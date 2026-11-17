@@ -8,11 +8,13 @@
 
 ## クイックスタート
 
+`pnpm add @h-ai/core` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/core.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
-Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`config/_core.yml` からアプリ情報とログ設定を読み込みます。[Serv](../../docs/usage/configuration/serv.md) または [Kit](../../docs/usage/configuration/kit.md) は HTTP サービスを作成するときにアクセスルールを読み込みます。
+Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`config/_core.yml` からアプリ情報とログ設定を読み込みます。[Serv](../../docs/usage/configuration/serv.ja.md) または [Kit](../../docs/usage/configuration/kit.ja.md) は HTTP サービスを作成するときにアクセスルールを読み込みます。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/core.ja.md)を参照してください。
 

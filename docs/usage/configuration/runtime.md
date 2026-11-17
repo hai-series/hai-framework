@@ -8,20 +8,25 @@
 
 运行配置通常放 `config/_<名称>.yml`，例如 `_db.yml` 注册为 `db`。模块名不一定是文件名：数据库模块 `reldb` 的生成配置名是 `db`，所以覆盖变量以 `HAI_DB_` 开头。根 `hai.json` 的 build/`deploy` 由 CLI 读取，UI 和 API 客户端参数由调用方传入。
 
-| 来源 | 普通应用运行时的优先级与用途 |
+启动先从下面这些来源合并环境变量。表中越靠上的来源优先级越高。
+
+| 来源 | 何时使用 |
 | --- | --- |
 | 进程环境 | 最高；CI/容器/Secret Manager 注入，已有变量不被 dotenv 覆盖；空字符串也是显式输入 |
 | `.env.<mode>.local` | 当前环境的私有覆盖，不提交版本库 |
 | `.env.local` | 本机私有覆盖，不提交版本库 |
 | `.env.<mode>` | 环境公共差异，例如 `.env.prod`；不放真实秘密 |
 | `.env` | 公共基础值 |
-| `HAI_<配置名>_<路径>` | 用环境变量替换 YAML 中的对应项。同一来源先应用整个 JSON 对象，再应用对象内的单项变量。`camelCase` 不在单词间加下划线 |
-| `${VAR}` / `${VAR:回退值}` | YAML 中引用环境变量。在对应配置项没有被 `HAI_*` 覆盖时替换。变量缺失且没有回退值会返回 `CONFIG_ENV_VAR_MISSING` |
-| 模块的默认值 | 检查配置时填入该模块规定的默认值。必填的服务器地址或凭据仍要由项目提供 |
 
 在自己的 Node 启动代码中，先调用 `core.config.loadEnvFiles()`，确认 `success` 后把返回值写入 `process.env`，再调用 `core.init()`。CLI 生成项目的 Node 启动命令通过 `scripts/run-node.mjs` 完成环境文件加载。环境文件、构建和部署按同样的优先级处理。高优先级来源为整个对象赋值时，会清除低优先级来源写入的子项。一个来源内始终先用整个对象，再用单项变量，文件行序无关。在同一个文件里重复定义变量会报错。
 
 `core.config.loadEnvFiles({ mode: 'prod', envDir: '.' })` 从当前目录读取 `.env`、`.env.prod` 等适用文件，成功时把合并后的变量放在 `result.data`。应用启动代码用 `Object.assign(process.env, result.data)` 安装这些变量。`mode` 决定文件名中的后缀，`_core.yml` 的 `env` 只记录应用运行环境。合并后的变量可能含密码，保存在服务进程中。
+
+`core.init()` 读到 YAML 后按以下顺序处理。这里的顺序与上表的环境变量来源优先级是两件事。
+
+1. 用 `HAI_<配置名>_<路径>` 覆盖对应配置项。例如 `session.maxAge` 对应 `HAI_IAM_SESSION_MAXAGE`，`maxAge` 内部不加下划线。
+2. 展开未被覆盖的 YAML 值里的 `${VAR}` 或 `${VAR:回退值}`。变量缺失且没有回退值时返回 `CONFIG_ENV_VAR_MISSING`。
+3. 按字段类型校验。模块定义了默认值的字段可省略；必填的地址或凭据需要由应用提供。
 
 例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终的 `session.maxAge` 是 `1800`。应用启动时可以在 `core.init({ configSchemas })` 中提供字段规则。这样，可选字段即使还没写进 YAML，也可以用环境变量设置。目录扫描用这些规则识别字段和类型，应用还要在初始化模块前检查具体取值。未提供规则时，Core 只按已有的 YAML 或 JSON 结构定位字段。
 

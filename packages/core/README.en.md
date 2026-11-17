@@ -8,11 +8,13 @@
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/core`.
+
 [Open the quick-start guide](../../docs/usage/function/core.en.md#quick-start).
 
 ## Configuration Reference
 
-Call `core.init({ configDir: './config' })` at Node startup to read application metadata and logging settings from `config/_core.yml`. [Serv](../../docs/usage/configuration/serv.md) or [Kit](../../docs/usage/configuration/kit.md) reads its request policy when it creates the HTTP service.
+Call `core.init({ configDir: './config' })` at Node startup to read application metadata and logging settings from `config/_core.yml`. [Serv](../../docs/usage/configuration/serv.en.md) or [Kit](../../docs/usage/configuration/kit.en.md) reads its request policy when it creates the HTTP service.
 
 See the [configuration reference](../../docs/usage/configuration/core.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 

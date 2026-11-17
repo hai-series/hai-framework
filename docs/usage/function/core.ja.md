@@ -57,7 +57,7 @@ Core は指定したディレクトリの直下にある YAML を読み込みま
 
 ## Node とブラウザーでの設定
 
-Node では YAML や dotenv を読み込み、ファイルを監視できます。ブラウザーで使う公開設定は、ビルド時に指定するかサーバーから受け取ります。ファイル操作は `SERVICE_UNAVAILABLE` を返し、`getOrThrow()` は例外を送出します。監視コールバックにはすぐ失敗が通知されます。
+Node では YAML や dotenv を読み込み、ファイルを監視できます。ブラウザーで使う公開設定は、ビルド時に指定するかサーバーから受け取ります。ファイル操作は `SERVICE_UNAVAILABLE` を返し、`getOrThrow()` は例外を送出します。監視コールバックにはすぐ失敗が通知されます。 ブラウザーでは `core.config.isWatching()` は常に `false` を返し、`core.config.unwatch()` は何もしません。
 
 モジュールの初期化前に dotenv の値を読み込んでください。優先順位はプロセスの環境変数、モード別ローカル、ローカル、モード別、基本ファイルの順です。戻り値の変数は必要に応じて明示的に反映します。YAML のプレースホルダーを展開した後、たとえば `HAI_APP_PORT` を `app.port` に反映します。親に JSON を設定するとそのノードを置き換え、同じ優先順位の子キーが親を上書きします。空文字列も指定値です。環境値や JSON から渡したプレースホルダーは展開されません。`resolve()` の結果は別途検証してください。再読み込みで更新されるのは Core 内の値なので、利用側でも明示的に反映し、監視が不要になったら解除します。dotenv の生成結果にある `# hai:json` は保持してください。
 
@@ -85,16 +85,39 @@ core.logger.info('Listening', { port: loaded.data.port })
 
 `core.logger` は既定で `info` 以上を `pretty` 形式で出力します。ログ収集基盤へ送る場合は `format: 'json'` を指定します。Node で任意依存の `pino-pretty` を使用できない場合も JSON 形式になります。ブラウザーでは開発者コンソールに出力します。設定したレベルより低いメッセージは出力されません。名前付きロガーは、明示的な設定がなければ全体設定を継承します。子ロガーには固定フィールドを追加できます。リクエスト情報を付け、機密値をマスクしてから出力します。
 
+子ロガーの固定フィールドは、その子ロガーとさらに下の子ロガーにだけ付きます。親ロガーは作成時のままです。ログメソッドの第 2 引数 `ctx` は、その 1 件にフィールドを追加します。同じキーがある場合は、全体設定 → ロガーの固定フィールド（親から子の順）→ 呼び出し時の `ctx` → 現在の `core.context` の順に後の値が優先されます。
+
+```ts
+import { core } from '@h-ai/core'
+
+const orders = core.logger.create({ name: 'orders' })
+const request = orders.child({ requestId: 'request-1' })
+
+orders.info('Order created', { attempt: 1 })
+request.warn('Request needs attention', { attempt: 2 })
+core.context.run({ requestId: 'request-2' }, () => {
+  orders.info('Order checked', { attempt: 1 })
+})
+```
+
+1 件目は `attempt: 1` のみで、リクエスト ID は付きません。2 件目には `attempt: 2` と子ロガーの `requestId: 'request-1'` が付きます。3 件目は親ロガーを使っていますが、`core.context.run()` により `requestId: 'request-2'` が付きます。
+
 監視コールバックは、レベル判定とマスク処理を通過したログを受け取ります。記録件数などに上限を設けてください。コールバックの例外や即時の再帰呼び出しは他のログ処理から分離されます。戻り値の関数で購読を解除できます。
 
-| API | 用途 | 引数と既定値 | 結果 | 例 |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace()`、`debug()`、`info()`、`warn()`、`error()`、`fatal()` | 指定レベルでログを出力 | メッセージと任意の追加フィールド。既定の下限は `info`。 | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.create(options?)` | 名前付きロガーを作成 | 名前、レベル、形式、コンテキストは省略可。未指定の項目は全体設定を継承。 | `Logger` | `const orders = core.logger.create({ name: 'orders' })` |
-| `core.logger.child(fields)` | 子ロガーにフィールドを固定 | 追加するフィールド | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure(options)` | 全体の形式とマスク規則を変更 | ログ設定 | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel(level)`、`getLevel()` | 出力レベルを設定・取得 | 設定時はレベルを指定。取得時は引数なし。 | `void` / `LogLevel` | `core.logger.setLevel('warn')`、`core.logger.getLevel()` |
-| `core.logger.observe(callback)` | マスク済みログを購読 | ログレコードを受け取る関数 | `() => void` | `const stop = core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace` | 最も細かい診断手順を記録 | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug` | デバッグ情報を記録 | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info` | 通常の業務イベントを記録 | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn` | 処理を続けられる注意事項を記録 | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error` | 処理の失敗を記録 | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal` | 重大障害を記録。終了するかはアプリが決定 | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create` | 未指定の項目を全体設定から継承するロガーを作る | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child` | 固定フィールドを持つ子ロガーを作る | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure` | 指定した全体ログ設定を更新 | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel` | 全体の出力しきい値を変更。初期は info | `level` | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel` | 現在の全体しきい値を取得 | 引数なし | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe` | 出力レベルによる選別とマスクの後の記録を購読 | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 <a id="context-api"></a>
 
@@ -144,7 +167,8 @@ core.logger.info('Listening', { port: loaded.data.port })
 
 | API | 用途 | 引数と既定値 | 結果 | 例 |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)`、`getGlobalLocale()` | 既定の言語を設定・取得 | 設定時に言語を指定。初期値は `zh-CN`。 | `void` / 言語コード | `core.i18n.setGlobalLocale('ja-JP')`、`core.i18n.getGlobalLocale()` |
+| `core.i18n.setGlobalLocale(locale)` | 既定の言語を設定する | 言語コード | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.getGlobalLocale()` | 現在の言語を取得する | なし。初期値は `zh-CN` | 言語コード | `core.i18n.getGlobalLocale()` |
 | `core.i18n.runWithLocale(locale, operation)` | Node の処理中だけ言語を指定 | 言語と関数 | 関数の戻り値 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
 | `core.i18n.createMessageGetter(dictionaries)` | メッセージ取得関数を作成 | 言語ごとの辞書 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'ようこそ' } })` |
 | `core.i18n.coreM(key, options?)` | 組み込みメッセージを取得 | キー、任意の言語と置換パラメーター | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
@@ -170,22 +194,214 @@ Zod v3/v4 の検証結果をフィールドごとのメッセージに変換し�
 | API | 用途 | 引数と既定値 | 結果 | 例 |
 | --- | --- | --- | --- | --- |
 | `core.module.createRuntime(steps)` | 依存先の起動と終了を管理 | 名前、起動・終了関数、任意の有効化条件を持つ手順 | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(error, message?)` | 初期化前のエラーと代理メソッドを用意 | エラー定義と任意のメッセージ取得関数。代理メソッドは既定で非同期。 | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 初期化前に共通のエラーを返す | エラーコードまたはエラー定義と、メッセージを返す関数。両方が必須。 | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
 | `core.module.requiresSharedState(environment)` | 共有バックエンドが必要か判定 | 環境値。本番設定での明示的な E2E 実行は除外できる。 | `boolean` | `core.module.requiresSharedState(process.env)` |
+
+### 初期化前の呼び出しにエラーを返す
+
+モジュールの実装者が、実際のバックエンドを利用できる前でも同じ API を公開するための機能です。たとえば、`cache.init()` が成功する前に `cache.kv.get(key)` を呼ぶと、Redis に接続せず、未初期化の失敗結果を返します。準備ができると、キャッシュモジュールが実際の操作を公開します。既存のモジュールを使う側は、先に初期化して、呼び出し結果を確認してください。
+
+- `error()` はエラーオブジェクトを返します。
+- `result<T>()` は `{ success: false, error }` を返します。操作の途中で処理を打ち切るときに使えます。
+- `proxy<T>()` は操作インターフェース `T` の仮の実装を作ります。実際の操作は行わず、失敗結果で解決する Promise を返します。すべてが同期メソッドなら `proxy<T>('sync')` を使います。
+
+メッセージ関数はエラーを作るたびに実行され、現在のリクエストの言語で文言を取得できます。
+
+<a id="order-lookup-example"></a>
+
+#### 例：注文の状態一覧を読み込むまでは照会を受け付けない
+
+注文照会モジュールが注文の有無を判断できるのは、状態一覧を読み込んだ後です。起動が完了する前に呼び出された場合は未初期化エラーを返し、呼び出し側が「その注文は存在しない」と誤解しないようにします。ここでは読み込み済みの一覧をメモリ上の `Map` で表します。`@h-ai/core` だけで動作し、データベースは不要です。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { core, HaiCommonError, ok } from '@h-ai/core'
+
+interface OrderQueries {
+  getStatus: (orderId: string) => Promise<HaiResult<string | null>>
+}
+
+const message = core.i18n.createMessageGetter({
+  'zh-CN': { notReady: '订单查询模块尚未初始化' },
+  'en-US': { notReady: 'Order queries are not initialized' },
+  'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
+})
+const waiting = core.module.createNotInitializedKit(
+  HaiCommonError.NOT_INITIALIZED,
+  () => message('notReady'),
+)
+const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
+let activeQueries: OrderQueries | undefined
+
+const orderLookup = {
+  init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
+    activeQueries = {
+      async getStatus(orderId) {
+        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+      },
+    }
+    return ok(undefined)
+  },
+  get orders(): OrderQueries {
+    return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。
+  },
+  close(): void {
+    activeQueries = undefined
+  },
+}
+
+const beforeInit = await orderLookup.orders.getStatus('order-42')
+if (!beforeInit.success)
+  core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
+
+// 此处用内存索引模拟已经从数据库加载完的数据。
+const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const found = await orderLookup.orders.getStatus('order-42')
+  const missing = await orderLookup.orders.getStatus('order-99')
+  if (found.success && missing.success)
+    core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
+}
+finally {
+  orderLookup.close()
+}
+const afterClose = await orderLookup.orders.getStatus('order-42')
+if (!afterClose.success)
+  core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
+```
+
+| 照会のタイミング | 結果 |
+| --- | --- |
+| 初期化前に `order-42` を照会（`beforeInit`） | `success: false`、エラーコードは `HaiCommonError.NOT_INITIALIZED.code`、`data` なし。 |
+| 初期化後に `order-42` を照会（`found`） | `{ success: true, data: 'shipped' }`。 |
+| 存在しない `order-99` を照会（`missing`） | `{ success: true, data: null }`。一覧は照会できましたが、該当注文はありません。 |
+| 終了後に `order-42` を再び照会（`afterClose`） | 再び未初期化エラーを返します。 |
+
+仮の操作オブジェクト自体が実際の実装に変わるわけではありません。初期化後は `orderLookup.orders` の getter が実際の操作を返します。起動前に取得した仮のオブジェクトを保持せず、照会のたびに getter から取得します。
 
 <a id="access-api"></a>
 
 ## Node のリクエストアクセス判定
 
-HTTP サーバーから渡された接続元アドレスを使用し、信頼するプロキシだけをリストに含めてください。起動時にアドレスと時間帯のルールを読み込み、リクエストごとに判定関数を実行できます。許可・拒否、該当するルール、リクエスト暗号化の方針を取得できます。プロキシの既定値は `auto` です。転送ヘッダーを使う前にマネージド環境での扱いを確認してください。不正なポリシーは起動時に例外になります。別ファイルでポリシーを読み込んでいる場合は、更新後に再起動します。
+`core.access` は、パス、HTTP メソッド、クライアント IP、サーバーの現在時刻に基づいて、Node サーバーがリクエストを通すかを判定します。認証と認可は引き続きサービス側で行います。
+
+- **Serv または Kit:** `_serv.yml` の `http.access` または `_kit.yml` の `access` に書き、`serv.createApp({ http, ... })` または `kit.createHandle({ access, ... })` に渡します。フレームワークが起動時に判定の準備を行い、拒否時は HTTP 403 を返します。ルールは `_core.yml` には書きません。
+- **その他の Node HTTP フレームワーク:** 起動時に IP 解決関数と判定関数を作ります。リクエストごとに、サーバーや信頼できる基盤から直接接続した相手のアドレスを取得して IP を解決し、URL のパス、HTTP メソッド、解決した IP を判定関数に渡します。HTTP の応答は結果を見て呼び出し側で返します。
 
 | API | 用途 | 引数と既定値 | 結果 | 例 |
 | --- | --- | --- | --- | --- |
 | `core.access.normalizeClientIp(value?)` | IPv4 または IPv6 を正規化 | 任意のアドレス文字列 | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | 接続元アドレスの取得関数を作成 | 信頼するプロキシの設定（既定は `auto`） | `(request, remoteAddress?) => string` or `undefined` | `const resolve = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createClientIpResolver(trustedProxies?)` | リクエストごとにアクセス判定用の IP を選ぶ関数を作成 | 信頼するプロキシの設定（既定は `auto`） | `resolveClientIp(request, remoteAddress?)` → IP または `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
 | `core.access.createConditionCheck(condition)` | アドレスと時間帯の条件を準備 | アドレスリストと時間帯を指定した条件 | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | リクエストポリシーを準備 | ルール、ファイル参照、または `false`。省略時は無効。 | `RequestAccessCheck` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.createRequestCheck(input?)` | リクエストポリシーを準備 | ルール、ファイル参照、または `false`。省略時は無効。 | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | ポリシーを読み込んで検証 | ポリシーと基準ディレクトリ（既定は作業ディレクトリ） | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+
+リクエストは `global` と該当するすべてのルールを満たす必要があります。該当するルールがなければ `global` だけが適用されます。`methods` を省略するか空の配列を渡すとすべてのメソッドに適用され、末尾の `/**` はパス自体と配下の両方に一致します。拒否時には `reason`（`address`、`time` または `path`）と、ルールで拒否した場合の `ruleId` が返ります。
+
+<a id="client-ip-resolver"></a>
+
+### アクセス判定に使う IP アドレスを決める
+
+**`core.access.createClientIpResolver()` は、アクセス判定に渡す IP アドレスを選びます。** たとえば、取引先 `198.51.100.23` がリバースプロキシ `192.0.2.10` を経由して Node にアクセスすると、Node のソケットには直接つながったプロキシのアドレスだけが見えます。このアドレスをそのまま渡すと、取引先ではなくプロキシを判定することになります。IP を選ぶ関数は、信頼するプロキシの一覧を見て、そのプロキシが伝えた上流のアドレスを使えるかどうかを決めます。
+
+- **起動時：** `createClientIpResolver(['192.0.2.10'])` で関数を作ります。この一覧に指定するのは、リクエストの送信元を伝えてよいプロキシです。アクセスを許可するクライアントは、別途ルールの `allowIps` に指定します。
+- **リクエストごと：** `resolveClientIp(request, remoteAddress)` を呼びます。`request` には HTTP ヘッダーが入っています。`remoteAddress` は直接接続した相手のアドレスで、リクエストヘッダーではなく、サーバーのソケット（例：`socket.remoteAddress`）や信頼できる基盤の API から取得します。戻り値は判定に使う IP 文字列で、取得できなければ `undefined` です。
+
+| 直接の接続元（`remoteAddress`） | `X-Forwarded-For` | 判定に使う IP |
+| --- | --- | --- |
+| 信頼するプロキシ `192.0.2.10` | `198.51.100.23` | `198.51.100.23`。プロキシが伝えた上流のアドレスを使います。 |
+| 信頼するプロキシの一覧にない `203.0.113.7` | 同じく `198.51.100.23` | `203.0.113.7`。転送ヘッダーは無視します。 |
+| 信頼するプロキシ `192.0.2.10` | なし。`X-Real-IP` もなし | `192.0.2.10`。直接接続したプロキシのアドレスだけが分かります。 |
+| 信頼するプロキシ `192.0.2.10` | 判定に必要なアドレスが無効 | `undefined`。使える上流のアドレスがありません。 |
+| 直接の接続元が未指定 | ヘッダーがあっても | `undefined`。誰がヘッダーを渡したか確認できません。 |
+
+信頼するプロキシが複数のアドレスを伝えた場合は、`X-Forwarded-For` の右端から順に信頼するプロキシのアドレスを飛ばし、一覧にない最初のアドレスを使います。すべてが一覧にあれば左端のアドレスを使います。`X-Real-IP` を読むのは `X-Forwarded-For` がない場合だけです。既定の `auto` は通常の Node サーバーでは転送ヘッダーを無視し、フレームワークが構成した非公開の Compose 環境ではコンテナのプライベートサブネットを使います。常に転送ヘッダーを無視するには `[]` を指定します。
+
+```ts
+import { core } from '@h-ai/core'
+
+// 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const request = new Request('https://example.test/api/partners/inventory/sync', {
+  headers: { 'X-Forwarded-For': '198.51.100.23' },
+})
+
+// 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+const unknown = resolveClientIp(request) // undefined
+
+// 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+const checkIp = core.access.createConditionCheck({
+  allowIps: ['198.51.100.0/24'],
+  denyIps: [],
+  timezone: 'UTC',
+  windows: [],
+})
+checkIp(throughProxy).allowed // true
+checkIp(direct).allowed // false
+checkIp(unknown).allowed // false
+```
+
+IP を取得しても、その場でアクセスが許可されるわけではありません。`checkIp(ip)` または `checkAccess(pathname, method, ip)` へ渡します。IP 制限のあるルールは、アドレスが取得できなかった場合（`undefined`）も拒否します。Serv と Kit はこの 2 ステップを内部で行うので、アプリは `trustedProxies` とアクセスルールをそれぞれ設定します。
+
+<a id="partner-sync-example"></a>
+
+### 例：取引先の在庫同期は営業時間内だけ許可する
+
+サービスはリバースプロキシ経由で `POST /api/partners/inventory/sync` を公開しています。同期できるのは、取引先のネットワーク `198.51.100.0/24` から、上海時間の月曜から金曜の 09:00 以上 18:00 未満に届いたリクエストだけです。`GET /health` にこのルールは適用されず、監視は従来どおり動作します。
+
+独自の Node HTTP サーバーに組み込む場合は、起動時に IP 解決関数と判定関数を作成します。リクエストごとに HTTP アダプターから Fetch `Request`、サーバーのソケットで取得した接続元アドレス、既存の処理関数を `handlePartnerAccess()` に渡します。`192.0.2.10` はリバースプロキシがバックエンドへの接続に使うアドレスの例です。取引先のネットワークとともに実際の値に置き換えてください。
+
+```ts
+import { core } from '@h-ai/core'
+
+// 启动时配置一次：这里只信任直接连到后端的反向代理。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const checkAccess = core.access.createRequestCheck({
+  rules: [
+    {
+      id: 'partner-inventory-sync',
+      paths: ['/api/partners/inventory/sync'],
+      methods: ['POST'],
+      allowIps: ['198.51.100.0/24'],
+      timezone: 'Asia/Shanghai',
+      windows: [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }],
+    },
+  ],
+})
+
+async function handlePartnerAccess(
+  request: Request,
+  peerAddress: string | undefined,
+  next: (request: Request) => Response | Promise<Response>,
+): Promise<Response> {
+  const clientIp = resolveClientIp(request, peerAddress)
+  const { pathname } = new URL(request.url)
+  const decision = checkAccess(pathname, request.method, clientIp)
+  if (!decision.allowed) {
+    core.logger.info('Request access denied', {
+      ruleId: decision.ruleId,
+      reason: decision.reason,
+    })
+    return new Response(null, { status: 403 })
+  }
+  return next(request) // 后续仍执行服务自己的认证和路由逻辑。
+}
+```
+
+| バックエンドが受け取るリクエスト（上海時間） | 結果 |
+| --- | --- |
+| 月曜 10:00、取引先 `198.51.100.23` が信頼済みのプロキシ経由で同期を要求 | 認証と同期処理に進みます。最終的なステータスは後続の処理関数が返します。 |
+| 月曜 10:00、別のネットワークから同じプロキシ経由で同期を要求 | `403` を返し、サーバーは `reason: 'address'` を記録します。 |
+| 月曜 18:00、取引先が再び同期を要求 | `403` を返し、サーバーは `reason: 'time'` を記録します。 |
+| 任意の時刻に `GET /health` を要求 | ルールに該当せず、ヘルスチェックを続行します。 |
+
+Serv または Kit では、同じルールを `_serv.yml` の `http.access` または `_kit.yml` の `access` に記述します。プロキシは Serv の `http.trustedProxies`、または Kit の最上位の `trustedProxies` に設定します。判定はフレームワークが行います。[リクエストポリシーの設定](../configuration/core.ja.md#request-access)に設定例があります。
+
+設定が不正なら判定関数の作成時に例外が発生します。別ファイルを変更したら、再起動するか判定関数を作り直します。`check.encryption(pathname, method)` は `'required'`、`'disabled'` または `undefined`（サービスの設定を使う）を返します。これは HTTPS とは別のアプリケーション層の暗号化設定で、アクセスの許可とは別です。`check.requiresEncryption` が `true` の場合、Serv と Kit はアプリケーション層の通信暗号化設定を必要とします。
 
 [リクエストポリシーの設定](../configuration/core.ja.md#request-access)
 
@@ -195,11 +411,16 @@ HTTP サーバーから渡された接続元アドレスを使用し、信頼す
 
 識別子は記録の特定や操作の追跡に使います。認証情報には専用の生成機能を使用してください。安全な乱数が得られない場合、UUID の生成は例外になります。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.id.generate(size?)`, `short()` | ランダム ID。既定は 21 文字、短縮版は 10 文字。 | `generate(8)` |
-| `core.id.withPrefix(prefix, size?)`, `trace()`, `request()` | 接頭辞とランダム ID。追跡とリクエストには `trace-` と `req-` を使う。 | `withPrefix('order_')` |
-| `core.id.uuid()`, `isValidUUID(value)`, `isValidNanoId(value, size?)` | UUID v4 を作成するか、文字列が指定形式に合うかを返す。 | `isValidUUID(core.id.uuid())` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.id.generate` | ランダム ID を生成 | `length = 21` | `string` | `core.id.generate(8)` |
+| `core.id.short` | 10 文字の短い ID を生成 | 引数なし | `string` | `core.id.short()` |
+| `core.id.withPrefix` | ランダム ID に業務用の接頭辞を付ける | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace` | trace- で始まる追跡 ID を生成 | 引数なし | `string` | `core.id.trace()` |
+| `core.id.request` | req- で始まるリクエスト ID を生成 | 引数なし | `string` | `core.id.request()` |
+| `core.id.uuid` | UUID v4 を生成。安全な乱数が得られない場合は例外 | 引数なし | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID` | UUID v4 の形式を確認 | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId` | 文字の範囲と長さを確認 | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 <a id="type-api"></a>
 
@@ -207,11 +428,16 @@ HTTP サーバーから渡された接続元アドレスを使用し、信頼す
 
 これらの判定関数で TypeScript の型を絞り込めます。業務データの検証にはスキーマを使います。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.typeUtils.isDefined(value)`, `isObject(value)` | 前者は null と undefined を除外。後者は配列と null を除外し、インスタンスは受け付ける。 | `isDefined(null)` → `false` |
-| `core.typeUtils.isFunction(value)`, `isPromise(value)` | 関数または Promise であるかを返す。 | `isPromise(Promise.resolve())` → `true` |
-| `core.typeUtils.isString(value)`, `isNumber(value)`, `isBoolean(value)`, `isArray(value)` | プリミティブ値または配列を判定。数値の判定では `NaN` を除外する。 | `isNumber(NaN)` → `false` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.typeUtils.isDefined` | null でも undefined でもないか確認 | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject` | null と配列を除き、オブジェクトか確認 | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction` | 関数か確認 | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise` | Promise か確認 | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString` | 文字列か確認 | `value` | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber` | NaN 以外の数値か確認 | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean` | 真偽値か確認 | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray` | 配列か確認 | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
 <a id="object-api"></a>
 
@@ -219,11 +445,16 @@ HTTP サーバーから渡された接続元アドレスを使用し、信頼す
 
 `deepClone` は `structuredClone` を使い、日付、Map、Set、循環参照をコピーできます。関数などコピーできない値は例外になります。`deepMerge` が再帰的に結合するのはプレーンオブジェクトだけで、配列、日付、コレクション、インスタンスは後の値で置き換えます。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.object.deepClone(value)`, `deepMerge(target, ...sources)` | 元の値を変更せずにコピーまたは結合結果を返す。 | `deepMerge({ a: 1 }, { a: 2 })` → `{ a: 2 }` |
-| `core.object.pick(value, keys)`, `omit(value, keys)` | 指定キーだけを持つオブジェクト、または指定キーを除いたオブジェクトを返す。 | `pick({ a: 1, b: 2 }, ['a'])` → `{ a: 1 }` |
-| `core.object.keys(value)`, `values(value)`, `entries(value)`, `fromEntries(entries)` | 型付きのキー、値、キーと値の組の配列を取得するか、組からオブジェクトを作る。 | `fromEntries([['mode', 'local']])` → `{ mode: 'local' }` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.object.deepClone` | 複製可能な値を複製。関数などは例外 | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge` | プレーンなオブジェクトを再帰的に結合。後の値が優先 | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick` | 指定のキーのみ残す | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit` | 指定のキーを除く | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys` | 自身の列挙可能な文字列キーを取得 | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values` | 同じ順序で値を取得 | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries` | キーと値の組を取得 | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries` | キーと値の組からオブジェクトを作る | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 <a id="string-api"></a>
 
@@ -231,13 +462,20 @@ HTTP サーバーから渡された接続元アドレスを使用し、信頼す
 
 Node では長さが等しい UTF-16 のバイト列をネイティブ関数で定時間比較します。ブラウザーでは定時間性を保証できないため、認証情報の比較はサーバーで行ってください。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.string.capitalize()`, `kebabCase()`, `camelCase()`, `snakeCase()`, `pascalCase()` | 文字列の表記を変換。 | `kebabCase('helloWorld')` → `'hello-world'` |
-| `core.string.truncate(value, length, suffix?)`, `trim(value)` | 接尾辞（既定は `'...'`）を付けて短縮するか前後の空白を除去。 | `truncate('abcdef', 3)` → `'abc...'` |
-| `core.string.isBlank(value)`, `isNotBlank(value)` | 空白だけか、有効な文字を含むかを判定。 | `isBlank(' ')` → `true` |
-| `core.string.padStart(value, length, char?)`, `padEnd(value, length, char?)` | 指定の長さまで埋める。既定の文字は空白。 | `padStart('5', 3, '0')` → `'005'` |
-| `core.string.constantTimeEqual(left, right)` | 二つの文字列を比較。長さが異なる場合はすぐ false を返す。 | `constantTimeEqual('a', 'a')` → `true` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.string.capitalize` | 先頭文字を大文字にする | `text` | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase` | ハイフン区切りの形式に変換 | `text` | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase` | 小文字始まりのキャメルケースに変換 | `text` | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase` | アンダースコア区切りの形式に変換 | `text` | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase` | パスカルケースに変換 | `text` | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate` | 長すぎる文字列を切って接尾辞を追加 | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim` | 前後の空白を除く | `text` | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank` | 空文字列か空白のみか確認 | `text` | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank` | 空白以外の文字があるか確認 | `text` | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart` | 指定長になるまで先頭を埋める | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd` | 指定長になるまで末尾を埋める | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual` | 同じ長さの文字列を比較。異なる長さは即 false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
 <a id="array-api"></a>
 
@@ -245,12 +483,18 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 入力配列は変更されません。分割サイズは正の安全な整数を指定してください。不正なサイズには空配列を返します。グループキーには `constructor` なども指定できます。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.array.unique(items)`, `chunk(items, size)`, `groupBy(items, key)` | 重複を除く、配列に分割する、またはキー取得関数でグループ化する。 | `chunk([1, 2, 3], 2)` → `[[1, 2], [3]]` |
-| `core.array.first(items)`, `last(items)` | 先頭または末尾を取得。空配列は `undefined`。 | `last([1, 2])` → `2` |
-| `core.array.flatten(items)`, `compact(items)`, `shuffle(items)` | 一段だけ平坦化する、null と undefined を除く、または順序を無作為化したコピーを返す。 | `compact([0, null, 1])` → `[0, 1]` |
-| `core.array.intersection(a, b)`, `difference(a, b)` | 両方にある要素、または一つ目にだけある要素を返す。 | `intersection([1, 2], [2, 3])` → `[2]` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.array.unique` | 最初に現れた順序で重複を除く | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy` | 選択関数が返したキーで分類 | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk` | 分割幅で小分けにする。無効な幅は空配列 | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first` | 最初の要素を返す。空配列には値なし | `items` | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last` | 最後の要素を返す。空配列には値なし | `items` | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten` | 一段だけ平坦にする | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact` | null と undefined を除き、0 などを保持 | `items` | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle` | 順序を無作為化したコピーを返す | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection` | 最初の配列のうち二つ目にもある要素を返す | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference` | 最初の配列のうち二つ目にない要素を返す | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
 <a id="async-api"></a>
 
@@ -258,12 +502,15 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 タイムアウトすると待機中の Promise が拒否されます。元の処理のキャンセルは呼び出し側で行います。再試行の対象は例外と拒否された Promise です。失敗した `HaiResult` は別途確認してください。並行処理の結果は入力順です。並行数の既定値は 5 です。一件が失敗しても他のワーカーはすぐには停止しません。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.async.delay(ms)`, `withTimeout(promise, ms)` | 指定時間だけ待つか、Promise の待機時間を制限する。 | `await core.async.delay(10)` |
-| `core.async.retry(operation, options?)` | 初回を含め既定で最大 3 回、間隔は 1000 ミリ秒。 | `await core.async.retry(async () => 'ready', { maxRetries: 2, delay: 10 })` |
-| `core.async.parallel(items, action, concurrency?)`, `serial(items, action)` | 上限付きの並行処理または逐次処理。不正な並行数は `RangeError`。 | `await core.async.parallel([1, 2], async n => n * 2, 2)` → `[2, 4]` |
-| `core.async.debounce(callback, ms)`, `throttle(callback, ms)` | 引数の型を保つ関数を返す。デバウンスは呼び出しが止まってから実行し、スロットルは間隔中に一度だけ実行する。 | `core.async.debounce((term: string) => search(term), 100)` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.async.delay` | 指定したミリ秒だけ非同期に待機 | `ms` | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout` | 待機時間を制限しタイムアウトで拒否 | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry` | 例外や拒否時に再試行。初回を試行回数に含む | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel` | 並列数を制限し、入力順に結果を返す | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial` | 入力順に一項目ずつ処理 | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce` | 呼び出しが途切れてから最後の入力を処理 | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle` | 初回をすぐに実行し、間隔内の後続呼び出しを飛ばす | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
 
 <a id="time-api"></a>
 
@@ -271,12 +518,18 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 暦の演算には実行環境のタイムゾーンを使います。夏時間の切り替えで実経過時間が変わることがあります。システム間ではオフセット付き ISO 日時を渡してください。
 
-| API | 引数・既定値と戻り値 | 例 |
-| --- | --- | --- |
-| `core.time.formatDate(date, format?)`, `timeAgo(date)` | 現地時刻（既定は `YYYY-MM-DD`）または翻訳済み相対時刻を返す。 | `formatDate(new Date(2026, 0, 1))` → `'2026-01-01'` |
-| `core.time.now()`, `nowSeconds()` | UNIX 時刻をミリ秒または秒の整数で取得。 | `core.time.nowSeconds()` |
-| `core.time.parseDate(value)`, `isValidDate(date)` | Date を作成し、有効な日時か確認。 | `isValidDate(core.time.parseDate('2026-01-01T00:00:00Z'))` |
-| `core.time.addDays(date, days)`, `addHours(date, hours)`, `startOfDay(date)`, `endOfDay(date)` | 現地時刻で加算した日時、または当日の開始・終了日時を返す。 | `startOfDay(new Date(2026, 0, 1, 12))` |
+| API | 用途 | 入力と既定値 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.time.formatDate` | ローカル時刻で日付の書式を埋める | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo` | 現在の言語で相対時刻を表示 | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now` | Unix ミリ秒を取得 | 引数なし | `number` | `core.time.now()` |
+| `core.time.nowSeconds` | 切り捨てた Unix 秒を取得 | 引数なし | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate` | Date で解析。無効な入力なら無効な日付を返す | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate` | Date が有効か確認 | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays` | ローカルの暦で指定日数分ずらす | `date, days` | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours` | ローカルの時計で指定時間分ずらす | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay` | 当日のローカル 0 時を取得 | `date` | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay` | 当日の最後の 1 ミリ秒を取得 | `date` | `Date` | `core.time.endOfDay(date)` |
 
 ## エラー処理
 

@@ -57,7 +57,7 @@ Check `success` before using `data` from a `HaiResult`. Reloading changes the va
 
 ## Configuration in Node and the browser
 
-Node configuration can read and watch YAML and dotenv files. In a browser, embedded assets or server load data carry public settings. File operations return `SERVICE_UNAVAILABLE`, `getOrThrow()` throws, and watchers report the failure immediately.
+Node configuration can read and watch YAML and dotenv files. In a browser, embedded assets or server load data carry public settings. File operations return `SERVICE_UNAVAILABLE`, `getOrThrow()` throws, and watchers report the failure immediately. In the browser, `core.config.isWatching()` always returns `false` and `core.config.unwatch()` does nothing.
 
 Load dotenv values before initializing modules. The order is process environment, mode-local file, local file, mode file, then base file. Apply the returned map explicitly. YAML placeholders are expanded before hierarchical environment overrides, for example `HAI_APP_PORT` overrides `app.port`. A parent JSON value replaces that node. Child keys override it at the same priority. An empty string is a supplied value. Placeholder expressions supplied through environment values or JSON remain literal. Validate the resolved object separately when using `resolve()` directly. A reload updates Core's in-memory copy, so have consumers apply new settings explicitly. Unsubscribe after use, and keep the `# hai:json` marker on values emitted by the dotenv writer.
 
@@ -85,16 +85,39 @@ With `port: 3000` in `config/app.yml`, this logs port 3000 unless `HAI_APP_PORT`
 
 `core.logger` starts at `info` with `pretty` output. Set `format: 'json'` for log collection. Node also emits JSON when the optional `pino-pretty` dependency is unavailable. The browser uses the developer console. Messages below the current level are dropped. Named loggers inherit global settings unless configured explicitly. A child binds extra fields. The current request context is included, and sensitive values are masked before output.
 
+A child logger's fields apply to that child and its descendants. Creating one leaves the parent unchanged. The optional second argument, `ctx`, adds fields to a single entry. When fields share a key, later sources win: global fields → fields bound to the logger (from parent to child) → per-call `ctx` → current `core.context`.
+
+```ts
+import { core } from '@h-ai/core'
+
+const orders = core.logger.create({ name: 'orders' })
+const request = orders.child({ requestId: 'request-1' })
+
+orders.info('Order created', { attempt: 1 })
+request.warn('Request needs attention', { attempt: 2 })
+core.context.run({ requestId: 'request-2' }, () => {
+  orders.info('Order checked', { attempt: 1 })
+})
+```
+
+The first entry has `attempt: 1` and no request ID. The second has `attempt: 2` and the child's `requestId: 'request-1'`. The third uses the parent again, but `core.context.run()` adds `requestId: 'request-2'`.
+
 Use observers for bounded diagnostics. An observer receives entries after level filtering and redaction. Its exceptions and immediate recursive invocations are isolated. Calling the returned function unsubscribes the observer.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+| API | Purpose | Inputs and defaults | Return value | Example |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace()`, `debug()`, `info()`, `warn()`, `error()`, `fatal()` | Emit a log at the chosen level | Message, optional fields. Default threshold is `info`. | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.create(options?)` | Create a named logger | Optional name, level, format and context. Unset values inherit global settings. | `Logger` | `const orders = core.logger.create({ name: 'orders' })` |
-| `core.logger.child(fields)` | Bind fields to a child logger | Fields to include | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure(options)` | Change global formatting and redaction | Logging options | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel(level)`, `getLevel()` | Change or read the threshold | A level for the setter. No arguments for the getter. | `void` / `LogLevel` | `core.logger.setLevel('warn')`, `core.logger.getLevel()` |
-| `core.logger.observe(callback)` | Subscribe to redacted entries | Callback receiving a log record | `() => void` | `const stop = core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace` | Log the most detailed diagnostic steps | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug` | Log diagnostic information | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info` | Log routine application events | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn` | Log a condition that needs attention | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error` | Log an operation failure | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal` | Log a severe failure; the application decides whether to exit | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create` | Create a logger that inherits settings you omit | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child` | Bind fields to a child logger | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure` | Update the supplied global logging options | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel` | Set the global threshold, initially info | `level` | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel` | Read the current global threshold | None | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe` | Receive records after filtering and redaction | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 <a id="context-api"></a>
 
@@ -144,7 +167,8 @@ A message lookup uses its explicit locale first, then the Node request locale, t
 
 | API | Purpose | Inputs and defaults | Result | Example |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)`, `getGlobalLocale()` | Set or read the global locale | Set with a locale. Initial locale is `zh-CN`. | `void` / locale | `core.i18n.setGlobalLocale('ja-JP')`, `core.i18n.getGlobalLocale()` |
+| `core.i18n.setGlobalLocale(locale)` | Set the default locale | Locale code | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.getGlobalLocale()` | Read the current locale | None; initial default is `zh-CN` | Locale code | `core.i18n.getGlobalLocale()` |
 | `core.i18n.runWithLocale(locale, operation)` | Scope a Node request locale | Locale and callback | Callback result | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
 | `core.i18n.createMessageGetter(dictionaries)` | Create a message lookup | Dictionaries keyed by locale | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'Welcome' } })` |
 | `core.i18n.coreM(key, options?)` | Read a built-in message | Key, optional locale and interpolation parameters | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
@@ -170,22 +194,214 @@ The mapper turns Zod v3/v4 issues into field-level messages. Array indexes appea
 | API | Purpose | Inputs and defaults | Result | Example |
 | --- | --- | --- | --- | --- |
 | `core.module.createRuntime(steps)` | Manage dependency startup and shutdown | Named steps with start and close functions, optional enabled predicate | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(error, message?)` | Build errors and proxy methods for uninitialized modules | Error definition and optional message getter. Proxies default to async. | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | Return consistent failures before a module is ready | Both arguments are required: the error code or definition, and a function that returns the message. | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
 | `core.module.requiresSharedState(environment)` | Check whether a shared backend is required | Environment values. Explicit production E2E runs can opt out. | `boolean` | `core.module.requiresSharedState(process.env)` |
+
+### Return a failure before initialization
+
+Module authors can use this helper to keep the same API available before the backend is ready. For example, before `cache.init()` succeeds, calling `cache.kv.get(key)` returns a not-initialized result without connecting to Redis. Once ready, the cache module exposes the backend's real operations. Applications using an existing module only need to initialize it first and check the result.
+
+- `error()` builds an error object.
+- `result<T>()` returns `{ success: false, error }` for an early return from an operation.
+- `proxy<T>()` creates a placeholder for the operation interface `T`. Calls return a promise that resolves to the failure above and never perform the operation. Use `proxy<T>('sync')` when all methods in that group return synchronously.
+
+The message function runs each time an error is generated. It can look up the current request's language.
+
+<a id="order-lookup-example"></a>
+
+#### Scenario: Reject order queries before the status index is loaded
+
+An order lookup module can only tell whether an order exists after it loads the status index. A call that arrives during startup should fail as not initialized, so callers can distinguish it from an unknown order. The example uses an in-memory `Map` as the loaded index. It needs only `@h-ai/core` and no database.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { core, HaiCommonError, ok } from '@h-ai/core'
+
+interface OrderQueries {
+  getStatus: (orderId: string) => Promise<HaiResult<string | null>>
+}
+
+const message = core.i18n.createMessageGetter({
+  'zh-CN': { notReady: '订单查询模块尚未初始化' },
+  'en-US': { notReady: 'Order queries are not initialized' },
+  'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
+})
+const waiting = core.module.createNotInitializedKit(
+  HaiCommonError.NOT_INITIALIZED,
+  () => message('notReady'),
+)
+const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
+let activeQueries: OrderQueries | undefined
+
+const orderLookup = {
+  init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
+    activeQueries = {
+      async getStatus(orderId) {
+        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+      },
+    }
+    return ok(undefined)
+  },
+  get orders(): OrderQueries {
+    return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。
+  },
+  close(): void {
+    activeQueries = undefined
+  },
+}
+
+const beforeInit = await orderLookup.orders.getStatus('order-42')
+if (!beforeInit.success)
+  core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
+
+// 此处用内存索引模拟已经从数据库加载完的数据。
+const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const found = await orderLookup.orders.getStatus('order-42')
+  const missing = await orderLookup.orders.getStatus('order-99')
+  if (found.success && missing.success)
+    core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
+}
+finally {
+  orderLookup.close()
+}
+const afterClose = await orderLookup.orders.getStatus('order-42')
+if (!afterClose.success)
+  core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
+```
+
+| When the lookup runs | Result |
+| --- | --- |
+| Look up `order-42` before startup (`beforeInit`) | `success: false`, error code `HaiCommonError.NOT_INITIALIZED.code`, no `data`. |
+| Look up `order-42` after startup (`found`) | `{ success: true, data: 'shipped' }`. |
+| Look up an unknown order, `order-99` (`missing`) | `{ success: true, data: null }`. The lookup ran against the index but found no match. |
+| Look up `order-42` after closing (`afterClose`) | Returns the not-initialized failure again. |
+
+The proxy never turns into the real implementation. The `orderLookup.orders` getter exposes the real queries once the module is ready. Read the getter for each call instead of keeping a reference to the startup placeholder.
 
 <a id="access-api"></a>
 
 ## Request access checks in Node
 
-Use the address supplied by the HTTP server and list only trusted proxies. An application can compile address and schedule rules once at startup and call the checker per request. The checker exposes the decision, the matched rule when applicable, and request encryption policy. The default proxy mode is `auto`; read the managed deployment rules before relying on forwarded headers. Invalid policies throw during startup. Restart after changing an independently loaded policy file.
+Use `core.access` to decide whether the Node server should let a request through based on its path, HTTP method, client IP and the server's current time. The service still handles authentication and authorization.
+
+- **Serv or Kit:** Configure `http.access` in `_serv.yml` or `access` in `_kit.yml`, then pass the settings to `serv.createApp({ http, ... })` or `kit.createHandle({ access, ... })`. The framework prepares the checker at startup and returns HTTP 403 for denied requests. These rules do not go in `_core.yml`.
+- **Other Node HTTP frameworks:** Create the IP resolver and policy checker at startup. For each request, resolve the IP using the actual peer address from the server or a trusted platform. Pass the URL pathname, HTTP method and resolved IP to the checker. Use its decision to choose the HTTP response.
 
 | API | Purpose | Inputs and defaults | Result | Example |
 | --- | --- | --- | --- | --- |
 | `core.access.normalizeClientIp(value?)` | Normalize an IPv4 or IPv6 address | Optional address string | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | Build a trusted client address resolver | Trusted proxy configuration (default `auto`) | `(request, remoteAddress?) => string` or `undefined` | `const resolve = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createClientIpResolver(trustedProxies?)` | Create a function that selects the IP for each access check | Trusted proxy configuration (default `auto`) | `resolveClientIp(request, remoteAddress?)` → IP or `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
 | `core.access.createConditionCheck(condition)` | Prepare address and schedule conditions | Condition object with address lists and time windows | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | Compile a request policy | Rules, file reference, or `false`. Omission disables the policy. | `RequestAccessCheck` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.createRequestCheck(input?)` | Compile a request policy | Rules, file reference, or `false`. Omission disables the policy. | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | Read and validate policy content | Policy input and base directory (default working directory) | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+
+A request must satisfy `global` and every matching rule. If none match, only `global` applies. Omitting `methods` or passing an empty list matches all methods. A pattern ending in `/**` matches the path itself and its descendants. A denial includes `reason: 'address'`, `'time'` or `'path'`, and a `ruleId` when a path rule denies it.
+
+<a id="client-ip-resolver"></a>
+
+### Which IP should the access check use?
+
+**`core.access.createClientIpResolver()` selects the IP address for the access policy.** Suppose partner `198.51.100.23` reaches Node through reverse proxy `192.0.2.10`. Only the proxy connects directly to Node, so the socket shows `192.0.2.10`. Checking the socket address alone would check the proxy. The resolver uses the list of proxies you trust to decide whether to use a reported upstream address.
+
+- **At startup:** `createClientIpResolver(['192.0.2.10'])` returns a function. This list names the proxies allowed to report where requests came from. The separate `allowIps` policy names the clients allowed to access the route.
+- **Per request:** Call `resolveClientIp(request, remoteAddress)`. The `request` supplies HTTP headers. Get `remoteAddress`, the address that connected directly to the server, from the server socket (for example, `socket.remoteAddress`) or a trusted platform API. The function returns an IP string for the policy, or `undefined` if it cannot select one.
+
+| Directly connected address (`remoteAddress`) | `X-Forwarded-For` | IP used for the check |
+| --- | --- | --- |
+| Trusted proxy `192.0.2.10` | `198.51.100.23` | `198.51.100.23`: use the upstream address reported by that proxy. |
+| Address outside the trusted proxy list, `203.0.113.7` | The same `198.51.100.23` | `203.0.113.7`: ignore the forwarding header. |
+| Trusted proxy `192.0.2.10` | Absent, with no `X-Real-IP` either | `192.0.2.10`: the only known address is the directly connected proxy. |
+| Trusted proxy `192.0.2.10` | The address needed for the check is invalid | `undefined`: no usable upstream address. |
+| No directly connected address supplied | Even if present | `undefined`: there is no way to check who supplied the header. |
+
+When a trusted proxy provides multiple addresses, start at the right end of `X-Forwarded-For`, skip trusted proxy addresses from right to left, and use the first address outside the trusted list. If all addresses are trusted, use the leftmost one. The resolver checks `X-Real-IP` only if `X-Forwarded-For` is absent. On ordinary Node servers, the default `auto` ignores forwarding headers; managed private Compose deployments use their private container subnet. Pass `[]` to always ignore forwarding headers.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const request = new Request('https://example.test/api/partners/inventory/sync', {
+  headers: { 'X-Forwarded-For': '198.51.100.23' },
+})
+
+// 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+const unknown = resolveClientIp(request) // undefined
+
+// 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+const checkIp = core.access.createConditionCheck({
+  allowIps: ['198.51.100.0/24'],
+  denyIps: [],
+  timezone: 'UTC',
+  windows: [],
+})
+checkIp(throughProxy).allowed // true
+checkIp(direct).allowed // false
+checkIp(unknown).allowed // false
+```
+
+A resolved IP does not grant access by itself. Pass it to `checkIp(ip)` or `checkAccess(pathname, method, ip)`. A rule that restricts IP addresses rejects an unresolved address (`undefined`). Serv and Kit do both steps internally; set `trustedProxies` and the access policy separately.
+
+<a id="partner-sync-example"></a>
+
+### Scenario: Let a partner sync inventory during business hours
+
+The service exposes `POST /api/partners/inventory/sync` behind a reverse proxy. Sync requests must come from the partner's `198.51.100.0/24` network and arrive Monday through Friday, from 09:00 inclusive to 18:00 exclusive, Shanghai time. The rule leaves `GET /health` available for monitoring.
+
+In a custom Node HTTP server, create the resolver and checker once at startup. For each request, the HTTP adapter passes the Fetch `Request`, the peer address from the server socket, and the existing handler to `handlePartnerAccess()`. Here, `192.0.2.10` is the address the reverse proxy uses to connect to the backend. Replace it and the partner's network with your actual addresses.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 启动时配置一次：这里只信任直接连到后端的反向代理。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const checkAccess = core.access.createRequestCheck({
+  rules: [
+    {
+      id: 'partner-inventory-sync',
+      paths: ['/api/partners/inventory/sync'],
+      methods: ['POST'],
+      allowIps: ['198.51.100.0/24'],
+      timezone: 'Asia/Shanghai',
+      windows: [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }],
+    },
+  ],
+})
+
+async function handlePartnerAccess(
+  request: Request,
+  peerAddress: string | undefined,
+  next: (request: Request) => Response | Promise<Response>,
+): Promise<Response> {
+  const clientIp = resolveClientIp(request, peerAddress)
+  const { pathname } = new URL(request.url)
+  const decision = checkAccess(pathname, request.method, clientIp)
+  if (!decision.allowed) {
+    core.logger.info('Request access denied', {
+      ruleId: decision.ruleId,
+      reason: decision.reason,
+    })
+    return new Response(null, { status: 403 })
+  }
+  return next(request) // 后续仍执行服务自己的认证和路由逻辑。
+}
+```
+
+| Request reaching the backend (Shanghai time) | Result |
+| --- | --- |
+| Monday 10:00, partner `198.51.100.23` sends a sync request through the trusted proxy | Continues to authentication and sync. The downstream handler sets the final status. |
+| Monday 10:00, a different network requests a sync through the same proxy | Returns `403`; the server logs `reason: 'address'`. |
+| Monday 18:00, the partner requests another sync | Returns `403`; the server logs `reason: 'time'`. |
+| `GET /health` at any time | The rule does not match; the health check continues. |
+
+With Serv or Kit, put the same rules under `http.access` in `_serv.yml` or `access` in `_kit.yml`. Set `http.trustedProxies` for Serv or top-level `trustedProxies` for Kit. Those frameworks run the check; see [request policy settings](../configuration/core.en.md#request-access) for configuration examples.
+
+Invalid policies throw when the checker is created. A referenced file is read only at creation; restart or recreate the checker after changing it. `check.encryption(pathname, method)` returns `'required'`, `'disabled'`, or `undefined` to keep the server's setting. It controls application-level encryption separately from HTTPS and does not grant access. If `check.requiresEncryption` is true, Serv and Kit require application-level transport encryption to be configured.
 
 [Request policy settings](../configuration/core.en.md#request-access)
 
@@ -195,11 +411,16 @@ Use the address supplied by the HTTP server and list only trusted proxies. An ap
 
 IDs identify records and correlate operations. Use a credential generator for secrets. UUID generation throws when secure randomness is unavailable.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.id.generate(size?)`, `short()` | Random ID, default 21 characters. Short IDs have 10. | `generate(8)` |
-| `core.id.withPrefix(prefix, size?)`, `trace()`, `request()` | Prefix plus random ID. Trace and request defaults are `trace-` and `req-`. | `withPrefix('order_')` |
-| `core.id.uuid()`, `isValidUUID(value)`, `isValidNanoId(value, size?)` | Create a UUID v4 or return whether the supplied string matches the expected format. | `isValidUUID(core.id.uuid())` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.id.generate` | Generate a random ID | `length = 21` | `string` | `core.id.generate(8)` |
+| `core.id.short` | Generate a short ID with 10 characters | None | `string` | `core.id.short()` |
+| `core.id.withPrefix` | Add a business prefix to a random ID | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace` | Generate a trace ID with the trace- prefix | None | `string` | `core.id.trace()` |
+| `core.id.request` | Generate a request ID with the req- prefix | None | `string` | `core.id.request()` |
+| `core.id.uuid` | Generate UUID v4; throws when secure randomness is unavailable | None | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID` | Check the UUID v4 format | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId` | Check the character set and length | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 <a id="type-api"></a>
 
@@ -207,11 +428,16 @@ IDs identify records and correlate operations. Use a credential generator for se
 
 These predicates narrow TypeScript types. Validate business data with a schema.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.typeUtils.isDefined(value)`, `isObject(value)` | The first excludes null and undefined. The second excludes arrays and null but accepts instances. | `isDefined(null)` → `false` |
-| `core.typeUtils.isFunction(value)`, `isPromise(value)` | Return whether the value is a function or a promise. | `isPromise(Promise.resolve())` → `true` |
-| `core.typeUtils.isString(value)`, `isNumber(value)`, `isBoolean(value)`, `isArray(value)` | Check a primitive or array. A number check excludes `NaN`. | `isNumber(NaN)` → `false` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.typeUtils.isDefined` | Check that a value is neither null nor undefined | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject` | Check for an object excluding null and arrays | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction` | Check for a function | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise` | Check for a promise | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString` | Check for a string | `value` | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber` | Check for a number other than NaN | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean` | Check for a boolean | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray` | Check for an array | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
 <a id="object-api"></a>
 
@@ -219,11 +445,16 @@ These predicates narrow TypeScript types. Validate business data with a schema.
 
 `deepClone` delegates to `structuredClone`. It can copy dates, maps, sets and cycles. Functions or other uncloneable inputs throw. `deepMerge` recurses into plain objects only. Later arrays, dates, collections and instances replace earlier values.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.object.deepClone(value)`, `deepMerge(target, ...sources)` | Return a copy or a merged object without modifying the inputs. | `deepMerge({ a: 1 }, { a: 2 })` → `{ a: 2 }` |
-| `core.object.pick(value, keys)`, `omit(value, keys)` | Return an object with only the listed keys, or with those keys removed. | `pick({ a: 1, b: 2 }, ['a'])` → `{ a: 1 }` |
-| `core.object.keys(value)`, `values(value)`, `entries(value)`, `fromEntries(entries)` | Return typed key, value, or pair arrays, or build an object from pairs. | `fromEntries([['mode', 'local']])` → `{ mode: 'local' }` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.object.deepClone` | Copy a cloneable value; functions and other uncloneable values throw | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge` | Merge plain objects recursively, with later values winning | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick` | Keep the listed keys | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit` | Remove the listed keys | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys` | List own enumerable string keys | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values` | List values in the same order | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries` | Return key/value pairs | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries` | Build an object from key/value pairs | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 <a id="string-api"></a>
 
@@ -231,13 +462,20 @@ These predicates narrow TypeScript types. Validate business data with a schema.
 
 Node uses native timing-safe comparison for equal-length UTF-16 byte sequences. The browser cannot guarantee constant-time execution. Keep credential checks on the server.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.string.capitalize()`, `kebabCase()`, `camelCase()`, `snakeCase()`, `pascalCase()` | Convert one string to the chosen case. | `kebabCase('helloWorld')` → `'hello-world'` |
-| `core.string.truncate(value, length, suffix?)`, `trim(value)` | Shorten with a suffix (default `'...'`) or trim whitespace. | `truncate('abcdef', 3)` → `'abc...'` |
-| `core.string.isBlank(value)`, `isNotBlank(value)` | Return whether the string is blank or nonblank. | `isBlank(' ')` → `true` |
-| `core.string.padStart(value, length, char?)`, `padEnd(value, length, char?)` | Pad to the requested length. The character defaults to a space. | `padStart('5', 3, '0')` → `'005'` |
-| `core.string.constantTimeEqual(left, right)` | Compare two strings. Different lengths return false immediately. | `constantTimeEqual('a', 'a')` → `true` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.string.capitalize` | Uppercase the first character | `text` | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase` | Convert to hyphen-separated case | `text` | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase` | Convert to lower camel case | `text` | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase` | Convert to underscore-separated case | `text` | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase` | Convert to Pascal case | `text` | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate` | Trim to the requested length when needed, then add the suffix | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim` | Remove leading and trailing whitespace | `text` | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank` | Check for empty or whitespace-only text | `text` | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank` | Check whether any nonwhitespace character remains | `text` | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart` | Pad at the start to reach the target length | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd` | Pad at the end to reach the target length | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual` | Compare equal-length strings; different lengths immediately return false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
 <a id="array-api"></a>
 
@@ -245,12 +483,18 @@ Node uses native timing-safe comparison for equal-length UTF-16 byte sequences. 
 
 These helpers preserve the input array. Chunk sizes must be positive safe integers. Invalid sizes return an empty array. Group keys such as `constructor` are supported.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.array.unique(items)`, `chunk(items, size)`, `groupBy(items, key)` | Deduplicate, split into arrays, or group using a key selector. | `chunk([1, 2, 3], 2)` → `[[1, 2], [3]]` |
-| `core.array.first(items)`, `last(items)` | Read an edge element. Empty arrays return `undefined`. | `last([1, 2])` → `2` |
-| `core.array.flatten(items)`, `compact(items)`, `shuffle(items)` | Flatten one level, remove null and undefined, or return a shuffled copy. | `compact([0, null, 1])` → `[0, 1]` |
-| `core.array.intersection(a, b)`, `difference(a, b)` | Return shared elements or elements in the first array only. | `intersection([1, 2], [2, 3])` → `[2]` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.array.unique` | Deduplicate in order of first appearance | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy` | Group by the key returned by the selector | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk` | Split into chunks; invalid sizes return an empty array | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first` | Read the first item; empty arrays have no value | `items` | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last` | Read the last item; empty arrays have no value | `items` | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten` | Flatten one level | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact` | Remove null and undefined, preserving zero and other values | `items` | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle` | Return a shuffled copy | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection` | Keep items in the first array that also appear in the second | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference` | Keep items in the first array that are absent from the second | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
 <a id="async-api"></a>
 
@@ -258,12 +502,15 @@ These helpers preserve the input array. Chunk sizes must be positive safe intege
 
 A timeout rejects the waiting promise. The caller owns cancellation of the underlying work. Retry handles thrown errors and rejected promises. Inspect a failed `HaiResult` separately. Parallel work returns results in input order. The default concurrency is five. A rejected task does not stop every worker immediately.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.async.delay(ms)`, `withTimeout(promise, ms)` | Wait for a time or bound how long a promise is awaited. | `await core.async.delay(10)` |
-| `core.async.retry(operation, options?)` | Run up to three attempts by default, including the initial call, with a 1000 ms delay. | `await core.async.retry(async () => 'ready', { maxRetries: 2, delay: 10 })` |
-| `core.async.parallel(items, action, concurrency?)`, `serial(items, action)` | Map items with bounded concurrency or one by one. Invalid concurrency rejects with `RangeError`. | `await core.async.parallel([1, 2], async n => n * 2, 2)` → `[2, 4]` |
-| `core.async.debounce(callback, ms)`, `throttle(callback, ms)` | Return callbacks that preserve their parameter types. Debounce runs after the quiet period. Throttle accepts one call per interval. | `core.async.debounce((term: string) => search(term), 100)` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.async.delay` | Wait approximately the supplied milliseconds | `ms` | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout` | Bound how long the caller waits; rejects on timeout | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry` | Retry thrown or rejected work; count includes the initial attempt | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel` | Bound concurrent work and keep results in input order | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial` | Run one action at a time in input order | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce` | Run the latest call after a quiet period | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle` | Run the first call immediately and skip later calls during the interval | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
 
 <a id="time-api"></a>
 
@@ -271,12 +518,18 @@ A timeout rejects the waiting promise. The caller owns cancellation of the under
 
 Calendar operations use the runtime time zone. Daylight-saving changes can affect elapsed time. Pass ISO timestamps with offsets between systems.
 
-| API | Inputs, defaults and result | Example |
-| --- | --- | --- |
-| `core.time.formatDate(date, format?)`, `timeAgo(date)` | Format locally (default `YYYY-MM-DD`) or return localized relative text. | `formatDate(new Date(2026, 0, 1))` → `'2026-01-01'` |
-| `core.time.now()`, `nowSeconds()` | Unix time in milliseconds or floored seconds. | `core.time.nowSeconds()` |
-| `core.time.parseDate(value)`, `isValidDate(date)` | Construct a Date and check whether it represents a valid time. | `isValidDate(core.time.parseDate('2026-01-01T00:00:00Z'))` |
-| `core.time.addDays(date, days)`, `addHours(date, hours)`, `startOfDay(date)`, `endOfDay(date)` | Return a date after local calendar arithmetic or the local day boundary. | `startOfDay(new Date(2026, 0, 1, 12))` |
+| API | Purpose | Inputs and defaults | Return value | Example |
+| --- | --- | --- | --- | --- |
+| `core.time.formatDate` | Fill date placeholders in the local time zone | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo` | Return localized relative time | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now` | Read Unix milliseconds | None | `number` | `core.time.now()` |
+| `core.time.nowSeconds` | Read Unix seconds rounded down | None | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate` | Parse with the native Date parser; invalid input yields an invalid date | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate` | Check whether the Date is valid | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays` | Shift by days on the local calendar | `date, days` | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours` | Shift by hours on the local clock | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay` | Return local midnight at the start of the day | `date` | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay` | Return the last millisecond of the local day | `date` | `Date` | `core.time.endOfDay(date)` |
 
 ## Error handling
 

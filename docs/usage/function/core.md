@@ -176,6 +176,7 @@ core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }
 - 配置名尚未加载时，`watch()` 立即回调 `CONFIG_NOT_LOADED`。
 - 系统无法建立监听或监听过程中报告错误时，回调收到 `SERVICE_UNAVAILABLE`，`isWatching()` 返回 `false`。目录恢复后可重新调用 `watch()`。
 - 取消函数只移除当前回调。`unwatch(name)` 停止该配置的所有监听，`clear(name)` 还会移除缓存，两者省略名称时作用于全部配置。
+- 浏览器不能监听文件；`core.config.isWatching()` 始终返回 `false`，`core.config.unwatch()` 不执行任何操作。
 
 同名配置要换到另一份文件时，先停止原监听，再加载并监听新文件。
 
@@ -330,14 +331,20 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 
 ### 记录日志：`core.logger`
 
-| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace()`、`debug()`、`info()`、`warn()`、`error()`、`fatal()` | 记录指定等级的事件 | 传入消息，按需附上字段。默认阈值 `info` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.create(options?)` | 创建独立的模块 Logger | 名称、级别、格式和上下文按需传入，未指定的设置继承全局 | `Logger` | `const orders = core.logger.create({ name: 'orders' })` |
-| `core.logger.child(fields)` | 创建带固定字段的子 Logger | 传入字段对象 | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure(options)` | 配置全局日志输出和脱敏 | 传入要设置的日志选项，字段见[配置清单](../configuration/core.md) | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel(level)`、`getLevel()` | 调整或读取当前全局阈值 | `setLevel` 必须传入级别，`getLevel` 无参数 | 分别为 `void` 和 `LogLevel` | `core.logger.setLevel('warn')`、`core.logger.getLevel()` |
-| `core.logger.observe(callback)` | 订阅过滤和脱敏后的日志记录 | 回调接收一条记录 | 取消订阅函数 `() => void` | `const stop = core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace` | 记录最细的调试步骤 | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug` | 记录调试信息 | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info` | 记录正常业务事件 | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn` | 记录需关注但可继续的情况 | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error` | 记录失败 | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal` | 记录严重故障，是否退出由应用决定 | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create` | 创建 Logger，省略的设置继承全局 | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child` | 创建带固定字段的子 Logger | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure` | 修改提供的全局日志设置 | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel` | 改全局阈值，初始为 info | `level` | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel` | 读当前全局阈值 | 无参数 | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe` | 接收通过级别筛选且已脱敏的记录 | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 日志按 `trace`、`debug`、`info`、`warn`、`error`、`fatal` 递增，只输出达到当前阈值的记录。阈值为 `fatal` 时只输出这一等级，应用自行决定是否退出。
 
@@ -355,27 +362,34 @@ core.logger.error('Operation failed', {
 })
 ```
 
-`create()` 创建有名称的 Logger，`child()` 给后续日志附带固定字段。`configure()` 设置输出与附加脱敏路径，`setLevel()` / `getLevel()` 调整或查看全局级别。
+`core.logger.create()` 创建有名称的 Logger。`orders.child()` 返回一个新的 Logger，固定字段只加在这个子 Logger 及其后代上。日志方法的第二个参数 `ctx` 给当前这一条日志追加字段。
 
 ```ts
 import { core } from '@h-ai/core'
 
-core.logger.configure({
+core.logger.configure({ // 用 JSON 输出 info 及以上日志，并遮盖 customer.email。
   level: 'info',
   format: 'json',
   redact: ['customer.email'],
 })
-const orders = core.logger.create({ name: 'orders' })
-const request = orders.child({ requestId: 'request-1' })
+const orders = core.logger.create({ name: 'orders' }) // 订单模块的 Logger。
+const request = orders.child({ requestId: 'request-1' }) // 绑定请求编号，orders 不变。
 
+// 以下两条日志都在 core.context.run() 之外执行。
 orders.info('Order created', {
   customer: { email: 'user@example.com' },
-}) // customer.email: '[REDACTED]'
-request.warn('Request needs attention') // requestId: 'request-1'
-core.logger.getLevel() // 'info'
+}) // customer.email: '[REDACTED]'；没有 requestId，因为这里调用的是父 Logger。
+request.warn('Request needs attention', { attempt: 2 })
+// 同时输出 requestId: 'request-1' 和 attempt: 2；单次字段不清除已绑定的字段。
+
+core.context.run({ requestId: 'request-2' }, () => {
+  orders.info('Order checked', { attempt: 1 }) // 输出 requestId: 'request-2' 和 attempt: 1。
+})
 ```
 
-已有默认、模块和嵌套 child Logger 的后续输出会使用当前全局配置，`setLevel()` 也即时生效。`create()` 显式指定的 level/format/context 优先；未指定项动态继承，调用时上下文覆盖固定上下文，当前请求关联字段再由 `core.context` 附加。浏览器 JSON 输出包含 `level` / `msg`，pretty 输出可读消息和上下文。
+字段同名时，后面的来源覆盖前面的：全局字段 → Logger 固定字段（父级到子级）→ 单次 `ctx` → 当前 `core.context`。因此即便在 `ctx` 里也传了 `requestId`，当前请求上下文中的同名字段仍然优先。
+
+修改全局级别、格式或脱敏规则后，已有 Logger 的后续输出也使用新设置；显式指定的级别和格式保持原值。浏览器 JSON 输出包含 `level` 和 `msg`，pretty 输出可读消息和上下文。
 
 `observe()` 用于诊断采集，接收经过当前级别过滤与脱敏的记录，返回解除订阅的函数。回调只做有界内存收集，持久化由应用另行异步完成；它不代表日志已保存。回调异常与同步重入被隔离。
 
@@ -552,7 +566,8 @@ if (!failed.success)
 
 | API | 用途 | 参数与默认值 | 返回值 | 示例 |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)`、`getGlobalLocale()` | 设置或读取当前语言 | 设置时传入语言。初始默认 `zh-CN` | 分别为 `void` 和当前语言 | `core.i18n.setGlobalLocale('ja-JP')`、`core.i18n.getGlobalLocale()` |
+| `core.i18n.setGlobalLocale(locale)` | 设置默认语言 | 语言代码 | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.getGlobalLocale()` | 读取当前语言 | 无；初始默认 `zh-CN` | 语言代码 | `core.i18n.getGlobalLocale()` |
 | `core.i18n.runWithLocale(locale, operation)` | 给当前 Node 请求设置独立的语言 | 语言和回调必填 | 回调的返回值，与回调同步或异步行为一致 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
 | `core.i18n.createMessageGetter(dictionaries)` | 从应用字典创建消息函数 | 传入语言到消息字典的映射 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: '欢迎' } })` |
 | `core.i18n.coreM(key, options?)` | 查询 Core 内置文案 | 键必填，可指定 `locale` 和 `params` | `string`，缺少对应键时返回键名 | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
@@ -635,7 +650,7 @@ if (!parsed.success) {
 | API | 用途 | 参数与默认值 | 返回值 | 示例 |
 | --- | --- | --- | --- | --- |
 | `core.module.createRuntime(steps)` | 按顺序管理应用依赖 | 每步传入名称、启动和关闭函数。可用 `enabled` 控制是否执行 | `ModuleRuntime`，其 `start()` 和 `close()` 均返回 `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(error, message?)` | 构造尚未初始化时的错误与操作代理 | 传错误定义和文案函数，或传已含文案的完整错误 | 带 `error()`、`result()`、`proxy()` 的对象。代理默认异步 | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 让模块在初始化前返回统一的失败结果 | 两个参数都必填：未初始化的错误码或错误定义，以及生成错误文案的函数 | 带 `error()`、`result<T>()`、`proxy<T>(mode?)` 的对象。代理默认异步 | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
 | `core.module.requiresSharedState(environment)` | 判断当前环境是否要求共享后端 | 传入环境变量对象，生产环境中的显式 E2E 模式可豁免 | `boolean` | `core.module.requiresSharedState(process.env)` |
 
 这些工具供应用启动代码和框架模块实现复用，既能管理多个模块，也能在模块尚未初始化时返回一致错误。它们不会替应用决定使用哪些模块。
@@ -692,33 +707,89 @@ finally {
 
 #### 模块尚未初始化时返回错误
 
-`createNotInitializedKit()` 返回 error/result/proxy 三种用法；proxy 为尚未准备好的同步或异步操作返回统一失败结果，模块就绪后应切换为真实操作。消息函数在调用时读取语言。
+这是给模块实现者用的工具。例如，应用在 `cache.init()` 成功前调用 `cache.kv.get(key)`，缓存模块会返回一个「未初始化」的失败结果，而不会尝试访问 Redis。初始化成功后，模块才把 `cache.kv` 指向实际后端。应用使用现成模块时，先初始化、再调用并检查 `success` 即可。
+
+`core.module.createNotInitializedKit()` 本身不负责初始化。模块可以按需要使用它返回的三个方法：
+
+- `error()` 只返回一个错误对象。
+- `result<T>()` 返回 `{ success: false, error }`，适合在某个操作内部提前返回。
+- `proxy<T>()` 返回一个临时操作对象，`T` 是这组操作的接口类型。调用其任意方法都不执行业务操作，默认返回一个 Promise，`await` 后得到 `{ success: false, error }`。整组方法都是同步 API 时，用 `proxy<T>('sync')` 直接返回失败结果。
+
+错误文案在每次生成错误时才求值；文案函数可以使用当前请求的语言。
+
+<a id="order-lookup-example"></a>
+
+##### 场景：订单索引加载完成前，拒绝订单查询
+
+一个订单查询模块只有加载完状态索引才知道订单是否存在。应用启动时如果有调用提前到达，模块应该返回「未初始化」的失败结果，避免调用方把它当成「订单不存在」。下面用内存 `Map` 模拟已加载好的索引，只需要安装 `@h-ai/core`，不需要连接数据库。
 
 ```ts
 import type { HaiResult } from '@h-ai/core'
-import { core, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError, ok } from '@h-ai/core'
+
+interface OrderQueries {
+  getStatus: (orderId: string) => Promise<HaiResult<string | null>>
+}
 
 const message = core.i18n.createMessageGetter({
-  'zh-CN': { notReady: '请先初始化模块' },
-  'en-US': { notReady: 'Initialize the module first' },
-  'ja-JP': { notReady: '先にモジュールを初期化してください' },
+  'zh-CN': { notReady: '订单查询模块尚未初始化' },
+  'en-US': { notReady: 'Order queries are not initialized' },
+  'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
 })
-// 本例固定使用中文消息，便于观察返回值。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined。
-const waiting = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => message('notReady'))
-// waiting 是带 error/result/proxy 的对象。
-waiting.error() // { code: 'hai:common:001', httpStatus: 500, system: 'hai', module: 'common', message: '请先初始化模块' }。
-waiting.result<string>() // { success: false, error: 上方错误对象 }，无 data。
+const waiting = core.module.createNotInitializedKit(
+  HaiCommonError.NOT_INITIALIZED,
+  () => message('notReady'),
+)
+const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
+let activeQueries: OrderQueries | undefined
 
-// 模块实现可把尚未就绪的操作暂时指向这些代理。
-const asyncOperations = waiting.proxy<{ read: () => Promise<HaiResult<string>> }>()
-const syncOperations = waiting.proxy<{ read: () => HaiResult<string> }>('sync')
-// 两次 proxy 调用分别返回异步和同步操作对象。
-const result = await asyncOperations.read() // { success: false, error: 上方错误对象 }。
-if (!result.success)
-  core.logger.warn('Read before initialization', { error: result.error })
-syncOperations.read() // 直接返回 { success: false, error: 上方错误对象 }，不返回 Promise。
+const orderLookup = {
+  init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
+    activeQueries = {
+      async getStatus(orderId) {
+        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+      },
+    }
+    return ok(undefined)
+  },
+  get orders(): OrderQueries {
+    return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。
+  },
+  close(): void {
+    activeQueries = undefined
+  },
+}
+
+const beforeInit = await orderLookup.orders.getStatus('order-42')
+if (!beforeInit.success)
+  core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
+
+// 此处用内存索引模拟已经从数据库加载完的数据。
+const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const found = await orderLookup.orders.getStatus('order-42')
+  const missing = await orderLookup.orders.getStatus('order-99')
+  if (found.success && missing.success)
+    core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
+}
+finally {
+  orderLookup.close()
+}
+const afterClose = await orderLookup.orders.getStatus('order-42')
+if (!afterClose.success)
+  core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
 ```
+
+| 调用时机 | 结果 |
+| --- | --- |
+| 初始化前查询 `order-42`（`beforeInit`） | `success: false`，错误码为 `HaiCommonError.NOT_INITIALIZED.code`，无 `data`。 |
+| 初始化成功后查询 `order-42`（`found`） | `{ success: true, data: 'shipped' }`。 |
+| 初始化成功后查询未知的 `order-99`（`missing`） | `{ success: true, data: null }`，实际查过索引，只是没有这一单。 |
+| 关闭后再次查询 `order-42`（`afterClose`） | 再次返回「未初始化」失败。 |
+
+`proxy()` 不会变成真正的查询对象。是 `orderLookup.orders` 的 getter 在模块就绪后改为返回实际查询，因此每次调用都从 `orderLookup.orders` 取接口，不要把初始化前拿到的占位对象缓存下来。
 
 #### 判断是否需要共享状态
 
@@ -736,63 +807,125 @@ core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // fal
 
 ### 请求访问检查：`core.access`（Node）
 
+这组工具让 Node 后端在执行接口前，先按请求的路径、HTTP 方法、客户端 IP 和服务器时间决定是否放行。例如，限制只有合作方网段能调用某个同步接口。通过检查只表示满足访问策略，接口仍需按自己的规则验证身份和权限。
+
+- 用 **Serv** 或 **Kit**：分别在 `_serv.yml` 的 `http.access` 或 `_kit.yml` 的 `access` 写规则。将对应设置交给 `serv.createApp({ http, ... })` 或 `kit.createHandle({ access, ... })` 后，框架会在启动时准备检查器，每次收到请求自动检查，拒绝时返回 HTTP 403。规则不写在 `_core.yml`。
+- 用 **其他 Node HTTP 框架**：启动时创建 IP 解析器和规则检查器。每次请求时先从连接取出对端地址并解析客户端 IP，再把 URL 的 `pathname`、HTTP 方法和该 IP 传给检查器。Core 返回判定结果，HTTP 响应由你的代码负责。
+
 | API | 用途 | 参数与默认值 | 返回值 | 示例 |
 | --- | --- | --- | --- | --- |
-| `core.access.normalizeClientIp(value?)` | 统一 IPv4/IPv6 地址格式 | IP 字符串可省略 | IP 字符串或 `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | 解析请求的可信客户端地址 | 默认 `auto`，也可明确指定受信代理地址 | `(request, remoteAddress?) => IP 或 undefined` | `const resolve = core.access.createClientIpResolver(['192.0.2.10'])` |
-| `core.access.createConditionCheck(condition)` | 提前准备一组地址及时段条件 | 条件对象必填，字段和默认值见[请求策略](../configuration/core.md#request-access) | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | 启动时准备整个请求策略 | 可传规则、文件或 `false`，省略时关闭策略 | 可重复调用的 `RequestAccessCheck`，配置无效时抛错 | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
-| `core.access.loadPolicy(input?, baseDirectory?)` | 读取并校验规则内容 | 路径默认从进程工作目录起算 | `RequestAccessPolicy` 或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.normalizeClientIp(value?)` | 检查并整理一个 IP 字符串 | 可省略地址 | 有效 IP 字符串；缺少地址或格式无效时返回 `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
+| `core.access.createClientIpResolver(trustedProxies?)` | 创建一个函数，逐请求选出供访问策略检查的 IP | 默认 `auto`；可传代理的 IP 或 CIDR 列表，`[]` 表示不信任任何代理 | `resolveClientIp(request, remoteAddress?)`，返回 IP 或 `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createConditionCheck(condition)` | 单独检查 IP 和当前时段，不匹配路径或方法 | 必须传完整的条件对象；字段见[配置清单](../configuration/core.md#request-access) | `checkCondition(ip?)`，返回 `AccessDecision` | `core.access.createConditionCheck({ allowIps: ['198.51.100.0/24'], denyIps: [], timezone: 'UTC', windows: [] })` |
+| `core.access.createRequestCheck(input?)` | 启动时准备请求检查器 | 内联策略、`{ file }` 或 `false`，省略时为 `false` | `check(pathname, method, ip?)`，返回 `AccessDecision`；无法创建时抛错 | `const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.loadPolicy(input?, baseDirectory?)` | 只读取和校验策略，适合部署前检查文件 | 策略输入同上；相对路径默认从进程工作目录起算 | 校验后的策略对象或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
 
-用 `core.access` 可以从受信代理转发头中取出真实客户端 IP，也可以判断这个地址能否在当前时间访问指定路径。配置独立 API 时在 `_serv.yml` 的 `http.access` 填写策略，配置 SvelteKit 服务时使用 `_kit.yml` 的 `access`。`serv.createApp({ http })` 和 `kit.createHandle({ access })` 会在启动时创建检查器，并在每次处理请求时调用它。
+<a id="client-ip-resolver"></a>
 
 #### 解析与检查客户端地址
+
+**`core.access.createClientIpResolver()` 解决的是「访问策略该检查哪个 IP」的问题。** 比如合作方 `198.51.100.23` 经反向代理 `192.0.2.10` 访问服务时，Node 的套接字只看得到和它直接建立连接的代理 `192.0.2.10`。把这个地址直接交给访问策略，检查到的就是代理，而不是合作方。IP 解析函数会根据你信任哪些代理，决定能否采用代理报告的上游地址。
+
+- **启动时**：`createClientIpResolver(['192.0.2.10'])` 返回一个函数。列表填的是哪些代理有权报告请求来源，**不是**哪些客户端能访问接口。客户端白名单另写在策略的 `allowIps`。
+- **每次请求时**：调用 `resolveClientIp(request, remoteAddress)`。`request` 提供请求头；`remoteAddress` 是服务器从套接字（例如 `socket.remoteAddress`）或可信平台取得的直接连接地址，不从请求头里取。返回的是供访问策略检查的 IP 字符串，取不到则返回 `undefined`。
+
+| 谁直接连到 Node（`remoteAddress`） | `X-Forwarded-For` | 用于检查的 IP |
+| --- | --- | --- |
+| 受信代理 `192.0.2.10` | `198.51.100.23` | `198.51.100.23`：采信这个代理报告的上游地址。 |
+| 未列为受信代理的连接 `203.0.113.7` | 同样是 `198.51.100.23` | `203.0.113.7`：忽略转发头。 |
+| 受信代理 `192.0.2.10` | 未提供，也没有 `X-Real-IP` | `192.0.2.10`：只能确认直接连接的地址。 |
+| 受信代理 `192.0.2.10` | 需要使用的地址无效 | `undefined`：无法确定上游地址。 |
+| 未提供直接连接地址 | 即使有转发头 | `undefined`：无法判断报上地址的是不是受信代理。 |
+
+受信代理提供多个地址时，从 `X-Forwarded-For` 最右边开始，逐跳向左跳过受信代理，取遇到的第一个非受信地址；如果一路都是受信地址，就取最左侧地址。只有缺少 `X-Forwarded-For` 时才读取 `X-Real-IP`。普通 Node 服务使用默认的 `auto` 时忽略转发头；框架生成的私有 Compose 部署会自动使用容器所在的私有网段。显式传 `[]` 则总是忽略转发头。
 
 ```ts
 import { core } from '@h-ai/core'
 
-core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23。
-const resolve = core.access.createClientIpResolver(['192.0.2.10']) // 返回 IP 解析函数，只信任这个代理。
-const request = new Request('https://example.test/api/orders', {
-  headers: { 'x-forwarded-for': '198.51.100.23' }
+// 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const request = new Request('https://example.test/api/partners/inventory/sync', {
+  headers: { 'X-Forwarded-For': '198.51.100.23' },
 })
-// 第二参数必须来自真实 socket/可信平台；这里用测试地址模拟代理对端。
-const clientIp = resolve(request, '192.0.2.10') // '198.51.100.23'，读取受信代理的转发头。
-// 只限制地址。denyIps 和 windows 为空表示没有额外的拒绝地址或时段限制。
-const check = core.access.createConditionCheck({
+
+// 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+const unknown = resolveClientIp(request) // undefined
+
+// 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+const checkIp = core.access.createConditionCheck({
   allowIps: ['198.51.100.0/24'],
   denyIps: [],
   timezone: 'UTC',
   windows: [],
 })
-// createConditionCheck 返回检查函数；check(clientIp) 得到 { allowed: true }。
-core.logger.info('Address checked', { allowed: check(clientIp).allowed })
+checkIp(throughProxy).allowed // true
+checkIp(direct).allowed // false
+checkIp(unknown).allowed // false
 ```
 
+解析成功也不会自动放行：需要把结果交给 `checkIp(ip)` 或 `checkAccess(pathname, method, ip)`。如果规则限制了来源 IP，缺少可用地址（`undefined`）也会被拒绝。Serv 和 Kit 会在内部完成这两步，应用只需在配置里分别设置 `trustedProxies` 和访问策略。
+
 #### 读取策略并检查请求
+
+先检查 `global`，再检查所有路径和方法都匹配的规则；全部通过才放行。没有匹配规则时只受 `global` 限制。`methods` 省略或为空表示匹配全部方法，`/**` 同时匹配该路径和它的子路径。拒绝时返回 `{ allowed: false, reason, ruleId? }`：`reason` 为 `address`、`time` 或 `path`；如果是某条路径规则拒绝，`ruleId` 可以用来定位规则。
+
+<a id="partner-sync-example"></a>
+
+##### 场景：只允许合作方在工作时段同步库存
+
+服务通过反向代理提供 `POST /api/partners/inventory/sync`。库存同步只允许来自合作方网段 `198.51.100.0/24` 的请求，并且只在上海时间周一到周五 `09:00`（含）至 `18:00`（不含）开放。`GET /health` 不受这条规则影响，监控可以照常检查。
+
+下面演示如何接入自建的 Node HTTP 服务。启动时创建解析器和检查器。每次请求时，HTTP 适配层将 Fetch `Request`、服务器套接字看到的对端地址和原有的请求处理函数传给 `handlePartnerAccess()`。示例中的 `192.0.2.10` 是反向代理连接后端时使用的地址；部署时把它和合作方网段替换为实际值。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 服务启动时传入规则，得到一个可以重复调用的请求检查器。
-const check = core.access.createRequestCheck({
+// 启动时配置一次：这里只信任直接连到后端的反向代理。
+const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+const checkAccess = core.access.createRequestCheck({
   rules: [
     {
-      id: 'external-api',
-      paths: ['/api/external/**'],
+      id: 'partner-inventory-sync',
+      paths: ['/api/partners/inventory/sync'],
       methods: ['POST'],
-      allowIps: ['192.0.2.0/24'],
-      encryption: 'disabled'
-    }
+      allowIps: ['198.51.100.0/24'],
+      timezone: 'Asia/Shanghai',
+      windows: [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }],
+    },
   ],
 })
-const decision = check('/api/external/sync', 'POST', '192.0.2.10') // { allowed: true }。
-check.encryption('/api/external/sync', 'POST') // disabled，供 HTTP 框架选择传输模式。
-check.requiresEncryption // false；本例没有 required 规则。
-core.logger.info('Request access checked', { allowed: decision.allowed })
+
+async function handlePartnerAccess(
+  request: Request,
+  peerAddress: string | undefined,
+  next: (request: Request) => Response | Promise<Response>,
+): Promise<Response> {
+  const clientIp = resolveClientIp(request, peerAddress)
+  const { pathname } = new URL(request.url)
+  const decision = checkAccess(pathname, request.method, clientIp)
+  if (!decision.allowed) {
+    core.logger.info('Request access denied', {
+      ruleId: decision.ruleId,
+      reason: decision.reason,
+    })
+    return new Response(null, { status: 403 })
+  }
+  return next(request) // 后续仍执行服务自己的认证和路由逻辑。
+}
 ```
 
-将路径规则保存到 `config/security/request-access.yml` 时，用下面的方式创建同一个检查器。文件结构从 `rules` 或 `global` 开始，见[独立文件示例](../configuration/request-access.md#41-准备文件)。
+| 进入后端的请求（上海时间） | 结果 |
+| --- | --- |
+| 周一 10:00，合作方 `198.51.100.23` 经受信代理发送库存同步请求 | 放行，继续认证和处理库存同步；最终状态码由后续处理函数决定。 |
+| 周一 10:00，其他网段经同一代理请求同步 | 返回 `403`；服务日志的 `reason` 为 `address`。 |
+| 周一 18:00，合作方再次请求同步 | 返回 `403`；日志的 `reason` 为 `time`。 |
+| 任意时间请求 `GET /health` | 没有命中这条规则，健康检查继续执行。 |
+
+用 Serv 或 Kit 时，无需复制这段处理函数。把规则写进 `_serv.yml` 的 `http.access` 或 `_kit.yml` 的 `access`，对应的代理地址写进 `http.trustedProxies` 或顶层 `trustedProxies`；配置示例见[请求访问策略](../configuration/core.md#request-access)。
+
+也可以从独立的 YAML 读取策略。下面改用[独立文件示例](../configuration/request-access.md#41-准备文件)中的规则来演示文件读取，它与上面的库存同步规则是两个例子。
 
 ```ts
 import { core } from '@h-ai/core'
@@ -803,18 +936,28 @@ const check = core.access.createRequestCheck({ file: './config/security/request-
 const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
 ```
 
-- 检查器创建时验证规则。文件最大 1 MiB，文件读不到或内容不合法时会抛错，调用方应停止启动。部署工具等只想读取和验证规则内容时，可以用 `core.access.loadPolicy({ file })`。
-- 请求要通过全局条件和每条命中的规则。即使地址在允许名单里，命中拒绝名单也会被拒绝。允许名单为空时不限制地址，时段列表为空时全天可访问。时段默认使用 UTC。
-- `core.access.createClientIpResolver()` 默认使用 `auto`。由框架生成的私有 Compose 部署可识别其网关所在网段。直接运行 Node 时默认忽略转发头。使用自行配置的代理时传入它连接后端所用的 IP 或网段，从服务器套接字或可信平台接口取得对端地址。
-- Serv 和 Kit 使用 `check.encryption()` 和 `check.requiresEncryption` 决定路径是否使用框架的请求加密。省略 `encryption` 时沿用该服务的加密设置。相同路径、方法的加密模式有冲突时，检查器创建失败。HTTPS 和鉴权仍由 HTTP 服务处理。
+- 文件只在创建检查器时读取，改完需要重启服务或重新创建检查器。文件最大 1 MiB，读不到或内容无效时会抛错；不要带着无效策略继续启动。
+- `denyIps` 优先于 `allowIps`。允许名单为空时不额外限制来源，但拒绝名单仍然有效。时段列表为空时不限制时间；有时段时按服务器时钟判断，默认使用 UTC。
+- `check.encryption(pathname, method)` 只按路径和方法返回 `'required'`、`'disabled'` 或 `undefined`。没有显式设置时返回 `undefined`，由 HTTP 服务沿用自己的设置。若规则的加密模式互相冲突，检查器创建失败；若 `check.requiresEncryption` 为 `true`，Serv 和 Kit 没有配置应用层传输加密时会拒绝启动。
 
-完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../configuration/request-access.md).
+完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../configuration/request-access.md)。
 
 <a id="id-api"></a>
 
 ### 生成与校验标识：`core.id`
 
 生成业务标识与日志关联编号，或检查输入是否符合 UUID v4 / nanoid 格式。
+
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.id.generate` | 生成随机 ID | `length = 21` | `string` | `core.id.generate(8)` |
+| `core.id.short` | 生成固定长度短 ID | 无参数 | `string` | `core.id.short()` |
+| `core.id.withPrefix` | 给随机 ID 加上业务前缀 | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace` | 生成以 trace- 开头的追踪编号 | 无参数 | `string` | `core.id.trace()` |
+| `core.id.request` | 生成以 req- 开头的请求编号 | 无参数 | `string` | `core.id.request()` |
+| `core.id.uuid` | 生成 UUID v4，缺安全随机源会抛错 | 无参数 | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID` | 检查 UUID v4 的格式 | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId` | 检查字符范围和长度 | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 ```ts
 import { core } from '@h-ai/core'
@@ -838,6 +981,17 @@ ID 不能作为密钥。UUID 只使用密码学安全随机源，不可用时抛
 
 对边界数据做类型判断，并帮助 TypeScript 在分支中缩小类型；这些判断不替代业务 Schema 校验。
 
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.typeUtils.isDefined` | 判断值是否既不是 null 也不是 undefined | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject` | 判断值是否为对象，排除 null 和数组 | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction` | 判断是否为函数 | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise` | 判断是否为 Promise | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString` | 判断是否为字符串 | `value` | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber` | 判断是否为数字，排除 NaN | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean` | 判断是否为布尔值 | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray` | 判断是否为数组 | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
+
 ```ts
 import { core } from '@h-ai/core'
 
@@ -856,6 +1010,17 @@ core.typeUtils.isArray([1, 2]) // true。
 ### 处理对象：`core.object`
 
 复制、合并或选取对象字段，也提供带键类型的 keys/values/entries 与 fromEntries。
+
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.object.deepClone` | 复制可克隆的值，函数等不可克隆输入会抛错 | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge` | 递归合并普通对象，后值优先 | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick` | 只保留列出的键 | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit` | 移除列出的键 | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys` | 列出对象自己的可枚举字符串键 | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values` | 依同样顺序列出对象的值 | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries` | 返回键值对 | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries` | 从键值对构造对象 | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 ```ts
 import { core } from '@h-ai/core'
@@ -882,6 +1047,21 @@ deepClone 使用 structuredClone，支持 Date/Map/Set/循环等可克隆值；�
 
 统一命名格式、处理显示文字、判断空白以及比较字符串。
 
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.string.capitalize` | 首字符大写 | `text` | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase` | 转换成连字符分隔的命名 | `text` | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase` | 转换成小驼峰命名 | `text` | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase` | 转换成下划线分隔的命名 | `text` | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase` | 转换成大驼峰命名 | `text` | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate` | 超过指定长度时截取，再加后缀 | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim` | 移除首尾空白 | `text` | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank` | 判断是否为空或只有空白 | `text` | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank` | 判断是否至少有一个非空白字符 | `text` | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart` | 在开头填充到指定长度 | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd` | 在末尾填充到指定长度 | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual` | 比较字符串，不同长度立即返回 false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
+
 ```ts
 import { core } from '@h-ai/core'
 
@@ -907,6 +1087,19 @@ Node 的 constantTimeEqual 对等长 UTF-16 字节使用原生 timingSafeEqual�
 
 按任务需要对数组去重、分块、分组、筛除空值或计算交集/差集；返回结果，保留输入数组。
 
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.array.unique` | 按首次出现的顺序去重 | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy` | 按回调返回的键分组 | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk` | 按正整数大小分块，无效大小返回空数组 | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first` | 读取首项，空数组没有值 | `items` | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last` | 读取末项，空数组没有值 | `items` | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten` | 展开一层嵌套数组 | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact` | 移除 null 和 undefined，保留 0 等值 | `items` | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle` | 返回随机排列的副本 | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection` | 保留第一个数组中也出现在第二个数组的元素 | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference` | 只保留第一个数组中未出现在第二个数组的元素 | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
+
 ```ts
 import { core } from '@h-ai/core'
 
@@ -926,8 +1119,11 @@ core.array.flatten([
 core.array.compact([0, null, 1, undefined]) // [0, 1]，保留 0/false/空字符串。
 core.array.shuffle([1, 2, 3]) // 如 [2, 3, 1]，次序随机；新数组不修改输入。
 core.array.intersection([1, 2], [2, 3]) // [2]。
-core.array.difference([1, 2], [2, 3]) // [1]。
+core.array.difference([1, 2], [2, 3]) // [1]：只保留第一个数组中未出现在第二个数组的元素。
+core.array.difference([2, 3], [1, 2]) // [3]：交换参数会改变结果。
 ```
+
+`difference()` 保留第一个数组中的顺序和未被筛除的重复项；它不计算两边各自独有元素的并集。本例如果要两边各自独有的值，应分别求两个方向的差集，合并得到 `[1, 3]`。
 
 `groupBy()` 支持与原型属性同名的键，例如 `constructor`。`chunk()` 要求块大小为正安全整数，传入小数、无穷大或其他无效大小时返回空数组。
 
@@ -936,6 +1132,16 @@ core.array.difference([1, 2], [2, 3]) // [1]。
 ### 组织异步操作：`core.async`
 
 安排延迟、超时、失败重试、限并发与串行处理，或为输入/滚动等事件添加防抖与节流。
+
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.async.delay` | 异步等待指定毫秒数 | `ms` | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout` | 限制等待时间，超时让等待方失败 | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry` | 抛错时重试；次数包含第一次 | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel` | 限制同时执行的数量，按原顺序返回 | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial` | 按输入顺序逐项执行 | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce` | 等调用停止一段时间后处理最后一次输入 | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle` | 立即处理第一次，在间隔内跳过后续调用 | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
 
 ```ts
 import { core } from '@h-ai/core'
@@ -965,6 +1171,19 @@ scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内�
 
 在毫秒/秒时间戳、Date 和显示文本之间转换，并计算当地日期边界与相对时间。
 
+| API | 用途 | 输入与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.time.formatDate` | 按本地时区填写格式中的日期占位符 | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo` | 按当前语言显示距今时间 | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now` | 读取 Unix 毫秒 | 无参数 | `number` | `core.time.now()` |
+| `core.time.nowSeconds` | 读取向下取整的 Unix 秒 | 无参数 | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate` | 将字符串交给原生 Date 解析，无效输入得到无效日期 | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate` | 检查 Date 是否代表有效时间 | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays` | 按本地日历移动指定天数 | `date, days` | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours` | 按本地时钟移动指定小时数 | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay` | 取当天的本地午夜 | `date` | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay` | 取当天最后一毫秒 | `date` | `Date` | `core.time.endOfDay(date)` |
+
 ```ts
 import { core } from '@h-ai/core'
 
@@ -990,21 +1209,6 @@ core.time.endOfDay(date) // 2026-01-01 23:59:59.999
 `formatDate()` 默认使用 `YYYY-MM-DD`，会替换模板里每处日期占位符。`parseDate()` 使用原生 `Date` 解析，输入无效时可用 `isValidDate()` 检出。跨环境传输建议使用带时区的 ISO 字符串。`addDays()` 和 `addHours()` 按本地日历和时钟计算，在夏令时切换时，经过的实际时长可能不同。
 
 更完整的参数与少见选项见[Core 使用参考](../../../packages/cli/templates/skills/hai-core/reference.md)；公开契约以当前包声明为准。
-
-### 补充日志级别和监听状态
-
-```ts
-const requestLogger = core.logger.child({ requestId: 'req-1' }) // 固定关联字段，返回 Logger。
-requestLogger.trace('Request callback entered') // 级别为 trace，返回 void，受当前日志阈值控制。
-requestLogger.fatal('Application startup failed', { module: 'orders' }) // 级别为 fatal，返回 void。
-```
-
-```ts
-const watching = core.config.isWatching('app') // 输入配置名，返回当前是否在监听。
-core.config.unwatch('app') // 取消 app 的全部监听，返回 void，保留已读取的配置。
-```
-
-浏览器条件入口的 `core.config.isWatching` 始终返回 `false`，`core.config.unwatch` 直接返回。
 
 ## 错误处理
 
