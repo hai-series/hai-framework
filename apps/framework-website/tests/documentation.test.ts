@@ -73,16 +73,16 @@ describe('公开手册的静态阅读契约', () => {
 
   it('缺译文时显示中文，并让侧栏、相关链接和搜索保留请求语言', async () => {
     const base = '/hai-framework'
-    const fallback = await getDocumentPage({ slug: 'configuration/payment', locale: 'ja-JP' }, base)
+    const fallback = await getDocumentPage({ slug: 'configuration/runtime', locale: 'ja-JP' }, base)
     expect(fallback?.locale).toBe('ja-JP')
     expect(fallback?.sourceLocale).toBe('zh-CN')
-    expect(fallback?.file).toBe('configuration/payment.md')
+    expect(fallback?.file).toBe('configuration/runtime.md')
     expect(fallback?.sections.map(section => section.html).join('')).toContain('href="/hai-framework/docs/ja/configuration/"')
     const navigation = await getNavigation()
     expect(docTitle(navigation.sections.find(node => node.id === 'configuration')!, 'ja-JP')).toContain('設定')
     const entries = await searchIndex(base, 'ja-JP')
     expect(entries.every(entry => entry.href.startsWith(`${base}/docs/ja/`))).toBe(true)
-    expect(entries.find(entry => entry.href.endsWith('/configuration/payment/'))?.sourceLocale).toBe('zh-CN')
+    expect(entries.find(entry => entry.href.endsWith('/configuration/runtime/'))?.sourceLocale).toBe('zh-CN')
     expect(new Set(entries.map(entry => entry.href)).size).toBe(entries.length)
   })
 
@@ -95,6 +95,15 @@ describe('公开手册的静态阅读契约', () => {
       const document = await getDocument(module.path, base)
       expect(document?.sections.some(section => section.id === 'api-reference'), module.path).toBe(true)
       expect(document?.sections.some(section => section.html.includes('<table>')), module.path).toBe(true)
+      for (const locale of ['en-US', 'ja-JP'] as const) {
+        for (const section of ['configuration', 'data', 'function']) {
+          const slug = docSlug(module.path.replace('function/', `${section}/`))
+          const translated = await getDocumentPage({ slug, locale }, base)
+          expect(translated?.sourceLocale, `${locale}/${slug}`).toBe(locale)
+          if (section === 'function')
+            expect(translated?.sections.some(part => part.id === 'api-reference'), `${locale}/${slug}`).toBe(true)
+        }
+      }
     }
     const entries = await searchIndex(base, 'en-US')
     expect(entries.find(entry => entry.href.endsWith('/function/core/'))?.partialTranslation).toBe(false)

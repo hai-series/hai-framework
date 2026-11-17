@@ -1,5 +1,7 @@
 # ui 数据结构
 
+[English](ui.en.md) · [日本語](ui.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/ui.md) · [功能说明](../function/ui.md)
 
 ## 数据库与缓存

@@ -10,21 +10,21 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/ai.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/ai.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define model names, endpoints, and other model settings in `config/_ai.yml`. At startup, the application reads the file and passes the settings object to `ai.init(config, options)`.
 
-See the [configuration reference](../../docs/usage/configuration/ai.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/ai.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/ai.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/ai.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/ai.md) in Chinese for the built-in DB Store, vector collections and native memory namespaces.
+See the [data reference](../../docs/usage/data/ai.en.md) for the built-in DB Store, vector collections and native memory namespaces.
 
 ## Development and Testing
 

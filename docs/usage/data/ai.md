@@ -1,5 +1,7 @@
 # ai 数据结构
 
+[English](ai.en.md) · [日本語](ai.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/ai.md) · [功能说明](../function/ai.md)
 
 ## 数据库

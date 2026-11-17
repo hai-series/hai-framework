@@ -62,6 +62,8 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 }
 ```
 
+<a id="api-reference"></a>
+
 ## 轻量公开方法
 
 | 方法 | 用途与返回值 |

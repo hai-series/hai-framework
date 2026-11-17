@@ -1,8 +1,12 @@
 # @h-ai/iam 功能说明
 
+[English](iam.en.md) · [日本語](iam.ja.md)
+
 在 Node.js 服务端用 `iam` 验证身份、管理会话，并为用户分配角色和权限。浏览器通过应用的 HTTP 接口登录和管理账号，也可以导入浏览器入口公开的类型、错误定义和权限标识。
 
 [模块 README](../../../packages/iam/README.md) · [配置清单](../configuration/iam.md) · [数据结构](../data/iam.md) · [身份认证接入](../development/authentication.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

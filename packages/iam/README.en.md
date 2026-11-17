@@ -8,21 +8,21 @@ Identity and access management through a unified `iam` object for authentication
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/iam.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/iam.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define allowed sign-in methods, password rules, and session lifetimes in `config/_iam.yml`. At startup, the application reads the file and passes the settings object to `iam.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/iam.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/iam.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/iam.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/iam.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/iam.md) in Chinese for accounts, roles, permissions, sessions and one-time credentials.
+See the [data reference](../../docs/usage/data/iam.en.md) for accounts, roles, permissions, sessions and one-time credentials.
 
 ## Development and Testing
 

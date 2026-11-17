@@ -62,6 +62,8 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 }
 ```
 
+<a id="api-reference"></a>
+
 ## 軽量メソッド
 
 | メソッド | 用途と戻り値 |

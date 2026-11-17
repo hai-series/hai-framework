@@ -1,8 +1,12 @@
 # @h-ai/ui 功能说明
 
+[English](ui.en.md) · [日本語](ui.ja.md)
+
 在 Svelte 5 组件里导入表单、表格和其他界面组件，通过属性和事件连接页面数据。主题、样式、语言状态和自动导入器有专用导入路径，按下文各节选用。
 
 [模块 README](../../../packages/ui/README.md) · [配置清单](../configuration/ui.md) · [数据结构](../data/ui.md) · [UI 接入](../development/ui.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 
@@ -472,6 +476,8 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
   showOutline={false}
 />
 ```
+
+<a id="tool-workspaces"></a>
 
 ##### 工具与产物工作台
 

@@ -1,5 +1,7 @@
 # iam 数据结构
 
+[English](iam.en.md) · [日本語](iam.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/iam.md) · [功能说明](../function/iam.md)
 
 ## 数据库

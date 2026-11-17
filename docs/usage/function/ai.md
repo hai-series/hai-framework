@@ -1,10 +1,14 @@
 # @h-ai/ai 功能说明
 
+[English](ai.en.md) · [日本語](ai.ja.md)
+
 在 Node.js 服务端用 `ai` 调用模型、执行工具、搜索知识库或连接其他智能体。浏览器的聊天页面通过应用提供的 HTTP 接口发送消息。需要录音或播放时，从 `@h-ai/ai/client` 创建浏览器语音客户端。
 
 模型、工具和知识库的服务端操作从 `ai` 调用。浏览器语音客户端、MCP 服务端工厂和 A2A 协议消息类型有独立导入路径，下文分别注明。
 
 [模块 README](../../../packages/ai/README.md) · [配置清单](../configuration/ai.md) · [数据结构](../data/ai.md) · [AI 接入](../development/ai.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

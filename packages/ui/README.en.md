@@ -12,25 +12,25 @@ HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/ui.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/ui.en.md#quick-start).
 
 ## Configuration Reference
 
 Pass props to a Svelte component, such as the columns and rows of a table. Set the application theme, language, and onboarding through `@h-ai/ui/theme`, `@h-ai/ui/i18n`, and `@h-ai/ui/guide`.
 
-See the [configuration reference](../../docs/usage/configuration/ui.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/ui.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/ui.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/ui.en.md#api-reference) for entry points, inputs, results and examples.
 
-[Tool and artifact workspaces](../../docs/usage/function/ui.md#工具与产物工作台) provide parameter forms, examples, task progress, document editing, version conflicts, and media previews. Applications connect authorized read, write, and execution callbacks (guide in Chinese).
+[Tool and artifact workspaces](../../docs/usage/function/ui.en.md#tool-workspaces) provide parameter forms, examples, task progress, document editing, version conflicts, and media previews. Applications connect authorized read, write, and execution callbacks.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/ui.md) in Chinese for where themes, language settings, and onboarding progress are stored in the browser.
+See the [data reference](../../docs/usage/data/ui.en.md) for where themes, language settings, and onboarding progress are stored in the browser.
 
 ## Development and Testing
 
