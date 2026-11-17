@@ -8,23 +8,23 @@ hai Framework のモバイルアプリ向け Capacitor ネイティブブリッ�
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/capacitor.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/capacitor.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 Capacitor プロジェクトで、プッシュ通知やカメラなど必要なネイティブプラグインをインストールして設定します。起動時に `capacitor.init()` を呼び出した後、`capacitor.push` や `capacitor.camera` を使います。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/capacitor.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/capacitor.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/capacitor.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/capacitor.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-ネイティブ設定、認証情報、写真、プッシュトークンについては[データ構造](../../docs/usage/data/capacitor.md)（中国語）を参照してください。
+ネイティブ設定、認証情報、写真、プッシュトークンについては[データ構造](../../docs/usage/data/capacitor.ja.md)を参照してください。
 
 ## 開発とテスト
 

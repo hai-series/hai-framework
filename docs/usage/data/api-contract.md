@@ -1,5 +1,7 @@
 # api-contract 数据结构
 
+[English](api-contract.en.md) · [日本語](api-contract.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/api-contract.md) · [功能说明](../function/api-contract.md)
 
 ## 数据库与缓存

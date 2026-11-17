@@ -1,5 +1,7 @@
 # API Client 配置
 
+[English](api-client.en.md) · [日本語](api-client.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

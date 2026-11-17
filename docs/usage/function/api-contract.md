@@ -1,10 +1,14 @@
 # @h-ai/api-contract 功能说明
 
+[English](api-contract.en.md) · [日本語](api-contract.ja.md)
+
 通过 `apiContract` 定义前后端共享的 HTTP 方法、路径和参数格式。服务端用这些定义校验请求，并绑定实际处理函数。客户端使用同一份定义获得 TypeScript 类型。
 
 组合 HTTP 契约用 `apiContract.create()`。各领域单独导出的 Schema 用于检查特定输入、输出或类型，下面分别注明这些依赖。
 
 [模块 README](../../../packages/api-contract/README.md) · [配置清单](../configuration/api-contract.md) · [数据结构](../data/api-contract.md) · [前后端接入](../development/frontend-backend.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

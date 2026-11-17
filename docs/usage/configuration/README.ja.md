@@ -10,19 +10,19 @@
 
 ### 実行基盤と API
 
-[core](core.ja.md) · [api-contract](api-contract.md) · [api-client](api-client.md) · [crypto](crypto.md) · [serv](serv.md) · [kit](kit.md)
+[core](core.ja.md) · [api-contract](api-contract.ja.md) · [api-client](api-client.ja.md) · [crypto](crypto.ja.md) · [serv](serv.md) · [kit](kit.md)
 
 ### データとファイル
 
-[reldb](reldb.md) · [cache](cache.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.ja.md)
+[reldb](reldb.md) · [cache](cache.ja.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.ja.md)
 
 ### アプリ機能
 
-[iam](iam.md) · [ai](ai.md) · [tools](tools.ja.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.ja.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.ja.md)
 
 ### ビルドと実行
 
-[cli](cli.md) · [deploy](deploy.md) · [runner](runner.md)
+[cli](cli.ja.md) · [deploy](deploy.md) · [runner](runner.md)
 
 ## 分野別の設定
 

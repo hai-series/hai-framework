@@ -16,23 +16,23 @@ pnpm add -g @h-ai/cli@latest
 hai --version
 ```
 
-[Open the quick-start guide](../../docs/usage/function/cli.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/cli.en.md#quick-start).
 
 ## Configuration Reference
 
 Command-line flags configure the current run. The project’s `hai.json` stores build and deployment settings.
 
-See the [configuration reference](../../docs/usage/configuration/cli.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/cli.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/cli.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/cli.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/cli.md) in Chinese for generated projects, configuration, build caches and deployment records.
+See the [data reference](../../docs/usage/data/cli.en.md) in Chinese for generated projects, configuration, build caches and deployment records.
 
 ## Development and Testing
 

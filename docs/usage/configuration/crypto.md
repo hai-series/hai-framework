@@ -1,5 +1,7 @@
 # Crypto 配置
 
+[English](crypto.en.md) · [日本語](crypto.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

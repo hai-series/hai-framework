@@ -1,5 +1,7 @@
 # Capacitor 配置
 
+[English](capacitor.en.md) · [日本語](capacitor.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

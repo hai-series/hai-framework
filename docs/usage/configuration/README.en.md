@@ -10,19 +10,19 @@ Start with the behavior you want to change. For example, shorten an idle session
 
 ### Runtime and APIs
 
-[core](core.en.md) · [api-contract](api-contract.md) · [api-client](api-client.md) · [crypto](crypto.md) · [serv](serv.md) · [kit](kit.md)
+[core](core.en.md) · [api-contract](api-contract.en.md) · [api-client](api-client.en.md) · [crypto](crypto.en.md) · [serv](serv.md) · [kit](kit.md)
 
 ### Data and files
 
-[reldb](reldb.md) · [cache](cache.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.en.md)
+[reldb](reldb.md) · [cache](cache.en.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.en.md)
 
 ### Application features
 
-[iam](iam.md) · [ai](ai.md) · [tools](tools.en.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.en.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.en.md)
 
 ### Build and execution
 
-[cli](cli.md) · [deploy](deploy.md) · [runner](runner.md)
+[cli](cli.en.md) · [deploy](deploy.md) · [runner](runner.md)
 
 ## Configuration by task
 

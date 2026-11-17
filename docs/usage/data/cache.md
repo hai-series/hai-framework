@@ -1,5 +1,7 @@
 # cache 数据结构
 
+[English](cache.en.md) · [日本語](cache.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/cache.md) · [功能说明](../function/cache.md)
 
 ## 数据库

@@ -1,10 +1,14 @@
 # @h-ai/capacitor 功能说明
 
+[English](capacitor.en.md) · [日本語](capacitor.ja.md)
+
 通过 `capacitor` 在 Capacitor 的 Android/iOS 应用中获取设备信息、注册推送、拍照或读写应用偏好。先安装需要的原生插件并将其同步到 Android/iOS 项目，运行时按需向用户请求权限。认证凭据使用独立的安全存储适配器。
 
 设备相关调用从 `capacitor` 进入。为 API 客户端创建原生安全凭据存储时，使用下面的独立工厂 `createCapacitorTokenStorage()`。
 
 [模块 README](../../../packages/capacitor/README.md) · [配置清单](../configuration/capacitor.md) · [数据结构](../data/capacitor.md) · [构建和原生交付](../getting-started/build.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

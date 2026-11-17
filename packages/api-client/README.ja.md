@@ -10,23 +10,23 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/api-client.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/api-client.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 `apiClient.init(config)` に API のベース URL を渡します。認証情報の保存先、リクエストのタイムアウト、通信の暗号化は必要に応じて指定します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-client.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-client.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/api-client.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/api-client.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-アクセス用と更新用のトークンの保存先、およびトークンが消える条件については[データ構造](../../docs/usage/data/api-client.md)（中国語）を参照してください。
+アクセス用と更新用のトークンの保存先、およびトークンが消える条件については[データ構造](../../docs/usage/data/api-client.ja.md)を参照してください。
 
 ## 開発とテスト
 

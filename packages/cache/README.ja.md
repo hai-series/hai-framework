@@ -8,21 +8,21 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/cache.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/cache.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、バックエンドの種類と Redis の接続設定を `config/_cache.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `cache.init(config)` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/cache.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/cache.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/cache.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/cache.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-Redis とメモリの値型、キー、TTL、ロック所有者については[データ構造](../../docs/usage/data/cache.md)（中国語）を参照してください。
+Redis とメモリの値型、キー、TTL、ロック所有者については[データ構造](../../docs/usage/data/cache.ja.md)を参照してください。
 
 ## 開発とテスト
 

@@ -1,5 +1,7 @@
 # cli 数据结构
 
+[English](cli.en.md) · [日本語](cli.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/cli.md) · [功能说明](../function/cli.md)
 
 ## 数据库与缓存

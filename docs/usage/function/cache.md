@@ -1,8 +1,12 @@
 # @h-ai/cache 功能说明
 
+[English](cache.en.md) · [日本語](cache.ja.md)
+
 通过 `cache` 使用进程内缓存或 Redis，保存键值、列表和集合。多个进程可借助共享 Redis 获取同一把有时效的锁。先检查 `cache.init()` 成功，再读写数据或获取锁。
 
 [模块 README](../../../packages/cache/README.md) · [配置清单](../configuration/cache.md) · [数据结构](../data/cache.md) · [数据服务接入](../development/data.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

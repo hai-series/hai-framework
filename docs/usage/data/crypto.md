@@ -1,5 +1,7 @@
 # crypto 数据结构
 
+[English](crypto.en.md) · [日本語](crypto.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/crypto.md) · [功能说明](../function/crypto.md)
 
 ## 数据库

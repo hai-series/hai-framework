@@ -1,5 +1,7 @@
 # capacitor 数据结构
 
+[English](capacitor.en.md) · [日本語](capacitor.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/capacitor.md) · [功能说明](../function/capacitor.md)
 
 ## 数据库与缓存

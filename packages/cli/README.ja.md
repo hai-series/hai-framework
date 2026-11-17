@@ -16,23 +16,23 @@ pnpm add -g @h-ai/cli@latest
 hai --version
 ```
 
-[最小構成の導入手順](../../docs/usage/function/cli.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/cli.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 実行時のオプションは CLI で指定します。ビルドと配布の設定はプロジェクトの `hai.json` に保存します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/cli.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/cli.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/cli.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/cli.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-生成プロジェクト、設定、ビルドキャッシュ、配布記録については[データ構造](../../docs/usage/data/cli.md)（中国語）を参照してください。
+生成プロジェクト、設定、ビルドキャッシュ、配布記録については[データ構造](../../docs/usage/data/cli.ja.md)を参照してください。
 
 ## 開発とテスト
 

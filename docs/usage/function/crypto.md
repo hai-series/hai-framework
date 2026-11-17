@@ -1,8 +1,12 @@
 # @h-ai/crypto 功能说明
 
+[English](crypto.en.md) · [日本語](crypto.ja.md)
+
 通过 `crypto` 处理加密、签名、哈希和密码存储。加密内容使用加密密钥，存储登录密码时保存带盐哈希。保护 HTTP 请求和响应时使用 `crypto.transport` 或 Serv/Kit 的传输加密支持。
 
 [模块 README](../../../packages/crypto/README.md) · [配置清单](../configuration/crypto.md) · [数据结构](../data/crypto.md) · [前后端接入](../development/frontend-backend.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

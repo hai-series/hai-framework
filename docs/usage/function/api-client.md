@@ -1,8 +1,12 @@
 # @h-ai/api-client 功能说明
 
+[English](api-client.en.md) · [日本語](api-client.ja.md)
+
 通过 `apiClient` 从浏览器、移动应用或 Node.js 调用 HTTP 接口。共享的 API 契约提供参数及返回类型。每个客户端实例管理自己的登录凭据和刷新流程，服务端决定请求能否访问目标资源。
 
 [模块 README](../../../packages/api-client/README.md) · [配置清单](../configuration/api-client.md) · [数据结构](../data/api-client.md) · [前后端接入](../development/frontend-backend.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

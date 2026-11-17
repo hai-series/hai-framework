@@ -1,10 +1,14 @@
 # @h-ai/cli 功能说明
 
+[English](cli.en.md) · [日本語](cli.ja.md)
+
 在终端运行 `hai` 命令创建、构建、部署和检查应用。命令默认在当前目录查找项目，可用 `--cwd` 指定其他目录。构建生成的目录可交给部署命令使用。
 
 这里的示例都是终端命令。看见 `hai xxx` 时，在应用根目录打开终端执行。
 
 [模块 README](../../../packages/cli/README.md) · [配置清单](../configuration/cli.md) · [数据结构](../data/cli.md) · [创建与开发项目](../getting-started/create.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 
