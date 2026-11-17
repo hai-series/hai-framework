@@ -37,8 +37,8 @@ export class TransportTimeError extends Error {
  * @returns 可诊断的失败响应；加密失败仍只返回错误，不发送原业务响应。
  * @example
  * ```ts
- * import { createTransportErrorResponse, TransportBodyTooLargeError } from '@h-ai/crypto'
- * const response = await createTransportErrorResponse(new TransportBodyTooLargeError(1024, 1025))
+ * import { TransportBodyTooLargeError, crypto } from '@h-ai/crypto'
+ * const response = await crypto.transport.createErrorResponse(new TransportBodyTooLargeError(1024, 1025))
  * const status = response.status // 413
  * ```
  */

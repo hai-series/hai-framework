@@ -1,6 +1,6 @@
 import { cache } from '@h-ai/cache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createCacheTransportKeyStore, crypto, HaiCryptoError } from '../../src/index.js'
+import { crypto, HaiCryptoError } from '../../src/index.js'
 
 let publicKey: string
 
@@ -22,7 +22,7 @@ afterAll(() => crypto.close())
 
 describe('bounded transport cache state', () => {
   it('defaults public keys to one hour and expires every cache entry', async () => {
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     expect(store.clientKeyTtlSeconds).toBe(3600)
     const clientId = await store.register(publicKey)
     expect(await store.claimRequest(clientId, 'a'.repeat(32), Date.now() + 660_000)).toBe(true)
@@ -55,14 +55,14 @@ describe('bounded transport cache state', () => {
     86401,
     2147483647,
   ])('rejects an unbounded or invalid public-key lifetime: %s', (ttlSeconds) => {
-    expect(() => createCacheTransportKeyStore({ cache, ttlSeconds })).toThrow(TypeError)
+    expect(() => crypto.transport.createKeyStore({ cache, ttlSeconds })).toThrow(TypeError)
   })
 
   it('shares registration quota between wrappers and recovers at the next minute', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const options = { cache, ttlSeconds: 3600, maxRegistrationsPerMinute: 2 }
-    const first = createCacheTransportKeyStore(options)
-    const second = createCacheTransportKeyStore(options)
+    const first = crypto.transport.createKeyStore(options)
+    const second = crypto.transport.createKeyStore(options)
     const ids = await Promise.all([
       first.register(publicKey),
       second.register(publicKey),
@@ -77,7 +77,7 @@ describe('bounded transport cache state', () => {
   it('does not extend the quota window when admitting another registration', async () => {
     const now = 1_800_000_000_000
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
-    const store = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 2 })
+    const store = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 2 })
     await store.register(publicKey)
     clock.mockReturnValue(now + 30_000)
     await store.register(publicKey)
@@ -87,8 +87,8 @@ describe('bounded transport cache state', () => {
   })
 
   it('rejects a different quota on another node without resetting the shared window', async () => {
-    const first = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 1 })
-    const second = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 2 })
+    const first = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 1 })
+    const second = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 2 })
     await first.register(publicKey)
     await expect(second.register(publicKey)).rejects.toThrow(TypeError)
     await expect(first.register(publicKey)).rejects.toMatchObject({ code: HaiCryptoError.TRANSPORT_BUSY.code })
@@ -98,8 +98,8 @@ describe('bounded transport cache state', () => {
     const now = 1_800_000_000_000
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
     const options = { cache, maxRequestsPerMinute: 2 }
-    const first = createCacheTransportKeyStore(options)
-    const second = createCacheTransportKeyStore(options)
+    const first = crypto.transport.createKeyStore(options)
+    const second = crypto.transport.createKeyStore(options)
     const expiry = now + 660_000
     expect(await first.claimRequest('client', 'a'.repeat(32), expiry)).toBe(true)
     expect(await second.claimRequest('client', 'a'.repeat(32), expiry)).toBe(false)
@@ -113,8 +113,8 @@ describe('bounded transport cache state', () => {
   it('never admits more than the shared quota during concurrent registrations', async () => {
     const options = { cache, maxRegistrationsPerMinute: 3 }
     const stores = [
-      createCacheTransportKeyStore(options),
-      createCacheTransportKeyStore(options),
+      crypto.transport.createKeyStore(options),
+      crypto.transport.createKeyStore(options),
     ]
     const results = await Promise.allSettled(Array.from({ length: 16 }, (_, index) => stores[index % 2].register(publicKey)))
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(3)
@@ -127,7 +127,7 @@ describe('bounded transport cache state', () => {
   it('expires public keys without renewing them on reads', async () => {
     const now = 1_800_000_000_000
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
-    const store = createCacheTransportKeyStore({ cache, ttlSeconds: 1 })
+    const store = crypto.transport.createKeyStore({ cache, ttlSeconds: 1 })
     const clientId = await store.register(publicKey)
     clock.mockReturnValue(now + 500)
     expect(await store.get(clientId)).toBe(publicKey)
@@ -136,13 +136,13 @@ describe('bounded transport cache state', () => {
   })
 
   it('rejects excessive nonce retention and invalid quota settings', async () => {
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     await expect(store.claimRequest('client', 'a'.repeat(32), Date.now() + 961_000)).rejects.toThrow(TypeError)
     for (const value of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
       const registration = { cache, maxRegistrationsPerMinute: value }
       const requests = { cache, maxRequestsPerMinute: value }
-      expect(() => createCacheTransportKeyStore(registration)).toThrow(TypeError)
-      expect(() => createCacheTransportKeyStore(requests)).toThrow(TypeError)
+      expect(() => crypto.transport.createKeyStore(registration)).toThrow(TypeError)
+      expect(() => crypto.transport.createKeyStore(requests)).toThrow(TypeError)
     }
   })
 })

@@ -12,8 +12,8 @@ import { HaiCryptoError } from '../crypto-types.js'
  * 传输预算；业务预算由明文容量推导，安全字段保持独立。
  * @example
  * ```ts
- * import { resolveTransportBodyLimits, type TransportBodyLimits } from '@h-ai/crypto'
- * const limits: TransportBodyLimits = resolveTransportBodyLimits(8 * 1024 * 1024)
+ * import { type TransportBodyLimits, crypto } from '@h-ai/crypto'
+ * const limits: TransportBodyLimits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
  * const proxyBytes = limits.encryptedPayloadBytes
  * ```
  */
@@ -29,8 +29,8 @@ export interface TransportBodyLimits {
  * 业务明文的有效 UTF-8 字节范围：1 KiB～64 MiB；不支持无限制。
  * @example
  * ```ts
- * import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
- * const maximumBytes = TRANSPORT_PLAINTEXT_RANGE.max
+ * import { crypto } from '@h-ai/crypto'
+ * const maximumBytes = crypto.transport.plaintextRange.max
  * ```
  */
 export const TRANSPORT_PLAINTEXT_RANGE = Object.freeze({ min: 1024, max: 64 * 1024 * 1024 })
@@ -40,9 +40,9 @@ export const TRANSPORT_PLAINTEXT_RANGE = Object.freeze({ min: 1024, max: 64 * 10
  *
  * @example
  * ```ts
- * import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: JSON.stringify({ message: 'hello' }) })
- * const text = await readTransportBody(request.body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal: request.signal })
+ * const text = await crypto.transport.readBody(request.body, { maxBytes: crypto.transport.bodyLimits.plaintextBytes, signal: request.signal })
  * ```
  */
 export const TRANSPORT_BODY_LIMITS: TransportBodyLimits = Object.freeze({
@@ -68,8 +68,8 @@ export const TRANSPORT_BODY_LIMITS: TransportBodyLimits = Object.freeze({
  * @throws RangeError - 配置无效；不接受字符串、null、无限制或静默回退。
  * @example
  * ```ts
- * import { resolveTransportBodyLimits } from '@h-ai/crypto'
- * const limits = resolveTransportBodyLimits(8 * 1024 * 1024)
+ * import { crypto } from '@h-ai/crypto'
+ * const limits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
  * const nginxLimit = limits.encryptedPayloadBytes
  * ```
  */
@@ -120,10 +120,10 @@ export class TransportBodyTooLargeError extends RangeError {
  *
  * @example
  * ```ts
- * import { readTransportBody, type ReadTransportBodyOptions } from '@h-ai/crypto'
+ * import { type ReadTransportBodyOptions, crypto } from '@h-ai/crypto'
  * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: 'hello' })
  * const options: ReadTransportBodyOptions = { maxBytes: 1024, signal: request.signal }
- * const text = await readTransportBody(request.body, options)
+ * const text = await crypto.transport.readBody(request.body, options)
  * ```
  */
 export interface ReadTransportBodyOptions {
@@ -147,9 +147,9 @@ export interface ReadTransportBodyOptions {
  *
  * @example
  * ```ts
- * import { readTransportBody } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: 'hello' })
- * const text = await readTransportBody(request.body, { maxBytes: 1024, signal: request.signal })
+ * const text = await crypto.transport.readBody(request.body, { maxBytes: 1024, signal: request.signal })
  * ```
  */
 export async function readTransportBody(
@@ -221,8 +221,8 @@ export async function readTransportBody(
  * @throws RangeError 配置路径、数量或容量无效。
  * @example
  * ```ts
- * import { createTransportBodyPolicy } from '@h-ai/crypto'
- * const policy = createTransportBodyPolicy(undefined, { '/api/files/*': 8 * 1024 * 1024 })
+ * import { crypto } from '@h-ai/crypto'
+ * const policy = crypto.transport.createBodyPolicy(undefined, { '/api/files/*': 8 * 1024 * 1024 })
  * const lease = policy.acquire('/api/files/attachment')
  * try { if (lease) lease.limits.plaintextBytes }
  * finally { lease?.release() }

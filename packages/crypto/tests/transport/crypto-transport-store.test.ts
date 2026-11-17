@@ -1,6 +1,6 @@
 import { cache } from '@h-ai/cache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { createCacheTransportKeyStore, crypto } from '../../src/index.js'
+import { crypto } from '../../src/index.js'
 
 let publicKey: string
 beforeAll(async () => {
@@ -18,8 +18,8 @@ afterAll(() => crypto.close())
 
 describe('crypto transport cache store', () => {
   it('shares client keys across wrappers and deletes only the selected client', async () => {
-    const first = createCacheTransportKeyStore({ cache })
-    const second = createCacheTransportKeyStore({ cache })
+    const first = crypto.transport.createKeyStore({ cache })
+    const second = crypto.transport.createKeyStore({ cache })
     const firstId = await first.register(publicKey)
     const secondId = await second.register(publicKey)
     expect(firstId).not.toBe(secondId)
@@ -31,8 +31,8 @@ describe('crypto transport cache store', () => {
   })
 
   it('atomically consumes a nonce once across wrappers without removing it on client deletion', async () => {
-    const first = createCacheTransportKeyStore({ cache })
-    const second = createCacheTransportKeyStore({ cache })
+    const first = crypto.transport.createKeyStore({ cache })
+    const second = crypto.transport.createKeyStore({ cache })
     const clientId = await first.register(publicKey)
     const expiresAt = Date.now() + 660_000
     const requestId = 'a'.repeat(32)
@@ -50,7 +50,7 @@ describe('crypto transport cache store', () => {
     const generated = crypto.asymmetric.generateKeyPair()
     if (!generated.success)
       throw new Error(generated.error.message)
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     const manager = crypto.transport.createServer({
       keyStore: store,
       serverKeyRing: {

@@ -33,7 +33,7 @@ import { posix } from 'node:path'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
-import { createTransportBodyPolicy, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { Hono as HonoApp } from 'hono'
@@ -75,7 +75,7 @@ const API_METHODS = [
  *
  * const mount: ServMiddlewareMount = { path: '/api/v1/*', middleware: serv.cors({ origin: 'https://app.example.com' }) }
  * // 内置 CORS 在外层补充响应头；预检仍执行访问策略。
- * ```
+ *```
  */
 export interface ServMiddlewareMount {
   readonly path?: string
@@ -98,7 +98,7 @@ export interface ServMiddlewareMount {
  *   const response = await app.request('/health')
  *   return response.ok
  * }
- * ```
+ *```
  */
 export interface ServHttpApp {
   readonly fetch: (request: Request, metadata?: ServRequestMetadata) => Response | Promise<Response>
@@ -130,7 +130,7 @@ export interface ServHttpApp {
  * function mount<TContract extends Parameters<typeof serv.createApp>[0]['contract'], TProcedures extends Parameters<typeof serv.createApp>[0]['procedures']>(options: CreateServAppOptions<TContract, TProcedures>) {
  *   return serv.createApp(options)
  * }
- * ```
+ *```
  */
 export interface CreateServAppOptions<
   TContract extends AnyContractRouter,
@@ -204,7 +204,7 @@ export interface CreateServAppOptions<
  *   return { ai, verifyTicket, preAuthTimeoutMs: 3000, maxSessionMs: 60000 }
  * }
  * // 应用实现 verifyTicket：原子消费共享票据并返回可信 session/grant。
- * ```
+ *```
  */
 export interface ServAudioConfig {
   /** AI 服务对象（提供 `ai.audio` 领域能力）。 */
@@ -255,7 +255,7 @@ export interface ServAudioConfig {
  *
  * const grant: AudioTicketGrant = { operation: 'synthesize', model: 'speech-model', sessionId: 'session-1' }
  * // 签发时绑定；start 帧不能覆盖服务端核准的模型与操作。
- * ```
+ *```
  */
 export interface AudioTicketGrant {
   /** 允许的操作 */
@@ -280,7 +280,7 @@ export interface AudioTicketGrant {
  *   return { session, grant: { operation: 'transcribe' } }
  * }
  * // session 必须来自成功消费的可信票据，不能从客户端 JSON 直接构造。
- * ```
+ *```
  */
 export interface AudioTicketVerification {
   /** IAM 会话摘要 */
@@ -299,7 +299,7 @@ export interface AudioTicketVerification {
  *
  * const request: AuthorizedAudioRequest = { operation: 'synthesize', format: 'mp3' }
  * // model/voice/instruction 只有经应用 authorize 确认后才生效。
- * ```
+ *```
  */
 export interface AuthorizedAudioRequest {
   readonly operation: 'transcribe' | 'synthesize'
@@ -324,7 +324,7 @@ export interface AuthorizedAudioRequest {
  *   return audioWsServers.has(app)
  * }
  * // WeakMap 只绑定本地网络资源，不作为跨节点认证或业务状态。
- * ```
+ *```
  */
 export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
 
@@ -347,7 +347,7 @@ export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
  *
  * const response = await app.request('/health')
  * const healthy = response.ok
- * ```
+ *```
  */
 export function createApp<
   TContract extends AnyContractRouter,
@@ -470,7 +470,7 @@ export function createApp<
     const decision = checkAccess(c.req.path, c.req.method, ipAddress)
     if (decision.allowed) {
       if (!options.transport && c.req.method !== 'OPTIONS'
-        && (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+        && (c.req.raw.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || c.req.raw.headers.has(crypto.transport.protocol.ENVELOPE_HEADER))
         && checkAccess.encryption(c.req.path, c.req.method) === 'disabled') {
         return c.json(buildHaiErrorBody(HaiCommonError.VALIDATION_ERROR, servM('serv_transportPlaintextRequired')), 400)
       }
@@ -522,7 +522,7 @@ export function createApp<
   // - 它需在 oRPC 读取 body 前完成解密
   // - 在下游响应返回后加密
   if (options.transport) {
-    const policy = createTransportBodyPolicy(options.transport.maxPlaintextBytes, options.transport.routePlaintextBytes)
+    const policy = crypto.transport.createBodyPolicy(options.transport.maxPlaintextBytes, options.transport.routePlaintextBytes)
     const mgr = options.transport.crypto.transport.createServer({
       serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
@@ -741,7 +741,7 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const payload: OrpcValidationErrorPayload = { defined: false, code: 'BAD_REQUEST', status: 400, message: 'Validation failed', data: { issues: [] } }
  * const recognized = isOrpcValidationErrorPayload(payload)
- * ```
+ *```
  */
 interface OrpcValidationErrorPayload {
   readonly defined: boolean

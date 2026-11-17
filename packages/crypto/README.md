@@ -18,6 +18,8 @@
 
 ## 功能说明
 
+算法使用 `crypto.asymmetric/hash/symmetric/password`，传输工厂、缓存登记、密钥环解析与 HTTP 工具统一使用 `crypto.transport`。公钥校验接受外部未知值，无需初始化；类型与错误类仍按命名导入。
+
 传输的精确格式见[协议说明](../../docs/usage/function/crypto.md#transport-protocol)，算法输入边界见[输入校验](../../docs/usage/function/crypto.md#primitive-validation)。
 
 [查 API 清单](../../docs/usage/function/crypto.md#api-reference)，包含调用入口、输入、返回值和用法。

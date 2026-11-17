@@ -3,7 +3,7 @@ import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { crypto, TransportTimeError } from '@h-ai/crypto'
 import { Hono } from 'hono'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
@@ -56,9 +56,9 @@ function testResponse(): EncryptedPayload {
 }
 function authenticatedGetHeaders() {
   return {
-    [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
-    [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true',
-    [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({
+    [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id',
+    [crypto.transport.protocol.ENCRYPTED_HEADER]: 'true',
+    [crypto.transport.protocol.ENVELOPE_HEADER]: JSON.stringify({
       ...testPayload(),
       context: {
         ...testPayload().context,
@@ -70,7 +70,7 @@ function authenticatedGetHeaders() {
 
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
-    bodyLimits: TRANSPORT_BODY_LIMITS,
+    bodyLimits: crypto.transport.bodyLimits,
     getServerKeyId: () => 'test-v1',
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
@@ -91,7 +91,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
         maxFutureSkewSeconds: 10,
@@ -148,7 +148,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix, openapi: false, docs: false },
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -182,7 +182,7 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
-    const keyStore = createCacheTransportKeyStore({ cache })
+    const keyStore = crypto.transport.createKeyStore({ cache })
     const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
     const forwardingCrypto = createCryptoWithTransportServer(createServer)
 
@@ -221,7 +221,7 @@ describe('serv.createApp({ transport })', () => {
         },
       ],
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -247,7 +247,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -279,13 +279,13 @@ describe('serv.createApp({ transport })', () => {
     })
     expect(resp.status).toBe(200)
     // 响应应已被自动解密
-    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(resp.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     const data = await resp.json() as { echoed: { msg: string } }
     expect(data.echoed.msg).toBe('hello')
   })
 
   it('renews an expired registry entry before sending concurrent POSTs', async () => {
-    const keyStore = createCacheTransportKeyStore({ cache, ttlSeconds: 2 })
+    const keyStore = crypto.transport.createKeyStore({ cache, ttlSeconds: 2 })
     const origin = 'http://test.local'
     const exchangeUrl = `${origin}/api/v1/_hai/key-exchange`
     const clientIds: string[] = []
@@ -314,7 +314,7 @@ describe('serv.createApp({ transport })', () => {
         if (request.url === exchangeUrl)
           exchange()
         else
-          clientIds.push(request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER) ?? '')
+          clientIds.push(request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? '')
         return Promise.resolve(app.fetch(request))
       },
     })
@@ -355,7 +355,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -382,7 +382,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: failingCrypto,
       },
@@ -395,7 +395,7 @@ describe('serv.createApp({ transport })', () => {
     })
 
     expect(resp.status).toBe(500)
-    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(resp.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     await expect(resp.json()).resolves.toMatchObject({
       error: expect.not.stringContaining('plain'),
     })
@@ -429,7 +429,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -447,7 +447,7 @@ describe('serv.createApp({ transport })', () => {
       : bytes
     const request = new Request('http://localhost/api/v1/raw-body', {
       method: method ?? 'POST',
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', ...headers },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', ...headers },
       body,
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
@@ -465,7 +465,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -477,7 +477,7 @@ describe('serv.createApp({ transport })', () => {
     app.post('/api/v1/raw-body', c => handler(c.req.raw))
     const request = new Request('http://localhost/api/v1/raw-body', {
       method: 'POST',
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
       body: new ReadableStream<Uint8Array>({
         start: controller => controller.close(),
       }),
@@ -497,7 +497,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -524,7 +524,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -543,9 +543,9 @@ describe('serv.createApp({ transport })', () => {
       body,
       headers: {
         'Content-Type': 'application/json',
-        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
+        [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id',
         ...(encrypted
-          ? { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE }
+          ? { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE }
           : {}),
       },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
@@ -574,7 +574,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -594,7 +594,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -606,7 +606,7 @@ describe('serv.createApp({ transport })', () => {
       method: 'POST',
       body,
       signal: controller.signal,
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true' },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', [crypto.transport.protocol.ENCRYPTED_HEADER]: 'true' },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
@@ -620,13 +620,13 @@ describe('serv.createApp({ transport })', () => {
 
   it('服务端公钥超限时不注册客户端', async () => {
     const manager = createFailingEncryptManager()
-    vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
+    vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(crypto.transport.bodyLimits.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
     const app = serv.createApp({
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -646,7 +646,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -685,12 +685,12 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
     })
-    const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
+    const payloadSize = crypto.transport.bodyLimits.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
     app.get('/api/v1/raw-response', () => new Response(text, {
       headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
@@ -716,7 +716,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -737,7 +737,7 @@ describe('serv.createApp({ transport })', () => {
     })
     const init = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      headers: { 'Content-Type': 'application/json', [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
       body: JSON.stringify(testPayload()),
     }
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(413)
@@ -772,7 +772,7 @@ describe('serv.createApp({ transport })', () => {
     })
     expect((await app.request('/api/v1/raw-body', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      headers: { 'Content-Type': 'application/json', [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
       body: JSON.stringify(testPayload()),
     })).status).toBe(200)
     expect(handler).toHaveBeenCalledOnce()
@@ -784,7 +784,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },

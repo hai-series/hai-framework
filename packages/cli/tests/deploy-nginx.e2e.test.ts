@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { TLSSocket } from 'node:tls'
-import { resolveTransportBodyLimits } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
@@ -864,7 +864,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
   it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 保留 %i 明文容量，反馈不缩容，普通 JSON 边界与超限均符合协议', async (maxPlaintextBytes) => {
     if (!fixture)
       throw new Error('Expected an owned proxy fixture')
-    const limits = resolveTransportBodyLimits(maxPlaintextBytes)
+    const limits = crypto.transport.resolveBodyLimits(maxPlaintextBytes)
     const image = 'docker.io/library/node:24.22.1-bookworm-slim'
     ensureDeployTestBaseImage(runtime, image, 30_000)
     let nodeContainer: string | undefined

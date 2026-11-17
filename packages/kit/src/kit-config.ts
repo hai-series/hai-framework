@@ -10,7 +10,7 @@
 
 import type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-types.js'
 import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
-import { TRANSPORT_PLAINTEXT_RANGE, TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { z } from 'zod'
 
 const AbsolutePathSchema = z.custom<`/${string}`>(
@@ -22,14 +22,14 @@ const KitTransportConfigInputSchema = z.union([
   z.literal(false),
   z.object({
     maxPlaintextBytes: z.union([
-      z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max),
+      z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max),
       z.literal('auto'),
     ]).transform(value => value === 'auto'
       ? undefined
       : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
-    maxFutureSkewSeconds: z.number().int().min(0).max(TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000 }),
-    maxRequestAgeSeconds: z.number().int().min(TRANSPORT_TIME_LIMITS.minRequestAgeSeconds).max(TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000 }),
-    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
+    maxFutureSkewSeconds: z.number().int().min(0).max(crypto.transport.timeLimits.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: crypto.transport.protocol.CLOCK_SKEW_MS / 1000 }),
+    maxRequestAgeSeconds: z.number().int().min(crypto.transport.timeLimits.minRequestAgeSeconds).max(crypto.transport.timeLimits.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: crypto.transport.protocol.REQUEST_WINDOW_MS / 1000 }),
+    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
     keyExchangePath: AbsolutePathSchema.default('/api/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
   }),
@@ -48,7 +48,7 @@ const ServerConfigInputSchema = z.object({
  *
  * const config = KitConfigSchema.parse({ server: { port: 3000 }, transport: false })
  * void config
- * ```
+ *```
  */
 export const KitConfigSchema = z.object({
   server: ServerConfigInputSchema.optional(),
@@ -95,7 +95,7 @@ function readServerEnvOverride(): KitServerConfigInput {
  * const config = resolveKitServerConfig({ port: 4000 })
  * // HOST / PORT 环境变量优先于输入。
  * void config.port
- * ```
+ *```
  */
 export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitServerConfig {
   return {
@@ -115,7 +115,7 @@ export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitSer
  *
  * const transport = resolveKitTransportConfig({ excludePaths: ['/api/health'] })
  * if (transport) void transport.keyExchangePath
- * ```
+ *```
  */
 export function resolveKitTransportConfig(
   input: false | KitTransportConfigInput = false,
@@ -136,7 +136,7 @@ export function resolveKitTransportConfig(
  *
  * const config = resolveKitConfig({ transport: false })
  * void config.server.port
- * ```
+ *```
  */
 export function resolveKitConfig(input: KitConfigInput = {}): KitConfig {
   return KitConfigSchema.parse(input)

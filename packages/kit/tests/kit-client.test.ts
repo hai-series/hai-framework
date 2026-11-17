@@ -1,11 +1,11 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { cache } from '@h-ai/cache'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 import { kit } from '../src/kit-main.js'
 
-const KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
+const KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
 
 let fetchSpy: ReturnType<typeof vi.fn>
 
@@ -71,7 +71,7 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
   if (!key.success)
     throw new Error(key.error.message)
   const manager = expectManager(crypto.transport.createServer({
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
@@ -96,12 +96,12 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
       })
     }
 
-    if (!request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER))
+    if (!request.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER))
       return new Response('OK')
-    const verified = await authenticateTransportRequest(manager, request)
+    const verified = await crypto.transport.authenticateRequest(manager, request)
     if (!verified.success)
       throw new Error(verified.error.message)
-    const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    const clientId = request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)
     expect(clientId).toBeTruthy()
     const enc = await manager.encryptResponse(verified.data.context, options.encryptedResponseBody ?? 'OK', 200)
     expect(enc.success).toBe(true)
@@ -111,7 +111,7 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
+        [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE,
       },
     })
   })
@@ -258,8 +258,8 @@ describe('createKitClient - 传输加密', () => {
     const [url, init] = fetchSpy.mock.calls[1]!
     expect(url).toBe('/api/data')
     const headers = new Headers(init.headers)
-    expect(headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBeTruthy()
-    expect(headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    expect(headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)).toBeTruthy()
+    expect(headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
 
     const payload = JSON.parse(init.body as string) as Record<string, unknown>
     expect(payload.encryptedKey).toBeTruthy()
@@ -276,8 +276,8 @@ describe('createKitClient - 传输加密', () => {
     try {
       expect(await (await client.apiFetch('/yyy/api/private')).text()).toBe('OK')
       const request = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1])).find(request => new URL(request.url).pathname === '/yyy/api/private')
-      expect(request?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
-      expect(request?.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(true)
+      expect(request?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+      expect(request?.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(true)
     }
     finally { client.destroy() }
   })
@@ -301,7 +301,7 @@ describe('createKitClient - 传输加密', () => {
     expect(init.body).toBe(formData)
 
     const headers = new Headers(init.headers)
-    expect(headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
     expect(headers.has('Content-Type')).toBe(false)
   })
 
@@ -322,7 +322,7 @@ describe('createKitClient - 传输加密', () => {
     const encrypted = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
     expect(encrypted.method).toBe('POST')
     expect(encrypted.headers.get('X-CSRF-Token')).toBe('request-token')
-    expect(encrypted.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+    expect(encrypted.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
   })
 
   it('request multipart 正文透传且保留 CSRF，不触发密钥交换', async () => {
@@ -362,8 +362,8 @@ describe('createKitClient - 传输加密', () => {
     expect(url).toBe('/api/public/health')
 
     const headers = new Headers(init.headers)
-    expect(headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
-    expect(headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(false)
+    expect(headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
+    expect(headers.has(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(false)
   })
 
   it('加密响应自动解密', async () => {
@@ -378,7 +378,7 @@ describe('createKitClient - 传输加密', () => {
 
     const response = await client.apiFetch('/api/users')
 
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     expect(await response.text()).toBe(originalData)
   })
 
@@ -510,10 +510,10 @@ describe('installBrowserTransportFetch', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(2)
     const dataRequest = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
-    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBeTruthy()
-    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
-    expect(dataRequest.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(dataRequest.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)).toBeTruthy()
+    expect(dataRequest.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+    expect(dataRequest.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)).toBe(true)
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     expect(await response.text()).toBe(originalPayload)
   })
 
@@ -529,9 +529,9 @@ describe('installBrowserTransportFetch', () => {
     for (const pathname of ['/yyy/api/private', '/yyy/api/public/ping', '/yyy-other/api/private'])
       expect(await (await fetch(`http://localhost${pathname}`)).text()).toBe('OK')
     const requests = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1]))
-    expect(requests.find(request => new URL(request.url).pathname === '/yyy/api/private')?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+    expect(requests.find(request => new URL(request.url).pathname === '/yyy/api/private')?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
     for (const pathname of ['/yyy/api/public/ping', '/yyy-other/api/private'])
-      expect(requests.find(request => new URL(request.url).pathname === pathname)?.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+      expect(requests.find(request => new URL(request.url).pathname === pathname)?.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
   })
 
   it('普通页面文档请求保持明文透传', async () => {
@@ -546,7 +546,7 @@ describe('installBrowserTransportFetch', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const request = toRequest(fetchSpy.mock.calls[0]![0], fetchSpy.mock.calls[0]![1])
-    expect(request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(request.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
     expect(await response.text()).toBe('<html>ok</html>')
   })
 
@@ -564,7 +564,7 @@ describe('installBrowserTransportFetch', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const request = toRequest(fetchSpy.mock.calls[0]![0], fetchSpy.mock.calls[0]![1])
-    expect(request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(request.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
     expect(request.headers.get('Content-Type')).toContain('multipart/form-data')
   })
 

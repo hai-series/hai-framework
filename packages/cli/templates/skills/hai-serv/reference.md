@@ -299,7 +299,7 @@ transport:
 
 在 `_serv.yml` 的 `transport` 块配置时间窗口，将字段传给服务端 transport 装配。校时提示与 `TransportTimeError.serverTime` 见 [Crypto 参考](../hai-crypto/reference.md)。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/205/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
 ## 核心 API
 
@@ -347,7 +347,7 @@ const procedures = serv
 
 serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer({ serverKeyRing, keyStore })`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
 
-业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；resolveTransportBodyLimits(limit, { requiredPlaintextBytes }) 合并模块需求：保留显式上限，不足时报配置冲突；省略时按需要推导，无模块需要仍为 1 MiB。Serv/Kit 的 auto 规范化为 undefined。密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 通过 _serv.yml 的 transport.maxPlaintextBytes 或对应 HAI_*_TRANSPORT_MAXPLAINTEXTBYTES 配置并转发到服务端 transport；重建正文保留 signal 并删除旧长度/编码头。
+业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；crypto.transport.resolveBodyLimits(limit, { requiredPlaintextBytes }) 合并模块需求：保留显式上限，不足时报配置冲突；省略时按需要推导，无模块需要仍为 1 MiB。Serv/Kit 的 auto 规范化为 undefined。密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 通过 _serv.yml 的 transport.maxPlaintextBytes 或对应 HAI_*_TRANSPORT_MAXPLAINTEXTBYTES 配置并转发到服务端 transport；重建正文保留 signal 并删除旧长度/编码头。
 
 ```typescript
 import { crypto } from '@h-ai/crypto'
@@ -391,7 +391,7 @@ await apiClient.init({
 
 > 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。
 
-启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和基于 @h-ai/cache 的 Redis registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。开发和测试显式 `createCacheTransportKeyStore({ cache })`（cache 显式使用 memory）。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
+启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和基于 @h-ai/cache 的 Redis registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。开发和测试显式 `crypto.transport.createKeyStore({ cache })`（cache 显式使用 memory）。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 
@@ -465,7 +465,7 @@ const app = serv.createApp({
       middleware: serv.cors({
         origin: origin => origin === 'https://app.example.com',
         credentials: true,
-        exposedHeaders: ['X-Encrypted', 'X-Request-Id'],
+        exposedHeaders: ['X-Encrypted', 'X-Hai-Transport', 'X-Request-Id'],
       }),
     },
     { middleware: requestMetrics },
@@ -498,7 +498,7 @@ const app = serv.createApp({
 - 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
 - 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure。
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
-- 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。
+- 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted` 和 `X-Hai-Transport`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。
 
 #### Context pipeline
 

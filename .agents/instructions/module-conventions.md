@@ -202,7 +202,7 @@ function register(tool: Tool): HaiResult<void> {
 | capacitor    | `capacitor-*`，Node/Browser 条件入口保留对应构建契约                                                              |
 | cli          | `cli-*`；命令启动入口与生成模板遵循 CLI、SvelteKit、Vite、Tauri 各自固定名称                                      |
 | core         | `core-*`、`core-function-*`、`core-util-*`；Node/Browser 入口保持实际环境差异                                     |
-| crypto       | `crypto-*`、`crypto-transport-*`；客户端子路径与服务端入口分开                                                    |
+| crypto       | `crypto-*`、`crypto-transport-*`；运行功能统一从 `crypto` 操作域进入，根入口同时支持 Node 与浏览器                                                    |
 | datapipe     | `datapipe-*`；纯函数与显式抛错工具按签名处理                                                                      |
 | deploy       | `deploy-*`、`deploy-<领域>-*`；容器与平台配置文件保留工具原生名称                                                 |
 | feedback     | `feedback-*`；根入口为 Node 服务，`/client` 为浏览器采集器，`/bundle` 为 Node/浏览器共享的纯离线协议与工具        |

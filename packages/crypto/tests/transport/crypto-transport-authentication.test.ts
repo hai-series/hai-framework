@@ -1,14 +1,14 @@
 import type { EncryptedPayload, EncryptedRequestPayload, TransportCreateServerOptions, TransportKeyPair, TransportMessageContext } from '../../src/index.js'
 import { cache } from '@h-ai/cache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, HaiCryptoError, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '../../src/index.js'
+import { crypto, HaiCryptoError, TransportTimeError } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 let serverKey: TransportKeyPair
 let clientKey: TransportKeyPair
 
 async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSkewSeconds' | 'maxRequestAgeSeconds'>) {
-  const keyStore = createCacheTransportKeyStore({ cache })
+  const keyStore = crypto.transport.createKeyStore({ cache })
   const ring = {
     activeKeyId: 'v1',
     keys: { v1: serverKey },
@@ -88,7 +88,7 @@ describe('authenticated transport protocol', () => {
   afterEach(() => vi.restoreAllMocks())
   afterAll(async () => crypto.close())
 
-  it.each([TRANSPORT_PROTOCOL.CLOCK_SKEW_MS + 1000, -TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS - 1000])('已认证请求的时间偏差 %s 提供校时错误且不消费 nonce', async (offset) => {
+  it.each([crypto.transport.protocol.CLOCK_SKEW_MS + 1000, -crypto.transport.protocol.REQUEST_WINDOW_MS - 1000])('已认证请求的时间偏差 %s 提供校时错误且不消费 nonce', async (offset) => {
     const f = await fixture()
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -172,7 +172,7 @@ describe('authenticated transport protocol', () => {
         activeKeyId: 'v1',
         keys: { v1: serverKey },
       },
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
       ...timing,
     })
     expect(result).toMatchObject({
@@ -255,7 +255,7 @@ describe('authenticated transport protocol', () => {
     expect((await f.a.decryptRequest(f.payload, f.expected)).success).toBe(true)
   })
 
-  it.each([-TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS, TRANSPORT_PROTOCOL.CLOCK_SKEW_MS + 1])('有合法签名但超出时间窗口的请求拒绝：%d', async (offset) => {
+  it.each([-crypto.transport.protocol.REQUEST_WINDOW_MS, crypto.transport.protocol.CLOCK_SKEW_MS + 1])('有合法签名但超出时间窗口的请求拒绝：%d', async (offset) => {
     const f = await fixture()
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -307,7 +307,7 @@ describe('authenticated transport protocol', () => {
     oversized.search = `?q=${'\\'.repeat(8193 - oversized.pathname.length - 3)}`
     const actual = new URL(new Request(oversized).url)
     expect(new TextEncoder().encode(actual.pathname + actual.search).byteLength).toBe(8193)
-    expect((await authenticateTransportRequest(f.a, requestFor(f.payload, oversized.href))).success).toBe(false)
+    expect((await crypto.transport.authenticateRequest(f.a, requestFor(f.payload, oversized.href))).success).toBe(false)
     expect(claim).not.toHaveBeenCalled()
   })
 
@@ -315,7 +315,7 @@ describe('authenticated transport protocol', () => {
     const f = await fixture()
     const handler = vi.fn()
     async function dispatch(request: Request, node = f.a) {
-      const result = await authenticateTransportRequest(node, request)
+      const result = await crypto.transport.authenticateRequest(node, request)
       if (result.success)
         handler(result.data.plaintext)
       return result.success
@@ -352,7 +352,7 @@ describe('authenticated transport protocol', () => {
             clientId: await f.a.registerClientKey(body.clientPublicKey),
           })
         }
-        const verified = await authenticateTransportRequest(f.b, request)
+        const verified = await crypto.transport.authenticateRequest(f.b, request)
         if (!verified.success)
           throw new Error(verified.error.message)
         const encrypted = await f.b.encryptResponse(verified.data.context, '"private"', 200)
@@ -393,7 +393,7 @@ describe('authenticated transport protocol', () => {
     const f = await fixture()
     const url = new URL('https://example.test/orders?q=')
     url.search = `?q=${'\\'.repeat(8192 - url.pathname.length - 3)}`
-    const bytes = TRANSPORT_BODY_LIMITS.plaintextBytes
+    const bytes = crypto.transport.bodyLimits.plaintextBytes
     const text = '你'.repeat(Math.floor(bytes / 3)) + 'a'.repeat(bytes % 3)
     expect(new TextEncoder().encode(text).byteLength).toBe(bytes)
     const actual = new Request(url, { method: 'POST', body: text })
@@ -418,7 +418,7 @@ describe('authenticated transport protocol', () => {
         }
         const wire = await request.text()
         sizes.push(new TextEncoder().encode(wire).byteLength)
-        const verified = await authenticateTransportRequest(f.b, new Request(request.url, { method: request.method, headers: request.headers, body: wire }))
+        const verified = await crypto.transport.authenticateRequest(f.b, new Request(request.url, { method: request.method, headers: request.headers, body: wire }))
         if (!verified.success)
           throw new Error(verified.error.message)
         const pathDigest = crypto.hash.hash(actualPath)
@@ -441,7 +441,7 @@ describe('authenticated transport protocol', () => {
     expect(sizes).toHaveLength(2)
     for (const size of sizes) {
       expect(size).toBeGreaterThan(2_097_152)
-      expect(size).toBeLessThanOrEqual(TRANSPORT_BODY_LIMITS.encryptedPayloadBytes)
+      expect(size).toBeLessThanOrEqual(crypto.transport.bodyLimits.encryptedPayloadBytes)
     }
     client.destroy()
   }, 30_000)
@@ -463,9 +463,9 @@ describe('authenticated transport protocol', () => {
             clientId: await f.a.registerClientKey(body.clientPublicKey),
           })
         }
-        const envelope = request.headers.get(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)!
+        const envelope = request.headers.get(crypto.transport.protocol.ENVELOPE_HEADER)!
         expect(new TextEncoder().encode(envelope).byteLength).toBeLessThan(2048)
-        const verified = await authenticateTransportRequest(f.b, request)
+        const verified = await crypto.transport.authenticateRequest(f.b, request)
         if (!verified.success)
           throw new Error(verified.error.message)
         const encrypted = await f.b.encryptResponse(verified.data.context, '', status)
@@ -475,7 +475,7 @@ describe('authenticated transport protocol', () => {
           status,
           headers: {
             'X-Encrypted': 'true',
-            [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify(encrypted.data),
+            [crypto.transport.protocol.ENVELOPE_HEADER]: JSON.stringify(encrypted.data),
           },
         })
       },

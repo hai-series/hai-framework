@@ -1,7 +1,7 @@
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '../../src/index.js'
 import { cache } from '@h-ai/cache'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createCacheTransportKeyStore, crypto, HaiCryptoError, parseTransportServerKeyRing } from '../../src/index.js'
+import { crypto, HaiCryptoError } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 function createKeyRing(): TransportServerKeyRing {
@@ -17,7 +17,7 @@ function createKeyRing(): TransportServerKeyRing {
 function createManager(serverKeyRing: TransportServerKeyRing): TransportEncryptionManager {
   const server = crypto.transport.createServer({
     serverKeyRing,
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
   })
   if (!server.success)
     throw new Error(server.error.message)
@@ -159,15 +159,15 @@ describe('managed transport server key ring', () => {
     expect(crypto.transport.createServer({ serverKeyRing: first }).success).toBe(false)
     // @ts-expect-error 验证非 TypeScript 调用方遗漏必填 ring 时不会隐式生成密钥。
     expect(crypto.transport.createServer({
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     }).success).toBe(false)
-    expect(parseTransportServerKeyRing(undefined).success).toBe(false)
-    expect(parseTransportServerKeyRing({ activeKeyId: 'missing', keys: first.keys }).success).toBe(false)
-    const malformed = parseTransportServerKeyRing(`{"privateKey":"${first.keys.v1!.privateKey}"`)
+    expect(crypto.transport.parseServerKeyRing(undefined).success).toBe(false)
+    expect(crypto.transport.parseServerKeyRing({ activeKeyId: 'missing', keys: first.keys }).success).toBe(false)
+    const malformed = crypto.transport.parseServerKeyRing(`{"privateKey":"${first.keys.v1!.privateKey}"`)
     expect(malformed.success).toBe(false)
     expect(JSON.stringify(malformed)).not.toContain(first.keys.v1!.privateKey)
     const mismatched = crypto.transport.createServer({
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
       serverKeyRing: {
         activeKeyId: 'v1',
         keys: {
@@ -195,7 +195,7 @@ describe('managed transport server key ring', () => {
     mutable.keys.v1.privateKey = 'invalid'
     expect(manager.getServerKeyId()).toBe('v1')
     expect(await decrypt(manager, request)).toMatchObject({ success: true, data: 'kept' })
-    expect(parseTransportServerKeyRing(JSON.stringify(original))).toMatchObject({ success: true, data: original })
+    expect(crypto.transport.parseServerKeyRing(JSON.stringify(original))).toMatchObject({ success: true, data: original })
   })
 
   it('真实共享 registry 故障时 encryptResponse 返回 HaiResult，注册按显式契约 reject', async () => {

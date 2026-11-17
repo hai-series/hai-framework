@@ -1,6 +1,6 @@
 import { cache } from '@h-ai/cache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createCacheTransportKeyStore, crypto, isValidSM2PublicKey } from '../../src/index.js'
+import { crypto } from '../../src/index.js'
 
 let publicKey: string
 
@@ -19,11 +19,11 @@ afterEach(async () => {
 
 describe('transport registry input boundaries', () => {
   it('accepts only bounded uncompressed SM2 points, with optional 04 prefix', () => {
-    expect(isValidSM2PublicKey(publicKey)).toBe(true)
-    expect(isValidSM2PublicKey(publicKey.slice(2))).toBe(true)
-    expect(isValidSM2PublicKey(publicKey.toUpperCase())).toBe(true)
-    expect(isValidSM2PublicKey(`${publicKey}\n`)).toBe(false)
-    expect(isValidSM2PublicKey(`${publicKey.slice(2)}\n`)).toBe(false)
+    expect(crypto.asymmetric.isValidPublicKey(publicKey)).toBe(true)
+    expect(crypto.asymmetric.isValidPublicKey(publicKey.slice(2))).toBe(true)
+    expect(crypto.asymmetric.isValidPublicKey(publicKey.toUpperCase())).toBe(true)
+    expect(crypto.asymmetric.isValidPublicKey(`${publicKey}\n`)).toBe(false)
+    expect(crypto.asymmetric.isValidPublicKey(`${publicKey.slice(2)}\n`)).toBe(false)
     for (const invalid of [
       null,
       undefined,
@@ -38,7 +38,7 @@ describe('transport registry input boundaries', () => {
       `${publicKey}00`,
       '你'.repeat(2000),
     ]) {
-      expect(isValidSM2PublicKey(invalid)).toBe(false)
+      expect(crypto.asymmetric.isValidPublicKey(invalid)).toBe(false)
       if (typeof invalid === 'string')
         expect(crypto.asymmetric.isValidPublicKey(invalid)).toBe(false)
     }
@@ -47,7 +47,7 @@ describe('transport registry input boundaries', () => {
   it('rejects malformed points before accessing injected storage', async () => {
     const write = vi.spyOn(cache.kv, 'set')
     const stores = [
-      createCacheTransportKeyStore({ cache }),
+      crypto.transport.createKeyStore({ cache }),
     ]
     for (const store of stores)
       await expect(store.register(`04${'0'.repeat(128)}`)).rejects.toBeInstanceOf(TypeError)
@@ -58,7 +58,7 @@ describe('transport registry input boundaries', () => {
     const keyPair = crypto.asymmetric.generateKeyPair()
     if (!keyPair.success)
       throw new Error(keyPair.error.message)
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     const register = vi.spyOn(store, 'register')
     const server = crypto.transport.createServer({
       serverKeyRing: {
@@ -82,7 +82,7 @@ describe('transport registry input boundaries', () => {
     Number.POSITIVE_INFINITY,
     2_147_483_648,
   ])('rejects invalid TTL %s rather than retaining the key forever', (ttlSeconds) => {
-    expect(() => createCacheTransportKeyStore({ cache, ttlSeconds })).toThrow(TypeError)
+    expect(() => crypto.transport.createKeyStore({ cache, ttlSeconds })).toThrow(TypeError)
   })
 
   it.each([
@@ -93,7 +93,7 @@ describe('transport registry input boundaries', () => {
     Number.POSITIVE_INFINITY,
     Number.MAX_SAFE_INTEGER + 1,
   ])('rejects invalid shared quota %s', (maxRegistrationsPerMinute) => {
-    expect(() => createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute })).toThrow(TypeError)
+    expect(() => crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute })).toThrow(TypeError)
   })
 })
 

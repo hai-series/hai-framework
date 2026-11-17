@@ -18,6 +18,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 
 ## Features
 
+Use `crypto.asymmetric/hash/symmetric/password` for algorithms and `crypto.transport` for transport factories, cache registration, key-ring parsing and HTTP helpers. Public-key validation accepts unknown input without initialization. Types and error classes remain named exports.
+
 See the [transport protocol](../../docs/usage/function/crypto.en.md#transport-protocol) and [input compatibility](../../docs/usage/function/crypto.en.md#primitive-validation).
 
 [Browse the API list](../../docs/usage/function/crypto.en.md#api-reference) for entry points, inputs, results and examples.

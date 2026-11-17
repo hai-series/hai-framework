@@ -1,43 +1,223 @@
-# @h-ai/crypto API reference
+# @h-ai/crypto functions
 
-<!-- translation: partial -->
+[中文](crypto.md) · [日本語](crypto.ja.md)
 
-[Chinese source](crypto.md) · [Configuration](../configuration/crypto.en.md) · [Data structures](../data/crypto.en.md)
+Use SM2 for encryption and signatures, SM3 for digests and HMAC, SM4 for content encryption, and password hashing on the server. HTTP transport adds authentication, replay protection and body limits; applications still enforce authorization.
 
-<a id="quick-start"></a>
+[Module README](../../../packages/crypto/README.en.md) · [Configuration](../configuration/crypto.en.md) · [Data structures](../data/crypto.en.md)
 
 ## Quick start
 
-Initialize Crypto before using providers. Obtain configuration and keys from trusted startup code. Use the transport managers to integrate encryption with the server or Fetch client.
+Check initialization before calling algorithms. Algorithms return HaiResult: check success before reading data, and propagate failures to the application error boundary. Run later algorithm examples after initialization and before closure.
 
 ```ts
 import { crypto } from '@h-ai/crypto'
 
-// 初始化（使用前必须调用）
 const initialized = await crypto.init()
 if (!initialized.success)
-  throw new Error(initialized.error.message)
+  throw new Error(initialized.error.message, { cause: initialized.error })
+const digestResult = crypto.hash.hash('abc')
+if (!digestResult.success)
+  throw new Error(digestResult.error.message, { cause: digestResult.error })
+const digest = digestResult.data
+// digest: 66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0
 ```
 
 <a id="api-reference"></a>
 
-## API list
+## Features
 
-| API | Purpose | Input | Output | Example |
+<a id="lifecycle"></a>
+
+### Prepare and close algorithms: `crypto`
+
+Initialization prepares algorithm objects. Their owner closes independent transport managers and clients before closing the module.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `crypto.init` | Prepare the algorithms before using them. | None | `Promise<HaiResult<void>>` | `await crypto.init()` |
 | `crypto.close` | Clear module state. Close transport managers and sessions when their owners are done with them. | None | `Promise<void>` | `await crypto.close()` |
 | `crypto.isInitialized` | Read readiness (property). | None | `boolean` | `crypto.isInitialized` |
+
+#### Scenario: Check readiness and close
+
+No arguments are required. Readiness becomes true after successful initialization and false after close. Reinitialize before running later examples. Closing during initialization prevents a late result from reopening the module.
+
+```ts
+crypto.isInitialized // true
+await crypto.close() // Promise<void>
+crypto.isInitialized // false
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message, { cause: initialized.error })
+crypto.isInitialized // true
+```
+
+<a id="asymmetric"></a>
+
+### Encrypt and sign: `crypto.asymmetric`
+
+Encrypt with the recipient public key and decrypt with its private key. Sign with the sender private key and verify with its public key. Keys and ciphertext vary on each run.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
 | `crypto.asymmetric.generateKeyPair` | Create an SM2 key pair. | None | `HaiResult<KeyPair>` | `crypto.asymmetric.generateKeyPair()` |
 | `crypto.asymmetric.encrypt` | Encrypt text with the recipient's public key. | `data, publicKey, options?; cipherMode = 1, outputFormat = 'hex'` | `HaiResult<string>` | `crypto.asymmetric.encrypt('orders', publicKey)` |
 | `crypto.asymmetric.decrypt` | Recover plain text with the matching private key and the same cipher mode. | `ciphertext, privateKey, options?; cipherMode = 1` | `HaiResult<string>` | `crypto.asymmetric.decrypt(ciphertext, privateKey)` |
 | `crypto.asymmetric.sign` | Sign a message with a private key. | `data, privateKey, options?; hash = true, userId = '1234567812345678'` | `HaiResult<string>` | `crypto.asymmetric.sign('orders', privateKey)` |
 | `crypto.asymmetric.verify` | Test the signature with the public key and the same options as signing. | `data, signature, publicKey, options?; hash = true, userId = '1234567812345678'` | `HaiResult<boolean>` | `crypto.asymmetric.verify('orders', signature, publicKey)` |
-| `crypto.asymmetric.isValidPublicKey` | Check the SM2 public key format. | `publicKey` | `boolean` | `crypto.asymmetric.isValidPublicKey(publicKey)` |
 | `crypto.asymmetric.isValidPrivateKey` | Check the SM2 private key format. | `privateKey` | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
+| `crypto.asymmetric.isValidPublicKey` | Validate the encoding and curve point of an external SM2 public key | Validate a candidate received from outside the application. Accepts any value; a key must have 128 hexadecimal digits, optionally prefixed with `04` (130 digits total) | `boolean` type guard: `true` only for valid encoding and a point on the SM2 curve; initialization is unnecessary | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
+
+#### Scenario: Generate keys, round-trip a message and verify its signature
+
+The message is order-42. Decryption restores that text; verification of a changed message succeeds with false. The independent validator also accepts external values such as null and returns false.
+
+```ts
+import { crypto } from '@h-ai/crypto'
+
+const pairResult = crypto.asymmetric.generateKeyPair()
+if (!pairResult.success)
+  throw new Error(pairResult.error.message, { cause: pairResult.error })
+const pair = pairResult.data
+crypto.asymmetric.isValidPublicKey(pair.publicKey) // true
+crypto.asymmetric.isValidPrivateKey(pair.privateKey) // true
+crypto.asymmetric.isValidPublicKey(null) // false
+crypto.asymmetric.isValidPublicKey('not-a-public-key') // false
+
+const ciphertextResult = crypto.asymmetric.encrypt('order-42', pair.publicKey)
+if (!ciphertextResult.success)
+  throw new Error(ciphertextResult.error.message, { cause: ciphertextResult.error })
+const ciphertext = ciphertextResult.data
+const decryptedResult = crypto.asymmetric.decrypt(ciphertext, pair.privateKey)
+if (!decryptedResult.success)
+  throw new Error(decryptedResult.error.message, { cause: decryptedResult.error })
+decryptedResult.data // 'order-42'
+const signatureResult = crypto.asymmetric.sign('order-42', pair.privateKey)
+if (!signatureResult.success)
+  throw new Error(signatureResult.error.message, { cause: signatureResult.error })
+const signature = signatureResult.data
+const verifiedResult = crypto.asymmetric.verify('order-42', signature, pair.publicKey)
+if (!verifiedResult.success)
+  throw new Error(verifiedResult.error.message, { cause: verifiedResult.error })
+verifiedResult.data // true
+const changedMessageResult = crypto.asymmetric.verify('changed', signature, pair.publicKey)
+if (!changedMessageResult.success)
+  throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
+changedMessageResult.data // false
+```
+
+#### Scenario: Select ciphertext encoding and signing options
+
+`cipherMode` chooses the order of three parts of one SM2 ciphertext: C1 is the temporary curve point needed for decryption, C2 is the encrypted content, and C3 checks integrity. The default `1` orders them C1→C3→C2; `0` orders them C1→C2→C3. It does not split content. Encryption and decryption must agree.
+
+`outputFormat` encodes that ciphertext as a string; it defaults to `hex`. The example selects `base64` and passes the same options to decryption.
+
+The previous scenario omits signing options, using `{ hash: true, userId: '1234567812345678' }`. Here `signing` **overrides userId with `'orders-service'`**, and verification passes the same object. This public identifier participates in the SM2 identity digest; it is neither an IAM user ID nor a password and does not bind the logged-in user automatically. With `hash: true`, SM3 processes the identity digest and original message before signing. Keep this default for business text, including large text.
+
+```ts
+const pairResult = crypto.asymmetric.generateKeyPair()
+if (!pairResult.success)
+  throw new Error(pairResult.error.message)
+const pair = pairResult.data
+const options = { cipherMode: 1, outputFormat: 'base64' } as const
+const encodedResult = crypto.asymmetric.encrypt('order-42', pair.publicKey, options)
+if (!encodedResult.success)
+  throw new Error(encodedResult.error.message, { cause: encodedResult.error })
+const encoded = encodedResult.data
+const decodedResult = crypto.asymmetric.decrypt(encoded, pair.privateKey, options)
+if (!decodedResult.success)
+  throw new Error(decodedResult.error.message, { cause: decodedResult.error })
+decodedResult.data // 'order-42'
+const signing = { hash: true, userId: 'orders-service' }
+const signedResult = crypto.asymmetric.sign('order-42', pair.privateKey, signing)
+if (!signedResult.success)
+  throw new Error(signedResult.error.message, { cause: signedResult.error })
+const signed = signedResult.data
+const customVerifiedResult = crypto.asymmetric.verify('order-42', signed, pair.publicKey, signing)
+if (!customVerifiedResult.success)
+  throw new Error(customVerifiedResult.error.message, { cause: customVerifiedResult.error })
+customVerifiedResult.data // true
+```
+
+<a id="primitive-validation"></a>
+
+SM2 encrypts nonempty text only. Failed authentication or incomplete ciphertext returns a failed result. Private keys use 64 hexadecimal digits and scalars 1 through n−2; signatures use 128 hexadecimal digits. Public-key validation does not prove ownership.
+
+#### Scenario: Decide whether to process large text directly
+
+`crypto.asymmetric.encrypt/sign` consume a whole string synchronously. They provide no automatic segmentation, streaming API or background Worker. SM2 encryption handles variable-length messages; internal KDF blocks still produce one complete ciphertext.
+
+For L UTF-8 bytes, this implementation produces L+96 ciphertext bytes (64 for C1 and 32 for C3), or `2 × (L+96)` hex characters. JavaScript string.length is not a byte count.
+
+Default signing hashes the identity digest and full message with SM3, then produces one signature: always128 hex characters (64bytes). Verification still needs the original message and matching userId/hash. Current internals convert and copy whole inputs; fixed signature length does not mean fixed memory usage.
+
+A local1 MiB ASCII sample passed encryption/decryption and signing/verification:2097344 ciphertext hex characters and128 signature characters. This is a verified sample, not a promised limit. The primitives currently enforce no business byte cap. Catchable failures return failed results, but memory exhaustion cannot guarantee a result. Apply a UTF-8 byte cap before calling. Prefer the existing SM2/SM4/HMAC transport scheme for large bodies within its configured limits; it is not an unlimited streaming file API.
+
+<a id="hashing"></a>
+
+### Digests and message authentication: `crypto.hash`
+
+A digest checks content; HMAC additionally requires a shared secret. A plain digest does not identify its sender.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
 | `crypto.hash.hash` | Compute a 64-digit hexadecimal SM3 digest. | `data: string / Uint8Array, options?; inputEncoding = 'utf8'` | `HaiResult<string>` | `crypto.hash.hash('orders')` |
 | `crypto.hash.hmac` | Compute a keyed SM3 digest. | `data, key` | `HaiResult<string>` | `crypto.hash.hmac('orders', secretKey)` |
 | `crypto.hash.verify` | Compute the digest again and compare it with the expected value. | `data, expectedHash` | `HaiResult<boolean>` | `crypto.hash.verify('orders', digest)` |
+
+#### Scenario: Check text, bytes and a keyed message
+
+The inputs are abc, its UTF-8 bytes and its hex encoding; all three digests match. Invalid hex fails. The HMAC secret is demonstration data; obtain real secrets from protected configuration.
+
+```ts
+const digestResult = crypto.hash.hash('abc')
+if (!digestResult.success)
+  throw new Error(digestResult.error.message, { cause: digestResult.error })
+const digest = digestResult.data
+// 66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0
+const byteDigestResult = crypto.hash.hash(new TextEncoder().encode('abc'))
+if (!byteDigestResult.success)
+  throw new Error(byteDigestResult.error.message, { cause: byteDigestResult.error })
+byteDigestResult.data === digest // true
+const hexDigestResult = crypto.hash.hash('616263', { inputEncoding: 'hex' })
+if (!hexDigestResult.success)
+  throw new Error(hexDigestResult.error.message, { cause: hexDigestResult.error })
+hexDigestResult.data === digest // true
+crypto.hash.hash('6z', { inputEncoding: 'hex' }).success // false
+const digestVerifiedResult = crypto.hash.verify('abc', digest)
+if (!digestVerifiedResult.success)
+  throw new Error(digestVerifiedResult.error.message, { cause: digestVerifiedResult.error })
+digestVerifiedResult.data // true
+const changedDigestResult = crypto.hash.verify('changed', digest)
+if (!changedDigestResult.success)
+  throw new Error(changedDigestResult.error.message, { cause: changedDigestResult.error })
+changedDigestResult.data // false
+const macResult = crypto.hash.hmac('order-42', 'demo-shared-secret')
+if (!macResult.success)
+  throw new Error(macResult.error.message, { cause: macResult.error })
+const mac = macResult.data
+mac.length // 64
+```
+
+HMAC measures keys in UTF-8 bytes and hashes keys longer than 64 bytes with SM3. Hex input must contain complete bytes; strings default to utf8.
+
+<a id="symmetric"></a>
+
+### Encrypt with a shared key: `crypto.symmetric`
+
+SM4 defaults to CBC with a fresh IV; the result carries the fields needed for decryption. An IV may be public but must not be reused with the same key. Keep the key secret.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
 | `crypto.symmetric.generateKey` | Generate a random SM4 key (32 hexadecimal digits). | None | `string` | `crypto.symmetric.generateKey()` |
 | `crypto.symmetric.generateIV` | Generate a random initialization vector (32 hexadecimal digits). | None | `string` | `crypto.symmetric.generateIV()` |
 | `crypto.symmetric.encrypt` | Encrypt text as a payload. CBC generates a new IV if none is supplied. | `data, key, options?; mode = 'cbc', outputFormat = 'hex'` | `HaiResult<SymmetricEncryptedPayload>` | `crypto.symmetric.encrypt('orders', key)` |
@@ -46,18 +226,130 @@ if (!initialized.success)
 | `crypto.symmetric.decryptWithIV` | Decrypt hex-encoded CBC ciphertext with the original key and IV. | `ciphertext, key, iv` | `HaiResult<string>` | `crypto.symmetric.decryptWithIV(ciphertext, key, iv)` |
 | `crypto.symmetric.isValidKey` | Check the SM4 key format. | `key` | `boolean` | `crypto.symmetric.isValidKey(key)` |
 | `crypto.symmetric.isValidIV` | Check the initialization vector format. | `iv` | `boolean` | `crypto.symmetric.isValidIV(iv)` |
+
+#### Scenario: Store a structured payload and decrypt it
+
+The input is hello and a generated 32-digit hexadecimal key. Both round trips restore hello; ciphertext and IV vary.
+
+```ts
+const key = crypto.symmetric.generateKey()
+crypto.symmetric.isValidKey(key) // true
+const encryptedResult = crypto.symmetric.encrypt('hello', key)
+if (!encryptedResult.success)
+  throw new Error(encryptedResult.error.message, { cause: encryptedResult.error })
+const encrypted = encryptedResult.data
+// { mode: 'cbc', encoding: 'hex', ciphertext: '…', iv: '…' }
+const plaintextResult = crypto.symmetric.decrypt(encrypted, key)
+if (!plaintextResult.success)
+  throw new Error(plaintextResult.error.message, { cause: plaintextResult.error })
+plaintextResult.data // 'hello'
+const withIVResult = crypto.symmetric.encryptWithIV('hello', key)
+if (!withIVResult.success)
+  throw new Error(withIVResult.error.message, { cause: withIVResult.error })
+const withIV = withIVResult.data
+const plaintextWithIVResult = crypto.symmetric.decryptWithIV(withIV.ciphertext, key, withIV.iv)
+if (!plaintextWithIVResult.success)
+  throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
+plaintextWithIVResult.data // 'hello'
+```
+
+#### Scenario: Supply a fresh IV and return Base64
+
+Generate an independent IV for this encryption only. The payload records encoding=base64, which decrypt uses to decode it.
+
+```ts
+const key = crypto.symmetric.generateKey()
+const iv = crypto.symmetric.generateIV()
+crypto.symmetric.isValidIV(iv) // true
+const base64PayloadResult = crypto.symmetric.encrypt('hello', key, {
+  mode: 'cbc', iv, outputFormat: 'base64',
+})
+if (!base64PayloadResult.success)
+  throw new Error(base64PayloadResult.error.message, { cause: base64PayloadResult.error })
+const base64Payload = base64PayloadResult.data
+base64Payload.encoding // 'base64'
+const base64PlaintextResult = crypto.symmetric.decrypt(base64Payload, key)
+if (!base64PlaintextResult.success)
+  throw new Error(base64PlaintextResult.error.message, { cause: base64PlaintextResult.error })
+base64PlaintextResult.data // 'hello'
+```
+
+SM4 accepts empty plaintext, but decryption rejects empty ciphertext, invalid encoding, incomplete 16-byte blocks, invalid PKCS#7 padding and invalid UTF-8. Select ECB only when a protocol requires it. CBC provides no message authentication; use transport for HTTP. Passwords and password hashes are not SM4 keys; this module has no password-to-key derivation function.
+
+<a id="passwords"></a>
+
+### Store and verify passwords: `crypto.password`
+
+Generate salted password records on the server, store the record instead of plaintext and verify at login.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
 | `crypto.password.hash` | Generate a password hash for a server-side account store. | `password, config?; saltLength = 16 characters, iterations = 10000` | `HaiResult<string>` | `crypto.password.hash(password)` |
 | `crypto.password.verify` | Check a password against the stored hash. | `password, storedHash` | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
+
+#### Scenario: Distinguish a match, a mismatch and a malformed record
+
+Hashing the same password produces different records. A wrong password is successful data false; a malformed record is a failed result with INVALID_INPUT.
+
+```ts
+const recordResult = crypto.password.hash('demo-password', {
+  saltLength: 16, iterations: 10000,
+})
+if (!recordResult.success)
+  throw new Error(recordResult.error.message, { cause: recordResult.error })
+const record = recordResult.data
+// record is the full random record string; fields are explained below.
+const passwordMatchedResult = crypto.password.verify('demo-password', record)
+if (!passwordMatchedResult.success)
+  throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
+passwordMatchedResult.data // true
+const wrongPasswordResult = crypto.password.verify('wrong-password', record)
+if (!wrongPasswordResult.success)
+  throw new Error(wrongPasswordResult.error.message, { cause: wrongPasswordResult.error })
+wrongPasswordResult.data // false
+const malformed = crypto.password.verify('demo-password', '$hai$invalid')
+malformed.success // false
+if (!malformed.success) {
+  malformed.error.code // 'hai:crypto:002'
+}
+```
+
+saltLength defaults to 16 (integer 8–128); iterations defaults to 10000 (integer 1–1000000). Records use `$hai$iterations$salt$hash`: canonical decimal iterations, an alphanumeric salt and a 64-digit lowercase hexadecimal digest. Do not log passwords, records or keys.
+
+`saltLength` is the number of random **characters** in each record’s salt, not the password length. The implementation chooses from uppercase/lowercase letters and digits; 16 means 16 characters. The salt makes equal passwords produce different records and is stored with the digest.
+
+`iterations` counts repeated SM3 calculations: start with salt + password, then hash repeatedly. 10000 means ten thousand rounds, not login retries. More rounds take more synchronous CPU time during both creation and verification. Omitting the options uses 16 and 10000.
+
+The returned string is a **password hash record** stored in the user database, not an encrypted password that can be decrypted. This concrete example verifies demo-password; real hash calls generate new salts and therefore return different records:
+
+```text
+$hai$10000$Q7m2k8R4v6N1x9Za$d2f65faa5aca03c5bd806077ba5ade701fbaad6a3ce85388325e7a924697d2aa
+```
+
+| Part | Example value | Meaning |
+| --- | --- | --- |
+| `$hai$` | `$hai$` | Framework password-record format marker |
+| `iterations` | `10000` | Rounds used for this record; read by verify |
+| `salt` | `Q7m2k8R4v6N1x9Za` | This record’s 16-character random salt |
+| `hash` | `d2f65f…697d2aa` | Final 64-character lowercase hex digest; full value above |
+
+Dollar signs delimit the fields. At login, pass the entered password and the entire saved record to verify. It reads the rounds and salt, recomputes and compares; no saltLength/iterations options are needed. Angle-bracket placeholders are not valid records.
+
+<a id="transport"></a>
+
+### Negotiate and protect HTTP: `crypto.transport`
+
+Ordinary applications use Serv/Kit on the server and api-client/kit.client on the client. The following factories support custom adapters. Production nodes share a managed key ring and Redis registry.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
 | `crypto.transport.createServer` | Make the transport manager. Supply the server key ring and a shared key store on the server. | `{ serverKeyRing, keyStore, … }` | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
 | `crypto.transport.createClient` | Make a client session. Its key exchange URL must resolve to the configured server endpoint. | `{ keyExchangeUrl, fetch?, maxPlaintextBytes? }` | `TransportClient` | `crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange' })` |
-| `crypto.transport.protocol` | Read the shared header names and protocol constants (property). | None | `TRANSPORT_PROTOCOL_T` | `crypto.transport.protocol` |
-
-### Transport manager and client session
-
-Check `success` before reading `data` from a `HaiResult`. Ciphertext, signatures and hashes in the examples come from prior successful calls. The `manager` comes from `createServer().data` after checking `success`; `createClient()` returns the `session` directly. The server supplies the actual HTTP request context.
-
-| API | Purpose | Input | Output | Example |
-| --- | --- | --- | --- | --- |
+| `crypto.transport.protocol` | Read the shared header names and protocol constants (property). | None | `typeof crypto.transport.protocol` | `crypto.transport.protocol` |
 | `manager.getServerKeyId` | Read the active server key ID. | None | `string` | `manager.getServerKeyId()` |
 | `manager.getServerPublicKey` | Read the current public key for exchange. | None | `string` | `manager.getServerPublicKey()` |
 | `manager.registerClientKey` | Register a client's public key; returns its client ID. | `clientPublicKey` | `Promise<string>` | `await manager.registerClientKey(clientPublicKey)` |
@@ -69,48 +361,110 @@ Check `success` before reading `data` from a `HaiResult`. Ciphertext, signatures
 | `session.encryptedFetch` | Send a request with the Fetch signature through the encrypted session. | `input, init?` | `Promise<Response>` | `await session.encryptedFetch(ordersUrl)` |
 | `session.ready` | Check whether the session can send a new request. | None | `boolean` | `session.ready()` |
 | `session.destroy` | Remove the local session's key material. | None | `void` | `session.destroy()` |
+| `crypto.transport.parseServerKeyRing` | Parse a key ring supplied by trusted startup code | Secret JSON or object | `HaiResult<TransportServerKeyRing>`; errors omit secrets | `crypto.transport.parseServerKeyRing(secret)` |
 
-### HTTP helpers and store instances
+#### Scenario: Build a server from a trusted Secret
 
-These root exports serve HTTP adapters, configuration parsing and independent registry instances. They are infrastructure contracts; algorithm operations and the main transport factories remain under `crypto`. The creating application owns returned instances.
+Prerequisites: Crypto and Cache are initialized. secret comes from a server Secret Manager or protected environment variable, as JSON or an object containing activeKeyId and keys. Invalid input returns a redacted failure; successful data is a manager.
 
-| API | Input and defaults | Output and failure | Example |
-| --- | --- | --- | --- |
-| `isValidSM2PublicKey` | Unknown value | `boolean`; no initialization | `isValidSM2PublicKey(value)` |
-| `parseTransportServerKeyRing` | Secret JSON or object | `HaiResult<TransportServerKeyRing>`; errors omit secrets | `parseTransportServerKeyRing(secret)` |
-| `createCacheTransportKeyStore` | `{ cache, ttlSeconds?, maxRegistrationsPerMinute?, maxRequestsPerMinute? }` | `TransportKeyStore`; invalid options throw TypeError, quota exhaustion rejects with `hai:crypto:072` | `createCacheTransportKeyStore({ cache })` |
-| `registry.register` | Valid SM2 public key | `Promise<string>`; key/storage failure rejects | `await registry.register(publicKey)` |
-| `registry.get` | Client ID | `Promise<string / undefined>`; storage failure rejects | `await registry.get(clientId)` |
-| `registry.claimRequest` | Client ID, request ID, retention deadline in Unix milliseconds | Atomic `Promise<boolean>`; storage failure rejects | `await registry.claimRequest(clientId, requestId, expiresAt)` |
-| `registry.delete?` | Client ID | `Promise<void>`; deletes only the key; storage failure rejects | `await registry.delete?.(clientId)` |
-| `registry.close?` | None | `Promise<void>`; optional cleanup for custom stores; the built-in Cache store does not close its borrowed connection | `await registry.close?.()` |
-| `resolveTransportBodyLimits` | Optional plaintext bytes and `{ requiredPlaintextBytes? }` | Immutable `TransportBodyLimits`; invalid/conflicting values throw RangeError | `resolveTransportBodyLimits(8388608)` |
-| `createTransportBodyPolicy` | Optional global bytes and route mapping, default empty | Policy; invalid configuration throws RangeError | `createTransportBodyPolicy(undefined, { '/files/*': 8388608 })` |
-| `policy.acquire` | Actual pathname | `{ limits, release } / null` when busy | `policy.acquire('/files/report')` |
-| `lease.release` | None | `void`; releases once, repeated calls are safe | `lease.release()` |
-| `readTransportBody` | Original stream or null, `{ maxBytes, signal?, direction?, stage? }` | `Promise<string>`; size, UTF-8, cancellation/read errors throw | `await readTransportBody(request.body, { maxBytes: 16384 })` |
-| `authenticateTransportRequest` | Manager, actual Request, optional route limits | `Promise<HaiResult<{ plaintext, context }>>`; read/size errors throw | `await authenticateTransportRequest(manager, request)` |
-| `createTransportErrorResponse` | Time/size error, optional authenticated `{ manager, context }` | `Promise<Response>`; encrypts when trusted context is supplied | `await createTransportErrorResponse(error)` |
-| `TransportBodyTooLargeError` | Limit, optional observed bytes and direction/stage | RangeError subclass, `hai:crypto:070` | `new TransportBodyTooLargeError(1024, 1025)` |
-| `TransportTimeError` | Optional trusted context, server Unix milliseconds | Error subclass; invalid time throws RangeError | `new TransportTimeError(undefined, Date.now())` |
+```ts
+import { cache } from '@h-ai/cache'
+import { crypto } from '@h-ai/crypto'
 
-`TRANSPORT_PROTOCOL`, `TRANSPORT_TIME_LIMITS`, `TRANSPORT_BODY_LIMITS` and `TRANSPORT_PLAINTEXT_RANGE` expose constants; they do not load configuration or connect to storage.
+function buildTransport(secret: unknown) {
+  const ring = crypto.transport.parseServerKeyRing(secret)
+  if (!ring.success)
+    return ring
+  return crypto.transport.createServer({
+    serverKeyRing: ring.data,
+    keyStore: crypto.transport.createKeyStore({ cache }),
+  })
+}
+```
 
-<a id="primitive-validation"></a>
+#### Scenario: Return handshake data and look up a registered key
 
-### Primitive validation and compatibility
+manager is successful data from the previous function. clientPublicKey comes from bounded, validated handshake JSON. Registration returns a clientId; lookup returns the same key. Registration rejects on failure and the HTTP boundary must translate that failure.
 
-SM2 encrypts nonempty text only. Incomplete or modified ciphertext, a wrong private key, or empty plaintext fails. Private keys must be 64 hexadecimal digits with scalar 1 through n-2; n-1 cannot sign safely. Signatures must be exactly 128 hex digits; noncanonical encoding verifies as `ok(false)`. Transport empty messages still work through SM4.
+```ts
+import type { TransportEncryptionManager } from '@h-ai/crypto'
 
-SM3 hex input must contain complete valid bytes; odd lengths and invalid characters return `INVALID_INPUT`. HMAC measures UTF-8 key bytes and hashes keys longer than 64 bytes first, following [RFC 2104](https://www.rfc-editor.org/rfc/rfc2104). Previously incorrect results for long non-ASCII keys change and external stored verification values must be regenerated. Transport's 64-byte ASCII MAC keys are unaffected.
+async function exchange(manager: TransportEncryptionManager, clientPublicKey: string) {
+  const clientId = await manager.registerClientKey(clientPublicKey)
+  const registered = await manager.getClientPublicKey(clientId)
+  // registered === clientPublicKey
+  return {
+    clientId,
+    serverKeyId: manager.getServerKeyId(),
+    serverPublicKey: manager.getServerPublicKey(),
+    maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+    clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
+  }
+}
+```
 
-SM4 allows empty plaintext but requires nonempty ciphertext in complete 16-byte blocks, valid encoding, strict PKCS#7 padding and valid UTF-8. Unknown modes/encodings fail. Base64 conversion processes chunks to support large input. CBC itself remains unauthenticated; use transport for HTTP.
+#### Scenario: Send a request and read plaintext through the client
 
-Password records strictly follow `$hai$iterations$salt$hash`: canonical decimal iterations 1–1000000, an 8–128 character alphanumeric salt and a 64-digit lowercase hex digest. Malformed records return `INVALID_INPUT`; normally generated historical records remain valid.
+Prerequisite: the HTTPS service exposes exchange at the handshake path and the authenticated echo handler below at /api/echo. A POST body of hello returns a decrypted Response containing { received: "hello" }. Fetch failures throw; finally destroys the session.
+
+session is the **client transport object** returned by crypto.transport.createClient, separate from an IAM login session. Creating it sends no request.
+
+1. init generates a local SM2 pair and POSTs the public key to keyExchangeUrl. The server registers it and returns clientId, server key/version, body limit and key lifetime. Only a validated response commits the in-memory session and makes ready true. Failure returns a failed HaiResult; this does not log in or call a business endpoint.
+2. encryptedFetch reads and bounds the whole request body, encrypts and signs it with request identity/time/method/path, then sends it. It authenticates the response against that request and its HTTP status before decrypting and returning a plaintext Response. Read json()/text() normally, and still check response.ok/business results. Network, capacity, protocol and authentication failures reject the Promise.
+3. encryptedFetch negotiates automatically before a new request when needed; concurrent calls share a handshake. It does not replay a failed sent business request. destroy clears local keys and cancels negotiation; a later encryptedFetch can negotiate again and does not imply server logout.
+
+The example sends POST hello and reads decrypted `{ received: "hello" }`. This is bounded whole-body text/JSON, not streaming file upload. Authenticated HEAD/204/205/304 responses remain bodyless; do not call json() on them.
+
+```ts
+const session = crypto.transport.createClient({
+  keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
+})
+session.ready() // false
+try {
+  const sessionInitialized = await session.init()
+  if (!sessionInitialized.success)
+    throw new Error(sessionInitialized.error.message, { cause: sessionInitialized.error })
+  session.ready() // true
+  const response = await session.encryptedFetch('https://api.example.com/api/echo', {
+    method: 'POST', body: 'hello',
+  })
+  if (!response.ok)
+    throw new Error(`HTTP ${response.status}`)
+  const body: unknown = await response.json() // { received: 'hello' }
+}
+finally {
+  session.destroy()
+}
+session.ready() // false
+crypto.transport.protocol.VERSION // 2
+```
+
+#### Scenario: Extract the actual request context before decryption
+
+Use this lower-level method only after a custom adapter has bounded and validated the envelope structure. payload remains unauthenticated; expected values come from the actual Request, never from payload. Successful data is plaintext. Normally use crypto.transport.authenticateRequest in the next section.
+
+```ts
+import type { EncryptedRequestPayload, TransportEncryptionManager } from '@h-ai/crypto'
+
+async function decryptEnvelope(
+  manager: TransportEncryptionManager,
+  payload: EncryptedRequestPayload,
+  request: Request,
+) {
+  const url = new URL(request.url)
+  return manager.decryptRequest(payload, {
+    clientId: request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? '',
+    method: request.method,
+    path: url.pathname + url.search,
+  })
+}
+```
+
+After stopping new requests and draining responses, await manager.close(), then close Crypto and the application-owned Cache. session.destroy() cancels pending handshakes; late results cannot restore the session. Server registrations expire independently. Rotate by deploying old and new keys to all nodes before switching activeKeyId, then remove the old version after the transition; clients re-handshake without automatically replaying writes.
 
 <a id="transport-protocol"></a>
 
-### Transport v2 encoding and verification
+#### Protocol: Transport v2 encoding and verification
 
 Serv, Kit, api-client and browser/mobile clients share this application protocol. TLS authenticates exchange public keys; IAM authorization and business idempotency remain required. Exchange POST JSON `{ clientPublicKey }` registers the client and returns `clientId`, `serverKeyId`, `serverPublicKey`, `maxPlaintextBytes` and optional `clientKeyTtlSeconds`. Keys accept only valid uncompressed SM2 points: 128 hex digits, optionally prefixed with `04`.
 
@@ -153,37 +507,20 @@ The authentication text is `JSON.stringify()` of this fixed-position array, with
 
 Every message sets `X-Encrypted: true`; requests also set `X-Client-Id`. Body-bearing methods use JSON envelopes even for empty plaintext. GET/HEAD use an empty-plaintext envelope in `X-Hai-Transport` and no body. Normal responses use JSON; HEAD, 204/205/304 or actually bodyless responses use that header. Never carry one envelope in both header and body. CORS allows and exposes the header. Plaintext routes require matching server/client exclusions; Kit has no `requireEncryption` / `encryptResponse` downgrade switches.
 
-Custom adapters call `await authenticateTransportRequest(manager, request)` and use `data.plaintext` only on success; bind replies through `await manager.encryptResponse(data.context, json, status)`. For authenticated time failures, pass the error's trusted context to `createTransportErrorResponse()`. See [retention and recovery](../data/crypto.en.md#transport-state) and [capacity and deployment](crypto.en.md#transport-capacity).
+Custom adapters call `await crypto.transport.authenticateRequest(manager, request)` and use `data.plaintext` only on success; bind replies through `await manager.encryptResponse(data.context, json, status)`. For authenticated time failures, pass the error's trusted context to `crypto.transport.createErrorResponse()`. See [retention and recovery](../data/crypto.en.md#transport-state) and [capacity and deployment](crypto.en.md#transport-capacity).
 
 Still untranslated: extended worked examples. Read the [Chinese source section](crypto.md#detailed-workflow).
 
 <a id="call-options"></a>
 
-## Call options
+#### Server and client arguments
 
-These are code arguments, not `_crypto.yml` fields. Initialize Crypto first; the application initializes and closes the borrowed cache connection.
-
-### Algorithm options
-
-| Option | Default | Accepted values and effect |
-| --- | --- | --- |
-| SM2 `cipherMode` | `1` (C1C3C2) | `0` selects C1C2C3; use the same mode to decrypt. |
-| SM2 `outputFormat` | `hex` | `hex` or `base64`; ciphertext encoding. |
-| SM2 `hash` | `true` | Whether signing hashes the input; verification must match. |
-| SM2 `userId` | `1234567812345678` | Signing identity; verification must match. |
-| SM3 `inputEncoding` | `utf8` | `utf8` or `hex` for strings; Uint8Array is already bytes. Hex must contain complete valid bytes. |
-| SM4 `mode` | `cbc` | `cbc` or explicit `ecb` for existing formats. |
-| SM4 `iv` | Random for CBC | 32 hexadecimal digits; use a fresh IV per encryption. |
-| SM4 `outputFormat` | `hex` | `hex` or `base64`. |
-| Password `saltLength` | `16` | Alphanumeric salt characters, integer 8–128. |
-| Password `iterations` | `10000` | Integer 1–1000000. |
-
-### Transport server and client options
+These are code arguments, not `_crypto.yml` fields.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | Server `serverKeyRing` | Required | Managed `{ activeKeyId, keys }`, injected by trusted server startup. |
-| Server `keyStore` | Required | Registry from `createCacheTransportKeyStore({ cache })`; production uses Redis. |
+| Server `keyStore` | Required | Registry from `crypto.transport.createKeyStore({ cache })`; production uses Redis. |
 | Server `maxPlaintextBytes` | 1048576 | Request/response UTF-8 plaintext bytes, integer 1024–67108864; the host may forward Serv/Kit file settings. |
 | Server `maxFutureSkewSeconds` | 30 | Allowed future skew, integer 0–300 seconds. |
 | Server `maxRequestAgeSeconds` | 300 | Request age from issuance, integer 1–600 seconds. |
@@ -191,7 +528,51 @@ These are code arguments, not `_crypto.yml` fields. Initialize Crypto first; the
 | Client `maxPlaintextBytes` | Follow server | An explicit local limit selects the smaller local/exchanged value. |
 | Client `fetch` | Global fetch | Standard Fetch implementation preserving body and cancellation semantics. |
 
-### Cache registry options
+<a id="registry"></a>
+
+### Store public keys and used request IDs: `crypto.transport.createKeyStore`
+
+Registered keys let the server verify client signatures; remembered request IDs prevent replay. Both records expire, and shared counters provide a final capacity guard.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `crypto.transport.createKeyStore` | Create an expiring, capacity-bounded registry | `{ cache, ttlSeconds?, maxRegistrationsPerMinute?, maxRequestsPerMinute? }` | `TransportKeyStore`; invalid options throw TypeError, quota exhaustion rejects with `hai:crypto:072` | `crypto.transport.createKeyStore({ cache })` |
+| `registry.register` | Register a client public key | Valid SM2 public key | `Promise<string>`; key/storage failure rejects | `await registry.register(publicKey)` |
+| `registry.get` | Read a registered public key | Client ID | `Promise<string / undefined>`; storage failure rejects | `await registry.get(clientId)` |
+| `registry.claimRequest` | Accept an ID once and reject replays | Client ID, request ID, retention deadline in Unix milliseconds | Atomic `Promise<boolean>`; storage failure rejects | `await registry.claimRequest(clientId, requestId, expiresAt)` |
+| `registry.delete?` | Delete a key registration | Client ID | `Promise<void>`; deletes only the key; storage failure rejects | `await registry.delete?.(clientId)` |
+| `registry.close?` | Clean up custom store resources | None | `Promise<void>`; optional cleanup for custom stores; the built-in Cache store does not close its borrowed connection | `await registry.close?.()` |
+
+#### Scenario: Observe registration and duplicate rejection with test IDs
+
+Cache must be initialized. This isolated test registration does not reuse a manager requestId; production claims happen inside the manager after full authentication. The first claim returns true and the second false. Deleting a key does not delete used IDs. The built-in registry has no close hook; the application owns the connection. Custom stores may provide one.
+
+```ts
+import { cache } from '@h-ai/cache'
+
+const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+const testPairResult = crypto.asymmetric.generateKeyPair()
+if (!testPairResult.success)
+  throw new Error(testPairResult.error.message, { cause: testPairResult.error })
+const testPair = testPairResult.data
+const clientId = await registry.register(testPair.publicKey)
+try {
+  await registry.get(clientId) === testPair.publicKey // true
+  const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
+  const expiresAt = Date.now() + 60_000
+  await registry.claimRequest(clientId, requestId, expiresAt) // true
+  await registry.claimRequest(clientId, requestId, expiresAt) // false
+}
+finally {
+  await registry.delete?.(clientId)
+  await registry.close?.()
+}
+await registry.get(clientId) // undefined
+```
+
+#### Cache arguments and capacity guards
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -205,9 +586,112 @@ These application-wide safeguards bound cache growth and do not replace per-IP/u
 
 Each quota window starts with its first write and expires through cache TTL. CAS consumes capacity atomically while preserving the original TTL; application clock differences do not reset the window. All nodes use identical limits. Exhaustion or sustained contention returns `hai:crypto:072`, mapped by Serv/Kit to 503 without automatic replay. Failed writes and concurrent duplicates may conservatively consume quota; ordinary replays of existing nonces consume none. Keys, nonces and the two fixed quota counters all expire. No full-key scan or eviction of live nonces is used. State is bounded approximately by minute quota times retained minutes: default public keys span at most 61 windows; nonces at most 17. Configure Redis memory, noeviction and reliable persistence as well.
 
+<a id="http-budgets"></a>
+
+### Authenticate HTTP messages and bound buffering: adapter helpers
+
+Custom HTTP adapters use these root exports; Serv/Kit already integrates them. A body policy reserves per-path capacity before reading, and business work starts only after authentication.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `crypto.transport.bodyLimits` | Read default handshake, header and body budgets | No arguments; UTF-8 bytes | `Readonly TransportBodyLimits` | `crypto.transport.bodyLimits.plaintextBytes // 1048576` |
+| `crypto.transport.plaintextRange` | Read the allowed plaintext budget range | No arguments; bytes | `Readonly { min: 1024, max: 67108864 }` | `crypto.transport.plaintextRange.max // 67108864` |
+| `crypto.transport.timeLimits` | Read allowed request ages and clock skew | No arguments; seconds | `Readonly time limits` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 600` |
+| `crypto.transport.resolveBodyLimits` | Derive transport limits from a plaintext budget | Optional plaintext bytes and `{ requiredPlaintextBytes? }` | Immutable `TransportBodyLimits`; invalid/conflicting values throw RangeError | `crypto.transport.resolveBodyLimits(8388608)` |
+| `crypto.transport.createBodyPolicy` | Create a per-path body policy | Optional global bytes and route mapping, default empty | Policy; invalid configuration throws RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
+| `policy.acquire` | Acquire request buffering capacity | Actual pathname | `{ limits, release } / null` when busy | `policy.acquire('/files/report')` |
+| `lease.release` | Release acquired capacity | None | `void`; releases once, repeated calls are safe | `lease.release()` |
+| `crypto.transport.readBody` | Read bounded bytes as strict UTF-8 | Original stream or null, `{ maxBytes, signal?, direction?, stage? }` | `Promise<string>`; size, UTF-8, cancellation/read errors throw | `await crypto.transport.readBody(request.body, { maxBytes: 16384 })` |
+| `crypto.transport.authenticateRequest` | Authenticate and decrypt an HTTP request | Manager, actual Request, optional route limits | `Promise<HaiResult<{ plaintext, context }>>`; read/size errors throw | `await crypto.transport.authenticateRequest(manager, request)` |
+| `crypto.transport.createErrorResponse` | Create a safe body-limit or time error response | Time/size error, optional authenticated `{ manager, context }` | `Promise<Response>`; encrypts when trusted context is supplied | `await crypto.transport.createErrorResponse(error)` |
+| `TransportBodyTooLargeError` | Describe a body limit and observed bytes | Limit, optional observed bytes and direction/stage | RangeError subclass, `hai:crypto:070` | `new TransportBodyTooLargeError(1024, 1025)` |
+| `TransportTimeError` | Describe an authenticated time-window rejection | Optional trusted context, server Unix milliseconds | Error subclass; invalid time throws RangeError | `new TransportTimeError(undefined, Date.now())` |
+
+#### Scenario: Read a bounded handshake body
+
+A Response stream containing {"hello":"world"} returns the same text. crypto.transport.readBody does not validate protocol JSON; parse and validate fields separately. Oversized data throws a body-limit error, invalid UTF-8 throws TypeError, and cancellation or read failures retain their cause.
+
+```ts
+import { TransportBodyTooLargeError, TransportTimeError, crypto } from '@h-ai/crypto'
+
+const text = await crypto.transport.readBody(new Response('{"hello":"world"}').body, {
+  maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
+})
+// text === '{"hello":"world"}'
+const limits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
+limits.plaintextBytes // 8388608
+limits.encryptedPayloadBytes // 16809984
+crypto.transport.plaintextRange.min // 1024; minimum plaintext bytes
+crypto.transport.plaintextRange.max // 67108864; maximum plaintext bytes
+crypto.transport.timeLimits.maxRequestAgeSeconds // 600; maximum request lifetime in seconds
+```
+
+#### Scenario: Authenticate, encrypt the response and release capacity
+
+Input is a handshaken client POST to /api/echo with plaintext hello. The server encrypts { received: "hello" }; the client verifies it and restores a normal Response. crypto.transport.authenticateRequest calls decryptRequest internally. Only its verified context is used for responses. This handler covers a body-bearing POST; other methods and bodyless states follow the protocol section.
+
+```ts
+import type { TransportEncryptionManager } from '@h-ai/crypto'
+import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+
+const policy = crypto.transport.createBodyPolicy(1024 * 1024, {
+  '/files/*': 8 * 1024 * 1024,
+})
+
+async function echo(manager: TransportEncryptionManager, request: Request): Promise<Response> {
+  const lease = policy.acquire(new URL(request.url).pathname)
+  if (!lease)
+    return new Response(null, { status: 503 })
+  try {
+    const verified = await crypto.transport.authenticateRequest(manager, request, lease.limits)
+    if (!verified.success) {
+      const cause = verified.error.cause
+      if (cause instanceof TransportTimeError && cause.context)
+        return crypto.transport.createErrorResponse(cause, { manager, context: cause.context })
+      return new Response(null, { status: verified.error.httpStatus ?? 400 })
+    }
+    const encrypted = await manager.encryptResponse(
+      verified.data.context, JSON.stringify({ received: verified.data.plaintext }), 200,
+    )
+    if (!encrypted.success)
+      return new Response(null, { status: 500 })
+    return Response.json(encrypted.data, {
+      headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
+    })
+  }
+  catch (error) {
+    if (error instanceof TransportBodyTooLargeError)
+      return crypto.transport.createErrorResponse(error)
+    throw error
+  }
+  finally {
+    lease.release()
+  }
+}
+```
+
+#### Scenario: Convert body-limit and time failures to responses
+
+These isolated diagnostic examples return 413 for a request body limit and 400 for time rejection. Encrypt diagnostics only with an authenticated context; never trust a self-reported client timestamp.
+
+```ts
+import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+
+const oversized = new TransportBodyTooLargeError(1024, 1025)
+oversized.code // 'hai:crypto:070'
+const tooLarge = await crypto.transport.createErrorResponse(oversized)
+tooLarge.status // 413
+const invalidTime = new TransportTimeError(undefined, Date.now())
+invalidTime.code // 'hai:crypto:071'
+const timeRejected = await crypto.transport.createErrorResponse(invalidTime)
+timeRejected.status // 400
+```
+
 <a id="transport-capacity"></a>
 
-## HTTP capacity and file sizing
+#### Capacity, files and proxy sizing
 
 `maxPlaintextBytes` limits the complete JSON plaintext in UTF-8 bytes, equally for requests and responses. The default is 1 MiB; the integer range is 1 KiB–64 MiB. Strings, null, zero, negative/fractional values and unlimited settings are invalid. Only Serv/Kit host configuration accepts `auto`, normalized to omission before calling Crypto.
 
@@ -217,7 +701,7 @@ Key exchange returns `manager.bodyLimits.plaintextBytes`; clients follow it unle
 
 Measure `new TextEncoder().encode(JSON.stringify(payload)).byteLength`, not character count. File Base64 uses `4 * ceil(fileBytes / 3)` characters, plus JSON fields, names, escaping and other business data. A 4 MiB XLSX file uses `5592408` Base64 bytes; an 8 MiB plaintext budget can fit typical wrapping. Keep the application's JSON/Base64 format rather than treating binary as UTF-8.
 
-`resolveTransportBodyLimits(limit).encryptedPayloadBytes` derives `2 * limit + 32768` for hex-encoded SM4-CBC and the bounded authentication envelope. An 8 MiB plaintext budget requires `16809984` proxy request bytes. Memory also holds JSON, Base64, ciphertext and authentication intermediates. Applications still enforce raw-file, archive expansion, worksheet/row, permission and business concurrency limits.
+`crypto.transport.resolveBodyLimits(limit).encryptedPayloadBytes` derives `2 * limit + 32768` for hex-encoded SM4-CBC and the bounded authentication envelope. An 8 MiB plaintext budget requires `16809984` proxy request bytes. Memory also holds JSON, Base64, ciphertext and authentication intermediates. Applications still enforce raw-file, archive expansion, worksheet/row, permission and business concurrency limits.
 
 Ordinary routes use the global budget. Feedback report, evidence, attachment and ZIP routes declare `feedback.budget.maxTransportBytes` through host `routePlaintextBytes`; explicit host values take precedence. `*` matches one complete path segment; overlapping patterns use the smaller budget. Exchange and deployment adapters reserve the maximum route budget. Explicit routes above 1 MiB have 2 concurrency slots, separate from 16 ordinary slots, released after response completion or failure. Busy admission returns 503 / `hai:crypto:072` without automatically replaying writes.
 
@@ -225,16 +709,20 @@ Handshake JSON 16 KiB, public keys 4 KiB, envelope headers 16 KiB, paths 8 KiB a
 
 Oversized requests return 413. An oversized response to an authenticated request becomes an encrypted 500 capacity error; clients restore its diagnostics only after authentication. Unauthenticated 413 means request capacity failure and its body is cancelled. api-client maps capacity errors to `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte counts.
 
-### Deployment and incremental updates
+#### Deployment and incremental updates
 
-docker-ssh derives Nginx `client_max_body_size` from resolved `_serv.yml`, disabling request/response buffering. Both endpoints check response size; header buffers remain separate. SvelteKit deployment derives adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. Self-managed proxies and launchers should use `resolveTransportBodyLimits()`; operators configure external CDN/gateway limits.
+docker-ssh derives Nginx `client_max_body_size` from resolved `_serv.yml`, disabling request/response buffering. Both endpoints check response size; header buffers remain separate. SvelteKit deployment derives adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. Self-managed proxies and launchers should use `crypto.transport.resolveBodyLimits()`; operators configure external CDN/gateway limits.
 
 Full deployment uses the new budget. App incremental packages also include proxy configuration: a capacity change recreates Web with its existing image and includes it in health checks and rollback, without uploading another Web image. Incremental updates allow capacity directives only; port, API route or other proxy changes require full deployment. A capacity change without app selected is rejected; unchanged capacity retains Web. See [deployment](../function/deploy.en.md).
 
-Custom managers and test doubles derive `bodyLimits` with `resolveTransportBodyLimits()` and return that plaintext budget during exchange.
+Custom managers and test doubles derive `bodyLimits` with `crypto.transport.resolveBodyLimits()` and return that plaintext budget during exchange.
 
 <a id="browser-support"></a>
 
-## Browser support
+#### Browser requirements
 
-This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](crypto.md#browser-support); this subsection is partially translated.
+Older browsers may lack features such as Request.body. See [browser startup checks](../getting-started/build.en.md) for detection and upgrade guidance.
+
+## Error handling
+
+Algorithm and manager encryption methods return HaiResult: check success and distinguish a valid false from failure. Validators, random keys/IVs and status properties return direct values. encryptedFetch, registry storage and bounded stream helpers may reject or throw; handle them at the relevant boundary. Destroy clients, close managers, then close Crypto and Cache when their owners are finished.

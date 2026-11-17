@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { runInNewContext } from 'node:vm'
 import { apiClient } from '@h-ai/api-client'
 import { cache } from '@h-ai/cache'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { afterEach, expect, it } from 'vitest'
@@ -87,7 +87,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
       activeKeyId: 'fixture-v1',
       keys: { 'fixture-v1': pair.data },
     },
-    keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 60 }),
+    keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 60 }),
   })
   if (!manager.success)
     throw new Error(manager.error.message)
@@ -147,7 +147,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
         outgoing.end(JSON.stringify(payload))
         return
       }
-      if (!headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)) {
+      if (!headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)) {
         observed.plaintext++
         outgoing.writeHead(400).end(JSON.stringify({ message: 'Authenticated transport required' }))
         return
@@ -161,7 +161,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
           ? { body: wire }
           : {}),
       })
-      const verified = await authenticateTransportRequest(manager.data, request)
+      const verified = await crypto.transport.authenticateRequest(manager.data, request)
       if (!verified.success)
         throw new Error(verified.error.message)
       observed.authenticated++
@@ -169,7 +169,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
       const encrypted = await manager.data.encryptResponse(verified.data.context, JSON.stringify(payload), 200)
       if (!encrypted.success)
         throw new Error(encrypted.error.message)
-      outgoing.setHeader(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      outgoing.setHeader(crypto.transport.protocol.ENCRYPTED_HEADER, crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
       outgoing.end(JSON.stringify(encrypted.data))
     }
     catch {

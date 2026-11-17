@@ -34,7 +34,7 @@ rules:
 
 `core.access.createRequestCheck` 返回可调用检查器；`.encryption(path, method)` 只查询索引，`.requiresEncryption` 供宿主验证必需装配，全部公开类型在 core-types。Core 不执行加解密。没有加密规则时选择器是常量空结果，不增加路径扫描；不要为此增加请求期文件读取或逐条正则。
 
-SvelteKit CLI 模板选择 crypto 后可启用 `_kit.yml.transport`；服务端显式装配密钥环和 registry，根 layout 只投影公开 transport 并安装浏览器包装。生产选择 db 和共享数据库，无 db 的内存 registry 仅限开发/测试；不支持的示例明确拒绝配置，不能静默忽略。Fullstack 管理默认强制加密并拒绝 transport:false，外部接口用 scoped disabled 例外。
+SvelteKit CLI 模板选择 crypto 后可启用 `_kit.yml.transport`；服务端显式装配密钥环，并用 `crypto.transport.createKeyStore({ cache })` 创建登记簿，根 layout 只投影公开 transport 并安装浏览器包装。先初始化 `@h-ai/cache`；生产节点连接同一 Redis，开发和测试可以显式选择 Cache 的 memory 后端。所有登记和防重放记录都有期限，并有每60秒10000次公钥登记、100000个新请求编号的共享容量保底；满额返回503，不能用它代替按用户或接口的业务限流。不支持的示例明确拒绝配置，不能静默忽略。Fullstack 管理默认强制加密并拒绝 transport:false，外部接口用 scoped disabled 例外。
 
 调用方协议必须匹配服务端。普通外部 HTTP 客户端直接使用 HTTPS；安装全局 fetch 加密的浏览器若需调用明文接口，使用独立接口前缀并同步公开 transport.excludePaths。排除列表按路径段前缀匹配，不能误扩大。服务端访问策略的 IP/时间/文件内容仍不公开，不自动重试或降级协议。
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readTransportBody } from '../../src/index.js'
+import { crypto } from '../../src/index.js'
 
-describe('readTransportBody', () => {
+describe('crypto.transport.readBody', () => {
   it('按实际 UTF-8 字节而非字符计数，并支持跨 chunk 的多字节字符', async () => {
     const bytes = new TextEncoder().encode('你🙂a')
     const stream = new ReadableStream<Uint8Array>({
@@ -11,7 +11,7 @@ describe('readTransportBody', () => {
         controller.close()
       },
     })
-    await expect(readTransportBody(stream, { maxBytes: 8 })).resolves.toBe('你🙂a')
+    await expect(crypto.transport.readBody(stream, { maxBytes: 8 })).resolves.toBe('你🙂a')
     expect(stream.locked).toBe(false)
   })
 
@@ -25,7 +25,7 @@ describe('readTransportBody', () => {
       },
       cancel,
     })
-    await expect(readTransportBody(stream, { maxBytes: 7 })).rejects.toBeInstanceOf(RangeError)
+    await expect(crypto.transport.readBody(stream, { maxBytes: 7 })).rejects.toBeInstanceOf(RangeError)
     expect(pulled).toBeLessThan(4)
     expect(cancel).toHaveBeenCalledOnce()
     expect(stream.locked).toBe(false)
@@ -35,7 +35,7 @@ describe('readTransportBody', () => {
     const controller = new AbortController()
     const cancel = vi.fn(() => new Promise<void>(() => {}))
     const stream = new ReadableStream<Uint8Array>({ cancel })
-    const reading = readTransportBody(stream, { maxBytes: 8, signal: controller.signal })
+    const reading = crypto.transport.readBody(stream, { maxBytes: 8, signal: controller.signal })
     controller.abort()
     await expect(reading).rejects.toMatchObject({ name: 'AbortError' })
     expect(cancel).toHaveBeenCalledOnce()
@@ -47,7 +47,7 @@ describe('readTransportBody', () => {
     controller.abort()
     const cancel = vi.fn()
     const stream = new ReadableStream<Uint8Array>({ cancel })
-    await expect(readTransportBody(stream, { maxBytes: 8, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(crypto.transport.readBody(stream, { maxBytes: 8, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
     expect(cancel).toHaveBeenCalledOnce()
     expect(stream.locked).toBe(false)
   })
@@ -58,7 +58,7 @@ describe('readTransportBody', () => {
       pull(controller) { controller.error(original) },
       cancel: async () => { throw new Error('cancel failure') },
     })
-    await expect(readTransportBody(stream, { maxBytes: 8 })).rejects.toBe(original)
+    await expect(crypto.transport.readBody(stream, { maxBytes: 8 })).rejects.toBe(original)
     expect(stream.locked).toBe(false)
   })
 
@@ -69,7 +69,7 @@ describe('readTransportBody', () => {
         controller.close()
       },
     })
-    await expect(readTransportBody(stream, { maxBytes: 2 })).rejects.toBeInstanceOf(TypeError)
+    await expect(crypto.transport.readBody(stream, { maxBytes: 2 })).rejects.toBeInstanceOf(TypeError)
     expect(stream.locked).toBe(false)
   })
 
@@ -81,16 +81,16 @@ describe('readTransportBody', () => {
       start(controller) { controller.enqueue(new Uint8Array(2)) },
       cancel,
     })
-    await expect(readTransportBody(stream, { maxBytes: 1 })).rejects.toBeInstanceOf(RangeError)
+    await expect(crypto.transport.readBody(stream, { maxBytes: 1 })).rejects.toBeInstanceOf(RangeError)
     expect(cancel).toHaveBeenCalledOnce()
     expect(stream.locked).toBe(false)
   })
 
   it('空流和零预算只允许实际空正文', async () => {
-    await expect(readTransportBody(null, { maxBytes: 0 })).resolves.toBe('')
+    await expect(crypto.transport.readBody(null, { maxBytes: 0 })).resolves.toBe('')
     const stream = new ReadableStream<Uint8Array>({
       start: controller => controller.close(),
     })
-    await expect(readTransportBody(stream, { maxBytes: 0 })).resolves.toBe('')
+    await expect(crypto.transport.readBody(stream, { maxBytes: 0 })).resolves.toBe('')
   })
 })

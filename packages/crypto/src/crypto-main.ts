@@ -12,6 +12,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { cryptoM } from './crypto-i18n.js'
 import { createPasswordFunctions } from './crypto-password.js'
+import { isValidSM2PublicKey } from './crypto-public-key.js'
 import { createSM2 } from './crypto-sm2.js'
 import { createSM3 } from './crypto-sm3.js'
 import { createSM4 } from './crypto-sm4.js'
@@ -20,9 +21,14 @@ import {
   HaiCryptoError,
 
 } from './crypto-types.js'
+import { createTransportBodyPolicy, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TRANSPORT_PLAINTEXT_RANGE } from './transport/crypto-transport-body.js'
 import { createTransportClient } from './transport/crypto-transport-client.js'
+import { createTransportErrorResponse } from './transport/crypto-transport-error.js'
+import { parseTransportServerKeyRing } from './transport/crypto-transport-keyring.js'
+import { authenticateTransportRequest } from './transport/crypto-transport-request.js'
 import { createTransportEncryption } from './transport/crypto-transport-server.js'
-import { TRANSPORT_PROTOCOL } from './transport/crypto-transport-types.js'
+import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './transport/crypto-transport-types.js'
+import { createCacheTransportKeyStore } from './transport/store-provider/crypto-transport-store-cache.js'
 
 const logger = core.logger.child({ module: 'crypto', scope: 'main' })
 
@@ -50,7 +56,17 @@ const notInitialized = core.module.createNotInitializedKit(
   () => cryptoM('crypto_notInitialized'),
 )
 
-const notInitializedAsymmetric = notInitialized.proxy<AsymmetricOperations>('sync')
+// 公钥校验是无状态边界检查；握手输入及配置解析在初始化前也需要可靠的 boolean。
+const unavailableAsymmetric = notInitialized.proxy<AsymmetricOperations>('sync')
+const notInitializedAsymmetric: AsymmetricOperations = {
+  generateKeyPair: unavailableAsymmetric.generateKeyPair,
+  encrypt: unavailableAsymmetric.encrypt,
+  decrypt: unavailableAsymmetric.decrypt,
+  sign: unavailableAsymmetric.sign,
+  verify: unavailableAsymmetric.verify,
+  isValidPublicKey: isValidSM2PublicKey,
+  isValidPrivateKey: unavailableAsymmetric.isValidPrivateKey,
+}
 const notInitializedHash = notInitialized.proxy<HashOperations>('sync')
 const notInitializedSymmetric = notInitialized.proxy<SymmetricOperations>('sync')
 const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
@@ -73,6 +89,16 @@ const transportOperations: TransportOperations = {
     ...options,
   }),
   protocol: TRANSPORT_PROTOCOL,
+  bodyLimits: TRANSPORT_BODY_LIMITS,
+  plaintextRange: TRANSPORT_PLAINTEXT_RANGE,
+  timeLimits: TRANSPORT_TIME_LIMITS,
+  createKeyStore: createCacheTransportKeyStore,
+  parseServerKeyRing: parseTransportServerKeyRing,
+  resolveBodyLimits: resolveTransportBodyLimits,
+  createBodyPolicy: createTransportBodyPolicy,
+  readBody: readTransportBody,
+  authenticateRequest: authenticateTransportRequest,
+  createErrorResponse: createTransportErrorResponse,
 }
 
 // ─── 服务对象 ───
@@ -171,7 +197,7 @@ export const crypto: CryptoFunctions = {
     }
   },
 
-  /** 非对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  /** 非对称加密操作；公钥校验不依赖初始化，其余操作需先初始化。 */
   get asymmetric(): AsymmetricOperations { return currentAsymmetric ?? notInitializedAsymmetric },
   /** 哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
   get hash(): HashOperations { return currentHash ?? notInitializedHash },

@@ -3,13 +3,13 @@ import type { AddressInfo } from 'node:net'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 let serverKeyRing: TransportServerKeyRing
 
-function createApp(keyStore: TransportKeyStore = createCacheTransportKeyStore({ cache })) {
+function createApp(keyStore: TransportKeyStore = crypto.transport.createKeyStore({ cache })) {
   const contract = apiContract.create({})
   return serv.createApp({
     contract,
@@ -32,7 +32,7 @@ describe('serv authenticated transport boundary', () => {
   afterAll(async () => crypto.close())
 
   it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
-    const keyStore = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
+    const keyStore = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
     const resolve = vi.fn(() => Response.json({ accepted: true }))
     const app = createApp(keyStore)
     app.post('/api/v1/order', resolve)
@@ -101,10 +101,10 @@ describe('serv authenticated transport boundary', () => {
           const headers = new Headers(request.headers)
           const url = new URL(request.url)
           if (field === 'client-header') {
-            headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, 'another-client')
+            headers.set(crypto.transport.protocol.CLIENT_ID_HEADER, 'another-client')
           }
           else if (field === 'marker') {
-            headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+            headers.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
           }
           else if (field === 'path') {
             url.pathname = '/api/v1/other'
@@ -143,7 +143,7 @@ describe('serv authenticated transport boundary', () => {
   })
 
   it('两套 Hono 节点并发收到同一请求时仅一个 handler 执行且正常响应可关联', async () => {
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     const a = createApp(store)
     const b = createApp(store)
     const handler = vi.fn(() => Response.json({ amount: 10000 }))
@@ -182,7 +182,7 @@ describe('serv authenticated transport boundary', () => {
       fetch: async (input, init) => {
         const request = new Request(input, init)
         if (!request.url.endsWith('/_hai/key-exchange'))
-          expect(request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
+          expect(request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)).toBe(true)
         const response = await app.fetch(request)
         wire.push(response.clone())
         return response
@@ -191,7 +191,7 @@ describe('serv authenticated transport boundary', () => {
     const response = await client.encryptedFetch('http://test.local/api/v1/empty', { method })
     expect(response.status).toBe(204)
     expect(await response.text()).toBe('')
-    expect(wire[1]?.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
+    expect(wire[1]?.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)).toBe(true)
     expect((await app.request('/api/v1/empty', {
       method,
       headers: { 'X-Client-Id': 'id' },
@@ -222,12 +222,12 @@ describe('serv authenticated transport boundary', () => {
       keyExchangeUrl: `${base}/api/v1/_hai/key-exchange`,
       fetch: async (input, init) => {
         const request = new Request(input, init)
-        const requestEnvelope = request.headers.get(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+        const requestEnvelope = request.headers.get(crypto.transport.protocol.ENVELOPE_HEADER)
         if (requestEnvelope)
           headerSizes.push(new TextEncoder().encode(requestEnvelope).byteLength)
         // 真实全局 fetch 与 serv.listen 均使用原生 Node HTTP 默认头限制，无自定义 dispatcher。
         const response = await fetch(request)
-        const responseEnvelope = response.headers.get(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+        const responseEnvelope = response.headers.get(crypto.transport.protocol.ENVELOPE_HEADER)
         if (responseEnvelope)
           headerSizes.push(new TextEncoder().encode(responseEnvelope).byteLength)
         return response
@@ -238,9 +238,9 @@ describe('serv authenticated transport boundary', () => {
       url.search = `?q=${'\\'.repeat(8192 - url.pathname.length - 3)}`
       const actual = new URL(new Request(url).url)
       expect(new TextEncoder().encode(actual.pathname + actual.search).byteLength).toBe(8192)
-      const bytes = TRANSPORT_BODY_LIMITS.plaintextBytes - 2
+      const bytes = crypto.transport.bodyLimits.plaintextBytes - 2
       const body = `"${'你'.repeat(Math.floor(bytes / 3))}${'a'.repeat(bytes % 3)}"`
-      expect(new TextEncoder().encode(body).byteLength).toBe(TRANSPORT_BODY_LIMITS.plaintextBytes)
+      expect(new TextEncoder().encode(body).byteLength).toBe(crypto.transport.bodyLimits.plaintextBytes)
       expect(await (await client.encryptedFetch(new Request(url, { method: 'POST', body }))).text()).toBe(body)
       for (const method of ['GET', 'HEAD'])
         expect((await client.encryptedFetch(new Request(url, { method }))).status).toBe(204)

@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { fork } from 'node:child_process'
 import { cache } from '@h-ai/cache'
 import { expect, it } from 'vitest'
-import { createCacheTransportKeyStore, crypto, HaiCryptoError } from '../../src/index.js'
+import { crypto, HaiCryptoError } from '../../src/index.js'
 import { sendWorker, startTransportRedis, stopWorker } from './crypto-transport-process-helper.js'
 
 it('真实 Redis 的双 Node 共享配额、有限 TTL 与重启恢复', async () => {
@@ -15,7 +15,7 @@ it('真实 Redis 的双 Node 共享配额、有限 TTL 与重启恢复', async (
     if (!key.success)
       throw new Error(key.error.message)
     const options = { cache, maxRegistrationsPerMinute: 3, maxRequestsPerMinute: 2 }
-    const store = createCacheTransportKeyStore(options)
+    const store = crypto.transport.createKeyStore(options)
     expect(store.stateScope).toBe('shared')
     async function startWorker(clockOffsetMs = 0) {
       const worker = fork(new URL('./fixtures/crypto-transport-registry-node.mjs', import.meta.url), {

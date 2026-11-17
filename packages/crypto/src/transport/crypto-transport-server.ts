@@ -32,7 +32,7 @@ import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-ty
  *
  * @example
  * ```ts
- * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -40,8 +40,8 @@ import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-ty
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
- *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+ *     const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!ring.success) throw new Error(ring.error.message)
  *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
  *     if (!created.success) throw new Error(created.error.message)

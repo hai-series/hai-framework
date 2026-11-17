@@ -3,7 +3,7 @@ import process from 'node:process'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import pkg from '../package.json' with { type: 'json' }
@@ -42,13 +42,13 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
   const refreshCookieMode = options.refreshCookie ?? 'enabled'
   let transport: ServTransportConfig | undefined
   if (transportMode !== 'disabled' && servConfig.transport !== false) {
-    const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(ring.error.message)
     transport = {
       crypto,
       serverKeyRing: ring.data,
-      keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
+      keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
       keyExchangePath: servConfig.transport.keyExchangePath,
       maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
       maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,

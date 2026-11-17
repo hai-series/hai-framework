@@ -10,6 +10,34 @@ describe('crypto.init', () => {
     expect(crypto.isInitialized).toBe(false)
   })
 
+  it('公钥输入校验在初始化前和关闭后仍返回可靠的布尔值', async () => {
+    for (const value of [undefined, null, {}, 42, 'invalid'])
+      expect(crypto.asymmetric.isValidPublicKey(value)).toBe(false)
+    expect((await crypto.init()).success).toBe(true)
+    const generated = crypto.asymmetric.generateKeyPair()
+    expect(generated.success).toBe(true)
+    if (!generated.success)
+      throw new Error(generated.error.message)
+    const input: unknown = generated.data.publicKey
+    await crypto.close()
+    expect(crypto.asymmetric.isValidPublicKey(input)).toBe(true)
+    if (crypto.asymmetric.isValidPublicKey(input))
+      expect(input.length).toBe(130)
+    expect(crypto.asymmetric.generateKeyPair().success).toBe(false)
+  })
+
+  it('传输容量和密钥环输入检查不依赖初始化', async () => {
+    const limits = crypto.transport.resolveBodyLimits(2048)
+    expect(limits.plaintextBytes).toBe(2048)
+    expect(limits.encryptedPayloadBytes).toBe(36864)
+    expect(() => crypto.transport.resolveBodyLimits(0)).toThrow(RangeError)
+    const invalidRing = crypto.transport.parseServerKeyRing(undefined)
+    expect(invalidRing.success).toBe(false)
+    const body = new Request('https://example.com', { method: 'POST', body: '你好' }).body
+    await expect(crypto.transport.readBody(body, { maxBytes: 6 })).resolves.toBe('你好')
+    expect(crypto.isInitialized).toBe(false)
+  })
+
   it('should initialize successfully', async () => {
     const result = await crypto.init()
     expect(result.success).toBe(true)

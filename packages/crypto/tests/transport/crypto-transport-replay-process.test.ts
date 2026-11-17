@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { fork } from 'node:child_process'
 import { cache } from '@h-ai/cache'
 import { expect, it } from 'vitest'
-import { createCacheTransportKeyStore, crypto } from '../../src/index.js'
+import { crypto } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 import { sendWorker, startTransportRedis, stopWorker } from './crypto-transport-process-helper.js'
 
@@ -20,7 +20,7 @@ it('两个独立进程通过 Redis 原子消费防重放，并发仅一次业务
       activeKeyId: 'v1',
       keys: { v1: server.data },
     }
-    const store = createCacheTransportKeyStore({ cache })
+    const store = crypto.transport.createKeyStore({ cache })
     const clientId = await store.register(client.data.publicKey)
     const requestPath = '/orders?currency=CNY'
     const digest = crypto.hash.hash(requestPath)

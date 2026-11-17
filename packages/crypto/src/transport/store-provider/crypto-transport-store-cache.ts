@@ -79,11 +79,11 @@ function validId(value: string): boolean {
  * @example
  * ```ts
  * import { cache } from '@h-ai/cache'
- * import { createCacheTransportKeyStore } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * const connected = await cache.init({ type: 'memory' })
  * if (!connected.success) throw new Error(connected.error.message)
  * try {
- *   const store = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *   const store = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
  *   const scope = store.stateScope // memory 为 local；生产应初始化 Redis。
  * }
  * finally { await cache.close() }

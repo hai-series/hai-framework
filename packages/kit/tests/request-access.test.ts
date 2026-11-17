@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { cache } from '@h-ai/cache'
 import { HaiCommonError } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
@@ -200,7 +200,7 @@ it('路径可选择明文或强制加密，IP/时间继续生效，明确规则�
           activeKeyId: 'v1',
           keys: { v1: pair.data },
         },
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         excludePaths: ['/custom-json'],
       },
     },
@@ -288,7 +288,7 @@ it('真实加密请求的策略拒绝仍可解密，密钥交换与预检也执�
       activeKeyId: 'v1',
       keys: { v1: pair.data },
     },
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
   }
   const handle = kit.createHandle({
     logging: false,

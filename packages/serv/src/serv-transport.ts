@@ -2,7 +2,7 @@
  * @h-ai/serv — 传输加密集成
  *
  * 提供 Hono 中间件 + 密钥协商端点，直接依赖 `@h-ai/crypto` 的
- * `TransportEncryptionManager` 与 `TRANSPORT_PROTOCOL` 协议常量，
+ * `TransportEncryptionManager` 与 `crypto.transport.protocol` 协议常量，
  * 确保前后端协议不漂移。
  *
  * 单次请求的处理顺序：
@@ -20,7 +20,7 @@ import type { RequestAccessCheck } from '@h-ai/core'
 import type { CryptoFunctions, KeyExchangeResponse, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core, err, HaiCommonError } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, HaiCryptoError, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { crypto, HaiCryptoError, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -41,7 +41,7 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
  *   return { crypto, serverKeyRing, keyStore }
  * }
  * // 私有 keyring 跨节点共享并支持轮换；生产 keyStore 原子消费重放标识，不能用进程 Map。
- * ```
+ *```
  */
 export interface ServTransportConfig {
   /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
@@ -93,13 +93,13 @@ export interface ServTransportConfig {
  *   return createTransportMiddleware(manager, '/api/v1/_hai/key-exchange', ['/health'])
  * }
  * // 请求先验证 method/pathHash/clientId/requestId 完整性并原子防重放，之后才执行 handler。
- * ```
+ *```
  */
 export function createTransportMiddleware(
   manager: TransportEncryptionManager,
   keyExchangePath: string,
   excludePaths: readonly string[] = [],
-  policy = createTransportBodyPolicy(manager.bodyLimits.plaintextBytes),
+  policy = crypto.transport.createBodyPolicy(manager.bodyLimits.plaintextBytes),
   encryption?: RequestAccessCheck['encryption'],
 ): MiddlewareHandler {
   return async (c, next) => {
@@ -116,7 +116,7 @@ export function createTransportMiddleware(
     const mode = encryption?.(pathname, c.req.method)
     if (mode === 'disabled') {
       // 明文端点拒绝传输信封，防止把密文当业务数据处理或返回无法解密的成功响应。
-      if (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)) {
+      if (c.req.raw.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || c.req.raw.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {
         return Response.json(err({
           ...HaiCommonError.VALIDATION_ERROR,
           message: servM('serv_transportPlaintextRequired'),
@@ -130,7 +130,7 @@ export function createTransportMiddleware(
       return next()
 
     // Step 3：普通业务请求必须先确认 clientId 存在，且服务端已经保存过该客户端公钥。
-    const clientId = c.req.header(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    const clientId = c.req.header(crypto.transport.protocol.CLIENT_ID_HEADER)
     if (!clientId)
       return jsonError(servM('serv_transportClientIdRequired'), 400)
 
@@ -140,12 +140,12 @@ export function createTransportMiddleware(
     try {
       let requestContext: TransportMessageContext
       try {
-        const verified = await authenticateTransportRequest(manager, c.req.raw, lease.limits)
+        const verified = await crypto.transport.authenticateRequest(manager, c.req.raw, lease.limits)
         if (!verified.success) {
           if (verified.error.code === HaiCryptoError.TRANSPORT_BUSY.code)
             return jsonError(servM('serv_transportBusy'), 503)
           if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
-            return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
+            return crypto.transport.createErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
           return jsonError(servM('serv_transportDecryptFailed'), 400)
         }
         requestContext = verified.data.context
@@ -154,7 +154,7 @@ export function createTransportMiddleware(
       }
       catch (error) {
         if (error instanceof TransportBodyTooLargeError)
-          return createTransportErrorResponse(error)
+          return crypto.transport.createErrorResponse(error)
         return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError
           ? 413
           : 400)
@@ -173,8 +173,8 @@ export function createTransportMiddleware(
       // Hono 的 res setter 会合并旧响应头，先清理其表征元数据，避免重新引入旧编码/长度。
       c.header('Content-Length', undefined)
       c.header('Content-Encoding', undefined)
-      c.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, undefined)
-      c.header(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, undefined)
+      c.header(crypto.transport.protocol.ENCRYPTED_HEADER, undefined)
+      c.header(crypto.transport.protocol.ENVELOPE_HEADER, undefined)
       if (!bodyless && !canEncryptResponseContentType(contentType)) {
         void response.body?.cancel().catch(() => {})
         c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
@@ -184,7 +184,7 @@ export function createTransportMiddleware(
       try {
         bodyText = bodyless
           ? ''
-          : await readTransportBody(response.body, {
+          : await crypto.transport.readBody(response.body, {
               maxBytes: lease.limits.plaintextBytes,
               direction: 'response',
               signal: c.req.raw.signal,
@@ -192,7 +192,7 @@ export function createTransportMiddleware(
       }
       catch (cause) {
         if (cause instanceof TransportBodyTooLargeError) {
-          c.res = await createTransportErrorResponse(cause, { manager, context: requestContext })
+          c.res = await crypto.transport.createErrorResponse(cause, { manager, context: requestContext })
           return
         }
         logger.warn('Failed to read response body for encryption', { error: cause })
@@ -200,7 +200,7 @@ export function createTransportMiddleware(
         return
       }
       const headers = new Headers(response.headers)
-      headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+      headers.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
       headers.delete('Content-Length')
       headers.delete('Content-Encoding')
 
@@ -213,9 +213,9 @@ export function createTransportMiddleware(
       }
 
       headers.set('Content-Type', 'application/json; charset=utf-8')
-      headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      headers.set(crypto.transport.protocol.ENCRYPTED_HEADER, crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
       if (bodyless)
-        headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encResult.data))
+        headers.set(crypto.transport.protocol.ENVELOPE_HEADER, JSON.stringify(encResult.data))
       c.res = new Response(bodyless
         ? null
         : JSON.stringify(encResult.data), {
@@ -234,8 +234,8 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
   let body: unknown
   try {
     // Step 1：读取客户端提交的公钥。
-    body = JSON.parse(await readTransportBody(request.body, {
-      maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+    body = JSON.parse(await crypto.transport.readBody(request.body, {
+      maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
       signal: request.signal,
     }))
   }
@@ -245,15 +245,15 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
       : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
-    || !isValidSM2PublicKey(body.clientPublicKey)
-    || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
+    || !crypto.asymmetric.isValidPublicKey(body.clientPublicKey)
+    || new TextEncoder().encode(body.clientPublicKey).byteLength > crypto.transport.bodyLimits.publicKeyBytes) {
     return jsonError(servM('serv_transportInvalidPayload'), 400)
   }
 
   try {
     // Step 2：注册客户端公钥，换取稳定的 clientId；并返回服务端公钥给客户端完成协商。
     const serverPublicKey = manager.getServerPublicKey()
-    if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
+    if (new TextEncoder().encode(serverPublicKey).byteLength > crypto.transport.bodyLimits.publicKeyBytes)
       return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
     const clientId = await manager.registerClientKey(body.clientPublicKey)
     return new Response(JSON.stringify({
@@ -279,7 +279,7 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
 function replaceRequestBody(c: Parameters<MiddlewareHandler>[0], body: string): void {
   const original = c.req.raw
   const newHeaders = new Headers(original.headers)
-  newHeaders.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+  newHeaders.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
   newHeaders.delete('Content-Length')
   newHeaders.delete('Content-Encoding')
   newHeaders.set('Content-Type', 'application/json; charset=utf-8')

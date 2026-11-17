@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
-import { createTransportBodyPolicy } from '../../src/transport/crypto-transport-body.js'
+import { crypto } from '../../src/index.js'
 
 it('路由预算按完整段匹配，业务保留自身容量，大包不会占满小包准入', () => {
-  const policy = createTransportBodyPolicy(1024, { '/api/files/*': 8 * 1024 * 1024 })
+  const policy = crypto.transport.createBodyPolicy(1024, { '/api/files/*': 8 * 1024 * 1024 })
   expect(policy.maximum.plaintextBytes).toBe(8 * 1024 * 1024)
   const first = policy.acquire('/api/files/one')!
   const second = policy.acquire('/api/files/two')!
@@ -28,11 +28,11 @@ it.each([
   '/api/**',
   '/api/path?q=1',
 ])('拒绝非完整路径模式 %s', (path) => {
-  expect(() => createTransportBodyPolicy(undefined, { [path]: 1024 })).toThrow(RangeError)
+  expect(() => crypto.transport.createBodyPolicy(undefined, { [path]: 1024 })).toThrow(RangeError)
 })
 
 it('宿主显式提升普通业务容量后仍保留独立业务并发，不被辅助限额压到两个', () => {
-  const policy = createTransportBodyPolicy(8 * 1024 * 1024, { '/api/feedback/*': 16 * 1024 * 1024 })
+  const policy = crypto.transport.createBodyPolicy(8 * 1024 * 1024, { '/api/feedback/*': 16 * 1024 * 1024 })
   const ordinary = Array.from({ length: 16 }, () => policy.acquire('/api/orders'))
   expect(ordinary.every(Boolean)).toBe(true)
   expect(policy.acquire('/api/orders')).toBeNull()

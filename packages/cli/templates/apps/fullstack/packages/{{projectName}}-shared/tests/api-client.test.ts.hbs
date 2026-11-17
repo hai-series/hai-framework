@@ -1,7 +1,7 @@
-import { cache } from '@h-ai/cache'
 import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../src/lib/api/api-client.js'
 
@@ -25,7 +25,7 @@ function createServerFetch() {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
     },
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
   })
   if (!created.success)
     throw new Error(created.error.message)
@@ -47,15 +47,15 @@ function createServerFetch() {
         clientKeyTtlSeconds: server.clientKeyTtlSeconds,
       } satisfies KeyExchangeResponse)
     }
-    const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    const clientId = request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)
     if (!clientId)
       return Response.json({ success: false }, { status: 400 })
-    const verified = await authenticateTransportRequest(server, request)
+    const verified = await crypto.transport.authenticateRequest(server, request)
     if (!verified.success)
       throw new Error(verified.error.message)
     let data: unknown = runtimeInfo
     if (url.pathname.endsWith('/app/echo')) {
-      expect(request.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      expect(request.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
       const payload = JSON.parse(verified.data.plaintext) as { message: string }
       messages.push(payload.message)
       data = { message: payload.message, echoedAt: '2026-01-01T00:00:00.000Z', requestId: 'test-request' }
@@ -64,7 +64,7 @@ function createServerFetch() {
     if (!response.success)
       throw new Error(response.error.message)
     return Response.json(response.data, {
-      headers: { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
     })
   }
   return { fetchFn, requests, messages }

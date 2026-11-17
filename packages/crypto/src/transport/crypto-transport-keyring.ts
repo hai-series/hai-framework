@@ -17,8 +17,8 @@ import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
  *
  * @example
  * ```ts
- * import { parseTransportServerKeyRing, type TransportServerKeyRing } from '@h-ai/crypto'
- * const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ * import { type TransportServerKeyRing, crypto } from '@h-ai/crypto'
+ * const parsed = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  * if (!parsed.success) throw new Error(parsed.error.message)
  * const ring: TransportServerKeyRing = parsed.data
  * // 仅服务端使用；createServer还会校验每个版本的公私钥配对。

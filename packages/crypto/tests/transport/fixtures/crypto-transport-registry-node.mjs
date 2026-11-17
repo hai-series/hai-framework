@@ -1,7 +1,7 @@
 import process from 'node:process'
 /** 独立 Node 缓存 registry worker；测试通过私有 IPC 装配 Redis 连接。 */
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 let store
 process.on('message', async (message) => {
@@ -15,7 +15,7 @@ process.on('message', async (message) => {
       const connected = await cache.init(message.config)
       if (!initialized.success || !connected.success)
         throw new Error('Worker initialization failed')
-      store = createCacheTransportKeyStore({
+      store = crypto.transport.createKeyStore({
         cache,
         ttlSeconds: 3600,
         maxRegistrationsPerMinute: message.maxRegistrationsPerMinute,

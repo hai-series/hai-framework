@@ -9,7 +9,7 @@
 import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import process from 'node:process'
 import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
-import { TRANSPORT_PLAINTEXT_RANGE, TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { z } from 'zod'
 import { servM } from './serv-i18n.js'
 
@@ -36,7 +36,7 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
  *
  * const config: ServServerConfig = { host: '127.0.0.1', port: 3000 }
  * const bindAddress = config.host
- * ```
+ *```
  */
 export interface ServServerConfig {
   readonly host: string
@@ -53,7 +53,7 @@ export interface ServServerConfig {
  *
  * const input: ServServerConfigInput = { port: 3000 }
  * // HOST/PORT 的环境覆盖由配置解析完成后传给 listen。
- * ```
+ *```
  */
 export type ServServerConfigInput = Partial<ServServerConfig>
 
@@ -67,7 +67,7 @@ export type ServServerConfigInput = Partial<ServServerConfig>
  *
  * const openapi: ServOpenAPIHttpConfig = { path: '/openapi.json' }
  * // 文档仅在 createApp.http 显式启用时挂载。
- * ```
+ *```
  */
 export interface ServOpenAPIHttpConfig {
   readonly path: `/${string}`
@@ -82,7 +82,7 @@ export interface ServOpenAPIHttpConfig {
  * import { serv } from '@h-ai/serv'
  *
  * const docs: ServDocsHttpConfig = { path: '/docs', requireAuth: true }
- * ```
+ *```
  */
 export interface ServDocsHttpConfig {
   readonly path: `/${string}`
@@ -98,7 +98,7 @@ export interface ServDocsHttpConfig {
  * import { serv } from '@h-ai/serv'
  *
  * const health: ServHealthHttpConfig = { path: '/health', readyPath: '/ready' }
- * ```
+ *```
  */
 export interface ServHealthHttpConfig {
   readonly path: `/${string}`
@@ -115,7 +115,7 @@ export interface ServHealthHttpConfig {
  *
  * const transport: ServTransportRuntimeConfig = { keyExchangePath: '/_hai/key-exchange', excludePaths: ['/health'] }
  * // 仅路径配置；真正启用还需私有 keyring 与共享 keyStore。
- * ```
+ *```
  */
 export interface ServTransportRuntimeConfig {
   /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
@@ -139,7 +139,7 @@ export interface ServTransportRuntimeConfig {
  * import { serv } from '@h-ai/serv'
  *
  * const cors: ServCorsRuntimeConfig = { origin: 'https://app.example.com', allowedHeaders: ['Authorization', 'Content-Type'], exposedHeaders: [], credentials: true }
- * ```
+ *```
  */
 export interface ServCorsRuntimeConfig {
   readonly origin?: string
@@ -158,7 +158,7 @@ export interface ServCorsRuntimeConfig {
  * import { serv } from '@h-ai/serv'
  *
  * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' } }
- * ```
+ *```
  */
 export interface ServHttpConfig {
   /** auto 仅在受管私有容器代理中采用容器网段；空数组显式忽略转发头。 */
@@ -183,7 +183,7 @@ export interface ServHttpConfig {
  *
  * const config: ServConfig = ServConfigSchema.parse({ server: { host: '127.0.0.1', port: 3000 } })
  * const port = config.server.port
- * ```
+ *```
  */
 export interface ServConfig {
   readonly server: ServServerConfig
@@ -201,7 +201,7 @@ export interface ServConfig {
  * import { serv } from '@h-ai/serv'
  *
  * const input: ServCorsRuntimeConfigInput = { origin: 'https://app.example.com', credentials: true }
- * ```
+ *```
  */
 export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
 
@@ -215,7 +215,7 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  *
  * const input: ServTransportRuntimeConfigInput = { keyExchangePath: '/_hai/key-exchange' }
  * // 此输入不包含私钥；私有 Secret 仅在服务端运行时装配。
- * ```
+ *```
  */
 export type ServTransportRuntimeConfigInput = Partial<{
   readonly maxPlaintextBytes: number | 'auto'
@@ -235,7 +235,7 @@ export type ServTransportRuntimeConfigInput = Partial<{
  * import { serv } from '@h-ai/serv'
  *
  * const http: ServHttpConfigInput = { apiPrefix: '/api/v2', trustedProxies: ['192.0.2.0/24'], docs: false }
- * ```
+ *```
  */
 export type ServHttpConfigInput = Partial<{
   readonly trustedProxies: TrustedProxies
@@ -259,7 +259,7 @@ export type ServHttpConfigInput = Partial<{
  * const input: ServConfigInput = { http: { apiPrefix: '/api/v2' }, transport: false }
  * const parsed = ServConfigSchema.safeParse(input)
  * if (!parsed.success) throw new Error('Invalid service configuration')
- * ```
+ *```
  */
 export interface ServConfigInput {
   readonly server?: ServServerConfigInput
@@ -295,14 +295,14 @@ const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
     maxPlaintextBytes: z.union([
-      z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max),
+      z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max),
       z.literal('auto'),
     ]).transform(value => value === 'auto'
       ? undefined
       : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
-    maxFutureSkewSeconds: z.number().int().min(0).max(TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000 }),
-    maxRequestAgeSeconds: z.number().int().min(TRANSPORT_TIME_LIMITS.minRequestAgeSeconds).max(TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000 }),
-    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
+    maxFutureSkewSeconds: z.number().int().min(0).max(crypto.transport.timeLimits.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: crypto.transport.protocol.CLOCK_SKEW_MS / 1000 }),
+    maxRequestAgeSeconds: z.number().int().min(crypto.transport.timeLimits.minRequestAgeSeconds).max(crypto.transport.timeLimits.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: crypto.transport.protocol.REQUEST_WINDOW_MS / 1000 }),
+    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
   }),
@@ -347,7 +347,7 @@ const ServHttpConfigInputSchema = z.object({
  * if (parsed.success) {
  *   const host = parsed.data.server.host
  * }
- * ```
+ *```
  */
 export const ServConfigSchema = z.object({
   server: ServerConfigInputSchema.optional(),
@@ -392,7 +392,7 @@ function readServerEnvOverride(): ServServerConfigInput {
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const server = resolveServServerConfig({ host: '127.0.0.1', port: 3000 })
  * // 合法 HOST/PORT 环境变量优先；配置非法时 parse 显式抛错。
- * ```
+ *```
  */
 export function resolveServServerConfig(input: ServServerConfigInput = {}): ServServerConfig {
   return {
@@ -412,7 +412,7 @@ export function resolveServServerConfig(input: ServServerConfigInput = {}): Serv
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const http = resolveServHttpConfig({ apiPrefix: '/api/v2', docs: false })
- * ```
+ *```
  */
 export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttpConfig {
   return ServHttpConfigInputSchema.parse(input)
@@ -429,7 +429,7 @@ export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttp
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const cors = resolveServCorsRuntimeConfig({ origin: 'https://app.example.com', credentials: true })
- * ```
+ *```
  */
 export function resolveServCorsRuntimeConfig(input: ServCorsRuntimeConfigInput = {}): ServCorsRuntimeConfig {
   return CorsRuntimeConfigInputSchema.parse(input)
@@ -447,7 +447,7 @@ export function resolveServCorsRuntimeConfig(input: ServCorsRuntimeConfigInput =
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const disabled = resolveServTransportRuntimeConfig(false)
  * const enabled = resolveServTransportRuntimeConfig({ keyExchangePath: '/_hai/key-exchange' })
- * ```
+ *```
  */
 export function resolveServTransportRuntimeConfig(
   input: false | ServTransportRuntimeConfigInput = false,
@@ -466,7 +466,7 @@ export function resolveServTransportRuntimeConfig(
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const config = resolveServConfig({ server: { port: 3000 }, http: { docs: false } })
- * ```
+ *```
  */
 export function resolveServConfig(input: ServConfigInput = {}): ServConfig {
   return ServConfigSchema.parse(input)

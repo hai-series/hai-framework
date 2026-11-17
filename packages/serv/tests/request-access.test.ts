@@ -6,7 +6,7 @@ import path from 'node:path'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
 import { HaiCommonError, ok } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { serv } from '../src/serv-main.js'
@@ -204,7 +204,7 @@ it('路径可关闭或强制加密，明文仍受 IP/时间约束，配置冲突
         activeKeyId: 'v1',
         keys: { v1: pair.data },
       },
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
       excludePaths: ['/health'],
     },
   })
@@ -302,7 +302,7 @@ it('策略拒绝保持真正的加密响应，客户端可读取原因和追踪�
         activeKeyId: 'v1',
         keys: { v1: pair.data },
       },
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     },
     middlewares: [
       {

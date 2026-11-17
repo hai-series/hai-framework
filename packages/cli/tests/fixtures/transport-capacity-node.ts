@@ -7,7 +7,7 @@ import process from 'node:process'
 import { Readable } from 'node:stream'
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads'
 import { cache } from '@h-ai/cache'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { createTransportWorkbook } from '../../../serv/tests/helpers/serv-transport-workbook.js'
 
 const maxPlaintextBytes = Number(process.env.HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES)
@@ -23,7 +23,7 @@ async function serveTransportBackend(): Promise<void> {
   if (!pair.success)
     throw new Error(pair.error.message)
   const created = crypto.transport.createServer({
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'v1',
       keys: { v1: pair.data },
@@ -54,7 +54,7 @@ async function serveTransportBackend(): Promise<void> {
       } as RequestInit)
       if (incoming.url?.endsWith('/_hai/key-exchange')) {
         stage = 'key-exchange'
-        const input = JSON.parse(await readTransportBody(request.body, { maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes })) as { clientPublicKey: string }
+        const input = JSON.parse(await crypto.transport.readBody(request.body, { maxBytes: crypto.transport.bodyLimits.keyExchangeBytes })) as { clientPublicKey: string }
         const clientId = await manager.registerClientKey(input.clientPublicKey)
         outgoing.setHeader('Content-Type', 'application/json')
         outgoing.end(JSON.stringify({
@@ -67,7 +67,7 @@ async function serveTransportBackend(): Promise<void> {
       }
       Atomics.add(requestCounts, 0, 1)
       stage = 'authenticate'
-      const verified = await authenticateTransportRequest(manager, request)
+      const verified = await crypto.transport.authenticateRequest(manager, request)
       if (!verified.success) {
         process.stderr.write(`Transport capacity authentication rejected: ${verified.error.code}\n`)
         throw new Error(verified.error.message)
@@ -163,7 +163,7 @@ async function verifyTransportCapacity(): Promise<void> {
       }
       const rejected = await fetch('http://127.0.0.1:18080/api/v1/import', {
         method: 'POST',
-        body: Buffer.alloc(resolveTransportBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1),
+        body: Buffer.alloc(crypto.transport.resolveBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1),
       })
       assert.equal(rejected.status, 413)
       assert.match(await rejected.text(), /nginx/)

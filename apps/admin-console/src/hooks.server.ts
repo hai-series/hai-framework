@@ -12,7 +12,7 @@ import process from 'node:process'
 import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
@@ -118,14 +118,14 @@ async function createHaiHandle(): Promise<Handle> {
       if (!initResult.success)
         throw new Error(initResult.error.message)
     }
-    const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(ring.error.message)
     managedTransport = {
       ...handleTransportConfig,
       basePath: base,
       serverKeyRing: ring.data,
-      keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
+      keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
     }
   }
 

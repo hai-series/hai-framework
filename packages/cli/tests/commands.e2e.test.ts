@@ -23,7 +23,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -255,12 +255,12 @@ describe('createProject — api 类型', () => {
       cwd: tmpRoot,
     })
     const prefix = `apps/${name}-serv`
-    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = crypto.transport.parseServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
     if (!ring.success)
       throw new Error(ring.error.message)
     const source = await readText(directory, `${prefix}/src/app.ts`)
-    expect(source).toContain('keyStore: createCacheTransportKeyStore({ cache })')
+    expect(source).toContain('keyStore: crypto.transport.createKeyStore({ cache })')
     expect(source).toContain('from \'@h-ai/cache\'')
     expect(await readText(directory, `${prefix}/.env.example`)).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
     expect(await readText(directory, `${prefix}/.env`)).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
@@ -959,7 +959,7 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
     const serializedRing = parseEnv(env).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
-    const ring = parseTransportServerKeyRing(serializedRing)
+    const ring = crypto.transport.parseServerKeyRing(serializedRing)
     expect(ring.success).toBe(true)
     if (!ring.success)
       throw new Error(ring.error.message)
@@ -970,7 +970,7 @@ describe('createProject — fullstack 类型', () => {
       expect((await crypto.init()).success).toBe(true)
       expect(crypto.transport.createServer({
         serverKeyRing: ring.data,
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
       }).success).toBe(true)
     }
     finally {
@@ -985,7 +985,7 @@ describe('createProject — fullstack 类型', () => {
       const publicValues = parseEnv(await readText(projectPath, `.env.${mode}`))
       expect(publicValues).not.toHaveProperty('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
       expect(publicValues).not.toHaveProperty('HAI_ADMIN_DEFAULT_PASSWORD')
-      const parsed = parseTransportServerKeyRing(values.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+      const parsed = crypto.transport.parseServerKeyRing(values.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       expect(parsed.success).toBe(true)
       if (!parsed.success)
         throw new Error(parsed.error.message)
@@ -1235,7 +1235,7 @@ describe('createProject — fullstack 类型', () => {
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
     expect(appServer).toContain('refreshCookie:')
-    expect(appServer).toContain('createCacheTransportKeyStore')
+    expect(appServer).toContain('crypto.transport.createKeyStore')
     expect(appServer).toContain('X-HAI-Token-Transport')
   })
 

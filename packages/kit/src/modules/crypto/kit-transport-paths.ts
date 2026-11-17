@@ -6,7 +6,7 @@
  * @module kit-transport-paths
  */
 
-import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 /**
  * 客户端与服务端共用的默认公开密钥交换路径。
@@ -14,9 +14,9 @@ import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
  * ```ts
  * const endpoint = new URL(DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, 'https://app.example.com')
  * void endpoint.pathname
- * ```
+ *```
  */
-export const DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
+export const DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
 
 const API_PREFIX = '/api/'
 const ROOT_DATA_PATH = '/__data.json'
@@ -38,7 +38,7 @@ function normalizePath(pathname: string): string {
  * ```ts
  * const basePath = normalizeTransportBasePath('/console/')
  * const endpoint = `${basePath}/api/articles`
- * ```
+ *```
  */
 export function normalizeTransportBasePath(value = ''): string {
   const invalid = () => new TypeError('Transport basePath must be an absolute mount path without dot segments, query or fragment')
@@ -68,7 +68,7 @@ export function normalizeTransportBasePath(value = ''): string {
  * ```ts
  * const isData = isSvelteKitDataPath('/articles/__data.json')
  * void isData
- * ```
+ *```
  */
 export function isSvelteKitDataPath(pathname: string): boolean {
   return pathname === ROOT_DATA_PATH || pathname.endsWith(DATA_SUFFIX)
@@ -84,7 +84,7 @@ export function isSvelteKitDataPath(pathname: string): boolean {
  * ```ts
  * const protectedPath = shouldHandleTransportPath('/api/articles')
  * void protectedPath
- * ```
+ *```
  */
 export function shouldHandleTransportPath(
   pathname: string,
@@ -108,7 +108,7 @@ export function shouldHandleTransportPath(
  * ```ts
  * const excluded = shouldExcludeTransportPath('/api/health', ['/api/health'], DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH)
  * void excluded
- * ```
+ *```
  */
 export function shouldExcludeTransportPath(
   pathname: string,
@@ -133,7 +133,7 @@ export function shouldExcludeTransportPath(
  * ```ts
  * const path = resolveTransportPath('https://app.example.com/api/articles?page=1')
  * void path
- * ```
+ *```
  */
 export function resolveTransportPath(urlOrPath: string, origin = 'http://localhost'): string {
   return new URL(urlOrPath, origin).pathname
@@ -156,7 +156,7 @@ export function resolveTransportPath(urlOrPath: string, origin = 'http://localho
  * ```ts
  * const protectedUrl = shouldUseTransportForUrl('/api/articles', { origin: 'https://app.example.com', excludePaths: ['/api/health'] })
  * void protectedUrl
- * ```
+ *```
  */
 export function shouldUseTransportForUrl(
   url: string | URL,

@@ -2,7 +2,7 @@ import type { TransportServerKeyRing } from '../../src/index.js'
 import { cache } from '@h-ai/cache'
 import { HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS } from '../../src/index.js'
+import { crypto } from '../../src/index.js'
 
 let serverKeyRing: TransportServerKeyRing
 
@@ -42,7 +42,7 @@ function makeRoundTripFetch(
     }
 
     // echo endpoint：解密 → 回显 → 加密
-    const verified = await authenticateTransportRequest(manager, req)
+    const verified = await crypto.transport.authenticateRequest(manager, req)
     if (!verified.success)
       throw new Error(verified.error.message)
     const echo = echoHandler(verified.data.plaintext)
@@ -90,7 +90,7 @@ describe('crypto.transport', () => {
       clientId: 'old-client',
       serverKeyId: 'test-v1',
       serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
-      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
     }))
     expect((await opening).success).toBe(false)
     expect(client.ready()).toBe(false)
@@ -118,7 +118,7 @@ describe('crypto.transport', () => {
         clientId: 'valid-client',
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
         ...invalid,
       }),
     })
@@ -136,7 +136,7 @@ describe('crypto.transport', () => {
     await crypto.close()
     const result = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     expect(result.success).toBe(false)
   })
@@ -144,7 +144,7 @@ describe('crypto.transport', () => {
   it('round-trips request/response through encrypted fetch', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     expect(serverResult.success).toBe(true)
     if (!serverResult.success)
@@ -185,7 +185,7 @@ describe('crypto.transport', () => {
   it('round-trips through an injected keyStore', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     expect(serverResult.success).toBe(true)
     if (!serverResult.success)
@@ -213,7 +213,7 @@ describe('crypto.transport', () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
       keyStore: {
-        ...createCacheTransportKeyStore({ cache }),
+        ...crypto.transport.createKeyStore({ cache }),
         clientKeyTtlSeconds: 60,
       },
     })
@@ -263,7 +263,7 @@ describe('crypto.transport', () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
       keyStore: {
-        ...createCacheTransportKeyStore({ cache }),
+        ...crypto.transport.createKeyStore({ cache }),
         clientKeyTtlSeconds: 60,
       },
     })
@@ -304,7 +304,7 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
         clientId: 'id',
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
         clientKeyTtlSeconds,
       }),
     })
@@ -336,7 +336,7 @@ describe('crypto.transport', () => {
   it('reads body from Request when init.body is absent (oRPC compat)', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     if (!serverResult.success)
       throw new Error('createServer failed')
@@ -356,7 +356,7 @@ describe('crypto.transport', () => {
   it('destroy() clears session state', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     if (!serverResult.success)
       throw new Error('createServer failed')
@@ -386,7 +386,7 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
         clientId: 'client-id',
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
       }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     expect((await client.init()).success).toBe(false)
@@ -401,7 +401,7 @@ describe('crypto.transport', () => {
     {
       serverKeyId: 'test-v1',
       serverPublicKey: '你'.repeat(1366),
-      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
       clientId: 'id',
     },
   ])('拒绝无效或超限服务端公钥：%j', async (body) => {
@@ -443,7 +443,7 @@ describe('crypto.transport', () => {
       serverKeyId: 'test-v1',
       serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
       clientId: 'id',
-      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
     }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo', { method: 'POST', body: stream })).rejects.toBeInstanceOf(RangeError)
@@ -468,14 +468,14 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
         clientId: 'id',
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
       }))
       .mockResolvedValueOnce(new Response(stream, {
         headers: { 'X-Encrypted': 'true' },
       }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo')).rejects.toThrow()
-    expect(pulls).toBeLessThan(Math.ceil(TRANSPORT_BODY_LIMITS.encryptedPayloadBytes / 65536) + 3)
+    expect(pulls).toBeLessThan(Math.ceil(crypto.transport.bodyLimits.encryptedPayloadBytes / 65536) + 3)
     expect(cancel).toHaveBeenCalledOnce()
     expect(stream.locked).toBe(false)
   })
@@ -486,7 +486,7 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
         clientId: 'id',
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
       }))
       .mockResolvedValueOnce(new Response(body, {
         headers: { 'X-Encrypted': 'true' },
@@ -498,7 +498,7 @@ describe('crypto.transport', () => {
   it('发送 ArrayBufferView 只读取有效切片并清除原正文的长度与编码头', async () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     if (!server.success)
       throw new Error('createServer failed')
@@ -524,7 +524,7 @@ describe('crypto.transport', () => {
     })
     const server = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
     })
     if (!server.success)
       throw new Error(server.error.message)
@@ -554,7 +554,7 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
         clientId: 'id',
-        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        maxPlaintextBytes: crypto.transport.bodyLimits.plaintextBytes,
       }))
       .mockResolvedValueOnce(new Response(stream, {
         headers: { 'X-Encrypted': 'true' },

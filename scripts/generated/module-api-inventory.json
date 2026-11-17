@@ -20912,40 +20912,16 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "authenticateTransportRequest",
-              "kind": "value",
-              "declaration": "authenticateTransportRequest",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CipherMode",
               "kind": "type",
               "declaration": "CipherMode",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createCacheTransportKeyStore",
-              "kind": "value",
-              "declaration": "createCacheTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
               "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createTransportBodyPolicy",
-              "kind": "value",
-              "declaration": "createTransportBodyPolicy",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createTransportErrorResponse",
-              "kind": "value",
-              "declaration": "createTransportErrorResponse",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "crypto",
@@ -20996,12 +20972,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "isValidSM2PublicKey",
-              "kind": "value",
-              "declaration": "isValidSM2PublicKey",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "KeyExchangeRequest",
               "kind": "type",
               "declaration": "KeyExchangeRequest",
@@ -21020,12 +20990,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "parseTransportServerKeyRing",
-              "kind": "value",
-              "declaration": "parseTransportServerKeyRing",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "PasswordConfig",
               "kind": "type",
               "declaration": "PasswordConfig",
@@ -21038,22 +21002,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "readTransportBody",
-              "kind": "value",
-              "declaration": "readTransportBody",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "resolveTransportBodyLimits",
-              "kind": "value",
-              "declaration": "resolveTransportBodyLimits",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SignOptions",
@@ -21102,30 +21054,6 @@
               "kind": "type",
               "declaration": "SymmetricOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TRANSPORT_BODY_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_BODY_LIMITS",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PLAINTEXT_RANGE",
-              "kind": "value",
-              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PROTOCOL",
-              "kind": "value",
-              "declaration": "TRANSPORT_PROTOCOL",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_TIME_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_TIME_LIMITS",
-              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportBodyLimits",
@@ -21228,40 +21156,16 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "authenticateTransportRequest",
-              "kind": "value",
-              "declaration": "authenticateTransportRequest",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CipherMode",
               "kind": "type",
               "declaration": "CipherMode",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createCacheTransportKeyStore",
-              "kind": "value",
-              "declaration": "createCacheTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
               "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createTransportBodyPolicy",
-              "kind": "value",
-              "declaration": "createTransportBodyPolicy",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createTransportErrorResponse",
-              "kind": "value",
-              "declaration": "createTransportErrorResponse",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "crypto",
@@ -21312,12 +21216,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "isValidSM2PublicKey",
-              "kind": "value",
-              "declaration": "isValidSM2PublicKey",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "KeyExchangeRequest",
               "kind": "type",
               "declaration": "KeyExchangeRequest",
@@ -21336,12 +21234,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "parseTransportServerKeyRing",
-              "kind": "value",
-              "declaration": "parseTransportServerKeyRing",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "PasswordConfig",
               "kind": "type",
               "declaration": "PasswordConfig",
@@ -21354,22 +21246,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "readTransportBody",
-              "kind": "value",
-              "declaration": "readTransportBody",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "resolveTransportBodyLimits",
-              "kind": "value",
-              "declaration": "resolveTransportBodyLimits",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SignOptions",
@@ -21418,30 +21298,6 @@
               "kind": "type",
               "declaration": "SymmetricOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TRANSPORT_BODY_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_BODY_LIMITS",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PLAINTEXT_RANGE",
-              "kind": "value",
-              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PROTOCOL",
-              "kind": "value",
-              "declaration": "TRANSPORT_PROTOCOL",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_TIME_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_TIME_LIMITS",
-              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportBodyLimits",
@@ -21544,40 +21400,16 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "authenticateTransportRequest",
-              "kind": "value",
-              "declaration": "authenticateTransportRequest",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CipherMode",
               "kind": "type",
               "declaration": "CipherMode",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createCacheTransportKeyStore",
-              "kind": "value",
-              "declaration": "createCacheTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
               "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createTransportBodyPolicy",
-              "kind": "value",
-              "declaration": "createTransportBodyPolicy",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createTransportErrorResponse",
-              "kind": "value",
-              "declaration": "createTransportErrorResponse",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "crypto",
@@ -21628,12 +21460,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "isValidSM2PublicKey",
-              "kind": "value",
-              "declaration": "isValidSM2PublicKey",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "KeyExchangeRequest",
               "kind": "type",
               "declaration": "KeyExchangeRequest",
@@ -21652,12 +21478,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "parseTransportServerKeyRing",
-              "kind": "value",
-              "declaration": "parseTransportServerKeyRing",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "PasswordConfig",
               "kind": "type",
               "declaration": "PasswordConfig",
@@ -21670,22 +21490,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "readTransportBody",
-              "kind": "value",
-              "declaration": "readTransportBody",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "resolveTransportBodyLimits",
-              "kind": "value",
-              "declaration": "resolveTransportBodyLimits",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SignOptions",
@@ -21734,30 +21542,6 @@
               "kind": "type",
               "declaration": "SymmetricOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TRANSPORT_BODY_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_BODY_LIMITS",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PLAINTEXT_RANGE",
-              "kind": "value",
-              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_PROTOCOL",
-              "kind": "value",
-              "declaration": "TRANSPORT_PROTOCOL",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TRANSPORT_TIME_LIMITS",
-              "kind": "value",
-              "declaration": "TRANSPORT_TIME_LIMITS",
-              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportBodyLimits",

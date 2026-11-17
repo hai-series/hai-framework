@@ -1,7 +1,7 @@
 import process from 'node:process'
 /** 两个独立 Node 进程共享 Redis registry；私钥只通过私有 IPC 装配。 */
 import { cache } from '@h-ai/cache'
-import { authenticateTransportRequest, createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 let manager
 let handled = 0
@@ -14,7 +14,7 @@ process.on('message', async (message) => {
         throw new Error('Worker initialization failed')
       const result = crypto.transport.createServer({
         serverKeyRing: message.serverKeyRing,
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
       })
       if (!result.success)
         throw new Error('Worker manager initialization failed')
@@ -22,7 +22,7 @@ process.on('message', async (message) => {
       process.send?.({ id: message.id, success: true })
     }
     else if (message.type === 'request') {
-      const verified = await authenticateTransportRequest(manager, new Request(message.url, message.init))
+      const verified = await crypto.transport.authenticateRequest(manager, new Request(message.url, message.init))
       if (verified.success) {
         handled++
         const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ handled }), 200)

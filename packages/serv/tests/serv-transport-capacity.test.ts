@@ -4,7 +4,7 @@ import { Buffer } from 'node:buffer'
 import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto, resolveTransportBodyLimits } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServConfigSchema } from '../src/serv-config.js'
 import { serv } from '../src/serv-main.js'
@@ -20,7 +20,7 @@ function createApplication(maxPlaintextBytes = 8 * 1024 * 1024) {
     transport: {
       crypto,
       serverKeyRing,
-      keyStore: createCacheTransportKeyStore({ cache }),
+      keyStore: crypto.transport.createKeyStore({ cache }),
       maxPlaintextBytes,
     },
   })
@@ -55,7 +55,7 @@ describe('serv configurable transport capacity', () => {
       transport: {
         crypto,
         serverKeyRing,
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         maxPlaintextBytes: 1024,
         routePlaintextBytes: { '/api/v1/material/*': 8192 },
       },
@@ -177,7 +177,7 @@ describe('serv configurable transport capacity', () => {
     const cancel = vi.fn()
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new Uint8Array(resolveTransportBodyLimits(1024).encryptedPayloadBytes + 1))
+        controller.enqueue(new Uint8Array(crypto.transport.resolveBodyLimits(1024).encryptedPayloadBytes + 1))
       },
       cancel,
     })

@@ -128,7 +128,7 @@ manifest.json 的 partial 与 selectedServices、apply 脚本共同记录部署�
 
 服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock、支持 flock 的持久化文件系统和容器/目录权限。部署和恢复使用固定 `.deploy.lock` 内核锁，不可删除/替换或按时间抢锁；活跃子命令继承 FD，全部持有进程退出或重启后自动释放。强杀/断电后的执行状态需核对结果文件、current 和容器，不能将锁释放当作恢复成功。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
-生成 web.conf 时从目标环境解析后的 _serv.yml 读取 transport.maxPlaintextBytes，调用 crypto.resolveTransportBodyLimits 推导 client_max_body_size；默认 2129920 字节，8 MiB 明文对应 16809984 字节。请求/响应 buffering 关闭，认证头缓冲固定。SvelteKit 从 _kit.yml 自动推导 adapter-node BODY_SIZE_LIMIT。app 增量包携带代理配置；容量变化时复用现有 Web 镜像重建代理并纳入失败恢复，容量不变保留 Web 容器。容量变化须选择 app；路由/端口/其他代理策略改变仍要求全量部署。应用继续独立限制业务文件、解压和行数。自管代理调用 resolveTransportBodyLimits 获取同一预算。
+生成 web.conf 时从目标环境解析后的 _serv.yml 读取 transport.maxPlaintextBytes，调用 crypto.crypto.transport.resolveBodyLimits 推导 client_max_body_size；默认 2129920 字节，8 MiB 明文对应 16809984 字节。请求/响应 buffering 关闭，认证头缓冲固定。SvelteKit 从 _kit.yml 自动推导 adapter-node BODY_SIZE_LIMIT。app 增量包携带代理配置；容量变化时复用现有 Web 镜像重建代理并纳入失败恢复，容量不变保留 Web 容器。容量变化须选择 app；路由/端口/其他代理策略改变仍要求全量部署。应用继续独立限制业务文件、解压和行数。自管代理调用 crypto.transport.resolveBodyLimits 获取同一预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。联网准备可选 --image-source / --npm-source 的 official、cn、custom；npm 参数随 --build 使用。代理通过 --proxy-mode 及 --proxy-url / --proxy-bypass 配置，--no-http-proxy 等价 none；镜像拉取端还需配置引擎代理。具体契约见 [下载源与代理](../hai-build/reference.md#下载源与代理)。SQLite 13 的原生二进制随 npm 包交付，不再需要独立镜像参数；deploy 不下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
 

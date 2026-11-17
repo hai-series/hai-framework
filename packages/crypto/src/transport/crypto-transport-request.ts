@@ -21,13 +21,13 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
  *
  * @example
  * ```ts
- * import { authenticateTransportRequest, TRANSPORT_PROTOCOL, type TransportEncryptionManager } from '@h-ai/crypto'
+ * import { type TransportEncryptionManager, crypto } from '@h-ai/crypto'
  * async function handle(manager: TransportEncryptionManager, request: Request): Promise<Response> {
- *   const verified = await authenticateTransportRequest(manager, request)
+ *   const verified = await crypto.transport.authenticateRequest(manager, request)
  *   if (!verified.success) return new Response(null, { status: 400 })
  *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
  *   if (!encrypted.success) return new Response(null, { status: 500 })
- *   return Response.json(encrypted.data, { headers: { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } })
+ *   return Response.json(encrypted.data, { headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE } })
  * }
  * ```
  */

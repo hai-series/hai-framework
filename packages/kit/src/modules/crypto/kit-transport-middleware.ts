@@ -10,7 +10,7 @@ import type { KeyExchangeResponse, TransportEncryptionManager, TransportMessageC
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { core, err, HaiCommonError } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, HaiCryptoError, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { crypto, HaiCryptoError, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -28,7 +28,7 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  * function install(config: TransportEncryptionConfig) {
  *   return transportEncryptionMiddleware(config) // 受管密钥环、共享 keyStore 与 crypto 生命周期由应用管理。
  * }
- * ```
+ *```
  */
 export function transportEncryptionMiddleware(config: TransportEncryptionConfig, encryption?: RequestAccessCheck['encryption']): Middleware {
   // 未启用时直接透传
@@ -40,7 +40,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
   const basePath = normalizeTransportBasePath(config.basePath)
   const excludePaths = config.excludePaths ?? []
 
-  const policy = createTransportBodyPolicy(config.maxPlaintextBytes, config.routePlaintextBytes)
+  const policy = crypto.transport.createBodyPolicy(config.maxPlaintextBytes, config.routePlaintextBytes)
 
   // 初始化传输加密管理器
   const result = config.crypto.transport.createServer({
@@ -71,7 +71,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
 
     const mode = encryption?.(pathname, event.request.method)
     if (mode === 'disabled') {
-      if (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)) {
+      if (event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {
         return Response.json(err({
           ...HaiCommonError.VALIDATION_ERROR,
           message: kitM('kit_transportPlaintextRequired'),
@@ -92,7 +92,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     }
 
     // 请求头中无 X-Client-Id 时的处理
-    const clientId = event.request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    const clientId = event.request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)
     if (!clientId)
       return jsonError(kitM('kit_transportClientIdRequired'), 400)
 
@@ -104,12 +104,12 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     // 不依赖可伪造/省略的 Content-Length/Type 判空，非 null 流必须进入实际内容检查。
       let requestContext: TransportMessageContext
       try {
-        const verified = await authenticateTransportRequest(manager, event.request, lease.limits)
+        const verified = await crypto.transport.authenticateRequest(manager, event.request, lease.limits)
         if (!verified.success) {
           if (verified.error.code === HaiCryptoError.TRANSPORT_BUSY.code)
             return jsonError(kitM('kit_transportBusy'), 503)
           if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
-            return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
+            return crypto.transport.createErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
           return jsonError(kitM('kit_transportDecryptFailed'), 400)
         }
         requestContext = verified.data.context
@@ -118,7 +118,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       }
       catch (error) {
         if (error instanceof TransportBodyTooLargeError)
-          return createTransportErrorResponse(error)
+          return crypto.transport.createErrorResponse(error)
         return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError
           ? 413
           : 400)
@@ -142,14 +142,14 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       try {
         const responseBody = bodyless
           ? ''
-          : await readTransportBody(response.body, {
+          : await crypto.transport.readBody(response.body, {
               maxBytes: lease.limits.plaintextBytes,
               direction: 'response',
               signal: event.request.signal,
             })
         const headers = new Headers(response.headers)
-        headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-        headers.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+        headers.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
+        headers.delete(crypto.transport.protocol.ENVELOPE_HEADER)
         headers.delete('Content-Length')
         headers.delete('Content-Encoding')
 
@@ -157,9 +157,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
         if (!encryptedPayload.success) {
           return jsonError(kitM('kit_transportEncryptFailed'), 500)
         }
-        headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+        headers.set(crypto.transport.protocol.ENCRYPTED_HEADER, crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
         if (bodyless)
-          headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encryptedPayload.data))
+          headers.set(crypto.transport.protocol.ENVELOPE_HEADER, JSON.stringify(encryptedPayload.data))
         return new Response(bodyless
           ? null
           : JSON.stringify(encryptedPayload.data), {
@@ -170,7 +170,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       }
       catch (error) {
         if (error instanceof TransportBodyTooLargeError)
-          return createTransportErrorResponse(error, { manager, context: requestContext })
+          return crypto.transport.createErrorResponse(error, { manager, context: requestContext })
         return jsonError(kitM('kit_transportEncryptFailed'), 500)
       }
     }
@@ -215,8 +215,8 @@ async function handleKeyExchange(
 ): Promise<Response> {
   let body: unknown
   try {
-    body = JSON.parse(await readTransportBody(request.body, {
-      maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+    body = JSON.parse(await crypto.transport.readBody(request.body, {
+      maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
       signal: request.signal,
     }))
   }
@@ -226,14 +226,14 @@ async function handleKeyExchange(
       : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
-    || !isValidSM2PublicKey(body.clientPublicKey)
-    || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
+    || !crypto.asymmetric.isValidPublicKey(body.clientPublicKey)
+    || new TextEncoder().encode(body.clientPublicKey).byteLength > crypto.transport.bodyLimits.publicKeyBytes) {
     return jsonError(kitM('kit_transportInvalidPayload'), 400)
   }
 
   try {
     const serverPublicKey = manager.getServerPublicKey()
-    if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
+    if (new TextEncoder().encode(serverPublicKey).byteLength > crypto.transport.bodyLimits.publicKeyBytes)
       return jsonError(kitM('kit_transportKeyExchangeFailed'), 500)
     const clientId = await manager.registerClientKey(body.clientPublicKey)
 
@@ -264,7 +264,7 @@ async function handleKeyExchange(
  * ```ts
  * const holder: RequestHolder = { request: new Request('https://app.example.com/api/articles', { method: 'POST', body: '{}' }) }
  * replaceRequestBody(holder, JSON.stringify({ title: 'Example' }))
- * ```
+ *```
  */
 interface RequestHolder {
   request: Request
@@ -280,7 +280,7 @@ interface RequestHolder {
  */
 function replaceRequestBody(event: RequestHolder, body: string): void {
   const headers = new Headers(event.request.headers)
-  headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+  headers.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
   headers.delete('Content-Length')
   headers.delete('Content-Encoding')
   headers.set('Content-Type', 'application/json; charset=utf-8')

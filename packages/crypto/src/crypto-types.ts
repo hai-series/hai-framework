@@ -6,12 +6,18 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { createTransportBodyPolicy, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TRANSPORT_PLAINTEXT_RANGE } from './transport/crypto-transport-body.js'
+import type { createTransportErrorResponse } from './transport/crypto-transport-error.js'
+import type { parseTransportServerKeyRing } from './transport/crypto-transport-keyring.js'
+import type { authenticateTransportRequest } from './transport/crypto-transport-request.js'
 import type {
   TRANSPORT_PROTOCOL as TRANSPORT_PROTOCOL_T,
+  TRANSPORT_TIME_LIMITS,
   TransportClient,
   TransportCreateServerOptions,
   TransportEncryptionManager,
 } from './transport/crypto-transport-types.js'
+import type { createCacheTransportKeyStore } from './transport/store-provider/crypto-transport-store-cache.js'
 import { core } from '@h-ai/core'
 
 const CryptoErrorInfo = {
@@ -521,7 +527,7 @@ export interface AsymmetricOperations {
   /**
    * 校验128/130字符SM2非压缩公钥编码及曲线点；有效不代表对端持有私钥。
    * @param key - 本次操作的密钥，不记录到日志。
-   * @returns 直接boolean，false表示不匹配/未就绪。
+   * @returns 编码与曲线点有效时为 true，并把输入收窄为 string；无需初始化。
    *
    * @example
    * ```ts
@@ -537,7 +543,7 @@ export interface AsymmetricOperations {
    * finally { await crypto.close() }
    * ```
    */
-  isValidPublicKey: (key: string) => boolean
+  isValidPublicKey: (key: unknown) => key is string
   /**
    * 校验64字符十六进制私钥编码及1～n-2的有效签名标量范围，不是密钥配对证明。
    * @param key - 本次操作的密钥，不记录到日志。
@@ -946,7 +952,7 @@ export interface TransportOperations {
    *
    * @example
    * ```ts
-   * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+   * import { crypto } from '@h-ai/crypto'
    * import { cache } from '@h-ai/cache'
    * const initialized = await crypto.init()
    * if (!initialized.success) throw new Error(initialized.error.message)
@@ -954,8 +960,8 @@ export interface TransportOperations {
    *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
    *   if (!connected.success) throw new Error(connected.error.message)
    *   try {
-   *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
-   *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+   *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+   *     const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
    *     if (!ring.success) throw new Error(ring.error.message)
    *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
    *     if (!created.success) throw new Error(created.error.message)
@@ -1008,6 +1014,26 @@ export interface TransportOperations {
   createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch, maxPlaintextBytes?: number }) => TransportClient
   /** 协议常量（headers、密钥协商默认路径）。 */
   readonly protocol: typeof TRANSPORT_PROTOCOL_T
+  /** 默认明文、密文、握手和认证头的只读字节预算；无需初始化。 */
+  readonly bodyLimits: typeof TRANSPORT_BODY_LIMITS
+  /** 明文容量允许的最小值和最大值（字节）；无需初始化。 */
+  readonly plaintextRange: typeof TRANSPORT_PLAINTEXT_RANGE
+  /** 请求时效、允许时钟偏差的范围；无需初始化。 */
+  readonly timeLimits: typeof TRANSPORT_TIME_LIMITS
+  /** 创建借用 @h-ai/cache 的公钥和已用请求编号存储；不初始化或关闭 Cache。 */
+  createKeyStore: typeof createCacheTransportKeyStore
+  /** 解析可信 Secret 提供的服务端密钥环；失败返回脱敏 HaiResult，无需初始化。 */
+  parseServerKeyRing: typeof parseTransportServerKeyRing
+  /** 校验明文字节上限并推导密文预算；无效参数抛 RangeError，无需初始化。 */
+  resolveBodyLimits: typeof resolveTransportBodyLimits
+  /** 创建按路径选择容量的策略；无效参数抛 RangeError，无需初始化。 */
+  createBodyPolicy: typeof createTransportBodyPolicy
+  /** 按实际 UTF-8 字节有界读取流；超限、取消和读取失败拒绝 Promise。 */
+  readBody: typeof readTransportBody
+  /** 从真实请求提取并验证上下文；成功返回明文及响应关联信息，失败返回 HaiResult。 */
+  authenticateRequest: typeof authenticateTransportRequest
+  /** 将容量、时间和过载错误转为明文或已认证响应；沿用原 HTTP 状态和清理契约。 */
+  createErrorResponse: typeof createTransportErrorResponse
 }
 
 // ─── 函数接口 ───

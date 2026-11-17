@@ -11,7 +11,7 @@ import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { core, TrustedProxiesSchema } from '@h-ai/core'
-import { resolveTransportBodyLimits } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { generatedVariables, mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
@@ -62,7 +62,7 @@ const CONTAINER_ENV_KEYS = new Set([
  * @example 模块内部上下文
  * ```ts
  * const service: ComposeService = { image: 'registry.example.org/shop:1.0.0', ports: ['8080:3000'] }
- * ```
+ *```
  */
 type ComposeService = Record<string, unknown>
 
@@ -73,7 +73,7 @@ type ComposeService = Record<string, unknown>
  * ```ts
  * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] }
  * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
- * ```
+ *```
  */
 export interface SidecarPlan {
   /** 实际启用的自建服务 */
@@ -100,7 +100,7 @@ export interface SidecarPlan {
  * ```ts
  * const plan: RuntimeEnvPlan = { env: { NODE_ENV: 'production' }, sidecar: { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] } }
  * const content = serializeEnvFile(plan.env)
- * ```
+ *```
  */
 export interface RuntimeEnvPlan {
   /** 完整运行期环境（写入 .env.runtime） */
@@ -350,7 +350,7 @@ function planChromaVecdb(plan: SidecarPlan, projectName: string, net: string[]):
  * const scanned = await scanApp(process.cwd())
  * if (!scanned.success) throw new Error(scanned.error.message)
  * const options = resolveSidecarOptions(scanned.data, { serviceModes: { db: 'keep' } })
- * ```
+ *```
  */
 export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptions): DeployAppOptions {
   // 保持配置不变仍需交付自建服务镜像；已保存的容器服务地址可明确区分外部连接。
@@ -395,7 +395,7 @@ export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptio
  * const scanned = await scanApp(process.cwd())
  * if (!scanned.success) throw new Error(scanned.error.message)
  * const sidecar = planSidecars(process.cwd(), 'shop', scanned.data, {}, { serviceModes: { db: 'keep' } })
- * ```
+ *```
  */
 export function planSidecars(
   _appDir: string,
@@ -548,7 +548,7 @@ export function planSidecars(
  * if (!scanned.success) throw new Error(scanned.error.message)
  * const plan = buildRuntimeEnv(process.cwd(), 'shop', scanned.data, {}, 3000, { environment: 'prod' }, { NODE_ENV: 'production' })
  * const text = serializeEnvFile(plan.env)
- * ```
+ *```
  */
 export function buildRuntimeEnv(
   appDir: string,
@@ -610,7 +610,7 @@ export function buildRuntimeEnv(
  * ```ts
  * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] }
  * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
- * ```
+ *```
  */
 export function generateComposeFile(options: {
   projectName: string
@@ -855,10 +855,10 @@ export function generateComposeFile(options: {
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
- * ```
+ *```
  */
 export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, backendPaths?: string[], storageBucket?: string, storageBasePath?: string, trustedEdgeProxies?: string[] } = {}): string {
-  const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
+  const bodyLimits = crypto.transport.resolveBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
   const apiPath = apiPrefix.replace(/\/+$/, '')
@@ -935,7 +935,7 @@ ${backendLocations}  location ${apiPrefix.replace(/\/$/, '')}/ {
  * ```ts
  * const route = renderStorageLocation('uploads', ['/api/v1', '/portal'])
  * void route
- * ```
+ *```
  */
 function renderStorageLocation(bucket: string, reservedPaths: string[], storageBasePath = ''): string {
   // 与网站目录共用安全路径校验；入口可位于网站目录内，但不能覆盖 API、资源或健康接口。
@@ -987,7 +987,7 @@ ${storageBasePath
  * ```ts
  * const config = renderStorageUpstream('business-files', '/delivery/files')
  * void config
- * ```
+ *```
  */
 function renderStorageUpstream(bucket: string, storageBasePath = ''): string {
   const upstream = renderResolvedUpstream('hai_storage_proxy', 'storage', 9000)
@@ -1017,13 +1017,13 @@ map $request_uri $hai_storage_uri {
  * ```ts
  * const config = generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'uploads', reservedPaths: ['/portal'] })
  * void config
- * ```
+ *```
  */
 export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket?: string, reservedPaths: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
   const { primaryService, port, bucket, reservedPaths, maxPlaintextBytes } = options
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
-  const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
+  const bodyLimits = crypto.transport.resolveBodyLimits(maxPlaintextBytes)
   const trustedEdges = renderTrustedEdgeProxies(options.trustedEdgeProxies)
   const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
   const proxySettings = `    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
@@ -1114,7 +1114,7 @@ map "$hai_trusted_edge:$http_x_forwarded_proto" $hai_request_scheme {
  * ```ts
  * const locations = renderWebLocation('/portal')
  * void locations
- * ```
+ *```
  */
 function renderWebLocation(webBasePath: string): string {
   if (webBasePath && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(webBasePath) || webBasePath.split('/').some(segment => segment === '.' || segment === '..') || ['/health', '/_hai/web-health'].includes(webBasePath)))
@@ -1155,7 +1155,7 @@ function renderWebLocation(webBasePath: string): string {
  * ```ts
  * const config = generateStaticWebConfig(8080, '/portal')
  * void config
- * ```
+ *```
  */
 export function generateStaticWebConfig(port: number, webBasePath: string): string {
   if (!Number.isInteger(port) || port < 1 || port > 65535)
@@ -1188,7 +1188,7 @@ ${renderWebLocation(webBasePath)}  location = ${webBasePath}/runtime-config.js {
  * @example 模块内部上下文
  * ```ts
  * const content = serializeEnvFile({ NODE_ENV: 'production', HAI_CORE_NAME: 'Shop app' })
- * ```
+ *```
  */
 export function serializeEnvFile(env: Record<string, string>, overrides: Record<string, string> = {}, target: 'node' | 'compose' = 'node'): string {
   const effective = generatedVariables(mergeEnvironmentLayers([env, overrides]))

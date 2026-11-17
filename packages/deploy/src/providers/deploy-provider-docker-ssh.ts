@@ -22,7 +22,7 @@ import { rootCertificates } from 'node:tls'
 import { parseEnv } from 'node:util'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, CoreConfigSchema, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
-import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
@@ -159,7 +159,7 @@ function sleep(ms: number): Promise<void> {
  * ```ts
  * const provider = createDockerSshProvider({ type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } })
  * const name = provider.name // 创建本身不连接 SSH；在线发布仍需有效 SSH 配置。
- * ```
+ *```
  */
 export function createDockerSshProvider(
   config: DockerSshProviderConfig,
@@ -452,7 +452,7 @@ export function createDockerSshProvider(
         try {
           const configured = (transport as { maxPlaintextBytes?: number | 'auto' }).maxPlaintextBytes
           const routes = (transport as { routePlaintextBytes?: Record<string, number> }).routePlaintextBytes
-          const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto'
+          const limits = crypto.transport.resolveBodyLimits(Math.max(crypto.transport.createBodyPolicy(configured === 'auto'
             ? undefined
             : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
@@ -466,7 +466,7 @@ export function createDockerSshProvider(
         }
       }
     }
-    if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !parseTransportServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success) {
+    if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !crypto.transport.parseServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success) {
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', {
         params: {
           path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`),
@@ -487,7 +487,7 @@ export function createDockerSshProvider(
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
-        const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto'
+        const limits = crypto.transport.resolveBodyLimits(Math.max(crypto.transport.createBodyPolicy(configured === 'auto'
           ? undefined
           : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, {
@@ -526,7 +526,7 @@ export function createDockerSshProvider(
         const http = server.data.http as { apiPrefix?: string } | undefined
         if (primaryService === 'serv') {
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
-          applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto'
+          applicationPlaintextBytes = Math.max(crypto.transport.createBodyPolicy(transport?.maxPlaintextBytes === 'auto'
             ? undefined
             : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
         }

@@ -21,7 +21,7 @@ import { apiContract } from '@h-ai/api-contract'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { serv } from '@h-ai/serv'
@@ -269,12 +269,12 @@ describe('api-service 基础设施端点', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('access-control-allow-origin')).toBe(origin)
-    expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-    expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
-    expect(wire?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    expect(response.headers.get('access-control-expose-headers')).toContain(crypto.transport.protocol.ENCRYPTED_HEADER)
+    expect(response.headers.get('access-control-expose-headers')).toContain(crypto.transport.protocol.ENVELOPE_HEADER)
+    expect(wire?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
     const servConfig = core.config.getOrThrow<ServConfig>('serv')
-    expect(servConfig.cors.exposedHeaders).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-    expect(servConfig.cors.exposedHeaders).toContain(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+    expect(servConfig.cors.exposedHeaders).toContain(crypto.transport.protocol.ENCRYPTED_HEADER)
+    expect(servConfig.cors.exposedHeaders).toContain(crypto.transport.protocol.ENVELOPE_HEADER)
     client.destroy()
   })
 

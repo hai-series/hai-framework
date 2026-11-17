@@ -427,7 +427,7 @@ describe('shared production configuration', () => {
     })
     const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-serv')
     const app = await readFile(path.join(service, 'src', 'app.ts'), 'utf8')
-    expect(app).toContain('createCacheTransportKeyStore')
+    expect(app).toContain('crypto.transport.createKeyStore')
     expect(app).toContain('from \'@h-ai/cache\'')
     const context = buildTemplateContext({
       name: 'crypto-api',

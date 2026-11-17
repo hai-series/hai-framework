@@ -16,10 +16,10 @@ import type { HaiResult } from '@h-ai/core'
  *
  * @example
  * ```ts
- * import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * const headers = new Headers()
- * headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
- * const keyExchangePath = TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH
+ * headers.set(crypto.transport.protocol.ENCRYPTED_HEADER, crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
+ * const keyExchangePath = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
  * ```
  */
 export const TRANSPORT_PROTOCOL = {
@@ -45,8 +45,8 @@ export const TRANSPORT_PROTOCOL = {
  * 服务端传输时间配置的允许范围，供 Crypto 工厂与 Serv/Kit 配置共用。
  * @example
  * ```ts
- * import { TRANSPORT_TIME_LIMITS } from '@h-ai/crypto'
- * const latest = TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds
+ * import { crypto } from '@h-ai/crypto'
+ * const latest = crypto.transport.timeLimits.maxRequestAgeSeconds
  * ```
  */
 export const TRANSPORT_TIME_LIMITS = Object.freeze({
@@ -137,9 +137,9 @@ export interface TransportKeyPair {
  *
  * @example
  * ```ts
- * import { authenticateTransportRequest, type EncryptedPayload, type TransportEncryptionManager } from '@h-ai/crypto'
+ * import { type EncryptedPayload, type TransportEncryptionManager, crypto } from '@h-ai/crypto'
  * async function sealResponse(manager: TransportEncryptionManager, request: Request): Promise<EncryptedPayload> {
- *   const verified = await authenticateTransportRequest(manager, request)
+ *   const verified = await crypto.transport.authenticateRequest(manager, request)
  *   if (!verified.success) throw new Error(verified.error.message)
  *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
  *   if (!encrypted.success) throw new Error(encrypted.error.message)
@@ -172,9 +172,9 @@ export interface EncryptedPayload {
  *
  * @example
  * ```ts
- * import { authenticateTransportRequest, type TransportEncryptionManager, type TransportMessageContext } from '@h-ai/crypto'
+ * import { type TransportEncryptionManager, type TransportMessageContext, crypto } from '@h-ai/crypto'
  * async function contextOf(manager: TransportEncryptionManager, request: Request): Promise<TransportMessageContext> {
- *   const verified = await authenticateTransportRequest(manager, request)
+ *   const verified = await crypto.transport.authenticateRequest(manager, request)
  *   if (!verified.success) throw new Error(verified.error.message)
  *   return verified.data.context
  * }
@@ -247,8 +247,8 @@ export interface EncryptedRequestPayload extends EncryptedPayload {
  *
  * @example
  * ```ts
- * import { parseTransportServerKeyRing, type TransportServerKeyRing } from '@h-ai/crypto'
- * const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ * import { type TransportServerKeyRing, crypto } from '@h-ai/crypto'
+ * const parsed = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  * if (!parsed.success) throw new Error(parsed.error.message)
  * const ring: TransportServerKeyRing = parsed.data
  * ```
@@ -306,7 +306,7 @@ export interface TransportCryptoServiceLike {
  *
  * @example
  * ```ts
- * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -314,7 +314,7 @@ export interface TransportCryptoServiceLike {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
  *     const store: import('@h-ai/crypto').TransportKeyStore = registry
  *     const scope = store.stateScope
  *     // Redis部署须noeviction/可靠持久化，并同步各节点时钟。
@@ -348,8 +348,8 @@ export interface TransportKeyStore {
    *     const generated = crypto.asymmetric.generateKeyPair()
    *     if (!generated.success) throw new Error(generated.error.message)
    *     const pair = generated.data
-   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
-   *     const registry = createCacheTransportKeyStore({ cache })
+   *     const { crypto.transport.createKeyStore } = await import('@h-ai/crypto')
+   *     const registry = crypto.transport.createKeyStore({ cache })
    *     try { const clientId = await registry.register(pair.publicKey) }
    *     finally { await registry.close?.() }
    *     // 本例仅开发/测试；生产替换为共享Redisregistry。
@@ -378,8 +378,8 @@ export interface TransportKeyStore {
    *     const generated = crypto.asymmetric.generateKeyPair()
    *     if (!generated.success) throw new Error(generated.error.message)
    *     const pair = generated.data
-   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
-   *     const registry = createCacheTransportKeyStore({ cache })
+   *     const { crypto.transport.createKeyStore } = await import('@h-ai/crypto')
+   *     const registry = crypto.transport.createKeyStore({ cache })
    *     try { const clientId = await registry.register(pair.publicKey); const publicKey = await registry.get(clientId) }
    *     finally { await registry.close?.() }
    *   }
@@ -410,8 +410,8 @@ export interface TransportKeyStore {
    *     const generated = crypto.asymmetric.generateKeyPair()
    *     if (!generated.success) throw new Error(generated.error.message)
    *     const pair = generated.data
-   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
-   *     const registry = createCacheTransportKeyStore({ cache })
+   *     const { crypto.transport.createKeyStore } = await import('@h-ai/crypto')
+   *     const registry = crypto.transport.createKeyStore({ cache })
    *     try {
    *       const clientId = await registry.register(pair.publicKey)
    *       const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
@@ -446,8 +446,8 @@ export interface TransportKeyStore {
    *     const generated = crypto.asymmetric.generateKeyPair()
    *     if (!generated.success) throw new Error(generated.error.message)
    *     const pair = generated.data
-   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
-   *     const registry = createCacheTransportKeyStore({ cache })
+   *     const { crypto.transport.createKeyStore } = await import('@h-ai/crypto')
+   *     const registry = crypto.transport.createKeyStore({ cache })
    *     try { const clientId = await registry.register(pair.publicKey); await registry.delete?.(clientId) }
    *     finally { await registry.close?.() }
    *   }
@@ -464,11 +464,11 @@ export interface TransportKeyStore {
    * @example
    * ```ts
    * import { cache } from '@h-ai/cache'
-   * import { createCacheTransportKeyStore } from '@h-ai/crypto'
+   * import { crypto } from '@h-ai/crypto'
    * const cacheReady = await cache.init({ type: 'memory' })
    * if (!cacheReady.success) throw new Error(cacheReady.error.message)
    * try {
-   *   const registry = createCacheTransportKeyStore({ cache })
+   *   const registry = crypto.transport.createKeyStore({ cache })
    *   await registry.close?.()
    *   // 共享registry借用的cache仍由应用反序关闭。
    * }
@@ -483,7 +483,7 @@ export interface TransportKeyStore {
  *
  * @example
  * ```ts
- * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -491,8 +491,8 @@ export interface TransportKeyStore {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
- *     const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+ *     const parsed = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!parsed.success) throw new Error(parsed.error.message)
  *     const options: import('@h-ai/crypto').TransportCreateServerOptions = { serverKeyRing: parsed.data, keyStore: registry }
  *     const created = crypto.transport.createServer(options)
@@ -521,11 +521,11 @@ export interface TransportCreateServerOptions {
 
 /**
  * 服务端认证传输管理器；注册公钥，按真实HTTP上下文验签/MAC/时效并消费nonce，随后才返回明文。
- * 优先使用authenticateTransportRequest；响应只用已认证上下文。close释放registry自有资源，不关闭借用的cache。
+ * 优先使用crypto.transport.authenticateRequest；响应只用已认证上下文。close释放registry自有资源，不关闭借用的cache。
  *
  * @example
  * ```ts
- * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -533,8 +533,8 @@ export interface TransportCreateServerOptions {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
- *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+ *     const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!ring.success) throw new Error(ring.error.message)
  *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
  *     if (!created.success) throw new Error(created.error.message)
@@ -617,9 +617,9 @@ export interface TransportEncryptionManager {
    *
    * @example
    * ```ts
-   * import { authenticateTransportRequest, type EncryptedPayload, type TransportEncryptionManager } from '@h-ai/crypto'
+   * import { type EncryptedPayload, type TransportEncryptionManager, crypto } from '@h-ai/crypto'
    * async function sealResponse(manager: TransportEncryptionManager, request: Request): Promise<EncryptedPayload> {
-   *   const verified = await authenticateTransportRequest(manager, request)
+   *   const verified = await crypto.transport.authenticateRequest(manager, request)
    *   if (!verified.success) throw new Error(verified.error.message)
    *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
    *   if (!encrypted.success) throw new Error(encrypted.error.message)
@@ -630,7 +630,7 @@ export interface TransportEncryptionManager {
   encryptResponse: (request: TransportMessageContext, data: string, status: number) => Promise<HaiResult<EncryptedPayload>>
   /**
    * 验证发送方、MAC、HTTP 绑定和时效，原子消费 nonce 后才返回明文；错误不含密文或 Secret。
-   * expected 须从实际 Request 提取，不从 payload 复制。HTTP 优先用 authenticateTransportRequest。
+   * expected 须从实际 Request 提取，不从 payload 复制。HTTP 优先用 crypto.transport.authenticateRequest。
    * @param payload - 实际调用输入，按该方法约束验证。
    * @param expected - 实际调用输入，按该方法约束验证。
    * @returns HaiResult，先检查success再读取data。
@@ -655,7 +655,7 @@ export interface TransportEncryptionManager {
    *
    * @example
    * ```ts
-   * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+   * import { crypto } from '@h-ai/crypto'
    * import { cache } from '@h-ai/cache'
    * const initialized = await crypto.init()
    * if (!initialized.success) throw new Error(initialized.error.message)
@@ -663,8 +663,8 @@ export interface TransportEncryptionManager {
    *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
    *   if (!connected.success) throw new Error(connected.error.message)
    *   try {
-   *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
-   *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+   *     const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+   *     const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
    *     if (!ring.success) throw new Error(ring.error.message)
    *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
    *     if (!created.success) throw new Error(created.error.message)
@@ -710,7 +710,7 @@ export interface TransportClient {
    * 取得可用的传输会话；并发调用共享握手，有效期内复用已有会话。
    *
    * `encryptedFetch` 在发送请求前会自动取得可用会话。
-   * 协商在 30 秒内完成，握手 JSON 与单个公钥分别受 TRANSPORT_BODY_LIMITS 限制。
+   * 协商在 30 秒内完成，握手 JSON 与单个公钥分别受 crypto.transport.bodyLimits 限制。
    * @returns HaiResult，先检查success再读取data。
    *
    * @example
@@ -734,7 +734,7 @@ export interface TransportClient {
   init: () => Promise<HaiResult<void>>
   /**
    * 包装后的 fetch；签名与全局 `fetch` 一致，请求/响应自动加解密。
-   * 明文/密文按 TRANSPORT_BODY_LIMITS 有界读取原流；超限或取消释放 reader，保留调用方 signal。
+   * 明文/密文按 crypto.transport.bodyLimits 有界读取原流；超限或取消释放 reader，保留调用方 signal。
    * 仅接受关联同一请求上下文与 HTTP status 的认证响应；缺标记也拒绝，不回退明文或密文。
    *
    * @throws 与原生 fetch 一样，网络错误、密钥协商失败、加密失败或解密失败会 reject。

@@ -3,13 +3,13 @@ import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
 import { err, HaiCommonError, ok } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
 let serverKeyRing: TransportServerKeyRing
 
-const KEY_EXCHANGE_PATH = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
+const KEY_EXCHANGE_PATH = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
 
 function createEvent(request: Request): RequestEvent {
   return {
@@ -98,9 +98,9 @@ function testResponse(): EncryptedPayload {
 }
 function authenticatedGetHeaders() {
   return {
-    [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
-    [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true',
-    [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({
+    [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id',
+    [crypto.transport.protocol.ENCRYPTED_HEADER]: 'true',
+    [crypto.transport.protocol.ENVELOPE_HEADER]: JSON.stringify({
       ...testPayload(),
       context: {
         ...testPayload().context,
@@ -112,7 +112,7 @@ function authenticatedGetHeaders() {
 
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
-    bodyLimits: TRANSPORT_BODY_LIMITS,
+    bodyLimits: crypto.transport.bodyLimits,
     getServerKeyId: () => 'test-v1',
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
@@ -167,7 +167,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -184,7 +184,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       : bytes
     const request = new Request('http://localhost/api/raw-body', {
       method: method ?? 'POST',
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', ...headers },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', ...headers },
       body,
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
@@ -202,7 +202,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -213,7 +213,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     })
     const request = new Request('http://localhost/api/raw-body', {
       method: 'POST',
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
       body: new ReadableStream<Uint8Array>({
         start: controller => controller.close(),
       }),
@@ -233,7 +233,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -258,7 +258,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -277,9 +277,9 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       body,
       headers: {
         'Content-Type': 'application/json',
-        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
+        [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id',
         ...(encrypted
-          ? { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE }
+          ? { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE }
           : {}),
       },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
@@ -310,7 +310,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -330,7 +330,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -342,7 +342,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       method: 'POST',
       body,
       signal: controller.signal,
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true' },
+      headers: { [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', [crypto.transport.protocol.ENCRYPTED_HEADER]: 'true' },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
@@ -358,13 +358,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('服务端公钥超限时不注册客户端', async () => {
     const manager = createFailingEncryptManager()
-    vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
+    vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(crypto.transport.bodyLimits.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -384,7 +384,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -422,12 +422,12 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
     })
-    const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
+    const payloadSize = crypto.transport.bodyLimits.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
     const response = await dispatch(handle, new Request('http://localhost/api/data', {
       headers: authenticatedGetHeaders(),
@@ -448,7 +448,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -459,7 +459,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     })
     const makeRequest = () => new Request('http://localhost/api/raw-body', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      headers: { 'Content-Type': 'application/json', [crypto.transport.protocol.CLIENT_ID_HEADER]: 'client-id', [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
       body: JSON.stringify(testPayload()),
     })
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(413)
@@ -475,7 +475,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         crypto,
         transport: {
           keyStore: {
-            ...createCacheTransportKeyStore({ cache }),
+            ...crypto.transport.createKeyStore({ cache }),
             clientKeyTtlSeconds,
           },
           serverKeyRing,
@@ -509,7 +509,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -532,7 +532,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: failingCrypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -551,7 +551,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
           basePath: '/yyy/',
           keyExchangePath: '/my/exchange',
           excludePaths: ['/yyy/api/public'],
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -580,7 +580,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         crypto,
         transport: {
           basePath,
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -588,7 +588,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
-    const keyStore = createCacheTransportKeyStore({ cache })
+    const keyStore = crypto.transport.createKeyStore({ cache })
     const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
     const forwardingCrypto = createCryptoWithTransportServer(createServer)
 
@@ -608,7 +608,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -644,7 +644,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -672,7 +672,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -704,7 +704,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -739,7 +739,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: failingCrypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -756,7 +756,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     )
 
     expect(response.status).toBe(500)
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     await expect(response.json()).resolves.toMatchObject({
       error: expect.not.stringContaining('plain'),
     })
@@ -767,7 +767,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
           excludePaths: ['/api/upload'],
         },
@@ -783,7 +783,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -810,7 +810,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       body: JSON.stringify({ msg: 'hello' }),
     })
 
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     const body = await response.json() as { echoed: { msg: string } }
     expect(body.echoed.msg).toBe('hello')
   })
@@ -820,7 +820,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -845,7 +845,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const response = await client.encryptedFetch('http://localhost/api/auth/logout', { method: 'POST' })
 
     expect(response.status).toBe(200)
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     await expect(response.json()).resolves.toEqual({ ok: true })
   })
 
@@ -854,7 +854,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -888,7 +888,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       return
 
     expect(rawDataResponse.headers.get('Content-Type')).toContain('text/sveltekit-data')
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     expect(response.headers.get('Content-Type')).toContain('text/sveltekit-data')
     expect(await response.text()).toBe('{"type":"data","nodes":[]}')
   })
@@ -898,7 +898,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
           keyExchangePath: '/custom/exchange',
         },

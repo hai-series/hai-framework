@@ -1,12 +1,12 @@
-import { cache } from '@h-ai/cache'
 import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
 {{#if features.feedback}}
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 {{/if}}
+import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
@@ -24,7 +24,7 @@ export function createServerApp(): ServHttpApp {
   const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
   if (servConfig.transport === false)
     throw new Error('Fullstack management requires transport encryption; configure scoped access.rules[].encryption: disabled for plaintext external endpoints')
-  const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+  const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
     throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
 {{#if features.feedback}}
@@ -105,7 +105,7 @@ export function createServerApp(): ServHttpApp {
       ],
       crypto,
       serverKeyRing: ring.data,
-      keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
+      keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
     },
     http: {
       ...servConfig.http,

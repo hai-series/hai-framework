@@ -18,6 +18,8 @@
 
 ## 機能
 
+アルゴリズムは `crypto.asymmetric/hash/symmetric/password`、通信ファクトリー、キャッシュ登録、鍵リング解析、HTTP 補助機能は `crypto.transport` から呼び出します。公開鍵検証は初期化不要で未知の入力を受け付けます。型とエラークラスは名前付きでインポートします。
+
 [通信プロトコル](../../docs/usage/function/crypto.ja.md#transport-protocol)と[入力の互換性](../../docs/usage/function/crypto.ja.md#primitive-validation)も参照してください。
 
 [API 一覧](../../docs/usage/function/crypto.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。

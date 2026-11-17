@@ -2,7 +2,7 @@ import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { crypto, TransportTimeError } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
@@ -34,7 +34,7 @@ describe('kit authenticated transport boundary', () => {
   afterAll(async () => crypto.close())
 
   it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
-    const keyStore = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
+    const keyStore = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
     const resolve = vi.fn(() => Response.json({ accepted: true }))
     const handle = kit.createHandle({
       crypto: {
@@ -88,7 +88,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
           maxFutureSkewSeconds: 10,
           maxRequestAgeSeconds: 90,
@@ -144,7 +144,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -160,10 +160,10 @@ describe('kit authenticated transport boundary', () => {
           const headers = new Headers(request.headers)
           const url = new URL(request.url)
           if (field === 'client-header') {
-            headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, 'another-client')
+            headers.set(crypto.transport.protocol.CLIENT_ID_HEADER, 'another-client')
           }
           else if (field === 'marker') {
-            headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+            headers.delete(crypto.transport.protocol.ENCRYPTED_HEADER)
           }
           else if (field === 'path') {
             url.pathname = '/api/other'
@@ -196,7 +196,7 @@ describe('kit authenticated transport boundary', () => {
   })
 
   it('两个 kit 节点共用 registry，并发重放仅一次 resolve', async () => {
-    const keyStore = createCacheTransportKeyStore({ cache })
+    const keyStore = crypto.transport.createKeyStore({ cache })
     const nodes = [0, 1].map(() => kit.createHandle({
       crypto: {
         crypto,
@@ -230,7 +230,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createCacheTransportKeyStore({ cache }),
+          keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
         },
       },

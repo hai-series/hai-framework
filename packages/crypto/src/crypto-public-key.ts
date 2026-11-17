@@ -16,15 +16,15 @@ const SM2_PUBLIC_KEY_REGEX = /^(?:04)?[0-9a-f]{128}$/i
  *
  * @example
  * ```ts
- * import { crypto, isValidSM2PublicKey } from '@h-ai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
  *   const generated = crypto.asymmetric.generateKeyPair()
  *   if (!generated.success) throw new Error(generated.error.message)
  *   const pair = generated.data
- *   const valid = isValidSM2PublicKey(pair.publicKey)
- *   const invalid = isValidSM2PublicKey('not-a-public-key')
+ *   const valid = crypto.asymmetric.isValidPublicKey(pair.publicKey)
+ *   const invalid = crypto.asymmetric.isValidPublicKey('not-a-public-key')
  * }
  * finally { await crypto.close() }
  * ```

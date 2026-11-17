@@ -163,13 +163,13 @@ if (hashed.success) {
 | --- | --- | --- |
 | `createServer` | `({ serverKeyRing, keyStore }) => HaiResult<TransportEncryptionManager>` | 校验受管密钥环并创建管理器，两项必填 |
 | `createClient` | `({ keyExchangeUrl, fetch? }) => TransportClient` | 创建客户端 encryptedFetch 会话 |
-| `protocol` | `TRANSPORT_PROTOCOL` | 协议常量：`X-Client-Id`、`X-Encrypted`、默认协商路径 |
+| `protocol` | `crypto.transport.protocol` | 协议常量：`X-Client-Id`、`X-Encrypted`、默认协商路径 |
 
 共享 `keyStore` provider（从 `@h-ai/crypto` 根入口导入）：
 
 | 工厂 | 签名 | 说明 |
 | --- | --- | --- |
-| `createCacheTransportKeyStore` | `({ cache, ttlSeconds?, maxRegistrationsPerMinute?, maxRequestsPerMinute? }) => TransportKeyStore` | 统一缓存实现；借用已初始化的 `@h-ai/cache`，不接管连接生命周期 |
+| `crypto.transport.createKeyStore` | `({ cache, ttlSeconds?, maxRegistrationsPerMinute?, maxRequestsPerMinute? }) => TransportKeyStore` | 统一缓存实现；借用已初始化的 `@h-ai/cache`，不接管连接生命周期 |
 
 这两项配额用于整个应用的缓存容量保底，不代替按 IP/用户/接口的业务限流。默认每60秒10000次登记、100000个新请求编号。首次占额起满60秒结束，达到上限返回503而保留已有公钥和请求标记；下一轮可继续使用，不是累计最多只能有这些公钥或请求。提高上限须增加内存预算。
 
@@ -179,10 +179,10 @@ if (hashed.success) {
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 // cache 由应用初始化并在所有使用方关闭后释放。
-const registry = createCacheTransportKeyStore({
+const registry = crypto.transport.createKeyStore({
   cache,
   ttlSeconds: 3600,
   maxRegistrationsPerMinute: 10000,
@@ -206,14 +206,14 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 ```
 
 ```typescript
-import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { cache } from '@h-ai/cache'
 
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const sharedServer = crypto.transport.createServer({
   serverKeyRing,
-  keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
+  keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
 })
 ```
 
@@ -222,23 +222,23 @@ const sharedServer = crypto.transport.createServer({
 2. 服务端显式传入受管 `serverKeyRing` 和共享 `keyStore`。协商响应包含 `serverKeyId`、`serverPublicKey`、`clientId`、`maxPlaintextBytes` 和可选的 `clientKeyTtlSeconds`。自定义适配器读取 `manager.clientKeyTtlSeconds` 填充登记有效期。
 3. 客户端 `createClient({ keyExchangeUrl })` 后，首次使用或登记临近到期时自动协商。并发请求共享握手，协商响应的公钥曲线点、clientId 编码和长度都通过校验后才发布 ready 状态，再发送业务请求。
 4. 所有请求均发送 v2 认证封装；包括 GET/HEAD 和无 input POST，不能只附带 clientId。
-5. 自定义适配器先 await authenticateTransportRequest(manager, request)，再用 manager.encryptResponse(verified.data.context, data, status) 关联响应。
+5. 自定义适配器先 await crypto.transport.authenticateRequest(manager, request)，再用 manager.encryptResponse(verified.data.context, data, status) 关联响应。
 6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。
 
 `encryptedFetch()` 与原生 fetch 一样会 reject：网络错误、密钥协商失败、请求加密失败或响应解密失败都应在调用方按 fetch 错误处理策略捕获。
 
 ### 受管服务端密钥与轮换
 
-`serverKeyRing` 为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`，ID 为 1–64 个字母、数字、下划线或连字符。根入口 `parseTransportServerKeyRing(secret)` 接受服务端 Secret JSON 或配置对象，返回 HaiResult，错误不附带原始 Secret 或解析片段。工厂验证每对公私钥并捕获快照；没有隐式随机私钥或 memory registry 回退。`keyStore` 也必填，生产使用 Redis；开发/测试可将显式初始化的 memory cache 传入 `createCacheTransportKeyStore({ cache })`。
+`serverKeyRing` 为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`，ID 为 1–64 个字母、数字、下划线或连字符。根入口 `crypto.transport.parseServerKeyRing(secret)` 接受服务端 Secret JSON 或配置对象，返回 HaiResult，错误不附带原始 Secret 或解析片段。工厂验证每对公私钥并捕获快照；没有隐式随机私钥或 memory registry 回退。`keyStore` 也必填，生产使用 Redis；开发/测试可将显式初始化的 memory cache 传入 `crypto.transport.createKeyStore({ cache })`。
 
 示例服务端读取 `process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，检查解析结果后仅传给服务端工厂；禁止写入普通 YAML、PUBLIC_/VITE_、日志或响应。CLI 创建服务端项目时在 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立 ring；私有环境文件不提交 Git，克隆后从受保护配置来源取得对应环境密钥。可由进程环境、私有覆盖或 Secret Manager 替换，同一环境所有节点使用同一 ring。
 
 请求密文 `EncryptedRequestPayload` 携带协商的 `serverKeyId`；服务端只按 ID 选择私钥，未知/撤销 ID 拒绝，不尝试其它 key。轮换先向所有节点分发包含新旧版本的 ring，再切 activeKeyId 并滚动重建 manager；过渡期后删除旧 ID 并更新所有节点。旧客户端 destroy 后重协商；禁止自动重放非幂等请求。共享 ring + registry 支持跨节点与重启，不依赖 sticky session。
 
 ```ts
-import { parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
-const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: sharedRegistry })
@@ -246,19 +246,19 @@ const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keySto
 
 ### 传输正文预算与自定义适配器
 
-业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；resolveTransportBodyLimits(limit, { requiredPlaintextBytes }) 合并模块需求：保留显式上限，不足时报配置冲突；省略时按需要推导，无模块需要仍为 1 MiB。Serv/Kit 的 auto 规范化为 undefined。密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 自定义适配器使用 manager.bodyLimits 和 readTransportBody 消费原流，不 clone/tee；握手返回 maxPlaintextBytes。
+业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；crypto.transport.resolveBodyLimits(limit, { requiredPlaintextBytes }) 合并模块需求：保留显式上限，不足时报配置冲突；省略时按需要推导，无模块需要仍为 1 MiB。Serv/Kit 的 auto 规范化为 undefined。密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 自定义适配器使用 manager.bodyLimits 和 crypto.transport.readBody 消费原流，不 clone/tee；握手返回 maxPlaintextBytes。
 
 Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请求返回加密的 HTTP 400 错误。客户端抛出 `TransportTimeError`（`hai:crypto:071`），显示校验时的服务器 UTC 时间，提示开启设备的自动校时或手工修改时间后刷新。`serverTime` 为 Unix 毫秒。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 和 `cause.serverTime` 保留诊断信息。
 
-自定义 HTTP 适配器检查失败原因 `error instanceof TransportTimeError && error.context` 后，使用 `createTransportErrorResponse(error, { manager, context: error.context })` 加密拒绝响应；不能根据未认证报文的时间戳给出可信时间诊断。
+自定义 HTTP 适配器检查失败原因 `error instanceof TransportTimeError && error.context` 后，使用 `crypto.transport.createErrorResponse(error, { manager, context: error.context })` 加密拒绝响应；不能根据未认证报文的时间戳给出可信时间诊断。
 
-根入口纯函数 `readTransportBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
+根入口纯函数 `crypto.transport.readBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
 
 ```ts
-import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 
-const text = await readTransportBody(request.body, {
-  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+const text = await crypto.transport.readBody(request.body, {
+  maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
   signal: request.signal,
 })
 const payload: unknown = JSON.parse(text)

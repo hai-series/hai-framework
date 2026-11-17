@@ -1,7 +1,7 @@
 import type { TransportMessageContext } from '@h-ai/crypto'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { authenticateTransportRequest, createCacheTransportKeyStore, createTransportErrorResponse, crypto, HaiCryptoError, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { crypto, HaiCryptoError, TransportTimeError } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
@@ -34,7 +34,7 @@ function makeServerFetch(clockOffset = 0): typeof fetch {
   if (!key.success)
     throw new Error(key.error.message)
   const mgrResult = crypto.transport.createServer({
-    keyStore: createCacheTransportKeyStore({ cache }),
+    keyStore: crypto.transport.createKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
@@ -72,11 +72,11 @@ function makeServerFetch(clockOffset = 0): typeof fetch {
     const clock = clockOffset
       ? vi.spyOn(Date, 'now').mockReturnValue(Date.now() + clockOffset)
       : undefined
-    const verified = await authenticateTransportRequest(mgr, req).finally(() => clock?.mockRestore())
+    const verified = await crypto.transport.authenticateRequest(mgr, req).finally(() => clock?.mockRestore())
     if (!verified.success) {
       const time = verified.error.cause
       if (time instanceof TransportTimeError && time.context) {
-        return createTransportErrorResponse(time, { manager: mgr, context: time.context })
+        return crypto.transport.createErrorResponse(time, { manager: mgr, context: time.context })
       }
       throw new Error(verified.error.message)
     }
@@ -101,7 +101,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     throw new Error(key.error.message)
   const mgrResult = crypto.transport.createServer({
     keyStore: {
-      ...createCacheTransportKeyStore({ cache }),
+      ...crypto.transport.createKeyStore({ cache }),
       clientKeyTtlSeconds: 60,
     },
     serverKeyRing: {
@@ -122,7 +122,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
       status,
       headers: {
         'Content-Type': 'application/json',
-        [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
+        [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE,
       },
     })
   }
@@ -134,7 +134,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
           ? input
           : input.toString(), init)
     const url = new URL(req.url)
-    calls.push(`${req.method} ${url.pathname} auth=${req.headers.get('authorization') ?? ''} client=${req.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER) ?? ''} credentials=${req.credentials}`)
+    calls.push(`${req.method} ${url.pathname} auth=${req.headers.get('authorization') ?? ''} client=${req.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? ''} credentials=${req.credentials}`)
 
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
@@ -151,11 +151,11 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
       })
     }
 
-    const clientId = req.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    const clientId = req.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)
     if (!clientId)
       return new Response(JSON.stringify({ error: 'missing transport client' }), { status: 400 })
 
-    const verified = await authenticateTransportRequest(mgr, req)
+    const verified = await crypto.transport.authenticateRequest(mgr, req)
     if (!verified.success)
       throw new Error(verified.error.message)
     if (url.pathname === '/api/v1/auth/refresh') {

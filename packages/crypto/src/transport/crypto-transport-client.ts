@@ -6,7 +6,7 @@
  * - 之后所有出站请求自动以混合加密包裹；
  * - 验证响应关联、发送方签名与 MAC 后解密，缺少认证的响应拒绝。
  *
- * 与服务端协议常量统一来自 {@link TRANSPORT_PROTOCOL}，确保不漂移。
+ * 与服务端协议常量统一来自 {@link crypto.transport.protocol}，确保不漂移。
  *
  * @module crypto-transport-client
  */

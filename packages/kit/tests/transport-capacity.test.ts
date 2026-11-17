@@ -1,7 +1,7 @@
 import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import { cache } from '@h-ai/cache'
-import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { KitConfigSchema } from '../src/kit-config.js'
 import { kit } from '../src/kit-main.js'
@@ -26,7 +26,7 @@ function fixture(maxPlaintextBytes: number, resolve: (event: RequestEvent) => Pr
       crypto,
       transport: {
         serverKeyRing,
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
         maxPlaintextBytes,
       },
     },

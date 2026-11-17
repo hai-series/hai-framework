@@ -309,7 +309,7 @@ export function createSM2(): AsymmetricOperations {
      * @returns 编码有效且为 SM2 曲线上的非无穷远点时返回 true
      * @example `crypto.asymmetric.isValidPublicKey(clientPublicKey)`
      */
-    isValidPublicKey(key: string): boolean {
+    isValidPublicKey(key: unknown): key is string {
       return isValidSM2PublicKey(key)
     },
 

@@ -150,6 +150,24 @@ function typeSmoke(directories, suffix, browser, generated) {
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
+    if (directory === 'crypto') {
+      source.push('export const limits = api.crypto.transport.resolveBodyLimits(2048)', 'export const protocol = api.crypto.transport.protocol', 'export const invalidRing = api.crypto.transport.parseServerKeyRing(null)', 'export function publicKeyLength(input: unknown) { return api.crypto.asymmetric.isValidPublicKey(input) ? input.length : 0 }')
+      for (const removed of [
+        'createCacheTransportKeyStore',
+        'parseTransportServerKeyRing',
+        'resolveTransportBodyLimits',
+        'readTransportBody',
+        'createTransportBodyPolicy',
+        'authenticateTransportRequest',
+        'createTransportErrorResponse',
+        'isValidSM2PublicKey',
+        'TRANSPORT_PROTOCOL',
+        'TRANSPORT_BODY_LIMITS',
+        'TRANSPORT_PLAINTEXT_RANGE',
+        'TRANSPORT_TIME_LIMITS',
+      ])
+        source.push('// @ts-expect-error 运行能力只从 crypto 命名空间调用，不保留包级别名', `api.${removed}`)
+    }
     if (directory === 'core') {
       source.push('const onInput = api.core.async.debounce((value: string, count: number) => value.repeat(count), 100)', 'const onScroll = api.core.async.throttle((position: number) => position + 1, 100)', 'onInput("sample", 2); onScroll(1)')
       source.push('// @ts-expect-error 防抖包装保留回调参数类型', 'onInput(2, "sample")', '// @ts-expect-error 节流包装不接受缺失的必需参数', 'onScroll()')

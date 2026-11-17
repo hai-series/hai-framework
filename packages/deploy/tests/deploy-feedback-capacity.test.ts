@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
-import { resolveTransportBodyLimits } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { createDeploymentPlan, deploy } from '@h-ai/deploy'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -124,7 +124,7 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   const { root, artifactDir } = fixture(kit)
   const feedback = resolveFeedbackBudget({ maxTotalBytes: 8388608, maxEvidenceBytes: 2097152 })
   expect(feedback.maxTransportBytes).toBe(11250348)
-  expect(resolveTransportBodyLimits(25165824).encryptedPayloadBytes).toBe(50364416)
+  expect(crypto.transport.resolveBodyLimits(25165824).encryptedPayloadBytes).toBe(50364416)
   expect((await deploy.init({
     provider: {
       type: 'docker-ssh',
@@ -143,7 +143,7 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   if (!result.success || !result.data.bundlePath)
     return
   const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
-  const lowered = resolveTransportBodyLimits(feedback.maxTransportBytes).encryptedPayloadBytes
+  const lowered = crypto.transport.resolveBodyLimits(feedback.maxTransportBytes).encryptedPayloadBytes
   expect(proxy).toContain('client_max_body_size 50364416;')
   expect(proxy).not.toContain(`client_max_body_size ${lowered};`)
   if (kit) {

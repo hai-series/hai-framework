@@ -24,7 +24,7 @@ import { cache } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
 {{#if features.crypto}}
-import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 {{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
@@ -104,14 +104,14 @@ const haiHandle: Handle = async (input) => {
 {{#if features.crypto}}
     let transport: TransportEncryptionOptions | undefined
     if (settings.transport !== false) {
-      const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+      const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       if (!ring.success)
         throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
       transport = {
         ...settings.transport,
         basePath: resolvePath('/').replace(/\/$/, ''),
         serverKeyRing: ring.data,
-        keyStore: createCacheTransportKeyStore({ cache }),
+        keyStore: crypto.transport.createKeyStore({ cache }),
       }
     }
 {{else}}

@@ -15,7 +15,7 @@ import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import process from 'node:process'
 import { audit } from '@h-ai/audit'
 import { core, err, HaiCommonError } from '@h-ai/core'
-import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
 import { fromError } from '../kit-response.js'
@@ -33,7 +33,7 @@ import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
  */
 function generateId(prefix: string): string {
   const timestamp = Date.now().toString(36)
-  const random = crypto.randomUUID().replace(/-/g, '').substring(0, 8)
+  const random = globalThis.crypto.randomUUID().replace(/-/g, '').substring(0, 8)
   return `${prefix}_${timestamp}${random}`
 }
 
@@ -69,7 +69,7 @@ function applyDefaultSecurityHeaders(response: Response): void {
  *
  * const handle = kit.createHandle({ auth: { verifyToken: async () => null, protectedPaths: ['/admin/**'] } })
  * void handle
- * ```
+ *```
  */
 export function createHandle(config: HandleConfig = {}): Handle {
   const resolveIp = core.access.createClientIpResolver(config.trustedProxies ?? 'auto')
@@ -235,7 +235,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
             }, { status: 403 })
           }
           if (!transportMiddleware && event.request.method !== 'OPTIONS'
-            && (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+            && (event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER))
             && checkAccess && checkAccess.encryption(event.url.pathname, event.request.method) === 'disabled') {
             return Response.json(err({
               ...HaiCommonError.VALIDATION_ERROR,
@@ -521,7 +521,7 @@ function buildCookieProxyConfig(
  *
  * const handle = kit.sequence(kit.createHandle({ logging: true }), kit.createHandle())
  * void handle
- * ```
+ *```
  */
 export function sequence(...handles: Handle[]): Handle {
   const filtered = handles.filter(Boolean)

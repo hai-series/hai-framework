@@ -336,7 +336,7 @@ const app = serv.createApp({
 
 服务端处理逻辑在 `src/serv-transport.ts#handleKeyExchange()`：
 
-1. 通过共享 `readTransportBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
+1. 通过共享 `crypto.transport.readBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
 2. 要求携带非空 `clientPublicKey`，公钥最多 4 KiB，否则返回 400；不接受 null 等错误 JSON 结构。
 3. 确认服务端公钥不超过同一预算后，调 `manager.registerClientKey(clientPublicKey)`。
 4. 返回 `clientId`、`serverPublicKey`、`serverKeyId` 与 `maxPlaintextBytes`。注册表指定固定 TTL 时返回 `clientKeyTtlSeconds`。客户端在 30 秒握手超时内按相同预算有界读取响应。
@@ -351,13 +351,13 @@ const app = serv.createApp({
    - key exchange 和 `excludePaths` 命中的路径直接跳过。
 
 2. **校验客户端身份**
-   - 读取 `TRANSPORT_PROTOCOL.CLIENT_ID_HEADER`，也就是客户端 ID 头。
+   - 读取 `crypto.transport.protocol.CLIENT_ID_HEADER`，也就是客户端 ID 头。
    - 缺少 `clientId` 时返回 400。
    - 找不到已注册公钥时也返回 400。
 
 3. **认证并解密每个请求**
    - 所有受保护请求（含空 POST、GET/HEAD）都必须提供 v2 认证封装；GET/HEAD 使用 X-Hai-Transport 头。
-   - await authenticateTransportRequest(manager, c.req.raw) 从实际 Request 提取 method、pathname + search、clientId。
+   - await crypto.transport.authenticateRequest(manager, c.req.raw) 从实际 Request 提取 method、pathname + search、clientId。
    - 有界读取原始 JSON 流，密文预算 2 MiB + 32 KiB；头封装最多 16 KiB，超限取消流并返回 413。
    - 固定位置数组认证 version/direction/keyId/clientId/requestId/issuedAt/method/pathHash/status/encryptedKey/ciphertext/iv；pathHash 为实际 pathname + 原始 search 的 SM3 摘要。先验证 SM2 发送方签名，再验证独立 HMAC-SM3，最后解密 SM4-CBC。
    - 请求有效期默认 300 秒，允许领先服务端默认 30 秒。使用服务端 `transport.maxRequestAgeSeconds` 与 `transport.maxFutureSkewSeconds` 调整。已认证请求超限时返回带服务器时间的加密 400。共享 registry 原子消费 (clientId, requestId)，nonce 保存至 issuedAt + 11 分钟，存储故障拒绝。
@@ -390,15 +390,15 @@ const app = serv.createApp({
 - key exchange 路由
 - `excludePaths` 命中的路径
 
-非 JSON 业务响应、响应体超过 1 MiB UTF-8 字节或 `encryptResponse()` 失败都会返回错误。预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`，不是 YAML 或环境变量配置。
+非 JSON 业务响应、响应体超过 1 MiB UTF-8 字节或 `encryptResponse()` 失败都会返回错误。预算统一来自 `@h-ai/crypto` 的 `crypto.transport.bodyLimits`，不是 YAML 或环境变量配置。
 
 ### 多节点部署注意事项
 
 服务端必须同时注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库），两项均无隐式默认值。只共享客户端公钥无法跨节点解密；正确装配不需要 sticky session，重启重新加载同一密钥环与 registry 即可。
 
-密钥环 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` 仅从 Secret Manager 或服务端私有环境装配，不放公开 `_serv.yml`。示例应用读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，用根入口 `parseTransportServerKeyRing()` 安全解析；错误不含原始 JSON/私钥片段。工厂校验公私钥配对并捕获快照。
+密钥环 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` 仅从 Secret Manager 或服务端私有环境装配，不放公开 `_serv.yml`。示例应用读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，用根入口 `crypto.transport.parseServerKeyRing()` 安全解析；错误不含原始 JSON/私钥片段。工厂校验公私钥配对并捕获快照。
 
-轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发和测试显式使用 `createCacheTransportKeyStore(capacity)`。
+轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发和测试显式使用 `crypto.transport.createKeyStore(capacity)`。
 
 ## Refresh Cookie 逻辑（补充）
 

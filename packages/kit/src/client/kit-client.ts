@@ -11,11 +11,11 @@ import type { BrowserTokenStore } from '../kit-auth.js'
 import type { KitPublicConfig } from '../kit-types.js'
 import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
-import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { getDefaultBrowserTokenStore } from '../kit-auth.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
 
-const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
+const DEFAULT_KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
 
 // ─── 类型 ───
 
@@ -27,7 +27,7 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_
  * import { crypto } from '@h-ai/crypto'
  *
  * function configAfterInit(): ClientTransportConfig { return { crypto, excludePaths: ['/api/health'] } }
- * ```
+ *```
  */
 export interface ClientTransportConfig {
   /** 宿主构建挂载目录，默认空字符串；SvelteKit 使用 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。 */
@@ -50,7 +50,7 @@ export interface ClientTransportConfig {
  *
  * const value: KitClientConfig = { auth: true }
  * void value
- * ```
+ *```
  */
 export interface KitClientConfig {
   /** 标准鉴别明确失效时原地登录原用户；成功才对被拒绝的请求重试一次。 */
@@ -87,7 +87,7 @@ export interface KitClientConfig {
  *   if (!response.ok) throw new Error('Request failed')
  *   return response.json()
  * }
- * ```
+ *```
  */
 export interface KitClient {
   /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
@@ -180,7 +180,7 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
  * const state: BrowserTransportFetchState = globalThis
  * const installed = state.__haiKitTransportFetchInstalled ?? false
  * void installed
- * ```
+ *```
  */
 type BrowserTransportFetchState = typeof globalThis & {
   __haiKitOriginalFetch?: typeof fetch
@@ -201,7 +201,7 @@ type BrowserTransportFetchState = typeof globalThis & {
  *
  * // 不传配置时不安装全局包装；启用时应传已初始化 crypto 与同源端点。
  * kit.client.installBrowserTransportFetch()
- * ```
+ *```
  */
 export function installBrowserTransportFetch(transportConfig?: ClientTransportConfig): void {
   if (typeof window === 'undefined' || !transportConfig)
@@ -238,7 +238,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
       return originalFetch(input, init)
     }
 
-    if (headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER))
+    if (headers.has(crypto.transport.protocol.CLIENT_ID_HEADER))
       return originalFetch(input, init)
 
     if (!canUseTransportForRequest(request))
@@ -275,7 +275,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * function installAfterCryptoInit() {
  *   kit.client.installBrowserTransport({ transport: { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
  * }
- * ```
+ *```
  */
 export function installBrowserTransport(
   config: KitPublicConfig,
@@ -321,7 +321,7 @@ export function installBrowserTransport(
  * } finally {
  *   client.destroy()
  * }
- * ```
+ *```
  */
 export function createKitClient(config: KitClientConfig = {}): KitClient {
   const {
