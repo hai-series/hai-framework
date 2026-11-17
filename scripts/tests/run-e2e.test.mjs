@@ -47,7 +47,7 @@ afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
 it.each([0, 7])('测试退出 %s 后保留证据、回收数据且保留退出码', (code) => {
   const result = spawnSync(process.execPath, [
-    resolve('scripts/run-e2e.mjs'),
+    resolve('packages/cli/templates/shared/run-e2e.mjs'),
     ...(code
       ? ['--fail']
       : []),
@@ -62,7 +62,7 @@ it.each([0, 7])('测试退出 %s 后保留证据、回收数据且保留退出�
 })
 it('独立配置失败后继续收集，隔离数据与证据并保留首个失败码', () => {
   const result = spawnSync(process.execPath, [
-    resolve('scripts/run-e2e.mjs'),
+    resolve('packages/cli/templates/shared/run-e2e.mjs'),
     '--config',
     'first.ts',
     '--next',
@@ -89,7 +89,7 @@ it('独立配置失败后继续收集，隔离数据与证据并保留首个失�
 it('同一配置可按组切换模式，分组参数和环境不会串到其他轮次', () => {
   const config = ['--config', 'playwright.config.ts']
   const result = spawnSync(process.execPath, [
-    resolve('scripts/run-e2e.mjs'),
+    resolve('packages/cli/templates/shared/run-e2e.mjs'),
     ...config,
     '--next',
     '--e2e-group=session-close',
@@ -108,7 +108,7 @@ it('同一配置可按组切换模式，分组参数和环境不会串到其他�
 
 it('取消时结束测试进程、回收数据并保留已写入的报告', async () => {
   // 通过真实进程触发同一 SIGTERM 处理器，兼容 Windows 无法发送 POSIX 信号的差异。
-  const entry = pathToFileURL(resolve('scripts/run-e2e.mjs')).href
+  const entry = pathToFileURL(resolve('packages/cli/templates/shared/run-e2e.mjs')).href
   const script = `process.stdin.once('data', () => process.emit('SIGTERM')); await import(${JSON.stringify(entry)}); process.stdin.destroy()`
   const runner = spawn(process.execPath, [
     '--input-type=module',
@@ -176,7 +176,7 @@ it('尊重显式证据和报告目录，保留既存报告及输出参数', () =
   const html = join(directory, 'selected-html')
   const output = join(directory, 'selected-output')
   const result = spawnSync(process.execPath, [
-    resolve('scripts/run-e2e.mjs'),
+    resolve('packages/cli/templates/shared/run-e2e.mjs'),
     `--output=${output}`,
   ], {
     cwd: directory,
@@ -191,7 +191,7 @@ it('尊重显式证据和报告目录，保留既存报告及输出参数', () =
 })
 
 it('数据回收失败不覆盖原始非零退出码', () => {
-  const entry = pathToFileURL(resolve('scripts/run-e2e.mjs')).href
+  const entry = pathToFileURL(resolve('packages/cli/templates/shared/run-e2e.mjs')).href
   const script = `import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module'; const original = fs.rmSync; fs.rmSync = (path, options) => { if (String(path).includes('hai-browser-e2e-')) throw new Error('Injected data cleanup failure'); return original(path, options) }; syncBuiltinESMExports(); await import(${JSON.stringify(entry)})`
   const result = spawnSync(process.execPath, [
     '--input-type=module',
@@ -210,8 +210,4 @@ it('数据回收失败不覆盖原始非零退出码', () => {
     expect(dataRoot).toContain('hai-browser-e2e-')
     rmSync(dataRoot, { recursive: true, force: true })
   }
-})
-
-it('生成应用与仓库使用同一浏览器执行器行为', () => {
-  expect(readFileSync(resolve('packages/cli/templates/shared/run-e2e.mjs'), 'utf8')).toBe(readFileSync(resolve('scripts/run-e2e.mjs'), 'utf8'))
 })

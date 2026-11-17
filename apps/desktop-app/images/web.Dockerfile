@@ -11,7 +11,7 @@ COPY . .
 RUN --mount=type=cache,id=hai-example-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 RUN pnpm --filter desktop-app... build
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS runtime
-COPY --chmod=755 scripts/container-runtime-config.sh /docker-entrypoint.d/19-hai-runtime-config.sh
+COPY --chmod=755 packages/cli/templates/shared/container-runtime-config.sh /docker-entrypoint.d/19-hai-runtime-config.sh
 COPY apps/desktop-app/images/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/desktop-app/dist /usr/share/nginx/html
 EXPOSE 8080

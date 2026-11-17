@@ -108,14 +108,6 @@ it('keeps the selected native build mode stable across child dotenv loading', ()
   expect(nativeNameEnvironment(root)).toEqual({ HAI_CORE_ENV: 'production' })
 })
 
-it('keeps repository and generated native scripts identical', () => {
-  for (const script of ['native-name.mjs', 'native-name.d.mts', 'run-tauri.mjs']) {
-    const template = fileURLToPath(new URL(`../templates/shared/${script}`, import.meta.url))
-    const repository = fileURLToPath(new URL(`../../../scripts/${script}`, import.meta.url))
-    expect(readFileSync(repository, 'utf8')).toBe(readFileSync(template, 'utf8'))
-  }
-})
-
 it.each(['dev', 'build', 'bundle'])('tauri %s overrides names while retaining arguments and window settings', (command) => {
   const toolDirectory = join(root, 'node_modules/@tauri-apps/cli')
   mkdirSync(toolDirectory, { recursive: true })

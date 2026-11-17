@@ -31,7 +31,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo src-tauri/target",
-    "tauri": "node ../../scripts/run-tauri.mjs . config/_core.yml",
+    "tauri": "node ../../packages/cli/templates/shared/run-tauri.mjs . config/_core.yml",
     "tauri:dev": "pnpm tauri dev",
     "tauri:build": "pnpm tauri build",
     "compile": "vite build",

@@ -4,10 +4,8 @@
   "globalDependencies": [
     "scripts/typecheck.mjs",
     "scripts/vite-browser-startup.ts",
-    "scripts/vite-runtime-config.ts",
-    "scripts/container-runtime-config.sh",
+    "packages/cli/templates/shared/**",
     "packages/tsup.base.ts",
-    "packages/cli/templates/shared/browser-check/**",
     "packages/vitest.base.ts"
   ],
   "tasks": {

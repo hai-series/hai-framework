@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
-import { createE2eServerEnv } from '../../scripts/e2e-env.js'
+import { createE2eServerEnv } from '../../packages/cli/templates/shared/e2e-env.js'
 
 const port = Number(process.env.AGENT_E2E_PORT ?? 4191)
 const origin = `http://127.0.0.1:${port}`

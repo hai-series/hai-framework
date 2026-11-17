@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import vm from 'node:vm'
 import { expect, it } from 'vitest'
-import { publicRuntimeConfig } from '../vite-runtime-config.js'
+import { publicRuntimeConfig } from '../../packages/cli/templates/shared/vite-runtime-config.js'
 
 it.each(['configureServer', 'configurePreviewServer'])('%s 只输出公开字段，保留字符串和宿主注入配置', async (hook) => {
   const input = {

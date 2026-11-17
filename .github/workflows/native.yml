@@ -8,9 +8,6 @@ on:
       - 'apps/mobile-app/**'
       - 'apps/api-service-contract/**'
       - 'packages/**'
-      - 'scripts/native-name.*'
-      - scripts/run-tauri.mjs
-      - scripts/vite-runtime-config.ts
       - .npmrc
       - package.json
       - pnpm-lock.yaml

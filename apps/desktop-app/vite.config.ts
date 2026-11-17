@@ -14,7 +14,7 @@ import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
-import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
+import { publicRuntimeConfig } from '../../packages/cli/templates/shared/vite-runtime-config.js'
 import { desktopBuildConfig } from './config-env.js'
 
 const host = process.env.TAURI_DEV_HOST

@@ -2,7 +2,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
-import { createE2eServerEnv } from '../../scripts/e2e-env.js'
+import { createE2eServerEnv } from '../../packages/cli/templates/shared/e2e-env.js'
 
 const baseURL = process.env.BASE_URL || process.env.ADMIN_E2E_BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)

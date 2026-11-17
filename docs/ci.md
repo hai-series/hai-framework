@@ -97,6 +97,8 @@ DaisyUI 使用包含 [join 焦点/悬停层级修复](https://github.com/saadegh
 
 `deepmerge@4.3.1` 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 已于 2026-11-16 撤回，公告明确不构成安全漏洞。工作区与生成应用使用上游发布文件，已移除本地补丁、注册及只验证该自定义补丁的测试。
 
+仓库应用与测试直接复用 `packages/cli/templates/shared/` 中的 Node/E2E 启动器、环境隔离、原生名称和公开运行配置脚本；CLI 将同一份文件复制到生成工程。Turbo 将共享目录纳入全局输入，Native delivery 通过已有的 `packages/**` 触发规则覆盖这些文件，无需保留根 `scripts/` 的重复副本与旧路径。
+
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。
 - 浏览器阶段先用 Playwright 的 `chrome` 通道实际启动 runner 上的 Chrome 并打开空白页。探测失败时最多安装三次，每次安装后重新探测。Chrome 无法启动时阻断该阶段。应用测试的失败不自动重试。脚手架和部署浏览器失败时保留截图、页面上下文及 trace，方便区分下载故障与应用错误。

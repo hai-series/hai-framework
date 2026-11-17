@@ -14,7 +14,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
-import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
+import { publicRuntimeConfig } from '../../packages/cli/templates/shared/vite-runtime-config.js'
 
 export default defineConfig(({ mode, command }) => {
   const envResult = command === 'build' || process.env.HAI_E2E === '1'

@@ -5,7 +5,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vm from 'node:vm'
 import { expect, it } from 'vitest'
-import { publicRuntimeConfig } from '../vite-runtime-config.js'
+import { publicRuntimeConfig } from '../../packages/cli/templates/shared/vite-runtime-config.js'
 
 const require = createRequire(new URL('../../apps/desktop-app/package.json', import.meta.url))
 const { createServer, preview } = await import(pathToFileURL(require.resolve('vite')).href)

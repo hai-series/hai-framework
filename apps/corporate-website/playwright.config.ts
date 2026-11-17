@@ -1,7 +1,7 @@
 import path from 'node:path'
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
-import { createE2eServerEnv } from '../../scripts/e2e-env.js'
+import { createE2eServerEnv } from '../../packages/cli/templates/shared/e2e-env.js'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4175'
 const e2eDataRoot = process.env.HAI_E2E_DATA_ROOT || '.'

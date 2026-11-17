@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
+import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from '../templates/shared/e2e-env.js'
 import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
 
 const roots: string[] = []
@@ -104,11 +104,6 @@ describe('e2E server environment', () => {
       { name: 'sms', type: 'api', url: 'http://127.0.0.1:12580/send' },
     ])
     expect(env.HAI_IAM_LOGIN_OTP).toBe('true')
-  })
-
-  it('ships the identical tested helper to generated applications', () => {
-    expect(readFileSync(new URL('../templates/shared/e2e-env.ts', import.meta.url), 'utf8'))
-      .toBe(readFileSync(new URL('../../../scripts/e2e-env.ts', import.meta.url), 'utf8'))
   })
 })
 

@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 import { resolve } from 'node:path'
 import process from 'node:process'
-import { resolveNativeName } from '../../scripts/native-name.mjs'
+import { resolveNativeName } from '../../packages/cli/templates/shared/native-name.mjs'
 
 const config: CapacitorConfig = {
   appId: 'com.hai.mobile.app',

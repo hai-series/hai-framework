@@ -12,11 +12,11 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
+import { createE2eServerEnv, createE2eTransportRing } from '../templates/shared/e2e-env.js'
 
 const enabled = process.env.HAI_CLI_RUN_GENERATE_GATES === '1'
 const repository = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
