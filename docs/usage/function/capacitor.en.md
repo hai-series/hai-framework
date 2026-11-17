@@ -4,9 +4,41 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Use the native module after `capacitor.init()`. Detect the runtime before doing work that needs a device. Remove push listeners when changing accounts or leaving a screen.
 
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+const initialized = await capacitor.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+const failures: unknown[] = []
+try {
+  const saved = await capacitor.preferences.set('theme', 'dark')
+  if (!saved.success)
+    throw new Error(saved.error.message)
+  const theme = await capacitor.preferences.get('theme')
+  if (!theme.success)
+    throw new Error(theme.error.message)
+  // theme.data 为 'dark'；尚未保存的键为 null。
+}
+catch (cause) {
+  failures.push(cause)
+}
+finally {
+  const closed = await capacitor.close()
+  if (!closed.success)
+    failures.push(closed.error)
+}
+if (failures.length)
+  throw new AggregateError(failures, 'Native preference operation failed')
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

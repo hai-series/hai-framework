@@ -144,7 +144,7 @@ core.logger.info('Listening', { port: loaded.data.port })
 
 | API | 用途 | 引数と既定値 | 結果 | 例 |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)`、`getGlobalLocale()` | 既定の言語を設定・取得 | 設定時に言語を指定。初期値は `zh-CN`。 | `void` / locale | `core.i18n.setGlobalLocale('ja-JP')`、`core.i18n.getGlobalLocale()` |
+| `core.i18n.setGlobalLocale(locale)`、`getGlobalLocale()` | 既定の言語を設定・取得 | 設定時に言語を指定。初期値は `zh-CN`。 | `void` / 言語コード | `core.i18n.setGlobalLocale('ja-JP')`、`core.i18n.getGlobalLocale()` |
 | `core.i18n.runWithLocale(locale, operation)` | Node の処理中だけ言語を指定 | 言語と関数 | 関数の戻り値 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
 | `core.i18n.createMessageGetter(dictionaries)` | メッセージ取得関数を作成 | 言語ごとの辞書 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'ようこそ' } })` |
 | `core.i18n.coreM(key, options?)` | 組み込みメッセージを取得 | キー、任意の言語と置換パラメーター | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |

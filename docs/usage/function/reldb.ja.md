@@ -6,9 +6,54 @@
 
 <a id="quick-start"></a>
 
+## クイックスタート
+
 設定したデータベースを初期化し、SQL、型付き CRUD テーブル、トランザクションから選びます。値をバインド引数で渡し、識別子には信頼できる定義を使います。値を読む前に `HaiResult.success` を確認します。
 
+```ts
+import { HaiReldbError, reldb } from '@h-ai/reldb'
+
+// 初始化
+const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+
+// DDL
+await reldb.ddl.createTable('users', {
+  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+  name: { type: 'TEXT', notNull: true },
+  email: { type: 'TEXT', unique: true },
+})
+
+// SQL
+await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
+const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
+
+// 分页查询
+const page = await reldb.sql.queryPage<{ id: number, name: string }>({
+  sql: 'SELECT id, name FROM users ORDER BY id',
+  pagination: { page: 1, pageSize: 20 },
+})
+
+// CRUD
+const userCrud = reldb.crud.table({
+  table: 'users',
+  idColumn: 'id',
+  select: ['id', 'name', 'email'],
+  createColumns: ['name', 'email'],
+  updateColumns: ['name', 'email'],
+  dbType: 'sqlite',
+})
+await userCrud.create({ name: '李四', email: 'li@test.com' })
+const user = await userCrud.findById(1)
+
+// 关闭
+await reldb.close()
+```
+
 <a id="api-reference"></a>
+
+## API 一覧
 
 | API | 入力と結果 | 例 |
 | --- | --- | --- |

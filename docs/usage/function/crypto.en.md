@@ -6,9 +6,22 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Initialize Crypto before using providers. Obtain configuration and keys from trusted startup code. Use the transport managers to integrate encryption with the server or Fetch client.
 
+```ts
+import { crypto } from '@h-ai/crypto'
+
+// 初始化（使用前必须调用）
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

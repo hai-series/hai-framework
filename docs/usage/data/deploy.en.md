@@ -12,4 +12,4 @@ Deployment state is stored as files and remote release records. The database, ca
 | Remote deployment / リモート配置 | Target-specific release contents and current/recovery status. Retain the release files and verified baseline needed for rollback. |
 | Credentials / 認証情報 | Provider credentials in a private location, loaded by environment. |
 
-Additional options and workflow examples are available in the [Chinese reference](deploy.md).
+Field constraints, defaults and retention details are available in the [Chinese reference](deploy.md).

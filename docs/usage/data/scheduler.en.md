@@ -12,4 +12,4 @@ Schedules, ownership and logs reside in RelDB when persistence is enabled. A uni
 | `hai_scheduler_executions` | Unique `occurrence_id`, task, active task claim, status, owner, lease, attempt limits, snapshot, trigger and log data. |
 | `hai_scheduler_logs` | Log ID, occurrence (nullable), task identity, trigger source/type, status and JSON payload, start/end times and duration. |
 
-Additional options and workflow examples are available in the [Chinese reference](scheduler.md).
+Field constraints, defaults and retention details are available in the [Chinese reference](scheduler.md).

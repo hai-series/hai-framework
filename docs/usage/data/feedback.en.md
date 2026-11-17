@@ -12,4 +12,4 @@ RelDB owns reports, evidence and job state. Storage owns attachment and export b
 | `hai_feedback_evidence`, `hai_feedback_attachments`, `hai_feedback_history` | Evidence by report or temporary scope, attachment checksum/object key/status, and actor/time/state-change history. |
 | `hai_feedback_jobs`, `hai_feedback_quotas` | Job lease and attempt records, and quota counters for user, scope and report. |
 
-Additional options and workflow examples are available in the [Chinese reference](feedback.md).
+Field constraints, defaults and retention details are available in the [Chinese reference](feedback.md).

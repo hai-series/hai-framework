@@ -12,4 +12,4 @@
 | `hai_feedback_evidence`, `hai_feedback_attachments`, `hai_feedback_history` | 報告・一時スコープの証跡、添付のチェックサム・オブジェクトキー・状態、処理者・時刻・状態の履歴。 |
 | `hai_feedback_jobs`, `hai_feedback_quotas` | ジョブのリースと試行記録、利用者・スコープ・報告ごとの上限カウンター。 |
 
-追加の設定項目や利用例は[中国語リファレンス](feedback.md)に掲載しています。
+フィールド制約・既定値・保存期間の詳細は[中国語リファレンス](feedback.md)に掲載しています。

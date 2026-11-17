@@ -16,17 +16,17 @@ A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent AP
 
 Pass the API base URL to `apiClient.init(config)`. Add credential storage, a request timeout, or transport encryption options as needed.
 
-See the [configuration reference](../../docs/usage/configuration/api-client.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/api-client.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/api-client.en.md) in Chinese for where access and refresh tokens are stored and when they are removed.
+See the [data reference](../../docs/usage/data/api-client.en.md) for where access and refresh tokens are stored and when they are removed.
 
 ## Development and Testing
 

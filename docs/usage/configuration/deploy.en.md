@@ -19,8 +19,22 @@ provider:
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |
 | `environment`, `provider.type` | Optional | Select deployment environment and backend (`vercel` or `docker-ssh`). |
+
+<a id="provider"></a>
+
+## Deployment providers
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
 | `provider.token`, `provider.ssh` | See backend | Vercel access token or SSH host, user, verification and authentication settings. |
 | `provider.remote`, `provider.expose` | See backend | Remote release directory and container runtime, port mapping and HTTPS configuration. |
+
+<a id="services"></a>
+
+## Services
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
 | `services.db`, `services.cache`, `services.storage` | Optional | Optional provisioned services. Supply the provider and its credentials when enabled. |
 
 Additional options and workflow examples are available in the [Chinese reference](deploy.md).

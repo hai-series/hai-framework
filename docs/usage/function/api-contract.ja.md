@@ -4,9 +4,41 @@
 
 <a id="quick-start"></a>
 
+## クイックスタート
+
 `@h-ai/api-contract` から `apiContract` をインポートします。アプリの契約を組み立て、サーバーの処理と型付きクライアントで共有します。
 
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+export const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: false,
+})
+```
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+export const appContract = {
+  ping: apiContract
+    .route({
+      method: 'POST',
+      path: '/app/ping',
+      operationId: 'app.ping',
+      tags: ['app']
+    })
+    .output(apiContract.haiResultSchema(z.object({
+      pong: z.boolean()
+    }))),
+}
+```
+
 <a id="api-reference"></a>
+
+## API 一覧
 
 | API | 入力と結果 | 例 |
 | --- | --- | --- |

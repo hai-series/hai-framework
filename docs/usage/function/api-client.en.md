@@ -6,9 +6,46 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Create one typed client from the same contract used by Serv or Kit. Initialize it before requests, handle each `HaiResult`, and close it when the owner releases it.
 
+```ts
+import type { IamAuthLoginInput } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+
+async function loginAndLoadProfile(input: IamAuthLoginInput) {
+  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
+  if (!initialized.success)
+    return initialized
+  try {
+    const actions = apiClient.createAuthActions(apiClient)
+    const loggedIn = await actions.login(input)
+    if (!loggedIn.success)
+      return loggedIn
+    const profile = await apiClient.iam.auth.currentUser()
+    if (!profile.success)
+      return profile
+    return profile
+  }
+  catch (writeError) {
+    try {
+      await apiClient.auth.clear()
+    }
+    catch (cleanupError) {
+      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
+    }
+    throw writeError
+  }
+  finally {
+    await apiClient.close()
+  }
+}
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

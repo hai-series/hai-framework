@@ -105,7 +105,7 @@ Use `core.context.run()` with correlation fields such as `requestId`, `userId`, 
 | API | Purpose | Inputs and defaults | Result | Example |
 | --- | --- | --- | --- | --- |
 | `core.context.run(context, operation)` | Run within a request or task context | Fields and callback. Observers are enabled by default. | Callback result, including a promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
-| `core.context.get()` | Read the current context | No arguments | Readonly `RequestContext` | `const { requestId } = core.context.get()` |
+| `core.context.get()` | Read the current context | No arguments | Readonly `RequestContext` (empty object without context) | `const { requestId } = core.context.get()` |
 
 <a id="sanitize-api"></a>
 

@@ -12,4 +12,4 @@ Audit events persist in RelDB. The optional backup writes objects to the configu
 | `hai_audit_policy` | One row `id=1`; initially `enabled=0` and `min_days=90`. |
 | `hai_audit_alert_claims` | Unique claim by rule, target and window; stores those identities, status, optional queue ID and error code. |
 
-Additional options and workflow examples are available in the [Chinese reference](audit.md).
+Field constraints, defaults and retention details are available in the [Chinese reference](audit.md).

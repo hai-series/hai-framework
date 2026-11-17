@@ -16,17 +16,17 @@ Import `serv` from `@h-ai/serv`. Use `serv.createApp()` to create the HTTP app a
 
 Generated projects set HTTP options, the listening address, and the port in `config/_serv.yml`. At startup, pass the HTTP options, contract, and handlers to `serv.createApp(options)`. Pass the returned application, address, and port to `serv.listen()`.
 
-See the [configuration reference](../../docs/usage/configuration/serv.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/serv.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/serv.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/serv.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/serv.en.md) in Chinese for where session cookies, static files and request data are stored.
+See the [data reference](../../docs/usage/data/serv.en.md) for where session cookies, static files and request data are stored.
 
 ## Development and Testing
 

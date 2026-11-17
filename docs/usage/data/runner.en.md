@@ -12,4 +12,4 @@ Use the same relational database for all nodes of one runner. Job ownership is c
 | `hai_runner_events` | `id` primary key, `execution_id`, `sequence_number`, `event_json`, `created_at`. Read by execution and sequence. |
 | `hai_runner_gate` | Single row `id=1`. `revision` starts at 0 and changes in shared capacity transactions. |
 
-Additional options and workflow examples are available in the [Chinese reference](runner.md).
+Field constraints, defaults and retention details are available in the [Chinese reference](runner.md).

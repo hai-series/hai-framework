@@ -14,17 +14,17 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 
 Install and configure the native plugins you need, such as push notifications or the camera, in the Capacitor project. Call `capacitor.init()` at startup, then use the configured plugins through `capacitor.push`, `capacitor.camera`, and related APIs.
 
-See the [configuration reference](../../docs/usage/configuration/capacitor.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/capacitor.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/capacitor.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/capacitor.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/capacitor.en.md) in Chinese for native preferences, credentials, photos and push tokens.
+See the [data reference](../../docs/usage/data/capacitor.en.md) for native preferences, credentials, photos and push tokens.
 
 ## Development and Testing
 

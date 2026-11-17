@@ -14,17 +14,17 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 
 Pass algorithm options when calling an encryption, signing, or hash method. To encrypt HTTP messages, call `crypto.transport.createServer(options)` with the server keys and key store. Pass the key exchange URL to `crypto.transport.createClient(options)`.
 
-See the [configuration reference](../../docs/usage/configuration/crypto.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/crypto.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/crypto.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/crypto.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The RelDB transport key registry creates SQL tables. The Redis registry uses cache keys for public keys and replay protection.
 
-See the [data reference](../../docs/usage/data/crypto.en.md) in Chinese for keys, transport sessions, nonces and pluggable storage components.
+See the [data reference](../../docs/usage/data/crypto.en.md) for keys, transport sessions, nonces and pluggable storage components.
 
 ## Development and Testing
 

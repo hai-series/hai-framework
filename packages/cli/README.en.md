@@ -22,17 +22,17 @@ hai --version
 
 Command-line flags configure the current run. The project’s `hai.json` stores build and deployment settings.
 
-See the [configuration reference](../../docs/usage/configuration/cli.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/cli.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/cli.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/cli.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/cli.en.md) in Chinese for generated projects, configuration, build caches and deployment records.
+See the [data reference](../../docs/usage/data/cli.en.md) for generated projects, configuration, build caches and deployment records.
 
 ## Development and Testing
 

@@ -14,17 +14,17 @@ Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the sin
 
 Pass the definitions your application exposes to `apiContract.create(options)`. The keys in the options object name the interface groups. Use the resulting contract for the server, typed clients, and API documentation.
 
-See the [configuration reference](../../docs/usage/configuration/api-contract.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/api-contract.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/api-contract.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/api-contract.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/api-contract.en.md) in Chinese for public HTTP payloads and persistence ownership.
+See the [data reference](../../docs/usage/data/api-contract.en.md) for public HTTP payloads and persistence ownership.
 
 ## Development and Testing
 

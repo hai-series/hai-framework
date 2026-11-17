@@ -14,17 +14,17 @@ An object storage module with a unified `storage` entry point for S3-compatible 
 
 Generated projects define the local directory or the connection settings for S3-compatible storage in `config/_storage.yml`. At startup, the application reads the file and passes the settings object to `storage.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/storage.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/storage.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/storage.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/storage.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/storage.en.md) in Chinese for local files and S3 objects, keys, metadata and retention.
+See the [data reference](../../docs/usage/data/storage.en.md) for local files and S3 objects, keys, metadata and retention.
 
 ## Development and Testing
 

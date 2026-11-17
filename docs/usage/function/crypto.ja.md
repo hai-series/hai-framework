@@ -6,9 +6,22 @@
 
 <a id="quick-start"></a>
 
+## クイックスタート
+
 プロバイダーを使う前に Crypto を初期化します。設定と鍵は信頼できる起動処理から取得します。サーバーや Fetch クライアントに暗号化を組み込むには通信マネージャーを使います。
 
+```ts
+import { crypto } from '@h-ai/crypto'
+
+// 初始化（使用前必须调用）
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
 <a id="api-reference"></a>
+
+## API 一覧
 
 | API | 入力と結果 | 例 |
 | --- | --- | --- |

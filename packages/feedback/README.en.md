@@ -14,15 +14,15 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 Generated projects define the application ID and feedback notification settings in `config/_feedback.yml`. At startup, the application reads the file and passes the settings object to `feedback.init(config, options)`.
 
-See the [configuration reference](../../docs/usage/configuration/feedback.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/feedback.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/feedback.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/feedback.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/feedback.en.md) in Chinese for reports, evidence, background jobs, attachments, offline bundles and browser drafts.
+See the [data reference](../../docs/usage/data/feedback.en.md) for reports, evidence, background jobs, attachments, offline bundles and browser drafts.
 
 ## Development and Testing
 

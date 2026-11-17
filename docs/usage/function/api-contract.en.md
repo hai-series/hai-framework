@@ -4,9 +4,41 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Import `apiContract` from `@h-ai/api-contract`. Assemble an application contract, then share it with the server procedures and the typed client.
 
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+export const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: false,
+})
+```
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+export const appContract = {
+  ping: apiContract
+    .route({
+      method: 'POST',
+      path: '/app/ping',
+      operationId: 'app.ping',
+      tags: ['app']
+    })
+    .output(apiContract.haiResultSchema(z.object({
+      pong: z.boolean()
+    }))),
+}
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

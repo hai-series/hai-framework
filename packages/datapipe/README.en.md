@@ -14,17 +14,17 @@ A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`
 
 Pass cleaning options to `datapipe.clean()` and options such as chunk size and overlap to `datapipe.chunk()`. Supply both sets of options when calling `datapipe.pipeline()`.
 
-See the [configuration reference](../../docs/usage/configuration/datapipe.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/datapipe.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/datapipe.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/datapipe.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/datapipe.en.md) in Chinese for cleaning results, text chunks and application-owned storage.
+See the [data reference](../../docs/usage/data/datapipe.en.md) for cleaning results, text chunks and application-owned storage.
 
 ## Development and Testing
 

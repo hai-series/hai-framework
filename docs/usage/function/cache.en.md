@@ -6,9 +6,37 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Initialize Cache before work and close it after dependent modules stop. Inspect the result before using values. Limit distributed locks to work that can safely end before the lease expires.
 
+```ts
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+
+const initialized = await cache.init({ type: 'redis', host: 'localhost' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
+  if (!written.success)
+    throw new Error(written.error.message)
+  const user = await cache.kv.get<{ name: string }>('user:1')
+  if (!user.success)
+    throw new Error(user.error.message)
+  if (user.data)
+    core.logger.info('Cached user', { name: user.data.name })
+}
+finally {
+  const closed = await cache.close()
+  if (!closed.success)
+    core.logger.error('Cache cleanup pending', { code: closed.error.code })
+}
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

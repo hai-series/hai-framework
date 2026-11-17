@@ -12,4 +12,4 @@
 | `hai_runner_events` | `id` が主キー。`execution_id`、`sequence_number`、`event_json`、`created_at`。実行 ID と順序で取得。 |
 | `hai_runner_gate` | 単一行 `id=1`。`revision` は 0 から始まり、共有容量のトランザクションで更新。 |
 
-追加の設定項目や利用例は[中国語リファレンス](runner.md)に掲載しています。
+フィールド制約・既定値・保存期間の詳細は[中国語リファレンス](runner.md)に掲載しています。

@@ -6,9 +6,22 @@
 
 <a id="quick-start"></a>
 
+## Quick start
+
 Install the CLI with `pnpm add -g @h-ai/cli`, then scaffold an application. Commands exit nonzero on failure.
 
+```sh
+pnpm view @h-ai/cli@latest version # 查询注册表，输出最新已发布版本。
+pnpm add -g @h-ai/cli@latest # 将该 CLI 安装到 pnpm 的全局目录。
+hai --version # 确认当前 PATH 实际调用的 CLI 版本。
+hai create my-app --type fullstack --frontends web # 输入应用名、模板和前端目标，生成 my-app。
+cd my-app # 进入刚生成的工程目录。
+pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
+```
+
 <a id="api-reference"></a>
+
+## API list
 
 | API | Input and result | Example |
 | --- | --- | --- |

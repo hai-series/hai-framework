@@ -14,15 +14,15 @@ A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSe
 
 Generated projects define the backend type and Redis connection settings in `config/_cache.yml`. At startup, the application reads the file and passes the settings object to `cache.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/cache.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/cache.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/cache.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/cache.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/cache.en.md) in Chinese for Redis and memory value types, keys, TTL and lock ownership.
+See the [data reference](../../docs/usage/data/cache.en.md) for Redis and memory value types, keys, TTL and lock ownership.
 
 ## Development and Testing
 

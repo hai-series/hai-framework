@@ -19,8 +19,22 @@ provider:
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |
 | `environment`, `provider.type` | 省略可 | 対象環境と方式（`vercel` または `docker-ssh`）を指定。 |
+
+<a id="provider"></a>
+
+## デプロイ方式
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
 | `provider.token`, `provider.ssh` | バックエンドによる | Vercel のトークン、または SSH のホスト・ユーザー・検証・認証設定。 |
 | `provider.remote`, `provider.expose` | バックエンドによる | リモートのリリースディレクトリとコンテナランタイム、ポート対応、HTTPS 設定。 |
+
+<a id="services"></a>
+
+## サービス
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
 | `services.db`, `services.cache`, `services.storage` | 省略可 | 任意のサービス作成設定。有効にした場合にプロバイダーと認証情報を指定。 |
 
 追加の設定項目や利用例は[中国語リファレンス](deploy.md)に掲載しています。
