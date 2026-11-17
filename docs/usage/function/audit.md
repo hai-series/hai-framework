@@ -14,50 +14,36 @@
 
 - `@h-ai/reldb` — 数据库（审计日志持久化），**需在 audit.init() 前初始化**
 
+本例使用内存 SQLite，不会写入业务数据库。先初始化 RelDB，再初始化 Audit。记录一次登录后用相同的动作名查询，`logs.items` 包含刚写入的记录；退出时先关闭 Audit，再关闭数据库。请在开发环境运行（例如 `NODE_ENV=development`）；生产模式需要跨节点共享的数据库。
+
 ```ts
+import type { HaiResult } from '@h-ai/core'
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化依赖
-await reldb.init({ type: 'sqlite', database: './data.db' })
-
-// 2. 初始化审计模块（自动使用已初始化的 reldb 单例）
-const result = await audit.init()
-if (!result.success) {
-  throw new Error(result.error.message)
+function dataOrThrow<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data
 }
 
-// 3. 记录审计日志
-await audit.log({
-  userId: 'user_1',
-  action: 'login',
-  resource: 'auth',
-  ipAddress: '127.0.0.1',
-})
+dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
 
-// 4. 使用便捷方法
-await audit.helper.login('user_1', '127.0.0.1')
-await audit.helper.crud({
-  userId: 'user_1',
-  action: 'create',
-  resource: 'users',
-  resourceId: 'user_2',
-  details: { name: '张三' }
-})
-
-// 5. 查询日志
-const logs = await audit.list({ pageSize: 20, action: 'login' })
-
-// 6. 获取统计
-const stats = await audit.getStats(7) // 最近 7 天
-
-// 7. 清理旧日志
-await audit.cleanup(90) // 清理 90 天前的日志
-
-// 8. 关闭
-const closeResult = await audit.close()
-if (!closeResult.success) {
-  throw new Error(closeResult.error.message)
+try {
+  dataOrThrow(await audit.init())
+  try {
+    const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+    const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
+    // 新数据库中，查询到的第一条记录就是刚写入的那条。
+    if (logs.items[0]?.id !== saved.id)
+      throw new Error('Expected the new login event')
+  }
+  finally {
+    dataOrThrow(await audit.close())
+  }
+}
+finally {
+  dataOrThrow(await reldb.close())
 }
 ```
 
@@ -69,7 +55,14 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `audit.init` | 等待审计表准备完成。先连接 RelDB | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await audit.init()` |
+| `audit.close` | 等待已开始的操作完成；RelDB 由应用关闭 | 无 | `Promise<HaiResult<void>>` | `await audit.close()` |
 
 #### audit · 记录事件与请求上下文
 

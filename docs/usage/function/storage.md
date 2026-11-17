@@ -107,7 +107,14 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `storage.init` | 准备本地路径或 S3 存储客户端 | `config`（必填） | `Promise<HaiResult<void>>` | `await storage.init({ type: 'local', root: './data/files' })` |
+| `storage.close` | 释放存储客户端；已保存的文件仍由原后端持有 | 无 | `Promise<HaiResult<void>>` | `await storage.close()` |
 
 #### storage.file
 

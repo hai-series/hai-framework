@@ -40,13 +40,33 @@ if (failures.length)
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `capacitor.init()`, `close()`, `getPlatform()`, `isNative()`, `isInitialized()` | 引数なしで初期化・終了し、環境と初期化状態を確認。 | `capacitor.getPlatform()` |
-| `capacitor.device.getInfo()`, `getAppVersion()` | 端末情報またはインストール済みバージョンを返す。 | `await capacitor.device.getInfo()` |
-| `capacitor.camera.takePhoto(options?)` | 既定では撮影元を選択し、URI で画像を返す。既定の品質は 90。 | `await capacitor.camera.takePhoto({ source: 'camera' })` |
-| `capacitor.push.register(options?)`, `listen(handlers, options?)` | 権限とトークンの取得、または通知の受信・操作イベントの購読。解除には中断シグナルを渡せる。 | `await capacitor.push.listen({ onReceived }, { signal })` |
-| `capacitor.statusBar.configure(options)`, `show()`, `hide()` | 色・スタイル・重なりを設定、または表示を切り替える。 | `await capacitor.statusBar.show()` |
-| `capacitor.preferences.get(key)`, `set(key, value)`, `remove(key)` | 端末上の一般の文字列を管理。 | `await capacitor.preferences.set('theme', 'dark')` |
-| `createCapacitorTokenStorage()` | アクセス・更新トークンを取得・保存・削除するネイティブ用アダプター。`@h-ai/capacitor` からインポート。 | `const tokens = createCapacitorTokenStorage()` |
-| `safeGetPreference`, `safeSetPreference`, `safeRemovePreference` | 一般設定を扱う独立関数。キーを渡し、書き込み時は値も指定。 | `await safeGetPreference('theme')` |
+モジュールと設定操作は HaiResult.data を示します。トークンアダプターはプラグイン障害時に Promise を拒否します。単体関数は @h-ai/capacitor からインポートします。
+
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `capacitor.init` | 実行環境を判定して準備 | なし | `void` | `await capacitor.init()` |
+| `capacitor.close` | 稼働中のネイティブリスナーを解放 | なし | `void` | `await capacitor.close()` |
+| `capacitor.getPlatform` | Android・iOS・Web を判別 | なし | `string` | `capacitor.getPlatform()` |
+| `capacitor.isNative` | ネイティブアプリ内か判定 | なし | `boolean` | `capacitor.isNative()` |
+| `capacitor.device.getInfo` | OS と端末情報を取得 | なし | `DeviceInfo` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion` | インストール済みアプリの版とビルド番号を取得 | なし | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.camera.takePhoto` | 画像を撮影または選択 | `{ source = "prompt", quality = 90, resultType = "uri", width?, height? }?` | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.push.register` | 端末をプッシュ通知サービスに登録 | `{ signal? }?` | `PushRegistration` | `await capacitor.push.register()` |
+| `capacitor.push.listen` | 通知の受信とタップなどの操作を監視 | `callbacks, { signal? }?` | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
+| `capacitor.statusBar.configure` | 指定したステータスバーの設定だけを適用 | `{ style?, backgroundColor?, overlay? }` | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show` | ネイティブのステータスバーを表示 | なし | `void` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide` | ネイティブのステータスバーを非表示 | なし | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.preferences.get` | 機密でない設定を取得 | `key` | `string or null` | `await capacitor.preferences.get('theme')` |
+| `capacitor.preferences.set` | 機密でない設定を保存 | `key, value` | `void` | `await capacitor.preferences.set('theme', 'dark')` |
+| `capacitor.preferences.remove` | 指定設定を削除 | `key` | `void` | `await capacitor.preferences.remove('theme')` |
+| `createCapacitorTokenStorage` | ネイティブの安全な認証情報アダプターを作る | なし | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `tokens.getAccessToken` | アクセストークンを読む | なし | `Promise<string or null>` | `await tokens.getAccessToken()` |
+| `tokens.setAccessToken` | アクセストークンを保存 | `token` | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
+| `tokens.getRefreshToken` | リフレッシュトークンを読む | なし | `Promise<string or null>` | `await tokens.getRefreshToken()` |
+| `tokens.setRefreshToken` | リフレッシュトークンを保存 | `token` | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
+| `tokens.clear` | 両方の認証情報を削除 | なし | `Promise<void>` | `await tokens.clear()` |
+| `safeGetPreference` | 単体ヘルパーで機密でない設定を取得 | `key` | `string or null` | `await safeGetPreference('theme')` |
+| `safeSetPreference` | 単体ヘルパーで機密でない設定を保存 | `key, value` | `void` | `await safeSetPreference('theme', 'dark')` |
+| `safeRemovePreference` | 単体ヘルパーで設定を削除 | `key` | `void` | `await safeRemovePreference('theme')` |
+
+アプリがコールバックと任意の AbortSignal を渡します。push.listen の解除関数を保持し、画面を離れる際に実行して待機します。画像の形式は resultType に従います。

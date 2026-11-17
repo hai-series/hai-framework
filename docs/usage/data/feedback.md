@@ -8,6 +8,8 @@
 
 服务端收到提交后，把反馈、关联证据和需要执行的任务一起写入共享 [reldb](reldb.md)。这几项通过一次数据库事务全部保存，或在失败时一起回滚。除列出的 SQL 默认值外，字段由模块写入，选填字段缺失时为 NULL。时间字段以 Unix 毫秒记录。
 
+<a id="reports"></a>
+
 ### `hai_feedback_reports`
 
 | 字段                                                 | 含义与约束                                                                                         |
@@ -26,6 +28,8 @@
 
 按 `(scope_id, created_at)`、`(scope_id, status, created_at)` 建索引，支持范围内查询。
 
+<a id="jobs"></a>
+
 ### 证据、附件、记录和异步任务
 
 | 表                         | 字段、默认值和约束                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -38,8 +42,12 @@
 
 证据按反馈、来源和顺序查询，也按应用、关联状态和过期时间回收。附件和历史建 `report_id` 索引。任务按 `(app_id, status, next_run_at)` 领取、按 `(report_id, snapshot_revision, snapshot_version)` 定位快照，计量记录按 `(app_id, period)` 索引。任务领取后默认可以处理 30 秒，最多尝试 5 次。
 
+<a id="storage"></a>
+
 ## 缓存与对象键
 
 模块不创建 Redis 键。附件、导出和截图通过私有 [storage](storage.md) 管理，业务表记录附件校验和与状态。对象路径使用 `feedback/<范围 SHA-256 前 16 位>/<反馈 ID>/` 前缀，后接附件 ID、`business/<行 ID>-<校验和>` 或 `exports/<任务 ID>.zip`。ZIP 含 `manifest.json`、反馈、证据和处理历史，以及允许导出的附件。导出对象默认保留 24 小时。
 
 浏览器在 IndexedDB 的 `hai-feedback-v1` 数据库（版本 1）中新建 `drafts` 对象存储，每个应用和身份组合可以保存一份待发送的草稿。键 `<隔离键>:checkpoint` 另存现场信息 `evidence` 和到期时间 `expiresAt`，有效期 5 分钟。重新打开反馈页面时只读取尚未过期的草稿。成功提交后，客户端删除草稿及相应记录。
+
+表结构和索引见 [Feedback 表定义](../../../packages/feedback/src/feedback-repository.ts)。

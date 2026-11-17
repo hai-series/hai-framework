@@ -33,4 +33,4 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 | `hai feedback` | Inspect a local diagnostic bundle and filter evidence. | `hai feedback summary feedback.zip` |
 | `hai --version`, `hai --help` | Show the CLI version or command usage. | `hai deploy --help` |
 
-Additional options and workflow examples are available in the [Chinese reference](cli.md).
+Still untranslated: the detailed command options and environment preparation examples. Read the [Chinese source section](cli.md#api-reference).

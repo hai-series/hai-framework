@@ -105,9 +105,16 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 模板用 `name` 标识，`vars` 是替换正文或标题的变量，模板定义包含发送渠道 `provider` 和正文 `body`，还可以包含标题 `subject`。队列用持久化的 `queueId`（UUID）查找。恢复失败消息或确认发送结果之前，先读取当前版本并人工核对实际投递记录。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `reach.init` | 准备配置中的通知渠道。存储模板或使用延迟队列时先连接 RelDB | `config` 必填，`options?` 可选 | `Promise<HaiResult<void>>` | `await reach.init(config)` |
+| `reach.close` | 关闭当前通知渠道；持久化记录仍可由后续实例读取 | 无 | `Promise<void>` | `await reach.close()` |
 
 #### reach
 
@@ -149,6 +156,8 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 - API 只有配置 `idempotent: true` 才允许重领在途消息。这是对接收端能力的声明，不会凭空实现幂等。每次请求的 `Idempotency-Key` 请求头和 `idempotencyKey` 正文字段均固定为持久化 `queueId`；接收端必须把去重记录和副作用原子提交。去重记录必须覆盖所有迟到请求，包括暂停后恢复的旧节点；无法界定最长迟到时间时不能过期删除。各节点同名 Provider 必须连接同一目标和幂等存储。
 - SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider 按持久策略退避；发送前解析失败直接进入 dead。Console 仅输出开发元数据，不产生真实投递。
 - 续租、数据库 owner 条件和取消信号都不能撤销已发出的邮件、短信或 HTTP 副作用；模块不提供通用 exactly-once 保证。
+
+<a id="detailed-workflow"></a>
 
 ### 未知结果人工核对
 

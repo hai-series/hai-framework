@@ -6,7 +6,9 @@
 
 ## 快速开始
 
-[最小接入与自定义工具](../../docs/usage/function/tools.md)
+使用 pnpm 安装：`pnpm add @h-ai/tools zod`。
+
+[最小接入与自定义工具](../../docs/usage/function/tools.md#quick-start)
 
 ## 配置清单
 

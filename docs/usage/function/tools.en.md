@@ -13,6 +13,8 @@ Use `tools` to define, register and execute business tools. Ordinary business co
 
 The lightweight entry works in browsers, but a trusted server must still verify server-side access. Keep `/server` out of frontend imports.
 
+<a id="quick-start"></a>
+
 ## Minimal integration
 
 ```sh
@@ -66,18 +68,24 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## Lightweight methods
 
-| Method | Purpose and result |
-| --- | --- |
-| `tools.define` | Name, description, Zod Schema and handler → tool instance; default timeout 30 seconds |
-| `tools.createRegistry` | Optional `authorize` → registry instance |
-| `tool.execute` | Business input and optional context → `Promise<HaiResult<TOutput>>` |
-| `tool.toDefinition` | Neutral name, title, description, input JSON Schema and examples |
-| `registry.register/registerMany` | Register tools → `HaiResult<void>`; duplicates do not overwrite, batches are atomic |
-| `registry.replace` | Explicitly replace an existing name → `HaiResult<void>` |
-| `registry.get/has/getNames/getDefinitions` | Query the current collection and neutral definitions |
-| `registry.execute` | Name, input and optional context → `Promise<HaiResult<unknown>>` |
-| `registry.executeAll` | `{ name, input }[]` → `Promise<HaiResult<unknown[]>>`; sequential by default |
-| `registry.unregister/clear/size` | Disable, clear and count the in-process collection |
+| API | Purpose | Input | Output | Example |
+| --- | --- | --- | --- | --- |
+| `tools.define` | Define a tool and validate its input at execution. The default timeout is `30000` ms. Invalid definitions throw `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tools.createRegistry` | Create an empty registry. Without `authorize` it applies no registry-level authorization | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `tool.execute` | Validate and execute. Options can supply identity, authorization, an abort signal and a deadline | `input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition` | Convert parameter rules to JSON Schema. Throws if conversion is unsupported | None | `ToolDefinition` | `tool.toDefinition()` |
+| `registry.register` | Add one tool. A duplicate name fails | `tool` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany` | Add several tools. If any name is duplicate or any entry invalid, none are added | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace` | Replace an existing tool with the same name. The name must already exist | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister` | Remove by name. Returns `true` only if the name existed | `name` | `boolean` | `registry.unregister('sum')` |
+| `registry.get` | Get the tool instance by name, or `undefined` if absent | `name` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has` | Check whether a name is registered | `name` | `boolean` | `registry.has('sum')` |
+| `registry.getNames` | List the registered names | None | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions` | List registered definitions. Throws if a parameter schema cannot be converted | None | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute` | Run a registered tool. When both registry and call define authorization, both must allow it | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll` | By default runs in order and stops at the first failure. With `parallel: true`, a failure does not undo already started calls | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear` | Remove all registrations. Calls already running are not cancelled | None | `void` | `registry.clear()` |
+| `registry.size` | Read the number of registered tools (property) | None | `number` | `registry.size` |
 
 `tool` and `registry` are returned instances, not independent package functions. Registries do not discover other tools. They accept instances made by `tools.define`, rejecting handwritten or copied objects.
 
@@ -89,7 +97,7 @@ Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents
 
 ## Server task service
 
-Install and initialize [Runner](runner.md), then import from `/server`. The host supplies trusted identity, enablement, authorization and artifact access. The service neither initializes nor closes the borrowed Runner.
+Install and initialize [Runner](runner.en.md), then import from `/server`. The host supplies trusted identity, enablement, authorization and artifact access. The service neither initializes nor closes the borrowed Runner.
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
@@ -134,7 +142,7 @@ Check `success` before reading business results. Use `invoke` when business code
 
 Jobs enter the catalog only when bound to environments: `documents` → `documents_extract/documents_generate`; `office` → `office_convert/office_recalculate`; `ocr` → `ocr_recognize`; `browser` → `browser_navigate`; `web` → `web_capture`; `preview` → `preview_build`; `video` → `video_render`. See [job instructions](../../../packages/tools/jobs/README.md) for exact inputs, pinned images, capabilities and network policies. `browser/web` also require a trusted host `browserProxy` in `http://non-loopback-IPv4:port` form. Reuse an existing model egress proxy if available; jobs receive it through `HAI_TOOL_BROWSER_PROXY`, not model arguments. Environment bindings still require Runner capability and network checks.
 
-For image, audio and document rewriting, use [AI](ai.md)'s `ai.tools.createBuiltinTools` and combine the factories into one `ToolSet`. Tools does not depend back on AI. `video_render` consumes a prepared project archive. The AI workflow below adds capture, planning, narration and asset assembly for a complete website introduction video.
+For image, audio and document rewriting, use [AI](ai.en.md)'s `ai.tools.createBuiltinTools` and combine the factories into one `ToolSet`. Tools does not depend back on AI. `video_render` consumes a prepared project archive. The AI workflow below adds capture, planning, narration and asset assembly for a complete website introduction video.
 
 `documents_generate` accepts `format: docx/xlsx/pptx`, a title and optional paragraphs, table or slides to generate Office files in fixed formats. UTF-8 JSON source data is limited to 256 KiB, with format-specific paragraph/table validation. PPTX permits at most 6 paragraphs per slide, 160 characters each and 800 total; tables allow 6 columns and 6 data rows, with 32 characters per cell. A slide with a table allows one body paragraph of 120 characters. `slides` is PPTX-only and cannot be combined with top-level paragraphs or a table. Built-in examples fill the workbench before editing title and content.
 
@@ -142,7 +150,7 @@ For image, audio and document rewriting, use [AI](ai.md)'s `ai.tools.createBuilt
 
 Tool groups and environment keys are distinct: office/ocr jobs belong to the documents group, and browser/preview jobs belong to web. Enable the corresponding group and bind the environment keys; do not invent matching group names.
 
-The service inherits Runner limits: submission parameters, each event and final output are separately limited to 512 KiB of JSON. The 50 MiB file/artifact byte limit does not permit an equally large inline JSON body. Container input totals are also bounded by the smaller of 50 MiB and environment scratchMiB. Even when a Schema allows longer text or more rows, the complete task must fit the JSON budget; use authorized file references for large content. See [Runner boundaries](runner.md#恢复任务读取事件和取消).
+The service inherits Runner limits: submission parameters, each event and final output are separately limited to 512 KiB of JSON. The 50 MiB file/artifact byte limit does not permit an equally large inline JSON body. Container input totals are also bounded by the smaller of 50 MiB and environment scratchMiB. Even when a Schema allows longer text or more rows, the complete task must fit the JSON budget; use authorized file references for large content. See [Runner boundaries](runner.en.md#api-reference).
 
 ## Build a website preview from a project
 

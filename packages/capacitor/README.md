@@ -8,7 +8,9 @@ Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/capacitor.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/capacitor @capacitor/core @capacitor/preferences`。
+
+[跟着最小示例完成接入](../../docs/usage/function/capacitor.md#quick-start)。
 
 ## 配置清单
 

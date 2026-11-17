@@ -8,7 +8,9 @@
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/cache.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/cache`。
+
+[跟着最小示例完成接入](../../docs/usage/function/cache.md#quick-start)。
 
 ## 配置清单
 

@@ -10,16 +10,29 @@
 
 ## 最小接入示例
 
+把以下代码放进 Svelte 5 页面的 `+page.svelte`。
+
 ```svelte
-<script>
+<script lang='ts'>
   import { Button, Card, Input } from '@h-ai/ui'
+
+  let name = $state('')
+  let submittedName = $state('')
 </script>
 
-<Card title='示例表单'>
-  <Input placeholder='请输入用户名' />
-  <Button variant='primary' onclick={handleSubmit}>提交</Button>
+<Card title='预览问候语'>
+  <label for='greeting-name'>姓名</label>
+  <Input id='greeting-name' bind:value={name} />
+  <Button variant='primary' disabled={!name.trim()} onclick={() => { submittedName = name.trim() }}>
+    预览
+  </Button>
+  <p role='status'>
+    {#if submittedName}你好，{submittedName}。{/if}
+  </p>
 </Card>
 ```
+
+`bind:value` 把输入框的文本写入 `name`。例如输入 `Ada` 后点击“预览”，页面会显示“你好，Ada。”。示例只更新页面状态。
 
 启用自动导入后可直接在模板中使用，无需逐个 import：
 
@@ -188,6 +201,8 @@ components/
     ├── storage/  # 存储管理
     └── crypto/   # 加密展示
 ```
+
+<a id="detailed-workflow"></a>
 
 ### 组件清单
 
@@ -699,20 +714,18 @@ const acceptedSubmission: ToolRun = {
 
 #### 指定提示方位
 
-下例 `m.saved()` 由应用自己的 i18n 提供；不同方位也共用同一个队列，按顺序展示。
+应用先取得翻译文案，再调用 `showSaved(m.saved())`。成功提示显示在右上角，普通提示显示在底部中央。两者共用一个队列，按顺序展示。
 
 ```ts
 import { toast } from '@h-ai/ui/toast'
 
-toast.add({
-  message: m.saved(),
-  variant: 'success',
-  position: 'top-right'
-})
-toast.add({
-  message: m.saved(),
-  position: 'bottom-center'
-})
+export function showSaved(message: string) {
+  return toast.add({ message, variant: 'success', position: 'top-right' })
+}
+
+export function showNotice(message: string) {
+  return toast.add({ message, position: 'bottom-center' })
+}
 ```
 
 #### 典型 CRUD 页面
@@ -997,6 +1010,7 @@ import {
 然后在 `hooks.server.ts` 里注入：
 
 ```ts
+import type { Handle } from '@sveltejs/kit/hooks'
 import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
 
 const themeBootstrapScript = createThemeBootstrapScript({
@@ -1005,7 +1019,9 @@ const themeBootstrapScript = createThemeBootstrapScript({
   colorCssVar: DEFAULT_THEME_COLOR_CSS_VAR,
 })
 
-transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstrapScript)
+export const handle: Handle = ({ event, resolve }) => resolve(event, {
+  transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstrapScript),
+})
 ```
 
 ### 国际化 (i18n)

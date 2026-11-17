@@ -8,6 +8,8 @@ Identity and access management through a unified `iam` object for authentication
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache`.
+
 [Open the quick-start guide](../../docs/usage/function/iam.en.md#quick-start).
 
 ## Configuration Reference

@@ -98,19 +98,25 @@ const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 's
 await apiClient.close()
 ```
 
-服务端通过 `@h-ai/serv` 挂载：
+服务端为每个公开路由实现处理函数，再将契约和实现一起交给 `@h-ai/serv`。下面不启动监听，用 `app.request()` 请求本地应用验证结果：
 
 ```ts
+import type { ServContext } from '@h-ai/serv'
 import { apiContract } from '@h-ai/api-contract'
+import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
+import { z } from 'zod'
 
-const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: { apiPrefix: '/api/v1' },
-})
+const contract = {
+  ping: apiContract.route({ method: 'GET', path: '/ping' })
+    .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))),
+}
+const procedures = serv.implement(contract).context<ServContext>()
+  .route('ping', () => ok({ ready: true }))
+  .build()
+const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1' } })
+const response = await app.request('/api/v1/ping')
+const body = await response.json() // { success: true, data: { ready: true } }
 ```
 
 ### API 概览

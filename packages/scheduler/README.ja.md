@@ -8,6 +8,8 @@
 
 ## クイックスタート
 
+`pnpm add @h-ai/scheduler @h-ai/reldb` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/scheduler.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

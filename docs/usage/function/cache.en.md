@@ -50,4 +50,4 @@ finally {
 | `cache.zset.zadd`, `zrem`, `zscore`, `zrank`, `zrevrank`, `zrange`, `zrevrange`, `zrangeByScore`, `zcard`, `zcount`, `zincrBy`, `zremRangeByRank`, `zremRangeByScore` | Store scores and query or remove by rank or score. | `await cache.zset.zrange('scores', 0, 9)` |
 | `cache.lock.acquire`, `release`, `isLocked` | Acquire a timed lease, release by owner token, or check its status. | `await cache.lock.isLocked('daily')` |
 
-Additional options and workflow examples are available in the [Chinese reference](cache.md).
+Still untranslated: the remaining collection operations, Cluster scans and lease examples. Read the [Chinese source section](cache.md#api-reference).

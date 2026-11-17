@@ -219,4 +219,4 @@ if (!result.success)
 | `iam.isRegisterEnabled` | なし | `boolean` | `iam.isRegisterEnabled` |
 | `iam.getPublicConfig` | なし | `IamPublicConfig` | `await iam.getPublicConfig()` |
 
-追加の設定項目や利用例は[中国語リファレンス](iam.md)に掲載しています。
+未翻訳：LDAP、独自通知の送信、アカウントの詳しい操作例。[中国語の該当節](iam.md#detailed-workflow)を参照してください。

@@ -40,13 +40,33 @@ if (failures.length)
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `capacitor.init()`, `close()`, `getPlatform()`, `isNative()`, `isInitialized()` | Initialize or close the module and query platform or lifecycle state without options. | `capacitor.getPlatform()` |
-| `capacitor.device.getInfo()`, `getAppVersion()` | Return device metadata or the installed version. | `await capacitor.device.getInfo()` |
-| `capacitor.camera.takePhoto(options?)` | Prompt for a photo by default and return it in URI form. Quality defaults to 90. | `await capacitor.camera.takePhoto({ source: 'camera' })` |
-| `capacitor.push.register(options?)`, `listen(handlers, options?)` | Request permission and a token, or receive notifications and action events. Pass an abort signal for cleanup. | `await capacitor.push.listen({ onReceived }, { signal })` |
-| `capacitor.statusBar.configure(options)`, `show()`, `hide()` | Set color, style and overlay, or toggle visibility. | `await capacitor.statusBar.show()` |
-| `capacitor.preferences.get(key)`, `set(key, value)`, `remove(key)` | Manage ordinary strings on the device. | `await capacitor.preferences.set('theme', 'dark')` |
-| `createCapacitorTokenStorage()` | Create the native token adapter with access/refresh get, set and clear operations. Import from `@h-ai/capacitor`. | `const tokens = createCapacitorTokenStorage()` |
-| `safeGetPreference`, `safeSetPreference`, `safeRemovePreference` | Standalone helpers for non-sensitive preferences, accepting a key and a value for set. | `await safeGetPreference('theme')` |
+The output is HaiResult.data for module and preference operations. The token adapter methods reject on plugin failure. Import the named exports from @h-ai/capacitor.
+
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `capacitor.init` | Detect platform and prepare the runtime | None | `void` | `await capacitor.init()` |
+| `capacitor.close` | Release active native listeners | None | `void` | `await capacitor.close()` |
+| `capacitor.getPlatform` | Identify Android, iOS or web | None | `string` | `capacitor.getPlatform()` |
+| `capacitor.isNative` | Check whether code runs in a native app | None | `boolean` | `capacitor.isNative()` |
+| `capacitor.device.getInfo` | Read OS and hardware information | None | `DeviceInfo` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion` | Read the installed app version and build | None | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.camera.takePhoto` | Capture or select an image | `{ source = "prompt", quality = 90, resultType = "uri", width?, height? }?` | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.push.register` | Register a device with the native push service | `{ signal? }?` | `PushRegistration` | `await capacitor.push.register()` |
+| `capacitor.push.listen` | Receive deliveries and notification actions | `callbacks, { signal? }?` | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
+| `capacitor.statusBar.configure` | Apply only the supplied native status bar settings | `{ style?, backgroundColor?, overlay? }` | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show` | Show the native status bar | None | `void` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide` | Hide the native status bar | None | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.preferences.get` | Read a nonsensitive preference | `key` | `string or null` | `await capacitor.preferences.get('theme')` |
+| `capacitor.preferences.set` | Save a nonsensitive preference | `key, value` | `void` | `await capacitor.preferences.set('theme', 'dark')` |
+| `capacitor.preferences.remove` | Remove a named preference | `key` | `void` | `await capacitor.preferences.remove('theme')` |
+| `createCapacitorTokenStorage` | Create a native secure credential adapter | None | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `tokens.getAccessToken` | Read the access credential | None | `Promise<string or null>` | `await tokens.getAccessToken()` |
+| `tokens.setAccessToken` | Save the access credential | `token` | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
+| `tokens.getRefreshToken` | Read the refresh credential | None | `Promise<string or null>` | `await tokens.getRefreshToken()` |
+| `tokens.setRefreshToken` | Save the refresh credential | `token` | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
+| `tokens.clear` | Remove both credentials | None | `Promise<void>` | `await tokens.clear()` |
+| `safeGetPreference` | Read a nonsensitive preference using a named export | `key` | `string or null` | `await safeGetPreference('theme')` |
+| `safeSetPreference` | Save a nonsensitive preference using a named export | `key, value` | `void` | `await safeSetPreference('theme', 'dark')` |
+| `safeRemovePreference` | Remove a preference using a named export | `key` | `void` | `await safeRemovePreference('theme')` |
+
+The caller supplies callbacks and an optional AbortSignal. Save the cleanup callback from push.listen and await it when leaving the screen. Interpret photo fields according to resultType.

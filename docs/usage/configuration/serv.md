@@ -21,6 +21,8 @@ http:
   access: false
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 默认不启用 OpenAPI、接口文档和应用层加密。例如，省略 `http.docs` 时不提供文档页面。设为 `http.docs: {}` 会启用文档页面并使用默认路径 `/docs`。

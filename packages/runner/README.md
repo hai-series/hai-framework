@@ -8,7 +8,9 @@ Runner 在 Node.js 服务端运行受管的 Agent Worker 和工具作业。API �
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/runner.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/runner @h-ai/reldb`。
+
+[跟着最小示例完成接入](../../docs/usage/function/runner.md#quick-start)。
 
 ## 配置清单
 

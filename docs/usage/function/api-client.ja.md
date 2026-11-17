@@ -58,4 +58,4 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ローカルトークンの削除とサーバー側のログアウトは別の操作です。サーバーで無効化するには IAM のログアウトを呼び出します。認証の復旧では同じ利用者のセッションを復元してください。
 
-追加の設定項目や利用例は[中国語リファレンス](api-client.md)に掲載しています。
+未翻訳：既定の各 API、認証フォーム用操作、更新処理の詳細。[中国語の該当節](api-client.md#detailed-workflow)を参照してください。

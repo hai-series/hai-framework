@@ -6,13 +6,15 @@
 
 ## クイックスタート
 
-[最小構成とカスタムツール](../../docs/usage/function/tools.ja.md)
+`pnpm add @h-ai/tools zod` でインストールします。
+
+[最小構成とカスタムツール](../../docs/usage/function/tools.ja.md#quick-start)
 
 ## 設定一覧
 
 [定義・実行・有効化](../../docs/usage/configuration/tools.ja.md)
 
-## 機能説明
+## 機能
 
 [公開 API とモデルアダプター](../../docs/usage/function/tools.ja.md)
 

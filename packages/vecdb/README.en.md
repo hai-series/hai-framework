@@ -8,6 +8,8 @@ A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qd
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/vecdb`.
+
 [Open the quick-start guide](../../docs/usage/function/vecdb.en.md#quick-start).
 
 ## Configuration Reference

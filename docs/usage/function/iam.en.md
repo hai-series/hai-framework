@@ -219,4 +219,4 @@ The public settings exclude directory, database and notification credentials. Ch
 | `iam.isRegisterEnabled` | None | `boolean` | `iam.isRegisterEnabled` |
 | `iam.getPublicConfig` | None | `IamPublicConfig` | `await iam.getPublicConfig()` |
 
-Additional options and workflow examples are available in the [Chinese reference](iam.md).
+Still untranslated: LDAP, custom notification delivery and extended account workflows. Read the [Chinese source section](iam.md#detailed-workflow).

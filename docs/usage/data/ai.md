@@ -4,6 +4,8 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/ai.md) · [功能说明](../function/ai.md)
 
+<a id="data-fields"></a>
+
 ## 数据库
 
 调用 `ai.init(config, options)` 时传入 `options.storeProvider`，AI 就用该对象读写数据。省略该选项时，AI 尝试使用已初始化的 [reldb](reldb.md) 和 [vecdb](vecdb.md)，分别存记录和向量。开发和测试可用进程内存储，进程结束后其中的数据会消失。生产环境的应用实例需要共享同一份数据。下表描述 AI 内置的关系库表，自定义存储可使用自己的结构。

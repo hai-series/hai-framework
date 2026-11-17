@@ -1,15 +1,40 @@
 # @h-ai/runner データ構造
 
-<!-- translation: partial -->
-
 [原文（中国語）](runner.md) · [設定](../configuration/runner.ja.md) · [API リファレンス](../function/runner.ja.md)
 
-同じ Runner の各ノードでデータベースを共有します。ジョブの所有権はリースと世代で確認します。実行の所有ノードは Redis では決まりません。
+<a id="tables"></a>
 
-| テーブル・キー・成果物 | 形式と管理元 |
+## データベースのテーブル
+
+ノード間で担当と期限を共有するため、共通の RelDB を使います。時刻は Unix ミリ秒で書き込みにはデータベースの時計を使います。型はバックエンド変換前の RelDB の定義です。
+
+### `hai_runner_executions`
+
+| フィールドまたはテーブル | 構造と意味 |
 | --- | --- |
-| `hai_runner_executions` | ID、スコープ、種別、要求・再利用キー、検証済みの入力と環境、状態、所有・固定ノードの世代、リース・待機・実行期限、リソース上限、結果とコンテナ情報、照合・予熱状態。再利用キーは NULL 可。 |
-| `hai_runner_events` | `id` が主キー。`execution_id`、`sequence_number`、`event_json`、`created_at`。実行 ID と順序で取得。 |
-| `hai_runner_gate` | 単一行 `id=1`。`revision` は 0 から始まり、共有容量のトランザクションで更新。 |
+| `id`, `scope_key`, `kind` | 必須のテキスト。実行の主キー、認可の範囲、登録済みタスク種別。 |
+| `request_key`, `reuse_key` | テキストのリクエスト照合値と、NULL を許す一意の再利用キー。 |
+| `request_json`, `environment_key` | 検証済み入力、範囲、環境、上限、タイムアウトの JSON スナップショットと、任意のテキスト環境 ID。 |
+| `state`, `reason` | 必須のテキスト状態と、NULL を許す理由。 |
+| `owner_node`, `owner_generation`, `owner_process_json` | 担当ノードと起動世代（テキスト）、プロセス識別情報（JSON）。いずれも NULL 可。 |
+| `pinned_node`, `pinned_generation`, `parent_id` | タスクの実行を限定するノードと起動世代、親実行 ID。NULL を許すテキストです。 |
+| `leased_until`, `queue_until`, `run_until` | 必須の整数。リース、待機、実行の期限。 |
+| `event_sequence`, `event_bytes` | 必須の整数。イベント位置と記録済みのバイト数。`event_bytes` の SQL 既定値は `0`。 |
+| `cpu_milli`, `memory_mib`, `pids`, `scratch_mib` | 必須の整数。CPU ミリコア、メモリ MiB、プロセス数、一時領域の MiB。 |
+| `result_json`, `container_json`, `reconciliation_json` | 結果、コンテナの識別情報と状態、運用者の照合記録。NULL を許す JSON です。 |
+| `created_at`, `updated_at`, `reconciled_at` | 整数の作成・更新・照合時刻。照合時刻は NULL 可。 |
+| `capacity_class`, `concurrency_key`, `concurrency_limit` | 必須のテキスト容量区分、NULL を許すテキスト並列グループ、必須の整数上限。 |
+| `pool_fingerprint`, `pool_limit`, `warm_state` | 任意の予備コンテナプール ID（テキスト）、容量（整数）、準備状態（テキスト）。 |
 
-フィールド制約・既定値・保存期間の詳細は[中国語リファレンス](runner.md)に掲載しています。
+キュー、リース、範囲と容量、並列グループ、親実行、期限、削除処理用のインデックスがあります。SQL の既定値は記載した項目にのみあります。
+
+<a id="events"></a>
+
+## イベント・容量・削除処理
+
+| フィールドまたはテーブル | 構造と意味 |
+| --- | --- |
+| `hai_runner_events` | 文字列の主キー `id` と実行 ID `execution_id`、整数の `sequence_number` と `created_at`、JSON `event_json`。実行 ID と連番で索引を持ちます。 |
+| `hai_runner_gate` | 整数の単一主キー `id=1` と整数 `revision`（初期 `0`）。共有リソースを更新するトランザクション内で revision が変わります。 |
+
+完了記録は通常 7 日後に削除します。元のジョブが完了したか分からない場合は照合まで保存します。Redis キーは作りません。実行ノードはローカルのプロセスやコンテナを管理し、他ノードはデータベースを参照します。

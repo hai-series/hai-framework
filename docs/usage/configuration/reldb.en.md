@@ -20,4 +20,4 @@ database: ./data/orders.db
 | `pool.min`, `max`, `idleTimeout`, `acquireTimeout` | See backend | Set pool size, idle timeout and connection acquisition deadline. |
 | `operationLog.read`, `write`, `maxLength`, `level` | See backend | Select operations to record, output length and log level. |
 
-Additional options and workflow examples are available in the [Chinese reference](reldb.md).
+Still untranslated: provider-specific TLS, pools, SQLite workers and operation logging. Read the [Chinese source section](reldb.md#configuration-fields).

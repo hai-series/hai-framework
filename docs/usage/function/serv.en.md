@@ -64,13 +64,24 @@ export function startApi(closeApp: () => Promise<void>) {
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `serv.implement(contract)`, `createApp(options)` | Bind procedures to the contract and build the HTTP application. | `serv.implement(contract)` |
-| `serv.listen(app, options?)`, `toFetch(app)` | Start the Node listener or adapt the application to a Fetch handler. | `serv.toFetch(app)` |
-| `serv.parseRequestContext(input)`, `buildAuthContextFactory(verifyToken)` | Read trusted request metadata and create an authentication context with the given verifier. | `serv.buildAuthContextFactory(verifyToken)` |
-| `serv.cors(config?)`, `createRuntimeSecurityPolicy(input)`, `storageAssets(config)` | Build origin handling, request rules and asset delivery behavior. | `serv.cors()` |
-| `serv.generateSpec(contract, options?)` | Produce the OpenAPI specification from the contract. | `serv.generateSpec(contract)` |
-| `serv.validateInputOrFail(schema, input, locale?)`, `resolveRequestLocale(headers)`, `m(key, options?)` | Resolve request language, validate input and format a localized message. | `serv.resolveRequestLocale(request.headers)` |
+Serv assembles an application; only listen starts a Node listener. Middleware, procedures and adapters have different error boundaries.
 
-Additional options and workflow examples are available in the [Chinese reference](serv.md).
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `serv.createApp` | Mount the contract and its procedures onto an HTTP application | `options` | `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen` | Start Node listening. Defaults: 127.0.0.1:3000 | `app, options?` | `ServNodeServer` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch` | Adapt the app to a Fetch request handler | `app` | `ServFetchHandler` | `serv.toFetch(app)` |
+| `serv.implement` | Build typed procedure implementations | `contract` | `ServImplementer` | `serv.implement(contract)` |
+| `serv.parseRequestContext` | Read request metadata without authenticating a session | `input` | `ServContext` | `serv.parseRequestContext({ request, remoteAddress })` |
+| `serv.buildAuthContextFactory` | Build a context factory using the supplied session verifier | `verifyToken` | `CreateServContext` | `serv.buildAuthContextFactory(verifyToken)` |
+| `serv.resolveRequestLocale` | Choose the locale from request headers | `headers` | `string` | `serv.resolveRequestLocale(request.headers)` |
+| `serv.cors` | Configure cross-origin request handling | `config?` | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com' })` |
+| `serv.storageAssets` | Serve permitted public Storage objects | `config` | `ServMiddleware` | `serv.storageAssets(storageConfig)` |
+| `serv.createRuntimeSecurityPolicy` | Resolve policy for the actual deployment mode | `input` | `ServRuntimeSecurityPolicy` | `serv.createRuntimeSecurityPolicy(runtimeInput)` |
+| `serv.generateSpec` | Generate the OpenAPI specification | `contract, options?` | `OpenAPI.Document` | `await serv.generateSpec(contract)` |
+| `serv.validateInputOrFail` | Validate inside a procedure and return a localized failure | `schema, input, locale?` | `HaiResult<T>` | `serv.validateInputOrFail(schema, input)` |
+| `serv.m` | Read a message for the explicit or current locale | `key, options?` | `string` | `serv.m('serv_validationFailed')` |
+
+Close the Node listener before releasing borrowed database or cache services. Keep request metadata separate from an authenticated session.
+
+Still untranslated: the transport, streaming/audio and middleware integration examples. Read the [Chinese source section](serv.md#detailed-workflow).

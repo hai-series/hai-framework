@@ -10,20 +10,34 @@
 
 Import components through the public UI entry points. Keep authorization and persistence in the application. Supply controlled values and callbacks for interactive scenes.
 
+Put this in a Svelte 5 page, such as `+page.svelte`.
+
 ```svelte
-<script>
+<script lang='ts'>
   import { Button, Card, Input } from '@h-ai/ui'
+
+  let name = $state('')
+  let submittedName = $state('')
 </script>
 
-<Card title='示例表单'>
-  <Input placeholder='请输入用户名' />
-  <Button variant='primary' onclick={handleSubmit}>提交</Button>
+<Card title='Preview a greeting'>
+  <label for='greeting-name'>Name</label>
+  <Input id='greeting-name' bind:value={name} />
+  <Button variant='primary' disabled={!name.trim()} onclick={() => { submittedName = name.trim() }}>
+    Preview
+  </Button>
+  <p role='status'>
+    {#if submittedName}Hello, {submittedName}.{/if}
+  </p>
 </Card>
 ```
 
+`bind:value` writes the text input to `name`. Type `Ada` and select **Preview** to see “Hello, Ada.”. This example updates only the page state.
+
+With the auto-import plugin configured, a component used in a template can be imported automatically:
+
 ```svelte
-<!-- 无需 import { Button } from '@h-ai/ui' -->
-<Button variant='primary'>提交</Button>
+<Button variant='primary'>Preview</Button>
 ```
 
 ```ts
@@ -53,4 +67,4 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 Provide ToolWorkspace with a server-filtered catalog, schema-backed forms and authorized execution callbacks. Keep the job receipt, read progress from the host and use the supplied cancellation action. Provide ArtifactWorkspace with the authorized content, versions, save and preview operations. When a save conflicts, return the conflict and keep the current draft for review.
 
-Additional options and workflow examples are available in the [Chinese reference](ui.md).
+Still untranslated: the full component and property catalog, integration examples and runtime constraints. Read the [Chinese source section](ui.md#detailed-workflow).

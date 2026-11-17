@@ -4,11 +4,13 @@
 
 Model-independent tool definitions, validation, registration and authorized execution. The lightweight entry works in Node and browsers without initialization. `@h-ai/tools/server` provides recoverable services and artifact/job factories using Runner and host authorization.
 
-## Quick start
+## Quick Start
 
-[Minimal integration and custom tools](../../docs/usage/function/tools.en.md)
+Install with pnpm: `pnpm add @h-ai/tools zod`.
 
-## Configuration
+[Minimal integration and custom tools](../../docs/usage/function/tools.en.md#quick-start)
+
+## Configuration Reference
 
 [Definitions, execution and enablement](../../docs/usage/configuration/tools.en.md)
 
@@ -16,11 +18,11 @@ Model-independent tool definitions, validation, registration and authorized exec
 
 [Public operations and model adapters](../../docs/usage/function/tools.en.md)
 
-## Data structures
+## Data Structures
 
 [Registry and execution data ownership](../../docs/usage/data/tools.en.md)
 
-## Development
+## Development and Testing
 
 ```sh
 pnpm --filter @h-ai/tools typecheck

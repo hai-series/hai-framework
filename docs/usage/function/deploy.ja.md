@@ -19,10 +19,20 @@ pnpm run deploy --env prod --build
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `deploy.scan`, `provisionAll`, `deployApp` | プロジェクトを調査、選択したサービスを作成、または指定の設定でデプロイ。 | `await deploy.scan(appDir)` |
-| `deploy.credentials.getPath`, `load`, `save`, `saveAll` | 認証情報ファイルの場所を確認・読み込み、後続実行のために保存。 | `deploy.credentials.getPath()` |
-| `hai deploy --plan`, `--build`, `--services`, `--artifact-dir`, `--bundle-only` | 計画の確認、デプロイ用ビルド、サービス選択、成果物の再利用、または単独バンドルの作成。 | `hai deploy --env staging --plan` |
+HaiResult を返す配置操作と認証情報操作では、success を確認し、認証情報の値は公開しないでください。
 
-追加の設定項目や利用例は[中国語リファレンス](deploy.md)に掲載しています。
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `deploy.init` | 設定済みのデプロイ先を準備 | `config` | `void` | `await deploy.init(config)` |
+| `deploy.close` | デプロイ先のリソースを解放 | なし | `Promise<void>` | `await deploy.close()` |
+| `deploy.scan` | アプリとデプロイに必要な素材を確認 | `appDir, options?` | `ScanResult` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
+| `deploy.provisionAll` | 選んだ基盤サービスを準備 | `projectName, services?` | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
+| `deploy.deployApp` | 配布用の束を作るか設定済みの対象へ配置 | `appDir, options?` | `DeployResult` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+| `deploy.credentials.getPath` | ローカル認証情報ファイルのパスを取得 | なし | `string` | `deploy.credentials.getPath()` |
+| `deploy.credentials.load` | 非公開の値を読み込み、読み込んだ変数名を返す | なし | `HaiResult<string[]>` | `deploy.credentials.load()` |
+| `deploy.credentials.save` | 認証情報を一件保存 | `key, value` | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
+| `deploy.credentials.saveAll` | 渡した非公開認証情報をまとめて保存 | `entries` | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
+
+bundleOnly の場合は配置前に配布ファイルを確認します。この呼び出しは配置先を更新しません。
+
+未翻訳：直接配置とオフライン配置、失敗時の復旧。[中国語の該当節](deploy.md#detailed-workflow)を参照してください。

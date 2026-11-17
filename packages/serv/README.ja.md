@@ -10,6 +10,8 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 ## クイックスタート
 
+`pnpm add @h-ai/serv` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/serv.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

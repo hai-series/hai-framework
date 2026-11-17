@@ -37,4 +37,4 @@ provider:
 | --- | --- | --- |
 | `services.db`, `services.cache`, `services.storage` | 省略可 | 任意のサービス作成設定。有効にした場合にプロバイダーと認証情報を指定。 |
 
-追加の設定項目や利用例は[中国語リファレンス](deploy.md)に掲載しています。
+未翻訳：プロバイダー、HTTPS、SSH、ミドルウェアの全設定。[中国語の該当節](deploy.md#configuration-fields)を参照してください。

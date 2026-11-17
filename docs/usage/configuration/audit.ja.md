@@ -22,4 +22,4 @@ capture:
 | `backup.enabled`, `batchSize`, `maxRecordBytes` | `false`, `200`, `1048576` | バックアップの有効化、バッチ件数、レコードの上限バイト数。 |
 | `backup.schedule.enabled`, `cron`, `timezone` | `false`, `0 2 * * *`, `UTC` | 有効時にバックアップを定期実行。 |
 
-追加の設定項目や利用例は[中国語リファレンス](audit.md)に掲載しています。
+未翻訳：通知先、バックアップのスケジュール、プライバシーの項目別設定。[中国語の該当節](audit.md#configuration-fields)を参照してください。

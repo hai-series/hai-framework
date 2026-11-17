@@ -54,9 +54,25 @@ finally {
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `vecdb.init(config)`, `close()`, `isInitialized`, `config`, `rawConnection` | Manage the backend lifecycle and inspect initialized state and connection. | `await vecdb.init(config)` |
-| `vecdb.collection.create(name, options)`, `drop`, `exists`, `info`, `list` | Create a collection from name and dimension, remove it, or inspect collections. Default metric is cosine. | `await vecdb.collection.create('docs', { dimension: 3 })` |
-| `vecdb.vector.insert`, `upsert`, `delete` | Write documents or remove them by ID. | `await vecdb.vector.delete('docs', ['a'])` |
-| `vecdb.vector.search(collection, vector, options?)`, `count`, `scan` | Rank matches (default topK 10), count documents or return cursor results. | `await vecdb.vector.search('docs', [1, 0, 0], { topK: 5 })` |
+Each async operation returns a HaiResult. The table shows successful data; check success before using it.
+
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `vecdb.init` | Open the selected backend | `config` | `void` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
+| `vecdb.close` | Release the connection after pending operations | None | `void` | `await vecdb.close()` |
+| `vecdb.isInitialized` | Read whether operations can run | Read-only property | `boolean` | `vecdb.isInitialized` |
+| `vecdb.config` | Read the current config with credentials removed | Read-only property | `VecdbConfig or null` | `vecdb.config` |
+| `vecdb.rawConnection` | Read connection details for trusted server code, possibly including credentials | Read-only property | `VecdbConnection or null` | `vecdb.rawConnection` |
+| `vecdb.collection.create` | Create a collection. The metric follows backend configuration (cosine if unset) | `name, { dimension, metric? }` | `void` | `await vecdb.collection.create('docs', { dimension: 3 })` |
+| `vecdb.collection.drop` | Delete a collection and its vectors | `name` | `void` | `await vecdb.collection.drop('docs')` |
+| `vecdb.collection.exists` | Check whether a collection exists | `name` | `boolean` | `await vecdb.collection.exists('docs')` |
+| `vecdb.collection.info` | Read the size, metric and document count | `name` | `CollectionInfo` | `await vecdb.collection.info('docs')` |
+| `vecdb.collection.list` | List collections | None | `string[]` | `await vecdb.collection.list()` |
+| `vecdb.vector.insert` | Insert documents with vectors matching the collection dimension | `collection, documents` | `void` | `await vecdb.vector.insert('docs', documents)` |
+| `vecdb.vector.upsert` | Insert or replace the complete document by ID | `collection, documents` | `void` | `await vecdb.vector.upsert('docs', documents)` |
+| `vecdb.vector.delete` | Delete matching IDs | `collection, ids` | `void` | `await vecdb.vector.delete('docs', ['doc-1'])` |
+| `vecdb.vector.search` | Return nearest matches in decreasing score order | `collection, vector, { topK = 10, minScore?, filter? }?` | `VectorSearchResult[]` | `await vecdb.vector.search('docs', [1, 0, 0], { topK: 5 })` |
+| `vecdb.vector.count` | Count documents in the collection | `collection` | `number` | `await vecdb.vector.count('docs')` |
+| `vecdb.vector.scan` | Page through document IDs. Valid limits are 1–128 | `collection, { cursor?, limit = 64 }?` | `VectorScanPage` | `await vecdb.vector.scan('docs', { limit: 32 })` |
+
+Scores run from 0 to 1 and are not percentages. Test a threshold with the actual metric and provider. A scan returns only IDs. Pass the returned nextCursor even after an empty page, and keep using the same collection and backend.

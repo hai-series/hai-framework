@@ -20,4 +20,4 @@ database: ./data/orders.db
 | `pool.min`, `max`, `idleTimeout`, `acquireTimeout` | バックエンドによる | 接続プールのサイズ、アイドル期限、接続取得期限を設定。 |
 | `operationLog.read`, `write`, `maxLength`, `level` | バックエンドによる | 記録する操作と出力の長さ・レベルを指定。 |
 
-追加の設定項目や利用例は[中国語リファレンス](reldb.md)に掲載しています。
+未翻訳：プロバイダーごとの TLS、接続プール、SQLite ワーカー、操作ログ。[中国語の該当節](reldb.md#configuration-fields)を参照してください。

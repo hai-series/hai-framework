@@ -62,9 +62,16 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 示例中的 `key` 是业务数据的键，`field` 是哈希中的字段名。列表下标用 `start`、`stop` 或 `index`，有序集合的分数范围用 `min` 和 `max`。表中 `seconds`、`ttl`、`timeout` 按秒传入，`timestamp` 是 Unix 秒数。释放或续期锁时，`owner` 使用获取锁时实际返回的值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `cache.init` | 按配置创建进程内缓存或连接 Redis | `config`（必填） | `Promise<HaiResult<void>>` | `await cache.init({ type: 'memory' })` |
+| `cache.close` | 释放缓存实例。用内存模式时，关闭后该实例中的值不再可用 | 无 | `Promise<HaiResult<void>>` | `await cache.close()` |
 
 #### cache.kv · 读写 JSON 值
 

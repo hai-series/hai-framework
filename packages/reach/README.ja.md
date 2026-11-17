@@ -8,6 +8,8 @@
 
 ## クイックスタート
 
+`pnpm add @h-ai/reach` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/reach.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

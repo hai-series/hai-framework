@@ -8,6 +8,8 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/crypto`.
+
 [Open the quick-start guide](../../docs/usage/function/crypto.en.md#quick-start).
 
 ## Configuration Reference

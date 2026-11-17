@@ -92,10 +92,21 @@ finally {
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `runner.init(config)`, `close()`, `isExecutor`, `environment(id)` | Initialize, stop and inspect execution role or configured environment. | `runner.environment('documents')` |
-| `runner.register(kind, handler)`, `registerWarmPool(pool)` | Register a trusted handler or prewarmed pool on a worker. | `runner.register(kind, handler)` |
-| `runner.submit(request)`, `find(scope, kind, key)`, `get(scope, id)` | Submit jobs or retrieve a job by deduplication key or ID. | `await runner.get(scope, id)` |
-| `runner.cancel(scope, id)`, `events(scope, id, after?, limit?)` | Request cancellation or page through events after a sequence. | `await runner.events(scope, id, 0, 50)` |
-| `runner.reconcileUnknown(scope, id, review)` | Record a trusted review of an unknown result. Confirm the remote effect before retrying. | `await runner.reconcileUnknown(scope, id, review)` |
+Check success before using the data shown below. environment, register and registerWarmPool return HaiResult synchronously.
+
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `runner.init` | Start this process as an API node or worker | `{ nodeId, executor = true, ... }` | `void` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close` | Stop claims and check local execution cleanup | None | `void` | `await runner.close()` |
+| `runner.isExecutor` | Check whether this ready node executes jobs | Read-only property | `boolean` | `runner.isExecutor` |
+| `runner.environment` | Read a registered execution environment | `id` | `RunnerEnvironment` | `runner.environment('docs')` |
+| `runner.register` | Register a local handler and get its deregistration function | `kind, handler` | `() => void` | `runner.register('example', handler)` |
+| `runner.registerWarmPool` | Register a pool for reusing prepared containers | `pool` | `() => void` | `runner.registerWarmPool(pool)` |
+| `runner.submit` | Queue a new job or reuse a matching execution | `request` | `RunnerExecution` | `await runner.submit(request)` |
+| `runner.find` | Find an execution by authorized scope, kind and reuse key | `scope, kind, key` | `RunnerExecution or undefined` | `await runner.find(scope, 'example', 'request-1')` |
+| `runner.get` | Read one execution in its authorized scope | `scope, id` | `RunnerExecution` | `await runner.get(scope, id)` |
+| `runner.cancel` | Ask a queued or running execution to stop | `scope, id` | `RunnerExecution` | `await runner.cancel(scope, id)` |
+| `runner.reconcileUnknown` | Record a verified outcome for an unknown execution | `scope, id, review` | `RunnerExecution` | `await runner.reconcileUnknown(scope, id, review)` |
+| `runner.events` | Read events after a saved sequence | `scope, id, after = 0, limit = 100` | `RunnerEvent[]` | `await runner.events(scope, id, 0, 20)` |
+
+Derive scope from the authenticated request. A cancellation request is not proof of stopped external work. Reconcile an unknown execution only after examining the original resources.

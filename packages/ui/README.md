@@ -12,7 +12,9 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/ui.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/ui`。
+
+[跟着最小示例完成接入](../../docs/usage/function/ui.md#quick-start)。
 
 ## 配置清单
 

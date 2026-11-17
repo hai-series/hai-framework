@@ -112,23 +112,8 @@ export function localizeZodError(zodError: unknown, locale: string): ValidationF
  * 与 oRPC contract 自动校验不同，本函数用于业务层二次校验（例如对从数据库读到的对象再校验）。
  * 失败时返回 `HaiResult` 错误分支，错误的 `cause` 字段携带 `ValidationFormError[]`。
  *
- * 推荐使用方式：
- * ```ts
- * import { z } from 'zod'
- * import { serv } from '@h-ai/serv'
- *
- * const Schema = z.object({ name: z.string().min(1) })
- *
- * export const procedures = serv
- *   .implement(contract)
- *   .context<ServContext>()
- *   .route('profile.update', ({ input, context }) => {
- *     const result = serv.validateInputOrFail(Schema, input, context.locale)
- *     if (!result.success) return result
- *     return profileService.update(result.data)
- *   })
- *   .build()
- * ```
+ * 在已实现的 procedure 中传入当前请求的 `context.locale`。失败时直接返回校验结果；
+ * 成功时把 `result.data`（经过校验的值）交给业务服务。
  *
  * @param schema - Zod schema
  * @param input - 待校验数据

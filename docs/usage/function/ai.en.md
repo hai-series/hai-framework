@@ -52,4 +52,4 @@ finally {
 | `ai.audio`, `ai.image`, `ai.file` | Use configured media models or parse uploaded source files. | `ai.audio` |
 | `ai.acp`, `ai.a2a`, `ai.mcp` | Integrate agent sessions, protocol builders and remote tool providers under application permissions. | `ai.acp` |
 
-Additional options and workflow examples are available in the [Chinese reference](ai.md).
+Still untranslated: provider workflows for memory, knowledge, media and remote agent sessions. Read the [Chinese source section](ai.md#detailed-workflow).

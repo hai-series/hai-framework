@@ -10,6 +10,8 @@
 
 ## クイックスタート
 
+`pnpm add @h-ai/ai` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/ai.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

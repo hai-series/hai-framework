@@ -64,4 +64,4 @@ await reldb.close()
 | `reldb.crud.table` | 典型的な CRUD を行う型付きテーブルを作成。 | `reldb.crud.table('orders')` |
 | `reldb.json.extract`, `set`, `insert`, `remove`, `merge` | JSON の項目の取得や更新に使うドライバー別の関数を構築。 | `reldb.json.extract('payload', '$.status')` |
 
-追加の設定項目や利用例は[中国語リファレンス](reldb.md)に掲載しています。
+未翻訳：SQL、JSON、トランザクション、リポジトリの各メソッドの例。[中国語の該当節](reldb.md#api-reference)を参照してください。

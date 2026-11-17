@@ -8,6 +8,8 @@ A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/datapipe`.
+
 [Open the quick-start guide](../../docs/usage/function/datapipe.en.md#quick-start).
 
 ## Configuration Reference

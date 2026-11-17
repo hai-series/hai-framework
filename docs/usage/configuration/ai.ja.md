@@ -47,4 +47,4 @@ acp:
 
 `knowledge.collection`（既定は `hai_ai_knowledge`）を指定し、埋め込みモデルに合った次元（既定は `1536`）を設定します。入力は `knowledge.cleanOptions` で整形した後、`knowledge.chunkOptions` で分割します。既定では Markdown の節で分割し、サイズは `1500`、重複は `200` です。登録前に調整し、既存の分割結果を変更する場合は再インデックスします。[Datapipe の設定](datapipe.ja.md)
 
-追加の設定項目や利用例は[中国語リファレンス](ai.md)に掲載しています。
+未翻訳：モデルプロファイル、MCP、ACP の全設定一覧。[中国語の該当節](ai.md#configuration-fields)を参照してください。

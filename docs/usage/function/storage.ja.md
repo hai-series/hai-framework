@@ -77,12 +77,28 @@ export async function uploadImage(key: string, file: File) {
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `storage.file.put`, `get`, `getStream`, `head`, `exists` | キーで保存、バイトまたはストリーム取得、メタデータ取得、存在確認。 | `await storage.file.head('reports/jan.pdf')` |
-| `storage.file.copy`, `delete`, `deleteMany` | キー間でコピー、または一つ・複数のオブジェクトを削除。 | `await storage.file.delete('reports/jan.pdf')` |
-| `storage.dir.list`, `delete` | 接頭辞内を列挙・削除。残りを読むには返されたカーソルを使用。 | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `storage.presign.getUrl`, `putUrl`, `publicUrl` | 対応する場合はダウンロード、アップロード、または設定済み公開 URL を返す。 | `await storage.presign.getUrl('reports/jan.pdf')` |
-| `storage.checksum.generate`, `verify` | 内容の整合性を確認するチェックサムの計算と照合。 | `await storage.checksum.generate(bytes)` |
+別の結果型である場合を除き、出力は成功時の HaiResult.data です。publicUrl は同期です。
 
-追加の設定項目や利用例は[中国語リファレンス](storage.md)に掲載しています。
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `storage.init` | 指定のストレージを開く | `config` | `void` | `await storage.init(config)` |
+| `storage.close` | 新規処理を止めてバックエンドを解放 | なし | `void` | `await storage.close()` |
+| `storage.file.put` | バイト列と任意のメタデータを保存 | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
+| `storage.file.get` | オブジェクトのバイト列をバッファで取得 | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream` | バイト列をストリームで読む。取得後の反復中にも失敗することがある | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.head` | 本文をダウンロードせずメタデータを取得 | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists` | キーの存在を確認 | `key` | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.delete` | 指定のオブジェクトを一件削除 | `key` | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany` | 複数キーを削除し、失敗時も進捗を保持 | `keys` | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+| `storage.file.copy` | 元のオブジェクトを別のキーにコピー | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
+| `storage.dir.list` | 必要に応じてプレフィックスで絞り、オブジェクトをページ取得 | `options?` | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
+| `storage.dir.delete` | 指定プレフィックス下のオブジェクトを削除 | `prefix` | `void` | `await storage.dir.delete('backup/')` |
+| `storage.presign.getUrl` | S3 で一時ダウンロード URL を発行 | `key, options?`（有効期間は既定で 3600 秒、1～604800 秒を指定可） | `string` | `await storage.presign.getUrl('report.txt')` |
+| `storage.presign.putUrl` | S3 で一時アップロード URL を発行 | `key, options?`（有効期間は既定で 3600 秒。MIME 型は既定で `application/octet-stream`） | `string` | `await storage.presign.putUrl('report.txt')` |
+| `storage.presign.publicUrl` | 公開 URL 設定があれば URL を組み立てる | `key` | `string or null` | `storage.presign.publicUrl('report.txt')` |
+| `storage.checksum.generate` | 内容のダイジェストを計算 | `data, options?` | `string` | `await storage.checksum.generate('Hello')` |
+| `storage.checksum.verify` | 内容と期待するダイジェストを照合 | `data, expected, options?` | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+
+取得したストリームは読み切るか中止します。一括削除失敗時は再試行の前に error.ext.deleteMany を確認してください。結果が不明でも削除済みの場合があります。
+
+未翻訳：ストリーム整合性、一括削除の復旧、外部アップロードの手順。[中国語の該当節](storage.md#api-reference)を参照してください。

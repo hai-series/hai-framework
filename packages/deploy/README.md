@@ -6,7 +6,9 @@
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/deploy.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/deploy`。
+
+[跟着最小示例完成接入](../../docs/usage/function/deploy.md#quick-start)。
 
 ## 配置清单
 

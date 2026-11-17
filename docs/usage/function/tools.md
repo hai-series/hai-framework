@@ -13,6 +13,8 @@
 
 浏览器可导入轻量入口，但服务端权限仍由可信服务端验证。不要把 `/server` 导入前端。
 
+<a id="quick-start"></a>
+
 ## 最小接入
 
 ```sh
@@ -66,18 +68,24 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## 轻量公开方法
 
-| 方法 | 用途与返回值 |
-| --- | --- |
-| `tools.define` | 名称、描述、Zod Schema 和处理函数 → 工具实例，默认超时 30 秒 |
-| `tools.createRegistry` | 可选 `authorize` → 注册器实例 |
-| `tool.execute` | 业务输入、可选执行上下文 → `Promise<HaiResult<TOutput>>` |
-| `tool.toDefinition` | 中立定义：名称、标题、描述、输入 JSON Schema、示例 |
-| `registry.register/registerMany` | 登记工具 → `HaiResult<void>`；重名不覆盖，批量原子登记 |
-| `registry.replace` | 显式替换已有名称 → `HaiResult<void>` |
-| `registry.get/has/getNames/getDefinitions` | 查询当前集合和中立定义 |
-| `registry.execute` | 名称、输入、可选上下文 → `Promise<HaiResult<unknown>>` |
-| `registry.executeAll` | `{ name, input }[]` → `Promise<HaiResult<unknown[]>>`；默认串行 |
-| `registry.unregister/clear/size` | 停用、清空和统计当前进程中的集合 |
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `tools.define` | 定义工具并约束输入。默认超时 `30000` 毫秒，定义无效时抛出 `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tools.createRegistry` | 创建空的工具注册器。未提供 `authorize` 时注册器不额外检查权限 | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `tool.execute` | 校验输入后执行；可另外传身份、授权、取消信号和期限 | `input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition` | 把参数规则转为 JSON Schema。不能转换时会抛出异常 | 无 | `ToolDefinition` | `tool.toDefinition()` |
+| `registry.register` | 添加一个工具。重名时失败 | `tool` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany` | 批量登记。任一项无效或重名，整批都不添加 | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace` | 用新定义替换同名工具。该名称必须已存在 | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister` | 移除指定名称。只有原来存在才返回 `true` | `name` | `boolean` | `registry.unregister('sum')` |
+| `registry.get` | 按名称读取实例。不存在时返回 `undefined` | `name` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has` | 检查指定名称是否已注册 | `name` | `boolean` | `registry.has('sum')` |
+| `registry.getNames` | 读取所有已注册工具的名称 | 无 | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions` | 读取所有已注册工具的定义。参数规则无法转换时会抛出异常 | 无 | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute` | 执行已注册工具。注册器和单次调用都设置授权时，两者都要通过 | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll` | 默认顺序执行，遇到失败即停。设置 `parallel: true` 时已启动的调用不会因此回退 | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear` | 清空登记，之后不能按名称执行。已开始的调用不会取消 | 无 | `void` | `registry.clear()` |
+| `registry.size` | 读取已注册的工具数（属性） | 无 | `number` | `registry.size` |
 
 `tool` 和 `registry` 是工厂返回的实例，不是包级独立函数。注册器不隐式发现其他工具，只接受 `tools.define` 创建的实例，拒绝手写或复制的对象。
 

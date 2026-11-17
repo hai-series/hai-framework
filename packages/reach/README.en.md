@@ -8,6 +8,8 @@ A notification module supporting multiple providers (email, SMS, API callbacks) 
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/reach`.
+
 [Open the quick-start guide](../../docs/usage/function/reach.en.md#quick-start).
 
 ## Configuration Reference

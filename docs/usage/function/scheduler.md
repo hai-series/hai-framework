@@ -14,61 +14,48 @@
 
 - `@h-ai/reldb` 用来保存任务、执行结果和当前领取期限，须先连接。若提供 `enableDb`，只能设为 `true`。
 
+本例用内存 SQLite 保存任务和日志，手动触发一次任务，无需等待 cron，也不会发送网络请求。`trigger()` 加载任务成功后还要查看 `run.status`，因为任务执行失败也能返回一条执行记录。此处应得到 `success`，`logs.items` 包含一条执行记录。长期定时运行时，注册任务后再调用 `scheduler.start()`。请在开发环境运行（例如 `NODE_ENV=development`）；生产模式需要跨节点共享的数据库。
+
 ```ts
+import type { HaiResult } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
-await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+function dataOrThrow<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data
+}
 
-await scheduler.init({
-  enableDb: true,
-  maxLogs: 1000,
-  retentionDays: 30,
-  hooks: {
-    onTaskStart(event) {
-      void event
+dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+
+try {
+  dataOrThrow(await scheduler.init({
+    hooks: {
+      onTaskExecute: ({ context }) => ({ taskId: context.taskId }),
     },
-  },
-})
+  }))
+  try {
+    dataOrThrow(await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' }))
+    const run = dataOrThrow(await scheduler.trigger('daily', { source: 'docs' }))
+    if (run.status !== 'success')
+      throw new Error(run.error ?? 'Task did not succeed')
 
-await scheduler.register({
-  id: 'health-check',
-  name: '健康检查',
-  description: '每 5 分钟执行一次系统健康检查',
-  cron: '*/5 * * * *',
-  params: { channel: 'ops' },
-  handler: {
-    kind: 'api',
-    url: 'https://api.example.com/health',
-    method: 'GET',
-    timeout: 10000,
-  },
-})
-
-await scheduler.register({
-  id: 'cleanup',
-  name: '清理过期数据',
-  description: '每日凌晨执行过期数据清理',
-  cron: '0 2 * * *',
-  deleteAfterRun: true,
-  params: { source: 'nightly' },
-  handler: {
-    kind: 'js',
-    code: '(context) => ({ taskId: context.taskId, params: context.params })',
-  },
-})
-
-scheduler.start()
-
-const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
-const logs = await scheduler.getLogs({
-  triggerType: 'manual',
-  triggerSource: 'admin-console',
-  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
-})
-
-scheduler.stop()
-await scheduler.close()
+    const logs = dataOrThrow(await scheduler.getLogs({
+      taskId: 'daily',
+      triggerSource: 'docs',
+      pagination: { page: 1, pageSize: 20 },
+    }))
+    if (logs.items.length !== 1)
+      throw new Error('Expected one execution record')
+  }
+  finally {
+    await scheduler.close()
+  }
+}
+finally {
+  dataOrThrow(await reldb.close())
+}
 ```
 
 ## 功能说明
@@ -81,7 +68,14 @@ await scheduler.close()
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.init` | 使用已连接的 RelDB 准备任务表和执行记录。随后另行调用 `scheduler.start()` | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
+| `scheduler.close` | 停止调度并释放自身资源；已发生的外部副作用无法撤销 | 无 | `Promise<void>` | `await scheduler.close()` |
 
 #### scheduler · 管理任务定义
 
@@ -103,7 +97,7 @@ start/stop 无参数返回同步 HaiResult；trigger 输入任务 ID/参数返�
 | `scheduler.start`   | 无参数          | `void`                              | `scheduler.start()`                                  |
 | `scheduler.stop`    | 无参数          | `void`                              | `scheduler.stop()`                                   |
 | `scheduler.trigger` | taskId, options | `TaskExecutionLog`                  | `await scheduler.trigger('daily')`                   |
-| `scheduler.getLogs` | options         | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ page: 1, pageSize: 20 })` |
+| `scheduler.getLogs` | options         | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
 
 #### scheduler · 执行器与事件回调
 
@@ -173,7 +167,14 @@ interface JsTaskConfig {
 
 ### 任务生命周期回调
 
-初始化时传入或运行时通过 `setHooks()` 设置：
+这些可选回调由 Scheduler 调用。应用用 `scheduler.init({ hooks })` 或 `scheduler.setHooks(hooks)` 注册；省略某一项就不会调用它。
+
+| 回调 | 什么时候调用 | 输入 | 返回 | 注册举例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.hooks.onTaskStart` | 开始一次任务尝试 | `SchedulerTaskStartEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskStart })` |
+| `scheduler.hooks.onTaskExecute` | 没有内置处理器的任务需要应用执行时 | `SchedulerTaskExecuteEvent`，含上下文和取消信号 | 任务输出，可异步 | `scheduler.setHooks({ onTaskExecute })` |
+| `scheduler.hooks.onTaskInterrupted` | 任务执行被中断时 | `SchedulerTaskInterruptedEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskInterrupted })` |
+| `scheduler.hooks.onTaskFinish` | 一次执行结束时 | `SchedulerTaskFinishEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskFinish })` |
 
 ```ts
 await scheduler.init({

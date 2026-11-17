@@ -17,6 +17,8 @@ nodeId: api-east
 executor: false
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 省略整个 `capacity` 时，普通任务使用 4 核 CPU、4 GiB 内存、512 个进程和 2 GiB 临时空间。如果要改其中一项，例如把内存提高到 8 GiB，需在 `capacity` 中提供完整的四项。`toolCapacity` 用同样方式管理工具任务的独立上限。

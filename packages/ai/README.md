@@ -10,7 +10,9 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/ai.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/ai`。
+
+[跟着最小示例完成接入](../../docs/usage/function/ai.md#quick-start)。
 
 ## 配置清单
 

@@ -22,4 +22,4 @@ consoleContent: metadata
 | `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | 報告の保存期間、出力の保存期間、出力件数の上限。 |
 | `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | 環境変数名の許可リスト、送信サイズと件数の上限。 |
 
-追加の設定項目や利用例は[中国語リファレンス](feedback.md)に掲載しています。
+未翻訳：クォータ、証拠、Webhook の再試行、保持期間の項目別設定。[中国語の該当節](feedback.md#configuration-fields)を参照してください。

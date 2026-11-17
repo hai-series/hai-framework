@@ -8,6 +8,8 @@ Use `scheduler` to run JavaScript handlers or call HTTP endpoints on a cron sche
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/scheduler @h-ai/reldb`.
+
 [Open the quick-start guide](../../docs/usage/function/scheduler.en.md#quick-start).
 
 ## Configuration Reference

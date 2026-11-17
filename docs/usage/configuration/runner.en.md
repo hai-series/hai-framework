@@ -21,4 +21,4 @@ executor: false
 | `maxEvents`, `retentionMs` | `10000`, `604800000` | Event cap and retention duration in milliseconds. |
 | `environments` | `[]` | Each entry declares an ID, image and resources. Backend defaults to `container`; capabilities default to an empty list. |
 
-Additional options and workflow examples are available in the [Chinese reference](runner.md).
+Still untranslated: individual container environment, network and resource fields. Read the [Chinese source section](runner.md#configuration-fields).

@@ -19,4 +19,4 @@ providers:
 | `dnd` | Optional | Configure quiet hours and whether to defer or block delivery. |
 | `queue` | Optional | Configure delivery retries. Retry only if the provider contract makes it safe. |
 
-Additional options and workflow examples are available in the [Chinese reference](reach.md).
+Still untranslated: the full provider fields and queue, retry and quiet-hours settings. Read the [Chinese source section](reach.md#configuration-fields).

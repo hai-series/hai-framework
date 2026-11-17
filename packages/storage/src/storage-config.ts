@@ -41,7 +41,7 @@ export const StorageTypeSchema = z.enum(['s3', 'local'])
 export type StorageType = z.infer<typeof StorageTypeSchema>
 
 /**
- * StorageOperationLogConfigSchema 的数据约束与操作契约。
+ * 校验存储操作的 debug 日志设置。默认只记录写操作，摘要最多保留 1000 个字符。
  * @example
  * ```ts
  * import { StorageOperationLogConfigSchema } from '@h-ai/storage'
@@ -60,7 +60,7 @@ export const StorageOperationLogConfigSchema = z.object({
 })
 
 /**
- * StorageOperationLogConfig 的数据约束与操作契约。
+ * 校验并填好默认值后的日志设置；三个字段都存在。`maxLength: 0` 省略诊断摘要。
  * @example
  * ```ts
  * import { StorageOperationLogConfigSchema, type StorageOperationLogConfig } from '@h-ai/storage'

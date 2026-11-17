@@ -59,4 +59,4 @@ export default defineConfig({
 | `kit.client.create`, `createAuthActions`, `installBrowserTransport`, `installBrowserTransportFetch` | 同一オリジンのクライアントを作成し、認証または暗号化 Fetch を組み込む。 | `kit.client.create()` |
 | `kit.auth.publicPaths` | 認証ガードで使う公開認証パスを取得。 | `kit.auth.publicPaths` |
 
-追加の設定項目や利用例は[中国語リファレンス](kit.md)に掲載しています。
+未翻訳：SvelteKit フック、セッションガード、暗号化 Fetch の接続手順。[中国語の該当節](kit.md#detailed-workflow)を参照してください。

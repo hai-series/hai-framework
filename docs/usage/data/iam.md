@@ -37,6 +37,8 @@
 
 API Key 原始值只在签发时返回。用 `iam.user`、`iam.authz` 等公开业务入口修改账户、角色或权限，便于 IAM 同步更新关联的会话与缓存。直接改 SQL 记录会绕开这些同步步骤。
 
+<a id="data-fields"></a>
+
 ## 缓存键
 
 下面是逻辑键。如果 [cache](cache.md) 配置了 `keyPrefix`，Redis 的物理键需要同时带该前缀。

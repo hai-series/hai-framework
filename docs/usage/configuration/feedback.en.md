@@ -22,4 +22,4 @@ consoleContent: metadata
 | `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | Report retention, export retention and export quota. |
 | `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | Allowlisted environment names and submission size/count quotas. |
 
-Additional options and workflow examples are available in the [Chinese reference](feedback.md).
+Still untranslated: per-field limits for quotas, evidence, webhook retries and expiry. Read the [Chinese source section](feedback.md#configuration-fields).

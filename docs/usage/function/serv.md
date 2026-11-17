@@ -162,21 +162,37 @@ const app = serv.createApp({
 - `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
 - 浏览器 `createAudioClient({ url, getTicket })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
 
+<a id="detailed-workflow"></a>
+
 ### 传输加密（与 `@h-ai/crypto` 统一）
 
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。服务端显式注入顶层 `crypto`、受管密钥环和共享 registry：
 
 ```ts
+import type { ServContext } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
+import { ok } from '@h-ai/core'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
+import { z } from 'zod'
 
-await crypto.init()
+const ready = await crypto.init()
+if (!ready.success)
+  throw new Error(ready.error.message)
 const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
-const serverKeyRing = ring.data
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+const connected = await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+if (!connected.success)
+  throw new Error(connected.error.message)
+
+const contract = {
+  ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),
+}
+const procedures = serv.implement(contract).context<ServContext>()
+  .route('ping', () => ok('pong'))
+  .build()
 
 const app = serv.createApp({
   contract,
@@ -184,23 +200,27 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
-    serverKeyRing,
-    // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
-    // excludePaths: ['/health'],
+    serverKeyRing: ring.data,
+    // 默认密钥交换端点为 /api/v1/_hai/key-exchange。
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
 ```
 
-客户端使用 `@h-ai/api-client`：
+此处 `app` 已装配 `GET /api/v1/ping`；交给 `serv.listen(app)` 后才会监听端口。启动流程出错或关闭服务时负责清理 Cache 和 Crypto。
+
+客户端通过公开地址配置 `@h-ai/api-client`，不传服务端密钥：
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
 
-await apiClient.init({
+const ready = await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: { crypto },
 })
+if (!ready.success)
+  throw new Error(ready.error.message)
 ```
 
 如果应用通过 `@h-ai/core` 从 `config/_serv.yml` 驱动 `ServConfigSchema`，transport 也可以一起配置：
@@ -333,11 +353,22 @@ const procedures = serv
 
 #### 1) 自定义 HTTP middleware
 
-当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑**，或挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`：
+当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑**，或挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`。下例挂载资产路由前，应用需先初始化 Storage 并检查结果；请求会返回耗时响应头。示例的租户请求头检查仅要求存在，不能替代对当前用户的租户归属校验。
 
 ```ts
-import type { ServMiddleware } from '@h-ai/serv'
+import type { ServContext, ServMiddleware } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
+import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
+import { storage } from '@h-ai/storage'
+import { z } from 'zod'
+
+const contract = {
+  ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),
+}
+const procedures = serv.implement(contract).context<ServContext>()
+  .route('ping', () => ok('pong'))
+  .build()
 
 const requestMetrics: ServMiddleware = async (c, next) => {
   const startedAt = Date.now()
@@ -643,7 +674,9 @@ oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地�
 3. **业务/领域错误**：不要 throw 预期业务失败；直接返回 `err(...)`，并在**创建错误消息的那一层**使用对应模块的 i18n getter，例如 `serv.m(..., { locale: context.locale })` 或 `widgetM(..., { locale: context.locale })`。
 
 ```ts
-import { err, HaiCommonError } from '@h-ai/core'
+import type { ServContext } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
@@ -651,25 +684,25 @@ const CreateWidgetSchema = z.object({
   title: z.string().min(1),
   slug: z.string().min(3),
 })
-
-const procedures = serv
-  .implement(widgetContract)
-  .context<ServContext>()
+const contract = {
+  widgets: {
+    create: apiContract.route({ method: 'POST', path: '/widgets' })
+      .input(z.object({ title: z.string(), slug: z.string() }))
+      .output(apiContract.haiResultSchema(CreateWidgetSchema)),
+  },
+}
+const procedures = serv.implement(contract).context<ServContext>()
   .route('widgets.create')
   .permission('widgets.write')
   .handle(({ input, context }) => {
     const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
     if (!validated.success)
       return validated
-
     if (validated.data.slug === 'admin') {
-      return err(
-        HaiCommonError.FORBIDDEN,
-        serv.m('serv_errorForbidden', { locale: context.locale }),
-      )
+      return err(HaiCommonError.FORBIDDEN, serv.m('serv_errorForbidden', { locale: context.locale }))
     }
-
-    return widgetService.create(validated.data)
+    // 演示返回已验证的数据；真实应用在此调用 Widget 服务写入。
+    return ok(validated.data)
   })
   .build()
 ```

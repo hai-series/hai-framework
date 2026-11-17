@@ -10,6 +10,8 @@ Import `serv` from `@h-ai/serv`. Use `serv.createApp()` to create the HTTP app a
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/serv`.
+
 [Open the quick-start guide](../../docs/usage/function/serv.en.md#quick-start).
 
 ## Configuration Reference

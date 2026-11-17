@@ -85,9 +85,16 @@ if (!result.success)
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 应用先检查当前用户是否有权操作这个用户 ID 或权限编号，再调用 IAM 管理方法。用户 ID、访问令牌、刷新令牌和一次性操作票据分别按参数传入。`expectedVersion` 取自最近一次读取的版本，`tx` 是应用已打开的同一个事务。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `iam.init` | 先连接 RelDB 和 Cache，再等待身份服务可用 | `config`（必填，可传 `{}` 使用默认值） | `Promise<HaiResult<void>>` | `await iam.init({})` |
+| `iam.close` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | 无 | `Promise<void>` | `await iam.close()` |
 
 #### iam.auth · 登录与注册
 
@@ -252,6 +259,8 @@ const canRegister = ready && iam.isRegisterEnabled // 先检查就绪，再读�
 
 `iam.isRegisterEnabled` 在未初始化或未显式禁用注册时为 `true`。浏览器通过受权契约读取公开策略，服务端注册处理仍执行相应校验。
 
+<a id="detailed-workflow"></a>
+
 ### 可选 LDAP 与通知接入
 
 只使用密码、用户管理和 RBAC 时，无需安装或初始化 LDAP/Reach。两者均为可选 peer dependency，应用只安装选用的集成。下列发送、LDAP 片段位于应用启动/认证函数中，reldb/cache 必须先成功初始化；`username/password` 来自已校验输入。
@@ -283,15 +292,19 @@ import type { IamConfigSettingsInput } from '@h-ai/iam'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
-// core 已加载 config/，reldb 与 cache 已成功初始化。
-const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
-if (!initialized.success)
-  return initialized
-const result = await iam.auth.loginWithLdap({ username, password })
-if (!result.success)
-  return result
-return result
+// 启动时调用一次。Core 已读取 config/，数据库和缓存已成功初始化。
+export function startDirectoryLogin() {
+  const config = core.config.getOrThrow<IamConfigSettingsInput>('iam')
+  return iam.init(config)
+}
+
+// 启动成功后，在登录处理函数中传入已经校验的表单输入。
+export function loginWithDirectory(username: string, password: string) {
+  return iam.auth.loginWithLdap({ username, password })
+}
 ```
+
+应用启动时检查 `startDirectoryLogin()` 的 `success`。登录处理函数检查 `loginWithDirectory()` 返回的结果：成功时才能读取用户和令牌，目录不可用或凭据无效时按失败处理。服务退出时关闭 IAM，再关闭其依赖。
 
 #### 使用可选 Reach 自动发送
 
@@ -336,62 +349,44 @@ import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 
-// core、reldb、cache 已初始化；按应用生命周期反序关闭 IAM 与 Reach。
-const notification = await reach.init(core.config.getOrThrow<ReachConfigInput>('reach'))
-if (!notification.success)
-  return notification
-const initialized = await iam.init({
-  reach,
-  login: { otp: true },
-  otp: { email: true, sms: true },
-  passwordReset: { mode: 'email', resetUrl: 'https://app.example.com/auth/reset-password' },
-})
-if (!initialized.success)
-  return initialized
-return iam.auth.sendOtp('user@example.com')
+// 服务启动时调用。Core、RelDB 与 Cache 已就绪。
+export async function startNotifications() {
+  const notification = await reach.init(core.config.getOrThrow<ReachConfigInput>('reach'))
+  if (!notification.success)
+    return notification
+  return iam.init({
+    reach,
+    login: { otp: true },
+    otp: { email: true, sms: true },
+    passwordReset: { mode: 'email', resetUrl: 'https://app.example.com/auth/reset-password' },
+  })
+}
 ```
+
+确认 `startNotifications()` 成功后，再处理请求里的 `iam.auth.sendOtp(identifier)`。邮件地址或手机号来自应用已校验的输入；成功数据给出 `expiresAt`，不返回验证码。启动失败或应用退出时由启动流程关闭 IAM 和 Reach，再关闭数据库和缓存。
 
 #### 应用自定义短信 / 邮件发送
 
-注入 `onOtpSendEmail`、`onOtpSendSms` 和 `onPasswordResetRequest` 即可接入现有发送服务；可只实现需要的回调，也可与 Reach 混用，显式回调优先。以下服务为应用实现，示例假定其 Promise 仅在投递成功时完成；若服务返回 HaiResult，须检查 `success`，失败时在回调内抛错。IAM 捕获回调异常并返回业务错误，不将验证码、令牌或内部投递详情写入用户提示。
+注入 `onOtpSendEmail`、`onOtpSendSms` 和 `onPasswordResetRequest` 即可接入现有发送服务；可只实现需要的回调，也可与 Reach 混用，显式回调优先。以下服务为应用实现，示例假定其 Promise 仅在投递成功时完成；若服务返回 HaiResult，须检查 `success`，失败时在回调内抛错。IAM 捕获回调异常并返回业务错误，不将验证码、令牌或内部投递详情写入用户提示。回调收到的 `context.idempotencyKey` 可交给应用的发件系统用于去重。密码重置回调使用收到的 token 生成面向该用户的链接，避免记录 token。
 
 ```ts
+import type { IamConfigInput } from '@h-ai/iam'
 import { iam } from '@h-ai/iam'
-import { mailService, smsService } from './notifications.js'
 
-// mailService/smsService 为应用已有的发送服务；不需要安装或初始化 Reach。
-// 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
-const initialized = await iam.init({
-  otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code, context) => {
-    await mailService.send({
-      to: email,
-      subject: 'Verification code',
-      text: code,
-      idempotencyKey: context.idempotencyKey
-    })
-  },
-  onOtpSendSms: async (phone, code, context) => {
-    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
-  },
-  passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, context) => {
-    if (!user.email)
-      throw new Error('Reset recipient unavailable')
-    const url = new URL('https://app.example.com/auth/reset-password')
-    url.searchParams.set('token', token)
-    await mailService.send({
-      to: user.email,
-      subject: 'Password reset',
-      text: url.toString(),
-      expiresAt: context.expiresAt,
-      idempotencyKey: context.idempotencyKey
-    })
-  },
-})
-if (!initialized.success)
-  return initialized
+type Delivery = Pick<IamConfigInput, 'onOtpSendEmail' | 'onOtpSendSms' | 'onPasswordResetRequest'>
+
+export function startWithOwnDelivery(delivery: Delivery) {
+  // 把应用已有的邮件/短信发送函数放进相应回调。
+  return iam.init({
+    login: { otp: true },
+    otp: { email: Boolean(delivery.onOtpSendEmail), sms: Boolean(delivery.onOtpSendSms) },
+    passwordReset: { mode: 'email' },
+    ...delivery,
+  })
+}
 ```
+
+例如，应用可在 `onOtpSendEmail(email, code, context)` 中把收件地址、验证码和 `context.idempotencyKey` 交给邮件服务。只有邮件服务确认受理才让回调完成；受理失败时拒绝 Promise。检查 `startWithOwnDelivery()` 成功后再开放登录。
 
 ### 设计说明
 

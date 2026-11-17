@@ -8,6 +8,8 @@ A unified audit logging module. The `audit` object records, queries, cleans up, 
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/audit @h-ai/reldb`.
+
 [Open the quick-start guide](../../docs/usage/function/audit.en.md#quick-start).
 
 ## Configuration Reference

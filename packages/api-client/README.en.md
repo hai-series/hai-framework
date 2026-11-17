@@ -10,6 +10,8 @@ A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent AP
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/api-client`.
+
 [Open the quick-start guide](../../docs/usage/function/api-client.en.md#quick-start).
 
 ## Configuration Reference

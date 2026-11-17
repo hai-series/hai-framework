@@ -176,6 +176,7 @@ finally {
 | `ai.retrieval.sources.register`   | 登记数据库定义          | `RetrievalSource input (id/collection)`                                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.retrieval.sources.register(sourceDefinition)`                                         |
 | `ai.retrieval.sources.update`     | 按版本替换定义          | `RetrievalSource input (id/collection), expectedVersion?`                         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.retrieval.sources.update(sourceDefinition, current.data.version)`                     |
 | `ai.retrieval.sources.remove`     | 删除数据库定义          | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.retrieval.sources.remove("docs", current.data.version)`                               |
+| `ai.acp.scoped` | 给当前工作区或用户创建限定范围的 Agent API | 由应用认证后提供 `RunnerScope` | 包含 `plan`、`sessions`、`tasks` 和 `approvals` 等方法的对象 | `const agent = ai.acp.scoped(identity)` |
 | `ai.acp.agents.list`              | 列出合并清单            | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()`                                                                    |
 | `ai.acp.agents.get`               | 读取来源和版本          | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.agents.get("coder")`                                                              |
 | `ai.acp.agents.register`          | 登记数据库定义          | `ACPAgent input (id/mode/adapter/modelIds)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.agents.register(agentDefinition)`                                                 |
@@ -294,20 +295,18 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 
 ### 自定义 StoreProvider
 
+如果应用已经有自己的状态存储，可以把实现了 `AIStoreProvider` 的对象交给启动函数。生产环境的实现必须报告 `stateScope: 'shared'` 并提供约定的原子操作。检查初始化结果成功后才调用 AI；应用退出时调用 `ai.close()`，它会等待自定义存储的关闭。
+
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
-const storeProvider: AIStoreProvider = createMyStoreProvider()
-
-await ai.init(
-  {
-    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }
-  },
-  { storeProvider },
-)
-
-await ai.close()
+export function startWithStore(storeProvider: AIStoreProvider) {
+  return ai.init(
+    { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
+    { storeProvider },
+  )
+}
 ```
 
 ### API 契约
@@ -319,6 +318,8 @@ await ai.close()
 - 开发/测试缺少 reldb/vecdb 时使用临时 Store；两者均已初始化时自动使用 DB Provider。生产校验真实数据库与向量后端共享能力，自定义 Provider 必须如实声明 `stateScope`。
 
 如果要用自己的存储系统，实现 `AIStoreProvider` 后在 `ai.init()` 时传入。接入模型时在 LLM 配置里设置供应商和模型参数。应用可通过公开的历史查询接口读取 `ChatRecord`。
+
+<a id="detailed-workflow"></a>
 
 ### API 概览
 
@@ -380,41 +381,36 @@ if (result.success)
 #### 工具调用
 
 ```ts
+import { ai } from '@h-ai/ai'
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
-const registry = tools.createRegistry({
-  // 统一授权在 Zod 校验后、handler 前执行；false/异常均 fail-closed
-  authorize: ({ toolName, context }) => canExecuteTool(context.objectId, toolName),
-})
-const registered = registry.register(tools.define({
-  name: 'get_weather',
-  description: '获取天气',
-  parameters: z.object({
-    city: z.string()
-  }),
-  // handler 第二参为执行上下文：可响应取消（打断/超时）、感知截止时间与交互主体
-  handler: async ({ city }, { signal }) => {
-    const res = await fetch(`https://api.example.com/weather?city=${city}`, { signal })
-    return res.json()
-  },
-  timeoutMs: 10_000, // 本工具默认超时（可被 execute 的 deadline / timeoutMs 覆盖）
-}))
-if (!registered.success)
-  return registered
+export async function runExample(objectId: string) {
+  const registry = tools.createRegistry({
+    // 演示规则：只有服务端传入的订单操作员可执行。
+    authorize: ({ toolName, context }) => context.objectId === 'orders-operator'
+      && toolName === 'order_status',
+  })
+  const registered = registry.register(tools.define({
+    name: 'order_status',
+    description: 'Look up the status of an order',
+    parameters: z.object({ id: z.string().min(1) }),
+    handler: ({ id }) => ({ status: id === 'order-42' ? 'shipped' : null }),
+    timeoutMs: 10_000,
+  }))
+  if (!registered.success)
+    return registered
 
-// 同一注册器经模型适配后解析工具调用，授权和执行仍使用原 Tools 实现。
-const modelTools = ai.tools.adapt(registry)
-const result = await modelTools.execute(toolCall, { signal: controller.signal, objectId: 'user-001', timeoutMs: 30_000 })
-
-// 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
-const batch = await modelTools.executeAll(toolCalls)
-
-const chat = await ai.llm.chat({
-  messages,
-  tools: modelTools.getDefinitions()
-})
+  const modelTools = ai.tools.adapt(registry)
+  return modelTools.execute({
+    id: 'call-order-42',
+    type: 'function',
+    function: { name: 'order_status', arguments: JSON.stringify({ id: 'order-42' }) },
+  }, { objectId })
+}
 ```
+
+`ai.tools.adapt(registry)` 无需初始化 AI，它保留注册器的业务执行和授权。示例由服务端传入可信主体：`runExample('orders-operator')` 成功后从 `result.data` 得到对应的模型工具消息，其 `content` 是 JSON 字符串 `{"status":"shipped"}`；其他主体授权失败。连接模型时把 `modelTools.getDefinitions()` 用于模型可用工具定义，执行时仍用注册器，并检查返回的 `HaiResult`。批量调用默认串行；只有确认工具没有相互影响时才显式启用并行。
 
 #### 图片、语音、文档与网址视频工具
 
@@ -804,18 +800,17 @@ if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 T
 `ai.audio.synthesize` 返回统一的 `AudioContent` 字节。需要通过 API 返回浏览器可播放的 Base64 负载时，使用 `serializePlayableAudio(result.data)`；该函数会将 `pcm16` 补齐为 WAV 容器，并透传 WAV/MP3：
 
 ```ts
-import { serializePlayableAudio } from '@h-ai/ai'
+import { ai, serializePlayableAudio } from '@h-ai/ai'
 
-const synthesized = await ai.audio.synthesize({ text: '欢迎参加访谈。', voice: 'Cherry' })
-if (!synthesized.success)
-  return synthesized
-
-const playable = serializePlayableAudio(synthesized.data)
-if (!playable.success)
-  return playable
-
-return playable.data
+export async function createPreviewAudio(text: string) {
+  const synthesized = await ai.audio.synthesize({ text, voice: 'Cherry' })
+  if (!synthesized.success)
+    return synthesized
+  return serializePlayableAudio(synthesized.data)
+}
 ```
+
+本例假设已经初始化 AI，并选用了支持 `Cherry` 音色的合成模型。调用 `createPreviewAudio('欢迎参加访谈。')` 后检查 `success`，成功时将可播放负载交给浏览器；失败时保留合成或序列化的错误。
 
 `OptionalSecretSchema` 统一用于 LLM、Audio 与 Image 的可选密钥字段：YAML `null`、空字符串和纯空白字符串都会规范化为 `undefined`。语音密钥优先级为模型条目 `apiKey` → 启用继承后的 LLM `apiKey` → 对应平台环境变量；`inheritLlmApiKey` 默认关闭，避免跨供应商误用密钥。
 

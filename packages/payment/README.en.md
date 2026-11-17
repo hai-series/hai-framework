@@ -8,6 +8,8 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/payment`.
+
 [Open the quick-start guide](../../docs/usage/function/payment.en.md#quick-start).
 
 ## Configuration Reference

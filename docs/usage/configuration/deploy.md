@@ -20,6 +20,8 @@ provider:
     hostPort: 8080
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 下表把镜像发布所需设置分为主机连接、入口端口和容器。比如，只制作离线交付包时可以省略整个 `provider.ssh`。要由 CLI 连接目标机发布时，至少要填写主机地址和登录账号。

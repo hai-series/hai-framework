@@ -22,4 +22,4 @@ capture:
 | `backup.enabled`, `batchSize`, `maxRecordBytes` | `false`, `200`, `1048576` | Opt in to backup, set batch length and bound each record. |
 | `backup.schedule.enabled`, `cron`, `timezone` | `false`, `0 2 * * *`, `UTC` | Schedule backups if enabled. |
 
-Additional options and workflow examples are available in the [Chinese reference](audit.md).
+Still untranslated: the per-field alert targets, backup schedule and privacy options. Read the [Chinese source section](audit.md#configuration-fields).

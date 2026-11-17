@@ -18,4 +18,4 @@ transport:
 | `createReldbTransportKeyStore({ reldb })` | Required | Borrow an initialized RelDB instance. |
 | `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` | Optional | Server loads a JSON key ring and validates it with `parseTransportServerKeyRing()`. |
 
-Additional options and workflow examples are available in the [Chinese reference](crypto.md).
+Still untranslated: provider limits, transport-body budgets and key-store options. Read the [Chinese source section](crypto.md#configuration-fields).

@@ -80,10 +80,24 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `reach.send` | Send a message or accept it for queued delivery. | `await reach.send(message)` |
-| `reach.template.resolve`, `save`, `saveBatch`, `remove`, `list`, `render` | Resolve, persist, enumerate or render templates with variables. | `await reach.template.list()` |
-| `reach.queue.get`, `list`, `requeueDead`, `resolveUnknown` | Read delivery status and reconcile or recover queued work. | `await reach.queue.get(queueId)` |
+Delivery, template and queue methods return HaiResult; the table shows successful data. close returns no data.
 
-Additional options and workflow examples are available in the [Chinese reference](reach.md).
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `reach.init` | Prepare providers and enabled queue dependencies | `config, options?` | `void` | `await reach.init(config)` |
+| `reach.close` | Stop the service and release its resources | None | `Promise<void>` | `await reach.close()` |
+| `reach.send` | Send now or queue for delivery | `message` | `SendResult` | `await reach.send(message)` |
+| `reach.template.resolve` | Read the resolved template | `name` | `ReachTemplate` | `await reach.template.resolve(name)` |
+| `reach.template.save` | Write one template | `template` | `void` | `await reach.template.save(template)` |
+| `reach.template.saveBatch` | Save several templates | `templates` | `void` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove` | Remove a stored template | `name` | `void` | `await reach.template.remove(name)` |
+| `reach.template.list` | List resolved templates | None | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render` | Substitute variables without sending | `name, vars` | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.queue.get` | Read one delivery record | `queueId` | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list` | List deliveries matching the filter | `options` | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
+| `reach.queue.requeueDead` | Requeue an eligible terminal failure | `queueId, options` | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown` | Record a delivery outcome confirmed outside the queue | `queueId, resolution` | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+
+Queue acceptance does not prove receipt. Only reconcile an unknown delivery after obtaining the provider’s actual outcome.
+
+Still untranslated: detailed delivery reconciliation, dead-letter recovery and production boundaries. Read the [Chinese source section](reach.md#detailed-workflow).

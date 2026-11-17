@@ -64,13 +64,24 @@ export function startApi(closeApp: () => Promise<void>) {
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `serv.implement(contract)`, `createApp(options)` | 契約に処理を対応付けて HTTP アプリを作成。 | `serv.implement(contract)` |
-| `serv.listen(app, options?)`, `toFetch(app)` | Node で待ち受けるか Fetch ハンドラーに変換。 | `serv.toFetch(app)` |
-| `serv.parseRequestContext(input)`, `buildAuthContextFactory(verifyToken)` | 信頼済みリクエスト情報を解析し、指定した検証関数で認証情報を作成。 | `serv.buildAuthContextFactory(verifyToken)` |
-| `serv.cors(config?)`, `createRuntimeSecurityPolicy(input)`, `storageAssets(config)` | オリジン処理、リクエスト規則、静的ファイル配信を設定。 | `serv.cors()` |
-| `serv.generateSpec(contract, options?)` | 契約から OpenAPI 仕様を生成。 | `serv.generateSpec(contract)` |
-| `serv.validateInputOrFail(schema, input, locale?)`, `resolveRequestLocale(headers)`, `m(key, options?)` | リクエストの言語を選択し、入力検証と翻訳済みメッセージの整形を行う。 | `serv.resolveRequestLocale(request.headers)` |
+Serv はアプリを組み立てます。Node の待ち受けは listen だけが開始します。ミドルウェア、処理、アダプターでエラーの扱いは異なります。
 
-追加の設定項目や利用例は[中国語リファレンス](serv.md)に掲載しています。
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `serv.createApp` | 契約と処理を HTTP アプリに割り当てる | `options` | `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen` | Node で待ち受け開始。既定は 127.0.0.1:3000 | `app, options?` | `ServNodeServer` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch` | Fetch リクエストを扱う実装に変換 | `app` | `ServFetchHandler` | `serv.toFetch(app)` |
+| `serv.implement` | 型付きのルート処理を定義 | `contract` | `ServImplementer` | `serv.implement(contract)` |
+| `serv.parseRequestContext` | リクエストのメタデータを取得。セッション認証はしない | `input` | `ServContext` | `serv.parseRequestContext({ request, remoteAddress })` |
+| `serv.buildAuthContextFactory` | 渡したトークン検証を使うコンテキスト作成関数を組む | `verifyToken` | `CreateServContext` | `serv.buildAuthContextFactory(verifyToken)` |
+| `serv.resolveRequestLocale` | リクエストヘッダーから言語を決める | `headers` | `string` | `serv.resolveRequestLocale(request.headers)` |
+| `serv.cors` | オリジンをまたぐリクエストを設定 | `config?` | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com' })` |
+| `serv.storageAssets` | 許可された公開 Storage オブジェクトを配信 | `config` | `ServMiddleware` | `serv.storageAssets(storageConfig)` |
+| `serv.createRuntimeSecurityPolicy` | 配置環境に合うセキュリティ設定を解決 | `input` | `ServRuntimeSecurityPolicy` | `serv.createRuntimeSecurityPolicy(runtimeInput)` |
+| `serv.generateSpec` | OpenAPI の仕様を生成 | `contract, options?` | `OpenAPI.Document` | `await serv.generateSpec(contract)` |
+| `serv.validateInputOrFail` | 処理内で入力を検証し失敗時は翻訳済みの結果を返す | `schema, input, locale?` | `HaiResult<T>` | `serv.validateInputOrFail(schema, input)` |
+| `serv.m` | 指定または現在の言語で文言を取得 | `key, options?` | `string` | `serv.m('serv_validationFailed')` |
+
+借りているデータベースやキャッシュを閉じる前に Node の待ち受けを終了します。認証済みセッションとリクエストのメタデータは分けて扱います。
+
+未翻訳：暗号化通信、ストリーミング・音声、ミドルウェアの接続例。[中国語の該当節](serv.md#detailed-workflow)を参照してください。

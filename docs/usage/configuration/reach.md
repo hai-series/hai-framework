@@ -18,6 +18,8 @@ providers:
     type: console
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 `providers[]` 指 `providers` 列表中的每个渠道。例子里的 `type: console` 只记日志。改用 SMTP 时，需要为这条渠道填写 SMTP 的连接字段。

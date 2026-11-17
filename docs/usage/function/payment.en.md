@@ -62,11 +62,20 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `payment.createOrder`, `queryOrder` | Create provider payment parameters, or query current provider status. | `await payment.queryOrder(provider, orderNo)` |
-| `payment.refund`, `closeOrder` | Request a refund or close a still-open order. Inspect the returned result. | `await payment.refund(provider, refundRequest)` |
-| `payment.handleNotify` | Verify and parse a provider notification using its original request body and headers. | `await payment.handleNotify(provider, notificationRequest)` |
-| `payment.getProvider`, `registerProvider` | Get an available provider or register a provider before use. | `payment.getProvider(provider)` |
+The output is successful HaiResult.data unless the operation is listed as returning a direct value or Promise<void>.
 
-Additional options and workflow examples are available in the [Chinese reference](payment.md).
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `payment.init` | Initialize configured payment channels | `config` | `void` | `await payment.init(config)` |
+| `payment.close` | Release module state | None | `Promise<void>` | `await payment.close()` |
+| `payment.createOrder` | Create channel payment instructions | `providerName, input` | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder` | Read current channel status | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.refund` | Request a refund with a business refund ID | `providerName, input` | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.closeOrder` | Request cancellation of an unpaid order | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.handleNotify` | Verify the provider notification before use | `providerName, request` | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.getProvider` | Look up a registered or configured provider | `name` | `PaymentProvider or undefined` | `payment.getProvider(name)` |
+| `payment.registerProvider` | Register an application-provided provider | `provider` | `void` | `payment.registerProvider(customProvider)` |
+
+An order creation result does not mean the customer paid. Verify notifications and update application orders once per business event.
+
+Still untranslated: the channel-specific checkout, callback and refund examples. Read the [Chinese source section](payment.md#api-reference).

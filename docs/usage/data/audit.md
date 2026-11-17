@@ -4,6 +4,8 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/audit.md) · [功能说明](../function/audit.md)
 
+<a id="tables"></a>
+
 ## 数据库
 
 应用先调用 `reldb.init()` 连接 SQLite、PostgreSQL 或 MySQL，再用 `audit.init()` 在该数据库准备审计表。下表的可空字段在未提供时存为 NULL。除列出的默认值外，写入代码负责提供字段值。
@@ -14,7 +16,15 @@
 | `hai_audit_policy`       | `id` 是单行主键，初始化写 1。`enabled` 表示是否强制最短保留期，初始 0。`min_days` 表示最低保留天数，初始 90。修改保留期配置后，模块会更新这行策略                                                                                                                                                                                                                                                                                                                                       |
 | `hai_audit_alert_claims` | `id` 为按告警规则、目标和时间段生成的唯一标识，用于防止多个实例重复领取同一告警。`rule_id` 为规则、`target_id` 为告警目标、`window_start` 为告警窗口起点、`status` 为领取处理状态。可空 `queue_id` 关联 Reach 队列，`error_code` 保存可用于排查的失败码                                                                                                                                                                                                                                 |
 
+`hai_audit_logs` 的 `details` 和 `actor_snapshot` 是 JSON，`created_at` 是时间戳（MySQL 存为毫秒精度的 `DATETIME(3)`），其余是字符串。策略表的三个字段是整数。告警表的 `window_start` 是整数，其余为字符串。
+
+<a id="policy"></a>
+
+### 保留策略与告警领取
+
 数据库根据保留策略阻止修改受保护的审计记录，也阻止删除尚未到达最短保留期的记录。应用在一个现有事务中写审计事件时，该事件随事务一起提交或回滚。多个应用实例共用告警领取表，发送记录保存在 [reach](reach.md)。
+
+<a id="backups"></a>
 
 ## 缓存与备份对象
 

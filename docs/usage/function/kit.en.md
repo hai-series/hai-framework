@@ -59,4 +59,4 @@ export default defineConfig({
 | `kit.client.create`, `createAuthActions`, `installBrowserTransport`, `installBrowserTransportFetch` | Create the same-origin client and install authentication or encrypted Fetch behavior. | `kit.client.create()` |
 | `kit.auth.publicPaths` | Obtain public authentication paths for authentication guards. | `kit.auth.publicPaths` |
 
-Additional options and workflow examples are available in the [Chinese reference](kit.md).
+Still untranslated: the SvelteKit request hook, session guards and encrypted fetch setup. Read the [Chinese source section](kit.md#detailed-workflow).

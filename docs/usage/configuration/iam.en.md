@@ -38,4 +38,4 @@ session:
 
 Configure server session expiration and limits under `session`. A browser may receive the public expiry and page-exit settings. Always invalidate the server session when the user logs out.
 
-Additional options and workflow examples are available in the [Chinese reference](iam.md).
+Still untranslated: the complete login, password, session and account-policy tables. Read the [Chinese source section](iam.md#configuration-fields).

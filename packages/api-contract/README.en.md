@@ -8,6 +8,8 @@ Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the sin
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/api-contract`.
+
 [Open the quick-start guide](../../docs/usage/function/api-contract.en.md#quick-start).
 
 ## Configuration Reference

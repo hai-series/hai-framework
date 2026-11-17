@@ -10,20 +10,34 @@
 
 公開された UI エントリーポイントからコンポーネントをインポートします。認可と永続化はアプリ側に置きます。画面部品には制御する値とコールバックを渡します。
 
+次のコードを Svelte 5 のページ（例: `+page.svelte`）に書きます。
+
 ```svelte
-<script>
+<script lang='ts'>
   import { Button, Card, Input } from '@h-ai/ui'
+
+  let name = $state('')
+  let submittedName = $state('')
 </script>
 
-<Card title='示例表单'>
-  <Input placeholder='请输入用户名' />
-  <Button variant='primary' onclick={handleSubmit}>提交</Button>
+<Card title='挨拶をプレビュー'>
+  <label for='greeting-name'>名前</label>
+  <Input id='greeting-name' bind:value={name} />
+  <Button variant='primary' disabled={!name.trim()} onclick={() => { submittedName = name.trim() }}>
+    プレビュー
+  </Button>
+  <p role='status'>
+    {#if submittedName}こんにちは、{submittedName}さん。{/if}
+  </p>
 </Card>
 ```
 
+`bind:value` は入力欄の文字列を `name` に入れます。`Ada` と入力して「プレビュー」を押すと「こんにちは、Adaさん。」と表示されます。この例ではページの状態だけを更新します。
+
+自動インポートを設定すると、テンプレートで使うコンポーネントの import を省略できます。
+
 ```svelte
-<!-- 无需 import { Button } from '@h-ai/ui' -->
-<Button variant='primary'>提交</Button>
+<Button variant='primary'>プレビュー</Button>
 ```
 
 ```ts
@@ -53,4 +67,4 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 ToolWorkspace に、サーバーで絞り込んだカタログ、スキーマ付きフォーム、認可済みの実行関数を渡します。実行の控えを保持し、進捗はホストから読み、指定された取消操作を使います。ArtifactWorkspace には、閲覧可能な本文、版、保存とプレビューの操作を渡します。保存が競合した場合は結果を返し、ユーザーが確認できるよう下書きを残します。
 
-追加の設定項目や利用例は[中国語リファレンス](ui.md)に掲載しています。
+未翻訳：全コンポーネントとプロパティ、導入例、実行時の制約。[中国語の該当節](ui.md#detailed-workflow)を参照してください。

@@ -33,4 +33,4 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 | `hai feedback` | ローカルの診断バンドルを調べ、証跡を絞り込む。 | `hai feedback summary feedback.zip` |
 | `hai --version`, `hai --help` | CLI のバージョンまたは使い方を表示。 | `hai deploy --help` |
 
-追加の設定項目や利用例は[中国語リファレンス](cli.md)に掲載しています。
+未翻訳：コマンドオプションと環境準備の詳しい例。[中国語の該当節](cli.md#api-reference)を参照してください。

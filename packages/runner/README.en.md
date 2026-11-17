@@ -8,6 +8,8 @@ Runner executes managed agent workers and tool jobs on Node.js. API nodes submit
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/runner @h-ai/reldb`.
+
 [Open the quick-start guide](../../docs/usage/function/runner.en.md#quick-start).
 
 ## Configuration Reference

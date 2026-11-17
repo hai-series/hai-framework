@@ -1,8 +1,10 @@
 /**
- * @h-ai/kit — 宿主配置
+ * @h-ai/kit — SvelteKit 服务配置
  *
  * 为 `config/_kit.yml` 提供监听、传输与请求策略的默认值和校验。
- * 服务端消费完整配置；浏览器仅接收显式投影的 transport 公共字段。
+ * 启动代码用监听设置启动服务，请求钩子读取代理和访问规则。生成的应用在
+ * 根 `+layout.server.ts` 的 `load` 中只把 `transport` 设置返回给浏览器，
+ * 让浏览器找到密钥协商路径并识别需要加密的请求。密钥和共享存储由服务端代码另行提供。
  * @module kit-config
  */
 
@@ -124,7 +126,8 @@ export function resolveKitTransportConfig(
 /**
  * 解析 `config/_kit.yml` 顶层配置并补齐默认值。
  *
- * 适合同一份配置同时供 SvelteKit 服务端 hook 与浏览器端 client 读取。
+ * 在服务端读取并检查整份配置。需要配置浏览器客户端时，只返回客户端协商所需的
+ * `transport` 设置，不要把监听地址、代理或访问规则作为页面数据返回。
  * @param input - Kit 监听和公开 transport 输入；省略字段按 Schema 补默认值。
  * @returns 已补齐默认值的配置；不合法输入抛出 ZodError。
  * @example

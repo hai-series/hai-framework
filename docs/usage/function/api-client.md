@@ -99,6 +99,8 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 | `storage.setRefreshToken` | token | `Promise<void>`           | 内存适配器保存；Cookie 适配器不改服务端 Cookie     | `await storage.setRefreshToken(refreshToken)` |
 | `storage.clear`           | —     | `Promise<void>`           | 清本适配器凭据，失败 reject；不撤销服务端会话      | `await storage.clear()`                       |
 
+<a id="detailed-workflow"></a>
+
 #### 默认业务领域
 
 默认客户端包含共享契约列出的 IAM、Storage 和 AI 路由。服务端对象另有管理和内部操作。用 `apiClient.create(contract)` 创建自定义客户端时，只可调用该契约声明的接口。
@@ -122,7 +124,7 @@ if (!chat.success)
   throw new Error(chat.error.message)
 ```
 
-`apiClient.config` 是脱敏运行快照（未初始化为 null），不能用于恢复真实密钥；`apiClient.isInitialized` 为就绪 boolean。它们是只读属性，不发起网络请求。
+`apiClient.config` 是脱敏运行快照（未初始化为 null），不能用于恢复真实密钥；`apiClient.isInitialized` 为就绪 boolean。它们是只读属性，不发起网络请求。需要设置 `fetch` 或刷新回调时，把函数传给 `apiClient.init(config)`，见[配置清单](../configuration/api-client.md#配置清单)。
 
 ### 启用传输加密
 
@@ -233,70 +235,72 @@ createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射
 
 ### 标准 HTTP 业务调用
 
-以下示例使用已初始化的默认 `apiClient`。各条调用都对应服务端已注册的 HTTP 处理函数，否则请求会找不到路由。应用应传入真实的用户 ID、凭据和工单 ID，并在调用后先检查 `success`，再读取表中列出的 `data`。
+这里列出默认客户端里的业务方法。服务端必须为相同的契约安装处理函数，否则接口会返回找不到路由。示例中的 ID、凭据和对象键由当前业务或表单提供。调用后先检查 `success`，再读取表里的成功数据。需要取消请求时，可在第二个参数中传入 `{ signal }`。
 
 #### IAM 认证、资料与会话
 
-| 用途               | 调用（含示例输入）                                                                 | 成功数据                           |
-| ------------------ | ---------------------------------------------------------------------------------- | ---------------------------------- |
-| 读取公开认证配置   | `await apiClient.iam.auth.publicConfig()`                                          | 当前登录注册、密码、协议等公开策略 |
-| 生成挑战           | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })`                   | 登录挑战与凭证                     |
-| 密码登录           | `await apiClient.iam.auth.login({ identifier, password })`                         | 已认证用户与 Token                 |
-| LDAP 登录          | `await apiClient.iam.auth.loginWithLdap({ username, password })`                   | 已认证用户与 Token                 |
-| 发送一次性验证码   | `await apiClient.iam.auth.sendOtp({ identifier })`                                 | 验证码失效时间                     |
-| 验证码登录         | `await apiClient.iam.auth.loginWithOtp({ identifier, code })`                      | 已认证用户与 Token                 |
-| 注册               | `await apiClient.iam.auth.register({ username, password })`                        | 新用户与 Token                     |
-| 读取当前账号       | `await apiClient.iam.auth.currentUser()`                                           | 当前用户以及角色和权限             |
-| 更新本人资料       | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })`              | 更新后的用户资料                   |
-| 已登录用户修改密码 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })`            | 无业务数据                         |
-| 密码到期后续密     | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })`    | 无业务数据                         |
-| 申请密码重置       | `await apiClient.iam.auth.requestPasswordReset({ identifier })`                    | 无业务数据                         |
-| 使用重置凭证       | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })`            | 无业务数据                         |
-| 申请敏感操作票据   | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` | 票据和到期时间                     |
-| 刷新凭据           | `await apiClient.iam.auth.refresh({ refreshToken })`                               | 新 Token；通常由客户端刷新流程调用 |
-| 主动退出           | `await apiClient.iam.auth.logout({})`                                              | 无业务数据                         |
-| 请求结束当前会话   | `await apiClient.iam.auth.closeSession({})`                                        | 无业务数据                         |
+| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.iam.auth.publicConfig` | 读取公开认证配置 | 无必填参数 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
+| `apiClient.iam.auth.createCaptcha` | 生成挑战 | `{ operation: 'login' }` | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
+| `apiClient.iam.auth.login` | 密码登录 | `{ identifier, password }` | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
+| `apiClient.iam.auth.loginWithLdap` | LDAP 登录 | `{ username, password }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
+| `apiClient.iam.auth.sendOtp` | 发送一次性验证码 | `{ identifier }` | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
+| `apiClient.iam.auth.loginWithOtp` | 验证码登录 | `{ identifier, code }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
+| `apiClient.iam.auth.register` | 注册 | `{ username, password }` | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
+| `apiClient.iam.auth.currentUser` | 读取当前账号 | 无必填参数 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
+| `apiClient.iam.auth.updateCurrentUser` | 更新本人资料 | `{ displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
+| `apiClient.iam.auth.changePassword` | 已登录用户修改密码 | `{ oldPassword, newPassword }` | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `apiClient.iam.auth.renewPassword` | 密码到期后续密 | `{ identifier, password, newPassword }` | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `apiClient.iam.auth.requestPasswordReset` | 申请密码重置 | `{ identifier }` | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
+| `apiClient.iam.auth.confirmPasswordReset` | 使用重置凭证 | `{ token, newPassword }` | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `apiClient.iam.auth.reauthenticate` | 申请敏感操作票据 | `{ password, operation: 'users:delete' }` | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
+| `apiClient.iam.auth.refresh` | 刷新凭据 | `{ refreshToken }` | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
+| `apiClient.iam.auth.logout` | 主动退出 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.logout({})` |
+| `apiClient.iam.auth.closeSession` | 请求结束当前会话 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.closeSession({})` |
 
 认证表单通常使用 `apiClient.createAuthActions` 负责保存 Token、续密和重新认证。直接请求业务端点时，负责凭据生命周期的应用需要根据认证结果更新 `apiClient.auth`。
 
 #### IAM 用户、角色与权限管理
 
-| 用途           | 调用（含示例输入）                                                                                                    | 成功数据               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 分页查询用户   | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })`                                                           | 用户分页               |
-| 读取用户       | `await apiClient.iam.users.get({ id: userId })`                                                                       | 用户资料，或 `null`    |
-| 创建用户       | `await apiClient.iam.users.create({ username, password })`                                                            | 新用户资料             |
-| 发出邀请       | `await apiClient.iam.users.invite({ username, email })`                                                               | 已创建的待激活用户资料 |
-| 修改用户       | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })`                                               | 更新后的用户资料       |
-| 删除用户       | `await apiClient.iam.users.delete({ id: userId })`                                                                    | 无业务数据             |
-| 管理员重置密码 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })`                                                | 无业务数据             |
-| 查询角色       | `await apiClient.iam.roles.list()`                                                                                    | 角色分页               |
-| 读取角色       | `await apiClient.iam.roles.get({ id: roleId })`                                                                       | 角色记录，或 `null`    |
-| 创建角色       | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })`                                                | 新角色                 |
-| 更新角色       | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })`                                             | 更新后的角色           |
-| 删除角色       | `await apiClient.iam.roles.delete({ id: roleId })`                                                                    | 无业务数据             |
-| 分页查询权限   | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })`                                                      | 权限分页               |
-| 读取权限       | `await apiClient.iam.permissions.get({ id: permissionId })`                                                           | 权限记录，或 `null`    |
-| 创建权限       | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })`                              | 新权限                 |
-| 配置敏感操作   | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` | 无业务数据             |
-| 删除权限       | `await apiClient.iam.permissions.delete({ id: permissionId })`                                                        | 无业务数据             |
+| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.iam.users.list` | 分页查询用户 | `{ page: 1, pageSize: 20 }` | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
+| `apiClient.iam.users.get` | 读取用户 | `{ id: userId }` | 用户资料，或 `null` | `await apiClient.iam.users.get({ id: userId })` |
+| `apiClient.iam.users.create` | 创建用户 | `{ username, password }` | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
+| `apiClient.iam.users.invite` | 发出邀请 | `{ username, email }` | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
+| `apiClient.iam.users.update` | 修改用户 | `{ id: userId, displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
+| `apiClient.iam.users.delete` | 删除用户 | `{ id: userId }` | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
+| `apiClient.iam.users.resetPassword` | 管理员重置密码 | `{ id: userId, newPassword }` | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
+| `apiClient.iam.roles.list` | 查询角色 | 无必填参数 | 角色分页 | `await apiClient.iam.roles.list()` |
+| `apiClient.iam.roles.get` | 读取角色 | `{ id: roleId }` | 角色记录，或 `null` | `await apiClient.iam.roles.get({ id: roleId })` |
+| `apiClient.iam.roles.create` | 创建角色 | `{ code: 'reader', name: 'Reader' }` | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
+| `apiClient.iam.roles.update` | 更新角色 | `{ id: roleId, name: 'Report reader' }` | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
+| `apiClient.iam.roles.delete` | 删除角色 | `{ id: roleId }` | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
+| `apiClient.iam.permissions.list` | 分页查询权限 | `{ page: 1, type: 'api' }` | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
+| `apiClient.iam.permissions.get` | 读取权限 | `{ id: permissionId }` | 权限记录，或 `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
+| `apiClient.iam.permissions.create` | 创建权限 | `{ code: 'reports:read', name: 'Read reports' }` | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
+| `apiClient.iam.permissions.setSensitiveOperations` | 配置敏感操作 | `{ id: permissionId, sensitiveOperations: ['users:delete'] }` | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
+| `apiClient.iam.permissions.delete` | 删除权限 | `{ id: permissionId }` | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
 
 #### 文件、聊天、记忆与会话
 
-| 用途           | 调用（含示例输入）                                                                            | 成功数据                   |
-| -------------- | --------------------------------------------------------------------------------------------- | -------------------------- |
-| 读对象元数据   | `await apiClient.storage.files.getMetadata({ key })`                                          | 键、大小、类型等           |
-| 删除单个对象   | `await apiClient.storage.files.delete({ key })`                                               | 无业务数据                 |
-| 批量删除对象   | `await apiClient.storage.files.deleteMany({ keys: [key] })`                                   | 已确认删除的键与空失败列表 |
-| 签发上传地址   | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` | 临时上传 URL 和对象键      |
-| 签发下载地址   | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })`                | 临时下载 URL 和对象键      |
-| 发送会话消息   | `await apiClient.ai.chats.sendMessage({ message, sessionId })`                                | 回复与当前会话信息         |
-| 查询历史       | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })`                              | 聊天记录列表               |
-| 查询记忆       | `await apiClient.ai.memories.list({ objectId, limit: 20 })`                                   | 记忆列表                   |
-| 按内容检索记忆 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })`                | 召回的记忆项               |
-| 查询对象的会话 | `await apiClient.ai.sessions.list({ objectId })`                                              | 会话列表                   |
+| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.storage.files.list` | 列出当前用户有权查看的对象 | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter`；`maxKeys` 范围 1–1000 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `apiClient.storage.files.getMetadata` | 读对象元数据 | `{ key }` | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
+| `apiClient.storage.files.delete` | 删除单个对象 | `{ key }` | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
+| `apiClient.storage.files.deleteMany` | 批量删除对象 | `{ keys: [key] }` | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
+| `apiClient.storage.presignedUrls.createUpload` | 签发上传地址 | `{ key, contentType: 'application/pdf' }` | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
+| `apiClient.storage.presignedUrls.createDownload` | 签发下载地址 | `{ key, expiresIn: 60 }` | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `apiClient.ai.chats.createCompletion` | 发送不附带会话历史的消息，获取非流式补全结果 | `messages` 必填；可选模型和生成设置 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Summarize this report.' }] })` |
+| `apiClient.ai.chats.sendMessage` | 发送会话消息 | `{ message, sessionId }` | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
+| `apiClient.ai.chats.listHistory` | 查询历史 | `{ sessionId, limit: 20 }` | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `apiClient.ai.memories.list` | 查询记忆 | `{ objectId, limit: 20 }` | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
+| `apiClient.ai.memories.recall` | 按内容检索记忆 | `{ query: 'preferred language', topK: 3 }` | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `apiClient.ai.sessions.list` | 查询对象的会话 | `{ objectId }` | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
 
-已有文件列表及聊天补全示例见[默认业务领域](#默认业务领域)。按需通过 `apiClient.create(apiContract.create({ payment: apiContract.payment, feedback: apiContract.feedback }))` 得到包含支付或反馈契约的实例。各调用的路径与权限见[HTTP 契约](./api-contract.md)。
+按需通过 `apiClient.create(apiContract.create({ payment: apiContract.payment, feedback: apiContract.feedback }))` 得到包含支付或反馈契约的实例。各调用的路径与权限见[HTTP 契约](./api-contract.md)。
 
 ## 错误处理
 

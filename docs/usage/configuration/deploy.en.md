@@ -37,4 +37,4 @@ provider:
 | --- | --- | --- |
 | `services.db`, `services.cache`, `services.storage` | Optional | Optional provisioned services. Supply the provider and its credentials when enabled. |
 
-Additional options and workflow examples are available in the [Chinese reference](deploy.md).
+Still untranslated: the full provider, HTTPS, SSH and middleware options. Read the [Chinese source section](deploy.md#configuration-fields).

@@ -17,6 +17,8 @@ type: sqlite
 database: ./data/orders.db
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 先看 `type` 对应的行。例如，SQLite 的 `database` 是文件路径或 `:memory:`，MySQL 的 `database` 是数据库名称。如果省略整个 `operationLog`，应用不会启用这里列出的 SQL 操作日志选项。

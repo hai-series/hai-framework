@@ -4,6 +4,8 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/scheduler.md) · [功能说明](../function/scheduler.md)
 
+<a id="tables"></a>
+
 ## 数据库
 
 调度器把任务设置、当前由谁执行以及执行日志保存在 [reldb](reldb.md)。除下表列出的默认值外，字段值由写入代码提供。选填字段缺失时存为 NULL。
@@ -19,3 +21,5 @@
 ## 缓存
 
 模块不创建 Redis 键。服务实例利用本机计时器决定何时查找任务。能否领取、延长执行权或写入结果，以数据库里的记录与时间为准。
+
+表结构和索引见调度器的[任务](../../../packages/scheduler/src/repositories/scheduler-repository-task.ts)、[执行](../../../packages/scheduler/src/repositories/scheduler-repository-execution.ts)与[日志](../../../packages/scheduler/src/repositories/scheduler-repository-log.ts)表定义。

@@ -6,6 +6,8 @@ Deploy existing images or Vercel prebuilt output, including complete offline bun
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/deploy`.
+
 [Open the quick-start guide](../../docs/usage/function/deploy.en.md#quick-start).
 
 ## Configuration Reference

@@ -8,6 +8,8 @@ A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSe
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/cache`.
+
 [Open the quick-start guide](../../docs/usage/function/cache.en.md#quick-start).
 
 ## Configuration Reference

@@ -8,6 +8,8 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/capacitor @capacitor/core @capacitor/preferences`.
+
 [Open the quick-start guide](../../docs/usage/function/capacitor.en.md#quick-start).
 
 ## Configuration Reference

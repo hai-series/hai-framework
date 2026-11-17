@@ -125,9 +125,11 @@ export default defineConfig({
 - A2A 协议集成：默认发现路径 `/.well-known/agent-card.json`；配置 `authenticate` 后 null/undefined 返回 401，仅未配置认证时允许匿名。API Key 参数从完整 Agent Card 的 `securitySchemes.apiKey` 读取。Hook 与显式 A2A 路由共享 JSON-RPC 解析错误和 SSE 取消清理逻辑。
 - 双构建模式（`createAdapter()`）
 
+<a id="detailed-workflow"></a>
+
 ### 搭建请求管道
 
-应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `paths.base` 与守卫使用的实际 URL 应保持一致：将 `resolve('/').replace(/\/$/, '')`（配置 `paths.relative: false`） 加到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
+应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `paths.base` 与守卫使用的实际 URL 应保持一致：配置 `paths.relative: false`，从 `$app/paths` 的 `resolve('/').replace(/\/$/, '')` 得到挂载路径后拼接到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
 
 以下 Hook 片段假设应用已完成数据库、共享缓存和 IAM 初始化，并检查每项初始化结果。关闭资源由应用统一负责；不在每个请求中初始化模块。
 
@@ -143,7 +145,10 @@ const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
       const verified = await iam.auth.verifyToken(token)
-      return verified.success ? verified.data : null
+      if (!verified.success)
+        return null
+      const { userId, username, roles, permissions } = verified.data
+      return { userId, username, roles, permissions }
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
@@ -163,6 +168,22 @@ export const handle: Handle = haiHandle
 限流采用首次成功提交为起点的固定窗口，后续请求不延长 TTL。必须显式传 store；应用先检查共享 Redis 初始化结果，所有节点使用相同 namespace/windowMs/maxRequests。缓存读取/条件提交失败或冲突耗尽返回503，超限429；不会回退 get+set 或本地计数。createMemoryRateLimitStore 仅开发或显式 HAI_E2E/HAI_E2E_MOCK 测试使用，无常驻定时器，丢弃引用即可回收；每次请求最多惰性扫描 64 项，最多保存 10000 个窗口，容量满时对新 key 返回503且不驱逐有效计数，外部 store 生命周期由创建者管理；生产不得设置测试开关。响应重置时间为节点时钟估算，实际窗口由 Redis TTL 决定，须同步时钟。默认键只读取可信 adapter 的 getClientAddress、规范化等价IPv6和IPv4映射地址，不采信原始转发头；代理信任通过部署adapter配置。
 
 ### API 端点
+
+先在应用的 `src/app.d.ts` 中声明会话字段。如果生成模板已经声明了 `Locals.session`，沿用现有定义。
+
+```ts
+import type { SessionData } from '@h-ai/kit'
+
+declare global {
+  namespace App {
+    interface Locals {
+      session?: SessionData
+    }
+  }
+}
+```
+
+请求经过上面的 Kit Hook 后，端点从 `locals.session` 读取已验证的会话。没有 `user:create` 权限时，处理函数不会读入请求正文。
 
 ```typescript
 import { kit } from '@h-ai/kit'
@@ -208,53 +229,63 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
-`paths.relative: false` 使 SvelteKit 生成绝对的应用路径。以部署到 `/console` 为例，应用可用 `resolve('/').replace(/\/$/, '')` 从 `$app/paths` 取得 `base`。将 `basePath: base` 同时交给服务端 `crypto.transport` 和浏览器的 `kit.client.installBrowserTransport(kitConfig, { crypto, basePath: base })`。若使用独立客户端，把相同值传给 `kit.client.create()` 的 `transport.basePath`。根目录使用空字符串。这个值由 SvelteKit 构建时设置，无需在 YAML 或请求头重复填写。密钥交换、排除规则和路由字节上限仍使用完整的请求路径。SSR 模板已配置这些值。
+`paths.relative: false` 使 SvelteKit 生成绝对的应用路径。例如部署到 `/console` 时，在应用中用 `resolve('/').replace(/\/$/, '')`（`resolve` 来自 `$app/paths`）得到 `'/console'`。将 `basePath: base` 同时交给服务端 `crypto.transport` 和浏览器的 `kit.client.installBrowserTransport(kitConfig, { crypto, basePath: base })`。若使用独立客户端，把相同值传给 `kit.client.create()` 的 `transport.basePath`。根目录使用空字符串。这个值由 SvelteKit 构建时设置，无需在 YAML 或请求头重复填写。密钥交换、排除规则和路由字节上限仍使用完整的请求路径。SSR 模板已配置这些值。
 
-**src/hooks.server.ts**：
+**服务端 Hook 装配**：在应用启动时将计算出的 `base` 传给 `createTransportHandle(base)`，再把返回的 Hook 交给 SvelteKit。
 
 ```ts
-import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
-import { kit } from '@h-ai/kit'
-import { appKitConfig } from '#lib/server/kit-config.js'
+import { core } from '@h-ai/core'
+import { kit, KitConfigSchema, type KitConfig } from '@h-ai/kit'
 
-const base = resolve('/').replace(/\/$/, '')
+export async function createTransportHandle(base: string) {
+  // 启动时从应用指定的目录读取并校验 _kit.yml。
+  core.init({ configDir: './config', configSchemas: { kit: KitConfigSchema } })
+  const appKitConfig = core.config.getOrThrow<KitConfig>('kit')
 
-const cryptoReady = await crypto.init()
-if (!cryptoReady.success)
-  throw new Error(cryptoReady.error.message)
-const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
-if (!ring.success)
-  throw new Error(ring.error.message)
-const serverKeyRing = ring.data
-// Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
+  const cryptoReady = await crypto.init()
+  if (!cryptoReady.success)
+    throw new Error(cryptoReady.error.message)
+  const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+  if (!ring.success)
+    throw new Error(ring.error.message)
+  const serverKeyRing = ring.data
+  // Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
 
-export const handle = kit.createHandle({
-  auth: {
-    verifyToken: async (token) => {
-      const verified = await iam.auth.verifyToken(token)
-      return verified.success ? verified.data : null
+  return kit.createHandle({
+    trustedProxies: appKitConfig.trustedProxies,
+    access: appKitConfig.access,
+    auth: {
+      verifyToken: async (token) => {
+        const verified = await iam.auth.verifyToken(token)
+        if (!verified.success)
+          return null
+        const { userId, username, roles, permissions } = verified.data
+        return { userId, username, roles, permissions }
+      },
+      protectedPaths: [`${base}/api/*`],
+      publicPaths: [`${base}/api/_hai/*`], // 默认密钥协商端点
     },
-    protectedPaths: [`${base}/api/*`],
-    publicPaths: [`${base}/api/_hai/*`], // 默认密钥协商端点
-  },
-  crypto: {
-    crypto,
-    transport: appKitConfig.transport === false
-      ? false
-      : {
-          ...appKitConfig.transport,
-          basePath: base,
-          serverKeyRing,
-          keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-        },
-  },
-})
+    crypto: {
+      crypto,
+      transport: appKitConfig.transport === false
+        ? false
+        : {
+            ...appKitConfig.transport,
+            basePath: base,
+            serverKeyRing,
+            keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+          },
+    },
+  })
+}
 ```
 
-**src/routes/+layout.svelte**（推荐入口：浏览器端只需一行）：
+`verifyToken` 把 IAM 的验证结果投影为 Kit 所需的会话字段；验证失败返回 `null`，由守卫判断未登录。密钥环和缓存连接仅保留在服务器。
+
+**src/routes/+layout.svelte**（安装浏览器端包装）：
 
 ```svelte
 <script lang='ts'>

@@ -10,7 +10,9 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/api-client.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/api-client`。
+
+[跟着最小示例完成接入](../../docs/usage/function/api-client.md#quick-start)。
 
 ## 配置清单
 

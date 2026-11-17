@@ -16,7 +16,7 @@ pnpm add -g @h-ai/cli@latest
 hai --version
 ```
 
-[跟着最小示例完成接入](../../docs/usage/function/cli.md#最小接入示例)。
+[跟着最小示例完成接入](../../docs/usage/function/cli.md#quick-start)。
 
 ## 配置清单
 

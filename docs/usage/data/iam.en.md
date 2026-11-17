@@ -14,4 +14,4 @@ Identity data belongs to RelDB and revocable session state uses a shared Cache i
 | `hai_iam_api_keys` | API key lifecycle and user ownership; store hashed key material. |
 | Cache / キャッシュ | Per-user sessions and indexes, token verification and revocation state, OTP attempts, challenge and one-time-ticket records. TTL and cleanup depend on the credential or policy. |
 
-Field constraints, defaults and retention details are available in the [Chinese reference](iam.md).
+Still untranslated: the complete account fields, cache key shapes and credential expiry behavior. Read the [Chinese source section](iam.md#data-fields).

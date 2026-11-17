@@ -64,4 +64,4 @@ await reldb.close()
 | `reldb.crud.table` | Create a typed table handle for common create/read/update/delete operations. | `reldb.crud.table('orders')` |
 | `reldb.json.extract`, `set`, `insert`, `remove`, `merge` | Build driver-specific JSON functions for extracting and updating document fields. | `reldb.json.extract('payload', '$.status')` |
 
-Additional options and workflow examples are available in the [Chinese reference](reldb.md).
+Still untranslated: the per-method SQL, JSON, transaction and repository examples. Read the [Chinese source section](reldb.md#api-reference).

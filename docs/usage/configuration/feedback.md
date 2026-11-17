@@ -18,6 +18,8 @@ notificationMode: console
 consoleContent: metadata
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 例如，省略 `notificationMode` 默认使用 `reach` 发送通知，因此需要为该模式设置收件方。下例显式改为 `console`，开发时只在服务端日志中看到反馈编号等基本信息。

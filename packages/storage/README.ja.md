@@ -8,6 +8,8 @@
 
 ## クイックスタート
 
+`pnpm add @h-ai/storage` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/storage.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

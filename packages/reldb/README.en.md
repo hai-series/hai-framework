@@ -8,6 +8,8 @@ A relational database module with a unified `reldb` object for SQLite, PostgreSQ
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/reldb`.
+
 [Open the quick-start guide](../../docs/usage/function/reldb.en.md#quick-start).
 
 ## Configuration Reference

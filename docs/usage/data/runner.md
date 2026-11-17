@@ -4,6 +4,8 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/runner.md) · [功能说明](../function/runner.md)
 
+<a id="tables"></a>
+
 ## 数据库
 
 Runner 把任务、资源配额和执行事件保存在共享 [reldb](reldb.md)。多个执行节点使用数据库时钟判断截止时间。未列默认值的字段由写入代码设置。
@@ -25,10 +27,12 @@ Runner 把任务、资源配额和执行事件保存在共享 [reldb](reldb.md)�
 | `result_json`、`container_json`                          | 可空结果和容器身份/运行信息                                                                             |
 | `created_at`、`updated_at`                               | 创建和更新时间                                                                                          |
 | `reconciliation_json`、`reconciled_at`                   | 可空人工裁定内容和时间                                                                                  |
-| `capacity_class`、`concurrency_key`、`concurrency_limit` | 记录任务占用哪类资源、归入哪组并发统计及该组上限。并发组及上限可为空                                    |
+| `capacity_class`、`concurrency_key`、`concurrency_limit` | 记录任务占用哪类资源、归入哪组并发统计及该组上限。并发组可为空，上限为必填整数                                    |
 | `pool_fingerprint`、`pool_limit`、`warm_state`           | 可空。记录提前启动容器所用的预热池标识、容量上限和准备状态                                              |
 
-索引覆盖排队状态、节点及租约、范围及容量、并发组、父执行、清理游标以及三类超时。
+时间字段是 Unix 毫秒。除可空字段外，计时与配额使用整数；JSON 列保存任务输入、执行或核验结果。索引覆盖排队状态、节点及租约、范围及容量、并发组、父执行、清理游标以及三类超时。
+
+<a id="events"></a>
 
 ### 执行事件与容量闸门
 

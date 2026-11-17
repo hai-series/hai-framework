@@ -8,6 +8,8 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 ## クイックスタート
 
+`pnpm add @h-ai/api-contract` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/api-contract.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

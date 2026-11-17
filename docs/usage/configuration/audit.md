@@ -18,6 +18,8 @@ capture:
   includeReads: false
 ```
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 省略 `alerts.schedule` 时，告警检查不会自动运行。要定时检查，设置 `alerts.schedule.enabled: true`，再把对应任务注册到 Scheduler。未开启自动检查时，应用仍可用 `audit.checkAlerts()` 手动运行。

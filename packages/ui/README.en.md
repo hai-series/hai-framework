@@ -12,6 +12,8 @@ HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/ui`.
+
 [Open the quick-start guide](../../docs/usage/function/ui.en.md#quick-start).
 
 ## Configuration Reference

@@ -411,6 +411,8 @@ ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；Agent 和远程服务�
 
 错误码 090 只读、091 不存在、092 冲突、093 无效定义、094 存储失败。CLI 生成项目中的 `.agents/skills/hai-ai/resources.md` 包含配置和 CRUD 示例。
 
+<a id="configuration-fields"></a>
+
 ## 配置清单
 
 生成的项目使用 `config/_ai.yml`。启动时应用用 `core.config.get('ai')` 读出设置，再传给 `ai.init()`。用环境变量覆盖时使用 `HAI_AI_` 前缀。[凭据和地址的读取顺序](#凭据和地址按哪个顺序生效)

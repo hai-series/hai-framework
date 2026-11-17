@@ -29,7 +29,14 @@ pnpm run deploy --env prod --build
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `deploy.init` | 读取项目部署设置以供后续命令使用 | `config`（必填） | `Promise<HaiResult<void>>` | `await deploy.init(config)` |
+| `deploy.close` | 清除部署模块的运行时状态；不会停止部署到服务器的服务 | 无 | `Promise<void>` | `await deploy.close()` |
 
 #### deploy
 
@@ -144,6 +151,8 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 默认网站位于根目录。需要`https://example.com/yyy/`时，在应用构建进程显式设置`PUBLIC_BASE_PATH=/yyy`，由CLI生成格式5制品；webBasePath是构建结果，不是部署环境的可覆盖参数。各目录段仅ASCII字母、数字、`_`、`.`、`-`，无末尾斜杠或单独的`.`/`..`段。使用支持格式5的CLI/Deploy，旧工具拒绝该格式；不能手改编号绕过。
 
 SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL，额外网关应保留此前缀。同源API仍由Serv的http.apiPrefix独立决定，CORS允许源只包含协议、域名和端口。独立Vite站点保留其运行配置中的外部API地址。完整及部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv；增量在替换前拒绝目录不一致，目录变更使用全量部署。失败恢复按旧发布记录的健康路径验证。操作示例、两种框架差异与真实截图见[网站子目录配置](../configuration/delivery.md#网站部署在子目录).
+
+<a id="detailed-workflow"></a>
 
 ### 部署到环境
 

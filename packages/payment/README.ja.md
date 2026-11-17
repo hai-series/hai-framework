@@ -8,6 +8,8 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 ## クイックスタート
 
+`pnpm add @h-ai/payment` でインストールします。
+
 [最小構成の導入手順](../../docs/usage/function/payment.ja.md#quick-start)を参照してください。
 
 ## 設定一覧

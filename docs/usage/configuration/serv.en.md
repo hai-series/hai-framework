@@ -28,4 +28,4 @@ http:
 | `cors.origin`, `cors.nativeOrigins` | Optional | Allow only the application origins that need access. |
 | `cors.allowedHeaders`, `exposedHeaders`, `credentials` | Built-in headers, `[]`, `false` | Configure CORS input headers, response headers visible to clients, and credentials. |
 
-Additional options and workflow examples are available in the [Chinese reference](serv.md).
+Still untranslated: individual CORS fields, Swagger/health switches and transport limits. Read the [Chinese source section](serv.md#configuration-fields).

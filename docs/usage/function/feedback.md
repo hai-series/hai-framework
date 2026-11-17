@@ -88,9 +88,16 @@ Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@
 
 ### 功能输入输出
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `feedback.init` | 准备反馈服务；先按快速开始连接数据库并准备依赖 | `config` 必填，`options?` 可选 | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
+| `feedback.close` | 停止本实例的反馈后台工作并清理模块状态；共享依赖由应用关闭 | 无 | `Promise<HaiResult<void>>` | `await feedback.close()` |
 
 #### feedback · 提交与查询
 

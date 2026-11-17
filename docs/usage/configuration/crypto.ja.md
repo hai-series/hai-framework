@@ -18,4 +18,4 @@ transport:
 | `createReldbTransportKeyStore({ reldb })` | 必須 | 初期化済み RelDB を使用。 |
 | `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` | 省略可 | サーバーで JSON の鍵リングを読み込み、`parseTransportServerKeyRing()` で検証。 |
 
-追加の設定項目や利用例は[中国語リファレンス](crypto.md)に掲載しています。
+未翻訳：プロバイダー制限、通信本文の予算、鍵ストアの設定。[中国語の該当節](crypto.md#configuration-fields)を参照してください。

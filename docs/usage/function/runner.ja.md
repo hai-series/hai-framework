@@ -92,10 +92,21 @@ finally {
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `runner.init(config)`, `close()`, `isExecutor`, `environment(id)` | 初期化・終了と、実行役割・設定済み環境の確認。 | `runner.environment('documents')` |
-| `runner.register(kind, handler)`, `registerWarmPool(pool)` | ワーカーに信頼できるハンドラーまたは予熱プールを登録。 | `runner.register(kind, handler)` |
-| `runner.submit(request)`, `find(scope, kind, key)`, `get(scope, id)` | ジョブを登録し、重複防止キーまたは ID で取得。 | `await runner.get(scope, id)` |
-| `runner.cancel(scope, id)`, `events(scope, id, after?, limit?)` | キャンセルを依頼、または位置指定でイベントを取得。 | `await runner.events(scope, id, 0, 50)` |
-| `runner.reconcileUnknown(scope, id, review)` | 結果不明のジョブを確認した記録を保存。再実行の前に外部処理の結果を確認。 | `await runner.reconcileUnknown(scope, id, review)` |
+表の成功データを使う前に success を確認します。environment、register と registerWarmPool は同期で HaiResult を返します。
+
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `runner.init` | API ノードまたはワーカーとして起動 | `{ nodeId, executor = true, ... }` | `void` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close` | 取得を止め、実行中の処理を確認して終了 | なし | `void` | `await runner.close()` |
+| `runner.isExecutor` | このノードが実行を担当するか確認 | 読み取り専用プロパティ | `boolean` | `runner.isExecutor` |
+| `runner.environment` | 登録済みの実行環境を取得 | `id` | `RunnerEnvironment` | `runner.environment('docs')` |
+| `runner.register` | ローカル処理を登録し、解除関数を取得 | `kind, handler` | `() => void` | `runner.register('example', handler)` |
+| `runner.registerWarmPool` | 準備済みコンテナを再利用するプールを登録 | `pool` | `() => void` | `runner.registerWarmPool(pool)` |
+| `runner.submit` | 新規ジョブを待機させるか、条件に合う既存実行を返す | `request` | `RunnerExecution` | `await runner.submit(request)` |
+| `runner.find` | 認可済み範囲、種別、再利用キーから実行を検索 | `scope, kind, key` | `RunnerExecution or undefined` | `await runner.find(scope, 'example', 'request-1')` |
+| `runner.get` | 認可済みの範囲の実行結果を取得 | `scope, id` | `RunnerExecution` | `await runner.get(scope, id)` |
+| `runner.cancel` | 待機中または実行中の処理に中止を要求 | `scope, id` | `RunnerExecution` | `await runner.cancel(scope, id)` |
+| `runner.reconcileUnknown` | 結果不明の実行について確認済みの結論を記録 | `scope, id, review` | `RunnerExecution` | `await runner.reconcileUnknown(scope, id, review)` |
+| `runner.events` | 保存した連番の続きからイベントを取得 | `scope, id, after = 0, limit = 100` | `RunnerEvent[]` | `await runner.events(scope, id, 0, 20)` |
+
+認証済みリクエストから範囲を決めます。中止要求は外部作業が停止した証拠ではありません。元のリソースを確認してから結果不明の実行を照合します。

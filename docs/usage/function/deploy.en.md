@@ -19,10 +19,20 @@ pnpm run deploy --env prod --build
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `deploy.scan`, `provisionAll`, `deployApp` | Read project structure, provision selected services, or deploy the selected provider configuration. | `await deploy.scan(appDir)` |
-| `deploy.credentials.getPath`, `load`, `save`, `saveAll` | Find or read credential files and persist provider credentials for later runs. | `deploy.credentials.getPath()` |
-| `hai deploy --plan`, `--build`, `--services`, `--artifact-dir`, `--bundle-only` | Inspect the plan, build for deployment, select services, reuse an artifact, or produce a standalone bundle. | `hai deploy --env staging --plan` |
+Deployment and credential operations with HaiResult require a success check. Keep credential values private.
 
-Additional options and workflow examples are available in the [Chinese reference](deploy.md).
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `deploy.init` | Prepare the configured deployment provider | `config` | `void` | `await deploy.init(config)` |
+| `deploy.close` | Release deployment provider resources | None | `Promise<void>` | `await deploy.close()` |
+| `deploy.scan` | Inspect an application and its deployment materials | `appDir, options?` | `ScanResult` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
+| `deploy.provisionAll` | Prepare selected infrastructure services | `projectName, services?` | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
+| `deploy.deployApp` | Build a bundle or deploy to the configured target | `appDir, options?` | `DeployResult` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+| `deploy.credentials.getPath` | Read the local credentials file path | None | `string` | `deploy.credentials.getPath()` |
+| `deploy.credentials.load` | Load private values and return the loaded variable names | None | `HaiResult<string[]>` | `deploy.credentials.load()` |
+| `deploy.credentials.save` | Save one credential | `key, value` | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
+| `deploy.credentials.saveAll` | Save supplied private credentials together | `entries` | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
+
+With bundleOnly, inspect the build package before deployment; this call does not update the target host.
+
+Still untranslated: direct versus offline deployment and failure recovery. Read the [Chinese source section](deploy.md#detailed-workflow).

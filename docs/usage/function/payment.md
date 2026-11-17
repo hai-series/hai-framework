@@ -96,7 +96,14 @@ const activeConfig = payment.config // 无需参数，读取服务端运行配�
 
 `payment.config` 可能含渠道密钥及回调凭据，仅在可信服务端使用。`payment.isInitialized` 反映模块状态，渠道响应和到账结果通过对应业务接口确认。
 
-下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+
+#### 初始化与关闭
+
+| API | 用途 | 输入 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `payment.init` | 按配置加载支付渠道；启用 Stripe 前先连接共享数据库 | `config`（必填） | `Promise<HaiResult<void>>` | `await payment.init(config)` |
+| `payment.close` | 停止当前支付模块；支付渠道中已创建的交易仍由渠道处理 | 无 | `Promise<void>` | `await payment.close()` |
 
 #### payment · 订单与退款
 

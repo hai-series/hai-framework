@@ -58,4 +58,4 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 Refresh credentials are distinct from server logout. Use the IAM logout endpoint to invalidate the server session. Recovery after refresh failure must restore the same user.
 
-Additional options and workflow examples are available in the [Chinese reference](api-client.md).
+Still untranslated: the extensive default-domain endpoints, authentication actions and refresh flows. Read the [Chinese source section](api-client.md#detailed-workflow).

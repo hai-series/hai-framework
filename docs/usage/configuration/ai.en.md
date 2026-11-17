@@ -47,4 +47,4 @@ acp:
 
 Choose `knowledge.collection` (default `hai_ai_knowledge`) and a dimension matching the embedding model (default `1536`). Incoming text runs through `knowledge.cleanOptions` before `knowledge.chunkOptions` creates chunks. The default chunker uses Markdown sections, a size of `1500` and overlap of `200`. Adjust these settings before indexing and reindex the collection if you need to change the stored chunks. [Datapipe options](datapipe.en.md)
 
-Additional options and workflow examples are available in the [Chinese reference](ai.md).
+Still untranslated: the full model-profile, MCP and ACP option tables. Read the [Chinese source section](ai.md#configuration-fields).

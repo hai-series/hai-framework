@@ -189,6 +189,8 @@ if (hashed.success) {
 }
 ```
 
+<a id="detailed-workflow"></a>
+
 ### 传输加密（crypto.transport）
 
 传输客户端 `destroy()` 使在途握手失效并取消网络等待；迟到结果不能恢复密钥或覆盖下一次握手。它只清理本地会话，服务端 registry 仍按自己的租约回收。
@@ -254,33 +256,43 @@ const response = await client.encryptedFetch('https://api.example.com/api/v1/ech
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 
-await crypto.init()
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
-
-const server = crypto.transport.createServer({
-  serverKeyRing,
-  keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-})
-if (!server.success)
-  throw new Error(server.error.message)
+export async function startTransport() {
+  const ready = await crypto.init()
+  if (!ready.success)
+    return ready
+  const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+  if (!ring.success)
+    return ring
+  const connected = await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+  if (!connected.success)
+    return connected
+  return crypto.transport.createServer({
+    serverKeyRing: ring.data,
+    keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+  })
+}
 ```
+
+在应用启动流程调用 `startTransport()`。示例从服务端环境读取密钥环，连接本地 Redis，并返回可交给 HTTP 适配器的管理器。检查 `success` 后才能接收请求；失败或进程退出时由启动流程按反序关闭 Cache 与 Crypto。
 
 用 `encryptedFetch()` 像用浏览器的 `fetch()` 一样等待响应。网络、密钥交换、请求加密或响应解密失败都会抛出异常，调用时用 `try/catch` 处理。
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 
-服务端 `createServer({ serverKeyRing, keyStore })` 两项均必填。密钥环为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`；ID 为 1–64 个字母、数字、下划线或连字符。创建时验证公私钥配对并捕获快照，缺失/无效配置返回脱敏的 HaiResult 错误。以下示例的 `keyStore` 为已连接的 Redis/共享数据库 registry；内存仅显式用于开发或测试。
+服务端 `createServer({ serverKeyRing, keyStore })` 两项均必填。密钥环为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`；ID 为 1–64 个字母、数字、下划线或连字符。创建时验证公私钥配对并捕获快照，缺失/无效配置返回脱敏的 HaiResult 错误。下面的函数供已经初始化 Crypto 的应用调用。把基于 Redis 或共享数据库创建的公钥存储传给 `keyStore`；内存实现只用于开发或测试。密钥环不合法时直接返回解析错误，成功时返回管理器。
 
 ```ts
-import { parseTransportServerKeyRing } from '@h-ai/crypto'
+import type { TransportKeyStore } from '@h-ai/crypto'
+import { crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 
-const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
-if (!ring.success)
-  throw new Error(ring.error.message)
-const serverKeyRing = ring.data
-const server = crypto.transport.createServer({ serverKeyRing, keyStore })
+export function buildTransport(keyStore: TransportKeyStore) {
+  const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+  if (!ring.success)
+    return ring
+  return crypto.transport.createServer({ serverKeyRing: ring.data, keyStore })
+}
 ```
 
 握手响应提供当前服务端密钥编号、公钥、客户端编号和请求正文上限，即 `{ serverKeyId, serverPublicKey, clientId, maxPlaintextBytes }`。之后的请求附上 `serverKeyId`，服务端直接用该编号选私钥。密钥编号不存在或已撤销时拒绝请求。响应使用客户端公钥加密。
@@ -309,16 +321,18 @@ Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请
 
 自定义 HTTP 适配器检查失败原因 `error instanceof TransportTimeError && error.context` 后，使用 `createTransportErrorResponse(error, { manager, context: error.context })` 加密拒绝响应；不能根据未认证报文的时间戳给出可信时间诊断。
 
-自定义 HTTP 适配器可从根入口使用纯工具 `readTransportBody(stream, { maxBytes, signal? })`，无需 `crypto.init()`。必须传入原始流；读取成功后重建 Request/Response，并清理旧 Content-Length/Content-Encoding。此工具对超限抛 RangeError，对无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason；流取消清理失败不覆盖原异常。
+自定义 HTTP 适配器可从根入口使用纯工具 `readTransportBody(stream, { maxBytes, signal? })`，无需 `crypto.init()`。必须传入原始流；读取成功后重建 Request/Response，并清理旧 Content-Length/Content-Encoding。此工具对超限抛 `RangeError`，对无效 UTF-8 抛 `TypeError`，保留读取异常或 `signal.reason`。下面的函数返回还未做协议校验的 JSON，格式错误时由 `JSON.parse()` 抛错。继续处理前还要验证必要字段。
 
 ```ts
 import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
 
-const text = await readTransportBody(request.body, {
-  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
-  signal: request.signal,
-})
-const payload: unknown = JSON.parse(text)
+export async function readKeyExchangeJson(request: Request): Promise<unknown> {
+  const text = await readTransportBody(request.body, {
+    maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+    signal: request.signal,
+  })
+  return JSON.parse(text)
+}
 ```
 
 ### 关闭模块

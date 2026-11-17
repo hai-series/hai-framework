@@ -77,12 +77,28 @@ export async function uploadImage(key: string, file: File) {
 
 ## API list
 
-| API | Input and result | Example |
-| --- | --- | --- |
-| `storage.file.put`, `get`, `getStream`, `head`, `exists` | Write an object, read bytes or a stream, inspect metadata, or check existence by key. | `await storage.file.head('reports/jan.pdf')` |
-| `storage.file.copy`, `delete`, `deleteMany` | Copy between keys or remove one or several objects. | `await storage.file.delete('reports/jan.pdf')` |
-| `storage.dir.list`, `delete` | List or remove objects under a prefix. Follow the returned cursor to read more entries. | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `storage.presign.getUrl`, `putUrl`, `publicUrl` | Return a download or upload URL, or a configured public URL when supported. | `await storage.presign.getUrl('reports/jan.pdf')` |
-| `storage.checksum.generate`, `verify` | Compute or compare a checksum for content integrity. | `await storage.checksum.generate(bytes)` |
+The output is successful HaiResult.data unless shown as a distinct result. publicUrl returns synchronously.
 
-Additional options and workflow examples are available in the [Chinese reference](storage.md).
+| API | Purpose | Inputs and defaults | Output | Example |
+| --- | --- | --- | --- | --- |
+| `storage.init` | Open the selected backend | `config` | `void` | `await storage.init(config)` |
+| `storage.close` | Stop new operations and release the backend | None | `void` | `await storage.close()` |
+| `storage.file.put` | Write bytes and optional metadata | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
+| `storage.file.get` | Read object bytes into a buffer | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream` | Stream object bytes. Iteration can fail after acquisition | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.head` | Read metadata without downloading content | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists` | Check whether a key exists | `key` | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.delete` | Remove one object | `key` | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany` | Delete several keys, retaining progress details on error | `keys` | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+| `storage.file.copy` | Copy the source object to another key | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
+| `storage.dir.list` | Page through objects, optionally filtered by prefix | `options?` | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
+| `storage.dir.delete` | Delete objects under a prefix | `prefix` | `void` | `await storage.dir.delete('backup/')` |
+| `storage.presign.getUrl` | Create a temporary download URL on S3 | `key, options?` (expires in 3600 seconds by default, range 1–604800) | `string` | `await storage.presign.getUrl('report.txt')` |
+| `storage.presign.putUrl` | Create a temporary upload URL on S3 | `key, options?` (expires in 3600 seconds by default; MIME type defaults to `application/octet-stream`) | `string` | `await storage.presign.putUrl('report.txt')` |
+| `storage.presign.publicUrl` | Build the configured public URL if available | `key` | `string or null` | `storage.presign.publicUrl('report.txt')` |
+| `storage.checksum.generate` | Calculate a content digest | `data, options?` | `string` | `await storage.checksum.generate('Hello')` |
+| `storage.checksum.verify` | Compare the content with the expected digest | `data, expected, options?` | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+
+Consume or cancel opened streams. After a failed bulk delete, inspect error.ext.deleteMany before retrying: a key with an unknown outcome may already be deleted.
+
+Still untranslated: the streaming integrity, batch-delete recovery and external upload workflows. Read the [Chinese source section](storage.md#api-reference).

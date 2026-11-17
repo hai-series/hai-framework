@@ -8,7 +8,9 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 ## 快速开始
 
-[跟着最小示例完成接入](../../docs/usage/function/api-contract.md#最小接入示例)。
+使用 pnpm 安装：`pnpm add @h-ai/api-contract`。
+
+[跟着最小示例完成接入](../../docs/usage/function/api-contract.md#quick-start)。
 
 ## 配置清单
 

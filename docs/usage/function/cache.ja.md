@@ -50,4 +50,4 @@ finally {
 | `cache.zset.zadd`, `zrem`, `zscore`, `zrank`, `zrevrank`, `zrange`, `zrevrange`, `zrangeByScore`, `zcard`, `zcount`, `zincrBy`, `zremRangeByRank`, `zremRangeByScore` | スコアを保存し、順位やスコアで検索・削除。 | `await cache.zset.zrange('scores', 0, 9)` |
 | `cache.lock.acquire`, `release`, `isLocked` | 期限付きリースの取得、所有者トークンによる解放、状態確認。 | `await cache.lock.isLocked('daily')` |
 
-追加の設定項目や利用例は[中国語リファレンス](cache.md)に掲載しています。
+未翻訳：残りのコレクション操作、Cluster の走査とロックの例。[中国語の該当節](cache.md#api-reference)を参照してください。

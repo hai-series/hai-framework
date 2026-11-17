@@ -21,4 +21,4 @@ executor: false
 | `maxEvents`, `retentionMs` | `10000`, `604800000` | イベント数の上限と保持期間（ミリ秒）。 |
 | `environments` | `[]` | 各項目に ID・イメージ・リソースを宣言。方式の既定は `container`、機能の既定は空リスト。 |
 
-追加の設定項目や利用例は[中国語リファレンス](runner.md)に掲載しています。
+未翻訳：コンテナ実行環境、ネットワーク、リソースの個別項目。[中国語の該当節](runner.md#configuration-fields)を参照してください。

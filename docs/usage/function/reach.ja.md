@@ -80,10 +80,24 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `reach.send` | メッセージを送信、または配送キューに登録。 | `await reach.send(message)` |
-| `reach.template.resolve`, `save`, `saveBatch`, `remove`, `list`, `render` | テンプレートの解決、保存、列挙、変数を使った描画。 | `await reach.template.list()` |
-| `reach.queue.get`, `list`, `requeueDead`, `resolveUnknown` | 配送状態を読み取り、キューの復旧や結果の照合を行う。 | `await reach.queue.get(queueId)` |
+送信、テンプレート、キューの操作は HaiResult を返します。表は成功時のデータです。close に業務データはありません。
 
-追加の設定項目や利用例は[中国語リファレンス](reach.md)に掲載しています。
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `reach.init` | プロバイダーと、キューを使う場合の依存先を準備 | `config, options?` | `void` | `await reach.init(config)` |
+| `reach.close` | サービスを停止してリソースを解放 | なし | `Promise<void>` | `await reach.close()` |
+| `reach.send` | 即時送信またはキューに登録 | `message` | `SendResult` | `await reach.send(message)` |
+| `reach.template.resolve` | 実際に適用されるテンプレートを取得 | `name` | `ReachTemplate` | `await reach.template.resolve(name)` |
+| `reach.template.save` | テンプレートを一件保存 | `template` | `void` | `await reach.template.save(template)` |
+| `reach.template.saveBatch` | 複数テンプレートを保存 | `templates` | `void` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove` | 保存済みテンプレートを削除 | `name` | `void` | `await reach.template.remove(name)` |
+| `reach.template.list` | テンプレートを一覧取得 | なし | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render` | 変数を埋め込む。送信はしない | `name, vars` | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.queue.get` | 送信記録を一件取得 | `queueId` | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list` | 条件に一致する送信記録を一覧取得 | `options` | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
+| `reach.queue.requeueDead` | 再試行できる終了済みの失敗をキューに戻す | `queueId, options` | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown` | キュー外で確認できた配信結果を記録 | `queueId, resolution` | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+
+キューへの登録は受信の証明ではありません。結果不明の送信を照合する際は、プロバイダーの実際の結果を確認します。
+
+未翻訳：送信結果の照合、失敗キューの復旧、本番での制約。[中国語の該当節](reach.md#detailed-workflow)を参照してください。

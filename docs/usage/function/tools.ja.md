@@ -13,6 +13,8 @@
 
 軽量エントリーはブラウザーでも利用できますが、サーバーの権限は信頼できるサーバー側で検証します。`/server` をフロントエンドにインポートしないでください。
 
+<a id="quick-start"></a>
+
 ## 最小構成
 
 ```sh
@@ -66,18 +68,24 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## 軽量メソッド
 
-| メソッド | 用途と戻り値 |
-| --- | --- |
-| `tools.define` | 名前・説明・Zod Schema・処理関数 → ツール。既定タイムアウトは 30 秒 |
-| `tools.createRegistry` | 任意の `authorize` → 登録器 |
-| `tool.execute` | 業務入力と任意のコンテキスト → `Promise<HaiResult<TOutput>>` |
-| `tool.toDefinition` | 名前・表示名・説明・入力 JSON Schema・プリセットの中立定義 |
-| `registry.register/registerMany` | 登録 → `HaiResult<void>`。重名は上書きせず、一括登録はアトミック |
-| `registry.replace` | 既存の名前を明示的に置換 → `HaiResult<void>` |
-| `registry.get/has/getNames/getDefinitions` | 現在の集合と中立定義を取得 |
-| `registry.execute` | 名前・入力・任意のコンテキスト → `Promise<HaiResult<unknown>>` |
-| `registry.executeAll` | `{ name, input }[]` → `Promise<HaiResult<unknown[]>>`。既定は逐次実行 |
-| `registry.unregister/clear/size` | プロセス内の集合を無効化・消去・集計 |
+| API | 用途 | 入力 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `tools.define` | ツールを定義し、実行時に入力を検証する。既定のタイムアウトは `30000` ms。定義が無効なら `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tools.createRegistry` | `authorize` を省略すると、登録先独自の認可条件を適用しない空の登録先を作る | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `tool.execute` | 入力を検証して実行する。利用者、認可、キャンセル信号、期限も指定できる | `input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition` | 入力の規則を JSON Schema に変換する。変換できないときは例外 | なし | `ToolDefinition` | `tool.toDefinition()` |
+| `registry.register` | ツールを 1 件登録する。同じ名前があれば失敗 | `tool` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany` | 複数のツールを登録する。重複や無効な項目が一つでもあれば、どれも登録しない | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace` | 既存のツールを同名の新しい定義で置き換える。登録済みの名前が必要 | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister` | 指定した名前を削除する。登録済みの場合だけ `true` | `name` | `boolean` | `registry.unregister('sum')` |
+| `registry.get` | 名前で実体を取得し、なければ `undefined` | `name` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has` | 名前が登録済みか確認する | `name` | `boolean` | `registry.has('sum')` |
+| `registry.getNames` | 登録された名前を一覧にする | なし | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions` | 登録済みツールの定義を返す。入力を JSON Schema に変換できないときは例外 | なし | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute` | 登録済みツールを実行する。登録先と呼び出しの両方に認可条件があれば、両方を満たす必要がある | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll` | 既定では順に実行して最初の失敗で停止する。`parallel: true` では、失敗しても実行を開始した処理は取り消されない | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear` | 登録内容を消去する。進行中の呼び出しはキャンセルしない | なし | `void` | `registry.clear()` |
+| `registry.size` | 登録済みの件数を取得する（プロパティ） | なし | `number` | `registry.size` |
 
 `tool` と `registry` はファクトリーの戻り値であり、パッケージ直下の関数ではありません。登録器は他のツールを自動発見せず、`tools.define` が作成したインスタンスだけを受け付けます。手書き・コピーしたオブジェクトは拒否します。
 
@@ -89,7 +97,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## サーバータスクサービス
 
-[Runner](runner.md) をインストール・初期化して `/server` からインポートします。ホストが本人情報、有効化、認可、成果物アクセスを提供します。サービスは借りた Runner を初期化・終了しません。
+[Runner](runner.ja.md) をインストール・初期化して `/server` からインポートします。ホストが本人情報、有効化、認可、成果物アクセスを提供します。サービスは借りた Runner を初期化・終了しません。
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
@@ -134,7 +142,7 @@ export function createDocumentService(runner: RunnerFunctions, files: ToolArtifa
 
 環境を割り当てたジョブだけがカタログに現れます。`documents` は `documents_extract/documents_generate`、`office` は `office_convert/office_recalculate`、`ocr` は `ocr_recognize`、`browser` は `browser_navigate`、`web` は `web_capture`、`preview` は `preview_build`、`video` は `video_render` です。入力、固定イメージ、capability、ネットワーク要件は [ジョブ説明](../../../packages/tools/jobs/README.md) を参照してください。`browser/web` は信頼済みホストの `browserProxy` も必要です。形式は `http://loopback 以外の IPv4:port` です。既存のモデル用出口プロキシを再利用でき、モデル引数ではなく `HAI_TOOL_BROWSER_PROXY` でジョブに渡します。割り当て後も Runner の能力・ネットワーク検証が必要です。
 
-画像・音声・文書の書き換えには [AI](ai.md) の `ai.tools.createBuiltinTools` を使い、同じ `ToolSet` に統合します。Tools は AI に逆依存しません。`video_render` の入力は準備済みのプロジェクトパッケージです。URL からの紹介動画全体は、以下の AI ワークフローで採集・構成・ナレーション・素材の組み立ても行います。
+画像・音声・文書の書き換えには [AI](ai.ja.md) の `ai.tools.createBuiltinTools` を使い、同じ `ToolSet` に統合します。Tools は AI に逆依存しません。`video_render` の入力は準備済みのプロジェクトパッケージです。URL からの紹介動画全体は、以下の AI ワークフローで採集・構成・ナレーション・素材の組み立ても行います。
 
 `documents_generate` は `format: docx/xlsx/pptx`、タイトル、任意の段落・表・スライドを受け取り、固定形式の Office ファイルを生成します。UTF-8 JSON 資料は 256 KiB までで、段落・表は形式別に検証します。PPTX は各ページ最大 6 段落、各 160 文字、合計 800 文字です。表は最大 6 列・データ 6 行・各セル 32 文字で、表があるページの本文は 120 文字の 1 段落までです。`slides` は PPTX 専用で、トップレベルの段落・表と併用できません。内蔵例をフォームに適用してからタイトル・内容を編集できます。
 
@@ -142,7 +150,7 @@ export function createDocumentService(runner: RunnerFunctions, files: ToolArtifa
 
 グループと環境キーは別です。office/ocr ジョブは documents グループ、browser/preview ジョブは web グループに属します。該当グループを選んで環境キーを割り当て、同名のグループを作る必要はありません。
 
-サービスは Runner の制限を継承し、提出パラメーター・各イベント・最終出力はそれぞれ 512 KiB JSON までです。50 MiB のファイル・成果物上限はバイト数で、同量の JSON を埋め込める意味ではありません。コンテナ入力合計は 50 MiB と環境 scratchMiB の小さい値も適用します。Schema が長いテキストや多くの行を許可しても、タスク全体の JSON 上限が必要です。大きな内容は権限付きファイル参照で渡します。[Runner の境界](runner.md#恢复任务读取事件和取消) を参照してください。
+サービスは Runner の制限を継承し、提出パラメーター・各イベント・最終出力はそれぞれ 512 KiB JSON までです。50 MiB のファイル・成果物上限はバイト数で、同量の JSON を埋め込める意味ではありません。コンテナ入力合計は 50 MiB と環境 scratchMiB の小さい値も適用します。Schema が長いテキストや多くの行を許可しても、タスク全体の JSON 上限が必要です。大きな内容は権限付きファイル参照で渡します。[Runner の境界](runner.ja.md#api-reference) を参照してください。
 
 ## プロジェクトから Web プレビューを構築
 

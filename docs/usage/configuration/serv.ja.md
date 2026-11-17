@@ -28,4 +28,4 @@ http:
 | `cors.origin`, `cors.nativeOrigins` | 省略可 | アクセスを必要とするアプリのオリジンだけ許可。 |
 | `cors.allowedHeaders`, `exposedHeaders`, `credentials` | Built-in headers, `[]`, `false` | CORS で受理するヘッダー、クライアントに公開するレスポンスヘッダー、認証情報の扱いを設定。 |
 
-追加の設定項目や利用例は[中国語リファレンス](serv.md)に掲載しています。
+未翻訳：CORS の個別項目、API 仕様とヘルスチェックの切替、通信の制限。[中国語の該当節](serv.md#configuration-fields)を参照してください。

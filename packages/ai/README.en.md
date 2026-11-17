@@ -10,6 +10,8 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 ## Quick Start
 
+Install with pnpm: `pnpm add @h-ai/ai`.
+
 [Open the quick-start guide](../../docs/usage/function/ai.en.md#quick-start).
 
 ## Configuration Reference

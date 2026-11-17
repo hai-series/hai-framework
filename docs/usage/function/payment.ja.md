@@ -62,11 +62,20 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## API 一覧
 
-| API | 入力と結果 | 例 |
-| --- | --- | --- |
-| `payment.createOrder`, `queryOrder` | 決済に必要なパラメーターを作成、または現在の状態を照会。 | `await payment.queryOrder(provider, orderNo)` |
-| `payment.refund`, `closeOrder` | 返金を依頼、または未完了の注文を終了。結果を確認。 | `await payment.refund(provider, refundRequest)` |
-| `payment.handleNotify` | 元のボディーとヘッダーを使って通知を検証・解析。 | `await payment.handleNotify(provider, notificationRequest)` |
-| `payment.getProvider`, `registerProvider` | 利用可能なプロバイダーを取得、または利用前に登録。 | `payment.getProvider(provider)` |
+直接値や Promise<void> を返す行以外、出力は成功時の HaiResult.data です。
 
-追加の設定項目や利用例は[中国語リファレンス](payment.md)に掲載しています。
+| API | 用途 | 入力と既定値 | 出力 | 例 |
+| --- | --- | --- | --- | --- |
+| `payment.init` | 設定済みの決済チャネルを初期化 | `config` | `void` | `await payment.init(config)` |
+| `payment.close` | モジュールの状態を解放 | なし | `Promise<void>` | `await payment.close()` |
+| `payment.createOrder` | 決済チャネルの支払い情報を発行 | `providerName, input` | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder` | 現在の決済状態を取得 | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.refund` | 業務上の返金 ID を指定して返金を依頼 | `providerName, input` | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.closeOrder` | 未決済の注文の取り消しを依頼 | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.handleNotify` | 決済通知を使う前に署名を確認 | `providerName, request` | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.getProvider` | 登録済み、または設定したプロバイダーを取得 | `name` | `PaymentProvider or undefined` | `payment.getProvider(name)` |
+| `payment.registerProvider` | アプリが用意した決済プロバイダーを登録 | `provider` | `void` | `payment.registerProvider(customProvider)` |
+
+支払い情報の発行成功は入金を意味しません。通知を検証し、同じ業務イベントで注文を二重に更新しないようにします。
+
+未翻訳：決済チャネルごとの購入手続き、通知、返金例。[中国語の該当節](payment.md#api-reference)を参照してください。
