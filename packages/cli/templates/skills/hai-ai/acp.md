@@ -26,6 +26,8 @@ Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chat
 
 浏览器工作台用 `scoped.sessions.create(options, { idempotencyKey, historySummary })` 创建会话，并用 `session.submit({ prompt, idempotencyKey, context })` 获取持久回执。用 `tasks.events(taskId, after, limit)` 读序号后的事件，页面断开时保留任务，显式 `tasks.cancel` 才取消。单轮可覆盖授权的资料和记忆，改变所需隔离时先选择合适会话。`session.status()` 可区分活动、显式关闭和空闲回收。
 
+通过 `tasks.findSubmission(sessionId, idempotencyKey)` 核对响应丢失的提交。使用已持久化的原会话和原幂等键。找到后继续按同一 taskId 查询或取消，返回 null 时保留待核对状态。
+
 只有部署方在固定 DeepSeek Harness 0.2.1-rc.5 镜像的登记项开启 `sharedMode: true` 时，内置共享 profile 才可运行。它使用默认启动配置，停用工具。逐轮工具及产物信息保留有界脱敏事件。工程任务可通过 `resolveProject` 装载 `workspaces.readGitSnapshot` 的文件树，完成后由 `publishProject` 交付生成的补丁。托管任务的推送调用 `workspaces.publishSnapshot`，服务端先重新查验当前 Git 发布权限。
 
 ## Goose 的原生接入

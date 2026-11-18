@@ -120,6 +120,7 @@
   "older": "Load earlier messages",
   "loading": "Loading…",
   "submitting": "Starting",
+  "confirming_submission": "Confirming submission",
   "queued": "Queued",
   "running": "Running",
   "cancelling": "Stopping",

@@ -16,6 +16,7 @@
 
 - 知识库由 `ai.knowledge.setup` 建立，`ingest` 导入，`retrieve` 只取授权范围内的命中片段。答案旁边可以查看实际引用。
 - ACP 用 `scoped.sessions.create` 开启会话，`session.submit` 取得持久回执，`tasks.events` 带事件序号重新读取。通过 `approvals.respond` 记录一次授权、会话授权、长期同类规则或拒绝。
+- 提交前记录原会话和轮次编号。受理回执丢失时调用 `tasks.findSubmission` 继续确认，同一轮只提交一次。已找回回执的任务可继续跟踪和取消。
 - 文件、代码补丁和工具产物经过当前账号的授权才可下载。保存的任务分支发布显式确认，Git 目标由服务器登记。
 - 转写和朗读复用 `ai.audio`。个人偏好通过 `ai.persona` 组装，记忆使用 `ai.memory.scoped`，长对话保留原历史并让新会话使用有界摘要。
 

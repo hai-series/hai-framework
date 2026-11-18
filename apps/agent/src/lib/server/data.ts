@@ -13,6 +13,29 @@ const text = { type: 'TEXT', notNull: true } as const
 const json = { type: 'JSON', notNull: true } as const
 const integer = { type: 'BIGINT', notNull: true } as const
 const pk = { ...text, primaryKey: true }
+// 预留两次默认排队时限供会话启动。过期的准备记录须重新预留才能发送。
+const prepareTurnTimeoutMs = 15 * 60_000
+
+export interface StoredTurn extends AgentTurn {
+  revision?: string
+  submission?: { fingerprint: string, deadline: number, sessionId?: string }
+}
+
+export function publicTurn(turn: StoredTurn): AgentTurn {
+  const { revision, submission, ...visible } = turn
+  return visible
+}
+
+export async function workspaceTime(sql: DmlOperations = reldb.sql) {
+  const expression = reldb.config?.type === 'postgresql'
+    ? 'CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)'
+    : 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  const row = value(await sql.get<{ now: number | string }>(`SELECT ${expression} AS now`))
+  const now = Number(row?.now)
+  if (!Number.isSafeInteger(now))
+    throw new WorkspaceError(503, 'operation-failed')
+  return now
+}
 
 export class WorkspaceError extends Error {
   constructor(readonly status: number, readonly code: string, readonly currentVersion?: number) {
@@ -184,33 +207,48 @@ export async function withTask<T>(user: string, id: string, operation: (task: Ag
 }
 
 export async function activeTurn(user: string, task: string, sql: DmlOperations = reldb.sql) {
-  const pending = value(await sql.get<{ data: AgentTurn | string }>(
+  const pending = value(await sql.get<{ data: StoredTurn | string }>(
     `SELECT data FROM ${turns} WHERE task_id = ? AND owner = ? AND status IN ('submitting', 'queued', 'running', 'cancelling') ORDER BY created_at DESC LIMIT 1`,
     [task, user],
   ))
   return pending
-    ? stored<AgentTurn>(pending.data)
+    ? stored<StoredTurn>(pending.data)
     : undefined
 }
 
 export async function reserveTurn(user: string, input: SendTurn) {
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify([
+      input.task,
+      input.text,
+      input.knowledge,
+      input.files,
+      input.skills,
+      input.memory,
+    ]))
+    .digest('hex')
   return withTask(user, input.task, async (task, sql) => {
     if (task.archived)
       throw new WorkspaceError(409, 'archived')
-    const previous = await one<AgentTurn>(turns, user, input.turn, sql)
+    const previous = await one<StoredTurn>(turns, user, input.turn, sql)
     if (previous) {
-      if (previous.task !== input.task || previous.text !== input.text)
+      if (previous.task !== input.task || previous.text !== input.text
+        || (previous.submission && previous.submission.fingerprint !== fingerprint)) {
         throw new WorkspaceError(409, 'busy')
-      return { task, turn: previous }
+      }
+      return { task, turn: previous, created: false }
     }
     if (await activeTurn(user, task.id, sql))
       throw new WorkspaceError(409, 'busy')
-    const turn: AgentTurn = {
+    const startedAt = await workspaceTime(sql)
+    const turn: StoredTurn = {
       id: input.turn,
       task: task.id,
       text: input.text,
       status: 'submitting',
-      startedAt: Date.now(),
+      startedAt,
+      revision: randomUUID(),
+      submission: { fingerprint, deadline: startedAt + prepareTurnTimeoutMs },
     }
     value(await sql.execute(`INSERT INTO ${turns} (id, owner, task_id, status, created_at, data) VALUES (?, ?, ?, ?, ?, ?)`, [
       turn.id,
@@ -224,29 +262,53 @@ export async function reserveTurn(user: string, input: SendTurn) {
       task.title = input.text.slice(0, 70)
       await writeTask(user, task, sql)
     }
-    return { task, turn }
+    return { task, turn, created: true }
   })
 }
 
 export async function listTurns(user: string, task: string, offset = 0, limit = 40) {
-  const found = value(await reldb.sql.query<{ data: AgentTurn | string }>(
+  const found = value(await reldb.sql.query<{ data: StoredTurn | string }>(
     `SELECT data FROM ${turns} WHERE owner = ? AND task_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
     [user, task, limit, offset],
   ))
-  return found.map(row => stored<AgentTurn>(row.data)).reverse()
+  return found.map(row => stored<StoredTurn>(row.data)).reverse()
 }
 
-export async function turnById(user: string, id: string) {
-  return (await one<AgentTurn>(turns, user, id)) ?? missing()
+export async function turnById(user: string, id: string, sql?: DmlOperations) {
+  return (await one<StoredTurn>(turns, user, id, sql)) ?? missing()
 }
 
-export async function writeTurn(user: string, turn: AgentTurn) {
-  value(await reldb.sql.execute(`UPDATE ${turns} SET data = ?, status = ? WHERE id = ? AND owner = ?`, [
-    JSON.stringify(turn),
-    turn.status,
-    turn.id,
-    user,
-  ]))
+export async function writeTurn(
+  user: string,
+  previous: StoredTurn,
+  changes: Partial<Pick<StoredTurn, 'status' | 'receipt' | 'output' | 'eventSummary' | 'plan' | 'estimate' | 'compressed'>>,
+  dispatch?: { sessionId: string, retentionMs: number },
+) {
+  return withTask(user, previous.task, async (task, sql) => {
+    const current = await turnById(user, previous.id, sql)
+    if (current.revision !== previous.revision)
+      return { updated: false, turn: current }
+    const next: StoredTurn = {
+      ...current,
+      ...changes,
+      revision: randomUUID(),
+    }
+    if (dispatch) {
+      const now = await workspaceTime(sql)
+      if (!current.submission || current.submission.sessionId || current.status !== 'submitting' || current.submission.deadline <= now)
+        return { updated: false, turn: current }
+      next.submission = { ...current.submission, sessionId: dispatch.sessionId, deadline: now + dispatch.retentionMs }
+      if (task.acpId !== dispatch.sessionId)
+        await writeTask(user, { ...task, acpId: dispatch.sessionId, acpMode: next.plan?.resolvedMode }, sql)
+    }
+    value(await sql.execute(`UPDATE ${turns} SET data = ?, status = ? WHERE id = ? AND owner = ?`, [
+      JSON.stringify(next),
+      next.status,
+      next.id,
+      user,
+    ]))
+    return { updated: true, turn: next }
+  })
 }
 
 export async function listResources(user: string, kind: AgentResource['kind']) {

@@ -232,6 +232,10 @@ function hash(value: string) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function turnKey(sessionId: string, idempotencyKey: string) {
+  return hash(JSON.stringify(['turn', sessionId, idempotencyKey]))
+}
+
 function permissionScopeKey(scope: RunnerScope) {
   // PostgreSQL JSONB 会重排键，授权归属始终使用固定字段顺序。
   return hash(JSON.stringify({ tenantId: scope.tenantId, userId: scope.userId }))
@@ -1474,7 +1478,7 @@ export function createACPPlatform(deps: {
           const state = await binding(id)
           if (state.closed)
             throw new ACPFailure('closed')
-          return enqueue(state, id, 'prompt', prompt, hash(JSON.stringify(['turn', id, idempotencyKey])), options)
+          return enqueue(state, id, 'prompt', prompt, turnKey(id, idempotencyKey), options)
         }),
         prompt: (content: ACPRunRequest['prompt'], observer?: ACPTurnOptions) => protectedCall(async () => {
           const state = await binding(id)
@@ -1642,6 +1646,25 @@ export function createACPPlatform(deps: {
         }),
       },
       tasks: {
+        /**
+         * 从原会话和幂等键找回当前主体已受理的任务，必要时补写查询回执。成功返回 null 表示当前未找到执行记录。
+         * @example
+         * ```ts
+         * import { ai } from '@h-ai/ai'
+         * const scoped = ai.acp.scoped({ tenantId: 'team', userId: 'alice' })
+         * const result = await scoped.tasks.findSubmission('saved-session-id', 'saved-turn-key')
+         * if (result.success && result.data) await scoped.tasks.get(result.data.taskId)
+         * ```
+         */
+        findSubmission: (sessionId: string, idempotencyKey: string) => protectedCall(async () => {
+          const key = submitTurnSchema.shape.idempotencyKey.parse(idempotencyKey)
+          const state = await binding(sessionId)
+          const accepted = unwrap(await getRunner().find(state.workerScope, controlKind, turnKey(sessionId, key)))
+          if (!accepted)
+            return null
+          await receipts.save(accepted.id, { scope: state.scope, workerScope: state.workerScope })
+          return { taskId: accepted.id, status: accepted.status }
+        }),
         /** 按任务 ID 查询当前主体已提交的执行状态。 */
         get: (id: string) => protectedCall(async () => unwrap(await getRunner().get(await receipt(id), id))),
         /** 读取当前主体的事件页，支持换节点重连。 */

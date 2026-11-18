@@ -49,6 +49,8 @@ Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。DeepSeek 
 
 用 `scoped.sessions.create(options, { idempotencyKey, historySummary })` 持久创建会话。收到会话句柄后用 `session.submit({ prompt, idempotencyKey, context })` 单独提交一轮。客户端保存返回的 `taskId`，用 `scoped.tasks.get` 查状态并用 `scoped.tasks.events` 按序号读取下一页。打开、刷新和换 API 节点都可以复用业务任务和历史。只有明确调用 `tasks.cancel` 才请求取消这次独立提交。
 
+应用保存原会话 ID 与轮次幂等键。调用 `scoped.tasks.findSubmission(sessionId, idempotencyKey)` 可恢复 Runner 已受理的任务和查询回执，随后按该 `taskId` 读取事件、结果或请求取消。返回 `null` 时可等待后继续核对。
+
 每轮可重新选择附件、知识库、技能和记忆范围。若新增资料改变隔离要求，先重新规划或建立合适的会话。由可信绑定提供引用信息，框架保存工具进度、脱敏预览、后端报告的上下文用量及发布产物引用。Runner 有界保留事件，长期业务记录由调用应用保存。空闲 Worker 可回收，`session.status()` 返回 `active`、`closed` 或 `expired`。用有界摘要接续时开启新的原生会话。
 
 ### 受管 Git 文件快照

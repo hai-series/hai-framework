@@ -142,7 +142,32 @@ describe.skipIf(!image)('independent ACP API and executor processes', () => {
       })
 
       const sessionId = await call<string>(left, 'open')
+      const submission = { sessionId, idempotencyKey: 'lost-receipt' }
+      expect(await call(right, 'findSubmission', submission)).toEqual({ success: true, data: null })
+      expect(await call(left, 'submitWithLostReceipt', submission)).toMatchObject({ success: false })
       await stop(left)
+      const recovered = await call<{ success: true, data: { taskId: string } }>(right, 'findSubmission', submission)
+      expect(recovered).toMatchObject({
+        success: true,
+        data: {
+          taskId: expect.any(String),
+        },
+      })
+      const recoveredId = recovered.data.taskId
+      await expect.poll(() => call(right, 'get', { taskId: recoveredId })).toMatchObject({
+        success: true,
+        data: {
+          status: 'succeeded',
+          output: { text: 'recover this result' },
+        },
+      })
+      expect(await call(right, 'findSubmission', submission)).toMatchObject({
+        success: true,
+        data: { taskId: recoveredId },
+      })
+      for (const other of ['user', 'tenant']) {
+        expect(await call(right, 'findSubmission', { ...submission, other })).toMatchObject({ success: false })
+      }
       let taskId: string | undefined
       let approvalObserved = false
       const pending = call(right, 'prompt', { sessionId, prompt: 'approval' }, (event) => {

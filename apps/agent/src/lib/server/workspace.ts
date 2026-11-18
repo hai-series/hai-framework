@@ -1,21 +1,30 @@
 import type { ACPPlatformRequest, AIConfig, ChatMessage } from '@h-ai/ai'
 import type { RunnerScope } from '@h-ai/runner'
 import type { actionSchema, AgentSettings, AgentTask, AgentTurn, SendTurn, WorkspaceEntry } from '#lib/workspace.js'
+import type { StoredTurn } from './data.js'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { ai, AIConfigSchema, HaiAIError } from '@h-ai/ai'
 import { core } from '@h-ai/core'
+import { RunnerConfigSchema } from '@h-ai/runner'
 import { z } from 'zod'
 import { settingsSchema } from '#lib/workspace.js'
 import { artifactStore } from './artifacts.js'
 import { config } from './config.js'
-import { activeTurn, addResource, findTask, getPrefs, insertTask, listResources, listTasks, listTurns, missing, owner, removeResource, reserveTurn, resource, turnById, value, withTask, WorkspaceError, writePrefs, writeTask, writeTurn } from './data.js'
+import { activeTurn, addResource, findTask, getPrefs, insertTask, listResources, listTasks, listTurns, missing, owner, publicTurn, removeResource, reserveTurn, resource, turnById, value, withTask, WorkspaceError, workspaceTime, writePrefs, writeTask, writeTurn } from './data.js'
 import { collection, knowledgeLists, memory, projects, readFile, readText } from './resources.js'
 import { toolHost } from './tool-host.js'
 
 const aiConfig = (): AIConfig => AIConfigSchema.parse(core.config.get('ai'))
 const acp = (scope: RunnerScope) => ai.acp.scoped(scope)
 const liveStates = new Set(['queued', 'running', 'cancelling'])
+// submit 在这些校验处尚未调用 Runner。存储或通信故障仍待核对。
+const rejectedBeforeDispatch = new Set([
+  HaiAIError.ACP_INVALID_REQUEST.code,
+  HaiAIError.ACP_UNSUPPORTED.code,
+  HaiAIError.ACP_CLOSED.code,
+  HaiAIError.ACP_MODEL_INCOMPATIBLE.code,
+])
 
 function defaultSettings(agentId?: string, mode?: AgentSettings['mode']) {
   return settingsSchema.parse({
@@ -81,7 +90,7 @@ function visibleEvent(input: unknown) {
   return parsed.success ? parsed.data : undefined
 }
 
-async function conclude(scope: RunnerScope, turn: AgentTurn, status: string, output: AgentTurn['output']) {
+async function conclude(scope: RunnerScope, turn: StoredTurn, status: string, output: AgentTurn['output']) {
   if (!turn.receipt)
     return turn
   const page = await acp(scope).tasks.events(turn.receipt, 0, 100)
@@ -114,27 +123,51 @@ async function conclude(scope: RunnerScope, turn: AgentTurn, status: string, out
       ? next.data
       : []
   }
-  const final = {
-    ...turn,
+  const { turn: final } = await writeTurn(owner(scope), turn, {
     status: output?.error ? 'failed' : status,
     output,
     eventSummary: [
       ...details.values(),
     ].slice(-100),
-  }
-  await writeTurn(owner(scope), final)
+  })
   return final
 }
 
-async function checkTurn(scope: RunnerScope, turn: AgentTurn) {
+async function recoverSubmission(scope: RunnerScope, turn: StoredTurn): Promise<StoredTurn> {
+  if (turn.status !== 'submitting' || turn.receipt)
+    return turn
+  const user = owner(scope)
+  const submission = turn.submission
+  if (!submission)
+    return (await writeTurn(user, turn, { status: 'unknown' })).turn
+  if (submission.sessionId) {
+    const result = await acp(scope).tasks.findSubmission(submission.sessionId, turn.id)
+    if (result.success && result.data) {
+      return (await writeTurn(user, turn, {
+        receipt: result.data.taskId,
+        status: liveStates.has(result.data.status)
+          ? result.data.status
+          : 'queued',
+      })).turn
+    }
+    if (!result.success && result.error.code !== HaiAIError.ACP_NOT_FOUND.code)
+      return value<never>(result)
+  }
+  if (submission.deadline > await workspaceTime())
+    return turn
+  return (await writeTurn(user, turn, {
+    status: submission.sessionId ? 'unknown' : 'failed',
+  })).turn
+}
+
+async function checkTurn(scope: RunnerScope, stored: StoredTurn) {
+  const turn = await recoverSubmission(scope, stored)
   if (!turn.receipt || !liveStates.has(turn.status))
     return turn
   const current = await acp(scope).tasks.get(turn.receipt)
   if (!current.success) {
     if (current.error.code === HaiAIError.ACP_NOT_FOUND.code) {
-      const expired = { ...turn, status: 'unknown' }
-      await writeTurn(owner(scope), expired)
-      return expired
+      return (await writeTurn(owner(scope), turn, { status: 'unknown' })).turn
     }
     return value<never>(current)
   }
@@ -189,7 +222,7 @@ export async function view(scope: RunnerScope, task?: string, after = 0, offset 
     : []
   return {
     task: cleanTask(current),
-    turns: all,
+    turns: all.map(publicTurn),
     events,
   }
 }
@@ -264,10 +297,11 @@ async function send(scope: RunnerScope, input: SendTurn) {
   const earlier = await activeTurn(user, pendingTask.id)
   if (earlier && earlier.id !== input.turn)
     await checkTurn(scope, earlier)
-  const { task, turn } = await reserveTurn(user, input)
-  if (turn.receipt || turn.status !== 'submitting')
-    return turn
+  const { task, turn, created } = await reserveTurn(user, input)
+  if (!created)
+    return checkTurn(scope, turn)
   const session = acp(scope)
+  let dispatched = false
   try {
     const prefs = await getPrefs(user)
     const settings = planInput(task.settings)
@@ -315,27 +349,47 @@ async function send(scope: RunnerScope, input: SendTurn) {
           ? `:${turn.id}`
           : ''}`, historySummary },
       ))
-      await writeTask(user, { ...task, acpId: native.id, acpMode: effective.resolvedMode })
     }
     const prompt = effective.resolvedMode !== 'shared' && prefs.preference
       ? `${value(await ai.persona.compose('personal', { objectId: user }))}\n\nCurrent request:\n${input.text}`
       : input.text
-    const receipt = value(await native.submit({ prompt, idempotencyKey: turn.id, context }))
-    const submitted = {
-      ...turn,
+    const retentionMs = RunnerConfigSchema.shape.retentionMs.parse(core.config.get<{ retentionMs?: number }>('runner')?.retentionMs)
+    const claimed = await writeTurn(user, turn, {
+      plan: { resolvedMode: effective.resolvedMode, reason: effective.reason, modelId: effective.modelId },
+      estimate: { used, size },
+      compressed: compress,
+    }, { sessionId: native.id, retentionMs })
+    if (!claimed.updated)
+      return checkTurn(scope, claimed.turn)
+
+    dispatched = true
+    const sent = await native.submit({ prompt, idempotencyKey: turn.id, context })
+    if (!sent.success && rejectedBeforeDispatch.has(sent.error.code))
+      await writeTurn(user, claimed.turn, { status: 'failed' })
+    const receipt = value(sent)
+    return (await writeTurn(user, claimed.turn, {
       status: liveStates.has(receipt.status)
         ? receipt.status
         : 'queued',
       receipt: receipt.taskId,
-      plan: { resolvedMode: effective.resolvedMode, reason: effective.reason, modelId: effective.modelId },
-      estimate: { used, size },
-      compressed: compress,
-    }
-    await writeTurn(user, submitted)
-    return submitted
+    })).turn
   }
   catch (error) {
-    await writeTurn(user, { ...turn, status: 'failed' })
+    // 存储提交权之前可以确认没有发送。迟到的写入仍须匹配原轮次版本。
+    if (!dispatched) {
+      try {
+        await writeTurn(user, turn, { status: 'failed' })
+      }
+      catch (failure) {
+        core.logger.error('Agent failed to record a rejected turn', {
+          module: 'agent',
+          turnId: turn.id,
+          errorCode: failure instanceof WorkspaceError
+            ? failure.code
+            : undefined,
+        })
+      }
+    }
     throw error
   }
 }
@@ -361,7 +415,7 @@ export async function action(scope: RunnerScope, input: z.output<typeof actionSc
       const prefs = await getPrefs(user)
       return cleanTask(await insertTask(user, input.id, defaultSettings(prefs.agentId, prefs.mode)))
     }
-    case 'send': return send(scope, input)
+    case 'send': return publicTurn(await send(scope, input))
     case 'plan': {
       await findTask(user, input.id)
       const plan = value(await session.plan(planInput(input.settings)))
@@ -412,7 +466,7 @@ export async function action(scope: RunnerScope, input: z.output<typeof actionSc
       return cleanTask(changed.task)
     }
     case 'cancel': {
-      const turn = await turnById(user, input.id)
+      const turn = await recoverSubmission(scope, await turnById(user, input.id))
       if (!turn.receipt)
         throw new WorkspaceError(409, 'busy')
       return value(await session.tasks.cancel(turn.receipt)).status

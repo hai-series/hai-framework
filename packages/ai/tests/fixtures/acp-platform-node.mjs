@@ -1,5 +1,6 @@
 import process from 'node:process'
 import { ai } from '@h-ai/ai'
+import { err } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { createRunner } from '@h-ai/runner'
 import { vecdb } from '@h-ai/vecdb'
@@ -93,6 +94,27 @@ const methods = {
   async prompt({ sessionId, prompt }, notify) {
     const session = sessions.get(sessionId) ?? take(await alice().sessions.get(sessionId))
     return session.prompt(prompt, { onEvent: notify })
+  },
+  async submitWithLostReceipt({ sessionId, idempotencyKey }) {
+    const session = take(await alice().sessions.get(sessionId))
+    const execute = reldb.sql.execute
+    try {
+      reldb.sql.execute = (sql, params) => sql.startsWith('INSERT INTO hai_ai_acp_managed_receipts ')
+        ? Promise.resolve(err('fixture:receipt-unavailable', 'Fixture receipt storage unavailable'))
+        : execute(sql, params)
+      return await session.submit({ prompt: 'recover this result', idempotencyKey })
+    }
+    finally {
+      reldb.sql.execute = execute
+    }
+  },
+  async findSubmission({ sessionId, idempotencyKey, other }) {
+    const scoped = other === 'tenant'
+      ? ai.acp.scoped({ tenantId: 'other-studio', userId: 'alice' })
+      : other
+        ? bob()
+        : alice()
+    return scoped.tasks.findSubmission(sessionId, idempotencyKey)
   },
   async events({ taskId, cursor }) {
     return alice().tasks.events(taskId, cursor)

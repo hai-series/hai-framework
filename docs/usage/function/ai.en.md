@@ -674,6 +674,7 @@ Bind trusted identity, register agents/workspaces and create sessions. Verify ap
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `ai.acp.scoped` | 给当前工作区或用户创建限定范围的 Agent API | 由应用认证后提供 `RunnerScope` | `plan`; `sessions`; `tasks`; `approvals` | `const agent = ai.acp.scoped(identity)` |
+| `scoped.tasks.findSubmission` | Recover an accepted turn receipt | Original session ID and submission idempotency key | `HaiResult<{ taskId, status }\|null>` with `null` when no execution is found | `await scoped.tasks.findSubmission(sessionId, turnKey)` |
 | `ai.acp.agents.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()` |
 | `ai.acp.agents.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.agents.get("coder")` |
 | `ai.acp.agents.register` | 登记数据库定义 | `ACPAgent input (id/mode/adapter/modelIds)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.agents.register(agentDefinition)` |
@@ -718,6 +719,8 @@ Bind trusted identity, register agents/workspaces and create sessions. Verify ap
 | `ai.acp.workspaces.publishSnapshot` | Publish an approved workspace snapshot | `ACPPublishSnapshot`: source directory, remote, base revision, approved patch, task branch, date and author; optional second argument `signal` | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
 
 #### Scenario: Manage agents, workspaces and ACP sessions
+
+If the submission response is lost, load the original session ID and idempotency key from durable storage and call `tasks.findSubmission`. It also restores the receipt index. Use the returned `taskId` to read events, check status or request cancellation. A `null` result means no execution record is currently available and the application can keep the turn pending verification.
 
 The workflow covers resource CRUD, preparation, sessions and returned handles. Identity comes from the server. updateMain/publish mutate repositories; documentation checks do not publish anything.
 

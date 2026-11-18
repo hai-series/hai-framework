@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test'
+import type { TaskView } from '../src/lib/client.js'
+import type { AgentTurn } from '../src/lib/workspace.js'
 import { Buffer } from 'node:buffer'
 import { expect, test } from '@playwright/test'
 
@@ -36,6 +38,66 @@ test('sign-out can be retried when the server cannot confirm revocation', async 
   await page.getByRole('button', { name: 'Retry sign-out' }).click()
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
   expect((await page.request.get('/api/workspace')).status()).toBe(401)
+})
+
+test('reopening a conversation continues tracking the original unconfirmed turn', async ({ page }) => {
+  await signup(page, `recover-${Date.now()}`)
+  let pending: AgentTurn | undefined
+  let confirmed = false
+  let cancelled: string | undefined
+  let sends = 0
+  await page.route(url => url.pathname === '/api/workspace', async (route) => {
+    const request = route.request()
+    const location = new URL(request.url())
+    if (request.method() === 'GET' && location.searchParams.has('task')) {
+      const response = await route.fetch()
+      const view = await response.json() as TaskView
+      view.task.settings.agentId = 'fixture'
+      if (pending?.task === view.task.id) {
+        view.turns = [
+          confirmed
+            ? {
+                ...pending,
+                status: cancelled ? 'cancelled' : 'running',
+                receipt: 'retained-receipt',
+                output: { text: 'Recovered output' },
+              }
+            : pending,
+        ]
+      }
+      return route.fulfill({ response, json: view })
+    }
+    if (request.method() === 'POST' && request.headers()['content-type']?.includes('application/json')) {
+      const job = request.postDataJSON() as { type: string, turn: string, task: string, text: string, id: string }
+      if (job.type === 'send') {
+        sends++
+        pending = {
+          id: job.turn,
+          task: job.task,
+          text: job.text,
+          status: 'submitting',
+          startedAt: Date.now(),
+        }
+        return route.abort()
+      }
+      if (job.type === 'cancel') {
+        cancelled = job.id
+        return route.fulfill({ json: 'cancelling' })
+      }
+    }
+    return route.continue()
+  })
+  await page.getByRole('button', { name: 'New task' }).click()
+  await page.getByLabel('Message').fill('One original submission')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(page.getByText('Confirming submission')).toBeVisible()
+  confirmed = true
+  await page.reload()
+  await expect(page.getByText('Recovered output')).toBeVisible()
+  await page.getByRole('button', { name: 'Stop task' }).click()
+  await expect(page.getByText('Cancelled', { exact: true })).toBeVisible()
+  expect(cancelled).toBe(pending?.id)
+  expect(sends).toBe(1)
 })
 
 test('keeps settings, memory, knowledge and task history in the authenticated account', async ({ browser, page }) => {

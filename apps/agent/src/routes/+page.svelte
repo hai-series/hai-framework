@@ -49,7 +49,7 @@
     'isolated-default': m.plan_task,
   }
   const statuses: Record<string, () => string> = {
-    submitting: m.submitting,
+    submitting: m.confirming_submission,
     queued: m.queued,
     running: m.running,
     cancelling: m.cancelling,
@@ -400,6 +400,7 @@
     if (!text.trim() || !selection || pending || running)
       return
     const id = selection
+    const turn = crypto.randomUUID()
     const signal = observer?.signal
     pending = true
     errorText = ''
@@ -407,7 +408,7 @@
       await send({
         type: 'send',
         task: id,
-        turn: crypto.randomUUID(),
+        turn,
         text: text.trim(),
         files: attachments.map(file => file.id),
         knowledge: chosenKnowledge,
@@ -423,8 +424,14 @@
     }
     catch (error) {
       if (!signal?.aborted) {
-        problem(error)
         await refresh(id, signal)
+        if (!signal?.aborted && selection === id) {
+          const saved = turns.find(item => item.id === turn)
+          if (saved && saved.status !== 'failed')
+            draft = ''
+          else
+            problem(error)
+        }
       }
     }
     finally { pending = false }

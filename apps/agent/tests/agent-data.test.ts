@@ -102,7 +102,7 @@ it('streams the newest round without resending conversation history', async () =
       turn: randomUUID(),
       text,
     }))
-    await writeTurn(user, { ...turn, status: 'succeeded' })
+    await writeTurn(user, turn, { status: 'succeeded' })
   }
   await finish('earlier round')
   await finish('subsequent round')

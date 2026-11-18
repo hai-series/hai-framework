@@ -1348,6 +1348,7 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `ai.acp.scoped` | 给当前工作区或用户创建限定范围的 Agent API | 由应用认证后提供 `RunnerScope` | 包含 `plan`、`sessions`、`tasks` 和 `approvals` 等方法的对象 | `const agent = ai.acp.scoped(identity)` |
+| `scoped.tasks.findSubmission` | 核对原轮次的受理回执 | 原会话 ID、提交的幂等键 | `HaiResult<{ taskId, status }\|null>`，无记录时返回 `null` | `await scoped.tasks.findSubmission(sessionId, turnKey)` |
 | `ai.acp.agents.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()` |
 | `ai.acp.agents.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.agents.get("coder")` |
 | `ai.acp.agents.register` | 登记数据库定义 | `ACPAgent input (id/mode/adapter/modelIds)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.agents.register(agentDefinition)` |
@@ -1478,6 +1479,8 @@ async function continueWork(identity: RunnerScope) {
 ```
 
 使用 `agents.describe(agentId)` 查询内置适配器的能力，`sessions.get(id)` 由同一主体在其他 API 节点取得句柄，`session.stream(prompt, options)` 迭代持久事件并在失败时抛错。`tasks.get(taskId)` 返回执行回执，`tasks.cancel(taskId)` 接受取消并返回当前状态。可在 `run` 或 `prompt` 的 `onEvent` 中取得 `accepted` 事件的 `taskId`，然后用另一请求查看或取消。
+
+提交响应丢失时，从可靠存储取回原会话 ID 和该轮幂等键，通过 `tasks.findSubmission` 查询受理。查询还会补写任务回执索引。查到 `taskId` 后可继续调用 `tasks.get`、`tasks.events` 或 `tasks.cancel`。`null` 表示目前查不到执行记录，应用可保留待核对状态。
 
 `acpPolicy` 负责 `workspaceId` 快照、知识库、记忆、文件、Skills 和工具的业务授权。`allowTools` 与 `bindTools` 可接入下文的 MCP 入口。应用取得 `approval` 事件中的 `approvalId` 后，从同一主体调用 `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')`，成功返回 `undefined`。`approvals.rules(offset, limit)` 分页返回仍可用的规则和 `expiresAt`，`approvals.revoke(ruleId)` 撤销当前主体的规则。`full-access` 需要应用明确允许且使用 `task`。`session.submit({ prompt, idempotencyKey, context })` 返回可续读的任务回执。浏览器带 `taskId` 和已读序号调用 `tasks.events`。`session.status()` 可发现空闲回收的会话，创建新会话时可带入用户确认的 `historySummary`。`workspaces.readGitSnapshot` 为独占环境读取普通文件树，成功后可保存改动补丁，并在用户确认后调用 `workspaces.publishSnapshot` 发布独立任务分支。更多示例见 [Agent 工作台](../../../apps/agent/README.md) 和 [受管调用](../development/ai-acp.md#多用户应用的受管调用)。
 
