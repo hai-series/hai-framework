@@ -10,6 +10,34 @@ async function signup(page: Page, username: string) {
   await expect(page.getByRole('button', { name: 'New task' })).toBeEnabled()
 }
 
+test('sign-out can be retried when the server cannot confirm revocation', async ({ page }) => {
+  await signup(page, `logout-${Date.now()}`)
+  const endpoint = (url: URL) => url.searchParams.has('/logout')
+  await page.route(endpoint, async (route) => {
+    // 模拟 SvelteKit 的 503 action 回包，第二次提交走真实路由。
+    await route.fulfill({
+      status: 503,
+      json: {
+        type: 'failure',
+        status: 503,
+        data: JSON.stringify([
+          { error: 1, traceId: 2 },
+          'logout-unconfirmed',
+          'fixture-reference',
+        ]),
+      },
+    })
+  }, { times: 1 })
+
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('The server could not confirm sign-out.')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0)
+  expect((await page.request.get('/api/workspace')).status()).toBe(200)
+  await page.getByRole('button', { name: 'Retry sign-out' }).click()
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
+  expect((await page.request.get('/api/workspace')).status()).toBe(401)
+})
+
 test('keeps settings, memory, knowledge and task history in the authenticated account', async ({ browser, page }) => {
   const a = `alice-${Date.now()}`
   await signup(page, a)

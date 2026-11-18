@@ -3,6 +3,7 @@
   import type { HomeView, KnowledgeView, TaskView } from '#lib/client.js'
   import type { AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry } from '#lib/workspace.js'
   import type { PageProps } from './$types'
+  import { enhance } from '$app/forms'
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeToggle, WorkspaceLayout } from '@h-ai/ui'
@@ -72,7 +73,7 @@
   let pane = $state<Pane>('workspace')
   let leaveWorkbench: WorkspaceLeaveGuard | undefined
   let allowNavigation = false
-  let allowLogout = false
+  let loggingOut = $state(false)
   let tab = $state<keyof typeof tabs>('activity')
   let home = $state<HomeView>()
   let task = $state<AgentTask>()
@@ -193,14 +194,34 @@
     return true
   }
 
-  async function logout(event: SubmitEvent) {
-    if (allowLogout || !leaveWorkbench)
+  const logout: NonNullable<Parameters<typeof enhance>[1]> = async ({ cancel }) => {
+    if (loggingOut) {
+      cancel()
       return
-    event.preventDefault()
-    const form = event.currentTarget as HTMLFormElement
-    if (await leaveWorkbench()) {
-      allowLogout = true
-      form.requestSubmit()
+    }
+    loggingOut = true
+    try {
+      if (leaveWorkbench && !await leaveWorkbench()) {
+        cancel()
+        loggingOut = false
+        return
+      }
+    }
+    catch (error) {
+      cancel()
+      loggingOut = false
+      problem(error)
+      return
+    }
+    return async ({ result, update }) => {
+      allowNavigation = result.type === 'redirect'
+      try {
+        await update({ reset: false, invalidateAll: result.type !== 'failure' })
+      }
+      finally {
+        allowNavigation = false
+        loggingOut = false
+      }
     }
   }
 
@@ -562,6 +583,20 @@
 
 <svelte:head><title>{m.app_name()}</title></svelte:head>
 
+{#snippet logoutFailure()}
+  {#if form?.error === 'logout-unconfirmed'}
+    <div class='mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-error/30 bg-error/5 p-3 text-sm text-error'>
+      <div role='alert'>
+        <p>{m.logout_unconfirmed()}</p>
+        {#if form.traceId}<p class='text-xs'>{m.logout_reference({ traceId: form.traceId })}</p>{/if}
+      </div>
+      <form method='POST' action='?/logout' use:enhance={logout}>
+        <button class='btn btn-outline btn-error btn-sm' disabled={loggingOut}>{m.logout_retry()}</button>
+      </form>
+    </div>
+  {/if}
+{/snippet}
+
 {#if !data.user}
   <main class='agent-rail grid min-h-dvh place-items-center p-5'>
     <section class='agent-shadow w-full max-w-sm rounded-2xl border agent-divider bg-base-100 p-7 sm:p-9'>
@@ -569,10 +604,11 @@
         <span class='agent-mark' aria-hidden='true'><span class='icon-[tabler--terminal-2] text-lg'></span></span>
         <h1 class='text-2xl font-semibold tracking-tight'>{m.app_name()}</h1>
       </div>
+      {@render logoutFailure()}
       <form method='POST' action='?/login' class='grid gap-4'>
         <label class='grid gap-1.5 text-sm font-medium'>{m.username()}<input name='username' class='input w-full' autocomplete='username' required minlength='3' maxlength='100' /></label>
         <label class='grid gap-1.5 text-sm font-medium'>{m.password()}<input type='password' name='password' class='input w-full' autocomplete='current-password' required maxlength='128' /></label>
-        {#if form?.error}<p role='alert' class='text-sm text-error'>{m.credentials()}</p>{/if}
+        {#if form?.error === 'credentials'}<p role='alert' class='text-sm text-error'>{m.credentials()}</p>{/if}
         <button class='btn btn-primary w-full' name='operation' value='login'>{m.login()}</button>
         {#if data.registration}<button class='btn btn-ghost w-full' name='operation' value='signup'>{m.signup()}</button>{/if}
       </form>
@@ -628,9 +664,9 @@
           {:else}<p class='agent-muted px-2 py-2 text-xs'>{m.empty_list()}</p>{/each}
         </div>
       </div>
-      <form method='POST' action='?/logout' onsubmit={logout} class='flex items-center justify-between border-t agent-divider px-3 py-3'>
+      <form method='POST' action='?/logout' use:enhance={logout} class='flex items-center justify-between border-t agent-divider px-3 py-3'>
         <span class='truncate text-sm font-medium'>{data.user.name}</span>
-        <button class='btn btn-ghost btn-square btn-sm' title={m.logout()} aria-label={m.logout()}><span class='icon-[tabler--logout] agent-icon'></span></button>
+        <button class='btn btn-ghost btn-square btn-sm' title={m.logout()} aria-label={m.logout()} disabled={loggingOut}><span class='icon-[tabler--logout] agent-icon'></span></button>
       </form>
     </aside>
 
@@ -658,6 +694,7 @@
         <ThemeToggle class='tooltip-end' />
         {#if pane === 'workspace'}<button class='btn btn-square btn-ghost btn-sm xl:hidden' onclick={() => { showResults = !showResults }} aria-label={m.show_results()}><span class='icon-[tabler--layout-sidebar-right] agent-icon'></span></button>{/if}
       {/snippet}
+      {@render logoutFailure()}
       {#if errorText}
         <div role='alert' class='mx-auto mb-2 flex w-full max-w-4xl items-center gap-2 rounded-lg border border-error/30 bg-error/5 p-2 text-sm text-error'>
           <span class='flex-1'>{errorText}</span><button class='btn btn-ghost btn-xs' onclick={() => { errorText = '' }}>{m.close()}</button>

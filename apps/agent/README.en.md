@@ -30,6 +30,8 @@ Set `HAI_IAM_REGISTER_ENABLED=true` in `apps/agent/.env.local` for local registr
 | Speech                    | Record or upload WAV/MP3, edit the transcript in the composer, then send. Read completed replies aloud and stop playback. Recording needs HTTPS or localhost                                                                                                               |
 | Tokens and context        | View estimates and separately reported backend usage. Long histories are compacted into a bounded summary for a new native session; original history remains visible                                                                                                       |
 
+If the cache prevents sign-out from being confirmed, follow the retry message to revoke the same session.
+
 ### Execution modes
 
 | Mode     | Isolation and intended use                                                                                                                                                                                                                                          |

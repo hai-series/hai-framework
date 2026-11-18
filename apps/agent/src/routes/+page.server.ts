@@ -21,7 +21,7 @@ export const load: PageServerLoad = ({ locals, cookies, request }) => {
   }
 }
 
-export const actions: Actions = {
+export const actions = {
   async login({ request, cookies, getClientAddress }) {
     const body = await request.formData()
     const input = login.safeParse({
@@ -56,11 +56,17 @@ export const actions: Actions = {
   },
   async logout({ cookies }) {
     const cookie = cookies.get('agent_session')
-    if (cookie)
-      await iam.auth.logout(cookie)
+    if (cookie) {
+      const result = await iam.auth.logout(cookie)
+      if (!result.success) {
+        const traceId = result.error.traceId ?? core.id.uuid()
+        core.logger.error('Agent logout revocation not confirmed', { module: 'agent', traceId, errorCode: result.error.code })
+        return fail(503, { error: 'logout-unconfirmed' as const, traceId })
+      }
+    }
     cookies.delete('agent_session', {
       path: resolve('/'),
     })
     redirect(303, resolve('/'))
   },
-}
+} satisfies Actions
