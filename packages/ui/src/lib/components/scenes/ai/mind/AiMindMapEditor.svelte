@@ -252,7 +252,18 @@
     }
   })
 
-  /** 等待画布初始化后将数据适配层用于更新；flush 保持与宿主协议兼容。 */
+  /**
+   * 等待画布初始化后将数据适配层用于更新；flush 保持与宿主协议兼容。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { AiMindMapEditor } from '@h-ai/ui'
+   * const editor = mount(AiMindMapEditor, { target: document.body, props: { data: { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }, artifactKey: 'mind-1' } })
+   * await editor.flushPendingChange()
+   * await unmount(editor)
+   * ```
+   */
   export function flushPendingChange(): Promise<boolean> {
     if (canvas?.contains(document.activeElement) && document.activeElement instanceof HTMLElement)
       document.activeElement.blur()
@@ -266,13 +277,35 @@
       : data
   }
 
-  /** 使用引擎自己的历史栈撤销最近一次编辑。 */
+  /**
+   * 使用引擎自己的历史栈撤销最近一次编辑。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { AiMindMapEditor } from '@h-ai/ui'
+   * const editor = mount(AiMindMapEditor, { target: document.body, props: { data: { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }, artifactKey: 'mind-1' } })
+   * editor.undo()
+   * await unmount(editor)
+   * ```
+   */
   export function undo(): void {
     if (editable)
       engine?.undo()
   }
 
-  /** 使用引擎自己的历史栈重做已撤销编辑。 */
+  /**
+   * 使用引擎自己的历史栈重做已撤销编辑。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { AiMindMapEditor } from '@h-ai/ui'
+   * const editor = mount(AiMindMapEditor, { target: document.body, props: { data: { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }, artifactKey: 'mind-1' } })
+   * editor.redo()
+   * await unmount(editor)
+   * ```
+   */
   export function redo(): void {
     if (editable)
       engine?.redo()

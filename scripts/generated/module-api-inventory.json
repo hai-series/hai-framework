@@ -35930,6 +35930,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -37080,6 +37122,12 @@
               "kind": "type",
               "declaration": "ForwardedDataAttributes",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "generateId",
@@ -38256,6 +38304,12 @@
               "kind": "type",
               "declaration": "ToggleRadioProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -38490,6 +38544,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -39640,6 +39736,12 @@
               "kind": "type",
               "declaration": "ForwardedDataAttributes",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "generateId",
@@ -40816,6 +40918,12 @@
               "kind": "type",
               "declaration": "ToggleRadioProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -41050,6 +41158,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -42200,6 +42350,12 @@
               "kind": "type",
               "declaration": "ForwardedDataAttributes",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "generateId",
@@ -43376,6 +43532,12 @@
               "kind": "type",
               "declaration": "ToggleRadioProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -44482,6 +44644,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -45382,6 +45586,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -46016,6 +46226,12 @@
               "kind": "value+type",
               "declaration": "ToggleRadio",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -46220,6 +46436,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -47120,6 +47378,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -47754,6 +48018,12 @@
               "kind": "value+type",
               "declaration": "ToggleRadio",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -47958,6 +48228,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -48858,6 +49170,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -49492,6 +49810,12 @@
               "kind": "value+type",
               "declaration": "ToggleRadio",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -50056,6 +50380,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -50119,6 +50485,12 @@
               "name": "downloadAiDocument",
               "kind": "value",
               "declaration": "downloadAiDocument",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -50263,6 +50635,12 @@
               "name": "resolveDocumentMarkdownContent",
               "kind": "value",
               "declaration": "resolveDocumentMarkdownContent",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
               "declarationKind": "FunctionDeclaration"
             }
           ]
@@ -50312,6 +50690,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -50375,6 +50795,12 @@
               "name": "downloadAiDocument",
               "kind": "value",
               "declaration": "downloadAiDocument",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -50519,6 +50945,12 @@
               "name": "resolveDocumentMarkdownContent",
               "kind": "value",
               "declaration": "resolveDocumentMarkdownContent",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
               "declarationKind": "FunctionDeclaration"
             }
           ]
@@ -50568,6 +51000,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -50631,6 +51105,12 @@
               "name": "downloadAiDocument",
               "kind": "value",
               "declaration": "downloadAiDocument",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -50775,6 +51255,12 @@
               "name": "resolveDocumentMarkdownContent",
               "kind": "value",
               "declaration": "resolveDocumentMarkdownContent",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
               "declarationKind": "FunctionDeclaration"
             }
           ]
@@ -53284,6 +53770,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -54040,6 +54568,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -54458,6 +54992,12 @@
               "kind": "value+type",
               "declaration": "ThemeToggle",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -54632,6 +55172,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -55388,6 +55970,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -55806,6 +56394,12 @@
               "kind": "value+type",
               "declaration": "ThemeToggle",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",
@@ -55980,6 +56574,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AiMindMapChangePayload",
+              "kind": "type",
+              "declaration": "AiMindMapChangePayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapData",
+              "kind": "type",
+              "declaration": "AiMindMapData",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapEditor",
+              "kind": "value+type",
+              "declaration": "AiMindMapEditor",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AiMindMapEditorProps",
+              "kind": "type",
+              "declaration": "AiMindMapEditorProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapExportFormat",
+              "kind": "type",
+              "declaration": "AiMindMapExportFormat",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AiMindMapNode",
+              "kind": "type",
+              "declaration": "AiMindMapNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMindMapSelection",
+              "kind": "type",
+              "declaration": "AiMindMapSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AiTableColumn",
               "kind": "type",
               "declaration": "AiTableColumn",
@@ -56736,6 +57372,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "fromMindElixirData",
+              "kind": "value",
+              "declaration": "fromMindElixirData",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "GuideHost",
               "kind": "value+type",
               "declaration": "GuideHost",
@@ -57154,6 +57796,12 @@
               "kind": "value+type",
               "declaration": "ThemeToggle",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "toMindElixirData",
+              "kind": "value",
+              "declaration": "toMindElixirData",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ToolCatalogItem",

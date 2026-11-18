@@ -1,6 +1,14 @@
 import type { DataAttributes } from '../../../../types.js'
 
-/** 项目脑图持久化协议，不暴露 Mind Elixir 的内部数据形状。 */
+/**
+ * 项目脑图持久化协议，不暴露 Mind Elixir 的内部数据形状。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapNode } from '@h-ai/ui'
+ * const node: AiMindMapNode = { id: 'root', text: '中心主题', children: [] }
+ * ```
+ */
 export interface AiMindMapNode {
   /** 在同一脑图生命周期内稳定且全图唯一的节点 ID。 */
   id: string
@@ -10,7 +18,15 @@ export interface AiMindMapNode {
   children: AiMindMapNode[]
 }
 
-/** 由 Mate 领域校验后交给框架编辑器的 mind/v1 数据。 */
+/**
+ * 由 Mate 领域校验后交给框架编辑器的 mind/v1 数据。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapData } from '@h-ai/ui'
+ * const data: AiMindMapData = { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }
+ * ```
+ */
 export interface AiMindMapData {
   /** 固定协议标识，未知协议不会交给引擎编辑。 */
   kind: 'mind/v1'
@@ -20,7 +36,15 @@ export interface AiMindMapData {
   root: AiMindMapNode
 }
 
-/** 编辑器发出的完整数据快照及变更来源。 */
+/**
+ * 编辑器发出的完整数据快照及变更来源。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapChangePayload } from '@h-ai/ui'
+ * const payload: AiMindMapChangePayload = { data: { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }, reason: 'edit' }
+ * ```
+ */
 export interface AiMindMapChangePayload {
   /** 可直接持久化的项目协议快照。 */
   data: AiMindMapData
@@ -28,10 +52,26 @@ export interface AiMindMapChangePayload {
   reason: string
 }
 
-/** 编辑器导出动作使用的格式标识。 */
+/**
+ * 编辑器导出动作使用的格式标识。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapExportFormat } from '@h-ai/ui'
+ * const format: AiMindMapExportFormat = 'json'
+ * ```
+ */
 export type AiMindMapExportFormat = 'json' | 'csv' | 'xlsx' | 'xmind'
 
-/** 当前画布的稳定节点选择及其改写范围。 */
+/**
+ * 当前画布的稳定节点选择及其改写范围。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapSelection } from '@h-ai/ui'
+ * const selection: AiMindMapSelection = { nodeIds: ['root'], scope: 'subtree', text: '中心主题' }
+ * ```
+ */
 export interface AiMindMapSelection {
   /** 按画布选择顺序去重后的稳定节点 ID。 */
   nodeIds: string[]
@@ -41,7 +81,15 @@ export interface AiMindMapSelection {
   text: string
 }
 
-/** AiMindMapEditor 受控属性。 */
+/**
+ * AiMindMapEditor 受控属性。
+ *
+ * @example
+ * ```ts
+ * import type { AiMindMapEditorProps } from '@h-ai/ui'
+ * const props: AiMindMapEditorProps = { data: { kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } }, artifactKey: 'mind-1' }
+ * ```
+ */
 export interface AiMindMapEditorProps extends DataAttributes {
   /** 宿主追加到编辑器根节点的布局类名。 */
   class?: string
