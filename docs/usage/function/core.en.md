@@ -386,29 +386,44 @@ A full queue returns `HaiCommonError.RATE_LIMIT_EXCEEDED`. A closed pool returns
 
 #### Scenario: Start one dedicated thread and wait for a reply
 
+To submit work and await its result, use `pool.run()` from the previous example. Use `core.worker.start()` when you need to exchange messages or control when the thread stops.
+
+Save this Node Worker as `stats-once-worker.mjs`. It receives one message, replies with the string length, and closes its message port so the thread can exit on its own.
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+const port = parentPort
+port?.once('message', (report) => {
+  port.postMessage(report.length)
+  port.close()
+})
+```
+
+In the calling script in the same directory, use `onMessage()` to subscribe before sending `'Report'` with `postMessage()`. When the reply arrives, the callback logs `6` as the `length`.
+
 ```ts
 import { core } from '@h-ai/core'
 
-const entry = new URL('./stats-worker.mjs', import.meta.url)
+const entry = new URL('./stats-once-worker.mjs', import.meta.url)
 const thread = core.worker.start<string, number>(entry)
-let unsubscribe: (() => void) | undefined
+const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
+
 try {
-  const reply = new Promise<number>((resolve) => {
-    unsubscribe = thread.onMessage(resolve)
-    thread.postMessage('Report')
-  })
-  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
-    throw new Error(`Worker exited before replying (${code})`)
-  })])
-  void length // 6
+  thread.postMessage('Report')
+  const { code, error } = await thread.exited
+  if (error || code !== 0)
+    throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
-  unsubscribe?.()
+  unsubscribe()
   await thread.terminate()
 }
 ```
 
-In a Vite application, put the entry inside the Web Worker constructor, for example `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`. The Web Worker entry uses `globalThis.addEventListener("message", ...)` and `postMessage()`. Load trusted scripts shipped with the application. Messages use structured clone. Node supports transferring ArrayBuffer, and browsers also support objects such as ImageBitmap. A submitted transfer list assigns ownership to the worker.
+`await thread.exited` waits for the Worker to stop and gives you its exit status. The `finally` block unsubscribes and ensures the thread is stopped even if sending the message throws.
+
+In a Vite application, put the entry inside the Web Worker constructor, for example `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`. The Web Worker entry uses `globalThis.addEventListener("message", ...)` and `postMessage()`. In a browser, `thread.exited` settles when you call `thread.terminate()` or the Worker reports an error. Load trusted scripts shipped with the application. Messages use structured clone. Node supports transferring ArrayBuffer, and browsers also support objects such as ImageBitmap. A submitted transfer list assigns ownership to the worker.
 
 <a id="access-api"></a>
 

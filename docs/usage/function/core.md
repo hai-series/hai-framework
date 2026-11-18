@@ -889,29 +889,44 @@ finally {
 
 #### 场景：启动独占线程并接收第一条消息
 
+只需提交任务并用 `await` 取得结果时，用上节的 `pool.run()`。需要自己收发消息或控制线程何时停止时，用 `core.worker.start()`。
+
+将下面的 Node Worker 保存为 `stats-once-worker.mjs`。它收到一条消息后回传字符串长度，再关闭消息端口，让线程自行退出。
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+const port = parentPort
+port?.once('message', (report) => {
+  port.postMessage(report.length)
+  port.close()
+})
+```
+
+在同一目录的调用脚本中，先用 `onMessage()` 订阅回复，再用 `postMessage()` 发送 `'Report'`。收到回复时，回调会记录 `length` 为 `6`。
+
 ```ts
 import { core } from '@h-ai/core'
 
-const entry = new URL('./stats-worker.mjs', import.meta.url)
+const entry = new URL('./stats-once-worker.mjs', import.meta.url)
 const thread = core.worker.start<string, number>(entry)
-let unsubscribe: (() => void) | undefined
+const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
+
 try {
-  const reply = new Promise<number>((resolve) => {
-    unsubscribe = thread.onMessage(resolve)
-    thread.postMessage('Report')
-  })
-  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
-    throw new Error(`Worker exited before replying (${code})`)
-  })])
-  void length // 6
+  thread.postMessage('Report')
+  const { code, error } = await thread.exited
+  if (error || code !== 0)
+    throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
-  unsubscribe?.()
+  unsubscribe()
   await thread.terminate()
 }
 ```
 
-在 Vite 应用中，将入口写在 Web Worker 构造函数中，例如 `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`。Web Worker 入口用 `globalThis.addEventListener("message", ...)` 和 `postMessage()`。只使用应用发布的可信脚本。普通消息通过结构化克隆传输，Node 转移 ArrayBuffer，浏览器也能转移 ImageBitmap 等对象。提交转移列表后由线程取得缓冲区所有权。
+`await thread.exited` 等待 Worker 结束并取得退出状态。`finally` 取消订阅，也会在发送消息等步骤抛错时终止线程。
+
+在 Vite 应用中，将入口写在 Web Worker 构造函数中，例如 `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`。Web Worker 入口用 `globalThis.addEventListener("message", ...)` 和 `postMessage()`。浏览器端的 `thread.exited` 在调用 `thread.terminate()` 或收到 Worker 错误时完成。只使用应用发布的可信脚本。普通消息通过结构化克隆传输，Node 转移 ArrayBuffer，浏览器也能转移 ImageBitmap 等对象。提交转移列表后由线程取得缓冲区所有权。
 
 <a id="access-api"></a>
 

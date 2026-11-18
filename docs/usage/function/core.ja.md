@@ -392,29 +392,44 @@ finally {
 
 #### 利用例：専用スレッドを起動して最初の応答を待つ
 
+処理を投入して `await` で結果を受け取るには、前の例の `pool.run()` を使います。メッセージを直接やり取りしたり、スレッドを終了するタイミングを制御したりする場合は、`core.worker.start()` を使います。
+
+次の Node Worker を `stats-once-worker.mjs` として保存します。メッセージを一件受信すると文字列の長さを返し、メッセージポートを閉じて自ら終了します。
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+const port = parentPort
+port?.once('message', (report) => {
+  port.postMessage(report.length)
+  port.close()
+})
+```
+
+同じディレクトリの呼び出し元スクリプトでは、`onMessage()` で応答を購読してから、`postMessage()` で `'Report'` を送信します。応答が届くと、コールバックが `length` の値 `6` をログに記録します。
+
 ```ts
 import { core } from '@h-ai/core'
 
-const entry = new URL('./stats-worker.mjs', import.meta.url)
+const entry = new URL('./stats-once-worker.mjs', import.meta.url)
 const thread = core.worker.start<string, number>(entry)
-let unsubscribe: (() => void) | undefined
+const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
+
 try {
-  const reply = new Promise<number>((resolve) => {
-    unsubscribe = thread.onMessage(resolve)
-    thread.postMessage('Report')
-  })
-  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
-    throw new Error(`Worker exited before replying (${code})`)
-  })])
-  void length // 6
+  thread.postMessage('Report')
+  const { code, error } = await thread.exited
+  if (error || code !== 0)
+    throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
-  unsubscribe?.()
+  unsubscribe()
   await thread.terminate()
 }
 ```
 
-Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })` のように Web Worker のコンストラクター内に入口を記述します。Worker の入口は `globalThis.addEventListener("message", ...)` と `postMessage()` を使います。アプリと一緒に配布した信頼できるスクリプトを使用します。メッセージは構造化クローンで送信されます。Node では ArrayBuffer、ブラウザーでは ImageBitmap なども転送でき、転送リストを指定すると所有権が Worker に移ります。
+`await thread.exited` は Worker の終了を待ち、終了状態を取得します。`finally` で購読を解除し、メッセージの送信時などに例外が発生した場合もスレッドを終了します。
+
+Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })` のように Web Worker のコンストラクター内に入口を記述します。Worker の入口は `globalThis.addEventListener("message", ...)` と `postMessage()` を使います。ブラウザーでは `thread.terminate()` を呼び出すか、Worker のエラーを受信すると `thread.exited` が解決します。アプリと一緒に配布した信頼できるスクリプトを使用します。メッセージは構造化クローンで送信されます。Node では ArrayBuffer、ブラウザーでは ImageBitmap なども転送でき、転送リストを指定すると所有権が Worker に移ります。
 
 <a id="access-api"></a>
 
