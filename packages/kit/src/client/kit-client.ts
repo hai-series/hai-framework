@@ -257,7 +257,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  *
  * 行为：
  * - `config.transport === false` 时直接返回（不启用传输加密）；
- * - 否则启动 {@link installBrowserTransportFetch}，并预热 {@link CryptoFunctions} 模块。
+ * - 否则启动 {@link installBrowserTransportFetch}，并在 Crypto 尚未就绪时预热。
  *
  * 应用层（SvelteKit `+layout.svelte` 或浏览器入口）只需调用此函数一次，
  * 之后宿主 basePath 下的同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
@@ -284,9 +284,9 @@ export function installBrowserTransport(
   if (typeof window === 'undefined' || config.transport === false)
     return
 
-  // crypto.init() 当前为同步副作用（signature 是 async 仅为接口一致性），
-  // 此处不 await，以便 `+layout.svelte` 顶层模块加载阶段就完成初始化。
-  void deps.crypto.init()
+  // 重新初始化会先关闭现有操作及线程池，复用已就绪实例以保护正在处理的请求。
+  if (!deps.crypto.isInitialized)
+    void deps.crypto.init()
 
   installBrowserTransportFetch({
     crypto: deps.crypto,
