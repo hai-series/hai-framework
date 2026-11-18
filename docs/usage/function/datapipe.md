@@ -143,6 +143,8 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 
 ### 组合可复用处理步骤：`datapipe.pipeline`
 
+Node 的 `pipeline.run()` 会把达到 128 Ki 个 UTF-16 代码单元的正文交给 Worker 连续执行内置清洗和分块。自定义 `transform` 与 `chunkTransform` 仍由调用方执行，短文本直接计算。队列满时返回管线失败。
+
 先登记清洗、文本转换、分块和分块筛选，再对每份输入执行 run；登记步骤不会立即处理数据。
 
 #### 接口清单

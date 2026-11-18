@@ -120,6 +120,8 @@ For example, `datapipe.chunk(text, { mode: 'paragraph' })` uses no overlap. The 
 
 ### Compose reusable steps: `datapipe.pipeline`
 
+On Node, `pipeline.run()` sends consecutive cleaning and chunking steps to a Worker when the text reaches 128 Ki UTF-16 code units. The caller runs custom `transform` and `chunkTransform` callbacks and processes short text directly. A full queue returns a pipeline failure.
+
 Register cleaning, text transforms, chunking and chunk transforms, then run that sequence on each input. Registration itself processes nothing.
 
 #### Interface list

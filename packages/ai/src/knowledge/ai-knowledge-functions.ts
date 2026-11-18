@@ -39,6 +39,7 @@ import type {
 } from './ai-knowledge-types.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { HaiDatapipeError } from '@h-ai/datapipe'
 import { nanoid } from 'nanoid'
 
 import { aiM } from '../ai-i18n.js'
@@ -179,18 +180,16 @@ export function createKnowledgeOperations(
       try {
         if (!await isCollectionReady(collection))
           return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
-        // ① 清洗：标准化文本（去 HTML、空白规整等）
-        const cleanResult = datapipe.clean(input.content, cleanOptions)
-        const cleanedText = cleanResult.success ? cleanResult.data : input.content
-
-        // ② 分块预算是输入约束；失败不能回退整篇文本绕过上限后继续向量化/发布。
-        const chunkResult = datapipe.chunk(cleanedText, chunkOptions)
+        let chunkResult = await datapipe.pipeline().clean(cleanOptions).chunk(chunkOptions).run(input.content)
+        // 保留清洗失败时按原文分块的契约。分块配置非法时重试仍会返回原配置错误。
+        if (!chunkResult.success && (chunkResult.error.code === HaiDatapipeError.CLEAN_FAILED.code || chunkResult.error.code === HaiDatapipeError.CONFIG_ERROR.code))
+          chunkResult = await datapipe.pipeline().chunk(chunkOptions).run(input.content)
         if (!chunkResult.success) {
           return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
             params: { error: chunkResult.error.message },
           }), chunkResult.error)
         }
-        const chunks = chunkResult.data
+        const chunks = chunkResult.data.chunks
 
         // ③ 批量向量化
         const texts = chunks.map(c => c.content)

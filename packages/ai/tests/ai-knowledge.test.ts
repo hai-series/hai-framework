@@ -5,6 +5,7 @@
  * 使用 mock KnowledgeStore、datapipe、llm、embedding。
  */
 
+import type { ChunkOptionsInput, CleanOptionsInput, PipelineBuilder } from '@h-ai/datapipe'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { KnowledgeDocumentMetadata, KnowledgeDocumentRevision, KnowledgeStore } from '../src/store/ai-store-types.js'
@@ -159,8 +160,8 @@ function createMockKnowledgeStore() {
 }
 
 function createMockDatapipe() {
-  return {
-    clean: vi.fn((text: string) => ({
+  const datapipe = {
+    clean: vi.fn((text: string, _options?: CleanOptionsInput) => ({
       success: true as const,
       data: text.trim(),
     })),
@@ -179,8 +180,37 @@ function createMockDatapipe() {
         },
       ],
     })),
-    pipeline: vi.fn(),
-  } as unknown as Parameters<typeof createKnowledgeOperations>[3]
+    pipeline: vi.fn((): PipelineBuilder => {
+      let cleanOptions: CleanOptionsInput | undefined
+      let chunkOptions: ChunkOptionsInput | undefined
+      const builder: PipelineBuilder = {
+        clean(options) {
+          cleanOptions = options
+          return builder
+        },
+        chunk(options) {
+          chunkOptions = options
+          return builder
+        },
+        transform: () => builder,
+        chunkTransform: () => builder,
+        async run(content) {
+          const text = cleanOptions
+            ? datapipe.clean(content, cleanOptions).data
+            : content
+          const chunks = chunkOptions
+            ? datapipe.chunk(text, chunkOptions).data
+            : []
+          return {
+            success: true,
+            data: { text, chunks },
+          }
+        },
+      }
+      return builder
+    }),
+  }
+  return datapipe
 }
 
 const DEFAULT_CONFIG = {

@@ -13,28 +13,18 @@ export async function POST({ request, locals }: RequestEvent) {
     return kit.response.badRequest('content is required')
   }
 
-  const cleanedResult = datapipe.clean(content, {
-    removeHtml: true,
-    removeUrls: false,
-    normalizeWhitespace: true,
-  })
-  if (!cleanedResult.success) {
-    return kit.response.internalError(cleanedResult.error.message)
+  const result = await datapipe.pipeline()
+    .clean({ removeHtml: true, removeUrls: false, normalizeWhitespace: true })
+    .chunk({ mode: 'paragraph', maxSize: 500, overlap: 50 })
+    .run(content)
+  if (!result.success) {
+    return kit.response.internalError(result.error.message)
   }
 
-  const chunksResult = datapipe.chunk(cleanedResult.data, {
-    mode: 'paragraph',
-    maxSize: 500,
-    overlap: 50,
-  })
-  if (!chunksResult.success) {
-    return kit.response.internalError(chunksResult.error.message)
-  }
-
-  const chunks = chunksResult.data
+  const { text, chunks } = result.data
 
   return kit.response.ok({
-    cleaned: cleanedResult.data,
+    cleaned: text,
     chunkCount: chunks.length,
     chunks: chunks.slice(0, 5),
   }, locals.requestId)

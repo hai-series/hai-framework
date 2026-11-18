@@ -7,6 +7,8 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config.js'
+import type { BuiltinStep } from './datapipe-pipeline-builtins.js'
+import type { PipelineJob } from './datapipe-pipeline-worker.js'
 import type {
   ChunkTransformFn,
   DataChunk,
@@ -16,12 +18,17 @@ import type {
   TransformFn,
 } from './datapipe-types.js'
 
-import { err, ok } from '@h-ai/core'
-
-import { chunkText } from './datapipe-chunk.js'
-import { cleanText } from './datapipe-clean.js'
+import { core, err, ok } from '@h-ai/core'
 import { datapipeM } from './datapipe-i18n.js'
+import { runBuiltinSteps } from './datapipe-pipeline-builtins.js'
 import { HaiDatapipeError } from './datapipe-types.js'
+
+const pool = core.worker.createPool<PipelineJob, ReturnType<typeof runBuiltinSteps>>(
+  new URL(import.meta.url.endsWith('.ts')
+    ? '../dist/datapipe-pipeline-worker.js'
+    : './datapipe-pipeline-worker.js', import.meta.url),
+  { maxWorkers: 2, maxQueuedJobs: 8, idleTimeoutMs: 30_000 },
+)
 
 /**
  * 创建管线构建器
@@ -81,24 +88,41 @@ async function runPipeline(
   let currentText = text
   let chunks: DataChunk[] = []
 
-  for (const step of steps) {
+  for (let index = 0; index < steps.length;) {
+    const step = steps[index++]
+    if (step.type === 'clean' || step.type === 'chunk') {
+      const batch: BuiltinStep[] = [step]
+      for (; index < steps.length; index++) {
+        const next = steps[index]
+        if (next.type !== 'clean' && next.type !== 'chunk')
+          break
+        batch.push(next)
+      }
+
+      // 小文本直接计算，避免线程调度和字符串克隆开销。
+      let result: ReturnType<typeof runBuiltinSteps>
+      // eslint-disable-next-line node/prefer-global/process -- 此模块也可在浏览器直接运行纯计算。
+      if (currentText.length >= 128 * 1024 && globalThis.process?.versions?.node) {
+        const computed = await pool.run({
+          steps: batch,
+          text: currentText,
+          locale: core.i18n.getGlobalLocale(),
+        })
+        if (!computed.success)
+          return err(HaiDatapipeError.PIPELINE_FAILED, computed.error.message, computed.error)
+        result = computed.data
+      }
+      else {
+        result = runBuiltinSteps(batch, currentText)
+      }
+      if (!result.success)
+        return result
+      currentText = result.data.text
+      chunks = result.data.chunks ?? chunks
+      continue
+    }
+
     switch (step.type) {
-      case 'clean': {
-        const result = cleanText(currentText, step.options)
-        if (!result.success)
-          return result
-        currentText = result.data
-        break
-      }
-
-      case 'chunk': {
-        const result = chunkText(currentText, step.options)
-        if (!result.success)
-          return result
-        chunks = result.data
-        break
-      }
-
       case 'transform': {
         try {
           currentText = await step.fn(currentText)
