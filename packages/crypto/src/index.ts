@@ -2,6 +2,7 @@ import type { AsyncPasswordOperations, PasswordOperations } from './crypto-types
 import { createCrypto } from './crypto-main.js'
 import { createPasswordWorkerPool } from './crypto-password-pool.js'
 import { createPasswordFunctions } from './crypto-password.js'
+import { createTransportWorkerPool } from './transport/crypto-transport-pool.js'
 
 export * from './crypto-exports.js'
 
@@ -20,6 +21,7 @@ export * from './crypto-exports.js'
  * ```
  */
 export const crypto = createCrypto<AsyncPasswordOperations>({
+  createTransportCodec: createTransportWorkerPool,
   create(hash) {
     const { close, hashAsync, verifyAsync } = createPasswordWorkerPool()
     return {

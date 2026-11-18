@@ -345,6 +345,8 @@ Dollar signs delimit the fields. At login, pass the entered password and the ent
 
 ### Negotiate and protect HTTP: `crypto.transport`
 
+The Node server seals and opens envelopes in a dedicated Worker pool. A full queue can return `TRANSPORT_BUSY`, which Kit and Serv map to HTTP 503. The host handles HTTP binding, registered key lookup and nonce claims.
+
 Ordinary applications use Serv/Kit on the server and api-client/kit.client on the client. The following factories support custom adapters. Production nodes share a managed key ring and Redis registry.
 
 #### Interface list

@@ -2,7 +2,7 @@ import type { EncryptedPayload, EncryptedRequestPayload, TransportCreateServerOp
 import { cache } from '@h-ai/cache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { crypto, HaiCryptoError, TransportTimeError } from '../../src/index.js'
-import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
+import { openTransportPayload, sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 let serverKey: TransportKeyPair
 let clientKey: TransportKeyPair
@@ -195,6 +195,7 @@ describe('authenticated transport protocol', () => {
       : 'a'}${value.slice(1)}` }
     const decrypt = vi.spyOn(crypto.symmetric, 'decryptWithIV')
     const claim = vi.spyOn(f.keyStore, 'claimRequest')
+    expect(openTransportPayload(crypto, payload, serverKey.privateKey, clientKey.publicKey).success).toBe(false)
     expect((await f.a.decryptRequest(payload, f.expected)).success).toBe(false)
     expect(decrypt).not.toHaveBeenCalled()
     expect(claim).not.toHaveBeenCalled()
@@ -226,6 +227,7 @@ describe('authenticated transport protocol', () => {
     const decrypt = vi.spyOn(crypto.symmetric, 'decryptWithIV')
     // 非法版本用于运行时边界回归，明确绕过静态字面量约束。
     const payload = { ...f.payload, context } as EncryptedRequestPayload
+    expect(openTransportPayload(crypto, payload, serverKey.privateKey, clientKey.publicKey).success).toBe(false)
     expect((await f.a.decryptRequest(payload, f.expected)).success).toBe(false)
     expect(decrypt).not.toHaveBeenCalled()
   })
@@ -236,6 +238,7 @@ describe('authenticated transport protocol', () => {
       ? 'b'
       : 'a'}${f.payload.iv.slice(1)}` })
     const decrypt = vi.spyOn(crypto.symmetric, 'decryptWithIV')
+    expect(openTransportPayload(crypto, payload, serverKey.privateKey, clientKey.publicKey).success).toBe(false)
     expect((await f.a.decryptRequest(payload, f.expected)).success).toBe(false)
     expect(decrypt).not.toHaveBeenCalled()
     expect((await f.a.decryptRequest(f.payload, f.expected)).success).toBe(true)
@@ -291,6 +294,20 @@ describe('authenticated transport protocol', () => {
       throw new Error(response.error.message)
     // @ts-expect-error 验证请求入口拒绝响应方向的合法密文。
     expect((await f.a.decryptRequest(response.data, f.expected)).success).toBe(false)
+  })
+
+  it('对大响应保留密文协议并可用原编解码器打开', async () => {
+    const f = await fixture()
+    const report = JSON.stringify({
+      details: 'Quarterly order report. '.repeat(8000),
+    })
+    const sealed = await f.a.encryptResponse(f.payload.context, report, 201)
+    if (!sealed.success)
+      throw new Error(sealed.error.message)
+    expect(sealed.data.direction).toBe('response')
+    expect(sealed.data.status).toBe(201)
+    expect(openTransportPayload(crypto, sealed.data, clientKey.privateKey, serverKey.publicKey))
+      .toEqual({ success: true, data: report })
   })
 
   it('拒绝未认证的额外字段，且超出 8 KiB 的实际 URL 不消费 nonce', async () => {

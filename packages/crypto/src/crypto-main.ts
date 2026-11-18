@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { AsymmetricOperations, CryptoFunctions, HashOperations, PasswordOperations, SymmetricOperations, TransportOperations } from './crypto-types.js'
+import type { TransportCodec } from './transport/crypto-transport-server.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -50,6 +51,7 @@ const notInitialized = core.module.createNotInitializedKit(
 export function createCrypto<Operations extends PasswordOperations>(runtime: {
   create: (hash: HashOperations) => { operations: Operations, close?: () => Promise<void> }
   unavailable: (kit: typeof notInitialized) => Operations
+  createTransportCodec?: () => TransportCodec & { close: () => Promise<void> }
 }): CryptoFunctions & { readonly password: Operations } {
   // ─── 内部状态 ───
 
@@ -67,17 +69,24 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
   let currentSymmetric: SymmetricOperations | null = null
   /** 当前密码哈希操作实例 */
   let currentPassword: ReturnType<typeof runtime.create> | null = null
+  let currentTransportCodec: (TransportCodec & { close: () => Promise<void> }) | undefined
   let closing: Promise<void> | undefined
 
   function clearOperations(): Promise<void> | undefined {
     const password = currentPassword
+    const transportCodec = currentTransportCodec
     currentAsymmetric = null
     currentHash = null
     currentSymmetric = null
     currentPassword = null
+    currentTransportCodec = undefined
     initialized = false
-    if (password?.close)
-      closing = password.close().finally(() => { closing = undefined })
+    if (password?.close || transportCodec) {
+      closing = Promise.all([
+        password?.close?.(),
+        transportCodec?.close(),
+      ]).then(() => undefined).finally(() => { closing = undefined })
+    }
     return closing
   }
 
@@ -109,7 +118,7 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
   }
   const transportOperations: TransportOperations = {
     createServer: options => getCrypto().isInitialized
-      ? createTransportEncryption(getCrypto(), options)
+      ? createTransportEncryption(getCrypto(), options, currentTransportCodec)
       : notInitialized.result(),
     createClient: options => createTransportClient({
       crypto: getCrypto(),
@@ -173,6 +182,7 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
         currentHash = createSM3()
         currentSymmetric = createSM4()
         currentPassword = runtime.create(currentHash)
+        currentTransportCodec = runtime.createTransportCodec?.()
         initialized = true
         logger.info('Crypto module initialized')
         return ok(undefined)

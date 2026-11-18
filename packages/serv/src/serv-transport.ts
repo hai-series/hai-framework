@@ -207,6 +207,10 @@ export function createTransportMiddleware(
       // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
       const encResult = await manager.encryptResponse(requestContext, bodyText, response.status)
       if (!encResult.success) {
+        if (encResult.error.code === HaiCryptoError.TRANSPORT_BUSY.code) {
+          c.res = jsonError(servM('serv_transportBusy'), 503)
+          return
+        }
         logger.warn('Failed to encrypt response', { error: encResult.error })
         c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
         return

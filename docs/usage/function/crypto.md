@@ -347,6 +347,8 @@ $hai$10000$Q7m2k8R4v6N1x9Za$d2f65faa5aca03c5bd806077ba5ade701fbaad6a3ce85388325e
 
 ### 协商并保护 HTTP 请求：`crypto.transport`
 
+Node 服务端通过独立的 Worker 池封包和解包。池满时可返回 `TRANSPORT_BUSY`，Kit 和 Serv 将其映射为 HTTP 503。宿主完成 HTTP 绑定、注册公钥读取及 nonce 消费。
+
 所有运行功能都从 `crypto` 对象进入；类型、错误定义和错误类仍从包命名导出。容量推导、密钥环解析、公钥校验等无状态检查不依赖初始化；算法操作和服务端管理器需先成功初始化。
 
 常规应用使用 Serv/Kit 的服务端适配和 api-client/kit.client 的客户端适配。下面说明自行装配时的工厂与实例；生产节点使用同一受管密钥环和 Redis registry。

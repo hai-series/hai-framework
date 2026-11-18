@@ -24,6 +24,18 @@ import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
 import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-types.js'
 
 /**
+ * 服务端报文计算。Node 入口使用线程池，浏览器保留同步实现。
+ * @example 模块内部上下文
+ * ```ts
+ * const codec: TransportCodec = { seal: sealTransportPayload, open: openTransportPayload }
+ * ```
+ */
+export interface TransportCodec {
+  seal: (...args: Parameters<typeof sealTransportPayload>) => ReturnType<typeof sealTransportPayload> | Promise<ReturnType<typeof sealTransportPayload>>
+  open: (...args: Parameters<typeof openTransportPayload>) => ReturnType<typeof openTransportPayload> | Promise<ReturnType<typeof openTransportPayload>>
+}
+
+/**
  * 内部服务端工厂；创建时校验并捕获受管密钥环快照，不随机回退生成服务端密钥。
  * 生产要求共享registry；先认证实际HTTP绑定/签名/MAC/nonce，再交给业务，响应关联原上下文与实际状态。
  * @param cryptoService - 已初始化SM2/SM3/SM4能力。
@@ -59,6 +71,7 @@ import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-ty
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
   options: TransportCreateServerOptions,
+  codec: TransportCodec = { seal: sealTransportPayload, open: openTransportPayload },
 ): HaiResult<TransportEncryptionManager> {
   const {
     maxFutureSkewSeconds = TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000,
@@ -137,7 +150,7 @@ export function createTransportEncryption(
         const key = serverKeys.get(context.serverKeyId)
         if (!key)
           return transportAuthenticationFailure()
-        return sealTransportPayload(cryptoService, data, context, 'response', status, clientPublicKey, key.privateKey, bodyLimits)
+        return await codec.seal(cryptoService, data, context, 'response', status, clientPublicKey, key.privateKey, bodyLimits)
       }
       catch {
         // registry/注入实现故障仍按 HaiResult 返回，不携带可能包含连接凭据的原始异常。
@@ -163,7 +176,7 @@ export function createTransportEncryption(
         const clientPublicKey = await keyStore.get(c.clientId)
         if (!key || !clientPublicKey)
           return transportAuthenticationFailure()
-        const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey, bodyLimits)
+        const plaintext = await codec.open(cryptoService, authenticated, key.privateKey, clientPublicKey, bodyLimits)
         if (!plaintext.success)
           return plaintext
         const timeFailure = (serverTime: number) => {

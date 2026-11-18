@@ -347,6 +347,8 @@ $hai$10000$Q7m2k8R4v6N1x9Za$d2f65faa5aca03c5bd806077ba5ade701fbaad6a3ce85388325e
 
 ### HTTP の鍵交換と保護：`crypto.transport`
 
+Node サーバーは専用の Worker プールで封入と開封を行います。キューが満杯のときは `TRANSPORT_BUSY` を返し、Kit と Serv は HTTP 503 に変換します。HTTP との照合、公開鍵の取得、nonce の確保はホストで行います。
+
 通常はサーバー側を Serv/Kit、クライアント側を api-client/kit.client に任せます。以下は独自実装向けのファクトリーとインスタンスです。本番ノードは管理された鍵リングと Redis registry を共有します。
 
 #### インターフェース一覧

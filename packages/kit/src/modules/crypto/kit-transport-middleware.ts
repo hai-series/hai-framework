@@ -155,6 +155,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
 
         const encryptedPayload = await manager.encryptResponse(requestContext, responseBody, response.status)
         if (!encryptedPayload.success) {
+          if (encryptedPayload.error.code === HaiCryptoError.TRANSPORT_BUSY.code)
+            return jsonError(kitM('kit_transportBusy'), 503)
           return jsonError(kitM('kit_transportEncryptFailed'), 500)
         }
         headers.set(crypto.transport.protocol.ENCRYPTED_HEADER, crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
