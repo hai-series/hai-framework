@@ -7,6 +7,7 @@
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { RagContextItem } from '../src/rag/ai-rag-types.js'
 import type { RetrievalOperations } from '../src/retrieval/ai-retrieval-types.js'
+import { core } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createRagOperations } from '../src/rag/ai-rag-functions.js'
@@ -71,6 +72,41 @@ function createFailRetrieval(): RetrievalOperations {
 // ─── 测试 ───
 
 describe('rAG operations', () => {
+  it('records query lengths without exposing input for both RAG entry points', async () => {
+    const input = 'private RAG query fixture'
+    const logs: unknown[] = []
+    const previousLevel = core.logger.getLevel()
+    core.logger.setLevel('trace')
+    const unsubscribe = core.logger.observe((record) => {
+      if (record.context?.scope === 'rag')
+        logs.push(record)
+    })
+    try {
+      const mockLLM = createMockLLM('answer')
+      vi.mocked(mockLLM.chatStream).mockReturnValue((async function* () {})())
+      const rag = createRagOperations(mockLLM, createMockRetrieval([]))
+      expect((await rag.query(input)).success).toBe(true)
+      await Array.fromAsync(rag.queryStream(input))
+      expect(logs).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          level: 'trace',
+          message: 'Starting RAG query',
+          context: expect.objectContaining({ queryLength: input.length }),
+        }),
+        expect.objectContaining({
+          level: 'trace',
+          message: 'Starting RAG stream',
+          context: expect.objectContaining({ queryLength: input.length }),
+        }),
+      ]))
+      expect(JSON.stringify(logs)).not.toContain(input)
+    }
+    finally {
+      unsubscribe()
+      core.logger.setLevel(previousLevel)
+    }
+  })
+
   it('基本 RAG 查询', async () => {
     const mockRetrieval = createMockRetrieval([
       {

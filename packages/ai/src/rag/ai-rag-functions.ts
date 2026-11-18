@@ -82,7 +82,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      */
     async query(query: string, options?: RagOptions): Promise<HaiResult<RagResult>> {
       logger.trace('Starting RAG query', {
-        query: query.slice(0, 100),
+        queryLength: query.length,
       })
 
       try {
@@ -184,7 +184,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
       }
       catch (error) {
-        logger.error('RAG query failed', { error })
+        logger.error('RAG query failed', { code: HaiAIError.RAG_FAILED.code, queryLength: query.length })
         return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
           params: {
             error: String(error),
@@ -198,7 +198,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      */
     async* queryStream(query: string, options?: RagOptions): AsyncIterable<RagStreamEvent> {
       logger.trace('Starting RAG stream', {
-        query: query.slice(0, 100),
+        queryLength: query.length,
       })
 
       // 阶段1：检索
