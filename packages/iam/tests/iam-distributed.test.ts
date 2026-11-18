@@ -112,7 +112,7 @@ it('独立节点仅有一次 OTP 消费和一次发送成功', async () => {
     operation: 'otp',
     credentials: { identifier: 'distributed-otp@example.com', code },
   })))
-  expect(results.filter(result => result.success)).toHaveLength(1)
+  expect(results.filter(result => result.success), JSON.stringify(results)).toHaveLength(1)
   const sent = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'send', identifier: 'distributed-send@example.com' })))
   expect(sent.filter(result => result.success)).toHaveLength(1)
 }, 60_000)

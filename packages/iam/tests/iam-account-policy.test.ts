@@ -99,8 +99,9 @@ function tests() {
     const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
     const before = await query()
     expect(before.success).toBe(true)
-    const verify = vi.spyOn(haiCrypto.password, 'verify').mockReturnValueOnce(err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
+    const verify = vi.spyOn(haiCrypto.password, 'verifyAsync').mockResolvedValueOnce(err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
     const changed = await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })
+    expect(verify).toHaveBeenCalledOnce()
     expect(changed).toMatchObject({
       success: false,
       error: { code: HaiIamError.INTERNAL_ERROR.code },
