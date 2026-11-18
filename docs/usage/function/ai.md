@@ -1045,6 +1045,8 @@ async function runSpokenTurn(playback: {
 
 ### 解析文本与文件：`ai.file`
 
+Node 在 Worker 中调用已安装的 PDF 和 DOCX 解析器，也将大 HTML 的提取交给 Worker。原生解析器返回失败时可沿用 OCR 路径。AI 视频工具同样在 Worker 中校验和解压采集包、压缩渲染项目，实际渲染由受管作业执行。
+
 先按类型和容量检查文件字节，再抽取文本；需要 OCR 的格式依赖已配置模型。
 
 #### 接口清单

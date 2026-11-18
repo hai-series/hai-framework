@@ -2,17 +2,24 @@ import type { HaiResult } from '@h-ai/core'
 import type { Tool } from '@h-ai/tools'
 import type { BuiltinToolDependencies } from './ai-tools-builtin.js'
 import type { BuiltinArtifactReference, BuiltinToolOptions } from './ai-tools-types.js'
+import type { VideoArchiveJob, VideoArchiveReply } from './ai-video-archive-worker.js'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { inflateRawSync } from 'node:zlib'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
-import { strFromU8, strToU8, zipSync } from 'fflate'
+import { strFromU8, strToU8 } from 'fflate'
 import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { serializePlayableAudio } from '../audio/ai-audio-serialization.js'
 import { toolField } from './ai-tools-schema.js'
+
+const archivePool = core.worker.createPool<VideoArchiveJob, VideoArchiveReply>(
+  new URL(import.meta.url.endsWith('.ts')
+    ? '../../dist/ai-video-archive-worker.js'
+    : './ai-video-archive-worker.js', import.meta.url),
+  { maxWorkers: 1, maxQueuedJobs: 2, idleTimeoutMs: 15_000 },
+)
 
 const reference = z.object({
   id: z.string().min(1).max(200),
@@ -91,96 +98,6 @@ interface TimedScene extends Scene { startMs: number, durationMs: number, voiceM
 
 function invalid(cause?: unknown) {
   return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolVideoInvalid'), cause)
-}
-
-/** 在解压前扫描 ZIP 中央目录，拒绝链接、加密、ZIP64 和越界声明。 */
-function validateArchive(bytes: Uint8Array): { name: string, compression: number, size: number, start: number, end: number }[] {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  let end = -1
-  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65557); offset--) {
-    if (view.getUint32(offset, true) === 0x06054B50 && offset + 22 + view.getUint16(offset + 20, true) === bytes.length) {
-      end = offset
-      break
-    }
-  }
-  if (end < 0 || view.getUint16(end + 4, true) !== 0 || view.getUint16(end + 6, true) !== 0)
-    throw new Error('Unsupported archive directory')
-  const count = view.getUint16(end + 10, true)
-  const directorySize = view.getUint32(end + 12, true)
-  let offset = view.getUint32(end + 16, true)
-  const directoryStart = offset
-  const directoryEnd = offset + directorySize
-  if (count < 1 || count > 256 || count !== view.getUint16(end + 8, true) || directoryEnd !== end)
-    throw new Error('Archive directory exceeds its bound')
-  let expanded = 0
-  const names = new Set<string>()
-  const entries: { name: string, compression: number, size: number, start: number, end: number }[] = []
-  const ranges: { start: number, end: number }[] = []
-  for (let index = 0; index < count; index++) {
-    if (offset + 46 > directoryEnd || view.getUint32(offset, true) !== 0x02014B50)
-      throw new Error('Invalid archive directory entry')
-    const flags = view.getUint16(offset + 8, true)
-    const compression = view.getUint16(offset + 10, true)
-    const compressedSize = view.getUint32(offset + 20, true)
-    const size = view.getUint32(offset + 24, true)
-    const nameLength = view.getUint16(offset + 28, true)
-    const entryLength = 46 + nameLength + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true)
-    const mode = view.getUint32(offset + 38, true) >>> 16
-    if (offset + entryLength > directoryEnd || flags & 1 || (compression !== 0 && compression !== 8)
-      || compressedSize > 50 * 1024 * 1024 || size > 50 * 1024 * 1024 || (mode & 0xF000) === 0xA000 || view.getUint16(offset + 34, true) !== 0) {
-      throw new Error('Unsupported archive entry')
-    }
-    const name = strFromU8(bytes.subarray(offset + 46, offset + 46 + nameLength), !(flags & 0x800))
-    expanded += size
-    if (expanded > 100 * 1024 * 1024 || names.has(name) || name.startsWith('/') || /\\|\0|(?:^|\/)\.{1,2}(?:\/|$)|^[a-z]:/i.test(name))
-      throw new Error('Unsafe archive path or expanded size')
-    const local = view.getUint32(offset + 42, true)
-    if (local + 30 > directoryStart || view.getUint32(local, true) !== 0x04034B50
-      || view.getUint16(local + 6, true) !== flags || view.getUint16(local + 8, true) !== compression) {
-      throw new Error('Archive local header mismatch')
-    }
-    const localNameLength = view.getUint16(local + 26, true)
-    const start = local + 30 + localNameLength + view.getUint16(local + 28, true)
-    const end = start + compressedSize
-    if (end > directoryStart || strFromU8(bytes.subarray(local + 30, local + 30 + localNameLength), !(flags & 0x800)) !== name
-      || (compression === 0 && size !== compressedSize)
-      || (!(flags & 8) && (view.getUint32(local + 18, true) !== compressedSize || view.getUint32(local + 22, true) !== size))) {
-      throw new Error('Archive entry length mismatch')
-    }
-    ranges.push({ start: local, end })
-    entries.push({ name, compression, size, start, end })
-    names.add(name)
-    offset += entryLength
-  }
-  if (offset !== directoryEnd)
-    throw new Error('Archive directory length mismatch')
-  ranges.sort((left, right) => left.start - right.start)
-  if (ranges.some((range, index) => index > 0 && range.start < ranges[index - 1].end))
-    throw new Error('Archive entries overlap')
-  return entries
-}
-
-/** 先核对目录和声明大小，再解压所需 JSON 与截图；不导入网站脚本或样式。 */
-function readCapture(bytes: Uint8Array) {
-  if (bytes.byteLength > 50 * 1024 * 1024)
-    throw new Error('Capture archive exceeds its bound')
-  const entries = validateArchive(bytes)
-  const files: Record<string, Uint8Array> = {}
-  for (const entry of entries) {
-    if (entry.name !== 'capture.json' && entry.name !== 'extracted/tokens.json' && !/^screenshots\/[\w./-]+\.png$/i.test(entry.name))
-      continue
-    const compressed = bytes.subarray(entry.start, entry.end)
-    // 原始声明与实际解压长度都受限，不能仅信任 ZIP 头中的 originalSize。
-    const output = entry.compression === 0
-      ? compressed.slice()
-      : inflateRawSync(compressed, {
-          maxOutputLength: Math.max(1, entry.size),
-        })
-    if (output.byteLength !== entry.size)
-      throw new Error('Archive expanded size mismatch')
-    files[entry.name] = output
-  }
-  return files
 }
 
 /** 截图按 PNG 头限制解码像素，压缩文件大小不能替代图像内存边界。 */
@@ -359,7 +276,12 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
       let capturedFiles: Record<string, Uint8Array>
       let capture: z.infer<typeof captureSchema>
       try {
-        capturedFiles = readCapture(archive.data.data)
+        const extracted = await archivePool.run({ type: 'read', bytes: archive.data.data })
+        if (!extracted.success)
+          return invalid(extracted.error)
+        if (extracted.data.type !== 'files')
+          return invalid()
+        capturedFiles = extracted.data.files
         capture = captureSchema.parse(JSON.parse(strFromU8(capturedFiles['capture.json'])))
       }
       catch (cause) { return invalid(cause) }
@@ -551,10 +473,12 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
         || Object.values(project).reduce((total, data) => total + data.byteLength, 0) > 100 * 1024 * 1024) {
         return invalid()
       }
-      const packed = zipSync(project, {
-        level: 6,
-        mtime: new Date('2000-01-01T00:00:00Z'),
-      })
+      const compressed = await archivePool.run({ type: 'pack', files: project })
+      if (!compressed.success)
+        return invalid(compressed.error)
+      if (compressed.data.type !== 'zip')
+        return invalid()
+      const packed = compressed.data.bytes
       if (packed.byteLength > 50 * 1024 * 1024)
         return invalid()
       const projectFile = await publish('video-project.zip', 'file', 'application/zip', packed)

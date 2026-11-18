@@ -16,6 +16,8 @@ export default defineConfig({
     'index': 'src/index.ts',
     'browser': 'src/ai-index.browser.ts',
     'client/index': 'src/client/index.ts',
+    'ai-file-worker': 'src/file/ai-file-worker.ts',
+    'ai-video-archive-worker': 'src/tools/ai-video-archive-worker.ts',
   },
   external: [
     '@h-ai/core',
@@ -24,6 +26,8 @@ export default defineConfig({
     '@h-ai/datapipe',
     '@h-ai/tools',
     'fflate',
+    'mammoth',
+    'pdfjs-dist',
     'openai',
     'nanoid',
     '@modelcontextprotocol/sdk',

@@ -559,6 +559,8 @@ const messageTokens = ai.token.estimateMessages(messages) // estimate including 
 
 ### 本文とファイルの解析：`ai.file`
 
+Node はインストール済みの PDF と DOCX のパーサーを Worker で呼び出し、大きな HTML の抽出も Worker に渡します。ローカルパーサーが失敗すると OCR に切り替えられます。動画ツールはキャプチャーの検証と展開、プロジェクトの圧縮を Worker で行い、管理対象ジョブが動画を描画します。
+
 型とサイズを確認してから本文を抽出します。OCR 形式には設定済みモデルが必要です。
 
 #### インターフェース一覧

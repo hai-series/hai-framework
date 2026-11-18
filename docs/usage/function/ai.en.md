@@ -555,6 +555,8 @@ Factories and manager methods below connect messages, budget, chat, save/flush, 
 
 ### Parse text and files: `ai.file`
 
+Node runs installed PDF and DOCX parsers in a Worker and offloads large HTML extraction. A local parser failure can fall back to OCR. The video tool validates and unpacks captures and compresses its render project in a Worker. The managed job renders the video.
+
 Validate file type and size before extracting text; OCR formats require configured models.
 
 #### Interface list

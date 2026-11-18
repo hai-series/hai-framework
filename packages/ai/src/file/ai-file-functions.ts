@@ -16,6 +16,7 @@ import type {
   FileParseResult,
   OutputFormat,
 } from './ai-file-types.js'
+import type { FileParseJob, FileParseReply } from './ai-file-worker.js'
 
 import { Buffer } from 'node:buffer'
 
@@ -25,6 +26,23 @@ import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { parseHtmlFile } from './ai-file-html.js'
+
+const filePool = core.worker.createPool<FileParseJob, FileParseReply>(
+  new URL(import.meta.url.endsWith('.ts')
+    ? '../../dist/ai-file-worker.js'
+    : './ai-file-worker.js', import.meta.url),
+  { maxWorkers: 2, maxQueuedJobs: 4, idleTimeoutMs: 15_000 },
+)
+
+async function parseInWorker(job: FileParseJob): Promise<HaiResult<FileParseReply>> {
+  const result = await filePool.run(job)
+  if (!result.success) {
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+      params: { error: result.error.message },
+    }), result.error)
+  }
+  return result
+}
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
 // ─── MIME 类型与扩展名映射 ───
@@ -144,88 +162,6 @@ function parseTextContent(content: Buffer | string): string {
   if (typeof content === 'string')
     return content
   return content.toString('utf-8')
-}
-
-/**
- * 使用 pdfjs-dist 解析 PDF 内容
- */
-async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'text', maxPages?: number): Promise<HaiResult<{ text: string, pageCount: number }>> {
-  try {
-    const pdfjs = await import(
-
-      // @ts-expect-error — pdfjs-dist is an optional peer dependency
-      'pdfjs-dist/legacy/build/pdf.mjs',
-    ) as { getDocument: (...args: unknown[]) => { promise: Promise<unknown> } }
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(content),
-    })
-    const pdf = await loadingTask.promise as {
-      numPages: number
-      getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }>
-    }
-    const totalPages = pdf.numPages
-    const pagesToProcess = maxPages
-      ? Math.min(maxPages, totalPages)
-      : totalPages
-    const textParts: string[] = []
-
-    for (let i = 1; i <= pagesToProcess; i++) {
-      const page = await pdf.getPage(i)
-      const textContent = await page.getTextContent()
-      const pageText = textContent.items
-        .map(item => item.str ?? '')
-        .join(' ')
-      textParts.push(pageText)
-    }
-
-    // markdown 模式用页分隔线区分每页
-    const separator = outputFormat === 'markdown'
-      ? '\n\n---\n\n'
-      : '\n\n'
-    return ok({
-      text: textParts.join(separator),
-      pageCount: totalPages,
-    })
-  }
-  catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
-      params: {
-        error: String(error),
-      },
-    }), error)
-  }
-}
-
-/**
- * 使用 mammoth 解析 DOCX 内容
- *
- * - `'text'`：使用 `extractRawText` 提取纯文本
- * - `'markdown'`：使用 `convertToHtml` 后转换为 Markdown
- */
-async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 'text'): Promise<HaiResult<string>> {
-  try {
-    const mammoth = await import(
-
-      // @ts-expect-error — mammoth is an optional peer dependency
-      'mammoth',
-    ) as {
-      extractRawText: (options: unknown) => Promise<{ value: string }>
-      convertToHtml: (options: unknown) => Promise<{ value: string }>
-    }
-    if (outputFormat === 'markdown') {
-      const result = await mammoth.convertToHtml({ buffer: content })
-      return ok(parseHtmlFile(result.value, 'markdown'))
-    }
-    const result = await mammoth.extractRawText({ buffer: content })
-    return ok(result.value)
-  }
-  catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
-      params: {
-        error: String(error),
-      },
-    }), error)
-  }
 }
 
 /**
@@ -371,7 +307,23 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
 
     // HTML：按输出格式选择解析方式
     if (mimeType === 'text/html') {
-      const text = parseHtmlFile(parseTextContent(content), outputFormat)
+      let text: string
+      if (content.length >= 128 * 1024) {
+        const result = await parseInWorker({
+          type: 'html',
+          content,
+          format: outputFormat,
+          locale: core.i18n.getGlobalLocale(),
+        })
+        if (!result.success)
+          return result
+        if (!result.data.success)
+          return result.data
+        text = result.data.data.text
+      }
+      else {
+        text = parseHtmlFile(parseTextContent(content), outputFormat)
+      }
       return ok({
         text,
         method: 'html' as FileParseMethod,
@@ -379,46 +331,41 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       })
     }
 
-    // PDF：尝试 pdfjs-dist，失败则回退 OCR
-    if (mimeType === 'application/pdf') {
-      if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
-          params: { reason: 'PDF parsing requires Buffer content' },
-        }))
-      }
-      const pdfResult = await parsePdfContent(content, outputFormat, options.maxPages)
-      if (pdfResult.success) {
-        return ok({
-          text: pdfResult.data.text,
-          method: 'pdf' as FileParseMethod,
-          pageCount: pdfResult.data.pageCount,
-          metadata: { filename, mimeType, charCount: pdfResult.data.text.length },
-        })
-      }
-      logger.warn('PDF native parser failed, falling back to OCR', { filename })
-      return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
-    }
-
-    // DOCX：尝试 mammoth，失败则回退 OCR
+    // 本地解析器处理 PDF/Office，解析器失败后按原请求回退至 OCR。
+    const isPdf = mimeType === 'application/pdf'
     if (
-      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      isPdf || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       || mimeType === 'application/msword'
       || mimeType === 'application/zip'
     ) {
       if (!Buffer.isBuffer(content)) {
         return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
-          params: { reason: 'DOCX parsing requires Buffer content' },
+          params: {
+            reason: isPdf ? 'PDF parsing requires Buffer content' : 'DOCX parsing requires Buffer content',
+          },
         }))
       }
-      const docxResult = await parseDocxContent(content, outputFormat)
-      if (docxResult.success) {
+      const result = await parseInWorker({
+        type: isPdf ? 'pdf' : 'docx',
+        content,
+        format: outputFormat,
+        maxPages: options.maxPages,
+        locale: core.i18n.getGlobalLocale(),
+      })
+      if (!result.success)
+        return result
+      if (result.data.success) {
+        const { text, pageCount } = result.data.data
         return ok({
-          text: docxResult.data,
-          method: 'docx' as FileParseMethod,
-          metadata: { filename, mimeType, charCount: docxResult.data.length },
+          text,
+          method: isPdf ? 'pdf' : 'docx',
+          ...(isPdf
+            ? { pageCount }
+            : {}),
+          metadata: { filename, mimeType, charCount: text.length },
         })
       }
-      logger.warn('DOCX native parser failed, falling back to OCR', { filename })
+      logger.warn('Local document parser failed, falling back to OCR', { filename, mimeType })
       return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
