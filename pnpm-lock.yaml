@@ -447,6 +447,9 @@ catalogs:
     mermaid:
       specifier: ^12.3.0
       version: 12.3.0
+    mind-elixir:
+      specifier: 6.0.1
+      version: 6.0.1
     monaco-editor:
       specifier: 0.57.0
       version: 0.57.0
@@ -2571,6 +2574,9 @@ importers:
       mermaid:
         specifier: 'catalog:'
         version: 12.3.0
+      mind-elixir:
+        specifier: 'catalog:'
+        version: 6.0.1
       monaco-editor:
         specifier: 'catalog:'
         version: 0.57.0
@@ -8023,6 +8029,9 @@ packages:
   mimic-function@5.0.1:
     resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
     engines: {node: '>=18'}
+
+  mind-elixir@6.0.1:
+    resolution: {integrity: sha512-0q7xiBedF2IN/UlZK0gW7J0SB0GI+22fx6Ryvzt+cXfbdjXsQSD6ZvSYcEic9UtP9CUe0obN2aEVI/tLb4Jbtg==}
 
   minimatch@11.0.5:
     resolution: {integrity: sha512-snPlVppFcYWfLLFQGhDxUyBcHNtMlWmn3jtj7pEaO+DP8pqL0IvAzXhMYmn1z9ASNtgmwLBdFxSf4tMUB0OTKA==}
@@ -15700,6 +15709,8 @@ snapshots:
       mime-db: 1.54.0
 
   mimic-function@5.0.1: {}
+
+  mind-elixir@6.0.1: {}
 
   minimatch@11.0.5:
     dependencies:
