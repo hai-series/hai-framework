@@ -235,6 +235,8 @@ const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or nul
 
 ### バイト列の整合性確認：`storage.checksum`
 
+Node は大きなメモリー入力のダイジェストを容量制限付き Worker プールで計算します。ストリームを分割して読み込み、呼び出し側のキャンセルシグナルに従います。
+
 チェックサムはストレージの初期化なしで使えます。両側で同じアルゴリズムと文字列表現を選びます。
 
 #### インターフェース一覧

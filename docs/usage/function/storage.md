@@ -371,6 +371,8 @@ const prefix = StoragePrefixSchema.safeParse('reports/fe') // success 为 true�
 
 ### 检查字节是否一致：`storage.checksum`
 
+Node 将大块内存输入的摘要交给有界 Worker 池。流式输入继续逐块读取，并遵循调用方的取消信号。
+
 校验工具不要求初始化存储；发送方与接收方必须使用相同算法和编码。
 
 #### 接口清单

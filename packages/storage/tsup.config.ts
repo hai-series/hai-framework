@@ -11,6 +11,7 @@ export default defineConfig({
     'browser': 'src/storage-index.browser.ts',
     'client/index': 'src/client/index.ts',
     'schemas': 'src/storage-schemas.ts',
+    'storage-checksum-worker': 'src/storage-checksum-worker.ts',
   },
   // 运行时依赖保持 external，避免重复打包
   external: [

@@ -231,6 +231,8 @@ This integration guide was moved from the configuration handbook because it desc
 
 ### Check byte integrity: `storage.checksum`
 
+Node computes digests for large in-memory inputs in a bounded Worker pool. Streams are read in chunks and honor the caller’s cancellation signal.
+
 Checksums do not require storage initialization. Both sides must use the same algorithm and encoding.
 
 #### Interface list

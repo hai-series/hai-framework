@@ -4,6 +4,17 @@ import { describe, expect, it } from 'vitest'
 import { HaiStorageError, storage } from '../src/index.js'
 
 describe('storage.checksum', () => {
+  it('generates the same digest for large byte buffers and UTF-8 text without consuming the caller buffer', async () => {
+    const text = '报告内容🙂'.repeat(180_000)
+    const bytes = Buffer.from(text)
+    const expected = createHash('sha512').update(bytes).digest('base64')
+    for (const data of [text, bytes]) {
+      expect(await storage.checksum.generate(data, { algorithm: 'sha512', encoding: 'base64' }))
+        .toEqual({ success: true, data: expected })
+    }
+    expect(bytes.toString('utf8')).toBe(text)
+  })
+
   it.each([
     'sha256',
     'sha384',
