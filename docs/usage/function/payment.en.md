@@ -107,6 +107,8 @@ Create a provider order with your business order number, query its status and cl
 | `payment.queryOrder` | Query payment status | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
 | `payment.closeOrder` | Close a payment order | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
 
+When WeChat returns `204 No Content`, `payment.closeOrder('wechat', orderNo)` succeeds with `undefined` data. Pass the channel status through the proxy. Other statuses and network errors return `CLOSE_ORDER_FAILED`.
+
 #### Scenario: Create, query and close orders
 
 Order creation is in the quick start. Supply its provider and business order number; this function closes only pending orders and returns a final query result or failure.

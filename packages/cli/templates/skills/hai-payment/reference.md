@@ -143,6 +143,8 @@ Stripe 创建操作将 orderNo 与 Session ID 持久绑定，查单/退款通过
 
 Stripe closeOrder 会通过可信映射读取 Session，只有 open/unpaid 才调用 expire；已 expired 幂等成功，complete/paid 失败。并发关闭或响应丢失后必须重读确认 expired，不能把“已发送请求”当关闭成功。successUrl/cancelUrl 的页面跳转不代表已付款或已经关单，业务仍以可信状态为准。
 
+微信关单的成功响应为 204 空体。`payment.closeOrder('wechat', orderNo)` 在渠道确认后返回成功。
+
 响应丢失或落库失败会保留未知记录，只能在数据库时钟的 23 小时安全窗口内沿用同一键重试；窗口之外先核对渠道结果并修复记录，不删除后重发。成功结果长期保留，不按缓存 TTL 清理。Stripe 仅保存渠道操作结果，宿主业务订单、回调去重与履约事务仍需自己实现。
 
 ```typescript

@@ -109,6 +109,8 @@ payment.getProvider('not-registered') // undefined
 | `payment.queryOrder` | 決済状態を取得 | providerName, orderNo | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
 | `payment.closeOrder` | 決済注文をクローズ | providerName, orderNo | `void` | `await payment.closeOrder(providerName, orderNo)` |
 
+微信支付が `204 No Content` を返すと、`payment.closeOrder('wechat', orderNo)` は成功し、`data` は `undefined` です。プロキシは決済サービスのステータスをそのまま転送します。他のステータスや通信エラーは `CLOSE_ORDER_FAILED` です。
+
 #### 利用例：注文の作成・照会・終了
 
 作成は最小例を参照。元の決済先と注文番号を渡すと pending の注文だけを終了し、再照会結果または失敗を返します。

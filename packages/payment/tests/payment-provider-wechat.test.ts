@@ -7,6 +7,7 @@
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { payment } from '../src/index.js'
 import { HaiPaymentError } from '../src/payment-types'
 import { createWechatPayProvider } from '../src/providers/wechat/payment-provider-wechat'
 
@@ -546,11 +547,19 @@ describe('payment-provider-wechat', () => {
   })
 
   describe('closeOrder', () => {
-    it('关闭订单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      })
+    it('统一支付入口允许微信以 204 确认关单', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }))
+      expect((await payment.init({ wechat: testConfig })).success).toBe(true)
+      try {
+        expect(await payment.closeOrder('wechat', 'PUBLIC-ORDER')).toEqual({ success: true, data: undefined })
+      }
+      finally {
+        await payment.close()
+      }
+    })
+
+    it('微信返回 204 空响应时关闭订单成功', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }))
 
       const provider = createWechatPayProvider(testConfig)
       const result = await provider.closeOrder('ORD001')
@@ -562,6 +571,18 @@ describe('payment-provider-wechat', () => {
       expect(options.method).toBe('POST')
       const body = JSON.parse(options.body)
       expect(body.mchid).toBe(testConfig.mchId)
+    })
+
+    it.each([200, 400, 503])('hTTP %s 未确认关单时返回 CLOSE_ORDER_FAILED', async (status) => {
+      fetchSpy.mockResolvedValueOnce(Response.json({}, { status }))
+      const provider = createWechatPayProvider(testConfig)
+
+      const result = await provider.closeOrder('ORD-FAIL')
+
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.CLOSE_ORDER_FAILED.code },
+      })
     })
 
     it('fetch 失败返回 CLOSE_ORDER_FAILED', async () => {

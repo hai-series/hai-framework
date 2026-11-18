@@ -147,6 +147,8 @@ finally {
 | `payment.queryOrder` | 查询渠道订单状态 | providerName, orderNo | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
 | `payment.closeOrder` | 向渠道关闭订单 | providerName, orderNo | `void` | `await payment.closeOrder(providerName, orderNo)` |
 
+微信回传 `204 No Content` 时，`payment.closeOrder('wechat', orderNo)` 返回成功，`data` 为 `undefined`。代理应透传微信的状态。其他响应状态或网络错误返回 `CLOSE_ORDER_FAILED`。
+
 #### 场景：创建、查询与关单
 
 创建订单见最小接入；此函数输入原渠道名和业务单号，只对 pending 订单申请关单，返回最终查询结果或失败。实际状态由渠道确认。

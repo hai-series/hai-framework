@@ -94,7 +94,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
   /**
    * 发送微信支付 API 请求
    */
-  async function wechatRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function wechatRequest(method: string, path: string, body?: unknown): Promise<Response> {
     const timestamp = getTimestamp()
     const nonce = generateNonce()
     const bodyStr = body
@@ -120,6 +120,11 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
       throw new Error(`Wechat API ${method} ${path} failed: ${response.status} ${errorText}`)
     }
 
+    return response
+  }
+
+  async function wechatJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const response = await wechatRequest(method, path, body)
     return response.json() as T
   }
 
@@ -152,7 +157,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           requestBody.attach = JSON.stringify(input.metadata)
         }
 
-        const response = await wechatRequest<{ prepay_id?: unknown }>('POST', '/v3/pay/transactions/jsapi', requestBody)
+        const response = await wechatJson<{ prepay_id?: unknown }>('POST', '/v3/pay/transactions/jsapi', requestBody)
         if (typeof response.prepay_id !== 'string' || !response.prepay_id.trim())
           throw new Error('Invalid Wechat JSAPI prepay response')
 
@@ -234,7 +239,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
     async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
         const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(config.mchId)}`
-        const response = await wechatRequest<{
+        const response = await wechatJson<{
           out_trade_no: string
           transaction_id: string
           trade_state: string
@@ -271,7 +276,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
-        const response = await wechatRequest<{
+        const response = await wechatJson<{
           refund_id: string
           status: string
         }>('POST', '/v3/refund/domestic/refunds', {
@@ -308,9 +313,11 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async closeOrder(orderNo: string): Promise<HaiResult<void>> {
       try {
-        await wechatRequest('POST', `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`, {
+        const response = await wechatRequest('POST', `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`, {
           mchid: config.mchId,
         })
+        if (response.status !== 204)
+          throw new Error(`Unexpected Wechat close order status: ${response.status}`)
         return ok(undefined)
       }
       catch (cause) {
