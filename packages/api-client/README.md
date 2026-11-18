@@ -20,6 +20,8 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 ## 功能说明
 
+浏览器可将同源根路径（如 `/api/v1`）作为 `baseUrl`。Node.js 和没有浏览器来源的设备使用 HTTP(S) 绝对地址。地址无效时，`init()` 返回 `CONFIG_ERROR`。
+
 [查 API 清单](../../docs/usage/function/api-client.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 客户端默认从服务端握手获取 `transport.maxPlaintextBytes`；可显式设置本地同名字段取较小值。容量失败返回 `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`），保留方向、阶段和字节诊断。见 [容量配置与升级](../../docs/usage/function/crypto.md#transport-capacity)。

@@ -263,21 +263,25 @@ describe('api-client transport', () => {
     await crypto.close()
   })
 
-  it('encrypts request and decrypts response transparently via crypto.transport', async () => {
+  it('encrypts request and decrypts response transparently with a same-origin API path', async () => {
     const client = apiClient.create(testContract)
-    const init = await client.init({
-      baseUrl: 'http://api.test/api/v1',
-      fetch: makeServerFetch(),
-      transport: { crypto },
-    })
-    expect(init.success).toBe(true)
-
-    const result = await client.echo({ msg: 'hi' })
-    expect(result.success).toBe(true)
-    if (result.success)
-      expect((result.data.echoed as { msg: string }).msg).toBe('hi')
-
-    await client.close()
+    vi.stubGlobal('location', new URL('http://api.test/workspace'))
+    try {
+      const init = await client.init({
+        baseUrl: '/api/v1',
+        fetch: makeServerFetch(),
+        transport: { crypto },
+      })
+      expect(init.success).toBe(true)
+      const result = await client.echo({ msg: 'hi' })
+      expect(result.success).toBe(true)
+      if (result.success)
+        expect((result.data.echoed as { msg: string }).msg).toBe('hi')
+    }
+    finally {
+      await client.close()
+      vi.unstubAllGlobals()
+    }
   })
 
   it.each([false, true])('renews transport before refreshing a session after idle, domain unauthorized=%s', async (domainUnauthorized) => {

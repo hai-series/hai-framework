@@ -20,6 +20,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 
 ## Features
 
+In browsers, `baseUrl` can be a same-origin root path such as `/api/v1`. Use an absolute HTTP(S) URL in Node.js and in clients without a browser origin. `init()` returns `CONFIG_ERROR` for invalid addresses.
+
 [Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples.
 
 Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../../docs/usage/function/crypto.en.md#transport-capacity).

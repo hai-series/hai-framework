@@ -10,6 +10,7 @@
   "apiClient_notInitialized": "API client not initialized, please call apiClient.init() first",
   "apiClient_alreadyInitialized": "API client is already initialized; call apiClient.close() before init()",
   "apiClient_configError": "API client config error: {error}",
+  "apiClient_invalidBaseUrl": "Provide an HTTP(S) API URL or a same-origin root path in the browser. Omit credentials, query parameters, and fragments.",
   "apiClient_responseValidationFailed": "Response validation failed",
   "apiClient_unknown": "Unknown error"
 }

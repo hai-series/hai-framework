@@ -20,6 +20,8 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ## 機能
 
+ブラウザーでは `baseUrl` に `/api/v1` のような同一オリジンのルート相対パスを指定できます。Node.js やブラウザーオリジンのない環境では HTTP(S) の絶対 URL を使います。無効なアドレスの場合、`init()` は `CONFIG_ERROR` を返します。
+
 [API 一覧](../../docs/usage/function/api-client.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 `transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../../docs/usage/function/crypto.ja.md#transport-capacity)を参照してください。

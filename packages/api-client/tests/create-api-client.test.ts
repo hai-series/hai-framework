@@ -303,17 +303,17 @@ describe('apiClient.create', () => {
     await client.close()
   })
 
-  it('config getter 应返回脱敏后的 baseUrl 与 headers 快照', async () => {
+  it('config getter 应返回生效的 baseUrl 与脱敏的 headers 快照', async () => {
     const client = apiClient.create(testContract)
     const initResult = await client.init({
-      baseUrl: 'https://user:pass@api.test.com/api/v1',
+      baseUrl: 'https://api.test.com/api/v1/',
       headers: {
         authorization: 'Bearer secret-token',
       },
     })
 
     expect(initResult.success).toBe(true)
-    expect(client.config?.baseUrl).toBe('https://[REDACTED]:[REDACTED]@api.test.com/api/v1')
+    expect(client.config?.baseUrl).toBe('https://api.test.com/api/v1')
     if (client.config?.headers && typeof client.config.headers !== 'function') {
       expect(client.config.headers.authorization).toBe('[REDACTED]')
     }

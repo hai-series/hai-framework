@@ -42,6 +42,73 @@ it('inspects an authenticated JSON response only once and preserves its body for
   }
 })
 
+it('resolves a browser API path once for requests, refresh and retry', async () => {
+  vi.stubGlobal('location', new URL('https://web.test/portal/settings'))
+  const client = apiClient.create(contract)
+  const requests: string[] = []
+  try {
+    expect((await client.init({
+      baseUrl: '/portal/api/v1/',
+      auth: {
+        storage: apiClient.tokenStorage.memory(),
+      },
+      fetch: async (input, init) => {
+        const request = new Request(input, init)
+        requests.push(request.url)
+        if (request.url.endsWith('/auth/refresh')) {
+          return Response.json({
+            success: true,
+            data: {
+              tokens: pair('new'),
+            },
+          })
+        }
+        return request.headers.get('authorization') === 'Bearer new'
+          ? Response.json({
+              success: true,
+              data: { value: 'ok' },
+            })
+          : new Response(null, { status: 401 })
+      },
+    })).success).toBe(true)
+    await client.auth.setTokens(pair('old'))
+    expect(await client.check()).toEqual({
+      success: true,
+      data: { value: 'ok' },
+    })
+    expect(requests).toEqual([
+      'https://web.test/portal/api/v1/check',
+      'https://web.test/portal/api/v1/auth/refresh',
+      'https://web.test/portal/api/v1/check',
+    ])
+  }
+  finally {
+    await client.close()
+    vi.unstubAllGlobals()
+  }
+})
+
+it.each([
+  '/api/v1',
+  '',
+  'invalid.example/api',
+  'ftp://api.test',
+  'https://api.test/?x=1',
+  'https://user:pass@api.test',
+])('rejects an invalid Node base URL %s before use', async (baseUrl) => {
+  const client = apiClient.create(contract)
+  try {
+    expect(await client.init({ baseUrl })).toMatchObject({
+      success: false,
+      error: { code: HaiApiClientError.CONFIG_ERROR.code },
+    })
+    expect(client.isInitialized).toBe(false)
+  }
+  finally {
+    await client.close()
+  }
+})
+
 it('a custom stream yields before EOF and caller cancellation releases its body', async () => {
   const client = apiClient.create({
     events: apiContract.route({ method: 'GET', path: '/events' }).output(eventIterator(z.object({

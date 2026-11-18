@@ -179,12 +179,16 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       initPromise = (async (): Promise<HaiResult<void>> => {
         let nextTransport: TransportClient | undefined
         try {
-          nextTransport = buildTransportSession(config)
-          const nextTokenManager = buildTokenManager(config, nextTransport)
-          const nextRawClient = buildRawClient(contract, config, nextTokenManager, nextTransport)
+          const baseUrl = normalizeBaseUrl(config.baseUrl)
+          if (baseUrl === undefined)
+            return err(HaiApiClientError.CONFIG_ERROR, apiClientM('apiClient_invalidBaseUrl'))
+          const effectiveConfig = { ...config, baseUrl }
+          nextTransport = buildTransportSession(effectiveConfig)
+          const nextTokenManager = buildTokenManager(effectiveConfig, nextTransport)
+          const nextRawClient = buildRawClient(contract, effectiveConfig, nextTokenManager, nextTransport)
 
           // 所有可能失败的构建步骤完成后再提交状态，避免调用方看到半初始化 client。
-          state.config = config
+          state.config = effectiveConfig
           state.transport = nextTransport
           state.tokenManager = nextTokenManager
           state.rawClient = nextRawClient
@@ -719,6 +723,25 @@ async function buildHeaders(
   }
 }
 
+/** 将浏览器根路径固定到当前来源，供请求、刷新和握手共用。 */
+function normalizeBaseUrl(value: string): string | undefined {
+  if (typeof value !== 'string' || value.includes('?') || value.includes('#'))
+    return undefined
+  const relative = value.startsWith('/')
+  const origin = relative ? globalThis.location?.origin : undefined
+  try {
+    const url = new URL(value, origin)
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password
+      || (relative && (value.startsWith('//') || url.origin !== origin))) {
+      return undefined
+    }
+    return url.href.replace(TRAILING_SLASHES_REGEX, '')
+  }
+  catch {
+    return undefined
+  }
+}
+
 /**
  * 发送前克隆一次性请求体；HTTP 401 或有效失败包络的 401 才尝试刷新并最多重试一次。
  * 登录/注册/找回密码与 refresh 入口保留原始失败，不递归刷新；重试保留 body 并替换 Bearer 头。
@@ -813,8 +836,7 @@ async function fetchWithRefresh(
     && 'httpStatus' in failureError && failureError.httpStatus === 401
   if (response.status !== 401 && !unauthorized)
     return response
-  if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
-    && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
+  if (typeof code === 'string' && code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(code).success) {
     return response
   }
   if (tokenManager.generation !== identityGeneration)

@@ -218,7 +218,7 @@ export interface AuthConfig {
  * ```
  */
 export interface ApiClientConfig {
-  /** API service 完整 baseUrl，通常含 `apiPrefix`，例如 `https://api.example.com/api/v1`。 */
+  /** HTTP(S) API 地址，通常含 `apiPrefix`。浏览器也可使用 `/api/v1` 这样的同源根路径。 */
   readonly baseUrl: string
   /** 认证配置；不传则不启用 Token 注入与自动刷新。 */
   readonly auth?: AuthConfig

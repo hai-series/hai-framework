@@ -101,9 +101,11 @@ Refresh credentials are distinct from server logout. Use the IAM logout endpoint
 
 Call `apiClient.init(config)` to configure the default client. If your application defines its own contract, call `apiClient.create(contract)` and pass the settings to that instance's `init(config)`. The browser sends and stores cookies through Fetch and the server's responses. For SSR, create a separate client and token store per request.
 
+Initialization resolves a root path against the browser origin, including its scheme, host, and port. API calls, token refresh, and the encryption handshake share the resolved URL. Omit user information, query parameters, and fragments. Protocol-relative URLs such as `//example.com` are rejected at initialization.
+
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |
-| `baseUrl` | Required | The API base the client can reach. Use `/api/v1` for a browser on the same origin, or an absolute URL on an app or another origin. |
+| `baseUrl` | Required | An absolute HTTP(S) API URL or a same-origin root path such as `/api/v1` in the browser. |
 | `timeout` | `30000` ms | Deadline for headers and JSON. Streaming reads use the caller's abort signal. |
 | `clientName` | `hai-api-client` | Value of `x-request-client` for diagnostics. |
 | `headers` | No additional headers | Static object or a sync or async function returning headers. |

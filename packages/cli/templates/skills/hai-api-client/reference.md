@@ -94,7 +94,7 @@ const client = apiClient.create(contract)
 await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 ```
 
-`client.config` / `apiClient.config` 返回的是脱敏后的运行配置快照；`baseUrl` 的内嵌凭证与 `headers.authorization` 等敏感值会自动隐藏。
+`client.config` / `apiClient.config` 返回有效的绝对 `baseUrl` 和脱敏后的配置快照，`headers.authorization` 等敏感值会隐藏。
 
 ### 4. 关闭
 
@@ -169,7 +169,7 @@ CLI 独立 mobile 模板在选择 IAM/crypto 时安装前端 crypto 并默认启
 
 ## 常见模式
 
-- `baseUrl` 通常包含服务端 `apiPrefix`，例如 `/api/v1`。
+- 浏览器可将同源根路径（如 `/api/v1`）作为 `baseUrl`。Node.js 和没有浏览器来源的设备使用 HTTP(S) 绝对地址。地址无效时，`init()` 返回 `CONFIG_ERROR`。初始化时将同源路径锚定到浏览器的来源（协议、主机和端口）。业务请求、刷新与加密握手都使用同一生效地址。地址中省略用户信息、查询参数和片段，协议相对地址（如 `//example.com`）会在初始化时报错。
 - 业务错误不 throw，统一判断 `HaiResult.success`。
 - 客户端不导入服务端 `procedures` 或 `@h-ai/serv`。
 - 客户端不导入 `@h-ai/crypto` 的内部 transport 工厂，只通过 `transport: { crypto }` 装配。
