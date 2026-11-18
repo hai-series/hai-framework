@@ -234,6 +234,12 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 
 #### 场景：一起提交或回滚
 
+下图展示自动事务的边界。回调中的每一步仍返回 HaiResult，必须逐步检查，业务失败时抛错才能阻止提交。
+
+![tx.wrap：什么情况提交，什么情况回滚](../images/function-reldb-transaction.svg)
+
+回调普通返回（包括误返回失败 HaiResult）都会进入提交。抛错才进入回滚；提交或回滚本身失败也要上报。事务只覆盖同一数据库连接上的操作，外部发消息、支付或文件上传不会随 SQL 回滚撤销。
+
 下文分别演示 wrap 的返回值、抛错回滚、begin 后 commit/rollback，以及事务内分页和批量操作。业务 HaiResult 失败要先检查，不能把失败对象当回调的普通成功值提交。
 
 #### 事务结束与失败规则

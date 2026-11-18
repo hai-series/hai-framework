@@ -158,6 +158,12 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 
 #### 场景：组合可复用处理步骤
 
+链式调用只登记步骤，run(text) 才开始执行。下面对应先清洗、再转换正文、分块、最后处理分块的常见顺序。
+
+![pipeline.run：按声明顺序处理文本和分块](../images/function-datapipe-pipeline.svg)
+
+正文与 chunks 是两份不同状态：transform 改正文，chunk 按当时的正文生成分块，chunkTransform 只改已有分块。分块后再 transform 不会重新计算 chunks；任一步失败立即返回失败，不继续后续步骤。没有 chunk 步骤时，chunks 仍为空。
+
 ```ts
 const pipeline = datapipe.pipeline()
   .clean({ removeHtml: true })

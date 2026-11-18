@@ -98,6 +98,12 @@ function value<T>(result: HaiResult<T>): T {
 
 #### 利用例：単一ツールの定義と実行
 
+定義時は handler を実行しません。execute は入力検証、認可、実行に共通の中止・時間制限を適用します。
+
+![ツール実行：検証・認可・共通の期限](../images/function-tools-execution.ja.svg)
+
+検証・認可に失敗したら handler に入りません。登録側と呼出側の認可は両方必要です。中止・期限切れは待機を止めますが、handler は signal に従う必要があり、外部処理は巻き戻しません。handler の値は data、resultHandler は既存の HaiResult を維持します。
+
 ```ts
 import { z } from 'zod'
 const tool = tools.define({

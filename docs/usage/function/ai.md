@@ -717,6 +717,12 @@ docs 必须是已登记且可访问的来源。回答文字不固定，引用指
 
 #### 场景：发布、搜索与撤销知识
 
+文档向量存在，不等于该修订已对检索可见。下图区分新修订准备、条件发布和旧向量清理。
+
+![知识入库：准备修订、发布、清理](../images/function-ai-knowledge-publication.svg)
+
+新修订只有发布成功后才成为检索使用的当前版本。旧向量清理失败时，成功结果可能带 cleanupPending，由 repair 后续补偿；删除则先撤销可见性再清理。搜索必须核对已发布版本，不能把向量库中仍存在的旧块重新当成当前资料。
+
 ```ts
 value(await ai.knowledge.setup())
 const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
@@ -938,6 +944,12 @@ const messageTokens = ai.token.estimateMessages(messages) // estimate including 
 | `manager.chatStream` | 多轮流式回答 | `message: string, ContextChatOptions?` | `AsyncIterable<ContextStreamEvent>` | `manager.chatStream("请继续")` |
 
 #### 场景：管理会话与轮次
+
+同一 scope 可能由多个请求或节点访问。下图展示 chat 的生成与保存边界；流式语音另用 prepareTurn / commitTurn 保留实际播放的内容。
+
+![对话管理器：一轮生成怎样提交](../images/function-ai-context-turn.svg)
+
+取得执行资格后才更新本轮上下文，提交时仍核验版本和期限，避免旧节点覆盖新会话。concurrency=reject 返回忙，queue 才排队。记忆提取可以在后台继续；save/flush 要检查结果，生成结束不代表持久化和记忆任务已全部成功。
 
 下面同时列出工厂与 manager 方法，按消息→预算→聊天→save/flush→reload/reset→轮次提交的流程解释输入输出。list/rename/removeSession 操作持久会话，返回的句柄不是自动关闭的后台服务。
 
@@ -1393,6 +1405,12 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 | `ai.acp.workspaces.publishSnapshot` | 发布已批准的工作区快照 | `ACPPublishSnapshot`：来源目录、远端、基准提交、已批准补丁、任务分支、日期和作者；第二参数 `signal?` | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
 
 #### 场景：管理智能体、工作区和 ACP 会话
+
+受管 ACP 将应用身份、Runner 的持久任务和原生智能体连接起来。plan 只说明将采用的资源，不领取容器。
+
+![受管 ACP：接收任务、执行与读取结果](../images/function-ai-acp-task.svg)
+
+submit 返回可续读的任务回执；run 等待本次结果；两者的受理事件都不能当作执行完成。断线后按同一主体和 taskId 续读 events/get。取消后要核对执行与资源停止状态；向业务分支发布补丁需要再次授权和用户批准。
 
 下面覆盖资源 CRUD、initialize/check/prepare/importFiles、会话 create/get/list/resume/close/reclaim/remove，以及 session/connection 句柄操作。输入归属来自服务端，updateMain/publish 会修改仓库，示例只说明调用契约，不在文档校验中执行真实发布。
 

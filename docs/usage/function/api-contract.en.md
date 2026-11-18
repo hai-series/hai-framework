@@ -58,6 +58,12 @@ Contracts describe paths, input and output without sending requests. Share them 
 
 #### Scenario: Define and compose HTTP contracts
 
+The contract object does not listen on a port. This map distinguishes route/schema declarations, server implementation and the typed client.
+
+![How one contract connects client and server](../images/function-api-contract-boundaries.en.svg)
+
+The same input/output definition guides both server implementation and client types. Authentication, resource authorization and business effects belong to the server; contract construction or browser validation cannot perform them.
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'

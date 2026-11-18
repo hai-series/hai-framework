@@ -166,6 +166,12 @@ Use the original body and signature headers, verify the provider and update busi
 
 #### Scenario: Verify payment callbacks
 
+This follows the successful-payment branch. Valid pending, failed or closed events must not create fulfillment jobs. handleNotify verifies the provider; the application owns order updates, durable deduplication and fulfillment.
+
+![Successful-payment notice: verification to commit](../images/function-payment-notification.en.svg)
+
+In one transaction the application checks order, amount, currency and event ID, updates state conditionally and inserts a unique fulfillment outbox item. Acknowledge after commit. Duplicates or reordered events cannot repeat fulfillment or regress paid to pending. External fulfillment still needs its own idempotency key.
+
 Input is the original route Request; output is HaiResult<PaymentNotifyResult>. Read the body once. After verification, validate and commit the order, amount, currency and event ID before acknowledging the provider.
 
 ```ts

@@ -51,6 +51,12 @@ Scan requirements and artifacts before choosing a read-only plan, offline bundle
 
 #### Scenario: Scan and deliver applications
 
+This is the caller’s delivery workflow. plan is read-only, build prepares artifacts, and deploy changes the target environment.
+
+![Deployment: plan, delivery and recovery](../images/function-deploy-delivery.en.svg)
+
+Review applications, middleware, variables and capacity before delivering verified artifacts. Startup or health failures use available recovery information; recovery can also fail and must be reported. Restoring images/configuration does not undo migrations or external business effects.
+
 Supply a built project and its real deployment config. scan reads requirements; provisionAll provisions selected services and belongs after plan review. The quick-start --plan is read-only.
 
 ```ts

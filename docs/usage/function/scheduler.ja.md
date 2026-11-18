@@ -126,6 +126,12 @@ start は時刻に応じた実行、trigger は指定タスクの実行です。
 
 #### 利用例：実行の開始とログ確認
 
+cron と手動実行で occurrenceId を決定し、DB 上の実行資格を共有します。旧実行の期限が切れた場合を詳しく示します。
+
+![共有スケジュール：期限後に引継ぎできる条件](../images/function-scheduler-timeout.ja.svg)
+
+取得・延長・最終保存は DB 時刻と現在の実行 token を確認します。安全に再試行できる宣言と残り回数がある場合だけ同じ occurrenceId で引継ぎます。それ以外は unknown とし後続を止めて照合します。期限切れで外部処理は取り消されません。
+
 初期化とタスク登録後に実行。start/stop は同期 HaiResult<void> で巡回を制御し、trigger の成功後も実行 status を確認します。
 
 ```ts

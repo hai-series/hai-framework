@@ -319,6 +319,12 @@ value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurren
 
 #### 场景：授权直传与下载
 
+签名 URL 把授权请求与文件内容传输分开。以下流程适用于已初始化的 S3 后端，应用先确定用户可操作的对象键。
+
+![私有文件：先授权，再直传或下载](../images/function-storage-presign.svg)
+
+API 返回 URL 仅表示已经签发访问凭据，文件尚未上传或下载。浏览器随后直连对象存储，校验签名和期限后才传输字节；上传的 Content-Type 要与签发时一致。publicUrl 只计算公开地址规则，不做授权，也不会把私有文件改成公开。
+
 ```ts
 // Requires initialized S3 storage and prior application authorization.
 const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))

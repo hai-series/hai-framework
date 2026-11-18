@@ -194,6 +194,12 @@ photo.data // { data: '用户拍摄图片的 Base64 内容', format: 'jpeg' }；
 
 #### 场景：登记与监听推送
 
+原生推送注册会请求用户权限并等待插件事件。必须先挂载成功/失败监听，再触发注册，避免漏掉立即返回的事件。
+
+![push.register：从权限到原生 Token](../images/function-capacitor-push.svg)
+
+30 秒边界覆盖权限、挂载监听和等待注册事件。拒绝、超时、取消或模块关闭都会清理已知及迟到句柄；注册与监听清理都成功后，才返回真实事件给出的 token；清理失败同样返回失败，可在 close 时继续清理。取得 token 后仍需应用把它与当前账号关联到服务端，取得 token 不代表消息已推送。
+
 ```ts
 const received: unknown[] = []
 const actions: unknown[] = []

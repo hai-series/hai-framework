@@ -145,6 +145,12 @@ if (photo.success) {
 
 #### 利用例：プッシュの登録と購読
 
+ネイティブのプッシュ登録では許可とプラグインのイベントを待ちます。即座の通知を失わないよう、先に成功・失敗の監視を設定します。
+
+![push.register：権限確認からネイティブ Token まで](../images/function-capacitor-push.ja.svg)
+
+30 秒の制限は許可・監視の設定・登録結果の待機を含みます。拒否・時間切れ・中止・close では遅れて届くハンドルも解放します。登録と監視の解放が成功してから実際の token を返します。解放失敗も失敗となり、close で再試行できます。サーバーで本人との関連付けはアプリが行います。
+
 ```ts
 const received: unknown[] = []
 const actions: unknown[] = []

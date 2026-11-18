@@ -195,6 +195,12 @@ const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.
 
 #### 利用例：暗号・音声・フィードバックの接続
 
+transport 有効時の通常 API 要求です。伝送認証はメッセージの送信元・完全性を確認し、IAM の本人と業務権限は後段で確認します。
+
+![Serv：契約から業務応答まで](../images/function-serv-request.ja.svg)
+
+本文を復元してから契約の検証と procedures に渡し、認可失敗では handler に入りません。通常のアクセス拒否も暗号化範囲内です。協商・プリフライトは専用確認があり、除外パスや静的ファイルには各設定が適用されます。
+
 createApp を使い、transport manager・音声チケットと認可・フィードバックの文脈を渡します。HTTP/WS の結果、容量超過、解放まで説明します。
 
 #### 音声接続の認可と予算

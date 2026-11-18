@@ -188,6 +188,12 @@ async function startApi(imageId: string) {
 
 #### 场景：提交、恢复、读取与取消
 
+submit 返回的是共享数据库中的执行回执。下图将“已排队”“请求取消”和“资源确实停止”分开。
+
+![Runner 回执怎样走到可确认的终态](../images/function-runner-states.svg)
+
+排队时取消可直接得到 cancelled；运行中通常先是 cancelling，停止得到确认后才结束。租约或清理无法确认时为 unknown，不能宣称业务已撤销。reconcileUnknown 要在原执行节点核对资源，解除占用后仍保留未知业务结果，不会伪造 succeeded。
+
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))

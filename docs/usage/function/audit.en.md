@@ -113,6 +113,12 @@ Record events using server-derived identities and request IDs. Helpers cover com
 
 #### Scenario: Record actions and identity
 
+If business data must never commit without an audit event, explicitly use the same RelDB transaction and inspect audit.log.
+
+![Required audit: commit business data and event together](../images/function-audit-transaction.en.svg)
+
+Both business writes and audit.log(input, tx) use tx; a failed step makes the caller abort and roll back. Automatic HTTP capture reports failure without undoing completed business work. Record a rollback failure event after the original transaction finishes rolling back.
+
 ```ts
 const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
 // saved includes its generated id and createdAt

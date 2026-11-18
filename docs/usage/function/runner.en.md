@@ -150,6 +150,12 @@ Save an idempotency key and execution ID for one intent. Recover receipts after 
 
 #### Scenario: Submit, recover, inspect and cancel
 
+submit returns a persisted execution receipt. This distinguishes queued work, cancellation requests and confirmed resource shutdown.
+
+![Runner receipts and confirmed terminal states](../images/function-runner-states.en.svg)
+
+Queued work can become cancelled directly. Running work usually enters cancelling until shutdown is confirmed. Unconfirmed ownership or cleanup yields unknown, not a promise that effects were undone. reconcileUnknown verifies resources on the original node and preserves the unknown business outcome.
+
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))

@@ -112,6 +112,12 @@ function value<T>(result: HaiResult<T>): T {
 
 #### 利用例：通知経路の起動と送信
 
+reach.send は送信先に接続する場合と、通常通知の待機番号を返す場合があります。機密情報を含む通知は本文なしの専用台帳を使い、遅延キューに入れません。
+
+![通知：直接送信・待機・結果不明](../images/function-reach-delivery.ja.svg)
+
+通常通知は許可されれば永続キューで待機し、reject 指定なら待機を拒否します。機密通知は通知禁止時間・期限切れ・結果不明で自動再送しません。送信先の受理は到達・既読ではなく、不明な結果は記録を照合してから回復します。
+
 ```ts
 const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
 // sent: SendResult for this provider attempt, not proof that a person read the message

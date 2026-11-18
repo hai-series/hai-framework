@@ -96,6 +96,12 @@ function value<T>(result: HaiResult<T>): T {
 
 #### 场景：定义并执行单个工具
 
+创建工具不执行 handler。实际 execute 调用把输入校验、授权和处理函数放在同一个取消及超时范围内。
+
+![工具执行：校验、授权与同一个截止时间](../images/function-tools-execution.svg)
+
+校验失败或授权拒绝不会进入 handler；注册器与单次调用都配置授权时，两者都必须允许。超时或取消返回失败并停止等待，处理函数仍须响应 signal，已经产生的外部效果不会自动回滚。handler 的普通值作为 data；resultHandler 保留已有 HaiResult。
+
 ```ts
 import { z } from 'zod'
 const tool = tools.define({

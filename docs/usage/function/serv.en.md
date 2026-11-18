@@ -195,6 +195,12 @@ These integrations use createApp parameters and application-owned services rathe
 
 #### Scenario: Integrate encryption, audio and feedback
 
+This follows an ordinary API request with transport enabled. Transport proves message origin and integrity; context and guards still verify IAM identity and business permissions.
+
+![Serv: from contract to business response](../images/function-serv-request.en.svg)
+
+Serv restores the business body before contract validation and procedures. Guard failure skips the handler. Ordinary access denials remain inside the encrypted boundary. Handshake/preflight have their own access checks, and excluded paths or static resources follow their configured routes.
+
 This section uses createApp. The workflows supply a transport manager, audio tickets and authorization, and feedback context, then explain HTTP/WS outcomes, capacity failures and cleanup.
 
 [Detailed parameters and workflows](serv.md#integrations)

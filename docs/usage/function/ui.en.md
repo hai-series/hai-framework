@@ -541,6 +541,12 @@ Resource definitions connect list, create, update and delete callbacks; controll
 
 #### Scenario: Build list and edit screens from a resource
 
+This follows CrudPage with createCrudController. The component displays state while the controller calls the application-provided data service.
+
+![CRUD lists: query, previous data and latest response](../images/function-ui-crud-loading.en.svg)
+
+Editing filters alone does not query; submit with Search/Enter. Paging and sorting use committed filters. Only the latest response can update the controller. Initial failure shows retry; refresh failure retains old data by default. Empty state requires loaded and total=0.
+
 Resource definitions connect list, create, update and delete callbacks; controllers manage loading, navigation and editing. For extended examples, see the [Chinese walkthrough](ui.md#crud).
 
 ```svelte

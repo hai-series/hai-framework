@@ -117,6 +117,12 @@ withContext（コールバックの結果をそのまま返す）以外、出力
 
 #### 利用例：操作と主体の記録
 
+監査なしに業務データを確定してはいけない場合は、同じ RelDB トランザクションを明示し、audit.log の結果を確認します。
+
+![必須監査：業務データとイベントを同時確定](../images/function-audit-transaction.ja.svg)
+
+業務の書込みと audit.log(input, tx) に同じ tx を使い、失敗時は呼び出し側で巻き戻します。HTTP 自動採集の失敗は完了済み業務を取り消しません。巻き戻しの失敗イベントは、元のトランザクション終了後に別途記録します。
+
 ```ts
 const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
 // saved includes its generated id and createdAt

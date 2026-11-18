@@ -153,6 +153,12 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 
 #### Scenario: Write, search and clean documents
 
+VecDB stores and compares numeric vectors; it does not embed text. Writes and queries must use the same model and dimension.
+
+![From text to search: who creates vectors](../images/function-vecdb-responsibilities.en.svg)
+
+The example uses dimension 3, so both write and query use [1,0,0]; identical cosine vectors score about 1. An application or AI embedding model supplies real vectors. Search returns matches and scores, not generated answers or percentages.
+
 ```ts
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
 value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))

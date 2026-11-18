@@ -203,6 +203,12 @@ start 开始按时间领取任务，trigger 主动执行指定任务；stop 停�
 
 #### 场景：启动调度与查看执行日志
 
+cron 和手动触发先确定一次运行的 occurrenceId。多个节点争用同一数据库中的执行资格，下面重点展开旧执行到期后的分支。
+
+![共享调度：超时后能否接手](../images/function-scheduler-timeout.svg)
+
+所有领取、续租和最终提交都核验数据库时钟及当前执行 token。只有明确声明可安全重试且次数未耗尽，才允许用同一 occurrenceId 接手；否则记为 unknown 并暂停后续周期，等待人工核对。租约失效不会撤销已发送的 HTTP 或其它外部效果。
+
 初始化并登记任务后运行；start/stop 都返回同步 HaiResult<void>，只控制定时轮询。trigger 仍需检查返回执行记录的 status，输出日志按本次来源筛选。
 
 ```ts

@@ -411,6 +411,12 @@ async function exchange(manager: TransportEncryptionManager, clientPublicKey: st
 
 #### 利用例：クライアントで送信して平文応答を読む
 
+クライアントの作成ではローカルオブジェクトだけを用意します。init または業務送信前の確認から、会話の再利用と実際のハンドシェイクを示します。
+
+![session.init：送信できるまで](../images/function-crypto-handshake.ja.svg)
+
+有効な会話は再利用し、再協商時の並行呼び出しは同じ処理を待ちます。サーバーでの登録後も、応答・容量・有効期間の確認が必要です。タイムアウト、不正な応答、destroy 後は候補を公開しません。
+
 HTTPS サービスで上の exchange を鍵交換パスに、後述の認証付き応答処理を /api/echo に組み込みます。POST の hello に対し、復号済み Response の本文は { received: "hello" } です。Fetch の失敗は例外となり、finally でセッションを破棄します。
 
 session は crypto.transport.createClient が返す**クライアントの暗号化通信オブジェクト**で、IAM のログインセッションとは別です。生成時は通信しません。
@@ -471,6 +477,12 @@ async function decryptEnvelope(
 <a id="transport-protocol"></a>
 
 #### プロトコル：Transport v2 の形式と検証順序
+
+協商は鍵の準備です。その後、要求ごとの番号とランダムな共通鍵で暗号化・認証し、通常の Response に戻します。
+
+![encryptedFetch：要求と応答の往復](../images/function-crypto-request.ja.svg)
+
+サーバーは署名、鍵の復元、MAC、復号、時刻を確認し、認証後に要求番号を消費してから業務を実行します。クライアントも要求と HTTP 状態の対応を確認して認証・復号します。業務の HTTP エラーは呼び出し側が扱い、通信・認証失敗で業務を再送しません。
 
 Serv、Kit、api-client、ブラウザー・モバイルは同じアプリ層プロトコルを使います。鍵交換の公開鍵は TLS で認証し、IAM 権限と業務の冪等性は別途検証します。POST JSON `{ clientPublicKey }` を登録し、`clientId`、`serverKeyId`、`serverPublicKey`、`maxPlaintextBytes`、任意の `clientKeyTtlSeconds` を返します。公開鍵は有効な SM2 非圧縮点のみで、128 hex または `04` + 128 hex です。
 
@@ -552,6 +564,12 @@ interface Context {
 | `registry.close?` | 独自ストアの所有リソースを解放 | なし | `Promise<void>` | `await registry.close?.()` |
 
 #### 利用例：テスト用 ID で登録と重複拒否を確認
+
+クライアント、サーバーの鍵一覧、共有台帳は別の状態を管理します。秘密鍵の所在と期限で消える記録を示します。
+
+![伝送の鍵と記録の保存先](../images/function-crypto-key-ownership.ja.svg)
+
+協商で交換するのは公開鍵だけです。クライアントの秘密鍵はオブジェクトのメモリにあり、destroy で消去します。サーバー秘密鍵は信頼済み Secret から取得します。Cache は期限付きの公開鍵・使用済み番号・分単位の計数を保持します。管理器の close は共有記録の全削除や Cache 接続の close ではありません。
 
 Cache を初期化済みとします。管理マネージャーと ID を共有しない独立したテストです。本番では認証完了後にマネージャーが消費します。最初の claimRequest は true、再実行は false。鍵削除でも使用済み ID は残ります。内蔵 registry に close はなく、接続はアプリが所有し、独自ストアのみ清掃フックを提供できます。
 

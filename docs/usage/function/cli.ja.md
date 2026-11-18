@@ -41,6 +41,12 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 
 #### 利用例：プロジェクトの作成と追加
 
+引数と対話選択でテンプレート・機能を決めます。ソース生成と依存関係の導入は別の段階で、出力先と選択を先に確認します。
+
+![hai create：選択から確認可能な工程へ](../images/function-cli-create.ja.svg)
+
+生成ではコード・設定・AI skills を出力し、選択時だけ依存関係を導入します。DB・Cache・Secret・配置先は別途準備が必要です。導入に失敗しても生成済みファイルが残るため、対象ディレクトリを確認します。
+
 ```sh
 hai create demo-app --type website --defaults --no-install --no-git
 cd demo-app

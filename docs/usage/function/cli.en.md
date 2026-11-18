@@ -39,6 +39,12 @@ Choose a template for new projects, add modules or missing configuration to exis
 
 #### Scenario: Create and extend projects
 
+Flags and interactive choices determine template and features. Source generation and dependency installation are separate stages; review the destination and selections first.
+
+![hai create: from options to a reviewable project](../images/function-cli-create.en.svg)
+
+Generation writes application code, configuration and AI skills. The package manager runs only when installation is selected. A generated project does not provision databases, Cache, Secrets or deployment. Install failure may leave generated files for inspection.
+
 ```sh
 hai create demo-app --type website --defaults --no-install --no-git
 cd demo-app

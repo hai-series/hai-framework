@@ -173,6 +173,12 @@ value(await vecdb.collection.exists('demo-docs')) // false
 
 #### 场景：写入、检索和清理文档
 
+VecDB 保存和比较数字向量，不会自动把文本变成向量。写入端与查询端必须使用同一模型和维度。
+
+![从文本到检索结果：谁负责生成向量](../images/function-vecdb-responsibilities.svg)
+
+例中的集合维度为 3，所以写入和查询都传 [1,0,0]；同向向量的余弦转换分数约为 1。真实文本由应用或 AI embedding 先转换，搜索返回匹配及 score，不自动生成回答，score 也不是百分比。
+
 ```ts
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
 value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))

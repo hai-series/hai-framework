@@ -113,6 +113,12 @@ Use business keys for serializable values. Compare and swap prevents replacing a
 
 #### Scenario: Store values, counters and expiry
 
+Another node can write between get and set. compareAndSwap combines comparison and mutation so a stale writer cannot overwrite that change.
+
+![compareAndSwap: compare and change atomically](../images/function-cache-cas.en.svg)
+
+If the value is 1, expected=1 and value=2 succeeds. If another node already stored 2, that submission returns false and preserves its value and TTL. A store failure is a failed HaiResult, not false. expected=undefined means create only if absent.
+
 ```ts
 value(await cache.kv.set('demo:user:1', { name: 'Ada' }, { ex: 60 })) // true
 value(await cache.kv.get('demo:user:1')) // { name: 'Ada' }

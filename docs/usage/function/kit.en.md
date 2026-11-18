@@ -266,6 +266,12 @@ Prepare Crypto and shared Cache, give public policy to the client and a trusted 
 
 #### Scenario: Assemble encrypted transport: client and middleware
 
+This covers ordinary business routes with transport enabled. Handshake, A2A, preflight and explicit plaintext paths have separate branches. Access decisions are computed first; ordinary denials run inside the authenticated transport boundary.
+
+![Kit: an encrypted business request through Handle](../images/function-kit-request.en.svg)
+
+Access or session/guard rejection prevents resolve. Transport encrypts normal responses and errors produced inside its boundary, followed by audit and response headers. Custom middleware must not treat encrypted bytes as business input; endpoints or load/actions still validate application data.
+
 resolveKitTransportConfig returns false or complete options. The middleware returns a SvelteKit handler. Preserve real HTTP failures for overload and handshake errors; the application owns dependencies.
 
 [Detailed parameters and workflows](kit.md#transport)

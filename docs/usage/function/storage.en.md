@@ -206,6 +206,12 @@ S3 supports short-lived URLs for a specific object and operation. Authorize the 
 
 #### Scenario: Authorize direct transfers
 
+A signed URL separates authorization from the byte transfer. This requires initialized S3 storage and an application-authorized object key.
+
+![Private files: authorize before direct transfer](../images/function-storage-presign.en.svg)
+
+Returning a URL issues access credentials; it does not transfer a file. The browser then contacts storage, which checks the signature and expiry. Upload Content-Type must match the signed value. publicUrl only computes the configured public address.
+
 ```ts
 // Requires initialized S3 storage and prior application authorization.
 const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))

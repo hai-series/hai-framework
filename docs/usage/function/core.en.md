@@ -60,6 +60,12 @@ Check `success` before using `data` from a `HaiResult`. Reloading changes the va
 
 #### Scenario: Configuration in Node and the browser
 
+This separates file reading, environment overrides, validation and publication. load establishes the file and schema; reload uses the saved settings.
+
+![When configuration replaces the saved value](../images/function-core-config.en.svg)
+
+For port: 3000 and HAI_APP_PORT=4000, only a successful check publishes 4000. Failed reads or validation retain the old value; reload subscribers receive the value or failure. Consumers must apply changed settings themselves.
+
 Node configuration can read and watch YAML and dotenv files. In a browser, embedded assets or server load data carry public settings. File operations return `SERVICE_UNAVAILABLE`, `getOrThrow()` throws, and watchers report the failure immediately. In the browser, `core.config.isWatching()` always returns `false` and `core.config.unwatch()` does nothing.
 
 Load dotenv values before initializing modules. The order is process environment, mode-local file, local file, mode file, then base file. Apply the returned map explicitly. YAML placeholders are expanded before hierarchical environment overrides, for example `HAI_APP_PORT` overrides `app.port`. A parent JSON value replaces that node. Child keys override it at the same priority. An empty string is a supplied value. Placeholder expressions supplied through environment values or JSON remain literal. Validate the resolved object separately when using `resolve()` directly. A reload updates Core's in-memory copy, so have consumers apply new settings explicitly. Unsubscribe after use, and keep the `# hai:json` marker on values emitted by the dotenv writer.

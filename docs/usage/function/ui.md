@@ -1025,6 +1025,12 @@ const acceptedSubmission: ToolRun = {
 
 #### 场景：CRUD 场景
 
+下图对应 CrudPage 配合 createCrudController 的查询场景。组件显示状态，controller 调用应用提供的数据服务。
+
+![CRUD 列表：查询、旧数据和最新响应](../images/function-ui-crud-loading.svg)
+
+编辑筛选值不会自动查询，点击查询/Enter 才提交；翻页与排序使用已提交条件。controller 只接受最新请求结果，迟到响应不会覆盖新列表。首次失败显示错误和重试；刷新失败默认保留旧数据，只有 loaded 且 total=0 才显示空状态。
+
 
 > `CrudPage`、`FeedbackList` 统一使用卡片内的查询栏、独立滚动表格和底部分页。搜索、查询、重置始终可见，扩展筛选默认收起且保留输入；点击查询或 Enter 一次提交全部条件，修改字段不自动查询。翻页和排序沿用已提交条件；重置清空搜索、筛选和排序并回到第一页。排序按钮只在支持排序的列头显示，`sortableColumns` 应只列出后端支持的字段。`detailColumns` 配置详情入口，`toolbarLeading` / `toolbarActions` 配置卡片上方的说明和业务操作；`card` 与 `tableCell` 保留自定义内容。过滤字段支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。 未提供 `sortableColumns` 时不显示排序按钮，避免把当前页排序当成服务端排序。
 >

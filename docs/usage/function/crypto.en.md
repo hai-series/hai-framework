@@ -409,6 +409,12 @@ async function exchange(manager: TransportEncryptionManager, clientPublicKey: st
 
 #### Scenario: Send a request and read plaintext through the client
 
+Creating a client only creates a local object. The flow starts at init or the readiness check before a business request.
+
+![session.init: becoming ready to send](../images/function-crypto-handshake.en.svg)
+
+A usable session is reused; concurrent callers otherwise share one handshake. Server registration alone does not make the client ready: the response, budget and lifetime must pass validation. Timeout, invalid data or destroy prevents publication of the candidate session.
+
 Prerequisite: the HTTPS service exposes exchange at the handshake path and the authenticated echo handler below at /api/echo. A POST body of hello returns a decrypted Response containing { received: "hello" }. Fetch failures throw; finally destroys the session.
 
 session is the **client transport object** returned by crypto.transport.createClient, separate from an IAM login session. Creating it sends no request.
@@ -469,6 +475,12 @@ After stopping new requests and draining responses, await manager.close(), then 
 <a id="transport-protocol"></a>
 
 #### Protocol: Transport v2 encoding and verification
+
+The handshake prepares keys. Each business exchange then encrypts and authenticates a message and restores a normal Response, using a new request ID and random symmetric keys.
+
+![encryptedFetch: one request and response](../images/function-crypto-request.en.svg)
+
+The server checks the signature, unwraps keys, verifies the MAC, decrypts and checks time before consuming the request ID. Business code runs only after those checks. The client binds the response to its request and HTTP status before authentication and decryption. Business HTTP errors remain the caller’s responsibility; network or authentication failures do not replay the operation.
 
 Serv, Kit, api-client and browser/mobile clients share this application protocol. TLS authenticates exchange public keys; IAM authorization and business idempotency remain required. Exchange POST JSON `{ clientPublicKey }` registers the client and returns `clientId`, `serverKeyId`, `serverPublicKey`, `maxPlaintextBytes` and optional `clientKeyTtlSeconds`. Keys accept only valid uncompressed SM2 points: 128 hex digits, optionally prefixed with `04`.
 
@@ -550,6 +562,12 @@ Registered keys let the server verify client signatures; remembered request IDs 
 | `registry.close?` | Clean up custom store resources | None | `Promise<void>`; optional cleanup for custom stores; the built-in Cache store does not close its borrowed connection | `await registry.close?.()` |
 
 #### Scenario: Observe registration and duplicate rejection with test IDs
+
+The client object, server key ring and shared registry own different state. This map shows where private keys stay and which records expire.
+
+![Where transport keys and records live](../images/function-crypto-key-ownership.en.svg)
+
+Only public keys cross the handshake. The client private key stays in that object’s memory; destroy clears local state. Server private keys come from trusted Secrets. Cache stores expiring client public keys, used request IDs and minute counters. Closing a manager neither deletes all shared records nor closes the application’s Cache connection.
 
 Cache must be initialized. This isolated test registration does not reuse a manager requestId; production claims happen inside the manager after full authentication. The first claim returns true and the second false. Deleting a key does not delete used IDs. The built-in registry has no close hook; the application owns the connection. Custom stores may provide one.
 

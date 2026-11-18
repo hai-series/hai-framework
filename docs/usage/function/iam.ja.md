@@ -155,6 +155,12 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 
 #### 利用例：ログイン・登録・再認証
 
+入力、チャレンジ、アカウント状態、会話方針を満たしてログインできます。図はパスワード方式で、他方式は各自の資格情報を検証します。
+
+![ログイン：資格情報の確認だけでは終わらない](../images/function-iam-login.ja.svg)
+
+有効なチャレンジは操作ごとに一度だけ消費し、パスワード誤りでも再利用できません。資格情報・アカウント状態の確認後に現在の認可と端末・会話数方針を適用します。トークンの取得は全リソースの許可ではありません。
+
 登録からログイン、チャレンジ、OTP/LDAP、セッション検証、再認証の順に説明します。フォーム値を入力し、成功結果からのみ主体や証明を使います。無効な方式は失敗します。
 
 #### 引数と結果：ログインと登録
@@ -323,6 +329,12 @@ async function reviewReader(userId: string) {
 | `iam.session.patchUserSessions` | セッションのユーザー情報を更新 | userId, updates | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
 
 #### 利用例：セッションの更新と失効
+
+同じ文字列の有効期間を延ばす処理ではありません。後継を準備し、旧 refresh の消費と新会話の保存を共有ストレージで一度に行います。
+
+![refresh：旧トークンから後継は 1 つだけ](../images/function-iam-refresh.ja.svg)
+
+同じ旧トークンを複数ノードで使っても、後継を両方から公開できません。アカウント・API Key・資格情報の版が無効なら拒否します。成功後は資格情報の組を置換し、保存や通信の失敗を成功として扱いません。
 
 create の TokenPair、verify のセッション、refresh の新トークンと destroy/destroyAll の効果を示します。実際のトークンをログに出さず、追加方針もサーバーで適用します。
 

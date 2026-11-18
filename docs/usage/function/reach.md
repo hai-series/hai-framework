@@ -12,8 +12,8 @@
 
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 DND delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
-- `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
+- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 quiet hours delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
+- `@h-ai/cache` — 缓存（quiet hours delay 策略分布式锁），可选；已初始化时自动启用分布式锁
 
 #### 安装
 
@@ -129,6 +129,12 @@ function value<T>(result: HaiResult<T>): T {
 
 #### 场景：启动渠道并发送通知
 
+reach.send 可能联系渠道，也可能为普通通知返回排队回执。敏感凭据通知使用单独的发送账本，不把正文放入延迟队列。
+
+![通知：直接发送、排队和未知结果](../images/function-reach-delivery.svg)
+
+普通消息允许延迟时，由持久队列稍后领取发送；显式 reject 则拒绝排队。敏感消息遇到免打扰、过期或结果不明时不自动重投。渠道受理成功不代表用户已读或最终送达；超时后的未知结果先核对渠道记录，再决定人工恢复。
+
 ```ts
 const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
 // sent: SendResult for this provider attempt, not proof that a person read the message
@@ -148,7 +154,7 @@ const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@exampl
 
 #### 凭据通知与持久化准备
 
-发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；DND/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
+发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；quiet hours/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
 
 `reach.init()` 创建并校验发送日志表及队列标识约束，结构不符时返回初始化失败。保留发送账本，按持久回执核对状态，避免重发结果不明的凭据通知。
 
@@ -294,7 +300,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 | `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | 模板渲染失败     |
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方       |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册  |
-| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰丢弃       |
+| `HaiReachError.quiet hours_BLOCKED`            | `hai:reach:006` | 免打扰丢弃       |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化         |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型     |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误         |

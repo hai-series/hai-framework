@@ -415,6 +415,12 @@ async function exchange(manager: TransportEncryptionManager, clientPublicKey: st
 
 #### 场景：通过客户端发送并读回明文
 
+创建客户端只建立本地对象。下图从 init 或业务请求发送前的检查开始，说明何时复用会话，何时真正发起握手。
+
+![session.init：从未协商到可发送](../images/function-crypto-handshake.svg)
+
+已有会话仍可用时直接复用；否则，并发调用等待同一次握手。服务端登记公钥不代表客户端已就绪，客户端还须校验返回字段、容量和有效期。超时、非法响应或 destroy 使本次握手失败，迟到结果不能恢复会话。
+
 这里的 session 是 `crypto.transport.createClient()` 返回的**客户端传输对象**，与 IAM 登录会话不同。创建对象本身不发请求。
 
 1. `await session.init()`：本地生成 SM2 密钥对，把公钥 POST 到 `keyExchangeUrl`。服务端登记公钥并返回 clientId、服务端公钥及版本、容量上限和公钥有效期；客户端校验这些字段，成功后把密钥和协商结果保存在内存，ready() 才为 true。握手失败返回失败 HaiResult，不会提交半完成状态，也不执行登录或业务请求。
@@ -473,6 +479,12 @@ async function decryptEnvelope(
 <a id="transport-protocol"></a>
 
 #### 协议：Transport v2 编码与接收顺序
+
+握手只准备密钥。业务请求随后按下图加密、认证并还原成普通 Response；每次消息使用新的请求编号和随机对称密钥。
+
+![encryptedFetch：一次请求和响应](../images/function-crypto-request.svg)
+
+服务端先验证发送方签名，再解封密钥、核对 MAC、解密并检查时效，完整认证后才记住已用编号。只有这些步骤通过才进入业务。客户端把响应与原请求及 HTTP 状态关联后再认证、解密；业务 HTTP 失败仍由调用方处理，网络或认证失败不会触发业务重放。
 
 serv、kit、api-client 与浏览器/移动客户端共用此协议。TLS 验证握手公钥的来源；应用仍需 IAM 授权和业务幂等键。每个节点加载同一受管密钥环，响应使用请求 `serverKeyId` 对应的私钥。轮换时保留旧版本至过渡结束，删除旧版本即撤销。
 
@@ -548,6 +560,12 @@ interface Context {
 | `registry.close?` | 清理自定义存储自有资源 | 无 | `Promise<void>`，可选自定义存储清理钩子；内置 Cache registry 不关闭借用连接 | `await registry.close?.()` |
 
 #### 场景：用一次性测试编号观察登记与重复拒绝
+
+客户端对象、服务端密钥环和共享登记簿承担不同职责。下面的关系图说明谁保存私钥，哪些记录会随期限清理。
+
+![传输密钥和记录分别放在哪里](../images/function-crypto-key-ownership.svg)
+
+握手只交换公钥。客户端私钥留在当前对象的内存，destroy 清除本地状态；服务端私钥来自可信 Secret，不能写到浏览器或共享登记簿。@h-ai/cache 保存有期限的客户端公钥、已用请求编号和分钟计数；管理器关闭不等于删除所有共享记录，也不关闭应用持有的 Cache 连接。
 
 前提：Cache 已初始化。这个场景单独使用测试登记，不与 manager 共用 requestId；生产编号的消费由管理器在完整认证后完成。首次 claimRequest 输出 true，再次为 false；删除公钥不删除已用编号。内置 registry 不提供 close，连接由应用关闭；自定义存储可以提供清理钩子。
 

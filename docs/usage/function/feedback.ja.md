@@ -207,6 +207,12 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 #### 利用例：ブラウザの現場と下書き
 
+prepare で現場を固定して確認し、submit で確実に送信します。受理後もブラウザーの追加転送とサーバー収集は続く場合があります。
+
+![フィードバック：現場固定・受理・後続の収集](../images/function-feedback-collection.ja.svg)
+
+初回送信で内容を固定し、再試行も同じ ID・内容を使います。受理は添付・業務証拠・通知の完了ではなく、収集状態を確認します。独立 Webhook は complete／partial／failed を待ち、収集失敗でも動作します。close は録画・監視・プレビューを解放します。
+
 ```ts
 import type { FeedbackClientConfig } from '@h-ai/feedback/client'
 import { createFeedbackClient } from '@h-ai/feedback/client'

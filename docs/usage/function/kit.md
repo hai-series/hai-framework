@@ -468,6 +468,12 @@ function buildResource(resource: Parameters<typeof defineCrud>[0]) {
 
 #### 场景：同时装配服务端与浏览器加密
 
+下图针对启用 transport 的普通业务路由；握手、A2A、预检和显式明文路径各有专门分支。先计算访问判定，再在传输认证范围内执行普通业务拒绝。
+
+![Kit：加密业务请求怎样经过 Handle](../images/function-kit-request.svg)
+
+访问策略拒绝或会话/守卫不通过时，resolve 不执行。正常响应和传输内产生的错误经 transport 加密后，再完成审计、关联头和安全头。自定义中间件不应读取原始密文当作业务正文；页面参数校验仍由实际端点或 load/action 完成。
+
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
 `paths.relative: false` 使 SvelteKit 生成绝对的应用路径。例如部署到 `/console` 时，在应用中用 `resolve('/').replace(/\/$/, '')`（`resolve` 来自 `$app/paths`）得到 `'/console'`。将 `basePath: base` 同时交给服务端 `crypto.transport` 和浏览器的 `kit.client.installBrowserTransport(kitConfig, { crypto, basePath: base })`。若使用独立客户端，把相同值传给 `kit.client.create()` 的 `transport.basePath`。根目录使用空字符串。这个值由 SvelteKit 构建时设置，无需在 YAML 或请求头重复填写。密钥交换、排除规则和路由字节上限仍使用完整的请求路径。SSR 模板已配置这些值。

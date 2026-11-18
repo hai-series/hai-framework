@@ -378,6 +378,12 @@ Publish document revisions from text or files, then retrieve or ask questions. R
 
 #### Scenario: Publish, search and revoke knowledge
 
+Existing vectors do not make a revision visible. This distinguishes revision preparation, conditional publication and cleanup of old vectors.
+
+![Knowledge ingestion: prepare, publish, clean up](../images/function-ai-knowledge-publication.en.svg)
+
+Only a published revision becomes current for retrieval. Cleanup failure can leave cleanupPending for repair. Removal revokes visibility before cleanup. Retrieval must check the published revision rather than trusting any old chunk still in the vector store.
+
 ```ts
 value(await ai.knowledge.setup())
 const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
@@ -534,6 +540,12 @@ Create or restore a manager, add messages, chat and persist. Commit voice turns 
 | `manager.chatStream` | 多轮流式回答 | `message: string, ContextChatOptions?` | `AsyncIterable<ContextStreamEvent>` | `manager.chatStream("请继续")` |
 
 #### Scenario: Manage sessions and turns
+
+Several requests or nodes may share one scope. This shows chat generation and persistence; streamed audio uses prepareTurn / commitTurn to retain what was actually played.
+
+![Context manager: committing one turn](../images/function-ai-context-turn.en.svg)
+
+Execution ownership precedes turn mutation, and final writes still verify version and deadline. reject returns busy; queue waits. Memory extraction may continue in the background. Check save/flush results: generation completion does not prove persistence or memory success.
 
 Factories and manager methods below connect messages, budget, chat, save/flush, reload/reset and turn commits. Session listing, renaming and deletion address persisted data, not an automatically managed background service.
 
@@ -719,6 +731,12 @@ Bind trusted identity, register agents/workspaces and create sessions. Verify ap
 | `ai.acp.workspaces.publishSnapshot` | Publish an approved workspace snapshot | `ACPPublishSnapshot`: source directory, remote, base revision, approved patch, task branch, date and author; optional second argument `signal` | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
 
 #### Scenario: Manage agents, workspaces and ACP sessions
+
+Managed ACP connects application identity, durable Runner tasks and the native agent. plan describes resources without allocating a container.
+
+![Managed ACP: acceptance, execution and results](../images/function-ai-acp-task.en.svg)
+
+submit returns a resumable receipt; run waits for its result. Acceptance is not completion. After disconnect, use the same identity and taskId for events/get. Cancellation requires checking execution and cleanup; publishing a patch requires renewed authorization and user approval.
 
 If the submission response is lost, load the original session ID and idempotency key from durable storage and call `tasks.findSubmission`. It also restores the receipt index. Use the returned `taskId` to read events, check status or request cancellation. A `null` result means no execution record is currently available and the application can keep the turn pending verification.
 

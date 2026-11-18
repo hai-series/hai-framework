@@ -125,6 +125,12 @@ core.logger.warn('Request needs attention', { requestId })
 
 #### 场景：加载、校验与读取
 
+下图把读盘、环境覆盖、校验和保存分开。load 负责首次加载；reload 使用上次保存的文件位置和校验规则。
+
+![配置何时替换，失败时保留什么](../images/function-core-config.svg)
+
+以 port: 3000 和 HAI_APP_PORT=4000 为例，校验成功才把缓存替换为 4000。读盘或校验失败时保留此前成功的值；reload 的监听者会收到新值或失败通知。配置更新后，数据库等消费者仍需自行应用新设置。
+
 `core.init({ configDir, configSchemas?, watchConfig? })` 扫描指定目录直属的 `.yml` / `.yaml` 文件；`_core.yml` 注册为 `core`，`_db.yml` 注册为 `db`，`app.yml` 注册为 `app`。构建/部署设置由 CLI 从项目根 `hai.json` 读取，不属于运行时 YAML。
 
 `core.init()` 自动检查 `_core.yml` 里允许的五个字段，并补齐未填写的名称、版本、运行环境和默认语言。写 `logging: {}` 会应用默认的 `info` 级别和 `pretty` 格式。完全省略 `logging` 会保留应用当前的日志设置。启动代码直接传入的 `core.init({ logging })` 优先使用。完整默认值、日志示例和 HTTP 访问设置的文件位置见 [Core 配置清单](../configuration/core.md)。

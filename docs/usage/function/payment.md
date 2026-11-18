@@ -233,6 +233,12 @@ if (closed.success) {
 
 #### 场景：验证并接收支付通知
 
+下图只展开支付成功通知的处理分支，合法的 pending、failed、closed 状态不能创建履约任务。handleNotify 负责验证渠道通知，订单更新、持久去重和履约任务由应用完成。
+
+![支付成功通知：验签、提交与确认](../images/function-payment-notification.svg)
+
+应用用同一事务核对订单、金额、币种和事件编号，条件更新状态并写唯一履约 outbox；提交后才向渠道确认。重复或乱序通知不能重复履约或把 paid 改回 pending。外部发货仍须携带稳定幂等编号；数据库提交不保证跨系统副作用恰好一次。
+
 输入是路由收到的原始 Request；返回 HaiResult<PaymentNotifyResult>。正文只读取一次，成功后仍须按下面的事务示例核对订单、金额、币种和事件 ID，再向渠道确认。
 
 ```ts

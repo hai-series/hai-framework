@@ -143,6 +143,12 @@ Request system permission, register push and listen for receipt and action event
 
 #### Scenario: Register and listen for push
 
+Native push registration requests permission and waits for plugin events. Success/error listeners are attached before registration so immediate events are not lost.
+
+![push.register: permission to native token](../images/function-capacitor-push.en.svg)
+
+The 30-second boundary covers permission, listeners and registration events. Denial, timeout, cancellation or close cleans up known and late handles. Success requires a real registration event and successful listener cleanup. Cleanup failure also returns failure; close can retry cleanup. The application must still associate the token with the account on its server.
+
 ```ts
 const received: unknown[] = []
 const actions: unknown[] = []

@@ -335,6 +335,12 @@ const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输�
 
 #### 场景：采集浏览器现场与草稿
 
+prepare 固定现场供用户检查，submit 才可靠提交。受理之后，浏览器续传和服务端采集仍可能继续。
+
+![反馈：现场固定、可靠受理与后续采集](../images/function-feedback-collection.svg)
+
+首次发送后包络冻结，重试沿用同一提交编号及内容，不能悄悄换一份输入。受理回执不等于附件、业务证据或通知全部完成；详情以采集状态为准。服务端 Webhook 等待采集 complete/partial/failed 后独立执行，采集失败也会回调。关闭客户端要释放录制、轮询与预览。
+
 ```ts
 import type { FeedbackClientConfig } from '@h-ai/feedback/client'
 import { createFeedbackClient } from '@h-ai/feedback/client'

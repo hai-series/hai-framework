@@ -98,6 +98,12 @@ Bind validation and a business function as a neutral tool. Definition does not e
 
 #### Scenario: Define and execute a tool
 
+Defining a tool does not run its handler. execute applies one cancellation/deadline boundary to input validation, authorization and execution.
+
+![Tool execution: validation, authorization and one deadline](../images/function-tools-execution.en.svg)
+
+Invalid input or rejected authorization never enters the handler. Registry and per-call authorizers must both allow execution. Timeout/cancellation stops waiting, but handlers must obey signal and external effects are not rolled back. handler values become data; resultHandler preserves HaiResult.
+
 ```ts
 import { z } from 'zod'
 const tool = tools.define({

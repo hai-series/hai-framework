@@ -122,6 +122,12 @@ start enables timed claims, trigger requests a specific execution, and stop prev
 
 #### Scenario: Start scheduling and inspect logs
 
+Cron and manual triggers identify an occurrenceId. Nodes contend for database-owned execution; this focuses on expiry of a previous attempt.
+
+![Shared scheduling: when takeover is allowed](../images/function-scheduler-timeout.en.svg)
+
+Claim, renewal and final writes verify database time and the active execution token. Takeover with the same occurrenceId requires declared safe retries and remaining attempts. Otherwise unknown pauses later occurrences for reconciliation. Lease expiry does not undo an HTTP request or other external effect.
+
 After initialization and task registration, start/stop return synchronous HaiResult<void> and control polling. Check the status inside a successful trigger result; logs are filtered by this source.
 
 ```ts

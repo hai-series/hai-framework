@@ -110,6 +110,12 @@ Prepare mail or SMS providers, then send using a template and recipient. Durable
 
 #### Scenario: Start providers and send
 
+reach.send may contact a provider or return a queue receipt for an ordinary notification. Sensitive credential messages use a separate receipt ledger without queuing their payload.
+
+![Notifications: direct send, queue and unknown outcomes](../images/function-reach-delivery.en.svg)
+
+Ordinary messages may be durably deferred unless the caller selects reject. Sensitive messages are not automatically retried after quiet hours, expiry or unknown outcomes. Provider acceptance is not final delivery or a read receipt; reconcile unknown results before recovery.
+
 ```ts
 const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
 // sent: SendResult for this provider attempt, not proof that a person read the message

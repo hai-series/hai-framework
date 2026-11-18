@@ -156,6 +156,12 @@ Let the client coordinate persistence and refresh. Use isolated memory for SSR/t
 
 #### Scenario: Store and refresh credentials
 
+This expands the session-expiry branch for business requests. Login, registration and refresh endpoints are excluded from this recovery loop.
+
+![When an authenticated request may retry](../images/function-api-client-recovery.en.svg)
+
+Concurrent refreshes share one attempt. A single retry requires new credentials, an active request and unchanged identity; sensitive operations require a new authorization ticket. Network failures are not proof of an invalid session. Failed recovery or a failed retry is returned to the caller.
+
 Input is a trusted login token pair. Storage failures reject; finally removes the observer and clears local credentials. Server logout is a separate operation.
 
 ```ts

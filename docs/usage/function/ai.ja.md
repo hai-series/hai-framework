@@ -382,6 +382,12 @@ docs を登録・許可済みにします。文言は変わり、引用は実際
 
 #### 利用例：知識の公開・検索・取消
 
+ベクトルが存在しても検索対象とは限りません。新しい版の準備、条件付き公開、旧ベクトルの削除を分けます。
+
+![知識の取込み：準備・公開・後片付け](../images/function-ai-knowledge-publication.ja.svg)
+
+公開が成功して初めて現在の検索対象になります。旧データの削除が失敗した場合は cleanupPending を repair で補います。削除では先に可視性を取り消します。残存する古いチャンクを現在の資料として扱いません。
+
 ```ts
 value(await ai.knowledge.setup())
 const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
@@ -538,6 +544,12 @@ const messageTokens = ai.token.estimateMessages(messages) // estimate including 
 | `manager.chatStream` | 多轮流式回答 | `message: string, ContextChatOptions?` | `AsyncIterable<ContextStreamEvent>` | `manager.chatStream("请继续")` |
 
 #### 利用例：セッションと会話ターン
+
+同じ scope を複数の要求・ノードが使う場合があります。chat の生成と保存の境界を示し、音声では prepareTurn／commitTurn で実際に再生した内容を残します。
+
+![会話管理：1 ターンを確定するまで](../images/function-ai-context-turn.ja.svg)
+
+実行資格を得てから更新し、確定時も版と期限を確認します。reject はビジーを返し、queue は待機します。記憶抽出は裏で続くため save／flush の結果を確認します。生成完了だけでは保存・記憶処理の成功を意味しません。
 
 工場と manager でメッセージ・予算・対話・保存・再読込・ターン確定をつなぎます。一覧・改名・削除は永続データに対する操作です。
 
@@ -723,6 +735,12 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 | `ai.acp.workspaces.publishSnapshot` | 承認済みのスナップショットを公開 | `ACPPublishSnapshot`：元ディレクトリ、リモート、基準コミット、承認済みパッチ、作業ブランチ、日時、作成者。第 2 引数 `signal?` | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
 
 #### 利用例：エージェント・作業領域・ACP
+
+管理 ACP は本人情報、Runner の永続タスク、ネイティブ Agent をつなぎます。plan は資源の説明だけで、コンテナーを確保しません。
+
+![管理 ACP：受理・実行・結果の取得](../images/function-ai-acp-task.ja.svg)
+
+submit は再読込可能な受付情報、run は今回の結果を待ちます。受理は完了ではありません。切断後は同じ本人と taskId で events／get を読み、取消後は実行・資源の停止を確認します。パッチの公開には再認可と承認が必要です。
 
 送信応答が失われた場合は、永続ストレージのセッション ID と元の冪等キーで `tasks.findSubmission` を呼び出します。受領情報の索引も復元します。返された `taskId` で状態確認、イベント取得、キャンセルを行えます。`null` の場合、アプリで確認待ちの状態を維持できます。
 

@@ -168,6 +168,12 @@ async function refundOrder(providerName: string, orderNo: string, refundNo: stri
 
 #### 利用例：決済通知の検証
 
+支払成功通知の分岐を示します。正当な pending・failed・closed でも履行処理を作成してはいけません。handleNotify は送信元を検証し、注文更新・永続重複排除・履行はアプリが担当します。
+
+![支払成功の通知：検証・確定・受領確認](../images/function-payment-notification.ja.svg)
+
+同じトランザクションで注文・金額・通貨・イベントを確認し、条件付き更新と一意な履行 outbox を保存してから受領を返します。重複・順序逆転で再履行や paid から pending への逆戻りを防ぎます。外部処理も独自の冪等 ID が必要です。
+
 入力はルートの元の Request、出力は HaiResult<PaymentNotifyResult>。本文は一度だけ読み、成功後も注文・金額・通貨・イベント ID をトランザクションで確認してから応答します。
 
 ```ts

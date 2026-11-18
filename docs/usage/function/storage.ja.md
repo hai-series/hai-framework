@@ -210,6 +210,12 @@ S3 の期限付き URL は特定のキーと操作に対応します。発行前
 
 #### 利用例：直接転送用 URL の発行
 
+署名付き URL では認可とファイル転送を分けます。初期化済み S3 と、アプリで認可したオブジェクトキーが必要です。
+
+![非公開ファイル：認可後に直接転送](../images/function-storage-presign.ja.svg)
+
+URL の返却時点ではファイルは未転送です。ブラウザーが保存先に接続し、署名・期限の検証後に転送します。アップロードの Content-Type は署名時の値と一致させます。publicUrl は設定済みの公開アドレスを計算するだけです。
+
 ```ts
 // Requires initialized S3 storage and prior application authorization.
 const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))

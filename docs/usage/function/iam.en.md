@@ -151,6 +151,12 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 
 #### Scenario: Sign in, register and reauthenticate
 
+Login requires valid input, challenge, account state and session policy. This follows password login; other strategies validate their own credentials.
+
+![Login: checks beyond valid credentials](../images/function-iam-login.en.svg)
+
+An enabled challenge is consumed once for its operation, even when the password is wrong. Valid credentials and account state precede effective authorization and shared terminal/session-limit checks. Tokens and user data do not grant access to every resource.
+
 The workflows cover registration, login, challenges, OTP/LDAP, session verification and reauthentication. Form values are inputs; use identities and proof only from successful results. Disabled methods fail.
 
 #### Parameters and result semantics: Sign-in and registration
@@ -319,6 +325,12 @@ Validate session tokens on the server. Refresh, list and revoke through the same
 | `iam.session.patchUserSessions` | Patch user profile snapshots in sessions | userId, updates | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
 
 #### Scenario: Renew and revoke sessions
+
+Refresh does not extend the same token string. IAM prepares a successor and atomically consumes the old refresh token while publishing the new session.
+
+![refresh: one successor per old token](../images/function-iam-refresh.en.svg)
+
+Two nodes using the same old token cannot both publish successors. Account, API Key and credential-version checks can reject refresh. After success the client replaces the credential pair. Storage or network failures must not be reported as completed refresh.
 
 Session workflows explain create’s TokenPair, verify’s session, refresh’s replacement tokens and destroy/destroyAll revocation. Tokens are described by source and type rather than logged; optional policies remain server-enforced.
 

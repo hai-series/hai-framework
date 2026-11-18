@@ -47,6 +47,12 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 
 #### 场景：创建与补齐工程
 
+命令行参数和交互选择共同决定模板及功能。生成源码和安装依赖是两个阶段；先看清最终目录和功能再继续。
+
+![hai create：从选项到可检查的工程](../images/function-cli-create.svg)
+
+生成阶段落盘应用代码、配置和 AI skills；只有选择安装时才运行包管理器。生成成功不代表数据库、缓存、Secret 或部署环境已经准备好。安装失败可能留下已生成工程，应按错误检查该目录，而不是把整条命令当作全部回滚。
+
 ```sh
 hai create demo-app --type website --defaults --no-install --no-git
 cd demo-app

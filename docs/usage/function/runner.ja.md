@@ -152,6 +152,12 @@ DB で実行記録を共有し、ハンドラーは各ノードで登録しま�
 
 #### 利用例：投入・復元・参照・取消
 
+submit は共有 DB の実行受付情報を返します。待機、取消の要求、資源停止の確認を分けて示します。
+
+![Runner の受付情報から確認済みの最終状態へ](../images/function-runner-states.ja.svg)
+
+待機中は直接 cancelled、実行中は通常 cancelling を経て停止を確認します。所有権や後片付けを確認できなければ unknown で、業務取消済みとは言えません。reconcileUnknown は元のノードで資源を確認し、業務結果の不明状態を維持します。
+
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))

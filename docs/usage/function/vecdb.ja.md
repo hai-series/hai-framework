@@ -155,6 +155,12 @@ value(await vecdb.collection.exists('demo-docs')) // false
 
 #### 利用例：文書の保存・検索・削除
 
+VecDB は数値ベクトルを保存・比較します。テキストの変換は別の役割で、登録と検索で同じモデル・次元を使います。
+
+![テキスト検索で誰がベクトルを作るか](../images/function-vecdb-responsibilities.ja.svg)
+
+例では 3 次元の集合に [1,0,0] を登録・検索し、同方向のコサイン変換スコアは約 1 です。実際の変換はアプリや AI embedding が担当します。検索結果は一致候補とスコアで、回答文や百分率ではありません。
+
 ```ts
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
 value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))

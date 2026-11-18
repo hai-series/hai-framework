@@ -62,6 +62,12 @@ export const appContract = {
 
 #### 场景：定义与组合 HTTP 契约
 
+契约对象本身不监听端口。下图按职责展示路由、Schema、服务端实现和 typed 客户端之间的关系。
+
+![同一份契约怎样连接前后端](../images/function-api-contract-boundaries.svg)
+
+修改同一份输入/输出定义后，服务端实现和客户端类型都据此检查。真正的身份验证、资源授权和业务副作用由服务端完成；构造契约或在浏览器通过 Schema 校验，都不能代替这些步骤。
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'

@@ -60,6 +60,12 @@ export const appContract = {
 
 #### 利用例：HTTP 契約の定義と組合せ
 
+契約オブジェクト自体はポートを開きません。ルート・Schema、サーバー実装、型付きクライアントの役割を示します。
+
+![同じ契約をクライアントとサーバーで共有](../images/function-api-contract-boundaries.ja.svg)
+
+同じ入出力定義でサーバー実装とクライアント型を確認します。本人確認、リソースの認可、業務処理はサーバーが行います。契約の作成やブラウザー側の検証だけでは代替できません。
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'

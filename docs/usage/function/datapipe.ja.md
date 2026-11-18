@@ -124,6 +124,12 @@ HTML として表示する場合は、整形後も UI の安全なレンダリ�
 
 #### 利用例：再利用する処理手順
 
+チェーンは手順を登録し、run(text) で実行します。例は整形、本文変換、分割、チャンク変換の順です。
+
+![pipeline.run：宣言順に本文とチャンクを処理](../images/function-datapipe-pipeline.ja.svg)
+
+本文と chunks は別の状態です。transform は本文、chunk はその時点の分割、chunkTransform は既存チャンクを変えます。分割後の本文変換は chunks を作り直しません。失敗時は後続を止め、chunk がなければ空配列です。
+
 ```ts
 const pipeline = datapipe.pipeline()
   .clean({ removeHtml: true })

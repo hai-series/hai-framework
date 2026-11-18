@@ -203,6 +203,12 @@ Create a client per product session, freeze evidence before opening UI and clean
 
 #### Scenario: Capture browser evidence and drafts
 
+prepare freezes the scene for review; submit durably submits it. Browser uploads and server collection may continue after acceptance.
+
+![Feedback: capture, acceptance and later collection](../images/function-feedback-collection.en.svg)
+
+The first send freezes the envelope; retries retain its ID and contents. Acceptance does not mean every attachment, business-evidence job or notification is complete. Inspect collection status. The independent webhook waits for complete/partial/failed collection and also runs after collection failure. Close releases recording, polling and previews.
+
 ```ts
 import type { FeedbackClientConfig } from '@h-ai/feedback/client'
 import { createFeedbackClient } from '@h-ai/feedback/client'

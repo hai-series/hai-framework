@@ -135,6 +135,12 @@ Register cleaning, text transforms, chunking and chunk transforms, then run that
 
 #### Scenario: Compose reusable steps
 
+Chained calls register steps; run(text) executes them. This example cleans, transforms the text, chunks it and then transforms the chunks.
+
+![pipeline.run: process text and chunks in order](../images/function-datapipe-pipeline.en.svg)
+
+Text and chunks are separate state: transform changes text, chunk snapshots that text into chunks, and chunkTransform changes existing chunks. A later text transform does not rebuild them. Failure stops later steps; without chunk, chunks remains empty.
+
 ```ts
 const pipeline = datapipe.pipeline()
   .clean({ removeHtml: true })

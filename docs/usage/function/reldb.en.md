@@ -180,6 +180,12 @@ Use one transaction for related reads and writes. Manually opened transactions m
 
 #### Scenario: Commit or roll back together
 
+This shows the automatic transaction boundary. Each operation still returns HaiResult: inspect it and throw on failure to prevent a commit.
+
+![tx.wrap: commit and rollback conditions](../images/function-reldb-transaction.en.svg)
+
+Any normal callback return, including an unchecked failed HaiResult, enters commit. A throw enters rollback; commit/rollback failures must also be handled. The transaction covers its database operations, not messages, payments or file uploads in other systems.
+
 Below, wrap returns the callback value and rolls back on throws; manual begin ends with commit or rollback. Check failed HaiResult values before allowing the callback to commit.
 
 [Detailed parameters and workflows](reldb.md#transactions)

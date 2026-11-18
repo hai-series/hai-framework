@@ -666,6 +666,12 @@ function createAudioApp(callbacks: Pick<ServAudioConfig, 'verifyTicket' | 'autho
 
 #### 场景：创建使用共享缓存的加密 HTTP 应用
 
+下面只展开启用 transport 的普通 API 请求。传输认证证明消息来源与完整性，IAM 身份和业务权限仍由后面的上下文及守卫验证。
+
+![Serv：契约如何变成一次业务响应](../images/function-serv-request.svg)
+
+Serv 先还原业务正文，再让契约校验和 procedures 处理它；鉴权失败不进入业务 handler。普通访问拒绝位于加密范围内，响应仍能被客户端认证。握手和预检先执行各自访问检查；排除路径与静态资源不应按这张业务图推断。
+
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。服务端显式注入顶层 `crypto`、受管密钥环和共享 registry：
 
 ```ts

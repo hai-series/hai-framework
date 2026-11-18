@@ -117,6 +117,12 @@ value(await cache.close()) // undefined; the memory instance is released
 
 #### 利用例：値・カウンター・期限の管理
 
+get と set の間には別ノードの書込みが入る可能性があります。比較と更新を一度に行うことで、古い値による上書きを防ぎます。
+
+![compareAndSwap：比較と更新を一度に行う](../images/function-cache-cas.ja.svg)
+
+現在値が 1 なら expected=1、value=2 は成功します。他ノードが既に 2 にした場合は false となり、現在値と TTL を保持します。保存先の障害は失敗 HaiResult であり、false とは異なります。expected=undefined は未作成時だけの作成です。
+
 ```ts
 value(await cache.kv.set('demo:user:1', { name: 'Ada' }, { ex: 60 })) // true
 value(await cache.kv.get('demo:user:1')) // { name: 'Ada' }

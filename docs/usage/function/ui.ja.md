@@ -543,6 +543,12 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 #### 利用例：リソース定義から一覧・編集画面を作る
 
+CrudPage と createCrudController の検索です。コンポーネントが状態を表示し、controller がアプリのデータサービスを呼びます。
+
+![CRUD 一覧：検索・前回データ・最新応答](../images/function-ui-crud-loading.ja.svg)
+
+条件の編集中は検索せず、検索／Enter で確定します。ページ・並べ替えは確定済み条件を使い、最新の応答だけを反映します。初回失敗は再試行を表示し、更新失敗では既存データを保持します。空表示は loaded かつ total=0 の時だけです。
+
 リソース定義で検索、作成、更新、削除を接続し、コントローラーで読み込み、移動、編集状態を管理します。 詳細は[中国語の手順](ui.md#crud)を参照してください。
 
 ```svelte

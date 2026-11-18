@@ -135,6 +135,12 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 
 #### 场景：保存对象、计数和期限
 
+“先 get，再 set”之间可能插入另一节点的写入。compareAndSwap 把比较和修改合成一次操作，避免覆盖刚更新的值。
+
+![compareAndSwap：比较和修改必须同时发生](../images/function-cache-cas.svg)
+
+若当前值为 1，expected=1、value=2 会成功；另一节点已改成 2 时，同样的提交返回 false，并保留当前值和 TTL。存储不可用则返回失败 HaiResult，不能把 false 和存储失败混为一谈。expected=undefined 表示仅在不存在时创建。
+
 ```ts
 value(await cache.kv.set('demo:user:1', { name: 'Ada' }, { ex: 60 })) // true
 value(await cache.kv.get('demo:user:1')) // { name: 'Ada' }
