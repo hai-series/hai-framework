@@ -20,8 +20,20 @@ import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
 import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
+import { providerPool } from './vecdb-provider-pool.js'
+import { packVectors, preparePgvectorRows, useVectorWorker } from './vecdb-vector-buffer.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
+
+async function prepareRows(documents: VectorDocument[], dimension: number) {
+  if (!useVectorWorker(documents.length, dimension))
+    return preparePgvectorRows(documents)
+  const batch = packVectors(documents, dimension)
+  const prepared = await providerPool.run({ kind: 'pgvector', batch }, [batch.vectors.buffer])
+  if (!prepared.success || prepared.data.kind !== 'pgvector')
+    throw new Error('Vector batch preparation failed')
+  return prepared.data.value
+}
 
 /**
  * pg Pool 的最小接口定义（避免强依赖可选包）
@@ -387,17 +399,10 @@ export function createPgvectorProvider(): VecdbProvider {
       // 构建多值 INSERT（单条 SQL，避免 await-in-loop N+1 问题）
       // 注意：PostgreSQL 参数上限为 65535，每条文档占 4 个参数，单批最多 ~16383 条
       const qi = quoteIdent(table)
-      const values: string[] = []
-      const params: unknown[] = []
-      for (let i = 0; i < documents.length; i++) {
-        const base = i * 4
-        values.push(`($${base + 1}, $${base + 2}::vector, $${base + 3}, $${base + 4}::jsonb)`)
-        const doc = documents[i]
-        params.push(doc.id, `[${doc.vector.join(',')}]`, doc.content ?? '', JSON.stringify(doc.metadata ?? {}))
-      }
+      const { placeholders, params } = await prepareRows(documents, dimensionResult.data)
 
       await pool!.query(
-        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${values.join(', ')}`,
+        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${placeholders}`,
         params,
       )
 
@@ -422,17 +427,10 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const qi = quoteIdent(table)
       // 构建多值 INSERT ON CONFLICT（单条 SQL，避免 await-in-loop N+1 问题）
-      const values: string[] = []
-      const params: unknown[] = []
-      for (let i = 0; i < documents.length; i++) {
-        const base = i * 4
-        values.push(`($${base + 1}, $${base + 2}::vector, $${base + 3}, $${base + 4}::jsonb)`)
-        const doc = documents[i]
-        params.push(doc.id, `[${doc.vector.join(',')}]`, doc.content ?? '', JSON.stringify(doc.metadata ?? {}))
-      }
+      const { placeholders, params } = await prepareRows(documents, dimensionResult.data)
 
       await pool!.query(
-        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${values.join(', ')}
+        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${placeholders}
          ON CONFLICT (id) DO UPDATE SET
            vector = EXCLUDED.vector,
            content = EXCLUDED.content,

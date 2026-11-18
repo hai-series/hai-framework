@@ -140,6 +140,8 @@ value(await vecdb.collection.exists('demo-docs')) // false
 
 ### 文書の保存・検索・削除：`vecdb.vector`
 
+LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow バッチや SQL パラメーターを構築し、ホストが書き込みを実行します。Qdrant の大きな応答も Worker で復号と検証を行い、uint64 のスクロールカーソルを保持します。
+
 同じ次元のベクトルを保存・検索します。ID ごとに更新・削除し、scan で一覧を分割取得します。
 
 #### インターフェース一覧

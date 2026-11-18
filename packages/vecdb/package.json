@@ -45,6 +45,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "apache-arrow": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",
     "tsup": "catalog:",

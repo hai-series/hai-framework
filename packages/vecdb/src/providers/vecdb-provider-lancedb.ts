@@ -21,7 +21,10 @@ import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
+import { loadLancedbArrow } from './vecdb-lancedb-arrow.js'
 import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
+import { providerPool } from './vecdb-provider-pool.js'
+import { packVectors, useVectorWorker } from './vecdb-vector-buffer.js'
 
 // @lancedb/lancedb 为可选原生依赖，用 require 运行时加载（见 loadLancedb）
 const require = createRequire(import.meta.url)
@@ -319,6 +322,27 @@ export function createLancedbProvider(): VecdbProvider {
 
   // ─── 向量操作适配器 ───
 
+  async function makeWriteTable(driver: typeof import('@lancedb/lancedb'), documents: VectorDocument[], meta: CollectionMeta) {
+    if (!useVectorWorker(documents.length, meta.dimension)) {
+      const records = documents.map(doc => ({
+        id: doc.id,
+        vector: doc.vector,
+        content: doc.content ?? '',
+        metadata: JSON.stringify(doc.metadata ?? {}),
+      }))
+      return driver.makeArrowTable(records, { schema: meta.inputSchema })
+    }
+    const batch = packVectors(documents, meta.dimension)
+    const arrow = loadLancedbArrow()
+    const schema = meta.inputSchema
+      ? arrow.tableToIPC(new arrow.Table(meta.inputSchema))
+      : undefined
+    const prepared = await providerPool.run({ kind: 'lancedb', batch, schema }, [batch.vectors.buffer])
+    if (!prepared.success || prepared.data.kind !== 'lancedb')
+      throw new Error('Vector batch preparation failed')
+    return arrow.tableFromIPC(prepared.data.ipc)
+  }
+
   const vectorDriver: VectorDriver = {
     async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
@@ -332,18 +356,12 @@ export function createLancedbProvider(): VecdbProvider {
           return dimensionValidation
         }
 
-        const records = documents.map(doc => ({
-          id: doc.id,
-          vector: doc.vector,
-          content: doc.content ?? '',
-          metadata: JSON.stringify(doc.metadata ?? {}),
-        }))
-
         // insert 保留已有 ID，不覆盖；不得用 add 绕过并发键冲突检测。
         const driver = loadLancedb()
         if (!driver.success)
           return driver
-        await table.mergeInsert('id').whenNotMatchedInsertAll().execute(driver.data.makeArrowTable(records, { schema: meta.inputSchema }))
+        const batch = await makeWriteTable(driver.data, documents, meta)
+        await table.mergeInsert('id').whenNotMatchedInsertAll().execute(batch)
 
         logger.info('Vectors inserted', { collection, count: documents.length })
         return ok(undefined)
@@ -362,21 +380,15 @@ export function createLancedbProvider(): VecdbProvider {
           return dimensionValidation
         }
 
-        const records = documents.map(doc => ({
-          id: doc.id,
-          vector: doc.vector,
-          content: doc.content ?? '',
-          metadata: JSON.stringify(doc.metadata ?? {}),
-        }))
-
         const driver = loadLancedb()
         if (!driver.success)
           return driver
+        const batch = await makeWriteTable(driver.data, documents, meta)
         await table
           .mergeInsert('id')
           .whenMatchedUpdateAll()
           .whenNotMatchedInsertAll()
-          .execute(driver.data.makeArrowTable(records, { schema: meta.inputSchema }))
+          .execute(batch)
 
         logger.info('Vectors upserted', { collection, count: documents.length })
         return ok(undefined)

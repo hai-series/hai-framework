@@ -30,10 +30,10 @@ afterAll(async () => {
 })
 
 /** 建立独立真实集合，并返回原生只读连接以核对 manifest 与实际行。 */
-async function collection(name: string) {
+async function collection(name: string, dimension = 2) {
   const database = path.join(directory, name)
   expect((await vecdb.init({ type: 'lancedb', path: database })).success).toBe(true)
-  expect((await vecdb.collection.create('docs', { dimension: 2 })).success).toBe(true)
+  expect((await vecdb.collection.create('docs', { dimension })).success).toBe(true)
   const connection = await driver.connect(database, { readConsistencyInterval: 0 })
   const table = await connection.openTable('docs')
   return {
@@ -47,6 +47,26 @@ async function collection(name: string) {
 }
 
 describe('lancedb atomic writes', () => {
+  it('preserves metadata schema and replacement semantics for an Arrow batch built in a worker', async () => {
+    const fixture = await collection('worker-batch', 384)
+    try {
+      const batch = Array.from({ length: 180 }, (_, index) => ({
+        id: `report-${index}`,
+        vector: Array.from({ length: 384 }, (_, column) => (index + column) / 400),
+        metadata: { index },
+      }))
+      expect((await vecdb.vector.insert('docs', batch)).success).toBe(true)
+      expect((await vecdb.vector.upsert('docs', batch.map(doc => ({
+        ...doc,
+        metadata: { index: 900 },
+      })))).success).toBe(true)
+      expect(await fixture.table.countRows()).toBe(batch.length)
+      const rows = await fixture.table.query().where('id = \'report-42\'').toArray()
+      expect(rows[0]).toMatchObject({ id: 'report-42', metadata: '{"index":900}' })
+    }
+    finally { fixture.close() }
+  })
+
   it('初始 manifest 已包含非空主键，insert 保留已有 ID，upsert 整体替换；重复输入先拒绝', async () => {
     const fixture = await collection('semantics')
     try {

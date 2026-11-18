@@ -354,6 +354,9 @@ catalogs:
     altcha:
       specifier: ^3.5.0
       version: 3.5.0
+    apache-arrow:
+      specifier: 18.1.0
+      version: 18.1.0
     better-sqlite3:
       specifier: ^13.0.3
       version: 13.0.3
@@ -2624,6 +2627,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.23.1
+      apache-arrow:
+        specifier: 'catalog:'
+        version: 18.1.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4

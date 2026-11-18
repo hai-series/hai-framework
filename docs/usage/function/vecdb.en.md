@@ -138,6 +138,8 @@ Use a new collection name. Recreate the three-dimensional collection before the 
 
 ### Write, search and clean documents: `vecdb.vector`
 
+Workers prepare Arrow batches or SQL parameters for large LanceDB and pgvector writes. The host commits writes. Workers decode and validate large Qdrant responses and preserve full uint64 scroll cursors.
+
 Insert and search vectors of the same dimension. Update or delete by ID; scan IDs for inventory and cleanup.
 
 #### Interface list

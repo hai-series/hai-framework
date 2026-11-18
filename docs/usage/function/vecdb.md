@@ -158,6 +158,8 @@ value(await vecdb.collection.exists('demo-docs')) // false
 
 ### 写入、检索和清理文档：`vecdb.vector`
 
+LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数。写入仍通过宿主提交。Qdrant 的大响应在线程内解码和校验，滚动读取保留完整的 uint64 游标。
+
 使用相同维度的向量写入和搜索，按 ID 修改或删除文档；扫描用于分页盘点。
 
 #### 接口清单

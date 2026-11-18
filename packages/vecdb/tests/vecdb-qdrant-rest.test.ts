@@ -12,6 +12,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it('decodes a large scroll response in the worker and preserves uint64 IDs', async () => {
+  const id = '18446744073709551615'
+  const label = 'stored document '.repeat(20_000)
+  const body = `{"status":"ok","result":{"points":[{"id":${id},"payload":{"_id":${JSON.stringify(label)}}}],"next_page_offset":${id}}}`
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+  const result = await new QdrantRestClient('https://qdrant.example').scroll('docs', 1)
+  expect(result).toEqual({
+    points: [
+      {
+        id: BigInt(id),
+        payload: { _id: label },
+      },
+    ],
+    next_page_offset: BigInt(id),
+  })
+})
+
 it('路径段与API Key传递准确，错误响应原文不进入异常', async () => {
   const fetch = vi.fn(async (_input: RequestInfo | URL, _options?: RequestInit) => new Response('private-server-password', { status: 503 }))
   vi.stubGlobal('fetch', fetch)

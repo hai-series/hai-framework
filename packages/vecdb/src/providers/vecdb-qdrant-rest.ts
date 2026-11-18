@@ -1,50 +1,12 @@
 /** Qdrant 固定 REST 端点；使用 Node 原生 fetch，不加载独立 HTTP 驱动。 */
+import type { QdrantResponse, QdrantResponseKind } from './vecdb-qdrant-response.js'
 import { core } from '@h-ai/core'
-import { z } from 'zod'
+import { providerPool } from './vecdb-provider-pool.js'
+import { decodeQdrantResponse } from './vecdb-qdrant-response.js'
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
-/**
- * Qdrant 数字 point ID 使用完整 uint64 范围。
- * @example 模块内部上下文
- * ```ts
- * const maxPointId = MAX_QDRANT_POINT_ID.toString()
- * ```
- */
-export const MAX_QDRANT_POINT_ID = 18_446_744_073_709_551_615n
-const scrollIdSchema = z.union([
-  z.guid(),
-  z.bigint().min(0n).max(MAX_QDRANT_POINT_ID),
-])
-
-// Node 22+ 支持保留 JSON 数值原文。仅 scroll 使用该模式，其余端点保留普通 JSON 语义。
-const parseWithSource = JSON.parse as (text: string, reviver: (key: string, value: unknown, context?: { source?: string }) => unknown) => unknown
+export { MAX_QDRANT_POINT_ID } from './vecdb-qdrant-response.js'
 const rawJSON = (JSON as JSON & { rawJSON: (text: string) => object }).rawJSON
-
-function parseScrollJson(text: string): unknown {
-  return parseWithSource(text, (key, value, context) => {
-    const source = context?.source
-    if ((key === 'id' || key === 'next_page_offset') && typeof value === 'number' && source && /^\d{1,20}$/.test(source))
-      return BigInt(source)
-    return value
-  })
-}
-const pointSchema = z.object({
-  id: z.union([
-    z.string(),
-    z.number(),
-  ]),
-  score: z.number().optional(),
-  payload: z.record(z.string(), z.unknown()).nullable().optional(),
-  vector: z.array(z.number()).optional(),
-})
-const collectionSchema = z.object({
-  config: z.object({
-    params: z.object({
-      vectors: z.unknown(),
-    }),
-  }),
-  points_count: z.number().nullable().optional(),
-})
 
 /**
  * 只携带状态码，不把服务端响应、连接地址或认证头带入业务异常。
@@ -81,7 +43,7 @@ export class QdrantRestClient {
       throw new Error('Qdrant URL must use HTTP(S) without embedded credentials')
   }
 
-  private async perform<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown, parseJson: (text: string) => unknown = JSON.parse): Promise<T> {
+  private async perform<Kind extends QdrantResponseKind>(path: string, method: string, operation: Kind, body?: unknown, maxPoints?: number): Promise<QdrantResponse[Kind]> {
     const url = new URL(this.base)
     const [pathname, query] = path.split('?')
     url.pathname = `${url.pathname.replace(/\/$/, '')}${pathname}`
@@ -130,25 +92,23 @@ export class QdrantRestClient {
       bytes.set(chunk, offset)
       offset += chunk.byteLength
     }
-    let bodyJson: unknown
-    try {
-      bodyJson = parseJson(new TextDecoder().decode(bytes))
-    }
-    catch {
-      throw new Error('Qdrant returned invalid JSON')
-    }
-    const envelope = z.object({
-      status: z.literal('ok'),
-      result: schema,
-    }).safeParse(bodyJson)
-    if (!envelope.success)
+    if (bytes.length < 256 * 1024)
+      return decodeQdrantResponse(operation, bytes, maxPoints)
+    const result = await providerPool.run({
+      kind: 'qdrant',
+      operation,
+      bytes,
+      maxPoints,
+    }, [bytes.buffer])
+    if (!result.success || result.data.kind !== 'qdrant')
       throw new Error('Qdrant returned an invalid response')
-    return envelope.data.result
+    // 同一个固定端点的 schema 在线程内已核对，结果联合类型在此收窄。
+    return result.data.value as QdrantResponse[Kind]
   }
 
-  private async request<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown, parseJson?: (text: string) => unknown): Promise<T> {
+  private async request<Kind extends QdrantResponseKind>(path: string, method: string, operation: Kind, body?: unknown, maxPoints?: number): Promise<QdrantResponse[Kind]> {
     try {
-      return await this.perform(path, method, schema, body, parseJson)
+      return await this.perform(path, method, operation, body, maxPoints)
     }
     catch (error) {
       if (error instanceof QdrantHttpError)
@@ -160,59 +120,35 @@ export class QdrantRestClient {
     }
   }
 
-  getCollections() {
-    return this.request('/collections', 'GET', z.object({
-      collections: z.array(z.object({
-        name: z.string(),
-      })),
-    }))
-  }
+  getCollections() { return this.request('/collections', 'GET', 'list') }
 
-  getCollection(name: string) { return this.request(`/collections/${encodeURIComponent(name)}`, 'GET', collectionSchema) }
-  createCollection(name: string, options: { vectors: { size: number, distance: string } }) { return this.request(`/collections/${encodeURIComponent(name)}`, 'PUT', z.boolean(), options) }
-  deleteCollection(name: string) { return this.request(`/collections/${encodeURIComponent(name)}`, 'DELETE', z.boolean()) }
+  getCollection(name: string) { return this.request(`/collections/${encodeURIComponent(name)}`, 'GET', 'collection') }
+  createCollection(name: string, options: { vectors: { size: number, distance: string } }) { return this.request(`/collections/${encodeURIComponent(name)}`, 'PUT', 'changed', options) }
+  deleteCollection(name: string) { return this.request(`/collections/${encodeURIComponent(name)}`, 'DELETE', 'changed') }
   upsert(name: string, options: { points: Array<{ id: string, vector: number[], payload: Record<string, unknown> }>, wait: boolean }) {
-    return this.request(`/collections/${encodeURIComponent(name)}/points?wait=${options.wait}`, 'PUT', z.object({
-      status: z.literal('completed'),
-    }), { points: options.points })
+    return this.request(`/collections/${encodeURIComponent(name)}/points?wait=${options.wait}`, 'PUT', 'write', { points: options.points })
   }
 
   delete(name: string, options: { points: string[], wait: boolean }) {
-    return this.request(`/collections/${encodeURIComponent(name)}/points/delete?wait=${options.wait}`, 'POST', z.object({
-      status: z.literal('completed'),
-    }), { points: options.points })
+    return this.request(`/collections/${encodeURIComponent(name)}/points/delete?wait=${options.wait}`, 'POST', 'write', { points: options.points })
   }
 
   query(name: string, options: { query: number[], limit: number, filter?: { must: Array<{ key: string, match: { value: unknown } }> }, with_payload: boolean }) {
-    return this.request(`/collections/${encodeURIComponent(name)}/points/query`, 'POST', z.object({
-      points: z.array(pointSchema.extend({
-        score: z.number(),
-      })),
-    }), options)
+    return this.request(`/collections/${encodeURIComponent(name)}/points/query`, 'POST', 'query', options)
   }
 
   scroll(name: string, limit: number, offset?: string | bigint) {
-    return this.request(`/collections/${encodeURIComponent(name)}/points/scroll`, 'POST', z.object({
-      points: z.array(z.object({
-        id: scrollIdSchema,
-        payload: z.object({
-          _id: z.unknown().optional(),
-        }).nullable().optional(),
-      })).max(limit),
-      next_page_offset: scrollIdSchema.nullish(),
-    }), {
+    return this.request(`/collections/${encodeURIComponent(name)}/points/scroll`, 'POST', 'scroll', {
       limit,
       offset: typeof offset === 'bigint'
         ? rawJSON(String(offset))
         : offset,
       with_payload: ['_id'],
       with_vector: false,
-    }, parseScrollJson)
+    }, limit)
   }
 
   count(name: string, options: { exact: boolean }) {
-    return this.request(`/collections/${encodeURIComponent(name)}/points/count`, 'POST', z.object({
-      count: z.number(),
-    }), options)
+    return this.request(`/collections/${encodeURIComponent(name)}/points/count`, 'POST', 'count', options)
   }
 }
