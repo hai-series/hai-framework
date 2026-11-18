@@ -1,5 +1,6 @@
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerConfig, RunnerEnvironment, RunnerResources } from './runner-config.js'
+import type { RunnerSerializationJob } from './runner-serialization-worker.js'
 import type { RunnerLaunch, RunnerProcess } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { execFile, spawn } from 'node:child_process'
@@ -9,11 +10,11 @@ import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile }
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, posix } from 'node:path'
 import { promisify } from 'node:util'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { runnerM } from './runner-i18n.js'
 import { HaiRunnerError } from './runner-types.js'
-import { captureWorkspace, decodeWorkspace, maxWorkspaceBytes, maxWorkspaceFiles, workspacePath } from './runner-workspace.js'
+import { captureWorkspace, decodeWorkspace, maxWorkspaceBytes, maxWorkspaceFiles, parseWorkspaceSnapshot, workspaceSchema } from './runner-workspace.js'
 
 const execute = promisify(execFile)
 const containerId = /^[\da-f]{64}$/u
@@ -28,9 +29,17 @@ const launchSchema = z.strictObject({
   env: z.record(z.string().regex(envKey), z.string().max(64_000).refine(value => !/[\r\n\0]/u.test(value))).default({}),
   files: z.record(z.string().regex(fileName).refine(value => value !== '.' && value !== '..'), z.string().max(128_000)).default({}),
   inputs: z.record(z.string().regex(artifactName), z.string().max(4 * Math.ceil(MAX_FILE_BYTES / 3))).optional(),
-  workspace: z.record(z.string().refine(workspacePath), z.string().max(4 * Math.ceil(maxWorkspaceBytes / 3))).optional(),
+  workspace: workspaceSchema.optional(),
   cwd: z.string().max(1024).default('/workspace'),
 })
+
+const serializationPool = core.worker.createPool<RunnerSerializationJob, string | Record<string, string> | undefined>(
+  new URL(import.meta.url.endsWith('.ts')
+    ? '../dist/runner-serialization-worker.js'
+    : './runner-serialization-worker.js', import.meta.url),
+  { maxWorkers: 1, maxQueuedJobs: 4, idleTimeoutMs: 15_000 },
+)
+const workerThreshold = 256 * 1024
 
 // 使用打开的文件描述符核对类型与大小，读取在容器内完成；不会解包归档或读取宿主路径。
 const READ_ARTIFACT = `
@@ -558,8 +567,14 @@ export async function startContainer(
             windowsHide: true,
             signal,
           })
-          return stdout.length <= maxBytes
-            ? ok(stdout.toString('base64'))
+          if (stdout.length > maxBytes)
+            return invalid()
+          if (stdout.length < workerThreshold)
+            return ok(stdout.toString('base64'))
+          const bytes = new Uint8Array(stdout)
+          const encoded = await serializationPool.run({ type: 'artifact', bytes }, [bytes.buffer])
+          return encoded.success && typeof encoded.data === 'string' && !closing && !signal.aborted
+            ? ok(encoded.data)
             : invalid()
         }
         catch {
@@ -589,9 +604,15 @@ export async function startContainer(
             windowsHide: true,
             signal,
           })
-          const files = launchSchema.shape.workspace.unwrap().parse(JSON.parse(stdout))
-          return decodeWorkspace(files, maxBytes)
-            ? ok(files)
+          if (stdout.length < workerThreshold) {
+            const files = parseWorkspaceSnapshot(stdout, maxBytes)
+            return files
+              ? ok(files)
+              : invalid()
+          }
+          const files = await serializationPool.run({ type: 'snapshot', content: stdout, budget: maxBytes })
+          return files.success && files.data && typeof files.data !== 'string' && !closing && !signal.aborted
+            ? ok(files.data)
             : invalid()
         }
         catch {

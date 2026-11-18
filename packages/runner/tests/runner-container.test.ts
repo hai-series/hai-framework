@@ -1,4 +1,5 @@
 import type { RunnerProcess } from '../src/index.js'
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { once } from 'node:events'
 import process from 'node:process'
@@ -281,7 +282,7 @@ describe('isolated artifact export', () => {
         const unsafe = input === 'bad-path'
         const started = await context.start({
           command: '/bin/sh',
-          args: ['-ec', 'test "$(cat src/main.txt)" = original; printf edited > src/main.txt; ln -s /etc/passwd escape.txt; printf ready; read -r done'],
+          args: ['-ec', 'test "$(cat src/main.txt)" = original; printf edited > src/main.txt; head -c 270336 /dev/zero > report.bin; ln -s /etc/passwd escape.txt; printf ready; read -r done'],
           workspace: { [unsafe ? '../outside' : 'src/main.txt']: 'b3JpZ2luYWw=' },
         })
         if (!started.success) {
@@ -296,11 +297,12 @@ describe('isolated artifact export', () => {
               throw new Error(`Project container stopped before readiness: ${code}`)
             }),
           ])
-          const capture = await started.data.snapshot(1024)
+          const capture = await started.data.snapshot(512 * 1024)
           const tooLarge = await started.data.snapshot(3)
           if (!capture.success)
             throw new Error(capture.error.message)
-          return { files: capture.data, overBudget: !tooLarge.success }
+          const { 'report.bin': report, ...files } = capture.data
+          return { files, reportBytes: Buffer.from(report, 'base64').length, overBudget: !tooLarge.success }
         }
         finally {
           await started.data.close()
@@ -311,6 +313,7 @@ describe('isolated artifact export', () => {
           'good-path',
           {
             files: { 'src/main.txt': 'ZWRpdGVk' },
+            reportBytes: 270336,
             overBudget: true,
           },
         ],
@@ -515,7 +518,7 @@ describe('isolated artifact export', () => {
       expect((await runner.register('artifact', async (_input, context) => {
         const result = await context.start({
           command: '/bin/sh',
-          args: ['-ec', 'printf result > /output/good.txt; ln -s /input/fixture.txt /output/link.txt; mkfifo /output/pipe; printf ready; exec sleep 60'],
+          args: ['-ec', 'printf result > /output/good.txt; head -c 270336 /dev/zero > /output/report.bin; ln -s /input/fixture.txt /output/link.txt; mkfifo /output/pipe; printf ready; exec sleep 60'],
           inputs: { 'fixture.txt': 'cHJpdmF0ZQ==' },
         })
         if (!result.success)
@@ -523,6 +526,10 @@ describe('isolated artifact export', () => {
         result.data.stderr.resume()
         await once(result.data.stdout, 'data')
         const good = await result.data.artifact('good.txt', 6)
+        const report = await result.data.artifact('report.bin', 512 * 1024)
+        if (!report.success)
+          throw new Error(report.error.message)
+        expect(Buffer.from(report.data, 'base64')).toEqual(Buffer.alloc(270336))
         const rejected = await Promise.all([
           result.data.artifact('../input/fixture.txt', 100),
           result.data.artifact('good.txt', 5),

@@ -173,6 +173,8 @@ scope comes from authentication. This example uses quick start’s report.v1 han
 
 ### Isolated containers and warm pools: `runner.registerWarmPool`
 
+For large artifacts and workspace snapshots, a Worker on the execution node performs Base64 encoding or JSON decoding and size validation. The source container still reads files within the caller’s limit.
+
 Map tools to controlled environments with CPU, memory, process and disk budgets. Warm pools prepare reusable capacity in advance.
 
 #### Interface list

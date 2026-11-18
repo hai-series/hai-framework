@@ -3,6 +3,9 @@ import { baseConfig } from '../tsup.base'
 
 export default defineConfig({
   ...baseConfig,
-  entry: { index: 'src/index.ts' },
+  entry: {
+    'index': 'src/index.ts',
+    'runner-serialization-worker': 'src/runner-serialization-worker.ts',
+  },
   external: ['@h-ai/core', '@h-ai/reldb', 'zod'],
 })

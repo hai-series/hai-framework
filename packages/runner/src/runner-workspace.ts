@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { z } from 'zod'
 
 /**
  * 单个 Runner 工作区快照允许的普通文件数量。
@@ -28,6 +29,29 @@ export function workspacePath(path: string): boolean {
   return path.length > 0 && path.length <= 512 && !/[\p{Cc}\\]/u.test(path)
     && path.split('/').every(part => part.length > 0 && part.length <= 128
       && part !== '.' && part !== '..' && part.toLowerCase() !== '.git')
+}
+
+/**
+ * 宿主启动参数和容器快照使用同一文件映射格式。
+ * @example 模块内部上下文
+ * ```ts
+ * const snap = workspaceSchema.parse({ 'src/main.txt': 'aGk=' })
+ * ```
+ */
+export const workspaceSchema = z.record(z.string().refine(workspacePath), z.string().max(4 * Math.ceil(maxWorkspaceBytes / 3)))
+
+/**
+ * 校验容器返回的工作区文件清单和解码后总量。
+ * @example 模块内部上下文
+ * ```ts
+ * const files = parseWorkspaceSnapshot('{"note.txt":"aGk="}', 1024)
+ * ```
+ */
+export function parseWorkspaceSnapshot(text: string, budget: number): Record<string, string> | undefined {
+  const files = workspaceSchema.safeParse(JSON.parse(text))
+  return files.success && decodeWorkspace(files.data, budget)
+    ? files.data
+    : undefined
 }
 
 /**

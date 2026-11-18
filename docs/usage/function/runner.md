@@ -242,6 +242,8 @@ async function cancelReport(scope: RunnerScope, key: string) {
 
 ### 隔离容器与预热池：`runner.registerWarmPool`
 
+导出大制品或工作区快照时，Worker 在执行节点处理 Base64 编码或 JSON 解析与容量校验。文件仍由原容器按调用方指定的上限读取。
+
 把工具映射到受控环境，明确 CPU、内存、进程与磁盘上限；预热只提前准备可复用环境。
 
 #### 接口清单
