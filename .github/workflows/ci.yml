@@ -76,6 +76,8 @@ jobs:
             hai-ci-build-v1-${{ runner.os }}-node24.22.1-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       # lint独立运行；Turbo仍按真实^build依赖恢复/构建，不使用失效dist绕过前置。
       - name: Build
         # Vite 应用同时打包时各自保留大型依赖图，控制总并行度以适配共享 runner。

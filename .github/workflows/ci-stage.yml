@@ -83,6 +83,8 @@ jobs:
       - name: Install dependencies
         if: steps.proof.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       - name: Download this run's build
         if: steps.proof.outputs.run == 'true' && inputs.build_artifact != ''
         uses: actions/download-artifact@v7.0.0

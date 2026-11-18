@@ -18,6 +18,8 @@ CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开�
 
 需要实际执行单元阶段时，CI 先为 Tools 的 Python 测试创建虚拟环境，并从 [测试依赖清单](../packages/tools/jobs/tests/requirements.txt) 安装 Office 库。生成真实 DOCX、XLSX 和 PPTX 的单元用例在 runner 上执行，后续镜像测试仍单独验证容器内的依赖和运行结果。
 
+Linux 上的共享构建和验证阶段安装依赖时设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，使用 npm 包内的 CPU 运行时。Transformers 图片兼容性测试仍实际加载 ONNX Runtime，并解码和缩放图片。
+
 ```mermaid
 flowchart TD
   P[输入指纹与发布状态] --> B[构建共享产物]
