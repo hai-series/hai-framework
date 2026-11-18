@@ -19,6 +19,75 @@ function denied(code = 'hai:iam:105') {
 }
 
 describe('in-place session recovery', () => {
+  it.each(['memory', 'cookie'] as const)('%s 刷新限流保留会话，后续请求成功轮换后只重发一次', async (mode) => {
+    const client = apiClient.create(contract)
+    const storage = mode === 'cookie'
+      ? apiClient.tokenStorage.httpOnlyCookie()
+      : apiClient.tokenStorage.memory()
+    await storage.setAccessToken('expired')
+    if (mode === 'memory')
+      await storage.setRefreshToken('existing-refresh')
+    const original = await storage.getRefreshToken()
+    const recoverSession = vi.fn(async () => false)
+    let refreshRequests = 0
+    let businessRequests = 0
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      const request = input instanceof Request
+        ? input
+        : new Request(input, init)
+      if (request.url.endsWith('/auth/refresh')) {
+        refreshRequests++
+        expect(request.credentials).toBe(mode === 'cookie'
+          ? 'include'
+          : 'same-origin')
+        if (refreshRequests === 1) {
+          return Response.json({
+            success: false,
+            error: { code: 'hai:iam:023', message: 'Busy', httpStatus: 429 },
+          }, { status: 429 })
+        }
+        return Response.json({
+          success: true,
+          data: {
+            tokens: {
+              accessToken: 'rotated',
+              ...(mode === 'memory' && { refreshToken: 'rotated-refresh' }),
+            },
+          },
+        })
+      }
+      businessRequests++
+      return request.headers.get('authorization') === 'Bearer rotated'
+        ? Response.json({
+            success: true,
+            data: { saved: true },
+          })
+        : denied()
+    }
+    try {
+      expect((await client.init({
+        baseUrl: 'https://app.test/api',
+        fetch,
+        auth: { storage, recoverSession },
+      })).success).toBe(true)
+      expect(await client.save({ draft: 'same draft' })).toMatchObject({ success: false })
+      expect(await storage.getAccessToken()).toBe('expired')
+      expect(await storage.getRefreshToken()).toBe(original)
+      expect(recoverSession).not.toHaveBeenCalled()
+      expect(businessRequests).toBe(1)
+      expect(await client.save({ draft: 'same draft' })).toMatchObject({
+        success: true,
+        data: { saved: true },
+      })
+      expect(recoverSession).not.toHaveBeenCalled()
+      expect(refreshRequests).toBe(2)
+      expect(businessRequests).toBe(3)
+    }
+    finally {
+      await client.close()
+    }
+  })
+
   it.each([true, undefined])('成功或无有效失败包络时不因额外错误字段重放写入：success=%s', async (success) => {
     const client = apiClient.create(contract)
     const reauthorize = vi.fn(async () => 'unused-proof')

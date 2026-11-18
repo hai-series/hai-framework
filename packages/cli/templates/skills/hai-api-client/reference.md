@@ -123,6 +123,8 @@ Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cooki
 
 自动刷新识别真实 HTTP 401（`Response.status`），以及 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`），成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 排除自动刷新，403/500 等其它失败也不刷新。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终 `success/error.code` 并处理刷新失败后的登录失效。
 
+刷新端点报告 401 时清理凭据并通知。429、408、409 等其他失败、网络异常和超时保留原凭据。HTTP 200 的有效失败 HaiResult 使用 error.httpStatus 分类，后续业务请求可继续触发刷新。
+
 ```ts
 import { apiClient } from '@h-ai/api-client'
 

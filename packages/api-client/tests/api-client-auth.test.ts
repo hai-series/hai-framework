@@ -264,6 +264,60 @@ describe('createTokenManager', () => {
     expect(await storage.getRefreshToken()).toBeNull()
   })
 
+  it.each([
+    { status: 429 },
+    { status: 408 },
+    { status: 409 },
+    { status: 200, bodyStatus: 429 },
+  ])('刷新受阻（HTTP $status，业务状态 $bodyStatus）时保留凭据供下一次轮换', async ({ status, bodyStatus }) => {
+    const storage = apiClient.tokenStorage.memory()
+    const current = tokenPair('current')
+    const rotated = tokenPair('rotated')
+    const failure = bodyStatus === undefined
+      ? new Response(null, { status })
+      : Response.json({
+          success: false,
+          error: { code: 'hai:iam:023', message: 'Busy', httpStatus: bodyStatus },
+        }, { status })
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(failure)
+      .mockResolvedValueOnce(Response.json({
+        success: true,
+        data: { tokens: rotated },
+      }))
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', fetch, onFailed)
+    await manager.setTokens(current)
+
+    expect(await manager.refresh()).toBeNull()
+    expect(manager.sessionInvalid).toBe(false)
+    expect(onFailed).not.toHaveBeenCalled()
+    expect(await storage.getAccessToken()).toBe(current.accessToken)
+    expect(await storage.getRefreshToken()).toBe(current.refreshToken)
+
+    expect(await manager.refresh()).toEqual(rotated)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(await storage.getAccessToken()).toBe(rotated.accessToken)
+    expect(await storage.getRefreshToken()).toBe(rotated.refreshToken)
+  })
+
+  it('hTTP 200 的刷新失败包络明确报告 401 时清理凭据', async () => {
+    const storage = apiClient.tokenStorage.memory()
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json({
+      success: false,
+      error: { code: 'hai:iam:105', message: 'Expired', httpStatus: 401 },
+    }))
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', fetch, onFailed)
+    await manager.setTokens(tokenPair('expired'))
+
+    expect(await manager.refresh()).toBeNull()
+    expect(manager.sessionInvalid).toBe(true)
+    expect(onFailed).toHaveBeenCalledOnce()
+    expect(await storage.getAccessToken()).toBeNull()
+    expect(await storage.getRefreshToken()).toBeNull()
+  })
+
   it('并发 refresh 去重', async () => {
     const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('rt')

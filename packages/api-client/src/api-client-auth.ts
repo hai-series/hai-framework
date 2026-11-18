@@ -29,6 +29,7 @@
  */
 
 import type { TokenPair, TokenStorage } from './api-client-types.js'
+import { HaiErrorSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
@@ -147,7 +148,7 @@ type RefreshCallback = (tokens: TokenPair) => void
  * 创建模块内部 Token 管理器；包用户通过 apiClient.auth 使用，包入口不导出此工厂。
  * 同一代际的并发刷新共享请求；clear/setTokens 同步撤销旧代际，所有存储变更串行提交。
  * 迟到响应不能覆盖新账号、恢复退出凭据或触发旧回调；已开始的存储写入须完成后才能执行后续身份变更。
- * 4xx、无效响应和非 Cookie 模式缺少 refreshToken 会尝试清理凭据；5xx、网络/超时保留凭据并返回 null。
+ * 刷新端点报告 401 时清理凭据；其他失败状态、网络故障与超时保留凭据。成功响应仍须通过凭据校验。
  * 无刷新凭据时通知失败并返回 null；存储读取失败可拒绝 Promise，setTokens/clear 的存储失败向调用方传播。
  * @param storage - 独占的安全存储适配器。
  * @param refreshEndpointUrl - baseUrl 与 refreshPath 组合后的完整 URL。
@@ -276,7 +277,7 @@ export function createTokenManager(
 
   /**
    * 等待身份写入完成后读取刷新凭据，执行超时请求并在每个异步边界校验代际。
-   * 4xx/无效数据尝试清理；5xx/网络故障保留凭据。只有当前代际成功写入后才通知订阅者。
+   * 从 HTTP 状态或有效的失败包络识别 401。只有当前代际成功写入后才通知订阅者。
    * @param refreshGeneration - 请求开始时的代际。
    * @param controller - 本次请求中断控制器；底层 fetch 应响应 signal。
    * @returns 当前刷新 Token 或 null；清理/回调等请求段异常记录为失败，不声称持久清理成功。
@@ -325,22 +326,27 @@ export function createTokenManager(
       if (refreshGeneration !== generation)
         return null
 
-      if (!response.ok) {
-        // 仅在服务端明确返回 401/4xx 时才清除 Token（refresh token 已失效）；
-        // 5xx 作为服务端临时故障，保留 Token 让下一次请求重试。
-        if (response.status >= 400 && response.status < 500) {
+      const body = response.ok
+        ? await response.json() as { success?: unknown, error?: unknown, data?: unknown } | null
+        : undefined
+      if (refreshGeneration !== generation)
+        return null
+
+      const failure = body?.success === false
+        ? HaiErrorSchema.safeParse(body.error)
+        : undefined
+      if (!response.ok || failure?.success) {
+        const status = failure?.success ? failure.data.httpStatus : response.status
+        if (status === 401) {
           await failRefresh(refreshGeneration)
         }
         else {
-          logger.warn('Token refresh transient failure, keeping tokens', { status: response.status })
+          logger.warn('Token refresh rejected, keeping tokens', { status })
         }
         return null
       }
 
-      const body = await response.json() as { data?: unknown }
-      if (refreshGeneration !== generation)
-        return null
-      const parsed = RefreshTokenPayloadSchema.safeParse(readTokenPayload(body.data))
+      const parsed = RefreshTokenPayloadSchema.safeParse(readTokenPayload(body?.data))
       if (!parsed.success) {
         logger.warn('Token refresh returned invalid data', { issues: parsed.error.issues })
         await failRefresh(refreshGeneration)

@@ -121,6 +121,8 @@ Call `apiClient.init(config)` to configure the default client. If your applicati
 | `transport.keyExchangePath` | `/_hai/key-exchange` | Key exchange path relative to the base URL. |
 | `transport.maxPlaintextBytes` | Optional | Uses the server limit unless the caller sets a smaller limit. |
 
+The refresh response determines how stored credentials are handled. A `401` clears the credentials and reports session expiry. Other failures such as `429`, `408` and `409`, or a timeout, keep the existing credentials. For a valid failed `HaiResult` inside HTTP 200, use `error.httpStatus`. A later business request can trigger refresh again.
+
 <a id="client-integration"></a>
 
 #### Client addresses, deadlines and recovery

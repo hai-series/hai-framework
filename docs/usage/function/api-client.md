@@ -549,6 +549,8 @@ else {
 
 自动刷新在真实 HTTP 401（`Response.status`）或 HTTP 200 的有效失败 HaiResult（`success=false`、`error.code/message` 为字符串且 `error.httpStatus=401`）后触发，刷新成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 不触发自动刷新，403/500 等其它失败也不会触发。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终结果的 `success` 与 `error.code`，并处理刷新失败后的登录失效。
 
+刷新端点的失败状态决定凭据处理。`401` 清理存储并通知会话失效，`429`、`408`、`409` 等其他失败以及网络超时保留原凭据。若端点以 HTTP 200 返回有效的失败 `HaiResult`，使用其中的 `error.httpStatus`。限流后可由下一次业务请求触发刷新。
+
 ### 错误提示与关联日志
 
 客户端以 `debug` 记录 4xx 和携带服务端追踪编号的结构化错误。未关联服务端错误的网络、协议和 5xx 失败使用 `error`，包含错误码及可取得的传输诊断字段。

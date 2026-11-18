@@ -167,7 +167,7 @@ export interface TokenStorage {
 
 /**
  * 启用 Token 注入与自动刷新；默认 Cookie 适配器，refreshPath 相对 baseUrl。
- * 网络/超时/5xx 为暂时失败，保留凭据；明确失效才清理并通知。回调不应抛出或记录 Token。
+ * 刷新端点返回 401 时清理并通知。限流、其他失败状态、超时和网络故障保留凭据。回调不应抛出或记录 Token。
  *
  * @example
  * ```ts
