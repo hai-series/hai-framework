@@ -23,6 +23,8 @@
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
+  import type { MarkdownRenderResult } from './document-parse.js'
+  import type { DocumentRenderJob } from './document-render-worker.js'
   import type {
     AiDocumentEditorProps,
     MarkdownBlockStyleKind,
@@ -35,10 +37,10 @@
     MarkdownSelectionSnapshot,
     MarkdownTextAlignKind,
   } from './document-types.js'
-  import { tick } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
-  import { uiM } from '../../../messages.js'
+  import { getUILocale, uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import AiDocumentDownloadMenu from './AiDocumentDownloadMenu.svelte'
   import {
@@ -47,6 +49,7 @@
   } from './code-preview.js'
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
+  import { documentRenderPool, useDocumentRenderWorker } from './document-render-pool.js'
   import { parseMarkdown } from './markdown-parse.js'
   import {
     createMermaidSourceSignature,
@@ -506,8 +509,10 @@
   )
   // hint 文案统一做 trim，避免只传空格时仍把占位区域撑开。
   const normalizedCodePreviewHint = $derived(codePreviewHint.trim())
-  const renderResult = $derived(
-    renderMarkdownDocument(documentContent, {
+  const renderJob = $derived({
+    content: documentContent,
+    locale: getUILocale(),
+    options: {
       enableHighlight,
       showCopyButton,
       showRunButton,
@@ -517,8 +522,64 @@
       codePreviewHint: normalizedCodePreviewHint,
       breaks,
       allowHtmlTags,
-    }),
-  )
+    },
+  } satisfies DocumentRenderJob)
+  let useBackgroundRender = $state(false)
+  let lastRender = $state.raw<{ job: DocumentRenderJob, result: MarkdownRenderResult }>()
+  const renderInWorker = $derived(useBackgroundRender && useDocumentRenderWorker(renderJob.content))
+  const renderResult = $derived(renderInWorker
+    ? lastRender?.result ?? { outline: [], codeBlocks: [], blocks: [] }
+    : renderMarkdownDocument(renderJob.content, renderJob.options))
+  const renderPending = $derived(renderInWorker && lastRender?.job !== renderJob)
+  let pendingRender: DocumentRenderJob | undefined
+  let renderFrame: number | undefined
+  let runningRender = false
+  let unmounted = false
+
+  onMount(() => {
+    if (useDocumentRenderWorker(renderJob.content))
+      lastRender = { job: renderJob, result: renderResult }
+    useBackgroundRender = true
+    return () => {
+      unmounted = true
+      if (renderFrame !== undefined)
+        cancelAnimationFrame(renderFrame)
+    }
+  })
+
+  function scheduleBackgroundRender(): void {
+    if (unmounted || runningRender || !pendingRender || renderFrame !== undefined)
+      return
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = undefined
+      const job = pendingRender
+      pendingRender = undefined
+      if (!job)
+        return
+      runningRender = true
+      void documentRenderPool.run(job).then((result) => {
+        if (unmounted || !renderInWorker)
+          return
+        if (result.success)
+          lastRender = { job, result: result.data }
+        else
+          useBackgroundRender = false
+      }).finally(() => {
+        runningRender = false
+        scheduleBackgroundRender()
+      })
+    })
+  }
+
+  $effect(() => {
+    if (renderInWorker && renderPending) {
+      pendingRender = renderJob
+      scheduleBackgroundRender()
+    }
+    else {
+      pendingRender = undefined
+    }
+  })
   // Mermaid 占位 HTML 在流式阶段可能不变，必须额外订阅源码签名变化。
   const mermaidRenderSignature = $derived(
     renderResult.blocks
@@ -3393,7 +3454,9 @@
             bind:this={previewHost}
             class={readerDocumentClass}
             style={documentStyle}
-            contenteditable={editable}
+            contenteditable={editable && !renderPending}
+            aria-busy={renderPending}
+            inert={renderPending}
             role='document'
             onmousemove={handlePreviewMouseMove}
             onmouseleave={handlePreviewMouseLeave}

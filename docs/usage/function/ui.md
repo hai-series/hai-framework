@@ -784,6 +784,8 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 
 ### 阅读、编辑与下载文档：AI 内容组件
 
+浏览器将长文档的 Markdown 解析和高亮交给 Web Worker，并合并流式更新。多页 PDF 导出保留 DOM 截图阶段，浏览器支持 OffscreenCanvas 时，用 Worker 扫描分页位置并生成每页 PNG。
+
 把文本、Markdown、表格或文档数据传入查看器，按需要接入编辑、下载和引用操作。
 
 #### 接口清单

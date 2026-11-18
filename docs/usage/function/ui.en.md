@@ -412,6 +412,8 @@ Display computed ciphertext, digests and verification results; provide Encrypted
 
 ### Read, edit and download documents: AI content
 
+A Web Worker parses and highlights long Markdown documents in the browser. Streaming updates are coalesced. Multi-page PDF export captures the DOM first, then uses a Worker to find page breaks and encode page PNGs when OffscreenCanvas is available.
+
 Pass text, Markdown, tables or document data to viewers and connect editing, downloads and citation actions.
 
 #### Interface list

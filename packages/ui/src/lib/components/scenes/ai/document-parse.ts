@@ -144,21 +144,6 @@ interface MarkdownRenderState {
   headingIds: Map<string, number>
 }
 
-/**
- * 单个已消毒 HTML 块和其中可复制的代码元信息。
- *
- * @example 模块内部上下文
- * ```ts
- * const example: MarkdownHtmlChunkRenderResult = { html: '<p>正文</p>', codeBlocks: [] }
- * ```
- */
-interface MarkdownHtmlChunkRenderResult {
-  /** 已按现有安全策略渲染后的 HTML。 */
-  html: string
-  /** HTML chunk 内收集到的代码块。 */
-  codeBlocks: MarkdownCodeBlockItem[]
-}
-
 /** 文档模式的默认解析选项。 */
 const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   enableHighlight: true,
@@ -514,22 +499,6 @@ function createHtmlBlock(id: string, html: string): MarkdownDocumentHtmlBlock | 
     : null
 }
 
-function renderMarkdownDocumentHtmlChunk(
-  content: string,
-  options: Required<MarkdownDocumentParseOptions>,
-  state: MarkdownRenderState,
-): MarkdownHtmlChunkRenderResult {
-  const marked = createMarkedInstance(options, state)
-  const result = marked.parse(content)
-
-  return {
-    html: typeof result === 'string'
-      ? result
-      : '',
-    codeBlocks: state.codeBlocks,
-  }
-}
-
 function isClosedMermaidToken(
   token: Token,
   options: Required<MarkdownDocumentParseOptions>,
@@ -552,20 +521,12 @@ function isClosedMermaidToken(
 function renderMarkdownDocumentBlocks(
   content: string,
   options: Required<MarkdownDocumentParseOptions>,
+  state: MarkdownRenderState,
 ): MarkdownDocumentBlock[] {
-  const marked = new Marked({
-    extensions: createEditorMarkdownExtensions(),
-    gfm: true,
-    breaks: options.breaks,
-  })
+  const marked = createMarkedInstance(options, state)
   const tokens = marked.lexer(content)
   const blocks: MarkdownDocumentBlock[] = []
   let htmlTokens: Token[] = []
-  const state: MarkdownRenderState = {
-    outline: [],
-    codeBlocks: [],
-    headingIds: new Map(),
-  }
   let nextBlockIndex = 1
 
   function flushHtmlTokens(): void {
@@ -573,9 +534,8 @@ function renderMarkdownDocumentBlocks(
       return
     }
 
-    const chunk = htmlTokens.map(token => token.raw).join('')
-    const result = renderMarkdownDocumentHtmlChunk(chunk, options, state)
-    const block = createHtmlBlock(`hai-md-block-${nextBlockIndex}`, result.html)
+    const html = marked.parser(htmlTokens)
+    const block = createHtmlBlock(`hai-md-block-${nextBlockIndex}`, html)
     if (block) {
       blocks.push(block)
       nextBlockIndex += 1
@@ -645,13 +605,10 @@ export function renderMarkdownDocument(
     codeBlocks: [],
     headingIds: new Map(),
   }
-  // marked instance is scoped to this render call.
-  const marked = createMarkedInstance(mergedOptions, state)
-  marked.parse(content)
-
+  const blocks = renderMarkdownDocumentBlocks(content, mergedOptions, state)
   return {
     outline: createNumberedOutline(state.outline),
     codeBlocks: state.codeBlocks,
-    blocks: renderMarkdownDocumentBlocks(content, mergedOptions),
+    blocks,
   }
 }

@@ -1,25 +1,17 @@
 import type { MarkdownDocumentBlock } from './document-parse.js'
+import type { PdfPage } from './document-pdf-worker.js'
 import type {
   MarkdownSourceKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
+import { core } from '@h-ai/core'
 import { getUILocale, uiM } from '../../../messages.js'
 import { renderMarkdownDocument } from './document-parse.js'
+import { BROWSER_PDF_CONTENT_WIDTH_MM, BROWSER_PDF_MARGIN_MM, sliceCanvasPages } from './document-pdf-pages.js'
+import { documentRenderPool, useDocumentRenderWorker } from './document-render-pool.js'
 
 const DOCUMENT_EXPORT_ROOT_CLASS = 'hai-ai-document-export'
-const BROWSER_PDF_PAGE_HEIGHT_MM = 297
 const BROWSER_PDF_VIEWPORT_WIDTH_PX = 794
-const BROWSER_PDF_MARGIN_MM = [14, 12, 14, 12] as const
-const BROWSER_PDF_CONTENT_WIDTH_MM = 210 - BROWSER_PDF_MARGIN_MM[1] - BROWSER_PDF_MARGIN_MM[3]
-const BROWSER_PDF_CONTENT_HEIGHT_MM
-  = BROWSER_PDF_PAGE_HEIGHT_MM - BROWSER_PDF_MARGIN_MM[0] - BROWSER_PDF_MARGIN_MM[2]
-const BROWSER_PDF_PAGE_BREAK_SEARCH_RATIO = 0.12
-const BROWSER_PDF_PAGE_BREAK_SEARCH_MAX_PX = 160
-const BROWSER_PDF_PAGE_BREAK_SEARCH_MIN_PX = 24
-const BROWSER_PDF_PAGE_BREAK_SAMPLE_STEP_PX = 4
-const BROWSER_PDF_PAGE_BREAK_WHITE_THRESHOLD = 246
-const BROWSER_PDF_PAGE_BREAK_ALPHA_THRESHOLD = 12
-const BROWSER_PDF_PAGE_BREAK_EMPTY_ROW_MAX_INK = 1
 
 function escapeExportHtml(value: string): string {
   return value
@@ -206,12 +198,22 @@ export async function downloadAiDocument(
   }
 
   const exportTitle = request.title?.trim() || baseName
-  const rendered = renderMarkdownDocument(markdownContent, {
+  const options = {
     enableHighlight: false,
     showCopyButton: false,
     showRunButton: false,
     breaks: true,
-  })
+  }
+  const computed = useDocumentRenderWorker(markdownContent)
+    ? await documentRenderPool.run({
+        content: markdownContent,
+        options,
+        locale: getUILocale(),
+      })
+    : undefined
+  const rendered = computed?.success
+    ? computed.data
+    : renderMarkdownDocument(markdownContent, options)
   const renderedHtml = renderDocumentBlocksForExport(rendered.blocks)
   const exportHtml = buildDocumentExportHtml(exportTitle, renderedHtml)
 
@@ -577,172 +579,57 @@ async function waitForBrowserPdfRenderReady(
   await waitForNextPaint(frameWindow)
 }
 
-function createPagedPdfFromCanvas(
+const pdfPool = core.worker.createPool<ImageBitmap, PdfPage[] | undefined>(
+  () => new Worker(new URL('./document-pdf-worker.js', import.meta.url), { type: 'module' }),
+  { maxWorkers: 1, maxQueuedJobs: 2, idleTimeoutMs: 15_000 },
+)
+
+async function encodePdfPages(canvas: HTMLCanvasElement): Promise<PdfPage[] | undefined> {
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap === 'undefined'
+    || canvas.height < canvas.width * 1.5) {
+    return undefined
+  }
+  let bitmap: ImageBitmap | undefined
+  try {
+    bitmap = await createImageBitmap(canvas)
+    const result = await pdfPool.run(bitmap, [bitmap])
+    return result.success ? result.data : undefined
+  }
+  catch {
+    return undefined
+  }
+  finally { bitmap?.close() }
+}
+
+async function createPagedPdfFromCanvas(
   JsPdfConstructor: typeof import('jspdf').jsPDF,
   canvas: HTMLCanvasElement,
-): Blob {
+): Promise<Blob> {
   const pdfDocument = new JsPdfConstructor({
     unit: 'mm',
     format: 'a4',
     orientation: 'portrait',
     compress: true,
   })
-  const pageCanvas = document.createElement('canvas')
-  const pageContext = pageCanvas.getContext('2d')
-  if (!pageContext) {
-    throw new Error('Failed to prepare PDF page canvas')
+  let pageIndex = 0
+  function addPage(image: string | Uint8Array, height: number): void {
+    if (pageIndex++ > 0)
+      pdfDocument.addPage()
+    pdfDocument.addImage(image, 'PNG', BROWSER_PDF_MARGIN_MM[3], BROWSER_PDF_MARGIN_MM[0], BROWSER_PDF_CONTENT_WIDTH_MM, height, undefined, 'FAST')
   }
 
-  const pixelsPerMillimeter = canvas.width / BROWSER_PDF_CONTENT_WIDTH_MM
-  const pageHeightPx = Math.max(
-    1,
-    Math.floor(BROWSER_PDF_CONTENT_HEIGHT_MM * pixelsPerMillimeter),
-  )
-  const sourceContext = canvas.getContext('2d', { willReadFrequently: true })
-
-  for (let pageIndex = 0, sourceY = 0; sourceY < canvas.height; pageIndex += 1) {
-    const remainingHeightPx = canvas.height - sourceY
-    const sliceHeightPx = remainingHeightPx > pageHeightPx && sourceContext
-      ? resolveCanvasPageSliceHeight(
-          sourceContext,
-          canvas,
-          sourceY,
-          pageHeightPx,
-        )
-      : Math.min(pageHeightPx, remainingHeightPx)
-
-    pageCanvas.width = canvas.width
-    pageCanvas.height = sliceHeightPx
-    pageContext.fillStyle = '#ffffff'
-    pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
-    pageContext.drawImage(
-      canvas,
-      0,
-      sourceY,
-      canvas.width,
-      sliceHeightPx,
-      0,
-      0,
-      canvas.width,
-      sliceHeightPx,
-    )
-
-    if (pageIndex > 0) {
-      pdfDocument.addPage()
-    }
-
-    pdfDocument.addImage(
-      pageCanvas.toDataURL('image/png'),
-      'PNG',
-      BROWSER_PDF_MARGIN_MM[3],
-      BROWSER_PDF_MARGIN_MM[0],
-      BROWSER_PDF_CONTENT_WIDTH_MM,
-      sliceHeightPx / pixelsPerMillimeter,
-      undefined,
-      'FAST',
-    )
-
-    sourceY += sliceHeightPx
+  const encoded = await encodePdfPages(canvas)
+  if (encoded) {
+    for (const page of encoded)
+      addPage(page.bytes, page.height)
+  }
+  else {
+    const page = document.createElement('canvas')
+    for (const height of sliceCanvasPages(canvas, page))
+      addPage(page.toDataURL('image/png'), height)
   }
 
   return pdfDocument.output('blob')
-}
-
-function resolveCanvasPageSliceHeight(
-  sourceContext: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
-  sourceY: number,
-  pageHeightPx: number,
-): number {
-  const searchRadiusPx = Math.max(
-    BROWSER_PDF_PAGE_BREAK_SEARCH_MIN_PX,
-    Math.min(
-      BROWSER_PDF_PAGE_BREAK_SEARCH_MAX_PX,
-      Math.floor(pageHeightPx * BROWSER_PDF_PAGE_BREAK_SEARCH_RATIO),
-    ),
-  )
-  const scanStartY = Math.max(
-    sourceY + 1,
-    sourceY + pageHeightPx - searchRadiusPx,
-  )
-  const scanEndY = Math.min(sourceY + pageHeightPx, canvas.height)
-  const scanHeight = scanEndY - scanStartY
-
-  if (scanHeight <= 0) {
-    return Math.min(pageHeightPx, canvas.height - sourceY)
-  }
-
-  const imageData = sourceContext.getImageData(
-    0,
-    scanStartY,
-    canvas.width,
-    scanHeight,
-  )
-  const bestBreakY = findCanvasPageBreakY(imageData, scanStartY)
-  return Math.max(
-    1,
-    Math.min(bestBreakY - sourceY, canvas.height - sourceY),
-  )
-}
-
-function findCanvasPageBreakY(
-  imageData: ImageData,
-  scanStartY: number,
-): number {
-  const rowWidth = imageData.width
-  const rowHeight = imageData.height
-  const rowStride = rowWidth * 4
-  let bestEmptyRowY = 0
-  let bestInkRowY = 0
-  let lowestInkScore = Number.POSITIVE_INFINITY
-
-  for (let rowIndex = 0; rowIndex < rowHeight; rowIndex += 1) {
-    const rowInkScore = measureCanvasRowInk(
-      imageData.data,
-      rowIndex * rowStride,
-      rowWidth,
-    )
-
-    if (rowInkScore <= BROWSER_PDF_PAGE_BREAK_EMPTY_ROW_MAX_INK) {
-      bestEmptyRowY = scanStartY + rowIndex + 1
-    }
-
-    if (rowInkScore <= lowestInkScore) {
-      lowestInkScore = rowInkScore
-      bestInkRowY = scanStartY + rowIndex + 1
-    }
-  }
-
-  return bestEmptyRowY || bestInkRowY || (scanStartY + rowHeight)
-}
-
-function measureCanvasRowInk(
-  pixels: Uint8ClampedArray,
-  rowOffset: number,
-  rowWidth: number,
-): number {
-  let inkScore = 0
-
-  for (let column = 0; column < rowWidth; column += BROWSER_PDF_PAGE_BREAK_SAMPLE_STEP_PX) {
-    const pixelOffset = rowOffset + (column * 4)
-    const alpha = pixels[pixelOffset + 3]
-    if (alpha < BROWSER_PDF_PAGE_BREAK_ALPHA_THRESHOLD) {
-      continue
-    }
-
-    const red = pixels[pixelOffset]
-    const green = pixels[pixelOffset + 1]
-    const blue = pixels[pixelOffset + 2]
-    if (
-      red < BROWSER_PDF_PAGE_BREAK_WHITE_THRESHOLD
-      || green < BROWSER_PDF_PAGE_BREAK_WHITE_THRESHOLD
-      || blue < BROWSER_PDF_PAGE_BREAK_WHITE_THRESHOLD
-    ) {
-      inkScore += 1
-    }
-  }
-
-  return inkScore
 }
 
 async function renderBrowserPdfCanvas(
@@ -807,7 +694,7 @@ async function downloadDocumentAsPdf(
       loadJsPdf(),
       renderBrowserPdfCanvas(renderHost),
     ])
-    downloadBlob(createPagedPdfFromCanvas(jsPDF, canvas), filename)
+    downloadBlob(await createPagedPdfFromCanvas(jsPDF, canvas), filename)
   }
   finally {
     renderHost.cleanup()
