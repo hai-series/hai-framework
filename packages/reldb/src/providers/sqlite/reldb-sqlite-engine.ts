@@ -18,7 +18,7 @@ import type { ExecuteResult } from '../../reldb-types.js'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as delay } from 'node:timers/promises'
-import { Worker } from 'node:worker_threads'
+import { core } from '@h-ai/core'
 
 const require = createRequire(import.meta.url)
 
@@ -235,13 +235,17 @@ export function createWorkerSqliteEngine(
   options: SqliteEngineOptions,
   connectTimeoutMs: number,
 ): SqliteEngine {
-  const worker = new Worker(resolveWorkerUrl(), {
+  const worker = core.worker.start<
+    { id: number, op: string, sql?: string, params?: unknown[], statements?: SqliteStatement[] },
+    WorkerResponse | { type: string, error?: { message: string } }
+  >(resolveWorkerUrl(), {
     workerData: { database: options.database, readonly: options.readonly, walMode: options.walMode },
   })
 
   let seq = 0
   let open = false
   let exited = false
+  let failHandshake: ((error: Error) => void) | undefined
   let closing: Promise<void> | null = null
   const pending = new Map<number, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
 
@@ -252,7 +256,7 @@ export function createWorkerSqliteEngine(
     pending.clear()
   }
 
-  worker.on('message', (msg: WorkerResponse | { type: string }) => {
+  const unsubscribe = worker.onMessage((msg) => {
     // 初始化握手消息由 init Promise 处理，这里只处理带 id 的请求响应。
     if (!('id' in msg))
       return
@@ -264,17 +268,12 @@ export function createWorkerSqliteEngine(
       entry.resolve(msg.result)
     else entry.reject(new Error(msg.error?.message ?? 'sqlite worker error'))
   })
-  worker.on('error', (error) => {
-    open = false
-    rejectAll(error instanceof Error
-      ? error
-      : new Error(String(error)))
-  })
-  worker.on('exit', (code) => {
+  void worker.exited.then(({ code, error }) => {
+    unsubscribe()
     exited = true
     open = false
-    if (pending.size > 0)
-      rejectAll(new Error(`sqlite worker exited unexpectedly with code ${code}`))
+    failHandshake?.(error ?? new Error(`sqlite worker exited before ready with code ${code}`))
+    rejectAll(error ?? new Error(`sqlite worker exited unexpectedly with code ${code}`))
   })
 
   /** 等待握手时同步处理 error/exit，并在所有完成路径释放定时器和临时监听器。 */
@@ -284,11 +283,11 @@ export function createWorkerSqliteEngine(
         finish(new Error(`sqlite worker init timed out after ${connectTimeoutMs}ms`))
       }, connectTimeoutMs)
 
+      let unsubscribeHandshake: (() => void) | undefined
       function finish(error?: Error): void {
         clearTimeout(timer)
-        worker.off('message', onHandshake)
-        worker.off('error', onError)
-        worker.off('exit', onExit)
+        unsubscribeHandshake?.()
+        failHandshake = undefined
         if (error) {
           reject(error)
         }
@@ -297,24 +296,17 @@ export function createWorkerSqliteEngine(
           resolve()
         }
       }
-      function onError(error: Error): void {
-        finish(error)
-      }
-      function onExit(code: number): void {
-        finish(new Error(`sqlite worker exited before ready with code ${code}`))
-      }
-      function onHandshake(msg: { type?: string }): void {
-        if (msg?.type === 'ready') {
+      unsubscribeHandshake = worker.onMessage((msg) => {
+        if (!('type' in msg))
+          return
+        if (msg.type === 'ready') {
           finish()
         }
-        else if (msg?.type === 'init-error') {
-          finish(new Error((msg as { error?: { message: string } }).error?.message ?? 'sqlite worker init failed'))
+        else if (msg.type === 'init-error') {
+          finish(new Error(msg.error?.message ?? 'sqlite worker init failed'))
         }
-      }
-
-      worker.on('message', onHandshake)
-      worker.once('error', onError)
-      worker.once('exit', onExit)
+      })
+      failHandshake = finish
       if (exited)
         finish(new Error('sqlite worker exited before initialization'))
     })
@@ -327,7 +319,13 @@ export function createWorkerSqliteEngine(
     const id = ++seq
     return new Promise<unknown>((resolve, reject) => {
       pending.set(id, { resolve, reject })
-      worker.postMessage({ id, op, ...payload })
+      try {
+        worker.postMessage({ id, op, ...payload })
+      }
+      catch (error) {
+        pending.delete(id)
+        reject(error)
+      }
     })
   }
 

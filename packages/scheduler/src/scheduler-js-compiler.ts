@@ -11,8 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { JsTaskConfig, JsTaskHandler } from './scheduler-types.js'
 import { createHash } from 'node:crypto'
 import { Script } from 'node:vm'
-import { Worker } from 'node:worker_threads'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { schedulerM } from './scheduler-i18n.js'
 import { HaiSchedulerError } from './scheduler-types.js'
@@ -75,12 +74,16 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
       signal?.throwIfAborted()
       return await new Promise<unknown>((resolve, reject) => {
         const timeout = config.timeout ?? 30000
-        const worker = new Worker(new URL('./scheduler-js-worker.js', import.meta.url), {
-          workerData: { code: config.code, context },
-          execArgv: [],
-        })
+        const worker = core.worker.start<never, { success: boolean, data?: unknown, message?: string }>(
+          new URL('./scheduler-js-worker.js', import.meta.url),
+          {
+            workerData: { code: config.code, context },
+            execArgv: [],
+          },
+        )
         let settled = false
         let timer: ReturnType<typeof setTimeout> | undefined
+        let unsubscribe: (() => void) | undefined
         const aborted = () => finish(new Error(schedulerM('scheduler_closing')))
         function finish(error?: Error, result?: unknown): void {
           if (settled)
@@ -88,6 +91,7 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
           settled = true
           clearTimeout(timer)
           signal?.removeEventListener('abort', aborted)
+          unsubscribe?.()
           // 等待线程停止后才结束本次尝试，禁止超时任务与后续重试并行。
           void worker.terminate().then(() => error
             ? reject(error)
@@ -97,11 +101,8 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
           params: { timeout },
         }))), timeout)
         signal?.addEventListener('abort', aborted, { once: true })
-        worker.once('error', error => finish(error instanceof Error
-          ? error
-          : new Error(String(error))))
-        worker.once('exit', code => finish(new Error(`JS worker exited before returning a result (${code})`)))
-        worker.once('message', (message: { success: boolean, data?: unknown, message?: string }) => {
+        void worker.exited.then(({ code, error }) => finish(error ?? new Error(`JS worker exited before returning a result (${code})`)))
+        unsubscribe = worker.onMessage((message) => {
           if (message.success)
             finish(undefined, message.data)
           else
