@@ -22,6 +22,8 @@ See the [configuration reference](../../docs/usage/configuration/iam.en.md) for 
 
 [Browse the API list](../../docs/usage/function/iam.en.md#api-reference) for entry points, inputs, results and examples.
 
+For an LDAP upgrade, follow [Migrate existing LDAP identity bindings](../../docs/usage/function/iam.en.md#ldap-identity-migration).
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/iam.en.md) for accounts, roles, permissions, sessions and one-time credentials.

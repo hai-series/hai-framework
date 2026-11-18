@@ -296,6 +296,8 @@ captcha:
 #   bindDn: cn=service,dc=example,dc=com
 #   bindPassword: \${HAI_IAM_LDAP_BINDPASSWORD}
 #   searchBase: ou=users,dc=example,dc=com
+#   directoryId: company-directory # 启用 LDAP 时必填，同一目录各节点取值一致
+#   identityAttribute: entryUUID # Active Directory 使用 objectGUID
 #   searchFilter: '(uid={{username}})'
 #   usernameAttribute: uid
 #   emailAttribute: mail

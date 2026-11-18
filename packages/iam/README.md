@@ -25,6 +25,7 @@
 <a id="可选-ldap-与通知接入"></a>
 
 [可选 LDAP 与通知接入](../../docs/usage/function/iam.md#可选-ldap-与通知接入)
+目录登录升级见[迁移现有身份绑定](../../docs/usage/function/iam.md#ldap-identity-migration)。
 
 <a id="使用可选-reach-自动发送"></a>
 

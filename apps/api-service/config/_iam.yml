@@ -15,15 +15,18 @@ login:
   # 取值：true | false
   ldap: ${HAI_IAM_LOGIN_LDAP:false}
 
-  # LDAP 可选：安装 ldapts 后开启 login.ldap，并声明连接配置或注入工厂。
-  # ldap: # 说明：是否启用 LDAP 登录；需要显式开启并提供 ldap 配置。；取值：true | false
-  #   url: ldaps://ldap.example.com:636
-  #   bindDn: cn=service,dc=example,dc=com
-  #   bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
-  #   searchBase: ou=users,dc=example,dc=com
   # 说明：是否启用 API Key 登录
   # 取值：true | false
   apikey: ${HAI_IAM_LOGIN_APIKEY:false}
+
+# LDAP 可选：安装 ldapts 后开启 login.ldap，或注入自定义客户端。
+# ldap: # 说明：LDAP 配置；取值：配置块（填写下方缩进字段）
+#   url: ldaps://ldap.example.com:636 # 说明：LDAP 服务器 URL；取值：字符串；格式 uri
+#   bindDn: cn=service,dc=example,dc=com # 说明：绑定 DN；取值：字符串
+#   bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}' # 说明：绑定密码；取值：字符串
+#   searchBase: ou=users,dc=example,dc=com # 说明：搜索基础 DN；取值：字符串
+#   directoryId: company-directory # 说明：启用 LDAP 时必填。对同一目录的所有节点应使用同一个稳定的命名空间。；取值：字符串；正则 ^[a-z0-9][a-z0-9._-]{0,95}$
+#   identityAttribute: entryUUID # 说明：由目录分配且在重命名时保持不变的条目标识。；取值：字符串；取值：entryUUID | objectGUID
 
 # 说明：注册配置
 # 取值：配置块（填写下方缩进字段）

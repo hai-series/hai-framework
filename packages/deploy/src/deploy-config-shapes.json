@@ -984,6 +984,18 @@
           "searchBase": {
             "type": "string"
           },
+          "directoryId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,95}$"
+          },
+          "identityAttribute": {
+            "default": "entryUUID",
+            "type": "string",
+            "enum": [
+              "entryUUID",
+              "objectGUID"
+            ]
+          },
           "searchFilter": {
             "default": "(uid={{username}})",
             "type": "string"

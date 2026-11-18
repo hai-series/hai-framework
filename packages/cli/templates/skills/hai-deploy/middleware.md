@@ -105,7 +105,7 @@ HTTP API 的全部自定义请求头整体写入私有环境文件，不能按�
 | S3                 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle                                                               |
 | Qdrant / Chroma    | url；Qdrant 可选 apiKey；Chroma apiKey 用于 Bearer 自托管网关，URL 仅支持 HTTP(S) 根端点，不提供 Cloud 契约                          |
 | pgvector           | url 或 host、port、database、user、password                                                                                          |
-| LDAP               | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
+| LDAP               | url、bindDn、bindPassword、searchBase、directoryId、identityAttribute、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
 | SMTP               | host、port、secure、user、pass、from                                                                                                 |
 | HTTP API           | url、method（POST / PUT）、headers（JSON）、timeout                                                                                  |
 | 阿里云 SMS         | accessKeyId、accessKeySecret、signName、endpoint                                                                                     |

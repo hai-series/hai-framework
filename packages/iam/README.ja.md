@@ -22,6 +22,8 @@
 
 [API 一覧](../../docs/usage/function/iam.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/function/iam.ja.md#ldap-identity-migration)を参照してください。
+
 ## データ構造
 
 アカウント、ロール、権限、セッション、ワンタイム認証情報については[データ構造](../../docs/usage/data/iam.ja.md)を参照してください。

@@ -78,6 +78,7 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
     bindDn: LDAP_ADMIN_DN,
     bindPassword: LDAP_ADMIN_PASSWORD,
     searchBase: `ou=users,${LDAP_BASE_DN}`,
+    directoryId: 'test-directory',
     searchFilter: '(uid={{username}})',
     usernameAttribute: 'uid',
     emailAttribute: 'mail',

@@ -132,6 +132,27 @@ const publicSettings = value(await iam.getPublicConfig()) // merged public IAM s
 | `iam.auth.reauthenticate` | 再認証して操作用チケットを発行 | accessToken, password, operation | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
 | `iam.auth.checkSensitiveOperation` | 操作の証明を検証・消費 | accessToken, operation, ticket | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
 
+<a id="ldap-identity-migration"></a>
+
+#### 既存の LDAP ID 関連付けを移行する
+
+LDAP ログインを停止し、全ノードを更新します。ディレクトリ管理者が不変のエントリー ID と IAM ユーザー ID の対応を独立に確認します。この例では確認済みの OpenLDAP エントリーを既存の `user-42` に関連付け、ロールと業務データを維持します。ユーザー名、DN、従来のメタデータは確認時の手掛かりに使います。
+
+```json
+{
+  "directoryId": "company-directory",
+  "identityAttribute": "entryUUID",
+  "bindings": [{ "entryId": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76", "userId": "user-42" }]
+}
+```
+
+```sh
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json --apply
+```
+
+`private-db.json` は対象データベースの非公開 RelDB JSON 設定です。最初のコマンドでは新規と既存の件数をプレビューします。確認後に `--apply` で一括トランザクションを実行します。同じ関連付けは再実行でき、競合時は一括で中断します。入力ファイルは非公開で管理し、確認済みアカウントで試してから再開します。既存の関連付けを必須にする場合は `ldapSyncUser: false` を使用します。
+
 #### 利用例：ログイン・登録・再認証
 
 登録からログイン、チャレンジ、OTP/LDAP、セッション検証、再認証の順に説明します。フォーム値を入力し、成功結果からのみ主体や証明を使います。無効な方式は失敗します。

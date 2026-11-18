@@ -1,5 +1,6 @@
 /** LDAP 默认客户端，应用只需配置连接信息；每次认证独立连接并释放。 */
 import type { LdapClientFactory } from './iam-authn-ldap-strategy.js'
+import { Buffer } from 'node:buffer'
 import { err, ok } from '@h-ai/core'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
@@ -42,17 +43,31 @@ export async function loadLdapClientFactory(): Promise<LdapClientFactory> {
         },
         async search(base, filter, attributes) {
           try {
-            const result = await client.search(base, { scope: 'sub', filter, attributes })
+            const result = await client.search(base, {
+              scope: 'sub',
+              filter,
+              attributes,
+              explicitBufferAttributes: config.identityAttribute === 'objectGUID'
+                ? ['objectGUID']
+                : [],
+            })
             return ok(result.searchEntries.map((entry) => {
               const values: Record<string, string | string[]> = {}
+              const returned = new Map(Object.entries(entry).map(([name, value]) => [
+                name.toLowerCase(),
+                value,
+              ]))
               for (const attribute of attributes) {
-                const value = entry[attribute]
+                const value = returned.get(attribute.toLowerCase())
+                const decode = (item: string | Buffer) => Buffer.isBuffer(item) && attribute === 'objectGUID'
+                  ? item.toString('hex')
+                  : String(item)
                 if (typeof value === 'string')
                   values[attribute] = value
                 else if (Array.isArray(value))
-                  values[attribute] = value.map(item => String(item))
+                  values[attribute] = value.map(decode)
                 else if (value !== undefined)
-                  values[attribute] = String(value)
+                  values[attribute] = decode(value)
               }
               return { dn: entry.dn, attributes: values }
             }))

@@ -180,6 +180,10 @@ export const LdapConfigSchema = z.object({
   bindPassword: z.string(),
   /** 搜索基础 DN */
   searchBase: z.string(),
+  /** 启用 LDAP 时必填。对同一目录的所有节点应使用同一个稳定的命名空间。 */
+  directoryId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,95}$/u).optional(),
+  /** 由目录分配且在重命名时保持不变的条目标识。 */
+  identityAttribute: z.enum(['entryUUID', 'objectGUID']).default('entryUUID'),
   /** 搜索过滤器（默认使用 uid） */
   searchFilter: z.string().default('(uid={{username}})'),
   /** 用户名属性 */

@@ -30,6 +30,8 @@ session:
 | `initialCredentials.enabled`, `loginAccess.enabled` | `false`, `false` | Opt into initial credential flow or address and schedule restrictions. |
 | `accounts.dormantAfterDays`, `scanIntervalSeconds` | `0`, `3600` | Dormancy threshold and periodic scan interval. |
 | `ldap`, `session`, `register`, `captcha` | See backend | Configure directory providers, session lifetime and scope, public registration, and interactive proof separately. |
+| `ldap.directoryId` | Required when LDAP is enabled | Stable identifier shared by deployments using this directory. Use 1–96 lowercase letters, digits, dots, underscores or hyphens, starting with a letter or digit. |
+| `ldap.identityAttribute` | `entryUUID` | Immutable directory entry identifier. Set `objectGUID` for Active Directory. |
 | `ui.variant` | `card` | Select the public login layout and optional branding fields. |
 
 <a id="session"></a>

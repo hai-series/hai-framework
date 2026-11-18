@@ -121,6 +121,18 @@ Allow a script to call limited APIs for a user, storing a digest for verificatio
 
 apikey-42 belongs to user-42 and allows orders.read only. Redacted digest/prefix cannot recover the original key, returned only at issue time.
 
+### Bind a directory entry to a local account
+
+`hai_iam_ldap_identities` is the source of truth for LDAP sign-in and offline imports. `directory_id` and `entry_id` uniquely identify a directory entry. `user_id` references a local user and is unique within the directory. Deleting the user removes the binding. The example keeps the entry linked to `user-42` even after a rename.
+
+```json
+{
+  "directory_id": "company-directory",
+  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
+  "user_id": "user-42"
+}
+```
+
 ### The user’s active login sessions
 
 Structure: `hai:iam:sessions:{<scope-digest>}`.

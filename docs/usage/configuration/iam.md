@@ -116,6 +116,8 @@ session:
 | `ldap.bindDn`               | 必填                   | 绑定 DN                            |
 | `ldap.bindPassword`         | 必填                   | 绑定密码                           |
 | `ldap.searchBase`           | 必填                   | 搜索基础 DN                        |
+| `ldap.directoryId`          | 启用 LDAP 时必填        | 同一目录在所有节点保持一致。取值 1–96 个小写字母、数字、`.`、`_` 或 `-`，以字母或数字开头。 |
+| `ldap.identityAttribute`    | `entryUUID`            | LDAP 条目的不可变标识。Active Directory 使用 `objectGUID`。 |
 | `ldap.searchFilter`         | `"(uid={{username}})"` | 搜索过滤器                         |
 | `ldap.usernameAttribute`    | `"uid"`                | 用户名属性                         |
 | `ldap.emailAttribute`       | `"mail"`               | 邮箱属性                           |

@@ -287,6 +287,7 @@ function tests() {
         bindDn: 'cn=admin',
         bindPassword: 'test-only',
         searchBase: 'dc=test',
+        directoryId: 'security-test',
       },
     })
     expect((await iam.user.register({ username: 'blocked', password: TEST_PASSWORD })).success).toBe(false)

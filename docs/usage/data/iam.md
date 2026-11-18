@@ -121,6 +121,18 @@ role-reader 包含 permission-read，与前两条关联后，user-42 才获得 o
 
 apikey-42 属于 user-42，只允许 orders.read。key_hash/key_prefix 已脱敏；原始密钥仅签发时返回，不能从这行还原。
 
+### 记录目录条目与本地用户的归属
+
+`hai_iam_ldap_identities` 保存 LDAP 登录和离线导入共用的身份绑定。`directory_id` 与 `entry_id` 组成目录侧唯一标识，`user_id` 引用本地用户，同一目录内也唯一。删除本地用户会级联清理绑定。示例表示公司目录条目已经核验并绑定到 `user-42`，目录条目重命名时仍是同一用户。
+
+```json
+{
+  "directory_id": "company-directory",
+  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
+  "user_id": "user-42"
+}
+```
+
 ### 这个用户仍有效的登录会话
 
 对应结构：`hai:iam:sessions:{<scope-digest>}`。

@@ -4480,6 +4480,14 @@
     "constraint": "整数；>= 1000；<= 9007199254740991"
   },
   {
+    "name": "HAI_IAM_LDAP_DIRECTORYID",
+    "module": "iam",
+    "path": "iam.ldap.directoryId",
+    "description": "启用 LDAP 时必填。对同一目录的所有节点应使用同一个稳定的命名空间。",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][a-z0-9._-]{0,95}$"
+  },
+  {
     "name": "HAI_IAM_LDAP_DISPLAYNAMEATTRIBUTE",
     "module": "iam",
     "path": "iam.ldap.displayNameAttribute",
@@ -4494,6 +4502,14 @@
     "description": "邮箱属性",
     "value": "mail",
     "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_IDENTITYATTRIBUTE",
+    "module": "iam",
+    "path": "iam.ldap.identityAttribute",
+    "description": "由目录分配且在重命名时保持不变的条目标识。",
+    "value": "entryUUID",
+    "constraint": "字符串；取值：entryUUID | objectGUID"
   },
   {
     "name": "HAI_IAM_LDAP_SEARCHBASE",

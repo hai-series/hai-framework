@@ -121,6 +121,18 @@ user-42 に role-reader が割り当てられ、同じ組合せは一度だけ�
 
 user-42 の注文参照専用です。秘匿した値から元のキーは復元できません。
 
+### ディレクトリエントリーをローカル利用者に関連付ける
+
+`hai_iam_ldap_identities` は LDAP ログインとオフライン取り込みが参照する関連付けです。`directory_id` と `entry_id` の組は一意で、`user_id` はディレクトリ内で一意のローカル利用者を参照します。利用者を削除すると関連付けも削除されます。例のエントリーは名前を変更しても同じ `user-42` に対応します。
+
+```json
+{
+  "directory_id": "company-directory",
+  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
+  "user_id": "user-42"
+}
+```
+
 ### 利用者の有効なログイン状態
 
 対応する構造：`hai:iam:sessions:{<scope-digest>}`。

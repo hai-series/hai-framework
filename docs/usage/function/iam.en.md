@@ -128,6 +128,27 @@ Follow enabled server authentication flows, including challenges, password expir
 | `iam.auth.reauthenticate` | Recheck a password and issue an operation ticket | accessToken, password, operation | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
 | `iam.auth.checkSensitiveOperation` | Check and consume operation proof | accessToken, operation, ticket | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
 
+<a id="ldap-identity-migration"></a>
+
+#### Migrate existing LDAP identity bindings
+
+Pause LDAP sign-in and upgrade all nodes. Have a directory administrator independently verify each immutable directory entry ID against its IAM user ID. The example binds a verified OpenLDAP entry to the existing `user-42` account and preserves its roles and data. The username, DN and legacy metadata are only inputs to that review.
+
+```json
+{
+  "directoryId": "company-directory",
+  "identityAttribute": "entryUUID",
+  "bindings": [{ "entryId": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76", "userId": "user-42" }]
+}
+```
+
+```sh
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json --apply
+```
+
+`private-db.json` contains the private RelDB JSON configuration for the target database. The first command previews the number of new and existing bindings. Run `--apply` after reviewing the counts. The import commits in one transaction, supports reruns of the same bindings and rejects conflicts. Keep both input files private. Reopen LDAP sign-in after checking the verified accounts. Use `ldapSyncUser: false` to require an existing binding.
+
 #### Scenario: Sign in, register and reauthenticate
 
 The workflows cover registration, login, challenges, OTP/LDAP, session verification and reauthentication. Form values are inputs; use identities and proof only from successful results. Disabled methods fail.

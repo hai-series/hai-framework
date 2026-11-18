@@ -36,6 +36,7 @@ import { createLoginAccessCheck } from './iam-authn-access.js'
 import { createIamCaptcha, verifyIamCaptcha } from './iam-authn-captcha.js'
 import { rejectMissingPasswordCredentials } from './iam-authn-utils.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
+import { prepareLdapIdentities } from './ldap/iam-authn-ldap-repository.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
 import { createOtpStrategy } from './otp/iam-authn-otp-strategy.js'
@@ -120,19 +121,26 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     const loginConfig = LoginConfigSchema.parse(config.login ?? {})
 
     /**
-     * 用户自动注册后分配默认角色的回调
-     *
-     * 供 OTP/LDAP 策略在自动创建用户后调用。
+     * 自动注册时解析配置指定的默认角色。
      */
-    async function onUserAutoRegistered(userId: string): Promise<HaiResult<void>> {
+    async function getRegistrationRole(): Promise<HaiResult<string | null>> {
       if (!config.rbac?.enabled || !config.rbac.defaultRole)
-        return ok(undefined)
+        return ok(null)
       const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
       if (!roleResult.success)
         return roleResult
       if (!roleResult.data)
         return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      return authzFunctions.assignRole(userId, roleResult.data.id)
+      return ok(roleResult.data.id)
+    }
+
+    async function onUserAutoRegistered(userId: string): Promise<HaiResult<void>> {
+      const role = await getRegistrationRole()
+      if (!role.success)
+        return role
+      return role.data
+        ? authzFunctions.assignRole(userId, role.data)
+        : ok(undefined)
     }
 
     // 密码策略
@@ -170,11 +178,17 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
     // LDAP 策略
     let ldapStrategy: AuthStrategy | undefined
-    if (loginConfig.ldap && config.ldap) {
+    if (loginConfig.ldap) {
+      if (!config.ldap?.directoryId)
+        return err(HaiIamError.CONFIG_ERROR, iamM('iam_ldapDirectoryRequired'))
       // 仅在启用目录认证且未注入工厂时加载可选 SDK；缺少 SDK 在 init 时返回配置错误。
       const clientFactory = ldapClientFactory ?? await loadLdapClientFactory()
+      const storage = await prepareLdapIdentities()
+      if (!storage.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), storage.error)
       ldapStrategy = createLdapStrategy({
         ldapConfig: config.ldap,
+        directoryId: config.ldap.directoryId,
         userRepository,
         ldapClientFactory: clientFactory,
         syncUser: ldapSyncUser ?? true,
@@ -183,7 +197,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         lockoutEnabled: securityConfig.lockoutEnabled,
         failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
-        onUserAutoRegistered,
+        getRegistrationRole,
+        assignRegistrationRole: authzFunctions.assignRole,
       })
     }
 

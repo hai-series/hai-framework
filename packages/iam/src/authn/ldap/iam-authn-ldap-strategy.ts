@@ -6,16 +6,19 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { LdapConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser } from '../../user/iam-user-types.js'
 import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
+import { getLdapUserId, insertLdapIdentity, ldapEntryId } from './iam-authn-ldap-repository.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
 
@@ -112,7 +115,7 @@ export type LdapClientFactory = (config: LdapConfig) => Promise<HaiResult<LdapCl
  * @example 模块内部上下文
  * ```ts
  * function configure(ldapConfig: LdapConfig, userRepository: UserRepository, ldapClientFactory: LdapClientFactory) {
- *   const config: LdapStrategyConfig = { ldapConfig, userRepository, ldapClientFactory, syncUser: true }
+ *   const config: LdapStrategyConfig = { ldapConfig, directoryId: 'staff', userRepository, ldapClientFactory, syncUser: true }
  *   return createLdapStrategy(config)
  * }
  * ```
@@ -120,6 +123,8 @@ export type LdapClientFactory = (config: LdapConfig) => Promise<HaiResult<LdapCl
 export interface LdapStrategyConfig {
   /** LDAP 配置 */
   ldapConfig: LdapConfig
+  /** 已在启用 LDAP 时校验的目录命名空间。 */
+  directoryId: string
   /** 用户存储 */
   userRepository: UserRepository
   /** LDAP 客户端工厂 */
@@ -133,13 +138,11 @@ export interface LdapStrategyConfig {
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
   /**
-   * 用户自动注册后的回调
-   *
-   * LDAP 同步创建本地新用户后调用，用于分配默认角色等后处理操作。
-   *
-   * @param userId - 新创建的用户 ID
+   * 自动注册前读取角色 ID，避免在 SQLite 写事务内占用另一个连接。
    */
-  onUserAutoRegistered?: (userId: string) => Promise<HaiResult<void>>
+  getRegistrationRole?: () => Promise<HaiResult<string | null>>
+  /** 为新用户分配默认角色，和用户及绑定同事务提交。 */
+  assignRegistrationRole?: (userId: string, roleId: string, tx: DmlWithTxOperations) => Promise<HaiResult<void>>
   /** 新同步账号的初始生命周期；休眠账号需要管理员激活。 */
   defaultAccountStatus?: 'active' | 'dormant'
 }
@@ -163,6 +166,7 @@ export interface LdapStrategyConfig {
 export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   const {
     ldapConfig,
+    directoryId,
     userRepository,
     ldapClientFactory,
     syncUser = true,
@@ -191,6 +195,68 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       return value[0]
     }
     return value
+  }
+
+  function rejected() {
+    return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+  }
+
+  async function boundUser(entryId: string): Promise<HaiResult<StoredUser | null>> {
+    const linked = await getLdapUserId(directoryId, entryId)
+    if (!linked.success)
+      return linked
+    return linked.data
+      ? userRepository.findById(linked.data)
+      : ok(null)
+  }
+
+  async function provision(entryId: string, username: string, email: string | undefined, displayName: string | undefined, dn: string): Promise<HaiResult<StoredUser>> {
+    const role = await config.getRegistrationRole?.()
+    if (role && !role.success)
+      return role
+    const result = await reldb.tx.begin()
+    if (!result.success)
+      return result
+    const tx = result.data
+    let committed = false
+    try {
+      const created = await userRepository.create({
+        username,
+        email,
+        displayName,
+        accountStatus: config.defaultAccountStatus ?? 'active',
+        emailVerified: !!email,
+        metadata: { ldapDn: dn, authSource: 'ldap' },
+      }, tx)
+      if (!created.success)
+        return created
+      const found = await userRepository.findByUsername(username, tx)
+      if (!found.success)
+        return found
+      if (!found.data)
+        return rejected()
+      const user = found.data
+      const linked = await insertLdapIdentity(directoryId, entryId, user.id, tx)
+      if (!linked.success)
+        return linked
+      if (role?.data && config.assignRegistrationRole) {
+        const assigned = await config.assignRegistrationRole(user.id, role.data, tx)
+        if (!assigned.success)
+          return assigned
+      }
+      const finished = await tx.commit()
+      committed = finished.success
+      return finished.success
+        ? ok(user)
+        : finished
+    }
+    finally {
+      if (!committed) {
+        const rolledBack = await tx.rollback()
+        if (!rolledBack.success)
+          logger.error('LDAP enrollment rollback failed', { errorCode: rolledBack.error.code, traceId: rolledBack.error.traceId })
+      }
+    }
   }
 
   return {
@@ -236,7 +302,14 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         const searchResult = await client.search(
           ldapConfig.searchBase,
           searchFilter,
-          [ldapConfig.usernameAttribute, ldapConfig.emailAttribute, ldapConfig.displayNameAttribute],
+          [
+            ...new Set([
+              ldapConfig.usernameAttribute,
+              ldapConfig.emailAttribute,
+              ldapConfig.displayNameAttribute,
+              ldapConfig.identityAttribute,
+            ]),
+          ],
         )
 
         if (!searchResult.success) {
@@ -248,27 +321,45 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         }
 
         const entries = searchResult.data
-        if (entries.length === 0) {
-          return err(
-            HaiIamError.USER_NOT_FOUND,
-            iamM('iam_userNotExist'),
-          )
-        }
+        if (entries.length !== 1)
+          return rejected()
 
         const entry = entries[0]
+        const identity = entry.attributes[ldapConfig.identityAttribute]
+        const entryId = ldapEntryId(ldapConfig.identityAttribute, Array.isArray(identity)
+          ? identity.length === 1
+            ? identity[0]
+            : undefined
+          : identity)
+        if (!entryId)
+          return rejected()
 
         // 提取用户信息
         const ldapUsername = getAttributeValue(entry, ldapConfig.usernameAttribute) || username
         const ldapEmail = getAttributeValue(entry, ldapConfig.emailAttribute)
         const ldapDisplayName = getAttributeValue(entry, ldapConfig.displayNameAttribute)
 
-        // 查找本地用户（用于状态判断与失败计数）
-        const localUserResult = await userRepository.findByUsername(ldapUsername)
-        if (!localUserResult.success) {
-          return localUserResult as HaiResult<AuthenticatedUser>
+        const localUserResult = await boundUser(entryId)
+        if (!localUserResult.success)
+          return localUserResult
+        let storedUser = localUserResult.data
+        if (!storedUser) {
+          if (!syncUser)
+            return rejected()
+          // 用户名只用于检测创建冲突，不能取得既存用户或影响其失败计数。
+          const occupied = await userRepository.existsByUsername(ldapUsername)
+          if (!occupied.success)
+            return occupied
+          if (occupied.data) {
+            // 并发首登可能刚完成提交，只按同一稳定标识再次查找。
+            const linked = await boundUser(entryId)
+            if (!linked.success)
+              return linked
+            if (!linked.data)
+              return rejected()
+            storedUser = linked.data
+          }
         }
-
-        let storedUser = localUserResult.data as StoredUser | null
 
         if (storedUser) {
           if (!isUserActive(storedUser)) {
@@ -294,57 +385,27 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             if (!failureResult.success)
               return failureResult
           }
-          logger.warn('LDAP authentication failed', { username })
-          return err(
-            HaiIamError.INVALID_CREDENTIALS,
-            iamM('iam_passwordWrong'),
-          )
+          logger.warn('LDAP user bind rejected', { userId: storedUser?.id })
+          return rejected()
         }
 
-        if (!storedUser && syncUser) {
-          // 创建本地用户
-          const createResult = await userRepository.create({
-            username: ldapUsername,
-            email: ldapEmail,
-            displayName: ldapDisplayName,
-            accountStatus: config.defaultAccountStatus ?? 'active',
-            emailVerified: !!ldapEmail,
-            metadata: {
-              ldapDn: entry.dn,
-              authSource: 'ldap',
-            },
-          })
-          if (!createResult.success) {
-            return err(
-              HaiIamError.REPOSITORY_ERROR,
-              iamM('iam_createUserFailed', {
-                params: { message: createResult.error.message },
-              }),
-              createResult.error,
-            )
+        if (!storedUser) {
+          const created = await provision(entryId, ldapUsername, ldapEmail, ldapDisplayName, entry.dn)
+          if (created.success) {
+            storedUser = created.data
           }
-
-          const createdResult = await userRepository.findByUsername(ldapUsername)
-          if (!createdResult.success) {
-            return createdResult as HaiResult<AuthenticatedUser>
+          else if (created.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
+            // 并发创建只接受另一事务已经提交的同一目录绑定。
+            const linked = await boundUser(entryId)
+            if (!linked.success)
+              return linked
+            storedUser = linked.data
           }
-          storedUser = createdResult.data
-
-          // LDAP 新用户同步后回调（分配默认角色等）
-          if (storedUser && config.onUserAutoRegistered) {
-            try {
-              const assigned = await config.onUserAutoRegistered(storedUser.id)
-              if (!assigned.success) {
-                await userRepository.deleteById(storedUser.id)
-                return assigned
-              }
-            }
-            catch (callbackError) {
-              logger.warn('onUserAutoRegistered callback failed', { userId: storedUser?.id, error: callbackError })
-            }
+          else {
+            return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), created.error)
           }
         }
-        else if (storedUser && syncUser) {
+        else if (syncUser) {
           // 更新本地用户信息
           const updateResult = await userRepository.updateById(storedUser.id, {
             email: ldapEmail || storedUser.email,
@@ -356,7 +417,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             },
           })
           if (updateResult.success) {
-            const refreshed = await userRepository.findByUsername(ldapUsername)
+            const refreshed = await userRepository.findById(storedUser.id)
             if (refreshed.success) {
               storedUser = refreshed.data ?? storedUser
             }
@@ -364,7 +425,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         }
 
         if (!storedUser)
-          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+          return rejected()
 
         const resetResult = await resetLoginFailures(userRepository, storedUser, failurePolicy)
         if (!resetResult.success)

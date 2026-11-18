@@ -30,6 +30,8 @@ session:
 | `initialCredentials.enabled`, `loginAccess.enabled` | `false`, `false` | 初期認証情報の手順またはアドレス・時間帯による制限を有効化。 |
 | `accounts.dormantAfterDays`, `scanIntervalSeconds` | `0`, `3600` | 休眠の判定日数と確認間隔。 |
 | `ldap`, `session`, `register`, `captcha` | バックエンドによる | ディレクトリ・セッション期限と範囲、公開登録、対話チャレンジを個別に設定。 |
+| `ldap.directoryId` | LDAP 有効時は必須 | 同じディレクトリを使う全ノードで共通の ID。英小文字、数字、ピリオド、アンダースコア、ハイフンを 1–96 文字使い、英小文字か数字で始めます。 |
+| `ldap.identityAttribute` | `entryUUID` | 不変のエントリー識別子。Active Directory では `objectGUID` を使用します。 |
 | `ui.variant` | `card` | 公開ログインのレイアウトと任意のブランド項目。 |
 
 <a id="session"></a>

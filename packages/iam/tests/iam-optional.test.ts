@@ -18,6 +18,7 @@ const ldap = {
   bindDn: 'cn=admin',
   bindPassword: 'fixture-only',
   searchBase: 'dc=test',
+  directoryId: 'optional-test',
 }
 
 defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
@@ -49,7 +50,12 @@ defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
       search: async () => ok([
         {
           dn: 'uid=directory,dc=test',
-          attributes: { uid: 'directory', mail: 'directory@example.com', cn: 'Directory user' },
+          attributes: {
+            uid: 'directory',
+            mail: 'directory@example.com',
+            cn: 'Directory user',
+            entryUUID: 'eb69f757-d9f0-4308-bc71-7c9b85ec6137',
+          },
         },
       ]),
       unbind: async () => ok(undefined),

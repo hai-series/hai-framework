@@ -15,6 +15,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import type { LdapContainerLease } from './helpers/ldap-container.js'
+import { Client } from 'ldapts'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
@@ -133,6 +134,39 @@ describe('iam.ldap', () => {
 
         // 用户 ID 应相同
         expect(login2.data.user.id).toBe(login1.data.user.id)
+      })
+
+      it('openLDAP 条目重命名后仍识别原来的本地用户', async () => {
+        const original = await getIam().auth.loginWithLdap({
+          username: ldapLease.testUser.username,
+          password: ldapLease.testUser.password,
+        })
+        expect(original.success).toBe(true)
+        if (!original.success)
+          return
+        const username = 'ldap-renamed'
+        const originalDn = ldapLease.testUser.dn
+        const renamedDn = originalDn.replace(/^uid=[^,]+/u, `uid=${username}`)
+        const admin = new Client({ url: ldapLease.ldapConfig.url, connectTimeout: 5000, timeout: 5000 })
+        await admin.bind(ldapLease.adminDn, ldapLease.adminPassword)
+        try {
+          await admin.modifyDN(originalDn, `uid=${username}`)
+          try {
+            const moved = await getIam().auth.loginWithLdap({ username, password: ldapLease.testUser.password })
+            expect(moved).toMatchObject({
+              success: true,
+              data: {
+                user: { id: original.data.user.id },
+              },
+            })
+          }
+          finally {
+            await admin.modifyDN(renamedDn, `uid=${ldapLease.testUser.username}`)
+          }
+        }
+        finally {
+          await admin.unbind()
+        }
       })
 
       it('lDAP 登录后用户应出现在 listUsers 中', async () => {

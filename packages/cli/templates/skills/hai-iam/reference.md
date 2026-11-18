@@ -522,7 +522,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
 
-LDAP 的 ldapSyncUser: false 要求已有且处于激活状态的本地用户以绑定数据库 credentialVersion；没有本地记录返回 USER_NOT_FOUND，不再创建虚拟 DN 身份。
+启用 LDAP 时配置 `ldap.directoryId`。`ldap.identityAttribute` 默认 `entryUUID`，Active Directory 选择 `objectGUID`，定制客户端返回 LDAP 16 字节原序的 32 位十六进制字符串。登录依据已有的目录标识和不可变条目标识绑定。`ldapSyncUser: false` 只接受可登录的预绑定账号。升级时由管理员核验目录条目与本地 ID，执行随 `@h-ai/iam` 发布的 `dist/ldap-bindings.js --database <RelDB JSON> --manifest <绑定清单>`。预检通过后加 `--apply` 事务写入。
 
 Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、激活且未到期的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
 

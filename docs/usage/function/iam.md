@@ -237,6 +237,8 @@ ldap:
   bindDn: cn=service,dc=example,dc=com
   bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   searchBase: ou=users,dc=example,dc=com
+  directoryId: company-directory
+  identityAttribute: entryUUID
   searchFilter: '(uid={{username}})'
   usernameAttribute: uid
   emailAttribute: mail
@@ -244,7 +246,9 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有且处于激活状态的本地用户以绑定数据库里记录的凭据版本；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
+`ldaps://` 使用 TLS。`ldap://` 可通过 `useTls: true` 启用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"`、`usernameAttribute: sAMAccountName` 和 `identityAttribute: objectGUID`。服务账号应能读取单一的稳定条目标识。自定义 LDAP 客户端返回 `entryUUID` 的标准文本，或 `objectGUID` 的 16 字节按 LDAP 返回顺序编码成 32 位十六进制字符串。
+
+IAM 以目录标识和不可变条目标识确定本地用户。已绑定的条目重命名后仍使用原本地用户 ID。默认允许首次登录创建本地用户并分配默认角色，遇到已占用的本地用户名或不唯一的目录条目会拒绝。`ldapSyncUser: false` 仅接受已有且可登录的绑定用户。已有目录账号升级见[迁移身份绑定](#ldap-identity-migration)。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -266,6 +270,27 @@ export function loginWithDirectory(username: string, password: string) {
 应用启动时检查 `startDirectoryLogin()` 的 `success`。登录处理函数检查 `loginWithDirectory()` 返回的结果：成功时才能读取用户和令牌，目录不可用或凭据无效时按失败处理。服务退出时关闭 IAM，再关闭其依赖。
 
 <a id="使用可选-reach-自动发送"></a>
+
+<a id="ldap-identity-migration"></a>
+
+#### 迁移现有 LDAP 身份绑定
+
+在 LDAP 登录入口停止接收请求后升级所有服务节点。让目录管理员独立核验不可变条目标识与 IAM 用户 ID 的对应关系。下面的清单将一个经过核验的 OpenLDAP 条目绑定到已有的 `user-42`，该用户的 ID、角色和业务数据保持有效。用户名、DN 和旧 `metadata` 可作为核验线索。
+
+```json
+{
+  "directoryId": "company-directory",
+  "identityAttribute": "entryUUID",
+  "bindings": [{ "entryId": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76", "userId": "user-42" }]
+}
+```
+
+```sh
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json
+node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json --apply
+```
+
+`private-db.json` 是目标数据库的私有 RelDB JSON 配置，第一个命令只预检并报告新增和已存在的数量。核对后用 `--apply` 在同一事务中导入。重复导入相同绑定安全，冲突会停止整批。清单和数据库配置保留在受控环境。确认真实目录账号可用后再开放 LDAP 登录。`ldapSyncUser: false` 可用于只允许预绑定的部署。
 
 #### 场景：让 Reach 发送验证码与重置链接
 
