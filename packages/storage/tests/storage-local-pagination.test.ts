@@ -17,6 +17,41 @@ function keys(files: Array<{ key: string }>, commonPrefixes: string[]): string[]
 }
 
 defineStorageSuite('local-cursor', localStorageEnv, () => {
+  it('deletes all pages of a string prefix and leaves the container ready for new objects', async () => {
+    const config = storage.config
+    if (!config || config.type !== 'local')
+      throw new Error('Expected local fixture')
+    const folder = join(config.root, 'remove')
+    await mkdir(folder)
+    // 直接准备批量对象，避免测试时间主要花在逐对象上传。
+    for (let offset = 0; offset < 1001; offset += 50) {
+      await Promise.all(Array.from({
+        length: Math.min(50, 1001 - offset),
+      }, (_, index) =>
+        writeFile(join(folder, `match-${offset + index}.txt`), 'content')))
+    }
+    expect((await storage.file.put('remove/match/nested.txt', 'keep')).success).toBe(true)
+    expect((await storage.file.put('remove/stay.txt', 'keep')).success).toBe(true)
+    expect((await storage.dir.delete('remove/match-')).success).toBe(true)
+    expect(await storage.dir.list()).toMatchObject({
+      success: true,
+      data: {
+        files: [
+          { key: 'remove/match/nested.txt' },
+          { key: 'remove/stay.txt' },
+        ],
+      },
+    })
+    expect((await storage.dir.delete('remove/match/')).success).toBe(true)
+    expect(await storage.file.exists('remove/stay.txt')).toMatchObject({ success: true, data: true })
+    expect((await storage.dir.delete('')).success).toBe(true)
+    expect(await storage.dir.list()).toMatchObject({
+      success: true,
+      data: { files: [] },
+    })
+    expect((await storage.file.put('new.txt', 'new')).success).toBe(true)
+  })
+
   it('empty and exact pages have no continuation, and partial string prefixes match filenames', async () => {
     const empty = await storage.dir.list({ prefix: 'empty/', maxKeys: 1 })
     expect(empty.success && empty.data).toMatchObject({ files: [], commonPrefixes: [], isTruncated: false })

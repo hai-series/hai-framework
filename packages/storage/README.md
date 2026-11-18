@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+`storage.dir.delete(prefix)` 按对象键的字符串前缀逐页删除。例如 `reports/draft-` 匹配 `reports/draft-1.txt`，`reports/` 匹配该目录样式的键。空前缀清空容器中的对象。
+
 [查 API 清单](../../docs/usage/function/storage.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="api-概览"></a>

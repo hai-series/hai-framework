@@ -178,6 +178,8 @@ UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で�
 | `storage.dir.list` | プレフィックス内をページ取得 | options | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
 | `storage.dir.delete` | プレフィックス内を削除 | prefix | `void` | `await storage.dir.delete('backup/')` |
 
+`storage.dir.delete(prefix)` はキーの文字列プレフィックスに一致するオブジェクトをページ単位で削除します。たとえば `reports/draft-` は `reports/draft-1.txt` に、`reports/` はそのパス配下のキーに一致します。空のプレフィックスはコンテナ内の全オブジェクトに一致します。
+
 #### 利用例：接頭辞による一覧と削除
 
 ```ts

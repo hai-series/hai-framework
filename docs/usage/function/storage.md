@@ -289,6 +289,8 @@ if (key.success) {
 | `storage.dir.list` | 分页列出前缀内的对象 | options | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
 | `storage.dir.delete` | 删除指定前缀内的对象 | prefix | `void` | `await storage.dir.delete('reports/')` |
 
+`storage.dir.delete(prefix)` 按对象键的字符串前缀逐页删除。例如 `reports/draft-` 匹配 `reports/draft-1.txt`，`reports/` 匹配该目录样式的键。空前缀清空容器中的对象。
+
 #### 场景：按前缀浏览与清理
 
 ```ts

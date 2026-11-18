@@ -174,6 +174,8 @@ Directories are object-key prefixes. List them in pages and authorize the full p
 | `storage.dir.list` | Paginate objects under a prefix | `options?` | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
 | `storage.dir.delete` | Delete objects under a prefix | `prefix` | `void` | `await storage.dir.delete('backup/')` |
 
+`storage.dir.delete(prefix)` deletes objects page by page based on the literal start of each key. For example, `reports/draft-` matches `reports/draft-1.txt`, and `reports/` matches keys under that path. An empty prefix clears the objects in the container.
+
 #### Scenario: Browse and clean a prefix
 
 ```ts

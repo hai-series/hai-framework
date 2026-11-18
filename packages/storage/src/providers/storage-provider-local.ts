@@ -20,7 +20,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { core, err, ok } from '@h-ai/core'
 
-import { toStorageDeleteResult } from '../storage-delete.js'
+import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
 import { toByteStream } from '../storage-stream.js'
@@ -738,18 +738,11 @@ export function createLocalProvider(): StorageProvider {
         }))
       }
       try {
-        const dirPath = await fullPath(prefix)
-
-        // 递归删除目录
-        await fsp.rm(dirPath, { recursive: true, force: true })
-
-        return ok(undefined)
+        // 保留路径与符号链接校验，实际匹配由列表操作按对象键前缀完成。
+        await fullPath(prefix)
+        return await deleteStoragePrefix(prefix, dir.list, file.deleteMany)
       }
       catch (error) {
-        // 如果目录不存在，视为删除成功
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          return ok(undefined)
-        }
         return err(toStorageError(error, prefix))
       }
     },

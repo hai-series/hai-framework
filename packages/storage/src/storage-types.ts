@@ -499,10 +499,10 @@ export interface DirOperations {
   list: (options?: ListOptions) => Promise<HaiResult<ListResult>>
 
   /**
-   * 删除目录（删除指定前缀下的所有文件）
+   * 分页删除键名以指定字符串开头的对象。
    *
-   * @param prefix - 目录前缀
-   * @returns 删除结果
+   * @param prefix - 对象键前缀，空字符串清空容器内的对象。
+   * @returns 删除结果，列举失败或部分删除失败时返回原错误。
    * @example
    * ```ts
    * import { storage } from '@h-ai/storage'

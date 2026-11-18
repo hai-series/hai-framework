@@ -20,6 +20,8 @@ See the [configuration reference](../../docs/usage/configuration/storage.en.md) 
 
 ## Features
 
+`storage.dir.delete(prefix)` deletes objects page by page based on the literal start of each key. For example, `reports/draft-` matches `reports/draft-1.txt`, and `reports/` matches keys under that path. An empty prefix clears the objects in the container.
+
 [Browse the API list](../../docs/usage/function/storage.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
