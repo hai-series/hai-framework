@@ -79,6 +79,7 @@ export default defineConfig({
           ...(ldapEnabled
             ? {
                 ldap: {
+                  directoryId: 'admin-console-e2e',
                   url: 'ldap://127.0.0.1:12583',
                   bindDn: 'cn=admin,dc=example,dc=org',
                   bindPassword: 'admin',

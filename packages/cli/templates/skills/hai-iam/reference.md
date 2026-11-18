@@ -100,7 +100,7 @@ Token 和 OTP 存储在 cache 中（不落库）。session/refresh/index 位于�
 
 LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h-ai/reach` 是可选 peer dependency，基础密码/RBAC 无需安装这两个包。
 
-- 默认 LDAP 客户端：在服务端 workspace 执行 `pnpm add ldapts`，配置 `login.ldap: true` 与 `ldap.url/bindDn/bindPassword/searchBase`。`searchFilter` 默认 `(uid={{username}})`；AD 可使用 `(sAMAccountName={{username}})` 与对应 `usernameAttribute`。`ldaps://` 使用 TLS，`ldap://` + `useTls: true` 使用 StartTLS。`ldapClientFactory` 可注入返回 `bind/search/unbind` 和 HaiResult 的客户端，此时无需安装 ldapts。
+- 默认 LDAP 客户端：在服务端 workspace 执行 `pnpm add ldapts`，配置 `login.ldap: true` 与 `ldap.directoryId/url/bindDn/bindPassword/searchBase`。同一目录的各个应用节点使用同一个 `directoryId`。`searchFilter` 默认 `(uid={{username}})`。AD 可配置 `(sAMAccountName={{username}})`、对应的 `usernameAttribute` 和 `identityAttribute: objectGUID`。`ldaps://` 使用 TLS，`ldap://` + `useTls: true` 使用 StartTLS。`ldapClientFactory` 可注入返回 `bind/search/unbind` 和 HaiResult 的客户端，此时无需安装 ldapts。
 - Reach 自动发送：应用安装、初始化 `@h-ai/reach`，在 `iam.init({ ...settings, reach })` 中注入一次。`otp_email/otp_sms` 模板使用 `{code}`；`password_reset/password_reset_sms` 使用 `{token}/{expiresAt}/{resetUrl}`。模板需在 IAM 初始化前配置，Provider 绑定实际邮件/短信通道。`passwordReset.mode` 选择 `email/phone`。
 - 自定义发送：直接传 `onOtpSendEmail(email, code, context)`、`onOtpSendSms(phone, code, context)`、`onPasswordResetRequest(user, token, context)`，均返回 `Promise<void>`；context 包含 expiresAt/idempotencyKey，发送服务按该稳定键持久化去重，异常表示结果未知，不自动重发。可以只实现选用通道或与 Reach 混用，显式回调优先。检查发送服务结果，投递失败在回调内抛错；IAM 捕获并返回业务错误，不要吞掉发送失败。
 - `otp` 必须有配置并开启所需通道；缺少回调或标准模板时 `iam.publicConfig` 不公布该入口。Reach 由应用管理生命周期，IAM 不负责初始化或关闭。Console 仅记录元数据。
