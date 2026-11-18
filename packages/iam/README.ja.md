@@ -20,6 +20,8 @@
 
 ## 機能
 
+パスワードと API キーの SM3 計算は Crypto のワーカープールを共用します。保存済みのハッシュも引き続き有効です。キューが満杯の場合は `SECURITY_BUSY`（HTTP 429）を返し、ログイン失敗回数に加算しません。
+
 [API 一覧](../../docs/usage/function/iam.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/function/iam.ja.md#ldap-identity-migration)を参照してください。

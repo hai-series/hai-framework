@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+密码与 API Key 的 SM3 计算共用 Crypto 的后台线程池，已保存的哈希可继续使用。等待队列满时返回 `SECURITY_BUSY`（HTTP 429），登录不累计密码错误次数。
+
 [查 API 清单](../../docs/usage/function/iam.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="可选-ldap-与通知接入"></a>

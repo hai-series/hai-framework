@@ -23,11 +23,11 @@ import type {
   UserSortField,
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { crypto, HaiCryptoError } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { verifyIamCaptcha } from '../authn/iam-authn-captcha.js'
-import { isAccountLocked, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../authn/iam-authn-utils.js'
+import { isAccountLocked, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -241,7 +241,7 @@ async function validateUniqueFieldsForUpdate(
 interface UserFnContext {
   userRepository: UserRepository
   validatePassword: (password: string) => HaiResult<void>
-  hashPassword: (password: string) => HaiResult<string>
+  hashPassword: (password: string) => Promise<HaiResult<string>>
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   config: IamConfig
@@ -253,14 +253,17 @@ interface UserFnContext {
 }
 
 /** 注册和所有改密入口共用强度规则；首次/过期改密不得以相同密码清除限制。 */
-function validatePasswordReplacement(ctx: UserFnContext, user: StoredUser, password: string): HaiResult<void> {
+async function validatePasswordReplacement(ctx: UserFnContext, user: StoredUser, password: string): Promise<HaiResult<void>> {
   const strength = ctx.validatePassword(password)
   if (!strength.success)
     return strength
   if (user.passwordHash && ((user.mustChangePassword && ctx.config.password?.requireInitialChange) || ctx.config.password?.preventSamePassword || (ctx.config.password?.expirationDays ?? 0) > 0)) {
-    const same = crypto.password.verify(password, user.passwordHash)
-    if (!same.success)
-      return same
+    const same = await crypto.password.verifyAsync(password, user.passwordHash)
+    if (!same.success) {
+      return same.error.code === HaiCryptoError.PASSWORD_BUSY.code
+        ? mapPasswordWorkError(same.error)
+        : same
+    }
     if (same.data)
       return err(HaiIamError.PASSWORD_REUSE_NOT_ALLOWED, iamM('iam_passwordMustDiffer'))
   }
@@ -333,7 +336,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       return preResult as HaiResult<RegisterResult>
 
     // 哈希密码
-    const hashResult = hashPassword(options.password)
+    const hashResult = await hashPassword(options.password)
     if (!hashResult.success)
       return hashResult as HaiResult<RegisterResult>
 
@@ -829,11 +832,11 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         )
       }
 
-      const validateResult = validatePasswordReplacement(ctx, userResult.data, newPassword)
+      const validateResult = await validatePasswordReplacement(ctx, userResult.data, newPassword)
       if (!validateResult.success)
         return validateResult
 
-      const hashResult = hashPassword(newPassword)
+      const hashResult = await hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult as HaiResult<void>
 
@@ -884,9 +887,9 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!user.passwordHash)
         return rejectMissingPasswordCredentials()
 
-      const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
+      const verifyResult = await crypto.password.verifyAsync(oldPassword, user.passwordHash)
       if (!verifyResult.success)
-        return err(HaiIamError.INTERNAL_ERROR, verifyResult.error.message)
+        return mapPasswordWorkError(verifyResult.error)
       if (!verifyResult.data) {
         // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
         const failureResult = await recordLoginFailure(userRepository, user, ctx.loginConfig)
@@ -904,12 +907,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return resetResult
 
       // 验证新密码强度
-      const validateResult = validatePasswordReplacement(ctx, user, newPassword)
+      const validateResult = await validatePasswordReplacement(ctx, user, newPassword)
       if (!validateResult.success)
         return validateResult
 
       // 哈希新密码
-      const hashResult = hashPassword(newPassword)
+      const hashResult = await hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult as HaiResult<void>
 
@@ -1035,10 +1038,10 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       const claimed = await userRepository.claimPasswordReset(tokenHash.data, resetConfig.maxAttempts)
       if (!claimed.success)
         return claimed
-      const validateResult = validatePasswordReplacement(ctx, claimed.data, newPassword)
+      const validateResult = await validatePasswordReplacement(ctx, claimed.data, newPassword)
       if (!validateResult.success)
         return validateResult
-      const hashResult = hashPassword(newPassword)
+      const hashResult = await hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult
       const committed = await userRepository.commitPasswordReset({ user: claimed.data, tokenHash: tokenHash.data, passwordHash: hashResult.data })

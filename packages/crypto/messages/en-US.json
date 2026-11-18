@@ -30,6 +30,7 @@
   "crypto_passwordHashFailed": "Password hashing failed",
   "crypto_hashFormatInvalid": "Invalid hash format",
   "crypto_passwordVerifyFailed": "Password verification failed",
+  "crypto_passwordBusy": "Password processing is busy. Try again shortly.",
   "crypto_transportClientKeyGenerateFailed": "Failed to generate transport client key pair",
   "crypto_transportServerKeyRingInvalid": "The server transport key ring is missing or invalid. Check that private HAI_CRYPTO_TRANSPORT_SERVERKEYRING contains complete valid JSON and distribute the same ring to every node.",
   "crypto_transportServerKeyUnknown": "Transport server key version is unknown or revoked",

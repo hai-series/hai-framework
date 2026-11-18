@@ -5,15 +5,30 @@
  * @module iam-authn-utils
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'
 import { err, ok } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { crypto, HaiCryptoError } from '@h-ai/crypto'
 
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+
+/**
+ * 认证和密码写入统一映射 Crypto 工作队列饱和，保留其余内部错误的原因。
+ * @example 模块内部上下文
+ * ```ts
+ * const result = await crypto.password.hashAsync('example')
+ * const mapped = result.success ? result : mapPasswordWorkError(result.error)
+ * void mapped
+ * ```
+ */
+export function mapPasswordWorkError(error: HaiError): HaiResult<never> {
+  return error.code === HaiCryptoError.PASSWORD_BUSY.code
+    ? err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'), error)
+    : err(HaiIamError.INTERNAL_ERROR, error.message, error)
+}
 
 /**
  * 不存在、无本地口令或受限账号执行同类哈希工作后统一拒绝凭据，不验证受限账号密码。
@@ -21,17 +36,17 @@ import { HaiIamError } from '../iam-types.js'
  * @internal
  * @example 模块内部上下文
  * ```ts
- * const rejected = rejectMissingPasswordCredentials()
+ * const rejected = await rejectMissingPasswordCredentials()
  * if (!rejected.success) {
  *   const code = rejected.error.code
  * }
  * ```
  */
-export function rejectMissingPasswordCredentials(): HaiResult<never> {
+export async function rejectMissingPasswordCredentials(): Promise<HaiResult<never>> {
   // 此固定值仅用于计算量填充，不作为任何账号、密钥或业务凭据保存。
-  const padded = crypto.password.hash('dummy-password-to-prevent-timing-leak')
+  const padded = await crypto.password.hashAsync('dummy-password-to-prevent-timing-leak')
   if (!padded.success)
-    return err(HaiIamError.INTERNAL_ERROR, padded.error.message)
+    return mapPasswordWorkError(padded.error)
   return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
 }
 

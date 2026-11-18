@@ -17,7 +17,7 @@ import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { checkPasswordState, isUserActive, toUser } from '../../user/iam-user-utils.js'
-import { ensureCredentialType, isAccountLocked, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../iam-authn-utils.js'
+import { ensureCredentialType, isAccountLocked, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../iam-authn-utils.js'
 
 /**
  * 密码认证策略配置
@@ -48,7 +48,7 @@ export interface PasswordStrategyConfig {
  * @internal
  * @example 模块内部上下文
  * ```ts
- * function hashNewPassword(strategy: PasswordStrategyResult, password: string) {
+ * async function hashNewPassword(strategy: PasswordStrategyResult, password: string) {
  *   const valid = strategy.validatePassword(password)
  *   if (!valid.success)
  *     return valid
@@ -62,7 +62,7 @@ export interface PasswordStrategyResult {
   /** 验证密码强度 */
   validatePassword: (password: string) => HaiResult<void>
   /** 密码哈希 */
-  hashPassword: (password: string) => HaiResult<string>
+  hashPassword: (password: string) => Promise<HaiResult<string>>
   /** 密码策略配置 */
   passwordConfig: PasswordConfig
 }
@@ -99,15 +99,6 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     lockoutEnabled: config.lockoutEnabled ?? true,
     failureWindow: config.failureWindow ?? 86400,
   }
-  const passwordOps = haiCrypto.password
-
-  function mapPasswordError(message: string): HaiResult<never> {
-    return err(
-      HaiIamError.INTERNAL_ERROR,
-      message,
-    )
-  }
-
   /**
    * 验证密码强度
    */
@@ -192,9 +183,9 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   async function verifyUserPassword(user: StoredUser, password: string): Promise<HaiResult<void>> {
     if (!user.passwordHash)
       return rejectMissingPasswordCredentials()
-    const verifyResult = passwordOps.verify(password, user.passwordHash)
+    const verifyResult = await haiCrypto.password.verifyAsync(password, user.passwordHash)
     if (!verifyResult.success) {
-      return mapPasswordError(verifyResult.error.message)
+      return mapPasswordWorkError(verifyResult.error)
     }
 
     if (!verifyResult.data) {
@@ -255,10 +246,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     },
   }
 
-  function hashPassword(password: string): HaiResult<string> {
-    const hashResult = passwordOps.hash(password)
+  async function hashPassword(password: string): Promise<HaiResult<string>> {
+    const hashResult = await haiCrypto.password.hashAsync(password)
     if (!hashResult.success) {
-      return mapPasswordError(hashResult.error.message)
+      return mapPasswordWorkError(hashResult.error)
     }
     return ok(hashResult.data)
   }

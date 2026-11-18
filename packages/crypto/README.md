@@ -18,6 +18,8 @@
 
 ## 功能说明
 
+Node.js 请求处理使用 `crypto.password.hashAsync()` 和 `verifyAsync()`，在后台线程计算现有 SM3 密码记录。队列满时返回 `PASSWORD_BUSY`。
+
 算法使用 `crypto.asymmetric/hash/symmetric/password`，传输工厂、缓存登记、密钥环解析与 HTTP 工具统一使用 `crypto.transport`。公钥校验接受外部未知值，无需初始化；类型与错误类仍按命名导入。
 
 传输的精确格式见[协议说明](../../docs/usage/function/crypto.md#transport-protocol)，算法输入边界见[输入校验](../../docs/usage/function/crypto.md#primitive-validation)。

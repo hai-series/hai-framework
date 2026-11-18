@@ -493,6 +493,8 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 标准 HTTP 入口：`GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm`；验证码继续使用 `/auth/otp/send` 与 `/auth/login/otp`。安全错误：`SECURITY_BUSY (hai:iam:023)`、`PASSWORD_RESET_DISABLED (hai:iam:024)`。
 
+密码与 API Key 的 SM3 计算共用 Crypto 的后台线程池，已保存的哈希可继续使用。等待队列满时返回 `SECURITY_BUSY`（HTTP 429），登录不累计密码错误次数。
+
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序（db → cache → iam）

@@ -13,14 +13,14 @@ import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
 import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
-import { crypto as haiCrypto } from '@h-ai/crypto'
+import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
 
 import { readIamCache } from '../../iam-cache.js'
 import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { isUserActive, toUser } from '../../user/iam-user-utils.js'
-import { ensureCredentialType } from '../iam-authn-utils.js'
+import { ensureCredentialType, mapPasswordWorkError } from '../iam-authn-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'apikey-strategy' })
 
@@ -126,7 +126,6 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     : ApiKeyConfigSchema.parse({})
 
   const { userRepository, apiKeyRepository } = config
-  const passwordOps = haiCrypto.password
 
   /**
    * 内部：验证明文 API Key 并返回 ApiKey 实体
@@ -142,9 +141,12 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
     // 遍历候选项验证哈希
     for (const candidate of candidatesResult.data) {
-      const verifyResult = passwordOps.verify(rawKey, candidate.keyHash)
-      if (!verifyResult.success)
-        continue
+      const verifyResult = await haiCrypto.password.verifyAsync(rawKey, candidate.keyHash)
+      if (!verifyResult.success) {
+        if (verifyResult.error.code === HaiCryptoError.INVALID_INPUT.code)
+          continue
+        return mapPasswordWorkError(verifyResult.error)
+      }
       if (!verifyResult.data)
         continue
 
@@ -265,9 +267,9 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
         // 生成明文密钥和哈希
         const rawKey = generateRawKey(apikeyConfig.prefix)
-        const hashResult = passwordOps.hash(rawKey)
+        const hashResult = await haiCrypto.password.hashAsync(rawKey)
         if (!hashResult.success) {
-          return err(HaiIamError.INTERNAL_ERROR, hashResult.error.message)
+          return mapPasswordWorkError(hashResult.error)
         }
 
         // 计算过期时间

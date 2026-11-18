@@ -32,6 +32,7 @@ const CryptoErrorInfo = {
   VERIFY_FAILED: '024:500',
   HASH_FAILED: '040:500',
   HMAC_FAILED: '041:500',
+  PASSWORD_BUSY: '042:503',
   INVALID_IV: '060:400',
   TRANSPORT_PAYLOAD_TOO_LARGE: '070:413',
   TRANSPORT_TIME_INVALID: '071:400',
@@ -912,6 +913,57 @@ export interface PasswordOperations {
    * ```
    */
   verify: (password: string, hash: string) => HaiResult<boolean>
+}
+
+/**
+ * Node.js 密码操作。异步方法将完整 SM3 密码计算交给有界线程池，并沿用同步方法的记录格式。
+ * @example
+ * ```ts
+ * import { crypto, type AsyncPasswordOperations } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const password: AsyncPasswordOperations = crypto.password
+ *   const saved = await password.hashAsync('test-password')
+ *   if (!saved.success) throw new Error(saved.error.message)
+ *   const verified = await password.verifyAsync('test-password', saved.data)
+ *   if (!verified.success) throw new Error(verified.error.message)
+ *   void verified.data
+ * }
+ * finally { await crypto.close() }
+ * ```
+ */
+export interface AsyncPasswordOperations extends PasswordOperations {
+  /**
+   * 异步生成 `$hai$<iterations>$<salt>$<hash>` 记录。队列满时返回 `PASSWORD_BUSY`。
+   * @param password - 非空密码。
+   * @param config - 可选迭代次数与盐值长度，与同步 `hash` 一致。
+   * @returns Promise 内的 HaiResult；关闭时未完成的任务返回 `NOT_INITIALIZED`。
+   * @example
+   * ```ts
+   * async function save(password: AsyncPasswordOperations, value: string) {
+   *   const result = await password.hashAsync(value)
+   *   return result.success ? result.data : result.error.code
+   * }
+   * ```
+   */
+  hashAsync: (password: string, config?: PasswordConfig) => Promise<HaiResult<string>>
+
+  /**
+   * 异步验证已有 `$hai$` 记录。密码不符返回 `ok(false)`，队列满时返回 `PASSWORD_BUSY`。
+   * @param password - 非空密码。
+   * @param hash - `hash` 或 `hashAsync` 生成的记录。
+   * @returns Promise 内的 HaiResult；关闭时未完成的任务返回 `NOT_INITIALIZED`。
+   * @example
+   * ```ts
+   * async function verify(password: AsyncPasswordOperations, value: string, saved: string) {
+   *   const result = await password.verifyAsync(value, saved)
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * ```
+   */
+  verifyAsync: (password: string, hash: string) => Promise<HaiResult<boolean>>
 }
 
 // ─── 传输加密 ───

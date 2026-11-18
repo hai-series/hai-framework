@@ -20894,6 +20894,508 @@
         {
           "subpath": ".",
           "conditions": [
+            "browser",
+            "default"
+          ],
+          "target": "./dist/browser.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "AsymmetricEncryptOptions",
+              "kind": "type",
+              "declaration": "AsymmetricEncryptOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsymmetricOperations",
+              "kind": "type",
+              "declaration": "AsymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsyncPasswordOperations",
+              "kind": "type",
+              "declaration": "AsyncPasswordOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CipherMode",
+              "kind": "type",
+              "declaration": "CipherMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CreateCacheTransportKeyStoreOptions",
+              "kind": "type",
+              "declaration": "CreateCacheTransportKeyStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "crypto",
+              "kind": "value",
+              "declaration": "crypto",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CryptoFunctions",
+              "kind": "type",
+              "declaration": "CryptoFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptedPayload",
+              "kind": "type",
+              "declaration": "EncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptedRequestPayload",
+              "kind": "type",
+              "declaration": "EncryptedRequestPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptWithIVResult",
+              "kind": "type",
+              "declaration": "EncryptWithIVResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiCryptoError",
+              "kind": "value",
+              "declaration": "HaiCryptoError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HashOperations",
+              "kind": "type",
+              "declaration": "HashOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HashOptions",
+              "kind": "type",
+              "declaration": "HashOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyExchangeRequest",
+              "kind": "type",
+              "declaration": "KeyExchangeRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyExchangeResponse",
+              "kind": "type",
+              "declaration": "KeyExchangeResponse",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyPair",
+              "kind": "type",
+              "declaration": "KeyPair",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "PasswordConfig",
+              "kind": "type",
+              "declaration": "PasswordConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "PasswordOperations",
+              "kind": "type",
+              "declaration": "PasswordOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReadTransportBodyOptions",
+              "kind": "type",
+              "declaration": "ReadTransportBodyOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SignOptions",
+              "kind": "type",
+              "declaration": "SignOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricCbcEncryptedPayload",
+              "kind": "type",
+              "declaration": "SymmetricCbcEncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricCiphertextEncoding",
+              "kind": "type",
+              "declaration": "SymmetricCiphertextEncoding",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricDecryptInput",
+              "kind": "type",
+              "declaration": "SymmetricDecryptInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricEncryptedPayload",
+              "kind": "type",
+              "declaration": "SymmetricEncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricEncryptOptions",
+              "kind": "type",
+              "declaration": "SymmetricEncryptOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricMode",
+              "kind": "type",
+              "declaration": "SymmetricMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricOperations",
+              "kind": "type",
+              "declaration": "SymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyLimits",
+              "kind": "type",
+              "declaration": "TransportBodyLimits",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyTooLargeError",
+              "kind": "value+type",
+              "declaration": "TransportBodyTooLargeError",
+              "declarationKind": "ClassDeclaration"
+            },
+            {
+              "name": "TransportClient",
+              "kind": "type",
+              "declaration": "TransportClient",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportCreateServerOptions",
+              "kind": "type",
+              "declaration": "TransportCreateServerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportCryptoServiceLike",
+              "kind": "type",
+              "declaration": "TransportCryptoServiceLike",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportEncryptionManager",
+              "kind": "type",
+              "declaration": "TransportEncryptionManager",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportKeyPair",
+              "kind": "type",
+              "declaration": "TransportKeyPair",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportKeyStore",
+              "kind": "type",
+              "declaration": "TransportKeyStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportMessageContext",
+              "kind": "type",
+              "declaration": "TransportMessageContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportOperations",
+              "kind": "type",
+              "declaration": "TransportOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportRequestContext",
+              "kind": "type",
+              "declaration": "TransportRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportServerKeyRing",
+              "kind": "type",
+              "declaration": "TransportServerKeyRing",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportTimeError",
+              "kind": "value+type",
+              "declaration": "TransportTimeError",
+              "declarationKind": "ClassDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "browser",
+            "types"
+          ],
+          "target": "./dist/browser.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "AsymmetricEncryptOptions",
+              "kind": "type",
+              "declaration": "AsymmetricEncryptOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsymmetricOperations",
+              "kind": "type",
+              "declaration": "AsymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsyncPasswordOperations",
+              "kind": "type",
+              "declaration": "AsyncPasswordOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CipherMode",
+              "kind": "type",
+              "declaration": "CipherMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CreateCacheTransportKeyStoreOptions",
+              "kind": "type",
+              "declaration": "CreateCacheTransportKeyStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "crypto",
+              "kind": "value",
+              "declaration": "crypto",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CryptoFunctions",
+              "kind": "type",
+              "declaration": "CryptoFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptedPayload",
+              "kind": "type",
+              "declaration": "EncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptedRequestPayload",
+              "kind": "type",
+              "declaration": "EncryptedRequestPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "EncryptWithIVResult",
+              "kind": "type",
+              "declaration": "EncryptWithIVResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiCryptoError",
+              "kind": "value",
+              "declaration": "HaiCryptoError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HashOperations",
+              "kind": "type",
+              "declaration": "HashOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HashOptions",
+              "kind": "type",
+              "declaration": "HashOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyExchangeRequest",
+              "kind": "type",
+              "declaration": "KeyExchangeRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyExchangeResponse",
+              "kind": "type",
+              "declaration": "KeyExchangeResponse",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KeyPair",
+              "kind": "type",
+              "declaration": "KeyPair",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "PasswordConfig",
+              "kind": "type",
+              "declaration": "PasswordConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "PasswordOperations",
+              "kind": "type",
+              "declaration": "PasswordOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReadTransportBodyOptions",
+              "kind": "type",
+              "declaration": "ReadTransportBodyOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SignOptions",
+              "kind": "type",
+              "declaration": "SignOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricCbcEncryptedPayload",
+              "kind": "type",
+              "declaration": "SymmetricCbcEncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricCiphertextEncoding",
+              "kind": "type",
+              "declaration": "SymmetricCiphertextEncoding",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricDecryptInput",
+              "kind": "type",
+              "declaration": "SymmetricDecryptInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricEncryptedPayload",
+              "kind": "type",
+              "declaration": "SymmetricEncryptedPayload",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricEncryptOptions",
+              "kind": "type",
+              "declaration": "SymmetricEncryptOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SymmetricMode",
+              "kind": "type",
+              "declaration": "SymmetricMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SymmetricOperations",
+              "kind": "type",
+              "declaration": "SymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyLimits",
+              "kind": "type",
+              "declaration": "TransportBodyLimits",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyTooLargeError",
+              "kind": "value+type",
+              "declaration": "TransportBodyTooLargeError",
+              "declarationKind": "ClassDeclaration"
+            },
+            {
+              "name": "TransportClient",
+              "kind": "type",
+              "declaration": "TransportClient",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportCreateServerOptions",
+              "kind": "type",
+              "declaration": "TransportCreateServerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportCryptoServiceLike",
+              "kind": "type",
+              "declaration": "TransportCryptoServiceLike",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportEncryptionManager",
+              "kind": "type",
+              "declaration": "TransportEncryptionManager",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportKeyPair",
+              "kind": "type",
+              "declaration": "TransportKeyPair",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportKeyStore",
+              "kind": "type",
+              "declaration": "TransportKeyStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportMessageContext",
+              "kind": "type",
+              "declaration": "TransportMessageContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportOperations",
+              "kind": "type",
+              "declaration": "TransportOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportRequestContext",
+              "kind": "type",
+              "declaration": "TransportRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportServerKeyRing",
+              "kind": "type",
+              "declaration": "TransportServerKeyRing",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportTimeError",
+              "kind": "value+type",
+              "declaration": "TransportTimeError",
+              "declarationKind": "ClassDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
             "default"
           ],
           "target": "./dist/index.js",
@@ -20909,6 +21411,12 @@
               "name": "AsymmetricOperations",
               "kind": "type",
               "declaration": "AsymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsyncPasswordOperations",
+              "kind": "type",
+              "declaration": "AsyncPasswordOperations",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21156,6 +21664,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AsyncPasswordOperations",
+              "kind": "type",
+              "declaration": "AsyncPasswordOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CipherMode",
               "kind": "type",
               "declaration": "CipherMode",
@@ -21397,6 +21911,12 @@
               "name": "AsymmetricOperations",
               "kind": "type",
               "declaration": "AsymmetricOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AsyncPasswordOperations",
+              "kind": "type",
+              "declaration": "AsyncPasswordOperations",
               "declarationKind": "InterfaceDeclaration"
             },
             {

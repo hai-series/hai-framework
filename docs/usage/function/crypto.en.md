@@ -288,20 +288,24 @@ Generate salted password records on the server, store the record instead of plai
 | --- | --- | --- | --- | --- |
 | `crypto.password.hash` | Generate a password hash for a server-side account store. | `password, config?; saltLength = 16 characters, iterations = 10000` | `HaiResult<string>` | `crypto.password.hash(password)` |
 | `crypto.password.verify` | Check a password against the stored hash. | `password, storedHash` | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
+| `crypto.password.hashAsync` | Generate a password record on a worker thread | `password, config?` · Same record format as the synchronous API | `Promise<HaiResult<string>>` | `await crypto.password.hashAsync(password)` |
+| `crypto.password.verifyAsync` | Verify a password on a worker thread | `password, storedHash` | `Promise<HaiResult<boolean>>` | `await crypto.password.verifyAsync(password, storedHash)` |
+
+Use the asynchronous methods for registration and sign-in requests in Node.js. Each process runs up to four password workers and queues up to 32 waiting jobs. Workers start on demand. A full queue returns `HaiCryptoError.PASSWORD_BUSY` (HTTP 503). `crypto.close()` ends unfinished jobs with `NOT_INITIALIZED` and waits for the workers to exit. The synchronous methods and browser entry use the same record format.
 
 #### Scenario: Distinguish a match, a mismatch and a malformed record
 
 Hashing the same password produces different records. A wrong password is successful data false; a malformed record is a failed result with INVALID_INPUT.
 
 ```ts
-const recordResult = crypto.password.hash('demo-password', {
+const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
 if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record is the full random record string; fields are explained below.
-const passwordMatchedResult = crypto.password.verify('demo-password', record)
+const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true

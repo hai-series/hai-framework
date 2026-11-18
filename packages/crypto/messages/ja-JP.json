@@ -30,6 +30,7 @@
   "crypto_passwordHashFailed": "パスワードのハッシュ化に失敗しました",
   "crypto_hashFormatInvalid": "ハッシュの形式が無効です",
   "crypto_passwordVerifyFailed": "パスワードの検証に失敗しました",
+  "crypto_passwordBusy": "パスワード処理が混み合っています。しばらくしてからお試しください。",
   "crypto_transportClientKeyGenerateFailed": "通信クライアントの鍵ペアの生成に失敗しました",
   "crypto_transportServerKeyRingInvalid": "サーバーの転送鍵リングが不足または不正です。非公開の HAI_CRYPTO_TRANSPORT_SERVERKEYRING が完全で有効な JSON であることを確認し、全ノードに同じリングを配布してください。",
   "crypto_transportServerKeyUnknown": "トランスポートのサーバーキーバージョンが不明、または失効しています",

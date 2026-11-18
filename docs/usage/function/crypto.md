@@ -290,20 +290,24 @@ SM4 可加密空文本，但解密拒绝空密文、无效编码、非完整16�
 | --- | --- | --- | --- | --- |
 | `crypto.password.hash` | 服务端保存密码摘要 | `password: string, options?: { saltLength, iterations }` | `HaiResult<string>: $hai$…` | `crypto.password.hash(password)` |
 | `crypto.password.verify` | 服务端验证密码 | `password: string, storedHash: string` | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
+| `crypto.password.hashAsync` | 在工作线程生成密码记录 | `password, config?` · 同同步方法，返回可互相验证的记录 | `Promise<HaiResult<string>>` | `await crypto.password.hashAsync(password)` |
+| `crypto.password.verifyAsync` | 在工作线程验证密码 | `password, storedHash` | `Promise<HaiResult<boolean>>` | `await crypto.password.verifyAsync(password, storedHash)` |
+
+在 Node.js 服务的注册或登录请求中使用异步方法。每个进程最多运行 4 个密码 Worker，并保留 32 个等待位置。线程按需启动，等待队列满时返回 `HaiCryptoError.PASSWORD_BUSY`（HTTP 503）。`crypto.close()` 会结束尚未完成的任务并等待线程退出，此类任务返回 `NOT_INITIALIZED`。同步接口与浏览器入口继续使用同一密码记录格式。
 
 #### 场景：区分匹配、不匹配与记录损坏
 
 同一密码多次 hash 得到不同记录。密码不符是成功结果 false；记录格式不合法是失败结果，错误码为 INVALID_INPUT，不能混为一谈。
 
 ```ts
-const recordResult = crypto.password.hash('demo-password', {
+const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
 if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record 是完整的随机记录字符串；各部分见下方格式示例。
-const passwordMatchedResult = crypto.password.verify('demo-password', record)
+const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true

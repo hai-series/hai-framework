@@ -290,20 +290,24 @@ SM4 は空の平文を扱えますが、空の暗号文、不正な形式、16�
 | --- | --- | --- | --- | --- |
 | `crypto.password.hash` | サーバーで保存するパスワードハッシュを作る。 | `password: string, options?: { saltLength, iterations }` | `HaiResult<string>` | `crypto.password.hash(password)` |
 | `crypto.password.verify` | 保存されたハッシュとパスワードを照合する。 | `password: string, storedHash: string` | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
+| `crypto.password.hashAsync` | ワーカースレッドでパスワードレコードを作成 | `password, config?` · 同期 API と互換性のあるレコード | `Promise<HaiResult<string>>` | `await crypto.password.hashAsync(password)` |
+| `crypto.password.verifyAsync` | ワーカースレッドで照合 | `password, storedHash` | `Promise<HaiResult<boolean>>` | `await crypto.password.verifyAsync(password, storedHash)` |
+
+Node.js の登録・ログイン処理には非同期メソッドを使用します。各プロセスでパスワード Worker を最大 4 つ実行し、最大 32 件を待機キューに入れます。Worker は必要時に起動し、満杯の場合は `HaiCryptoError.PASSWORD_BUSY`（HTTP 503）を返します。`crypto.close()` は未完了の処理を `NOT_INITIALIZED` で終了させ、Worker の終了を待ちます。同期メソッドとブラウザーエントリーも同じ形式のレコードを使用します。
 
 #### 利用例：一致・不一致・レコード破損を区別
 
 同じパスワードでも毎回異なるレコードになります。パスワード不一致は成功データ false、不正なレコード形式は INVALID_INPUT の失敗結果です。
 
 ```ts
-const recordResult = crypto.password.hash('demo-password', {
+const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
 if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record は完全なランダム記録。各項目は以下で説明。
-const passwordMatchedResult = crypto.password.verify('demo-password', record)
+const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true

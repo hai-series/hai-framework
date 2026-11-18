@@ -18,7 +18,7 @@
 | `crypto.asymmetric` 非对称加密 | ✅ | ✅ | SM2 加解密、签名验签 |
 | `crypto.hash` 哈希 | ✅ | ✅ | SM3 哈希、HMAC |
 | `crypto.symmetric` 对称加密 | ✅ | ✅ | SM4 ECB/CBC |
-| `crypto.password` 密码哈希 | ✅ | ❌ | 账户密码处理仅用于服务端；随机盐使用 Web Crypto |
+| `crypto.password` 密码哈希 | 同步与异步 | 同步 | 账户密码处理在服务端执行，服务端请求优先使用异步接口 |
 | `crypto.transport` 传输加密 | ✅ | ✅ | 服务端管理器 + 客户端 encryptedFetch |
 
 浏览器端主要用于 kit 传输加密场景（`kit.client.create({ transport: { crypto } })`），一般不需要直接调用 crypto API。
@@ -113,7 +113,7 @@ if (hash.success) {
 | `isValidKey`    | `(key: string) => boolean`                      | 校验密钥格式                |
 | `isValidIV`     | `(iv: string) => boolean`                       | 校验 IV 格式                |
 
-SM4 密钥使用 `generateKey()` 生成；本模块不提供密码 KDF。密码存储使用服务端 `crypto.password.hash()`，不要将密码或密码哈希直接用作 SM4 密钥。
+SM4 密钥使用 `generateKey()` 生成；本模块不提供密码 KDF。密码存储使用服务端 `crypto.password.hashAsync()`，不要将密码或密码哈希直接用作 SM4 密钥。
 
 ```typescript
 const key = crypto.symmetric.generateKey()
@@ -144,16 +144,20 @@ SM4 拒绝未知 mode/encoding、空密文、非完整分组、无效 PKCS#7 和
 | -------- | --------------------------------------- | -------- |
 | `hash`   | `(password, config?) => HaiResult<string>` | 密码哈希 |
 | `verify` | `(password, hash) => HaiResult<boolean>`   | 验证密码 |
+| `hashAsync` | `(password, config?) => Promise<HaiResult<string>>` | Node.js 异步哈希 |
+| `verifyAsync` | `(password, hash) => Promise<HaiResult<boolean>>` | Node.js 异步验证 |
 
 ```typescript
-const hashed = crypto.password.hash('MyPassword123')
+const hashed = await crypto.password.hashAsync('MyPassword123')
 if (hashed.success) {
-  const valid = crypto.password.verify('MyPassword123', hashed.data)
+  const valid = await crypto.password.verifyAsync('MyPassword123', hashed.data)
 }
 ```
 
 哈希格式：`$hai$<iterations>$<salt>$<hash>`
 **PasswordConfig**：`{ saltLength?: number, iterations?: number }`。盐为 8～128 个字母数字字符（默认 16），轮数为 1～1000000 的整数（默认 10000）。verify 严格校验整个 `$hai$iterations$salt$hash` 记录，迭代数使用无前导符号的规范十进制，摘要为 64 个小写 hex；畸形记录返回 INVALID_INPUT，正常记录继续有效。
+
+在 Node.js 服务的注册或登录请求中使用异步方法。每个进程最多运行 4 个密码 Worker，并保留 32 个等待位置。线程按需启动，等待队列满时返回 `HaiCryptoError.PASSWORD_BUSY`（HTTP 503）。`crypto.close()` 会结束尚未完成的任务并等待线程退出，此类任务返回 `NOT_INITIALIZED`。同步接口与浏览器入口继续使用同一密码记录格式。
 
 ### 传输加密 — `crypto.transport`
 
@@ -284,6 +288,7 @@ const payload: unknown = JSON.parse(text)
 | `HaiCryptoError.VERIFY_FAILED` | `hai:crypto:024` | 验签失败 |
 | `HaiCryptoError.HASH_FAILED` | `hai:crypto:040` | 哈希计算失败 |
 | `HaiCryptoError.HMAC_FAILED` | `hai:crypto:041` | HMAC 计算失败 |
+| `HaiCryptoError.PASSWORD_BUSY` | `hai:crypto:042` | 密码任务等待队列已满，HTTP 503 |
 | `HaiCryptoError.INVALID_IV` | `hai:crypto:060` | 无效 IV |
 
 | `HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE` | `hai:crypto:070` | 传输容量超限 |
@@ -309,13 +314,13 @@ const decrypted = crypto.symmetric.decrypt(storedPayload, key)
 
 ```typescript
 // 注册时哈希存储
-const hashResult = crypto.password.hash(userPassword)
+const hashResult = await crypto.password.hashAsync(userPassword)
 if (hashResult.success) {
   // 存储 hashResult.data 到数据库
 }
 
 // 登录时验证
-const verifyResult = crypto.password.verify(inputPassword, storedHash)
+const verifyResult = await crypto.password.verifyAsync(inputPassword, storedHash)
 if (verifyResult.success && verifyResult.data) {
   // 密码匹配
 }

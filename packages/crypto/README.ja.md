@@ -18,6 +18,8 @@
 
 ## 機能
 
+Node.js のリクエスト処理では `crypto.password.hashAsync()` と `verifyAsync()` を使用すると、バックグラウンドスレッドで従来の SM3 パスワードレコードを計算できます。キューが満杯の場合は `PASSWORD_BUSY` を返します。
+
 アルゴリズムは `crypto.asymmetric/hash/symmetric/password`、通信ファクトリー、キャッシュ登録、鍵リング解析、HTTP 補助機能は `crypto.transport` から呼び出します。公開鍵検証は初期化不要で未知の入力を受け付けます。型とエラークラスは名前付きでインポートします。
 
 [通信プロトコル](../../docs/usage/function/crypto.ja.md#transport-protocol)と[入力の互換性](../../docs/usage/function/crypto.ja.md#primitive-validation)も参照してください。

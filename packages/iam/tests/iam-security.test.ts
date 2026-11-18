@@ -1,5 +1,7 @@
 /** 密码、OTP、重置的并发与配置回归，覆盖共享数据库/Redis。 */
 import { cache } from '@h-ai/cache'
+import { err } from '@h-ai/core'
+import { crypto, HaiCryptoError } from '@h-ai/crypto'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { expect, it, vi } from 'vitest'
@@ -7,6 +9,31 @@ import { HaiIamError } from '../src/index.js'
 import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
+  it('密码计算饱和时存在与不存在的账号都返回繁忙，且不累计登录失败', async () => {
+    const iam = await initIam()
+    const identifier = 'password-work-busy'
+    expect((await iam.user.register({ username: identifier, password: TEST_PASSWORD })).success).toBe(true)
+    const failure = err(HaiCryptoError.PASSWORD_BUSY, 'Password processing is busy')
+    const hash = vi.spyOn(crypto.password, 'hashAsync').mockResolvedValue(failure)
+    const verify = vi.spyOn(crypto.password, 'verifyAsync').mockResolvedValue(failure)
+    try {
+      for (const username of [identifier, 'nonexistent-account']) {
+        expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.SECURITY_BUSY.code, httpStatus: 429 },
+        })
+      }
+      expect(hash).toHaveBeenCalledOnce()
+      expect(verify).toHaveBeenCalledOnce()
+      const attempts = await reldb.sql.get<{ login_failed_count: number | string }>('SELECT login_failed_count FROM hai_iam_users WHERE username = ?', [identifier])
+      expect(attempts.success && Number(attempts.data?.login_failed_count)).toBe(0)
+    }
+    finally {
+      hash.mockRestore()
+      verify.mockRestore()
+    }
+  })
+
   it('公开配置与注册/登录结果保留 Markdown 协议，按场景开关展示', async () => {
     const agreements = {
       userAgreementMarkdown: '# 用户协议\n\n条款正文。',
