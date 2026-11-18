@@ -240,6 +240,8 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 | `exists`     | `(options?, tx?) => HaiResult<boolean>`           | 条件是否存在 |
 | `existsById` | `(id, tx?) => HaiResult<boolean>`                 | ID 是否存在  |
 
+`findAll({ orderBy, offset })` 会跳过指定条数并返回剩余记录，在 SQLite、PostgreSQL 和 MySQL 中均可省略 `limit`。
+
 > 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。
 
 **使用示例**：

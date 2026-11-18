@@ -213,6 +213,8 @@ o1 はバインド値です。get の null は正常な該当なし、query は�
 | `repository.exists` | 条件に一致するか確認 | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
 | `repository.existsById` | ID の存在を確認 | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
 
+`findAll({ orderBy, offset })` は指定した行数をスキップし、残りの行を返します。SQLite、PostgreSQL、MySQL では `limit` を省略できます。
+
 #### 利用例：レコード単位の操作
 
 以下の完全な定義から、インスタンスの入力・行・ページ・件数・該当なしを確認できます。独自実装には BaseReldbCrudRepository を使えます。

@@ -209,6 +209,8 @@ Map table fields to application objects with a repository, then create, query, u
 | `repository.exists` | Test a condition | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
 | `repository.existsById` | Test an ID | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
 
+`findAll({ orderBy, offset })` skips the specified number of rows and returns the rest. You can omit `limit` in SQLite, PostgreSQL, and MySQL.
+
 #### Scenario: Work with records
 
 The full repository definition below is followed by instance-method scenarios with input records, pages, counts and missing-record behavior. BaseReldbCrudRepository supports custom repositories.

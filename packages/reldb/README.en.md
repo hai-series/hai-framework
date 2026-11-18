@@ -20,6 +20,8 @@ See the [configuration reference](../../docs/usage/configuration/reldb.en.md) fo
 
 ## Features
 
+`findAll({ orderBy, offset })` skips the specified number of rows and returns the rest. You can omit `limit` in SQLite, PostgreSQL, and MySQL.
+
 [Browse the API list](../../docs/usage/function/reldb.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures

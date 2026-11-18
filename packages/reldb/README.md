@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+`findAll({ orderBy, offset })` 会跳过指定条数并返回剩余记录，在 SQLite、PostgreSQL 和 MySQL 中均可省略 `limit`。
+
 [查 API 清单](../../docs/usage/function/reldb.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="事务"></a>

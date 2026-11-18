@@ -25,6 +25,8 @@ import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'crud-kernel' })
 const ORDER_BY_SEGMENT_REGEX = /^(\w+)(?:\s+(ASC|DESC))?$/i
+// SQLite 与 MySQL 的 OFFSET 须带 LIMIT，各用方言的无上限写法。
+const OFFSET_ONLY_LIMIT = { sqlite: ' LIMIT -1', mysql: ' LIMIT 18446744073709551615', postgresql: '' }
 
 // ─── CRUD 工具方法 ───
 
@@ -182,20 +184,6 @@ export function createCrud<TItem>(
       return ''
     return ` ORDER BY ${safeParts.join(', ')}`
   }
-  /** 构建 LIMIT/OFFSET 子句，仅在传入值时生效 */
-  const buildLimitOffset = (limit?: number, offset?: number): string => {
-    const parts: string[] = []
-    if (typeof limit === 'number') {
-      // limit 优先
-      parts.push(` LIMIT ${limit}`)
-    }
-    if (typeof offset === 'number') {
-      // offset 仅在传入时生效
-      parts.push(` OFFSET ${offset}`)
-    }
-    return parts.join('')
-  }
-
   /** 构建空负载错误结果（数据为空时报错） */
   const createPayloadError = (): HaiResult<ExecuteResult> => err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
 
@@ -383,9 +371,20 @@ export function createCrud<TItem>(
     async findAll(options: CrudQueryOptions = {}, tx?: DmlWithTxOperations): Promise<HaiResult<TItem[]>> {
       const whereClause = buildWhereClause(options.where)
       const orderClause = buildOrderClause(options.orderBy)
-      const limitClause = buildLimitOffset(options.limit, options.offset)
+      const params = [
+        ...(options.params ?? []),
+      ]
+      let limitClause = ''
+      if (typeof options.limit === 'number') {
+        limitClause = ' LIMIT ?'
+        params.push(options.limit)
+      }
+      if (typeof options.offset === 'number') {
+        limitClause = `${limitClause || OFFSET_ONLY_LIMIT[dbType]} OFFSET ?`
+        params.push(options.offset)
+      }
       const sql = `SELECT ${selectColumns} FROM ${table}${whereClause}${orderClause}${limitClause}`
-      const result = await resolveOps(tx).query<QueryRow>(sql, options.params)
+      const result = await resolveOps(tx).query<QueryRow>(sql, params)
       if (!result.success) {
         // 透传查询错误
         return result

@@ -380,6 +380,8 @@ await reldb.tx.wrap(async (tx) => {
 | `repository.exists` | 检查条件是否命中 | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
 | `repository.existsById` | 检查主键是否存在 | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
 
+`findAll({ orderBy, offset })` 会跳过指定条数并返回剩余记录，在 SQLite、PostgreSQL 和 MySQL 中均可省略 `limit`。
+
 #### 场景：按记录操作数据
 
 下文先给出完整仓库定义，再逐场景展示各实例方法的输入、成功记录/分页/计数和未找到结果；BaseReldbCrudRepository 是自定义仓库的基类。

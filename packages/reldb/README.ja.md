@@ -20,6 +20,8 @@
 
 ## 機能
 
+`findAll({ orderBy, offset })` は指定した行数をスキップし、残りの行を返します。SQLite、PostgreSQL、MySQL では `limit` を省略できます。
+
 [API 一覧](../../docs/usage/function/reldb.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造

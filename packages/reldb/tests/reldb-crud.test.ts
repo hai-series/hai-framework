@@ -45,6 +45,31 @@ describe('reldb.crud', () => {
       expect(create.success).toBe(true)
     }
 
+    it(`${label}: findAll allows offset without limit`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+      expect((await crud.createMany([
+        { name: 'A', email: 'a@example.test' },
+        { name: 'B', email: 'b@example.test' },
+        { name: 'C', email: 'c@example.test' },
+      ])).success).toBe(true)
+      const options = {
+        orderBy: 'id ASC',
+        where: 'name >= ?',
+        params: ['A'],
+      }
+      const names = async (offset: number, limit?: number) => {
+        const result = await crud.findAll({ ...options, offset, limit })
+        if (!result.success)
+          throw new Error(result.error.message)
+        return result.data.map(user => user.name)
+      }
+      expect(await names(1)).toEqual(['B', 'C'])
+      expect(await names(1, 1)).toEqual(['B'])
+      expect(await names(0)).toEqual(['A', 'B', 'C'])
+      expect(await names(50)).toEqual([])
+    })
+
     it(`${label}: crud functions should work with reldb.sql`, async () => {
       await ensureTable()
       const crud = userCrud()

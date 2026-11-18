@@ -519,7 +519,7 @@ export interface CrudQueryOptions {
   orderBy?: string
   /** LIMIT */
   limit?: number
-  /** OFFSET */
+  /** 跳过排序后的前 N 条记录，可单独传入，也可和 limit 一起使用。 */
   offset?: number
 }
 
