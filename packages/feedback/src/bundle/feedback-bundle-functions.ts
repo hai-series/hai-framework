@@ -1,8 +1,10 @@
 import type { HaiResult } from '@h-ai/core'
 import type { FeedbackBundle, FeedbackBundleEvidence, FeedbackBundleEvidencePage, FeedbackBundleFile, FeedbackBundleInput, FeedbackBundleManifest, FeedbackBundleQuery, FeedbackBundleReadOptions } from './feedback-bundle-types.js'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { strFromU8, strToU8 } from 'fflate'
+import { bundleArchive } from './feedback-bundle-archive.js'
 import { feedbackViewerFiles } from './feedback-bundle-viewer.js'
+import { safePath } from './feedback-bundle-zip.js'
 
 const bundleM = core.i18n.createMessageGetter({
   'zh-CN': {
@@ -49,11 +51,6 @@ function jsonObject(value: unknown): Record<string, unknown> {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
     throw new Error('Expected object')
   return parsed as Record<string, unknown>
-}
-
-function safePath(value: string): boolean {
-  return /^[a-z0-9][\w./-]*$/i.test(value) && !value.endsWith('/')
-    && !value.split('/').some(segment => !segment || segment === '.' || segment === '..')
 }
 
 async function checksum(bytes: Uint8Array): Promise<string> {
@@ -114,52 +111,6 @@ function limitsFor(options: FeedbackBundleReadOptions = {}) {
   if (Object.values(limits).some(value => !Number.isSafeInteger(value) || value <= 0))
     throw new Error('Invalid limits')
   return limits
-}
-
-/** 先检查 ZIP 中央目录，避免解压后才发现重复路径、符号链接或压缩炸弹。 */
-function preflight(bytes: Uint8Array, limits: ReturnType<typeof limitsFor>): void {
-  if (bytes.byteLength > limits.maxBytes || bytes.byteLength < 22)
-    throw new Error('Invalid archive size')
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  let end = -1
-  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65557); offset--) {
-    if (view.getUint32(offset, true) === 0x06054B50 && offset + 22 + view.getUint16(offset + 20, true) === bytes.length) {
-      end = offset
-      break
-    }
-  }
-  if (end < 0 || view.getUint16(end + 4, true) !== 0 || view.getUint16(end + 6, true) !== 0)
-    throw new Error('Invalid archive directory')
-  const count = view.getUint16(end + 10, true)
-  const size = view.getUint32(end + 12, true)
-  let offset = view.getUint32(end + 16, true)
-  if (count === 0 || count > limits.maxFiles || count !== view.getUint16(end + 8, true) || offset + size !== end)
-    throw new Error('Invalid archive directory size')
-  let total = 0
-  const names = new Set<string>()
-  for (let index = 0; index < count; index++) {
-    if (offset + 46 > end || view.getUint32(offset, true) !== 0x02014B50)
-      throw new Error('Invalid archive entry')
-    const nameLength = view.getUint16(offset + 28, true)
-    const next = offset + 46 + nameLength + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true)
-    if (next > end)
-      throw new Error('Invalid archive entry length')
-    const name = strFromU8(bytes.subarray(offset + 46, offset + 46 + nameLength))
-    const originalSize = view.getUint32(offset + 24, true)
-    const method = view.getUint16(offset + 10, true)
-    const mode = (view.getUint32(offset + 38, true) >>> 16) & 0xF000
-    if (!safePath(name) || names.has(name.toLowerCase()) || originalSize > limits.maxFileBytes
-      || (view.getUint16(offset + 8, true) & 1) || ![0, 8].includes(method) || (mode !== 0 && mode !== 0x8000)) {
-      throw new Error('Unsafe archive entry')
-    }
-    total += originalSize
-    if (total > limits.maxBytes)
-      throw new Error('Archive expansion limit')
-    names.add(name.toLowerCase())
-    offset = next
-  }
-  if (offset !== end)
-    throw new Error('Unexpected archive entry')
 }
 
 function parseManifest(value: Record<string, unknown>): FeedbackBundleManifest {
@@ -321,10 +272,10 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
     const total = Object.values(files).reduce((sum, file) => sum + file.byteLength, 0)
     if (Object.keys(files).length > MAX_FILES || total > Math.min(input.maxBytes ?? MAX_BYTES, MAX_BYTES) || Object.values(files).some(file => file.byteLength > MAX_FILE_BYTES))
       throw new Error('Bundle limits exceeded')
-    return ok(zipSync(files, {
-      level: 1,
-      mtime: new Date(1980, 0, 1),
-    }))
+    const packed = await bundleArchive({ type: 'pack', files })
+    if (packed.type !== 'zip')
+      throw new Error('Bundle packing failed')
+    return ok(packed.bytes)
   }
   catch {
     return err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
@@ -346,8 +297,12 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
 export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBundleReadOptions): Promise<HaiResult<FeedbackBundle>> {
   try {
     const limits = limitsFor(options)
-    preflight(bytes, limits)
-    const files = unzipSync(bytes)
+    if (bytes.byteLength > limits.maxBytes || bytes.byteLength < 22)
+      throw new Error('Invalid archive size')
+    const unpacked = await bundleArchive({ type: 'read', bytes, limits })
+    if (unpacked.type !== 'files')
+      throw new Error('Bundle unpacking failed')
+    const files = unpacked.files
     const manifest = parseManifest(objectFromFile(files, 'manifest.json'))
     if (Object.keys(files).length !== manifest.files.length + 1)
       throw new Error('Unexpected bundle file')

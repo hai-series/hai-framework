@@ -3,6 +3,30 @@ import { describe, expect, it } from 'vitest'
 import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '../src/bundle/index.js'
 
 describe('feedback 离线问题包', () => {
+  it('在 ZIP 往返中保留大附件和完整性信息', async () => {
+    const evidence = strToU8('Document line for diagnosis.\n'.repeat(40_000))
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-large-attachment' },
+      evidence: [],
+      attachments: [
+        {
+          id: 'log',
+          name: 'report.txt',
+          contentType: 'text/plain',
+          bytes: evidence,
+        },
+      ],
+    })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const parsed = await readFeedbackBundle(created.data)
+    if (!parsed.success)
+      throw new Error(parsed.error.message)
+    const file = parsed.data.manifest.files.find(file => file.attachmentId === 'log')
+    expect(file?.size).toBe(evidence.length)
+    expect(file && parsed.data.files[file.path]).toEqual(evidence)
+  })
+
   it('固定快照与创建时间生成确定性 ZIP，非法时间不进入归档', async () => {
     const input = {
       report: { id: 'fb-deterministic', evidenceRevision: 1 },

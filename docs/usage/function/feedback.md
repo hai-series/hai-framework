@@ -261,6 +261,8 @@ async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadI
 
 ### 导出与读取离线诊断包：`feedback`
 
+ZIP 压缩和解压使用 Core Worker。浏览器离线导出使用 Web Worker；归档的路径、容量及内容摘要按同一规则校验。
+
 导出先创建任务并固定证据修订，完成后读取 ZIP；本地查看器不重新执行业务。
 
 #### 接口清单

@@ -153,6 +153,8 @@ async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadI
 
 ### Export and inspect offline bundles: `feedback`
 
+Core Workers compress and unpack ZIP bundles. Browser offline export uses a Web Worker. Archive paths, size limits and content digests follow the same validation rules.
+
 Export creates a job at a fixed evidence revision. Retrieve ZIP only when ready; the viewer does not replay business effects.
 
 #### Interface list

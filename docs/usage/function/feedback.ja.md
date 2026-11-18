@@ -157,6 +157,8 @@ async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadI
 
 ### 診断包の出力と参照：`feedback`
 
+ZIP の圧縮と展開は Core Worker で行います。ブラウザーのオフライン出力では Web Worker を使い、パス、容量上限、内容のダイジェストは共通の規則で検証します。
+
 証拠の版を固定して出力タスクを作り、完了後に ZIP を得ます。閲覧で業務を再実行しません。
 
 #### インターフェース一覧
