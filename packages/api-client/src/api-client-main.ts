@@ -797,14 +797,21 @@ async function fetchWithRefresh(
   const failure: unknown = response.headers.get('content-type')?.includes('application/json')
     ? await response.clone().json().catch(() => undefined)
     : undefined
-  const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
-    ? failure.error.code
+  const failureError = failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object'
+    ? failure.error
+    : null
+  const code = failureError && 'code' in failureError
+    ? failureError.code
     : undefined
-  if (code === 'hai:iam:027' && reauthorize)
+  const failed = failure && typeof failure === 'object' && 'success' in failure && failure.success === false
+  if (failed && code === 'hai:iam:027' && reauthorize)
     return retryAuthorized()
   if (!tokenManager)
     return response
-  if (response.status !== 401 && !await isUnauthorizedResult(response))
+  const unauthorized = response.status === 200 && failed && failureError && typeof code === 'string'
+    && 'message' in failureError && typeof failureError.message === 'string'
+    && 'httpStatus' in failureError && failureError.httpStatus === 401
+  if (response.status !== 401 && !unauthorized)
     return response
   if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
     && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
@@ -831,38 +838,6 @@ async function fetchWithRefresh(
     return response
 
   return retryAuthorized(accessToken)
-}
-
-/**
- * 只从 HTTP 200 JSON 的有效失败 HaiResult 识别 httpStatus=401；克隆响应避免消费原正文。
- * @param response - 原始 HTTP 响应。
- * @returns 是否满足认证失效包络；非法 JSON/字段缺失留给原解析路径处理。
- *
- * @example 模块内部上下文
- * ```ts
- * const response = Response.json({ success: false, error: { code: 'hai:iam:001', message: 'Session expired', httpStatus: 401 } })
- * const unauthorized = await isUnauthorizedResult(response)
- * const originalBody = await response.json()
- * // 克隆检查没有消耗原响应正文。
- * ```
- */
-async function isUnauthorizedResult(response: Response): Promise<boolean> {
-  if (response.status !== 200 || !response.headers.get('content-type')?.includes('application/json'))
-    return false
-  try {
-    const body: unknown = await response.clone().json()
-    if (!body || typeof body !== 'object' || !('success' in body) || body.success !== false
-      || !('error' in body) || !body.error || typeof body.error !== 'object') {
-      return false
-    }
-    return 'httpStatus' in body.error && body.error.httpStatus === 401
-      && 'code' in body.error && typeof body.error.code === 'string'
-      && 'message' in body.error && typeof body.error.message === 'string'
-  }
-  catch {
-    // 非 JSON/非法包络交由既有客户端解析路径报告，不掩盖为认证失败。
-    return false
-  }
 }
 
 /**

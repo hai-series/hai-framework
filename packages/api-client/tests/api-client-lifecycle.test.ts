@@ -18,6 +18,30 @@ function pair(name: string) {
   }
 }
 
+it('inspects an authenticated JSON response only once and preserves its body for decoding', async () => {
+  const client = apiClient.create(contract)
+  const clone = vi.spyOn(Response.prototype, 'clone')
+  try {
+    expect((await client.init({
+      baseUrl: 'https://api.test',
+      auth: {},
+      fetch: async () => Response.json({
+        success: true,
+        data: { value: 'ok' },
+      }),
+    })).success).toBe(true)
+    expect(await client.check()).toEqual({
+      success: true,
+      data: { value: 'ok' },
+    })
+    expect(clone).toHaveBeenCalledTimes(1)
+  }
+  finally {
+    clone.mockRestore()
+    await client.close()
+  }
+})
+
 it('a custom stream yields before EOF and caller cancellation releases its body', async () => {
   const client = apiClient.create({
     events: apiContract.route({ method: 'GET', path: '/events' }).output(eventIterator(z.object({
