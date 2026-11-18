@@ -59,7 +59,7 @@ afterAll(async () => {
   await redis?.release()
 }, 300_000)
 
-function worker(input: object): Promise<{ success: boolean, code?: string }> {
+function worker(input: object, workerSettings: IamConfigInput = settings): Promise<{ success: boolean, code?: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
       fileURLToPath(new URL('./helpers/iam-security-worker.mjs', import.meta.url)),
@@ -69,7 +69,7 @@ function worker(input: object): Promise<{ success: boolean, code?: string }> {
         IAM_SECURITY_WORKER_INPUT: JSON.stringify({
           db,
           cache: cacheConfig,
-          iam: settings,
+          iam: workerSettings,
           ...input,
         }),
       },
@@ -107,13 +107,19 @@ it('独立节点累计错误密码达到统一锁定阈值', async () => {
 }, 60_000)
 
 it('独立节点仅有一次 OTP 消费和一次发送成功', async () => {
-  await iam.auth.sendOtp('distributed-otp@example.com')
-  const results = await Promise.all(Array.from({ length: 6 }, () => worker({
+  expect((await iam.auth.sendOtp('distributed-otp@example.com')).success).toBe(true)
+  const contenders = 6
+  // 重放仍须失败。阈值高于并发数，避免重放先锁定账号而干扰有效验证码的会话签发。
+  const otpSettings: IamConfigInput = {
+    ...settings,
+    security: { ...settings.security, maxLoginAttempts: contenders + 1 },
+  }
+  const results = await Promise.all(Array.from({ length: contenders }, () => worker({
     operation: 'otp',
     credentials: { identifier: 'distributed-otp@example.com', code },
-  })))
+  }, otpSettings)))
   expect(results.filter(result => result.success), JSON.stringify(results)).toHaveLength(1)
-  const sent = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'send', identifier: 'distributed-send@example.com' })))
+  const sent = await Promise.all(Array.from({ length: contenders }, () => worker({ operation: 'send', identifier: 'distributed-send@example.com' }, otpSettings)))
   expect(sent.filter(result => result.success)).toHaveLength(1)
 }, 60_000)
 
