@@ -952,22 +952,28 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       // Node 与真实 Nginx 共用本次容器网络，不依赖 Windows 宿主回连或外部网络。
       const require = createRequire(import.meta.url)
       const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
-      const flow = path.join(root, 'transport-flow.mjs')
-      const buildArgs = [
-        path.resolve('tests/fixtures/transport-capacity-node.ts'),
-        '--bundle',
-        '--platform=node',
-        '--format=esm',
-        '--target=node22',
-        `--outfile=${flow}`,
-        '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
-      ]
-      // Windows 使用Node启动JS入口；POSIX入口可能已被esbuild优化为原生程序，也可由shebang直接启动。
-      execFileSync(process.platform === 'win32'
-        ? process.execPath
-        : builder, process.platform === 'win32'
-        ? [builder, ...buildArgs]
-        : buildArgs, { windowsHide: true, timeout: 15_000 })
+      const scripts = {
+        'transport-flow.mjs': path.resolve('tests/fixtures/transport-capacity-node.ts'),
+        // 夹具将 Crypto 内联到单文件，须一同携带它在同目录启动的 Workers。
+        'crypto-transport-worker.js': path.join(path.dirname(require.resolve('@h-ai/crypto')), 'crypto-transport-worker.js'),
+      }
+      for (const [filename, entry] of Object.entries(scripts)) {
+        const buildArgs = [
+          entry,
+          '--bundle',
+          '--platform=node',
+          '--format=esm',
+          '--target=node22',
+          `--outfile=${path.join(root, filename)}`,
+          '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+        ]
+        // Windows 使用 Node 启动 esbuild 的 JS 入口；POSIX 可直接运行其入口。
+        execFileSync(process.platform === 'win32'
+          ? process.execPath
+          : builder, process.platform === 'win32'
+          ? [builder, ...buildArgs]
+          : buildArgs, { windowsHide: true, timeout: 15_000 })
+      }
       const identity = execFileSync(runtime, [
         'create',
         '--network',
@@ -984,7 +990,13 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       if (!/^[a-f0-9]{64}$/.test(identity))
         throw new Error('Expected an owned Node container identity')
       nodeContainer = identity
-      execFileSync(runtime, ['cp', flow, `${nodeContainer}:/tmp/transport-flow.mjs`], { windowsHide: true, timeout: 15_000 })
+      for (const filename of Object.keys(scripts)) {
+        execFileSync(runtime, [
+          'cp',
+          path.join(root, filename),
+          `${nodeContainer}:/tmp/${filename}`,
+        ], { windowsHide: true, timeout: 15_000 })
+      }
       // 24 MiB 场景包含三次真实加解密与代理往返，不能沿用单个 XLSX 的一分钟预算。
       const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 240_000 })
       expect(output).toContain('TRANSPORT_CAPACITY_PASS')
