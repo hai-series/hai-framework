@@ -129,6 +129,7 @@ declare global {
   // scenes - ai
   const AiDocumentDownloadMenu: typeof import('@h-ai/ui')['AiDocumentDownloadMenu']
   const AiDocumentEditor: typeof import('@h-ai/ui')['AiDocumentEditor']
+  const AiMindMapEditor: typeof import('@h-ai/ui')['AiMindMapEditor']
   const AiTableEditor: typeof import('@h-ai/ui')['AiTableEditor']
   const MarkdownRenderer: typeof import('@h-ai/ui')['MarkdownRenderer']
   // scenes - tools

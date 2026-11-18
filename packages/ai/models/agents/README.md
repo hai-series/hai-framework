@@ -100,6 +100,8 @@ acp:
 
 原生版本、程序和传输见各目录的 `agent.json`。构建选项包括 `--engine=auto|podman|docker`、`--variant=minimal|documents|office|browser|developer` 及 developer 的 `--java`、`--rust`、`--go`。
 
+DeepSeek Harness 镜像设置 `NARB_DISABLE_NATIVE_CACHE=1`，从镜像内直接加载 npm 安装的原生扩展。Docker 受管 Worker 的 `/tmp` 可以继续使用 `noexec`。已有镜像需要重新构建，并将执行环境指向新镜像 ID。
+
 代理通过Agent/workspace环境引用显式提供，并使用容器可达地址。Podman VM不能访问宿主127.0.0.1代理，受管运行不自动继承引擎服务代理。能力容量、超时、模型绑定和凭据隔离见[ACP接入](../../../cli/templates/skills/hai-ai/acp.md)与[配置手册](../../../../docs/usage/configuration/ai.md)。
 
 ## 错误处理

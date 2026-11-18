@@ -13,6 +13,8 @@ RUN npm install --global @deepseek-ai/dsh@0.2.1-rc.5
 RUN mkdir -p /workspace /state && chown node:node /workspace /state
 USER node
 ENV HOME=/state
+# 直接从镜像加载原生扩展，兼容 Docker 中带 noexec 的 /tmp。
+ENV NARB_DISABLE_NATIVE_CACHE=1
 WORKDIR /workspace
 ENTRYPOINT ["dsh"]
 CMD ["--profile", "acp"]

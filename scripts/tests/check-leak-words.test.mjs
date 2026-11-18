@@ -147,7 +147,9 @@ it('git 补丁读取失败仍阻断检查', () => {
   git(['config', 'diff.algorithm', 'invalid-fixture-algorithm'])
   const result = check(['--staged'])
   expect(result.status).not.toBe(0)
-  expect(result.stderr).toContain('invalid-fixture-algorithm')
+  // 断言变量名而非非法值：新版 git 报 "unknown value for config 'diff.algorithm': <值>"，
+  // 旧版（如 Apple Git 2.39）仅报 "bad config variable 'diff.algorithm'"，不含配置值。
+  expect(result.stderr).toContain('diff.algorithm')
 })
 
 it('保留提交信息的敏感词检查和脱敏', () => {

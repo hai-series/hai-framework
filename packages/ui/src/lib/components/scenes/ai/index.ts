@@ -45,6 +45,9 @@ export { highlightCode, isLanguageSupported } from './highlight.js'
 export { parseMarkdown } from './markdown-parse.js'
 export type { MarkdownParseOptions } from './markdown-parse.js'
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte'
+export { default as AiMindMapEditor } from './mind/AiMindMapEditor.svelte'
+export { fromMindElixirData, toMindElixirData } from './mind/mind-adapter.js'
+export type { AiMindMapChangePayload, AiMindMapData, AiMindMapEditorProps, AiMindMapExportFormat, AiMindMapNode, AiMindMapSelection } from './mind/mind-types.js'
 export { default as AiTableEditor } from './table/AiTableEditor.svelte'
 export type {
   AiTableColumn,

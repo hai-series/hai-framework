@@ -113,6 +113,7 @@ const UI_COMPONENTS = new Set([
   // scenes - ai
   'AiDocumentDownloadMenu',
   'AiDocumentEditor',
+  'AiMindMapEditor',
   'AiTableEditor',
   'MarkdownRenderer',
   // scenes - tools

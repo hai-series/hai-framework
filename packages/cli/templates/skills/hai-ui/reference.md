@@ -411,6 +411,7 @@ const p = usePlatform()
 | `AiDocumentDownloadMenu` | AI 文档下载菜单              |
 | `AiDocumentEditor`   | AI 文档编辑器（支持 Mermaid、受控代码预览，以及 `fontSize` / `allowHtmlTags`） |
 | `AiTableEditor`      | AI 表格编辑器                    |
+| `AiMindMapEditor`    | mind/v1 脑图查看与编辑；支持布局切换、撤销重做、JSON 导入及 JSON/CSV/XLSX/XMind 导出 |
 
 > AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。`AiDocumentEditor` 默认只允许 Markdown 内置预览；HTML / JS / CSS 等高风险预览需要显式启用 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
 >
