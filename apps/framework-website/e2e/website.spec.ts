@@ -234,11 +234,14 @@ test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和�
 test('配置流程图可加载、保留比例，手机端可以打开原图阅读', async ({ page }) => {
   await page.goto('/hai-framework/docs/configuration/data/')
   const diagram = page.locator('article img[src$="storage-private-download.svg"]')
-  await diagram.scrollIntoViewIfNeeded()
-  await expect(diagram).toHaveJSProperty('complete', true)
-  expect(await diagram.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1080)
+  // Markdown 水合可能换掉预渲染节点，每次检查都定位当前图片并触发懒加载。
+  await expect.poll(() => diagram.evaluate((element) => {
+    const image = element as HTMLImageElement
+    image.scrollIntoView({ block: 'center' })
+    return { complete: image.complete, width: image.naturalWidth }
+  })).toEqual({ complete: true, width: 1080 })
   await page.setViewportSize({ width: 390, height: 844 })
-  await diagram.scrollIntoViewIfNeeded()
+  await expect(diagram).toBeVisible()
   expect(await diagram.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(390)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   await diagram.locator('..').click()
