@@ -20,6 +20,8 @@ See the [configuration reference](../../docs/usage/configuration/payment.en.md) 
 
 ## Features
 
+`hai add payment` adds payment and database dependencies, configuration examples, and the payment skill. Define payment routes in the application and read the amount, owner, and payable state from the application order.
+
 [Browse the API list](../../docs/usage/function/payment.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures

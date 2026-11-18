@@ -54,6 +54,8 @@ pnpm dev
 
 已有项目可用 `hai add <module>` 添加适用模块，例如 `hai add deploy`。`page` 生成器用于 SvelteKit 文件路由；`api` 按目标 workspace 生成 SvelteKit 路由或 Serv 的 contract、procedure 及聚合入口，使用 `--workspace` 选择服务。fullstack 的 hash 页面按生成结构继续开发。
 
+`hai add payment` 添加支付及数据库依赖、配置示例和支付 skill。应用的支付路由由应用定义，金额、主体与可支付状态从业务订单读取。
+
 <a id="project-layout"></a>
 
 ## 理解目录再改代码

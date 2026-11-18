@@ -20,6 +20,8 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 ## 機能
 
+`hai add payment` は決済・データベースの依存関係、設定例、決済 skill を追加します。決済ルートはアプリケーションで定義し、金額、所有者、決済可能な状態は業務注文から取得します。
+
 [API 一覧](../../docs/usage/function/payment.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造

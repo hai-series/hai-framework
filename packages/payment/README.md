@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+`hai add payment` 添加支付及数据库依赖、配置示例和支付 skill。应用的支付路由由应用定义，金额、主体与可支付状态从业务订单读取。
+
 [查 API 清单](../../docs/usage/function/payment.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构

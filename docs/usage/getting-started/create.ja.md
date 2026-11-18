@@ -45,6 +45,8 @@ pnpm dev
 
 既存アプリには `hai add <module>` で対応モジュールを追加し、設定と呼び出しをアプリに組み込みます。ルートを生成する場合、`page` は SvelteKit 用です。`api` は `--workspace` で選んだ対象に応じて SvelteKit のルート、または Serv の API 定義と procedure を生成します。fullstack クライアントは生成されたハッシュルートを使います。
 
+`hai add payment` は決済・データベースの依存関係、設定例、決済 skill を追加します。決済ルートはアプリケーションで定義し、金額、所有者、決済可能な状態は業務注文から取得します。
+
 <a id="project-layout"></a>
 
 ## 生成された構成を確認する

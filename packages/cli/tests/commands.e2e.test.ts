@@ -1894,6 +1894,9 @@ describe('addModule', () => {
       expect(workspace.catalog[name]).toBe('1.0.0-beta.6')
     }
     expect(await exists(dir, 'config/_db.yml')).toBe(true)
+    expect(await exists(dir, 'config/_payment.yml')).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-payment/SKILL.md')).toBe(true)
+    expect(await exists(dir, 'src/routes/api/v1/payment')).toBe(false)
     expect(await exists(dir, 'pnpm-workspace.yaml')).toBe(false)
   })
 

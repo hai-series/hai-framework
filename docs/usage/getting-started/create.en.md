@@ -45,6 +45,8 @@ The first command generates a Web frontend and API workspace, installs dependenc
 
 Use `hai add <module>` to add a supported module to an existing app, then configure and connect it in the application. For generated routes, `page` targets SvelteKit. `api` generates SvelteKit routes or the Serv contract and procedure, depending on the selected `--workspace`. Fullstack clients use the generated hash routes.
 
+`hai add payment` adds payment and database dependencies, configuration examples, and the payment skill. Define payment routes in the application and read the amount, owner, and payable state from the application order.
+
 <a id="project-layout"></a>
 
 ## Read the generated structure
