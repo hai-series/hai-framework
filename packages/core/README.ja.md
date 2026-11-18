@@ -28,6 +28,8 @@ Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`c
 
 アプリ設定、言語、ログ、リクエストコンテキストの管理範囲については[データ構造](../../docs/usage/data/core.ja.md)を参照してください。
 
+[ワーカースレッド](../../docs/usage/function/core.ja.md#worker-api)
+
 ## 開発とテスト
 
 リポジトリールートで実行します（PowerShell は `pnpm.cmd`）。

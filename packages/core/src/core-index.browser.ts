@@ -13,3 +13,4 @@ export * from './core-main.browser.js'
 
 // 类型定义（HaiResult, Logger, i18n 公共类型等）
 export * from './core-types.js'
+export type * from './core-worker-types.js'

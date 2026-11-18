@@ -329,6 +329,87 @@ if (!afterClose.success)
 
 The proxy never turns into the real implementation. The `orderLookup.orders` getter exposes the real queries once the module is ready. Read the getter for each call instead of keeping a reference to the startup placeholder.
 
+<a id="worker-api"></a>
+
+### Run CPU work on background threads with `core.worker`
+
+Use a Worker for large document processing or batch computation while the calling thread continues serving other work. The pool starts threads on demand, runs one job per thread and takes waiting jobs in submission order. A dedicated thread supports ongoing message exchanges and independent termination.
+
+#### Interface list
+
+| Entry | Purpose | Inputs | Returns | Example |
+| --- | --- | --- | --- | --- |
+| `core.worker.createPool(entry, limits)` | Create a pool | Entry, positive thread limit, non-negative queue limit and optional idle time in milliseconds | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | Submit work | A cloneable input and optional transfer list | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `pool.close()` | Settle unfinished jobs and stop the threads | None | `Promise<void>` | `await pool.close()` |
+| `core.worker.start(entry, options?)` | Start a dedicated thread | Entry, plus optional Node `workerData` and `execArgv` | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | Send a message | Input and optional transfer list | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | Subscribe to messages | Function that receives the output | Unsubscribe function | `const unsubscribe = thread.onMessage(receive)` |
+| `thread.exited` | Observe exit | None | `Promise<WorkerExit>` | `await thread.exited` |
+| `thread.terminate()` | Stop the thread | None | `Promise<void>` | `await thread.terminate()` |
+
+#### Scenario: Measure documents and release the threads
+
+The diagram follows one pool. Each thread takes the next waiting job after returning its current result. Closing settles queued and running tasks.
+
+![Jobs pass through a bounded queue to a background thread. Closing settles jobs and waits for exit.](../images/function-core-worker.en.svg)
+
+For example, while the first document runs, the second waits in the queue. If the owner closes the pool at that point, both tasks return a closed-pool result. The owner waits for `close()` before releasing other resources.
+
+Ship the following entry file with the application. It replies once per input. Use the matching input and output types in the caller.
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+parentPort?.on('message', report => parentPort.postMessage(report.length))
+```
+
+Create the pool in the Node service and close it after the batch.
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
+try {
+  const result = await pool.run('Quarterly report')
+  if (!result.success)
+    throw new Error(result.error.message)
+  void result.data // 16
+}
+finally {
+  await pool.close()
+}
+```
+
+A full queue returns `HaiCommonError.RATE_LIMIT_EXCEEDED`. A closed pool returns `NOT_INITIALIZED`. Startup, message and thread failures return `INTERNAL_ERROR`. The failed job settles and later jobs can start a replacement thread. Set `idleTimeoutMs` for idle reclamation. By default idle threads remain until close, and idle Node threads release their event-loop reference.
+
+#### Scenario: Start one dedicated thread and wait for a reply
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const thread = core.worker.start<string, number>(entry)
+let unsubscribe: (() => void) | undefined
+try {
+  const reply = new Promise<number>((resolve) => {
+    unsubscribe = thread.onMessage(resolve)
+    thread.postMessage('Report')
+  })
+  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
+    throw new Error(`Worker exited before replying (${code})`)
+  })])
+  void length // 6
+}
+finally {
+  unsubscribe?.()
+  await thread.terminate()
+}
+```
+
+In a Vite application, put the entry inside the Web Worker constructor, for example `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`. The Web Worker entry uses `globalThis.addEventListener("message", ...)` and `postMessage()`. Load trusted scripts shipped with the application. Messages use structured clone. Node supports transferring ArrayBuffer, and browsers also support objects such as ImageBitmap. A submitted transfer list assigns ownership to the worker.
+
 <a id="access-api"></a>
 
 ### Check request access: `core.access` (Node)

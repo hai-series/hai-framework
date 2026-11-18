@@ -120,7 +120,7 @@ const hidden = new Map([
 ])
 
 /** 真实自引用消费已发布声明；负例防止内部类型或浏览器服务器实例重新泄漏。 */
-function typeSmoke(directories, suffix, browser, generated) {
+function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = false) {
   const sources = directories.map(({ directory, manifest, base }) => {
     const source = [`import * as api from '${manifest.name}'`, 'export type PublishedApi = typeof api']
     for (const name of hidden.get(directory) ?? [])
@@ -172,9 +172,15 @@ function typeSmoke(directories, suffix, browser, generated) {
       source.push('const onInput = api.core.async.debounce((value: string, count: number) => value.repeat(count), 100)', 'const onScroll = api.core.async.throttle((position: number) => position + 1, 100)', 'onInput("sample", 2); onScroll(1)')
       source.push('// @ts-expect-error 防抖包装保留回调参数类型', 'onInput(2, "sample")', '// @ts-expect-error 节流包装不接受缺失的必需参数', 'onScroll()')
       source.push('export const policy = api.RequestAccessConfigSchema.parse(false)')
+      source.push(
+        'const pool: api.WorkerPool<string, number> = api.core.worker.createPool(new URL("file:///opt/app/report-worker.mjs"), { maxWorkers: 1, maxQueuedJobs: 2 })',
+        'export const pendingWorkerResult: Promise<api.HaiResult<number>> = pool.run("sample")',
+        '// @ts-expect-error 任务输入类型由 WorkerPool 契约约束',
+        'pool.run(5)',
+      )
       source.push('// @ts-expect-error 请求检查执行函数统一注册在 core.access', 'api.createRequestCheck(false)')
       if (browser)
-        source.push('// @ts-expect-error 浏览器没有 Node 访问策略执行能力', 'api.core.access')
+        source.push('// @ts-expect-error 浏览器没有 Node 访问策略执行能力', 'api.core.access', 'api.core.worker.createPool(() => new Worker(new URL("/worker.js", "https://example.test"), { type: "module" }), { maxWorkers: 1, maxQueuedJobs: 0 })')
       else
         source.push('export const access: api.AccessFunctions = api.core.access', 'export const decision = access.createRequestCheck(policy)(\'/api/example\', \'GET\')')
     }
@@ -208,7 +214,7 @@ function typeSmoke(directories, suffix, browser, generated) {
   const program = ts.createProgram(sources, {
     noEmit: true,
     strict: true,
-    skipLibCheck: true,
+    skipLibCheck: !nodeWithoutDom,
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -216,7 +222,14 @@ function typeSmoke(directories, suffix, browser, generated) {
       ? ['browser']
       : [],
     allowArbitraryExtensions: true,
-    types: [],
+    types: nodeWithoutDom
+      ? ['node']
+      : [],
+    ...(nodeWithoutDom
+      ? {
+          lib: ['lib.es2022.d.ts'],
+        }
+      : {}),
   })
   const diagnostics = ts.getPreEmitDiagnostics(program)
   if (diagnostics.length) {
@@ -299,6 +312,12 @@ try {
     catch (error) {
       failures.push(`${browser ? 'Browser' : 'Node'} public declarations: ${error.message}`)
     }
+  }
+  try {
+    typeSmoke(directories.filter(({ directory }) => directory === 'core'), `${basename(temporary)}-core-only`, false, generated, true)
+  }
+  catch (error) {
+    failures.push(`Core Node declarations without DOM types: ${error.message}`)
   }
   for (const { directory, manifest, base } of directories) {
     const entries = expandPackageExports(base, manifest.exports ?? {})

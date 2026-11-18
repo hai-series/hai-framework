@@ -17,6 +17,7 @@ import type {
   RequestAccessPolicySchema,
   TrustedProxiesSchema,
 } from './core-config.js'
+import type { BrowserWorkerFunctions, NodeWorkerFunctions } from './core-worker-types.js'
 import type { config as browserConfig } from './functions/core-function-config.browser.js'
 import type { config as nodeConfig } from './functions/core-function-config.node.js'
 import type { id } from './functions/core-function-id.js'
@@ -758,6 +759,7 @@ export interface AccessFunctions {
  */
 export interface NodeCoreFunctions extends CoreFunctions {
   readonly access: AccessFunctions
+  readonly worker: NodeWorkerFunctions
   readonly config: ConfigFn
   readonly init: (options?: CoreOptions) => void
 }
@@ -771,6 +773,7 @@ export interface NodeCoreFunctions extends CoreFunctions {
  * ```
  */
 export interface BrowserCoreFunctions extends CoreFunctions {
+  readonly worker: BrowserWorkerFunctions
   readonly config: BrowserConfigFn
   readonly init: (options?: CoreOptions) => void
 }

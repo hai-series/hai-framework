@@ -18552,6 +18552,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BrowserWorkerFunctions",
+              "kind": "type",
+              "declaration": "BrowserWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ConfigFn",
               "kind": "type",
               "declaration": "ConfigFn",
@@ -18810,6 +18816,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "NodeWorkerFunctions",
+              "kind": "type",
+              "declaration": "NodeWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NotInitializedKit",
               "kind": "type",
               "declaration": "NotInitializedKit",
@@ -18952,6 +18964,36 @@
               "kind": "type",
               "declaration": "WatchCallback",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerEntry",
+              "kind": "type",
+              "declaration": "WorkerEntry",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerExit",
+              "kind": "type",
+              "declaration": "WorkerExit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPool",
+              "kind": "type",
+              "declaration": "WorkerPool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPoolOptions",
+              "kind": "type",
+              "declaration": "WorkerPoolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerThread",
+              "kind": "type",
+              "declaration": "WorkerThread",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -19031,6 +19073,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BrowserWorkerFunctions",
+              "kind": "type",
+              "declaration": "BrowserWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ConfigFn",
               "kind": "type",
               "declaration": "ConfigFn",
@@ -19289,6 +19337,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "NodeWorkerFunctions",
+              "kind": "type",
+              "declaration": "NodeWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NotInitializedKit",
               "kind": "type",
               "declaration": "NotInitializedKit",
@@ -19431,6 +19485,36 @@
               "kind": "type",
               "declaration": "WatchCallback",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerEntry",
+              "kind": "type",
+              "declaration": "WorkerEntry",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerExit",
+              "kind": "type",
+              "declaration": "WorkerExit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPool",
+              "kind": "type",
+              "declaration": "WorkerPool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPoolOptions",
+              "kind": "type",
+              "declaration": "WorkerPoolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerThread",
+              "kind": "type",
+              "declaration": "WorkerThread",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -19509,6 +19593,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BrowserWorkerFunctions",
+              "kind": "type",
+              "declaration": "BrowserWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ConfigFn",
               "kind": "type",
               "declaration": "ConfigFn",
@@ -19767,6 +19857,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "NodeWorkerFunctions",
+              "kind": "type",
+              "declaration": "NodeWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NotInitializedKit",
               "kind": "type",
               "declaration": "NotInitializedKit",
@@ -19909,6 +20005,36 @@
               "kind": "type",
               "declaration": "WatchCallback",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerEntry",
+              "kind": "type",
+              "declaration": "WorkerEntry",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerExit",
+              "kind": "type",
+              "declaration": "WorkerExit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPool",
+              "kind": "type",
+              "declaration": "WorkerPool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPoolOptions",
+              "kind": "type",
+              "declaration": "WorkerPoolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerThread",
+              "kind": "type",
+              "declaration": "WorkerThread",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -19987,6 +20113,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BrowserWorkerFunctions",
+              "kind": "type",
+              "declaration": "BrowserWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ConfigFn",
               "kind": "type",
               "declaration": "ConfigFn",
@@ -20245,6 +20377,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "NodeWorkerFunctions",
+              "kind": "type",
+              "declaration": "NodeWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NotInitializedKit",
               "kind": "type",
               "declaration": "NotInitializedKit",
@@ -20387,6 +20525,36 @@
               "kind": "type",
               "declaration": "WatchCallback",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerEntry",
+              "kind": "type",
+              "declaration": "WorkerEntry",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerExit",
+              "kind": "type",
+              "declaration": "WorkerExit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPool",
+              "kind": "type",
+              "declaration": "WorkerPool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPoolOptions",
+              "kind": "type",
+              "declaration": "WorkerPoolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerThread",
+              "kind": "type",
+              "declaration": "WorkerThread",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -20465,6 +20633,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BrowserWorkerFunctions",
+              "kind": "type",
+              "declaration": "BrowserWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ConfigFn",
               "kind": "type",
               "declaration": "ConfigFn",
@@ -20723,6 +20897,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "NodeWorkerFunctions",
+              "kind": "type",
+              "declaration": "NodeWorkerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NotInitializedKit",
               "kind": "type",
               "declaration": "NotInitializedKit",
@@ -20865,6 +21045,36 @@
               "kind": "type",
               "declaration": "WatchCallback",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerEntry",
+              "kind": "type",
+              "declaration": "WorkerEntry",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "WorkerExit",
+              "kind": "type",
+              "declaration": "WorkerExit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPool",
+              "kind": "type",
+              "declaration": "WorkerPool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerPoolOptions",
+              "kind": "type",
+              "declaration": "WorkerPoolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkerThread",
+              "kind": "type",
+              "declaration": "WorkerThread",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ZodMessageGetter",

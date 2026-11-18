@@ -335,6 +335,87 @@ if (!afterClose.success)
 
 仮の操作オブジェクト自体が実際の実装に変わるわけではありません。初期化後は `orderLookup.orders` の getter が実際の操作を返します。起動前に取得した仮のオブジェクトを保持せず、照会のたびに getter から取得します。
 
+<a id="worker-api"></a>
+
+### `core.worker` で CPU 処理をバックグラウンドに移す
+
+大きな文書の処理や一括計算を Worker に渡すと、呼び出し元はほかの処理を続けられます。プールは必要に応じてスレッドを起動し、各スレッドは待機キューの先頭から一件ずつ実行します。メッセージの継続的な交換や個別の終了には専用スレッドを使います。
+
+#### インターフェース一覧
+
+| 入口 | 用途 | 入力 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `core.worker.createPool(entry, limits)` | プールを作成 | エントリー、正のスレッド上限、非負の待機件数上限、任意のアイドル時間（ミリ秒） | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | 処理を投入 | 構造化クローン可能な入力と任意の転送リスト | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `pool.close()` | 未完了処理を解決してスレッドを終了 | なし | `Promise<void>` | `await pool.close()` |
+| `core.worker.start(entry, options?)` | 専用スレッドを起動 | エントリー。Node では `workerData` と `execArgv` も指定可 | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | メッセージを送信 | 入力と任意の転送リスト | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | メッセージを購読 | 出力を受け取る関数 | 購読解除関数 | `const unsubscribe = thread.onMessage(receive)` |
+| `thread.exited` | 終了を監視 | なし | `Promise<WorkerExit>` | `await thread.exited` |
+| `thread.terminate()` | スレッドを終了 | なし | `Promise<void>` | `await thread.terminate()` |
+
+#### 利用例：文書の文字数を測定してスレッドを解放する
+
+図は一つのプール内の流れを示します。各スレッドは結果を返した後、キューの先頭の処理を受け取ります。終了時には待機中と実行中の処理を解決します。
+
+![容量制限付きキューからワーカーへ処理を渡し、プールを閉じると処理を解決して終了を待つ](../images/function-core-worker.ja.svg)
+
+一件目の文書を処理している間、二件目はキューで待機します。この時点でプールを閉じると両方が終了済みの結果を受け取ります。呼び出し元は `close()` の完了後にほかのリソースを解放します。
+
+次のエントリーファイルをアプリと一緒に配布します。入力一件につき一回応答し、呼び出し側には対応する入力と出力の型を指定します。
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+parentPort?.on('message', report => parentPort.postMessage(report.length))
+```
+
+Node サービスでプールを作成し、一連の処理を終えたら閉じます。
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
+try {
+  const result = await pool.run('Quarterly report')
+  if (!result.success)
+    throw new Error(result.error.message)
+  void result.data // 16
+}
+finally {
+  await pool.close()
+}
+```
+
+キューが満杯の場合は `HaiCommonError.RATE_LIMIT_EXCEEDED`、プールが閉じていれば `NOT_INITIALIZED`、起動や通信、スレッドの障害は `INTERNAL_ERROR` になります。障害のあった処理を解決した後、後続の処理でスレッドを補充できます。`idleTimeoutMs` でアイドル時の回収を指定できます。省略すると終了操作までアイドルスレッドが残り、Node ではイベントループの参照が解除されます。
+
+#### 利用例：専用スレッドを起動して最初の応答を待つ
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const thread = core.worker.start<string, number>(entry)
+let unsubscribe: (() => void) | undefined
+try {
+  const reply = new Promise<number>((resolve) => {
+    unsubscribe = thread.onMessage(resolve)
+    thread.postMessage('Report')
+  })
+  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
+    throw new Error(`Worker exited before replying (${code})`)
+  })])
+  void length // 6
+}
+finally {
+  unsubscribe?.()
+  await thread.terminate()
+}
+```
+
+Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })` のように Web Worker のコンストラクター内に入口を記述します。Worker の入口は `globalThis.addEventListener("message", ...)` と `postMessage()` を使います。アプリと一緒に配布した信頼できるスクリプトを使用します。メッセージは構造化クローンで送信されます。Node では ArrayBuffer、ブラウザーでは ImageBitmap なども転送でき、転送リストを指定すると所有権が Worker に移ります。
+
 <a id="access-api"></a>
 
 ### 要求のアクセス判定：`core.access`（Node）

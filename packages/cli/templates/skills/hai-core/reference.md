@@ -162,6 +162,16 @@ feature:
   url: http://${HOST}:${PORT} # → string（混合文本，不还原）
 ```
 
+<a id="worker-api"></a>
+
+### 通过 `core.worker` 执行 CPU 工作
+
+每个入口是应用发布的受信任 Worker 脚本。Node 传入 `new URL('./job-worker.mjs', import.meta.url)`。Vite 浏览器使用 `() => new Worker(new URL('./job-worker.js', import.meta.url), { type: 'module' })`。
+
+- `core.worker.createPool<Input, Output>(entry, { maxWorkers, maxQueuedJobs, idleTimeoutMs? })` 按需起线程。每个线程收到一个任务后回复一次。等待队列满、池关闭、线程或消息失败分别返回通用的限流、未初始化、内部错误。对 `pool.run(input)` 检查 `success`，在所有者关闭时等待 `pool.close()`。
+- `core.worker.start<Input, Output>(entry, options?)` 建立独占线程。用 `postMessage()` 发送、`onMessage()` 订阅并取得退订函数、`exited` 观察退出、`terminate()` 等待关闭。Node 选项支持 `workerData` 和 `execArgv`。状态协调和事务协议由调用模块管理。
+- 消息使用结构化克隆。转移列表交出缓冲区所有权，Node 接收 ArrayBuffer，浏览器还可转移 ImageBitmap 等对象。传递业务操作所需的最小输入。
+
 ### 日志 — `core.logger`
 
 `core.logger` 既是默认 Logger 实例，也是日志管理的统一入口。

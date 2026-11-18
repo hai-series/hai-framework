@@ -9,6 +9,7 @@ import type { BrowserCoreFunctions, CoreOptions } from './core-types.js'
 import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.browser.js'
 import { logger } from './functions/core-function-logger.browser.js'
+import { worker } from './functions/core-function-worker.browser.js'
 
 // ─── Core 实例 ───
 
@@ -33,6 +34,7 @@ function createBrowserCore(): BrowserCoreFunctions {
   // 扩展 config 和 init 功能；浏览器端 config 为占位实现，返回明确不支持错误。
   return {
     ...baseCore,
+    worker,
     /** 配置管理（浏览器端不支持文件配置，方法返回 SERVICE_UNAVAILABLE） */
     config,
     /** 初始化 Core */

@@ -37,11 +37,11 @@
 | @h-ai/capacitor | `. (types)` | 24 |
 | @h-ai/cli | `. (import)` | 0 |
 | @h-ai/cli | `. (types)` | 0 |
-| @h-ai/core | `. (browser/default)` | 78 |
-| @h-ai/core | `. (browser/types)` | 78 |
-| @h-ai/core | `. (default)` | 78 |
-| @h-ai/core | `. (import)` | 78 |
-| @h-ai/core | `. (types)` | 78 |
+| @h-ai/core | `. (browser/default)` | 85 |
+| @h-ai/core | `. (browser/types)` | 85 |
+| @h-ai/core | `. (default)` | 85 |
+| @h-ai/core | `. (import)` | 85 |
+| @h-ai/core | `. (types)` | 85 |
 | @h-ai/crypto | `. (browser/default)` | 40 |
 | @h-ai/crypto | `. (browser/types)` | 40 |
 | @h-ai/crypto | `. (default)` | 40 |

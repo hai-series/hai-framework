@@ -13,3 +13,4 @@ export * from './core-main.node.js'
 
 // 类型定义（HaiResult, Logger 等）
 export * from './core-types.js'
+export type * from './core-worker-types.js'

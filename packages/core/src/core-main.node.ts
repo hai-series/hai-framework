@@ -18,6 +18,7 @@ import { access } from './functions/core-function-access.node.js'
 import { config, loadConfigStructure } from './functions/core-function-config.node.js'
 import { installRequestContext } from './functions/core-function-context.js'
 import { logger } from './functions/core-function-logger.node.js'
+import { worker } from './functions/core-function-worker.node.js'
 import { installRequestLocales } from './i18n/core-i18n-utils.js'
 
 // 请求语言跨 await 保持隔离，避免并行 SSR 修改另一个请求的默认语言。
@@ -50,6 +51,7 @@ function createNodeCore(): NodeCoreFunctions {
     ...baseCore,
     /** Node 专属的可信地址、策略文件读取与已编译访问检查。 */
     access,
+    worker,
     string: {
       ...baseCore.string,
       /**

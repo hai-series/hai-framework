@@ -36,6 +36,8 @@
 
 查看[数据结构](../../docs/usage/data/core.md)，了解应用配置、语言、日志与请求上下文的归属。
 
+[后台线程](../../docs/usage/function/core.md#worker-api)
+
 ## 开发测试
 
 在仓库根目录执行（PowerShell 使用 `pnpm.cmd`）：

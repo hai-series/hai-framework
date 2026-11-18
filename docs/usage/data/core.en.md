@@ -110,6 +110,16 @@ Start dependencies in order and close in reverse, avoiding duplicate startup or 
 
 Only isInitialized:true is shown; start/close are functions omitted from JSON. This is not database state.
 
+### Worker pool and exit state
+
+Jobs and replies belong to their in-process pool. The owner closes the pool to release queued and running work. The following result is from a dedicated browser thread stopped by its owner. Node reports its thread exit code in `code`, with the thread error in `error` when available.
+
+```json
+{
+  "code": 0
+}
+```
+
 ## Field, storage and cleanup reference
 
 Core keeps the data below in the running process. It creates no database tables, Redis keys or disk cache. Each Node process loads the configuration it needs.

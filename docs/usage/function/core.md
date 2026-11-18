@@ -832,6 +832,87 @@ core.module.requiresSharedState({ NODE_ENV: 'production' }) // true：应使用�
 core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // false：显式 E2E 例外。
 ```
 
+<a id="worker-api"></a>
+
+### 在后台线程处理 CPU 工作：`core.worker`
+
+把大文档处理或批量计算交给 Worker，调用线程可继续响应。池在提交首个任务时才启动线程，每个线程同时处理一项任务，按提交顺序从等待队列取任务。独占线程适合需要持续交换消息或单独终止的操作。
+
+#### 接口清单
+
+| 入口 | 用途 | 参数 | 返回 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.worker.createPool(entry, limits)` | 创建任务池 | 入口、正整数线程数、非负等待上限及可选空闲回收毫秒数 | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | 提交一次计算 | 可结构化克隆的输入和可选转移列表 | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `pool.close()` | 结算未完成任务并回收线程 | 无 | `Promise<void>` | `await pool.close()` |
+| `core.worker.start(entry, options?)` | 创建独占线程 | 入口；Node 可选 `workerData` 和 `execArgv` | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | 发送消息 | 输入和可选转移列表 | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | 订阅消息 | 接收输出的函数 | 取消订阅函数 | `const unsubscribe = thread.onMessage(receive)` |
+| `thread.exited` | 观察退出 | 无 | `Promise<WorkerExit>` | `await thread.exited` |
+| `thread.terminate()` | 终止线程 | 无 | `Promise<void>` | `await thread.terminate()` |
+
+#### 场景：统计导入文档并释放线程
+
+图中追踪一个已经启动的池。每个线程确认当前结果后从队首领取下一项；关闭会结算队列及正在运行的任务。
+
+![任务进入有容量上限的队列，经后台线程返回结果，关闭后等待线程退出](../images/function-core-worker.svg)
+
+例如，第一个线程正在统计一篇文档，第二篇进入等待队列。如果此时关闭池，两篇任务都返回已关闭结果，调用方等待 `close()` 完成后再释放自己的资源。
+
+将以下入口文件随应用发布。线程收到一条输入就回复一次，调用方使用相同的类型描述请求和返回值。
+
+```js
+import { parentPort } from 'node:worker_threads'
+
+parentPort?.on('message', report => parentPort.postMessage(report.length))
+```
+
+在 Node 服务入口创建池，处理完这一批后关闭。
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
+try {
+  const result = await pool.run('Quarterly report')
+  if (!result.success)
+    throw new Error(result.error.message)
+  void result.data // 16
+}
+finally {
+  await pool.close()
+}
+```
+
+队列满返回 `HaiCommonError.RATE_LIMIT_EXCEEDED`，池关闭返回 `NOT_INITIALIZED`，启动、传输或线程异常返回 `INTERNAL_ERROR`。异常任务结算后，后续工作可启动补位线程。空闲回收由 `idleTimeoutMs` 控制。无该参数时，空闲线程保留至关闭，Node 空闲线程会释放事件循环引用。
+
+#### 场景：启动独占线程并接收第一条消息
+
+```ts
+import { core } from '@h-ai/core'
+
+const entry = new URL('./stats-worker.mjs', import.meta.url)
+const thread = core.worker.start<string, number>(entry)
+let unsubscribe: (() => void) | undefined
+try {
+  const reply = new Promise<number>((resolve) => {
+    unsubscribe = thread.onMessage(resolve)
+    thread.postMessage('Report')
+  })
+  const length = await Promise.race([reply, thread.exited.then(({ code }) => {
+    throw new Error(`Worker exited before replying (${code})`)
+  })])
+  void length // 6
+}
+finally {
+  unsubscribe?.()
+  await thread.terminate()
+}
+```
+
+在 Vite 应用中，将入口写在 Web Worker 构造函数中，例如 `() => new Worker(new URL("./stats-worker.js", import.meta.url), { type: "module" })`。Web Worker 入口用 `globalThis.addEventListener("message", ...)` 和 `postMessage()`。只使用应用发布的可信脚本。普通消息通过结构化克隆传输，Node 转移 ArrayBuffer，浏览器也能转移 ImageBitmap 等对象。提交转移列表后由线程取得缓冲区所有权。
+
 <a id="access-api"></a>
 
 ### 请求访问检查：`core.access`（Node）

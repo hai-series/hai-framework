@@ -28,6 +28,8 @@ The module creates no database tables of its own.
 
 See the [data reference](../../docs/usage/data/core.en.md) for ownership of application configuration, locale, logging and request context.
 
+[Worker threads](../../docs/usage/function/core.en.md#worker-api)
+
 ## Development and Testing
 
 Run from the repository root (use `pnpm.cmd` in PowerShell):

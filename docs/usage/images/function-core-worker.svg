@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="912" height="250" viewBox="0 0 912 250" role="img" aria-label="任务进入有容量上限的队列，经后台线程返回结果，关闭后等待线程退出">
+  <rect x="1" y="1" width="910" height="248" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#475569"/>
+    </marker>
+  </defs>
+  <g stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M187 75 H245"/><path d="M416 75 H475"/><path d="M646 75 H705"/>
+    <path d="M188 176 H245"/>
+    <path d="M545 105 V143"/>
+  </g>
+  <g stroke="#93c5fd" fill="#eff6ff">
+    <rect x="26" y="44" width="160" height="61" rx="9"/>
+    <rect x="253" y="44" width="162" height="61" rx="9"/>
+    <rect x="483" y="44" width="162" height="61" rx="9"/>
+    <rect x="713" y="44" width="173" height="61" rx="9"/>
+  </g>
+  <g stroke="#7dd3fc" fill="#f0f9ff">
+    <rect x="26" y="145" width="162" height="61" rx="9"/>
+    <rect x="253" y="145" width="392" height="61" rx="9"/>
+  </g>
+  <g fill="#0f172a" font-family="system-ui, sans-serif" font-size="24" text-anchor="middle" dominant-baseline="central">
+    <text x="106" y="75">提交任务</text>
+    <text x="334" y="75">等待队列</text>
+    <text x="564" y="75">工作线程</text>
+    <text x="799" y="75">返回结果</text>
+    <text x="106" y="176">关闭池</text>
+    <text x="449" y="176">结算任务并等待退出</text>
+  </g>
+</svg>
