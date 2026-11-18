@@ -1,10 +1,9 @@
-import type { AgentPreferences, AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry } from './workspace.js'
+import type { AgentPreferences, AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry, WorkspacePage } from './workspace.js'
 import { resolve } from '$app/paths'
 import { blobToWav } from '@h-ai/ai/client'
 
 export interface HomeView {
   preferences: AgentPreferences
-  tasks: AgentTask[]
   agents: { id: string, name: string, adapter: string, models: string[], modes: string[] }[]
   projects: { id: string, title: string }[]
   tools: { id: string, description: string }[]
@@ -53,6 +52,36 @@ export function url(params?: Record<string, string>) {
 
 export async function read<T>(params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   return (await checked(await fetch(url(params), { signal }))).json()
+}
+
+export function readTaskPage(query: string, archived: boolean, cursor?: string, signal?: AbortSignal) {
+  return read<WorkspacePage<AgentTask>>({
+    pane: 'tasks',
+    archived: archived ? '1' : '0',
+    query,
+    ...(cursor
+      ? { cursor }
+      : {}),
+  }, signal)
+}
+
+export function readResourcePage(pane: 'files' | 'artifacts', cursor?: string, signal?: AbortSignal) {
+  return read<WorkspacePage<AgentResource>>({
+    pane,
+    ...(cursor
+      ? { cursor }
+      : {}),
+  }, signal)
+}
+
+/** 增量加载保持当前顺序并按 ID 去重，允许同一条记录展示较新的投影。 */
+export function mergePageItems<T extends { id: string }>(current: T[], next: T[]): T[] {
+  return [
+    ...new Map([
+      ...current,
+      ...next,
+    ].map(item => [item.id, item])).values(),
+  ]
 }
 
 export async function mutate<T>(command: Record<string, unknown>, signal?: AbortSignal): Promise<T> {

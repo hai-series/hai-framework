@@ -118,6 +118,7 @@
   "incompatible": "These settings are unavailable with the selected mode or permissions.",
   "retry": "Retry",
   "older": "Load earlier messages",
+  "load_more": "Load more",
   "loading": "Loading…",
   "submitting": "Starting",
   "confirming_submission": "Confirming submission",

@@ -278,7 +278,7 @@ export async function upload(user: string, file: File) {
 }
 
 export async function knowledgeLists(user: string) {
-  return Promise.all((await listResources(user, 'knowledge')).map(async (entry) => {
+  return Promise.all((await listResources(user, 'knowledge')).items.map(async (entry) => {
     const docs = await ai.knowledge.listDocuments({
       collection: collection(entry.id),
       limit: 40,

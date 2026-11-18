@@ -1,9 +1,9 @@
 import type { DmlOperations } from '@h-ai/reldb'
-import type { AgentPreferences, AgentResource, AgentSettings, AgentTask, AgentTurn, SendTurn } from '#lib/workspace.js'
+import type { AgentPreferences, AgentResource, AgentSettings, AgentTask, AgentTurn, SendTurn, WorkspacePage } from '#lib/workspace.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { core, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { prefsSchema } from '#lib/workspace.js'
+import { id, prefsSchema } from '#lib/workspace.js'
 
 const tasks = 'hai_agent_tasks'
 const turns = 'hai_agent_turns'
@@ -15,6 +15,39 @@ const integer = { type: 'BIGINT', notNull: true } as const
 const pk = { ...text, primaryKey: true }
 // 预留两次默认排队时限供会话启动。过期的准备记录须重新预留才能发送。
 const prepareTurnTimeoutMs = 15 * 60_000
+const listPageSize = 100
+
+interface ListRow<T> {
+  id: string
+  stamp: number | string
+  data: T | string
+}
+
+function listBoundary(column: 'updated_at' | 'created_at', cursor?: string) {
+  if (cursor === undefined)
+    return { sql: '', params: [] }
+  const [stamp, key, extra] = cursor.split(':')
+  const time = Number(stamp)
+  if (extra !== undefined || String(time) !== stamp || !Number.isSafeInteger(time) || time < 0 || !id.safeParse(key).success)
+    throw new WorkspaceError(400, 'invalid')
+  return {
+    sql: ` AND (${column}, id) < (?, ?)`,
+    params: [time, key],
+  }
+}
+
+function rowCursor(row: ListRow<unknown>): string {
+  return `${row.stamp}:${row.id}`
+}
+
+function listPage<T>(rows: ListRow<T>[]): WorkspacePage<T> {
+  return {
+    items: rows.slice(0, listPageSize).map(row => stored<T>(row.data)),
+    nextCursor: rows.length > listPageSize
+      ? rowCursor(rows[listPageSize - 1])
+      : undefined,
+  }
+}
 
 export interface StoredTurn extends AgentTurn {
   revision?: string
@@ -153,13 +186,47 @@ export async function taskBySession(user: string, id: string) {
     : undefined
 }
 
-export async function listTasks(user: string) {
-  const result = value(await reldb.sql.query<{ data: AgentTask | string }>(`SELECT data FROM ${tasks} WHERE owner = ? ORDER BY updated_at DESC, id DESC LIMIT 100`, [user]))
+export async function listTasks(user: string, options: { archived?: boolean, query?: string, untitled?: string, cursor?: string, signal?: AbortSignal } = {}): Promise<WorkspacePage<AgentTask>> {
+  const search = options.query?.trim().toLowerCase() ?? ''
+  const archive = reldb.json.extract('data', '$.archived')
+  const textType = reldb.config?.type === 'mysql'
+    ? 'CHAR'
+    : 'TEXT'
+  const matching: ListRow<AgentTask>[] = []
+  let cursor = options.cursor
+  do {
+    options.signal?.throwIfAborted()
+    const boundary = listBoundary('updated_at', cursor)
+    const rows = value(await reldb.sql.query<ListRow<AgentTask>>(
+      `SELECT id, updated_at AS stamp, data FROM ${tasks}
+       WHERE owner = ? AND CASE WHEN CAST(${archive.sql} AS ${textType}) IN ('true', '1') THEN 1 ELSE 0 END = ?${boundary.sql}
+       ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      [
+        user,
+        ...archive.params,
+        options.archived ? 1 : 0,
+        ...boundary.params,
+        listPageSize + 1,
+      ],
+    ))
+    // 在服务端分批匹配标题，保持不同数据库上的 Unicode 大小写和字面子串语义一致。
+    for (const row of rows) {
+      const task = stored<AgentTask>(row.data)
+      if (!search || (task.title || options.untitled || '').toLowerCase().includes(search))
+        matching.push({ ...row, data: task })
+      if (matching.length > listPageSize)
+        break
+    }
+    if (rows.length <= listPageSize)
+      break
+    cursor = rowCursor(rows[rows.length - 1])
+  } while (matching.length <= listPageSize)
+  const page = listPage(matching)
   // 原生连接 ID 只在服务端读取。
-  return result.map(({ data }) => {
-    const { acpId, ...task } = stored<AgentTask>(data)
-    return task
-  })
+  return {
+    ...page,
+    items: page.items.map(({ acpId, ...task }) => task),
+  }
 }
 
 export async function insertTask(user: string, id: string, settings: AgentSettings) {
@@ -311,9 +378,19 @@ export async function writeTurn(
   })
 }
 
-export async function listResources(user: string, kind: AgentResource['kind']) {
-  const found = value(await reldb.sql.query<{ data: AgentResource | string }>(`SELECT data FROM ${resources} WHERE owner = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 100`, [user, kind]))
-  return found.map(row => stored<AgentResource>(row.data))
+export async function listResources(user: string, kind: AgentResource['kind'], cursor?: string): Promise<WorkspacePage<AgentResource>> {
+  const boundary = listBoundary('created_at', cursor)
+  const rows = value(await reldb.sql.query<ListRow<AgentResource>>(
+    `SELECT id, created_at AS stamp, data FROM ${resources} WHERE owner = ? AND kind = ?${boundary.sql}
+     ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [
+      user,
+      kind,
+      ...boundary.params,
+      listPageSize + 1,
+    ],
+  ))
+  return listPage(rows)
 }
 
 export async function resource(user: string, id: string, kind?: AgentResource['kind'], sql: DmlOperations = reldb.sql) {

@@ -9,7 +9,7 @@
   import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeToggle, WorkspaceLayout } from '@h-ai/ui'
   import { onDestroy, onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
-  import { AgentClientError, read, record, send, speak, transcribe, upload } from '#lib/client.js'
+  import { AgentClientError, mergePageItems, read, readTaskPage, record, send, speak, transcribe, upload } from '#lib/client.js'
   import AgentWorkbench from '#lib/components/AgentWorkbench.svelte'
   import Library from '#lib/components/Library.svelte'
   import TaskSettings from '#lib/components/TaskSettings.svelte'
@@ -93,6 +93,10 @@
   let selection = $state('')
   let draft = $state('')
   let query = $state('')
+  let titles = $state<AgentTask[]>([])
+  let nextTaskCursor = $state<string>()
+  let taskListLoading = $state(false)
+  let taskListRequest: AbortController | undefined
   let errorText = $state('')
   let pending = $state(false)
   let rename = $state(false)
@@ -117,7 +121,6 @@
   let poll: ReturnType<typeof setTimeout> | undefined
   const lastTurn = $derived(turns.at(-1))
   const running = $derived(!!lastTurn && live.has(lastTurn.status))
-  const titles = $derived(home?.tasks.filter(item => item.archived === archived && `${item.title || m.untitled()}`.toLowerCase().includes(query.trim().toLowerCase())) ?? [])
   const seen = $derived([
     ...turns.flatMap(turn => turn.eventSummary ?? []),
     ...entries,
@@ -181,6 +184,47 @@
   async function bootstrap() {
     home = await read<HomeView>()
   }
+
+  async function loadTaskHistory(search = query.trim(), showArchived = archived, cursor?: string) {
+    taskListRequest?.abort()
+    const request = new AbortController()
+    taskListRequest = request
+    taskListLoading = true
+    try {
+      const page = await readTaskPage(search, showArchived, cursor, request.signal)
+      if (request.signal.aborted)
+        return
+      titles = cursor
+        ? mergePageItems(titles, page.items)
+        : page.items
+      nextTaskCursor = page.nextCursor
+    }
+    catch (error) {
+      if (!request.signal.aborted)
+        problem(error)
+    }
+    finally {
+      if (!request.signal.aborted)
+        taskListLoading = false
+    }
+  }
+
+  $effect(() => {
+    const search = query.trim()
+    const showArchived = archived
+    if (!data.user)
+      return
+    titles = []
+    nextTaskCursor = undefined
+    taskListLoading = true
+    const timer = setTimeout(() => {
+      void loadTaskHistory(search, showArchived)
+    }, search ? 250 : 0)
+    return () => {
+      clearTimeout(timer)
+      taskListRequest?.abort()
+    }
+  })
 
   function registerLeaveGuard(guard: WorkspaceLeaveGuard | undefined) {
     leaveWorkbench = guard
@@ -253,7 +297,7 @@
     allowNavigation = false
   })
 
-  async function openTask(id: string) {
+  async function openTask(id: string, restoreActive = false) {
     if (!await navigatePane('workspace'))
       return
     observer?.abort()
@@ -282,11 +326,11 @@
     showTasks = false
     if (id) {
       sessionStorage.setItem('agent-active-task', id)
-      await refresh(id, observer.signal)
+      await refresh(id, observer.signal, false, restoreActive)
     }
   }
 
-  async function refresh(id: string, signal = observer?.signal, latest = false) {
+  async function refresh(id: string, signal = observer?.signal, latest = false, restoreActive = false) {
     if (signal?.aborted || !id || id !== selection)
       return
     try {
@@ -299,6 +343,11 @@
       }, signal)
       if (signal?.aborted || id !== selection)
         return
+      if (restoreActive && result.task.archived) {
+        selection = ''
+        sessionStorage.removeItem('agent-active-task')
+        return
+      }
       const tail = result.turns.at(-1)
       if (latest && tail?.id !== turns.at(-1)?.id) {
         await refresh(id, signal)
@@ -338,9 +387,14 @@
     }
     catch (error) {
       if (!signal?.aborted) {
+        if (restoreActive && error instanceof AgentClientError && (error.status === 400 || error.status === 404)) {
+          selection = ''
+          sessionStorage.removeItem('agent-active-task')
+          return
+        }
         problem(error)
         if (!(error instanceof AgentClientError) || error.status >= 500)
-          poll = setTimeout(() => { void refresh(id, signal, latest) }, 1400)
+          poll = setTimeout(() => { void refresh(id, signal, latest, restoreActive) }, 1400)
       }
     }
   }
@@ -370,8 +424,8 @@
         return
       }
       const previous = sessionStorage.getItem('agent-active-task')
-      if (previous && home?.tasks.some(item => item.id === previous && !item.archived))
-        await openTask(previous)
+      if (previous)
+        await openTask(previous, true)
     }).catch(problem)
   })
 
@@ -388,10 +442,11 @@
     errorText = ''
     try {
       const id = crypto.randomUUID()
-      const created = await send<AgentTask>({ type: 'new', id })
-      if (home)
-        home.tasks = [created, ...home.tasks]
-      await openTask(id)
+      await send({ type: 'new', id })
+      await Promise.all([
+        openTask(id),
+        loadTaskHistory(),
+      ])
     }
     catch (error) { problem(error) }
   }
@@ -419,7 +474,10 @@
         return
       draft = ''
       await refresh(id, signal)
-      await bootstrap()
+      await Promise.all([
+        bootstrap(),
+        loadTaskHistory(),
+      ])
       requestAnimationFrame(() => feed?.scrollTo({ top: feed?.scrollHeight }))
     }
     catch (error) {
@@ -442,7 +500,10 @@
     try {
       await send(action)
       await refresh(selection)
-      await bootstrap()
+      await Promise.all([
+        bootstrap(),
+        loadTaskHistory(),
+      ])
     }
     catch (error) { problem(error) }
   }
@@ -662,13 +723,18 @@
             : m.task_history()}</h2>
           <button class='btn btn-square btn-ghost btn-xs' title={m.archived()} aria-label={m.archived()} aria-pressed={archived} onclick={() => { archived = !archived }}><span class='icon-[tabler--archive] agent-icon'></span></button>
         </div>
-        <input class='input input-sm w-full' aria-label={m.search_tasks()} placeholder={m.search_tasks()} bind:value={query} />
-        <div class='mt-2 grid content-start gap-0.5 overflow-auto'>
+        <input class='input input-sm w-full' aria-label={m.search_tasks()} placeholder={m.search_tasks()} maxlength='400' bind:value={query} />
+        <div class='mt-2 grid content-start gap-0.5 overflow-auto' aria-busy={taskListLoading}>
           {#each titles as item (item.id)}
             <button class:btn-active={selection === item.id} class='btn btn-ghost btn-sm w-full min-w-0 justify-start px-2' onclick={() => openTask(item.id)}>
               <span class='icon-[tabler--message-circle] agent-icon opacity-60'></span><span class='truncate'>{item.title || m.untitled()}</span>
             </button>
-          {:else}<p class='agent-muted px-2 py-2 text-xs'>{m.empty_list()}</p>{/each}
+          {:else}<p class='agent-muted px-2 py-2 text-xs'>{taskListLoading
+            ? m.loading()
+            : m.empty_list()}</p>{/each}
+          {#if nextTaskCursor}
+            <button class='btn btn-ghost btn-xs' disabled={taskListLoading} onclick={() => loadTaskHistory(query.trim(), archived, nextTaskCursor)}>{m.load_more()}</button>
+          {/if}
         </div>
       </div>
       <form method='POST' action='?/logout' use:enhance={logout} class='flex items-center justify-between border-t agent-divider px-3 py-3'>
@@ -848,7 +914,7 @@
                   {#if running && lastTurn?.receipt}
                     <button type='button' class='btn btn-sm' onclick={() => lastTurn && change({ type: 'cancel', id: lastTurn.id })}><span class='icon-[tabler--player-stop] agent-icon'></span>{m.stop()}</button>
                   {:else}
-                    <button class='btn btn-primary btn-sm' type='submit' disabled={pending || !draft.trim() || !task.settings.agentId}><span class='icon-[tabler--arrow-up] agent-icon'></span>{pending
+                    <button class='btn btn-primary btn-sm' type='submit' disabled={pending || running || !draft.trim() || !task.settings.agentId}><span class='icon-[tabler--arrow-up] agent-icon'></span>{pending
                       ? m.submitting()
                       : m.send()}</button>
                   {/if}

@@ -19,6 +19,8 @@ Set `HAI_IAM_REGISTER_ENABLED=true` in `apps/agent/.env.local` for local registr
 
 ## Usage
 
+Task search covers the current account’s active or archived tasks on the server, including older records. Use **Load more** in task, file, and artifact lists, the knowledge file picker, and the manual tool resource picker.
+
 | Feature                   | Action and observable result                                                                                                                                                                                                                                               |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tasks and conversation    | Create a task, choose a backend and send a prompt. Search, reload, rename, archive or restore tasks; refresh or switch API nodes to continue following persisted progress                                                                                                  |

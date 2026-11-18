@@ -3,7 +3,7 @@ import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { addResource, findTask, initWorkspace, insertTask, owner, reserveTurn, resource, withTask, writeTask, writeTurn } from '#lib/server/data.js'
+import { addResource, findTask, initWorkspace, insertTask, listResources, listTasks, owner, reserveTurn, resource, withTask, writeTask, writeTurn } from '#lib/server/data.js'
 import { allowedTool } from '#lib/server/resources.js'
 import { contextSummary, view } from '#lib/server/workspace.js'
 import { sendSchema, settingsSchema } from '#lib/workspace.js'
@@ -16,6 +16,70 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await reldb.close()
+})
+
+it('finds historical tasks and pages equal timestamps within the selected account and archive', async () => {
+  const scope = { tenantId: 'workspace', userId: 'alice' }
+  const user = owner(scope)
+  const settings = settingsSchema.parse({})
+  const keys = Array.from({ length: 105 }, () => randomUUID()).sort().reverse()
+  const insert = async (ownerKey: string, key: string, stamp: number, title: string, archived = false) => {
+    const data = {
+      id: key,
+      title,
+      archived,
+      settings,
+      acpId: 'internal-session',
+      generation: 0,
+      carry: false,
+      startedAt: stamp,
+    }
+    expect((await reldb.sql.execute('INSERT INTO hai_agent_tasks (id, owner, updated_at, data) VALUES (?, ?, ?, ?)', [
+      key,
+      ownerKey,
+      stamp,
+      JSON.stringify(data),
+    ])).success).toBe(true)
+  }
+  for (const [index, key] of keys.entries()) {
+    await insert(user, key, 1_700_000_000_000, index === 104
+      ? 'Ältere Aufgabe 100%'
+      : 'Recent task')
+  }
+  const archived = randomUUID()
+  await insert(user, archived, 1_700_000_000_000, 'Ältere archived 100%', true)
+  await insert(owner({ ...scope, userId: 'other' }), randomUUID(), 1_700_000_000_000, 'Ältere private 100%')
+  await insert(owner({ ...scope, tenantId: 'other' }), randomUUID(), 1_700_000_000_000, 'Ältere other tenant 100%')
+
+  const first = await listTasks(user)
+  expect(first.items.map(item => item.id)).toEqual(keys.slice(0, 100))
+  expect(first.nextCursor).toBeDefined()
+  const older = await listTasks(user, { cursor: first.nextCursor })
+  expect(older.items.map(item => item.id)).toEqual(keys.slice(100))
+  expect(older.nextCursor).toBeUndefined()
+  expect((await listTasks(user, { query: ' äLTeRE ' })).items.map(item => item.id)).toEqual(keys.slice(-1))
+  expect((await listTasks(user, { query: '100%', archived: true })).items.map(item => item.id)).toEqual([archived])
+  expect(first.items[0]).not.toHaveProperty('acpId')
+  await expect(listTasks(user, { cursor: 'invalid' })).rejects.toMatchObject({ status: 400 })
+})
+
+it.each(['file', 'artifact'] as const)('pages owned %s resources without omissions on equal timestamps', async (kind) => {
+  const keys = Array.from({ length: 101 }, () => randomUUID()).sort().reverse()
+  for (const key of keys) {
+    const entry = { id: key, title: key, kind }
+    expect((await reldb.sql.execute('INSERT INTO hai_agent_resources (id, owner, kind, created_at, data) VALUES (?, ?, ?, ?, ?)', [
+      key,
+      'alice',
+      kind,
+      1_700_000_000_000,
+      JSON.stringify(entry),
+    ])).success).toBe(true)
+  }
+  const first = await listResources('alice', kind)
+  expect(first.items.map(item => item.id)).toEqual(keys.slice(0, 100))
+  expect(first.nextCursor).toBeDefined()
+  expect((await listResources('alice', kind, first.nextCursor)).items.map(item => item.id)).toEqual(keys.slice(100))
+  expect((await listResources('bob', kind, first.nextCursor)).items).toEqual([])
 })
 
 it('authorizes an MCP wrapper by the single task tool name and checks file ownership', async () => {

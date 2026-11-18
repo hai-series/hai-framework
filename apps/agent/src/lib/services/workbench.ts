@@ -10,10 +10,16 @@ import type {
   ToolRun,
   ToolRunRequest,
 } from '@h-ai/ui/components/scenes/tools/index'
-import type { AgentResource } from '#lib/workspace.js'
+import type { AgentResource, WorkspacePage } from '#lib/workspace.js'
 import { replaceState } from '$app/navigation'
 import { page } from '$app/state'
-import { AgentClientError, mutate, read, url } from '#lib/client.js'
+import { AgentClientError, mutate, read, readResourcePage, url } from '#lib/client.js'
+
+/** 工具资源来自独立的文件与产物列表，各自保存续页位置。 */
+export interface ToolResourceCursors {
+  files?: string
+  artifacts?: string
+}
 
 /** 将已有资源投影给通用工作台，工程补丁保留原来的预览与发布入口。 */
 function summary(resource: AgentResource): ArtifactSummary {
@@ -46,9 +52,12 @@ function remember(run: ToolRun | undefined) {
 /** Agent 只连接组件回调，通用编辑、表单和任务展示由 UI 模块负责。 */
 export const workbench = {
   artifacts: {
-    async list(signal?: AbortSignal): Promise<ArtifactSummary[]> {
-      const resources = await read<AgentResource[]>({ pane: 'artifacts' }, signal)
-      return resources.filter(item => item.artifactKind && item.version).map(summary)
+    async list(cursor?: string, signal?: AbortSignal): Promise<WorkspacePage<ArtifactSummary>> {
+      const page = await readResourcePage('artifacts', cursor, signal)
+      return {
+        ...page,
+        items: page.items.filter(item => item.artifactKind && item.version).map(summary),
+      }
     },
     read(id: string, version: number | undefined, signal: AbortSignal): Promise<ArtifactDocument> {
       return read({
@@ -98,22 +107,28 @@ export const workbench = {
         ? { id, status: 'unknown' }
         : undefined
     },
-    async resources(signal?: AbortSignal): Promise<ToolResource[]> {
-      const lists = await Promise.all([
-        read<AgentResource[]>({ pane: 'files' }, signal),
-        read<AgentResource[]>({ pane: 'artifacts' }, signal),
+    async resources(cursors?: ToolResourceCursors, signal?: AbortSignal): Promise<{ items: ToolResource[], next?: ToolResourceCursors }> {
+      const [files, artifacts] = await Promise.all([
+        !cursors || cursors.files
+          ? readResourcePage('files', cursors?.files, signal)
+          : undefined,
+        !cursors || cursors.artifacts
+          ? readResourcePage('artifacts', cursors?.artifacts, signal)
+          : undefined,
       ])
-      return [
-        ...new Map(lists.flat().map(item => [
-          item.id,
-          {
-            id: item.id,
-            title: item.title,
-            kind: item.artifactKind ?? item.kind,
-            mediaType: item.mediaType,
-          },
-        ])).values(),
-      ]
+      const items = [
+        ...(files?.items ?? []),
+        ...(artifacts?.items ?? []),
+      ].map(item => ({
+        id: item.id,
+        title: item.title,
+        kind: item.artifactKind ?? item.kind,
+        mediaType: item.mediaType,
+      }))
+      const next = files?.nextCursor || artifacts?.nextCursor
+        ? { files: files?.nextCursor, artifacts: artifacts?.nextCursor }
+        : undefined
+      return { items, next }
     },
     catalog(signal?: AbortSignal): Promise<ToolCatalogItem[]> {
       return read({ catalog: '1' }, signal)

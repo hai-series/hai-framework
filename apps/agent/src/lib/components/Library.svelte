@@ -3,7 +3,7 @@
   import type { AgentPreferences, AgentResource, WorkspaceAction } from '#lib/workspace.js'
   import { resolve } from '$app/paths'
   import { untrack } from 'svelte'
-  import { read, send, upload } from '#lib/client.js'
+  import { mergePageItems, read, readResourcePage, send, upload } from '#lib/client.js'
   import * as m from '#lib/paraglide/messages.js'
 
   interface Props {
@@ -17,6 +17,9 @@
   let memories = $state<MemoryView>({ entries: [], proposals: [] })
   let knowledge = $state<KnowledgeView[]>([])
   let files = $state<AgentResource[]>([])
+  let nextFileCursor = $state<string>()
+  let filesLoading = $state(false)
+  let fileRequest: AbortController | undefined
   let rules = $state<{ id: string, summary?: string, expires?: number }[]>([])
   let selection = $state('')
   const chosenBase = $derived(knowledge.find(item => item.id === selection))
@@ -38,17 +41,44 @@
     permissions: m.permissions,
   }
 
+  async function loadFiles(cursor?: string) {
+    fileRequest?.abort()
+    const request = new AbortController()
+    fileRequest = request
+    filesLoading = true
+    try {
+      const page = await readResourcePage('files', cursor, request.signal)
+      if (!request.signal.aborted) {
+        files = cursor
+          ? mergePageItems(files, page.items)
+          : page.items
+        nextFileCursor = page.nextCursor
+      }
+    }
+    catch (error) {
+      if (!request.signal.aborted)
+        onerror(error)
+    }
+    finally {
+      if (!request.signal.aborted)
+        filesLoading = false
+    }
+  }
+
   async function load(target: Props['pane'], query = '') {
     try {
       if (target === 'memory') {
         memories = await read<MemoryView>({ pane: target, query })
       }
       else if (target === 'knowledge') {
-        knowledge = await read<KnowledgeView[]>({ pane: target })
-        files = await read<AgentResource[]>({ pane: 'files' })
+        const [items] = await Promise.all([
+          read<KnowledgeView[]>({ pane: target }),
+          loadFiles(),
+        ])
+        knowledge = items
       }
       else if (target === 'files') {
-        files = await read<AgentResource[]>({ pane: target })
+        await loadFiles()
       }
       else if (target === 'permissions') {
         rules = await read({ pane: target })
@@ -62,6 +92,7 @@
     prefs = untrack(() => ({ ...home.preferences }))
     saved = false
     void load(target)
+    return () => fileRequest?.abort()
   })
 
   async function run(command: WorkspaceAction, onDone?: () => void) {
@@ -237,6 +268,7 @@
             {#each files as file (file.id)}<option value={file.id}>{file.title}</option>{/each}
           </select>
         </label>
+        {#if nextFileCursor}<button type='button' class='btn btn-ghost btn-xs self-start' disabled={filesLoading} onclick={() => loadFiles(nextFileCursor)}>{m.load_more()}</button>{/if}
         {#if !chosenFile}<label class='grid gap-1 text-sm font-medium'>{m.doc_body()}<textarea required class='textarea w-full' rows='5' bind:value={content}></textarea></label>{/if}
         <div class='flex flex-wrap items-center gap-2'>
           <button class='btn btn-primary btn-sm' disabled={pending}>{pending
@@ -262,7 +294,10 @@
       <div class='flex items-center justify-between gap-2 border-b agent-divider py-2 text-sm'>
         <span class='break-all'>{file.title}</span><a class='btn btn-ghost btn-xs' href={resolve(`/api/workspace?download=${encodeURIComponent(file.id)}`)}>{m.download()}</a>
       </div>
-    {:else}<p class='agent-muted text-sm'>{m.empty_list()}</p>{/each}
+    {:else}<p class='agent-muted text-sm'>{filesLoading
+      ? m.loading()
+      : m.empty_list()}</p>{/each}
+    {#if nextFileCursor}<button class='btn btn-ghost btn-sm mt-3' disabled={filesLoading} onclick={() => loadFiles(nextFileCursor)}>{m.load_more()}</button>{/if}
   {:else if pane === 'permissions'}
     {#each rules as rule (rule.id)}
       <div class='flex flex-wrap items-center justify-between gap-2 border-b agent-divider py-2 text-sm'>

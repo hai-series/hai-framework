@@ -118,6 +118,7 @@
   "incompatible": "当前模式或权限无法使用此设置。",
   "retry": "重试",
   "older": "加载更早记录",
+  "load_more": "加载更多",
   "loading": "正在加载…",
   "submitting": "正在启动",
   "confirming_submission": "正在确认提交状态",

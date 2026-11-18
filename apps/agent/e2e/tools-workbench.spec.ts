@@ -1,5 +1,6 @@
 import type { ToolRun } from '@h-ai/ui'
 import type { Page } from '@playwright/test'
+import type { AgentResource, WorkspacePage } from '../src/lib/workspace.js'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 import { expectWorkbenchWidth, postWorkbench, signupWorkbench } from './workbench-flow.js'
@@ -131,8 +132,8 @@ test('recovers a real accepted request after its HTTP response is lost and after
   await chooseTool(page, 'artifact_create')
   await expect(page.getByRole('region', { name: 'Execution result', exact: true }).getByRole('status')).toContainText('Completed')
   const artifacts = await page.request.get('/api/workspace?pane=artifacts')
-  const resources = await artifacts.json() as { title: string }[]
-  expect(resources.filter(item => item.title === title)).toHaveLength(1)
+  const resources = await artifacts.json() as WorkspacePage<AgentResource>
+  expect(resources.items.filter(item => item.title === title)).toHaveLength(1)
   expect(submissions).toBe(1)
 })
 
@@ -160,7 +161,8 @@ test('rejects a previously available tool on a real node with its tool groups di
   })
   expect(rejected.status()).toBe(403)
   const artifacts = await page.request.get('/api/workspace?pane=artifacts')
-  expect(await artifacts.json()).not.toEqual(expect.arrayContaining([
+  const resources = await artifacts.json() as WorkspacePage<AgentResource>
+  expect(resources.items).not.toEqual(expect.arrayContaining([
     expect.objectContaining({ title: 'Disabled tool' }),
   ]))
 })

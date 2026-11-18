@@ -190,6 +190,12 @@ export interface AgentTask {
   startedAt: number
 }
 
+/** 工作台列表按服务端排序返回，存在下一页时携带续页游标。 */
+export interface WorkspacePage<T> {
+  items: T[]
+  nextCursor?: string
+}
+
 export interface AgentTurn {
   id: string
   task: string

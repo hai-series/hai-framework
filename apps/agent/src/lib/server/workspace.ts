@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { settingsSchema } from '#lib/workspace.js'
 import { artifactStore } from './artifacts.js'
 import { config } from './config.js'
-import { activeTurn, addResource, findTask, getPrefs, insertTask, listResources, listTasks, listTurns, missing, owner, publicTurn, removeResource, reserveTurn, resource, turnById, value, withTask, WorkspaceError, workspaceTime, writePrefs, writeTask, writeTurn } from './data.js'
+import { activeTurn, addResource, findTask, getPrefs, insertTask, listResources, listTurns, missing, owner, publicTurn, removeResource, reserveTurn, resource, turnById, value, withTask, WorkspaceError, workspaceTime, writePrefs, writeTask, writeTurn } from './data.js'
 import { collection, knowledgeLists, memory, projects, readFile, readText } from './resources.js'
 import { toolHost } from './tool-host.js'
 
@@ -196,7 +196,6 @@ export async function view(scope: RunnerScope, task?: string, after = 0, offset 
     return {
       workbench: { artifacts: config().workbench.artifacts, tools: config().workbench.tools },
       preferences: prefs,
-      tasks: await listTasks(user),
       agents,
       projects: (await projects(scope)).map(project => ({ id: project.id, title: project.title })),
       tools: config().toolUrl && config().workbench.tools
@@ -227,14 +226,14 @@ export async function view(scope: RunnerScope, task?: string, after = 0, offset 
   }
 }
 
-export async function library(scope: RunnerScope, pane: string, query: string) {
+export async function library(scope: RunnerScope, pane: string, query: string, cursor?: string) {
   const user = owner(scope)
   if (pane === 'knowledge')
     return knowledgeLists(user)
   if (pane === 'files' || pane === 'artifacts') {
     return listResources(user, pane === 'files'
       ? 'file'
-      : 'artifact')
+      : 'artifact', cursor)
   }
   if (pane === 'permissions')
     return value(await acp(scope).approvals.rules())
@@ -242,7 +241,7 @@ export async function library(scope: RunnerScope, pane: string, query: string) {
     const entries = query
       ? value(await memory(scope).recall(query, { topK: 30 }))
       : value(await memory(scope).listPage({ limit: 50 })).items
-    return { entries, proposals: await listResources(user, 'memory-proposal') }
+    return { entries, proposals: (await listResources(user, 'memory-proposal')).items }
   }
   return missing()
 }

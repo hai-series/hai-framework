@@ -2,10 +2,11 @@ import type { RequestHandler } from './$types'
 import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 import { artifactDocument, artifactMedia, artifactSummary } from '#lib/server/artifact-http.js'
 import { artifactStore } from '#lib/server/artifacts.js'
 import { config } from '#lib/server/config.js'
-import { handleWorkspaceError, owner, resource, WorkspaceError } from '#lib/server/data.js'
+import { handleWorkspaceError, listTasks, owner, resource, WorkspaceError } from '#lib/server/data.js'
 import { readFile, upload } from '#lib/server/resources.js'
 import { toolHost } from '#lib/server/tool-host.js'
 import { action, library, view } from '#lib/server/workspace.js'
@@ -24,6 +25,7 @@ const pageQuery = z.object({
   toolRun: z.string().min(1).max(512).optional(),
   toolKey: z.string().min(1).max(200).optional(),
   pane: z.enum([
+    'tasks',
     'knowledge',
     'memory',
     'files',
@@ -31,6 +33,8 @@ const pageQuery = z.object({
     'permissions',
   ]).optional(),
   query: z.string().max(400).default(''),
+  archived: z.enum(['0', '1']).default('0'),
+  cursor: z.string().min(1).max(64).optional(),
   after: z.coerce.number().int().min(0).max(100_000).default(0),
   offset: z.coerce.number().int().min(0).max(10_000).default(0),
   latest: z.literal('1').optional(),
@@ -98,8 +102,17 @@ export const GET = endpoint(async ({ url, request }, scope) => {
       partial: bytes.length > 128_000,
     })
   }
+  if (params.pane === 'tasks') {
+    return json(await listTasks(owner(scope), {
+      query: params.query,
+      archived: params.archived === '1',
+      cursor: params.cursor,
+      untitled: m.untitled(),
+      signal: request.signal,
+    }))
+  }
   if (params.pane)
-    return json(await library(scope, params.pane, params.query))
+    return json(await library(scope, params.pane, params.query, params.cursor))
   return json(await view(scope, params.task, params.after, params.offset, params.latest === '1'))
 })
 

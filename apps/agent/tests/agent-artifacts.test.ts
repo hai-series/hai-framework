@@ -161,7 +161,7 @@ it('creates an owned Markdown artifact and keeps immutable readable versions', a
   expect(new TextDecoder().decode((await artifactStore.read('alice', created.id, 1)).bytes)).toBe(original)
   expect(new TextDecoder().decode((await artifactStore.read('alice', created.id)).bytes)).toContain('An update.')
   expect((await artifactStore.history('alice', created.id)).map(entry => entry.version)).toEqual([2, 1])
-  expect((await listResources('alice', 'artifact'))[0].version).toBe(2)
+  expect((await listResources('alice', 'artifact')).items[0].version).toBe(2)
 })
 
 it('does not overwrite a user edit with a stale AI version and does not create an extra history entry', async () => {

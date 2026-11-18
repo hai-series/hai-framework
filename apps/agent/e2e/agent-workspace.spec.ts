@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import type { TaskView } from '../src/lib/client.js'
 import type { AgentTurn } from '../src/lib/workspace.js'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 async function signup(page: Page, username: string) {
@@ -11,6 +12,37 @@ async function signup(page: Page, username: string) {
   await page.getByRole('button', { name: 'Create account' }).click()
   await expect(page.getByRole('button', { name: 'New task' })).toBeEnabled()
 }
+
+test('finds an older task by title and loads it from the next history page', async ({ page }) => {
+  await signup(page, `history-${Date.now()}`)
+  const headers = { Origin: new URL(page.url()).origin }
+  const old = randomUUID()
+  const post = async (data: { type: 'new' | 'rename', id: string, title?: string }) => {
+    expect((await page.request.post('/api/workspace', { headers, data })).ok()).toBe(true)
+  }
+  await post({ type: 'new', id: old })
+  await post({ type: 'rename', id: old, title: 'Earlier release checklist' })
+  for (let i = 0; i < 101; i++) {
+    await post({
+      type: 'new',
+      id: randomUUID(),
+    })
+  }
+
+  await page.reload()
+  const history = page.getByRole('complementary', { name: 'Task history' })
+  const earlier = history.getByRole('button', { name: 'Earlier release checklist' })
+  const more = history.getByRole('button', { name: 'Load more' })
+  await expect(more).toBeVisible()
+  await expect(earlier).toHaveCount(0)
+  await history.getByRole('textbox', { name: 'Search tasks' }).fill('release checklist')
+  await expect(earlier).toBeVisible()
+  await history.getByRole('textbox', { name: 'Search tasks' }).clear()
+  await more.click()
+  await expect(earlier).toBeVisible()
+  await earlier.click()
+  await expect(page.getByRole('heading', { name: 'Earlier release checklist' })).toBeVisible()
+})
 
 test('sign-out can be retried when the server cannot confirm revocation', async ({ page }) => {
   await signup(page, `logout-${Date.now()}`)
