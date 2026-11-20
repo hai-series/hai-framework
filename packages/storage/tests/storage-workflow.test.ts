@@ -303,14 +303,13 @@ describe('storage workflow', () => {
 
       // 生成上传签名 URL
       const putUrlResult = await storage.presign.putUrl('presign-test/binary.bin', {
-        contentType: 'application/octet-stream',
         expiresIn: 600,
       })
       expect(putUrlResult.success).toBe(true)
       if (!putUrlResult.success)
         return
 
-      // 客户端上传
+      // 省略签发类型时，客户端仍需显式发送默认的 Content-Type。
       const uploadResponse = await fetch(putUrlResult.data, {
         method: 'PUT',
         body: binaryContent,

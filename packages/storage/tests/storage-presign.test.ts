@@ -57,6 +57,7 @@ describe('storage.presign', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toContain('upload.txt')
+        expect(new URL(result.data).searchParams.get('X-Amz-SignedHeaders')?.split(';')).toContain('content-type')
       }
     })
 

@@ -169,13 +169,24 @@ export async function logStorageResult<Value>(operation: string, pending: Promis
   return result
 }
 
-async function* logReadStream(stream: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
-  try {
-    yield* stream
-  }
-  catch (cause) {
-    warnFailure('file.getStream', { code: HaiStorageError.DOWNLOAD_FAILED.code, cause })
-    throw cause
+function logReadStream(stream: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
+  return {
+    [Symbol.asyncIterator]() {
+      const iterator = stream[Symbol.asyncIterator]()
+      return {
+        async next() {
+          try {
+            return await iterator.next()
+          }
+          catch (cause) {
+            warnFailure('file.getStream', { code: HaiStorageError.DOWNLOAD_FAILED.code, cause })
+            throw cause
+          }
+        },
+        // 包装器也要转发首次 next() 前的关闭，S3 响应可能已经占用连接。
+        return: iterator.return?.bind(iterator),
+      }
+    },
   }
 }
 
