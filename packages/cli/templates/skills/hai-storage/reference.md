@@ -116,6 +116,8 @@ if (!closed.success) {
 - `deleteMany(keys)`
 - `copy(sourceKey, destKey, options?)`
 
+S3 `file.put()` 成功时返回本次上传的字节数、提交的元数据和服务端回执中的 ETag。`lastModified` 是应用收到成功响应的时间。需要该键的当前状态或服务端修改时间时，调用 `file.head()`。
+
 ```typescript
 // 上传文件
 // 用调用方 PNG 字节及用户元数据写入头像键。成功 data 是对象元数据，失败读取 error。

@@ -54,6 +54,6 @@ Objects live on the backend under caller-supplied keys. Storage creates no SQL t
 | Table, key or artifact | Shape and ownership |
 | --- | --- |
 | `key` | Object path, at most 1024 UTF-8 bytes. |
-| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. |
+| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. An S3 upload receipt records when the application received the successful response. |
 | `etag` | Cache validator. Local storage builds it from size and modification time; S3 returns it. Use `storage.checksum` for content verification. |
 | `metadata` | Optional string-to-string attributes on upload. |

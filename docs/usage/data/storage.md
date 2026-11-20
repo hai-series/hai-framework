@@ -62,7 +62,7 @@ reports/order-42.txt 是一个5字节的文本文件；lastModified 在代码里
 | `key`          | 调用方定义的对象标识，支持路径层级，UTF-8 长度上限 1024 字节                                                   |
 | `size`         | 字节数                                                                                                         |
 | `contentType`  | MIME 类型，上传时可指定                                                                                        |
-| `lastModified` | 后端报告的修改时间                                                                                             |
+| `lastModified` | 后端报告的修改时间。S3 上传回执记录应用收到写入成功响应的时间                                                    |
 | `etag`         | 用于校验缓存的标记。本地存储根据大小和修改时间生成，S3 由服务端返回。要校验文件内容，请使用 `storage.checksum` |
 | `metadata`     | 自定义字符串键值映射，上传时可提供                                                                             |
 

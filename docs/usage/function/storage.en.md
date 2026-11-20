@@ -177,6 +177,8 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 
 UTF-8 hello is five bytes. Chunk boundaries vary, and stream iteration can fail after the initial result. Inspect confirmed batch deletions rather than assuming Promise completion means every key was removed.
 
+For S3, `file.put()` returns the byte count and submitted metadata for that write, plus the ETag when the service supplies it. The receipt uses `application/octet-stream` when the request omits the content type. Its `lastModified` records when the application received the successful response. Use `file.head()` to query the object currently at that key and its service-reported timestamp.
+
 To abandon a download, abort its signal or call `return()` on its iterator to release the connection, even before reading the first chunk. When copying, setting only `contentType` or `metadata` preserves the other field from the source. For an S3 copy with overrides, Storage checks the source ETag before applying the changes. If the check fails, read the source again before retrying.
 
 With Local storage, `file.head()` and `file.copy()` require the metadata record tied to the file's identity. When moving objects, export their bytes and metadata and write them to the destination with `file.put()`. [Local backup and recovery](../data/storage.en.md)

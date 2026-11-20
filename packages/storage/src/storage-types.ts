@@ -343,6 +343,8 @@ export interface FileOperations {
    * @returns 成功包含文件元数据。失败包含错误码和消息，底层原因可用时保留在 error.cause。
    * `ifNoneMatch: '*'` 的目标冲突返回 ALREADY_EXISTS，上传源读取失败返回 UPLOAD_FAILED。
    * S3 流式上传可从 error.ext.s3Operation 获取失败操作，清理错误单独保存在 error.ext.cleanupError。
+   * S3 成功结果来自本次写入，包含实际字节数、提交的元数据和后端提供的 ETag。
+   * S3 的 lastModified 记录收到成功响应的时间，省略 contentType 时返回 application/octet-stream。
    * @example
    * ```ts
    * const result = await storage.file.put('uploads/a.txt', 'hello')

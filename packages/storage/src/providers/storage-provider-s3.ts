@@ -356,17 +356,21 @@ export function createS3Provider(): StorageProvider {
           : data
         const buffered = body instanceof Uint8Array
         let size = buffered ? body.byteLength : 0
+        let etag: string | undefined
         const params = {
           Bucket: s3Config.bucket,
           Key: fullPath,
           ContentType: options.contentType,
-          Metadata: options.metadata,
+          Metadata: options.metadata
+            ? { ...options.metadata }
+            : undefined,
           CacheControl: options.cacheControl,
           ContentDisposition: options.contentDisposition,
           IfNoneMatch: options.ifNoneMatch,
         }
         if (buffered) {
-          await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
+          const receipt = await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
+          etag = receipt.ETag
         }
         else {
           const stop = new AbortController()
@@ -405,7 +409,8 @@ export function createS3Provider(): StorageProvider {
               leavePartsOnError: true,
             })
             upload = multipart
-            await uploadDiagnostics.run(diagnostics, () => multipart.done())
+            const receipt = await uploadDiagnostics.run(diagnostics, () => multipart.done())
+            etag = receipt.ETag
           }
           catch (cause) {
             const failure = diagnostics.failure
@@ -443,18 +448,14 @@ export function createS3Provider(): StorageProvider {
           }
         }
 
-        // 获取上传后的元数据
-        const headResult = await file.head(key)
-        if (headResult.success) {
-          return headResult
-        }
-
-        // 如果获取元数据失败，返回基本信息
+        // 按本次写入回执返回，避免读取同键被并发覆盖后的对象。
         return ok({
           key,
           size,
-          contentType: options.contentType || 'application/octet-stream',
+          contentType: params.ContentType || 'application/octet-stream',
           lastModified: new Date(),
+          etag,
+          metadata: params.Metadata,
         })
       }
       catch (error) {

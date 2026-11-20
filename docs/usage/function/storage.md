@@ -213,6 +213,8 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 
 `file.put()` 支持 Buffer、Uint8Array、字符串及 `AsyncIterable<Uint8Array>`（如 Node Readable）；流上传内部使用有界 S3 multipart。`getStream()` 返回字节流，支持 Range 与 `signal` 取消。初始失败返回 HaiResult，迭代期间的 I/O 或取消错误由消费方处理。放弃下载时，即使尚未读取第一块，也应取消 `signal` 或调用迭代器的 `return()` 释放连接。`get()` 返回完整 Buffer，适合小文件。
 
+S3 `file.put()` 返回本次写入的字节数、提交的类型与自定义元数据，以及对象服务提供的 ETag。省略类型时，回执的 `contentType` 为 `application/octet-stream`，`lastModified` 是应用收到成功响应的时间。需要查询该键当前指向的对象及服务端时间时，调用 `file.head()`。
+
 上传选项 `{ ifNoneMatch: '*' }` 通过标准 S3 条件写或本地原子发布拒绝覆盖，冲突返回 `ALREADY_EXISTS`；S3 服务不支持条件写时返回错误，不降级为覆盖。失败/取消会清理临时文件或未完成分片；取消不能撤销已经发布的对象。
 
 Local 在内容文件旁的保留目录 `.hai-storage-meta/` 中准备与文件身份绑定的代际元数据，再以内容文件的原子发布作为提交点。元数据准备失败不会新增或覆盖内容；默认元数据也有空记录，不继承旧对象的类型或业务字段。发布后清理明确旧代际失败只记录诊断，不将已提交写入报告为失败；并发或崩溃可能留下尚未确认可回收的内部记录，不做推测性删除。`.meta.json`、`.upload.tmp` 后缀和 `.hai-storage-meta` 在每个路径段均保留，不能直接读写或删除。`file.head()` 和 `file.copy()` 需要有效的代际记录。迁移时请按数据参考导出内容和元数据，再通过 `file.put()` 写入目标后端。[本地备份与恢复](../data/storage.md)
