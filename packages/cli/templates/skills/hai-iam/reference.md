@@ -77,13 +77,17 @@ import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
 // 位于应用启动函数内；依赖初始化失败时立即返回，不能继续启动 IAM。
+// 加载 ./config 的配置并注册 IAM Schema，返回 void。
 core.init({ configDir: './config', configSchemas: { iam: IamConfigSchema } })
+// 连接 ./data.db 中的 SQLite 数据库。成功 data 为 undefined，连接失败返回 error。
 const db = await reldb.init({ type: 'sqlite', database: './data.db' })
 if (!db.success)
   return db
+// 启动开发用的进程内缓存。成功 data 为 undefined，失败时不能继续初始化 IAM。
 const cached = await cache.init({ type: 'memory' })
 if (!cached.success)
   return cached
+// 先从配置中心读取 iam，缺失时 getOrThrow 抛错。把取得的配置传给 iam.init，成功 data 为 undefined。
 const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
 if (!initialized.success)
   return initialized
@@ -176,8 +180,12 @@ interface TokenPair {
 | `consume` | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>`          | 原子消费（单次有效，用途不符拒绝） |
 
 ```ts
-const issued = await iam.ticket.issue({ subjectId, purpose: 'ai-audio', grant: { operation: 'transcribe' } })
-const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // 并发消费仅一个成功
+// 为已认证用户 user-1 签发 ai-audio 的 transcribe 票据。成功 data 含票据字符串及到期毫秒值。
+const issued = await iam.ticket.issue({ subjectId: 'user-1', purpose: 'ai-audio', grant: { operation: 'transcribe' } })
+if (!issued.success) throw new Error(issued.error.message)
+// 用签发结果中的 ticket 按 ai-audio 用途消费。成功 data 含 subjectId、purpose 和 grant。
+// 并发消费只有一次成功，过期或用途不符时返回失败。
+const consumed = await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-audio' })
 ```
 
 错误码：`TICKET_INVALID`(hai:iam:110) / `TICKET_EXPIRED`(hai:iam:111) / `TICKET_ISSUE_FAILED`(hai:iam:112)。
@@ -265,6 +273,7 @@ import { iam } from '@h-ai/iam'
 
 async function createReadKey(userId: string) {
   // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  // 为指定 userId 签发 30 天有效的 record:read 密钥。成功 data 含 Key 资料及只返回一次的 rawKey。
   const created = await iam.apiKey.createApiKey(userId, {
     name: 'Read client',
     expirationDays: 30,
@@ -278,11 +287,13 @@ async function createReadKey(userId: string) {
 
 async function apiKeyLogin(rawKey: string) {
   // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  // 把原始 API Key 交给服务端换取 AuthResult，会话权限按 Key 的 scope 限制。失效 Key 返回失败结果。
   return iam.auth.loginWithApiKey({ key: rawKey })
 }
 
 async function requireRecordRead(accessToken: string, deniedMessage: string) {
   // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  // 验证客户端提交的 accessToken。成功 data 是当前会话，含权限和 userId。过期或撤销时失败。
   const verified = await iam.auth.verifyToken(accessToken)
   if (!verified.success)
     return verified
@@ -291,12 +302,15 @@ async function requireRecordRead(accessToken: string, deniedMessage: string) {
     || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
   )
   if (!allowed)
+    // 用领域拒绝码和应用提供的本地化消息构造失败结果。
     return err(HaiCommonError.FORBIDDEN, deniedMessage)
   // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  // 返回成功的 HaiResult，data.userId 取自已验证且具备权限的会话。
   return ok({ userId: verified.data.userId })
 }
 
 async function listMyKeys(userId: string) {
+  // 读取指定用户启用且匹配 Read 的 Key，取第一页 20 条。成功 data 是分页元数据和 Key 摘要。
   return iam.apiKey.listApiKeys(userId, {
     page: 1,
     pageSize: 20,
@@ -307,6 +321,7 @@ async function listMyKeys(userId: string) {
 
 async function revokeKey(keyId: string) {
   // 调用前校验本人归属或管理权限。
+  // 撤销已通过归属检查的 keyId。成功 data 为 undefined，该 Key 不能再登录。
   return iam.apiKey.revokeApiKey(keyId)
 }
 ```
@@ -332,6 +347,7 @@ IAM HTTP API 统一由 `@h-ai/api-contract` 的 `apiContract.iam` 定义，由 `
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 
+// 按用户提交的用户名和密码调用登录接口。成功 data 是 AuthResult，认证失败查看 error。
 const result = await apiClient.iam.auth.login({ identifier: username, password })
 ```
 
@@ -394,9 +410,11 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 // 应用启动时已成功初始化 IAM。
+// 用下方公开路径、保护路径和认证回调构造 SvelteKit 请求钩子。
 export const handle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
+      // 在回调中验证请求 token，成功时用会话作为回调输出，失败映射为 null。
       const result = await iam.auth.verifyToken(token)
       return result.success ? result.data : null
     },
@@ -412,12 +430,15 @@ export const handle = kit.createHandle({
 
 ```typescript
 // 登录 → 保存 Token
+// 按用户提交的用户名和密码调用登录接口。成功 data 是 AuthResult，认证失败查看 error。
 const login = await apiClient.iam.auth.login({ identifier: username, password })
 if (login.success) {
+  // 持久化登录返回的 token 对并切换会话版本。返回 Promise<void>，存储异常时拒绝。
   await apiClient.auth.setTokens(login.data.tokens)
 }
 
 // 获取当前用户
+// 无参查询当前会话对应的用户和权限，成功 data 含用户字段及角色、权限。
 const me = await apiClient.iam.auth.currentUser()
 if (me.success) {
   // 返回 User + 服务端当前会话的 roles/permissions。
@@ -430,7 +451,9 @@ if (me.success) {
 
 // 登出：本地清理与服务端撤销确认分别处理，调用方继续检查返回结果。
 async function signOut() {
+  // 用当前认证状态请求服务端撤销会话，成功无业务数据，失败供调用方核对。
   const result = await apiClient.iam.auth.logout({})
+  // 无参清除本地 token 和旧刷新状态。返回 Promise<void>，存储异常时拒绝。
   await apiClient.auth.clear()
   return result
 }

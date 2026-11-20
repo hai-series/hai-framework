@@ -25,6 +25,7 @@
 import { apiContract } from '@h-ai/api-contract'
 
 // 按需组合，传 false/undefined 的领域不会出现在 contract 或 OpenAPI spec 中
+// 组合 IAM、Storage 和 AI 路由，得到应用契约。payment 为 false，因此不包含支付路由。
 export const myContract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -42,6 +43,7 @@ export const myContract = apiContract.create({
 ```typescript
 import { apiContract } from '@h-ai/api-contract'
 
+// 将启用的 IAM 和 Storage 路由组合为契约。构造阶段不调用服务。
 export const myContract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -62,6 +64,7 @@ const WidgetCreateInputSchema = z.object({
 })
 
 // 同一 contract 内两个接口复用，因此保留为文件私有常量，不从 schemas 导出。
+// 声明成功数据中的 id、name、createdAt 字段和标准失败形状。
 const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
   id: z.string(),
   name: z.string(),
@@ -72,6 +75,7 @@ const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
 export const widgetContract = {
   widget: {
     create: apiContract
+      // 建立 POST /widgets 的路由定义并指定操作 ID 和分组。
       .route({
         method: 'POST',
         path: '/widgets',
@@ -79,18 +83,23 @@ export const widgetContract = {
         summary: 'Create widget',
         tags: ['widget'],
       })
+      // 为创建请求绑定已有的 name 和可选 description 校验。
       .input(WidgetCreateInputSchema)
+      // 声明创建接口闭合在同一 HaiResult 输出形状。
       .output(WidgetOutputSchema),
 
     getById: apiContract
       .route({
+        // 建立 GET /widgets/{id} 的路由定义。
         method: 'GET',
         path: '/widgets/{id}',
         operationId: 'widget.getById',
         summary: 'Get widget by id',
         tags: ['widget'],
       })
+      // 将路径 id 绑定到输入的字符串字段。
       .input(z.object({ id: z.string() }))
+      // 复用创建接口的同一成功及失败输出形状。
       .output(WidgetOutputSchema),
   },
 }
@@ -102,6 +111,7 @@ export const widgetContract = {
 import { apiContract } from '@h-ai/api-contract'
 import { widgetContract } from './widget-contract.js'
 
+// 组合内置 IAM 和本地 widgetContract，返回应用路由契约。
 export const appContract = apiContract.create({
   iam: apiContract.iam,
   widget: widgetContract,
@@ -115,9 +125,11 @@ import { serv } from '@h-ai/serv'
 import { appContract } from './app-contract.js'
 import { createMyProcedures } from './procedures/widget.js'
 
+// 将应用契约及领域实现挂到 /api/v1，返回组装好的 HTTP App。
 const app = serv.createApp({
   contract: appContract,
   procedures: {
+    // 用已初始化的 IAM 服务创建认证和管理路由的处理器。
     iam: createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
@@ -132,6 +144,7 @@ const app = serv.createApp({
 ```typescript
 import { apiContract } from '@h-ai/api-contract'
 
+// 组合内置 IAM 和自定义领域，false 排除 Storage。
 const contract = apiContract.create({
   iam: apiContract.iam,      // 启用：纳入 contract
   storage: false,            // 禁用：不出现在 OpenAPI spec 中
@@ -152,6 +165,7 @@ const contract = apiContract.create({
 ### 内置 contract 路径示例
 
 ```typescript
+// 组合三个内置领域，得到下面用于查找命名路由的契约。
 const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 // IAM
@@ -176,7 +190,9 @@ import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 const getWidget = apiContract
+  // 定义 GET /widgets/{id} 的路径及方法。
   .route({ method: 'GET', path: '/widgets/{id}' })
+  // 用 Widget 的 id 和 name 声明成功数据，HaiResult 同时包含失败形状。
   .output(apiContract.haiResultSchema(z.object({
     id: z.string(),
     name: z.string(),
@@ -190,6 +206,7 @@ const getWidget = apiContract
 ### `apiContract.pathOf(procedure)` — 读取业务路径
 
 ```typescript
+// 获取内置刷新操作的相对路径，结果为 /auth/refresh。
 const refreshPath = apiContract.pathOf(apiContract.iam.auth.refresh)
 // '/auth/refresh'
 ```
@@ -248,8 +265,11 @@ import { z } from 'zod'
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })
 
 const listWidgets = apiContract
+  // 定义 Widget 列表的 GET 路径、操作 ID 和 OpenAPI 标签。
   .route({ method: 'GET', path: '/widgets', operationId: 'widget.list', tags: ['widget'] })
+  // 沿用分页校验并加入可选关键词，无效输入由运行时校验拒绝。
   .input(PaginationQuerySchema.extend({ keyword: z.string().optional() }))
+  // 将 Widget 条目及分页元数据包装进 HaiResult 输出，也允许标准错误。
   .output(apiContract.haiResultSchema(apiContract.paginatedSchema(WidgetSchema)))
 ```
 
@@ -258,8 +278,11 @@ const listWidgets = apiContract
 ```typescript
 // 路径中的 {id} 对应 input 中的 id 字段
 const getWidget = apiContract
+  // 定义按 id 获取 Widget 的 GET 路由。
   .route({ method: 'GET', path: '/widgets/{id}', operationId: 'widget.getById', tags: ['widget'] })
+  // 声明路径参数 id 是字符串。
   .input(z.object({ id: z.string() }))
+  // 声明 Widget 成功数据及标准失败输出。
   .output(apiContract.haiResultSchema(WidgetSchema))
 ```
 
@@ -267,7 +290,9 @@ const getWidget = apiContract
 
 ```typescript
 const versionContract = apiContract
+  // 定义系统版本 GET 路由并指定操作 ID 和分组。
   .route({ method: 'GET', path: '/system/version', operationId: 'system.version', tags: ['system'] })
+  // 声明版本字符串的成功数据及标准错误形状。
   .output(apiContract.haiResultSchema(z.object({ version: z.string() })))
 ```
 

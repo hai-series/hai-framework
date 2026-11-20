@@ -37,6 +37,7 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 | `listSessions(objectId)` | 查询主体会话 |
 
 ```ts
+// 让配置 ID 为 fast 的模型按翻译助手提示处理你好世界。成功从 choices 读取译文，模型或请求失败时读取 error。
 const result = await ai.llm.chat({
   model: 'fast',
   messages: [
@@ -62,10 +63,13 @@ if (result.success) {
 ### 独立服务器
 
 ```ts
+// 创建名为 my-server、版本 1.0.0 的 MCP Server，用于登记静态资源。
 const mcp = createMcpServer({ name: 'my-server', version: '1.0.0' })
+// 把应用配置处理器登记到 config://app；查询该 URI 时返回正文，登记错误抛出。
 mcp.registerResource('config', 'config://app', { description: '应用配置' }, async uri => ({
   contents: [{ uri: uri.href, text: '{}' }],
 }))
+// 创建并连接标准输入输出传输，成功后接收协议消息，连接错误拒绝 Promise。
 await mcp.connect(new StdioServerTransport())
 ```
 
@@ -122,6 +126,7 @@ Memory 后端通过 `memory.provider` 选择：
 ## Retrieval / RAG
 
 ```ts
+// 登记 docs 对应 doc_vectors 的检索来源，默认取五项并应用 0.7 阈值；成功无数据，ID 重复返回失败。
 await ai.retrieval.addSource({
   id: 'docs',
   name: '产品文档',
@@ -130,6 +135,7 @@ await ai.retrieval.addSource({
   minScore: 0.7,
 })
 
+// 从 docs 获取最多五条候选回答核心架构问题，成功含答案、上下文和引用；无源或模型失败返回错误。
 const result = await ai.rag.query('核心架构是什么？', {
   sources: ['docs'],
   topK: 5,
@@ -243,6 +249,7 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
+// 用下方意图枚举和提问调用 JSON 模式，成功返回本地校验后的 intent；解析或校验重试耗尽时失败。
 const result = await ai.llm.generateObject({
   schema: z.object({ intent: z.enum(['question', 'request']) }), // 定义允许的分类。
   messages: [{ role: 'user', content: '如何部署？' }], // 输入待分类文本。
@@ -294,7 +301,9 @@ A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信
 默认 `chats.createCompletion`（`POST /ai/chats/completions`）只返回非流式 `HaiResult<AiChatCompletionData>`，未声明字段（含 `stream: true/false`）在 HTTP 边界拒绝。function `tools` 保留完整嵌套 JSON Schema 与 `strict`，`tool_choice` 支持 auto/none/required/本次定义的函数名。消息按角色校验并保留 name、用户图片、助手 tool_calls；工具结果必须带非空 tool_call_id。应用自行授权执行工具后，将助手调用与对应结果回传。需要流式时定义与 `ai.llm.chatStream()` 匹配的独立 endpoint，不把 stream 填入默认补全请求。
 
 ```ts
+// 把浏览器已准备的 messages 交给服务端非流式 Chat 接口，成功读 completion，鉴权或模型错误按 HaiResult 处理。
 const response = await apiClient.ai.chats.createCompletion({ messages })
+// 在服务端会话主体范围按偏好检索最多五条记忆，成功返回匹配项，越权或检索失败返回错误。
 const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 })
 ```
 

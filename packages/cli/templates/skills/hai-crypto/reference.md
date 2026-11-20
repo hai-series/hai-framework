@@ -40,9 +40,10 @@
 ```typescript
 import { crypto } from '@h-ai/crypto'
 
+// 省略配置，启用默认加密和密码参数。初始化成功时 data 为 undefined，失败返回错误。
 await crypto.init()
 
-// 使用后关闭
+// 无参关闭加密模块和密码任务队列，等待 Promise 完成。没有业务返回值。
 await crypto.close()
 ```
 
@@ -61,17 +62,22 @@ await crypto.close()
 | `isValidPrivateKey` | `(key: string) => boolean`                                  | 校验私钥编码及 1～n-2 标量范围 |
 
 ```typescript
+// 无参生成 SM2 密钥对。成功 data 包含 publicKey 和 privateKey，生成失败时返回错误。
 const keyPair = crypto.asymmetric.generateKeyPair()
 if (keyPair.success) {
   const { publicKey, privateKey } = keyPair.data
 
+  // 用生成的公钥加密示例文本。成功 data 是密文，公钥不合法时返回错误。
   const encrypted = crypto.asymmetric.encrypt('敏感数据', publicKey)
   if (encrypted.success) {
+    // 用对应的私钥解开前一步密文。成功 data 是原文，解密失败返回错误。
     const decrypted = crypto.asymmetric.decrypt(encrypted.data, privateKey)
   }
 
+  // 用私钥为「待签名数据」生成签名。成功 data 是签名字符串。
   const signature = crypto.asymmetric.sign('待签名数据', privateKey)
   if (signature.success) {
+    // 用公钥验证同一文本与签名是否匹配。成功 data 为布尔值。
     const valid = crypto.asymmetric.verify('待签名数据', signature.data, publicKey)
   }
 }
@@ -91,9 +97,12 @@ SM2 加密只接受非空明文，错误私钥、畸形密文或 C3 认证失败
 | `verify` | `(data, expectedHash) => HaiResult<boolean>`                  | 验证哈希 |
 
 ```typescript
+// 对 hello 计算 SM3，成功 data 是 64 字符十六进制摘要。
 const hash = crypto.hash.hash('hello')
+// 用示例密钥对 hello 计算 HMAC-SM3，成功 data 是 64 字符十六进制认证码。
 const hmac = crypto.hash.hmac('hello', 'secret-key')
 if (hash.success) {
+  // 重新计算 hello 的摘要，与上一步 data 比较。成功 data 为 true。
   const valid = crypto.hash.verify('hello', hash.data)
 }
 ```
@@ -116,17 +125,22 @@ if (hash.success) {
 SM4 密钥使用 `generateKey()` 生成；本模块不提供密码 KDF。密码存储使用服务端 `crypto.password.hashAsync()`，不要将密码或密码哈希直接用作 SM4 密钥。
 
 ```typescript
+// 无参生成 SM4 随机密钥，直接返回十六进制字符串。
 const key = crypto.symmetric.generateKey()
 
 // 默认安全用法：CBC + 自动 IV，返回 { mode, ciphertext, iv, encoding }
+// 用 key 加密示例明文，成功 data 含模式、密文、IV 和编码。
 const encrypted = crypto.symmetric.encrypt('明文数据', key)
 if (encrypted.success) {
+  // 用相同 key 和完整加密对象恢复原文，失败时返回 HaiResult 错误。
   const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
 }
 
 // 需要单独存储 IV 时使用结构化结果
+// 用 key 加密同一明文，成功 data 可分别读取 ciphertext 和 iv。
 const withIV = crypto.symmetric.encryptWithIV('明文数据', key)
 if (withIV.success) {
+  // 传入刚生成的密文、原密钥和对应 IV，成功 data 为原始明文。
   const decrypted = crypto.symmetric.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 }
 ```
@@ -148,8 +162,10 @@ SM4 拒绝未知 mode/encoding、空密文、非完整分组、无效 PKCS#7 和
 | `verifyAsync` | `(password, hash) => Promise<HaiResult<boolean>>` | Node.js 异步验证 |
 
 ```typescript
+// 异步哈希示例口令，成功 data 是可持久化的密码哈希记录，队列满时返回 PASSWORD_BUSY。
 const hashed = await crypto.password.hashAsync('MyPassword123')
 if (hashed.success) {
+  // 以示例口令验证生成的哈希，成功 data 为 true，口令不符时为 false。
   const valid = await crypto.password.verifyAsync('MyPassword123', hashed.data)
 }
 ```
@@ -186,6 +202,7 @@ import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
 
 // cache 由应用初始化并在所有使用方关闭后释放。
+// 用已初始化的共享 cache 创建密钥登记库，记录保留一小时，并配置注册与请求的每分钟上限。
 const registry = crypto.transport.createKeyStore({
   cache,
   ttlSeconds: 3600,
@@ -195,14 +212,17 @@ const registry = crypto.transport.createKeyStore({
 ```
 
 ```typescript
+// 用受管密钥环和密钥登记库创建服务端。成功 data 是传输加密管理器，配置无效返回错误。
 const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   return server
 
+// 用 HTTPS 密钥交换地址创建传输客户端，返回可发起加密请求的实例。
 const client = crypto.transport.createClient({
   keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
 })
 
+// 向 echo 地址发送 JSON POST，自动协商密钥并校验响应。成功返回 Response，网络或协议校验失败会拒绝。
 const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', {
   method: 'POST',
   body: JSON.stringify({ hello: 'world' }),
@@ -213,10 +233,13 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 import { crypto } from '@h-ai/crypto'
 import { cache } from '@h-ai/cache'
 
+// 连接本机 Redis 6379，成功 data 为 undefined，无法连接时返回错误。
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
+// 用已有密钥环和下方的共享登记库创建服务端。成功 data 是管理器。
 const sharedServer = crypto.transport.createServer({
   serverKeyRing,
+  // 将已初始化的 Redis cache 用作登记库，公钥登记保留 3600 秒，返回存储接口。
   keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
 })
 ```
@@ -242,9 +265,11 @@ const sharedServer = crypto.transport.createServer({
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 解析环境变量中的密钥环。成功 data 为密钥环，缺失或格式不合法时返回错误。
 const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
+// 用解析出的密钥环和共享登记库构建服务端。成功 data 为管理器。
 const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: sharedRegistry })
 ```
 
@@ -261,6 +286,7 @@ Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 按密钥交换字节上限读取请求体为文本。超限或请求取消时会拒绝。
 const text = await crypto.transport.readBody(request.body, {
   maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
   signal: request.signal,
@@ -301,10 +327,12 @@ const payload: unknown = JSON.parse(text)
 
 ```typescript
 const key = process.env.HAI_CRYPTO_DATA_KEY!
+// 用部署提供的密钥加密待入库数据。成功 data 是包含 IV 和密文的结构化对象。
 const encrypted = crypto.symmetric.encrypt(sensitiveData, key)
 // 存入数据库
 
 // 读取时解密
+// 读取已存加密对象并用原密钥恢复明文。密钥或数据不合法时返回错误。
 const decrypted = crypto.symmetric.decrypt(storedPayload, key)
 ```
 
@@ -314,12 +342,14 @@ const decrypted = crypto.symmetric.decrypt(storedPayload, key)
 
 ```typescript
 // 注册时哈希存储
+// 哈希注册表单的密码，成功 data 是带盐的哈希记录，可存数据库。
 const hashResult = await crypto.password.hashAsync(userPassword)
 if (hashResult.success) {
   // 存储 hashResult.data 到数据库
 }
 
 // 登录时验证
+// 用登录表单里的口令验证数据库哈希。成功 data 为 true 或 false，处理故障另走失败结果。
 const verifyResult = await crypto.password.verifyAsync(inputPassword, storedHash)
 if (verifyResult.success && verifyResult.data) {
   // 密码匹配

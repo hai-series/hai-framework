@@ -7,9 +7,11 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export async function calculateForUser(objectId: string) {
+  // 创建空注册器，下方授权规则使用可信调用方提供的身份。
   const registry = tools.createRegistry({
     authorize: ({ context }) => context.objectId === objectId,
   })
+  // 用下方数字参数和求和处理器定义 sum，再登记到本注册器。无效定义抛错，登记成功无数据，重名返回错误。
   const registered = registry.register(tools.define({
     name: 'sum',
     description: 'Add two numbers',
@@ -18,6 +20,7 @@ export async function calculateForUser(objectId: string) {
   }))
   if (!registered.success)
     return registered
+  // 按可信 objectId 执行 sum(2, 3)，成功得到 { total: 5 }；输入校验或授权失败时处理器不运行。
   return registry.execute('sum', { a: 2, b: 3 }, { objectId })
 }
 ```

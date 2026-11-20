@@ -84,6 +84,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  // 无参读取项目交付配置并返回对应的 SvelteKit adapter，供 Vite 插件使用。
   plugins: [sveltekit({ adapter: await createAdapter(), paths: { relative: false } })],
 })
 ```
@@ -159,23 +160,33 @@ import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { iam, IamConfigSchema } from '@h-ai/iam'
 
 // 放入应用已有的启动函数；并发防护和关闭钩子复用当前模板。
+// 从 ./config 加载配置，注册 db、cache 和 iam 的 Schema，返回 void。
 core.init({ configDir: './config', configSchemas: { db: ReldbConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema } })
+// 校验 db 配置并应用默认值。成功 data 供 reldb.init 使用，校验失败直接返回。
 const dbConfig = core.config.validate('db', ReldbConfigSchema)
 if (!dbConfig.success) return dbConfig
+// 校验 cache 配置。成功 data 是要初始化的缓存后端配置。
 const cacheConfig = core.config.validate('cache', CacheConfigSchema)
 if (!cacheConfig.success) return cacheConfig
+// 校验 iam 配置。成功 data 是要传给身份模块的配置。
 const iamConfig = core.config.validate('iam', IamConfigSchema)
 if (!iamConfig.success) return iamConfig
+// 用校验后的 db 配置连接数据库，成功 data 为 undefined。
 const db = await reldb.init(dbConfig.data)
 if (!db.success) return db
+// 用校验后的配置初始化缓存。成功 data 为 undefined，失败后清理已连接的数据库。
 const cached = await cache.init(cacheConfig.data)
 if (!cached.success) {
+  // 无参关闭已初始化的数据库，释放失败时返回清理错误。
   const cleanup = await reldb.close()
   return cleanup.success ? cached : cleanup
 }
+// 用校验后的配置初始化 IAM。成功 data 为 undefined，失败后按依赖关系释放缓存和数据库。
 const identity = await iam.init(iamConfig.data)
 if (!identity.success) {
+  // 无参释放缓存，成功 data 为 undefined，失败结果由启动函数返回。
   const cacheCleanup = await cache.close()
+  // 无参释放数据库，成功 data 为 undefined，失败结果由启动函数返回。
   const dbCleanup = await reldb.close()
   if (!cacheCleanup.success) return cacheCleanup
   if (!dbCleanup.success) return dbCleanup
@@ -193,6 +204,7 @@ if (!identity.success) {
 import { apiClient } from '@h-ai/api-client'
 
 export async function initApi() {
+  // 配置 API 基址、会话策略和 15 秒超时，返回初始化的 HaiResult。
   return apiClient.init({
     baseUrl: configuredApiBase, // 来自当前项目已校验的运行时配置
     auth: {}, // 浏览器默认 httpOnly cookie；原生 App 传入 Capacitor TokenStorage
@@ -209,8 +221,10 @@ export { apiClient }
 import { capacitor } from '@h-ai/capacitor'
 
 export async function initCapacitor() {
+  // 无参加载当前平台的 Capacitor 能力，失败时将错误结果交给应用。
   const initialized = await capacitor.init()
   if (!initialized.success) return initialized
+  // 请求把原生状态栏设为 dark，成功 data 为 undefined，能力或设置失败返回错误。
   return capacitor.statusBar.configure({ style: 'dark' })
 }
 ```
@@ -324,13 +338,17 @@ pnpm test
 返回 `HaiResult<T>` 的领域操作按以下模式处理；工具、工厂和流式 API 以签名为准：
 
 ```typescript
+// 执行无绑定参数的 users 查询。成功 data 是用户行数组。
 const result = await reldb.sql.query('SELECT * FROM users')
 if (!result.success) {
   // result.error: { code, message, details? }
+  // 记录失败的数据库查询及对应 error，返回 void。
   core.logger.error('Query failed', { error: result.error })
+  // 无参返回通用 HTTP 500 响应，保留内部查询详情在日志中。
   return kit.response.internalError()
 }
 // result.data 可安全使用
+// 以查询到的数组作为 data 返回 HTTP 200。
 return kit.response.ok(result.data)
 ```
 

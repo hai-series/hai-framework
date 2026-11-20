@@ -52,20 +52,25 @@ import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 import { storage } from '@h-ai/storage'
 
+// 组合三个内置领域，返回 HTTP 路由契约。
 const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 // 装配 procedures（每个 feature 对应 contract 中的一个领域）
 const procedures = {
+  // 将已初始化 IAM 绑定到认证和管理过程，无权限的请求由过程拒绝。
   iam: createIamProcedures({ iam }),
+  // 将已初始化 storage 绑定到存储过程，拒绝任何不在当前用户键前缀下的请求。
   storage: createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
       key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
   }),
+  // 将已初始化 AI 服务绑定到匹配的 API 过程。
   ai: createAiProcedures({ ai }),
 }
 
 // 创建 HTTP App 抽象；不要在应用导出类型里暴露 Hono
+// 组装契约、过程和 IAM，挂载 /api/v1 及配置的文档和健康检查路径。
 const app = serv.createApp({
   contract,
   procedures,
@@ -79,10 +84,13 @@ const app = serv.createApp({
 })
 
 // Node.js 启动（host/port 来自 _serv.yml 的 server；HOST/PORT 环境变量高于配置文件；onClose 自动监听 SIGINT/SIGTERM）
+// 读取已加载的 Serv 监听配置。缺失时报错。
 const { server } = core.config.getOrThrow<ServConfig>('serv')
+// 用配置的地址与端口启动 HTTP 监听，关闭回调负责释放业务依赖。绑定失败时拒绝。
 serv.listen(app, {
   host: server.host,
   port: server.port,
+  // 监听成功后记录实际端口。
   onListening: info => logger.info('API service listening', { port: info.port }),
   onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
@@ -91,12 +99,14 @@ serv.listen(app, {
 生产部署先从 `_core.yml.env` 与 `_serv.yml.cors` 创建安全策略；不要在业务应用重复实现 Origin 解析：
 
 ```typescript
+// 按当前环境及配置的 Web 和原生来源生成安全策略，结果供 CORS、文档和 Cookie 使用。
 const security = serv.createRuntimeSecurityPolicy({
   environment: coreConfig.env,
   corsOrigin: servConfig.cors.origin,
   nativeOrigins: servConfig.cors.nativeOrigins,
 })
 
+// 组装应用，按策略决定是否开放文档与是否设置安全刷新 Cookie。
 const app = serv.createApp({
   contract,
   procedures,
@@ -108,6 +118,7 @@ const app = serv.createApp({
   iam,
   refreshCookie: { secure: security.secureRefreshCookie },
   middlewares: [{
+    // 使用允许来源和配置的请求头、响应头生成 CORS 中间件，不匹配的来源不取得跨域授权。
     middleware: serv.cors({
       origin: security.allowOrigin,
       credentials: servConfig.cors.credentials,
@@ -126,6 +137,7 @@ const app = serv.createApp({
 ### 2.1 Audio WebSocket 安全接入
 
 ```typescript
+// 在已装配的 App 中挂载 AI 音频能力，使用应用提供的票据、授权与会话关闭回调。无效或未获授权的请求不能开启会话。
 const app = serv.createApp({
   contract,
   procedures,
@@ -155,15 +167,22 @@ const app = serv.createApp({
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
+// 定义名与版本组成的成功结果，以及标准失败输出。
 const InfoOutput = apiContract.haiResultSchema(z.object({ name: z.string(), version: z.string() }))
 const EchoInput = z.object({ message: z.string().min(1).max(2000) })
+// 定义回显内容和已认证用户 ID 的成功结果。
 const EchoOutput = apiContract.haiResultSchema(z.object({ message: z.string(), userId: z.string() }))
 
 export const appContract = {
+  // 描述 POST /app/info 的固定路由和操作 ID。
   info: apiContract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+    // 将服务信息结果声明为该路由的输出。
     .output(InfoOutput),
+  // 描述 POST /app/echo 的固定路由和操作 ID。
   echo: apiContract.route({ method: 'POST', path: '/app/echo', operationId: 'app.echo', tags: ['app'] })
+    // 要求请求提供长度为 1 到 2000 的 message。
     .input(EchoInput)
+    // 将回显结果声明为该路由的输出。
     .output(EchoOutput),
 }
 ```
@@ -177,17 +196,24 @@ import { serv } from '@h-ai/serv'
 
 export function createAppProcedures(deps: { name: string, version: string }) {
   return serv
+    // 为传入的应用契约创建过程构造器。
     .implement(appContract)
+    // 指定处理器使用 ServContext。
     .context<ServContext>()
     // 公开 procedure：route 名只出现一次，handler 直接返回 HaiResult。
+    // 将 info 绑定到成功结果，数据取应用提供的名称和版本。
     .route('info', () => ok({ name: deps.name, version: deps.version }))
     // 鉴权 procedure：guard 通过后 context.session 自动收窄为非空。
+    // 选中 echo 过程以绑定后面的守卫和回调。
     .route('echo')
+    // 要求会话存在，认证失败时不运行回显回调。
     .auth()
+    // 为当前请求回显已校验的消息，并将会话用户 ID 写入成功结果。
     .handle(({ input, context }) => ok({
       message: input.message,
       userId: context.session.userId,
     }))
+    // 完成过程映射供 createApp 注册。
     .build()
 }
 ```
@@ -195,6 +221,7 @@ export function createAppProcedures(deps: { name: string, version: string }) {
 把自有 contract / procedures 与框架的 iam/storage/ai 平铺合并：
 
 ```typescript
+// 组合三个内置领域及自定义 app 契约，获取完整路由契约。
 const contract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -203,16 +230,20 @@ const contract = apiContract.create({
 })
 
 const procedures = {
+  // 用已初始化的 IAM 创建对应的过程实现。
   iam: createIamProcedures({ iam }),
+  // 用已初始化的存储创建过程实现，传入的授权回调拒绝跨用户键。
   storage: createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
       key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
   }),
+  // 用已初始化的 AI 服务创建请求处理器。
   ai: createAiProcedures({ ai }),
   app: createAppProcedures({ name: 'demo', version: '1.0.0' }),
 }
 
+// 将契约、过程及传入 HTTP/IAM 设置装配为 HTTP App。
 const app = serv.createApp({ contract, procedures, http, iam })
 ```
 
@@ -230,6 +261,7 @@ toFetch 只适配调用签名；包根仍静态依赖 Node API，未经实际验
 import { serv } from '@h-ai/serv'
 
 // toFetch 返回标准 Fetch handler
+// 将已有 Serv App 转成宿主可直接调用的标准 Fetch 处理器。
 const handler = serv.toFetch(app)
 
 export default { fetch: handler }
@@ -243,14 +275,18 @@ export default { fetch: handler }
 import { core } from '@h-ai/core'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 
+// 启动时读取 ./config，并按 ServConfigSchema 注册和校验 serv 配置。
 core.init({ configDir: './config', configSchemas: { serv: ServConfigSchema } })
 
+// 按同一 Schema 验证已读取的 Serv 配置。失败时抛出返回的错误。
 const validation = core.config.validate('serv', ServConfigSchema)
 if (!validation.success)
   throw new Error(validation.error.message)
 
+// 获取已校验的 Serv 配置。配置缺失时抛异常。
 const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
 
+// 用已加载的 HTTP 和传输设置构建应用，transport 为 false 时跳过传输初始化。
 const app = serv.createApp({
   contract,
   procedures,
@@ -311,13 +347,16 @@ import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 
 // 最小服务使用默认健康检查；业务路由由真实 contract/procedures 扩展。
+// 创建空的业务契约，用于只验证服务的基础入口。
 const contract = apiContract.create({})
+// 用 ServContext 组装该空契约的过程映射。
 const procedures = serv.implement(contract).context<ServContext>().build()
 const options: CreateServAppOptions<typeof contract, typeof procedures> = {
   contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
 }
+// 使用前面准备的选项组装 App，API 前缀为 /api/v1。
 const app = serv.createApp(options)
 ```
 
@@ -331,15 +370,23 @@ import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 
 // 等价于 oc.route(...)，但不让应用感知 @orpc/contract
+// 创建 POST /x 路由的契约描述，指定操作 ID 和分组。
 const route = apiContract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
 
 const procedures = serv
+  // 为应用契约创建过程构造器。
   .implement(appContract)
+  // 将过程运行上下文指定为 ServContext。
   .context<ServContext>()
+  // 绑定 info 与应用提供的信息处理器。
   .route('info', infoHandler)
+  // 选中 echo 过程，为其配置认证和实现。
   .route('echo')
+  // 要求当前请求通过认证。失败时阻止后续回显。
   .auth()
+  // 将调用转给应用提供的回显处理器。
   .handle(echoHandler)
+  // 完成映射供 App 注册。
   .build()
 ```
 
@@ -353,8 +400,10 @@ serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.cr
 import { crypto } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
+// 初始化传输依赖的密码学功能。失败结果含错误，需在装配应用前检查。
 await crypto.init()
 
+// 用现有密钥环和已连接仓库为 /api/v1 装配服务端传输。
 const app = serv.createApp({
   contract,
   procedures,
@@ -371,6 +420,7 @@ const app = serv.createApp({
 客户端：
 
 ```typescript
+// 使用指定 HTTPS 地址和 crypto 传输配置初始化客户端。初始化失败返回结构化错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: { crypto },
@@ -380,6 +430,7 @@ await apiClient.init({
 若服务端通过 `config/_serv.yml` 自定义了 `transport.keyExchangePath`，客户端也必须传入同一路径：
 
 ```typescript
+// 初始化 HTTPS 客户端，并用显式协商路径覆盖默认路径。配置失败返回错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: {
@@ -419,13 +470,21 @@ await apiClient.init({
 import { serv } from '@h-ai/serv'
 
 const procedures = serv
+  // 为应用契约开始构造过程映射。
   .implement(appContract)
+  // 指定处理器的请求上下文类型。
   .context<ServContext>()
+  // 将 info 路由绑定到应用提供的处理器。
   .route('info', infoHandler)
+  // 选中更新用户过程，为其定义守卫和处理器。
   .route('users.update')
+  // 要求 user.write 权限，缺少权限时拒绝调用。
   .permission('user.write')
+  // 同时要求 admin 角色。
   .role('admin')
+  // 认证授权通过后将请求交给用户更新处理器。
   .handle(updateUserHandler)
+  // 构造可注册的过程映射。
   .build()
 ```
 
@@ -456,12 +515,14 @@ const requestMetrics: ServMiddleware = async (c, next) => {
   c.header('x-response-time-ms', String(Date.now() - startedAt))
 }
 
+// 使用下面的 CORS、租户检查和静态资产中间设置组装 API App。
 const app = serv.createApp({
   contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
   middlewares: [
     {
+      // 为匹配的指定来源允许凭据，公开列出的传输和跟踪响应头。
       middleware: serv.cors({
         origin: origin => origin === 'https://app.example.com',
         credentials: true,
@@ -479,6 +540,7 @@ const app = serv.createApp({
     },
     {
       path: '/assets/*',
+      // 从提供的存储实例读 /assets/ 的公开 PNG。路径或内容类型不在白名单中时拒绝。
       middleware: serv.storageAssets({
         storage,
         pathPrefix: '/assets/',
@@ -505,12 +567,15 @@ const app = serv.createApp({
 如果想复用“Bearer token → session”这段逻辑，再追加租户/工作区等字段，优先：
 
 ```typescript
+// 以 IAM 验证函数构造基础上下文工厂，合法凭据产生会话。
 const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
+// 组装应用，让自定义上下文在基础认证结果上补充租户字段。
 const app = serv.createApp({
   contract,
   procedures,
   createContext: async (input) => {
+    // 对当前请求执行基础上下文工厂，得到会话及请求元数据。
     const context = await baseContext(input)
     return {
       ...context,
@@ -532,13 +597,20 @@ const app = serv.createApp({
 
 ```typescript
 const procedures = serv
+  // 按 Widget 契约构造过程映射。
   .implement(widgetContract)
+  // 将处理器上下文定义为 ServContext。
   .context<ServContext>()
+  // 将列表过程绑定到应用的查询服务，传递契约验证后的输入。
   .route('widgets.list', ({ input }) => widgetService.list(input))
+  // 选中创建 Widget 过程。
   .route('widgets.create')
+  // 只允许具有 widgets.write 的调用者进入创建处理器。
   .permission('widgets.write')
+  // 将已认证用户及输入交给应用创建服务。
   .handle(({ input, context }) =>
     widgetService.create(context.session.userId, input))
+  // 完成过程映射并返回。
   .build()
 ```
 
@@ -575,17 +647,24 @@ import { z } from 'zod'
 const Schema = z.object({ title: z.string().min(1) })
 
 const procedures = serv
+  // 为 Widget 契约建立过程构造器。
   .implement(widgetContract)
+  // 让处理器访问 ServContext 的会话与语言。
   .context<ServContext>()
+  // 选中创建过程。
   .route('widgets.create')
+  // 先要求有效会话，未登录时拒绝继续。
   .auth()
+  // 为通过认证的请求绑定下方创建逻辑。
   .handle(({ input, context }) => {
+    // 按 Schema 和当前请求语言校验输入。失败直接返回错误，成功传递已校验的数据。
     const validated = serv.validateInputOrFail(Schema, input, context.locale)
     if (!validated.success)
       return validated
 
     return widgetService.create(context.session.userId, validated.data)
   })
+  // 完成过程映射供服务使用。
   .build()
 ```
 
@@ -608,6 +687,7 @@ const procedures = serv
 ### `serv.generateSpec(contract, options)` — 生成 OpenAPI 文档
 
 ```typescript
+// 使用给定契约、标题、版本和 API 前缀生成 OpenAPI 文档。
 const spec = await serv.generateSpec(contract, {
   title: 'My API',
   version: '1.0.0',
@@ -657,6 +737,7 @@ AI 默认 feature 把 objectId 绑定到可信 `context.session.userId`，客户
 `chats.createCompletion` 只提供非流式 JSON 输出，stream 字段无论 true/false 都在 procedure 前以 HTTP 400 拒绝。完整 function tools（嵌套 JSON Schema/strict）、tool_choice（auto/none/required/已定义函数名）和角色消息直接传给模型，不自动执行工具。工具结果必填 tool_call_id，不能把未知字段静默裁剪为看似成功。流式调用使用应用自己的 endpoint 与 ai.llm.chatStream 输出契约。
 
 ```typescript
+// 用初始化后的 AI 实例创建处理器。对象级操作还须通过本例中的 ai.manage 授权。
 const aiProcedures = createAiProcedures({
   ai,
   authorizeObject: ({ context }) => context.session.permissions.includes('ai.manage'),
@@ -674,14 +755,23 @@ import { myContract } from './my-contract.js'
 
 export function createMyProcedures() {
   return serv
+    // 为自定义契约创建过程构造器。
     .implement(myContract)
+    // 指定 ServContext 请求上下文。
     .context<ServContext>()
+    // 选中 widget.list 过程。
     .route('widget.list')
+    // 要求列表请求已登录，失败时拒绝。
     .auth()
+    // 将已校验输入传给应用查询服务。
     .handle(({ input }) => widgetService.list(input))
+    // 选中 widget.create 过程，重新配置其授权。
     .route('widget.create')
+    // 要求 widget:write 权限，缺少时拒绝。
     .permission('widget:write')
+    // 将已校验输入传给应用创建服务。
     .handle(({ input }) => widgetService.create(input))
+    // 完成并返回过程映射。
     .build()
 }
 ```
@@ -692,14 +782,17 @@ export function createMyProcedures() {
 import { apiContract } from '@h-ai/api-contract'
 import { widgetContract } from './widget-contract.js'
 
+// 组合内置 IAM 和应用 Widget 契约，供 App 挂载。
 export const myAppContract = apiContract.create({
   iam: apiContract.iam,
   widget: widgetContract,
 })
 
+// 用组合契约、两组过程与 /api/v1 配置组装 HTTP App。
 const app = serv.createApp({
   contract: myAppContract,
   procedures: {
+    // 用已初始化的 IAM 服务组装域过程。
     iam: createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
@@ -752,6 +845,7 @@ route 实现器内置以下错误：
 ### 配置
 
 ```typescript
+// 用已有契约、过程和 IAM 创建 HTTP App，按下方规则处理刷新凭据。
 const app = serv.createApp({
   contract,
   procedures,
@@ -766,6 +860,7 @@ const app = serv.createApp({
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
       isRequest: request =>
         request.headers.get('x-client-platform') === 'capacitor'
+        // 验证请求来源属于允许的原生来源。缺失或不匹配时不启用原生令牌传输。
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },

@@ -137,10 +137,13 @@ CLI 的 npm 包名是 `@h-ai/cli`，安装后提供 `hai` 命令。使用脚手�
 
 ```bash
 pnpm add -g @h-ai/cli
+# 打印已安装的 Hai CLI 版本。缺少 hai 命令时先完成上一步全局安装。
 hai --version
+# 打印可用子命令与选项，退出码为 0。
 hai --help
 
 # 新建项目
+# 在当前目录创建 my-app，按交互选择生成应用与对应的配置。取消时不会完成生成。
 hai create my-app
 ```
 

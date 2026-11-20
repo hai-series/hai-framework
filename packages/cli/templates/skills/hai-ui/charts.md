@@ -8,11 +8,16 @@
   const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
 </script>
 
+<!-- 用四列的仪表盘布局展示核心指标。 -->
 <DashboardGrid label="核心指标" columns={4}>
+  <!-- 显示传入的收入金额、CNY 单位以及较上月的正向变化。 -->
   <MetricCard title="收入" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="较上月" />
+  <!-- 显示传入的 42ms 响应耗时与下降趋势。 -->
   <MetricCard title="响应耗时" value={42} unit="ms" trend={-8.2} trendTone="success" />
 </DashboardGrid>
+<!-- 以收入与成本作为报告卡片标题，内部展示比较图。 -->
 <ReportCard title="收入与成本">
+  <!-- 根据月份将收入和成本字段画为分组柱。 -->
   <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
 </ReportCard>
 ```
@@ -43,6 +48,7 @@ Chart 在 SSR 中保留高度并显示加载占位，浏览器挂载且数据非
   import { ArcChart } from 'layerchart/svg'
   import 'layerchart/daisyui-5.css'
 </script>
+<!-- 展示目标完成率的报告容器，内部绘制 72/100 的弧图。 -->
 <ReportCard title="目标完成率">
   <ArcChart data={[{ key: 'Target', value: 72 }]} value="value" maxValue={100} range={[-90, 90]} innerRadius={0.78} height={240} />
 </ReportCard>

@@ -21,6 +21,7 @@
 import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 
+// 从 Core 读取已加载的 ai 配置，再据此启用模型。成功无数据；配置或初始化失败时不开始调用。
 const init = await ai.init(core.config.get('ai'))
 if (!init.success)
   return init
@@ -28,6 +29,7 @@ if (!init.success)
 // LLM-only：未初始化 DB 时使用进程内临时 Store
 // ... 使用 ai.llm
 
+// 无参关闭 AI 并等待本模块资源释放，包括已接入的自定义 Store。完成时无业务数据。
 await ai.close()
 ```
 
@@ -39,21 +41,27 @@ import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 
+// 用 RelDB 的公开 Schema 校验已加载的 db 节点，成功返回可用于 init 的数据库配置。
 const databaseConfig = core.config.validate('db', ReldbConfigSchema)
 if (!databaseConfig.success)
   return databaseConfig
+// 用 VecDB 公开 Schema 校验 vecdb 节点，成功返回校验后的向量配置；失败中止启动。
 const vectorConfig = core.config.validate('vecdb', VecdbConfigSchema)
 if (!vectorConfig.success)
   return vectorConfig
+// 用 AI 公开 Schema 校验 ai 节点，成功返回校验后的 AI 配置；失败不获取依赖连接。
 const aiConfig = core.config.validate('ai', AIConfigSchema)
 if (!aiConfig.success)
   return aiConfig
+// 用第一份校验结果连接关系数据库，成功无数据；失败不启动 VecDB。
 const database = await reldb.init(databaseConfig.data)
 if (!database.success)
   return database
+// 用校验后的 vecdb 配置启动向量数据库，成功无数据；失败不启动 AI。
 const vectors = await vecdb.init(vectorConfig.data)
 if (!vectors.success)
   return vectors
+// 在关系数据库和向量数据库就绪后初始化 AI，成功无数据；模型或 Store 初始化失败原样返回。
 return await ai.init(aiConfig.data)
 ```
 
@@ -64,10 +72,13 @@ import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
+// 无参关闭 AI 并等待本模块资源释放，包括已接入的自定义 Store。完成时无业务数据。
 await ai.close() // AI 按实际 Promise<void> 契约关闭
+// AI 结束后无参关闭向量数据库，成功无数据，失败先保留下层 RelDB 供后续清理。
 const vectorsClosed = await vecdb.close()
 if (!vectorsClosed.success)
   return vectorsClosed
+// 向量库已关闭后无参释放关系数据库，返回它独立的清理结果。
 return await reldb.close()
 ```
 
@@ -76,7 +87,9 @@ return await reldb.close()
 自定义存储：
 
 ```ts
+// 从 Core 读取已加载的 ai 配置并注入宿主 myProvider；成功启用该 Store，失败时查看 HaiResult.error。
 await ai.init(core.config.get('ai'), { storeProvider: myProvider })
+// 无参关闭 AI 并等待本模块资源释放，包括已接入的自定义 Store。完成时无业务数据。
 await ai.close()
 ```
 
@@ -157,9 +170,11 @@ memory:
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
+// 创建空注册表，执行授权采用宿主的 canExecuteTool 并检查可信对象 ID 和工具名。
 const registry = tools.createRegistry({
   authorize: ({ toolName, context }) => canExecuteTool(context.objectId, toolName),
 })
+// 定义接收城市的 get_weather 并注册，成功无数据；定义无效抛错，重名注册返回失败。
 const registered = registry.register(tools.define({
   name: 'get_weather',
   description: '获取天气',
@@ -169,9 +184,11 @@ const registered = registry.register(tools.define({
 if (!registered.success)
   return registered
 
+// 把刚建立的授权注册表适配为模型目录和工具执行器；适配本身不执行工具。
 const modelTools = ai.tools.adapt(registry)
 const messages: ChatMessage[] = [{ role: 'user', content: '北京天气？' }]
 const objectId = 'user-001'
+// 无参取模型可见的工具描述，连同北京天气问题发给默认模型；成功可得到工具调用或文本，模型错误停止处理。
 let result = await ai.llm.chat({ messages, tools: modelTools.getDefinitions() })
 
 while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls') {
@@ -179,11 +196,13 @@ while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls')
   const toolCalls = assistant.tool_calls ?? []
   messages.push(assistant)
 
+  // 用可信 user-001 执行当前 completion 的工具调用，成功返回关联原调用 ID 的消息；拒绝或失败保留结果。
   const toolMessages = await modelTools.executeAll(toolCalls, { objectId })
   if (!toolMessages.success)
     return toolMessages
   messages.push(...toolMessages.data)
 
+  // 重新取工具目录，把新增的助手调用和工具结果一并交给模型续答；成功读取下一次 completion。
   result = await ai.llm.chat({ messages, tools: modelTools.getDefinitions() })
 }
 ```
@@ -191,12 +210,16 @@ while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls')
 ## 流式处理
 
 ```ts
+// 无参创建流式分块处理器，初始不含已累计的消息。
 const processor = ai.stream.createProcessor()
+// 把调用方准备的 messages 交给默认模型，逐项收到 completion 分块；连接或生成失败从流抛出。
 for await (const chunk of ai.llm.chatStream({ messages })) {
+  // 用当前模型分块更新累计内容，并返回该块的增量；没有正文的增量不写到终端。
   const delta = processor.process(chunk)
   if (delta?.content)
     process.stdout.write(delta.content)
 }
+// 无参把已累计文本和工具调用组装成最终 assistant 消息。
 const message = processor.toAssistantMessage()
 ```
 
@@ -208,6 +231,7 @@ const message = processor.toAssistantMessage()
 临时客户端按 `apiKey+baseUrl+timeout` 缓存，TTL 默认 10 分钟（`llm.tempModelCacheTtl` 毫秒，可配置），与常驻模型客户端隔离。
 
 ```ts
+// 向下方临时 Claude 模型发送你好，密钥来自环境。成功返回含 choices 的 completion；临时配置或服务失败则返回错误。
 const result = await ai.llm.chat({
   messages: [{ role: 'user', content: '你好' }],
   tempModel: {
@@ -221,6 +245,7 @@ const result = await ai.llm.chat({
 })
 
 // ask 便捷方法同样支持
+// 用环境密钥在这次请求中选临时 gpt-4o 处理提示，成功得到文本字符串，失败在 HaiResult.error。
 await ai.llm.ask('翻译这段话', { tempModel: { model: 'gpt-4o', apiKey: process.env.TEMP_MODEL_API_KEY } })
 ```
 
@@ -230,7 +255,9 @@ await ai.llm.ask('翻译这段话', { tempModel: { model: 'gpt-4o', apiKey: proc
 import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 
+// 用名称 my-server 和版本 1.0.0 创建 MCP Server，此时尚未连接传输。
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+// 登记接收字符串 query 的 search 工具，返回调用方传入查询的文本结果；不合法的注册会抛异常。
 server.registerTool('search', {
   description: '搜索',
   inputSchema: { query: z.string() },
@@ -238,6 +265,7 @@ server.registerTool('search', {
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
 
+// 以 Core UUID 工厂生成会话标识并连接 HTTP 传输，成功后可处理请求，失败拒绝 Promise。
 await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: core.id.uuid }))
 ```
 
@@ -256,14 +284,17 @@ Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间�
 `add` / `extract` 的写入回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 ```ts
+// 从 user-001 的相关记忆选择最多五项加入消息，成功返回新消息数组；检索失败保留错误。
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
 if (!enriched.success)
   return enriched
 
+// 以混合策略处理上一步消息，预算 4000 token；成功返回压缩结果，策略或模型失败保留 error。
 const compressed = await ai.compress.tryCompress(enriched.data, { strategy: 'hybrid', maxTokens: 4000 })
 if (!compressed.success)
   return compressed
 
+// 从 docs 取最多五个候选回答核心架构问题，成功含答案与引用；检索源或模型失败返回错误。
 const answer = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
 ```
 
@@ -272,10 +303,12 @@ const answer = await ai.rag.query('核心架构是什么？', { sources: ['docs'
 知识库流程：
 
 ```ts
+// 无参准备默认集合与文档版本清单，成功无数据，失败时不导入。
 const setup = await ai.knowledge.setup()
 if (!setup.success)
   return setup
 
+// 把下方文档 ID 和正文导入默认知识集合，成功发布版本并报告 cleanupPending；写入失败不继续问答。
 const ingest = await ai.knowledge.ingest({
   documentId: 'doc-001',
   content: markdownText,
@@ -285,12 +318,14 @@ const ingest = await ai.knowledge.ingest({
 if (!ingest.success)
   return ingest
 if (ingest.data.cleanupPending) {
+  // 从第一项起批量核对最多 100 个清单的过期暂存和旧向量，返回清理进度，失败保留错误。
   const repair = await ai.knowledge.repair({ offset: 0, limit: 100 })
   if (!repair.success)
     return repair
   // 大集合继续分页，并将 repair 全页扫描纳入定期维护。
 }
 
+// 在默认知识库检索核心架构并生成答案，成功含文本和引用；检索或生成错误由结果返回。
 const answer = await ai.knowledge.ask('核心架构是什么？')
 ```
 
@@ -303,6 +338,7 @@ const answer = await ai.knowledge.ask('核心架构是什么？')
 自定义 Store 接入遵守[Context 持久化约束](reference.md#context)，包括最终提交时的版本、存储端时钟和截止条件；不能用一次续租或读前检查替代最终原子判断。
 
 ```ts
+// 用 user-001/sess-001、混合压缩与记忆设置创建管理器，配置错误不建立会话。
 const managerResult = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
   systemPrompt: '你是一个友好的助手。',
@@ -312,7 +348,9 @@ const managerResult = ai.context.createManager({
 if (!managerResult.success)
   return managerResult
 
+// 向已创建会话发送你好，成功返回模型的一轮回复；生成被拒或上游失败时返回错误。
 const reply = await managerResult.data.chat('你好')
+// 无参把当前会话写入 Store，成功无业务数据；写入失败不视作已保存。
 const saved = await managerResult.data.save()
 if (!saved.success)
   return saved
@@ -323,17 +361,21 @@ if (!saved.success)
 `turnCommit: 'manual'` 时，`chat` / `chatStream` 不自动写入生成文本，只返回 `turnId`；由调用方提交**实际发生的内容**（TTS 播放、被打断等场景）。`chatStream` 在调用上游模型前就产出 `turn_started`（事件序列 `turn_started → delta* → done`，中途取消 `→ cancelled`），取消时保留 `turnId` 与已生成文本：
 
 ```ts
+// 为调用方提供的可信 scope 创建手动提交会话，成功返回管理器；失败不开始流式对话。
 const manager = ai.context.createManager({ turnCommit: 'manual', scope })
 if (!manager.success)
   return manager
 const m = manager.data
 const controller = new AbortController()
+// 发送指定文本与取消信号，消费分块以及 done/cancelled 事件；模型完成和播放结束需要分别判断。
 for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal })) {
   if (ev.type === 'delta')
     feedTts(ev.text)
   else if (ev.type === 'done')
+    // 用本轮 ID 提交完整生成文本；仅在完整内容已实际表达时采用，失败结果需由调用方检查。
     await m.commitTurn(ev.turnId) // 完整提交
   else if (ev.type === 'cancelled')
+    // 用当前轮次 ID 和宿主提供的已播文本保存打断状态，成功无数据，过期或冲突返回失败。
     await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
 }
 ```
@@ -359,18 +401,22 @@ audio:
 
 ```ts
 // 完整识别 / 合成（HaiResult）
+// 把调用方 WAV 字节交给默认模型做中文识别，成功返回转录文字与元数据；输入或服务失败保留错误。
 const t = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh' })
 if (!t.success)
   return t
+// 用 Cherry 音色将欢迎合成为 PCM16，成功含字节与格式，不触发播放；失败返回 error。
 const s = await ai.audio.synthesize({ text: '欢迎', voice: 'Cherry', format: 'pcm16' })
 
 // 实时识别：持续音频输入 → 增量文本（chunk.final 标记语句最终态，可直接覆盖临时文本）
+// 用采集器的 16 kHz PCM16 分块开启识别流，逐项消费事件；不支持连续输入或上游故障时抛出。
 for await (const chunk of ai.audio.transcribeStream({ audio: { chunks: micChunks, format: 'pcm16', sampleRate: 16000 } })) {
   updateTranscript(chunk.text, chunk.final)
 }
 
 // 分段合成：稳定 ID 关联文本与音频，支持 AbortSignal 打断
 const controller = new AbortController()
+// 把 seg-1 的文本送给 Cherry 音色并传入取消信号，逐项收到音频和结束状态；连接故障从流抛出。
 for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text: '欢迎。' }, voice: 'Cherry', signal: controller.signal })) {
   if (event.type === 'segment_started')
     prepareDecoder(event.format, event.sampleRate, event.channels) // 真实输出格式来自服务端解析后的 Provider 输出
@@ -384,10 +430,12 @@ for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text:
 ```ts
 import { serializePlayableAudio } from '@h-ai/ai'
 
+// 将访谈欢迎语交给默认合成配置，成功返回语音字节，服务失败时保留错误。
 const synthesized = await ai.audio.synthesize({ text: '欢迎参加访谈。' })
 if (!synthesized.success)
   return synthesized
 
+// 把刚合成的字节打包成 Base64 播放负载，PCM16 封为 WAV；不支持的音频格式返回失败。
 const playable = serializePlayableAudio(synthesized.data)
 if (!playable.success)
   return playable
@@ -424,6 +472,7 @@ image:
 LLM、Audio、Image 的可选密钥统一使用 `OptionalSecretSchema`：配置中的 YAML `null`、空字符串和纯空白字符串均表示未配置。语音密钥优先级为模型条目 → 启用继承后的 LLM 密钥 → 平台环境变量，业务启动代码不应再遍历配置修补 `apiKey`。
 
 ```ts
+// 用下方水墨提示、1024×1024 尺寸和宿主的 PNG 参考图生成图像；成功得到图像字节与 MIME，能力或服务失败返回错误。
 const image = await ai.image.generate({
   prompt: '水墨风格的未来城市，清晨薄雾',
   size: { width: 1024, height: 1024 },
@@ -444,11 +493,16 @@ await saveImage(image.data.images[0].data, image.data.images[0].mimeType)
 ## SvelteKit API 端点模式
 
 ```ts
+// 把下方 Chat 逻辑包装为 POST 路由，框架负责统一 HTTP 返回与错误处理。
 export const POST = kit.handler(async ({ request }) => {
+  // 用 ChatSchema 校验路由收到的请求正文，成功得到 messages 等数据，校验失败不问模型。
   const data = await kit.validate.body(request, ChatSchema)
+  // 用请求中已校验的消息调用默认模型，成功含 completion，模型失败由下一分支处理。
   const result = await ai.llm.chat({ messages: data.messages })
   if (!result.success)
+    // 把模型错误码与消息转换为路由失败响应，不返回完成数据。
     return kit.response.error(result.error.code, result.error.message)
+  // 把成功的 completion 放进标准 HTTP 成功响应。
   return kit.response.ok(result.data)
 })
 ```

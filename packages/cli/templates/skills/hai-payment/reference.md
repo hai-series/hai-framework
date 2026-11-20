@@ -72,6 +72,7 @@ Stripe 的 secretKey 必须为 sk/rk 的 test/live 服务端密钥；受限密�
 ```typescript
 import { payment } from '@h-ai/payment'
 
+// 用下面的示例商户号及密钥配置初始化微信与支付宝。成功 data 为 undefined，配置或认证材料不合法时返回错误。
 const initResult = await payment.init({
   wechat: {
     appId: 'wx1234567890',
@@ -97,6 +98,7 @@ if (!initResult.success) {
 ### 3. 创建订单
 
 ```typescript
+// 用订单编号、分单位金额、用户 openid 和通知地址创建微信 JSAPI 订单。成功 data 是传给前端的 PaymentOrder。
 const result = await payment.createOrder('wechat', {
   orderNo: 'ORDER_20250101_001',
   amount: 9900, // 单位：分
@@ -119,6 +121,7 @@ if (result.success) {
 
 ```typescript
 // API 路由：POST /payment/notify/:provider
+// 用微信通知原始正文及请求头验签解析。成功 data 含可核对的订单事件，签名错误返回失败。
 const result = await payment.handleNotify('wechat', {
   body: await request.text(),
   headers: Object.fromEntries(request.headers),
@@ -148,6 +151,7 @@ Stripe closeOrder 会通过可信映射读取 Session，只有 open/unpaid 才�
 响应丢失或落库失败会保留未知记录，只能在数据库时钟的 23 小时安全窗口内沿用同一键重试；窗口之外先核对渠道结果并修复记录，不删除后重发。成功结果长期保留，不按缓存 TTL 清理。Stripe 仅保存渠道操作结果，宿主业务订单、回调去重与履约事务仍需自己实现。
 
 ```typescript
+// 查询微信渠道的指定商户订单，成功 data 包含渠道报告的当前状态。
 const result = await payment.queryOrder('wechat', 'ORDER_20250101_001')
 
 if (result.success) {
@@ -160,6 +164,7 @@ if (result.success) {
 支付宝查单/退款/关单会验证方法对应的 envelope、字符串 code=10000、关键字段和订单号；HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。
 
 ```typescript
+// 用独立退款编号提交全额 9900 分退款及原订单总额。成功 data 含渠道退款结果，可继续核对状态。
 const result = await payment.refund('wechat', {
   orderNo: 'ORDER_20250101_001',
   refundNo: 'REFUND_20250101_001',
@@ -177,6 +182,7 @@ import { invokePayment } from '@h-ai/payment/client'
 // 前端拿到服务端返回的 PaymentOrder 后调起支付
 if (!orderResult.success)
   throw new Error(orderResult.error.message)
+// 把服务端返回的 PaymentOrder 交给浏览器。成功 data.invoked 表示是否拉起，最终支付状态由服务端确认。
 const payResult = await invokePayment(orderResult.data)
 if (!payResult.success)
   throw new Error(payResult.error.message)
@@ -269,15 +275,23 @@ export function createPaymentHandler(
   readOrder: (id: string) => Promise<HaiResult<PayableOrder | null>>,
   notifyUrl: string,
 ) {
+  // 把应用的创建支付回调包装成 HTTP 请求处理器，接收请求和已解析的会话。
   return kit.handler(async ({ request, locals }) => {
     const session = locals.session
+    // 会话为空时无参生成 HTTP 401 响应。
     if (!session) return kit.response.unauthorized()
+    // 校验当前会话的 payment:create 权限，通过时继续，缺少权限时抛出 403 Response。
     kit.guard.require(session, 'payment:create')
+    // 从 request 解析 JSON 并校验只含非空 orderId。成功返回解析后的对象，无效请求交给 kit.handler。
     const input = await kit.validate.body(request, z.object({ orderId: z.string().min(1) }).strict())
+    // 按客户端的 orderId 查询数据库。成功 data 是 PayableOrder 或 null，读库失败转成错误响应。
     const order = await readOrder(input.orderId)
+    // 用读取失败结果生成对应 HTTP 失败响应。
     if (!order.success) return kit.response.fromError(order.error)
     if (!order.data || order.data.ownerId !== session.userId || order.data.status !== 'pending')
+      // 订单不存在、不属于当前用户或不待支付时，无参返回 HTTP 403。
       return kit.response.forbidden()
+    // 用数据库中的金额、币种和订单号请求 Stripe H5 支付。成功 data 含前端支付参数。
     const result = await payment.createOrder('stripe', {
       orderNo: order.data.orderNo,
       amount: order.data.amount,
@@ -286,7 +300,9 @@ export function createPaymentHandler(
       tradeType: 'h5',
       notifyUrl,
     })
+    // 将渠道错误与当前请求 ID 转成客户端可读的 HTTP 错误响应。
     if (!result.success) return kit.response.fromError(result.error, locals.requestId)
+    // 以关联的请求 ID 将 PaymentOrder 包装为 HTTP 200 成功响应。
     return kit.response.ok(result.data, locals.requestId)
   })
 }

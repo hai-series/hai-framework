@@ -35,11 +35,15 @@ import { ok } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 
 export function registerBuiltinTools(options: BuiltinToolOptions) {
+  // 用宿主的文件接口、上下文和已配置能力创建内置工具集，返回当前可用工具及分组。
   const set = ai.tools.createBuiltinTools(options)
+  // 无参创建独立空注册表，尚未登记这些内置工具。
   const registry = tools.createRegistry()
+  // 把生成的工具集批量登记，成功无数据，名称冲突时保留失败。
   const registered = registry.registerMany(set.tools)
   if (!registered.success)
     return registered
+  // 将已登记的工具表适配成模型工具接口，并与工具集、注册表一并包装为成功结果。
   return ok({ set, registry, modelTools: ai.tools.adapt(registry) })
 }
 ```

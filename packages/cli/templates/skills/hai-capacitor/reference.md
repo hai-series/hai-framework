@@ -43,6 +43,7 @@ docker run --rm -it --platform linux/amd64 \
 import { capacitor } from '@h-ai/capacitor'
 
 // 应用启动时初始化（检测 Capacitor 环境可用性）
+// 不传配置，检测当前运行平台并初始化。成功后模块可用，平台不可用或初始化失败时返回错误。
 const result = await capacitor.init()
 if (!result.success) {
   // result.error.code === HaiCapacitorError.NOT_AVAILABLE.code
@@ -51,10 +52,13 @@ if (!result.success) {
 
 // 检查状态
 capacitor.isInitialized // boolean
+// 读取当前平台标识，例如 android、ios 或 web。
 capacitor.getPlatform() // 'android' | 'ios' | 'web'
+// 判断当前运行环境是否为原生宿主，返回布尔值。
 capacitor.isNative()    // true = 原生 App
 
 // 关闭模块（重置状态）
+// 关闭当前实例并释放监听。资源清理失败通过返回的 HaiResult 报告。
 await capacitor.close()
 ```
 
@@ -66,9 +70,11 @@ await capacitor.close()
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
+// 使用应用提供的 apiBase 和原生凭据存储配置客户端。初始化失败返回错误。
 await apiClient.init({
   baseUrl: apiBase,
   auth: {
+    // 创建安全令牌适配器供客户端持久化凭据，后续访问原生插件可能失败。
     storage: createCapacitorTokenStorage(),
   },
 })
@@ -92,12 +98,15 @@ await apiClient.init({
 import { capacitor } from '@h-ai/capacitor'
 
 // 返回 HaiResult<string | null>
+// 读取 my_key，成功返回字符串，键缺失返回 null，存储错误返回失败。
 const result = await capacitor.preferences.get('my_key')
 if (result.success) {
   // result.data — 值或 null
 }
 
+// 将 value 保存到 my_key。成功无业务数据，写失败返回错误。
 await capacitor.preferences.set('my_key', 'value')
+// 删除同一个键。成功后读取为 null，删除失败返回错误。
 await capacitor.preferences.remove('my_key')
 ```
 
@@ -106,6 +115,7 @@ await capacitor.preferences.remove('my_key')
 ```typescript
 import { capacitor } from '@h-ai/capacitor'
 
+// 读取当前设备的系统、型号等字段。插件不可用时返回错误。
 const info = await capacitor.device.getInfo()
 if (info.success) {
   info.data.platform    // 'android' | 'ios' | 'web'
@@ -115,6 +125,7 @@ if (info.success) {
   info.data.isVirtual   // false
 }
 
+// 读取应用版本和构建号。平台无这些数据时返回失败。
 const version = await capacitor.device.getAppVersion()
 if (version.success) {
   version.data.version // '1.0.0'
@@ -128,13 +139,16 @@ if (version.success) {
 import { capacitor } from '@h-ai/capacitor'
 
 // 注册推送（请求权限 + 获取设备 Token）
+// 为当前设备请求推送权限并注册。成功包含设备 token，拒权或注册失败返回错误。
 const reg = await capacitor.push.register()
 if (reg.success) {
   // 将 reg.data.token 上报给后端
+  // 把注册返回的 token 交给应用后端，成功后后端才能向该设备寻址。
   await api.post('/push/register', { token: reg.data.token })
 }
 
 // 监听推送事件（返回 HaiResult 包裹的 async 清理函数）
+// 将下方两个回调注册为推送监听。成功返回异步清理函数，注册失败返回错误。
 const listenResult = await capacitor.push.listen({
   onReceived: (notification) => {
     // 前台收到推送
@@ -147,6 +161,7 @@ const listenResult = await capacitor.push.listen({
 
 // 停止监听
 if (listenResult.success) {
+  // 移除本次注册的监听。清理失败通过返回结果报告。
   await listenResult.data()
 }
 ```
@@ -156,6 +171,7 @@ if (listenResult.success) {
 ```typescript
 import { capacitor } from '@h-ai/capacitor'
 
+// 拍摄图片并按下方质量、尺寸和 Base64 格式处理。成功包含数据和实际格式，取消或拍摄失败返回错误。
 const photo = await capacitor.camera.takePhoto({
   quality: 80,           // 0-100
   source: 'camera',      // 'camera' | 'photos' | 'prompt'
@@ -174,13 +190,16 @@ if (photo.success) {
 ```typescript
 import { capacitor } from '@h-ai/capacitor'
 
+// 将当前原生状态栏设置为下方颜色和覆盖模式，插件操作失败返回错误。
 await capacitor.statusBar.configure({
   backgroundColor: '#ffffff',
   style: 'dark',    // 'dark' | 'light' | 'default'（文字颜色）
   overlay: true,     // 沉浸式
 })
 
+// 隐藏当前状态栏，插件调用失败返回错误。
 await capacitor.statusBar.hide()
+// 重新显示当前状态栏，插件调用失败返回错误。
 await capacitor.statusBar.show()
 ```
 
@@ -233,12 +252,15 @@ await capacitor.statusBar.show()
 import { capacitor } from '@h-ai/capacitor'
 
 export async function initCapacitor() {
+  // 初始化当前平台。失败时本示例直接返回。
   const result = await capacitor.init()
   if (!result.success) {
     return
   }
 
+  // 仅当当前运行平台为原生宿主时才进入状态栏配置。
   if (capacitor.isNative()) {
+    // 配置原生状态栏的浅色样式、背景并关闭内容覆盖。配置失败返回结构化错误。
     await capacitor.statusBar.configure({
       backgroundColor: '#ffffff',
       style: 'light',
@@ -287,9 +309,11 @@ import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 export async function initApi(apiBase: string) {
+  // 按调用方给出的 API 根地址和原生安全存储初始化。将成功或失败结果交回调用者。
   return apiClient.init({
     baseUrl: apiBase,
     auth: {
+      // 创建原生安全令牌适配器，供认证模块后续读写。
       storage: createCapacitorTokenStorage(),
     },
   })
@@ -304,22 +328,27 @@ export { apiClient }
 import { capacitor } from '@h-ai/capacitor'
 
 export async function setupPush() {
+  // 检测原生宿主。纯 Web 跳过推送流程。
   if (!capacitor.isNative()) {
     return
   }
 
+  // 注册当前设备推送。成功提供 token，拒权或注册失败时直接返回。
   const reg = await capacitor.push.register()
   if (!reg.success) {
     return
   }
 
   // 上报 Token 给后端
+  // 把注册返回的令牌及检测到的平台交给应用注册路由。
   await api.post('/push/register', {
     token: reg.data.token,
+    // 读取当前平台标识，作为后端的设备平台字段。
     platform: capacitor.getPlatform(),
   })
 
   // 监听推送
+  // 为前台接收和通知点击注册两个回调。成功结果带异步清理函数，失败返回错误。
   const listenResult = await capacitor.push.listen({
     onReceived: (n) => {
       // 前台通知处理
@@ -337,6 +366,7 @@ export async function setupPush() {
 import { capacitor } from '@h-ai/capacitor'
 
 async function captureAndUpload() {
+  // 拍摄并输出质量 80、最大宽度 1024 的 Base64 图片。失败时跳过上传。
   const photo = await capacitor.camera.takePhoto({
     source: 'camera',
     resultType: 'base64',
@@ -349,6 +379,7 @@ async function captureAndUpload() {
   }
 
   // 上传 base64 给后端
+  // 用应用的上传接口发送此次拍照返回的图像数据及格式。
   await api.post('/files/upload', {
     data: photo.data.data,
     format: photo.data.format,

@@ -10,9 +10,11 @@ import type { ToolArtifactAccess } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 export function createDocuments(runner: RunnerFunctions, files: ToolArtifactAccess) {
+  // 用已初始化的 Runner 创建下方文档服务，成功返回持久任务服务实例；配置或处理器注册失败返回错误。
   return tools.createService({
     id: 'documents',
     runner,
+    // 为当前授权范围使用宿主文件接口构建产物工具集；未提供保存权限时不加入保存工具。
     createTools: context => tools.createArtifactTools({ context, files }),
     enabled: { groups: ['documents', 'analysis'] },
     authorize: ({ context }) => context.scope.userId.length > 0,

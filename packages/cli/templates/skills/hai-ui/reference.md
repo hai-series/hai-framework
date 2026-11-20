@@ -128,6 +128,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     sveltekit({
+      // 在构建时安装 UI 自动导入预处理器，为模板中使用的 Hai 组件补 import。
       preprocess: [vitePreprocess(), autoImportHaiUi()],
       compilerOptions: { runes: true },
       adapter: adapter(),
@@ -208,11 +209,15 @@ export default defineConfig({
 import { detectPlatform, isMobile, isNativeApp, usePlatform } from '@h-ai/ui'
 
 // 一次性检测
+// 根据当前环境检测运行平台，返回 ios、android 或 web。
 const platform = detectPlatform() // 'ios' | 'android' | 'web'
+// 判断当前设备是否为移动设备，返回布尔值。
 const mobile = isMobile() // boolean
+// 判断是否运行在原生 App 宿主中，返回布尔值。
 const native = isNativeApp() // boolean（Capacitor 环境）
 
 // Svelte 5 响应式（组件中使用）
+// 返回可在 Svelte 中响应式读取的平台、移动端和原生宿主状态。
 const p = usePlatform()
 // p.platform / p.isMobile / p.isNative
 ```
@@ -289,13 +294,17 @@ const p = usePlatform()
   ]
 </script>
 
+<!-- 为本页内容预留顶部和底部安全区。 -->
 <SafeArea top bottom>
+  <!-- 显示首页标题栏。 -->
   <AppBar title="首页" />
+  <!-- 用户下拉时调用应用的 loadData，refreshing 绑定同步进行中的状态。 -->
   <PullRefresh bind:refreshing onrefresh={loadData}>
     <main class="p-4">
       <!-- 页面内容 -->
     </main>
   </PullRefresh>
+  <!-- 渲染三个指定的底部导航项，并高亮 home。 -->
   <BottomNav items={navItems} active="home" />
 </SafeArea>
 ```
@@ -314,6 +323,7 @@ const p = usePlatform()
   ]
 </script>
 
+<!-- 根据 showActions 显示操作菜单，选择动作时把对应项目交给 handleAction。 -->
 <ActionSheet bind:open={showActions} title="选择操作" items={actions} onselect={handleAction} />
 ```
 
@@ -329,6 +339,7 @@ const p = usePlatform()
   ]
 </script>
 
+<!-- 向左滑动列表项展示两个指定动作。点击时将动作交给 handleSwipeAction。 -->
 <SwipeCell {rightActions} onaction={handleSwipeAction}>
   <div class="p-4">列表项内容</div>
 </SwipeCell>
@@ -353,6 +364,7 @@ const p = usePlatform()
   }
 </script>
 
+<!-- 读取传入的文件树并在选中文件时调用 readFile。示例打开 README.md 后显示 Markdown。 -->
 <CodeWorkspace {source} />
 ```
 
@@ -426,8 +438,10 @@ const p = usePlatform()
 > - 原始 `<img>` 的 `width` / `height` 仅接受 1–99999 的正整数像素值；为延迟加载图片预留空间，避免文档锚点和布局跳变。百分比、负数、小数、事件属性及任意 `style` 仍被移除。
 
 ```svelte
+<!-- 以指定字号渲染传入的 Markdown，允许经过消毒的 HTML。 -->
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
 
+<!-- 以 18px 编辑传入的方案文档，显示工具栏，隐藏大纲。 -->
 <AiDocumentEditor
   title="方案文档"
   content={documentMarkdown}
@@ -443,6 +457,7 @@ const p = usePlatform()
 `Chart type='line'` 默认使用 LayerChart 原生折线图；监控看板类场景需要“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
 
 ```svelte
+<!-- 按 label 绘制传入的限流和熔断数据，指针选取最近分段点并显示十字线。 -->
 <Chart
   type='line'
   data={trendData}
@@ -495,6 +510,7 @@ const p = usePlatform()
 ### CrudPage 推荐用法
 
 ```svelte
+<!-- 展示传入的角色记录，启用增删改和弹窗表单，按指定设置分页与排序。 -->
 <CrudPage
   crud={roleCrud}
   {data}
@@ -572,9 +588,13 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 ```typescript
 import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'
 
+// 把当前文档切换为 dark，并在浏览器支持时保存偏好。
 applyTheme('dark')      // 应用主题（自动持久化 localStorage）
+// 读取当前文档主题，示例返回 dark。
 getCurrentTheme()        // 获取当前主题名
+// 读取已保存主题，未保存时返回传入的 corporate。
 getSavedTheme('corporate') // 存储为空或不可用时使用应用默认主题
+// 判断 dracula 是否属于暗色主题，返回 true。
 isDarkTheme('dracula')   // 检查是否暗色主题
 ```
 
@@ -644,6 +664,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 ```svelte
 <!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<!-- 用应用提供的 IAM 配置和认证动作展示表单，登录和注册插槽在对应界面可见。 -->
 <AuthPanel {config} {actions}>
   {#snippet loginHeader()}
     <p>{m.loginHelp()}</p>
@@ -705,13 +726,19 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
 
 ```svelte
 <!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
+<!-- 布局为两列，左侧标签宽 6rem。有效提交将字段交给 save，必填失败阻止提交。 -->
 <Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+  <!-- 以应用翻译展示必填姓名字段。 -->
   <FormField label={() => m.name()} required>
+    <!-- 将姓名输入与 name 状态同步，提交字段名为 name。 -->
     <Input name="name" bind:value={name} required />
   </FormField>
+  <!-- 以应用翻译展示可选备注字段。 -->
   <FormField label={() => m.notes()}>
+    <!-- 将备注输入同步至 notes，提交字段名为 notes。 -->
     <Textarea name="notes" bind:value={notes} />
   </FormField>
+  <!-- 点击带应用文案的按钮触发表单校验及提交。 -->
   <Button type="submit">{m.save()}</Button>
 </Form>
 ```

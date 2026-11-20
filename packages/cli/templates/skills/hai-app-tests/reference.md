@@ -106,8 +106,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 // 内存 SQLite 隔离数据；应用服务测试同样从服务的公共入口验证结果。
 beforeAll(async () => {
+  // 使用独立的内存 SQLite。初始化成功 data 为 undefined，失败时下一条断言终止准备。
   const init = await reldb.init({ type: 'sqlite', database: ':memory:' })
   expect(init.success).toBe(true)
+  // 按给定字段定义创建 articles 表。成功 data 为 undefined，失败时测试准备不能继续。
   const table = await reldb.ddl.createTable('articles', {
     id: { type: 'TEXT', primaryKey: true },
     title: { type: 'TEXT', notNull: true },
@@ -115,15 +117,19 @@ beforeAll(async () => {
   expect(table.success).toBe(true)
 })
 afterAll(async () => {
+  // 无参数释放测试数据库资源。成功 data 为 undefined，释放失败由断言报告。
   const closed = await reldb.close()
   expect(closed.success).toBe(true)
 })
 
 describe('article persistence', () => {
   it('creates and reads the stored article', async () => {
+    // 为测试数据库的 articles 表返回 CRUD 对象。
     const articles = reldb.crud.table<{ id: string, title: string }>({ table: 'articles', dbType: 'sqlite' })
+    // 插入编号 a1、标题 Test 的文章，成功 data 包含写入统计。
     const saved = await articles.create({ id: 'a1', title: 'Test' })
     expect(saved.success).toBe(true)
+    // 按主键 a1 读取文章，成功 data 为记录或 null，测试下方验证读取值。
     const found = await articles.findById('a1')
     expect(found.success).toBe(true)
     if (found.success) expect(found.data).toEqual({ id: 'a1', title: 'Test' })
@@ -258,6 +264,7 @@ export async function registerViaApi(
   request: APIRequestContext,
   user: ReturnType<typeof uniqueUser>,
 ) {
+  // 用 username、email 和两次相同的密码发起注册，返回 HTTP 响应供测试查看状态。
   return request.post('/api/auth/register', {
     data: {
       username: user.username,
@@ -275,6 +282,7 @@ export async function registerAndLogin(
   prefix = 'e2e',
 ) {
   const user = uniqueUser(prefix)
+  // 用本轮生成的测试用户调用注册接口，返回响应后继续页面登录。
   await registerViaApi(request, user)
   await page.goto('/login')
   await page.fill('[name="username"]', user.username)
@@ -296,13 +304,16 @@ import { registerAndLogin } from './helpers'
 
 test.describe('Articles API', () => {
   test('GET /api/articles 未认证返回 401', async ({ request }) => {
+    // 匿名读取文章集合，预期收到 HTTP 401。
     const response = await request.get('/api/articles')
     expect(response.status()).toBe(401)
   })
 
   test('POST /api/articles 创建文章成功', async ({ page, request }) => {
+    // 以 article 前缀创建并登录测试用户，完成后页面上下文携带该会话。
     await registerAndLogin(page, request, 'article')
 
+    // 用已登录的会话提交下方文章数据，返回响应。合法标题预期 201，空标题预期 400。
     const response = await page.request.post('/api/articles', {
       data: { title: 'E2E Test Article', content: 'Test content' },
     })
@@ -314,8 +325,10 @@ test.describe('Articles API', () => {
   })
 
   test('POST /api/articles 空标题返回 400', async ({ page, request }) => {
+    // 以 article 前缀创建并登录测试用户，完成后页面上下文携带该会话。
     await registerAndLogin(page, request, 'article')
 
+    // 用已登录的会话提交下方文章数据，返回响应。合法标题预期 201，空标题预期 400。
     const response = await page.request.post('/api/articles', {
       data: { title: '', content: '' },
     })
@@ -323,8 +336,10 @@ test.describe('Articles API', () => {
   })
 
   test('GET /api/articles 认证后获取列表', async ({ page, request }) => {
+    // 以 article 前缀创建并登录测试用户，完成后页面上下文携带该会话。
     await registerAndLogin(page, request, 'article')
 
+    // 以登录会话读取文章集合，预期返回成功封装，其中 data 是数组。
     const response = await page.request.get('/api/articles')
     expect(response.ok()).toBeTruthy()
 
@@ -349,6 +364,7 @@ test.describe('Articles Page', () => {
   })
 
   test('已登录显示文章列表', async ({ page, request }) => {
+    // 以 artui 前缀注册并登录测试用户，后续页面操作共享会话。
     await registerAndLogin(page, request, 'artui')
     await page.goto('/admin/articles')
 
@@ -356,6 +372,7 @@ test.describe('Articles Page', () => {
   })
 
   test('创建文章表单提交', async ({ page, request }) => {
+    // 以 artui 前缀注册并登录测试用户，后续页面操作共享会话。
     await registerAndLogin(page, request, 'artui')
     await page.goto('/admin/articles/new')
 
@@ -410,6 +427,7 @@ E2E 测试（Playwright）：
 
 ```typescript
 // ✅ 单元测试断言
+// 将有效输入传给应用服务，预期成功且 data 含新资源 ID。
 const result = await service.create(input)
 expect(result.success).toBe(true)
 if (result.success) {
@@ -417,6 +435,7 @@ if (result.success) {
 }
 
 // ✅ 单元测试错误断言
+// 将无效输入传给服务，预期 success=false 且错误码为 VALIDATION_FAILED。
 const result = await service.create(invalidInput)
 expect(result.success).toBe(false)
 if (!result.success) {
@@ -424,6 +443,7 @@ if (!result.success) {
 }
 
 // ✅ E2E API 断言
+// 用下方 input 调用创建接口，预期得到 201 和成功的响应体。
 const response = await request.post('/api/articles', { data: input })
 expect(response.status()).toBe(201)
 const body = await response.json()

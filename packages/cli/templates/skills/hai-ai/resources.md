@@ -19,9 +19,11 @@ import { ai } from '@h-ai/ai'
 
 // 已按应用生命周期成功初始化 reldb、vecdb 和 ai。
 async function changeModel() {
+  // 按 ID 读取 coding 的定义、来源及版本；未找到时保留失败。
   const current = await ai.llm.models.get('coding')
   if (!current.success) return current
   if (current.data.source === 'config') return current
+  // 以刚读取的数据库版本把 coding 的温度改为 0.2，成功返回新版本，冲突或静态配置拒绝写入。
   return ai.llm.models.update({ ...current.data.value, temperature: 0.2 }, current.data.version)
 }
 ```

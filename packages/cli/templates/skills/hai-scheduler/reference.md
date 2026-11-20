@@ -27,20 +27,25 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
+// 连接 scheduler.db 的 SQLite 数据库，成功 data 为 undefined，连接失败阻止持久化调度。
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
 
+// 以下方参数启动数据库模式，创建或加载持久化记录。成功 data 为 undefined，失败返回错误。
 await scheduler.init({
   enableDb: true,
   maxLogs: 1000,
   retentionDays: 30,
   hooks: {
     onTaskStart(event) {
+      // 记录本次任务 ID 和触发来源，返回 void。
       core.logger.info('Task started', { taskId: event.task.id, trigger: event.trigger })
     },
     onTaskInterrupted(event) {
+      // 在中断回调中记录任务 ID 与原因，返回 void。
       core.logger.warn('Task interrupted', { taskId: event.task.id, reason: event.reason })
     },
     onTaskFinish(event) {
+      // 记录任务结束回调中的执行状态，返回 void。
       core.logger.info('Task finished', { status: event.log.status })
     },
   },
@@ -50,6 +55,7 @@ await scheduler.init({
 ### 2. 注册任务
 
 ```ts
+// 注册每五分钟向健康地址发 GET 的 health-check，参数带 channel=ops。 成功 data 为 undefined，配置有误则返回失败。
 await scheduler.register({
   id: 'health-check',
   name: '健康检查',
@@ -63,6 +69,7 @@ await scheduler.register({
   },
 })
 
+// 注册每天 02:00 触发的 cleanup，将运行参数交给 JS，执行后移除这项单次任务。 成功 data 为 undefined，配置有误则返回失败。
 await scheduler.register({
   id: 'cleanup',
   name: '清理过期数据',
@@ -82,12 +89,14 @@ await scheduler.register({
 ### 3. 使用全局 execute hook 处理无 handler 任务
 
 ```ts
+// 同步安装执行回调。成功 data 为 undefined，实际任务运行时回调返回 hook 结果及触发来源。
 await scheduler.setHooks({
   async onTaskExecute(event) {
     return { via: 'hook', source: event.context.trigger.source }
   },
 })
 
+// 注册每分钟触发的 hook-task。它未配置 handler，执行时使用刚安装的回调。 成功 data 为 undefined，配置有误则返回失败。
 await scheduler.register({
   id: 'hook-task',
   name: 'Hook 任务',
@@ -98,8 +107,10 @@ await scheduler.register({
 ### 4. 手工触发与日志查询
 
 ```ts
+// 以 admin-console 为来源立即触发 cleanup。成功 data 是执行记录，任务自身成败看记录的 status。
 const result = await scheduler.trigger('cleanup', { source: 'admin-console' })
 
+// 以任务 ID、手动来源和过去 24 小时为条件取第一页 20 条日志，成功 data 为分页结果。
 const logs = await scheduler.getLogs({
   taskId: 'cleanup',
   triggerType: 'manual',
@@ -132,8 +143,10 @@ const logs = await scheduler.getLogs({
 ### 持久化 JS 任务
 
 ```ts
+// 启用数据库持久化以便重启后恢复任务。成功 data 为 undefined，缺少数据库依赖时失败。
 await scheduler.init({ enableDb: true })
 
+// 注册名为 persisted-js 的 JS 任务，每十分钟触发，持久化保存其配置。 成功 data 为 undefined，配置有误则返回失败。
 await scheduler.register({
   id: 'persisted-js',
   name: '持久化 JS 任务',
@@ -148,16 +161,21 @@ await scheduler.register({
 ### 手工触发来源审计
 
 ```ts
+// 从管理台触发 cleanup，成功 data 是标记来源 admin-console 的执行记录。
 await scheduler.trigger('cleanup', { source: 'admin-console' })
+// 从命令行再次触发 cleanup，成功 data 是标记来源 cli 的执行记录。若单次任务已被移除，则返回任务不存在。
 await scheduler.trigger('cleanup', { source: 'cli' })
 
+// 按 admin-console 来源过滤日志，成功 data 是分页记录，不含 cli 来源。
 const adminLogs = await scheduler.getLogs({ triggerSource: 'admin-console' })
 ```
 
 ### 共享执行租约
 
 ```ts
+// 连接 scheduler.db 的 SQLite 数据库，成功 data 为 undefined，连接失败阻止持久化调度。
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+// 以下方参数启动数据库模式，创建或加载持久化记录。成功 data 为 undefined，失败返回错误。
 await scheduler.init({
   enableDb: true,
   maxLogs: 500,
@@ -178,10 +196,12 @@ await scheduler.init({
 领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；`scheduler.init()` 创建并校验任务、执行及日志表，结构不符时返回初始化失败。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
 
 ```ts
+// 用本次清理的稳定幂等键触发任务，成功 data 含任务状态及执行日志持久化状态。
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
 if (!result.success)
   return result
 if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  // 按已返回的 occurrenceId 补写待落库的日志。成功 data 为 undefined，业务回调不会再次运行。
   const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
   if (!repaired.success)
     return repaired

@@ -88,24 +88,31 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 
 // 当前配置启用了 delay：数据库和队列表为必需依赖。
+// 从配置中心校验 db。成功 data 是延迟发送所需的数据库配置。
 const databaseConfig = core.config.validate('db', ReldbConfigSchema)
 if (!databaseConfig.success) throw new Error(databaseConfig.error.message)
+// 用校验后的配置初始化数据库。成功 data 为 undefined，连库失败从 error 诊断。
 const database = await reldb.init(databaseConfig.data)
 if (!database.success)
   throw new Error(database.error.message)
+// 从配置中心校验 cache。成功 data 用来初始化 flush 分布式锁所需的缓存。
 const cacheConfig = core.config.validate('cache', CacheConfigSchema)
 if (!cacheConfig.success) throw new Error(cacheConfig.error.message)
+// 用已校验的配置初始化缓存。成功 data 为 undefined，失败时停止示例启动。
 const cached = await cache.init(cacheConfig.data) // 可选，启用 flush 分布式锁
 if (!cached.success)
   throw new Error(cached.error.message)
 
 // 再初始化触达模块（自动检测已初始化的 reldb/cache 单例）
+// 校验 reach 配置，成功 data 含 Provider、模板及免打扰选项。
 const reachConfig = core.config.validate('reach', ReachConfigSchema)
 if (!reachConfig.success) throw new Error(reachConfig.error.message)
+// 初始化 Reach 并接入已启动的依赖。成功 data 为 undefined，配置或依赖错误返回失败。
 const initialized = await reach.init(reachConfig.data)
 if (!initialized.success)
   throw new Error(initialized.error.message)
 // ... 使用触达服务
+// 无参关闭 Reach 并等待它释放拥有的资源，返回 Promise<void>。
 await reach.close()
 ```
 
@@ -115,6 +122,7 @@ await reach.close()
 
 ```typescript
 // 通过代码保存（配置文件中的模板在 init 时自动注册）
+// 为 email 渠道保存 verification_code 模板。发送时由 code 和 minutes 替换占位符。 成功 data 为 undefined，模板无效返回错误。
 await reach.template.save({
   name: 'verification_code',
   provider: 'email',
@@ -122,6 +130,7 @@ await reach.template.save({
   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
 })
 
+// 用下方两份模板批量注册邮件欢迎语与短信验证码。成功 data 为 undefined。
 await reach.template.saveBatch([
   { name: 'welcome', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎使用 {appName}！' },
   { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
@@ -132,6 +141,7 @@ await reach.template.saveBatch([
 
 ```typescript
 // 使用模板发送邮件（指定 provider）
+// 用 email 渠道把 code 和 minutes 代入验证码模板并向该邮箱发送。成功可能直接返回投递结果，也可能返回延迟队列回执。
 const result = await reach.send({
   provider: 'email',
   to: 'user@example.com',
@@ -142,10 +152,12 @@ if (!result.success)
   throw new Error(result.error.message)
 if (result.data.deferred) {
   // queueId 是 hai_reach_send_log.queue_id 中的回执 UUID；此时尚未投递。
+  // 把延期回执的 queueId 交给应用持久化，以便查询后续状态。
   await savePendingReceipt(result.data.queueId)
 }
 
 // 直接发送邮件（无模板）
+// 通过 email 渠道向示例邮箱直接发送主题「通知」及 HTML 正文。 成功 data 表示投递结果或延期回执，渠道错误返回失败。
 await reach.send({
   provider: 'email',
   to: 'user@example.com',
@@ -154,6 +166,7 @@ await reach.send({
 })
 
 // 发送短信（通过 extra 传递 Provider 特有参数）
+// 用 sms 渠道向示例手机号发送验证码 654321，渠道侧使用 SMS_123456 模板。 成功 data 表示投递结果或延期回执，渠道错误返回失败。
 await reach.send({
   provider: 'sms',
   to: '13800138000',
@@ -162,6 +175,7 @@ await reach.send({
 })
 
 // API 回调
+// 把 signup 的 JSON 正文交给已配置的 webhook 渠道。 成功 data 表示投递结果或延期回执，渠道错误返回失败。
 await reach.send({
   provider: 'webhook',
   to: 'user@example.com',
@@ -265,7 +279,9 @@ API `idempotent: true` 是接收端能力声明：接收方必须把 queueId 对
 SMTP、短信和默认 API 一旦开始投递，失败或过期转 unknown，不自动重发。未连接按持久策略退避；发送前解析失败直接进入 dead。unknown 必须在可信服务端管理流程里，先停止/隔离旧 worker 并核对第三方投递记录，再执行以下二选一裁定；discarded 不撤销已开始请求。需要补发时，先确保旧请求不可能继续生效，再创建新消息。
 
 ```ts
+// 按发送回执的 queueId 查询队列记录。成功 data 是当前记录或 null。
 const state = await reach.queue.get(queueId)
+// 在外部投递已核对成功后，用消息 ID 将该未知结果记录确认为 sent。成功 data 为 undefined，状态冲突返回失败。
 const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
 if (!resolved.success)
   throw new Error(resolved.error.message)
@@ -281,10 +297,12 @@ queue.get/list 返回 attemptCount、maxAttempts、nextAttemptAt、lastFailure�
 
 ```ts
 // 应用先校验运维权限并修复根因；不向浏览器直接暴露队列管理。
+// 按发送回执的 queueId 查询队列记录。成功 data 是当前记录或 null。
 const state = await reach.queue.get(queueId)
 if (!state.success)
   throw new Error(state.error.message)
 if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  // 以刚读到的 updatedAt 为版本条件恢复此 dead 回执。成功后回到待处理，版本不再匹配时失败。
   const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
   if (!restored.success)
     throw new Error(restored.error.message)
@@ -296,6 +314,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 ### 多渠道验证码发送
 
 ```typescript
+// 为 email 渠道保存 email_code 模板，主题和正文使用 code，正文还使用 minutes。 成功 data 为 undefined，模板无效返回错误。
 reach.template.save({
   name: 'email_code',
   provider: 'email',
@@ -303,6 +322,7 @@ reach.template.save({
   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
 })
 
+// 为 sms 渠道保存 sms_code 模板，发送时传入 code 和 minutes。 成功 data 为 undefined，模板无效返回错误。
 reach.template.save({
   name: 'sms_code',
   provider: 'sms',
@@ -312,6 +332,7 @@ reach.template.save({
 // 根据用户选择的渠道发送
 async function sendCode(channel: 'email' | 'sms', target: string, code: string) {
   const template = channel === 'email' ? 'email_code' : 'sms_code'
+  // 用调用方提供的收件地址和验证码发送所选模板。渠道取自模板，成功 data 说明已发送或排队。
   return reach.send({
     to: target,
     template,
@@ -327,6 +348,7 @@ import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 
 // 初始化 reach（注册 email 和 sms Provider）
+// 注册下方邮件、短信渠道和 IAM 用到的三份模板，成功 data 为 undefined。
 const initializedReach = await reach.init({
   providers: [
     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
@@ -342,6 +364,7 @@ if (!initializedReach.success)
   throw new Error(initializedReach.error.message)
 
 // 先确认 reldb/cache/Reach 已初始化成功，再注入 Reach；内置适配器传播发送失败。
+// 把已启动的 Reach 作为通知依赖传入 IAM。成功 data 为 undefined，启动失败停止应用初始化。
 const initializedIam = await iam.init({ ...iamSettings, reach })
 if (!initializedIam.success)
   throw new Error(initializedIam.error.message)
@@ -354,6 +377,7 @@ if (!initializedIam.success)
 ```typescript
 import { HaiReachError } from '@h-ai/reach'
 
+// 发送应用准备的 message。成功 data 是发送结果，下方按失败码处理未初始化、配置和渠道问题。
 const result = await reach.send(message)
 if (!result.success) {
   switch (result.error.code) {

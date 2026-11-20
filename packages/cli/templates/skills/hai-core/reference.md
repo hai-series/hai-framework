@@ -38,10 +38,11 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 ```typescript
 import { core } from '@h-ai/core'
 
-// 自动加载配置目录内所有 .yml / .yaml
+// 加载 ./config 中的 YAML 配置到进程配置中心，返回 void。
 core.init({ configDir: './config' })
 
 // 可选启用配置监听
+// 加载同一目录并监听配置变化，返回 void。仅在选用监听的初始化方式时调用。
 core.init({ configDir: './config', watchConfig: true })
 ```
 
@@ -54,13 +55,13 @@ Core 扫描配置目录直属的 YAML。启用 `watchConfig` 后只监听本次�
 ### 2. 使用功能
 
 ```typescript
-// 日志
+// 记录 info 级服务启动日志，附端口 3000。返回 void。
 core.logger.info('Server started', { port: 3000 })
 
-// 配置
+// 取配置中心中名为 db 的已加载配置，未加载时返回 undefined。
 const dbConfig = core.config.get('db')
 
-// Zod 校验错误本地化
+// 将 zodError 的校验问题与 getMessage 映射为包含 field 和 message 的表单错误数组。
 const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessage)
 ```
 
@@ -111,9 +112,11 @@ Node 的 `loadEnvFiles({ mode, envDir? })` 返回合并变量的 HaiResult，不
 // - 成功重载时：传入新配置，error 为 undefined
 // - 重载失败时：config 为 null，error 为错误详情（包含 code 和 message）
 
+// 监听 db 配置变化，返回取消函数。每次回调接收重载结果或错误。
 const unwatch = core.config.watch('db', (cfg, error) => {
   if (error) {
     // 处理重载失败（如文件解析错误），不应更新本地使用的配置
+    // 以 error 级记录 db 重载失败的错误码，返回 void。
     core.logger.error('Config reload failed', {
       name: 'db',
       code: error.code,
@@ -122,10 +125,11 @@ const unwatch = core.config.watch('db', (cfg, error) => {
   }
   // 使用新配置
   // 注意：此时 core.config.get('db') 已经指向新数据
+  // 记录 db 已更新的 info 日志，返回 void。
   core.logger.info('Config updated', { name: 'db' }) // 不记录含密码的完整配置
 })
 
-// 调用 unwatch() 停止监听
+// 调用 watch 返回的无参函数移除这个监听，返回 void。
 unwatch()
 ```
 
@@ -181,8 +185,11 @@ feature:
 **日志记录**（实例方法）：`trace` / `debug` / `info` / `warn` / `error` / `fatal`
 
 ```typescript
+// 用 info 级记录创建用户，附示例用户 ID 123。返回 void。
 core.logger.info('User created', { userId: '123' })
+// 用 error 级记录连接失败及捕获的 Error，返回 void。
 core.logger.error('Failed to connect', { error })
+// 用 debug 级记录当前 id 和 validation 步骤，返回 void。
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
@@ -199,21 +206,25 @@ core.logger.debug('Processing item', { id, step: 'validation' })
 | `getLevel`  | `() => LogLevel`                       | 获取当前全局日志级别     |
 
 ```typescript
-// 创建模块级 logger
+// 创建名为 my-module 的日志实例，返回 logger。
 const logger = core.logger.create({ name: 'my-module' })
+// 通过模块 logger 记录初始化完成，返回 void。
 logger.info('Module initialized')
 
-// 创建携带固定上下文的子 logger（自动合并到每条日志）
+// 基于当前 logger 创建带固定 requestId 的子 logger，返回该实例。
 const reqLogger = core.logger.child({ requestId: 'req-001' })
+// 用子 logger 写 debug 级请求日志并带上 requestId，返回 void。
 reqLogger.debug('Request started') // 日志中自动包含 requestId
 
-// 配置输出格式和级别
+// 将全局日志设为 warn、JSON 格式并脱敏指定字段，返回 void。
 core.logger.configure({
   level: 'warn',
   format: 'json',
   redact: ['password', 'token'], // 脱敏字段
 })
+// 把当前最低输出级别设为 debug，返回 void。
 core.logger.setLevel('debug')
+// 无参数，读取当前最低输出级别，此时是 'debug'。
 const level = core.logger.getLevel() // 'debug'
 ```
 
@@ -235,6 +246,7 @@ import enUS from '../messages/en-US.json'
 import jaJP from '../messages/ja-JP.json'
 import zhCN from '../messages/zh-CN.json'
 
+// 用三个语言字典创建消息读取函数，调用时按选中的语言读取消息。
 const m = core.i18n.createMessageGetter({
   'zh-CN': zhCN,
   'en-US': enUS,
@@ -242,7 +254,9 @@ const m = core.i18n.createMessageGetter({
 })
 
 // 使用
+// 读取当前语言的 user_created 文本，中文下返回「用户已创建」。
 m('user_created') // "用户已创建"
+// 用 name 参数替换欢迎语中的占位符，中文下返回「欢迎，张三」。
 m('welcome', { params: { name: '张三' } }) // "欢迎，张三"
 ```
 
@@ -286,6 +300,7 @@ const result = LoginSchema.safeParse({
 })
 
 if (!result.success) {
+  // 用 serv 前缀和提供的翻译回调创建 Zod 消息读取函数。
   const getMessage = core.zodValidation.createPrefixedZodMessageGetter(
     'serv',
     (messageKey, params) => {
@@ -296,6 +311,7 @@ if (!result.success) {
       return '输入不合法'
     },
   )
+  // 用读取函数翻译本轮校验错误，返回表单字段与消息列表并保留 Schema 自定义消息。
   const errors = core.zodValidation.mapZodErrorToFormErrors(result.error, getMessage)
 
   errors[0]?.field // 'email'
@@ -325,7 +341,9 @@ const traceId = core.id.trace()        // 'trace-V1StGXR...'
 const reqId = core.id.request()        // 'req-V1StGXR...'
 const uuid = core.id.uuid()            // UUID v4
 
+// 检查字符串是否是完整 UUID，示例的省略写法返回 false。
 core.id.isValidUUID('f47ac10b-...')    // true/false
+// 检查字母表及指定长度 6，示例 abc123 返回 true。
 core.id.isValidNanoId('abc123', 6)     // true/false
 ```
 
@@ -352,8 +370,11 @@ core.id.isValidNanoId('abc123', 6)     // true/false
 `deepMerge` 只递归合并普通对象（含空原型对象）；数组、Date、Map、Set 和类实例由后值覆盖，不修改输入对象。
 
 ```typescript
+// 从左到右合并 a、b、c 的对象属性，返回合并结果并忽略污染原型的键。
 core.object.deepMerge(a, b, c)       // 递归合并（防原型污染）
+// 只复制 obj 的 a、b 属性到返回对象。
 core.object.pick(obj, ['a', 'b'])
+// 复制 obj 中除 c、d 以外的属性到返回对象。
 core.object.omit(obj, ['c', 'd'])
 ```
 
@@ -364,6 +385,7 @@ core.object.omit(obj, ['c', 'd'])
 ```typescript
 core.string.capitalize('hello')      // 'Hello'
 core.string.kebabCase('helloWorld')  // 'hello-world'
+// 比较两个字符串 a、b 是否相等，返回布尔值。
 core.string.constantTimeEqual(a, b)  // Node 使用原生等长比较；浏览器不保证恒时
 ```
 
@@ -387,10 +409,15 @@ core.array.intersection([1, 2], [2, 3]) // [2]
 超时不取消底层任务；重试只处理抛错/reject，不识别失败 HaiResult。当前 `maxRetries` 按总尝试次数计算，至少执行一次。`parallel` 验证并发参数为大于 0 的安全整数，非法值拒绝为 RangeError，任何任务均不执行；正常结果按输入顺序返回。debounce/throttle 保留传入回调的参数类型。
 
 ```typescript
+// 等待 1000 毫秒，Promise 完成时无返回数据。
 await core.async.delay(1000)
+// 最多等待 /api 请求 5000 毫秒，返回此次 fetch 的结果，等待超时会拒绝。
 await core.async.withTimeout(fetch('/api'), 5000)
+// 运行 fn，每次失败后等待 1000 毫秒，总共最多执行三次，成功返回 fn 的结果，耗尽重试则拒绝。
 await core.async.retry(fn, { maxRetries: 3, delay: 1000 })
+// 最多并发处理 5 个 items 元素，返回按输入顺序排列的 processFn 结果。
 await core.async.parallel(items, processFn, 5)  // 并发限制
+// 把 fn 包装为延迟 300 毫秒的防抖函数，间隔内再次调用会重启计时。
 const debouncedFn = core.async.debounce(fn, 300)
 ```
 
@@ -399,8 +426,10 @@ const debouncedFn = core.async.debounce(fn, 300)
 `formatDate` / `timeAgo` / `now` / `nowSeconds` / `parseDate` / `isValidDate` / `addDays` / `addHours` / `startOfDay` / `endOfDay`
 
 ```typescript
+// 把当前时间按给定年月日及小时分钟秒格式化为字符串。
 core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
 core.time.timeAgo(new Date(Date.now() - 60000)) // '1 分钟前'
+// 返回比 date 晚 7 天的新 Date。
 core.time.addDays(date, 7)
 ```
 
@@ -412,9 +441,11 @@ core.time.addDays(date, 7)
 import { ok, err, HaiCommonError } from '@h-ai/core'
 
 // 成功
+// 将 data 包装成 success=true 的 HaiResult。
 return ok(data)
 
 // 失败
+// 将 NOT_FOUND 错误码和指定消息包装成 success=false 的 HaiResult。
 return err(HaiCommonError.NOT_FOUND, 'Resource not found')
 ```
 
@@ -425,6 +456,7 @@ const result = await someOperation()
 
 // 模式1：直接检查
 if (!result.success) {
+  // 记录本次操作失败和 error 数据，返回 void。
   core.logger.error('Operation failed', { error: result.error })
   return result // 直接透传错误
 }
@@ -472,7 +504,9 @@ Core 模块定义了两组标准错误码：
 import { HaiCommonError, err } from '@h-ai/core'
 
 // 创建错误实例
+// 创建 success=false 的 HaiResult，包含 NOT_FOUND 错误码及用户不存在的消息。
 err(HaiCommonError.NOT_FOUND, 'User not found')
+// 创建带 VALIDATION_ERROR 的失败结果，将 validationErrors 作为错误原因。
 err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 ```
 
@@ -491,12 +525,15 @@ err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 
+// 按 schema 读取 ./config/db.yml 并注册为 db 配置。成功 data 是校验后的配置。
 const result = core.config.load('db', './config/db.yml', schema)
 if (!result.success) {
   if (result.error.code === HaiConfigError.CONFIG_FILE_NOT_FOUND.code) {
+    // 记录配置文件缺失错误，返回 void。
     core.logger.error('Config file missing')
   }
   else if (result.error.code === HaiConfigError.CONFIG_VALIDATION_ERROR.code) {
+    // 记录配置校验失败，附 error.cause 中的校验详情。
     core.logger.error('Config validation failed', { issues: result.error.cause })
   }
 }
@@ -519,8 +556,10 @@ const MyConfigSchema = z.object({
 })
 
 // 模块初始化时校验
+// 对配置中心的 myModule 配置应用 MyConfigSchema。成功 data 是通过校验和默认值处理的配置。
 const result = core.config.validate('myModule', MyConfigSchema)
 if (!result.success) {
+  // 记录 myModule 配置失败及错误，返回 void。
   core.logger.error('Invalid config', { error: result.error })
   return result
 }
@@ -545,6 +584,7 @@ const config = result.data // 类型安全
 import { core } from '@h-ai/core'
 
 // 浏览器端：仅传入 logging 配置即可
+// 在浏览器中以 info 最低日志级别初始化 Core，返回 void。
 core.init({ logging: { level: 'info' } })
 ```
 
@@ -552,11 +592,14 @@ core.init({ logging: { level: 'info' } })
 
 ```typescript
 // 与 Node.js 完全一致的 API
+// 以 info 级记录 /home 页面加载，返回 void。
 core.logger.info('Page loaded', { route: '/home' })
+// 以 error 级记录失败请求的 URL 和状态码，返回 void。
 core.logger.error('API call failed', { url, status })
 
-// 创建模块级 logger
+// 创建名为 my-page 的 logger 并返回。
 const logger = core.logger.create({ name: 'my-page' })
+// 记录获取的数据项数，使用 debug 级别并返回 void。
 logger.debug('Data fetched', { count: items.length })
 
 // ❌ 禁止直接引用底层日志库
@@ -583,6 +626,7 @@ logger.debug('Data fetched', { count: items.length })
 脱敏副本不执行自定义 `toJSON()`，普通对象和类实例只复制自有可枚举数据属性，跳过访问器和原型；Date 转 ISO 字符串，URL 转脱敏字符串。原对象不变，副本用于诊断，不作为原类实例调用。仍需只选取必要字段，并明确清理未标注秘密和业务隐私。
 
 ```ts
+// 脱敏 URL 中的 token 参数，保留 limit，返回处理后的 URL 字符串。
 const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&limit=10")
 // https://example.com/a?token=[REDACTED]&limit=10
 ```

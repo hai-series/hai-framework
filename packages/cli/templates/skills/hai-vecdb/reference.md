@@ -66,11 +66,14 @@ operationLog:
 import { core } from '@h-ai/core'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 
+// 用 VecdbConfigSchema 校验已装入的向量库配置。成功 data 是已校验设置，失败读取 error。
 const config = core.config.validate('vecdb', VecdbConfigSchema)
 if (!config.success) throw new Error(config.error.message)
+// 用校验后的设置连接已选后端。成功后向量操作可用且无 data，失败读取 error。
 const initialized = await vecdb.init(config.data)
 if (!initialized.success) throw new Error(initialized.error.message)
 // ... 使用向量数据库
+// 无参数释放当前向量库连接，成功无 data，清理失败由下方抛出。
 const closeResult = await vecdb.close()
 if (!closeResult.success) {
   throw new Error(closeResult.error.message)
@@ -102,15 +105,18 @@ if (!closeResult.success) {
 
 ```typescript
 // 创建集合（指定维度和度量）
+// 创建 docs 的 1536 维余弦集合。成功无 data，重名或后端失败读取 error。
 await vecdb.collection.create('docs', { dimension: 1536, metric: 'cosine' })
 
 // 查询集合信息
+// 按集合名读取维度、度量和文档数，成功 data 是元数据，失败读取 error。
 const info = await vecdb.collection.info('docs')
 if (info.success) {
   // info.data => { name, dimension, metric, count }
 }
 
 // 列出所有集合
+// 不传参数列出当前集合名，成功 data 包含已建立的 docs，查询失败读取 error。
 const list = await vecdb.collection.list()
 ```
 
@@ -152,12 +158,14 @@ LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/�
 
 ```typescript
 // 插入向量文档
+// 将调用方准备的两个同维向量和文档字段写入 docs。成功无 data，维度或存储失败读取 error。
 await vecdb.vector.insert('docs', [
   { id: 'doc-1', vector: embedding, content: '文档内容', metadata: { source: 'wiki' } },
   { id: 'doc-2', vector: embedding2, content: '另一段内容' },
 ])
 
 // 向量搜索（返回相似度排序结果）
+// 传查询向量，筛选来源 wiki 且分数至少 0.7 的最多十条。成功 data 为命中数组，失败读取 error。
 const result = await vecdb.vector.search('docs', queryVector, {
   topK: 10,
   minScore: 0.7,
@@ -170,17 +178,21 @@ if (result.success) {
 }
 
 // 更新已有文档（按 id 匹配）
+// 按 doc-1 写入新向量和正文，已有则更新。成功无 data，失败读取 error。
 await vecdb.vector.upsert('docs', [
   { id: 'doc-1', vector: newEmbedding, content: '更新后的内容' },
 ])
 
 // 删除
+// 传两个明确的文档 ID 删除对应记录。成功无 data，失败读取 error。
 await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
 
 // 输入集合名和页大小，成功时返回 data.items（仅文档 ID）及可选的 data.nextCursor。
+// 从 docs 首页枚举最多 32 个 ID，成功 data 含 items 及可选游标，失败读取 error。
 const page = await vecdb.vector.scan('docs', { limit: 32 })
 // 当 data.nextCursor 存在时，把它传给同一集合，输出下一页文档 ID 和可选的后续游标。
 if (page.success && page.data.nextCursor !== undefined) {
+  // 传上一页游标继续读取同一集合，成功 data 为下一页 ID 和可选后续游标，失败读取 error。
   const nextPage = await vecdb.vector.scan('docs', { cursor: page.data.nextCursor, limit: 32 })
 }
 ```
@@ -246,11 +258,13 @@ import { ai } from '@h-ai/ai'
 import { vecdb } from '@h-ai/vecdb'
 
 // 将查询文本转为向量
+// 把用户查询送到已配置的嵌入模型，成功 data 是查询向量，失败原样返回。
 const embedResult = await ai.embedding.embedText(query)
 if (!embedResult.success)
   return embedResult
 
 // 检索最相似的文档
+// 以刚得到的嵌入检索 knowledge，返回分数至少 0.7 的最多五个命中，失败原样返回。
 const searchResult = await vecdb.vector.search('knowledge', embedResult.data, {
   topK: 5,
   minScore: 0.7,
@@ -260,6 +274,7 @@ if (!searchResult.success)
 
 // 拼接上下文，送入 LLM
 const context = searchResult.data.map(r => r.content).join('\n\n')
+// 将命中文本作为上下文、原问题作为用户消息。成功 data 为模型响应，推理失败读取 error。
 const chatResult = await ai.llm.chat({
   messages: [
     { role: 'system', content: `参考以下资料回答用户问题：\n${context}` },
@@ -276,15 +291,20 @@ import { datapipe } from '@h-ai/datapipe'
 import { vecdb } from '@h-ai/vecdb'
 
 // 清洗 + 分块
+// 不传参数创建空构建器，以下依次注册并执行处理步骤。
 const pipeline = await datapipe.pipeline()
+  // 注册去掉原文 HTML 的清理步骤，返回同一构建器。
   .clean({ removeHtml: true })
+  // 注册 Markdown 分块，上限 1000、重叠 100，返回构建器。
   .chunk({ mode: 'markdown', maxSize: 1000, overlap: 100 })
+  // 用调用方原文执行步骤。成功 data 含正文和分块，任一步失败原样返回。
   .run(rawText)
 
 if (!pipeline.success)
   return pipeline
 
 // 批量生成嵌入
+// 按原顺序传清洗后各块的文字。成功 data 是对应向量数组，失败原样返回。
 const embeddings = await ai.embedding.embedBatch(
   pipeline.data.chunks.map(c => c.content),
 )
@@ -298,6 +318,7 @@ const docs = pipeline.data.chunks.map((chunk, i) => ({
   content: chunk.content,
   metadata: chunk.metadata,
 }))
+// 将分块与其对应嵌入组成的文档数组写进 knowledge。成功无 data，写入失败读取 error。
 await vecdb.vector.insert('knowledge', docs)
 ```
 
@@ -306,6 +327,7 @@ await vecdb.vector.insert('knowledge', docs)
 ```typescript
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
+// 创建默认余弦度量的 1536 维 docs 集合。成功无 data，未初始化、重名及其他失败按下方错误码判断。
 const result = await vecdb.collection.create('docs', { dimension: 1536 })
 if (!result.success) {
   switch (result.error.code) {

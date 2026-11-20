@@ -41,6 +41,7 @@ import { ai } from '@h-ai/ai'
 
 // ai 已初始化，Goose 已运行；HAI_GOOSE_SECRET 为服务端环境变量，值与远端服务密钥一致。
 async function connectGoose() {
+  // 把下方 Goose 远程服务配置写入注册表，密钥由环境提供；成功含注册版本，同名或配置不合法时失败。
   const registered = await ai.acp.agents.register({
     id: 'goose', name: 'Goose', mode: 'custom-service',
     transport: 'http', url: 'http://127.0.0.1:3284/acp',
@@ -48,6 +49,7 @@ async function connectGoose() {
     headerEnv: { 'X-Secret-Key': 'HAI_GOOSE_SECRET' },
   })
   if (!registered.success) return registered
+  // 以刚登记的 Goose 在远端可见的 /workspace 建会话，成功返回会话句柄；连接或认证失败返回错误。
   return ai.acp.sessions.create({ agentId: 'goose', cwd: '/workspace' })
 }
 ```
@@ -70,6 +72,7 @@ import { ai, type ACPPlatformPolicy, type MCPServiceBroker, type MCPServiceBroke
 function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize']) {
   let broker: MCPServiceBroker | undefined
   const http = createServer((req, res) => {
+    // Broker 激活后处理宿主的 HTTP 请求与响应，未授权的调用由入口拒绝。
     if (broker) return void broker.handleRequest(req, res)
     res.writeHead(503).end()
   })
@@ -80,6 +83,7 @@ function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize
     async bindTools(scope, sessionId, ids, signal) {
       if (!broker || ids.length !== 1 || ids[0] !== 'manual_search')
         throw new Error('Manual tool binding is unavailable')
+      // 将主体、会话 ID、信号和 manual_search 工具绑定到同一临时授权，成功返回 servers、signal 和 revoke；校验不通过不发凭据。
       const bound = await broker.bind({
         principal: { tenantId: scope.tenantId, userId: scope.userId },
         taskId: sessionId,
@@ -103,10 +107,12 @@ function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize
     http, policy,
     activate() {
       // ai.init(config, { runner, acpPolicy: policy }) 成功后，监听 HTTP 端口之前激活。
+      // 用宿主部署地址和逐次鉴权回调创建工具入口，成功返回 Broker，地址或设置无效时不发布。
       const created = ai.mcp.services.createBroker({ url, authorize })
       if (created.success) broker = created.data
       return created
     },
+    // 不传参数关闭现有 Broker 并撤销其绑定；没有 Broker 时不执行清理。
     close() { broker?.close() },
   }
 }
@@ -128,6 +134,7 @@ Windows stdio 需要系统 PowerShell 可用；npm 的 `.cmd` 包装应改用 `c
 import { ai } from '@h-ai/ai'
 
 async function run() {
+  // 用环境凭据和下方 Responses 模型设置初始化 AI。成功无业务数据，初始化失败时不登记 Agent。
   const initialized = await ai.init({
     llm: { models: [{
       id: 'coding', model: 'your-responses-model', protocol: 'responses',
@@ -138,19 +145,25 @@ async function run() {
   })
   if (!initialized.success) return initialized
   try {
+    // 注册使用 coding 模型的嵌入式 Codex Agent，取得版本化记录；重复 ID 时不继续。
     const agent = await ai.acp.agents.register({ id: 'coder', name: 'Codex', mode: 'embedded', adapter: 'codex', modelIds: ['coding'], defaultModelId: 'coding' })
     if (!agent.success) return agent
+    // 登记 project 的宿主目录和可信 api/trunk 仓库定义，成功返回登记记录；失败不准备目录。
     const workspace = await ai.acp.workspaces.register({ id: 'project', storage: { type: 'directory', path: '/srv/projects/demo' }, repositories: [{ id: 'api', url: 'https://git.example.com/team/api.git', mainBranch: 'trunk' }] })
     if (!workspace.success) return workspace
+    // 根据刚保存的 project 配置准备工作区和仓库，失败不建立会话。
     const ready = await ai.acp.workspaces.prepare('project')
     if (!ready.success) return ready
+    // 在 project/api 的独立 Git 工作树为 coder 创建会话。成功返回会话句柄，工作区或启动失败时返回错误。
     const created = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', repositoryId: 'api', newWorktree: true })
     if (!created.success) return created
     const session = created.data
+    // 向刚创建的会话发送指定文本，成功可读取回答 text；会话或执行错误直接返回。
     const response = await session.prompt([{ type: 'text', text: '阅读工程并说明结构' }])
     if (!response.success) return response
     return response.data.text
   }
+  // 退出时无参关闭 AI 并等待它拥有的资源清理，不返回业务数据。
   finally { await ai.close() }
 }
 ```

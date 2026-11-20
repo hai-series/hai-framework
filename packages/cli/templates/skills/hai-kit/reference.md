@@ -25,12 +25,14 @@ import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
+// 使用下面的认证、限流和日志选项生成 SvelteKit 请求钩子。示例校验器只演示输入输出，实际服务应校验令牌。
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async token => token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null,
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*'],
   },
+  // 借用已初始化的 cache，并用 app 命名空间保存共享限流计数。
   rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
   logging: true,
 })
@@ -50,9 +52,13 @@ import { z } from 'zod'
 
 const CreateUserSchema = z.object({ name: z.string().min(1) })
 
+// 将这个 POST 回调包装为 SvelteKit 请求处理器，并将适用的失败转换为 HTTP 响应。
 export const POST = kit.handler(async ({ request, locals }) => {
+  // 检查当前会话能否创建用户。缺少身份或权限时拒绝继续。
   kit.guard.require(locals.session, 'user:create')
+  // 按 CreateUserSchema 解析请求正文。校验失败时不返回已创建结果。
   const payload = await kit.validate.body(request, CreateUserSchema)
+  // 用已校验数据生成 HTTP 201 成功响应。
   return kit.response.created(payload)
 })
 ```
@@ -62,6 +68,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ```ts
 import { kit } from '@h-ai/kit'
 
+// 以默认配置创建本应用的客户端，并导出它的 apiFetch。
 const client = kit.client.create()
 export const { apiFetch } = client
 ```
@@ -78,13 +85,17 @@ import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
+// 初始化传输层使用的密码学模块。返回失败时应先处理错误再继续。
 await crypto.init()
+// 解析环境变量中的服务端密钥环，失败时抛错退出。
 const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const serverKeyRing = ring.data
+// 连接本机 Redis 保存共享传输状态。连接失败返回错误。
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
+// 根据下方认证策略、密钥环和共享密钥仓库生成服务端请求钩子。
 export const handle = kit.createHandle({
   auth: {
     verifyToken,
@@ -95,6 +106,7 @@ export const handle = kit.createHandle({
     crypto,
     transport: {
       serverKeyRing,
+      // 用已连接的缓存存放传输密钥，条目寿命为 3600 秒。
       keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -118,6 +130,7 @@ export const handle = kit.createHandle({
 
   // 服务端 layout 只返回 kit 公共投影；初次加载安装，不下发完整策略。
   if (browser) {
+    // 将服务端返回的 Kit 公共配置和 crypto 交给浏览器传输安装。仅在配置启用时启用包装。
     kit.client.installBrowserTransport(untrack(() => data.kit), { crypto })
   }
 </script>
@@ -127,6 +140,7 @@ export const handle = kit.createHandle({
 // lib/utils/api.ts —— 业务层只看到 apiFetch
 import { kit } from '@h-ai/kit'
 
+// 创建默认客户端，并为业务层导出其 apiFetch。
 export const { apiFetch } = kit.client.create()
 ```
 
@@ -166,6 +180,7 @@ import { KitConfigSchema } from '@h-ai/kit'
 
 // src/routes/+layout.server.ts；服务端已先完成应用配置初始化。
 export function load() {
+  // 读取并校验应用的 _kit.yml。成功返回配置，失败时抛错且不生成公开投影。
   const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
   if (!loaded.success)
     throw new Error(loaded.error.message)

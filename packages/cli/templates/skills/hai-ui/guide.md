@@ -12,7 +12,9 @@
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import * as m from '#lib/paraglide/messages.js'
 
+  // 按下面的用户页步骤和帮助文章创建引导控制器，使用 my-app-guide 保存进度。
   const guide = createGuide({
+    // 创建当前 SvelteKit 应用的导航适配器，供引导定位用户页面。
     nav: createSvelteKitNavAdapter(),
     persistKey: 'my-app-guide',
     tours: [{
@@ -36,8 +38,11 @@
   })
 </script>
 
+<!-- 为当前用户和语言挂载引导宿主，并自动尝试开启 users 步骤。 -->
 <GuideHost {guide} {locale} scope={currentUser.id} autoStart='users' />
+<!-- 点击按钮调用控制器，打开帮助面板。 -->
 <Button onclick={() => guide.openHelp()}>{m.help()}</Button>
+<!-- 给创建按钮设置 users-create 步骤锚点，点击仍执行应用的 createUser。 -->
 <Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
 ```
 

@@ -18,6 +18,7 @@
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// 使用 HTTPS API 地址和默认浏览器认证配置初始化单例。成功后可发送请求，失败结果包含配置错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
@@ -30,8 +31,10 @@ await apiClient.init({
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
+// 按默认配置初始化传输密码学依赖。成功后才可交给客户端，失败结果包含错误。
 await crypto.init()
 
+// 将已初始化的 crypto 交给指定 HTTPS 客户端。初始化失败时应先处理返回的错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
@@ -44,8 +47,10 @@ App/Capacitor 场景传入自定义 TokenStorage：
 ```ts
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
+// 用 HTTPS 地址和原生认证存储初始化客户端。失败返回错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
+  // 创建原生安全令牌适配器供认证模块读写。原生存储不可用时，后续读写会失败。
   auth: { storage: createCapacitorTokenStorage() },
 })
 ```
@@ -57,8 +62,10 @@ SSR / Node.js 测试场景请显式传入内存存储：
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// 用 HTTPS 地址和内存认证存储初始化客户端。失败返回错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
+  // 为本客户端创建空的进程内凭据存储。
   auth: { storage: apiClient.tokenStorage.memory() },
 })
 ```
@@ -66,18 +73,23 @@ await apiClient.init({
 ### 2. 调用 typed API
 
 ```ts
+// 用示例账号口令登录。成功返回用户和令牌，认证失败时不进入下面的保存分支。
 const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
 if (login.success) {
   // 默认 httpOnly cookie 模式下，refresh token 由服务端 Set-Cookie 管理。
+  // 将登录返回的令牌交给当前认证存储。写入失败时 Promise 拒绝。
   await apiClient.auth.setTokens(login.data.tokens)
 }
 
+// 读取当前凭据对应的用户。成功返回用户、角色和权限，未登录等失败返回错误。
 const me = await apiClient.iam.auth.currentUser()
 if (me.success) {
   // currentUser 返回服务端最新角色/权限；不要把权限快照持久化到 localStorage。
   const { roles, permissions, ...user } = me.data
 }
+// 为 avatar.png 请求上传预签名 URL。成功返回上传信息，无权限或签名失败返回错误。
 const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+// 向聊天接口发送 hello。成功返回回答，接口或授权失败返回错误。
 const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
 ```
 
@@ -89,8 +101,11 @@ const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 
+// 只组合内置 IAM 路由，得到独立客户端使用的契约。
 const contract = apiContract.create({ iam: apiContract.iam })
+// 为该契约创建独立客户端，公开 IAM 调用。
 const client = apiClient.create(contract)
+// 配置此实例的 HTTPS API 地址。失败结果含初始化错误。
 await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 ```
 
@@ -99,6 +114,7 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 ### 4. 关闭
 
 ```ts
+// 关闭默认客户端，释放本地状态和观察者。完成后无业务数据。
 await apiClient.close()
 ```
 
@@ -129,14 +145,17 @@ Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cooki
 import { apiClient } from '@h-ai/api-client'
 
 // apiClient.tokenStorage.httpOnlyCookie() 是默认存储，无需显式指定
+// 配置默认浏览器客户端的 HTTPS 地址和 Cookie 认证。初始化失败返回错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
 })
 
 // 登录后设置 access token（refresh token 由服务端写入 cookie，前端无需操作）
+// 使用示例账号和口令登录。成功返回凭据，认证失败不写入。
 const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
 if (login.success) {
+  // 保存登录响应中的访问令牌。写入完成无业务数据，存储失败时拒绝。
   await apiClient.auth.setTokens(login.data.tokens)
 }
 ```

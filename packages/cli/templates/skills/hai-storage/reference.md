@@ -70,11 +70,14 @@ S3 流式上传用 `error.cause` 获取首次失败，`error.ext?.s3Operation` �
 import { core } from '@h-ai/core'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 
+// 用公开 Schema 校验已加载的 storage 配置。成功 data 是校验后的设置，失败读取 error。
 const config = core.config.validate('storage', StorageConfigSchema)
 if (!config.success) throw new Error(config.error.message)
+// 以已校验配置连接对象后端。成功后可读写且无 data，失败读取 error。
 const initialized = await storage.init(config.data)
 if (!initialized.success) throw new Error(initialized.error.message)
 // 使用后关闭
+// 无参数关闭本例连接，成功无 data，失败由下方抛出。
 const closeResult = await storage.close()
 if (!closeResult.success) {
   throw new Error(closeResult.error.message)
@@ -85,9 +88,11 @@ if (!closeResult.success) {
 初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`storage.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
 
 ```ts
+// 无参数尝试清理当前连接，成功释放资源，失败进入重试分支。
 const closed = await storage.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
+  // 无参数重试同一后端的清理，成功无 data，再次失败保留 error。
   const retried = await storage.close()
   if (!retried.success) throw new Error(retried.error.message)
 }
@@ -113,15 +118,18 @@ if (!closed.success) {
 
 ```typescript
 // 上传文件
+// 用调用方 PNG 字节及用户元数据写入头像键。成功 data 是对象元数据，失败读取 error。
 const result = await storage.file.put('avatars/user-123.png', fileBuffer, {
   contentType: 'image/png',
   metadata: { userId: '123' },
 })
 
 // 下载文件
+// 按刚指定的头像键读取，成功 data 为 Buffer，缺失或读取失败返回错误。
 const file = await storage.file.get('avatars/user-123.png')
 
 // 列出文件
+// 以头像前缀读取最多 100 个对象，成功 data 为分页结果，失败读取 error。
 const files = await storage.dir.list({ prefix: 'avatars/', maxKeys: 100 })
 ```
 
@@ -132,6 +140,7 @@ const files = await storage.dir.list({ prefix: 'avatars/', maxKeys: 100 })
 `@h-ai/serv` / `@h-ai/api-client` 的 `storage.files.deleteMany` 使用同一成功结构并透传失败进度。
 
 ```ts
+// 删除两个示例键，成功 data 为删除汇总，部分失败从 error.ext.deleteMany 读取进度。
 const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
 if (!result.success) {
   const progress = result.error.ext?.deleteMany
@@ -152,6 +161,7 @@ if (!result.success) {
 
 ```typescript
 // 客户端直传模式
+// 为 PDF 键和类型签发 3600 秒上传地址。成功 data 是 URL，失败返回原结果。
 const uploadUrl = await storage.presign.putUrl('uploads/doc.pdf', {
   expiresIn: 3600, // 1 小时有效
   contentType: 'application/pdf',
@@ -159,6 +169,7 @@ const uploadUrl = await storage.presign.putUrl('uploads/doc.pdf', {
 if (!uploadUrl.success) return uploadUrl
 
 // 临时下载链接
+// 为同一 PDF 签发 300 秒下载地址。成功 data 是 URL，失败返回原结果。
 const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
   expiresIn: 300, // 5 分钟有效
 })
@@ -198,6 +209,7 @@ if (!downloadUrl.success) return downloadUrl
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 
+// 从已授权 API 申请 avatar.png 的上传会话。成功 data 含 URL 和对象键，失败原样返回。
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 if (!result.success) return result
 ```
@@ -225,22 +237,29 @@ import { storage } from '#lib/server/init.js'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
+// 将下方 key 规则构造成 Zod Schema，要求键是非空字符串。
 const UploadSchema = z.object({
   key: z.string().min(1),
 })
 
+// 把下方业务回调包成 SvelteKit POST 处理器，由框架处理请求和响应错误。
 export const POST = kit.handler(async ({ request, locals }) => {
+  // 用宿主提供的会话检查写权限，允许时继续，无会话或权限不足时由守卫拒绝。
   kit.guard.require(locals.session, 'storage:write')
   const formData = await request.formData()
   const file = formData.get('file') as File
   if (!file)
+    // 缺失上传文件时把说明包装成 HTTP 400 响应。
     return kit.response.badRequest('Missing file')
 
   const key = `uploads/${locals.session.userId}/${file.name}`
   const buffer = new Uint8Array(await file.arrayBuffer())
+  // 以当前用户的上传键和表单文件字节、MIME 写入。成功 data 是对象元数据，失败进入 500 分支。
   const result = await storage.file.put(key, buffer, { contentType: file.type })
   if (!result.success)
+    // 无参数生成 HTTP 500 响应，隐藏存储失败内部细节。
     return kit.response.internalError()
+  // 用写入成功的对象键生成 HTTP 201 响应，正文包含 key。
   return kit.response.created({ key })
 })
 ```
@@ -256,6 +275,7 @@ Local 的 `prefix` 是 key 字符串前缀，可匹配 `reports/2026-` 这类不
 ```ts
 let continuationToken: string | undefined
 do {
+  // 依报告前缀、分隔符与上一页的游标查询最多 100 项。成功 data 有文件、目录及下一页游标，失败立即返回。
   const page = await storage.dir.list({ prefix: 'reports/2026-', delimiter: '/', maxKeys: 100, continuationToken })
   if (!page.success) return page
   // 消费当前页的 files 和 commonPrefixes。
@@ -267,11 +287,14 @@ do {
 
 ```typescript
 const key = `avatars/${userId}/${Date.now()}.png`
+// 用生成的头像键和应用提供的 PNG 字节写入。成功 data 是对象元数据，失败读取 error。
 const result = await storage.file.put(key, avatarBuffer, {
   contentType: 'image/png',
 })
 if (result.success) {
+  // 用刚写入的对象键求配置的公开地址，后端未提供时返回 null。
   const publicUrl = storage.presign.publicUrl(key)
+  // 用当前用户 ID 及公开地址更新头像，无公开地址时写空字符串。成功 data 是更新后的用户，失败读取 error。
   await iam.user.updateUser(userId, { avatarUrl: publicUrl ?? '' })
 }
 ```
@@ -287,11 +310,13 @@ import { apiClient } from '@h-ai/api-client'
 import { uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 // apiClient 已初始化；用户和资源范围由服务端授权策略决定。
+// 让已初始化客户端以当前用户 ID 派生对象键并申请 PNG 直传。成功 data 有地址和对象键，失败原样返回。
 const result = await apiClient.storage.presignedUrls.createUpload({
   key: `avatars/${userId}.png`,
   contentType: 'image/png',
 })
 if (!result.success) return result
+// 用上一步 URL、调用方文件及签名的 PNG 类型直传。返回上传结果，失败从 error 读取详情。
 return uploadWithPresignedUrl(result.data.url, file, { contentType: 'image/png' })
 ```
 

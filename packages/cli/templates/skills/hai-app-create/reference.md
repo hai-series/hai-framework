@@ -136,6 +136,7 @@ import { error, redirect } from '@sveltejs/kit'
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.session)
     redirect(303, '/auth/login')
+  // 读取当前页面的记录列表。成功 data 作为页面 items，失败时下方响应 503。
   const result = await someService.list()
   if (!result.success)
     error(503, safeLoadErrorMessage)
@@ -164,24 +165,35 @@ const CreateSchema = z.object({
 })
 
 // GET - 列表
+// 将接受请求上下文的列表回调包装为 GET 处理器，返回应用的 HTTP 响应。
 export const GET = kit.handler(async ({ locals }) => {
+  // 以请求会话检查 resource:read。通过时继续，未登录或无权限时中断请求。
   kit.guard.require(locals.session, 'resource:read')
 
+  // 调用应用服务取得记录列表。成功 data 是列表，失败交由应用映射成 HTTP 错误。
   const result = await service.list()
   if (!result.success)
+    // 将服务返回的 error 交给应用的错误映射，返回相应失败响应。
     return toHttpError(result.error)
+  // 把查询出的列表放入成功响应 data，HTTP 状态为 200。
   return kit.response.ok(result.data)
 })
 
 // POST - 创建
+// 用创建回调构造 POST 处理器，返回新资源或校验与服务错误的响应。
 export const POST = kit.handler(async ({ request, locals }) => {
+  // 为当前会话校验 resource:create 权限，校验失败时中断请求。
   kit.guard.require(locals.session, 'resource:create')
 
+  // 解析请求 JSON 并按 CreateSchema 校验，成功返回规范化后的创建数据。
   const data = await kit.validate.body(request, CreateSchema)
 
+  // 把校验后的 data 交给应用服务，成功 data 是新资源，失败走应用的错误映射。
   const result = await service.create(data)
   if (!result.success)
+    // 将服务返回的 error 交给应用的错误映射，返回相应失败响应。
     return toHttpError(result.error)
+  // 将新资源 result.data 封装为 HTTP 201 成功响应。
   return kit.response.created(result.data)
 })
 ```
@@ -205,6 +217,7 @@ import { core, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 // Article/CreateArticleInput/ListParams 为应用类型；已完成建表。
+// 为 SQLite 中的 articles 表创建 CRUD 对象，按 id 定位并映射查询列。
 const articles = reldb.crud.table<Article>({
   table: 'articles',
   idColumn: 'id',
@@ -213,14 +226,18 @@ const articles = reldb.crud.table<Article>({
 })
 
 export async function createArticle(input: CreateArticleInput): Promise<HaiResult<Article>> {
+  // 用无参 ID 生成器取得随机字符串，并和输入与创建时间合成 Article。
   const article = { ...input, id: core.id.generate(), createdAt: new Date().toISOString() }
   // DB 列映射由应用定义；create 返回 ExecuteResult，不是 Article。
+  // 把 Article 映射为 SQLite 列后插入，成功 data 包含写入统计。
   const result = await articles.create({ id: article.id, title: article.title, created_at: article.createdAt })
   if (!result.success) return result
+  // 将新 Article 放在 success=true 的 HaiResult.data 中。
   return ok(article)
 }
 
 export async function listArticles(params: ListParams): Promise<HaiResult<PaginatedResult<Article>>> {
+  // 按调用方的页码和页大小读取文章，成功 data 包含 items、total、page 和 pageSize。
   return articles.findPage({ pagination: params })
 }
 ```
@@ -294,6 +311,7 @@ interface CreateArticleInput {
     <p>{article.content ?? ''}</p>
     {#if onEdit}
       <div class="card-actions justify-end">
+        <!-- 读取当前语言的 article_edit 文本作为按钮标签，点击时调用上层的 onEdit。 -->
         <button class="btn btn-primary" onclick={onEdit}>{m.article_edit()}</button>
       </div>
     {/if}

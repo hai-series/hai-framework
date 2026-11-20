@@ -33,9 +33,11 @@ import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
 // 先初始化依赖
+// 以 ./data.db 打开 SQLite 连接。成功后可准备审计表，失败时应停止启动并读取 error。
 await reldb.init({ type: 'sqlite', database: './data.db' })
 
 // 再初始化审计模块（自动使用已初始化的 reldb 单例）
+// 借用已连接的 RelDB 和默认配置准备审计表。成功无 data，失败读取 error。
 const result = await audit.init()
 if (!result.success) {
   // 处理错误
@@ -45,6 +47,7 @@ if (!result.success) {
 自定义用户表映射：
 
 ```ts
+// 使用下方 IAM 表、ID 列和用户名列配置审计。表准备成功时无 data，配置或建表失败读取 error。
 await audit.init({
   userTable: 'hai_iam_users',
   userIdColumn: 'id',
@@ -55,6 +58,7 @@ await audit.init({
 ### 3. 关闭
 
 ```ts
+// 无参数停止审计并释放自有资源。成功 data 为 undefined，失败由下方抛出。
 const closeResult = await audit.close()
 if (!closeResult.success) {
   throw new Error(closeResult.error.message)
@@ -143,17 +147,22 @@ alerts.schedule 控制定时开关/cron/timezone；audit.schedulerPlan 统一备
 
 ```ts
 // 登录
+// 用已认证用户 ID、连接 IP 和请求的 User-Agent 记录登录。成功无 data，写入失败读取 error。
 await audit.helper.login(userId, request.ip, request.headers['user-agent'])
 
 // 登出
+// 用当前会话用户 ID、IP 和 User-Agent 记录退出。成功无 data，写入失败读取 error。
 await audit.helper.logout(userId, request.ip, request.headers['user-agent'])
 ```
 
 ### CRUD 操作审计
 
 ```ts
+// 用发起者、创建成功的用户 ID 和名称记录 users 创建事件。成功无 data，失败读取 error。
 await audit.helper.crud({ userId, action: 'create', resource: 'users', resourceId: newUser.id, details: { name: newUser.name } })
+// 用发起者、目标 roleId 和业务变更记录角色修改。成功无 data，失败读取 error。
 await audit.helper.crud({ userId, action: 'update', resource: 'roles', resourceId: roleId, details: { changes } })
+// 用发起者及目标权限 ID 记录删除。成功无 data，失败读取 error。
 await audit.helper.crud({ userId, action: 'delete', resource: 'permissions', resourceId: permId })
 ```
 
@@ -161,9 +170,11 @@ await audit.helper.crud({ userId, action: 'delete', resource: 'permissions', res
 
 ```ts
 // 最近日志
+// 取默认第一页的最多 10 条审计记录。成功 data 包含 items 和分页信息，失败读取 error。
 const recentLogs = await audit.list({ pageSize: 10 })
 
 // 7 天统计
+// 统计最近 7 天各类操作数量。成功 data 为分组数组，失败读取 error。
 const stats = await audit.getStats(7)
 ```
 
@@ -171,8 +182,10 @@ const stats = await audit.getStats(7)
 
 ```ts
 // 清理 90 天前的日志
+// 删除早于 90 天的记录，成功 data 为删除条数，失败读取 error。
 const result = await audit.cleanup(90)
 if (result.success) {
+  // 把本次清理条数写入 info 日志，无业务返回值。
   logger.info(`Cleaned up ${result.data} old audit logs`)
 }
 ```

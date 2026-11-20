@@ -20,22 +20,28 @@
 ```typescript
 import { datapipe } from '@h-ai/datapipe'
 
-// 清洗
+// 移除 htmlText 中的标签和 URL，成功 data 是清洗后的文本。
 const cleaned = datapipe.clean(htmlText, { removeHtml: true, removeUrls: true })
 
-// 分块
 if (!cleaned.success) return cleaned
+// 将上一步文本按 Markdown 标题分块，大小上限 2000、重叠 200。成功 data 是分块数组。
 const chunks = datapipe.chunk(cleaned.data, { mode: 'markdown', maxSize: 2000, overlap: 200 })
 ```
 
 ### 管线模式
 
 ```typescript
+// 创建一个空管线构建器，以下调用按顺序添加步骤。
 const result = await datapipe.pipeline()
+  // 添加清除标签和 URL 的清洗步骤，返回构建器。
   .clean({ removeHtml: true, removeUrls: true })
+  // 添加把整段文本改为小写的回调，返回构建器。
   .transform(text => text.toLowerCase())
+  // 添加段落分块，块上限 1000、重叠 100，返回构建器。
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
+  // 只保留内容超过 50 字符的分块，返回构建器。
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
+  // 用传入的原始文本执行全部步骤。成功 data 是 { text, chunks }，参数或处理错误返回失败结果。
   .run(rawText)
 
 if (result.success) {
@@ -104,11 +110,17 @@ interface DataChunk {
 ### 管线 — `datapipe.pipeline()`
 
 ```typescript
+// 无参创建一个新的管线构建器。
 datapipe.pipeline()
+  // 以 CleanOptionsInput 配置清洗，返回管线构建器供继续添加步骤。
   .clean(options)              // 添加清洗步骤
+  // 注册接收当前文本并返回新文本的回调，返回构建器。
   .transform(fn)                // 添加文本转换步骤（同步/异步）
+  // 用 ChunkOptionsInput 添加分块步骤，返回构建器。
   .chunk(options)               // 添加分块步骤
+  // 注册接收并返回分块数组的回调，返回管线构建器。
   .chunkTransform(fn)           // 添加分块后处理步骤
+  // 用传入的原始文本执行全部步骤。成功 data 是 { text, chunks }，参数或处理错误返回失败结果。
   .run(text)                    // 执行管线 → Promise<HaiResult<PipelineResult>>
 ```
 
@@ -142,14 +154,18 @@ import { ai } from '@h-ai/ai'
 import { vecdb } from '@h-ai/vecdb'
 
 // 清洗 + Markdown 分块
+// 创建一个空管线构建器，以下调用按顺序添加步骤。
 const result = await datapipe.pipeline()
+  // 添加清除标签和 URL 的清洗步骤，返回构建器。
   .clean({ removeHtml: true, removeUrls: true })
+  // 按 Markdown 标题分块，块上限 1000、重叠 100，返回构建器。
   .chunk({ mode: 'markdown', maxSize: 1000, overlap: 100 })
+  // 用传入的原始文本执行全部步骤。成功 data 是 { text, chunks }，参数或处理错误返回失败结果。
   .run(rawDocument)
 
 if (!result.success) return result
 
-// 生成嵌入
+// 将所有块的正文作为字符串数组传给嵌入服务。成功 data 里的向量与输入按下标对应。
 const embeddings = await ai.embedding.embedBatch(
   result.data.chunks.map(c => c.content),
 )
@@ -162,18 +178,26 @@ const docs = result.data.chunks.map((chunk, i) => ({
   content: chunk.content,
   metadata: chunk.metadata,
 }))
+// 将带 ID、向量、正文和元数据的块写入 knowledge 集合。成功 data 为 undefined，写入失败返回错误。
 await vecdb.vector.insert('knowledge', docs)
 ```
 
 ### 多步清洗管线
 
 ```typescript
+// 创建一个空管线构建器，以下调用按顺序添加步骤。
 const result = await datapipe.pipeline()
+  // 添加清除标签和邮箱的清洗步骤，返回构建器。
   .clean({ removeHtml: true, removeEmails: true })
+  // 在分块前移除文本中的方括号注释，返回构建器。
   .transform(text => text.replace(/\[.*?\]/g, ''))        // 移除 [注释]
+  // 在分块前移除括号内的链接 URL，返回构建器。
   .transform(text => text.replace(/\(https?:.*?\)/g, '')) // 移除 Markdown 链接 URL
+  // 添加大小上限为 800 的段落分块，返回构建器。
   .chunk({ mode: 'paragraph', maxSize: 800 })
+  // 只保留内容超过 20 字符的分块，返回构建器。
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 20)) // 过滤过短分块
+  // 用传入的原始文本执行全部步骤。成功 data 是 { text, chunks }，参数或处理错误返回失败结果。
   .run(rawText)
 ```
 
@@ -182,6 +206,7 @@ const result = await datapipe.pipeline()
 ```typescript
 import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
+// 对 text 请求 custom 分块却省略 separator，返回 MISSING_SEPARATOR，可用 error.code 分支。
 const result = datapipe.chunk(text, { mode: 'custom' })
 if (!result.success) {
   switch (result.error.code) {

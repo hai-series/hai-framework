@@ -54,6 +54,7 @@ MySQL 仅传 mysql:// URL 即可连接，优先于 host/port/database/user/passw
 
 ```ts
 // trustedCaPem 从部署信任配置提供。
+// 用指定 CA 连接 app 库并设定连接池和排队上限。初始化成功 data 为 undefined，连接或证书错误时返回失败。
 const result = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }, ssl: { ca: trustedCaPem } })
 if (!result.success) return result
 ```
@@ -64,11 +65,14 @@ PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换
 import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 
+// 按 ReldbConfigSchema 校验已加载的 db 配置，成功 data 是通过校验并补齐默认值的配置。
 const config = core.config.validate('db', ReldbConfigSchema)
 if (!config.success) throw new Error(config.error.message)
+// 用 db 配置连接数据库，成功时 data 为 undefined，失败返回连接错误。
 const initialized = await reldb.init(config.data)
 if (!initialized.success) throw new Error(initialized.error.message)
 // ... 使用数据库
+// 无参数，等待数据库资源释放。成功 data 为 undefined，失败可检查 error。
 const closed = await reldb.close()
 if (!closed.success) throw new Error(closed.error.message)
 ```
@@ -77,9 +81,11 @@ if (!closed.success) throw new Error(closed.error.message)
 初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
 
 ```ts
+// 无参数，等待数据库资源释放。成功 data 为 undefined，失败可检查 error。
 const closed = await reldb.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
+  // 重试关闭尚未成功释放的资源。成功返回空 data，再次失败交由应用报告。
   const retried = await reldb.close()
   if (!retried.success) throw new Error(retried.error.message)
 }
@@ -181,6 +187,7 @@ Unix 毫秒使用 BIGINT，不能使用 PostgreSQL/MySQL 的普通 INTEGER。原
 **参数占位符统一使用 `?`**（PostgreSQL 的 `$n` 由 Provider 自动转换）：
 
 ```typescript
+// 绑定 active 与 18 查询启用且大于 18 岁的用户。成功 data 是 User 数组，无匹配时为空数组。
 const result = await reldb.sql.query<User>(
   'SELECT * FROM users WHERE status = ? AND age > ?',
   ['active', 18],
@@ -199,6 +206,7 @@ interface ExecuteResult {
 **分页查询**：
 
 ```typescript
+// 按 id 取启用用户的第一页，每页 20 项，大小限制 100。成功 data 是 items、total、page、pageSize。
 const page = await reldb.sql.queryPage<User>({
   sql: 'SELECT * FROM users WHERE status = ? ORDER BY id',
   params: ['active'],
@@ -215,6 +223,7 @@ const page = await reldb.sql.queryPage<User>({
 `CrudConfig.dbType` 必填，必须与实际初始化的数据库后端一致（含环境变量覆盖后的类型）。以下为 SQLite 示例；切换到 PostgreSQL/MySQL 时同步修改。`BaseReldbCrudRepository` 会从已初始化的 `reldb.config.type` 获取类型，无需手动传入。
 
 ```typescript
+// 为 SQLite 的 users 表创建 CRUD 对象，依据配置选择查询列和可写列。
 const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   table: 'users',
   idColumn: 'id',           // 主键列，默认 'id'
@@ -248,20 +257,24 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 
 ```typescript
 // 单条插入
+// 插入给定姓名和邮箱。成功 data 包含受影响行数和 SQLite 返回的主键。
 const result = await userCrud.create({ name: '张三', email: 'test@example.com' })
 // result.data → { changes: 1, lastInsertRowid: 1 }
 
 // 批量插入
+// 一次插入两条给定用户记录。成功 data 为 undefined，写入异常返回失败结果。
 await userCrud.createMany([
   { name: '用户A', email: 'a@test.com' },
   { name: '用户B', email: 'b@test.com' },
 ])
 
 // 主键查找
+// 按主键 1 查找用户。成功 data 是记录或 null。
 const user = await userCrud.findById(1)
 // user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
 
 // 条件查询（where + params 占位符）
+// 查询姓名包含「张」的用户，按 id 倒序，从第一条起最多取 10 条。成功 data 是数组。
 const actives = await userCrud.findAll({
   where: 'name LIKE ?',
   params: ['%张%'],
@@ -271,6 +284,7 @@ const actives = await userCrud.findAll({
 })
 
 // 分页查询
+// 对姓名匹配结果按 id 倒序取第一页，每页 20 条。成功 data 包含记录和分页元数据。
 const page = await userCrud.findPage({
   where: 'name LIKE ?',
   params: ['%张%'],
@@ -280,20 +294,29 @@ const page = await userCrud.findPage({
 // page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
 
 // 更新 / 删除
+// 把主键 1 的姓名改为「新名字」。成功 data.changes 是实际更新行数。
 await userCrud.updateById(1, { name: '新名字' })
+// 按主键 1 删除，成功 data.changes 是删除行数，键不存在时为 0。
 await userCrud.deleteById(1)
 
 // 计数 / 存在性
+// 统计姓名匹配 %张% 的用户，成功 data 是数字。
 const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+// 用指定邮箱检查用户是否存在，成功 data 是布尔值。
 const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+// 检查主键 1 是否存在，成功 data 是布尔值。
 const found = await userCrud.existsById(1)
 
 // 事务中使用（所有方法均支持 tx 参数）
+// 用同一个事务句柄执行回调。成功时提交并返回查询到的用户，回调抛错则回滚并返回失败。
 await reldb.tx.wrap(async (tx) => {
+  // 在 tx 内插入示例用户，成功 data 是写入统计，失败时下方抛错触发回滚。
   const created = await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
   if (!created.success) throw new Error(created.error.message)
+  // 在 tx 内更新主键 1 的姓名。成功 data 是写入统计，失败时下方抛错。
   const updated = await userCrud.updateById(1, { name: '新名字' }, tx)
   if (!updated.success) throw new Error(updated.error.message)
+  // 在 tx 内读取主键 1。成功 data 是用户或 null，读取失败时下方抛错。
   const user = await userCrud.findById(1, tx)
   if (!user.success) throw new Error(user.error.message)
   return user.data
@@ -311,6 +334,7 @@ interface User { id: number, name: string, email: string, createdAt: Date, updat
 
 class UserRepository extends BaseReldbCrudRepository<User> {
   constructor() {
+    // 用初始化的 db 和 users 字段映射构建此仓库实例。
     super(db, {
       table: 'users',
       idColumn: 'id',
@@ -326,6 +350,7 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 
   /** 自定义查询示例 */
   async findByEmail(email: string, tx?: DmlWithTxOperations) {
+    // 使用传入 tx 的 SQL 接口（否则用默认连接），按 email 绑定查一条。成功 data 是 User 或 null。
     return this.sql(tx).get<User>('SELECT * FROM users WHERE email = ?', [email])
   }
 }
@@ -347,9 +372,12 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 
 ```typescript
 // 方式1：wrap（自动 commit/rollback）
+// 在同一个事务中执行回调并提交，成功 data 是回调返回值。抛错时回滚并返回失败。
 const result = await reldb.tx.wrap(async (tx) => {
+  // 用 tx 插入张三，成功 data.changes 是写入行数。
   const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
   if (!inserted.success) throw new Error(inserted.error.message)
+  // 在同一事务插入 user_created 日志，成功 data.changes 是写入行数。
   const logged = await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
   if (!logged.success) throw new Error(logged.error.message)
   return 'done'
@@ -358,15 +386,19 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 回调抛异常 → 自动 rollback → result.success === false
 
 // 方式2：手动管理，保留原领域错误（置于 async 函数内）
+// 无参开启事务，成功 data 是供后续调用的事务句柄。
 const txResult = await reldb.tx.begin()
 if (!txResult.success) return txResult
 const tx = txResult.data
+// 用刚开启的 tx 插入李四，成功 data 是写入统计，失败时进入回滚分支。
 const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['李四'])
 if (!inserted.success) {
+  // 无参撤销 tx 中的操作，成功 data 为 undefined，撤销失败从 error 诊断。
   const rollback = await tx.rollback()
   if (!rollback.success) return rollback
   return inserted
 }
+// 无参提交 tx，成功 data 为 undefined，提交失败返回失败结果。
 return tx.commit()
 ```
 
@@ -416,22 +448,31 @@ import { reldb, type ReldbFunctions } from '@h-ai/reldb'
 
 // db 已初始化，users 表已有 settings/profile JSON 列。
 async function updateSettings(db: ReldbFunctions, userId: string) {
+  // 针对当前数据库生成 settings 的 $.theme 提取表达式，返回 SQL 片段及参数。
   const extracted = db.json.extract('settings', '$.theme')
+  // 把表达式及参数和 JSON 字符串 dark 绑定到查询中，成功 data 是匹配行数组。
   const rows = await db.sql.query(`SELECT * FROM users WHERE ${extracted.sql} = ?`, [...extracted.params, '"dark"'])
   if (!rows.success) return rows
 
+  // 生成把 settings 的 $.theme 更新为 dark 的 SQL 片段及参数。
   const changed = db.json.set('settings', '$.theme', 'dark')
+  // 按 userId 把生成的表达式应用到 settings，成功 data.changes 是更新行数。
   const updated = await db.sql.execute(`UPDATE users SET settings = ${changed.sql} WHERE id = ?`, [...changed.params, userId])
   if (!updated.success) return updated
 
+  // 生成移除 settings 的 $.deprecated 属性的 SQL 片段及参数。
   const removed = db.json.remove('settings', '$.deprecated')
+  // 按 userId 执行移除操作，成功 data.changes 是更新行数。
   const deleted = await db.sql.execute(`UPDATE users SET settings = ${removed.sql} WHERE id = ?`, [...removed.params, userId])
   if (!deleted.success) return deleted
 
+  // 生成合并 profile 的 JSON 补丁，返回 SQL 片段和参数。
   const patch = db.json.merge('profile', { bio: '新简介', avatar: null })
+  // 按 userId 应用 profile 补丁，返回写入统计或错误。
   return db.sql.execute(`UPDATE users SET profile = ${patch.sql} WHERE id = ?`, [...patch.params, userId])
 }
 
+// 用已初始化的 reldb 更新 u1，全部操作成功时返回最后一次更新的统计。
 const result = await updateSettings(reldb, 'u1')
 if (!result.success) throw new Error(result.error.message)
 ```
@@ -464,12 +505,17 @@ if (!result.success) throw new Error(result.error.message)
 import { reldb, HaiReldbError } from '@h-ai/reldb'
 import { kit } from '@h-ai/kit'
 
+// 包装列表回调为 GET 请求处理器，捕获校验响应并转成 HTTP 响应。
 export const GET = kit.handler(async ({ url }) => {
   // query 返回校验后的数据，失败抛 Response，由 kit.handler 处理。
+  // 依据 PageSchema 从请求 URL 解析分页参数，返回已校验输入。
   const pagination = kit.validate.query(url, PageSchema)
+  // 用请求分页参数并按 id 排序查询，成功 data 是分页结果。
   const result = await userCrud.findPage({ pagination, orderBy: 'id ASC' })
   if (!result.success)
+    // 将查询返回的错误码与消息转成失败 JSON 响应。
     return kit.response.error(result.error.code, result.error.message)
+  // 用分页查询的 data 构造 HTTP 200 成功响应。
   return kit.response.ok(result.data)
 })
 ```
@@ -477,11 +523,14 @@ export const GET = kit.handler(async ({ url }) => {
 ### 事务跨仓库
 
 ```typescript
+// 在同一个事务中执行回调并提交，成功 data 是回调返回值。抛错时回滚并返回失败。
 const result = await reldb.tx.wrap(async (tx) => {
+  // 在事务内用 userData 创建用户，成功 data 包含数据库返回的插入 ID。
   const user = await userRepo.create(userData, tx)
   if (!user.success)
     throw new Error(user.error.message)
 
+  // 用用户插入 ID 与 profileData 创建资料，成功 data 是写入统计，失败触发回滚。
   const profile = await profileRepo.create({ userId: user.data.lastInsertRowid, ...profileData }, tx)
   if (!profile.success) throw new Error(profile.error.message)
   return user.data

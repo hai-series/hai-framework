@@ -78,11 +78,18 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 ## CLI
 
 ```sh
+# 构建当前应用并发布 prod，全量部署失败时命令返回非零。
 pnpm run deploy --env prod --build
+# 为应用配置的容器角色构建镜像制品，构建失败返回非零。
 pnpm build --target image
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+# 将所选构建编号对应的 artifactDir 赋给 deploy_artifact_dir，目录可从 hai build --target image --json 的输出取得。
+# 复用对应制品交付 prod，制品不匹配时停止。
+pnpm run deploy --env prod --artifact-dir "${deploy_artifact_dir:?请先设置所选构建的制品目录}"
+# 生成 prod 离线包，不连接目标执行发布。打包失败返回非零。
 pnpm run deploy --env prod --bundle-only
+# 仅构建 web 角色镜像，角色不存在或构建失败时停止。
 pnpm build --target image --images web
+# 仅发布 web 角色。只有远端成功基线符合本次计划时才更新。
 pnpm run deploy --env prod --services web
 ```
 
@@ -90,7 +97,7 @@ pnpm run deploy --env prod --services web
 
 上传脚本先复用操作机密码；缺失或为空时直接隐藏输入并继续本次部署，输入不落盘；非交互调用明确失败且不等待。无效输入显示变量名和约束；SCP 上传期间通过 SSH 查询远端归档大小，显示已接收/总字节与百分比，成功后才显示 100%。增量部署先恢复已停止或 Compose down 的既有完整基线，复用本地镜像且不重建正在运行的容器，再检查依赖和更新选中服务；恢复失败须检查诊断，不能推进 current。
 
-成功发布后需回退业务版本时，使用保留的旧完整制品和与其匹配的配置/私有环境备份，恢复配置后执行 `pnpm run deploy --env prod --artifact-dir .hai/build/docker/<previousBuildId>`。省略 --build 和 --services，以旧制品创建新的全量交付包和部署 ID，再经历锁、校验、健康验证。不要重跑已使用的旧包、手动覆盖 current 或只改镜像 tag。发布前验证数据库迁移向后兼容或准备匹配的数据备份；保留外部服务凭据与卷身份，未知状态先检查实际服务。此路径不是自动的数据恢复命令。
+成功发布后需回退业务版本时，使用保留的旧完整制品和与其匹配的配置/私有环境备份。恢复配置后，将清单中构建编号与目标旧版本匹配的制品目录赋给 `previous_deploy_artifact_dir`，再执行 `pnpm run deploy --env prod --artifact-dir "${previous_deploy_artifact_dir:?请先设置旧完整构建的制品目录}"`。省略 --build 和 --services，以旧制品创建新的全量交付包和部署 ID，再经历锁、校验、健康验证。不要重跑已使用的旧包、手动覆盖 current 或只改镜像 tag。发布前验证数据库迁移向后兼容或准备匹配的数据备份；保留外部服务凭据与卷身份，未知状态先检查实际服务。此路径不是自动的数据恢复命令。
 
 ## 请求访问策略
 
