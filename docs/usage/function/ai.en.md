@@ -90,6 +90,8 @@ The quick start covers init/close. config is a sanitized snapshot and isInitiali
 
 Chat returns a complete response while streams yield chunks. Model management and history queries follow current identity and storage capabilities.
 
+When a model uses `protocol: "responses"`, `chat` and `chatStream` send text and images in the order supplied in the user message. Images accept URLs or Base64 data URLs, and an omitted `detail` defaults to `auto`. Set `response_format` on either call for structured output. Responses maps `json_object` or `json_schema` with a supplied schema to the provider request’s `text.format`.
+
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |

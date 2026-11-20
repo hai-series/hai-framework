@@ -241,6 +241,8 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 
 单次聊天返回完整响应，流式聊天逐块消费；模型配置管理与历史查询按当前主体和存储能力执行。
 
+模型使用 `protocol: "responses"` 时，`chat` 和 `chatStream` 按用户消息原顺序发送文本和图片。图片支持 URL 或 Base64 Data URL，未填写 `detail` 时使用 `auto`。如需结构化结果，请在两种调用中传入 `response_format`。Responses 将 `json_object` 或带有 `schema` 的 `json_schema` 映射为供应商的 `text.format`。
+
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |

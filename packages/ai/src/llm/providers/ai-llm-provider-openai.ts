@@ -260,20 +260,44 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
    * 构建 Responses API 请求参数（非流式基础形状）
    *
    * 将 Chat Completions 语义映射到 Responses：messages→input、max_tokens→max_output_tokens、
-   * tools 转 Responses 工具定义；`tool_choice` 仅透传字符串枚举。
+   * response_format→text.format、tools 转 Responses 工具定义，`tool_choice` 仅透传字符串枚举。
    */
   function buildResponsesParams(
     request: ChatCompletionRequest,
     resolved: ResolvedClient,
-  ): OpenAI.Responses.ResponseCreateParamsNonStreaming {
+  ): HaiResult<OpenAI.Responses.ResponseCreateParamsNonStreaming> {
+    const { response_format: responseFormat } = request
+    let format: OpenAI.Responses.ResponseFormatTextConfig | undefined
+    if (responseFormat?.type === 'json_schema') {
+      const { json_schema: jsonSchema } = responseFormat
+      if (!jsonSchema?.schema)
+        return err(HaiAIError.INVALID_REQUEST, aiM('ai_llmResponsesSchemaRequired'))
+      const { name, schema, description, strict } = jsonSchema
+      format = {
+        type: 'json_schema',
+        name,
+        schema,
+        description,
+        strict,
+      }
+    }
+    else {
+      format = responseFormat
+    }
+
     const maxOutput = request.max_tokens ?? resolved.maxTokens
     const temperature = request.temperature ?? resolved.temperature
     const toolChoice = typeof request.tool_choice === 'string'
       ? request.tool_choice
       : undefined
-    return {
+    return ok({
       model: resolved.model,
       input: toResponsesInput(request.messages),
+      ...(format
+        ? {
+            text: { format },
+          }
+        : {}),
       ...(maxOutput != null
         ? { max_output_tokens: maxOutput }
         : {}),
@@ -292,7 +316,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         ? { tool_choice: toolChoice }
         : {}),
       stream: false,
-    }
+    })
   }
 
   return {
@@ -306,7 +330,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       try {
         // Responses API 分支：转换请求/响应形状，对调用方透明
         if (api === 'responses') {
-          const response = await client.responses.create(buildResponsesParams(request, resolved), { signal })
+          const params = buildResponsesParams(request, resolved)
+          if (!params.success)
+            return params
+          const response = await client.responses.create(params.data, { signal })
           return ok(responsesToChatResponse(response, model))
         }
 
@@ -345,9 +372,12 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
 
       // Responses API 流式分支：转发文本增量与完成事件
       if (api === 'responses') {
+        const params = buildResponsesParams(request, resolved)
+        if (!params.success)
+          throw new Error(params.error.message)
         const responsesStream = await client.responses.create(
           {
-            ...buildResponsesParams(request, resolved),
+            ...params.data,
             stream: true,
           },
           { signal },

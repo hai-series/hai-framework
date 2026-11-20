@@ -26,6 +26,8 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 
 ## LLM
 
+当模型的 `protocol` 为 `responses` 时，`chat` 和 `chatStream` 保留用户消息中 URL 或 Base64 Data URL 图片与文本的顺序。图片 `detail` 缺省为 `auto`。`response_format` 的 `json_object` 及带 `schema` 的 `json_schema` 都会转换到 Responses 请求的 `text.format`。
+
 | 方法 | 说明 |
 | --- | --- |
 | `chat(options)` | 非流式 Chat Completion |

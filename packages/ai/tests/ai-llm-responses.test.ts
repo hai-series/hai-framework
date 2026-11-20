@@ -56,7 +56,7 @@ describe('toResponsesInput', () => {
     expect(input).toContainEqual({ type: 'function_call_output', call_id: 'call-1', output: '晴' })
   })
 
-  it('多模态数组内容仅提取 text 片段', () => {
+  it('保留用户多模态数组中的文本和图片', () => {
     const messages: ChatMessage[] = [
       {
         role: 'user',
@@ -71,7 +71,13 @@ describe('toResponsesInput', () => {
     ]
     const input = toResponsesInput(messages)
     expect(input).toEqual([
-      { role: 'user', content: '看图' },
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: '看图' },
+          { type: 'input_image', image_url: 'http://x/y.png', detail: 'auto' },
+        ],
+      },
     ])
   })
 })

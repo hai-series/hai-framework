@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   ToolCall,
   ToolDefinition,
+  UserMessage,
 } from '../ai-llm-types.js'
 
 /**
@@ -98,10 +99,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+/** 按原顺序将用户的文本和图片转换为 Responses 输入内容。 */
+function toResponsesUserContent(content: UserMessage['content']): OpenAI.Responses.EasyInputMessage['content'] {
+  if (typeof content === 'string')
+    return content
+
+  const parts: OpenAI.Responses.ResponseInputMessageContentList = []
+  for (const part of content) {
+    if (part.type === 'text' && part.text) {
+      parts.push({ type: 'input_text', text: part.text })
+    }
+    else if (part.type === 'image_url') {
+      const { url, detail = 'auto' } = part.image_url
+      parts.push({ type: 'input_image', image_url: url, detail })
+    }
+  }
+  return parts.length > 0
+    ? parts
+    : ''
+}
+
 /**
  * 将框架消息列表转换为 Responses API 的 input 项
  *
- * - system / developer / user：映射为 EasyInputMessage
+ * - system / developer / user：映射为 EasyInputMessage，保留用户消息中的文本和图片顺序
  * - assistant：文本映射为 assistant 消息；`tool_calls` 映射为 function_call 项
  * - tool：映射为 function_call_output 项（按 tool_call_id 关联）
  *
@@ -145,7 +166,13 @@ export function toResponsesInput(messages: ChatMessage[]): ResponseInput {
     }
 
     // system / developer / user——仅映射 EasyInputMessage 支持的角色（跳过遗留 function 角色）
-    if (message.role === 'user' || message.role === 'system' || message.role === 'developer') {
+    if (message.role === 'user') {
+      items.push({
+        role: message.role,
+        content: toResponsesUserContent(message.content),
+      })
+    }
+    else if (message.role === 'system' || message.role === 'developer') {
       items.push({
         role: message.role,
         content: contentToText(message.content),

@@ -94,6 +94,8 @@ function value<T>(result: HaiResult<T>): T {
 
 通常対話は完全な応答、ストリームは断片を返します。モデル管理と履歴は主体・保存先の条件に従います。
 
+モデルの `protocol` が `"responses"` の場合、`chat` と `chatStream` はユーザーメッセージのテキストと画像を指定順に送信します。画像には URL または Base64 の Data URL を使用でき、`detail` の既定値は `auto` です。構造化出力を要求するには `response_format` を指定します。`json_object` または `schema` を指定した `json_schema` が、プロバイダーへのリクエストの `text.format` に変換されます。
+
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
