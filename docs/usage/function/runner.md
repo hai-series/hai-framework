@@ -30,9 +30,11 @@ try {
   if (!started.success)
     throw new Error(started.error.message) // 停止启动，不提交任务。
 
+  // 将 report.v1 绑定到当前节点的报表处理器，返回注销函数；同名处理器重复注册失败。
   const registration = runner.register('report.v1', async (input, context) => { // 成功返回注销函数。
     if (typeof input !== 'string')
       throw new TypeError('Expected report title') // 处理器校验业务输入。
+    // 以当前任务的执行上下文持久写入 phase: ready，首次事件序号为 1；写入失败时处理器停止。
     const event = await context.emit({ phase: 'ready' }) // 成功后事件序号为 1，可从另一节点读取。
     if (!event.success)
       throw new Error(event.error.message) // 写事件失败时结束处理器。
@@ -42,6 +44,7 @@ try {
     throw new Error(registration.error.message) // 重复注册会失败。
 
   const scope = { tenantId: 'studio', userId: 'alice' } // 示例主体，生产来自服务端认证。
+  // 以 studio/alice 身份提交 report.v1，持久键为 report-nov。回执含任务 ID 和入队状态；未接受时不轮询。
   const accepted = await runner.submit({
     scope,
     kind: 'report.v1',
@@ -54,6 +57,7 @@ try {
   const deadline = Date.now() + 5_000 // 本示例最多等待五秒。
   let completed = false // 仅在读取到成功终态时设为 true。
   while (Date.now() < deadline) {
+    // 用刚收到的任务 ID 和同一身份读取持久状态。查询成功后仍需根据 status 区分已完成和业务失败。
     const task = await runner.get(scope, accepted.data.id) // 同一主体下读取当前状态与结果。
     if (!task.success)
       throw new Error(task.error.message) // 找不到或读取失败时终止示例。
@@ -68,6 +72,7 @@ try {
   }
   if (!completed)
     throw new Error('Timed out waiting for the report') // 等待超时由示例报告，Runner 会在退出阶段尝试取消本节点任务。
+  // 调用 register 返回的无参注销函数，移除当前节点的 report.v1 处理器，无业务返回值。
   registration.data() // 注销当前处理器，返回 undefined。
 }
 finally {
@@ -196,10 +201,15 @@ submit 返回的是共享数据库中的执行回执。下图将“已排队”�
 
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
+// 提交 studio/alice 的月报，成功拿到执行回执；同业务重试使用 report-nov，状态未确定时保留错误。
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+// 按相同主体、任务种类和持久键查原执行；无匹配时成功返回 undefined。
 const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+// 读取该主体在提交回执中的任务状态及可用结果；无权访问或读取失败会返回错误。
 const current = value(await runner.get(scope, accepted.id)) // current persisted state
+// 读取同一任务从游标 0 之后的最多 20 条有序事件，暂无数据是空数组。
 const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+// 对同一任务请求取消。返回实际执行状态，运行中任务可能先进入 cancelling。
 const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
 ```
 
@@ -269,6 +279,7 @@ import { core } from '@h-ai/core' // 记录未确认的清理结果。
 import { runner } from '@h-ai/runner' // 需在实际执行节点上运行。
 
 const registration = runner.register('copy.v1', async (_input, context) => { // 返回注销函数，处理器只运行在拥有任务租约的节点。
+  // 在当前任务环境中启动下方命令。成功 data 为容器进程句柄，启动失败时不读取文件。
   const launched = await context.start({
     command: '/bin/sh', // 固定镜像内的可信入口。
     args: ['-ec', 'cat /input/source.txt > /output/result.txt; printf ready; read -r done || true'], // 文件就绪后等待 stdin 关闭。
@@ -296,6 +307,7 @@ const registration = runner.register('copy.v1', async (_input, context) => { // 
   finally {
     const stopped = await process.close() // 成功时确认容器已移除，data 为 undefined。
     if (!stopped.success)
+      // 把容器清理未确认的错误码写入 ERROR 日志，不返回业务数据。
       core.logger.error('Container cleanup unconfirmed', { code: stopped.error.code }) // Runner 在处理器结束后再次核对清理结果。
   }
 })
@@ -314,6 +326,7 @@ import type { RunnerContext } from '@h-ai/runner'
 
 async function readWorkspace(context: RunnerContext) {
   // context 由 Runner 传入已登记的任务处理器。
+  // 在当前任务环境中启动下方命令。成功 data 为容器进程句柄，启动失败时不读取文件。
   const launched = await context.start({
     command: '/bin/sh',
     args: ['-c', 'read -r done'],
@@ -322,6 +335,7 @@ async function readWorkspace(context: RunnerContext) {
   if (!launched.success)
     throw new Error(launched.error.message)
   // 输入允许读取的最大字节数，得到当前普通文件的 Base64 映射。
+  // 从刚启动的进程读取最多 1 MiB 工作区快照。成功返回相对路径到 Base64 内容的映射，读取超限或失败时保留错误。
   const files = await launched.data.snapshot(1024 * 1024)
   if (!files.success)
     throw new Error(files.error.message)
@@ -340,6 +354,8 @@ import type { RunnerScope } from '@h-ai/runner' // 由服务端认证或可信�
 import { runner } from '@h-ai/runner' // 连接共用数据库的实例。
 
 async function sendControl(scope: RunnerScope, parentId: string) {
+  // 用可信主体和父任务 ID 提交 worker.control 状态查询；成功返回 queued 回执。
+  // 父任务已结束、归属不符或校验失败时，不创建控制任务。
   return runner.submit({
     scope,
     parentId,
@@ -349,6 +365,8 @@ async function sendControl(scope: RunnerScope, parentId: string) {
 }
 
 function registerCopyPool() {
+  // 为 docs 环境的 copy.v1 登记 docs-copy 池，以 1 个就绪实例为目标，最多 2 个运行和 3 个实例。
+  // 成功返回注销函数；处理器未注册或容量无效时返回失败。
   return runner.registerWarmPool({
     key: 'docs-copy',
     kind: 'copy.v1',
@@ -360,6 +378,8 @@ function registerCopyPool() {
 }
 
 async function queuePrewarmedCopy(scope: RunnerScope) {
+  // 为此主体提交使用 docs 环境的 copy.v1，业务输入为 null，要求预热且同组并发上限为 2。
+  // 成功返回任务回执；排队后由执行节点分配容器，提交失败不表示容器已启动。
   return runner.submit({
     scope,
     kind: 'copy.v1',

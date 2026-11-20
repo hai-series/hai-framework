@@ -12,10 +12,15 @@ import { datapipe } from '@h-ai/datapipe'
 const rawText = '<p>One. Two.</p>'
 
 // The builder registers three steps and returns a result when run on the input.
+// Create an empty pipeline builder without arguments. The following calls register its steps in order.
 const result = await datapipe.pipeline()
+  // Register HTML tag removal and return the builder. The run result reports a cleaning failure.
   .clean({ removeHtml: true }) // Pass options. The builder will strip tags from the text.
+  // Register a lowercase conversion of the cleaned text and return the builder.
   .transform(text => text.toLowerCase()) // Pass a callback that returns the next text.
+  // Register sentence splitting with a limit of 80 and return the builder.
   .chunk({ mode: 'sentence', maxSize: 80 }) // Pass the splitting method and limit.
+  // Run the steps on the HTML above. Success returns text and chunks. Read error if a step fails.
   .run(rawText) // Pass the source text. On success, data contains { text, chunks }.
 
 if (!result.success)
@@ -47,6 +52,7 @@ Extract text from sources such as HTML and optionally remove URLs or extra white
 #### Scenario: Extract and clean text
 
 ```ts
+// Strip the tags and collapse whitespace. Success returns 'Hello Ada'. Read error if cleaning fails.
 const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
 if (!cleaned.success)
   throw new Error(cleaned.error.message)
@@ -85,6 +91,7 @@ Choose word, sentence, paragraph or Markdown boundaries, then limit chunk size. 
 #### Scenario: Split documents by size
 
 ```ts
+// Split into one word per chunk. Success returns three chunks in input order, preserving separator spaces. Read error on failure.
 const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
 if (!chunks.success)
   throw new Error(chunks.error.message)
@@ -144,11 +151,17 @@ Chained calls register steps; run(text) executes them. This example cleans, tran
 Text and chunks are separate state: transform changes text, chunk snapshots that text into chunks, and chunkTransform changes existing chunks. A later text transform does not rebuild them. Failure stops later steps; without chunk, chunks remains empty.
 
 ```ts
+// Create a reusable builder with no arguments. The following calls register steps for later execution.
 const pipeline = datapipe.pipeline()
+  // Register HTML tag removal and return the builder. The run result reports a cleaning failure.
   .clean({ removeHtml: true })
+  // Register a lowercase conversion of the cleaned text and return the builder.
   .transform(text => text.toLowerCase())
+  // Register splitting into at most one word per chunk and return the builder.
   .chunk({ mode: 'word', maxSize: 1 })
+  // Register removal of the beta chunk and return the builder.
   .chunkTransform(parts => parts.filter(part => part.content.trim() !== 'beta'))
+// Run the builder on this HTML. Success returns lowercase text and the filtered alpha and gamma chunks. Read error on failure.
 const result = await pipeline.run('<p>ALPHA BETA GAMMA</p>')
 if (!result.success)
   throw new Error(result.error.message)

@@ -52,7 +52,9 @@
 4. 按需添加下面两个 snippet。右侧面板收到当前文件和可为空的选区，可以用 `reveal` 跳到当前文件的标注。浮动操作收到非空选区，可用 `openInspector` 打开右栏。示例沿用步骤 1 定义的 `source`，实际应用将按钮文案接入自身翻译字典。
 
 ```svelte
+<!-- 传入 source，显示文件和编辑区，向插槽传递当前文件与选区操作。 -->
 <CodeWorkspace {source}>
+  <!-- 接收当前文件、选区和定位函数；下方按钮用标注的 range 滚动到对应位置。 -->
   {#snippet inspector({ file, selection, reveal })}
     <p>{file.node.name}</p>
     {#each file.annotations ?? [] as annotation (annotation)}
@@ -60,6 +62,7 @@
     {/each}
     {#if selection}<pre>{selection.text}</pre>{/if}
   {/snippet}
+  <!-- 接收当前选区的检查器开关，点击下方按钮时展示选区详情。 -->
   {#snippet selectionActions({ openInspector })}
     <button type="button" onclick={openInspector}>查看选区</button>
   {/snippet}
@@ -86,10 +89,14 @@
   const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
 </script>
 
+<!-- 以经营指标标识和四列布局渲染卡片栅格。 -->
 <DashboardGrid label="经营指标" columns={4}>
+  <!-- 显示收入数值、单位及较上月上升的趋势。 -->
   <MetricCard title="收入" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="较上月" />
 </DashboardGrid>
+<!-- 以收入与成本为标题包住下方报表图。 -->
 <ReportCard title="收入与成本">
+  <!-- 用 data 的月份作横轴，按收入和成本两列画分组柱。 -->
   <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
 </ReportCard>
 ```
@@ -121,8 +128,11 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
   let name = $state('')
 </script>
 
+<!-- 设置两列及 6rem 左侧标签宽度，为下方字段排版。 -->
 <FormLayout columns={2} labelPosition="left" labelWidth="6rem">
+  <!-- 用应用翻译提供标签，标签关联 id=name 的输入框。 -->
   <FormField label={() => m.userName()} for="name">
+    <!-- 把必填字段绑定到 name，用户编辑时同步更新该状态。 -->
     <Input id="name" bind:value={name} required />
   </FormField>
 </FormLayout>
@@ -164,6 +174,7 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
   // 保存失败：notifyError(result.error, m.saveFailed())
 </script>
 
+<!-- 挂载提示容器，显示上方通知函数发布的反馈。 -->
 <ToastContainer />
 ```
 

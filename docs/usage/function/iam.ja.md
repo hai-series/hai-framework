@@ -23,33 +23,43 @@ import { reldb } from '@h-ai/reldb'
 // 基础密码认证不需要安装 Reach 或 ldapts。
 async function example() {
   try {
+    // プロジェクトの data.db を SQLite で開く。成功時データなし、失敗時は IAM の準備を止める。
     const db = await reldb.init({ type: 'sqlite', database: './data.db' })
     if (!db.success)
       return db
+    // 開発用ログインのプロセス内キャッシュを初期化する。成功時データなし、共有バックエンドが必須なら失敗。
     const cached = await cache.init({ type: 'memory' })
     if (!cached.success)
       return cached
+    // 準備済みの DB とキャッシュで IAM の既定値を使う。成功時データなし、失敗時は登録へ進まない。
     const initialized = await iam.init({})
     if (!initialized.success)
       return initialized
+    // 例の demo とパスワードで登録する。成功時は登録結果、名前の重複やパスワード規則違反は失敗。
     const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
     if (!registered.success)
       return registered
+    // 登録した demo と同じパスワードでログインする。成功時はユーザーとトークン、資格情報が不正なら失敗。
     const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
     if (!login.success)
       return login
+    // ログインで受け取ったアクセストークンを検証する。成功時は現在の認可を含むセッション、無効・期限切れは失敗。
     return await iam.auth.verifyToken(login.data.tokens.accessToken)
   }
   finally {
     // 应用关闭时按依赖的反向顺序释放。
+    // 引数なしで IAM の実行状態を終了する。キャッシュと DB はホストが別に閉じる。
     await iam.close()
+    // 引数なしでインメモリキャッシュとデータを解放する。キャッシュが解放結果を返す。
     await cache.close()
+    // 最後に data.db の接続を引数なしで解放する。解放結果はログイン結果とは別に返る。
     await reldb.close()
   }
 }
 
 const result = await example()
 if (!result.success)
+  // エラーコードを ERROR ログに出し、パスワードやトークンは含めない。
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
@@ -92,6 +102,7 @@ DB とキャッシュを先に準備します。公開設定は認証画面の�
 #### 利用例：認証サービスと公開方針
 
 ```ts
+// 引数なしで統合済みの公開認証ポリシーを読む。機密設定は含まず、失敗は value が例外にする。
 const publicSettings = value(await iam.getPublicConfig()) // merged public IAM settings
 // Read only the returned public policy; never return iam.config as a public response.
 ```
@@ -259,31 +270,57 @@ RBAC 有効の隔離開発データと、他のロールを持たないテスト
 
 ```ts
 async function reviewReader(userId: string) {
+  // docs:read の API 権限を作り、ID を受け取る。コード重複や書き込み失敗は value が例外にする。
   const permission = value(await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' }))
+  // 権限なしの docs_reader を作る。成功時は役割 ID、コード衝突は失敗。
   const role = value(await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] }))
+  // 作成した二つの ID で docs:read を docs_reader に関連付ける。成功時データなし。
   value(await iam.authz.assignPermissionToRole(role.id, permission.id)) // undefined
+  // 指定ユーザーに新しい役割を割り当てる。成功時データなし、書き込み失敗は value が例外にする。
   value(await iam.authz.assignRole(userId, role.id)) // undefined
+  // 同じユーザーの役割を、作成した一つだけに置き換える。成功時データなし。
   value(await iam.authz.syncRoles(userId, [role.id])) // replaces the complete role set
+  // このユーザーの docs:read を確認する。この例は true、false は拒否、照会エラーは value が例外にする。
   value(await iam.authz.checkPermission(userId, 'docs:read')) // true (RBAC enabled)
+  // ユーザー ID で有効な役割・権限コードを読む。docs_reader と docs:read が含まれる。
   value(await iam.authz.getUserAuthorization(userId)) // role and permission codes
+  // 同じユーザー ID で役割の記録を読む。割り当てた docs_reader が含まれる。
   value(await iam.authz.getUserRoles(userId)) // Role[]
+  // ユーザー ID で有効な権限記録を読む。この例には docs:read が入る。
   value(await iam.authz.getUserPermissions(userId)) // Permission[]
+  // このユーザー一件の ID 配列を渡す。ユーザー ID をキー、役割配列を値とする Map が返る。
   value(await iam.authz.getUserRolesForMany([userId])) // Map keyed by user ID
+  // 作成した役割 ID の配列で権限を読む。役割 ID から権限配列への Map が返る。
   value(await iam.authz.getRolePermissionsForMany([role.id])) // Map keyed by role ID
+  // 役割の人数をまとめて読み、現在の役割 ID で取り出す。分離した例では一人。
   value(await iam.authz.getRoleUserCounts([role.id])).get(role.id) // 1 in this isolated example
+  // 作成した役割を ID で照会する。記録がなければ null。
   value(await iam.authz.getRole(role.id)) // the created Role
+  // 固定コード docs_reader から同じ役割を探す。該当しなければ null。
   value(await iam.authz.getRoleByCode('docs_reader')) // same Role
+  // 役割の最初のページを最大 20 件取得する。items とページ情報が返る。
   value(await iam.authz.getAllRoles({ page: 1, pageSize: 20 })) // role page
+  // この役割の表示名を Document readers に変更し、更新済み記録を返す。
   value(await iam.authz.updateRole(role.id, { name: 'Document readers' })) // updated Role
+  // 作成した権限を ID で照会する。存在しなければ null。
   value(await iam.authz.getPermission(permission.id)) // the created Permission
+  // 固定コード docs:read で同じ権限を探す。見つからなければ null。
   value(await iam.authz.getPermissionByCode('docs:read')) // same Permission
+  // 権限の先頭ページを最大 20 件読む。items とページ情報が返る。
   value(await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })) // permission page
+  // 役割 ID に関連付いた権限を読む。docs:read が含まれる。
   value(await iam.authz.getRolePermissions(role.id)) // includes docs:read
+  // この権限の機微操作として docs:export を保存する。成功時データなし。
   value(await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])) // undefined
+  // docs:export に絞って有効な機微操作を読む。再認証が有効ならこの規則が入り、該当なしは空配列。
   value(await iam.authz.getSensitiveOperations('docs:export')) // configured rule when reauthentication is enabled
+  // 役割と権限の関連だけを解除する。成功時データなし、定義は残る。
   value(await iam.authz.removePermissionFromRole(role.id, permission.id)) // undefined
+  // 指定ユーザーから例の役割を取り消す。成功時データなし。
   value(await iam.authz.removeRole(userId, role.id)) // undefined
+  // 例で作成した役割を ID で削除する。成功時データなし、失敗は value が例外にする。
   value(await iam.authz.deleteRole(role.id)) // undefined
+  // 例で作成した権限を ID で削除する。成功時データなし、失敗は value が例外にする。
   value(await iam.authz.deletePermission(permission.id)) // undefined
 }
 ```
@@ -352,19 +389,29 @@ options は検証後に信頼済みサーバーで作成します。低層 API �
 import type { CreateSessionOptions } from '@h-ai/iam'
 
 async function manageTrustedSession(options: CreateSessionOptions, refreshToken: string) {
+  // ホストが信頼した設定から Session を作る。保存失敗は value が例外にする。
   const created = value(await iam.session.create(options)) // Session, not TokenPair
   const token = created.accessToken
+  // 作成したアクセストークンでセッションを読む。存在しなければ null。
   const found = value(await iam.session.get(token)) // Session or null
+  // 同じアクセストークンをセッション層で検証する。成功時は Session、存在しないか期限切れなら失敗。
   const verified = value(await iam.session.verifyToken(token)) // Session; missing/expired fails
+  // 検証したバージョンを条件にこのセッションの theme を dark にする。成功時データなし、版競合は失敗。
   value(await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)) // undefined
+  // 対象ユーザーのセッションに検証済みの役割・権限の写しを反映する。成功時データなし、失敗は value が例外にする。
   value(await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })) // undefined
+  // 元のアクセストークンでこのセッションを失効させる。成功時データなし、保存失敗は value が例外にする。
   value(await iam.session.delete(token)) // undefined; revokes this session
+  // 設定内のユーザー ID で残りのセッションを失効させ、件数を返す。
   value(await iam.session.deleteByUserId(options.userId)) // remaining revoked count
 }
 
 async function rotateThenRevoke(refreshToken: string) {
+  // 渡されたリフレッシュトークンで新しい二つのトークンを得る。使用済み・期限切れは失敗。
   const pair = value(await iam.session.refresh(refreshToken)) // new TokenPair
+  // 新しいリフレッシュトークンを失効させ、再更新を止める。成功時データなし、アクセストークンは別に扱う。
   value(await iam.session.revokeRefresh(pair.refreshToken)) // undefined; access remains valid until expiry/revocation
+  // 同じ更新で発行したアクセストークンのセッションを失効させる。成功時データなし。
   value(await iam.session.delete(pair.accessToken)) // undefined
 }
 ```

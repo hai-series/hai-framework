@@ -26,20 +26,25 @@ import { storage } from '@h-ai/storage'
 
 export function startApi(closeApp: () => Promise<void>) {
   // 用三个模块的契约生成 HTTP 路由契约。
+  // Compose the supplied IAM, storage, and AI contracts. Returns a single route contract without starting a server.
   const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
   // 将已初始化的业务模块绑定为实现；存储检查所有 key 的归属。
   const procedures = {
+    // Bind the initialized IAM instance to procedures for the IAM routes. The procedures surface authentication and permission failures.
     iam: createIamProcedures({ iam }),
+    // Bind storage routes to the initialized storage service. The supplied authorization check rejects keys outside the session user's prefix.
     storage: createStorageProcedures({
       storage,
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
+    // Bind the initialized AI service to the AI request procedures. Calls return results from that service.
     ai: createAiProcedures({ ai }),
   }
 
   // 使用契约、实现和 HTTP 设置构建 App。
+  // Build an HTTP app from the contract and its procedures. The supplied HTTP paths register the API, OpenAPI JSON, and documentation.
   const app = serv.createApp({
     contract,
     procedures,
@@ -52,10 +57,13 @@ export function startApi(closeApp: () => Promise<void>) {
   })
 
   // 读取已加载的监听配置，返回包含地址和 close() 的句柄。
+  // Read validated serving settings from the loaded serv config. Missing settings throw before opening a listener.
   const { server } = core.config.getOrThrow<ServConfig>('serv')
+  // Listen for this HTTP app on the configured host and port. Returns a handle with the bound address and cleanup. Bind errors reject.
   return serv.listen(app, {
     host: server.host,
     port: server.port,
+    // When listening succeeds, log the port reported by the listener.
     onListening: info => core.logger.info('API service listening', { port: info.port }),
     onClose: closeApp,
   })
@@ -130,6 +138,7 @@ server:
 import type { ServHttpApp } from '@h-ai/serv'
 
 export function createFetchAdapter(app: ServHttpApp) {
+  // Adapt the supplied Serv HTTP app to a fetch handler. Host fetch calls are routed through the app.
   return { fetch: serv.toFetch(app) }
 }
 ```
@@ -175,9 +184,12 @@ import { createIamProcedures } from '@h-ai/serv/features/iam'
 export function createAuthApp() {
   if (!iam.isInitialized)
     throw new Error('Initialize IAM before creating the HTTP application')
+  // Build the route contract from the built-in IAM contract.
   const contract = apiContract.create({ iam: apiContract.iam })
+  // Create a Serv app under /api/v1 with IAM auth and a 30-day refresh cookie. The returned app has no public docs route.
   return serv.createApp({
     contract,
+    // Bind the initialized IAM service's handlers to the contract. Requests without required authorization fail.
     procedures: { iam: createIamProcedures({ iam }) },
     iam,
     http: { apiPrefix: '/api/v1', docs: false, openapi: false },
@@ -231,15 +243,21 @@ function createAuthenticationExamples(
   verifyToken: (token: string) => Promise<HaiResult<ServSession>>,
   resolveTenant: (userId: string) => Promise<string | null>,
 ) {
+  // Compose the built-in IAM routes into the app contract.
   const contract = apiContract.create({ iam: apiContract.iam })
+  // Create HTTP procedures backed by the initialized IAM service.
   const procedures = { iam: createIamProcedures({ iam }) }
+  // Build the app with IAM's built-in verification and default refresh cookie settings.
   const defaultApp = serv.createApp({ contract, procedures, iam, refreshCookie: {} })
+  // Build the app using the caller-supplied token verifier.
   const customTokenApp = serv.createApp({ contract, procedures, verifyToken })
 
+  // Build the app with the custom tenant-aware context factory below.
   const tenantApp = serv.createApp({
     contract,
     procedures,
     createContext: async (input) => {
+      // Parse the incoming request context, including its presented access token when available.
       const base = serv.parseRequestContext(input)
       const result = await verifyToken(base.accessToken ?? '')
       const session = result.success ? result.data : undefined
@@ -268,17 +286,26 @@ import { z } from 'zod'
 
 const contract = {
   users: {
+    // Describe POST /users/update with a route builder.
     update: apiContract.route({ method: 'POST', path: '/users/update' })
+      // Require a string id and nonempty name. Invalid request input fails before the handler runs.
       .input(z.object({ id: z.string(), name: z.string().min(1) }))
+      // Declare a HaiResult response whose success data has id and name. The schema also permits a framework error.
       .output(apiContract.haiResultSchema(z.object({ id: z.string(), name: z.string() }))),
   },
 }
 const procedures = serv
+  // Start a procedure builder for this contract.
   .implement(contract)
+  // Set the handler context type so it can access Serv request state.
   .context<ServContext>()
+  // Select the users.update procedure for authorization and implementation.
   .route('users.update')
+  // Require users.write before invoking the handler. A caller without permission is rejected.
   .permission('users.write')
+  // Bind the handler and wrap its validated input as successful data. It does not persist an update.
   .handle(({ input }) => ok(input)) // 演示返回已校验输入，实际更新由应用服务执行。
+  // Finish the procedure map for registration with the HTTP app.
   .build()
 ```
 
@@ -306,24 +333,38 @@ import { z } from 'zod'
 const widget = z.object({ name: z.string(), ownerId: z.string() })
 const widgetContract = {
   widgets: {
+    // Define the read-only GET /widgets route.
     list: apiContract.route({ method: 'GET', path: '/widgets' })
+      // Give it a HaiResult output with an array of widgets on success.
       .output(apiContract.haiResultSchema(z.array(widget))),
+    // Define POST /widgets for creation.
     create: apiContract.route({ method: 'POST', path: '/widgets' })
+      // Require a nonempty name on the request. Invalid input is rejected.
       .input(z.object({ name: z.string().min(1) }))
+      // Set its output to HaiResult with one widget on success.
       .output(apiContract.haiResultSchema(widget)),
   },
 }
 const procedures = serv
+  // Start mapping implementations to the widget contract.
   .implement(widgetContract)
+  // Select ServContext as the handler context type.
   .context<ServContext>()
+  // Bind widgets.list to a success result with an empty array.
   .route('widgets.list', () => ok([]))
+  // Select widgets.create for the following guards and handler.
   .route('widgets.create')
+  // Require widgets.write before running the handler. Missing permission denies access.
   .permission('widgets.write')
+  // Also require the editor role. A caller without the role is denied.
   .role('editor')
+  // Bind the create handler using the validated body and authorized session.
   .handle(({ input, context }) => {
     // guard 通过后 session 在类型上已是非空，不需要 `!`。
+    // Return success data with the supplied name and actual session user ID.
     return ok({ name: input.name, ownerId: context.session.userId })
   })
+  // Finish the procedure map for use by createApp.
   .build()
 ```
 
@@ -372,12 +413,16 @@ import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 
+// Compose the built-in IAM HTTP contract.
 const contract = apiContract.create({ iam: apiContract.iam })
+// Bind the initialized IAM service to that contract's procedures.
 const procedures = { iam: createIamProcedures({ iam }) }
+// Resolve the development policy with one allowed web origin and capacitor://localhost as native origin.
 const security = serv.createRuntimeSecurityPolicy({
   environment: 'development', corsOrigin: 'https://app.example.com', nativeOrigins: 'capacitor://localhost',
 })
 
+// Build the HTTP app with the IAM service, API prefix, and refresh-cookie policy below.
 const app = serv.createApp({
   contract,
   procedures,
@@ -392,6 +437,7 @@ const app = serv.createApp({
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
       isRequest: request =>
         request.headers.get('x-client-platform') === 'capacitor'
+        // Check the presented Origin against the configured native origins. Missing or unlisted origins return false.
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
@@ -405,6 +451,7 @@ const app = serv.createApp({
 import { apiClient } from '@h-ai/api-client'
 
 // 默认存储即 httpOnly cookie，refreshPath 默认 /auth/refresh，无需额外配置。
+// Configure the client for the HTTPS API and default browser credential storage. The initialization result reports a failed configuration.
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
@@ -434,13 +481,18 @@ import { iam } from '@h-ai/iam'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 
 function createTenantApp(resolveTenant: (userId: string) => Promise<string | null>) {
+  // Compose the IAM routes into the app contract.
   const contract = apiContract.create({ iam: apiContract.iam })
+  // Bind the supplied ready IAM service to its HTTP procedures.
   const procedures = { iam: createIamProcedures({ iam }) }
+  // Build an auth context factory with IAM verification. Valid request tokens supply session claims.
   const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+  // Build the HTTP app with a context factory that also resolves tenant information.
   return serv.createApp({
     contract,
     procedures,
     createContext: async (input) => {
+      // Run the auth context factory on the current request. The result has a session only when authentication succeeded.
       const context = await baseContext(input)
       return {
         ...context,
@@ -476,8 +528,10 @@ resolveTenant 由应用根据已认证 userId 查询，返回可信租户编号�
 #### 场景：控制访问、跨域与静态资源
 
 ```ts
+// Resolve the production policy using this one web origin. The known origin is allowed and the refresh cookie defaults to secure.
 const policy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
 // policy.allowOrigin restricts requests to the explicit origin; secureRefreshCookie is enabled
+// Create CORS middleware for the exact app origin with credentials enabled. A mismatched origin gets no allow-origin grant.
 const cors = serv.cors({ origin: 'https://app.example.com', credentials: true }) // ServMiddleware
 ```
 
@@ -496,10 +550,14 @@ import { storage } from '@h-ai/storage'
 import { z } from 'zod'
 
 const contract = {
+  // Define GET /ping and declare a HaiResult response whose success data is a string.
   ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),
 }
+// Start mapping the ping contract with ServContext for the handler.
 const procedures = serv.implement(contract).context<ServContext>()
+  // Bind ping to a handler returning the successful string pong.
   .route('ping', () => ok('pong'))
+  // Build the final procedure map for app registration.
   .build()
 
 const requestMetrics: ServMiddleware = async (c, next) => {
@@ -508,12 +566,14 @@ const requestMetrics: ServMiddleware = async (c, next) => {
   c.header('x-response-time-ms', String(Date.now() - startedAt))
 }
 
+// Build an app under /api/v1 with the ping procedure and the scoped middleware below.
 const app = serv.createApp({
   contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
   middlewares: [
     {
+      // Allow credentialed requests from the configured app origin and expose the listed transport and request headers.
       middleware: serv.cors({
         origin: origin => origin === 'https://app.example.com',
         credentials: true,
@@ -531,6 +591,7 @@ const app = serv.createApp({
     },
     {
       path: '/assets/*',
+      // Serve PNG assets from the initialized storage service under /assets/. Requests outside the key or content-type allowlists are rejected.
       middleware: serv.storageAssets({
         storage,
         pathPrefix: '/assets/',
@@ -593,16 +654,22 @@ const app = serv.createApp({
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
+// Read en-US from the request locale header. An unavailable locale uses the supported fallback.
 const locale = serv.resolveRequestLocale(new Headers({ 'x-hai-locale': 'en-US' })) // 'en-US'
+// Validate the Order title under this locale. Success contains the parsed object. Failure contains localized issues.
 const checked = serv.validateInputOrFail(z.object({ title: z.string().min(1) }), { title: 'Order' }, locale)
 if (!checked.success)
   throw new Error(checked.error.message)
 checked.data // { title: 'Order' }
+// Resolve the forbidden message key in en-US for safe user-facing text.
 const denied = serv.m('serv_errorForbidden', { locale }) // localized safe text
 const contract = {
+  // Define the GET /ping procedure.
   ping: apiContract.route({ method: 'GET', path: '/ping' })
+    // Declare a HaiResult response with string success data.
     .output(apiContract.haiResultSchema(z.string())),
 }
+// Generate OpenAPI for the local contract with the Orders title and version 1.0.0.
 const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
 ```
 
@@ -644,7 +711,9 @@ import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
 
 function createAudioApp(callbacks: Pick<ServAudioConfig, 'verifyTicket' | 'authorize' | 'onSessionEnd'>) {
+  // Build a Serv app binding audio to the ready AI service and supplied security and cleanup callbacks. Invalid tickets or denied requests cannot open a session.
   return serv.createApp({
+    // Use an empty RPC contract because this example installs the audio endpoint only.
     contract: apiContract.create({}),
     procedures: {},
     audio: { ai, ...callbacks },
@@ -683,23 +752,31 @@ import { crypto } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
+// Initialize crypto before creating the encrypted transport. An error stops setup.
 const ready = await crypto.init()
 if (!ready.success)
   throw new Error(ready.error.message)
+// Parse the configured server key ring. Success yields the active and retained keys. Invalid config stops setup.
 const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
+// Connect to the local Redis service at port 6379 for shared transport state. A connection failure stops startup.
 const connected = await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 if (!connected.success)
   throw new Error(connected.error.message)
 
 const contract = {
+  // Define GET /ping and its HaiResult response with string success data.
   ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),
 }
+// Start mapping the ping contract using ServContext.
 const procedures = serv.implement(contract).context<ServContext>()
+  // Bind ping to the successful pong response.
   .route('ping', () => ok('pong'))
+  // Build the procedure map before mounting it.
   .build()
 
+// Build the API app under /api/v1 with the prepared transport. Transport errors fail closed.
 const app = serv.createApp({
   contract,
   procedures,
@@ -708,6 +785,7 @@ const app = serv.createApp({
     crypto,
     serverKeyRing: ring.data,
     // 默认密钥交换端点为 /api/v1/_hai/key-exchange。
+    // Use the connected Redis cache for transport keys with a 3,600-second TTL.
     keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -721,6 +799,7 @@ const app = serv.createApp({
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
+// Initialize the client for the HTTPS service and supplied crypto transport. The error is thrown below if setup fails.
 const ready = await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: { crypto },
@@ -754,19 +833,24 @@ import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 
 // 沿用前一服务端示例已建立的 contract、procedures，并已初始化 Core、Cache、Crypto。
+// Parse the server key ring assembled from the environment. Invalid data aborts setup.
 const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const serverKeyRing = ring.data
+// Create the transport key store backed by the initialized cache.
 const keyStore = crypto.transport.createKeyStore({ cache })
+// Read the validated serv configuration. Missing serving settings throw.
 const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
 
+// Build the app with the loaded HTTP and transport settings and the existing procedures.
 const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
   middlewares: [
     {
+      // Create CORS middleware from the configured origin, credentials, and request and response header lists.
       middleware: serv.cors({
         origin: servConfig.cors.origin,
         credentials: servConfig.cors.credentials,
@@ -814,9 +898,12 @@ import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
 
+// Compose the built-in feedback routes into the app contract.
 const contract = apiContract.create({ feedback: apiContract.feedback })
+// Build the request context factory using the initialized IAM token verifier.
 const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 const procedures = {
+  // Bind the initialized feedback service and scope resolver. A request outside a resolved scope cannot access those reports.
   feedback: createFeedbackProcedures({
     feedback,
     resolveContext: context => context.scopeId
@@ -824,10 +911,12 @@ const procedures = {
       : null,
   }),
 }
+// Build the feedback app with the procedure map and a request context carrying a fixed product scope.
 const app = serv.createApp({
   contract,
   procedures,
   createContext: async input => ({
+    // Resolve the authenticated context for the current request before adding the configured scope ID.
     ...await authenticate(input),
     scopeId: 'configured-product'
   }),
@@ -900,24 +989,35 @@ const CreateWidgetSchema = z.object({
 })
 const contract = {
   widgets: {
+    // Describe POST /widgets with a route builder.
     create: apiContract.route({ method: 'POST', path: '/widgets' })
+      // Require string title and slug fields. Malformed bodies fail before the handler.
       .input(z.object({ title: z.string(), slug: z.string() }))
+      // Declare a HaiResult response whose success data follows the stricter schema.
       .output(apiContract.haiResultSchema(CreateWidgetSchema)),
   },
 }
+// Start mapping the contract using ServContext for authorization and locale.
 const procedures = serv.implement(contract).context<ServContext>()
+  // Select the widgets.create route.
   .route('widgets.create')
+  // Require widgets.write before invoking the handler. Missing permission denies access.
   .permission('widgets.write')
+  // Bind app-specific validation and the demonstration result to this guarded route.
   .handle(({ input, context }) => {
+    // Validate input with the stricter schema and current request locale. An invalid result is returned unchanged.
     const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
     if (!validated.success)
       return validated
     if (validated.data.slug === 'admin') {
+      // Return a forbidden result for the reserved admin slug. Resolve its message in the request locale.
       return err(HaiCommonError.FORBIDDEN, serv.m('serv_errorForbidden', { locale: context.locale }))
     }
     // 演示返回已验证的数据；真实应用在此调用 Widget 服务写入。
+    // Wrap validated data as success without writing a widget.
     return ok(validated.data)
   })
+  // Finish the procedure map for mounting in the app.
   .build()
 ```
 

@@ -28,10 +28,12 @@ import { payment } from '@h-ai/payment'
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
   // 如启用 Stripe，应用已先调用 reldb.init() 打开共享数据库并检查 success。
+  // 用宿主已验证的 trustedConfig 装配可用支付渠道。成功无数据；配置出错时不创建订单。
   const initialized = await payment.init(trustedConfig)
   if (!initialized.success)
     throw new Error(initialized.error.message)
   try {
+    // 用可信 openid 创建 100 分的微信 JSAPI 订单 ORD001。成功取得调起支付参数；渠道拒绝时不继续查单。
     const created = await payment.createOrder('wechat', {
       orderNo: 'ORD001',
       amount: 100,
@@ -42,12 +44,14 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     })
     if (!created.success)
       throw new Error(created.error.message)
+    // 向微信读取刚创建的 ORD001 当前状态，成功返回 OrderStatus；查询失败独立处理。
     const query = await payment.queryOrder('wechat', 'ORD001')
     if (!query.success)
       throw new Error(query.error.message)
     return { order: created.data, status: query.data.status }
   }
   finally {
+    // 无参释放支付模块状态，不改变渠道中现有订单；宿主要另行关闭借用的数据库。
     await payment.close() // 随后关闭应用打开的 reldb。
   }
 }
@@ -63,6 +67,7 @@ import { invokePayment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
+  // 用服务端成功创建的订单与渠道参数调起支付。成功 data.invoked 表示已调起，未调起要看 message，成交由服务端确认。
   const invoked = await invokePayment(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
@@ -100,9 +105,12 @@ export async function startPayment(orderData: PaymentOrder) {
 import type { PaymentProvider } from '@h-ai/payment'
 
 function installProvider(provider: PaymentProvider) {
+  // 注册传入的渠道实例，按 provider.name 保存或替换同名实例，无返回数据。
   payment.registerProvider(provider)
+  // 用刚注册的名称读回同一个渠道实例；缺少名称对应的注册时返回 undefined。
   return payment.getProvider(provider.name) === provider // true
 }
+// 以未注册名称 not-registered 查询，结果为 undefined。
 payment.getProvider('not-registered') // undefined
 ```
 
@@ -114,12 +122,16 @@ payment.getProvider('not-registered') // undefined
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 
+// 把框架公开的 Payment 契约挂到 payment 域，返回提供订单创建等路由的组合契约。
 const contract = apiContract.create({ payment: apiContract.payment })
+// 传入组合契约创建独立类型化客户端，获得 api.payment 下的调用入口，尚未配置服务端地址。
 const api = apiClient.create(contract)
+// 用服务端 API 基地址初始化该客户端。成功 data 为 undefined，配置失败则停止下方的下单请求。
 const initialized = await api.init({ baseUrl: 'https://api.example.com/api/v1' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
+  // 向 Payment 订单接口提交支付宝 H5 订单，金额为 100 分，描述为 Demo。成功返回订单数据；失败保留服务端错误。
   const order = await api.payment.orders.create({
     provider: 'alipay', amount: 100,
     description: 'Demo', tradeType: 'h5',
@@ -129,6 +141,7 @@ try {
   // order.data contains the provider's payment parameters for this order.
 }
 finally {
+  // 不传参数关闭当前客户端，结束其运行时资源，Promise 不返回业务数据。
   await api.close()
 }
 ```
@@ -155,14 +168,17 @@ finally {
 
 ```ts
 async function inspectAndClose(providerName: string, orderNo: string) {
+  // 用业务记录里的渠道名称和商户订单号查渠道状态。成功返回订单状态对象；查询失败直接返回错误。
   const queried = await payment.queryOrder(providerName, orderNo)
   if (!queried.success)
     return queried
   if (queried.data.status !== 'pending')
     return queried
+  // 只对上一步查询到的 pending 订单发送关闭请求。成功无业务数据；渠道拒绝时保留失败。
   const closed = await payment.closeOrder(providerName, orderNo)
   if (!closed.success)
     return closed
+  // 关闭成功后用同一渠道和订单号重新查询，以渠道返回的新状态为准。查询仍可能独立失败。
   return payment.queryOrder(providerName, orderNo)
 }
 ```
@@ -193,6 +209,7 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 ```ts
 async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  // 用商户订单号和持久化退款号申请退回 100 分。成功回执的 status 仍可能为 processing；渠道拒绝返回失败，重试同一退款须复用退款号。
   const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
   if (!refunded.success)
     return refunded
@@ -207,10 +224,12 @@ async function refundOrder(providerName: string, orderNo: string, refundNo: stri
 退款返回 `success: true` 仍需检查 `data.status`：只有 `fund_change=Y` 为 `success`；`N` 或缺失为 `processing`，需通过支付宝退款查询核实（本模块尚未提供退款查询 API）。`refund_fee` 为累计退款额，不能与本次退款金额直接比较。支付宝 `refundId` 是原交易号，本次退款以 `refundNo` 区分，重试必须保留相同退款号和参数。
 
 ```typescript
+// 对支付宝订单 ORDER_1 提交 100 分退款，使用固定 REFUND_1；受理成功仍需检查 data.status，不能把 processing 当作到账。
 const refund = await payment.refund('alipay', { orderNo: 'ORDER_1', refundNo: 'REFUND_1', amount: 100 })
 if (refund.success && refund.data.status === 'success') {
   // 才可在共享业务数据库中幂等确认退款成功
 }
+// 请求支付宝关闭 ORDER_2，校验渠道回传的订单号后成功无数据；渠道拒绝或应答不符返回失败。
 const closed = await payment.closeOrder('alipay', 'ORDER_2')
 if (closed.success) {
   // 已核对关单响应中的订单号，才可更新业务订单
@@ -243,6 +262,7 @@ if (closed.success) {
 
 ```ts
 async function verifyNotification(providerName: string, request: Request) {
+  // 把收单渠道名称、HTTP 原始正文和头传入验签解析。成功返回事件 ID、订单号和支付状态；签名无效则失败。履约前须核对状态并去重。
   return payment.handleNotify(providerName, {
     body: await request.text(),
     headers: Object.fromEntries(request.headers),
@@ -322,6 +342,7 @@ const orderInput: Parameters<typeof payment.createOrder>[1] = {
   orderNo: 'ORD-ERROR-1', amount: 100, description: 'Demo', tradeType: 'h5',
   notifyUrl: 'https://api.example.com/payment/notify/alipay',
 }
+// 将上面定义的支付宝 H5 订单交给渠道；成功返回 PaymentOrder，失败按错误码区分金额和渠道故障。
 const result = await payment.createOrder('alipay', orderInput)
 if (!result.success) {
   switch (result.error.code) {

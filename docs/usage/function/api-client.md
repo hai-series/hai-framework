@@ -21,14 +21,18 @@ import type { IamAuthLoginInput } from '@h-ai/api-client'
 import { apiClient } from '@h-ai/api-client'
 
 async function loginAndLoadProfile(input: IamAuthLoginInput) {
+  // Start the default client at /api/v1 with default authentication storage. Return initialization errors before using the client.
   const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
   if (!initialized.success)
     return initialized
   try {
+    // Build auth actions bound to the initialized default client. Subsequent actions use its URL and credential storage.
     const actions = apiClient.createAuthActions(apiClient)
+    // Send the caller's login input. Success supplies the session and stores the issued tokens. Return a failed login result unchanged.
     const loggedIn = await actions.login(input)
     if (!loggedIn.success)
       return loggedIn
+    // Fetch the signed-in user with the current credentials. Success includes the profile and permissions; return a failure unchanged.
     const profile = await apiClient.iam.auth.currentUser()
     if (!profile.success)
       return profile
@@ -36,6 +40,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
   }
   catch (writeError) {
     try {
+      // Clear any credentials left by a failed write. Storage cleanup can reject and is combined with the original error.
       await apiClient.auth.clear()
     }
     catch (cleanupError) {
@@ -44,6 +49,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
     throw writeError
   }
   finally {
+    // Close the default client and release local state and observers. The promise resolves without data.
     await apiClient.close()
   }
 }
@@ -87,12 +93,16 @@ function value<T>(result: HaiResult<T>): T {
 import { apiContract } from '@h-ai/api-contract'
 apiClient.isInitialized // default client readiness
 const settings = apiClient.config // redacted config or null
+// Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
 const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+// Initialize that client for the HTTPS API and default auth options. value throws on initialization failure.
 value(await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} }))
 try {
+  // Fetch public authentication settings from this client's server. value returns its data or throws the failed result.
   const policy = value(await client.iam.auth.publicConfig()) // IamPublicConfig from this server
 }
 finally {
+  // Close only the independent client used in this try block. Its local resources are released.
   await client.close() // undefined; local resources released
 }
 ```
@@ -112,6 +122,7 @@ finally {
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// Initialize the default web client for the HTTPS endpoint with a 15,000 ms timeout. Failure throws before use.
 const initialized = await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: { terminalType: 'web' },
@@ -162,6 +173,7 @@ if (!initialized.success)
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// Configure the orders-web client with the sample base URL, default auth, and a 15,000 ms timeout. Invalid configuration fails initialization.
 const started = await apiClient.init({
   baseUrl: 'https://api.example.invalid/api/v1',
   timeout: 15000,
@@ -208,22 +220,33 @@ Kit 的 `kit.response.validationError(errors)` 与 `fromError` 使用同一字�
 
 ```ts
 async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setTokens>[0]) {
+  // Create a fresh in-process credential store. It starts without an access or refresh token.
   const storage = apiClient.tokenStorage.memory()
+  // Write the issued access token into this memory store. Completion has no result data.
   await storage.setAccessToken(tokens.accessToken)
   if (tokens.refreshToken)
+    // Write the supplied refresh token when present. The write only changes this memory instance.
     await storage.setRefreshToken(tokens.refreshToken)
+  // Read back both tokens. access is the issued access token, and refresh is the provided refresh token or null.
   const stored = { access: await storage.getAccessToken(), refresh: await storage.getRefreshToken() }
+  // Remove both tokens from this store. Subsequent reads return null.
   await storage.clear()
+  // Read the access token after the clear. It is null.
   const afterClear = await storage.getAccessToken() // null
+  // Create the browser cookie-backed adapter. It holds access credentials in memory and relies on the browser for the HttpOnly refresh cookie.
   const browserStorage = apiClient.tokenStorage.httpOnlyCookie() // refresh cookie is not readable
   let refreshCount = 0
+  // Subscribe to client refresh events and increment the counter on each event. The returned function removes this subscription.
   const stop = apiClient.auth.onTokenRefreshed(() => { refreshCount += 1 })
   try {
+    // Give the client's active auth store the issued pair. Persistence failure rejects; successful assignment alone is not a refresh event.
     await apiClient.auth.setTokens(tokens)
     return { stored, afterClear, refreshCount }
   }
   finally {
+    // Remove the callback registered above. Later refreshes no longer update refreshCount.
     stop()
+    // Clear credentials from the client's active auth store. This can reject if storage cleanup fails.
     await apiClient.auth.clear()
   }
 }
@@ -264,33 +287,45 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 从页面取得表单字段，通过 actions 等待凭据保存，再把结果交给 UI。下面返回的处理函数分别对应用户选择的流程，不要连续调用它们来测试真实账号。验证码开启时由 AuthPanel 求解并传递 captcha。
 
 ```ts
+// Bind auth actions to the initialized API client and its current credential store.
 const actions = apiClient.createAuthActions(apiClient)
+// Load the server's public IAM settings, or null when unavailable. value throws a failed result.
 const config = value(await actions.publicConfig()) // IamPublicConfig | null
 if (!config)
   throw new Error('Public authentication settings are unavailable')
+// Bind page-exit session ending only when the returned setting enables it. Keep the function that unbinds the listener.
 const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
 async function login(input: Parameters<typeof actions.login>[0]) {
+  // Submit the caller's login input. Success returns authenticated identity and tokens. value throws the preserved failure.
   return value(await actions.login(input)) // authenticated user and tokens, or throws preserved failure
 }
 async function register(input: Parameters<typeof actions.register>[0]) {
+  // Submit the caller's registration input. Success returns the registration result. value throws on failed registration.
   return value(await actions.register(input)) // registration/authentication result
 }
 async function sendCode(identifier: string) {
+  // Request an OTP for the supplied identifier. Success returns its expiry. value throws a failed request.
   return value(await actions.sendOtp(identifier)) // expiresAt
 }
 async function requestReset(identifier: string) {
+  // Request a password reset for the identifier. Success has no data. value throws if the request fails.
   value(await actions.requestPasswordReset(identifier)) // undefined
 }
 async function resetPassword(token: string, newPassword: string) {
+  // Send the supplied reset token and new password. Success completes the reset without data. value throws on failure.
   value(await actions.confirmPasswordReset(token, newPassword)) // undefined
 }
 async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
+  // Submit the caller's renewal input. Success confirms renewal without data. value throws on failure.
   value(await actions.renewPassword(input)) // undefined
 }
 async function confirmSensitive(password: string) {
+  // Exchange the current password for a credential scoped to users:delete. value throws on a failed reauthentication.
   return value(await actions.reauthenticate(password, 'users:delete')) // one-operation credential
 }
+// Request a CAPTCHA for login. Check success before handing the returned challenge to AuthPanel.
 const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
+// Remove the page-exit handler registered above when the page leaves.
 unbind() // call when this page is destroyed
 ```
 
@@ -376,12 +411,16 @@ createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射
 #### 场景：调用认证与用户管理 API
 
 ```ts
+// Fetch the authenticated current user with no explicit input. Success supplies the profile. Missing authorization or other failures are thrown below.
 const current = await apiClient.iam.auth.currentUser()
 if (!current.success)
   throw new Error(current.error.message)
+// Fetch authorized page 1 with at most 20 users. value throws the failure instead of returning a page.
 const users = value(await apiClient.iam.users.list({ page: 1, pageSize: 20 }))
 // users.items is the authorized user page, not every user in the database
+// Use default role filters. Success yields the roles visible to the caller. value throws on failure.
 const roles = value(await apiClient.iam.roles.list({})) // configured roles visible to this caller
+// Use default permission filters. Success contains visible permission records. value throws on failure.
 const permissions = value(await apiClient.iam.permissions.list({})) // permitted permission records
 ```
 
@@ -421,8 +460,10 @@ const permissions = value(await apiClient.iam.permissions.list({})) // permitted
 #### 场景：调用文件与 AI API
 
 ```ts
+// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. value throws on failure.
 const files = value(await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 }))
 // files contains metadata and pagination for this authorized prefix
+// List the AI sessions visible to the caller using default filters. value throws on request failure.
 const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessions
 ```
 
@@ -439,9 +480,11 @@ const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessi
 数组型输入/输出、权限与业务错误按实际契约。服务端决定身份和资源授权，客户端配置不能授予权限。
 
 ```ts
+// List up to 20 accessible entries under reports/. Success includes the file page. A failed request throws below.
 const files = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
 if (!files.success)
   throw new Error(files.error.message)
+// Send the supplied user message to the chat completion endpoint. A successful result contains the generated response. A failure throws below.
 const chat = await apiClient.ai.chats.createCompletion({
   messages: [
     { role: 'user', content: 'Summarize this public report.' }
@@ -473,14 +516,17 @@ if (!chat.success)
 
 ```ts
 const outcomes: string[] = []
+// Register an observer that collects sanitized logical request outcomes. The returned function removes it.
 const stop = apiClient.observeRequests(record => { outcomes.push(JSON.stringify(record)) })
 try {
+  // Read this server's public IAM settings. The logical request is observed even if the call fails, and failure throws below.
   const result = await apiClient.iam.auth.publicConfig()
   if (!result.success)
     throw new Error(result.error.message)
   // outcomes now contains the sanitized logical request record for this call
 }
 finally {
+  // Unsubscribe the request observer created above.
   stop()
 }
 ```
@@ -497,15 +543,19 @@ finally {
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
+// Initialize crypto with defaults for the transport handshake. value throws if initialization fails.
 value(await crypto.init())
 
+// Configure the HTTPS client with the initialized crypto transport. value throws on a failed initialization.
 value(await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
   transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
 }))
 
+// Close the API client and its transport before releasing its crypto dependency.
 await apiClient.close()
+// Close the crypto instance after the client. Await completion before exiting.
 await crypto.close()
 ```
 
@@ -530,10 +580,12 @@ await crypto.close()
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// Observe sanitized request outcomes through the supplied callback. The returned function cancels the subscription.
 const unsubscribe = apiClient.observeRequests((record) => {
   const failed = !record.success
   const requestId = record.requestId
 })
+// Remove the observer registered above so later requests do not reach it.
 unsubscribe()
 ```
 
@@ -542,6 +594,7 @@ unsubscribe()
 业务 API 返回 `HaiResult<T>`：
 
 ```ts
+// Request the current user's profile without explicit arguments. Success includes roles and permissions. Failure exposes a structured error.
 const result = await apiClient.iam.auth.currentUser()
 if (!result.success) {
   // result.error.code / result.error.message

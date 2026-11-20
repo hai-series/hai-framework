@@ -130,13 +130,16 @@ Web・実行ノードに同じ Git コミットを用意します。Web コン�
 ```ts
 import { ai } from '@h-ai/ai'
 
+// 認証済みユーザーを agent テナントに紐付け、以降の呼び出しをその主体に限定する入口を返す。
 const scoped = ai.acp.scoped({ tenantId: 'agent', userId: 'authenticated-user' })
+// coder と自動実行を選び、job-123 で重複を防いでセッションまたはエラーを返す。
 const created = await scoped.sessions.create({
   agentId: 'coder',
   execution: { mode: 'auto' }
 }, { idempotencyKey: 'job-123' })
 if (!created.success)
   throw new Error(created.error.message)
+// turn-1 と project-docs の使用範囲を指定してプロンプトを送る。成功時は受理されたタスク ID と状態を返す。
 const accepted = await created.data.submit({
   prompt: '資料を読んで要約',
   idempotencyKey: 'turn-1',
@@ -146,6 +149,7 @@ const accepted = await created.data.submit({
 })
 if (!accepted.success)
   throw new Error(accepted.error.message)
+// 受理されたタスクについて、通し番号 0 の後のイベントを最大 100 件返す。失敗時は取得エラーを返す。
 const page = await scoped.tasks.events(accepted.data.taskId, 0, 100)
 if (!page.success)
   throw new Error(page.error.message)

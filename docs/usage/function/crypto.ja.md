@@ -15,9 +15,11 @@ SM2 の暗号化・署名、SM3 のダイジェストと HMAC、SM4 の暗号化
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 既定設定で初期化します。成功時の data はなく、失敗時は error を確認します。
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// abc の UTF-8 バイトを既定の SM3 で処理します。成功時は 64 文字の 16 進数、失敗時は error です。
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
@@ -48,12 +50,17 @@ const digest = digestResult.data
 引数はありません。初期化成功後は true、終了後は false です。後続の例の前に再初期化します。初期化中に終了すると、遅れて完了した初期化でも再開されません。
 
 ```ts
+// 準備状態を読みます。初期化後は true です。
 crypto.isInitialized // true
+// 引数なしで暗号機能を終了します。完了時の data はありません。
 await crypto.close() // Promise<void>
+// 終了後の準備状態は false です。
 crypto.isInitialized // false
+// 既定設定で初期化します。成功時の data はなく、失敗時は error を確認します。
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// 準備状態を読みます。初期化後は true です。
 crypto.isInitialized // true
 ```
 
@@ -82,31 +89,41 @@ crypto.isInitialized // true
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 引数なしでランダムな SM2 鍵ペアを作ります。成功時は公開鍵と秘密鍵、失敗時は error です。
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message, { cause: pairResult.error })
 const pair = pairResult.data
+// 生成した公開鍵を検証します。有効なら true です。
 crypto.asymmetric.isValidPublicKey(pair.publicKey) // true
+// 生成した秘密鍵を検証します。有効なら true です。
 crypto.asymmetric.isValidPrivateKey(pair.privateKey) // true
+// null を公開鍵として検査すると false です。
 crypto.asymmetric.isValidPublicKey(null) // false
+// 無効な公開鍵のサンプル文字列を検査すると false です。
 crypto.asymmetric.isValidPublicKey('not-a-public-key') // false
 
+// 生成した公開鍵で order-42 を暗号化します。成功時は SM2 暗号文、失敗時は error です。
 const ciphertextResult = crypto.asymmetric.encrypt('order-42', pair.publicKey)
 if (!ciphertextResult.success)
   throw new Error(ciphertextResult.error.message, { cause: ciphertextResult.error })
 const ciphertext = ciphertextResult.data
+// 対応する秘密鍵で前の暗号文を復号します。成功時は order-42、失敗時は error です。
 const decryptedResult = crypto.asymmetric.decrypt(ciphertext, pair.privateKey)
 if (!decryptedResult.success)
   throw new Error(decryptedResult.error.message, { cause: decryptedResult.error })
 decryptedResult.data // 'order-42'
+// 生成した秘密鍵で order-42 に署名します。成功時は署名文字列、失敗時は error です。
 const signatureResult = crypto.asymmetric.sign('order-42', pair.privateKey)
 if (!signatureResult.success)
   throw new Error(signatureResult.error.message, { cause: signatureResult.error })
 const signature = signatureResult.data
+// 元の本文、署名、対応する公開鍵を渡します。有効なら true、操作失敗時は error です。
 const verifiedResult = crypto.asymmetric.verify('order-42', signature, pair.publicKey)
 if (!verifiedResult.success)
   throw new Error(verifiedResult.error.message, { cause: verifiedResult.error })
 verifiedResult.data // true
+// 署名と鍵を保ち、本文だけ changed にすると照合結果は false です。操作失敗時は error です。
 const changedMessageResult = crypto.asymmetric.verify('changed', signature, pair.publicKey)
 if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
@@ -122,24 +139,29 @@ changedMessageResult.data // false
 前の例は署名設定を省略し、`{ hash: true, userId: '1234567812345678' }` を使います。下の signing は **userId を `'orders-service'` に変更**するため、検証にも同じ signing を渡します。これは SM2 の識別情報ダイジェストに使う公開識別子で、IAM ユーザー ID やパスワードではなく、ログインユーザーにも自動連携しません。`hash: true` は識別情報と原文を SM3 で処理してから署名します。大きな業務テキストでもこの既定を維持します。
 
 ```ts
+// 引数なしでランダムな SM2 鍵ペアを作ります。成功時は公開鍵と秘密鍵、失敗時は error です。
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message)
 const pair = pairResult.data
 const options = { cipherMode: 1, outputFormat: 'base64' } as const
+// 生成した公開鍵と指定の並び順で order-42 を暗号化します。成功時は Base64 暗号文、失敗時は error です。
 const encodedResult = crypto.asymmetric.encrypt('order-42', pair.publicKey, options)
 if (!encodedResult.success)
   throw new Error(encodedResult.error.message, { cause: encodedResult.error })
 const encoded = encodedResult.data
+// 同じ並び順と符号化、対応する秘密鍵で前の出力を復号します。成功時は order-42、失敗時は error です。
 const decodedResult = crypto.asymmetric.decrypt(encoded, pair.privateKey, options)
 if (!decodedResult.success)
   throw new Error(decodedResult.error.message, { cause: decodedResult.error })
 decodedResult.data // 'order-42'
 const signing = { hash: true, userId: 'orders-service' }
+// 秘密鍵で order-42 に署名し、ハッシュと orders-service の ID を使います。成功時は署名、失敗時は error です。
 const signedResult = crypto.asymmetric.sign('order-42', pair.privateKey, signing)
 if (!signedResult.success)
   throw new Error(signedResult.error.message, { cause: signedResult.error })
 const signed = signedResult.data
+// 同じ本文、署名、公開鍵と設定で検証します。一致時は true、操作失敗時は error です。
 const customVerifiedResult = crypto.asymmetric.verify('order-42', signed, pair.publicKey, signing)
 if (!customVerifiedResult.success)
   throw new Error(customVerifiedResult.error.message, { cause: customVerifiedResult.error })
@@ -179,28 +201,35 @@ UTF-8 の L バイトに対し、この実装は L+96 バイト（C1 が64、C3 
 入力は abc、その UTF-8 バイト列、16進表記で、同じダイジェストになります。不正な16進入力は失敗します。HMAC の鍵は例示用で、実際の秘密鍵は安全な設定から取得します。
 
 ```ts
+// abc の UTF-8 バイトを既定の SM3 で処理します。成功時は 64 文字の 16 進数、失敗時は error です。
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
 const digest = digestResult.data
 // 66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0
+// abc を符号化したバイトで SM3 を計算します。文字列の結果と一致し、失敗時は error です。
 const byteDigestResult = crypto.hash.hash(new TextEncoder().encode('abc'))
 if (!byteDigestResult.success)
   throw new Error(byteDigestResult.error.message, { cause: byteDigestResult.error })
 byteDigestResult.data === digest // true
+// 16 進の 616263 を abc のバイトへ変換して処理します。前のダイジェストと一致し、失敗時は error です。
 const hexDigestResult = crypto.hash.hash('616263', { inputEncoding: 'hex' })
 if (!hexDigestResult.success)
   throw new Error(hexDigestResult.error.message, { cause: hexDigestResult.error })
 hexDigestResult.data === digest // true
+// z が 16 進文字ではないため、失敗を返します。
 crypto.hash.hash('6z', { inputEncoding: 'hex' }).success // false
+// abc を生成済みのダイジェストと照合します。成功時は true、計算失敗時は error です。
 const digestVerifiedResult = crypto.hash.verify('abc', digest)
 if (!digestVerifiedResult.success)
   throw new Error(digestVerifiedResult.error.message, { cause: digestVerifiedResult.error })
 digestVerifiedResult.data // true
+// changed を元のダイジェストと照合します。成功時は false、計算失敗時は error です。
 const changedDigestResult = crypto.hash.verify('changed', digest)
 if (!changedDigestResult.success)
   throw new Error(changedDigestResult.error.message, { cause: changedDigestResult.error })
 changedDigestResult.data // false
+// サンプルの共有鍵で order-42 の HMAC を計算します。成功時は 64 文字の 16 進数、失敗時は error です。
 const macResult = crypto.hash.hmac('order-42', 'demo-shared-secret')
 if (!macResult.success)
   throw new Error(macResult.error.message, { cause: macResult.error })
@@ -234,21 +263,27 @@ SM4 の既定値は CBC で、毎回新しい IV を作り、復号に必要な�
 入力は hello と生成した32桁の16進数鍵です。どちらの手順でも hello に戻り、暗号文と IV は毎回変わります。
 
 ```ts
+// 引数なしでランダムな SM4 鍵を生成し、16 進文字列を返します。
 const key = crypto.symmetric.generateKey()
+// 生成した SM4 鍵を検証します。有効なら true です。
 crypto.symmetric.isValidKey(key) // true
+// 生成した鍵で hello を暗号化します。成功時は暗号文、符号化、モードと IV、失敗時は error です。
 const encryptedResult = crypto.symmetric.encrypt('hello', key)
 if (!encryptedResult.success)
   throw new Error(encryptedResult.error.message, { cause: encryptedResult.error })
 const encrypted = encryptedResult.data
 // { mode: 'cbc', encoding: 'hex', ciphertext: '…', iv: '…' }
+// 元の鍵で暗号文オブジェクトを復号します。成功時は hello、失敗時は error です。
 const plaintextResult = crypto.symmetric.decrypt(encrypted, key)
 if (!plaintextResult.success)
   throw new Error(plaintextResult.error.message, { cause: plaintextResult.error })
 plaintextResult.data // 'hello'
+// 同じ鍵で hello を暗号化します。成功時は暗号文と新しい IV、失敗時は error です。
 const withIVResult = crypto.symmetric.encryptWithIV('hello', key)
 if (!withIVResult.success)
   throw new Error(withIVResult.error.message, { cause: withIVResult.error })
 const withIV = withIVResult.data
+// 前の暗号文、元の鍵、その IV を個別に渡します。成功時は hello、失敗時は error です。
 const plaintextWithIVResult = crypto.symmetric.decryptWithIV(withIV.ciphertext, key, withIV.iv)
 if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
@@ -260,9 +295,13 @@ plaintextWithIVResult.data // 'hello'
 この暗号化専用の IV を生成します。結果の encoding=base64 を復号側が読み取ります。
 
 ```ts
+// 引数なしでランダムな SM4 鍵を生成し、16 進文字列を返します。
 const key = crypto.symmetric.generateKey()
+// 引数なしで新しいランダム IV を生成し、16 進文字列を返します。
 const iv = crypto.symmetric.generateIV()
+// 生成した IV の形式を確認します。有効なら true です。
 crypto.symmetric.isValidIV(iv) // true
+// 新しい鍵と明示した IV で hello を CBC 暗号化します。成功時は Base64、失敗時は error です。
 const base64PayloadResult = crypto.symmetric.encrypt('hello', key, {
   mode: 'cbc', iv, outputFormat: 'base64',
 })
@@ -270,6 +309,7 @@ if (!base64PayloadResult.success)
   throw new Error(base64PayloadResult.error.message, { cause: base64PayloadResult.error })
 const base64Payload = base64PayloadResult.data
 base64Payload.encoding // 'base64'
+// 同じ鍵で Base64 の記録を復号します。成功時は hello、失敗時は error です。
 const base64PlaintextResult = crypto.symmetric.decrypt(base64Payload, key)
 if (!base64PlaintextResult.success)
   throw new Error(base64PlaintextResult.error.message, { cause: base64PlaintextResult.error })
@@ -300,6 +340,7 @@ Node.js の登録・ログイン処理には非同期メソッドを使用しま
 同じパスワードでも毎回異なるレコードになります。パスワード不一致は成功データ false、不正なレコード形式は INVALID_INPUT の失敗結果です。
 
 ```ts
+// サンプルのパスワードを 16 バイトのランダムソルトと 10000 回の反復で処理します。成功時は保存用文字列、失敗時は error です。
 const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
@@ -307,14 +348,17 @@ if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record は完全なランダム記録。各項目は以下で説明。
+// デモのパスワードを生成済み記録と非同期で照合します。一致時は true、失敗時は error です。
 const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true
+// 誤ったパスワードを有効な記録と照合します。照合結果は false、操作失敗時は error です。
 const wrongPasswordResult = crypto.password.verify('wrong-password', record)
 if (!wrongPasswordResult.success)
   throw new Error(wrongPasswordResult.error.message, { cause: wrongPasswordResult.error })
 wrongPasswordResult.data // false
+// デモのパスワードを壊れた記録と照合します。hai:crypto:002 で失敗します。
 const malformed = crypto.password.verify('demo-password', '$hai$invalid')
 malformed.success // false
 if (!malformed.success) {
@@ -380,11 +424,14 @@ import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
 
 function buildTransport(secret: unknown) {
+  // 信頼済み Secret から読み込んだ鍵リングを検証します。成功時は鍵リング、失敗はそのまま返します。
   const ring = crypto.transport.parseServerKeyRing(secret)
   if (!ring.success)
     return ring
+  // 検証済み鍵リングと登録先でサーバーを作ります。成功時は管理オブジェクト、失敗はそのまま返します。
   return crypto.transport.createServer({
     serverKeyRing: ring.data,
+    // 初期化済みキャッシュから、サーバーに渡す公開鍵・リクエスト登録先を作ります。
     keyStore: crypto.transport.createKeyStore({ cache }),
   })
 }
@@ -398,14 +445,20 @@ manager は前の関数の成功データです。clientPublicKey は容量制�
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 
 async function exchange(manager: TransportEncryptionManager, clientPublicKey: string) {
+  // クライアントの公開鍵を登録して登録 ID を返します。不正な鍵や登録失敗は例外です。
   const clientId = await manager.registerClientKey(clientPublicKey)
+  // 取得した登録 ID で公開鍵を読みます。有効なら元の鍵、なければ undefined です。
   const registered = await manager.getClientPublicKey(clientId)
   // registered === clientPublicKey
   return {
     clientId,
+    // 引数なしで現在のサーバー鍵 ID を取得します。
     serverKeyId: manager.getServerKeyId(),
+    // 引数なしで、クライアントへ渡す現在のサーバー公開鍵を取得します。
     serverPublicKey: manager.getServerPublicKey(),
+    // 管理オブジェクトの平文バイト数の上限を読みます。
     maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+    // クライアント鍵の登録有効期間を秒単位で読みます。
     clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
   }
 }
@@ -430,15 +483,20 @@ session は crypto.transport.createClient が返す**クライアントの暗号
 例は POST hello を送り、復号済み `{ received: "hello" }` を読みます。本文全体を扱う方式で大容量のストリーム送信ではありません。HEAD/204/205/304 は空本文のままなので json() を呼びません。
 
 ```ts
+// API の鍵交換 URL でクライアントセッションを作ります。
 const session = crypto.transport.createClient({
   keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
 })
+// 引数なしで準備状態を読みます。作成直後または破棄後は false です。
 session.ready() // false
 try {
+  // 設定済み URL で鍵交換します。成功後は暗号化リクエストを送信でき、失敗時は error です。
   const sessionInitialized = await session.init()
   if (!sessionInitialized.success)
     throw new Error(sessionInitialized.error.message, { cause: sessionInitialized.error })
+  // 鍵交換成功後に引数なしで準備状態を確認すると true です。
   session.ready() // true
+  // 準備済みセッションで echo に hello を POST します。平文を読める Response を返し、通信・復号失敗は例外です。
   const response = await session.encryptedFetch('https://api.example.com/api/echo', {
     method: 'POST', body: 'hello',
   })
@@ -447,9 +505,12 @@ try {
   const body: unknown = await response.json() // { received: 'hello' }
 }
 finally {
+  // 引数なしでセッションの暗号状態を破棄します。準備状態は false になります。
   session.destroy()
 }
+// 引数なしで準備状態を読みます。作成直後または破棄後は false です。
 session.ready() // false
+// 伝送プロトコルのバージョン定数を読みます。値は 2 です。
 crypto.transport.protocol.VERSION // 2
 ```
 
@@ -466,7 +527,9 @@ async function decryptEnvelope(
   request: Request,
 ) {
   const url = new URL(request.url)
+  // 受信ペイロードを実際の要求条件で復号します。成功時は平文と文脈、検証・時刻・復号の失敗はそのまま返します。
   return manager.decryptRequest(payload, {
+    // プロトコルのクライアント ID ヘッダーから登録 ID を読みます。なければ空文字列で検証へ渡します。
     clientId: request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? '',
     method: request.method,
     path: url.pathname + url.search,
@@ -578,23 +641,32 @@ Cache を初期化済みとします。管理マネージャーと ID を共有�
 ```ts
 import { cache } from '@h-ai/cache'
 
+// 初期化済みキャッシュと 3600 秒の期限で鍵登録先を作り、インスタンスを返します。
 const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+// 引数なしでテスト用 SM2 鍵ペアを生成します。成功時は公開鍵と秘密鍵、失敗時は error です。
 const testPairResult = crypto.asymmetric.generateKeyPair()
 if (!testPairResult.success)
   throw new Error(testPairResult.error.message, { cause: testPairResult.error })
 const testPair = testPairResult.data
+// 生成したテスト公開鍵を登録し、クライアント ID を返します。失敗時は例外です。
 const clientId = await registry.register(testPair.publicKey)
 try {
+  // 登録 ID で公開鍵を読み、テスト鍵と一致することを確認します。照会失敗は例外になり得ます。
   await registry.get(clientId) === testPair.publicKey // true
   const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
   const expiresAt = Date.now() + 60_000
+  // このクライアントの新しい要求 ID を将来の期限で登録します。初回は true、保存失敗時は例外です。
   await registry.claimRequest(clientId, requestId, expiresAt) // true
+  // 同じ期限内の要求 ID を再登録します。重複なら false、保存失敗時は例外です。
   await registry.claimRequest(clientId, requestId, expiresAt) // false
 }
 finally {
+  // 対応していればテスト ID の公開鍵登録を削除します。完了時のデータはなく、失敗時は例外です。
   await registry.delete?.(clientId)
+  // 対応していれば引数なしで登録先を閉じます。完了時のデータはありません。
   await registry.close?.()
 }
+// 削除済み ID を再度読みます。この例では undefined、保存先の失敗は例外になり得ます。
 await registry.get(clientId) // undefined
 ```
 
@@ -642,15 +714,21 @@ await registry.get(clientId) // undefined
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError, crypto } from '@h-ai/crypto'
 
+// 鍵交換のバイト上限でサンプル JSON を読みます。結果は本文で、超過は TransportBodyTooLargeError です。
 const text = await crypto.transport.readBody(new Response('{"hello":"world"}').body, {
+  // 既定の鍵交換本文サイズをバイト単位で取得します。
   maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
 })
 // text === '{"hello":"world"}'
+// 平文 8 MiB を渡し、平文や暗号ペイロードの各バイト上限を取得します。
 const limits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
 limits.plaintextBytes // 8388608
 limits.encryptedPayloadBytes // 16809984
+// 平文の最小 1024 バイトを読みます。
 crypto.transport.plaintextRange.min // 1024；明文の最小バイト数
+// 平文の最大 67108864 バイトを読みます。
 crypto.transport.plaintextRange.max // 67108864；明文の最大バイト数
+// 最大要求有効期間の 600 秒を読みます。
 crypto.transport.timeLimits.maxRequestAgeSeconds // 600；要求の最長有効期間、秒
 ```
 
@@ -662,37 +740,45 @@ crypto.transport.timeLimits.maxRequestAgeSeconds // 600；要求の最長有効�
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// 既定 1 MiB、/files/* は 8 MiB の容量ポリシーを作ります。パス別に割り当てます。
 const policy = crypto.transport.createBodyPolicy(1024 * 1024, {
   '/files/*': 8 * 1024 * 1024,
 })
 
 async function echo(manager: TransportEncryptionManager, request: Request): Promise<Response> {
+  // 実際のパスで枠を取得します。成功時は制限と解放方法、枠がなければ 503 です。
   const lease = policy.acquire(new URL(request.url).pathname)
   if (!lease)
     return new Response(null, { status: 503 })
   try {
+    // 管理オブジェクト、要求、取得した制限で認証します。成功時は平文と文脈、失敗は後続で分岐します。
     const verified = await crypto.transport.authenticateRequest(manager, request, lease.limits)
     if (!verified.success) {
       const cause = verified.error.cause
       if (cause instanceof TransportTimeError && cause.context)
+        // 時刻エラーと検証済み文脈から、管理オブジェクトで HTTP エラー応答を作ります。
         return crypto.transport.createErrorResponse(cause, { manager, context: cause.context })
       return new Response(null, { status: verified.error.httpStatus ?? 400 })
     }
+    // 検証済み文脈で 200 の JSON 応答を暗号化します。成功時は暗号ペイロード、失敗時は 500 です。
     const encrypted = await manager.encryptResponse(
       verified.data.context, JSON.stringify({ received: verified.data.plaintext }), 200,
     )
     if (!encrypted.success)
       return new Response(null, { status: 500 })
     return Response.json(encrypted.data, {
+      // プロトコルの暗号化応答ヘッダー名と値で JSON をマークします。
       headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
     })
   }
   catch (error) {
     if (error instanceof TransportBodyTooLargeError)
+      // 容量例外を 413 応答に変換します。
       return crypto.transport.createErrorResponse(error)
     throw error
   }
   finally {
+    // 各終了経路で引数なしでこの要求の枠を返却します。データは返しません。
     lease.release()
   }
 }
@@ -705,12 +791,16 @@ async function echo(manager: TransportEncryptionManager, request: Request): Prom
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// 上限 1024 と実測 1025 バイトで容量例外を作ります。コードは hai:crypto:070 です。
 const oversized = new TransportBodyTooLargeError(1024, 1025)
 oversized.code // 'hai:crypto:070'
+// 作成した容量例外をステータス 413 の応答に変換します。
 const tooLarge = await crypto.transport.createErrorResponse(oversized)
 tooLarge.status // 413
+// 要求時刻の欠落と現在時刻のミリ秒値から時刻例外を作ります。コードは hai:crypto:071 です。
 const invalidTime = new TransportTimeError(undefined, Date.now())
 invalidTime.code // 'hai:crypto:071'
+// 認証済み文脈のない時刻例外をステータス 400 の応答に変換します。
 const timeRejected = await crypto.transport.createErrorResponse(invalidTime)
 timeRejected.status // 400
 ```

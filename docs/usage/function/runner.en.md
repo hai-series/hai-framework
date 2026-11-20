@@ -24,9 +24,11 @@ try {
   if (!started.success)
     throw new Error(started.error.message) // 停止启动，不提交任务。
 
+  // Bind report.v1 to the report handler on this node. Success returns a disposer; a duplicate kind fails.
   const registration = runner.register('report.v1', async (input, context) => { // 成功返回注销函数。
     if (typeof input !== 'string')
       throw new TypeError('Expected report title') // 处理器校验业务输入。
+    // Persist phase: ready using the current task context. The first event has sequence 1; a write failure stops the handler.
     const event = await context.emit({ phase: 'ready' }) // 成功后事件序号为 1，可从另一节点读取。
     if (!event.success)
       throw new Error(event.error.message) // 写事件失败时结束处理器。
@@ -36,6 +38,7 @@ try {
     throw new Error(registration.error.message) // 重复注册会失败。
 
   const scope = { tenantId: 'studio', userId: 'alice' } // 示例主体，生产来自服务端认证。
+  // Submit report.v1 for studio/alice using report-nov as the durable key. The receipt contains the task ID and queue state; failure stops polling.
   const accepted = await runner.submit({
     scope,
     kind: 'report.v1',
@@ -48,6 +51,7 @@ try {
   const deadline = Date.now() + 5_000 // 本示例最多等待五秒。
   let completed = false // 仅在读取到成功终态时设为 true。
   while (Date.now() < deadline) {
+    // Read persisted state using the receipt ID and the same scope. A successful lookup still requires checking status for task success or failure.
     const task = await runner.get(scope, accepted.data.id) // 同一主体下读取当前状态与结果。
     if (!task.success)
       throw new Error(task.error.message) // 找不到或读取失败时终止示例。
@@ -62,6 +66,7 @@ try {
   }
   if (!completed)
     throw new Error('Timed out waiting for the report') // 等待超时由示例报告，Runner 会在退出阶段尝试取消本节点任务。
+  // Call the disposer returned by register, with no arguments, to remove the local report.v1 handler. It returns no data.
   registration.data() // 注销当前处理器，返回 undefined。
 }
 finally {
@@ -158,10 +163,15 @@ Queued work can become cancelled directly. Running work usually enters cancellin
 
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
+// Submit the monthly report for studio/alice and obtain an execution receipt. Use report-nov for the same business request; submission errors propagate.
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+// Look up the original execution by the same scope, kind, and durable key. A successful miss returns undefined.
 const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+// Read state and any available output for the submitted receipt in this scope. A scope mismatch or read failure returns an error.
 const current = value(await runner.get(scope, accepted.id)) // current persisted state
+// Read up to 20 ordered events for the same task after cursor 0. With no events, the result is an empty array.
 const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+// Request cancellation for the same task. The returned state may be cancelling if execution is still stopping.
 const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
 ```
 

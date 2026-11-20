@@ -28,9 +28,11 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export async function calculate(objectId: string) {
+  // 创建独立注册器，使用下方函数把执行主体限制为宿主传入的 objectId；此时没有已登记工具。
   const registry = tools.createRegistry({
     authorize: ({ context }) => context.objectId === objectId,
   })
+  // 用下方 Zod 参数和求和处理器定义 sum，再登记到本注册器。定义不合法会抛错；登记成功无数据，同名登记失败。
   const registered = registry.register(tools.define({
     name: 'sum',
     title: '求和',
@@ -41,6 +43,7 @@ export async function calculate(objectId: string) {
   }))
   if (!registered.success)
     return registered
+  // 以宿主已确认的 objectId 执行 sum(2, 3)。成功数据是 { total: 5 }；校验或授权失败不运行处理器。
   return registry.execute('sum', { a: 2, b: 3 }, { objectId })
 }
 ```
@@ -55,6 +58,7 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
+  // 定义按非空 ID 查询的工具，以调用方 read 的 HaiResult 作为业务结果；定义不合法会抛错。
   return tools.define({
     name: 'document_lookup',
     description: 'Read an authorized document',
@@ -104,13 +108,17 @@ function value<T>(result: HaiResult<T>): T {
 
 ```ts
 import { z } from 'zod'
+// 用下方 Zod 数字规则和加法处理器定义 sum；返回可执行实例，定义不合法会抛 TypeError。
 const tool = tools.define({
   name: 'sum', description: 'Add two numbers',
   parameters: z.object({ a: z.number(), b: z.number() }),
   handler: ({ a, b }) => ({ total: a + b }),
 })
+// 无参把工具元数据和参数转换成协议定义，在本例读到名称 sum；无法转换规则时抛异常。
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
+// 向 sum 传数字 2 和 3，成功得到 { total: 5 }；工具失败时 value 抛出。
 value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// 把 a 改成字符串 wrong 验证边界，结果为 VALIDATION_FAILED，求和处理器不执行。
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
 
@@ -181,19 +189,32 @@ const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALID
 
 ```ts
 // Continue with the sum tool from the preceding scenario.
+// 创建空注册器，仅允许可信上下文里的 demo-user 执行其工具。
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
+// 登记前面定义的 sum 实例，成功无数据；同名工具已登记时失败。
 value(registry.register(tool)) // undefined
+// 传入空工具集，成功无数据，现有 sum 保持有效。
 value(registry.registerMany([])) // undefined; no tools added
 registry.size // 1
+// 检查刚登记的 sum，返回 true。
 registry.has('sum') // true
+// 按名称获取 sum 实例，再无参读回协议定义中的名称 sum；无该名称时返回 undefined。
 registry.get('sum')?.toDefinition().name // 'sum'
+// 无参列出当前注册名称，得到 ['sum']。
 registry.getNames() // ['sum']
+// 无参取得当前注册工具的协议定义，此处提取名称得到 ['sum']；参数规则无法转换时会抛异常。
 registry.getDefinitions().map(definition => definition.name) // ['sum']
+// 使用可信 demo-user 对 sum 传入 2 和 3，成功为 { total: 5 }，未授权或校验失败不执行。
 value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
+// 同一身份批量执行一条 sum(4, 1)，得到输入顺序的 [{ total: 5 }]；批量失败由 value 抛出。
 value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+// 以已有 sum 名称更新当前实例，成功无数据；校验失败保留旧注册。
 value(registry.replace(tool)) // undefined; same registered name
+// 删除 sum 的注册；此次返回 true，名称原本不存在时返回 false。
 registry.unregister('sum') // true
+// 把刚移除的 sum 再批量登记一次；成功无数据，名称冲突时失败。
 value(registry.registerMany([tool])) // undefined
+// 无参清空当前注册表，sum 此后不可查，无返回数据。
 registry.clear() // undefined
 registry.size // 0
 ```
@@ -243,9 +264,11 @@ import type { ToolArtifactAccess } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
+  // 借用已初始化的 Runner 创建 documents 服务，启用 documents 与 analysis；成功返回服务对象，服务参数或处理器登记错误则失败。
   return tools.createService({
     id: 'documents',
     runner,
+    // 用当前服务上下文和宿主文件权限构建产物工具集合；未提供保存钩子则不包含 artifact_save。
     createTools: context => tools.createArtifactTools({ context, files }),
     enabled: { groups: ['documents', 'analysis'] },
     authorize: ({ context }) => context.scope.userId.length > 0,
@@ -297,15 +320,21 @@ service 来自上方 createDocumentService 的成功 data；context 由服务端
 import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/tools/server'
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
+  // 按当前可信上下文读取启用目录，返回工具定义和分组，仍需在提交、执行时授权。
   const catalog = value(await service.catalog(context))
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
+  // 把保有幂等键的请求与当前主体提交给服务，返回任务状态和完整回执；拒绝或提交失败由 value 抛错。
   const submitted = value(await service.submit(keyed, context))
+  // 以同一持久键和主体查回先前执行，无匹配时成功返回 undefined，不会新建任务。
   const recovered = value(await service.find(keyed.idempotencyKey, context))
   // recovered is the same logical run, or undefined if none was accepted.
+  // 用提交返回的完整回执和当前主体查看任务状态、可用输出及事件；回执不属于当前主体时失败。
   const current = value(await service.inspect(submitted.receipt, context))
+  // 用同一回执请求取消，返回实际任务状态，cancelling 时尚未确认停止。
   const cancelling = value(await service.cancel(submitted.receipt, context))
   // current/cancelling are ToolRun values; cancellation may still be in progress.
+  // 以同一幂等键和主体等待对应任务的终态，成功返回工具的 JSON 输出；任务已取消或失败时返回错误。
   return service.invoke(keyed, context)
 }
 // At application shutdown, after all users of the service finish:
@@ -334,7 +363,9 @@ import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
+  // 用宿主上下文及文件权限构建产物工具和组；有 save 能力时才加入保存工具。
   const artifacts = tools.createArtifactTools({ context: options.context, files: options.files })
+  // 用宿主提供的 Runner、环境映射和文件权限构建作业工具集；未绑定环境不加入相应工具。
   const jobs = tools.createJobTools(options)
   return {
     tools: [...artifacts.tools, ...jobs.tools],

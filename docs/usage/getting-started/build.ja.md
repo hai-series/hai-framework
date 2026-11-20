@@ -50,6 +50,7 @@ pnpm build --target app --platform android --runtime auto
 ルートの `package.json` がプロジェクト名とバージョンの取得元です。イメージのビルド結果は `.hai/build/docker/build-<project>-image-<buildId>/` に保存されます。マニフェストにはサービスの種類、プラットフォーム、チェックサム、部分ビルドかどうかが記録されます。すべての出力に成功するとローカルの `latest` が更新されます。同じバージョンを再ビルドすると異なるビルド ID が割り当てられます。
 
 ```sh
+# 現在のプロジェクトのイメージをビルドし、自動処理用の JSON 結果を出力する。
 hai build --target image --json
 ```
 

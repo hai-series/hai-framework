@@ -18,17 +18,20 @@
 import { vecdb } from '@h-ai/vecdb'
 
 // 打开本地 LanceDB 连接。
+// 用本地 ./data/vecdb 初始化 LanceDB。成功 data 为 undefined，连接失败读取 error。
 const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 try {
   // 创建余弦相似度集合，每个向量有 3 个数值。
+  // 用 docs 名称创建三维余弦集合。成功 data 为 undefined，重复名称等失败读取 error。
   const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
   if (!created.success)
     throw new Error(created.error.message)
 
   // 写入一条文档向量，content 和 metadata 会随结果返回。
+  // 将文档 ID、三维向量及内容和来源写入 docs。成功 data 为 undefined，插入失败读取 error。
   const inserted = await vecdb.vector.insert('docs', [
     {
       id: 'doc-1',
@@ -41,6 +44,7 @@ try {
     throw new Error(inserted.error.message)
 
   // 用接近已写入向量的查询值，返回最多 5 条命中。
+  // 用三维查询向量在 docs 中搜索分数至少 0.7 的最多 5 条记录，data 为命中数组或 []，失败读取 error。
   const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
   if (!matches.success)
     throw new Error(matches.error.message)
@@ -50,6 +54,7 @@ try {
 }
 finally {
   // 释放连接，即使创建、写入或搜索失败也执行。
+  // 无参数释放本例连接，成功 data 为 undefined。清理失败记录错误码。
   const closed = await vecdb.close()
   if (!closed.success)
     process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
@@ -91,11 +96,17 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：连接与关闭
 
 ```ts
+// 打开 ./data/docs-demo 中的 LanceDB，成功可访问集合且无 data，失败交给 value 处理。
 value(await vecdb.init({ type: 'lancedb', path: './data/docs-demo' }))
+// 直接读取就绪属性，连接成功后为 true。
 vecdb.isInitialized // true
+// 从连接后的脱敏配置读取 type，本例为 lancedb。
 vecdb.config?.type // 'lancedb'
+// 读取同进程集成需要的后端连接信息，可能含凭据。
 const connection = vecdb.rawConnection // backend-specific connection; may contain credentials
+// 不传参数关闭当前连接，成功 data 为 undefined，失败由 value 抛出。
 value(await vecdb.close()) // undefined
+// 直接读取关闭后的配置，返回 null。
 vecdb.config // null
 ```
 
@@ -144,11 +155,17 @@ const connection = vecdb.rawConnection // 无需参数，返回同进程集成�
 #### 场景：准备与删除集合
 
 ```ts
+// 创建名为 demo-docs 的三维余弦集合。成功无 data，创建失败由 value 抛出。
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+// 检查刚创建的 demo-docs，成功 data 为 true，后端错误由 value 抛出。
 value(await vecdb.collection.exists('demo-docs')) // true
+// 不传名称，读取全部集合名，data 包含 demo-docs。读取失败由 value 抛出。
 value(await vecdb.collection.list()) // includes 'demo-docs'
+// 按 demo-docs 读取三维余弦集合信息，此时文档数为 0，读取失败由 value 抛出。
 const info = value(await vecdb.collection.info('demo-docs')) // dimension 3, cosine, zero documents
+// 删除 demo-docs 及其中数据，成功无 data，删除失败由 value 抛出。
 value(await vecdb.collection.drop('demo-docs')) // undefined
+// 再检查已删除的 demo-docs，data 为 false，查询失败由 value 抛出。
 value(await vecdb.collection.exists('demo-docs')) // false
 ```
 
@@ -182,15 +199,23 @@ VecDB 保存和比较数字向量，不会自动把文本变成向量。写入�
 例中的集合维度为 3，所以写入和查询都传 [1,0,0]；同向向量的余弦转换分数约为 1。真实文本由应用或 AI embedding 先转换，搜索返回匹配及 score，不自动生成回答，score 也不是百分比。
 
 ```ts
+// 创建名为 demo-docs 的三维余弦集合。成功无 data，创建失败由 value 抛出。
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+// 将 doc-1、三维向量和原文 Install 写入 demo-docs，成功无 data，插入失败由 value 抛出。
 value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))
+// 按集合名统计插入后的文档数，data 为 1，失败由 value 抛出。
 value(await vecdb.vector.count('demo-docs')) // 1
+// 用相同 doc-1 替换其正文为 Install v2，成功无 data，失败由 value 抛出。
 value(await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }]))
+// 用相同向量搜索 demo-docs，要求最高 1 条且分数至少 0.9。data 是更新后的 doc-1 所在数组，失败由 value 抛出。
 const matches = value(await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 }))
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+// 从 demo-docs 首页读取最多 32 个文档 ID，成功 data 含 items 及可选 nextCursor，失败由 value 抛出。
 const page = value(await vecdb.vector.scan('demo-docs', { limit: 32 }))
 // page.items: [{ id: 'doc-1' }]; continue using nextCursor when present
+// 从 demo-docs 删除列表中唯一的 doc-1，成功无 data，失败由 value 抛出。
 value(await vecdb.vector.delete('demo-docs', ['doc-1'])) // undefined
+// 删除后再统计 demo-docs，data 为 0，查询失败由 value 抛出。
 value(await vecdb.vector.count('demo-docs')) // 0
 ```
 
@@ -202,9 +227,11 @@ value(await vecdb.vector.count('demo-docs')) // 0
 
 ```ts
 // 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
+// 从 documents 扫描最多 32 个 ID。成功返回 items 及可选游标，失败保留 error 并停止续页。
 const page = await vecdb.vector.scan('documents', { limit: 32 })
 // 成功且存在下一页时，将上一页游标与页大小传入同一集合。
 if (page.success && page.data.nextCursor !== undefined) {
+  // 把上页游标交回同一集合，每页最多 32 条。成功返回下一批 ID，失败查看 error。
   const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
   // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
 }
@@ -217,6 +244,7 @@ if (page.success && page.data.nextCursor !== undefined) {
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
+// 创建 1536 维 docs 集合，成功无 data，未连接、重名等失败由下方按 code 分流。
 const result = await vecdb.collection.create('docs', { dimension: 1536 })
 if (!result.success) {
   switch (result.error.code) {

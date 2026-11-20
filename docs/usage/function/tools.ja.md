@@ -28,9 +28,11 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export async function calculate(objectId: string) {
+  // ホストが渡す objectId と同じ主体だけを許可する空の登録器を作る。
   const registry = tools.createRegistry({
     authorize: ({ context }) => context.objectId === objectId,
   })
+  // 下の Zod 入力と加算処理から sum を定義し、この登録器に登録する。定義不正は例外、登録成功時データなし、同名登録は失敗。
   const registered = registry.register(tools.define({
     name: 'sum',
     title: '合計',
@@ -41,6 +43,7 @@ export async function calculate(objectId: string) {
   }))
   if (!registered.success)
     return registered
+  // 確認済みの objectId で sum(2, 3) を実行する。成功時は { total: 5 }、入力や権限が不正なら処理を実行しない。
   return registry.execute('sum', { a: 2, b: 3 }, { objectId })
 }
 ```
@@ -55,6 +58,7 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
+  // 空でない ID を照会するツールを作り、受け取った read の HaiResult をそのまま使う。定義不正は例外。
   return tools.define({
     name: 'document_lookup',
     description: 'Read an authorized document',
@@ -106,13 +110,17 @@ function value<T>(result: HaiResult<T>): T {
 
 ```ts
 import { z } from 'zod'
+// 下記の数値 Zod ルールと加算処理で sum を定義する。実行可能なツールが返り、不正な定義は TypeError。
 const tool = tools.define({
   name: 'sum', description: 'Add two numbers',
   parameters: z.object({ a: z.number(), b: z.number() }),
   handler: ({ a, b }) => ({ total: a + b }),
 })
+// 引数なしでメタデータと入力規則を定義に変換し、名前 sum を読む。変換できなければ例外。
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
+// sum に数値 2 と 3 を渡す。成功時は { total: 5 }、実行失敗は value が例外にする。
 value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// a に文字列 wrong を渡す。VALIDATION_FAILED が返り、加算処理は呼ばれない。
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
 
@@ -195,19 +203,32 @@ Tools に全体の有効化スイッチはありません。各アプリケー�
 
 ```ts
 // Continue with the sum tool from the preceding scenario.
+// 信頼済みの主体 demo-user だけが実行できる空の登録器を作る。
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
+// 上で定義した sum を登録する。成功時にデータはなく、同名ツールは失敗。
 value(registry.register(tool)) // undefined
+// 空配列を渡して一括登録する。成功時にデータはなく、登録済みの sum は残る。
 value(registry.registerMany([])) // undefined; no tools added
 registry.size // 1
+// 登録済みの sum の有無を確認する。結果は true。
 registry.has('sum') // true
+// 名前 sum のインスタンスを探して、引数なしで定義に変換し名前 sum を読む。登録がなければ undefined。
 registry.get('sum')?.toDefinition().name // 'sum'
+// 引数なしで登録名を列挙する。結果は ['sum']。
 registry.getNames() // ['sum']
+// 引数なしで登録済み定義を取得し、名前だけを取り出すと ['sum']。入力規則の変換不可は例外。
 registry.getDefinitions().map(definition => definition.name) // ['sum']
+// 信頼済み demo-user で sum に 2 と 3 を渡す。成功時は { total: 5 }、権限や入力が不正なら実行されない。
 value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
+// demo-user で一件の sum(4, 1) をまとめて実行する。入力順の [{ total: 5 }] が返り、失敗は value が例外にする。
 value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+// 登録済みの sum を置き換える。成功時にデータはなく、検証に失敗すれば元の登録が残る。
 value(registry.replace(tool)) // undefined; same registered name
+// sum を登録解除する。今回は true、もともと登録がなければ false。
 registry.unregister('sum') // true
+// 解除済みの sum を一件のバッチとして再登録する。成功時データはなく、名前の衝突は失敗。
 value(registry.registerMany([tool])) // undefined
+// 引数なしで登録器を空にする。sum は見つからなくなり、戻り値はない。
 registry.clear() // undefined
 registry.size // 0
 ```
@@ -249,9 +270,11 @@ import type { ToolArtifactAccess } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
+  // 初期化済み Runner を借りて documents サービスを作り、documents と analysis を有効にする。成功時はサービス、設定や登録の失敗はエラー。
   return tools.createService({
     id: 'documents',
     runner,
+    // 現在のコンテキストとホストのファイル権限で成果物ツール群を作る。保存フックがなければ artifact_save は含まれない。
     createTools: context => tools.createArtifactTools({ context, files }),
     enabled: { groups: ['documents', 'analysis'] },
     authorize: ({ context }) => context.scope.userId.length > 0,
@@ -295,15 +318,21 @@ createDocumentService の成功データ、認証済みコンテキスト、カ�
 import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/tools/server'
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
+  // 信頼済みの主体で有効な定義とグループを取得する。提出と実行時には改めて権限を確認する。
   const catalog = value(await service.catalog(context))
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
+  // 冪等キー付きの要求をこの主体で提出する。成功時は実行状態と完全な受付、権限や提出の失敗は value が例外にする。
   const submitted = value(await service.submit(keyed, context))
+  // 同じ永続キーと主体で以前の実行を探す。見つからなければ undefined で、新規タスクは作らない。
   const recovered = value(await service.find(keyed.idempotencyKey, context))
   // recovered is the same logical run, or undefined if none was accepted.
+  // 完全な受付と現在の主体で状態・取得可能な出力・イベントを読む。主体が合わなければ失敗。
   const current = value(await service.inspect(submitted.receipt, context))
+  // 同じ受付でキャンセルを要求し、実際の状態を受け取る。cancelling なら停止確認はまだ終わっていない。
   const cancelling = value(await service.cancel(submitted.receipt, context))
   // current/cancelling are ToolRun values; cancellation may still be in progress.
+  // 同じキーと主体で終端状態を待つ。成功時は JSON 出力、キャンセルや実行失敗はエラー。
   return service.invoke(keyed, context)
 }
 // At application shutdown, after all users of the service finish:
@@ -332,7 +361,9 @@ import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
+  // ホストの主体とファイル権限で成果物ツールとグループを作る。保存ツールは save がある場合だけ追加される。
   const artifacts = tools.createArtifactTools({ context: options.context, files: options.files })
+  // ホストの Runner、環境割り当て、ファイル権限からジョブツール群を作る。環境がなければ該当ツールは追加されない。
   const jobs = tools.createJobTools(options)
   return {
     tools: [...artifacts.tools, ...jobs.tools],

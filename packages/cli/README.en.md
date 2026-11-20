@@ -13,6 +13,7 @@ Use Node.js matching `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.
 ```sh
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# Print the installed Hai CLI version.
 hai --version
 ```
 

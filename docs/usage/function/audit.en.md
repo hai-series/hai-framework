@@ -21,22 +21,28 @@ function dataOrThrow<T>(result: HaiResult<T>): T {
   return result.data
 }
 
+// Open the in-memory SQLite database for audit tables. Success has no data. Connection failure throws.
 dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
 
 try {
+  // Borrow the open database and use default audit settings. Success enables logging; failure throws.
   dataOrThrow(await audit.init())
   try {
+    // Write the auth login event for demo-user. Success returns the record with its ID; failure throws.
     const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+    // Query login events in pages of up to 20. In the fresh database the page contains the new event. Query failure throws.
     const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
     // 新数据库中，查询到的第一条记录就是刚写入的那条。
     if (logs.items[0]?.id !== saved.id)
       throw new Error('Expected the new login event')
   }
   finally {
+    // Close audit state without arguments. Success has no data; cleanup failure throws.
     dataOrThrow(await audit.close())
   }
 }
 finally {
+  // Close SQLite after audit shuts down. Success has no data; cleanup failure throws.
   dataOrThrow(await reldb.close())
 }
 ```
@@ -78,8 +84,11 @@ Connect RelDB before Audit and close them in reverse order.
 #### Scenario: Prepare audit services
 
 ```ts
+// Use default settings with the initialized RelDB. Success prepares tables. value throws on failure.
 value(await audit.init()) // undefined; audit tables are ready
+// Read readiness. It is true here once the audit tables are ready.
 audit.isInitialized // true
+// Stop audit without arguments. Success leaves the borrowed database open and has no data. value throws on failure.
 value(await audit.close()) // undefined; the borrowed RelDB remains open
 ```
 
@@ -120,17 +129,26 @@ If business data must never commit without an audit event, explicitly use the sa
 Both business writes and audit.log(input, tx) use tx; a failed step makes the caller abort and roll back. Automatic HTTP capture reports failure without undoing completed business work. Record a rollback failure event after the original transaction finishes rolling back.
 
 ```ts
+// Save an explicit login using the user, action, and resource. Success returns the record with ID and creation time. value throws on failure.
 const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
 // saved includes its generated id and createdAt
+// Pass safe read-event fields for demo-user and orders to automatic capture. Writing or skipping returns no data. value throws on failure.
 value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+// Bind the trusted actor ID to the async operation. Return the event ID produced by the callback and propagate its errors.
 const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
+  // Write an orders update with the actor inherited from context. Success returns the record. value throws on failure.
   const record = value(await audit.log({ action: 'update', resource: 'orders' }))
   return record.id
 }) // id is the callback's returned record id
+// Record registration for demo-user. Success has no data; failure throws.
 value(await audit.helper.register('demo-user'))
+// Record a login for demo-user. Success has no data; failure throws.
 value(await audit.helper.login('demo-user'))
+// Record logout for demo-user. Success has no data; failure throws.
 value(await audit.helper.logout('demo-user'))
+// Record a password reset request for the sample email. Success has no data; failure throws.
 value(await audit.helper.passwordResetRequest('demo@example.com'))
+// Record a completed reset for demo-user. Success has no data; failure throws.
 value(await audit.helper.passwordResetComplete('demo-user'))
 // helper calls succeed with undefined; query their saved events using audit.list
 ```
@@ -144,6 +162,7 @@ The application supplies authenticated IDs; these IDs are fictional. log returns
 Pass a trusted actor, resource name and order ID. Success has no business data; audit.list can read the saved event.
 
 ```ts
+// Record demo-user updating order-42 in orders. Success has no data. value throws on failure.
 value(await audit.helper.crud({
   userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
 })) // undefined
@@ -167,9 +186,13 @@ Investigate by user, action and time, then clean records according to retention 
 #### Scenario: Query and clean old records
 
 ```ts
+// Filter login events and read up to 20 from page 1. The result has items and totals; query failure throws.
 const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
+// Read up to 20 recent records for the user ID. The result is an array; query failure throws.
 const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
+// Aggregate the last seven days by action. The result is grouped counts; failure throws.
 const stats = value(await audit.getStats(7)) // action statistics for the last seven days
+// Keep 90 days of records and return the number deleted. Cleanup failure throws.
 const removed = value(await audit.cleanup(90)) // count of records older than 90 days
 ```
 
@@ -201,11 +224,13 @@ Below, run takes archive filters and returns AuditBackupInfo. Pass its object ke
 Initialize with private Storage and backup enabled. Supply an archive ID and range, then pass the returned key to verify. The second result describes the verified archive.
 
 ```ts
+// Pass the archive ID and UTC interval. Success returns the private archive key and manifest information; failure throws.
 const archive = value(await audit.backup.run({
   id: 'demo-login-archive',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
 }))
+// Verify the archive using archive.key from the prior step. Success returns verified archive information; corruption or read failure throws.
 const verifiedArchive = value(await audit.backup.verify(archive.key))
 // verifiedArchive identifies the same private archive; its contents passed verification.
 ```
@@ -225,6 +250,7 @@ Check rules that currently meet their thresholds; use Scheduler for recurring ch
 #### Scenario: Check anomalies and notify
 
 ```ts
+// Check configured windows without arguments. The report counts submitted, queued, and failed notifications. Check failure throws.
 const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
 ```
 

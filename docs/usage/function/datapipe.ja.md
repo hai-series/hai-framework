@@ -14,10 +14,15 @@ import { datapipe } from '@h-ai/datapipe'
 const rawText = '<p>One. Two.</p>'
 
 // ビルダーに 3 つの処理を登録し、入力を渡して実行します。
+// 引数なしで空のビルダーを作り、以下の呼び出しで処理を順に登録します。
 const result = await datapipe.pipeline()
+  // HTML タグの除去を登録し、ビルダーを返します。清掃の失敗は run が返します。
   .clean({ removeHtml: true }) // HTML タグを取り除くオプションを渡します。
+  // 清掃後のテキストを小文字にする処理を登録し、ビルダーを返します。
   .transform(text => text.toLowerCase()) // 次の処理に渡す文字列を返します。
+  // 上限 80 の文単位分割を登録し、ビルダーを返します。
   .chunk({ mode: 'sentence', maxSize: 80 }) // 分割方法と長さの上限を渡します。
+  // 上記の HTML で登録した処理を実行します。成功時は text と chunks、失敗時は error を確認します。
   .run(rawText) // 元のテキストを渡します。成功時の data は { text, chunks } です。
 
 if (!result.success)
@@ -49,6 +54,7 @@ HTML などから文字列を抽出し、必要に応じて URL や余分な空�
 #### 利用例：テキストの抽出と整形
 
 ```ts
+// タグと余分な空白を除き、成功時に 'Hello Ada' を返します。失敗時は error を確認します。
 const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
 if (!cleaned.success)
   throw new Error(cleaned.error.message)
@@ -74,6 +80,7 @@ cleaned.data // 'Hello Ada'
 #### 利用例：文書を分割する
 
 ```ts
+// 1 語ずつ分割します。成功時は区切りの空白を保った 3 チャンク、失敗時は error を確認します。
 const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
 if (!chunks.success)
   throw new Error(chunks.error.message)
@@ -133,11 +140,17 @@ Node の `pipeline.run()` は本文が UTF-16 の 128 Ki コード単位に達�
 本文と chunks は別の状態です。transform は本文、chunk はその時点の分割、chunkTransform は既存チャンクを変えます。分割後の本文変換は chunks を作り直しません。失敗時は後続を止め、chunk がなければ空配列です。
 
 ```ts
+// 引数なしで再利用可能なビルダーを作り、以下で後から実行する処理を登録します。
 const pipeline = datapipe.pipeline()
+  // HTML タグの除去を登録し、ビルダーを返します。清掃の失敗は run が返します。
   .clean({ removeHtml: true })
+  // 清掃後のテキストを小文字にする処理を登録し、ビルダーを返します。
   .transform(text => text.toLowerCase())
+  // 1 チャンクに最大 1 語を入れる分割を登録し、ビルダーを返します。
   .chunk({ mode: 'word', maxSize: 1 })
+  // beta チャンクを除く処理を登録し、ビルダーを返します。
   .chunkTransform(parts => parts.filter(part => part.content.trim() !== 'beta'))
+// この HTML でビルダーを実行します。成功時は小文字の本文と alpha、gamma のチャンク、失敗時は error を確認します。
 const result = await pipeline.run('<p>ALPHA BETA GAMMA</p>')
 if (!result.success)
   throw new Error(result.error.message)

@@ -13,6 +13,7 @@ import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
 // 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
+// Start orders 1.0.0 with console notifications and the admin URL below. Success has no data; initialization failure stops intake.
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -24,6 +25,7 @@ if (!initialized.success)
 
 export async function submitFeedback(context: FeedbackContext, submissionId: string) {
   // 受理成功返回含编号的报告。遇到失败时，调用方读取 error。
+  // Submit for orders with the trusted context and caller's stable submissionId. Success returns a report ID and number; authorization or budget checks can fail.
   return feedback.submit({ appId: 'orders', submissionId }, context)
 }
 ```
@@ -65,6 +67,7 @@ The server accepts reports, collects evidence, notifies and expires records usin
 #### Scenario: Prepare the service and collection jobs
 
 ```ts
+// Process a round of feedback jobs without arguments. data.processed is the count for this round; delivery is tracked separately.
 const jobs = value(await feedback.runJobs()) // this round's processed count
 ```
 
@@ -101,15 +104,21 @@ Use a server-authenticated context authorized for create/read/process. submit su
 import type { FeedbackContext } from '@h-ai/feedback'
 
 async function processReport(context: FeedbackContext, submissionId: string) {
+  // Submit an orders report with the trusted actor and durable submission ID. The result contains the report ID and number; value throws on authorization or storage failure.
   const report = value(await feedback.submit({ appId: 'orders', submissionId }, context))
+  // Read page 1 with up to 20 reports visible to this actor. The page has empty items when none are visible.
   const page = value(await feedback.list({ page: 1, pageSize: 20 }, context)) // authorized report page
+  // Read details and version using the new report ID and current actor. value throws on denied access or a read error.
   const detail = value(await feedback.get(report.id, context))
+  // Read the first 20 evidence items for the same report and actor. With no evidence, the returned page has empty items.
   const evidence = value(await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context))
+  // Mark the report handled using the observed version. Success returns the new report version; a version conflict or lack of permission fails.
   const handled = value(await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context))
   return { report, page, evidence, handled } // same report ID; handled has the new version
 }
 
 async function retryNotification(id: string, context: FeedbackContext) {
+  // Schedule a notification retry for the supplied authorized report. Success has no data; delivery completion is reported separately.
   return feedback.retry({ id, target: 'notify' }, context) // HaiResult<void>, caller checks success
 }
 ```
@@ -138,12 +147,16 @@ import type { FeedbackContext, FeedbackUploadInput } from '@h-ai/feedback'
 
 async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadInput) {
   const id = upload.id
+  // Append browser event event-demo-1 to the report named by upload.id. Its stable ID supports deduplication. Success returns acknowledged IDs and the evidence revision.
   const receipt = value(await feedback.appendEvidence({ id, evidence: [{
     id: 'event-demo-1', source: 'browser', sequence: 1, kind: 'business',
     timestamp: Date.now(), data: { state: 'checkout-failed' },
   }] }, context)) // acknowledged IDs and evidenceRevision
+  // Write the supplied attachment content and IDs to the report. Success returns metadata; value throws on validation, budget, or write failure.
   const attachment = value(await feedback.uploadAttachment(upload, context)) // saved attachment metadata
+  // Read the authorized attachment using the report and original attachment IDs. The DTO contains Base64 content; value throws on read failure.
   const bytes = value(await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context))
+  // Mark collection complete for this report with no known missing material. Success returns the updated report; unmet conditions fail.
   const completed = value(await feedback.completeCollection({ id, missing: [] }, context)) // updated report
   return { receipt, attachment, bytes, completed }
 }
@@ -172,7 +185,9 @@ An authorized administrator supplies the report ID. export returns a job ID. Thi
 import type { FeedbackContext } from '@h-ai/feedback'
 
 async function requestArchive(id: string, context: FeedbackContext) {
+  // Request an export for the authorized report and receive the durable job receipt. Archive generation may still be pending.
   const job = value(await feedback.export({ id }, context)) // persistent job receipt
+  // Fetch the archive for this report and the newly returned job ID. A pending archive or denied access fails.
   return feedback.getExport({ id, jobId: job.id }, context) // HaiResult<FeedbackAttachmentData>
 }
 ```
@@ -215,24 +230,39 @@ The first send freezes the envelope; retries retain its ID and contents. Accepta
 import type { FeedbackClientConfig } from '@h-ai/feedback/client'
 import { createFeedbackClient } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
+  // Create an independent capture client without arguments. Initialization enables the configured capture.
   const feedbackClient = createFeedbackClient()
+  // Initialize this session with the host's client config. Success has no data; value throws on invalid config or conflicting initialization.
   value(await feedbackClient.init(config))
   try {
+    // Record state: ready as a business event in this capture session. No data is returned.
     feedbackClient.record({ kind: 'business', data: { state: 'ready' } })
+    // Prepare an editable draft with no arguments. Success returns the draft; value throws if the session is unavailable.
     const draft = value(await feedbackClient.prepare())
+    // Read the current draft with no arguments. The result is undefined when no draft exists.
     const current = feedbackClient.getDraft() // current draft or undefined
+    // Read the current UI projection without arguments, including evidence, missing material, and available previews.
     const view = feedbackClient.getView() // preview URLs, evidence and missing materials
+    // Capture the visible page into the draft without a replacement ID. Capture failure or a concurrent draft freeze makes value throw.
     value(await feedbackClient.captureScreenshot()) // refreshes the screenshot attachment
+    // Add the in-memory demo.txt file to the draft. Success has no data; limits, validation, or conflicts leave existing files intact.
     value(await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })]))
+    // Submit the draft with description Checkout failed. Success yields the report ID and number; material uploads may still be pending.
     const receipt = value(await feedbackClient.submit({ description: 'Checkout failed' })) // accepted report ID/number
+    // Resume pending evidence and attachments for the current report without arguments. Success has no data; unfinished material remains pending.
     value(await feedbackClient.flush()) // resumes pending evidence upload
+    // Export the local draft to ZIP bytes without arguments or upload. value throws if archive generation fails.
     const archive = value(await feedbackClient.exportDraft()) // Uint8Array ZIP
+    // Send the current draft archive to the platform saver. Check status for saved or cancelled; value throws on a platform error.
     const saved = value(await feedbackClient.saveDraft()) // inspect saved.status; cancelled is not a saved file
+    // Revoke the session's attachment preview URLs without arguments. No data is returned.
     feedbackClient.releasePreviews() // releases generated object URLs
+    // Pause active collection with no arguments, retaining the draft and accepted uploads.
     feedbackClient.pause() // pauses active collection while retaining the draft
     return { draft, receipt, archive, saved }
   }
   finally {
+    // Close collection and discard the local draft, awaiting listener and observer cleanup. The promise has no business data.
     await feedbackClient.close({ discard: true })
   }
 }
@@ -249,9 +279,11 @@ import type { FeedbackBrowserClient } from '@h-ai/feedback/client'
 
 async function redactImage(client: FeedbackBrowserClient, attachmentId: string,
   annotation: Parameters<FeedbackBrowserClient['annotate']>[1]) {
+  // Apply the supplied annotation to the selected attachment ID. Success updates it with no data; a frozen draft or conflict preserves the prior attachment.
   const changed = await client.annotate(attachmentId, annotation)
   if (!changed.success)
     return changed
+  // Read the refreshed UI projection with no arguments to obtain the updated attachment and preview.
   return client.getView() // refreshed preview and attachment state
 }
 ```

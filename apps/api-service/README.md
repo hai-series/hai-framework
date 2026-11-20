@@ -58,12 +58,14 @@ import { AppInfoOutputDataSchema } from './app-schemas.js'
 
 export const appContract = {
   info: apiContract
+    // 声明 POST /app/info 的操作 ID 和文档分组，返回可继续附加 Schema 的路由。
     .route({
       method: 'POST',
       path: '/app/info',
       operationId: 'app.info',
       tags: ['app']
     })
+    // 将服务元信息 Schema 包成 HaiResult 成败结构，并作为路由输出。
     .output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
 }
 ```
@@ -78,17 +80,24 @@ import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
 export const router = serv
+  // 以 appContract 为约束创建处理器构建器。
   .implement(appContract)
+  // 声明处理器使用的服务端上下文类型，返回同一构建流程。
   .context<ServContext>()
+  // 为 info 注册处理器，调用时将服务元信息包装为成功结果。
   .route('info', () => ok({ /* 服务元信息 */ }))
+  // 选中 echo 路由，下一步为它设置鉴权和处理器。
   .route('echo')
+  // 启用当前路由的会话鉴权，未认证请求在进入处理器前被拒绝。
   .auth()
+  // 处理器接收经过校验的输入和请求上下文，返回回显、用户、请求号与时间。
   .handle(({ input, context }) => ok({
     message: input.message,
     userId: context.session.userId,
     requestId: context.requestId,
     timestamp: new Date().toISOString(),
   }))
+  // 完成此组路由，返回可交给服务端装配的处理器定义。
   .build()
 ```
 
@@ -99,8 +108,11 @@ import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { crypto } from '@h-ai/crypto'
 
+// 无参数初始化加密模块；成功后客户端能使用其传输能力，失败结果应先处理。
 await crypto.init()
+// 根据 apiServiceContract 创建独立客户端，提供对应的端点方法。
 const client = apiClient.create(apiServiceContract)
+// 配置本机 /api/v1、加密传输和浏览器 Cookie 续期；成功后客户端可调用。
 await client.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
@@ -108,19 +120,25 @@ await client.init({
 })
 
 // 公开端点
+// 无参数读取公开的服务元信息；成功 data 为服务信息。
 const info = await client.app.info()
 
 // 鉴权端点：需先登录
+// 提交示例账号和密码；成功返回用户和 tokens，注册失败时终止后续鉴权步骤。
 const registration = await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
 if (!registration.success)
   throw new Error(registration.error.message)
+// 使用注册返回的 tokens 更新此客户端的认证状态，无业务返回值。
 await client.auth.setTokens(registration.data.tokens)
+// 传入消息 hi；成功返回原消息及已认证用户、请求号和时间。
 const echoed = await client.app.echo({ message: 'hi' })
 
 void info
 void echoed
 
+// 无参数关闭客户端，释放认证及加密传输会话。
 await client.close()
+// 无参数释放加密模块，等待 Promise 完成。成功时无返回数据。
 await crypto.close()
 ```
 
@@ -172,7 +190,9 @@ transport:
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
+// 无参数初始化加密模块；成功后客户端能使用其传输能力，失败结果应先处理。
 await crypto.init()
+// 配置本机 API 前缀和本段传输选项；成功后默认客户端可调用，失败返回配置错误。
 await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
@@ -182,6 +202,7 @@ await apiClient.init({
 如果 `_serv.yml` 自定义了密钥协商路径，则客户端也要传同一路径：
 
 ```ts
+// 配置本机 API 前缀和本段传输选项；成功后默认客户端可调用，失败返回配置错误。
 await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: {
@@ -236,7 +257,9 @@ AI procedures 默认将 objectId 绑定为认证用户 ID，客户端无需传�
 #### 健康检查
 
 ```bash
+# 请求存活探针，服务在线时返回健康信息。
 curl http://localhost:3000/health
+# 请求就绪探针，所需服务准备完成时返回就绪信息，否则返回非就绪状态。
 curl http://localhost:3000/ready
 ```
 
@@ -249,28 +272,34 @@ curl http://localhost:3000/ready
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
+// 无参数初始化加密模块；成功后客户端能使用其传输能力，失败结果应先处理。
 await crypto.init()
 
+// 配置本机 API 前缀和本段传输选项；成功后默认客户端可调用，失败返回配置错误。
 await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
   auth: {},
 })
 
+// 提交示例账号、密码和邮箱；新建成功返回用户及 tokens，已有账号时可转用下方登录。
 const register = await apiClient.iam.auth.register({
   username: 'admin',
   password: 'Admin123!',
   email: 'admin@example.com',
 })
 
+// 使用该账号的标识和密码登录；成功 data 包含用户及本次 tokens，失败不上传。
 const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
 if (!login.success)
   throw new Error(login.error.message)
+// 使用登录返回的 tokens 更新默认客户端状态，后续预签名请求带认证信息。
 await apiClient.auth.setTokens(login.data.tokens)
 
+// 在当前用户路径下请求 PNG 上传凭据；对象存储后端成功时返回预签名信息。
 const storage = await apiClient.storage.presignedUrls.createUpload({
   key: `users/${encodeURIComponent(login.data.user.id)}/demo.png`,
   contentType: 'image/png',
@@ -284,7 +313,9 @@ void register
 void login
 void storage
 
+// 无参数关闭客户端，释放认证及加密传输会话。
 await apiClient.close()
+// 无参数释放加密模块，等待 Promise 完成。成功时无返回数据。
 await crypto.close()
 ```
 

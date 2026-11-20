@@ -41,6 +41,7 @@
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// 配置目标 API 地址、Cookie 认证和 15 秒超时；成功无业务数据，失败时终止使用客户端。
 const initialized = await apiClient.init({
   baseUrl: 'https://api.example.invalid/api/v1',
   auth: {},

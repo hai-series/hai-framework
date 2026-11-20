@@ -13,7 +13,9 @@
 在 CLI 创建并已配置 `deploy` 脚本的工程根目录执行。先查看只读计划，核对环境、目标和服务范围，再构建并发布：
 
 ```sh
+# Read the prod settings and report the deployment plan without applying it. Invalid inputs produce a diagnostic.
 pnpm run deploy --env prod --plan
+# Build and deploy the current app for prod. Build, connection, or remote deployment failure exits nonzero.
 pnpm run deploy --env prod --build
 ```
 
@@ -66,14 +68,19 @@ import type { DeployConfigInput } from '@h-ai/deploy'
 import { deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
+  // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. value throws on failure.
   const scan = value(await deploy.scan(appDir, { environment: 'prod' }))
+  // Initialize the deployment service with the supplied provider and credentials. value throws on invalid config or failed initialization.
   value(await deploy.init(config))
   try {
+    // Provision database and cache for orders. Success lists each provisioned resource. value throws on a failed provisioning result.
     const provisioned = value(await deploy.provisionAll('orders', ['db', 'cache']))
+    // Package the supplied app for prod in offline bundle mode. Success contains its bundle path and instructions. value throws on failure.
     const delivered = value(await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true }))
     return { scan, provisioned, delivered } // bundlePath/instructions do not imply remote readiness
   }
   finally {
+    // Release deployment providers and resources opened by init. The promise resolves without data.
     await deploy.close()
   }
 }
@@ -86,9 +93,13 @@ async function deliver(appDir: string, config: DeployConfigInput) {
 交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
 
 ```sh
+# Compile the current app using its default target. A compile failure exits nonzero.
 pnpm build
+# Build container artifacts for the configured roles. Missing container tooling or build failure exits nonzero.
 pnpm build --target image
+# Build only the web image artifact. An unknown role fails.
 pnpm build --target image --images web
+# Build a Windows x64 desktop artifact. Missing tooling or packaging failures exit nonzero.
 pnpm build --target desktop --platform windows --arch x64
 ```
 
@@ -116,6 +127,7 @@ SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额
 SDK 的 `DeployAppOptions.imageSource` 为 `{ type: 'cn' }` 或 `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`，`proxy` 为 `{ mode: 'inherit' }` 或 `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`。缺省为官方源、继承进程代理。`resolveImageReference()` / `resolveDownloadProxy()` 是无需 init 的解析工具，不修改引擎设置。中间件归档保留原始引用，服务器继续离线导入。
 
 ```sh
+# Build with the China image and npm sources and create a prod offline bundle. Build or packaging failure exits nonzero.
 pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
 ```
 
@@ -164,7 +176,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 
-版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括manifest.json、所选镜像tar和SHA-256；镜像制品统一使用格式 5。`webBasePath` 记录公开挂载目录，空字符串表示域名根目录。partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
+版本来自应用根 package.json.version。制品位于 `.hai/build/docker/build-<项目>-image-<buildId>/`，构建命令的 JSON 输出通过 `artifactDir` 返回实际目录。目录包括 manifest.json、所选镜像 tar 和 SHA-256，镜像制品统一使用格式 5。`webBasePath` 记录公开挂载目录，空字符串表示域名根目录。partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
 
 #### 网站挂载目录
 
@@ -233,10 +245,15 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 #### 两机连通：直接部署
 
 ```sh
+# Build the current app and publish the complete prod deployment. Failure leaves a diagnostic.
 pnpm run deploy --env prod --build
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+# Set deploy_artifact_dir to the artifactDir reported for the selected build ID by hai build --target image --json.
+# Deploy reuses those artifacts for prod and rejects an incompatible build.
+pnpm run deploy --env prod --artifact-dir "${deploy_artifact_dir:?Set deploy_artifact_dir to the selected artifact directory}"
+# Build and update only web. A missing or incompatible baseline skips the partial rollout.
 pnpm run deploy --env prod --build --services web
 # 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
+# Build and update only the serv and web roles, preserving other services. The baseline must match.
 pnpm run deploy --env prod --build --services "serv,web"
 ```
 
@@ -249,6 +266,7 @@ S3 的 `createBucket` 默认为 `false`；部署器为自建 S3 注入 `HAI_STOR
 #### 两机不通：生成包，手工复制
 
 ```sh
+# Build for prod and write an offline bundle for manual delivery. Build or packaging failure exits nonzero.
 pnpm run deploy --env prod --build --bundle-only
 ```
 
@@ -281,7 +299,9 @@ pnpm run deploy --env prod --build --bundle-only
 已经发布成功但业务验收发现问题时，准备保留的旧完整构建产物，以及匹配的配置、环境和私有参数备份；确认数据库结构与旧应用兼容，或先按业务恢复方案处理数据。恢复对应配置后执行：
 
 ```sh
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<previousBuildId>
+# Set previous_deploy_artifact_dir to the retained directory whose manifest has the full build ID you want to restore.
+# Deploy creates a new release from those artifacts or rejects an incompatible build.
+pnpm run deploy --env prod --artifact-dir "${previous_deploy_artifact_dir:?Set previous_deploy_artifact_dir to the retained full build directory}"
 ```
 
 使用当前 CLI，省略 `--build`、`--services`，以旧制品生成新的全量交付包和部署 ID，再执行锁、账本、校验、启动和健康检查。离线环境同样先生成新包再交付；不得用旧工具或重跑旧包绕过保护。旧 buildId 通常保留 serv/web 应用镜像，重新打包的中间件仍按当前 CLI 固定版本规划，不保证精确回退所有中间件版本。发布前应核实主版本、数据目录与 Schema 兼容，保留旧制品、匹配配置、账本、凭据和数据备份。不能仅修改 `current`、删除数据卷或手工覆盖镜像 tag；容器回滚不会撤销已写业务数据、不兼容迁移或外部通知等副作用。
@@ -312,6 +332,7 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 ```ts
 import { deploy } from '@h-ai/deploy'
 
+// Select docker-ssh and expose host port 18080. A failed provider initialization stops the example.
 const initialized = await deploy.init({
   provider: {
     type: 'docker-ssh',
@@ -321,6 +342,7 @@ const initialized = await deploy.init({
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
+  // Package demo-serv with the prod environment and the selected build artifacts. Success identifies the bundle, while packaging failure throws below.
   const result = await deploy.deployApp('./packages/demo-serv', {
     environment: 'prod',
     envDir: '.',
@@ -333,6 +355,7 @@ try {
   // result.data.bundlePath / instructions; packaged does not mean server ready.
 }
 finally {
+  // Close the provider instance created above. The promise resolves with no result.
   await deploy.close()
 }
 ```
@@ -386,11 +409,15 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 #### 场景：管理本机私有凭据
 
 ```ts
+// Read the current user's private credentials file path. This requires no initialized deployment provider.
 const credentialPath = deploy.credentials.getPath() // operator-private path
+// Load saved credentials for this process. Success lists loaded variable names. value throws on a failed read.
 const loadedNames = value(deploy.credentials.load()) // loaded environment variable names
 // Save only credentials supplied securely by the operator:
 export function saveCredential(providerToken: string) {
+  // Save the operator-supplied token under HAI_DEPLOY_PROVIDER_TOKEN. value throws on persistence failure.
   value(deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken))
+  // Save the same token using the batch API. value throws if the credentials file cannot be updated.
   value(deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken }))
 }
 ```
@@ -422,10 +449,15 @@ import type { MiddlewareRequirement } from '@h-ai/deploy'
 import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
+  // Load the required prod environment from envDir. Success contains the merged values and file information. value throws if loading fails.
   const environment = value(loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true }))
+  // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
   const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
+  // Resolve this app's _cache.yml with those environment values. Success is a cache config object. value throws on load or expansion failure.
   const config = value(loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values))
+  // Write the memory override to the private production environment. Success lists written variable names. value throws on failure.
   const written = value(saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true }))
+  // Save the given cache requirement as the memory backend for this app. Success lists updated names. value throws if configuration cannot be written.
   const middleware = value(saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } }))
   return { config, written, middleware } // use the memory cache requirement from this app's scan
 }
@@ -506,7 +538,9 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 ```ts
 import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
+// Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
 validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
+// Parse SMTP secure from the string false. The result is the boolean false. value throws if parsing fails.
 value(parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })) // false
 ```
 
@@ -534,10 +568,14 @@ value(parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boo
 import { artifactChecksum, getDeployRecovery, normalizeProjectName } from '@h-ai/deploy'
 
 async function inspectDelivery(appDir: string, artifactFile: string) {
+  // Normalize the supplied scoped name to the deploy project identifier orders.
   const project = normalizeProjectName('@shop/orders') // 'orders'
+  // Hash the existing artifact at the supplied path. Success is its SHA-256 digest. An unreadable path rejects.
   const digest = await artifactChecksum(artifactFile) // existing artifact; failures reject
+  // Package the supplied app for prod without publishing. Success contains bundle details. On failure inspect recovery below.
   const delivered = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
   if (!delivered.success)
+    // Extract the recovery information attached to this deploy failure, when available.
     return { project, digest, error: delivered.error, recovery: getDeployRecovery(delivered.error) }
   return { project, digest, delivery: delivered.data }
 }

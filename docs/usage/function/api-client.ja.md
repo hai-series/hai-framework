@@ -15,14 +15,18 @@ import type { IamAuthLoginInput } from '@h-ai/api-client'
 import { apiClient } from '@h-ai/api-client'
 
 async function loginAndLoadProfile(input: IamAuthLoginInput) {
+  // Start the default client at /api/v1 with default authentication storage. Return initialization errors before using the client.
   const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
   if (!initialized.success)
     return initialized
   try {
+    // Build auth actions bound to the initialized default client. Subsequent actions use its URL and credential storage.
     const actions = apiClient.createAuthActions(apiClient)
+    // Send the caller's login input. Success supplies the session and stores the issued tokens. Return a failed login result unchanged.
     const loggedIn = await actions.login(input)
     if (!loggedIn.success)
       return loggedIn
+    // Fetch the signed-in user with the current credentials. Success includes the profile and permissions; return a failure unchanged.
     const profile = await apiClient.iam.auth.currentUser()
     if (!profile.success)
       return profile
@@ -30,6 +34,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
   }
   catch (writeError) {
     try {
+      // Clear any credentials left by a failed write. Storage cleanup can reject and is combined with the original error.
       await apiClient.auth.clear()
     }
     catch (cleanupError) {
@@ -38,6 +43,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
     throw writeError
   }
   finally {
+    // Close the default client and release local state and observers. The promise resolves without data.
     await apiClient.close()
   }
 }
@@ -83,12 +89,16 @@ function value<T>(result: HaiResult<T>): T {
 import { apiContract } from '@h-ai/api-contract'
 apiClient.isInitialized // default client readiness
 const settings = apiClient.config // redacted config or null
+// Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
 const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+// Initialize that client for the HTTPS API and default auth options. value throws on initialization failure.
 value(await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} }))
 try {
+  // Fetch public authentication settings from this client's server. value returns its data or throws the failed result.
   const policy = value(await client.iam.auth.publicConfig()) // IamPublicConfig from this server
 }
 finally {
+  // Close only the independent client used in this try block. Its local resources are released.
   await client.close() // undefined; local resources released
 }
 ```
@@ -170,22 +180,33 @@ finally {
 
 ```ts
 async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setTokens>[0]) {
+  // Create a fresh in-process credential store. It starts without an access or refresh token.
   const storage = apiClient.tokenStorage.memory()
+  // Write the issued access token into this memory store. Completion has no result data.
   await storage.setAccessToken(tokens.accessToken)
   if (tokens.refreshToken)
+    // Write the supplied refresh token when present. The write only changes this memory instance.
     await storage.setRefreshToken(tokens.refreshToken)
+  // Read back both tokens. access is the issued access token, and refresh is the provided refresh token or null.
   const stored = { access: await storage.getAccessToken(), refresh: await storage.getRefreshToken() }
+  // Remove both tokens from this store. Subsequent reads return null.
   await storage.clear()
+  // Read the access token after the clear. It is null.
   const afterClear = await storage.getAccessToken() // null
+  // Create the browser cookie-backed adapter. It holds access credentials in memory and relies on the browser for the HttpOnly refresh cookie.
   const browserStorage = apiClient.tokenStorage.httpOnlyCookie() // refresh cookie is not readable
   let refreshCount = 0
+  // Subscribe to client refresh events and increment the counter on each event. The returned function removes this subscription.
   const stop = apiClient.auth.onTokenRefreshed(() => { refreshCount += 1 })
   try {
+    // Give the client's active auth store the issued pair. Persistence failure rejects; successful assignment alone is not a refresh event.
     await apiClient.auth.setTokens(tokens)
     return { stored, afterClear, refreshCount }
   }
   finally {
+    // Remove the callback registered above. Later refreshes no longer update refreshCount.
     stop()
+    // Clear credentials from the client's active auth store. This can reject if storage cleanup fails.
     await apiClient.auth.clear()
   }
 }
@@ -218,33 +239,45 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 フォーム入力を受け、actions が保存完了を待ちます。以下の関数は別々の操作用で、実アカウントに順次実行しません。必要な captcha は AuthPanel が渡します。
 
 ```ts
+// Bind auth actions to the initialized API client and its current credential store.
 const actions = apiClient.createAuthActions(apiClient)
+// Load the server's public IAM settings, or null when unavailable. value throws a failed result.
 const config = value(await actions.publicConfig()) // IamPublicConfig | null
 if (!config)
   throw new Error('Public authentication settings are unavailable')
+// Bind page-exit session ending only when the returned setting enables it. Keep the function that unbinds the listener.
 const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
 async function login(input: Parameters<typeof actions.login>[0]) {
+  // Submit the caller's login input. Success returns authenticated identity and tokens. value throws the preserved failure.
   return value(await actions.login(input)) // authenticated user and tokens, or throws preserved failure
 }
 async function register(input: Parameters<typeof actions.register>[0]) {
+  // Submit the caller's registration input. Success returns the registration result. value throws on failed registration.
   return value(await actions.register(input)) // registration/authentication result
 }
 async function sendCode(identifier: string) {
+  // Request an OTP for the supplied identifier. Success returns its expiry. value throws a failed request.
   return value(await actions.sendOtp(identifier)) // expiresAt
 }
 async function requestReset(identifier: string) {
+  // Request a password reset for the identifier. Success has no data. value throws if the request fails.
   value(await actions.requestPasswordReset(identifier)) // undefined
 }
 async function resetPassword(token: string, newPassword: string) {
+  // Send the supplied reset token and new password. Success completes the reset without data. value throws on failure.
   value(await actions.confirmPasswordReset(token, newPassword)) // undefined
 }
 async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
+  // Submit the caller's renewal input. Success confirms renewal without data. value throws on failure.
   value(await actions.renewPassword(input)) // undefined
 }
 async function confirmSensitive(password: string) {
+  // Exchange the current password for a credential scoped to users:delete. value throws on a failed reauthentication.
   return value(await actions.reauthenticate(password, 'users:delete')) // one-operation credential
 }
+// Request a CAPTCHA for login. Check success before handing the returned challenge to AuthPanel.
 const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
+// Remove the page-exit handler registered above when the page leaves.
 unbind() // call when this page is destroyed
 ```
 
@@ -296,12 +329,16 @@ unbind() // call when this page is destroyed
 #### 利用例：認証と管理 API の呼び出し
 
 ```ts
+// Fetch the authenticated current user with no explicit input. Success supplies the profile. Missing authorization or other failures are thrown below.
 const current = await apiClient.iam.auth.currentUser()
 if (!current.success)
   throw new Error(current.error.message)
+// Fetch authorized page 1 with at most 20 users. value throws the failure instead of returning a page.
 const users = value(await apiClient.iam.users.list({ page: 1, pageSize: 20 }))
 // users.items is the authorized user page, not every user in the database
+// Use default role filters. Success yields the roles visible to the caller. value throws on failure.
 const roles = value(await apiClient.iam.roles.list({})) // configured roles visible to this caller
+// Use default permission filters. Success contains visible permission records. value throws on failure.
 const permissions = value(await apiClient.iam.permissions.list({})) // permitted permission records
 ```
 
@@ -335,8 +372,10 @@ const permissions = value(await apiClient.iam.permissions.list({})) // permitted
 #### 利用例：ファイルと AI API
 
 ```ts
+// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. value throws on failure.
 const files = value(await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 }))
 // files contains metadata and pagination for this authorized prefix
+// List the AI sessions visible to the caller using default filters. value throws on request failure.
 const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessions
 ```
 
@@ -360,14 +399,17 @@ reports/ と成功応答のセッション ID を使います。削除は実デ�
 
 ```ts
 const outcomes: string[] = []
+// Register an observer that collects sanitized logical request outcomes. The returned function removes it.
 const stop = apiClient.observeRequests(record => { outcomes.push(JSON.stringify(record)) })
 try {
+  // Read this server's public IAM settings. The logical request is observed even if the call fails, and failure throws below.
   const result = await apiClient.iam.auth.publicConfig()
   if (!result.success)
     throw new Error(result.error.message)
   // outcomes now contains the sanitized logical request record for this call
 }
 finally {
+  // Unsubscribe the request observer created above.
   stop()
 }
 ```

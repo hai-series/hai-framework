@@ -15,9 +15,11 @@
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 用默认配置初始化加密模块，成功 data 为 undefined，配置或初始化失败读取 error。
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// 对 abc 的 UTF-8 字节计算默认 SM3，data 为 64 位十六进制字符串，失败读取 error。
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
@@ -48,12 +50,17 @@ const digest = digestResult.data
 没有输入参数；init 成功后状态为 true，close 完成后为 false。要继续下面的算法示例，请重新初始化。初始化期间调用 close 不会让迟到的初始化重新打开模块。
 
 ```ts
+// 读取就绪状态，已完成本例初始化时为 true。
 crypto.isInitialized // true
+// 无参数清除当前加密模块的初始化状态，完成时无业务返回数据。
 await crypto.close() // Promise<void>
+// 关闭后读取就绪属性，当前值为 false。
 crypto.isInitialized // false
+// 用默认配置初始化加密模块，成功 data 为 undefined，配置或初始化失败读取 error。
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// 读取就绪状态，已完成本例初始化时为 true。
 crypto.isInitialized // true
 ```
 
@@ -82,31 +89,41 @@ crypto.isInitialized // true
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// 无参数生成随机 SM2 公私钥对，data 含 publicKey 和 privateKey，失败读取 error。
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message, { cause: pairResult.error })
 const pair = pairResult.data
+// 校验刚生成的公钥，格式有效时返回 true。
 crypto.asymmetric.isValidPublicKey(pair.publicKey) // true
+// 校验刚生成的私钥，格式有效时返回 true。
 crypto.asymmetric.isValidPrivateKey(pair.privateKey) // true
+// 传空值检查公钥格式，返回 false。
 crypto.asymmetric.isValidPublicKey(null) // false
+// 传示例无效文本检查公钥，返回 false。
 crypto.asymmetric.isValidPublicKey('not-a-public-key') // false
 
+// 用刚生成的公钥加密 order-42，data 为 SM2 密文，失败读取 error。
 const ciphertextResult = crypto.asymmetric.encrypt('order-42', pair.publicKey)
 if (!ciphertextResult.success)
   throw new Error(ciphertextResult.error.message, { cause: ciphertextResult.error })
 const ciphertext = ciphertextResult.data
+// 用匹配私钥解开上一步密文，data 为 order-42，解密失败读取 error。
 const decryptedResult = crypto.asymmetric.decrypt(ciphertext, pair.privateKey)
 if (!decryptedResult.success)
   throw new Error(decryptedResult.error.message, { cause: decryptedResult.error })
 decryptedResult.data // 'order-42'
+// 用生成的私钥为 order-42 签名，data 是签名字符串，失败读取 error。
 const signatureResult = crypto.asymmetric.sign('order-42', pair.privateKey)
 if (!signatureResult.success)
   throw new Error(signatureResult.error.message, { cause: signatureResult.error })
 const signature = signatureResult.data
+// 传原文、刚生成的签名和配对公钥。有效签名的 data 为 true，校验操作失败读取 error。
 const verifiedResult = crypto.asymmetric.verify('order-42', signature, pair.publicKey)
 if (!verifiedResult.success)
   throw new Error(verifiedResult.error.message, { cause: verifiedResult.error })
 verifiedResult.data // true
+// 保持签名和公钥不变，将正文改为 changed。成功 data 为 false，操作失败读取 error。
 const changedMessageResult = crypto.asymmetric.verify('changed', signature, pair.publicKey)
 if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
@@ -122,24 +139,29 @@ changedMessageResult.data // false
 上一场景省略签名选项，实际使用 `{ hash: true, userId: '1234567812345678' }`。下面的 `signing` **显式把 userId 改为 `'orders-service'`**，所以验签也传同一个 signing。这个公开标识参与签名中的身份摘要计算，不是 IAM 用户 ID，不是密码，也不自动绑定当前登录用户。`hash: true` 按 SM2 的消息预处理规则，把身份摘要与原文一起做 SM3 后签名；业务文本保持默认即可，不要为大文本关闭哈希。
 
 ```ts
+// 无参数生成随机 SM2 公私钥对，data 含 publicKey 和 privateKey，失败读取 error。
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message)
 const pair = pairResult.data
 const options = { cipherMode: 1, outputFormat: 'base64' } as const
+// 用配对公钥及指定顺序加密 order-42，输出 Base64 密文，失败读取 error。
 const encodedResult = crypto.asymmetric.encrypt('order-42', pair.publicKey, options)
 if (!encodedResult.success)
   throw new Error(encodedResult.error.message, { cause: encodedResult.error })
 const encoded = encodedResult.data
+// 用同一密文顺序、Base64 编码及匹配私钥解密上一步输出，data 为 order-42，失败读取 error。
 const decodedResult = crypto.asymmetric.decrypt(encoded, pair.privateKey, options)
 if (!decodedResult.success)
   throw new Error(decodedResult.error.message, { cause: decodedResult.error })
 decodedResult.data // 'order-42'
 const signing = { hash: true, userId: 'orders-service' }
+// 用私钥对 order-42 签名，开启摘要并绑定 orders-service 标识，data 为签名，失败读取 error。
 const signedResult = crypto.asymmetric.sign('order-42', pair.privateKey, signing)
 if (!signedResult.success)
   throw new Error(signedResult.error.message, { cause: signedResult.error })
 const signed = signedResult.data
+// 传同一文本、签名、公钥及签名选项，匹配时 data 为 true，校验失败读取 error。
 const customVerifiedResult = crypto.asymmetric.verify('order-42', signed, pair.publicKey, signing)
 if (!customVerifiedResult.success)
   throw new Error(customVerifiedResult.error.message, { cause: customVerifiedResult.error })
@@ -179,28 +201,35 @@ SM2 只加密非空文本；认证失败或密文不完整返回失败。私钥�
 输入分别是 abc、它的 UTF-8 字节和 hex 编码，三种摘要相同。非法 hex 返回失败。HMAC 示例密钥仅作演示，真实密钥来自安全配置。
 
 ```ts
+// 对 abc 的 UTF-8 字节计算默认 SM3，data 为 64 位十六进制字符串，失败读取 error。
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
 const digest = digestResult.data
 // 66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0
+// 对编码后的 abc 原始字节计算默认 SM3，data 与文本摘要相同，失败读取 error。
 const byteDigestResult = crypto.hash.hash(new TextEncoder().encode('abc'))
 if (!byteDigestResult.success)
   throw new Error(byteDigestResult.error.message, { cause: byteDigestResult.error })
 byteDigestResult.data === digest // true
+// 将 616263 按十六进制解码为 abc 字节，成功 data 与前面的摘要相同，失败读取 error。
 const hexDigestResult = crypto.hash.hash('616263', { inputEncoding: 'hex' })
 if (!hexDigestResult.success)
   throw new Error(hexDigestResult.error.message, { cause: hexDigestResult.error })
 hexDigestResult.data === digest // true
+// 6z 含非十六进制字符，校验输入编码时返回失败。
 crypto.hash.hash('6z', { inputEncoding: 'hex' }).success // false
+// 对照原始 abc 和刚生成的摘要，data 为 true，计算失败读取 error。
 const digestVerifiedResult = crypto.hash.verify('abc', digest)
 if (!digestVerifiedResult.success)
   throw new Error(digestVerifiedResult.error.message, { cause: digestVerifiedResult.error })
 digestVerifiedResult.data // true
+// 对照改后的 changed 与原摘要，成功 data 为 false，计算失败读取 error。
 const changedDigestResult = crypto.hash.verify('changed', digest)
 if (!changedDigestResult.success)
   throw new Error(changedDigestResult.error.message, { cause: changedDigestResult.error })
 changedDigestResult.data // false
+// 用本例共享密钥计算 order-42 的 HMAC，data 是 64 位十六进制字符串，失败读取 error。
 const macResult = crypto.hash.hmac('order-42', 'demo-shared-secret')
 if (!macResult.success)
   throw new Error(macResult.error.message, { cause: macResult.error })
@@ -234,21 +263,27 @@ SM4 默认 CBC，每次生成新 IV，结果包含解密所需的字段。IV 可
 输入为 hello 和随机生成的32字符十六进制密钥；两种往返调用均还原 hello，密文与 IV 每次不同。
 
 ```ts
+// 无参数生成随机 SM4 密钥，直接返回十六进制字符串。
 const key = crypto.symmetric.generateKey()
+// 检查刚生成的 SM4 密钥，有效时返回 true。
 crypto.symmetric.isValidKey(key) // true
+// 用生成的密钥保护 hello，data 为含默认 CBC、编码和 IV 的密文对象，失败读取 error。
 const encryptedResult = crypto.symmetric.encrypt('hello', key)
 if (!encryptedResult.success)
   throw new Error(encryptedResult.error.message, { cause: encryptedResult.error })
 const encrypted = encryptedResult.data
 // { mode: 'cbc', encoding: 'hex', ciphertext: '…', iv: '…' }
+// 用原密钥和密文对象解密，data 为 hello，输入错误或解密失败读取 error。
 const plaintextResult = crypto.symmetric.decrypt(encrypted, key)
 if (!plaintextResult.success)
   throw new Error(plaintextResult.error.message, { cause: plaintextResult.error })
 plaintextResult.data // 'hello'
+// 用同一密钥加密 hello，data 为本次密文和新 IV，失败读取 error。
 const withIVResult = crypto.symmetric.encryptWithIV('hello', key)
 if (!withIVResult.success)
   throw new Error(withIVResult.error.message, { cause: withIVResult.error })
 const withIV = withIVResult.data
+// 分别传上次密文、原密钥和该次 IV，data 为 hello，解密失败读取 error。
 const plaintextWithIVResult = crypto.symmetric.decryptWithIV(withIV.ciphertext, key, withIV.iv)
 if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
@@ -260,9 +295,13 @@ plaintextWithIVResult.data // 'hello'
 生成独立 IV 后只用于这一次加密。结构化结果标记 encoding=base64，decrypt 根据该字段解码。
 
 ```ts
+// 无参数生成随机 SM4 密钥，直接返回十六进制字符串。
 const key = crypto.symmetric.generateKey()
+// 无参数生成本次加密的随机 IV，直接返回十六进制字符串。
 const iv = crypto.symmetric.generateIV()
+// 检查刚生成的 IV，格式符合要求时返回 true。
 crypto.symmetric.isValidIV(iv) // true
+// 用新密钥和自备 IV 为 hello 生成 CBC 密文，data 的编码为 Base64，失败读取 error。
 const base64PayloadResult = crypto.symmetric.encrypt('hello', key, {
   mode: 'cbc', iv, outputFormat: 'base64',
 })
@@ -270,6 +309,7 @@ if (!base64PayloadResult.success)
   throw new Error(base64PayloadResult.error.message, { cause: base64PayloadResult.error })
 const base64Payload = base64PayloadResult.data
 base64Payload.encoding // 'base64'
+// 用同一密钥解密 Base64 记录，data 为 hello，解密失败读取 error。
 const base64PlaintextResult = crypto.symmetric.decrypt(base64Payload, key)
 if (!base64PlaintextResult.success)
   throw new Error(base64PlaintextResult.error.message, { cause: base64PlaintextResult.error })
@@ -300,6 +340,7 @@ SM4 可加密空文本，但解密拒绝空密文、无效编码、非完整16�
 同一密码多次 hash 得到不同记录。密码不符是成功结果 false；记录格式不合法是失败结果，错误码为 INVALID_INPUT，不能混为一谈。
 
 ```ts
+// 对演示密码使用 16 字节随机盐和 10000 轮生成记录，data 是保存用字符串，失败读取 error。
 const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
@@ -307,14 +348,17 @@ if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record 是完整的随机记录字符串；各部分见下方格式示例。
+// 异步比对演示密码与刚生成的完整记录，匹配时 data 为 true，记录或计算错误读取 error。
 const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true
+// 用错误密码核对原记录，有效记录下 data 为 false，计算或记录错误读取 error。
 const wrongPasswordResult = crypto.password.verify('wrong-password', record)
 if (!wrongPasswordResult.success)
   throw new Error(wrongPasswordResult.error.message, { cause: wrongPasswordResult.error })
 wrongPasswordResult.data // false
+// 传演示密码和损坏记录，本次校验失败，错误码为 hai:crypto:002。
 const malformed = crypto.password.verify('demo-password', '$hai$invalid')
 malformed.success // false
 if (!malformed.success) {
@@ -384,11 +428,14 @@ import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
 
 function buildTransport(secret: unknown) {
+  // 校验调用方从可信 Secret 读取的密钥环，data 为密钥环，校验失败原样返回。
   const ring = crypto.transport.parseServerKeyRing(secret)
   if (!ring.success)
     return ring
+  // 用已验证的密钥环和登记库创建服务端，data 为传输管理器，创建失败直接返回。
   return crypto.transport.createServer({
     serverKeyRing: ring.data,
+    // 用已初始化的缓存建立公钥与请求登记库，返回服务端可注入的对象。
     keyStore: crypto.transport.createKeyStore({ cache }),
   })
 }
@@ -402,14 +449,20 @@ manager 是上一步成功 data；clientPublicKey 是有界读取、校验握手
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 
 async function exchange(manager: TransportEncryptionManager, clientPublicKey: string) {
+  // 登记握手调用方的公钥，返回登记标识。无效公钥或登记失败会抛错。
   const clientId = await manager.registerClientKey(clientPublicKey)
+  // 用刚返回的登记 ID 读取公钥，当前登记有效时返回原公钥，缺失时为 undefined。
   const registered = await manager.getClientPublicKey(clientId)
   // registered === clientPublicKey
   return {
     clientId,
+    // 无参数读取当前握手使用的服务端密钥 ID。
     serverKeyId: manager.getServerKeyId(),
+    // 无参数读取当前服务端公钥，交给客户端完成握手。
     serverPublicKey: manager.getServerPublicKey(),
+    // 读取管理器当前允许的明文请求字节上限。
     maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+    // 读取本次公钥登记有效期，单位为秒。
     clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
   }
 }
@@ -432,15 +485,20 @@ async function exchange(manager: TransportEncryptionManager, clientPublicKey: st
 示例输入是 POST hello，预期 Response 正文是解密后的 `{ received: "hello" }`。这是整段 JSON/文本传输，不是大文件流式上传。HEAD/204/205/304 的已认证响应保持空正文，不应调用 json()。
 
 ```ts
+// 用业务 API 的握手 URL 构造客户端会话，返回可初始化的实例。
 const session = crypto.transport.createClient({
   keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
 })
+// 无参数读取会话就绪值。刚创建或已销毁的会话返回 false。
 session.ready() // false
 try {
+  // 无参数按会话的握手地址建立加密上下文，成功后可发加密请求，失败读取 error。
   const sessionInitialized = await session.init()
   if (!sessionInitialized.success)
     throw new Error(sessionInitialized.error.message, { cause: sessionInitialized.error })
+  // 握手成功后无参数读取会话，返回 true。
   session.ready() // true
+  // 用已就绪会话向 echo API POST 明文 hello，成功返回可读取明文的 Response。网络或解密错误会抛出。
   const response = await session.encryptedFetch('https://api.example.com/api/echo', {
     method: 'POST', body: 'hello',
   })
@@ -449,9 +507,12 @@ try {
   const body: unknown = await response.json() // { received: 'hello' }
 }
 finally {
+  // 无参数清除当前会话的加密状态，完成后 ready 为 false。
   session.destroy()
 }
+// 无参数读取会话就绪值。刚创建或已销毁的会话返回 false。
 session.ready() // false
+// 直接读取当前传输协议版本常量，值为 2。
 crypto.transport.protocol.VERSION // 2
 ```
 
@@ -468,7 +529,9 @@ async function decryptEnvelope(
   request: Request,
 ) {
   const url = new URL(request.url)
+  // 用收到的加密载荷和实际请求上下文解密。成功 data 含明文和上下文，验签、时间或解密失败原样返回。
   return manager.decryptRequest(payload, {
+    // 使用协议定义的客户端 ID 请求头名读取登记 ID，缺失时传空字符串交由校验。
     clientId: request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? '',
     method: request.method,
     path: url.pathname + url.search,
@@ -574,23 +637,32 @@ interface Context {
 ```ts
 import { cache } from '@h-ai/cache'
 
+// 用已初始化缓存和 3600 秒有效期构造公钥登记库，返回后续调用的实例。
 const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+// 无参数生成测试用 SM2 密钥对，data 含测试公钥和私钥，失败读取 error。
 const testPairResult = crypto.asymmetric.generateKeyPair()
 if (!testPairResult.success)
   throw new Error(testPairResult.error.message, { cause: testPairResult.error })
 const testPair = testPairResult.data
+// 登记刚生成的测试公钥并返回其客户端 ID，登记失败会抛错。
 const clientId = await registry.register(testPair.publicKey)
 try {
+  // 用登记 ID 读回公钥，本例与测试公钥相同，查询失败可能抛错。
   await registry.get(clientId) === testPair.publicKey // true
   const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
   const expiresAt = Date.now() + 60_000
+  // 首次用该客户端、随机请求 ID 和未来期限占用编号，返回 true，存储失败抛错。
   await registry.claimRequest(clientId, requestId, expiresAt) // true
+  // 再次传同一个未过期编号，重复申请返回 false，存储失败抛错。
   await registry.claimRequest(clientId, requestId, expiresAt) // false
 }
 finally {
+  // 若登记库支持删除，按测试 ID 删除公钥登记，完成无数据，失败会抛错。
   await registry.delete?.(clientId)
+  // 若登记库提供关闭方法，无参数释放其资源，完成无数据。
   await registry.close?.()
 }
+// 再查询已删除的登记 ID，本例返回 undefined，存储查找失败可能抛错。
 await registry.get(clientId) // undefined
 ```
 
@@ -638,15 +710,21 @@ await registry.get(clientId) // undefined
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError, crypto } from '@h-ai/crypto'
 
+// 用内置握手字节上限读取示例 JSON 正文，返回原文本，超限抛出 TransportBodyTooLargeError。
 const text = await crypto.transport.readBody(new Response('{"hello":"world"}').body, {
+  // 读取协议的默认握手正文上限作为参数，单位为字节。
   maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
 })
 // text === '{"hello":"world"}'
+// 输入 8 MiB 明文容量，返回明文和加密载荷等各阶段的字节上限。
 const limits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
 limits.plaintextBytes // 8388608
 limits.encryptedPayloadBytes // 16809984
+// 读取协议允许的最小明文字节数 1024。
 crypto.transport.plaintextRange.min // 1024；最小明文字节数
+// 读取协议允许的最大明文字节数 67108864。
 crypto.transport.plaintextRange.max // 67108864；最大明文字节数
+// 读取最长请求有效期，单位为秒，当前为 600。
 crypto.transport.timeLimits.maxRequestAgeSeconds // 600；最长请求有效期，秒
 ```
 
@@ -658,37 +736,45 @@ crypto.transport.timeLimits.maxRequestAgeSeconds // 600；最长请求有效期�
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// 设置默认 1 MiB 和 /files/* 的 8 MiB 明文限制，返回可按路径分配资源名额的策略。
 const policy = crypto.transport.createBodyPolicy(1024 * 1024, {
   '/files/*': 8 * 1024 * 1024,
 })
 
 async function echo(manager: TransportEncryptionManager, request: Request): Promise<Response> {
+  // 用实际请求路径申请处理名额，成功返回该路径限制及释放方法，无可用名额时进入 503 分支。
   const lease = policy.acquire(new URL(request.url).pathname)
   if (!lease)
     return new Response(null, { status: 503 })
   try {
+    // 用管理器、来访请求和租用上限认证，data 含明文和上下文，失败按下方时间错误或 HTTP 状态处理。
     const verified = await crypto.transport.authenticateRequest(manager, request, lease.limits)
     if (!verified.success) {
       const cause = verified.error.cause
       if (cause instanceof TransportTimeError && cause.context)
+        // 用时间错误及已核实上下文配合管理器生成 HTTP 错误响应，返回给同一客户端。
         return crypto.transport.createErrorResponse(cause, { manager, context: cause.context })
       return new Response(null, { status: verified.error.httpStatus ?? 400 })
     }
+    // 用已核实请求上下文加密状态 200 对应的 JSON 正文，成功 data 为密文载荷，失败返回 500。
     const encrypted = await manager.encryptResponse(
       verified.data.context, JSON.stringify({ received: verified.data.plaintext }), 200,
     )
     if (!encrypted.success)
       return new Response(null, { status: 500 })
     return Response.json(encrypted.data, {
+      // 用协议的加密响应头名和值标记 JSON 密文响应。
       headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
     })
   }
   catch (error) {
     if (error instanceof TransportBodyTooLargeError)
+      // 将容量异常转换为 413 响应。
       return crypto.transport.createErrorResponse(error)
     throw error
   }
   finally {
+    // 无参数归还本次申请的容量名额，各分支退出时执行，无业务数据。
     lease.release()
   }
 }
@@ -701,12 +787,16 @@ async function echo(manager: TransportEncryptionManager, request: Request): Prom
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// 用上限 1024 和实测 1025 字节构造容量异常，错误码为 hai:crypto:070。
 const oversized = new TransportBodyTooLargeError(1024, 1025)
 oversized.code // 'hai:crypto:070'
+// 将刚构造的容量异常转换为状态 413 的响应。
 const tooLarge = await crypto.transport.createErrorResponse(oversized)
 tooLarge.status // 413
+// 用未提供的请求时间和当前毫秒数构造时间异常，错误码为 hai:crypto:071。
 const invalidTime = new TransportTimeError(undefined, Date.now())
 invalidTime.code // 'hai:crypto:071'
+// 将没有已认证上下文的时间异常转换为状态 400 的响应。
 const timeRejected = await crypto.transport.createErrorResponse(invalidTime)
 timeRejected.status // 400
 ```

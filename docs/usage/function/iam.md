@@ -35,33 +35,43 @@ import { reldb } from '@h-ai/reldb'
 // 基础密码认证不需要安装 Reach 或 ldapts。
 async function example() {
   try {
+    // 用项目中的 data.db 打开 SQLite，成功无数据；失败时不开始 IAM。
     const db = await reldb.init({ type: 'sqlite', database: './data.db' })
     if (!db.success)
       return db
+    // 为开发登录建立本进程缓存，成功无数据；生产要求共享后端时会失败。
     const cached = await cache.init({ type: 'memory' })
     if (!cached.success)
       return cached
+    // 在已启动的数据库和缓存上应用默认身份配置，成功无数据；初始化失败时不注册用户。
     const initialized = await iam.init({})
     if (!initialized.success)
       return initialized
+    // 用示例用户名 demo 和密码注册，成功返回注册结果；占用的用户名或密码策略不符会失败。
     const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
     if (!registered.success)
       return registered
+    // 以刚注册的 demo 和相同密码登录，成功返回用户和令牌；凭据不符会失败。
     const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
     if (!login.success)
       return login
+    // 验证登录刚返回的 access token，成功返回当前授权下的会话；无效或过期令牌失败。
     return await iam.auth.verifyToken(login.data.tokens.accessToken)
   }
   finally {
     // 应用关闭时按依赖的反向顺序释放。
+    // 无参关闭 IAM 并停止继续使用当前运行期状态；不会替宿主关闭数据库和缓存。
     await iam.close()
+    // 无参释放例中的 Memory 后端与进程内数据，关闭结果由缓存模块独立返回。
     await cache.close()
+    // 最后无参释放 data.db 的数据库连接，结果独立于登录结果。
     await reldb.close()
   }
 }
 
 const result = await example()
 if (!result.success)
+  // 写 ERROR 日志并带失败码，不输出示例密码和令牌。
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
@@ -106,6 +116,7 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备认证服务与公开策略
 
 ```ts
+// 无参读取合并后的公开认证策略；成功不含私密设置，失败由 value 抛出。
 const publicSettings = value(await iam.getPublicConfig()) // merged public IAM settings
 // Read only the returned public policy; never return iam.config as a public response.
 ```
@@ -263,12 +274,15 @@ import { iam } from '@h-ai/iam'
 
 // 启动时调用一次。Core 已读取 config/，数据库和缓存已成功初始化。
 export function startDirectoryLogin() {
+  // 从 Core 已加载配置读 iam 节点；缺少配置则抛错，类型参数描述预期字段。
   const config = core.config.getOrThrow<IamConfigSettingsInput>('iam')
+  // 用读取的 LDAP/IAM 设置与已就绪依赖初始化。成功 data 为 undefined，配置或依赖失败返回 err。
   return iam.init(config)
 }
 
 // 启动成功后，在登录处理函数中传入已经校验的表单输入。
 export function loginWithDirectory(username: string, password: string) {
+  // 把已校验的表单凭据交给 LDAP 登录，成功返回绑定的本地用户和令牌；LDAP 或凭据失败返回 error。
   return iam.auth.loginWithLdap({ username, password })
 }
 ```
@@ -343,9 +357,11 @@ import { reach } from '@h-ai/reach'
 
 // 服务启动时调用。Core、RelDB 与 Cache 已就绪。
 export async function startNotifications() {
+  // 先从 Core 读取已加载的 reach 配置（缺失会抛错），再启动通知模块。成功无数据，初始化失败不启动 IAM。
   const notification = await reach.init(core.config.getOrThrow<ReachConfigInput>('reach'))
   if (!notification.success)
     return notification
+  // 用下方 OTP 与密码重置策略初始化 IAM，通知由已启动的 Reach 或宿主回调负责。成功无业务数据，依赖或配置失败返回错误。
   return iam.init({
     reach,
     login: { otp: true },
@@ -369,6 +385,7 @@ type Delivery = Pick<IamConfigInput, 'onOtpSendEmail' | 'onOtpSendSms' | 'onPass
 
 export function startWithOwnDelivery(delivery: Delivery) {
   // 把应用已有的邮件/短信发送函数放进相应回调。
+  // 用下方 OTP 与密码重置策略初始化 IAM，通知由已启动的 Reach 或宿主回调负责。成功无业务数据，依赖或配置失败返回错误。
   return iam.init({
     login: { otp: true },
     otp: { email: Boolean(delivery.onOtpSendEmail), sms: Boolean(delivery.onOtpSendSms) },
@@ -428,6 +445,7 @@ OTP 是两次交互：先发送，用户取得验证码后再登录；发送/登
 import { iam } from '@h-ai/iam'
 
 async function passwordLogin(identifier: string, password: string) {
+  // 使用表单标识和密码登录，成功含用户、令牌及授权；无效凭据等失败保留 error。
   const result = await iam.auth.login({ identifier, password })
   if (!result.success)
     return result
@@ -437,15 +455,18 @@ async function passwordLogin(identifier: string, password: string) {
 
 async function requestLoginCode(identifier: string) {
   // identifier 为启用通道对应的邮箱/手机号，返回 expiresAt。
+  // 发验证码到表单标识对应的已启用通道；成功返回 expiresAt，频繁重发失败。
   return iam.auth.sendOtp(identifier)
 }
 
 async function otpLogin(identifier: string, code: string) {
   // 用户收到验证码并输入后调用；发送失败时不能伪报成功。
+  // 提交原标识和用户收到的验证码；成功返回用户及令牌，错误或过期验证码不建立会话。
   return iam.auth.loginWithOtp({ identifier, code })
 }
 
 async function registerWithSession(username: string, password: string) {
+  // 用申请者的用户名和密码注册后登录；成功返回令牌与用户，任一步失败保留错误。
   return iam.auth.registerAndLogin({ username, password })
 }
 ```
@@ -573,24 +594,29 @@ import { iam } from '@h-ai/iam'
 
 async function registerUser(username: string, email: string, password: string) {
   // 返回 RegisterResult，不自动建立会话。
+  // 用申请者表单中的用户名、邮箱和密码创建账号；成功返回注册结果，字段冲突或策略失败不建立会话。
   return iam.user.register({ username, email, password })
 }
 
 async function createManagedUser(username: string, password: string) {
   // 先验证调用者管理权限；不受 register.enabled 开关限制。
+  // 已授权管理员用提供的用户名和密码创建账号。成功返回创建结果，重复用户名或密码策略失败。
   return iam.user.createUser({ username, password })
 }
 
 async function updateMyProfile(accessToken: string, displayName: string) {
+  // 用请求中的 access token 更新自己的显示名并返回更新后的用户；会话无效或资料不合法时失败。
   return iam.user.updateCurrentUser(accessToken, { displayName })
 }
 
 async function changeMyPassword(accessToken: string, oldPassword: string, newPassword: string) {
   // 成功后撤销该用户全部会话，客户端回到登录入口。
+  // 用当前访问令牌和表单中的旧、新密码改密。成功无数据并撤销会话；旧密码验证或新密码策略不符时失败。
   return iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)
 }
 
 async function listReaders(page: number) {
+  // 按调用方页码读取名称匹配 alice 的 active 记录读取者，每页最多 20 条并含角色。返回分页结果，查询失败保留 error。
   const result = await iam.user.listUsers({
     page,
     pageSize: 20,
@@ -609,6 +635,7 @@ async function listReaders(page: number) {
 
 async function loadUsers(userIds: readonly string[]) {
   // 最多 1000 个输入 ID；去重保留输入顺序，缺失 ID 省略。
+  // 用调用方已授权的用户 ID 批量读取并包含角色；成功按输入顺序返回去重后的命中项，存储失败保留 error。
   return iam.user.getUsers(userIds, {
     include: ['roles']
   })
@@ -616,6 +643,7 @@ async function loadUsers(userIds: readonly string[]) {
 
 async function makeUserDormant(userId: string) {
   // 调用前已验证管理权限；成功后自动清除该用户会话。
+  // 把管理员指定账号置为 dormant。成功返回更新记录并使旧会话失效；账号不存在或更新失败时返回错误。
   return iam.user.updateUser(userId, { accountStatus: 'dormant' })
 }
 ```
@@ -640,16 +668,19 @@ import { iam } from '@h-ai/iam'
 
 async function requestReset(identifier: string) {
   // 缺失用户与有效用户使用相同成功响应，避免枚举账户。
+  // 为用户输入的邮箱请求重置。已登记或不存在都可成功且无数据；存储故障或投递未知返回失败。
   return iam.user.requestPasswordReset(identifier)
 }
 
 async function confirmReset(token: string, newPassword: string) {
   // token 来自通知中的重置链接；成功后重新登录。
+  // 消费通知链接的令牌并保存表单里的新密码；成功无数据，过期/无效令牌或策略失败返回错误。
   return iam.user.confirmPasswordReset(token, newPassword)
 }
 
 async function resetByAdministrator(userId: string, newPassword: string) {
   // 管理权限校验在服务端入口完成；不接受未经校验的 userId。
+  // 管理入口用已核对的用户 ID 重置密码，成功无数据并撤销旧会话；找不到用户或策略失败返回错误。
   return iam.user.adminResetPassword(userId, newPassword)
 }
 ```
@@ -717,31 +748,57 @@ Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 
 
 ```ts
 async function reviewReader(userId: string) {
+  // 登记 docs:read API 权限并取得含 id 的权限对象；重复代码或写入失败由 value 抛出。
   const permission = value(await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' }))
+  // 建立代码 docs_reader 的空权限角色，返回含 id 的角色；同名代码冲突失败。
   const role = value(await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] }))
+  // 用刚创建的两个 ID 关联 docs:read 到 docs_reader；成功无数据。
   value(await iam.authz.assignPermissionToRole(role.id, permission.id)) // undefined
+  // 将新角色授给调用方指定的用户，成功无数据；关系写入失败由 value 抛出。
   value(await iam.authz.assignRole(userId, role.id)) // undefined
+  // 把同一用户全部角色替换为刚创建的单一角色；成功无数据。
   value(await iam.authz.syncRoles(userId, [role.id])) // replaces the complete role set
+  // 检查该用户的 docs:read；此例为 true，false 表示拒绝，查询失败由 value 抛出。
   value(await iam.authz.checkPermission(userId, 'docs:read')) // true (RBAC enabled)
+  // 按用户 ID 读取生效角色和权限 code，包括 docs_reader 与 docs:read。
   value(await iam.authz.getUserAuthorization(userId)) // role and permission codes
+  // 按同一用户 ID 读取角色记录，包含刚分配的 docs_reader。
   value(await iam.authz.getUserRoles(userId)) // Role[]
+  // 按用户 ID 读取生效权限对象，本例包含 docs:read。
   value(await iam.authz.getUserPermissions(userId)) // Permission[]
+  // 传只有该用户的一批 ID，返回以用户 ID 为键、角色数组为值的 Map。
   value(await iam.authz.getUserRolesForMany([userId])) // Map keyed by user ID
+  // 传刚创建的角色 ID 数组，返回角色 ID 到权限数组的 Map。
   value(await iam.authz.getRolePermissionsForMany([role.id])) // Map keyed by role ID
+  // 批量读角色成员数并按当前角色 ID 取值，隔离示例中为 1。
   value(await iam.authz.getRoleUserCounts([role.id])).get(role.id) // 1 in this isolated example
+  // 按刚创建的 ID 查询角色对象，未命中为 null。
   value(await iam.authz.getRole(role.id)) // the created Role
+  // 按稳定代码 docs_reader 读取相同角色，未命中为 null。
   value(await iam.authz.getRoleByCode('docs_reader')) // same Role
+  // 读取角色第一页最多 20 条，返回 items 和分页信息。
   value(await iam.authz.getAllRoles({ page: 1, pageSize: 20 })) // role page
+  // 按该角色 ID 更新显示名为 Document readers，成功返回更新记录。
   value(await iam.authz.updateRole(role.id, { name: 'Document readers' })) // updated Role
+  // 用创建时的权限 ID 查询权限，没有此项时返回 null。
   value(await iam.authz.getPermission(permission.id)) // the created Permission
+  // 按稳定代码 docs:read 找相同权限，未命中为 null。
   value(await iam.authz.getPermissionByCode('docs:read')) // same Permission
+  // 读取权限第一页最多 20 条，结果含 items 和分页信息。
   value(await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })) // permission page
+  // 按角色 ID 读取已关联的权限数组，仍包含 docs:read。
   value(await iam.authz.getRolePermissions(role.id)) // includes docs:read
+  // 把 docs:export 作为该权限的敏感操作规则保存，成功无业务数据。
   value(await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])) // undefined
+  // 按 docs:export 筛选生效的敏感操作；重认证策略启用时包含该规则，没有匹配则为空数组。
   value(await iam.authz.getSensitiveOperations('docs:export')) // configured rule when reauthentication is enabled
+  // 解除新角色和权限的关联，成功无数据，不删除两者的定义。
   value(await iam.authz.removePermissionFromRole(role.id, permission.id)) // undefined
+  // 从指定用户撤销本例的角色分配，成功无数据。
   value(await iam.authz.removeRole(userId, role.id)) // undefined
+  // 按 ID 删除本例创建的角色定义，成功无数据；删除失败由 value 抛出。
   value(await iam.authz.deleteRole(role.id)) // undefined
+  // 按 ID 删除本例创建的权限定义，成功无数据；删除失败由 value 抛出。
   value(await iam.authz.deletePermission(permission.id)) // undefined
 }
 ```
@@ -785,6 +842,7 @@ import { iam } from '@h-ai/iam'
 
 async function provisionReader(userId: string) {
   // 示例初始化权限/角色；生产种子应先按 code 查询，保证幂等。
+  // 创建 record:read API 权限；成功取得权限 ID，代码冲突或写入失败不继续建角色。
   const permission = await iam.authz.createPermission({
     code: 'record:read',
     name: '读取记录',
@@ -794,6 +852,7 @@ async function provisionReader(userId: string) {
   })
   if (!permission.success)
     return permission
+  // 用前一步的权限 ID 创建 record_reader 角色；成功得到角色 ID，定义无效或写入失败直接返回。
   const role = await iam.authz.createRole({
     code: 'record_reader',
     name: '记录读取者',
@@ -801,21 +860,25 @@ async function provisionReader(userId: string) {
   })
   if (!role.success)
     return role
+  // 把新角色授给调用方指定用户，成功无数据，绑定失败返回错误。
   return iam.authz.assignRole(userId, role.data.id)
 }
 
 async function replaceRolePermissions(roleId: string, permissionIds: string[]) {
   // 完整替换：[] 清空；省略 permissionIds 则保持已有权限。
+  // 用已授权的角色 ID 和可替换权限 ID 数组更新角色；成功返回更新对象，写失败返回错误。
   return iam.authz.updateRole(roleId, { permissionIds })
 }
 
 async function replaceUserRoles(userId: string, roleIds: string[]) {
   // 完整替换用户的角色集合；[] 移除全部角色。
+  // 将指定用户的角色完整替换为传入 ID 集合，成功无数据，写入错误返回失败。
   return iam.authz.syncRoles(userId, roleIds)
 }
 
 async function currentAuthorization(userId: string) {
   // 返回 roles/permissions 的 code 数组，不接受 ID 或显示名称代替 code。
+  // 按已核对的用户 ID 读当前授权快照；返回角色与权限 code，读取失败保留 error。
   return iam.authz.getUserAuthorization(userId)
 }
 ```
@@ -906,6 +969,7 @@ import { iam } from '@h-ai/iam'
 
 async function authenticateRequest(accessToken: string) {
   // 受保护请求读取当前用户状态及角色/权限，失败时停止业务操作。
+  // 验证请求携带的访问令牌并重读当前授权；成功返回会话，令牌无效、过期或依赖不可用时失败。
   const verified = await iam.auth.verifyToken(accessToken)
   if (!verified.success)
     return verified
@@ -913,6 +977,7 @@ async function authenticateRequest(accessToken: string) {
 }
 
 async function rotateTokens(refreshToken: string) {
+  // 以客户端刷新令牌原子换取新的 TokenPair；过期或已轮换时失败。
   const refreshed = await iam.session.refresh(refreshToken)
   if (!refreshed.success)
     return refreshed
@@ -921,11 +986,13 @@ async function rotateTokens(refreshToken: string) {
 }
 
 async function signOut(accessToken: string) {
+  // 以完整访问令牌撤销会话及相关刷新令牌，成功无数据；共享存储提交失败返回错误。
   return iam.auth.logout(accessToken)
 }
 
 async function forceSignOut(userId: string) {
   // 调用前已验证管理员权限，返回撤销的会话数。
+  // 撤销经授权管理的用户的所有会话，成功返回撤销数量；提交失败返回错误。
   return iam.session.deleteByUserId(userId)
 }
 ```
@@ -973,19 +1040,29 @@ options 只能由可信服务端在验证用户后构造；这些低层接口不
 import type { CreateSessionOptions } from '@h-ai/iam'
 
 async function manageTrustedSession(options: CreateSessionOptions, refreshToken: string) {
+  // 用宿主提供的用户与可信会话选项直接创建 Session；存储失败由 value 抛出。
   const created = value(await iam.session.create(options)) // Session, not TokenPair
   const token = created.accessToken
+  // 用刚创建的 access token 读取会话快照；找不到时返回 null。
   const found = value(await iam.session.get(token)) // Session or null
+  // 用同一 access token 做底层会话验证，成功得到现存 Session；缺失、过期等失败。
   const verified = value(await iam.session.verifyToken(token)) // Session; missing/expired fails
+  // 按刚验证的版本把该会话的 theme 设为 dark，成功无数据；版本冲突失败。
   value(await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)) // undefined
+  // 为创建选项中的用户同步已验证的角色和权限快照，成功无数据；写错时 value 抛出。
   value(await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })) // undefined
+  // 用初始 access token 撤销该会话，成功无数据；存储失败由 value 抛出。
   value(await iam.session.delete(token)) // undefined; revokes this session
+  // 用创建选项的用户 ID 撤销剩余会话并返回数量。
   value(await iam.session.deleteByUserId(options.userId)) // remaining revoked count
 }
 
 async function rotateThenRevoke(refreshToken: string) {
+  // 使用调用方的旧刷新令牌换取新的一对令牌；过期或已用过的令牌失败。
   const pair = value(await iam.session.refresh(refreshToken)) // new TokenPair
+  // 撤销刚换出的刷新令牌，解除再次续期能力，成功无数据；当前访问令牌仍需独立撤销。
   value(await iam.session.revokeRefresh(pair.refreshToken)) // undefined; access remains valid until expiry/revocation
+  // 撤销同一轮新发的 access token 会话，成功无数据。
   value(await iam.session.delete(pair.accessToken)) // undefined
 }
 ```
@@ -1069,6 +1146,7 @@ import { iam } from '@h-ai/iam'
 
 async function createReadKey(userId: string) {
   // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  // 为已授权用户创建名为 Read client、有效期 30 天、限 record:read 的密钥；成功仅本次返回明文。
   const created = await iam.apiKey.createApiKey(userId, {
     name: 'Read client',
     expirationDays: 30,
@@ -1082,11 +1160,13 @@ async function createReadKey(userId: string) {
 
 async function apiKeyLogin(rawKey: string) {
   // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  // 用安全接收的明文 API Key 登录，返回受 scopes 收敛的会话令牌；无效、已停用或过期的密钥失败。
   return iam.auth.loginWithApiKey({ key: rawKey })
 }
 
 async function requireRecordRead(accessToken: string, deniedMessage: string) {
   // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  // 验证请求携带的访问令牌并重读当前授权；成功返回会话，令牌无效、过期或依赖不可用时失败。
   const verified = await iam.auth.verifyToken(accessToken)
   if (!verified.success)
     return verified
@@ -1095,12 +1175,15 @@ async function requireRecordRead(accessToken: string, deniedMessage: string) {
     || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
   )
   if (!allowed)
+    // 用统一拒绝码和应用本地化文案构造失败 HaiResult，当前请求不继续。
     return err(HaiCommonError.FORBIDDEN, deniedMessage)
   // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  // 把已验证会话中的用户 ID 包为成功数据，供后续检查具体资源归属。
   return ok({ userId: verified.data.userId })
 }
 
 async function listMyKeys(userId: string) {
+  // 为已核对的用户拉取第一页启用的 Read 系列密钥元数据，每页最多 20 条，不返回明文密钥。
   return iam.apiKey.listApiKeys(userId, {
     page: 1,
     pageSize: 20,
@@ -1111,6 +1194,7 @@ async function listMyKeys(userId: string) {
 
 async function revokeKey(keyId: string) {
   // 调用前校验本人归属或管理权限。
+  // 按已核对的密钥 ID 撤销 API Key，成功无数据；存储失败保留错误。
   return iam.apiKey.revokeApiKey(keyId)
 }
 ```
@@ -1157,6 +1241,7 @@ import { iam } from '@h-ai/iam'
 
 async function issueAudioTicket(session: Session) {
   // session 已通过当前授权校验，签发前还须验证该操作及资源范围。
+  // 把已验证会话的用户 ID 绑定到 ai-audio 转录 grant，签发 30 秒一次性票据；签发失败不下发票据。
   const issued = await iam.ticket.issue({
     subjectId: session.userId,
     purpose: 'ai-audio',
@@ -1170,6 +1255,7 @@ async function issueAudioTicket(session: Session) {
 }
 
 async function consumeAudioTicket(ticket: string) {
+  // 按 ai-audio 用途原子消费客户端票据，成功返回已绑定授权；用途不符、过期或已消费会失败。
   const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
   if (!consumed.success)
     return consumed
@@ -1189,6 +1275,7 @@ async function consumeAudioTicket(ticket: string) {
 ```ts
 import { HaiIamError, iam } from '@h-ai/iam'
 
+// 故意使用 admin 的错误密码示范。凭据错误返回 INVALID_CREDENTIALS 并且不建立会话。
 const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
 if (!result.success) {
   if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {

@@ -20,9 +20,12 @@
   let submittedName = $state('')
 </script>
 
+<!-- Give the greeting preview a card title. The card renders the name form and status as its contents. -->
 <Card title='预览问候语'>
   <label for='greeting-name'>姓名</label>
+  <!-- Bind the text input to name and associate it with the greeting-name label. Typing updates name. -->
   <Input id='greeting-name' bind:value={name} />
+  <!-- Disable the primary button for blank names. An enabled click trims the name and updates the greeting below. -->
   <Button variant='primary' disabled={!name.trim()} onclick={() => { submittedName = name.trim() }}>
     预览
   </Button>
@@ -38,6 +41,7 @@
 
 ```svelte
 <!-- 无需 import { Button } from '@h-ai/ui' -->
+<!-- Render a primary submit-labelled button after the preprocessor injects the import. -->
 <Button variant='primary'>提交</Button>
 ```
 
@@ -80,6 +84,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 
 export default {
+  // Install the Hai UI preprocessor before Vite's Svelte preprocessor. It supplies imports for Hai components in templates.
   preprocess: [autoImportHaiUi(), vitePreprocess()],
 }
 ```
@@ -124,8 +129,10 @@ export default {
 ```svelte
 <div class='hai-mobile-viewport'>
   <div class='hai-mobile-shell max-w-lg'>
+    <!-- Render the Home bar inline and include the top safe-area inset. -->
     <AppBar title='Home' fixed={false} safeArea />
     <main class='hai-mobile-main'>...</main>
+    <!-- Render the provided destinations and mark home as active. The centered bottom bar includes the bottom safe area. -->
     <BottomNav items={items} active='home' centered maxWidth='lg' safeArea />
   </div>
 </div>
@@ -198,7 +205,9 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
   import { CalendarDate } from '@internationalized/date'
   let date = $state(new CalendarDate(2026, 11, 17))
 </script>
+<!-- Display the initial November 17 date in the calendar. Selection updates the shared bound date. -->
 <Calendar bind:value={date} />
+<!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
 ```
 
@@ -235,13 +244,19 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
   const m = { name: () => '姓名', notes: () => '备注', save: () => '预览提交' }
   const save = (data: Record<string, unknown>) => { submitted = data }
 </script>
+<!-- Render a two-column form with fixed-width left labels. Valid submission passes the named fields to save; required validation blocks invalid submission. -->
 <Form columns={2} labelPosition='left' labelWidth='6rem' onsubmit={save}>
+  <!-- Render the required name caption using the app label. -->
   <FormField label={() => m.name()} required>
+    <!-- Bind the required name field. Its name key appears in the submitted record. -->
     <Input name='name' bind:value={name} required />
   </FormField>
+  <!-- Render the optional notes caption using the app label. -->
   <FormField label={() => m.notes()}>
+    <!-- Bind the optional notes field. Its notes key is available on form submission. -->
     <Textarea name='notes' bind:value={notes} />
   </FormField>
+  <!-- Render the labelled submit button, invoking form validation and submission on click. -->
   <Button type='submit'>{m.save()}</Button>
 </Form>
 <p role='status'>{JSON.stringify(submitted)}</p>
@@ -260,8 +275,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
   let name = $state('')
   const m = { userName: () => '姓名' }
 </script>
+<!-- Arrange fields in two columns with 6rem left labels. -->
 <FormLayout columns={2} labelPosition="left" labelWidth="6rem">
+  <!-- Associate the app's name label with the input whose id is name. -->
   <FormField label={() => m.userName()} for="name">
+    <!-- Keep the required input synchronized with name and report empty values through native validation. -->
     <Input id="name" bind:value={name} required />
   </FormField>
 </FormLayout>
@@ -305,7 +323,9 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
   import { Button, Modal } from '@h-ai/ui'
   let open = $state(false)
 </script>
+<!-- Open the details dialog when the button is clicked. -->
 <Button onclick={() => open = true}>Details</Button>
+<!-- Display Order 42 when open is true. Dismissing the dialog updates the bound state. -->
 <Modal bind:open title='Details'>Order 42</Modal>
 ```
 
@@ -354,8 +374,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
   let username = $state('')
   let open = $state(false)
 </script>
+<!-- Forward the supplied test and analytics attributes. Clicking Save opens the bound dialog. -->
 <Button data-testid='save-button' data-analytics-id='settings.save' onclick={() => { open = true }}>保存</Button>
+<!-- Render the identified input and sync edits to username. -->
 <Input data-testid='username-input' bind:value={username} />
+<!-- Use the bound open state to show confirmation for the entered username, with the given test ID. -->
 <Modal data-testid='confirm-modal' bind:open>确认保存 {username}？</Modal>
 ```
 
@@ -420,10 +443,15 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 </script>
 
 <div class='flex h-dvh min-h-0'>
+  <!-- Render the translated workspace title and its filter toolbar. -->
   <WorkspaceLayout title={m.page_title()}>
+    <!-- Show the active status count and call the app's clearFilters when reset is requested. -->
     <FilterBar activeCount={status ? 1 : 0} onreset={clearFilters}>
+      <!-- Put the small search input in the leading slot and update search as the user types. -->
       {#snippet leading()}<Input size='sm' bind:value={search} placeholder={m.search()} />{/snippet}
+      <!-- Put the small search button in the actions slot and invoke loadRows on click. -->
       {#snippet actions()}<Button size='sm' onclick={loadRows}>{m.search()}</Button>{/snippet}
+      <!-- Offer the app's status choices and write the selected value to status. -->
       <div class='w-40'><Select size='sm' bind:value={status} options={statusOptions} /></div>
     </FilterBar>
   </WorkspaceLayout>
@@ -475,14 +503,19 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
   import { toast, ToastContainer } from '@h-ai/ui'
 
   function notify() {
+    // Queue the supplied message as a success toast.
     toast.success('操作成功')
+    // Queue the supplied message using the error style.
     toast.error('操作失败')
+    // Queue the supplied caution message as a warning.
     toast.warning('请注意')
+    // Queue the info message with a 5,000 ms lifetime.
     toast.info('提示信息', 5000) // 自定义持续时间
   }
 </script>
 
 <button onclick={notify}>通知</button>
+<!-- Mount the view that renders the four notifications queued by notify. -->
 <ToastContainer />
 ```
 
@@ -508,10 +541,12 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 import { toast } from '@h-ai/ui/toast'
 
 export function showSaved(message: string) {
+  // Queue the caller's success message at the top right. Returns the toast ID.
   return toast.add({ message, variant: 'success', position: 'top-right' })
 }
 
 export function showNotice(message: string) {
+  // Queue the caller's message at the bottom center using the default variant. Returns the toast ID.
   return toast.add({ message, position: 'bottom-center' })
 }
 ```
@@ -563,6 +598,7 @@ const fallback = resolveErrorPreset(undefined) // 输入缺省状态，返回通
 ```ts
 import { toast } from '@h-ai/ui/toast'
 
+// Queue the supplied warning for five seconds. Its sample trace ID is available from the toast's diagnostic disclosure.
 toast.add({
   message: '请刷新后重试', // 实际应用使用自己的翻译函数。
   variant: 'warning',
@@ -660,19 +696,23 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
   import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
 
   const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
+  // Create a reauthentication controller using the application's auth actions. It tracks the pending challenge and result.
   const confirmation = createSensitiveActions(actions)
   $effect(() => {
+    // Configure which operations require confirmation using the supplied IAM policy.
     confirmation.configure(policy)
+    // Cancel the pending confirmation on effect cleanup, resolving the pending authorizer without a credential.
     return () => confirmation.cancel()
   })
 // 业务动作 await confirmation.authorize(operation)；null 时中止该动作。
 </script>
+<!-- Show the challenge, loading state, and last error from the controller. Submit forwards the entered password and close cancels the request. -->
 <ReauthenticationDialog
   open={confirmation.open}
   loading={confirmation.loading}
   error={confirmation.error}
-  onsubmit={password => confirmation.submit(password)}
-  onclose={() => confirmation.cancel()}
+  onsubmit={password => /* Send the entered password to the controller. Success resolves the operation credential, and failure updates the dialog error. */ confirmation.submit(password)}
+  onclose={() => /* Cancel the pending request and resolve it without a credential. */ confirmation.cancel()}
 />
 ```
 
@@ -687,6 +727,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
   let password = $state('')
 </script>
 
+<!-- Render the password from the app state with a strength indicator. The input event stores the new value. -->
 <PasswordInput
   value={password}
   oninput={(e) => { password = e.currentTarget.value }}
@@ -714,6 +755,7 @@ AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生�
   } = $props()
   let subscribe = $state(false)
 </script>
+<!-- Render the authentication screens from the app's config and actions. The supplied slots add login help and a registration checkbox. -->
 <AuthPanel {config} {actions}>
   {#snippet loginHeader()}
     <p>{loginHelp}</p>
@@ -810,12 +852,19 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 
 ```ts
 import { parseMarkdown, renderMarkdownDocument, isLanguageSupported, highlightCode, resolveDocumentMarkdownContent, resolveDocumentDownloadActions, downloadAiDocument } from '@h-ai/ui'
+// Parse the supplied heading as HTML. Raw HTML input is escaped with this option.
 const html = parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
+// Parse the heading into a Markdown document result with an outline and blocks.
 const document = renderMarkdownDocument('# Hello') // outline and parsed blocks
+// Check support for the TypeScript grammar. It returns true here.
 isLanguageSupported('typescript') // true
+// Highlight the supplied TypeScript statement and return its safe HTML.
 highlightCode('const total = 1', 'typescript') // highlighted HTML
+// Convert the supplied code to a TypeScript fenced Markdown block.
 resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
+// Resolve the supplied Markdown option into the enabled download actions.
 const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
+// Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
 await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
@@ -835,8 +884,10 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 > - 原始 `<img>` 可保留 `width` / `height`（1–99999 的正整数像素值），用于在图片延迟加载前预留空间，减少文档布局和锚点位置跳变；百分比、负数、小数、事件及任意 `style` 不保留。
 
 ```svelte
+<!-- Render the supplied Markdown at 1.125rem. Supported raw HTML still goes through sanitization. -->
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
 
+<!-- Render the editable proposal Markdown with tool controls and an 18px font. The outline pane is hidden. -->
 <AiDocumentEditor
   title='方案文档'
   content={documentMarkdown}
@@ -894,6 +945,7 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
   }
 </script>
 
+<!-- Open the supplied editable report. Reading returns its current snapshot. Saving updates the version or reports a conflict when the base version is stale. -->
 <ArtifactWorkspace artifacts={[report]} onread={readArtifact} onsave={saveArtifact} />
 ```
 
@@ -920,6 +972,7 @@ HTML 预览允许内联脚本交互，iframe 仅开放 `allow-scripts`，不开�
   }
 </script>
 
+<!-- Render the sum tool from the supplied catalog. Its run callback returns a successful total for valid input such as 2 and 3. -->
 <ToolWorkspace tools={catalog} onrun={run} />
 ```
 
@@ -980,10 +1033,14 @@ const acceptedSubmission: ToolRun = {
   ]
 </script>
 
+<!-- Lay out the metric cards in a labelled four-column grid. -->
 <DashboardGrid label='Key metrics' columns={4}>
+  <!-- Show the supplied revenue value, CNY unit, and positive 12.8 trend. -->
   <MetricCard title='Revenue' value='128,430' unit='CNY' trend={12.8} trendTone='success' trendLabel='vs previous month' />
 </DashboardGrid>
+<!-- Group the chart under the Revenue and cost report heading. -->
 <ReportCard title='Revenue and cost'>
+  <!-- Render the Jan and Feb revenue and cost values side by side using the grouped-bar preset. -->
   <Chart preset='grouped-bar' {data} x='month' y={['revenue', 'cost']} />
 </ReportCard>
 ```
@@ -991,6 +1048,7 @@ const acceptedSubmission: ToolRun = {
 `Chart type='line'` 默认透传 LayerChart 原生折线图；需要监控看板常见的“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
 
 ```svelte
+<!-- Plot the supplied rate-limit and circuit-break series by label. The pointer selects the nearest segmented point and shows a crosshair. -->
 <Chart
   type='line'
   data={trendData}
@@ -1058,6 +1116,7 @@ const acceptedSubmission: ToolRun = {
 <script lang='ts'>
   import { createCrudController, CrudPage, defineCrud } from '@h-ai/ui'
 
+  // Define the users CRUD resource and its name field. The example list callback supplies one Ada record.
   const crud = defineCrud({
     name: 'users', label: 'Users',
     fields: [{ id: 'name', label: 'Name', type: 'text' }],
@@ -1065,8 +1124,10 @@ const acceptedSubmission: ToolRun = {
       list: async () => ({ items: [{ id: 'u1', name: 'Ada' }], total: 1, page: 1, pageSize: 10 }),
     },
   })
+  // Create the controller for that resource without synchronizing filters to the URL. It exposes data, loading and error state, and reload.
   const controller = createCrudController(crud, { syncUrl: false })
 </script>
+<!-- Show the users resource and the controller's current results. A load error is shown with the supplied retry action. -->
 <CrudPage
   {crud} data={controller.data} nav={controller.nav}
   loading={controller.loading} loaded={controller.loaded}
@@ -1084,9 +1145,11 @@ const acceptedSubmission: ToolRun = {
   import { CrudPage } from '@h-ai/ui'
 
   const { data } = $props()
+  // Create the navigation adapter for the current SvelteKit page.
   const nav = createSvelteKitNavAdapter()
 </script>
 
+<!-- Render the supplied role CRUD data with create, update, and delete enabled. The requested modal, sorting, and page controls use the supplied adapter. -->
 <CrudPage
   crud={roleCrud}
   {data}
@@ -1148,6 +1211,7 @@ const acceptedSubmission: ToolRun = {
   }
 </script>
 
+<!-- Load the tree through the supplied source. Opening README.md reads its Markdown text into the workspace. -->
 <CodeWorkspace {source} />
 ```
 
@@ -1184,6 +1248,7 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 <script lang='ts'>
   import { createGuide, GuideHost } from '@h-ai/ui/guide'
 
+  // Create a guide for the users route with a named anchor and help article, using the supplied navigation adapter and persistence key.
   const guide = createGuide({
     nav,
     persistKey: 'my-app-guide',
@@ -1214,9 +1279,11 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
   })
 </script>
 
+<!-- Mount the guide for the active locale and user. Starting the users tour targets the configured route and step. -->
 <GuideHost {guide} {locale} scope={user.id} autoStart='users' />
+<!-- Open the guide's help panel when this button is clicked. -->
 <Button onclick={() => guide.openHelp()}>{m.help()}</Button>
-<!-- 在目标页面为现有按钮添加锚点，无需额外包装。 -->
+<!-- Use the users tour anchor on the existing create button. A click still calls the app's createUser handler. -->
 <Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
 ```
 
@@ -1298,6 +1365,7 @@ import {
 import type { Handle } from '@sveltejs/kit/hooks'
 import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
 
+// Generate a first-paint theme script using the supplied preference key and fallback color. The returned text replaces the page placeholder below.
 const themeBootstrapScript = createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',
   defaultThemeColor: '#5765f0',
@@ -1368,10 +1436,13 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
   import { createLocaleStore } from '@h-ai/ui/i18n'
   import { setLocale } from '#lib/paraglide/runtime.js'
 
+  // Create a reactive language store with browser and framework defaults.
   const localeStore = createLocaleStore()
 
   function changeLocale(code) {
+    // Update the UI store and the framework locale with the chosen supported code.
     localeStore.set(code) // 更新 UI store + 同步到 @h-ai/core
+    // Apply the same selected code to the app's Paraglide runtime.
     setLocale(code) // 同步到 Paraglide（应用层）
   }
 </script>
@@ -1463,10 +1534,15 @@ import {
 
 ```ts
 import { cn, generateId, getDataAttributes, getVariantClass, writeTextToClipboard } from '@h-ai/ui'
+// Combine the given class with the falsy conditional. The result is flex.
 cn('flex', false && 'hidden') // 'flex'
+// Keep the data-testid attribute from this object and discard the unrelated property.
 getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
+// Combine the primary variant and btn prefix into btn-primary.
 getVariantClass('primary', 'btn') // 'btn-primary'
+// Generate a unique field identifier with the requested prefix.
 const id = generateId('field') // generated field identifier
+// Copy the supplied trace ID. true means the browser copied it and false means it could not.
 const copied = await writeTextToClipboard('trace-001') // true if copied; false on failure
 ```
 
@@ -1504,8 +1580,11 @@ import { createGuide } from '@h-ai/ui/guide'
 import { createLocaleStore } from '@h-ai/ui/i18n'
 import { applyTheme } from '@h-ai/ui/theme'
 
+// Apply the light theme to the current document and persist the preference when browser storage is available.
 applyTheme('light')
+// Create a locale store that falls back to zh-CN and uses orders-locale for persistence.
 const locale = createLocaleStore({ defaultLocale: 'zh-CN', persistKey: 'orders-locale' })
+// Create a guide with no tours and memory-only state.
 const guide = createGuide({ tours: [], persistence: 'memory' })
 ```
 

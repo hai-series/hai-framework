@@ -15,6 +15,7 @@
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 
+// Compose the built-in IAM and storage routers into contract. Passing false omits AI. This only defines the contract.
 export const contract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -30,12 +31,14 @@ import { z } from 'zod'
 
 export const appContract = {
   ping: apiContract
+    // Describe POST /app/ping with operation ID app.ping and the app tag. This returns a route builder.
     .route({
       method: 'POST',
       path: '/app/ping',
       operationId: 'app.ping',
       tags: ['app']
     })
+    // Use a boolean pong schema as the success data. The output builder also includes the HaiResult failure shape.
     .output(apiContract.haiResultSchema(z.object({
       pong: z.boolean()
     }))),
@@ -71,9 +74,13 @@ export const appContract = {
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
+// Create a route builder for GET /status. No handler runs while defining the route.
 const status = apiContract.route({ method: 'GET', path: '/status' })
+  // Set the output to HaiResult with a boolean ready field. Success data has ready and failures use the error shape.
   .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() })))
+// Compose the local status route with IAM. Passing false leaves payment out.
 const contract = apiContract.create({ status, iam: apiContract.iam, payment: false })
+// Read the relative path of the built-in login procedure. It yields /auth/login.
 apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 // contract includes status and iam; payment is omitted
 ```
@@ -97,6 +104,7 @@ apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 
+// Combine the selected built-in routers and return the app contract. This does not start their services.
 const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 myContract.iam.auth.login
@@ -118,13 +126,20 @@ import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const contract = {
+  // Identify the app's GET /ping route. This only prepares the route definition.
   ping: apiContract.route({ method: 'GET', path: '/ping' })
+    // Describe its output as HaiResult containing a boolean ready. The failure variant remains available.
     .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))),
 }
+// Start mapping the local contract and type each handler's context as ServContext.
 const procedures = serv.implement(contract).context<ServContext>()
+  // Map ping to a handler that returns success data { ready: true }.
   .route('ping', () => ok({ ready: true }))
+  // Finish the procedure map so createApp can bind it to the contract.
   .build()
+// Assemble contract and procedures under /api/v1. Incompatible app setup can fail.
 const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1' } })
+// Send GET /api/v1/ping through the app and expect its successful HTTP response with ready data.
 const response = await app.request('/api/v1/ping')
 const body = await response.json() // { success: true, data: { ready: true } }
 ```
@@ -148,12 +163,18 @@ const body = await response.json() // { success: true, data: { ready: true } }
 ```ts
 import { z } from 'zod'
 
+// Build a result schema whose success data is a string. Its failure variant carries HaiError.
 const stringResult = apiContract.haiResultSchema(z.string())
+// Validate a ready success envelope. checked.success is true and checked.data contains that envelope.
 const checked = stringResult.safeParse({ success: true, data: 'ready' })
 // checked.success === true; checked.data is HaiResult<string>
+// Validate success with undefined data. This is valid for the void result schema.
 apiContract.voidResultSchema.safeParse({ success: true, data: undefined }).success // true
+// Build a paginated schema whose items each have a string id.
 const pageSchema = apiContract.paginatedSchema(z.object({ id: z.string() }))
+// Validate page 1 of one order at page size 20. The record fits the schema, so success is true.
 pageSchema.safeParse({ items: [{ id: 'o1' }], total: 1, page: 1, pageSize: 20 }).success // true
+// A numeric success value is invalid for the string schema, so success is false.
 stringResult.safeParse({ success: true, data: 42 }).success // false
 ```
 
@@ -178,6 +199,7 @@ stringResult.safeParse({ success: true, data: 42 }).success // false
 #### 场景：选择标准业务接口
 
 ```ts
+// Compose the five supplied module routers into a new standard contract. No routes execute during assembly.
 const standard = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -215,8 +237,11 @@ const standard = apiContract.create({
 ```ts
 import { apiContract, FeedbackSubmitInputSchema } from '@h-ai/api-contract'
 
+// Validate the submission ID and orders app ID. Invalid input throws a Zod error.
 const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
+// Create a contract containing only the built-in feedback router.
 const contract = apiContract.create({ feedback: apiContract.feedback })
+// Read the submission route's relative HTTP path from that contract.
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
 
@@ -241,7 +266,9 @@ IamCreateCaptchaInputSchema / IamCaptchaChallengeSchema 定义 POST /auth/captch
 ```ts
 import { FeedbackBudgetSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 
+// Use the 16 MiB total limit to derive the effective feedback budgets, including transport overhead.
 const effective = resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 }) // 输入 16 MiB 总量，返回派生的 FeedbackBudget。
+// Validate the effective budget object. An inconsistent shape yields schema issues.
 const validated = FeedbackBudgetSchema.safeParse(effective) // 校验结果结构，成功时 data 为预算对象。
 const maxRouteBytes = effective.maxTransportBytes // 读取反馈路由的明文预算，用于配置单独的上传/导出路由。
 ```

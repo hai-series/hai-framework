@@ -18,9 +18,12 @@ Put this in a Svelte 5 page, such as `+page.svelte`.
   let submittedName = $state('')
 </script>
 
+<!-- Render a titled card containing the name controls and their preview. -->
 <Card title='Preview a greeting'>
   <label for='greeting-name'>Name</label>
+  <!-- Bind the text input to name and pair it with the matching label. Typing updates name. -->
   <Input id='greeting-name' bind:value={name} />
+  <!-- Disable preview for blank names. Clicking when enabled trims name and shows the greeting. -->
   <Button variant='primary' disabled={!name.trim()} onclick={() => { submittedName = name.trim() }}>
     Preview
   </Button>
@@ -35,6 +38,7 @@ Put this in a Svelte 5 page, such as `+page.svelte`.
 With the auto-import plugin configured, a component used in a template can be imported automatically:
 
 ```svelte
+<!-- The configured preprocessor supplies Button. This renders the primary Preview action. -->
 <Button variant='primary'>Preview</Button>
 ```
 
@@ -71,6 +75,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 
 export default {
+  // Install the Hai UI preprocessor before Vite's Svelte preprocessor. It supplies imports for Hai components in templates.
   preprocess: [autoImportHaiUi(), vitePreprocess()],
 }
 ```
@@ -123,7 +128,9 @@ Keep field values in page state and update them through bindings. The applicatio
   import { CalendarDate } from '@internationalized/date'
   let date = $state(new CalendarDate(2026, 11, 17))
 </script>
+<!-- Display the initial November 17 date in the calendar. Selection updates the shared bound date. -->
 <Calendar bind:value={date} />
+<!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
 ```
 
@@ -153,7 +160,9 @@ Control dialogs, drawers and confirmation with open state; attach menus and hint
   import { Button, Modal } from '@h-ai/ui'
   let open = $state(false)
 </script>
+<!-- Open the details dialog when the button is clicked. -->
 <Button onclick={() => open = true}>Details</Button>
+<!-- Display Order 42 when open is true. Dismissing the dialog updates the bound state. -->
 <Modal bind:open title='Details'>Order 42</Modal>
 ```
 
@@ -191,8 +200,11 @@ Pass loaded records and column definitions. Application callbacks load data when
   let username = $state('')
   let open = $state(false)
 </script>
+<!-- Forward the supplied test and analytics attributes. Clicking Save opens the bound dialog. -->
 <Button data-testid='save-button' data-analytics-id='settings.save' onclick={() => { open = true }}>保存</Button>
+<!-- Render the identified input and sync edits to username. -->
 <Input data-testid='username-input' bind:value={username} />
+<!-- Use the bound open state to show confirmation for the entered username, with the given test ID. -->
 <Modal data-testid='confirm-modal' bind:open>确认保存 {username}？</Modal>
 ```
 
@@ -247,10 +259,15 @@ Arrange headings, actions and content in a workspace while retaining query field
 </script>
 
 <div class='flex h-dvh min-h-0'>
+  <!-- Render the translated workspace title and its filter toolbar. -->
   <WorkspaceLayout title={m.page_title()}>
+    <!-- Show the active status count and call the app's clearFilters when reset is requested. -->
     <FilterBar activeCount={status ? 1 : 0} onreset={clearFilters}>
+      <!-- Put the small search input in the leading slot and update search as the user types. -->
       {#snippet leading()}<Input size='sm' bind:value={search} placeholder={m.search()} />{/snippet}
+      <!-- Put the small search button in the actions slot and invoke loadRows on click. -->
       {#snippet actions()}<Button size='sm' onclick={loadRows}>{m.search()}</Button>{/snippet}
+      <!-- Offer the app's status choices and write the selected value to status. -->
       <div class='w-40'><Select size='sm' bind:value={status} options={statusOptions} /></div>
     </FilterBar>
   </WorkspaceLayout>
@@ -304,14 +321,19 @@ Send results, errors and confirmation to shared hosts; use returned IDs to remov
   import { toast, ToastContainer } from '@h-ai/ui'
 
   function notify() {
+    // Queue the supplied message as a success toast.
     toast.success('操作成功')
+    // Queue the supplied message using the error style.
     toast.error('操作失败')
+    // Queue the supplied caution message as a warning.
     toast.warning('请注意')
+    // Queue the info message with a 5,000 ms lifetime.
     toast.info('提示信息', 5000) // 自定义持续时间
   }
 </script>
 
 <button onclick={notify}>通知</button>
+<!-- Mount the view that renders the four notifications queued by notify. -->
 <ToastContainer />
 ```
 
@@ -355,19 +377,23 @@ Forms collect credentials and call host authentication actions. Public policy co
   import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
 
   const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
+  // Create a reauthentication controller using the application's auth actions. It tracks the pending challenge and result.
   const confirmation = createSensitiveActions(actions)
   $effect(() => {
+    // Configure which operations require confirmation using the supplied IAM policy.
     confirmation.configure(policy)
+    // Cancel the pending confirmation on effect cleanup, resolving the pending authorizer without a credential.
     return () => confirmation.cancel()
   })
 // 业务动作 await confirmation.authorize(operation)；null 时中止该动作。
 </script>
+<!-- Show the challenge, loading state, and last error from the controller. Submit forwards the entered password and close cancels the request. -->
 <ReauthenticationDialog
   open={confirmation.open}
   loading={confirmation.loading}
   error={confirmation.error}
-  onsubmit={password => confirmation.submit(password)}
-  onclose={() => confirmation.cancel()}
+  onsubmit={password => /* Send the entered password to the controller. Success resolves the operation credential, and failure updates the dialog error. */ confirmation.submit(password)}
+  onclose={() => /* Cancel the pending request and resolve it without a credential. */ confirmation.cancel()}
 />
 ```
 
@@ -438,12 +464,19 @@ Pass text, Markdown, tables or document data to viewers and connect editing, dow
 
 ```ts
 import { parseMarkdown, renderMarkdownDocument, isLanguageSupported, highlightCode, resolveDocumentMarkdownContent, resolveDocumentDownloadActions, downloadAiDocument } from '@h-ai/ui'
+// Parse the supplied heading as HTML. Raw HTML input is escaped with this option.
 const html = parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
+// Parse the heading into a Markdown document result with an outline and blocks.
 const document = renderMarkdownDocument('# Hello') // outline and parsed blocks
+// Check support for the TypeScript grammar. It returns true here.
 isLanguageSupported('typescript') // true
+// Highlight the supplied TypeScript statement and return its safe HTML.
 highlightCode('const total = 1', 'typescript') // highlighted HTML
+// Convert the supplied code to a TypeScript fenced Markdown block.
 resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
+// Resolve the supplied Markdown option into the enabled download actions.
 const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
+// Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
 await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
@@ -481,6 +514,7 @@ The host supplies tool catalogs, submission callbacks and accessible artifacts; 
   }
 </script>
 
+<!-- Open the supplied editable report. Reading returns its current snapshot. Saving updates the version or reports a conflict when the base version is stale. -->
 <ArtifactWorkspace artifacts={[report]} onread={readArtifact} onsave={saveArtifact} />
 ```
 
@@ -513,10 +547,14 @@ Charts consume supplied data and fields; metric cards display computed values wi
   ]
 </script>
 
+<!-- Lay out the metric cards in a labelled four-column grid. -->
 <DashboardGrid label='Key metrics' columns={4}>
+  <!-- Show the supplied revenue value, CNY unit, and positive 12.8 trend. -->
   <MetricCard title='Revenue' value='128,430' unit='CNY' trend={12.8} trendTone='success' trendLabel='vs previous month' />
 </DashboardGrid>
+<!-- Group the chart under the Revenue and cost report heading. -->
 <ReportCard title='Revenue and cost'>
+  <!-- Render the Jan and Feb revenue and cost values side by side using the grouped-bar preset. -->
   <Chart preset='grouped-bar' {data} x='month' y={['revenue', 'cost']} />
 </ReportCard>
 ```
@@ -555,6 +593,7 @@ Resource definitions connect list, create, update and delete callbacks; controll
 <script lang='ts'>
   import { createCrudController, CrudPage, defineCrud } from '@h-ai/ui'
 
+  // Define the users CRUD resource and its name field. The example list callback supplies one Ada record.
   const crud = defineCrud({
     name: 'users', label: 'Users',
     fields: [{ id: 'name', label: 'Name', type: 'text' }],
@@ -562,8 +601,10 @@ Resource definitions connect list, create, update and delete callbacks; controll
       list: async () => ({ items: [{ id: 'u1', name: 'Ada' }], total: 1, page: 1, pageSize: 10 }),
     },
   })
+  // Create the controller for that resource without synchronizing filters to the URL. It exposes data, loading and error state, and reload.
   const controller = createCrudController(crud, { syncUrl: false })
 </script>
+<!-- Show the users resource and the controller's current results. A load error is shown with the supplied retry action. -->
 <CrudPage
   {crud} data={controller.data} nav={controller.nav}
   loading={controller.loading} loaded={controller.loaded}
@@ -602,6 +643,7 @@ Display source with a file list and lazy read callback. The host controls file a
   }
 </script>
 
+<!-- Load the tree through the supplied source. Opening README.md reads its Markdown text into the workspace. -->
 <CodeWorkspace {source} />
 ```
 
@@ -628,6 +670,7 @@ Define tour steps, targets and articles; the controller starts, advances and end
 <script lang='ts'>
   import { createGuide, GuideHost } from '@h-ai/ui/guide'
 
+  // Create a guide for the users route with a named anchor and help article, using the supplied navigation adapter and persistence key.
   const guide = createGuide({
     nav,
     persistKey: 'my-app-guide',
@@ -658,9 +701,11 @@ Define tour steps, targets and articles; the controller starts, advances and end
   })
 </script>
 
+<!-- Mount the guide for the active locale and user. Starting the users tour targets the configured route and step. -->
 <GuideHost {guide} {locale} scope={user.id} autoStart='users' />
+<!-- Open the guide's help panel when this button is clicked. -->
 <Button onclick={() => guide.openHelp()}>{m.help()}</Button>
-<!-- 在目标页面为现有按钮添加锚点，无需额外包装。 -->
+<!-- Use the users tour anchor on the existing create button. A click still calls the app's createUser handler. -->
 <Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
 ```
 
@@ -735,10 +780,13 @@ Keep browser locale in page state and select server locale per request to preven
   import { createLocaleStore } from '@h-ai/ui/i18n'
   import { setLocale } from '#lib/paraglide/runtime.js'
 
+  // Create a reactive language store with browser and framework defaults.
   const localeStore = createLocaleStore()
 
   function changeLocale(code) {
+    // Update the UI store and the framework locale with the chosen supported code.
     localeStore.set(code) // 更新 UI store + 同步到 @h-ai/core
+    // Apply the same selected code to the app's Paraglide runtime.
     setLocale(code) // 同步到 Paraglide（应用层）
   }
 </script>
@@ -804,10 +852,15 @@ Compose class names, create UI IDs and select platform styles. Clipboard and por
 
 ```ts
 import { cn, generateId, getDataAttributes, getVariantClass, writeTextToClipboard } from '@h-ai/ui'
+// Combine the given class with the falsy conditional. The result is flex.
 cn('flex', false && 'hidden') // 'flex'
+// Keep the data-testid attribute from this object and discard the unrelated property.
 getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
+// Combine the primary variant and btn prefix into btn-primary.
 getVariantClass('primary', 'btn') // 'btn-primary'
+// Generate a unique field identifier with the requested prefix.
 const id = generateId('field') // generated field identifier
+// Copy the supplied trace ID. true means the browser copied it and false means it could not.
 const copied = await writeTextToClipboard('trace-001') // true if copied; false on failure
 ```
 

@@ -10,7 +10,9 @@
 pnpm view @h-ai/cli dist-tags
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# インストール済みの Hai CLI のバージョンを表示する。
 hai --version
+# 既定値を使い、Web フロントエンドを持つ fullstack プロジェクト my-app を生成する。
 hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
@@ -48,6 +50,7 @@ IAM テンプレートの初期アカウントは `admin` です。同じ環境�
 
 ```sh
 pnpm build --target image --runtime auto
+# prod のデプロイ計画を解決して表示する。計画の適用は行わない。
 hai deploy --env prod --plan
 ```
 

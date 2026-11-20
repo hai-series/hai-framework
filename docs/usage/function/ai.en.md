@@ -11,6 +11,7 @@ Initialize the configured provider before invoking AI. Start with chat or embedd
 ```ts
 import { ai } from '@h-ai/ai'
 
+// Initialize gpt-4o-mini with the key from the environment. Success enables LLM access; setup failure stops the request.
 const init = await ai.init({
   llm: {
     model: 'gpt-4o-mini',
@@ -21,6 +22,7 @@ if (!init.success)
   throw new Error(init.error.message)
 
 try {
+  // Send the user message below to the configured model. Success exposes the response in choices; provider failure enters the error branch.
   const result = await ai.llm.chat({
     messages: [
       { role: 'user', content: '你好！' }
@@ -31,6 +33,7 @@ try {
   const reply = result.data.choices[0]?.message.content ?? ''
 }
 finally {
+  // Release AI-owned resources without arguments. There is no business data; the host closes any dependencies it supplied.
   await ai.close()
 }
 ```
@@ -108,15 +111,20 @@ Chat returns a complete response while streams yield chunks. Model management an
 #### Scenario: Chat, structured output and models
 
 ```ts
+// Send the order status question to the default model. The completion contains text in choices; value throws on provider failure.
 const reply = value(await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] }))
 const text = reply.choices[0]?.message.content // model-generated text, not a fixed literal
+// Ask the default model what pending means. Success yields answer text; value throws on a provider failure.
 const answer = value(await ai.llm.ask('What does pending mean?')) // string answer
+// Stream Hello to the default model and iterate completion chunks. Connection or generation failure throws from the stream.
 for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] })) {
   const delta = chunk.choices[0]?.delta?.content // incremental text when present
 }
+// Ask Hello as plain text and consume answer deltas. Provider errors end iteration by throwing.
 for await (const delta of ai.llm.askStream('Hello')) {
   // consume each returned text fragment; handle stream errors outside the loop
 }
+// List available models with no arguments. value throws if the catalog cannot be read.
 const models = value(await ai.llm.listModels()) // configured model summaries
 ```
 
@@ -131,10 +139,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.register>[0]) {
+  // Persist the supplied language model definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.llm.models.register(definition))
+  // List configured and database language model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.llm.models.list())
+  // Look up the saved language model ID and its database version. A missing ID fails.
   const current = value(await ai.llm.models.get(definition.id))
+  // Replace this language model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.llm.models.update(definition, current.version))
+  // Delete the example language model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.llm.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -184,16 +197,27 @@ Process chunks, collect responses and encode/decode SSE without initializing AI.
 Input is SSE text and a real chat stream. decode waits for the blank event delimiter; collect consumes a complete stream and rejects on failure.
 
 ```ts
+// Encode ready as an SSE text frame with the default event.
 const encoded = ai.stream.encodeSSE({ data: 'ready' })
+// Create an SSE decoder without arguments. It retains incomplete frames between chunks.
 const decoder = ai.stream.createSSEDecoder()
+// Pass the first five characters. The partial frame yields no event.
 const first = [...decoder.decode(encoded.slice(0, 5))] // []
+// Supply the remaining characters to complete the default message event with data ready.
 const second = [...decoder.decode(encoded.slice(5))] // [{ event: 'message', data: 'ready', ... }]
+// Clear buffered decoder data without arguments before a fresh stream.
 decoder.reset()
+// Create an empty completion chunk accumulator with no arguments.
 const processor = ai.stream.createProcessor()
+// Process the simulated Hello chunk and record its text and stop finish reason.
 processor.process({ id: 'demo', object: 'chat.completion.chunk', created: 0, model: 'configured-model', choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: 'stop' }] })
+// Read accumulated Hello and any available usage or tool calls without arguments.
 processor.getResult() // accumulated text and optional usage/tool calls
+// Convert accumulated data to an assistant message with text Hello.
 processor.toAssistantMessage() // assistant message containing Hello
+// Reset accumulated text and calls without arguments for the next stream.
 processor.reset()
+// chatStream sends Hello to the default model. collect consumes it to completion and returns the aggregate; stream errors reject the promise.
 const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] }))
 // collected contains the full stream result; text is produced by the model.
 ```
@@ -215,8 +239,11 @@ Use the same model and dimensions for documents and queries; batch outputs retai
 #### Scenario: Generate text embeddings
 
 ```ts
+// Embed the supplied installation-guide text as one numeric vector. value throws on a provider failure.
 const one = value(await ai.embedding.embedText('Order installation guide')) // number[]
+// Embed Install and Refund together and return the two corresponding vectors. Provider failure makes value throw.
 const batch = value(await ai.embedding.embedBatch(['Install', 'Refund'])) // vectors in input order
+// Read the full embedding response for the same inputs, including item vectors and indices. value throws on request failure.
 const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] })) // model, data, usage
 ```
 
@@ -261,10 +288,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers.register>[0]) {
+  // Persist the supplied MCP server definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.mcp.servers.register(definition))
+  // List configured and database MCP server entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.mcp.servers.list())
+  // Look up the saved MCP server ID and its database version. A missing ID fails.
   const current = value(await ai.mcp.servers.get(definition.id))
+  // Replace this MCP server definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.mcp.servers.update(definition, current.version))
+  // Delete the example MCP server entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.mcp.servers.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -297,15 +329,21 @@ Register source collections before retrieval and optionally rerank the candidate
 Prepare a populated manual collection matching the embedding dimensions, then register docs. Scores depend on the backend; removing a source retains its documents.
 
 ```ts
+// Register docs for the manual vector collection. Success has no data; a duplicate ID fails.
 value(await ai.retrieval.addSource({ id: 'docs', collection: 'manual' }))
 try {
+  // List retrieval sources without arguments. The returned array now includes docs.
   const sources = await ai.retrieval.listSources() // direct RetrievalSource[]
+  // Find up to five deployment matches in docs, with citations. value throws on missing sources or retrieval failures.
   const found = value(await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 }))
+  // Rerank the two supplied documents for deployment relevance. The result includes ranked items and scores; provider errors throw through value.
   const ranked = value(await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] }))
+  // Rerank the same texts and return only the top-ranked text.
   const texts = value(await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1))
   // found has source candidates; ranked/texts carry original indexes and relevance scores.
 }
 finally {
+  // Remove the docs source registered for this example. Success has no data; a missing source fails.
   value(await ai.retrieval.removeSource('docs'))
 }
 ```
@@ -317,10 +355,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_retrieval_sources(definition: Parameters<typeof ai.retrieval.sources.register>[0]) {
+  // Persist the supplied retrieval source definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.retrieval.sources.register(definition))
+  // List configured and database retrieval source entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.retrieval.sources.list())
+  // Look up the saved retrieval source ID and its database version. A missing ID fails.
   const current = value(await ai.retrieval.sources.get(definition.id))
+  // Replace this retrieval source definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.retrieval.sources.update(definition, current.version))
+  // Delete the example retrieval source entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.retrieval.sources.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -342,8 +385,10 @@ Pass the question and registered sources to RAG, retain citations with answers a
 #### Scenario: Answer with sources and citations
 
 ```ts
+// Retrieve deployment context from docs and ask the model. Success includes answer, context, and citations; value throws on retrieval or generation failure.
 const answer = value(await ai.rag.query('How do I deploy?', { sources: ['docs'] }))
 // answer contains answer, context, citations, query and model
+// Stream the same deployment question over docs and consume context, text deltas, and the completion event.
 for await (const event of ai.rag.queryStream('How do I deploy?', { sources: ['docs'] })) {
   // Render only events applicable to the UI; preserve citation events as references.
 }
@@ -385,14 +430,23 @@ Existing vectors do not make a revision visible. This distinguishes revision pre
 Only a published revision becomes current for retrieval. Cleanup failure can leave cleanupPending for repair. Removal revokes visibility before cleanup. Retrieval must check the published revision rather than trusting any old chunk still in the vector store.
 
 ```ts
+// Set up the default knowledge collection and revision records with no arguments. Success has no data; setup failure blocks ingestion.
 value(await ai.knowledge.setup())
+// Ingest the restart instruction as demo-intro. Success returns the published revision, chunk details, and cleanupPending.
 const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
+// Retrieve restart guidance from the default collection with citations. value throws on a retrieval failure.
 const matches = value(await ai.knowledge.retrieve('When should the service restart?'))
+// Answer the same restart question using retrieved evidence. Success includes the answer and references; value throws on failure.
 const answer = value(await ai.knowledge.ask('When should the service restart?'))
+// Read visible documents from the default collection; the list includes demo-intro.
 const documents = value(await ai.knowledge.listDocuments())
+// List entities with no arguments. Actual entries depend on extraction.
 const entities = value(await ai.knowledge.listEntities())
+// Find documents associated with entity service. With no match, the list is empty.
 const related = value(await ai.knowledge.findByEntity('service'))
+// Remove the visible revision for the ingested document ID. Success has no data; handle cleanup failure.
 value(await ai.knowledge.removeDocument('demo-intro')) // no longer visible to retrieval
+// Reconcile expired staging or old vectors for up to 100 records from offset 0. Success returns repair progress.
 const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // cleanup progress
 ```
 
@@ -429,18 +483,29 @@ Use a trusted session subject throughout. Add, read, update, recall and remove o
 
 ```ts
 async function rememberPreference(objectId: string) {
+  // Bind the trusted subject and demo-preference topic to a memory instance for subsequent calls.
   const memory = ai.memory.scoped({ objectId, scope: { topicId: 'demo-preference' } })
+  // Store the Chinese-reply preference in the bound scope. Success returns the entry and ID; persistence or embedding failure throws through value.
   const saved = value(await memory.add({ content: 'Prefers Chinese replies', type: 'preference' }))
   const access = { objectId, scope: { topicId: 'demo-preference' } }
+  // Read the saved ID in the same subject and topic. Missing or out-of-scope entries fail.
   value(await ai.memory.get(saved.id, access))
+  // Change this scoped entry to Japanese replies. Success returns the updated memory with a recalculated embedding; errors throw through value.
   value(await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access))
+  // Find language preference memories in the bound scope. No match gives an empty array.
   const recalled = value(await memory.recall('language preference'))
   const messages = [{ role: 'user' as const, content: 'Hello' }]
+  // Inject relevant scoped memories into a new list based on the Hello messages.
   const enriched = value(await ai.memory.injectMemories(messages, access))
+  // Analyze the Hello message and persist any extracted memories in the same scope. The returned array can be empty.
   const extracted = value(await ai.memory.extract(messages, access))
+  // List memories for the same subject and topic; value throws on read failure.
   const all = value(await ai.memory.list(access))
+  // Read up to 20 scoped entries from offset 0 and their pagination information.
   const page = value(await ai.memory.listPage({ ...access, offset: 0, limit: 20 }))
+  // Delete the original preference using its ID and scope. Success has no data; a scope mismatch fails.
   value(await ai.memory.remove(saved.id, access))
+  // Clear the remaining preference entries only within the bound subject and topic. Success has no data.
   value(await memory.clear({ types: ['preference'] }))
   return { recalled, enriched, extracted, all, page }
 }
@@ -470,11 +535,17 @@ Use demo-tutor under one subject; compose returns prompt text without changing m
 ```ts
 async function usePersona(objectId: string) {
   const access = { objectId }
+  // Save demo-tutor with the stated prompt for this subject. Success returns the full profile; value throws on storage failure.
   value(await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' }))
+  // Read the profile ID in the same subject scope. A missing profile makes value throw.
   value(await ai.persona.get('demo-tutor', access))
+  // Rename this subject's demo-tutor to Order tutor and return the updated profile.
   value(await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access))
+  // List profiles for this subject, including the updated profile.
   const profiles = value(await ai.persona.list(access))
+  // Compose the system prompt for this scoped persona ID. Success gives text; a missing profile fails.
   const prompt = value(await ai.persona.compose('demo-tutor', access))
+  // Remove the example profile for this subject. Success has no data.
   value(await ai.persona.remove('demo-tutor', access))
   return { profiles, prompt }
 }
@@ -500,7 +571,9 @@ Estimate message budgets before summarizing or compressing. Estimates are not ex
 
 ```ts
 const messages = [{ role: 'user' as const, content: 'Order is pending.' }]
+// Estimate tokens for the literal text locally. The result is approximate.
 const textTokens = ai.token.estimateText('Order is pending.') // estimate number
+// Estimate the one user message above, including message overhead.
 const messageTokens = ai.token.estimateMessages(messages) // estimate including message overhead
 ```
 
@@ -569,6 +642,7 @@ Validate file type and size before extracting text; OCR formats require configur
 #### Scenario: Parse text and files
 
 ```ts
+// Parse the supplied order-status text into the common document result. value throws on a parse error.
 const plain = value(await ai.file.parseText('Order status: pending.')) // parsed text result
 ```
 
@@ -629,10 +703,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_audio_models(definition: Parameters<typeof ai.audio.models.register>[0]) {
+  // Persist the supplied audio model definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.audio.models.register(definition))
+  // List configured and database audio model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.audio.models.list())
+  // Look up the saved audio model ID and its database version. A missing ID fails.
   const current = value(await ai.audio.models.get(definition.id))
+  // Replace this audio model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.audio.models.update(definition, current.version))
+  // Delete the example audio model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.audio.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -668,10 +747,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_image_models(definition: Parameters<typeof ai.image.models.register>[0]) {
+  // Persist the supplied image model definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.image.models.register(definition))
+  // List configured and database image model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.image.models.list())
+  // Look up the saved image model ID and its database version. A missing ID fails.
   const current = value(await ai.image.models.get(definition.id))
+  // Replace this image model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.image.models.update(definition, current.version))
+  // Delete the example image model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.image.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -755,11 +839,13 @@ import type { ACPPublishSnapshot } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
 async function previewChange(directory: string, revision: string) {
+  // Read a snapshot for the supplied directory and Git revision, including the resolved revision. A read failure returns an error.
   const snapshot = await ai.acp.workspaces.readGitSnapshot({ directory, revision })
   if (!snapshot.success)
     return snapshot
   const before = snapshot.data.files
   const after = { ...before, 'notes.txt': 'aGVsbG8K' }
+  // Compare the snapshot with the copy containing notes.txt. Success gives changed paths and a Git patch; diff failure returns an error.
   const changes = await ai.acp.workspaces.diffSnapshot(before, after)
   if (!changes.success)
     return changes
@@ -767,6 +853,7 @@ async function previewChange(directory: string, revision: string) {
 }
 
 async function publishApprovedChange(approvedSnapshot: ACPPublishSnapshot) {
+  // Publish the approved snapshot to its authorized branch. Success returns branch and commit IDs; publication failure returns an error.
   const result = await ai.acp.workspaces.publishSnapshot(approvedSnapshot)
   if (!result.success)
     return result
@@ -783,10 +870,15 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 
 ```ts
 async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.register>[0]) {
+  // Persist the supplied ACP agent definition and get its database version. Duplicate or configuration-owned IDs fail.
   const created = value(await ai.acp.agents.register(definition))
+  // List configured and database ACP agent entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
   const listed = value(await ai.acp.agents.list())
+  // Look up the saved ACP agent ID and its database version. A missing ID fails.
   const current = value(await ai.acp.agents.get(definition.id))
+  // Replace this ACP agent definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
   const updated = value(await ai.acp.agents.update(definition, current.version))
+  // Delete the example ACP agent entry against its latest version. Success has no data; a conflict or config-owned entry fails.
   value(await ai.acp.agents.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }

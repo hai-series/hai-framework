@@ -21,20 +21,25 @@ function dataOrThrow<T>(result: HaiResult<T>): T {
   return result.data
 }
 
+// Start the development database in in-memory SQLite. Success has no data; a database failure stops scheduler startup.
 dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
 
 try {
+  // Prepare scheduler tables on RelDB and install the hook that returns the task ID. Initialization failure stops registration.
   dataOrThrow(await scheduler.init({
     hooks: {
       onTaskExecute: ({ context }) => ({ taskId: context.taskId }),
     },
   }))
   try {
+    // Register daily for 02:00 each day. Success has no data; an existing ID or invalid schedule fails.
     dataOrThrow(await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' }))
+    // Run daily manually with source docs. A returned execution log still requires checking status.
     const run = dataOrThrow(await scheduler.trigger('daily', { source: 'docs' }))
     if (run.status !== 'success')
       throw new Error(run.error ?? 'Task did not succeed')
 
+    // Read the first 20 daily execution logs from source docs. This run should produce one item; query errors throw.
     const logs = dataOrThrow(await scheduler.getLogs({
       taskId: 'daily',
       triggerSource: 'docs',
@@ -44,10 +49,12 @@ try {
       throw new Error('Expected one execution record')
   }
   finally {
+    // Close the scheduler with no arguments, stopping new claims and awaiting shutdown. No business data is returned.
     await scheduler.close()
   }
 }
 finally {
+  // Close the database after the scheduler. Success has no data; dataOrThrow throws on failure.
   dataOrThrow(await reldb.close())
 }
 ```
@@ -92,9 +99,13 @@ Register task definitions after connecting RelDB, and distinguish stored definit
 #### Scenario: Prepare and maintain tasks
 
 ```ts
+// Register demo-daily for 02:00 UTC each day. Success has no data; value throws on invalid input.
 value(await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' }))
+// Disable the registered demo-daily task without deleting it. value throws if the update fails.
 value(await scheduler.updateTask('demo-daily', { enabled: false }))
+// Reload this node's task definitions from storage without arguments. Success has no data; a read error fails.
 value(await scheduler.refreshTasks())
+// Remove the demo-daily definition by ID. Success has no data; value throws on a storage error.
 value(await scheduler.unregister('demo-daily'))
 // Each successful result has no business data; only the stored definition changes.
 ```
@@ -132,13 +143,17 @@ After initialization and task registration, start/stop return synchronous HaiRes
 
 ```ts
 async function runAndRead(taskId: string) {
+  // Start cron polling with no arguments. Success has no data; value throws if the scheduler is unavailable.
   value(scheduler.start())
   try {
+    // Trigger the supplied task with source docs-console. The returned record's status describes the execution outcome.
     const run = value(await scheduler.trigger(taskId, { source: 'docs-console' }))
+    // Query page 1 of the task's docs-console logs with up to 20 entries. items may be empty; value throws on lookup failure.
     const logs = value(await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } }))
     return { status: run.status, logs: logs.items }
   }
   finally {
+    // Stop future scheduled claims with no arguments. Success has no data; external effects already started remain.
     value(scheduler.stop())
   }
 }
@@ -163,16 +178,21 @@ The onTask* fields are callbacks passed to setHooks and called by the scheduler.
 
 ```ts
 const events: Array<{ stage: string, taskId: string }> = []
+// Install the callbacks below for start, interruption, and finish events. Success updates the host hooks; value throws if unavailable.
 value(scheduler.setHooks({
   onTaskStart: event => { events.push({ stage: 'start', taskId: event.task.id }) },
   onTaskExecute: event => ({ taskId: event.context.taskId }),
   onTaskInterrupted: event => { events.push({ stage: 'interrupted', taskId: event.task.id }) },
   onTaskFinish: event => { events.push({ stage: 'finish', taskId: event.task.id }) },
 }))
+// Register demo-hook at 02:00 daily so hooks can be observed. Success has no data; a duplicate ID fails.
 value(await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' }))
+// Trigger demo-hook manually to produce hook events. Inspect status on the execution log.
 const run = value(await scheduler.trigger('demo-hook'))
 // run.status === 'success'; events contains start and finish for demo-hook.
+// Remove the example demo-hook definition. Success has no data; value throws on failure.
 value(await scheduler.unregister('demo-hook'))
+// Clear the registered host hooks with no arguments. Success has no data.
 value(scheduler.clearHooks()) // undefined; future tasks no longer use these callbacks
 ```
 
@@ -198,17 +218,23 @@ Log repair never executes business work. The separate resolution function accept
 
 ```ts
 async function repairPendingLogs() {
+  // Read up to 20 executions with log-write failures from offset 0. With none pending, the result is empty.
   const pending = value(await scheduler.execution.listLogFailures({ limit: 20, offset: 0 }))
   for (const entry of pending)
+    // Repair the observation log for this occurrence ID. Success has no data and does not rerun the task.
     value(await scheduler.execution.repairLog(entry.occurrenceId))
   return pending.length // at most 20; the next scan starts at offset 0 again
 }
 async function recordVerifiedOutcome(occurrenceId: string, status: 'success' | 'discarded') {
+  // Read up to 20 unknown executions awaiting reconciliation from offset 0. No match gives an empty array.
   const unknown = value(await scheduler.execution.listUnknown({ limit: 20, offset: 0 }))
+  // Look up the reconciled occurrence and its update time. A missing occurrence returns null.
   const current = value(await scheduler.execution.get(occurrenceId))
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown execution')
+  // Record the verified success or discarded outcome against the observed update time. Success has no data; changed state fails.
   value(await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt }))
+  // Read the same occurrence after reconciliation. value still throws if the independent read fails.
   return { scanned: unknown.length, entry: value(await scheduler.execution.get(occurrenceId)) }
 }
 ```

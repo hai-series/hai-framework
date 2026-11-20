@@ -22,7 +22,9 @@
 import { reldb } from '@h-ai/reldb'
 
 // 数据库已初始化，example_orders表已创建。
+// 在一个事务内运行回调并在成功时提交；回调抛错会回滚，外层返回失败。
 const result = await reldb.tx.wrap(async (tx) => {
+  // 通过占位参数插入 order-1 及标题；成功 data 包含语句执行结果。
   const saved = await tx.execute(
     'INSERT INTO example_orders (id, title) VALUES (?, ?)',
     ['order-1', 'Example order'],

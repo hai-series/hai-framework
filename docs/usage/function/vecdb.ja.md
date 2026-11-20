@@ -12,17 +12,20 @@
 import { vecdb } from '@h-ai/vecdb'
 
 // 打开本地 LanceDB 连接。
+// ./data/vecdb で LanceDB を開きます。成功時の data は undefined、接続失敗時は error です。
 const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 try {
   // 创建余弦相似度集合，每个向量有 3 个数值。
+  // docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、重複などの失敗時は error です。
   const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
   if (!created.success)
     throw new Error(created.error.message)
 
   // 写入一条文档向量，content 和 metadata 会随结果返回。
+  // ID、3 次元ベクトル、本文と出典を docs に挿入します。成功時の data は undefined、失敗時は error です。
   const inserted = await vecdb.vector.insert('docs', [
     {
       id: 'doc-1',
@@ -35,6 +38,7 @@ try {
     throw new Error(inserted.error.message)
 
   // 用接近已写入向量的查询值，返回最多 5 条命中。
+  // この 3 次元ベクトルで docs を検索し、0.7 以上の最大 5 件を取得します。結果はヒット配列か []、失敗時は error です。
   const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
   if (!matches.success)
     throw new Error(matches.error.message)
@@ -44,6 +48,7 @@ try {
 }
 finally {
   // 释放连接，即使创建、写入或搜索失败也执行。
+  // 引数なしで接続を閉じます。成功時の data は undefined、失敗時はエラーコードを記録します。
   const closed = await vecdb.close()
   if (!closed.success)
     process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
@@ -89,11 +94,17 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：接続と終了
 
 ```ts
+// ./data/docs-demo で LanceDB を開きます。成功時は集合を利用でき、data は undefined です。失敗は value が処理します。
 value(await vecdb.init({ type: 'lancedb', path: './data/docs-demo' }))
+// 準備状態を直接読みます。接続成功後は true です。
 vecdb.isInitialized // true
+// 接続後のマスク済み設定から type を取り出します。この例は lancedb です。
 vecdb.config?.type // 'lancedb'
+// 同一プロセス内の連携用の接続情報を取得します。認証情報が含まれる場合があります。
 const connection = vecdb.rawConnection // backend-specific connection; may contain credentials
+// 引数なしで現在の接続を閉じます。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.close()) // undefined
+// 終了後の設定を読みます。値は null です。
 vecdb.config // null
 ```
 
@@ -124,11 +135,17 @@ vecdb.config // null
 #### 利用例：集合の作成と削除
 
 ```ts
+// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+// 作成直後の demo-docs を確認すると true が返ります。バックエンドの失敗は value が例外にします。
 value(await vecdb.collection.exists('demo-docs')) // true
+// 引数なしで集合名を列挙します。配列には demo-docs が含まれ、失敗は value が例外にします。
 value(await vecdb.collection.list()) // includes 'demo-docs'
+// demo-docs の情報を読みます。3 次元、コサイン、文書数 0 です。失敗は value が例外にします。
 const info = value(await vecdb.collection.info('demo-docs')) // dimension 3, cosine, zero documents
+// demo-docs とそのデータを削除します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.collection.drop('demo-docs')) // undefined
+// 削除後の demo-docs を調べると false が返ります。照会の失敗は value が例外にします。
 value(await vecdb.collection.exists('demo-docs')) // false
 ```
 
@@ -164,15 +181,23 @@ VecDB は数値ベクトルを保存・比較します。テキストの変換�
 例では 3 次元の集合に [1,0,0] を登録・検索し、同方向のコサイン変換スコアは約 1 です。実際の変換はアプリや AI embedding が担当します。検索結果は一致候補とスコアで、回答文や百分率ではありません。
 
 ```ts
+// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+// doc-1、3 次元ベクトル、本文 Install を demo-docs に挿入します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))
+// 挿入後の demo-docs の文書数は 1 です。失敗は value が例外にします。
 value(await vecdb.vector.count('demo-docs')) // 1
+// 同じ doc-1 の本文を Install v2 に更新します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }]))
+// 同じベクトルで 0.9 以上の上位 1 件を検索します。この例の結果は更新後の doc-1、失敗は value が例外にします。
 const matches = value(await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 }))
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+// demo-docs の先頭から最大 32 件の ID を取得します。結果には items と任意の nextCursor が含まれます。失敗は value が例外にします。
 const page = value(await vecdb.vector.scan('demo-docs', { limit: 32 }))
 // page.items: [{ id: 'doc-1' }]; continue using nextCursor when present
+// demo-docs から指定した doc-1 を削除します。成功時の data は undefined、失敗は value が例外にします。
 value(await vecdb.vector.delete('demo-docs', ['doc-1'])) // undefined
+// 削除後の demo-docs の文書数は 0 です。照会の失敗は value が例外にします。
 value(await vecdb.vector.count('demo-docs')) // 0
 ```
 

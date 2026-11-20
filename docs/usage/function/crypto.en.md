@@ -13,9 +13,11 @@ Check initialization before calling algorithms. Algorithms return HaiResult: che
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// Initialize crypto with defaults. Success has no data. Check error on failure.
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// Hash the UTF-8 bytes of abc with default SM3. Success data is 64 hex characters. Check error on failure.
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
@@ -46,12 +48,17 @@ Initialization prepares algorithm objects. Their owner closes independent transp
 No arguments are required. Readiness becomes true after successful initialization and false after close. Reinitialize before running later examples. Closing during initialization prevents a late result from reopening the module.
 
 ```ts
+// Read readiness, which is true after initialization.
 crypto.isInitialized // true
+// Close the current crypto instance without arguments. Completion has no data.
 await crypto.close() // Promise<void>
+// After close, readiness reads false.
 crypto.isInitialized // false
+// Initialize crypto with defaults. Success has no data. Check error on failure.
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message, { cause: initialized.error })
+// Read readiness, which is true after initialization.
 crypto.isInitialized // true
 ```
 
@@ -80,31 +87,41 @@ The message is order-42. Decryption restores that text; verification of a change
 ```ts
 import { crypto } from '@h-ai/crypto'
 
+// Generate a random SM2 key pair without arguments. Success data has publicKey and privateKey. Check error on failure.
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message, { cause: pairResult.error })
 const pair = pairResult.data
+// Validate the generated public key. A valid format returns true.
 crypto.asymmetric.isValidPublicKey(pair.publicKey) // true
+// Validate the generated private key. A valid format returns true.
 crypto.asymmetric.isValidPrivateKey(pair.privateKey) // true
+// Check null as a public key. It returns false.
 crypto.asymmetric.isValidPublicKey(null) // false
+// Check the sample invalid public-key string. It returns false.
 crypto.asymmetric.isValidPublicKey('not-a-public-key') // false
 
+// Encrypt order-42 with the generated public key. Success returns SM2 ciphertext. Check error on failure.
 const ciphertextResult = crypto.asymmetric.encrypt('order-42', pair.publicKey)
 if (!ciphertextResult.success)
   throw new Error(ciphertextResult.error.message, { cause: ciphertextResult.error })
 const ciphertext = ciphertextResult.data
+// Decrypt the prior ciphertext with the matching private key. Success returns order-42. Check error on failure.
 const decryptedResult = crypto.asymmetric.decrypt(ciphertext, pair.privateKey)
 if (!decryptedResult.success)
   throw new Error(decryptedResult.error.message, { cause: decryptedResult.error })
 decryptedResult.data // 'order-42'
+// Sign order-42 with the generated private key. Success returns a signature string. Check error on failure.
 const signatureResult = crypto.asymmetric.sign('order-42', pair.privateKey)
 if (!signatureResult.success)
   throw new Error(signatureResult.error.message, { cause: signatureResult.error })
 const signature = signatureResult.data
+// Pass the original message, signature, and matching public key. Valid signatures return true. Check error on operation failure.
 const verifiedResult = crypto.asymmetric.verify('order-42', signature, pair.publicKey)
 if (!verifiedResult.success)
   throw new Error(verifiedResult.error.message, { cause: verifiedResult.error })
 verifiedResult.data // true
+// Keep the signature and key but change the message to changed. A completed check returns false. Check error on failure.
 const changedMessageResult = crypto.asymmetric.verify('changed', signature, pair.publicKey)
 if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
@@ -120,24 +137,29 @@ changedMessageResult.data // false
 The previous scenario omits signing options, using `{ hash: true, userId: '1234567812345678' }`. Here `signing` **overrides userId with `'orders-service'`**, and verification passes the same object. This public identifier participates in the SM2 identity digest; it is neither an IAM user ID nor a password and does not bind the logged-in user automatically. With `hash: true`, SM3 processes the identity digest and original message before signing. Keep this default for business text, including large text.
 
 ```ts
+// Generate a random SM2 key pair without arguments. Success data has publicKey and privateKey. Check error on failure.
 const pairResult = crypto.asymmetric.generateKeyPair()
 if (!pairResult.success)
   throw new Error(pairResult.error.message)
 const pair = pairResult.data
 const options = { cipherMode: 1, outputFormat: 'base64' } as const
+// Encrypt order-42 with the generated public key and selected layout. Success returns Base64 ciphertext. Check error on failure.
 const encodedResult = crypto.asymmetric.encrypt('order-42', pair.publicKey, options)
 if (!encodedResult.success)
   throw new Error(encodedResult.error.message, { cause: encodedResult.error })
 const encoded = encodedResult.data
+// Decrypt the prior output with the same layout and encoding and the matching private key. Success returns order-42. Check error on failure.
 const decodedResult = crypto.asymmetric.decrypt(encoded, pair.privateKey, options)
 if (!decodedResult.success)
   throw new Error(decodedResult.error.message, { cause: decodedResult.error })
 decodedResult.data // 'order-42'
 const signing = { hash: true, userId: 'orders-service' }
+// Sign order-42 with the private key, hashing enabled, and the orders-service identity. Success returns a signature. Check error on failure.
 const signedResult = crypto.asymmetric.sign('order-42', pair.privateKey, signing)
 if (!signedResult.success)
   throw new Error(signedResult.error.message, { cause: signedResult.error })
 const signed = signedResult.data
+// Verify the same text, signature, public key, and options. A match returns true. Check error on operation failure.
 const customVerifiedResult = crypto.asymmetric.verify('order-42', signed, pair.publicKey, signing)
 if (!customVerifiedResult.success)
   throw new Error(customVerifiedResult.error.message, { cause: customVerifiedResult.error })
@@ -177,28 +199,35 @@ A digest checks content; HMAC additionally requires a shared secret. A plain dig
 The inputs are abc, its UTF-8 bytes and its hex encoding; all three digests match. Invalid hex fails. The HMAC secret is demonstration data; obtain real secrets from protected configuration.
 
 ```ts
+// Hash the UTF-8 bytes of abc with default SM3. Success data is 64 hex characters. Check error on failure.
 const digestResult = crypto.hash.hash('abc')
 if (!digestResult.success)
   throw new Error(digestResult.error.message, { cause: digestResult.error })
 const digest = digestResult.data
 // 66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0
+// Hash the encoded bytes of abc using SM3. Success matches the string digest. Check error on failure.
 const byteDigestResult = crypto.hash.hash(new TextEncoder().encode('abc'))
 if (!byteDigestResult.success)
   throw new Error(byteDigestResult.error.message, { cause: byteDigestResult.error })
 byteDigestResult.data === digest // true
+// Decode hex 616263 into the bytes of abc. Success matches the earlier digest. Check error on failure.
 const hexDigestResult = crypto.hash.hash('616263', { inputEncoding: 'hex' })
 if (!hexDigestResult.success)
   throw new Error(hexDigestResult.error.message, { cause: hexDigestResult.error })
 hexDigestResult.data === digest // true
+// The z character is invalid in hex, so this call returns a failure.
 crypto.hash.hash('6z', { inputEncoding: 'hex' }).success // false
+// Compare abc with its generated digest. Success returns true. Check error on calculation failure.
 const digestVerifiedResult = crypto.hash.verify('abc', digest)
 if (!digestVerifiedResult.success)
   throw new Error(digestVerifiedResult.error.message, { cause: digestVerifiedResult.error })
 digestVerifiedResult.data // true
+// Compare changed to the original digest. Success returns false. Check error on calculation failure.
 const changedDigestResult = crypto.hash.verify('changed', digest)
 if (!changedDigestResult.success)
   throw new Error(changedDigestResult.error.message, { cause: changedDigestResult.error })
 changedDigestResult.data // false
+// Compute the HMAC of order-42 with the sample shared key. Success returns 64 hex characters. Check error on failure.
 const macResult = crypto.hash.hmac('order-42', 'demo-shared-secret')
 if (!macResult.success)
   throw new Error(macResult.error.message, { cause: macResult.error })
@@ -232,21 +261,27 @@ SM4 defaults to CBC with a fresh IV; the result carries the fields needed for de
 The input is hello and a generated 32-digit hexadecimal key. Both round trips restore hello; ciphertext and IV vary.
 
 ```ts
+// Generate a random SM4 key without arguments and return it as hex.
 const key = crypto.symmetric.generateKey()
+// Check the generated SM4 key. A valid key returns true.
 crypto.symmetric.isValidKey(key) // true
+// Encrypt hello with the generated key. Success returns ciphertext, encoding, mode, and IV. Check error on failure.
 const encryptedResult = crypto.symmetric.encrypt('hello', key)
 if (!encryptedResult.success)
   throw new Error(encryptedResult.error.message, { cause: encryptedResult.error })
 const encrypted = encryptedResult.data
 // { mode: 'cbc', encoding: 'hex', ciphertext: '…', iv: '…' }
+// Decrypt the ciphertext object with the original key. Success returns hello. Check error on failure.
 const plaintextResult = crypto.symmetric.decrypt(encrypted, key)
 if (!plaintextResult.success)
   throw new Error(plaintextResult.error.message, { cause: plaintextResult.error })
 plaintextResult.data // 'hello'
+// Encrypt hello with the same key. Success returns the ciphertext and a new IV. Check error on failure.
 const withIVResult = crypto.symmetric.encryptWithIV('hello', key)
 if (!withIVResult.success)
   throw new Error(withIVResult.error.message, { cause: withIVResult.error })
 const withIV = withIVResult.data
+// Pass the prior ciphertext, original key, and that IV. Success returns hello. Check error on failure.
 const plaintextWithIVResult = crypto.symmetric.decryptWithIV(withIV.ciphertext, key, withIV.iv)
 if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
@@ -258,9 +293,13 @@ plaintextWithIVResult.data // 'hello'
 Generate an independent IV for this encryption only. The payload records encoding=base64, which decrypt uses to decode it.
 
 ```ts
+// Generate a random SM4 key without arguments and return it as hex.
 const key = crypto.symmetric.generateKey()
+// Generate a fresh random IV without arguments and return it as hex.
 const iv = crypto.symmetric.generateIV()
+// Validate the generated IV. A valid format returns true.
 crypto.symmetric.isValidIV(iv) // true
+// Encrypt hello in CBC using the fresh key and explicit IV. Success data is Base64-encoded. Check error on failure.
 const base64PayloadResult = crypto.symmetric.encrypt('hello', key, {
   mode: 'cbc', iv, outputFormat: 'base64',
 })
@@ -268,6 +307,7 @@ if (!base64PayloadResult.success)
   throw new Error(base64PayloadResult.error.message, { cause: base64PayloadResult.error })
 const base64Payload = base64PayloadResult.data
 base64Payload.encoding // 'base64'
+// Decrypt the Base64 record with the same key. Success returns hello. Check error on failure.
 const base64PlaintextResult = crypto.symmetric.decrypt(base64Payload, key)
 if (!base64PlaintextResult.success)
   throw new Error(base64PlaintextResult.error.message, { cause: base64PlaintextResult.error })
@@ -298,6 +338,7 @@ Use the asynchronous methods for registration and sign-in requests in Node.js. E
 Hashing the same password produces different records. A wrong password is successful data false; a malformed record is a failed result with INVALID_INPUT.
 
 ```ts
+// Hash the demo password using a 16-byte random salt and 10,000 iterations. Success returns the storage record. Check error on failure.
 const recordResult = await crypto.password.hashAsync('demo-password', {
   saltLength: 16, iterations: 10000,
 })
@@ -305,14 +346,17 @@ if (!recordResult.success)
   throw new Error(recordResult.error.message, { cause: recordResult.error })
 const record = recordResult.data
 // record is the full random record string; fields are explained below.
+// Asynchronously verify the demo password against its full record. A match returns true. Check error on failure.
 const passwordMatchedResult = await crypto.password.verifyAsync('demo-password', record)
 if (!passwordMatchedResult.success)
   throw new Error(passwordMatchedResult.error.message, { cause: passwordMatchedResult.error })
 passwordMatchedResult.data // true
+// Compare the wrong password with the valid record. A completed check returns false. Check error on failure.
 const wrongPasswordResult = crypto.password.verify('wrong-password', record)
 if (!wrongPasswordResult.success)
   throw new Error(wrongPasswordResult.error.message, { cause: wrongPasswordResult.error })
 wrongPasswordResult.data // false
+// Verify the demo password against a malformed record. This fails with hai:crypto:002.
 const malformed = crypto.password.verify('demo-password', '$hai$invalid')
 malformed.success // false
 if (!malformed.success) {
@@ -378,11 +422,14 @@ import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
 
 function buildTransport(secret: unknown) {
+  // Parse the key ring loaded from the caller's trusted Secret. Success returns the ring. Return failures as-is.
   const ring = crypto.transport.parseServerKeyRing(secret)
   if (!ring.success)
     return ring
+  // Create the server with the validated key ring and registry. Success returns a manager. Return failures directly.
   return crypto.transport.createServer({
     serverKeyRing: ring.data,
+    // Use the initialized cache to create a public-key and request registry for the server.
     keyStore: crypto.transport.createKeyStore({ cache }),
   })
 }
@@ -396,14 +443,20 @@ manager is successful data from the previous function. clientPublicKey comes fro
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 
 async function exchange(manager: TransportEncryptionManager, clientPublicKey: string) {
+  // Register the client's public key and return its registration ID. Invalid input or failed registration throws.
   const clientId = await manager.registerClientKey(clientPublicKey)
+  // Read the public key by its new registration ID. A live record yields the original key; a missing one yields undefined.
   const registered = await manager.getClientPublicKey(clientId)
   // registered === clientPublicKey
   return {
     clientId,
+    // Read the current server key ID without arguments.
     serverKeyId: manager.getServerKeyId(),
+    // Read the current server public key without arguments for the client's handshake.
     serverPublicKey: manager.getServerPublicKey(),
+    // Read the manager's plaintext request size limit in bytes.
     maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+    // Read the client key registration lifetime in seconds.
     clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
   }
 }
@@ -428,15 +481,20 @@ session is the **client transport object** returned by crypto.transport.createCl
 The example sends POST hello and reads decrypted `{ received: "hello" }`. This is bounded whole-body text/JSON, not streaming file upload. Authenticated HEAD/204/205/304 responses remain bodyless; do not call json() on them.
 
 ```ts
+// Construct a client session for the API's handshake URL and return the instance.
 const session = crypto.transport.createClient({
   keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
 })
+// Read readiness without arguments. A new or destroyed session returns false.
 session.ready() // false
 try {
+  // Establish encryption via the configured handshake URL. Success enables encrypted requests. Check error on failure.
   const sessionInitialized = await session.init()
   if (!sessionInitialized.success)
     throw new Error(sessionInitialized.error.message, { cause: sessionInitialized.error })
+  // Read readiness without arguments after a successful handshake. It returns true.
   session.ready() // true
+  // POST hello to echo using the ready session. It returns a Response with readable plaintext. Transport or decryption errors throw.
   const response = await session.encryptedFetch('https://api.example.com/api/echo', {
     method: 'POST', body: 'hello',
   })
@@ -445,9 +503,12 @@ try {
   const body: unknown = await response.json() // { received: 'hello' }
 }
 finally {
+  // Clear the session's encryption state without arguments. Readiness becomes false.
   session.destroy()
 }
+// Read readiness without arguments. A new or destroyed session returns false.
 session.ready() // false
+// Read the transport protocol version constant, which is 2.
 crypto.transport.protocol.VERSION // 2
 ```
 
@@ -464,7 +525,9 @@ async function decryptEnvelope(
   request: Request,
 ) {
   const url = new URL(request.url)
+  // Decrypt the received payload using the actual request context. Success contains plaintext and context. Return verification, time, or decryption failures directly.
   return manager.decryptRequest(payload, {
+    // Read the ID using the protocol's header name. Pass an empty string for validation when missing.
     clientId: request.headers.get(crypto.transport.protocol.CLIENT_ID_HEADER) ?? '',
     method: request.method,
     path: url.pathname + url.search,
@@ -576,23 +639,32 @@ Cache must be initialized. This isolated test registration does not reuse a mana
 ```ts
 import { cache } from '@h-ai/cache'
 
+// Create the registry from the initialized cache with a lifetime of 3,600 seconds and return the instance.
 const registry = crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 })
+// Generate a test SM2 key pair without arguments. Success contains both keys. Check error on failure.
 const testPairResult = crypto.asymmetric.generateKeyPair()
 if (!testPairResult.success)
   throw new Error(testPairResult.error.message, { cause: testPairResult.error })
 const testPair = testPairResult.data
+// Register the generated test public key and return its client ID. Registration failure throws.
 const clientId = await registry.register(testPair.publicKey)
 try {
+  // Read the public key back by its ID. It matches the test key here. Lookup failures can throw.
   await registry.get(clientId) === testPair.publicKey // true
   const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
   const expiresAt = Date.now() + 60_000
+  // Claim the fresh request ID for this client and future expiry. The first claim returns true. Storage failure throws.
   await registry.claimRequest(clientId, requestId, expiresAt) // true
+  // Try the same unexpired ID again. It returns false for a duplicate. Storage failure throws.
   await registry.claimRequest(clientId, requestId, expiresAt) // false
 }
 finally {
+  // If supported, remove the public-key registration by test ID. Completion has no data. Failure throws.
   await registry.delete?.(clientId)
+  // If supported, close the registry without arguments. Completion has no data.
   await registry.close?.()
 }
+// Look up the deleted ID again. This returns undefined. Storage errors may throw.
 await registry.get(clientId) // undefined
 ```
 
@@ -640,15 +712,21 @@ A Response stream containing {"hello":"world"} returns the same text. crypto.tra
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError, crypto } from '@h-ai/crypto'
 
+// Read the sample JSON with the handshake byte limit. This returns text. Oversize input throws TransportBodyTooLargeError.
 const text = await crypto.transport.readBody(new Response('{"hello":"world"}').body, {
+  // Read the default handshake body limit in bytes for this call.
   maxBytes: crypto.transport.bodyLimits.keyExchangeBytes,
 })
 // text === '{"hello":"world"}'
+// Pass an 8 MiB plaintext limit and return the byte quotas for plaintext and encrypted payloads.
 const limits = crypto.transport.resolveBodyLimits(8 * 1024 * 1024)
 limits.plaintextBytes // 8388608
 limits.encryptedPayloadBytes // 16809984
+// Read the minimum plaintext limit of 1,024 bytes.
 crypto.transport.plaintextRange.min // 1024; minimum plaintext bytes
+// Read the maximum plaintext limit of 67,108,864 bytes.
 crypto.transport.plaintextRange.max // 67108864; maximum plaintext bytes
+// Read the maximum request age of 600 seconds.
 crypto.transport.timeLimits.maxRequestAgeSeconds // 600; maximum request lifetime in seconds
 ```
 
@@ -660,37 +738,45 @@ Input is a handshaken client POST to /api/echo with plaintext hello. The server 
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// Use 1 MiB by default and 8 MiB for routes matching the files wildcard. The policy allocates capacity by path.
 const policy = crypto.transport.createBodyPolicy(1024 * 1024, {
   '/files/*': 8 * 1024 * 1024,
 })
 
 async function echo(manager: TransportEncryptionManager, request: Request): Promise<Response> {
+  // Request capacity for the actual path. Success returns its limits and release method. If unavailable, take the 503 branch.
   const lease = policy.acquire(new URL(request.url).pathname)
   if (!lease)
     return new Response(null, { status: 503 })
   try {
+    // Authenticate the request with the manager and leased limits. Success gives plaintext and context. The branches handle errors.
     const verified = await crypto.transport.authenticateRequest(manager, request, lease.limits)
     if (!verified.success) {
       const cause = verified.error.cause
       if (cause instanceof TransportTimeError && cause.context)
+        // Create an HTTP error response for the time error with the manager and verified context.
         return crypto.transport.createErrorResponse(cause, { manager, context: cause.context })
       return new Response(null, { status: verified.error.httpStatus ?? 400 })
     }
+    // Encrypt the status-200 JSON response with the verified context. Success yields the ciphertext envelope; failure returns 500.
     const encrypted = await manager.encryptResponse(
       verified.data.context, JSON.stringify({ received: verified.data.plaintext }), 200,
     )
     if (!encrypted.success)
       return new Response(null, { status: 500 })
     return Response.json(encrypted.data, {
+      // Mark the JSON envelope with the protocol's encrypted-response header name and value.
       headers: { [crypto.transport.protocol.ENCRYPTED_HEADER]: crypto.transport.protocol.ENCRYPTED_HEADER_VALUE },
     })
   }
   catch (error) {
     if (error instanceof TransportBodyTooLargeError)
+      // Convert the size exception to a 413 response.
       return crypto.transport.createErrorResponse(error)
     throw error
   }
   finally {
+    // Release this request's capacity without arguments on every exit. It returns no data.
     lease.release()
   }
 }
@@ -703,12 +789,16 @@ These isolated diagnostic examples return 413 for a request body limit and 400 f
 ```ts
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 
+// Construct the size error from limit 1,024 and observed size 1,025. Its code is hai:crypto:070.
 const oversized = new TransportBodyTooLargeError(1024, 1025)
 oversized.code // 'hai:crypto:070'
+// Convert the constructed size error to a response with status 413.
 const tooLarge = await crypto.transport.createErrorResponse(oversized)
 tooLarge.status // 413
+// Construct a time error from a missing request timestamp and the current milliseconds. Its code is hai:crypto:071.
 const invalidTime = new TransportTimeError(undefined, Date.now())
 invalidTime.code // 'hai:crypto:071'
+// Convert the time error with no authenticated context into a response with status 400.
 const timeRejected = await crypto.transport.createErrorResponse(invalidTime)
 timeRejected.status // 400
 ```

@@ -13,6 +13,7 @@
 ```sh
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# 打印已安装的 Hai CLI 版本。
 hai --version
 ```
 

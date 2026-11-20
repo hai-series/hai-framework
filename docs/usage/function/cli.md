@@ -19,7 +19,9 @@
 ```sh
 pnpm view @h-ai/cli@latest version # 查询注册表，输出最新已发布版本。
 pnpm add -g @h-ai/cli@latest # 将该 CLI 安装到 pnpm 的全局目录。
+# Prints the installed CLI version selected by PATH. A missing executable fails before version output.
 hai --version # 确认当前 PATH 实际调用的 CLI 版本。
+# Creates my-app from the fullstack template with its web frontend. Invalid options or a conflicting destination stop creation.
 hai create my-app --type fullstack --frontends web # 输入应用名、模板和前端目标，生成 my-app。
 cd my-app # 进入刚生成的工程目录。
 pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
@@ -54,9 +56,12 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 生成阶段落盘应用代码、配置和 AI skills；只有选择安装时才运行包管理器。生成成功不代表数据库、缓存、Secret 或部署环境已经准备好。安装失败可能留下已生成工程，应按错误检查该目录，而不是把整条命令当作全部回滚。
 
 ```sh
+# Creates demo-app from the website template with default answers. Installation and Git initialization are skipped. An existing destination can stop creation.
 hai create demo-app --type website --defaults --no-install --no-git
 cd demo-app
+# Adds AI and its required module configuration to demo-app. Invalid project or feature prerequisites stop the update.
 hai add ai --no-install
+# Refreshes the project's AI skills and entry files. A missing or unsupported project layout yields a diagnostic.
 hai init
 ```
 
@@ -106,10 +111,15 @@ Fullstack提供用户/角色、审计、反馈、个人设置和主题语言界�
 #### 场景：生成业务骨架
 
 ```sh
+# Generates the dashboard page in the current file-routed app. A conflicting file or unsupported project fails.
 hai generate page dashboard
+# Generates an orders page through the page alias. Existing files are protected.
 hai g:page orders
+# Generates the OrderList Svelte component. A colliding path stops generation.
 hai g:component OrderList
+# Generates the orders API in the selected orders-serv workspace. An unresolved workspace or conflicting output fails.
 hai g:api orders --workspace orders-serv
+# Generates the order model skeleton. A missing target module or conflicting file stops the generator.
 hai g:model order
 ```
 
@@ -118,10 +128,15 @@ hai g:model order
 #### 场景：生成不同类型的源码文件
 
 ```sh
+# Uses the current app's file-routed workspace. Fails on unsupported routing or a protected file.
 hai generate page dashboard # 输入路由名，生成 dashboard 页面。
+# The destination is derived from this workspace. A conflicting component stops generation.
 hai generate component UserCard # 输入组件名，生成对应 Svelte 组件文件。
+# The target package must resolve to orders-serv. Missing generator hooks or conflicting files stop the update.
 hai generate api orders --workspace orders-serv # 输入接口名和目标包，生成契约或服务处理器。
+# Uses the selected database model workspace. Existing files are protected.
 hai generate model order # 输入模型名，生成数据库模型骨架。
+# Creates the up/down scaffold only. A conflicting migration path fails.
 hai generate migration add-orders # 输入迁移名，生成待填写的迁移文件。
 ```
 
@@ -142,7 +157,9 @@ hai generate migration add-orders # 输入迁移名，生成待填写的迁移�
 #### 场景：编译与打包应用
 
 ```sh
+# Compiles the app in the current workspace and writes its configured build output. A compile error exits nonzero.
 hai build --target compile
+# Builds container artifacts and emits metadata JSON including artifactDir. Engine or build failure exits nonzero.
 hai build --target image --json
 ```
 
@@ -151,8 +168,11 @@ hai build --target image --json
 #### 场景：构建镜像与原生制品
 
 ```sh
+# Needs a working container engine and both build roles. A failed image exits nonzero.
 hai build --target image --images "serv,web" --concurrency 1 # 串行构建两个镜像角色，成功后输出镜像产物。
+# Uses the Android SDK and configured runtime. Missing tools or build failures exit nonzero.
 hai build --target app --platform android --runtime auto --debug # 选择 Android 和可用的容器引擎，输出调试包。
+# Selects Windows x64 and writes the matching desktop artifact. Unsupported tooling or build failure exits nonzero.
 hai build --target desktop --platform windows --arch x64 # 按 Windows x64 目标生成桌面制品。
 ```
 
@@ -177,6 +197,7 @@ website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_
 #### 场景：查看计划并交付
 
 ```sh
+# Reads the production settings and prints a read-only deployment plan as JSON. Missing configuration exits nonzero.
 hai deploy --env prod --plan
 ```
 
@@ -185,9 +206,13 @@ hai deploy --env prod --plan
 #### 场景：检查远端或制作离线包
 
 ```sh
+# Reports invalid or missing production configuration with a nonzero exit.
 hai deploy --env prod --plan # 读取生产环境配置，输出本地计划 JSON。
+# Adds SSH observations from the configured remote. An unavailable baseline is reported in the plan.
 hai deploy --env prod --plan --inspect-remote # 读取同一环境和服务器基线，补充计划中的远端事实。
+# Writes an offline bundle without publishing it. Build or packaging errors exit nonzero.
 hai deploy --env prod --build --bundle-only # 先构建，再输出可手工交付的生产归档。
+# Publishes the selected roles only after checking the production baseline. A mismatch stops the partial rollout.
 hai deploy --env prod --build --services "serv,web" # 对满足基线的生产环境构建并发布选定服务。
 ```
 
@@ -216,9 +241,13 @@ HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1M
 #### 场景：查看帮助、升级与诊断
 
 ```sh
+# Prints the CLI version found on PATH.
 hai --version
+# Prints the top-level command list and global switches.
 hai --help
+# Prints the deployment command's arguments and switches.
 hai deploy --help
+# Reads the existing feedback.zip and prints its summary. An invalid or unreadable archive fails.
 hai feedback summary feedback.zip
 ```
 
@@ -227,8 +256,11 @@ hai feedback summary feedback.zip
 #### 场景：读取证据与预检升级
 
 ```sh
+# Reads the first 20 matching entries. Invalid bundles or filters fail with a diagnostic.
 hai feedback evidence feedback.zip --request-id request-42 --page 1 --page-size 20 # 以请求编号过滤指定 ZIP，输出证据首页。
+# Starts a loopback viewer for the supplied ZIP. An invalid or unreadable archive stops startup.
 hai feedback view feedback.zip # 打开指定 ZIP，输出本机查看器地址。
+# Replace TARGET_VERSION with an exact published version. Unsupported versions or incompatible projects fail preflight.
 hai upgrade TARGET_VERSION # 输入已发布精确版本，输出当前工程的升级预检结果。
 ```
 

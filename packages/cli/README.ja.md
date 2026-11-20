@@ -13,6 +13,7 @@ Node.js は `engines`（`^22.23.4 || ^24.22.1 || ^26.12.1`）、pnpm は12.11.2�
 ```sh
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# インストール済みの Hai CLI のバージョンを表示する。
 hai --version
 ```
 

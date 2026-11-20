@@ -63,6 +63,7 @@ pnpm --filter mobile-app cap:ios
 import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 
+// 以 apiServiceContract 创建独立客户端，得到契约对应的调用方法；使用前由应用初始化。
 export const mobileApiClient = apiClient.create(apiServiceContract)
 ```
 

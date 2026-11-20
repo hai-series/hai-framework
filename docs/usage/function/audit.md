@@ -27,22 +27,28 @@ function dataOrThrow<T>(result: HaiResult<T>): T {
   return result.data
 }
 
+// 用 SQLite 内存库承载本例审计表，成功无 data，连接失败抛出。
 dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
 
 try {
+  // 借用已打开的数据库，采用默认审计配置。成功后可写日志，失败抛出。
   dataOrThrow(await audit.init())
   try {
+    // 为 demo-user 写入 auth 登录事件，成功返回有 ID 的记录，写入失败抛出。
     const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+    // 查询 login 事件，每页最多 20 条。结果是分页对象，新库只包含刚写入的记录，查询失败抛出。
     const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
     // 新数据库中，查询到的第一条记录就是刚写入的那条。
     if (logs.items[0]?.id !== saved.id)
       throw new Error('Expected the new login event')
   }
   finally {
+    // 无参数释放审计状态，成功无 data，失败抛出。
     dataOrThrow(await audit.close())
   }
 }
 finally {
+  // 在审计关闭后释放 SQLite 连接，成功无 data，关闭失败抛出。
   dataOrThrow(await reldb.close())
 }
 ```
@@ -80,8 +86,11 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备审计服务
 
 ```ts
+// 采用默认配置并借用已初始化的 RelDB，成功准备审计表，失败由 value 抛出。
 value(await audit.init()) // undefined; audit tables are ready
+// 读取就绪属性，审计表准备好后本例为 true。
 audit.isInitialized // true
+// 无参数停止审计，成功无 data 且借用的 RelDB 保持打开，失败由 value 抛出。
 value(await audit.close()) // undefined; the borrowed RelDB remains open
 ```
 
@@ -114,17 +123,26 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 #### 场景：记录操作与关联身份
 
 ```ts
+// 按用户、动作和资源保存显式登录事件，返回有 ID 和创建时间的记录，失败由 value 抛出。
 const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
 // saved includes its generated id and createdAt
+// 将 demo-user 读取 orders 的安全字段交给自动采集，写入或按配置跳过时无 data，失败由 value 抛出。
 value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+// 将可信用户 ID 绑定到下面的异步操作，返回回调产出的事件 ID，回调抛错原样传播。
 const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
+  // 在上下文中写 orders 更新事件，用户 ID 从外层补齐，成功返回记录，失败由 value 抛出。
   const record = value(await audit.log({ action: 'update', resource: 'orders' }))
   return record.id
 }) // id is the callback's returned record id
+// 以 demo-user 为用户 ID 记录注册。成功无 data，写入失败抛出。
 value(await audit.helper.register('demo-user'))
+// 记录 demo-user 的登录。成功无 data，失败抛出。
 value(await audit.helper.login('demo-user'))
+// 记录 demo-user 的退出。成功无 data，失败抛出。
 value(await audit.helper.logout('demo-user'))
+// 用示例邮箱记录已请求重置。成功无 data，记录失败抛出。
 value(await audit.helper.passwordResetRequest('demo@example.com'))
+// 用 demo-user 记录重置完成。成功无 data，记录失败抛出。
 value(await audit.helper.passwordResetComplete('demo-user'))
 // helper calls succeed with undefined; query their saved events using audit.list
 ```
@@ -169,6 +187,7 @@ value(await audit.helper.passwordResetComplete('demo-user'))
 输入是可信操作者、资源名和订单 ID；成功结果没有业务数据，持久记录可通过 audit.list 查询。
 
 ```ts
+// 记录 demo-user 对 orders 中 order-42 的更新。成功无 data，失败由 value 抛出。
 value(await audit.helper.crud({
   userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
 })) // undefined
@@ -192,9 +211,13 @@ value(await audit.helper.crud({
 #### 场景：查询与清理旧记录
 
 ```ts
+// 筛选 login 并读取第一页的最多 20 条，返回记录和总数等分页信息，查询失败抛出。
 const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
+// 按用户 ID 读取最近最多 20 条，返回记录数组，查询失败抛出。
 const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
+// 传 7 天统计窗口，返回按操作分组的计数，统计失败抛出。
 const stats = value(await audit.getStats(7)) // action statistics for the last seven days
+// 保留 90 天，返回删除的旧记录数，清理失败抛出。
 const removed = value(await audit.cleanup(90)) // count of records older than 90 days
 ```
 
@@ -231,14 +254,17 @@ const removed = value(await audit.cleanup(90)) // count of records older than 90
 import { scheduler } from '@h-ai/scheduler'
 
 async function startAuditSchedule(schedulerSettings: Parameters<typeof scheduler.init>[0]) {
+// 读取审计配置派生的任务与钩子，没有启用时为 null。
 const plan = audit.schedulerPlan
 if (plan) {
+  // 将宿主调度配置和审计计划合并传入，成功无 data，失败读取 error。
   const initialized = await scheduler.init({
     ...schedulerSettings,
     ...plan
   })
   if (!initialized.success)
     throw new Error(initialized.error.message)
+  // 无参数启动已初始化的调度器。成功后开始触发任务，失败读取 error。
   const started = scheduler.start()
   if (!started.success)
     throw new Error(started.error.message)
@@ -253,11 +279,13 @@ if (plan) {
 前提：初始化时注入私有 Storage 并开启 backup。输入是本次归档 ID 和时间范围；run 返回的 key 交给 verify，后者返回同一归档的核对结果。
 
 ```ts
+// 传归档 ID 和 UTC 时间范围，成功返回私有归档键及清单，归档失败抛出。
 const archive = value(await audit.backup.run({
   id: 'demo-login-archive',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
 }))
+// 用上一步签发的 archive.key 核对归档，数据是验证后的归档信息，损坏或读取失败抛出。
 const verifiedArchive = value(await audit.backup.verify(archive.key))
 // verifiedArchive identifies the same private archive; its contents passed verification.
 ```
@@ -277,6 +305,7 @@ const verifiedArchive = value(await audit.backup.verify(archive.key))
 #### 场景：检查异常并通知
 
 ```ts
+// 无参数按已配置规则检查窗口，返回通知的提交、入队和失败计数，检查失败抛出。
 const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
 ```
 

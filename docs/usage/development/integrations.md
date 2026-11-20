@@ -21,14 +21,17 @@
 ```ts
 import { capacitor } from '@h-ai/capacitor'
 
+// 无参数检查当前宿主并初始化桥接；成功后才开始访问设备能力。
 const ready = await capacitor.init()
 if (!ready.success) throw new Error(ready.error.message)
 try {
+  // 无参数读取当前设备信息；成功 data 是平台、系统等信息，失败时中止。
   const device = await capacitor.device.getInfo()
   if (!device.success) throw new Error(device.error.message)
   // 将明确允许的设备信息传给业务；不要将其当作可信认证身份。
 }
 finally {
+  // 无参数释放已初始化的桥接资源；失败时抛出关闭错误。
   const closed = await capacitor.close()
   if (!closed.success) throw new Error(closed.error.message)
 }

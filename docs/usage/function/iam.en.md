@@ -21,33 +21,43 @@ import { reldb } from '@h-ai/reldb'
 // 基础密码认证不需要安装 Reach 或 ldapts。
 async function example() {
   try {
+    // Open project-local data.db as SQLite. Success has no data; failure stops IAM setup.
     const db = await reldb.init({ type: 'sqlite', database: './data.db' })
     if (!db.success)
       return db
+    // Initialize a local cache for the development sign-in. Success has no data; shared-backend policy can reject it.
     const cached = await cache.init({ type: 'memory' })
     if (!cached.success)
       return cached
+    // Apply default IAM settings over the ready database and cache. Success has no data; failure stops registration.
     const initialized = await iam.init({})
     if (!initialized.success)
       return initialized
+    // Register demo with the sample password. Success returns the registration result; duplicate usernames or policy violations fail.
     const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
     if (!registered.success)
       return registered
+    // Sign in as the newly registered demo with the same password. Success returns user and tokens; invalid credentials fail.
     const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
     if (!login.success)
       return login
+    // Validate the access token from sign-in. Success returns the current authorized session; invalid or expired tokens fail.
     return await iam.auth.verifyToken(login.data.tokens.accessToken)
   }
   finally {
     // 应用关闭时按依赖的反向顺序释放。
+    // Close IAM without arguments and stop using its current runtime. The host still owns the cache and database.
     await iam.close()
+    // Release this example's in-memory cache and data with no arguments. The cache reports its own cleanup result.
     await cache.close()
+    // Close data.db last without arguments. Its cleanup result is separate from sign-in.
     await reldb.close()
   }
 }
 
 const result = await example()
 if (!result.success)
+  // Write an error-level event with the failure code, omitting passwords and tokens.
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
@@ -90,6 +100,7 @@ Prepare the database and cache before IAM. Public settings drive available authe
 #### Scenario: Prepare IAM and public policies
 
 ```ts
+// Read merged public authentication policy with no arguments. Success omits private settings; value throws on failure.
 const publicSettings = value(await iam.getPublicConfig()) // merged public IAM settings
 // Read only the returned public policy; never return iam.config as a public response.
 ```
@@ -255,31 +266,57 @@ Use isolated development data with RBAC enabled and a test user with no other ro
 
 ```ts
 async function reviewReader(userId: string) {
+  // Create the docs:read API permission and receive its ID. value throws on a duplicate code or write failure.
   const permission = value(await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' }))
+  // Create the docs_reader role with no permissions. Success returns its ID; a conflicting code fails.
   const role = value(await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] }))
+  // Link the newly created docs:read permission to docs_reader. Success has no data.
   value(await iam.authz.assignPermissionToRole(role.id, permission.id)) // undefined
+  // Assign the new role to the supplied user. Success has no data; value throws on a write error.
   value(await iam.authz.assignRole(userId, role.id)) // undefined
+  // Replace this user's entire role set with the one newly created role. Success has no data.
   value(await iam.authz.syncRoles(userId, [role.id])) // replaces the complete role set
+  // Check docs:read for this user. This example returns true; false means denied, and value throws on lookup failure.
   value(await iam.authz.checkPermission(userId, 'docs:read')) // true (RBAC enabled)
+  // Read effective role and permission codes for the user, including docs_reader and docs:read.
   value(await iam.authz.getUserAuthorization(userId)) // role and permission codes
+  // Read role records for the same user, including the assigned docs_reader.
   value(await iam.authz.getUserRoles(userId)) // Role[]
+  // Read effective permission records for the user, including docs:read here.
   value(await iam.authz.getUserPermissions(userId)) // Permission[]
+  // Read roles for the one-user batch. The Map keys are user IDs and the values are role arrays.
   value(await iam.authz.getUserRolesForMany([userId])) // Map keyed by user ID
+  // Read permissions for the new role ID. The Map associates role IDs with permission arrays.
   value(await iam.authz.getRolePermissionsForMany([role.id])) // Map keyed by role ID
+  // Read counts for the role batch and look up this role ID. It has one member in the isolated example.
   value(await iam.authz.getRoleUserCounts([role.id])).get(role.id) // 1 in this isolated example
+  // Look up the new role by ID. An absent record returns null.
   value(await iam.authz.getRole(role.id)) // the created Role
+  // Look up the same role by stable code docs_reader. A miss gives null.
   value(await iam.authz.getRoleByCode('docs_reader')) // same Role
+  // Read the first role page with up to 20 records and pagination metadata.
   value(await iam.authz.getAllRoles({ page: 1, pageSize: 20 })) // role page
+  // Rename this role to Document readers and return the updated record.
   value(await iam.authz.updateRole(role.id, { name: 'Document readers' })) // updated Role
+  // Look up the created permission by ID; a missing record gives null.
   value(await iam.authz.getPermission(permission.id)) // the created Permission
+  // Find the same permission by stable code docs:read; a miss gives null.
   value(await iam.authz.getPermissionByCode('docs:read')) // same Permission
+  // Read the first permission page, up to 20 records, with pagination metadata.
   value(await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })) // permission page
+  // Read the permissions attached to this role ID, including docs:read.
   value(await iam.authz.getRolePermissions(role.id)) // includes docs:read
+  // Store docs:export as the sensitive operation for this permission. Success has no data.
   value(await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])) // undefined
+  // Read effective sensitive operations for docs:export. An enabled reauthentication policy includes this rule; no match yields an empty array.
   value(await iam.authz.getSensitiveOperations('docs:export')) // configured rule when reauthentication is enabled
+  // Unlink the role and permission. Success has no data; their definitions remain.
   value(await iam.authz.removePermissionFromRole(role.id, permission.id)) // undefined
+  // Remove this example's role assignment from the user. Success has no data.
   value(await iam.authz.removeRole(userId, role.id)) // undefined
+  // Delete the role created for this example. Success has no data; value throws on deletion failure.
   value(await iam.authz.deleteRole(role.id)) // undefined
+  // Delete the permission created for this example. Success has no data; value throws on deletion failure.
   value(await iam.authz.deletePermission(permission.id)) // undefined
 }
 ```
@@ -348,19 +385,29 @@ Only trusted server code may build options after verifying the user. These low-l
 import type { CreateSessionOptions } from '@h-ai/iam'
 
 async function manageTrustedSession(options: CreateSessionOptions, refreshToken: string) {
+  // Create a Session from the host's trusted options. value throws on storage failure.
   const created = value(await iam.session.create(options)) // Session, not TokenPair
   const token = created.accessToken
+  // Look up the session by the access token just created. An absent session yields null.
   const found = value(await iam.session.get(token)) // Session or null
+  // Validate the same access token at the session layer. Success yields a Session; an absent or expired token fails.
   const verified = value(await iam.session.verifyToken(token)) // Session; missing/expired fails
+  // Set theme dark on this session using the observed version. Success has no data; a version mismatch fails.
   value(await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)) // undefined
+  // Apply the verified role and permission snapshot to this user's sessions. Success has no data; value throws on write failure.
   value(await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })) // undefined
+  // Revoke this session using its original access token. Success has no data; value throws on storage failure.
   value(await iam.session.delete(token)) // undefined; revokes this session
+  // Revoke the remaining sessions for the user ID in options and return the count.
   value(await iam.session.deleteByUserId(options.userId)) // remaining revoked count
 }
 
 async function rotateThenRevoke(refreshToken: string) {
+  // Rotate the supplied refresh token to obtain a new token pair. A used or expired token fails.
   const pair = value(await iam.session.refresh(refreshToken)) // new TokenPair
+  // Revoke the newly issued refresh token to prevent renewal. Success has no data; the access token is separate.
   value(await iam.session.revokeRefresh(pair.refreshToken)) // undefined; access remains valid until expiry/revocation
+  // Revoke the session for the access token issued in the same rotation. Success has no data.
   value(await iam.session.delete(pair.accessToken)) // undefined
 }
 ```

@@ -19,6 +19,7 @@ pnpm view @h-ai/cli@latest version
 
 ```sh
 pnpm add -g @h-ai/cli@latest
+# 打印已安装的 Hai CLI 版本。
 hai --version
 ```
 
@@ -31,6 +32,7 @@ hai --version
 以下创建 Web + API 工程，默认安装依赖并初始化 Git：
 
 ```sh
+# 用默认设置生成前端为 web 的 fullstack 项目 my-app。
 hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev

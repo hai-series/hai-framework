@@ -15,14 +15,17 @@
 ```ts
 import { capacitor } from '@h-ai/capacitor'
 
+// Detect and initialize the current Capacitor platform with defaults. A failed result stops before Preferences are used.
 const initialized = await capacitor.init()
 if (!initialized.success)
   throw new Error(initialized.error.message)
 const failures: unknown[] = []
 try {
+  // Write dark under theme. Success completes the preference write; storage failure becomes an error in this example.
   const saved = await capacitor.preferences.set('theme', 'dark')
   if (!saved.success)
     throw new Error(saved.error.message)
+  // Read the same theme key. Expect dark or null for a missing value. A failed read is collected below.
   const theme = await capacitor.preferences.get('theme')
   if (!theme.success)
     throw new Error(theme.error.message)
@@ -32,6 +35,7 @@ catch (cause) {
   failures.push(cause)
 }
 finally {
+  // Close the active Capacitor instance and release its listeners. Collect any cleanup failure.
   const closed = await capacitor.close()
   if (!closed.success)
     failures.push(closed.error)
@@ -77,12 +81,18 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备原生环境与读取设备
 
 ```ts
+// Initialize this platform with defaults. value returns undefined on success and throws the framework error on failure.
 value(await capacitor.init())
+// Read the detected platform without arguments. The result is web, ios, or android.
 const platform = capacitor.getPlatform() // 'web', 'ios' or 'android'
+// Check the detected platform without arguments. true means an iOS or Android native shell.
 const native = capacitor.isNative() // true on the native shell
 capacitor.isInitialized // true
+// Read platform, OS, and model from the active device. value throws if the device operation fails.
 const info = value(await capacitor.device.getInfo()) // actual platform, OS and model
+// Ask the current app for version and build. Check success because native application data may be unavailable on web.
 const version = await capacitor.device.getAppVersion() // check success; web may not supply native app data
+// Close the current instance and release listeners. value throws if cleanup fails.
 value(await capacitor.close()) // undefined; listeners released
 ```
 
@@ -157,6 +167,7 @@ docker run --rm -it --platform linux/amd64 \
 #### 场景：取得用户选择的照片
 
 ```ts
+// Select a photo at quality 80 and request a data URL. Success includes image data and format. Cancellation or plugin failure returns an error.
 const photo = await capacitor.camera.takePhoto({ source: 'photos', resultType: 'dataUrl', quality: 80 })
 if (photo.success) {
   const source = photo.data.data // selected image data URL
@@ -169,6 +180,7 @@ if (photo.success) {
 #### 场景：打开摄像头并取得 Base64
 
 ```ts
+// Open the camera at quality 80 and return Base64 image content and its device-reported format. Permission or capture failure throws below.
 const photo = await capacitor.camera.takePhoto({
   source: 'camera',
   resultType: 'base64',
@@ -203,11 +215,14 @@ photo.data // { data: '用户拍摄图片的 Base64 内容', format: 'jpeg' }；
 ```ts
 const received: unknown[] = []
 const actions: unknown[] = []
+// Register this device for push with default settings. Success contains the platform token. value throws on registration failure.
 const registration = value(await capacitor.push.register()) // { token: '<platform token>' }
+// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. value throws on setup failure.
 const stop = value(await capacitor.push.listen({
   onReceived: notification => { received.push(notification) },
   onActionPerformed: action => { actions.push(action) },
 }))
+// Remove the listeners installed above. Success has no data. value throws on cleanup failure.
 value(await stop()) // undefined; registered listeners removed
 ```
 
@@ -234,8 +249,11 @@ value(await stop()) // undefined; registered listeners removed
 #### 场景：控制系统状态栏
 
 ```ts
+// Apply dark status text and enable overlay on the active native view. value surfaces unsupported platform or plugin errors.
 value(await capacitor.statusBar.configure({ style: 'dark', overlay: true }))
+// Hide the status bar for the active app. value throws if the plugin operation fails.
 value(await capacitor.statusBar.hide())
+// Show the status bar again. value throws if restoration fails.
 value(await capacitor.statusBar.show())
 ```
 
@@ -262,12 +280,19 @@ value(await capacitor.statusBar.show())
 
 ```ts
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from '@h-ai/capacitor'
+// Write dark at demo-theme through the initialized Preferences API. value throws on a failed write.
 value(await capacitor.preferences.set('demo-theme', 'dark'))
+// Read demo-theme through Preferences. It returns dark, or null if the key is gone. value throws on failure.
 value(await capacitor.preferences.get('demo-theme')) // 'dark'
+// Remove demo-theme through Preferences. Success has no data. value surfaces storage errors.
 value(await capacitor.preferences.remove('demo-theme'))
+// Use the standalone helper to write light at demo-theme. value surfaces storage errors.
 value(await safeSetPreference('demo-theme', 'light'))
+// Read the same key with the standalone helper. Expect light. value throws on a failed read.
 value(await safeGetPreference('demo-theme')) // 'light'
+// Delete demo-theme with the standalone helper. The returned result is void on success.
 value(await safeRemovePreference('demo-theme'))
+// Read demo-theme after deletion. Expect null on success. value throws on a failed read.
 value(await safeGetPreference('demo-theme')) // null
 ```
 
@@ -298,16 +323,22 @@ value(await safeGetPreference('demo-theme')) // null
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 async function verifySecureStorage(accessToken: string, refreshToken: string) {
+  // Create a native secure token storage adapter with default key names. Its operations use the secure plugin.
   const tokens = createCapacitorTokenStorage()
   try {
+    // Store the issued access token. This resolves without data or rejects if the secure write fails.
     await tokens.setAccessToken(accessToken)
+    // Store the issued refresh token. This rejects on storage failure.
     await tokens.setRefreshToken(refreshToken)
     return {
+      // Read the stored access token. It matches the supplied token after a successful write, or is null if absent. Plugin failures reject.
       accessMatches: await tokens.getAccessToken() === accessToken,
+      // Read the stored refresh token. It matches the supplied token after a successful write, or is null if absent. Plugin failures reject.
       refreshMatches: await tokens.getRefreshToken() === refreshToken,
     } // both true
   }
   finally {
+    // Delete both secure credentials. Partial deletion failure rejects with the cleanup errors.
     await tokens.clear()
   }
 }
@@ -319,9 +350,11 @@ async function verifySecureStorage(accessToken: string, refreshToken: string) {
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
+// Configure the client with the server URL and refresh endpoint. A failed initialization stops setup.
 const initialized = await apiClient.init({
   baseUrl: 'https://api.example.com/v1',
   auth: {
+    // Use a native secure token storage adapter for issued credentials. Its read or write can reject if the native plugin fails.
     storage: createCapacitorTokenStorage(),
     refreshPath: '/auth/refresh',
   },
@@ -347,6 +380,7 @@ if (!initialized.success)
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
 
+// Open the device camera with default result settings. Success returns the photo; a denied or unavailable camera returns a structured failure.
 const result = await capacitor.camera.takePhoto({ source: 'camera' })
 if (!result.success) {
   if (result.error.code === HaiCapacitorError.CAMERA_FAILED.code) {

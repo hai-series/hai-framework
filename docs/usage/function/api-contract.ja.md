@@ -11,6 +11,7 @@
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 
+// Compose the built-in IAM and storage routers into contract. Passing false omits AI. This only defines the contract.
 export const contract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
@@ -24,12 +25,14 @@ import { z } from 'zod'
 
 export const appContract = {
   ping: apiContract
+    // Describe POST /app/ping with operation ID app.ping and the app tag. This returns a route builder.
     .route({
       method: 'POST',
       path: '/app/ping',
       operationId: 'app.ping',
       tags: ['app']
     })
+    // Use a boolean pong schema as the success data. The output builder also includes the HaiResult failure shape.
     .output(apiContract.haiResultSchema(z.object({
       pong: z.boolean()
     }))),
@@ -69,9 +72,13 @@ export const appContract = {
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
+// Create a route builder for GET /status. No handler runs while defining the route.
 const status = apiContract.route({ method: 'GET', path: '/status' })
+  // Set the output to HaiResult with a boolean ready field. Success data has ready and failures use the error shape.
   .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() })))
+// Compose the local status route with IAM. Passing false leaves payment out.
 const contract = apiContract.create({ status, iam: apiContract.iam, payment: false })
+// Read the relative path of the built-in login procedure. It yields /auth/login.
 apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 // contract includes status and iam; payment is omitted
 ```
@@ -99,12 +106,18 @@ GET /status と使用するモジュールを入力して契約オブジェク�
 ```ts
 import { z } from 'zod'
 
+// Build a result schema whose success data is a string. Its failure variant carries HaiError.
 const stringResult = apiContract.haiResultSchema(z.string())
+// Validate a ready success envelope. checked.success is true and checked.data contains that envelope.
 const checked = stringResult.safeParse({ success: true, data: 'ready' })
 // checked.success === true; checked.data is HaiResult<string>
+// Validate success with undefined data. This is valid for the void result schema.
 apiContract.voidResultSchema.safeParse({ success: true, data: undefined }).success // true
+// Build a paginated schema whose items each have a string id.
 const pageSchema = apiContract.paginatedSchema(z.object({ id: z.string() }))
+// Validate page 1 of one order at page size 20. The record fits the schema, so success is true.
 pageSchema.safeParse({ items: [{ id: 'o1' }], total: 1, page: 1, pageSize: 20 }).success // true
+// A numeric success value is invalid for the string schema, so success is false.
 stringResult.safeParse({ success: true, data: 42 }).success // false
 ```
 
@@ -131,6 +144,7 @@ stringResult.safeParse({ success: true, data: 42 }).success // false
 #### 利用例：標準業務インターフェースの選択
 
 ```ts
+// Compose the five supplied module routers into a new standard contract. No routes execute during assembly.
 const standard = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,

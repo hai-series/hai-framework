@@ -130,13 +130,16 @@ The server derives the scope from a verified IAM session. Backends/environments 
 ```ts
 import { ai } from '@h-ai/ai'
 
+// Bind the authenticated user to the agent tenant. The returned facade scopes subsequent calls to that subject.
 const scoped = ai.acp.scoped({ tenantId: 'agent', userId: 'authenticated-user' })
+// Select coder and automatic execution, deduplicate with job-123, and return the session or an error.
 const created = await scoped.sessions.create({
   agentId: 'coder',
   execution: { mode: 'auto' }
 }, { idempotencyKey: 'job-123' })
 if (!created.success)
   throw new Error(created.error.message)
+// Submit this prompt with turn-1 and access to project-docs. Success returns an accepted task ID and state.
 const accepted = await created.data.submit({
   prompt: 'Read the sources and summarize',
   idempotencyKey: 'turn-1',
@@ -146,6 +149,7 @@ const accepted = await created.data.submit({
 })
 if (!accepted.success)
   throw new Error(accepted.error.message)
+// Read up to 100 events after sequence 0 for the accepted task. A failed result carries the read error.
 const page = await scoped.tasks.events(accepted.data.taskId, 0, 100)
 if (!page.success)
   throw new Error(page.error.message)

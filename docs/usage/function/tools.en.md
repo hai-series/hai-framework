@@ -28,9 +28,11 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export async function calculate(objectId: string) {
+  // Create an empty registry whose authorizer binds execution to the host's objectId.
   const registry = tools.createRegistry({
     authorize: ({ context }) => context.objectId === objectId,
   })
+  // Define sum from the Zod inputs and addition handler below, then register it. Invalid definitions throw; registration has no success data and rejects duplicates.
   const registered = registry.register(tools.define({
     name: 'sum',
     title: 'Sum',
@@ -41,6 +43,7 @@ export async function calculate(objectId: string) {
   }))
   if (!registered.success)
     return registered
+  // Execute sum(2, 3) as the host-verified objectId. Success yields { total: 5 }; validation or authorization failure skips the handler.
   return registry.execute('sum', { a: 2, b: 3 }, { objectId })
 }
 ```
@@ -55,6 +58,7 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
+  // Define an ID lookup tool using the supplied read function's HaiResult. The ID is nonempty; invalid definitions throw.
   return tools.define({
     name: 'document_lookup',
     description: 'Read an authorized document',
@@ -106,13 +110,17 @@ Invalid input or rejected authorization never enters the handler. Registry and p
 
 ```ts
 import { z } from 'zod'
+// Define sum using the numeric Zod rules and addition handler below. Success returns an executable tool; invalid definitions throw TypeError.
 const tool = tools.define({
   name: 'sum', description: 'Add two numbers',
   parameters: z.object({ a: z.number(), b: z.number() }),
   handler: ({ a, b }) => ({ total: a + b }),
 })
+// Convert the tool metadata and parameter rules without arguments. The example reads name sum; unsupported conversion throws.
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
+// Pass numbers 2 and 3 to sum. Success yields { total: 5 }; value throws if execution fails.
 value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// Pass wrong as a string for a. The result is VALIDATION_FAILED and the addition handler is skipped.
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
 
@@ -185,19 +193,32 @@ The registry contains explicitly registered tools. Host authorization controls e
 
 ```ts
 // Continue with the sum tool from the preceding scenario.
+// Create an empty registry allowing execution only as demo-user in the trusted context.
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
+// Register the sum instance defined above. Success has no data; a duplicate tool name fails.
 value(registry.register(tool)) // undefined
+// Register an empty batch. Success has no data and the existing sum remains registered.
 value(registry.registerMany([])) // undefined; no tools added
 registry.size // 1
+// Check the newly registered sum name; it returns true.
 registry.has('sum') // true
+// Look up the sum instance and convert its definition to read name sum. The optional lookup returns undefined if missing.
 registry.get('sum')?.toDefinition().name // 'sum'
+// List registered names without arguments; this yields ['sum'].
 registry.getNames() // ['sum']
+// Read the registered tool definitions and project their names to ['sum']. Unsupported input-rule conversion throws.
 registry.getDefinitions().map(definition => definition.name) // ['sum']
+// Run sum with 2 and 3 as trusted demo-user. Success yields { total: 5 }; denied or invalid calls are not run.
 value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
+// Execute one batched sum(4, 1) as demo-user, yielding [{ total: 5 }] in input order. value throws on batch failure.
 value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+// Replace the currently registered sum. Success has no data; invalid replacement keeps the existing tool.
 value(registry.replace(tool)) // undefined; same registered name
+// Remove the sum registration. This call returns true; a missing registration returns false.
 registry.unregister('sum') // true
+// Register the removed sum again in a one-item batch. Success has no data; a name conflict fails.
 value(registry.registerMany([tool])) // undefined
+// Clear the registry with no arguments. sum is no longer present and nothing is returned.
 registry.clear() // undefined
 registry.size // 0
 ```
@@ -249,9 +270,11 @@ import type { ToolArtifactAccess } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
+  // Create documents using the initialized Runner and enable documents and analysis. Success returns the service; invalid options or handler registration fail.
   return tools.createService({
     id: 'documents',
     runner,
+    // Build artifact tools from the current context and host file access. Without a save hook, artifact_save is omitted.
     createTools: context => tools.createArtifactTools({ context, files }),
     enabled: { groups: ['documents', 'analysis'] },
     authorize: ({ context }) => context.scope.userId.length > 0,
@@ -305,15 +328,21 @@ Use successful data from createDocumentService, a server-authenticated context a
 import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/tools/server'
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
+  // Read enabled definitions and groups for the trusted context. Submission and execution still authorize independently.
   const catalog = value(await service.catalog(context))
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
+  // Submit the keyed request for this principal. Success returns the run state and complete receipt; value throws on denial or submission failure.
   const submitted = value(await service.submit(keyed, context))
+  // Find the prior run using the same durable key and principal. A miss returns undefined without submitting a task.
   const recovered = value(await service.find(keyed.idempotencyKey, context))
   // recovered is the same logical run, or undefined if none was accepted.
+  // Read status, available output, and events using the full receipt and current principal. A scope mismatch fails.
   const current = value(await service.inspect(submitted.receipt, context))
+  // Request cancellation with the same receipt and receive the actual run state. cancelling means termination is still pending.
   const cancelling = value(await service.cancel(submitted.receipt, context))
   // current/cancelling are ToolRun values; cancellation may still be in progress.
+  // Wait for the terminal outcome using the same key and principal. Success yields JSON output; a cancelled or failed run returns an error.
   return service.invoke(keyed, context)
 }
 // At application shutdown, after all users of the service finish:
@@ -342,7 +371,9 @@ import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
 import { tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
+  // Create artifact tools and groups using the host context and file access. Saving is present only with a save capability.
   const artifacts = tools.createArtifactTools({ context: options.context, files: options.files })
+  // Build the job tool set from the host's Runner, environment mappings, and file access. Unbound environments add no tools.
   const jobs = tools.createJobTools(options)
   return {
     tools: [...artifacts.tools, ...jobs.tools],

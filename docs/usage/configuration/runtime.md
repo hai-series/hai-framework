@@ -96,6 +96,7 @@ Core 自动加载或重载配置失败时，日志提供文件路径、错误码
 例如，应用记录下面这个对象：
 
 ```ts
+// 将订单号、客户与收件人结构化字段写入 info 日志；命中配置的字段按规则脱敏。
 core.logger.info('Order created', {
   orderId: 'order-42',
   customer: { name: 'Alice', email: 'alice@example.com' },
@@ -137,6 +138,7 @@ logging:
 
 ```ts
 // 结构化字段可以按路径脱敏。
+// 将邮箱放在 customer.email 字段；该路径可由日志脱敏配置处理。
 core.logger.info('Customer updated', { customer: { email } })
 // 不要把业务隐私拼进消息正文。
 ```
@@ -175,12 +177,16 @@ SvelteKit SSR 在 Node 服务正常停止后，会先关闭业务模块，再释
 import { core } from '@h-ai/core'
 import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
 
+// 从当前目录按 dev 模式读取环境文件；返回变量映射，解析失败时停止启动。
 const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
 if (!env.success) throw new Error(env.error.message)
 Object.assign(process.env, env.data)
+// 装载 ./config 并声明 db Schema，在进程内初始化 Core；无返回值。
 core.init({ configDir: './config', configSchemas: { db: ReldbConfigSchema } })
+// 用关系数据库 Schema 校验已装载的 db；成功 data 是解析后的数据库设置。
 const db = core.config.validate('db', ReldbConfigSchema)
 if (!db.success) throw new Error(db.error.message)
+// 使用通过校验的数据库设置连接后端，成功无业务数据，失败终止启动。
 const started = await reldb.init(db.data)
 if (!started.success) throw new Error(started.error.message)
 // 服务退出时 await reldb.close()，并检查它的关闭结果。

@@ -14,11 +14,13 @@
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
+// このプロセス用のインメモリ SQLite を開きます。成功後は SQL を実行でき、失敗時は error です。
 const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 // DDL
+// 下の ID、名前、メールで users を作成します。成功時の data はなく、失敗は error に入ります。
 await reldb.ddl.createTable('users', {
   id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
   name: { type: 'TEXT', notNull: true },
@@ -26,16 +28,20 @@ await reldb.ddl.createTable('users', {
 })
 
 // SQL
+// サンプルの名前とメールをプレースホルダーへ束縛します。data.changes は挿入件数、失敗時は error です。
 await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
+// users の全行を読みます。成功時は追加したユーザーを含む配列、失敗時は error です。
 const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
 
 // 分页查询
+// ID 順で 1 ページ目を最大 20 件取得します。成功時は items と total、失敗時は error です。
 const page = await reldb.sql.queryPage<{ id: number, name: string }>({
   sql: 'SELECT id, name FROM users ORDER BY id',
   pagination: { page: 1, pageSize: 20 },
 })
 
 // CRUD
+// 下の主キーと列指定で users の CRUD リポジトリを作り、後続の処理で使用します。
 const userCrud = reldb.crud.table({
   table: 'users',
   idColumn: 'id',
@@ -44,10 +50,13 @@ const userCrud = reldb.crud.table({
   updateColumns: ['name', 'email'],
   dbType: 'sqlite',
 })
+// 名前とメールで 2 人目を作成します。成功時は影響行数、失敗時は error です。
 await userCrud.create({ name: '李四', email: 'li@test.com' })
+// キー 1 で最初のユーザーを検索します。成功時は行または null、失敗時は error です。
 const user = await userCrud.findById(1)
 
 // 关闭
+// 引数なしでこの DB 接続を閉じます。成功時の data はなく、失敗時は error です。
 await reldb.close()
 ```
 
@@ -116,14 +125,23 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：テーブルの作成と変更
 
 ```ts
+// テキスト ID を主キーとする注文表を作ります。成功時の data はなく、失敗は value が例外にします。
 value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
+// demo_orders に NULL 可の TEXT 列 note を追加します。失敗は value が例外にします。
 value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
+// 変更後の表の列名は ['id', 'note'] です。失敗は value が例外にします。
 value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
+// demo_orders.note に指定名の索引を作ります。失敗は value が例外にします。
 value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
+// 作成した索引を名前で削除します。true は存在しなくても許容し、失敗は value が例外にします。
 value(await reldb.ddl.dropIndex('demo_orders_note', true))
+// demo_orders から note 列とその値を削除します。失敗は value が例外にします。
 value(await reldb.ddl.dropColumn('demo_orders', 'note'))
+// 表を demo_orders_old に改名します。失敗は value が例外にします。
 value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
+// 改名した表を削除します。true は表がなくても許容し、失敗は value が例外にします。
 value(await reldb.ddl.dropTable('demo_orders_old', true))
+// 固定 DDL でマーカー表を作ります。成功時の data はなく、失敗は value が例外にします。
 value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
 // All successful DDL calls have no business data.
 ```
@@ -153,15 +171,24 @@ value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMA
 #### 利用例：パラメーター付き SQL とページング
 
 ```ts
+// テキスト主キーで照会用の表を作ります。失敗は value が例外にします。
 value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
+// 挿入のプレースホルダーに o1 を束縛します。結果は影響行数を含み、失敗は value が例外にします。
 const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
+// 挿入した ID を取得します。結果は [{ id: 'o1' }]、失敗は value が例外にします。
 value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
+// o1 を束縛して最初の行 { id: 'o1' } を取得します。失敗は value が例外にします。
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+// ページ 1、件数 20 から最初のページの上限とオフセットを得ます。
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+// 固定 SQL と正規化済みページ設定を渡し、o1 のページと総数 1 を取得します。失敗は value が例外にします。
 const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
 // page.items: [{ id: 'o1' }], total: 1
+// 例の行、総数、ページ設定から同等のページオブジェクトを作ります。
 reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
+// バッチで o1 を削除します。成功時は行を削除して data はなく、失敗は value が例外にします。
 value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
+// 削除後に o1 を検索すると null を返します。照会失敗は value が例外にします。
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
 ```
 

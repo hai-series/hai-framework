@@ -30,14 +30,18 @@ import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 
+// 把 RelDB 和 Reach 两个步骤交给宿主运行时。后者依赖前者；这里仅创建 start/close 编排器。
 const runtime = core.module.createRuntime([
   {
     name: 'reldb',
+    // 启动进程内 SQLite，为模板和通知状态提供存储；成功无数据，数据库失败会阻止 Reach 启动。
     start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    // 不传参数释放数据库连接，成功 data 为 undefined；运行时会在 Reach 之后执行此步。
     close: () => reldb.close()
   },
   {
     name: 'reach',
+    // 启动 local 控制台渠道并注册 welcome 模板。成功后可调用发送接口，配置或模板存储失败会终止启动。
     start: () => reach.init({
       providers: [
         { name: 'local', type: 'console' }
@@ -51,15 +55,18 @@ const runtime = core.module.createRuntime([
         }
       ],
     }),
+    // 不传参数关闭通知模块，成功后不再接收发送；解放失败由运行时继续报告。
     close: () => reach.close()
   },
 ])
+// 按依赖顺序启动已登记步骤；全部成功时 data 为 undefined，失败时回收已启动部分并保留错误。
 const initialized = await runtime.start()
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 let result: Awaited<ReturnType<typeof reach.send>>
 try {
+  // 用 welcome 模板给 user@example.com 渲染 Hello Alice，并交给 local 控制台渠道。即发成功时 deferred 为 false 或省略；渲染或发送失败则报告错误。
   result = await reach.send({
     to: 'user@example.com',
     template: 'welcome',
@@ -67,11 +74,13 @@ try {
   })
 }
 catch (error) {
+  // 逆序解放 Reach 和 SQLite，成功无数据；失败单独报告清理错误。
   const closed = await runtime.close()
   throw new AggregateError(closed.success
     ? [error]
     : [error, closed.error], 'Reach operation failed')
 }
+// 逆序解放 Reach 和 SQLite，成功无数据；失败单独报告清理错误。
 const closed = await runtime.close()
 if (!closed.success) {
   throw new AggregateError(result.success
@@ -136,6 +145,7 @@ reach.send 可能联系渠道，也可能为普通通知返回排队回执。敏
 普通消息允许延迟时，由持久队列稍后领取发送；显式 reject 则拒绝排队。敏感消息遇到免打扰、过期或结果不明时不自动重投。渠道受理成功不代表用户已读或最终送达；超时后的未知结果先核对渠道记录，再决定人工恢复。
 
 ```ts
+// 用已保存的 demo-welcome 模板将 Ada 渲染到正文并通知 demo@example.com。收到 deferred 回执只表示入队；模板或渠道失败由 value 抛出。
 const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
 // sent: SendResult for this provider attempt, not proof that a person read the message
 ```
@@ -186,11 +196,17 @@ PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的�
 #### 场景：维护与预览通知模板
 
 ```ts
+// 将主题 Welcome、正文 Hello {name} 与 local 渠道关联并保存为 demo-welcome；成功无数据，持久化错误由 value 抛出。
 value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+// 批量保存使用 local 渠道的 demo-goodbye，正文为 Bye {name}。成功无数据，部分失败时已写入项不保证回滚。
 value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
+// 按 demo-welcome 名称读取上面保存的模板；未找到时由 value 抛出。
 const template = value(await reach.template.resolve('demo-welcome')) // saved template
+// 传入 demo-welcome 和变量 Ada 预览，返回正文 Hello Ada 及主题，不发送通知；模板缺失会失败。
 const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
+// 无参读取已保存的模板列表，包含上面两项；查询失败由 value 抛出。
 const templates = value(await reach.template.list()) // includes both templates
+// 删除 demo-goodbye 模板，成功无数据；存储错误由 value 抛出。
 value(await reach.template.remove('demo-goodbye')) // undefined
 ```
 
@@ -212,8 +228,10 @@ value(await reach.template.remove('demo-goodbye')) // undefined
 #### 场景：查询延迟与失败发送
 
 ```ts
+// 从队列读取最多 20 条 dead 状态摘要，没有匹配返回空数组；读取错误由 value 抛出。
 const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
 if (entries.length > 0) {
+  // 按第一条摘要的 queueId 重读当前状态；记录已不存在则成功返回 null，读取错误单独失败。
   const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
 }
 ```
@@ -241,10 +259,13 @@ if (entries.length > 0) {
 import type { ReachUnknownResolution } from '@h-ai/reach'
 
 async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
+  // 按调用方提供的队列回执读取当前记录。缺项是 null，只有仍为 unknown 才继续人工处置。
   const current = value(await reach.queue.get(queueId))
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown delivery')
+  // 把可信核验结论写到指定的 unknown 记录，成功无数据且不重发；状态已变化或结论无效则失败。
   value(await reach.queue.resolveUnknown(queueId, decision))
+  // 用同一 queueId 读取已处理记录，检查当前状态是 sent 或 discarded；仍需处理独立的读取失败。
   return value(await reach.queue.get(queueId)) // status is sent or discarded
 }
 ```
@@ -266,10 +287,12 @@ async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownRes
 
 ```ts
 async function restoreDead(queueId: string) {
+// 用运维人员提供的回执读取最新记录和更新时间；不存在为 null，读取失败由下方处理。
 const state = await reach.queue.get(queueId)
 if (!state.success)
   throw new Error(state.error.message)
 if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  // 按刚读取的更新时间条件恢复死信。成功无数据，只改为待处理；状态或更新时间不匹配时失败。
   const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
   if (!restored.success)
     throw new Error(restored.error.message)
@@ -307,6 +330,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 | `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020` | API 明确永久拒绝 |
 
 ```ts
+// 使用已配置的 email 渠道向 user@example.com 发送正文 hello。读取回执区分已发送与延迟入队，失败由下方处理。
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
 if (!result.success) {
   // result.error.code / result.error.message

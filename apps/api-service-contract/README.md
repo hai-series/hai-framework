@@ -19,23 +19,29 @@ import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { crypto } from '@h-ai/crypto'
 
+// 无参数初始化加密模块；成功后可供客户端传输使用，失败时终止示例。
 const initialized = await crypto.init()
 if (!initialized.success)
   throw new Error(initialized.error.message)
+// 传入服务契约，返回带对应端点的独立客户端。下一步初始化连接配置。
 const client = apiClient.create(apiServiceContract)
 try {
+  // 以本地 /api/v1 和已就绪的 crypto 配置客户端；成功无业务数据，失败抛出错误。
   const ready = await client.init({
     baseUrl: 'http://localhost:3000/api/v1',
     transport: { crypto },
   })
   if (!ready.success)
     throw new Error(ready.error.message)
+  // 公开服务信息端点无需参数；成功 data 为服务名称、版本等元信息。
   const info = await client.app.info()
   if (!info.success)
     throw new Error(info.error.message)
 }
 finally {
+  // 无参数关闭该客户端及其传输会话；完成后可释放 crypto。
   await client.close()
+  // 无参数释放加密模块；关闭结果报告资源清理是否成功。
   await crypto.close()
 }
 ```

@@ -15,10 +15,12 @@ import { payment } from '@h-ai/payment'
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
   // 如启用 Stripe，应用已先调用 reldb.init() 打开共享数据库并检查 success。
+  // Initialize configured providers with the host's trustedConfig. Success has no data; an invalid configuration stops order creation.
   const initialized = await payment.init(trustedConfig)
   if (!initialized.success)
     throw new Error(initialized.error.message)
   try {
+    // Create the 100-minor-unit WeChat JSAPI order ORD001 with the trusted openid. Success supplies payment launch parameters; provider rejection stops the lookup.
     const created = await payment.createOrder('wechat', {
       orderNo: 'ORD001',
       amount: 100,
@@ -29,12 +31,14 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     })
     if (!created.success)
       throw new Error(created.error.message)
+    // Read WeChat's current state for the newly created ORD001. Success returns OrderStatus; a lookup failure is separate.
     const query = await payment.queryOrder('wechat', 'ORD001')
     if (!query.success)
       throw new Error(query.error.message)
     return { order: created.data, status: query.data.status }
   }
   finally {
+    // Close Payment with no arguments. Existing provider orders are unaffected and the host still owns its database.
     await payment.close() // 随后关闭应用打开的 reldb。
   }
 }
@@ -46,6 +50,7 @@ import { invokePayment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
+  // Launch payment using the server-created order and channel parameters. Check data.invoked for launch and message when unavailable; the server confirms settlement.
   const invoked = await invokePayment(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
@@ -87,9 +92,12 @@ Input is an application PaymentProvider instance. Registration and lookup are sy
 import type { PaymentProvider } from '@h-ai/payment'
 
 function installProvider(provider: PaymentProvider) {
+  // Register the supplied provider under provider.name, replacing a provider with the same name. Returns no data.
   payment.registerProvider(provider)
+  // Look up the name just registered. The returned instance equals provider; an unknown name yields undefined.
   return payment.getProvider(provider.name) === provider // true
 }
+// Look up the unregistered name not-registered. The result is undefined.
 payment.getProvider('not-registered') // undefined
 ```
 
@@ -115,14 +123,17 @@ Order creation is in the quick start. Supply its provider and business order num
 
 ```ts
 async function inspectAndClose(providerName: string, orderNo: string) {
+  // Query the named provider using the merchant order number. Success returns the order status record; return the query error unchanged.
   const queried = await payment.queryOrder(providerName, orderNo)
   if (!queried.success)
     return queried
   if (queried.data.status !== 'pending')
     return queried
+  // Request closure only for the order observed as pending. Success has no business data; propagate a provider rejection.
   const closed = await payment.closeOrder(providerName, orderNo)
   if (!closed.success)
     return closed
+  // Query the same provider and order again after closure. Use the returned state and handle lookup failure independently.
   return payment.queryOrder(providerName, orderNo)
 }
 ```
@@ -145,6 +156,7 @@ Input is a verified order and a unique refund number; 100 is in minor currency u
 
 ```ts
 async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  // Request a refund of 100 minor units for the merchant order and stored refund number. An accepted refund may still be processing; provider rejection fails, and retries reuse the refund number.
   const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
   if (!refunded.success)
     return refunded
@@ -176,6 +188,7 @@ Input is the original route Request; output is HaiResult<PaymentNotifyResult>. R
 
 ```ts
 async function verifyNotification(providerName: string, request: Request) {
+  // Verify and parse the notification with the provider name, unmodified request body, and headers. Success returns event, order, and status data; invalid signatures fail. Check state and deduplicate before fulfillment.
   return payment.handleNotify(providerName, {
     body: await request.text(),
     headers: Object.fromEntries(request.headers),

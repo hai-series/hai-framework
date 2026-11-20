@@ -12,6 +12,7 @@ Use the npm `latest` channel for a normal installation. To make team installatio
 pnpm view @h-ai/cli dist-tags
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# Print the installed Hai CLI version.
 hai --version
 ```
 
@@ -22,6 +23,7 @@ The first two commands list the published channels and the default version. Use 
 ## Generate and run an app
 
 ```sh
+# Generate my-app as a fullstack project with the web frontend and default settings.
 hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev

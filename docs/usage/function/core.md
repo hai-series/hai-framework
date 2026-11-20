@@ -39,11 +39,15 @@ import type { CoreConfig } from '@h-ai/core'
 import { core } from '@h-ai/core'
 
 // 读取 config 目录。_core.yml 校验成功后以 core 为名存入缓存。
+// 读取当前项目 ./config 直属配置文件，加载成功后可按名称读取。初始化本身无返回值。
 core.init({ configDir: './config' })
+// 取刚加载的 core 配置快照，缺失时抛错。
 const settings = core.config.getOrThrow<CoreConfig>('core')
 
 // 应用默认语言并记录启动成功。
+// 以配置中的默认语言更新后续消息，无返回数据。
 core.i18n.setGlobalLocale(settings.defaultLocale)
+// 将配置中的应用名称写入启动日志，无业务数据。
 core.logger.info('Application ready', { app: settings.name }) // app: 'orders'
 ```
 
@@ -55,13 +59,17 @@ core.logger.info('Application ready', { app: settings.name }) // app: 'orders'
 import { core } from '@h-ai/core'
 
 // 在页面启动时设置日志阈值和默认语言。
+// 用下面的 warn 日志选项初始化浏览器 Core，更新日志阈值，无返回值。
 core.init({
   logging: { level: 'warn' }
 })
+// 将默认语言设为 zh-CN，之后默认消息使用中文。
 core.i18n.setGlobalLocale('zh-CN')
 
 // 把请求编号写入日志，便于关联后续记录。
+// 不传参数生成带 req- 前缀的随机请求 ID。
 const requestId = core.id.request()
+// 按当前 warn 阈值记录刚生成的请求编号，无业务数据。
 core.logger.warn('Request needs attention', { requestId })
 ```
 
@@ -152,19 +160,25 @@ port: 3000
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
+// 用下面的端口字段构造 Zod 配置校验器，供本例 load 解析。
 const AppSchema = z.object({
   port: z.number().int().min(1).max(65535),
 })
 
 // 读取文件并立即校验。成功时得到 { success: true, data: { port: 3000 } }。
+// 以 app 名称从实际 YAML 路径读入并用 AppSchema 校验，成功 data 是已存配置，校验或读盘失败读取 error。
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message, { cause: loaded.error })
 
 // 以下结果假设当前只加载了 app。
+// 检查刚注册的 app 名称，成功加载后为 true。
 core.config.has('app') // true
+// 无参数列出当前已注册配置名，本例仅有 app。
 core.config.keys() // ['app']
+// 读取 app 的校验后快照，返回端口配置，未注册则为 undefined。
 core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }
+// 读取同一 app 快照，缺失时抛错。
 core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }
 ```
 
@@ -185,22 +199,28 @@ core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }
 import { core } from '@h-ai/core'
 
 // 接着上一个示例。成功重载时，回调取得当前端口。
+// 为 app 注册变更回调，成功变化传新配置，失败传 error。返回取消订阅函数。
 const stop = core.config.watch<{ port: number }>('app', (settings, error) => {
   if (error) {
+    // 将监听回调收到的失败码写入 warn 日志，无业务数据。
     core.logger.warn('App config watch reported a failure', { code: error.code })
     return
   }
+  // 将监听回调收到的新端口写入 info 日志，无业务数据。
   core.logger.info('App config reloaded', { port: settings?.port })
 })
 
 try {
   // 主动读取一次。文件仍为 port: 3000 时，回调记录 port: 3000。
+  // 按先前注册路径和 Schema 重载 app，成功 data 为新设置，失败保留旧值并读取 error。
   const reloaded = core.config.reload('app')
   if (!reloaded.success)
     throw new Error(reloaded.error.message, { cause: reloaded.error })
 }
 finally {
+  // 无参数调用上面返回的取消函数。本段回调停止接收事件。
   stop()
+  // 从当前 Core 缓存中清除 app 配置，无返回数据。
   core.config.clear('app')
 }
 ```
@@ -234,12 +254,15 @@ finally {
 import { core } from '@h-ai/core'
 
 // 准备 config/app.yml（port: 3000）和 .env（HAI_APP_PORT=4000）。假设没有更高优先级的覆盖。
+// 从当前目录加载 dev 模式的 dotenv，成功 data 是已合并变量，失败读取 error。
 const result = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
 if (!result.success)
   throw new Error(result.error.message, { cause: result.error })
 
 Object.assign(process.env, result.data)
+// 读取当前项目 ./config 直属配置文件，加载成功后可按名称读取。初始化本身无返回值。
 core.init({ configDir: './config' })
+// 读取已应用环境覆盖的 app 快照，本例端口为 4000，缺失时为 undefined。
 core.config.get('app') // { port: 4000 }
 ```
 
@@ -254,12 +277,14 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 // 用显式环境数据演示覆盖顺序、数值/布尔转换与字符串保留。
+// 用下面的端口字段构造 Zod 配置校验器，供本例 load 解析。
 const AppSchema = z.object({
   port: z.number(),
   enabled: z.boolean(),
   label: z.string(),
   code: z.string()
 })
+// 传 app 名称、带占位符的配置和显式环境变量，返回替换后的配置数据，解析失败读取 error。
 const resolved = core.config.resolve({
   name: 'app',
 
@@ -282,9 +307,11 @@ if (!resolved.success)
 // resolved：{ success: true, data: { port: 5000, enabled: false, label: 'server-4000', code: '00123' } }。
 
 // resolve 只做替换和类型还原；再用 Schema 确认最终数据符合要求。
+// 验证上一步替换结果，成功 data 为校验后的配置，失败附字段问题。
 const validated = AppSchema.safeParse(resolved.data)
 if (!validated.success)
   throw new Error(validated.error.message, { cause: validated.error })
+// 把刚校验的端口 5000 写入 info 日志，无业务返回值。
 core.logger.info('Config resolved', { port: validated.data.port }) // port: 5000
 ```
 
@@ -302,6 +329,7 @@ core.logger.info('Config resolved', { port: validated.data.port }) // port: 5000
 import { core } from '@h-ai/core'
 
 // 配置生成器把普通对象转成 HAI_APP_PORT 等变量；数组保留为 JSON。
+// 用 HAI_APP 前缀将端口与标签转成字符串映射，数组编码为 JSON，非法名称抛错。
 const values = core.config.toEnv({
   prefix: 'HAI_APP',
   value: {
@@ -310,17 +338,21 @@ const values = core.config.toEnv({
   }
 })
 // values：{ HAI_APP_PORT: '3000', HAI_APP_TAGS: '["local"]' }。
+// 先传生成映射，再传高优先级端口覆盖，返回 HAI_APP_PORT 为 4000 的合并映射。
 const merged = core.config.mergeEnv([
   values,
   { HAI_APP_PORT: '4000' }
 ])
 // merged：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
+// 将合并后的键值映射编码为 dotenv 文本，非法变量名抛错。
 const text = core.config.stringifyEnv(merged) // 编码为可写入 .env 的文本。
 // text 含以下两行，每行以换行符结尾：
 // HAI_APP_PORT='4000'
 // HAI_APP_TAGS='["local"]'
+// 解析刚生成的 dotenv 文本，返回字面字符串映射，无效内容抛出错误。
 const restored = core.config.parseEnv(text) // 解析回字面字符串，不执行其中的变量。
 // restored：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
+// 将解析回来的 HAI_APP_PORT 写入 info 日志，无业务数据。
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
@@ -356,14 +388,21 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```ts
 import { core } from '@h-ai/core'
 
+// 将日志门槛设为 info，较低级别被过滤，无返回值。
 core.logger.setLevel('info')
+// 无参数读取刚设定的当前阈值，返回 info。
 core.logger.getLevel() // 'info'
+// 传读取开始消息，低于本例阈值而跳过，无业务返回。
 core.logger.debug('Read started') // 低于 info，跳过。
+// 记录创建消息和订单 ID，无业务数据。
 core.logger.info('Order created', { orderId: 'order-1' }) // 日志包含 orderId。
+// 将已安排重试的消息写入 warn 日志，无业务数据。
 core.logger.warn('Retry scheduled')
+// 将示例错误对象随诊断消息写入 error 日志，无业务返回值。
 core.logger.error('Operation failed', {
   error: new Error('Example failure')
 })
+// 以 fatal 记录启动失败消息，返回 undefined。
 core.logger.fatal('Example startup failure') // 记录 fatal 日志，返回 undefined；不会主动退出进程。
 ```
 
@@ -372,22 +411,29 @@ core.logger.fatal('Example startup failure') // 记录 fatal 日志，返回 und
 ```ts
 import { core } from '@h-ai/core'
 
+// 应用以下 JSON 输出、info 门槛和客户邮件脱敏规则，无返回数据。
 core.logger.configure({ // 用 JSON 输出 info 及以上日志，并遮盖 customer.email。
   level: 'info',
   format: 'json',
   redact: ['customer.email'],
 })
+// 用 orders 名创建订单模块 logger，返回可写日志的实例。
 const orders = core.logger.create({ name: 'orders' }) // 订单模块的 Logger。
+// 在父 logger 的基础上绑定 request-1，返回带该字段的子 logger。
 const request = orders.child({ requestId: 'request-1' }) // 绑定请求编号，orders 不变。
 
 // 以下两条日志都在 core.context.run() 之外执行。
+// 用父 logger 记录创建消息及当前字段，无业务返回值。
 orders.info('Order created', {
   customer: { email: 'user@example.com' },
 }) // customer.email: '[REDACTED]'；没有 requestId，因为这里调用的是父 Logger。
+// 用子 logger 写入 attempt: 2，日志同时带有 request-1，无业务返回。
 request.warn('Request needs attention', { attempt: 2 })
 // 同时输出 requestId: 'request-1' 和 attempt: 2；单次字段不清除已绑定的字段。
 
+// 在 request-2 上下文运行回调，结束后恢复外层作用域，返回回调结果。
 core.context.run({ requestId: 'request-2' }, () => {
+  // 记录检查消息和 attempt: 1，上下文提供 request-2，无业务数据。
   orders.info('Order checked', { attempt: 1 }) // 输出 requestId: 'request-2' 和 attempt: 1。
 })
 ```
@@ -402,16 +448,19 @@ core.context.run({ requestId: 'request-2' }, () => {
 import { core } from '@h-ai/core'
 
 const recentMessages: string[] = []
+// 注册观察回调收集最近消息，返回取消函数。
 const stop = core.logger.observe((record) => {
   if (recentMessages.length === 100)
     recentMessages.shift()
   recentMessages.push(record.message)
 })
 try {
+  // 写入 Observed event 并通知已注册观察者，无业务数据。
   core.logger.warn('Observed event')
   recentMessages // ['Observed event']
 }
 finally {
+  // 无参数调用上面返回的取消函数。本段回调停止接收事件。
   stop()
 }
 ```
@@ -435,15 +484,21 @@ finally {
 import { core } from '@h-ai/core'
 
 // Node 示例：同一请求等待异步处理后，仍能取得自己的编号。
+// 用本请求编号和用户 ID 隔离运行异步回调，等待后返回 request-1，回调异常原样传播。
 await core.context.run({ requestId: 'request-1', userId: 'user-1' }, async () => {
+  // 等待约 1 毫秒，无业务数据，随后继续使用原请求上下文。
   await core.async.delay(1)
+  // 无参数读取异步请求的当前上下文，包含传入的请求和用户 ID。
   const current = core.context.get() // 包含 requestId: 'request-1'、traceId: 'request-1'、userId: 'user-1'；其他字段为 undefined。
+  // 将恢复后的请求编号写入 info 日志，无业务数据。
   core.logger.info('Request continued', { requestId: current.requestId })
   return current.requestId
 }) // run 返回回调的结果；此处 await 后得到 'request-1'。
+// 回调退出后再读当前上下文，本例回到外层空对象。
 core.context.get() // {}，回到外层后不保留上面请求的上下文。
 
 // 采集器自身写日志时，可暂停观察回调，正常日志输出仍然执行。
+// 在当前回调内暂停观察者；内层 warn 仍写诊断日志，run 得到无返回值的回调结果。
 core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collector diagnostic'))
 // 返回 undefined；输出 warn 日志，但不会触发日志观察回调。
 ```
@@ -474,17 +529,21 @@ import { core } from '@h-ai/core'
 
 core.sanitize.isSensitiveKey('apiKey') // true。
 core.sanitize.sanitizeSensitiveValue('example-only', 'password') // '[REDACTED]'。
+// 以默认规则复制并清理诊断对象，输出遮盖已知密码字段、保留邮箱。
 const safe = core.sanitize.sanitizeSensitiveFields({ password: 'example-only', email: 'user@example.com' })
 // safe：{ password: '[REDACTED]', email: 'user@example.com' }，原对象不变。
 // 默认仅遮蔽凭据；额外业务隐私可在已处理凭据的副本上继续清理。
+// 按自定义匹配清单把上一步副本中的邮箱替换为三个星号，返回新对象。
 core.sanitize.sanitizeSensitiveFields(safe, {
   matcher: ['email'],
   replacement: '***'
 })
 // => { password: '[REDACTED]', email: '***' }
+// 清理示例 URL 中的用户名、密码和查询令牌，返回脱敏字符串。
 core.sanitize.sanitizeUrl('https://user:example-only@example.com/?token=example-only')
 // => 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]'
 core.sanitize.sanitizeText('Bearer example-only') // '[REDACTED]'。
+// 用显式敏感片段清理日志消息，返回替换后的文本。
 core.sanitize.sanitizeText('Request failed with a known private value', ['private value'])
 // => 'Request failed with a known [REDACTED]'
 ```
@@ -519,14 +578,18 @@ core.sanitize.sanitizeText('Request failed with a known private value', ['privat
 import { core } from '@h-ai/core'
 
 // 定义稳定错误码，消息在创建实例时根据当前语言获取。
+// 用 orders 模块和 300:404 定义订单未找到错误，返回含错误码和 HTTP 状态的定义。
 const OrderError = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })
 // OrderError.NOT_FOUND：{ code: 'hai:orders:300', httpStatus: 404, system: 'hai', module: 'orders' }。
+// coreM 以 zh-CN 取资源不存在消息。用该文案和订单错误定义构造完整失败对象。
 const failure = core.error.buildHaiErrorInst(OrderError.NOT_FOUND, core.i18n.coreM('core_errorNotFound', { locale: 'zh-CN' }))
 // failure：上面的错误定义加上 message: '资源不存在'。
+// 将内部错误和 request-1 转成可向外返回的错误，保留稳定标识与追踪编号。
 const publicError = core.error.toPublic(failure, 'request-1')
 // publicError：保留 code/httpStatus/system/module，增加 traceId: 'request-1'；
 // message 为 '资源不存在 (traceId: request-1)'。
 const message = core.error.formatMessage(publicError) // '资源不存在 (traceId: request-1)'，编号不会重复追加。
+// 用内部失败和已格式化提示记录订单不可用，无业务返回值。
 core.logger.warn('Order unavailable', { error: failure, publicMessage: message })
 ```
 
@@ -541,6 +604,7 @@ import { core, err, HaiCommonError, ok } from '@h-ai/core'
 // 业务失败返回 err，成功返回 ok；共用构造器保持独立导入。
 function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
+    // 分母为 0 时，由 coreM 获取中文验证消息，err 返回含稳定错误定义与消息的失败结果。
     return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
   return ok(a / b) // 如 ok(5) 返回 { success: true, data: 5 }。
 }
@@ -548,14 +612,17 @@ function divide(a: number, b: number): HaiResult<number> {
 // 先检查 success，再读取 data 或 error。
 const result = divide(10, 2) // { success: true, data: 5 }。
 if (!result.success)
+  // 执行失败时将原错误写入 warn 日志，无业务返回值。
   core.logger.warn('Calculation failed', { error: result.error })
 else
+  // 将成功计算得到的 5 写入 info 日志，无业务返回值。
   core.logger.info('Calculation completed', { value: result.data })
 
 const failed = divide(10, 0)
 // failed：{ success: false, error: { code: 'hai:common:200', httpStatus: 400,
 // system: 'hai', module: 'common', message: '验证失败' } }，无 data。
 if (!failed.success)
+  // 记录分母为 0 时的稳定错误码，无业务返回值。
   core.logger.warn('Calculation rejected', { code: failed.error.code })
 ```
 
@@ -600,6 +667,7 @@ if (!failed.success)
 import { core } from '@h-ai/core'
 
 // 页面语言或服务进程的启动默认值；请求中使用 runWithLocale 单独选择语言。
+// 将默认语言设为 zh-CN，之后默认消息使用中文。
 core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；后续默认消息使用中文。
 core.i18n.getGlobalLocale() // 'zh-CN'。
 core.i18n.coreM('core_errorNotFound') // '资源不存在'。
@@ -613,19 +681,23 @@ core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 
 import { core } from '@h-ai/core'
 
 // 业务字典按语言组织；占位参数在取消息时传入。
+// 用下面的三语字典构造消息获取函数，调用结果在后文展示。
 const message = core.i18n.createMessageGetter({
   'zh-CN': { welcome: '欢迎 {name}' },
   'en-US': { welcome: 'Welcome {name}' },
   'ja-JP': { welcome: 'ようこそ {name}' },
 })
 // createMessageGetter 返回消息函数；如 message('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) 得到 '欢迎 Alice'。
+// 在回调中使用 en-US，等待回调返回的 Welcome Alice，回调错误原样传播。
 const greeting = await core.i18n.runWithLocale('en-US', async () => {
   await Promise.resolve()
+  // 用当前 en-US 字典和参数 Alice 替换 welcome 占位符，返回 Welcome Alice。
   return message('welcome', {
     params: { name: 'Alice' }
   })
 })
 // greeting：'Welcome Alice'；runWithLocale 返回回调的结果，此处等待 Promise 得到字符串。
+// 把生成的欢迎文案写入 info 日志，无业务返回值。
 core.logger.info('Greeting prepared', { greeting })
 ```
 
@@ -651,17 +723,23 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 // 此例复用 Core 已有翻译；业务表单可注入自己的消息获取器。
+// 绑定 core 前缀及下方取中文消息的回调，返回供错误映射使用的函数。
 const message = core.zodValidation.createPrefixedZodMessageGetter('core', key =>
   key === 'core_validationEmail'
+    // 邮箱校验失败时用 zh-CN 返回已有的邮箱提示。
     ? core.i18n.coreM('core_validationEmail', { locale: 'zh-CN' })
+    // 其他校验错误取 zh-CN 通用提示。
     : core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
 // 返回消息函数；message('validationEmail') 得到 '请输入有效的邮箱地址'。
+// 构造邮箱约束并校验示例值 invalid，本例得到可供映射的校验失败。
 const parsed = z.object({
   email: z.email()
 }).safeParse({ email: 'invalid' })
 if (!parsed.success) {
+  // 用刚得到的 Zod 错误和消息函数生成字段错误数组，本例包含 email。
   const errors = core.zodValidation.mapZodErrorToFormErrors(parsed.error, message)
   // errors：[{ field: 'email', message: '请输入有效的邮箱地址' }]。
+  // 将转换后的字段错误记录到 info 日志，无业务数据。
   core.logger.info('Validation failed', { errors })
 }
 ```
@@ -696,15 +774,20 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 // 按需要的启动顺序，列出各模块的初始化和关闭函数。
+// 按声明的先后关系登记数据库和缓存的启停方法，返回 runtime 管理对象。
 const runtime = core.module.createRuntime([
   {
     name: 'database',
+    // 创建示例 SQLite 内存库，成功后无 data，失败交由 runtime 清理。
     start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    // 无参数释放本例数据库。成功无 data，失败交给 runtime。
     close: () => reldb.close(),
   },
   {
     name: 'cache',
+    // 使用进程内后端初始化缓存，成功可读写，失败交给 runtime。
     start: () => cache.init({ type: 'memory' }),
+    // 无参数释放内存缓存和数据，清理失败交给 runtime。
     close: () => cache.close(),
   },
 ])
@@ -712,18 +795,22 @@ const runtime = core.module.createRuntime([
 // createRuntime 返回带 start()/close() 的对象；到这里数据库和缓存尚未启动。
 
 // 依次启动数据库、缓存；失败时自动清理已尝试启动的模块。
+// 无参数依次启动登记模块，成功无 data，失败清理已开始启动的模块。
 const started = await runtime.start() // 成功为 { success: true, data: undefined }；两个模块均已初始化。
 if (!started.success)
   throw new Error(started.error.message, { cause: started.error })
 
 try {
   // 启动成功后再执行应用业务；这里演示记录启动结果。
+  // 所有模块启动后写入就绪日志，无业务数据。
   core.logger.info('Application modules ready')
 }
 finally {
   // 演示结束后先关闭缓存，再关闭数据库，并检查清理结果。
+  // 无参数按启动反序关闭模块，成功无 data，清理失败读取 error。
   const closed = await runtime.close() // 成功为 { success: true, data: undefined }；两个模块均已关闭。
   if (!closed.success)
+    // 将整体清理错误写入 error 日志，无业务数据。
     core.logger.error('Application cleanup failed', { error: closed.error })
 }
 ```
@@ -760,15 +847,19 @@ interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
 }
 
+// 用下面的三语字典构造消息获取函数，调用结果在后文展示。
 const message = core.i18n.createMessageGetter({
   'zh-CN': { notReady: '订单查询模块尚未初始化' },
   'en-US': { notReady: 'Order queries are not initialized' },
   'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
 })
+// 用通用未就绪错误定义和消息回调创建占位工具，返回代理工厂及失败构造方法。
 const waiting = core.module.createNotInitializedKit(
   HaiCommonError.NOT_INITIALIZED,
+  // 获取示例订单查询的本地化未就绪提示。
   () => message('notReady'),
 )
+// 不传实参，用接口类型生成默认异步占位。调用任何查询得到未初始化失败。
 const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
 let activeQueries: OrderQueries | undefined
 
@@ -776,9 +867,11 @@ const orderLookup = {
   init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
     activeQueries = {
       async getStatus(orderId) {
+        // 用传入 ID 查内存索引，ok 将状态或 null 包装为成功 data。
         return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
+    // 完成当前示例初始化后返回成功，data 为 undefined。
     return ok(undefined)
   },
   get orders(): OrderQueries {
@@ -789,25 +882,34 @@ const orderLookup = {
   },
 }
 
+// 用示例订单调用未初始化占位，返回未就绪失败。
 const beforeInit = await orderLookup.orders.getStatus('order-42')
 if (!beforeInit.success)
+  // 将占位查询产生的错误码写入 warn 日志，无业务数据。
   core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
 
 // 此处用内存索引模拟已经从数据库加载完的数据。
+// 用 order-42 的已发货索引激活应用示例。成功无 data，初始化失败读取 error。
 const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
+  // 查询已加载的 order-42，成功 data 为 shipped。
   const found = await orderLookup.orders.getStatus('order-42')
+  // 查索引里不存在的 order-99，成功 data 为 null。
   const missing = await orderLookup.orders.getStatus('order-99')
   if (found.success && missing.success)
+    // 记录命中状态和未命中的 null，无业务返回数据。
     core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
 }
 finally {
+  // 不传参数清除活动索引，后续查询会回到未初始化占位。
   orderLookup.close()
 }
+// 关闭后再次查 order-42，本次返回占位错误。
 const afterClose = await orderLookup.orders.getStatus('order-42')
 if (!afterClose.success)
+  // 记录关闭后查询得到的错误码，无业务返回值。
   core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
 ```
 
@@ -873,14 +975,17 @@ parentPort?.on('message', report => parentPort.postMessage(report.length))
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-worker.mjs', import.meta.url)
+// 传统计 worker 的模块 URL，限制两个线程和四个待执行任务，返回线程池。
 const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
 try {
+  // 将报告字符串提交给池，成功 data 为长度 16，队列满或线程失败读取 error。
   const result = await pool.run('Quarterly report')
   if (!result.success)
     throw new Error(result.error.message)
   void result.data // 16
 }
 finally {
+  // 无参数结算未完成任务并等待池中线程退出。
   await pool.close()
 }
 ```
@@ -909,17 +1014,23 @@ port?.once('message', (report) => {
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-once-worker.mjs', import.meta.url)
+// 用一次性统计 worker 的模块 URL 启动独占线程，返回消息和退出控制对象。
 const thread = core.worker.start<string, number>(entry)
+// 注册长度回调，收到长度时 info 写日志。订阅调用返回取消函数。
 const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
 
 try {
+  // 向该线程发送可克隆的 Report 文本，无数据返回。
   thread.postMessage('Report')
+  // 等待线程的退出结果，成功时 code 为 0，异常时读取 error 或其他退出码。
   const { code, error } = await thread.exited
   if (error || code !== 0)
     throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
+  // 无参数停止接收上面登记的线程消息。
   unsubscribe()
+  // 无参数请求该独占线程终止，并等待退出完成。
   await thread.terminate()
 }
 ```
@@ -970,25 +1081,33 @@ finally {
 import { core } from '@h-ai/core'
 
 // 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+// 以示例可信代理地址构造解析函数，后续用直接连接地址判断能否采用转发头。
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
 const request = new Request('https://example.test/api/partners/inventory/sync', {
   headers: { 'X-Forwarded-For': '198.51.100.23' },
 })
 
 // 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+// 传带转发头的请求及可信直连地址，得到头中的客户地址。
 const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+// 同一请求来自无信任声明的直接连接时，以连接地址为结果。
 const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+// 只传请求且没有直接连接地址，返回 undefined。
 const unknown = resolveClientIp(request) // undefined
 
 // 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+// 用下方网段和空时间窗构造地址规则检查函数，返回许可或拒绝结果。
 const checkIp = core.access.createConditionCheck({
   allowIps: ['198.51.100.0/24'],
   denyIps: [],
   timezone: 'UTC',
   windows: [],
 })
+// 传已解析的允许网段地址，许可字段为 true。
 checkIp(throughProxy).allowed // true
+// 传不在网段的直接地址，许可字段为 false。
 checkIp(direct).allowed // false
+// 没有可验证客户端地址时，许可字段为 false。
 checkIp(unknown).allowed // false
 ```
 
@@ -1010,7 +1129,9 @@ checkIp(unknown).allowed // false
 import { core } from '@h-ai/core'
 
 // 启动时配置一次：这里只信任直接连到后端的反向代理。
+// 以示例可信代理地址构造解析函数，后续用直接连接地址判断能否采用转发头。
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+// 用下方路径、方法、CIDR 和工作时段构造请求许可判定器，无效策略在构建时抛错。
 const checkAccess = core.access.createRequestCheck({
   rules: [
     {
@@ -1029,10 +1150,13 @@ async function handlePartnerAccess(
   peerAddress: string | undefined,
   next: (request: Request) => Response | Promise<Response>,
 ): Promise<Response> {
+  // 用请求头及宿主传入的真实连接地址解析客户端 IP，未知时为 undefined。
   const clientIp = resolveClientIp(request, peerAddress)
   const { pathname } = new URL(request.url)
+  // 检查实际路径、HTTP 方法和已解析的地址，结果提供 allowed 和拒绝原因。
   const decision = checkAccess(pathname, request.method, clientIp)
   if (!decision.allowed) {
+    // 将命中的拒绝规则和原因写入 info 日志，无业务数据。
     core.logger.info('Request access denied', {
       ruleId: decision.ruleId,
       reason: decision.reason,
@@ -1058,8 +1182,10 @@ async function handlePartnerAccess(
 import { core } from '@h-ai/core'
 
 // 相对路径从 Node 进程的工作目录起算。文件只在创建检查器时读取。
+// 从进程当前目录加载访问规则文件，成功返回检查函数，读取或校验失败抛错。
 const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })
 // 链接中的示例文件拒绝 192.0.2.7，结果的 allowed 为 false，reason 为 'address'。
+// 用样例 GET 路径及被拒地址检查，结果 allowed 为 false，原因是 address。
 const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
 ```
 
@@ -1136,6 +1262,7 @@ core.typeUtils.isFunction(() => {}) // true。
 core.typeUtils.isPromise(Promise.resolve('ready')) // true。
 core.typeUtils.isString('orders') // true。
 core.typeUtils.isNumber(3000) // true；传 NaN 返回 false。
+// 检查参数是否为布尔类型，false 本身是布尔值，所以返回 true。
 core.typeUtils.isBoolean(false) // true。
 core.typeUtils.isArray([1, 2]) // true。
 ```
@@ -1173,6 +1300,7 @@ core.object.omit(settings, ['port']) // { name: 'orders' }。
 core.object.keys(settings) // ['name', 'port']，元素类型为 'name' | 'port'。
 core.object.values(settings) // ['orders', 4000]。
 core.object.entries(settings) // [['name', 'orders'], ['port', 4000]]。
+// 将下方键值对转成对象，返回 { mode: 'local' }。
 core.object.fromEntries([
   ['mode', 'local']
 ]) // { mode: 'local' }。
@@ -1213,12 +1341,16 @@ core.string.kebabCase('helloWorld') // 'hello-world'。
 core.string.camelCase('hello-world') // 'helloWorld'。
 core.string.snakeCase('helloWorld') // 'hello_world'。
 core.string.pascalCase('hello-world') // 'HelloWorld'。
+// 保留 abcdef 的前三个字符并加默认后缀，返回 abc...。
 core.string.truncate('abcdef', 3) // 'abc...'。
 core.string.trim(' hello ') // 'hello'。
 core.string.isBlank(' ') // true。
 core.string.isNotBlank('hello') // true。
+// 将 5 左侧以字符 0 补至 3 位，返回 005。
 core.string.padStart('5', 3, '0') // '005'。
+// 将 5 右侧以字符 0 补至 3 位，返回 500。
 core.string.padEnd('5', 3, '0') // '500'。
+// 比较两份内容相同的字符串，返回 true。
 core.string.constantTimeEqual('same', 'same') // true；安全边界见下方说明。
 ```
 
@@ -1251,7 +1383,9 @@ Node 的 constantTimeEqual 对等长 UTF-16 字节使用原生 timingSafeEqual�
 import { core } from '@h-ai/core'
 
 core.array.unique([1, 1, 2]) // [1, 2]。
+// 将三个输入项按每段最多两个分组，返回 [[1, 2], [3]]。
 core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]。
+// 以每项 role 为分组键，返回分别含 admin 和 user 的分组对象。
 core.array.groupBy([
   { role: 'admin' },
   { role: 'user' }
@@ -1259,6 +1393,7 @@ core.array.groupBy([
 // => { admin: [{ role: 'admin' }], user: [{ role: 'user' }] }
 core.array.first([1, 2, 3]) // 1；空数组为 undefined。
 core.array.last([1, 2, 3]) // 3；空数组为 undefined。
+// 展开下方二维数组一层，返回 [1, 2, 3]。
 core.array.flatten([
   [1],
   [2, 3]
@@ -1297,14 +1432,21 @@ core.array.difference([2, 3], [1, 2]) // [3]：交换参数会改变结果。
 ```ts
 import { core } from '@h-ai/core'
 
+// 等待约 1 毫秒，无业务数据，随后继续使用原请求上下文。
 await core.async.delay(1) // 等待约 1ms 后得到 undefined；计时以运行环境为准。
+// 给等待 ready 的 Promise 设 1000ms 上限，本例得到 ready，超时拒绝。
 await core.async.withTimeout(Promise.resolve('ready'), 1000) // 'ready'；超时则 reject 为 Error。
+// 执行返回 ready 的回调，最多重试三次并等待配置延迟。本例首轮成功，耗尽后抛最后错误。
 await core.async.retry(async () => 'ready', { maxRetries: 3, delay: 10 }) // 'ready'，本例首次即成功。
+// 对三个输入执行翻倍回调并限制并发为二，成功得到输入顺序的 [2, 4, 6]，回调异常拒绝。
 await core.async.parallel([1, 2, 3], async value => value * 2, 2) // [2, 4, 6]，最多同时执行两项。
+// 按顺序运行每项翻倍回调，成功得到 [2, 4, 6]，回调异常拒绝。
 await core.async.serial([1, 2, 3], async value => value * 2) // [2, 4, 6]，按输入顺序逐项执行。
 
 // 两种包装保留回调参数类型；调用 search/scroll 时传入同样类型的参数。
+// 以 100ms 包装搜索日志回调，返回等待间隔后记录最后一项搜索词的函数。
 const search = core.async.debounce((term: string) => core.logger.debug('Search requested', { term }), 100)
+// 以 100ms 包装滚动日志回调，返回限制滚动位置日志频率的函数。
 const scroll = core.async.throttle((position: number) => core.logger.debug('Scroll position', { position }), 100)
 // debounce/throttle 均返回包装函数，调用时返回 undefined。
 core.logger.setLevel('debug') // 返回 undefined；确保下面的 debug 日志可见。
@@ -1347,17 +1489,24 @@ const date = new Date(2026, 0, 1, 12, 0, 0)
 core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'
 core.time.formatDate(date, 'MM/DD (MM-DD)') // '01/01 (01-01)'
 
+// 将默认语言设为 zh-CN，之后默认消息使用中文。
 core.i18n.setGlobalLocale('zh-CN')
+// 将当前时刻前 120 秒的日期转为中文相对时间，本例为 2 分钟前。
 core.time.timeAgo(new Date(Date.now() - 120_000)) // '2 分钟前'
 core.time.now() // 当前 Unix 时间戳，单位为毫秒。
 core.time.nowSeconds() // 当前 Unix 时间戳，向下取整到秒。
 
+// 将 ISO UTC 字符串解析为日期对象，本例对应 2026 年元旦的 UTC 零点。
 const parsed = core.time.parseDate('2026-01-01T00:00:00Z')
 parsed.toISOString() // '2026-01-01T00:00:00.000Z'
 core.time.isValidDate(parsed) // true
+// 将示例本地日期加七天，返回新的 1 月 8 日中午日期对象。
 core.time.addDays(date, 7) // 2026-01-08 12:00:00
+// 将示例本地日期加两小时，返回当天 14:00 的日期对象。
 core.time.addHours(date, 2) // 2026-01-01 14:00:00
+// 根据传入日期返回同一当地日的起点 00:00:00.000。
 core.time.startOfDay(date) // 2026-01-01 00:00:00.000
+// 根据传入日期返回同一当地日末尾 23:59:59.999。
 core.time.endOfDay(date) // 2026-01-01 23:59:59.999
 ```
 

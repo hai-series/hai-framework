@@ -7,7 +7,9 @@
 应用启动时初始化基础依赖、runner 和 ai，向 ai 注入 runner；请求中不重复初始化。身份来自服务端认证，不从模型输出或客户端传来的 userId 直接采信。
 
 ```ts
+// 以已认证的租户与用户建立 ACP 入口；接下来的任务只在该主体范围内运行。
 const scoped = ai.acp.scoped({ tenantId: auth.tenantId, userId: auth.userId })
+// 提交下列代理和提示，并应用本段可选策略；成功 data 是任务结果，失败原样返回错误。
 const result = await scoped.run({
   agentId: 'office-assistant',
   prompt: '总结已授权的项目资料',
@@ -25,6 +27,7 @@ Agent 定义提供默认模型、上下文、工具和环境。默认 `auto / wo
 下面是“用指定模型总结附件，并输出 JSON”的示意。agentId、模型、文件和知识库 ID 都是应用预先登记或授权取得的值；businessRequestId 来自已持久化的业务请求，同一请求重试继续使用它。
 
 ```ts
+// 提交下列代理和提示，并应用本段可选策略；成功 data 是任务结果，失败原样返回错误。
 const result = await scoped.run({
   agentId: 'office-assistant',
   prompt: '结合项目资料总结附件，给出摘要和待办',

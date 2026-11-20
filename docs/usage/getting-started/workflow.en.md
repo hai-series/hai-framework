@@ -10,7 +10,9 @@ Follow this workflow in the generated application. The linked chapters explain i
 pnpm view @h-ai/cli dist-tags
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# Print the installed Hai CLI version.
 hai --version
+# Generate my-app as a fullstack project with the web frontend and default settings.
 hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
@@ -46,6 +48,7 @@ Keep build and deployment settings in the generated project's root `hai.json`, u
 
 ```sh
 pnpm build --target image --runtime auto
+# Resolve and display the prod deployment plan without applying it.
 hai deploy --env prod --plan
 ```
 

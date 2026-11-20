@@ -17,9 +17,13 @@ defaultLocale: ja-JP
 import type { CoreConfig } from '@h-ai/core'
 import { core } from '@h-ai/core'
 
+// ./config 直下の設定を読み、成功したものを名前で登録します。初期化自体に戻り値はありません。
 core.init({ configDir: './config' })
+// 読み込んだ core 設定を取得します。欠落時は例外です。
 const settings = core.config.getOrThrow<CoreConfig>('core')
+// 設定の既定ロケールを次のメッセージへ適用します。戻り値はありません。
 core.i18n.setGlobalLocale(settings.defaultLocale)
+// 起動ログに設定済みのアプリ名を記録します。業務データは返しません。
 core.logger.info('Application ready', { app: settings.name })
 ```
 
@@ -78,15 +82,19 @@ Node では YAML や dotenv を読み込み、ファイルを監視できます�
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
+// 下のポート列用 Zod スキーマを作り、load に渡します。
 const AppSchema = z.object({ port: z.number().int().positive() })
+// dev の環境ファイルを読みます。成功時は変数マップ、読み込み・解析失敗時は error です。
 const environment = core.config.loadEnvFiles({ mode: 'dev' })
 if (!environment.success)
   throw new Error(environment.error.message)
 Object.assign(process.env, environment.data)
 
+// YAML を app として読み込み AppSchema で検証します。成功時は登録した設定、読み込み・検証失敗時は error です。
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message)
+// 読み込んだポートを起動ログに記録します。業務データは返しません。
 core.logger.info('Listening', { port: loaded.data.port })
 ```
 
@@ -122,15 +130,24 @@ core.logger.info('Listening', { port: loaded.data.port })
 ```ts
 import { core } from '@h-ai/core'
 
+// orders 名のロガーを作り、そのオブジェクトを返します。
 const orders = core.logger.create({ name: 'orders' })
+// 閾値を info にし、低いレベルを除外します。戻り値はありません。
 core.logger.setLevel('info')
+// 引数なしで現在の閾値を取得します。結果は info です。
 core.logger.getLevel() // 'info'
+// 起動失敗メッセージを fatal で記録します。戻り値は undefined です。
 core.logger.fatal('Example startup failure') // ログを記録し、プロセスは終了しません。
+// orders に request-1 を追加した子ロガーを返します。
 const request = orders.child({ requestId: 'request-1' })
 
+// 親ロガーで作成メッセージと渡したフィールドを記録します。業務データは返しません。
 orders.info('Order created', { attempt: 1 })
+// 子ロガーで attempt: 2 と request-1 を記録します。業務データは返しません。
 request.warn('Request needs attention', { attempt: 2 })
+// request-2 の文脈でコールバックを実行し、終了後に外側へ戻って結果を返します。
 core.context.run({ requestId: 'request-2' }, () => {
+  // 確認と attempt: 1 を記録します。文脈から request-2 が入り、業務データは返しません。
   orders.info('Order checked', { attempt: 1 })
 })
 ```
@@ -275,15 +292,19 @@ interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
 }
 
+// 下の 3 言語の辞書でメッセージ取得関数を作ります。
 const message = core.i18n.createMessageGetter({
   'zh-CN': { notReady: '订单查询模块尚未初始化' },
   'en-US': { notReady: 'Order queries are not initialized' },
   'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
 })
+// 共通の未初期化エラーとメッセージ関数から、プロキシと失敗を作るツールを得ます。
 const waiting = core.module.createNotInitializedKit(
   HaiCommonError.NOT_INITIALIZED,
+  // 注文検索の未初期化文言を現在の言語で取得します。
   () => message('notReady'),
 )
+// インターフェースから非同期の代替を作ります。メソッドは未初期化エラーを返します。
 const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
 let activeQueries: OrderQueries | undefined
 
@@ -291,9 +312,11 @@ const orderLookup = {
   init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
     activeQueries = {
       async getStatus(orderId) {
+        // 渡された ID の状態または null を成功 data に包みます。
         return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
+    // この例の初期化成功を返します。data は undefined です。
     return ok(undefined)
   },
   get orders(): OrderQueries {
@@ -304,25 +327,34 @@ const orderLookup = {
   },
 }
 
+// 未初期化の代替で注文を検索します。未初期化エラーが返ります。
 const beforeInit = await orderLookup.orders.getStatus('order-42')
 if (!beforeInit.success)
+  // 代替の未初期化エラーコードを記録します。業務データは返しません。
   core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
 
 // 此处用内存索引模拟已经从数据库加载完的数据。
+// order-42 を発送済みとして検索を有効にします。成功時の data はなく、失敗時は error です。
 const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
+  // 読み込んだ order-42 を検索し、成功時に shipped を返します。
   const found = await orderLookup.orders.getStatus('order-42')
+  // 存在しない order-99 を検索します。成功時は null です。
   const missing = await orderLookup.orders.getStatus('order-99')
   if (found.success && missing.success)
+    // 一致した状態と欠落時の null を記録します。業務データは返しません。
     core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
 }
 finally {
+  // 引数なしで現在の索引を破棄し、後続の照会を代替に戻します。
   orderLookup.close()
 }
+// 終了後に order-42 を再検索すると未初期化エラーが返ります。
 const afterClose = await orderLookup.orders.getStatus('order-42')
 if (!afterClose.success)
+  // 終了後のエラーコードを記録します。業務データは返しません。
   core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
 ```
 
@@ -376,14 +408,17 @@ Node サービスでプールを作成し、一連の処理を終えたら閉じ
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-worker.mjs', import.meta.url)
+// worker の URL で、最大 2 スレッド・待機 4 件のプールを作ります。
 const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
 try {
+  // レポート文字列を渡します。成功時は長さ 16、満杯やスレッド失敗時は error です。
   const result = await pool.run('Quarterly report')
   if (!result.success)
     throw new Error(result.error.message)
   void result.data // 16
 }
 finally {
+  // 引数なしで未処理タスクを精算し、ワーカーの終了を待ちます。
   await pool.close()
 }
 ```
@@ -412,17 +447,23 @@ port?.once('message', (report) => {
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-once-worker.mjs', import.meta.url)
+// 統計用の URL で専用ワーカーを起動し、制御オブジェクトを返します。
 const thread = core.worker.start<string, number>(entry)
+// 長さを購読して info ログに記録します。購読の戻り値は解除関数です。
 const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
 
 try {
+  // クローン可能な Report をワーカーへ送信します。戻り値はありません。
   thread.postMessage('Report')
+  // スレッド終了を待ちます。正常時は code が 0、異常時は error または別の終了コードを確認します。
   const { code, error } = await thread.exited
   if (error || code !== 0)
     throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
+  // 引数なしで上で登録したメッセージの受信を止めます。
   unsubscribe()
+  // 引数なしで専用ワーカーを停止させ、終了を待ちます。
   await thread.terminate()
 }
 ```
@@ -477,25 +518,33 @@ Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { t
 import { core } from '@h-ai/core'
 
 // 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+// 例の信頼済みプロキシで IP 解決関数を作ります。接続元から転送ヘッダーを採用するか判断します。
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
 const request = new Request('https://example.test/api/partners/inventory/sync', {
   headers: { 'X-Forwarded-For': '198.51.100.23' },
 })
 
 // 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+// ヘッダー付き要求と信頼済み接続元から、ヘッダー内のアドレスを取得します。
 const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+// 同じ要求でも信頼されない直接接続元なら、そのアドレスを返します。
 const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+// 接続元なしで要求だけを渡すと undefined です。
 const unknown = resolveClientIp(request) // undefined
 
 // 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+// 下のサブネットと空の時間枠で判定関数を作り、許可・拒否を返します。
 const checkIp = core.access.createConditionCheck({
   allowIps: ['198.51.100.0/24'],
   denyIps: [],
   timezone: 'UTC',
   windows: [],
 })
+// 許可サブネットの解決済みアドレスを渡します。allowed は true です。
 checkIp(throughProxy).allowed // true
+// サブネット外の接続元を渡します。allowed は false です。
 checkIp(direct).allowed // false
+// クライアント IP が不明な場合は allowed が false です。
 checkIp(unknown).allowed // false
 ```
 
@@ -513,7 +562,9 @@ IP を取得しても、その場でアクセスが許可されるわけでは�
 import { core } from '@h-ai/core'
 
 // 启动时配置一次：这里只信任直接连到后端的反向代理。
+// 例の信頼済みプロキシで IP 解決関数を作ります。接続元から転送ヘッダーを採用するか判断します。
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+// 下のパス、メソッド、サブネット、営業時間で判定関数を作ります。不正な方針は例外です。
 const checkAccess = core.access.createRequestCheck({
   rules: [
     {
@@ -532,10 +583,13 @@ async function handlePartnerAccess(
   peerAddress: string | undefined,
   next: (request: Request) => Response | Promise<Response>,
 ): Promise<Response> {
+  // 要求とホストが渡した実接続元から IP を解決します。不明なら undefined です。
   const clientIp = resolveClientIp(request, peerAddress)
   const { pathname } = new URL(request.url)
+  // 実際のパス、HTTP メソッド、解決済み IP を点検し、allowed と拒否理由を返します。
   const decision = checkAccess(pathname, request.method, clientIp)
   if (!decision.allowed) {
+    // 拒否した規則と理由を info で記録します。業務データは返しません。
     core.logger.info('Request access denied', {
       ruleId: decision.ruleId,
       reason: decision.reason,

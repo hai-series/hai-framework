@@ -23,22 +23,28 @@ function dataOrThrow<T>(result: HaiResult<T>): T {
   return result.data
 }
 
+// 監査表用のインメモリ SQLite を開きます。成功時の data はなく、接続失敗時は例外になります。
 dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
 
 try {
+  // 開いた DB と既定設定で監査を初期化します。成功後に記録でき、失敗時は例外になります。
   dataOrThrow(await audit.init())
   try {
+    // demo-user の auth ログインを記録します。成功時は ID 付きの記録、失敗時は例外です。
     const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+    // login イベントを 1 ページ最大 20 件で取得します。新規 DB の結果には直前の記録が入り、失敗時は例外です。
     const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
     // 新数据库中，查询到的第一条记录就是刚写入的那条。
     if (logs.items[0]?.id !== saved.id)
       throw new Error('Expected the new login event')
   }
   finally {
+    // 引数なしで監査状態を解放します。成功時の data はなく、失敗時は例外です。
     dataOrThrow(await audit.close())
   }
 }
 finally {
+  // 監査終了後に SQLite 接続を閉じます。成功時の data はなく、失敗時は例外です。
   dataOrThrow(await reldb.close())
 }
 ```
@@ -80,8 +86,11 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：監査サービスの準備
 
 ```ts
+// 初期化済み RelDB と既定設定で監査表を準備します。失敗は value が例外にします。
 value(await audit.init()) // undefined; audit tables are ready
+// 監査表が準備できると、準備状態は true です。
 audit.isInitialized // true
+// 引数なしで監査を終了します。成功後も借用した DB は開いたままです。失敗は value が例外にします。
 value(await audit.close()) // undefined; the borrowed RelDB remains open
 ```
 
@@ -124,17 +133,26 @@ withContext（コールバックの結果をそのまま返す）以外、出力
 業務の書込みと audit.log(input, tx) に同じ tx を使い、失敗時は呼び出し側で巻き戻します。HTTP 自動採集の失敗は完了済み業務を取り消しません。巻き戻しの失敗イベントは、元のトランザクション終了後に別途記録します。
 
 ```ts
+// ユーザー、操作、対象でログインを記録します。成功時は ID と作成時刻付きの記録、失敗は value が例外にします。
 const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
 // saved includes its generated id and createdAt
+// demo-user の orders 読み取りを自動収集へ渡します。書き込み・条件付きスキップとも data はなく、失敗は value が例外にします。
 value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+// 信頼済みユーザー ID を非同期処理に結び付けます。コールバックのイベント ID を返し、例外も伝播します。
 const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
+  // コンテキストのユーザーで orders 更新を記録します。成功時は記録、失敗は value が例外にします。
   const record = value(await audit.log({ action: 'update', resource: 'orders' }))
   return record.id
 }) // id is the callback's returned record id
+// demo-user の登録を記録します。成功時の data はなく、失敗時は例外です。
 value(await audit.helper.register('demo-user'))
+// demo-user のログインを記録します。成功時の data はなく、失敗時は例外です。
 value(await audit.helper.login('demo-user'))
+// demo-user のログアウトを記録します。成功時の data はなく、失敗時は例外です。
 value(await audit.helper.logout('demo-user'))
+// サンプルメールでリセット要求を記録します。成功時の data はなく、失敗時は例外です。
 value(await audit.helper.passwordResetRequest('demo@example.com'))
+// demo-user のリセット完了を記録します。成功時の data はなく、失敗時は例外です。
 value(await audit.helper.passwordResetComplete('demo-user'))
 // helper calls succeed with undefined; query their saved events using audit.list
 ```
@@ -148,6 +166,7 @@ value(await audit.helper.passwordResetComplete('demo-user'))
 信頼済みの主体、リソース名、注文 ID を渡します。成功データはなく、保存記録は audit.list で取得します。
 
 ```ts
+// demo-user による orders の order-42 更新を記録します。成功時の data はなく、失敗は value が例外にします。
 value(await audit.helper.crud({
   userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
 })) // undefined
@@ -171,9 +190,13 @@ value(await audit.helper.crud({
 #### 利用例：記録の照会と削除
 
 ```ts
+// login の 1 ページ目を最大 20 件取得します。結果には記録と総数があり、失敗時は例外です。
 const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
+// ユーザー ID の直近最大 20 件を配列で取得します。照会の失敗時は例外です。
 const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
+// 過去 7 日を操作別に集計して件数を返します。失敗時は例外です。
 const stats = value(await audit.getStats(7)) // action statistics for the last seven days
+// 90 日分を保持し、削除件数を返します。解放失敗時は例外です。
 const removed = value(await audit.cleanup(90)) // count of records older than 90 days
 ```
 
@@ -205,11 +228,13 @@ const removed = value(await audit.cleanup(90)) // count of records older than 90
 非公開 Storage を注入し backup を有効にして初期化します。ID と範囲を渡し、返った key を verify に渡して整合性を確認します。
 
 ```ts
+// アーカイブ ID と UTC の範囲を渡します。成功時は内部キーとマニフェスト情報、失敗時は例外です。
 const archive = value(await audit.backup.run({
   id: 'demo-login-archive',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
 }))
+// 前の archive.key で検証します。成功時は検証済みの情報、破損や読み込み失敗時は例外です。
 const verifiedArchive = value(await audit.backup.verify(archive.key))
 // verifiedArchive identifies the same private archive; its contents passed verification.
 ```
@@ -229,6 +254,7 @@ const verifiedArchive = value(await audit.backup.verify(archive.key))
 #### 利用例：異常の確認と通知
 
 ```ts
+// 引数なしで設定済みの時間枠を点検し、送信・キュー登録・失敗の件数を返します。点検失敗時は例外です。
 const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
 ```
 

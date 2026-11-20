@@ -22,6 +22,7 @@
   const content = '# 操作说明\n\n<b>请先保存</b>'
 </script>
 
+<!-- 传入 content 和 18px 字号，渲染允许的 HTML 标记及消毒后的 Markdown。 -->
 <MarkdownRenderer {content} fontSize="18px" allowHtmlTags={true} />
 ```
 
@@ -51,6 +52,7 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
+// 按所列提示和标题 Schema 请求结构化数据；通过校验时 data.title 是生成的标题。
 const result = await ai.llm.generateObject({
   schema: z.object({ title: z.string() }), // 要求结果包含标题字符串。
   messages: [{ role: 'user', content: '为发布检查表生成标题。' }], // 本次输入。
@@ -90,6 +92,7 @@ import { ai, type MCPServiceAuthorization } from '@h-ai/ai'
 
 // 应用已成功初始化 ai，authorization 来自可信服务端。
 async function searchManual(query: string, authorization: MCPServiceAuthorization) {
+  // 用可信授权在 manual 服务上调用 search_manual，输入 query；成功返回工具内容。
   const result = await ai.mcp.services.invoke({
     serviceId: 'manual',
     tool: 'search_manual',

@@ -12,6 +12,7 @@
 pnpm view @h-ai/cli dist-tags
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
+# インストール済みの Hai CLI のバージョンを表示する。
 hai --version
 ```
 
@@ -22,6 +23,7 @@ hai --version
 ## アプリを作成して起動する
 
 ```sh
+# 既定値を使い、Web フロントエンドを持つ fullstack プロジェクト my-app を生成する。
 hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev

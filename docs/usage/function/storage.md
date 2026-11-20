@@ -23,6 +23,7 @@ import { storage } from '@h-ai/storage'
 
 export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
   // 选择一个后端，检查初始化结果。
+  // 使用调用方传入的后端配置。成功建立连接且无 data，连接失败读取 error。
   const initialized = await storage.init(config)
   if (!initialized.success)
     throw new Error(initialized.error.message)
@@ -32,11 +33,13 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   try {
     const key = 'uploads/image.png'
     // 用对象 key 写入 PNG 字节，成功时返回对象元数据。
+    // 将调用方 PNG 字节写到本例对象键，data 为元数据，写入失败读取 error。
     const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
     if (!uploaded.success)
       throw new Error(uploaded.error.message)
 
     // 用同一 key 读取对象内容，成功时返回 Buffer。
+    // 用刚写入的 key 读取 PNG，成功 data 为 Buffer，缺失或读取失败返回错误。
     const downloaded = await storage.file.get(key)
     if (!downloaded.success)
       throw new Error(downloaded.error.message)
@@ -44,6 +47,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     result = { metadata: uploaded.data, bytes: downloaded.data }
     if (config.type === 's3') {
       // S3 可签发有效期为 3600 秒的下载 URL。
+      // 为同一 S3 键签发 3600 秒下载地址，data 为 URL 字符串，签发失败读取 error。
       const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
       if (!signed.success)
         throw new Error(signed.error.message)
@@ -52,6 +56,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   }
   finally {
     // 释放本次连接，失败时交由调用方处理。
+    // 不传参数，释放本次连接。成功 data 为 undefined，失败由下方检测。
     closed = await storage.close()
   }
   if (!closed.success)
@@ -71,11 +76,13 @@ import { uploadWithPresignedUrl } from '@h-ai/storage/client'
 export async function uploadImage(key: string, file: File) {
   // 用相同的 Content-Type 请求签名和上传。
   const contentType = file.type || 'application/octet-stream'
+  // 向已绑定的 API 提交对象键及 MIME 类型，成功 data 含上传地址和服务端确认的键，失败读取 error。
   const signed = await apiClient.storage.presignedUrls.createUpload({ key, contentType })
   if (!signed.success)
     throw new Error(signed.error.message)
 
   // 直接上传到对象存储，成功时返回服务端确认的对象 key。
+  // 使用已签名 URL、原文件及签名时的 MIME 类型直传。成功表示响应已接受，失败读取 error。
   const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
@@ -117,7 +124,9 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：连接与关闭
 
 ```ts
+// 用 ./data/files-demo 目录初始化本地存储，成功可访问其对象文件，失败由 value 抛出。
 value(await storage.init({ type: 'local', root: './data/files-demo' }))
+// 不传参数释放本地后端，成功无 data 且文件留在磁盘，失败由 value 抛出。
 value(await storage.close()) // undefined; saved files remain on disk
 ```
 
@@ -128,9 +137,11 @@ value(await storage.close()) // undefined; saved files remain on disk
 关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()` 或 `init()` 会先重试释放原连接。检查 `await storage.close()` 的结果，再停止本模块依赖的其他服务。
 
 ```ts
+// 无参数尝试关闭当前后端，成功释放资源，失败进入下方重试分支。
 const closed = await storage.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
+  // 无参数重试同一资源的清理，成功无 data，再次失败向调用方抛出。
   const retried = await storage.close()
   if (!retried.success)
     throw new Error(retried.error.message)
@@ -171,19 +182,28 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 #### 场景：读写与复制文件
 
 ```ts
+// 以纯文本类型保存 hello 到报告键，成功元数据的大小为 5 字节，写入失败由 value 抛出。
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
 // saved describes key demo/report.txt, size 5 and backend timestamps
+// 检查刚写入的报告，data 为 true，后端查询失败由 value 抛出。
 value(await storage.file.exists('demo/report.txt')) // true
+// 传报告键读取元数据，返回同一键及 5 字节等属性，缺失或后端失败由 value 抛出。
 const metadata = value(await storage.file.head('demo/report.txt')) // same key and size
+// 传报告键获取完整字节，转 UTF-8 得 hello，读取失败由 value 抛出。
 value(await storage.file.get('demo/report.txt')).toString('utf8') // 'hello'
+// 按报告键打开字节流，打开失败由 value 抛出，打开成功后读取错误可在遍历时抛出。
 const stream = value(await storage.file.getStream('demo/report.txt'))
 let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// 将报告复制到 demo/copy.txt，成功返回新键的元数据，复制失败由 value 抛出。
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
+// 删除原报告键，成功无 data，删除失败由 value 抛出。
 value(await storage.file.delete('demo/report.txt')) // undefined
+// 传仅含复制键的列表，成功返回逐键删除汇总，部分失败带进度并由 value 抛出。
 const deleted = value(await storage.file.deleteMany(['demo/copy.txt'])) // per-key deletion progress
+// 核对删除后的复制键，未被重建时 data 为 false，查询失败由 value 抛出。
 value(await storage.file.exists('demo/copy.txt')) // false after confirmed deletion
 ```
 
@@ -206,6 +226,7 @@ S3 `file.copy()` 对源键按路径段编码，中文、空格及 URL 分隔字�
 `@h-ai/serv` / `@h-ai/api-client` 的 `storage.files.deleteMany` 使用同一成功结构并透传失败进度。
 
 ```ts
+// 请求删除两个键，成功返回删除汇总，部分失败从 error.ext.deleteMany 读取已知进度。
 const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
 if (!result.success) {
   const progress = result.error.ext?.deleteMany
@@ -221,6 +242,7 @@ if (!result.success) {
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// 通过已授权的客户端为 avatar.png 申请直传地址，data 包含 URL 及对象键，失败读取 error。
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 if (!result.success)
   throw new Error(result.error.message)
@@ -251,8 +273,10 @@ if (!result.success)
 import { StorageDeleteFilesInputSchema } from '@h-ai/api-contract/storage'
 import { StorageKeySchema } from '@h-ai/storage/schemas'
 
+// 校验报告对象键，成功 data 为原字符串，无效键返回校验问题。
 const key = StorageKeySchema.safeParse('users/u1/report.pdf')
 if (key.success) {
+  // 用上一步验证的键组装批量删除请求，成功返回校验后的输入，无效结构抛出校验错误。
   const input = StorageDeleteFilesInputSchema.parse({
     keys: [key.data]
   })
@@ -294,10 +318,14 @@ if (key.success) {
 #### 场景：按前缀浏览与清理
 
 ```ts
+// 在示例前缀下写入 1 字节内容，成功返回元数据，失败由 value 抛出。
 value(await storage.file.put('demo-prefix/a.txt', 'a'))
+// 按 demo-prefix/ 筛选最多 20 个对象，返回包含 a.txt 的分页结果，失败由 value 抛出。
 const page = value(await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 }))
 // page contains metadata for demo-prefix/a.txt and backend pagination information
+// 删除此前缀下对象，成功无 data，部分失败由 value 抛出。
 value(await storage.dir.delete('demo-prefix/')) // undefined
+// 按原键核对清理，未发生重建时 data 为 false，查询失败由 value 抛出。
 value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurrent writer recreates it
 ```
 
@@ -327,8 +355,11 @@ API 返回 URL 仅表示已经签发访问凭据，文件尚未上传或下载�
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
+// 用报告键和 text/plain 签发 300 秒的上传 URL，data 是地址字符串，签发失败由 value 抛出。
 const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))
+// 给相同报告键签发 300 秒下载 URL，data 是地址字符串，签发失败由 value 抛出。
 const downloadUrl = value(await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 }))
+// 按报告键与公开地址配置求 URL。无公开访问地址时返回 null。
 const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or null
 ```
 
@@ -385,8 +416,11 @@ Node 将大块内存输入的摘要交给有界 Worker 池。流式输入继续�
 #### 场景：检查字节是否一致
 
 ```ts
+// 对 hello 的字节生成默认 SHA-256 摘要字符串，失败由 value 抛出。
 const digest = value(await storage.checksum.generate('hello'))
+// 用同一字节及刚生成的摘要核对，成功 data 为 true，计算失败由 value 抛出。
 value(await storage.checksum.verify('hello', digest)) // true
+// 将修改后的字节与原摘要比对，成功 data 为 false，计算失败由 value 抛出。
 value(await storage.checksum.verify('changed', digest)) // false
 ```
 
@@ -423,15 +457,21 @@ input 的两个 URL 来自上方签名接口的成功响应，file 来自文件�
 import { downloadAndSave, downloadWithPresignedUrl, formatFileSize, getFileExtension, getMimeType, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
+  // 根据调用方文件名取扩展名，无扩展名时为空字符串。
   const extension = getFileExtension(file)
+  // file.type 缺失时用上一步扩展名取得 MIME 类型，未识别时退回 application/octet-stream。
   const contentType = file.type || getMimeType(extension)
+  // 传文件字节数生成可读字符串，例如 1024 字节显示为 1 KB。
   const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // 用调用方传的直传 URL、原文件及 MIME 类型上传，成功表示上传完成，失败读取 error。
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
+  // 用已签名下载地址取回内容，成功 data 为 Blob，失败读取 error。
   const downloaded = await downloadWithPresignedUrl(downloadUrl)
   if (!downloaded.success || !downloaded.data)
     throw new Error(downloaded.error ?? 'Download failed')
+  // 用同一下载地址和原文件名触发浏览器保存，成功表示已触发保存，失败读取 error。
   const saved = await downloadAndSave(downloadUrl, { filename: file.name })
   if (!saved.success)
     throw new Error(saved.error ?? 'Save failed')
@@ -447,6 +487,7 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'
 
+// 读取 image.png 的字节，成功 data 为 Buffer，模块未初始化时下方分支处理 NOT_INITIALIZED。
 const result = await storage.file.get('image.png')
 if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.code) {
   // 存储未初始化

@@ -10,9 +10,12 @@
 import { ai } from '@h-ai/ai'
 
 async function answer(identity: { tenantId: string, userId: string }, requestId: string) {
+  // 使用宿主已认证的租户与用户，得到只访问该主体的 ACP 入口。
   const agent = ai.acp.scoped(identity)
+  // 解析 assistant 在当前策略下的运行计划；失败时直接返回错误。
   const plan = await agent.plan({ agentId: 'assistant' })
   if (!plan.success) return plan
+  // 对 assistant 提交待办整理的提示，按 requestId 去重；返回任务结果或失败。
   return agent.run({
     agentId: 'assistant',
     prompt: '把这次讨论整理成三条待办',
@@ -89,13 +92,17 @@ DSH 直连官方 DeepSeek Chat 时，为模型设置 `protocol: 'chat'` 和 `bas
 import { ai } from '@h-ai/ai'
 
 async function inspectProject() {
+  // 用工作区 ID project 准备配置的目录和仓库；失败时停止创建会话。
   const prepared = await ai.acp.workspaces.prepare('project')
   if (!prepared.success) return prepared
+  // 让 coder 使用 project 的 web 仓库并创建工作树；成功返回会话。
   const created = await ai.acp.sessions.create({
     agentId: 'coder', workspaceId: 'project', repositoryId: 'web', newWorktree: true,
   })
   if (!created.success) return created
+  // 向已准备的会话发一条文本消息，返回该轮模型结果或错误。
   const response = await created.data.prompt([{ type: 'text', text: '阅读工程，说明结构与改进建议。' }])
+  // 无参数关闭刚创建的会话；清理失败优先返回关闭错误。
   const closed = await created.data.close()
   if (!closed.success) return closed
   return response
@@ -150,6 +157,7 @@ import { ai } from '@h-ai/ai'
 
 // ai 已初始化；服务已启动，HAI_GOOSE_SECRET 是宿主中的服务认证变量。
 async function openRemoteProject() {
+  // 以服务地址、传输和令牌变量注册 goose；注册失败时停止。
   const registered = await ai.acp.agents.register({
     id: 'goose', name: 'Goose', mode: 'custom-service',
     transport: 'http', url: 'http://127.0.0.1:3284/acp',
@@ -157,6 +165,7 @@ async function openRemoteProject() {
     headerEnv: { 'X-Secret-Key': 'HAI_GOOSE_SECRET' },
   })
   if (!registered.success) return registered
+  // 让 goose 在 /workspace 启动会话，返回会话句柄或连接错误。
   return ai.acp.sessions.create({ agentId: 'goose', cwd: '/workspace' })
 }
 ```

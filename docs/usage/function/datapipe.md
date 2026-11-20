@@ -17,21 +17,29 @@ const rawText = '<p>Hello framework.</p>'
 const text = '# Getting started\n\nHello framework.'
 
 // 输入原始 HTML 与清洗选项，成功的 data 为纯文本。
+// 清理 rawText 中的 HTML，成功 data 为 'Hello framework.'。配置或清洗失败读取 error。
 const cleaned = datapipe.clean(rawText, { removeHtml: true })
 if (!cleaned.success)
   throw new Error(cleaned.error.message)
 
 // 输入 Markdown 和分块上限，成功的 data 为分块数组。
+// 按 Markdown 边界及 2000 的上限拆分 text，成功 data 为 DataChunk 数组，失败读取 error。
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
 if (!chunks.success)
   throw new Error(chunks.error.message)
 
 // 配置链按顺序登记各步骤，run 读入原文并返回 { text, chunks }。
+// 无参数创建空的流水线构建器，下面的调用依次登记步骤。
 const result = await datapipe.pipeline()
+  // 登记去除标签和 URL 的清洗步骤，返回同一个构建器。
   .clean({ removeHtml: true, removeUrls: true })
+  // 登记小写转换回调，接收清洗后的文本并交给下一步，返回构建器。
   .transform(text => text.toLowerCase())
+  // 登记段落分块，限制为 1000 且相邻块重叠 100，返回构建器。
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
+  // 登记只保留内容长度大于 50 的块，返回构建器。
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
+  // 用上方 HTML 原文执行已登记步骤，成功 data 含 text、chunks，任一步失败读取 error。
   .run(rawText)
 if (!result.success)
   throw new Error(result.error.message)
@@ -58,6 +66,7 @@ if (!result.success)
 #### 场景：提取与清理文本
 
 ```ts
+// 去除示例标签并合并空白，data 为 'Hello Ada'，清洗失败读取 error。
 const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
 if (!cleaned.success)
   throw new Error(cleaned.error.message)
@@ -100,6 +109,7 @@ HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时
 #### 场景：按大小拆分文档
 
 ```ts
+// 以每块最多一词拆分示例，data 含按原顺序保留分隔空格的三个块，失败读取 error。
 const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
 if (!chunks.success)
   throw new Error(chunks.error.message)
@@ -167,11 +177,17 @@ Node 的 `pipeline.run()` 会把达到 128 Ki 个 UTF-16 代码单元的正文�
 正文与 chunks 是两份不同状态：transform 改正文，chunk 按当时的正文生成分块，chunkTransform 只改已有分块。分块后再 transform 不会重新计算 chunks；任一步失败立即返回失败，不继续后续步骤。没有 chunk 步骤时，chunks 仍为空。
 
 ```ts
+// 无参数创建可复用构建器，下面的调用只登记步骤。
 const pipeline = datapipe.pipeline()
+  // 登记去除 HTML 标签，返回构建器。运行时清洗失败由 run 报告。
   .clean({ removeHtml: true })
+  // 登记小写转换回调，接收清洗后的文本并交给下一步，返回构建器。
   .transform(text => text.toLowerCase())
+  // 登记逐词拆分，单块最多 1 个词，返回构建器。
   .chunk({ mode: 'word', maxSize: 1 })
+  // 登记过滤 beta 块的回调，返回构建器。
   .chunkTransform(parts => parts.filter(part => part.content.trim() !== 'beta'))
+// 将此 HTML 交给上述构建器，成功 data 含小写正文和过滤后的 alpha、gamma 块，失败读取 error。
 const result = await pipeline.run('<p>ALPHA BETA GAMMA</p>')
 if (!result.success)
   throw new Error(result.error.message)
@@ -190,6 +206,7 @@ result.data.chunks.map(part => part.content) // ['alpha ', 'gamma']
 ```ts
 import { HaiDatapipeError } from '@h-ai/datapipe'
 
+// 对示例句选择 custom 模式但省略 separator，本次返回失败 MISSING_SEPARATOR，无分块数据。
 const result = datapipe.chunk('A sample sentence.', { mode: 'custom' }) // 缺少分隔符，返回 MISSING_SEPARATOR。
 if (!result.success) {
   switch (result.error.code) {

@@ -36,6 +36,7 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 - `listSessions(objectId)`：查询主体会话。
 
 ```ts
+// 使用 fast 和下方翻译消息发起对话；成功首项含助手回复，失败返回模型错误。
 const result = await ai.llm.chat({
   model: 'fast',
   messages: [
@@ -97,6 +98,7 @@ Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额�
 ## Retrieval / RAG
 
 ```ts
+// 登记 docs 文档集合及召回阈值；成功后 RAG 查询可选择该来源。
 await ai.retrieval.addSource({
   id: 'docs',
   name: '产品文档',
@@ -105,6 +107,7 @@ await ai.retrieval.addSource({
   minScore: 0.7,
 })
 
+// 只从登记的 docs 来源检索该问题；成功返回最多 5 个匹配结果。
 const result = await ai.rag.query('核心架构是什么？', {
   sources: ['docs'],
   topK: 5,
@@ -244,7 +247,9 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 浏览器 HTTP 通过 `@h-ai/api-client` 的真实 typed contract 访问 AI；默认聊天补全非流式。A2A 与应用自定义流须绑定应用 contract。`@h-ai/ai/client` 只导出独立的 `createAudioClient`；不存在字符串路径 HTTP 客户端或重复 SSE parser。浏览器不导出 Node 服务单例 `ai`。
 
 ```ts
+// 将上游 messages 交给会话补全接口，成功返回生成的补全。
 const response = await apiClient.ai.chats.createCompletion({ messages })
+// 按 user-001 的对象范围检索“偏好”，成功返回最多 5 条记忆。
 const memories = await apiClient.ai.memories.recall({ query: '偏好', objectId: 'user-001', topK: 5 })
 ```
 

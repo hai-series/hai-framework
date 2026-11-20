@@ -15,6 +15,7 @@ import { storage } from '@h-ai/storage'
 
 export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
   // 选择一个后端，检查初始化结果。
+  // Use the caller's backend settings. Success opens the connection with no data. Read error on failure.
   const initialized = await storage.init(config)
   if (!initialized.success)
     throw new Error(initialized.error.message)
@@ -24,11 +25,13 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   try {
     const key = 'uploads/image.png'
     // 用对象 key 写入 PNG 字节，成功时返回对象元数据。
+    // Write the caller's PNG bytes at this key. Success returns metadata. Read error on failure.
     const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
     if (!uploaded.success)
       throw new Error(uploaded.error.message)
 
     // 用同一 key 读取对象内容，成功时返回 Buffer。
+    // Read the PNG at the same key. Success returns a Buffer; a missing object or read failure is an error.
     const downloaded = await storage.file.get(key)
     if (!downloaded.success)
       throw new Error(downloaded.error.message)
@@ -36,6 +39,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     result = { metadata: uploaded.data, bytes: downloaded.data }
     if (config.type === 's3') {
       // S3 可签发有效期为 3600 秒的下载 URL。
+      // Sign a 3,600-second download URL for this S3 key. Success returns the URL string. Read error on failure.
       const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
       if (!signed.success)
         throw new Error(signed.error.message)
@@ -44,6 +48,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   }
   finally {
     // 释放本次连接，失败时交由调用方处理。
+    // Release this connection without arguments. Success has no data. The check below handles failure.
     closed = await storage.close()
   }
   if (!closed.success)
@@ -59,11 +64,13 @@ import { uploadWithPresignedUrl } from '@h-ai/storage/client'
 export async function uploadImage(key: string, file: File) {
   // 用相同的 Content-Type 请求签名和上传。
   const contentType = file.type || 'application/octet-stream'
+  // Send the key and MIME type to the configured API. Success contains the upload URL and server-confirmed key. Read error on failure.
   const signed = await apiClient.storage.presignedUrls.createUpload({ key, contentType })
   if (!signed.success)
     throw new Error(signed.error.message)
 
   // 直接上传到对象存储，成功时返回服务端确认的对象 key。
+  // Upload the original file to the signed URL with the signed MIME type. Success means the response accepted it. Read error on failure.
   const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
@@ -105,7 +112,9 @@ Local directories and S3 use the same file API; the application owns startup and
 #### Scenario: Connect and close
 
 ```ts
+// Initialize local storage at ./data/files-demo. Success enables access to its files. value throws on failure.
 value(await storage.init({ type: 'local', root: './data/files-demo' }))
+// Close the local backend without arguments. Success has no data and files stay on disk. value throws on failure.
 value(await storage.close()) // undefined; saved files remain on disk
 ```
 
@@ -141,19 +150,28 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 #### Scenario: Read, write and copy files
 
 ```ts
+// Write hello as text at the report key. Success metadata has size 5 bytes. value throws on write failure.
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
 // saved describes key demo/report.txt, size 5 and backend timestamps
+// Check the newly written report. Success returns true. value throws on lookup failure.
 value(await storage.file.exists('demo/report.txt')) // true
+// Read metadata for the report key. Success returns the same key and size 5. value throws if missing or unavailable.
 const metadata = value(await storage.file.head('demo/report.txt')) // same key and size
+// Read all bytes at the report key and decode to hello. value throws on read failure.
 value(await storage.file.get('demo/report.txt')).toString('utf8') // 'hello'
+// Open a byte stream for the report key. value throws on open failure. Later I/O can throw during iteration.
 const stream = value(await storage.file.getStream('demo/report.txt'))
 let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// Copy the report to demo/copy.txt. Success returns the new object's metadata. value throws on failure.
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
+// Delete the original report key. Success has no data. value throws on failure.
 value(await storage.file.delete('demo/report.txt')) // undefined
+// Pass the copied key in an array. Success returns a deletion summary. A partial failure includes progress and value throws.
 const deleted = value(await storage.file.deleteMany(['demo/copy.txt'])) // per-key deletion progress
+// Check the copied key after deletion. The result is false if it was not recreated. value throws on failure.
 value(await storage.file.exists('demo/copy.txt')) // false after confirmed deletion
 ```
 
@@ -179,10 +197,14 @@ Directories are object-key prefixes. List them in pages and authorize the full p
 #### Scenario: Browse and clean a prefix
 
 ```ts
+// Write one byte under the example prefix. Success returns metadata. value throws on failure.
 value(await storage.file.put('demo-prefix/a.txt', 'a'))
+// List up to 20 objects under demo-prefix/. The page includes a.txt. value throws on failure.
 const page = value(await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 }))
 // page contains metadata for demo-prefix/a.txt and backend pagination information
+// Delete objects under the prefix. Success has no data. value throws on partial failure.
 value(await storage.dir.delete('demo-prefix/')) // undefined
+// Recheck the original key after cleanup. The result is false unless recreated. value throws on failure.
 value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurrent writer recreates it
 ```
 
@@ -214,8 +236,11 @@ Returning a URL issues access credentials; it does not transfer a file. The brow
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
+// Sign a 300-second upload URL for the report key and text/plain. Success returns the URL. value throws on failure.
 const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))
+// Sign a 300-second download URL for the same report. Success returns the URL. value throws on failure.
 const downloadUrl = value(await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 }))
+// Resolve the public URL from the report key and public base configuration. Returns null when unavailable.
 const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or null
 ```
 
@@ -245,8 +270,11 @@ Checksums do not require storage initialization. Both sides must use the same al
 #### Scenario: Check byte integrity
 
 ```ts
+// Generate the default SHA-256 digest string for the bytes of hello. value throws on failure.
 const digest = value(await storage.checksum.generate('hello'))
+// Check the same bytes against the generated digest. Success returns true. value throws on processing failure.
 value(await storage.checksum.verify('hello', digest)) // true
+// Compare changed bytes to the original digest. Success returns false. value throws on processing failure.
 value(await storage.checksum.verify('changed', digest)) // false
 ```
 
@@ -279,15 +307,21 @@ Both URLs come from successful signing responses; file comes from the file picke
 import { downloadAndSave, downloadWithPresignedUrl, formatFileSize, getFileExtension, getMimeType, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
+  // Read the extension from the caller's filename, or an empty string if absent.
   const extension = getFileExtension(file)
+  // If file.type is missing, use the extension to resolve the MIME type, falling back to application/octet-stream.
   const contentType = file.type || getMimeType(extension)
+  // Format the file's byte count. For example, 1024 bytes displays as 1 KB.
   const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // Upload the original file to the supplied URL with the MIME type. Success signals completion. Read error on failure.
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
+  // Retrieve bytes from the signed download URL. Success data is a Blob. Read error on failure.
   const downloaded = await downloadWithPresignedUrl(downloadUrl)
   if (!downloaded.success || !downloaded.data)
     throw new Error(downloaded.error ?? 'Download failed')
+  // Use the same URL and original filename to trigger a browser download. Success means it was triggered. Read error on failure.
   const saved = await downloadAndSave(downloadUrl, { filename: file.name })
   if (!saved.success)
     throw new Error(saved.error ?? 'Save failed')

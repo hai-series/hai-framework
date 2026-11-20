@@ -15,9 +15,13 @@ defaultLocale: en-US
 import type { CoreConfig } from '@h-ai/core'
 import { core } from '@h-ai/core'
 
+// Read configuration files directly in ./config and register successful loads by name. Initialization returns no value.
 core.init({ configDir: './config' })
+// Read the loaded core configuration snapshot. A missing entry throws.
 const settings = core.config.getOrThrow<CoreConfig>('core')
+// Apply the configured default locale to future messages. Returns no value.
 core.i18n.setGlobalLocale(settings.defaultLocale)
+// Log the application's configured name at startup. Returns no business data.
 core.logger.info('Application ready', { app: settings.name })
 ```
 
@@ -74,15 +78,19 @@ Load dotenv values before initializing modules. The order is process environment
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
+// Build the Zod schema for the port field below. The example passes it to load.
 const AppSchema = z.object({ port: z.number().int().positive() })
+// Load dev environment files. Success returns the variable map. Check error if reading or parsing fails.
 const environment = core.config.loadEnvFiles({ mode: 'dev' })
 if (!environment.success)
   throw new Error(environment.error.message)
 Object.assign(process.env, environment.data)
 
+// Load the YAML path as app and validate with AppSchema. Success data is the registered config. Check error on read or validation failure.
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message)
+// Log the port read from the loaded configuration. Returns no business data.
 core.logger.info('Listening', { port: loaded.data.port })
 ```
 
@@ -118,15 +126,24 @@ A child logger's fields apply to that child and its descendants. Creating one le
 ```ts
 import { core } from '@h-ai/core'
 
+// Create the orders logger and return its instance.
 const orders = core.logger.create({ name: 'orders' })
+// Set the threshold to info so lower levels are skipped. Returns no value.
 core.logger.setLevel('info')
+// Read the current threshold with no arguments. It returns info.
 core.logger.getLevel() // 'info'
+// Log the startup message at fatal level. It returns undefined.
 core.logger.fatal('Example startup failure') // Records a log; does not exit the process.
+// Bind request-1 on top of orders and return the child logger.
 const request = orders.child({ requestId: 'request-1' })
 
+// Log creation and the supplied fields with the parent logger. Returns no business data.
 orders.info('Order created', { attempt: 1 })
+// Log attempt 2 with the child, which also includes request-1. Returns no business data.
 request.warn('Request needs attention', { attempt: 2 })
+// Run the callback in request-2, restore the outer context afterward, and return the callback result.
 core.context.run({ requestId: 'request-2' }, () => {
+  // Log the check and attempt 1. The context adds request-2. Returns no business data.
   orders.info('Order checked', { attempt: 1 })
 })
 ```
@@ -269,15 +286,19 @@ interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
 }
 
+// Create a message getter from the three dictionaries below for later calls.
 const message = core.i18n.createMessageGetter({
   'zh-CN': { notReady: '订单查询模块尚未初始化' },
   'en-US': { notReady: 'Order queries are not initialized' },
   'ja-JP': { notReady: '注文照会モジュールが初期化されていません' },
 })
+// Create the readiness kit from the common error and message callback. It provides a proxy and failure factory.
 const waiting = core.module.createNotInitializedKit(
   HaiCommonError.NOT_INITIALIZED,
+  // Resolve the localized order-lookup readiness message.
   () => message('notReady'),
 )
+// Create the default async placeholder from the interface type. Its methods return the not-initialized failure.
 const fallback = waiting.proxy<OrderQueries>() // 与实际查询接口一致，默认返回 Promise。
 let activeQueries: OrderQueries | undefined
 
@@ -285,9 +306,11 @@ const orderLookup = {
   init(statusById: ReadonlyMap<string, string>): HaiResult<void> {
     activeQueries = {
       async getStatus(orderId) {
+        // Look up the supplied ID and wrap the status or null as success data.
         return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
+    // Return initialization success with undefined data.
     return ok(undefined)
   },
   get orders(): OrderQueries {
@@ -298,25 +321,34 @@ const orderLookup = {
   },
 }
 
+// Look up the sample order through the uninitialized placeholder. It returns a readiness failure.
 const beforeInit = await orderLookup.orders.getStatus('order-42')
 if (!beforeInit.success)
+  // Log the placeholder's readiness error code. Returns no business data.
   core.logger.warn('Order lookup is not ready', { code: beforeInit.error.code })
 
 // 此处用内存索引模拟已经从数据库加载完的数据。
+// Activate the sample lookup with order-42 marked shipped. Success has no data. Read error on failure.
 const initialized = orderLookup.init(new Map([['order-42', 'shipped']]))
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
+  // Look up loaded order-42. Success returns shipped.
   const found = await orderLookup.orders.getStatus('order-42')
+  // Look up absent order-99. Success returns null.
   const missing = await orderLookup.orders.getStatus('order-99')
   if (found.success && missing.success)
+    // Log the found status and the missing null. Returns no business data.
     core.logger.info('Order lookup finished', { found: found.data, missing: missing.data })
 }
 finally {
+  // Clear the active index without arguments, returning later calls to the placeholder.
   orderLookup.close()
 }
+// Query order-42 again after close. This returns the placeholder failure.
 const afterClose = await orderLookup.orders.getStatus('order-42')
 if (!afterClose.success)
+  // Log the post-close error code. Returns no business data.
   core.logger.warn('Order lookup has closed', { code: afterClose.error.code })
 ```
 
@@ -370,14 +402,17 @@ Create the pool in the Node service and close it after the batch.
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-worker.mjs', import.meta.url)
+// Create a pool for the worker URL with at most two workers and four queued jobs.
 const pool = core.worker.createPool<string, number>(entry, { maxWorkers: 2, maxQueuedJobs: 4 })
 try {
+  // Submit the report string. Success returns length 16. Check error on a full queue or worker failure.
   const result = await pool.run('Quarterly report')
   if (!result.success)
     throw new Error(result.error.message)
   void result.data // 16
 }
 finally {
+  // Settle pending jobs and wait for the pool's workers to exit.
   await pool.close()
 }
 ```
@@ -406,17 +441,23 @@ In the calling script in the same directory, use `onMessage()` to subscribe befo
 import { core } from '@h-ai/core'
 
 const entry = new URL('./stats-once-worker.mjs', import.meta.url)
+// Start the dedicated worker at the one-shot statistics URL and return the thread controls.
 const thread = core.worker.start<string, number>(entry)
+// Subscribe to lengths and log them at info level. The subscription returns an unsubscribe function.
 const unsubscribe = thread.onMessage(length => core.logger.info('Report length', { length }))
 
 try {
+  // Send the cloneable Report string to the worker. Returns no value.
   thread.postMessage('Report')
+  // Await worker exit. A normal exit has code 0. Inspect error or a nonzero code on failure.
   const { code, error } = await thread.exited
   if (error || code !== 0)
     throw error ?? new Error(`Worker exited with code ${code}`)
 }
 finally {
+  // Stop receiving messages through the subscription above.
   unsubscribe()
+  // Request termination of the dedicated worker without arguments and wait for its exit.
   await thread.terminate()
 }
 ```
@@ -469,25 +510,33 @@ When a trusted proxy provides multiple addresses, start at the right end of `X-F
 import { core } from '@h-ai/core'
 
 // 启动时配置代理地址。这个数组不是合作方的 IP 白名单。
+// Create an IP resolver using the trusted example proxy. It uses the peer address to decide whether to trust forwarded headers.
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
 const request = new Request('https://example.test/api/partners/inventory/sync', {
   headers: { 'X-Forwarded-For': '198.51.100.23' },
 })
 
 // 用同一个请求头对比不同的直接连接地址。实际服务从连接读取第二个参数。
+// Pass the forwarded header and known proxy peer to get the address in the header.
 const throughProxy = resolveClientIp(request, '192.0.2.10') // '198.51.100.23'
+// Pass the same request with an untrusted direct peer. The result is the peer address.
 const direct = resolveClientIp(request, '203.0.113.7') // '203.0.113.7'
+// Pass only the request without a peer address. This returns undefined.
 const unknown = resolveClientIp(request) // undefined
 
 // 用解析后的地址检查合作方网段；路径和方法规则请用下方的 createRequestCheck 示例。
+// Build the checker for the subnet and empty time windows below. It returns allow or deny decisions.
 const checkIp = core.access.createConditionCheck({
   allowIps: ['198.51.100.0/24'],
   denyIps: [],
   timezone: 'UTC',
   windows: [],
 })
+// Check the resolved allowed-subnet address. allowed is true.
 checkIp(throughProxy).allowed // true
+// Check the peer outside the subnet. allowed is false.
 checkIp(direct).allowed // false
+// Check without a known client IP. allowed is false.
 checkIp(unknown).allowed // false
 ```
 
@@ -505,7 +554,9 @@ In a custom Node HTTP server, create the resolver and checker once at startup. F
 import { core } from '@h-ai/core'
 
 // 启动时配置一次：这里只信任直接连到后端的反向代理。
+// Create an IP resolver using the trusted example proxy. It uses the peer address to decide whether to trust forwarded headers.
 const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])
+// Build a checker from the path, method, subnet, and work hours below. Invalid policy throws.
 const checkAccess = core.access.createRequestCheck({
   rules: [
     {
@@ -524,10 +575,13 @@ async function handlePartnerAccess(
   peerAddress: string | undefined,
   next: (request: Request) => Response | Promise<Response>,
 ): Promise<Response> {
+  // Resolve the client IP from the request and actual peer supplied by the host. Unknown addresses yield undefined.
   const clientIp = resolveClientIp(request, peerAddress)
   const { pathname } = new URL(request.url)
+  // Check the actual path, HTTP method, and resolved address. The decision supplies allowed and a denial reason.
   const decision = checkAccess(pathname, request.method, clientIp)
   if (!decision.allowed) {
+    // Log the denying rule and reason at info level. Returns no business data.
     core.logger.info('Request access denied', {
       ruleId: decision.ruleId,
       reason: decision.reason,

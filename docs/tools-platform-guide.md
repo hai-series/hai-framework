@@ -44,6 +44,7 @@ Agent 的“工具工作台”负责选择工具、填写参数、查看进度�
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
+// 定义 word_count 的参数 Schema 和执行逻辑，返回可执行的工具对象。
 const wordCount = tools.define({
   name: 'word_count',
   description: 'Count the words in a text.',
@@ -51,6 +52,7 @@ const wordCount = tools.define({
   handler: ({ text }) => ({ words: text.trim().split(/\s+/u).filter(Boolean).length }),
 })
 
+// 传入 Hello Hai 进行校验和计词；成功 data.words 为 2，输入不合规时返回失败。
 const result = await wordCount.execute({ text: 'Hello Hai' })
 if (result.success) {
   // result.data.words 为 2。

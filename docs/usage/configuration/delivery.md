@@ -180,9 +180,11 @@ SvelteKit由`kit.paths.base`处理资源和路由，模板不另设Vite base。V
 以下以启用IAM的Admin项目为例。先创建项目、安装依赖，并核对开发所需服务；可生成一个受保护的测试API，便于验证匿名请求确实被拒绝：
 
 ```sh
+# 按默认配置生成 admin 项目 portal，保留依赖清单，留待下一步安装。
 hai create portal --type admin --defaults --no-install
 cd portal
 pnpm install
+# 将 prefix-probe 生成到 src/routes/api，命令成功后可检查生成的路由文件。
 hai generate api prefix-probe --output src/routes/api
 ```
 
@@ -319,6 +321,7 @@ location /api/v1/ {
 用于企业介绍、帮助和文档等纯展示站点。新建 website 默认 SSR，只安装 Core/Kit/UI，可直接切换静态构建；完整的注释配置及环境变量参考不启用模块。后续新增了服务端业务依赖、初始化或 API/`actions` 时，须先移除这些动态能力：
 
 ```sh
+# 按默认配置生成名为 docs-site 的 website 项目；成功后进入该目录。
 hai create docs-site --type website --defaults
 cd docs-site
 ```

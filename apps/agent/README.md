@@ -133,16 +133,16 @@ web/video 对应的 Runner 环境建议从 `resources.pids: 512` 起做真实验
 ```ts
 import { ai } from '@h-ai/ai'
 
-// 输入登录态映射出的租户和用户，得到仅作用于该主体的入口。
+// 用已认证用户和 agent 租户创建调用入口，后续操作限定在这个主体。
 const scoped = ai.acp.scoped({ tenantId: 'agent', userId: 'authenticated-user' })
-// 输入后端、分配策略和稳定任务 ID，得到可跨 API 节点获取的会话。
+// 选择 coder 和自动执行模式，用 job-123 去重。成功 data 是可跨 API 节点访问的会话。
 const created = await scoped.sessions.create({
   agentId: 'coder',
   execution: { mode: 'auto' }
 }, { idempotencyKey: 'job-123' })
 if (!created.success)
   throw new Error(created.error.message)
-// 输入消息、该轮稳定 ID 及本轮可读取的资料，立即取得 taskId 和状态。
+// 发送提示词和本轮可访问的 project-docs，用 turn-1 去重。受理后 data 返回 taskId 和状态。
 const accepted = await created.data.submit({
   prompt: '阅读资料并总结',
   idempotencyKey: 'turn-1',
@@ -152,7 +152,7 @@ const accepted = await created.data.submit({
 })
 if (!accepted.success)
   throw new Error(accepted.error.message)
-// 输入 taskId 和已经显示到的序号，返回下一页持久事件。
+// 按刚受理的 taskId 读取序号 0 之后最多 100 条持久事件。读取失败由 error 提供原因。
 const page = await scoped.tasks.events(accepted.data.taskId, 0, 100)
 if (!page.success)
   throw new Error(page.error.message)

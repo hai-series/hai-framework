@@ -24,20 +24,25 @@ import { storage } from '@h-ai/storage'
 
 export function startApi(closeApp: () => Promise<void>) {
   // 用三个模块的契约生成 HTTP 路由契约。
+  // Compose the supplied IAM, storage, and AI contracts. Returns a single route contract without starting a server.
   const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
   // 将已初始化的业务模块绑定为实现；存储检查所有 key 的归属。
   const procedures = {
+    // Bind the initialized IAM instance to procedures for the IAM routes. The procedures surface authentication and permission failures.
     iam: createIamProcedures({ iam }),
+    // Bind storage routes to the initialized storage service. The supplied authorization check rejects keys outside the session user's prefix.
     storage: createStorageProcedures({
       storage,
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
+    // Bind the initialized AI service to the AI request procedures. Calls return results from that service.
     ai: createAiProcedures({ ai }),
   }
 
   // 使用契约、实现和 HTTP 设置构建 App。
+  // Build an HTTP app from the contract and its procedures. The supplied HTTP paths register the API, OpenAPI JSON, and documentation.
   const app = serv.createApp({
     contract,
     procedures,
@@ -50,10 +55,13 @@ export function startApi(closeApp: () => Promise<void>) {
   })
 
   // 读取已加载的监听配置，返回包含地址和 close() 的句柄。
+  // Read validated serving settings from the loaded serv config. Missing settings throw before opening a listener.
   const { server } = core.config.getOrThrow<ServConfig>('serv')
+  // Listen for this HTTP app on the configured host and port. Returns a handle with the bound address and cleanup. Bind errors reject.
   return serv.listen(app, {
     host: server.host,
     port: server.port,
+    // When listening succeeds, log the port reported by the listener.
     onListening: info => core.logger.info('API service listening', { port: info.port }),
     onClose: closeApp,
   })
@@ -139,8 +147,10 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 #### 利用例：アクセス・CORS・資源の制御
 
 ```ts
+// Resolve the production policy using this one web origin. The known origin is allowed and the refresh cookie defaults to secure.
 const policy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
 // policy.allowOrigin restricts requests to the explicit origin; secureRefreshCookie is enabled
+// Create CORS middleware for the exact app origin with credentials enabled. A mismatched origin gets no allow-origin grant.
 const cors = serv.cors({ origin: 'https://app.example.com', credentials: true }) // ServMiddleware
 ```
 
@@ -167,13 +177,17 @@ const cors = serv.cors({ origin: 'https://app.example.com', credentials: true })
 
 ```ts
 import { z } from 'zod'
+// Read en-US from the locale header. An unavailable language uses the supported fallback.
 const locale = serv.resolveRequestLocale(new Headers({ 'x-hai-locale': 'en-US' })) // 'en-US'
+// Validate the supplied Order title under that locale. Success contains the object. Failure carries localized issues.
 const checked = serv.validateInputOrFail(z.object({ title: z.string().min(1) }), { title: 'Order' }, locale)
 if (!checked.success)
   throw new Error(checked.error.message)
 checked.data // { title: 'Order' }
+// Resolve the localized forbidden message using the selected request locale.
 const denied = serv.m('serv_errorForbidden', { locale }) // localized safe text
 // With the contract from quick start:
+// Generate the OpenAPI document for the quick-start contract with the supplied title and version.
 const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
 ```
 

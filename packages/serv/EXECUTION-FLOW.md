@@ -39,13 +39,16 @@ import { serv } from '@h-ai/serv'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 
+// 组合 IAM 和存储定义，返回供客户端与服务端共享的 API 契约。
 const contract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
 })
 
 const procedures = {
+  // 注入宿主 IAM 实例，返回对应端点的处理器。
   iam: createIamProcedures({ iam }),
+  // 注入 Storage 并限制用户路径，返回会执行该授权检查的存储处理器。
   storage: createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
@@ -53,6 +56,7 @@ const procedures = {
   }),
 }
 
+// 结合下方的契约、处理器与宿主选项，创建并返回服务应用。
 const app = serv.createApp({
   contract,
   procedures,
@@ -63,6 +67,7 @@ const app = serv.createApp({
   },
 })
 
+// 让 app 开始监听，并在服务退出时调用宿主的 closeApp。
 serv.listen(app, { onClose: closeApp })
 ```
 
@@ -241,13 +246,21 @@ flowchart TD
 
 ```ts
 serv
+  // 使用共享契约开始组装受约束的路由。
   .implement(contract)
+  // 声明处理器使用 ServContext，供下面的路由类型推断。
   .context<ServContext>()
+  // 将 healthHandler 绑定到 health 端点。
   .route('health', healthHandler)
+  // 选择 users.update 继续配置授权与回调。
   .route('users.update')
+  // 为更新用户要求 users.write 权限。
   .permission('users.write')
+  // 为该路由增加 admin 角色要求。
   .role('admin')
+  // 绑定更新逻辑，授权成功后由该处理器执行。
   .handle(updateUserHandler)
+  // 返回已经绑定处理器和授权条件的路由定义。
   .build()
 ```
 
@@ -316,6 +329,7 @@ serv
 ### 启用方式
 
 ```ts
+// 结合下方的契约、处理器与宿主选项，创建并返回服务应用。
 const app = serv.createApp({
   contract,
   procedures,

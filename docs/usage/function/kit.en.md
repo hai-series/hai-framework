@@ -118,23 +118,41 @@ import { ok } from '@h-ai/core'
 import { z } from 'zod'
 const schema = z.object({ title: z.string().min(1) })
 const request = new Request('https://app.example.com/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Order' }) })
+// Validate the sample JSON POST body with the title schema. On success body is { title: 'Order' }. Invalid JSON or fields fail validation.
 const body = await kit.validate.body(request, schema) // { title: 'Order' }
+// Parse page=1 from this URL and normalize it with pagination defaults. Invalid query values fail validation.
 kit.validate.query(new URL('https://app.example.com/?page=1'), kit.validate.PaginationQuerySchema) // normalized page
+// Validate the sample route parameters. id remains o1 and invalid values fail validation.
 kit.validate.params({ id: 'o1' }, kit.validate.IdParamSchema) // { id: 'o1' }
+// Validate the same id with the schema directly. Returns { id: 'o1' } or throws a Zod error.
 kit.validate.IdParamSchema.parse({ id: 'o1' }) // { id: 'o1' }
+// Convert the query string page to a numeric page and fill its defaults. An invalid page throws a Zod error.
 kit.validate.PaginationQuerySchema.parse({ page: '1' }) // normalized page defaults
+// Wrap the validated order body as a successful JSON response with status 200.
 kit.response.ok(body).status // 200
+// Return a success envelope for the new order o1 with status 201.
 kit.response.created({ id: 'o1' }).status // 201
+// Return an empty response with status 204.
 kit.response.noContent().status // 204
+// Return HTTP 400 with the supplied Invalid request message.
 kit.response.badRequest('Invalid request').status // 400
+// Return the default authentication error envelope with HTTP 401.
 kit.response.unauthorized().status // 401
+// Return the default permission-denied error envelope with HTTP 403.
 kit.response.forbidden().status // 403
+// Return the default missing-resource error envelope with HTTP 404.
 kit.response.notFound().status // 404
+// Use the supplied Data changed message for HTTP 409.
 kit.response.conflict('Data changed').status // 409
+// Include the supplied title field issue in the HTTP 422 response.
 kit.response.validationError([{ field: 'title', message: 'Required' }]).status // 422
+// Return the default internal-error envelope with HTTP 500.
 kit.response.internalError().status // 500
+// Create a redirect response whose Location is /auth/login.
 kit.response.redirect('/auth/login').headers.get('location') // '/auth/login'
+// Return the supplied app error code and message with HTTP 400.
 kit.response.error('app:orders:001', 'Invalid request', 400).status // 400
+// Wrap { id: 'o1' } in a successful HaiResult and convert it to HTTP 200. Failed results use their recorded error status.
 kit.response.fromResult(ok({ id: 'o1' })).status // 200
 ```
 
@@ -198,16 +216,22 @@ Run in a browser module with an existing same-origin /api/ping endpoint. Default
 ```ts
 import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
 
+// Create a browser client with defaults. The returned object has its own request and transport methods.
 const client = createKitClient({}) // same factory as kit.client.create
+// Bind authentication actions to that client's apiFetch.
 const actions = createKitAuthActions({ apiFetch: client.apiFetch })
+// Create a navigation adapter for the current SvelteKit runtime.
 const nav = createSvelteKitNavAdapter()
+// Initialize this client's transport if enabled. A failed enabled handshake rejects.
 await client.init()
 try {
+  // Fetch /api/ping through the configured client. Inspect the returned HTTP status and handle network rejection as for fetch.
   const response = await client.apiFetch('/api/ping')
   const body: unknown = await response.json() // the application endpoint's JSON
   client.ready // whether an enabled transport session is ready
 }
 finally {
+  // Destroy this client's transport state without changing other clients.
   client.destroy()
 }
 ```
@@ -239,9 +263,13 @@ resource contains application-owned fields and authorized callbacks typed by Cru
 import { defineCrud, kit, resolveOptions, resolveText } from '@h-ai/kit'
 
 function buildResource(resource: Parameters<typeof defineCrud>[0]) {
+  // Build the operations for the supplied resource declaration.
   const operations = defineCrud(resource)
+  // Build the equivalent operations through kit.crud using the same declaration.
   const equivalent = kit.crud.define(resource)
+  // Evaluate the supplied label function. The resolved label is Name.
   const label = resolveText(() => 'Name') // 'Name'
+  // Resolve the supplied Active option with boolean true. This array is returned as the available choices.
   const choices = resolveOptions([{ label: 'Active', value: true }]) // same option array
   return { operations, equivalent, label, choices }
 }

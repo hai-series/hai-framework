@@ -14,11 +14,13 @@
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
+// 打开本进程临时 SQLite 库，成功后可执行 SQL，失败读取 error。
 const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 // DDL
+// 用下方 ID、姓名和邮件字段建表，成功 data 无值，DDL 失败在 error 中。
 await reldb.ddl.createTable('users', {
   id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
   name: { type: 'TEXT', notNull: true },
@@ -26,16 +28,20 @@ await reldb.ddl.createTable('users', {
 })
 
 // SQL
+// 将示例姓名及邮件绑定到两个占位符，data.changes 为插入行数，约束或执行失败读取 error。
 await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
+// 读取 users 所有行，data 是记录数组，刚插入后包含张三，查询失败读取 error。
 const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
 
 // 分页查询
+// 按 ID 排序读取第一页，每页最多 20 条。成功 data 有记录与总数，失败读取 error。
 const page = await reldb.sql.queryPage<{ id: number, name: string }>({
   sql: 'SELECT id, name FROM users ORDER BY id',
   pagination: { page: 1, pageSize: 20 },
 })
 
 // CRUD
+// 用 users、主键和字段白名单创建 CRUD 仓库对象，下方用它执行写入和查询。
 const userCrud = reldb.crud.table({
   table: 'users',
   idColumn: 'id',
@@ -44,10 +50,13 @@ const userCrud = reldb.crud.table({
   updateColumns: ['name', 'email'],
   dbType: 'sqlite',
 })
+// 传李四和邮件创建第二位用户。成功包含影响行数，约束等失败读取 error。
 await userCrud.create({ name: '李四', email: 'li@test.com' })
+// 传主键 1 查找先前用户，成功 data 是对应记录或 null，查询失败读取 error。
 const user = await userCrud.findById(1)
 
 // 关闭
+// 无参数关闭本例的数据库连接，成功无 data，释放失败读取 error。
 await reldb.close()
 ```
 
@@ -94,9 +103,11 @@ function value<T>(result: HaiResult<T>): T {
 关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()` 或 `init()` 会先重试释放原连接。检查 `await reldb.close()` 的结果，再停止数据库服务。
 
 ```ts
+// 无参数关闭当前连接。成功释放资源，失败进入重试分支。
 const closed = await reldb.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
+  // 无参数再次清理原连接，成功无 data，再次失败向调用方抛出。
   const retried = await reldb.close()
   if (!retried.success)
     throw new Error(retried.error.message)
@@ -114,9 +125,13 @@ table/column/index 名必须来自可信代码；sql 是可信语句，params �
 输入是稳定的模块标识；回调仅使用它收到的 ddl/sql。成功返回回调的 data，本例没有业务数据。PostgreSQL 在事务锁下执行，失败回滚；其他后端遵守自身 DDL 提交规则。
 
 ```ts
+// 用共享的结构准备键运行下方建表回调，成功返回回调结果，协调或 DDL 失败由 value 抛出。
 value(await reldb.prepareSchema('docs:demo:schema', ({ ddl }) =>
+  // 创建仅有文本主键 id 的表，true 允许已存在，成功无 data，失败交回 prepareSchema。
   ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true } }, true)))
+// 读取刚建表的实际列名，返回 ['id']，查询失败由 value 抛出。
 value(await reldb.schemaColumns('demo_prepared')) // ['id']
+// 删除本例表，true 允许不存在，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropTable('demo_prepared', true))
 ```
 
@@ -147,14 +162,23 @@ value(await reldb.ddl.dropTable('demo_prepared', true))
 #### 场景：创建与修改表
 
 ```ts
+// 为例中的订单创建文本 ID 主键表，成功无 data，DDL 失败由 value 抛出。
 value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
+// 给 demo_orders 新增 TEXT 可空列 note，成功改变表结构，失败由 value 抛出。
 value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
+// 查询修改后的列名，data 为 ['id', 'note']，查询失败由 value 抛出。
 value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
+// 在 demo_orders.note 上创建示例索引，成功改变表结构，失败由 value 抛出。
 value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
+// 按名称移除刚建的索引，true 允许不存在，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropIndex('demo_orders_note', true))
+// 删除 demo_orders 的 note 列及其值，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropColumn('demo_orders', 'note'))
+// 将原表重命名为 demo_orders_old，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
+// 删除已改名的表，true 允许不存在，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropTable('demo_orders_old', true))
+// 执行示例常量 DDL 创建标记表，成功无 data，驱动失败由 value 抛出。
 value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
 // All successful DDL calls have no business data.
 ```
@@ -186,15 +210,24 @@ value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMA
 #### 场景：参数化查询与分页
 
 ```ts
+// 建立有文本主键 id 的查询示例表，成功无 data，DDL 失败由 value 抛出。
 value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
+// 将 o1 绑定到插入占位符，结果包含受影响行数，失败由 value 抛出。
 const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
+// 读取刚写入的 ID 列，data 为 [{ id: 'o1' }]，查询失败由 value 抛出。
 value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
+// 用参数 o1 读取首条匹配行，返回 { id: 'o1' }，查询失败由 value 抛出。
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+// 将页码 1 和每页 20 条规范化为分页参数，得到首段记录的限制和偏移量。
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+// 传可信 SQL 及规范化分页选项，返回 o1 所在一页与总条数 1，失败由 value 抛出。
 const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
 // page.items: [{ id: 'o1' }], total: 1
+// 用示例记录、总数和页参数构造等价分页对象，直接返回该对象。
 reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
+// 执行批次中绑定 o1 的删除，成功后不再有该行且无 data，批次失败由 value 抛出。
 value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
+// 删除后再按 o1 查找，成功 data 为 null，查询失败由 value 抛出。
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
 ```
 
@@ -207,11 +240,17 @@ value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // nu
 ```ts
 import { createJsonOps, escapeSqlString, parseJsonPath, quoteIdentifier, validateIdentifier, validateIdentifiers } from '@h-ai/reldb'
 
+// 校验可信列名 order_total，成功 data 为原串，非法标识符返回失败。
 const column = validateIdentifier('order_total') // 成功的 data 为 'order_total'。
+// 一次校验两个可信列名，全部合法时无 data，任一非法则失败。
 const columns = validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
+// 按当前示例所用双引号规则包裹 order_total，返回引用后的标识符。
 const quoted = quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
+// 将示例 O'Reilly 的单引号加倍，返回用于可信 SQL 拼装的字符串。
 const escaped = escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
+// 将 $.profile.name 分解为 ['profile', 'name']，不支持的路径语法抛错。
 const segments = parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
+// 按 PostgreSQL 方言创建 JSON 表达式构造器，返回相应的操作对象。
 const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
 ```
 
@@ -253,8 +292,10 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 事务回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时，使用下方手动事务。各片段假定数据库已成功初始化且 users 表已经创建。
 
 ```ts
+// 用回调运行两次插入，正常返回时提交并将 'ok' 放入 data，失败或抛错进入回滚。
 const result = await reldb.tx.wrap(async (tx) => {
   for (const name of ['Alice', 'Bob']) {
+    // 在当前事务中绑定循环中的姓名插入一行，data 含受影响行数，失败读取 error。
     const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
     if (!inserted.success)
       throw new Error(inserted.error.message, { cause: inserted.error })
@@ -268,21 +309,26 @@ const result = await reldb.tx.wrap(async (tx) => {
 
 ```ts
 // 放在 async 业务函数内，失败时向调用方返回 HaiResult。
+// 无参数开启当前数据库事务，成功 data 是事务对象，失败返回或抛出其 error。
 const txResult = await reldb.tx.begin()
 if (!txResult.success)
   return txResult
 const tx = txResult.data
 try {
   for (const name of ['Alice', 'Bob']) {
+    // 在当前事务中绑定循环中的姓名插入一行，data 含受影响行数，失败读取 error。
     const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
     if (!inserted.success) {
+      // 无参数回滚当前事务，成功撤销未提交写入且无 data，回滚失败保留 error。
       const rolledBack = await tx.rollback()
       return rolledBack.success ? inserted : rolledBack
     }
   }
+  // 无参数提交两次写入并结束事务，成功无 data，提交失败结果原样返回。
   return await tx.commit()
 }
 catch (error) {
+  // 无参数回滚当前事务，成功撤销未提交写入且无 data，回滚失败保留 error。
   const rolledBack = await tx.rollback()
   if (!rolledBack.success)
     return rolledBack
@@ -294,12 +340,15 @@ catch (error) {
 
 ```ts
 // 独立脚本：试写后回滚，不保留用户数据。
+// 无参数开启当前数据库事务，成功 data 是事务对象，失败返回或抛出其 error。
 const txResult = await reldb.tx.begin()
 if (!txResult.success)
   throw new Error(txResult.error.message, { cause: txResult.error })
 const tx = txResult.data
 // 两个 API 均返回 HaiResult；同时失败时保留执行和回滚两份原因。
+// 将 Alice 绑定到试写语句，成功 data 含变更行数，写入尚待下方回滚，失败保留 error。
 const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['Alice'])
+// 无参数回滚当前事务，成功撤销未提交写入且无 data，回滚失败保留 error。
 const rolledBack = await tx.rollback()
 if (!inserted.success && !rolledBack.success)
   throw new AggregateError([inserted.error, rolledBack.error], rolledBack.error.message)
@@ -312,7 +361,9 @@ if (!rolledBack.success)
 #### 场景：在事务内批量写入并分页查询
 
 ```ts
+// 下列操作使用同一事务，正常返回时提交并返回回调 data，抛错则回滚并返回失败。
 await reldb.tx.wrap(async (tx) => {
+  // 把 Alice、Bob 两条带参数语句交给当前事务，成功无 data，执行失败读取 error 并抛出。
   const inserted = await tx.batch([
     {
       sql: 'INSERT INTO users (name) VALUES (?)',
@@ -326,6 +377,7 @@ await reldb.tx.wrap(async (tx) => {
   if (!inserted.success)
     throw new Error(inserted.error.message, { cause: inserted.error })
 
+  // 同一事务内读取按 ID 排序的第一页最多十条，data 含包括未提交写入的分页结果，失败读取 error。
   const page = await tx.queryPage<{ id: number, name: string }>({
     sql: 'SELECT id, name FROM users ORDER BY id',
     pagination: { page: 1, pageSize: 10 },
@@ -341,19 +393,24 @@ await reldb.tx.wrap(async (tx) => {
 所有方法均支持传入 `tx` 参数，自动路由到事务上下文：
 
 ```ts
+// 用 users 的字段投影与写入列构建 SQLite 仓库，返回支持传入事务的操作对象。
 const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   table: 'users', idColumn: 'id', dbType: 'sqlite',
   select: ['id', 'name', 'email'], createColumns: ['name', 'email'], updateColumns: ['name', 'email'],
 })
+// 下列操作使用同一事务，正常返回时提交并返回回调 data，抛错则回滚并返回失败。
 await reldb.tx.wrap(async (tx) => {
+  // 将 Alice 及邮箱写入当前事务，data 可能含 SQLite 插入 ID，失败读取 error。
   const created = await userCrud.create({ name: 'Alice', email: 'alice@example.com' }, tx)
   if (!created.success)
     throw new Error(created.error.message, { cause: created.error })
   if (created.data.lastInsertRowid === undefined)
     throw new Error('Insert did not return an ID')
+  // 用刚取得的主键在同一事务修改姓名，成功 data 含变更行数，失败读取 error。
   const updated = await userCrud.updateById(created.data.lastInsertRowid, { name: 'Alice Smith' }, tx)
   if (!updated.success)
     throw new Error(updated.error.message, { cause: updated.error })
+  // 在同一事务中按新主键读取已更新用户，成功为记录或 null，失败读取 error。
   const user = await userCrud.findById(created.data.lastInsertRowid, tx)
   if (!user.success)
     throw new Error(user.error.message, { cause: user.error })
@@ -397,28 +454,45 @@ await reldb.tx.wrap(async (tx) => {
 输入为全新的 demo_repository 表和固定 ID r1/r2。先建表再创建仓库；所有 success 数据写在调用旁。where/orderBy 是可信代码，业务值放 params。各方法最后可选传入同一事务句柄。
 
 ```ts
+// 创建 CRUD 示例表，使用文本主键和必填名称，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.createTable('demo_repository', {
   id: { type: 'TEXT', primaryKey: true },
   name: { type: 'TEXT', notNull: true },
 }))
+// 绑定示例表、列权限与 SQLite 方言，返回下方使用的仓库对象。
 const repository = reldb.crud.table<{ id: string, name: string }>({
   table: 'demo_repository', idColumn: 'id', dbType: 'sqlite',
   select: ['id', 'name'], createColumns: ['id', 'name'], updateColumns: ['name'],
 })
+// 插入 r1 和 Ada，data.changes 为 1，失败由 value 抛出。
 value(await repository.create({ id: 'r1', name: 'Ada' })).changes // 1
+// 批量写入列表中的 r2，成功无 data，批量失败由 value 抛出。
 value(await repository.createMany([{ id: 'r2', name: 'Lin' }])) // undefined
+// 传已存在的 r1 并更新姓名为 Ada v2，data.changes 为 1，失败由 value 抛出。
 value(await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })).changes // 1
+// 查询已更新的 r1，返回该行或 null，查询失败由 value 抛出。
 value(await repository.findById('r1')) // { id: 'r1', name: 'Ada v2' }
+// 必须读取到 r1，成功返回该行，缺失或查询失败由 value 抛出。
 value(await repository.getById('r1')) // same record; missing records fail
+// 按 id 升序读取两条记录，成功 data 是数组，查询失败由 value 抛出。
 value(await repository.findAll({ orderBy: 'id ASC' })).length // 2
+// 按 id 升序读取第一页最多十条，分页对象中总数为 2，失败由 value 抛出。
 value(await repository.findPage({ orderBy: 'id ASC', pagination: { page: 1, pageSize: 10 } })).total // 2
+// 无条件统计示例表，data 为 2，查询失败由 value 抛出。
 value(await repository.count()) // 2
+// 用参数 Lin 绑定姓名条件，存在匹配时为 true，查询失败由 value 抛出。
 value(await repository.exists({ where: 'name = ?', params: ['Lin'] })) // true
+// 按主键核对刚批量插入的 r2，返回 true，查询失败由 value 抛出。
 value(await repository.existsById('r2')) // true
+// 将 r1 的名称更新为 Ada v3，data.changes 为 1，失败由 value 抛出。
 value(await repository.updateById('r1', { name: 'Ada v3' })).changes // 1
+// 按主键删除 r2，data.changes 为 1，删除失败由 value 抛出。
 value(await repository.deleteById('r2')).changes // 1
+// 按已删除的 r2 查询，成功 data 为 null，底层查询失败由 value 抛出。
 value(await repository.findById('r2')) // null, a successful lookup with no match
+// 要求读取已删除的 r2，返回失败 RECORD_NOT_FOUND。
 const missing = await repository.getById('r2') // success: false, RECORD_NOT_FOUND
+// 清理本例表，true 允许已不存在，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropTable('demo_repository', true)) // cleanup of this example's table
 ```
 
@@ -485,11 +559,13 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
 
 class UserRepository extends BaseReldbCrudRepository<UserRow> {
   constructor() {
+    // 把已初始化 RelDB、表名、主键和字段映射交给基类，配置当前仓库。
     super(reldb, { table: 'users', idColumn: 'id', fields: USER_FIELDS })
   }
 
   /** 自定义查询方法 */
   async findByEmail(email: string) {
+    // 按调用方 email 参数查最多一条匹配记录，成功为数组，失败结果原样返回。
     return this.findAll({
       where: 'email = ?',
       params: [email],
@@ -500,10 +576,12 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
   async insertRaw(data: { name: string, email: string }, tx?: DmlWithTxOperations) {
     // 自定义原始写操作应先确保表已就绪（避免刚建库/建表较慢时的竞态）
+    // 无参数等待基类准备好 users 表。成功后执行写入，失败结果原样返回。
     const ready = await this.ensureReady()
     if (!ready.success)
       return ready
     const now = Date.now()
+    // sql 使用调用方事务或常规连接，execute 用姓名、邮箱和时间戳插入，返回影响行数或失败。
     return this.sql(tx).execute(
       'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',
       [data.name, data.email, now, now],
@@ -513,16 +591,22 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
 // 使用
 const repo = new UserRepository()
+// 用示例姓名与邮件创建用户，库可生成主键，执行信息包含影响行数，失败由 value 抛出。
 value(await repo.create({ name: '张三', email: 'test@example.com' }))
+// 用主键 1 查询，返回映射后的 UserRow 或 null，失败由 value 抛出。
 const user = value(await repo.findById(1)) // UserRow or null
 
 // 创建或更新（upsert）
+// 按 id 1 使用示例姓名和邮件更新或新增，返回执行信息，失败由 value 抛出。
 value(await repo.createOrUpdate({ id: 1, name: '李四', email: 'test@example.com' }))
 // id=1 已存在 → 更新 name；不存在 → 插入新记录
 
 // 同一事务中全部成功才提交；value 在脚本中把失败转为异常触发回滚。
+// 用同一事务执行下面的两次仓库写入。全部成功则提交，无业务数据，失败回滚后由 value 抛出。
 value(await reldb.tx.wrap(async (tx) => {
+  // 使用回调传入的事务创建用户 A，执行信息含影响行数，插入失败触发回滚。
   value(await repo.create({ name: '用户A', email: 'a@test.com' }, tx))
+  // 用同一事务创建用户 B，执行信息含影响行数，失败时两次写入一起回滚。
   value(await repo.create({ name: '用户B', email: 'b@test.com' }, tx))
 }))
 ```
@@ -552,26 +636,40 @@ value(await reldb.tx.wrap(async (tx) => {
 下面在开发用 SQLite 中创建一条记录，输入 ID j1 和初始 JSON。表达式只描述 SQL；执行成功后再查回完整值。各后端提取 JSON 标量的原始返回类型不同，应用需按真实数据库处理；不要把字符串引号规则写死为跨库约定。
 
 ```ts
+// 创建包含文本主键和 JSON 列的示例表，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.createTable('demo_json', {
   id: { type: 'TEXT', primaryKey: true }, payload: { type: 'JSON' },
 }))
+// 将 j1 和序列化的草稿 JSON 绑定到两个占位符，成功记录影响行数，失败由 value 抛出。
 value(await reldb.sql.execute('INSERT INTO demo_json (id, payload) VALUES (?, ?)', [
   'j1', JSON.stringify({ status: 'draft', obsolete: true }),
 ]))
+// 用当前方言为 payload 内的 $.status 生成 SQL 表达式及参数，交给下面的查询。
 const initialStatus = reldb.json.extract('payload', '$.status')
+// 用上一步表达式及绑定的记录 ID j1 查询状态，SQLite 本例返回 draft，查询失败由 value 抛出。
 value(await reldb.sql.get(`SELECT ${initialStatus.sql} AS status FROM demo_json WHERE id = ?`, [...initialStatus.params, 'j1']))
 // SQLite: { status: 'draft' }
+// 为 payload 的 $.status 赋值 paid 生成 SQL 和绑定参数。
 const changed = reldb.json.set('payload', '$.status', 'paid')
+// 将刚生成的设置表达式应用到 j1。成功 data 含影响行数，失败由 value 抛出。
 value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${changed.sql} WHERE id = ?`, [...changed.params, 'j1']))
+// 生成只在 reviewer 路径缺失时插入 Ada 的 SQL 和参数。
 const inserted = reldb.json.insert('payload', '$.reviewer', 'Ada')
+// 用上一表达式更新 j1 的缺失字段，成功返回受影响行数，失败由 value 抛出。
 value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${inserted.sql} WHERE id = ?`, [...inserted.params, 'j1']))
+// 为从 payload 删除 obsolete 路径生成 SQL 和参数。
 const removed = reldb.json.remove('payload', '$.obsolete')
+// 对 j1 应用删除表达式，成功 data 含影响行数，失败由 value 抛出。
 value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${removed.sql} WHERE id = ?`, [...removed.params, 'j1']))
+// 为版本号 2 和 reviewer 的 null 补丁生成 SQLite 合并表达式，后者移除该成员。
 const merged = reldb.json.merge('payload', { version: 2, reviewer: null })
+// 将合并表达式应用到 j1，返回影响行数，失败由 value 抛出。
 value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${merged.sql} WHERE id = ?`, [...merged.params, 'j1']))
+// 按 j1 读取最终 payload，成功得到 JSON 文本所在行或 null，失败由 value 抛出。
 const final = value(await reldb.sql.get<{ payload: string }>('SELECT payload FROM demo_json WHERE id = ?', ['j1']))
 if (final)
   JSON.parse(final.payload) // { status: 'paid', version: 2 }
+// 删除示例 JSON 表，true 允许不存在，成功无 data，失败由 value 抛出。
 value(await reldb.ddl.dropTable('demo_json', true))
 ```
 
@@ -586,6 +684,7 @@ set 创建或替换路径，insert 仅新增，remove 删除路径；merge 递�
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
+// 读取 users 全部行，成功 data 为记录数组，失败按下方错误码处理。
 const result = await reldb.sql.query('SELECT * FROM users')
 if (!result.success) {
   switch (result.error.code) {

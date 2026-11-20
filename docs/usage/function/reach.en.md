@@ -17,14 +17,18 @@ import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 
+// Create the host lifecycle with RelDB before its dependent Reach step. The returned runtime exposes start and close.
 const runtime = core.module.createRuntime([
   {
     name: 'reldb',
+    // Start in-memory SQLite for templates and delivery state. Success has no data; a database failure prevents Reach from starting.
     start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    // Close the database with no arguments after Reach. Success has undefined data.
     close: () => reldb.close()
   },
   {
     name: 'reach',
+    // Initialize the local console provider with the welcome template. Success enables sending; invalid config or template storage failure stops startup.
     start: () => reach.init({
       providers: [
         { name: 'local', type: 'console' }
@@ -38,15 +42,18 @@ const runtime = core.module.createRuntime([
         }
       ],
     }),
+    // Close Reach with no arguments so subsequent sends are unavailable. The runtime reports any cleanup failure.
     close: () => reach.close()
   },
 ])
+// Start the registered steps in dependency order. Success has undefined data; failure triggers cleanup of started steps and retains the error.
 const initialized = await runtime.start()
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 let result: Awaited<ReturnType<typeof reach.send>>
 try {
+  // Render Hello Alice for user@example.com using welcome and dispatch to the local console provider. Immediate success has deferred false or omitted; render or send errors fail.
   result = await reach.send({
     to: 'user@example.com',
     template: 'welcome',
@@ -54,11 +61,13 @@ try {
   })
 }
 catch (error) {
+  // Close Reach and SQLite in reverse order. Success has no data; report cleanup errors separately.
   const closed = await runtime.close()
   throw new AggregateError(closed.success
     ? [error]
     : [error, closed.error], 'Reach operation failed')
 }
+// Close Reach and SQLite in reverse order. Success has no data; report cleanup errors separately.
 const closed = await runtime.close()
 if (!closed.success) {
   throw new AggregateError(result.success
@@ -117,6 +126,7 @@ reach.send may contact a provider or return a queue receipt for an ordinary noti
 Ordinary messages may be durably deferred unless the caller selects reject. Sensitive messages are not automatically retried after quiet hours, expiry or unknown outcomes. Provider acceptance is not final delivery or a read receipt; reconcile unknown results before recovery.
 
 ```ts
+// Render Ada into the stored demo-welcome template for demo@example.com. A deferred receipt means queued; value throws on a template or provider error.
 const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
 // sent: SendResult for this provider attempt, not proof that a person read the message
 ```
@@ -149,11 +159,17 @@ Templates select a provider, body and subject. Render previews variable substitu
 #### Scenario: Maintain and preview templates
 
 ```ts
+// Save demo-welcome with subject Welcome and body Hello {name} for the local provider. Success has no data; value throws on persistence failure.
 value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+// Upsert the local demo-goodbye template with body Bye {name}. Success has no data; a failure does not roll back other completed writes.
 value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
+// Look up the saved demo-welcome template by name; value throws if it cannot be found.
 const template = value(await reach.template.resolve('demo-welcome')) // saved template
+// Preview demo-welcome with name Ada. The result contains body Hello Ada and the subject without sending; a missing template fails.
 const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
+// List stored templates with no arguments, including both saved entries. value throws on a lookup error.
 const templates = value(await reach.template.list()) // includes both templates
+// Delete demo-goodbye by name. Success has no data; value throws on a storage error.
 value(await reach.template.remove('demo-goodbye')) // undefined
 ```
 
@@ -177,8 +193,10 @@ Save queue IDs when sends are queued. Read their status or list dead letters for
 #### Scenario: Inspect queued and failed sends
 
 ```ts
+// Read up to 20 dead queue entries. An empty match yields an empty array; value throws on a read error.
 const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
 if (entries.length > 0) {
+  // Read the current entry for the first summary's queueId. A removed entry gives null; a query error fails.
   const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
 }
 ```
@@ -208,10 +226,13 @@ Input is an authorized operator’s externally verified decision. Isolate the ol
 import type { ReachUnknownResolution } from '@h-ai/reach'
 
 async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
+  // Read the current entry using the supplied queue receipt. A missing entry is null; only unknown proceeds to manual resolution.
   const current = value(await reach.queue.get(queueId))
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown delivery')
+  // Record the verified decision for this unknown entry without resending. Success has no data; changed state or an invalid decision fails.
   value(await reach.queue.resolveUnknown(queueId, decision))
+  // Read the same queueId after reconciliation to inspect sent or discarded. The read can independently fail.
   return value(await reach.queue.get(queueId)) // status is sent or discarded
 }
 ```

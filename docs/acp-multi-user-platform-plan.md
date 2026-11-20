@@ -178,7 +178,9 @@ Full Access 仍受组织强制拒绝、用户身份、其他用户数据、宿�
 
 ```ts
 // auth 来自服务端认证；单次任务自动管理临时会话和清理。
+// 以已认证的租户与用户建立 ACP 入口；接下来的任务只在该主体范围内运行。
 const scoped = ai.acp.scoped({ tenantId: auth.tenantId, userId: auth.userId })
+// 提交下列代理和提示，并应用本段可选策略；成功 data 是任务结果，失败原样返回错误。
 const result = await scoped.run({
   agentId: 'office-assistant',
   prompt: '总结已授权的项目资料',

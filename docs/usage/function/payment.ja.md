@@ -17,10 +17,12 @@ import { payment } from '@h-ai/payment'
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
   // 如启用 Stripe，应用已先调用 reldb.init() 打开共享数据库并检查 success。
+  // ホストが検証した trustedConfig で決済チャネルを準備する。成功時データなし、設定不正なら注文を作らない。
   const initialized = await payment.init(trustedConfig)
   if (!initialized.success)
     throw new Error(initialized.error.message)
   try {
+    // 信頼済み openid で最小通貨単位 100 の WeChat JSAPI 注文 ORD001 を作る。成功時は支払起動用の値、拒否時は照会へ進まない。
     const created = await payment.createOrder('wechat', {
       orderNo: 'ORD001',
       amount: 100,
@@ -31,12 +33,14 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     })
     if (!created.success)
       throw new Error(created.error.message)
+    // 作成した ORD001 の現在状態を WeChat に照会する。成功時は OrderStatus、照会失敗は個別に扱う。
     const query = await payment.queryOrder('wechat', 'ORD001')
     if (!query.success)
       throw new Error(query.error.message)
     return { order: created.data, status: query.data.status }
   }
   finally {
+    // 引数なしで決済モジュールの状態を解放する。チャネル上の注文は残り、DB はホストが別に閉じる。
     await payment.close() // 随后关闭应用打开的 reldb。
   }
 }
@@ -48,6 +52,7 @@ import { invokePayment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
+  // サーバーが作った注文とチャネルの値で決済を起動する。起動可否は data.invoked、不可時は message、成立はサーバーで確認する。
   const invoked = await invokePayment(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
@@ -89,9 +94,12 @@ export async function startPayment(orderData: PaymentOrder) {
 import type { PaymentProvider } from '@h-ai/payment'
 
 function installProvider(provider: PaymentProvider) {
+  // 受け取ったチャネルを provider.name で登録し、同名の実装があれば置き換える。戻り値はない。
   payment.registerProvider(provider)
+  // 登録した名前から同じチャネルを取得する。登録のない名前なら undefined。
   return payment.getProvider(provider.name) === provider // true
 }
+// 未登録の not-registered を検索する。結果は undefined。
 payment.getProvider('not-registered') // undefined
 ```
 
@@ -117,14 +125,17 @@ payment.getProvider('not-registered') // undefined
 
 ```ts
 async function inspectAndClose(providerName: string, orderNo: string) {
+  // 業務記録のチャネル名と加盟店注文番号で状態を照会する。成功時は注文状態、照会失敗はそのまま返す。
   const queried = await payment.queryOrder(providerName, orderNo)
   if (!queried.success)
     return queried
   if (queried.data.status !== 'pending')
     return queried
+  // 直前の照会で pending だった注文だけを閉じる。成功時に業務データはなく、チャネルが拒否した場合は失敗を返す。
   const closed = await payment.closeOrder(providerName, orderNo)
   if (!closed.success)
     return closed
+  // 閉じたあとに同じチャネルと注文番号で再照会する。返った状態で確認し、再照会の失敗も個別に扱う。
   return payment.queryOrder(providerName, orderNo)
 }
 ```
@@ -147,6 +158,7 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 ```ts
 async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  // 加盟店注文番号と保存済みの返金番号で最小通貨単位 100 の返金を申請する。受理後も processing の場合があり、拒否は失敗。同じ返金の再試行では番号を再利用する。
   const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
   if (!refunded.success)
     return refunded
@@ -178,6 +190,7 @@ async function refundOrder(providerName: string, orderNo: string, refundNo: stri
 
 ```ts
 async function verifyNotification(providerName: string, request: Request) {
+  // チャネル名、未変更の HTTP 本文とヘッダーで通知を検証・解析する。成功時はイベント ID と注文・支払状態を取得し、署名不正は失敗。履行前に状態確認と重複排除を行う。
   return payment.handleNotify(providerName, {
     body: await request.text(),
     headers: Object.fromEntries(request.headers),

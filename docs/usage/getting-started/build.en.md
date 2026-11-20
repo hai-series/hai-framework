@@ -50,6 +50,7 @@ Deploy all three files under the same site path. Test a simulated old browser wh
 The root `package.json` supplies the project name and version. An image batch goes under `.hai/build/docker/build-<project>-image-<buildId>/`. The manifest records roles, platform, the checksum, and whether the batch is partial. A successful export advances the local `latest` pointer. Rebuilding the same version creates a different build ID.
 
 ```sh
+# Build the current project image and print the build result as JSON for automation.
 hai build --target image --json
 ```
 

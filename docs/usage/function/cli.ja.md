@@ -13,7 +13,9 @@
 ```sh
 pnpm view @h-ai/cli@latest version # 查询注册表，输出最新已发布版本。
 pnpm add -g @h-ai/cli@latest # 将该 CLI 安装到 pnpm 的全局目录。
+# Prints the installed CLI version selected by PATH. A missing executable fails before version output.
 hai --version # 确认当前 PATH 实际调用的 CLI 版本。
+# Creates my-app from the fullstack template with its web frontend. Invalid options or a conflicting destination stop creation.
 hai create my-app --type fullstack --frontends web # 输入应用名、模板和前端目标，生成 my-app。
 cd my-app # 进入刚生成的工程目录。
 pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
@@ -48,9 +50,12 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 生成ではコード・設定・AI skills を出力し、選択時だけ依存関係を導入します。DB・Cache・Secret・配置先は別途準備が必要です。導入に失敗しても生成済みファイルが残るため、対象ディレクトリを確認します。
 
 ```sh
+# Creates demo-app from the website template with default answers. Installation and Git initialization are skipped. An existing destination can stop creation.
 hai create demo-app --type website --defaults --no-install --no-git
 cd demo-app
+# Adds AI and its required module configuration to demo-app. Invalid project or feature prerequisites stop the update.
 hai add ai --no-install
+# Refreshes the project's AI skills and entry files. A missing or unsupported project layout yields a diagnostic.
 hai init
 ```
 
@@ -89,10 +94,15 @@ demo-app・website・ai を指定し、工程・設定・skill を得ます。�
 #### 利用例：業務の雛形を生成する
 
 ```sh
+# Generates the dashboard page in the current file-routed app. A conflicting file or unsupported project fails.
 hai generate page dashboard
+# Generates an orders page through the page alias. Existing files are protected.
 hai g:page orders
+# Generates the OrderList Svelte component. A colliding path stops generation.
 hai g:component OrderList
+# Generates the orders API in the selected orders-serv workspace. An unresolved workspace or conflicting output fails.
 hai g:api orders --workspace orders-serv
+# Generates the order model skeleton. A missing target module or conflicting file stops the generator.
 hai g:model order
 ```
 
@@ -115,7 +125,9 @@ hai g:model order
 #### 利用例：コンパイルと梱包
 
 ```sh
+# Compiles the app in the current workspace and writes its configured build output. A compile error exits nonzero.
 hai build --target compile
+# Builds container artifacts and emits metadata JSON including artifactDir. Engine or build failure exits nonzero.
 hai build --target image --json
 ```
 
@@ -138,6 +150,7 @@ hai build --target image --json
 #### 利用例：計画と配布
 
 ```sh
+# Reads the production settings and prints a read-only deployment plan as JSON. Missing configuration exits nonzero.
 hai deploy --env prod --plan
 ```
 
@@ -162,9 +175,13 @@ prod を入力し計画 JSON を得ます。--plan は実際に配置しませ�
 #### 利用例：ヘルプ・更新・診断の確認
 
 ```sh
+# Prints the CLI version found on PATH.
 hai --version
+# Prints the top-level command list and global switches.
 hai --help
+# Prints the deployment command's arguments and switches.
 hai deploy --help
+# Reads the existing feedback.zip and prints its summary. An invalid or unreadable archive fails.
 hai feedback summary feedback.zip
 ```
 

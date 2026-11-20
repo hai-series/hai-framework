@@ -19,6 +19,7 @@
 ```ts
 import { ai } from '@h-ai/ai'
 
+// 用环境中的密钥初始化 gpt-4o-mini；成功无数据并启用 LLM，配置或初始化失败不发请求。
 const init = await ai.init({
   llm: {
     model: 'gpt-4o-mini',
@@ -29,6 +30,7 @@ if (!init.success)
   throw new Error(init.error.message)
 
 try {
+  // 把下方一条用户消息发给已配置模型；成功从 choices 中读取回答，上游失败进入错误分支。
   const result = await ai.llm.chat({
     messages: [
       { role: 'user', content: '你好！' }
@@ -39,6 +41,7 @@ try {
   const reply = result.data.choices[0]?.message.content ?? ''
 }
 finally {
+  // 无参释放 AI 自有资源，不返回业务数据；宿主提供的数据库等由宿主另行关闭。
   await ai.close()
 }
 ```
@@ -110,10 +113,12 @@ function value<T>(result: HaiResult<T>): T {
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
+// 用应用的 API 基地址初始化客户端，成功无数据；配置无效不发 LLM 请求。
 const ready = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
 if (!ready.success)
   throw new Error(ready.error.message)
 try {
+  // 把下方用户消息发给宿主 Chat API；成功从 choices 读取模型回复，HTTP 或服务失败由结果承载。
   const response = await apiClient.ai.chats.createCompletion({
     messages: [
       { role: 'user', content: '你好' }
@@ -124,6 +129,7 @@ try {
   const reply = response.data.choices[0]?.message.content
 }
 finally {
+  // 无参关闭当前 API 客户端，完成后 Promise 无业务数据。
   await apiClient.close()
 }
 ```
@@ -142,17 +148,21 @@ import { vecdb } from '@h-ai/vecdb'
 // 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
 const failures: unknown[] = []
 try {
+  // 用开发文件 ai.db 启动 SQLite，成功无数据，失败时不初始化后续依赖。
   const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
   if (!database.success)
     throw new Error(database.error.message)
+  // 用开发路径 ai-vec.db 准备 LanceDB，成功无数据，失败时停止 AI 初始化。
   const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
   if (!vectors.success)
     throw new Error(vectors.error.message)
+  // 在已准备的 RelDB 和 VecDB 上以环境密钥启动 gpt-4o-mini；配置或依赖失败时不发请求。
   const initialized = await ai.init({
     llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
   })
   if (!initialized.success)
     throw new Error(initialized.error.message)
+  // 把下方一条用户消息发给已配置模型；成功从 choices 中读取回答，上游失败进入错误分支。
   const result = await ai.llm.chat({
     messages: [
       { role: 'user', content: 'Hello!' }
@@ -166,8 +176,10 @@ catch (error) {
   failures.push(error)
 }
 finally {
+  // 无参释放 AI 自有资源，不返回业务数据；宿主提供的数据库等由宿主另行关闭。
   await ai.close()
   for (const service of [vecdb, reldb]) {
+    // 依次关闭宿主拥有的 VecDB 和 RelDB；成功无数据，清理失败加入独立的汇总错误。
     const closed = await service.close()
     if (!closed.success)
       failures.push(new Error(closed.error.message))
@@ -190,6 +202,7 @@ import type { AIStoreProvider } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
 export function startWithStore(storeProvider: AIStoreProvider) {
+  // 用环境密钥和 gpt-4o-mini 初始化，并使用调用方注入的 Store；成功无数据，配置或依赖失败返回错误。
   return ai.init(
     { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
     { storeProvider },
@@ -249,15 +262,20 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 #### 场景：对话、结构化结果与模型
 
 ```ts
+// 把订单状态问题送到默认模型，返回完整 completion，正文位于 choices；模型错误由 value 抛出。
 const reply = value(await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] }))
 const text = reply.choices[0]?.message.content // model-generated text, not a fixed literal
+// 把 pending 的问题交给默认模型，直接得到回答字符串，上游失败由 value 抛出。
 const answer = value(await ai.llm.ask('What does pending mean?')) // string answer
+// 以 Hello 启动默认模型的流式请求，迭代得到 completion 增量块；连接或生成错误从流抛出。
 for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] })) {
   const delta = chunk.choices[0]?.delta?.content // incremental text when present
 }
+// 用纯文本 Hello 请求流式回答，每轮取得文本增量；上游错误终止迭代并抛出。
 for await (const delta of ai.llm.askStream('Hello')) {
   // consume each returned text fragment; handle stream errors outside the loop
 }
+// 无参读取当前模型目录，返回模型列表；目录读取失败由 value 抛出。
 const models = value(await ai.llm.listModels()) // configured model summaries
 ```
 
@@ -269,7 +287,9 @@ const models = value(await ai.llm.listModels()) // configured model summaries
 import { HaiAIError } from '@h-ai/ai'
 
 const messages = [{ role: 'user' as const, content: 'Hello' }]
+// 把 messages 中的 Hello 发给默认模型；成功返回 completion，未初始化或服务失败时返回 error。
 const result = await ai.llm.chat({ messages })
+// 用同一 Hello 消息开启流并读取 choices 的正文增量；上游异常从迭代器抛出。
 for await (const chunk of ai.llm.chatStream({ messages })) {
   const delta = chunk.choices[0]?.delta?.content
   if (delta) {
@@ -279,6 +299,7 @@ for await (const chunk of ai.llm.chatStream({ messages })) {
 
 // 请求取消：传入 AbortSignal，主持人打断/用户切换时 abort() 立即请求上游停止生成
 const controller = new AbortController()
+// 为 Hello 请求传入控制器的信号，返回待完成的 HaiResult；触发取消后本调用不再等待生成结果。
 const cancellable = ai.llm.chat({ messages, signal: controller.signal })
 // controller.abort()
 
@@ -286,10 +307,12 @@ const cancellable = ai.llm.chat({ messages, signal: controller.signal })
 // - chat（默认）：OpenAI Chat Completions（兼容绝大多数厂商）
 // - responses：OpenAI Responses API（/v1/responses）
 // - anthropic：Anthropic Messages API（Claude 原生协议，环境变量 ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL）
+// 把 Hello 发给配置 ID 为 claude 的模型，仍按公共 completion 形状读取结果；找不到或上游失败时返回错误。
 const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配置 protocol: anthropic
 
 // 临时模型：单次请求绕过配置注册模型，直接指定端点与凭据（chat/chatStream/ask/askStream 均支持）
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
+// 将 Hello 送往本次临时指定的 Claude 模型，认证取自 TEMP_LLM_API_KEY；成功返回 completion，临时配置或请求失败则返回错误。
 const temp = await ai.llm.chat({
   messages,
   tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: process.env.TEMP_LLM_API_KEY },
@@ -307,6 +330,7 @@ import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 已初始化 AI，llm 使用支持通用 JSON 模式的文本模型。
+// 对下方用户提示生成符合 Zod title 字段的对象；成功即验证后的 data，解析或校验在一次修复后仍失败则返回 error。
 const result = await ai.llm.generateObject({
   schema: z.object({
     title: z.string()
@@ -328,10 +352,15 @@ if (result.success)
 
 ```ts
 async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.register>[0]) {
+  // 将调用方的完整语言模型定义保存为数据库条目，取得语言模型版本；ID 重复或为静态配置时失败。
   const created = value(await ai.llm.models.register(definition))
+  // 无参读取静态配置与数据库合并的语言模型目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.llm.models.list())
+  // 按刚保存的 ID 读回语言模型定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.llm.models.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的语言模型定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.llm.models.update(definition, current.version))
+  // 按最新版本删除示例语言模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.llm.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -367,11 +396,13 @@ import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 export async function runExample(objectId: string) {
+  // 创建只允许 orders-operator 调用 order_status 的空注册器。
   const registry = tools.createRegistry({
     // 演示规则：只有服务端传入的订单操作员可执行。
     authorize: ({ toolName, context }) => context.objectId === 'orders-operator'
       && toolName === 'order_status',
   })
+  // 用下方处理器定义 order_status，再登记到注册器；定义不合法会抛错，注册同名失败，成功无数据。
   const registered = registry.register(tools.define({
     name: 'order_status',
     description: 'Look up the status of an order',
@@ -382,7 +413,9 @@ export async function runExample(objectId: string) {
   if (!registered.success)
     return registered
 
+  // 把已注册工具及其授权入口适配成模型可执行对象；适配不会执行工具。
   const modelTools = ai.tools.adapt(registry)
+  // 将模型发出的 order_status JSON 参数按已认证的 objectId 执行，order-42 返回 shipped；参数或授权失败不调用处理器。
   return modelTools.execute({
     id: 'call-order-42',
     type: 'function',
@@ -419,16 +452,27 @@ export async function runExample(objectId: string) {
 输入是一份事件文本和实际聊天流。decode 会等待空行再输出事件；collect 完整读取模型流，失败拒绝 Promise。
 
 ```ts
+// 把 ready 数据编码为一个 SSE 文本帧，未指定 event 时使用默认事件。
 const encoded = ai.stream.encodeSSE({ data: 'ready' })
+// 无参创建独立 SSE 解码器，能够在多次输入之间保留未完整帧。
 const decoder = ai.stream.createSSEDecoder()
+// 传编码文本的前五个字符，只有部分帧，所以此步不产出事件。
 const first = [...decoder.decode(encoded.slice(0, 5))] // []
+// 传剩余字符完成上一帧，产出 data 为 ready 的默认 message 事件。
 const second = [...decoder.decode(encoded.slice(5))] // [{ event: 'message', data: 'ready', ... }]
+// 无参清空解码器缓冲，使下一条流不继承此前残留。
 decoder.reset()
+// 无参创建一个 completion 分块累积器，初始未收集文本或调用。
 const processor = ai.stream.createProcessor()
+// 处理模拟的 Hello 终止分块，累积正文与 stop 完成原因。
 processor.process({ id: 'demo', object: 'chat.completion.chunk', created: 0, model: 'configured-model', choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: 'stop' }] })
+// 无参读取当前已累积的 Hello 文本和可用用量或工具调用。
 processor.getResult() // accumulated text and optional usage/tool calls
+// 无参把当前累积内容转为助手消息，本例正文是 Hello。
 processor.toAssistantMessage() // assistant message containing Hello
+// 无参丢弃已累积的文本和工具调用，以便处理下一条流。
 processor.reset()
+// chatStream 把 Hello 发到默认模型，collect 读取这些增量直到完成并返回汇总；流异常拒绝 Promise。
 const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] }))
 // collected contains the full stream result; text is produced by the model.
 ```
@@ -450,8 +494,11 @@ const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role:
 #### 场景：生成文本向量
 
 ```ts
+// 将指定订单安装文字送给嵌入模型，data 是单个数值向量；上游失败由 value 抛出。
 const one = value(await ai.embedding.embedText('Order installation guide')) // number[]
+// 批量嵌入 Install 与 Refund，返回对应的两个向量，模型失败由 value 抛出。
 const batch = value(await ai.embedding.embedBatch(['Install', 'Refund'])) // vectors in input order
+// 用相同文本读取完整嵌入响应，其中 data 项包含向量与索引；请求失败由 value 抛出。
 const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] })) // model, data, usage
 ```
 
@@ -493,7 +540,9 @@ const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] }
 import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
 import { z } from 'zod'
 
+// 用 my-server/1.0.0 创建独立 MCP Server 供登记工具，尚未连接传输。
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+// 为 MCP 登记接收字符串 query 的 search，处理器返回含该查询的文本块；重复名称等无效登记会抛错。
 server.registerTool('search', {
   description: '搜索',
   inputSchema: {
@@ -504,6 +553,7 @@ server.registerTool('search', {
     { type: 'text', text: `Results for ${query}` }
   ],
 }))
+// 用下方随机会话 ID 生成器创建 HTTP 传输并连接 MCP Server；成功后可接收请求，连接失败拒绝 Promise。
 await server.connect(new StreamableHTTPServerTransport({
   sessionIdGenerator: () => globalThis.crypto.randomUUID()
 }))
@@ -529,6 +579,7 @@ import type { MCPServiceAuthorization } from '@h-ai/ai' // 应用从 IAM 构造�
 import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 与 office 服务。
 
 async function searchManual(access: MCPServiceAuthorization, query: string) {
+  // 按宿主 access 运行下方目录中已登记的工具，成功返回 MCP 工具结果；授权或上游失败时保留错误。
   const result = await ai.mcp.services.invoke({
     serviceId: 'manual',
     tool: 'search_manual',
@@ -540,6 +591,7 @@ async function searchManual(access: MCPServiceAuthorization, query: string) {
 }
 
 async function convertDocument(access: MCPServiceAuthorization, fileId: string) {
+  // 按宿主 access 运行下方目录中已登记的工具，成功返回 MCP 工具结果；授权或上游失败时保留错误。
   const result = await ai.mcp.services.invoke({
     serviceId: 'office',
     tool: 'office.convert',
@@ -557,17 +609,20 @@ import { createServer } from 'node:http' // 提供示例 HTTP 请求入口。
 import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 服务。
 
 function mountTools(options: MCPServiceBrokerOptions) {
+  // 传入部署地址和可信权限复核策略创建 Broker，成功得到 bind、handleRequest 与 close，配置错误阻止挂载。
   const result = ai.mcp.services.createBroker(options) // 成功返回 bind、handleRequest 和 close。
   if (!result.success)
     throw new Error(result.error.message)
   const broker = result.data // 每个执行节点创建自己的入口。
   const server = createServer((req, res) => {
+    // 用宿主 HTTP 请求/响应处理 Broker 协议，绑定或授权失败时由 Broker 返回错误响应。
     void broker.handleRequest(req, res)
   }) // 处理绑定地址上的 MCP 请求。
   return { broker, server } // 应用服务器监听固定地址，并通过 HTTPS 保护传输，关闭时调用 broker.close() 和 server.close()。
 }
 
 async function bindManual(broker: ReturnType<typeof mountTools>['broker'], principal: MCPServiceAuthorization['principal'], sessionId: string, signal: AbortSignal) {
+  // 把可信主体及当前 sessionId 绑定到 manual_search，信号结束可撤销。成功返回 MCP servers 与 revoke，失败不下发凭据。
   const result = await broker.bind({
     principal,
     taskId: sessionId,
@@ -602,10 +657,15 @@ async function bindManual(broker: ReturnType<typeof mountTools>['broker'], princ
 
 ```ts
 async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers.register>[0]) {
+  // 将调用方的完整MCP 服务定义保存为数据库条目，取得MCP 服务版本；ID 重复或为静态配置时失败。
   const created = value(await ai.mcp.servers.register(definition))
+  // 无参读取静态配置与数据库合并的MCP 服务目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.mcp.servers.list())
+  // 按刚保存的 ID 读回MCP 服务定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.mcp.servers.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的MCP 服务定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.mcp.servers.update(definition, current.version))
+  // 按最新版本删除示例MCP 服务条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.mcp.servers.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -638,15 +698,21 @@ async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers
 先准备与 embedding 维度匹配并已入库的 manual 集合，再登记 docs。结果分数由实际后端决定；移除来源不删除文档。
 
 ```ts
+// 登记指向 manual 向量集合的 docs 源，成功无数据；重复 ID 会失败。
 value(await ai.retrieval.addSource({ id: 'docs', collection: 'manual' }))
 try {
+  // 无参读取当前检索源数组，本例已含 docs；这里直接返回数组。
   const sources = await ai.retrieval.listSources() // direct RetrievalSource[]
+  // 只在 docs 查询 deployment 的最多五个候选，结果含匹配项和引用；来源不可用或检索失败由 value 抛出。
   const found = value(await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 }))
+  // 用 deployment 作为相关性查询重排两篇固定候选，返回排序项及分数；模型失败由 value 抛出。
   const ranked = value(await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] }))
+  // 以相同查询对两篇文本重排，只返回最高分的一条正文。
   const texts = value(await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1))
   // found has source candidates; ranked/texts carry original indexes and relevance scores.
 }
 finally {
+  // 删除本例登记的 docs 源，成功无业务数据；找不到源会失败。
   value(await ai.retrieval.removeSource('docs'))
 }
 ```
@@ -658,10 +724,15 @@ finally {
 
 ```ts
 async function maintain_retrieval_sources(definition: Parameters<typeof ai.retrieval.sources.register>[0]) {
+  // 将调用方的完整检索源定义保存为数据库条目，取得检索源版本；ID 重复或为静态配置时失败。
   const created = value(await ai.retrieval.sources.register(definition))
+  // 无参读取静态配置与数据库合并的检索源目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.retrieval.sources.list())
+  // 按刚保存的 ID 读回检索源定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.retrieval.sources.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的检索源定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.retrieval.sources.update(definition, current.version))
+  // 按最新版本删除示例检索源条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.retrieval.sources.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -683,8 +754,10 @@ async function maintain_retrieval_sources(definition: Parameters<typeof ai.retri
 #### 场景：基于来源回答并引用
 
 ```ts
+// 从 docs 检索部署信息并交给模型作答，结果含答案、上下文和引用，检索或模型失败由 value 抛出。
 const answer = value(await ai.rag.query('How do I deploy?', { sources: ['docs'] }))
 // answer contains answer, context, citations, query and model
+// 对同一部署问题和 docs 源流式查询，依次消费检索上下文、文本增量及结束事件。
 for await (const event of ai.rag.queryStream('How do I deploy?', { sources: ['docs'] })) {
   // Render only events applicable to the UI; preserve citation events as references.
 }
@@ -724,14 +797,23 @@ docs 必须是已登记且可访问的来源。回答文字不固定，引用指
 新修订只有发布成功后才成为检索使用的当前版本。旧向量清理失败时，成功结果可能带 cleanupPending，由 repair 后续补偿；删除则先撤销可见性再清理。搜索必须核对已发布版本，不能把向量库中仍存在的旧块重新当成当前资料。
 
 ```ts
+// 无参创建默认知识集合和版本清单，成功无数据；初始化失败不导入文档。
 value(await ai.knowledge.setup())
+// 把配置更新后重启的说明按 demo-intro 导入，成功返回已发布版本、分块及 cleanupPending。
 const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
+// 在默认知识库检索重启条件，返回相关片段及引用，存储不可用等失败由 value 抛出。
 const matches = value(await ai.knowledge.retrieve('When should the service restart?'))
+// 以相同问题在检索上下文上生成回答，返回答案与信源；检索或模型失败由 value 抛出。
 const answer = value(await ai.knowledge.ask('When should the service restart?'))
+// 无参读默认集合的可见文档清单，本例包含 demo-intro。
 const documents = value(await ai.knowledge.listDocuments())
+// 无参读取导入产生的实体列表，实际项由提取结果决定。
 const entities = value(await ai.knowledge.listEntities())
+// 按 service 实体查询关联文档，没有匹配时列表可为空。
 const related = value(await ai.knowledge.findByEntity('service'))
+// 按导入时的 ID 删除文档的可见版本，成功无业务数据；清理失败按错误处理。
 value(await ai.knowledge.removeDocument('demo-intro')) // no longer visible to retrieval
+// 从偏移 0 恢复至多 100 条清单的过期暂存或旧向量清理，返回恢复进度。
 const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // cleanup progress
 ```
 
@@ -780,18 +862,29 @@ Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其�
 
 ```ts
 async function rememberPreference(objectId: string) {
+  // 把服务端主体与 demo-preference 主题绑定到记忆实例，后续调用自动带此范围。
   const memory = ai.memory.scoped({ objectId, scope: { topicId: 'demo-preference' } })
+  // 在绑定范围内写入中文回复偏好，返回完整记忆及 ID；写入或向量生成失败由 value 抛出。
   const saved = value(await memory.add({ content: 'Prefers Chinese replies', type: 'preference' }))
   const access = { objectId, scope: { topicId: 'demo-preference' } }
+  // 用写入返回的 ID 和同一主体/主题读记忆；不存在或范围不符时失败。
   value(await ai.memory.get(saved.id, access))
+  // 按同一范围把已存偏好改为日语回复，成功返回重算向量后的记忆；无权或更新失败由 value 抛出。
   value(await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access))
+  // 在绑定范围内按 language preference 搜索，返回相关记忆列表，没有匹配时为空。
   const recalled = value(await memory.recall('language preference'))
   const messages = [{ role: 'user' as const, content: 'Hello' }]
+  // 用同一主体和主题向 Hello 消息副本注入相关记忆，返回新的消息列表。
   const enriched = value(await ai.memory.injectMemories(messages, access))
+  // 分析 Hello 消息并把可提取的事项存入同一范围，返回成功提取的记忆数组，可能为空。
   const extracted = value(await ai.memory.extract(messages, access))
+  // 使用相同主体和主题查当前记忆列表；读错由 value 抛出。
   const all = value(await ai.memory.list(access))
+  // 从绑定范围的偏移 0 读取最多 20 项及分页信息。
   const page = value(await ai.memory.listPage({ ...access, offset: 0, limit: 20 }))
+  // 以写入返回的 ID 在同一作用域删除已存偏好，成功无数据，范围不符时失败。
   value(await ai.memory.remove(saved.id, access))
+  // 仅清除绑定主体/主题里的剩余 preference 记录，成功无数据。
   value(await memory.clear({ types: ['preference'] }))
   return { recalled, enriched, extracted, all, page }
 }
@@ -804,11 +897,13 @@ async function rememberPreference(objectId: string) {
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
+// 针对下方的主体和会话创建 ContextManager，成功返回用于会话的实例，选项或依赖不可用时失败。
 const created = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' }
 })
 if (!created.success)
   return created
+// 用长期范围 user-001/xiaoq 固化当前会话，成功返回摘要与写入的记忆；依赖失败返回错误。
 const result = await created.data.consolidate({
   scope: { userId: 'user-001', personaId: 'xiaoq' }
 })
@@ -846,11 +941,17 @@ if (result.success) {
 ```ts
 async function usePersona(objectId: string) {
   const access = { objectId }
+  // 为当前主体保存带英文系统提示的 demo-tutor 档案，成功返回完整档案；持久化失败由 value 抛出。
   value(await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' }))
+  // 在同一主体范围按 ID 读取该档案，找不到时由 value 抛出。
   value(await ai.persona.get('demo-tutor', access))
+  // 仅把该主体的 demo-tutor 显示名改为 Order tutor，成功返回更新档案。
   value(await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access))
+  // 列出当前主体全部角色档案，包含刚更新的一项。
   const profiles = value(await ai.persona.list(access))
+  // 按当前主体和 ID 组合系统提示词，成功返回字符串；档案不存在会失败。
   const prompt = value(await ai.persona.compose('demo-tutor', access))
+  // 删除当前主体下本例创建的档案，成功无数据。
   value(await ai.persona.remove('demo-tutor', access))
   return { profiles, prompt }
 }
@@ -862,6 +963,7 @@ Memory 用 `objectId` / `scope` 回答「谁的记忆」；Persona 回答「AI �
 稳定的系统提示词与性格特征，并通过 `scope: { personaId }` 关联其长期记忆：
 
 ```ts
+// 用下方中文系统提示和特征创建或覆盖系统角色 xiaoq；返回保存后的档案，失败由 value 抛出。
 value(await ai.persona.save({
   id: 'xiaoq',
   name: '小Q',
@@ -870,9 +972,11 @@ value(await ai.persona.save({
 }))
 
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
+// 按 xiaoq 读取系统作用域档案并组合系统提示词；成功返回字符串，不存在时保留失败。
 const composed = await ai.persona.compose('xiaoq')
 if (!composed.success)
   return composed
+// 用下方主体、会话和管理设置创建 ContextManager，返回可发起对话的实例；选项无效时不创建。
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
@@ -906,7 +1010,9 @@ const manager = ai.context.createManager({
 
 ```ts
 const messages = [{ role: 'user' as const, content: 'Order is pending.' }]
+// 估算该文本的 token 数，不调用模型，数值为近似。
 const textTokens = ai.token.estimateText('Order is pending.') // estimate number
+// 对上面单条用户消息估算 token，还计入消息结构开销。
 const messageTokens = ai.token.estimateMessages(messages) // estimate including message overhead
 ```
 
@@ -966,6 +1072,7 @@ const messageTokens = ai.token.estimateMessages(messages) // estimate including 
 自定义 `AIRelStore` 必须提供 `readVersioned`、`compareAndSwap` 和存储端 `currentTime`；普通 save/saveMany 也要更换不可复用版本。CAS 的 `expectedVersion: undefined` 仅创建，`notAfter` 在最终写入以存储时钟严格检查，冲突/截止返回 undefined，存储故障抛错。默认 PostgreSQL/MySQL/SQLite 实现均执行这些条件；SQLite 仅供开发/测试，生产使用 PostgreSQL/MySQL。新 schema 含 version 列，不提供旧表自动迁移。
 
 ```ts
+// 用下方主体、会话和管理设置创建 ContextManager，返回可发起对话的实例；选项无效时不创建。
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
   compress: { auto: true, strategy: 'hybrid', maxTokens: 8000 },
@@ -973,11 +1080,14 @@ const manager = ai.context.createManager({
   concurrency: 'reject', // 单活动生成（默认）：活动生成期间的新 chat 返回 CONTEXT_BUSY；'queue' 则排队
 })
 if (manager.success) {
+  // 用已创建会话发出你好，成功返回一轮回复；并发生成被拒或上游失败时返回错误。
   const reply = await manager.data.chat('你好')
+  // 无参把当前会话内容保存至存储，成功无业务数据；持久化失败则返回错误而不继续重置。
   const saved = await manager.data.save()
   if (!saved.success)
     return saved
   // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
+  // 无参重置这次会话，清空消息和轮次、保留系统提示词，结果为 HaiResult。
   await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }
 ```
@@ -999,6 +1109,7 @@ async function runSpokenTurn(playback: {
   stop: () => void
   spokenText: () => string
 }, signal: AbortSignal) {
+  // 针对下方的主体和会话创建 ContextManager，成功返回用于会话的实例，选项或依赖不可用时失败。
   const created = ai.context.createManager({
     scope: { objectId: 'user-001', sessionId: 'sess-001' },
     turnCommit: 'manual',
@@ -1007,8 +1118,10 @@ async function runSpokenTurn(playback: {
     return created
   const manager = created.data
 
+  // 发送请展开讲讲并传入调用方取消信号；流返回轮次开始、生成增量与结束/取消事件，生成完成尚不等于播放完成。
   for await (const event of manager.chatStream('请展开讲讲', { signal })) {
     if (event.type === 'turn_started') {
+      // 用开始事件给出的 turnId 标记表达中，成功无数据；轮次不存在时失败。
       value(await manager.markTurnSpeaking(event.turnId))
     }
     else if (event.type === 'delta') {
@@ -1018,14 +1131,18 @@ async function runSpokenTurn(playback: {
       await playback.finish() // 等到音频实际播放完，再记录确实说出的文字。
       const spoken = { text: playback.spokenText() }
       value(await (signal.aborted
+        // 信号已停止时，用本轮 ID 和播放器实际已播文本登记 interrupted。
         ? manager.interruptTurn(event.turnId, spoken)
+        // 未取消时，用相同轮次和实际已播文本提交为 completed；过期或冲突通过 value 抛出。
         : manager.commitTurn(event.turnId, spoken)))
     }
     else if (event.type === 'cancelled') {
       playback.stop()
+      // 收到取消事件后，用该轮 ID 和播放器已播出的部分保留实际表达，未播文本不提交。
       value(await manager.interruptTurn(event.turnId, { text: playback.spokenText() }))
     }
   }
+  // 无参读取这一会话发生顺序的轮次，分别显示已生成、已提交的文本及状态。
   return manager.getTurns() // HaiResult：各轮的 generated / committed / status。
 }
 ```
@@ -1059,6 +1176,7 @@ Node 在 Worker 中调用已安装的 PDF 和 DOCX 解析器，也将大 HTML �
 #### 场景：解析文本与文件
 
 ```ts
+// 把给定订单状态纯文本解析为统一文档结果；文本在解析结果中，失败由 value 抛出。
 const plain = value(await ai.file.parseText('Order status: pending.')) // parsed text result
 ```
 
@@ -1119,6 +1237,7 @@ run 输入问题和选项输出推理结果，runStream 对同类请求输出事
 平台（`provider`）表示调用协议而非部署位置：`openai` / `mimo` / `qwen` / `doubao` 为云服务；`whisper`（ASR）/ `indextts`（TTS）为可自托管协议，无 canonical 端点，必须显式配置 `baseUrl`，同一协议可切换多个 Endpoint（云 / 内网 / 本地）而不改业务代码。云平台缺少凭据返回 `CONFIGURATION_ERROR`；自托管平台可无凭据（配置 `apiKey` 后按 `Authorization: Bearer` 发送）。
 
 ```ts
+// 用下方实时和自托管配置初始化语音模型，默认识别 asr、合成 tts；配置错误时不开始会话。
 const initializedAudio = await ai.init({
   llm: {
     apiKey: process.env.HAI_AI_LLM_APIKEY,
@@ -1163,6 +1282,7 @@ if (!initializedAudio.success)
   throw new Error(initializedAudio.error.message)
 
 // 实时会话启动前按操作校验模型能力
+// 按合成操作检查配置 ID tts 的能力，成功读到流式音频开关；模型未知或不支持操作时失败。
 const caps = ai.audio.getCapabilities({ operation: 'synthesize', model: 'tts' })
 if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 TTS */ }
 ```
@@ -1173,6 +1293,7 @@ if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 T
 import type { AudioContent } from '@h-ai/ai'
 
 async function transcribeFile(wavBytes: Uint8Array) {
+  // 将调用方 WAV 字节送往 whisper，要求中文、语音检测及段/字级时间戳；成功返回转录结果，模型或输入失败返回错误。
   return ai.audio.transcribe({
     audio: { data: wavBytes, format: 'wav' },
     language: 'zh',
@@ -1184,6 +1305,7 @@ async function transcribeFile(wavBytes: Uint8Array) {
 }
 
 async function cloneVoice(speakerWav: AudioContent, styleWav: AudioContent) {
+  // 把下方文本和讲话人/风格参考交给 indextts，目标约 3280 毫秒；成功含音频和时长匹配状态，不触发播放。
   return ai.audio.synthesize({
     text: '我们下午三点出发。', language: 'zh', model: 'indextts',
     speakerReference: { audio: speakerWav, language: 'ja' },
@@ -1205,6 +1327,7 @@ async function readMicrophone(
   onEvent: (event: TranscriptionEvent) => Promise<void>,
   signal: AbortSignal,
 ) {
+  // 把采集器的 16 kHz 单声道 PCM16 分块和取消信号交给流式识别，得到转录或语音边界事件；上游失败从流抛出。
   for await (const event of ai.audio.transcribeStream({
     audio: { chunks, format: 'pcm16', sampleRate: 16000, channels: 1 }, signal,
   })) {
@@ -1213,6 +1336,7 @@ async function readMicrophone(
 }
 
 async function streamSpeech(onEvent: (event: SynthesisEvent) => Promise<void>, signal: AbortSignal) {
+  // 用 answer-1 文本、Cherry 音色、语气提示和取消信号合成音频。迭代收到分段与音频事件，上游失败从流抛出。
   for await (const event of ai.audio.synthesizeStream({
     text: { id: 'answer-1', text: '欢迎参加访谈。' },
     voice: 'Cherry', instruction: '用轻快的语气', signal,
@@ -1230,9 +1354,11 @@ async function streamSpeech(onEvent: (event: SynthesisEvent) => Promise<void>, s
 import { ai, serializePlayableAudio } from '@h-ai/ai'
 
 export async function createPreviewAudio(text: string) {
+  // 用默认合成模型和 Cherry 音色合成调用方传入的文本，成功得到音频字节与格式；上游失败直接返回。
   const synthesized = await ai.audio.synthesize({ text, voice: 'Cherry' })
   if (!synthesized.success)
     return synthesized
+  // 把合成成功的字节编码成可通过 JSON 传输的音频 DTO；格式或内容不合法时返回失败。
   return serializePlayableAudio(synthesized.data)
 }
 ```
@@ -1270,10 +1396,15 @@ async function prepareAudio(recorded: Blob) { // 输入浏览器采集且可被 
 
 ```ts
 async function maintain_audio_models(definition: Parameters<typeof ai.audio.models.register>[0]) {
+  // 将调用方的完整语音模型定义保存为数据库条目，取得语音模型版本；ID 重复或为静态配置时失败。
   const created = value(await ai.audio.models.register(definition))
+  // 无参读取静态配置与数据库合并的语音模型目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.audio.models.list())
+  // 按刚保存的 ID 读回语音模型定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.audio.models.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的语音模型定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.audio.models.update(definition, current.version))
+  // 按最新版本删除示例语音模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.audio.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -1305,6 +1436,7 @@ generate 输入具体 prompt，输出图像数组及模型信息；下文注明�
 在 `ai.init()` 注册模型后，调用方只接收标准化图片字节，不感知厂商 Base64、内联数据或临时 URL：
 
 ```ts
+// 登记下方 OpenAI/Pollinations 生成模型，默认使用 image；配置失败不调用生图。
 const initializedImage = await ai.init({
   image: {
     models: [
@@ -1319,6 +1451,7 @@ if (!initializedImage.success)
   throw new Error(initializedImage.error.message)
 
 async function generateWithReference(referenceBytes: Uint8Array) {
+  // 将中文提示、1024×1024 画布和调用方提供的 PNG 参考图送至默认模型；成功返回产物，能力不匹配或上游出错返回失败。
   return ai.image.generate({
     prompt: '一个正在构建开源框架的友好机器人',
     size: { width: 1024, height: 1024 },
@@ -1342,10 +1475,15 @@ async function generateWithReference(referenceBytes: Uint8Array) {
 
 ```ts
 async function maintain_image_models(definition: Parameters<typeof ai.image.models.register>[0]) {
+  // 将调用方的完整图像模型定义保存为数据库条目，取得图像模型版本；ID 重复或为静态配置时失败。
   const created = value(await ai.image.models.register(definition))
+  // 无参读取静态配置与数据库合并的图像模型目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.image.models.list())
+  // 按刚保存的 ID 读回图像模型定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.image.models.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的图像模型定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.image.models.update(definition, current.version))
+  // 按最新版本删除示例图像模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.image.models.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -1450,17 +1588,21 @@ import type { RunnerScope } from '@h-ai/runner' // tenantId 和 userId 来自已
 import { ai } from '@h-ai/ai' // 使用已注入 Runner 的服务端实例。
 
 async function summarize(identity: RunnerScope, requestId: string) {
+  // 用服务端认证的租户与用户绑定 ACP 实例，后续会话和任务操作限在该主体范围。
   const agent = ai.acp.scoped(identity) // 将后续任务、会话和权限访问绑定到此主体。
   const options = {
     agentId: 'assistant',
     execution: { mode: 'auto' as const }
   } // assistant 是已登记的 Agent。
+  // 为 assistant 与 auto 执行模式计算部署计划，返回实际环境/模型/配额；不能运行时不提交任务。
   const plan = await agent.plan(options) // 返回实际模式、环境、模型和资源设置，不领取容器。
   if (!plan.success)
     return plan // 环境或权限不满足时不提交。
+  // 以同一计划和稳定 requestId 执行发布检查提示，成功含任务 ID、工具输出与生效选项；失败不读事件。
   const result = await agent.run({ ...options, prompt: '列出三条发布检查项', idempotencyKey: requestId }) // 返回 taskId、output 和生效选项。
   if (!result.success)
     return result // 提交、执行或清理失败时返回 HaiResult 错误。
+  // 以任务回执从游标 0 读前 20 条持久事件，返回按序号排列的数组，没有则为空。
   const events = await agent.tasks.events(result.data.taskId, 0, 20) // 读取前 20 个持久事件，空页为 []。
   if (!events.success)
     return events
@@ -1473,7 +1615,9 @@ import type { RunnerScope } from '@h-ai/runner' // 服务端认证主体。
 import { ai } from '@h-ai/ai' // assistant 已登记，并允许在同一用户内复用 Worker。
 
 async function continueWork(identity: RunnerScope) {
+  // 用服务端认证的租户与用户绑定 ACP 实例，后续会话和任务操作限在该主体范围。
   const agent = ai.acp.scoped(identity) // 成功访问只限当前主体的资源。
+  // 在当前主体内为 assistant 创建 user 执行模式的会话，成功得到含 id 的实例；配置或创建失败返回错误。
   const created = await agent.sessions.create({
     agentId: 'assistant',
     execution: { mode: 'user' }
@@ -1482,15 +1626,19 @@ async function continueWork(identity: RunnerScope) {
     return created
   const session = created.data // 句柄提供 prompt、stream、changeExecution 和 close。
   const run = async () => {
+    // 在刚创建的复用会话里发送记下验收目标，成功得到本轮 taskId 和 output；生成失败不切换执行模式。
     const first = await session.prompt('记下验收目标') // 返回这一轮的 taskId、output 与生效选项。
     if (!first.success)
       return first
+    // 接受新原生会话并切换到 task 隔离，成功保留业务会话 ID；环境或权限失败不继续发送提示。
     const switched = await session.changeExecution({ mode: 'task', acceptNewSession: true }) // 保留业务 id，建立新的原生会话。
     if (!switched.success)
       return switched
+    // 在切换后的隔离会话发出这一新提示，返回本轮执行结果或原始错误。
     return await session.prompt('给出独立验收清单') // 模型回答位于成功结果的 data.output。
   }
   return run().finally(async () => {
+    // 无参关闭例中创建的会话，成功无数据并释放资源；失败由下方报告。
     const closed = await session.close() // 成功的 data 为 undefined，释放会话或独占任务环境。
     if (!closed.success)
       throw new Error(closed.error.message)
@@ -1513,11 +1661,13 @@ import type { ACPPublishSnapshot } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
 async function previewChange(directory: string, revision: string) {
+  // 用宿主提供的目录及 Git 版本读取文件快照和解析后的 revision；无法读取时返回错误。
   const snapshot = await ai.acp.workspaces.readGitSnapshot({ directory, revision })
   if (!snapshot.success)
     return snapshot
   const before = snapshot.data.files
   const after = { ...before, 'notes.txt': 'aGVsbG8K' } // Base64 解码后是 hello 加换行。
+  // 比较快照与添加 notes.txt 后的内存副本，成功返回变更路径与 Git 补丁；计算失败保留错误。
   const changes = await ai.acp.workspaces.diffSnapshot(before, after)
   if (!changes.success)
     return changes
@@ -1527,6 +1677,7 @@ async function previewChange(directory: string, revision: string) {
 
 // 仅在应用重新验权、用户已批准目标远端、分支和具体补丁后调用。
 async function publishApprovedChange(approvedSnapshot: ACPPublishSnapshot) {
+  // 把应用重新授权且用户已批准的快照发到指定分支，成功返回分支和提交 ID；发布失败保留错误。
   const result = await ai.acp.workspaces.publishSnapshot(approvedSnapshot)
   if (!result.success)
     return result
@@ -1542,10 +1693,15 @@ async function publishApprovedChange(approvedSnapshot: ACPPublishSnapshot) {
 
 ```ts
 async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.register>[0]) {
+  // 将调用方的完整ACP Agent定义保存为数据库条目，取得ACP Agent版本；ID 重复或为静态配置时失败。
   const created = value(await ai.acp.agents.register(definition))
+  // 无参读取静态配置与数据库合并的ACP Agent目录；同 ID 时配置优先，本次注册项也在目录中。
   const listed = value(await ai.acp.agents.list())
+  // 按刚保存的 ID 读回ACP Agent定义及数据库版本；没有该 ID 时失败。
   const current = value(await ai.acp.agents.get(definition.id))
+  // 用刚读取的版本作为条件完整替换同 ID 的ACP Agent定义，返回新版本；读到旧版本或遇到配置项时失败。
   const updated = value(await ai.acp.agents.update(definition, current.version))
+  // 按最新版本删除示例ACP Agent条目，成功无数据；版本冲突或配置来源时拒绝删除。
   value(await ai.acp.agents.remove(definition.id, updated.version))
   return { created, listed, updated } // entries include value/source and database version
 }
@@ -1578,6 +1734,7 @@ getAgentCard 输出公开能力文档，handleRequest 输入协议请求输出 J
 ```ts
 import { AgentEvent, Message } from '@h-ai/ai'
 
+// 把含消息 ID m1、角色 Agent 和文本 Done 的 ProtoJSON 转为 SDK 消息对象。
 const message = Message.fromJSON({
   messageId: 'm1',
   role: 'ROLE_AGENT',
@@ -1585,7 +1742,9 @@ const message = Message.fromJSON({
     { text: 'Done' }
   ]
 }) // 将一条 ProtoJSON 消息转换为 SDK 消息。
+// 将刚构造的协议消息转换回可序列化 JSON，保留其 ID、角色和文本。
 const json = Message.toJSON(message) // 把 SDK 对象转回可序列化的协议表示。
+// 用上述消息创建 A2A 消息事件对象，供调用方交给事件总线，不在此调用发布。
 const event = AgentEvent.message(message) // 包装成可交给执行器事件总线的 A2A 消息事件。
 ```
 
@@ -1611,6 +1770,7 @@ Task 与事件一次 CAS 持久化，任意节点可订阅；相同 message ID/�
 import { HaiAIError } from '@h-ai/ai'
 
 const messages = [{ role: 'user' as const, content: 'Hello' }]
+// 把 messages 中的 Hello 发给默认模型；成功返回 completion，未初始化或服务失败时返回 error。
 const result = await ai.llm.chat({ messages })
 if (!result.success) {
   switch (result.error.code) {

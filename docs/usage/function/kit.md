@@ -107,9 +107,11 @@ import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
+// Build the SvelteKit request hook from the auth, rate limit, and logging settings below. Export the resulting Handle.
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
+      // Verify the token received by the request hook. Success yields session claims. An invalid token maps to no session.
       const verified = await iam.auth.verifyToken(token)
       if (!verified.success)
         return null
@@ -123,6 +125,7 @@ const haiHandle = kit.createHandle({
   rateLimit: {
     windowMs: 60_000,
     maxRequests: 100,
+    // Use the active cache and app namespace for rate-limit counts. The returned store shares the counters across application nodes.
     store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' })
   },
   logging: true,
@@ -185,8 +188,10 @@ export const handle: Handle = haiHandle
 import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
+// Initialize crypto with defaults before building cookie middleware. Failure throws and stops hook setup.
 const ready = await crypto.init()
 if (!ready.success) throw new Error(ready.error.message)
+// Build a request hook that uses the ready crypto instance to protect order_preferences. The installed hook uses the server cookie key.
 const handle = kit.createHandle({
   crypto: { crypto, encryptedCookies: ['order_preferences'] },
 })
@@ -232,23 +237,41 @@ import { ok } from '@h-ai/core'
 import { z } from 'zod'
 const schema = z.object({ title: z.string().min(1) })
 const request = new Request('https://app.example.com/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Order' }) })
+// Validate the sample JSON POST body with the title schema. On success body is { title: 'Order' }. Invalid JSON or fields fail validation.
 const body = await kit.validate.body(request, schema) // { title: 'Order' }
+// Parse page=1 from this URL and normalize it with pagination defaults. Invalid query values fail validation.
 kit.validate.query(new URL('https://app.example.com/?page=1'), kit.validate.PaginationQuerySchema) // normalized page
+// Validate the sample route parameters. id remains o1 and invalid values fail validation.
 kit.validate.params({ id: 'o1' }, kit.validate.IdParamSchema) // { id: 'o1' }
+// Validate the same id with the schema directly. Returns { id: 'o1' } or throws a Zod error.
 kit.validate.IdParamSchema.parse({ id: 'o1' }) // { id: 'o1' }
+// Convert the query string page to a numeric page and fill its defaults. An invalid page throws a Zod error.
 kit.validate.PaginationQuerySchema.parse({ page: '1' }) // normalized page defaults
+// Wrap the validated order body as a successful JSON response with status 200.
 kit.response.ok(body).status // 200
+// Return a success envelope for the new order o1 with status 201.
 kit.response.created({ id: 'o1' }).status // 201
+// Return an empty response with status 204.
 kit.response.noContent().status // 204
+// Return HTTP 400 with the supplied Invalid request message.
 kit.response.badRequest('Invalid request').status // 400
+// Return the default authentication error envelope with HTTP 401.
 kit.response.unauthorized().status // 401
+// Return the default permission-denied error envelope with HTTP 403.
 kit.response.forbidden().status // 403
+// Return the default missing-resource error envelope with HTTP 404.
 kit.response.notFound().status // 404
+// Use the supplied Data changed message for HTTP 409.
 kit.response.conflict('Data changed').status // 409
+// Include the supplied title field issue in the HTTP 422 response.
 kit.response.validationError([{ field: 'title', message: 'Required' }]).status // 422
+// Return the default internal-error envelope with HTTP 500.
 kit.response.internalError().status // 500
+// Create a redirect response whose Location is /auth/login.
 kit.response.redirect('/auth/login').headers.get('location') // '/auth/login'
+// Return the supplied app error code and message with HTTP 400.
 kit.response.error('app:orders:001', 'Invalid request', 400).status // 400
+// Wrap { id: 'o1' } in a successful HaiResult and convert it to HTTP 200. Failed results use their recorded error status.
 kit.response.fromResult(ok({ id: 'o1' })).status // 200
 ```
 
@@ -281,9 +304,13 @@ const CreateUserSchema = z.object({
   email: z.string().email(),
 })
 
+// Wrap this SvelteKit POST handler so the framework can translate handling errors into HTTP responses.
 export const POST = kit.handler(async ({ request, locals }) => {
+  // Require user:create in the current session before validation. Missing authentication or permission rejects the request.
   kit.guard.require(locals.session, 'user:create')
+  // Validate the request JSON against the create-user fields. Invalid data stops before returning a 201 response.
   const payload = await kit.validate.body(request, CreateUserSchema)
+  // Send the validated payload back as a created response with status 201.
   return kit.response.created(payload)
 })
 ```
@@ -372,16 +399,22 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ```ts
 import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
 
+// Create a browser client with defaults. The returned object has its own request and transport methods.
 const client = createKitClient({}) // same factory as kit.client.create
+// Bind authentication actions to that client's apiFetch.
 const actions = createKitAuthActions({ apiFetch: client.apiFetch })
+// Create a navigation adapter for the current SvelteKit runtime.
 const nav = createSvelteKitNavAdapter()
+// Initialize this client's transport if enabled. A failed enabled handshake rejects.
 await client.init()
 try {
+  // Fetch /api/ping through the configured client. Inspect the returned HTTP status and handle network rejection as for fetch.
   const response = await client.apiFetch('/api/ping')
   const body: unknown = await response.json() // the application endpoint's JSON
   client.ready // whether an enabled transport session is ready
 }
 finally {
+  // Destroy this client's transport state without changing other clients.
   client.destroy()
 }
 ```
@@ -396,6 +429,7 @@ finally {
 // src/lib/utils/api.ts — 全应用共享
 import { kit } from '@h-ai/kit'
 
+// Create the app's reusable client with defaults. Its apiFetch method is exported below.
 const client = kit.client.create()
 export const { apiFetch } = client
 ```
@@ -404,6 +438,7 @@ export const { apiFetch } = client
 // 使用
 import { apiFetch } from '#lib/utils/api.js'
 
+// Send GET /api/users using the shared browser client. The result is a Response, so check its status before reading the body.
 const response = await apiFetch('/api/users', { method: 'GET' })
 ```
 
@@ -435,9 +470,13 @@ resource 是应用按 CrudResource 契约提供的字段和已授权 CRUD 回调
 import { defineCrud, kit, resolveOptions, resolveText } from '@h-ai/kit'
 
 function buildResource(resource: Parameters<typeof defineCrud>[0]) {
+  // Build the operations for the supplied resource declaration.
   const operations = defineCrud(resource)
+  // Build the equivalent operations through kit.crud using the same declaration.
   const equivalent = kit.crud.define(resource)
+  // Evaluate the supplied label function. The resolved label is Name.
   const label = resolveText(() => 'Name') // 'Name'
+  // Resolve the supplied Active option with boolean true. This array is returned as the available choices.
   const choices = resolveOptions([{ label: 'Active', value: true }]) // same option array
   return { operations, equivalent, label, choices }
 }
@@ -489,23 +528,29 @@ import { kit, KitConfigSchema, type KitConfig } from '@h-ai/kit'
 
 export async function createTransportHandle(base: string) {
   // 启动时从应用指定的目录读取并校验 _kit.yml。
+  // Load ./config with the supplied Kit schema registered under kit. Invalid configuration stops startup.
   core.init({ configDir: './config', configSchemas: { kit: KitConfigSchema } })
+  // Read the parsed Kit config. This throws if the module configuration is missing.
   const appKitConfig = core.config.getOrThrow<KitConfig>('kit')
 
+  // Initialize crypto for the transport hook. A failed result stops setup.
   const cryptoReady = await crypto.init()
   if (!cryptoReady.success)
     throw new Error(cryptoReady.error.message)
+  // Parse the supplied server key ring from the environment. Success supplies the current and retained keys. Invalid data stops setup.
   const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
     throw new Error(ring.error.message)
   const serverKeyRing = ring.data
   // Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
 
+  // Build the SvelteKit hook using app access settings, authentication, and optional transport. Return it for installation.
   return kit.createHandle({
     trustedProxies: appKitConfig.trustedProxies,
     access: appKitConfig.access,
     auth: {
       verifyToken: async (token) => {
+        // Verify each incoming token with the initialized IAM module. Invalid claims become no session.
         const verified = await iam.auth.verifyToken(token)
         if (!verified.success)
           return null
@@ -523,6 +568,7 @@ export async function createTransportHandle(base: string) {
             ...appKitConfig.transport,
             basePath: base,
             serverKeyRing,
+            // Create a transport key store backed by the initialized shared cache. Its entries expire after 3,600 seconds.
             keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
           },
     },
@@ -547,6 +593,7 @@ export async function createTransportHandle(base: string) {
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
+    // Use the browser's public Kit config, crypto instance, and app base path. Installs fetch transport only when enabled.
     kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
   }
 </script>
@@ -557,6 +604,7 @@ export async function createTransportHandle(base: string) {
 ```ts
 import { kit } from '@h-ai/kit'
 
+// Create a default client for this app and export its apiFetch method.
 export const { apiFetch } = kit.client.create()
 ```
 
@@ -601,6 +649,7 @@ import { core } from '@h-ai/core'
 import { KitConfigSchema } from '@h-ai/kit'
 
 // 仅放在 src/lib/server 中；浏览器只收到 +layout.server.ts 返回的公开设置。
+// Read the server-only _kit.yml and validate it with KitConfigSchema. A failed load stops before exposing public settings.
 const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message)
@@ -654,6 +703,7 @@ import type { SessionData } from '@h-ai/kit'
 import { feedback } from '@h-ai/feedback'
 import { kit } from '@h-ai/kit'
 
+// Bind the supplied feedback service to GET, POST, and PATCH. A request without a resolved session cannot access its scoped feedback.
 const handler = kit.createFeedbackHandler({
   feedback,
   resolveContext: (event) => {

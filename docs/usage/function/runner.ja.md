@@ -26,9 +26,11 @@ try {
   if (!started.success)
     throw new Error(started.error.message) // 停止启动，不提交任务。
 
+  // report.v1 をこのノードのレポート処理に割り当てる。成功時は登録解除関数、重複登録は失敗。
   const registration = runner.register('report.v1', async (input, context) => { // 成功返回注销函数。
     if (typeof input !== 'string')
       throw new TypeError('Expected report title') // 处理器校验业务输入。
+    // 実行中タスクのコンテキストで phase: ready を保存する。最初の順序番号は 1。保存失敗時は処理を中断する。
     const event = await context.emit({ phase: 'ready' }) // 成功后事件序号为 1，可从另一节点读取。
     if (!event.success)
       throw new Error(event.error.message) // 写事件失败时结束处理器。
@@ -38,6 +40,7 @@ try {
     throw new Error(registration.error.message) // 重复注册会失败。
 
   const scope = { tenantId: 'studio', userId: 'alice' } // 示例主体，生产来自服务端认证。
+  // studio/alice として report.v1 を提出し、report-nov を永続キーに使う。受付には ID と待機状態が入り、失敗時は照会しない。
   const accepted = await runner.submit({
     scope,
     kind: 'report.v1',
@@ -50,6 +53,7 @@ try {
   const deadline = Date.now() + 5_000 // 本示例最多等待五秒。
   let completed = false // 仅在读取到成功终态时设为 true。
   while (Date.now() < deadline) {
+    // 受付 ID と同じ主体で保存済み状態を読む。照会が成功しても、タスクの成否は status で判定する。
     const task = await runner.get(scope, accepted.data.id) // 同一主体下读取当前状态与结果。
     if (!task.success)
       throw new Error(task.error.message) // 找不到或读取失败时终止示例。
@@ -64,6 +68,7 @@ try {
   }
   if (!completed)
     throw new Error('Timed out waiting for the report') // 等待超时由示例报告，Runner 会在退出阶段尝试取消本节点任务。
+  // register が返した解除関数を引数なしで呼び、このノードの report.v1 を登録解除する。戻り値はない。
   registration.data() // 注销当前处理器，返回 undefined。
 }
 finally {
@@ -160,10 +165,15 @@ submit は共有 DB の実行受付情報を返します。待機、取消の要
 
 ```ts
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
+// studio/alice の月次報告を登録し実行受付を得る。同じ要求には report-nov を使い、提出失敗はそのまま扱う。
 const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+// 同じ主体・種類・永続キーで元の実行を検索する。該当なしは成功結果の undefined。
 const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+// 提出時の受付を同じ主体で読み、状態と取得可能な結果を確認する。主体の不一致や読み取りエラーは失敗。
 const current = value(await runner.get(scope, accepted.id)) // current persisted state
+// カーソル 0 の後から同じタスクの順序付きイベントを最大 20 件読む。イベントがなければ空配列。
 const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+// 同じタスクのキャンセルを要求する。終了処理中なら返った状態は cancelling の場合がある。
 const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
 ```
 

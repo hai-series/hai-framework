@@ -12,11 +12,13 @@ Initialize the configured database, then select SQL, a typed CRUD table or a tra
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
+// Open an in-memory SQLite database for this process. Success enables SQL. Read error on failure.
 const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 // DDL
+// Create users with the ID, name, and email fields below. Success has no data. DDL failures appear in error.
 await reldb.ddl.createTable('users', {
   id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
   name: { type: 'TEXT', notNull: true },
@@ -24,16 +26,20 @@ await reldb.ddl.createTable('users', {
 })
 
 // SQL
+// Bind the sample name and email to the two placeholders. data.changes is the insert count. Check error on failure.
 await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
+// Read all users rows. Success is an array containing the inserted user. Check error on failure.
 const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
 
 // 分页查询
+// Read page 1 in ID order, up to 20 rows. Success has items and total. Check error on failure.
 const page = await reldb.sql.queryPage<{ id: number, name: string }>({
   sql: 'SELECT id, name FROM users ORDER BY id',
   pagination: { page: 1, pageSize: 20 },
 })
 
 // CRUD
+// Build a CRUD repository for users using the key and allowed columns below. The following calls use that object.
 const userCrud = reldb.crud.table({
   table: 'users',
   idColumn: 'id',
@@ -42,10 +48,13 @@ const userCrud = reldb.crud.table({
   updateColumns: ['name', 'email'],
   dbType: 'sqlite',
 })
+// Create the second user from the sample name and email. Success includes the affected-row count. Check error on failure.
 await userCrud.create({ name: '李四', email: 'li@test.com' })
+// Look up key 1 for the first user. Success data is the row or null. Check error on failure.
 const user = await userCrud.findById(1)
 
 // 关闭
+// Close this database connection without arguments. Success has no data. Check error on failure.
 await reldb.close()
 ```
 
@@ -112,14 +121,23 @@ Use trusted table names, columns and definitions, and inspect destructive change
 #### Scenario: Create and change tables
 
 ```ts
+// Create the sample order table with a text ID primary key. Success has no data. value throws on failure.
 value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
+// Add the nullable TEXT column note to demo_orders. Success updates the schema. value throws on failure.
 value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
+// Inspect the modified table. Success returns ['id', 'note']. value throws on failure.
 value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
+// Create the named index on demo_orders.note. Success changes the schema. value throws on failure.
 value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
+// Drop the new index by name. true allows it to be absent. Success has no data. value throws on failure.
 value(await reldb.ddl.dropIndex('demo_orders_note', true))
+// Drop note and its values from demo_orders. Success has no data. value throws on failure.
 value(await reldb.ddl.dropColumn('demo_orders', 'note'))
+// Rename the table to demo_orders_old. Success has no data. value throws on failure.
 value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
+// Drop the renamed table. true allows absence. Success has no data. value throws on failure.
 value(await reldb.ddl.dropTable('demo_orders_old', true))
+// Execute the trusted constant DDL for the marker table. Success has no data. value throws on failure.
 value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
 // All successful DDL calls have no business data.
 ```
@@ -149,15 +167,24 @@ Pass dynamic values as parameters, distinguish query rows from execution counts 
 #### Scenario: Parameterized queries and pages
 
 ```ts
+// Create the query example table with a text primary key. Success has no data. value throws on failure.
 value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
+// Bind o1 to the insert placeholder. The result includes affected rows. value throws on failure.
 const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
+// Read the inserted ID column. Success returns [{ id: 'o1' }]. value throws on failure.
 value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
+// Bind o1 and read the first matching row, { id: 'o1' }. value throws on failure.
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+// Normalize page 1 and size 20 into the limit and offset for the first page.
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+// Run the trusted SQL with normalized pagination. The page contains o1 and total 1. value throws on failure.
 const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
 // page.items: [{ id: 'o1' }], total: 1
+// Build the equivalent page envelope from the sample row, total, and page settings.
 reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
+// Execute the deletion of o1 in this batch. Success removes the row and returns no data. value throws on failure.
 value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
+// Look up o1 after deletion. Success returns null. value throws on query failure.
 value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
 ```
 
