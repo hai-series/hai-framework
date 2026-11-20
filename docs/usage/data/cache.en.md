@@ -6,8 +6,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
 ### A cached number
 
 Structure: `orders:total`.
@@ -33,7 +31,7 @@ Reuse a fetched profile across requests; business code updates or removes it whe
 }
 ```
 
-This is user-42. With ex:60 it expires after 60 seconds; no explicit lifetime means no automatic expiry.
+This example shows the profile for `user-42`. Writing it with `ex: 60` makes it expire 60 seconds after the write. When the application omits expiry, it can update or delete the profile as needed.
 
 ### Individual profile fields
 
@@ -99,15 +97,21 @@ user-42 has score 8. The score controls ordering, not how often the member appea
 
 ### A temporary lock owner
 
-Structure: `orders:__lock:invoice-42`.
+The logical key is `__lock:invoice-42`. Redis stores it as `orders:__lock:invoice-42` when `keyPrefix` is `orders:`. Redis and Memory both store the owner and acquisition depth as one string.
 
-A lock makes competing workers defer temporarily; release or renewal must match its owner token.
+The first acquisition of `invoice-42` stores the owner token returned to the caller. The example below uses a redacted token. The default lease lasts 30 seconds from the first acquisition.
 
 ```json
 "<lock-token:redacted>"
 ```
 
-The redacted token defaults to a 30-second lease. Final writes still need version or uniqueness checks.
+The holder can call `cache.lock.acquire('invoice-42', { owner })` again. It returns the same `owner`, increases the depth, and preserves the original expiry. The stored value after the second acquisition looks like this.
+
+```json
+"<lock-token:redacted>|2"
+```
+
+The first `release` succeeds with `data: true`, restores the token-only value, and leaves the lock held at depth one. The next release deletes the key. Renewal requires the same `owner`. Expiry deletes the entire key at any depth. Final writes still need version or uniqueness checks.
 
 ## Field, storage and cleanup reference
 
@@ -117,4 +121,6 @@ The caller owns business keys and values. Select a namespace and set expiry deli
 | --- | --- |
 | `kv`, `hash` | Caller key. JSON value or field-to-value map. Counters store numeric values. |
 | `list`, `set_`, `zset` | Ordered list with duplicates, unique members, or members with numeric scores. |
-| `__lock:<key>` | Owner token. Expiry releases the lease. Release with the token for the same lease. |
+| `__lock:<key>` | A string containing `owner` at depth one or `owner\|depth` at greater depths. The default lease is 30 seconds. Renewal and release use the same `owner`. |
+
+Removing the last item in a Hash, List, Set, or ZSet deletes the key and its TTL. A collection created under the same name starts with no expiry.

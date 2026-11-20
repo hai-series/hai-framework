@@ -6,7 +6,7 @@
 
 ## 运行环境
 
-> ⚠️ **服务端模块（Node.js only）。** 浏览器端无需直接操作缓存，由服务端模块（如 IAM、Scheduler）内部使用。
+> ⚠️ **服务端模块（Node.js only）。** 浏览器通过服务端接口使用依赖缓存的功能，例如 IAM 会话。
 
 ## 适用场景
 
@@ -41,11 +41,13 @@ type: memory # memory | redis
 import { core } from '@h-ai/core'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 
+// 从已加载的 cache 配置按 CacheConfigSchema 校验并补齐默认值。成功 data 是配置，失败包含配置错误。
 const config = core.config.validate('cache', CacheConfigSchema)
 if (!config.success) throw new Error(config.error.message)
+// 用校验后的 config.data 初始化选定的 Memory 或 Redis。成功 data 为 undefined，连接失败可用 error 诊断。
 const initialized = await cache.init(config.data)
 if (!initialized.success) throw new Error(initialized.error.message)
-// 使用后关闭
+// 无参数，等待初始化和连接清理完成。成功 data 为 undefined，失败时可检查 error 并重试清理。
 const closed = await cache.close()
 if (!closed.success) throw new Error(closed.error.message)
 ```
@@ -53,10 +55,14 @@ if (!closed.success) throw new Error(closed.error.message)
 
 初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`cache.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
 
+关闭或重新初始化开始清理原连接后，留存的操作对象和此前从中取出的操作函数都返回 `NOT_INITIALIZED`。新实例就绪后，从 `cache` 重新取得操作。
+
 ```ts
+// 无参数，等待初始化和连接清理完成。成功 data 为 undefined，失败时可检查 error 并重试清理。
 const closed = await cache.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
+  // 无参数，重试清理此前保留的连接资源。成功 data 为 undefined，再次失败报告 error。
   const retried = await cache.close()
   if (!retried.success) throw new Error(retried.error.message)
 }
@@ -74,16 +80,19 @@ if (!closed.success) {
 | `get / set / del / exists`          | 基础读写与存在性判断 |
 | `expire / expireAt / ttl / persist` | TTL 管理             |
 | `incr / incrBy / decr / decrBy`     | 计数器操作           |
-| `mget / mset`                       | 批量读写             |
+| `mget / mset`                       | 批量读写。`mget` 按输入顺序返回，缺失或非 KV 类型的位置为 `null` |
 | `scan / keys / type`                | Key 检索与类型判断   |
 
 ```typescript
+// 将用户对象快照保存到 user:123，60 分钟后过期。成功 data 为 true，序列化或存储失败返回 error。
 await cache.kv.set('user:123', { name: '张三' }, { ex: 3600 })
+// 读取 user:123 的 JSON 快照。命中时 data 是用户对象，键不存在时 data 为 null。
 const result = await cache.kv.get<{ name: string }>('user:123')
 if (result.success && result.data) {
   // result.data.name === '张三'
 }
 
+// 删除 user:123 和它的期限。成功 data 是实际删除数，本例有键时为 1。
 await cache.kv.del('user:123')
 ```
 
@@ -94,8 +103,10 @@ await cache.kv.del('user:123')
 scan 首次传字符串 `'0'`，后续原样传回不透明游标，返回 `'0'` 表示完成。Cluster 覆盖所有 master；同配置和拓扑的另一应用节点可接续。拓扑、match 或 keyPrefix 改变时返回 `SCAN_TOPOLOGY_CHANGED`，从 `'0'` 重启；无效游标或 count 返回 `INVALID_SCAN`。返回去除 keyPrefix 的逻辑 key，前缀 glob 字符按字面量解释；keys 同样扫描并去重。SCAN 无快照，可能重复，count 仅为正整数提示值。
 
 ```ts
+// 从游标 '0' 开始匹配 users:*，每批参考 100 个键。成功 data 是 [下个游标, 逻辑键数组]。
 const first = await cache.kv.scan('0', { match: 'users:*', count: 100 })
 if (first.success && first.data[0] !== '0') {
+  // 以原游标和同一组筛选条件继续。成功 data 的游标为 '0' 时已完成，拓扑变化则返回 SCAN_TOPOLOGY_CHANGED。
   const next = await cache.kv.scan(first.data[0], { match: 'users:*', count: 100 })
 }
 ```
@@ -108,67 +119,79 @@ if (first.success && first.data[0] !== '0') {
 - `cache.zset`：分数排序（排行榜、权重调度）
 
 ```typescript
+// 设置 profile:1 的 nickname 字段为 alice。成功 data 是新增字段数，覆盖时该字段计为 0。
 await cache.hash.hset('profile:1', { nickname: 'alice' })
+// 向 queue:jobs 左端依次压入两项，job-2 成为首项。成功 data 是压入完成后的列表长度。
 await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
+// 把两项权限加入 role:admin:perms。成功 data 是首次加入的成员数。
 await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
+// 写入 rank:daily 的成员 u1 和分数 100。成功 data 是新增成员数，更新已有成员计为 0。
 await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 ```
+
+Redis 的 `blpop` 和 `brpop` 每次使用独立连接，返回去除 `keyPrefix` 的逻辑键。`timeout` 是服务端等待秒数，`0` 代表一直等待，超时成功返回 `null`。`commandTimeout` 不会截断该等待。关闭或更换后端时，仍在等待的弹出返回 `OPERATION_FAILED`。Memory 按输入顺序检查列表，无可取值时立即返回 `null`。
+
+移除结构的最后一项会删除键和 TTL。Memory 的 `hincrBy` 只接受安全整数的字段值、增量和结果。集合随机操作指定整数 `count` 时，缺键返回 `[]`。`srandmember` 负数允许重复取样，`spop` 仅接受非负数。ZSet 同分按成员的 UTF-8 字节顺序，分数支持正负无穷并拒绝 `NaN`。分数范围用 `'(10'` 排除端点，`zrangeByScore` 的 `offset` 和 `count` 可以分别指定，默认是 `0` 和 `-1`（不限）。
 
 ### 分布式锁（`cache.lock`）
 
 | 方法       | 说明                                       |
 | ---------- | ------------------------------------------ |
-| `acquire`  | 尝试获锁（SET NX EX），返回唯一 owner 或 null |
-| `release`  | 释放锁（必须携带本次 owner，防止误释放） |
+| `acquire`  | 首次获取返回随机 owner。传入当前 `{ owner }` 可重入并返回同一凭据，失败竞争返回 `null` |
+| `release`  | 当前 owner 释放一层，最后一层释放后解锁。凭据不匹配返回 `false` |
 | `isLocked` | 检查锁是否被持有                           |
 | `extend`   | 续期锁 TTL（必须携带本次 owner） |
 
 ```typescript
-// acquire 返回本次唯一 owner，后续释放/续期必须复用该凭据
+// 尝试持有逻辑键 my-lock 30 秒。成功 data 是新 owner，已被占用时为 null，后端失败返回 error。
 const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   const owner = acquired.data
   try {
-    // 长任务仅在仍持有锁时续期；失败或 data=false 时停止依赖锁的后续操作
-    const extended = await cache.lock.extend('my-lock', 60, owner)
-    if (!extended.success || !extended.data) {
-      logger.warn('Lock extension failed; protected work cancelled')
-    }
-    else {
-      // 受保护的操作
+    // 以首次返回的 owner 重入 my-lock。成功时返回同一 owner 并增加一层，凭据已失效时 data 为 null。
+    const nested = await cache.lock.acquire('my-lock', { owner })
+    if (nested.success && nested.data !== null) {
+      try {
+        // 执行嵌套步骤。
+      }
+      finally {
+        // 用同一个 owner 释放 my-lock 的一层。data=true 表示释放成功，最后一层删除锁。过期或凭据不符时 data=false。
+        const released = await cache.lock.release('my-lock', owner)
+        if (!released.success || !released.data)
+          logger.warn('Nested lock release failed')
+      }
     }
   }
   finally {
-    await cache.lock.release('my-lock', owner)
+    // 用同一个 owner 释放 my-lock 的一层。data=true 表示释放成功，最后一层删除锁。过期或凭据不符时 data=false。
+    const released = await cache.lock.release('my-lock', owner)
+    if (!released.success || !released.data)
+      logger.warn('Outer lock release failed')
   }
 }
-
-// 检查
-const locked = await cache.lock.isLocked('my-lock')
 ```
 
-**最佳实践：**
-
-- `owner` 必须取自成功的 acquire.data；缓存内部每次生成唯一凭据，不能使用 nodeId 替代。释放/续期复用该凭据。
-- 释放锁时传入 `owner` 防止误释放他人锁
-- Memory 后端适合开发/测试；Redis 后端用 Lua 脚本保证 release/extend 原子性
+- `owner` 取自首次获取结果，只在同一业务执行的可信服务之间传递。每次成功进入对应一次 `release`。`release` 的 `true` 表示释放了一层。
+- 重入保留期限。需要延期时调用 `extend(key, ttl, owner)`。首次获取和续期的 TTL 用正安全整数秒，换算后的到期毫秒须可精确表示。重入同时传 `ttl` 和非法 TTL 均返回 `OPERATION_FAILED`。
+- 多机使用同一 Redis 或 Redis Cluster 和键前缀。Redis 在同一键内原子更新持有次数，Memory 的状态仅限本进程。滚动部署时先升级所有使用同一把锁的参与者，再使用重入。
+- 锁操作若在网络中断后未收到结果，按结果未知处理，避免盲目重复重入或释放。为同一任务保留最终写入的条件校验。
 
 ## 错误码 — `HaiCacheError`
 
 | 错误码 | code | 说明 |
 |--------|------|------|
-| `HaiCacheError.CONNECTION_FAILED` | `hai:cache:001` | 连接失败 |
+| `HaiCacheError.CONNECTION_FAILED` | `hai:cache:001` | 连接或资源释放失败 |
 | `HaiCacheError.OPERATION_FAILED` | `hai:cache:002` | 操作失败 |
-| `HaiCacheError.SERIALIZATION_FAILED` | `hai:cache:003` | 序列化失败 |
-| `HaiCacheError.DESERIALIZATION_FAILED` | `hai:cache:004` | 反序列化失败 |
-| `HaiCacheError.KEY_NOT_FOUND` | `hai:cache:005` | 键不存在 |
-| `HaiCacheError.TIMEOUT` | `hai:cache:006` | 超时 |
+| `HaiCacheError.SERIALIZATION_FAILED` | `hai:cache:003` | 缓存值无法序列化为 JSON，例如存在循环引用或 `toJSON()` 返回 `undefined`。批量写入遇到此错误时不提交任何项 |
+| `HaiCacheError.KEY_NOT_FOUND` | `hai:cache:005` | Memory 通过 `lset` 更新不存在的列表 |
 | `HaiCacheError.NOT_INITIALIZED` | `hai:cache:010` | 未初始化 |
-| `HaiCacheError.UNSUPPORTED_TYPE` | `hai:cache:011` | 不支持的缓存类型 |
-| `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置错误 |
+| `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置校验失败或生产环境要求 Redis |
 | `HaiCacheError.INVALID_SCAN` | `hai:cache:013` | 游标或 count 无效 |
 | `HaiCacheError.SCAN_TOPOLOGY_CHANGED` | `hai:cache:014` | 拓扑或条件变化，重新遍历 |
 | `HaiCacheError.CROSS_SLOT` | `hai:cache:015` | 多键操作不在同一 slot |
+| `HaiCacheError.INVALID_SET_OPTIONS` | `hai:cache:016` | `kv.set` 的写入条件或期限配置无效 |
+
+`HaiCacheError` 仍导出 `DESERIALIZATION_FAILED`（`hai:cache:004`）、`TIMEOUT`（`hai:cache:006`）和内部防御用的 `UNSUPPORTED_TYPE`（`hai:cache:011`）。阻塞弹出等到 Redis 超时会成功返回 `null`，配置中不支持的 `type` 由 Schema 校验返回 `CONFIG_ERROR`。
 
 ## 常见模式
 
@@ -176,12 +199,15 @@ const locked = await cache.lock.isLocked('my-lock')
 
 ```typescript
 async function getUserCached(userId: string) {
+  // 由 userId 拼出逻辑缓存键。成功 data 是缓存的用户或 null。
   const cached = await cache.kv.get<User>(`user:${userId}`)
   if (cached.success && cached.data)
     return cached.data
 
+  // 缓存未命中时，用同一 userId 查用户表。成功 data 是用户或 null，查询失败返回 error。
   const user = await userRepo.findById(userId)
   if (user.success && user.data) {
+    // 把数据库返回的用户保存一小时。成功 data 为 true，本示例仍返回已查到的用户。
     await cache.kv.set(`user:${userId}`, user.data, { ex: 3600 })
     return user.data
   }
@@ -193,13 +219,16 @@ async function getUserCached(userId: string) {
 
 ```typescript
 const lockKey = 'batch:import'
+// 尝试持有导入锁 60 秒，成功 data 是 owner 或表示竞争失败的 null。
 const acquired = await cache.lock.acquire(lockKey, { ttl: 60 })
 if (acquired.success && acquired.data) {
   const owner = acquired.data
   try {
+    // 执行导入，每次持久化时校验资源自己的提交条件，提交失败由应用处理。
     await runBatchImportWithConditionalCommit()
   }
   finally {
+    // 用本次获取的 owner 释放导入锁。data=true 表示解锁，data=false 表示租约已失效。
     await cache.lock.release(lockKey, owner)
   }
 }
@@ -216,7 +245,6 @@ else {
 - `hai-build`：模块初始化顺序（cache 在 iam 之前；cache 自身不依赖 reldb）
 - `hai-core`：配置与 HaiResult 模型
 - `hai-iam`：会话存储与权限缓存（底层使用 cache）
-- `hai-scheduler`：定时任务分布式锁（底层使用 cache.lock）
 - `hai-reach`：消息发送互斥锁（底层使用 cache.lock）
 - `hai-kit`：SvelteKit 集成层
 
@@ -224,7 +252,7 @@ Cluster 与 Sentinel 数据节点认证使用 `password`，Cluster 发现的新�
 
 单键 compareAndSwap(key, expected, value, {px?,keepTtl?}) 比较 JSON 序列化快照并原子替换，必须检查 success 与 boolean data。expected=undefined 表示不存在，value=undefined 表示删除，null 是值；px 正整数且与 keepTtl 互斥。比较失败不修改 TTL；跨节点版本状态优先使用 CAS 而不是租约后无条件 SET。
 
-owner 只校验租约续期/释放，不是资源 fencing token。暂停或过期后旧任务仍可能执行，最终持久化写入必须使用资源自己的 CAS/代际条件/事务约束。批量导入等应用函数须在每次提交时校验条件，不能只靠锁包裹 Promise。
+`owner` 用于校验租约重入、续期和释放。暂停或过期后旧任务仍可能继续执行，最终持久化写入必须使用资源自己的 CAS、版本条件或事务约束。批量导入等应用函数须在每次提交时校验条件。
 
 ## 生产共享状态
 

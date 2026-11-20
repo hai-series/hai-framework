@@ -32,7 +32,7 @@ Redis とメモリの値型、キー、TTL、ロック所有者については[�
 pnpm --filter @h-ai/cache test
 ```
 
-> Redis 関連のテストには Docker が必要です。
+> Redis の統合テストには Docker API が必要です。Docker、または Docker 互換 API を有効にした Podman を使用できます。
 
 公開契約と内部構造には型検査できる例を用意しています。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。
 

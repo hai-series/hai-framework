@@ -32,7 +32,7 @@
 pnpm --filter @h-ai/cache test
 ```
 
-> Redis 相关测试需要 Docker 环境。
+> Redis 集成测试需要可用的 Docker API，例如 Docker 或已启用 Docker 兼容 API 的 Podman。
 
 公开契约与内部结构均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 

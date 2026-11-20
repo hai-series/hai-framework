@@ -32,7 +32,7 @@ See the [data reference](../../docs/usage/data/cache.en.md) for Redis and memory
 pnpm --filter @h-ai/cache test
 ```
 
-> Redis tests require Docker.
+> Redis integration tests require a Docker API, provided by Docker or Podman with its Docker-compatible API enabled.
 
 Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
