@@ -121,7 +121,7 @@ if (result.success) {
 
 ```typescript
 // API 路由：POST /payment/notify/:provider
-// 用微信通知原始正文及请求头验签解析。成功 data 含可核对的订单事件，签名错误返回失败。
+// 使用支付回调的原始请求正文和请求头验签。成功 data 包含订单事件，验签失败时读取 error。
 const result = await payment.handleNotify('wechat', {
   body: await request.text(),
   headers: Object.fromEntries(request.headers),
