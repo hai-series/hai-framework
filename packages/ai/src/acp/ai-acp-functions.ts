@@ -24,6 +24,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
+import { isDeepStrictEqual } from 'node:util'
 import { ok } from '@h-ai/core'
 import { createResourceRegistry } from '../registry/ai-registry-functions.js'
 import {
@@ -1359,7 +1360,7 @@ export function createACPOperations(
           const agent = await getAgent(info.agentId)
           if (
             !agent.enabled
-            || JSON.stringify(agent) !== JSON.stringify(info.agent)
+            || !isDeepStrictEqual(JSON.parse(JSON.stringify(agent)), JSON.parse(JSON.stringify(info.agent)))
           ) {
             throw new ACPFailure('conflict')
           }
