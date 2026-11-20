@@ -181,6 +181,10 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 
 UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で、読み出し中に失敗することもあります。一括削除は完了した Promise だけでなく、各キーの確認結果を調べてください。
 
+ダウンロードを中断する場合は、最初のチャンクを読み取る前でも、シグナルを中断するかイテレーターの `return()` を呼び出して接続を解放します。コピーで `contentType` または `metadata` の片方だけを指定すると、もう片方はコピー元から引き継がれます。S3 で上書き項目を指定すると、変更の適用前にコピー元の ETag を検証します。検証に失敗した場合は、コピー元を読み直してから再試行してください。
+
+Local ストレージでは、`file.head()` と `file.copy()` がファイルの識別情報に対応するメタデータを必要とします。移行時はファイルの内容とメタデータを取得し、移行先に `file.put()` で書き込みます。[ローカルストレージのバックアップと復元](../data/storage.ja.md)
+
 [引数と手順の詳細](storage.md#files)
 
 <a id="directories"></a>
@@ -236,7 +240,7 @@ S3 の期限付き URL は特定のキーと操作に対応します。発行前
 
 ![非公開ファイル：認可後に直接転送](../images/function-storage-presign.ja.svg)
 
-URL の返却時点ではファイルは未転送です。ブラウザーが保存先に接続し、署名・期限の検証後に転送します。アップロードの Content-Type は署名時の値と一致させます。publicUrl は設定済みの公開アドレスを計算するだけです。
+URL を受け取ったブラウザーがオブジェクトストレージに接続し、署名と期限の検証後にファイルを転送します。PUT 署名には `Content-Type` ヘッダーが含まれます。アップロード時に署名時の値を送信してください。署名時に `contentType` を省略した場合は `application/octet-stream` を送信します。`publicUrl()` はキーをパスの区切りごとにエンコードして、設定済みの公開アドレスに追加します。
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
@@ -298,7 +302,7 @@ value(await storage.checksum.verify('changed', digest)) // false
 | --- | --- | --- | --- | --- |
 | `uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
 | `downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
 | `getFileExtension` | 拡張子を取得 | `File` | `string` | `getFileExtension(file)` |
 | `getMimeType` | MIME 型を取得 | `extension: string` | `string` | `getMimeType("txt")` |
 | `formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `formatFileSize(1024)` |
@@ -315,8 +319,8 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   const extension = getFileExtension(file)
   // file.type が空なら拡張子から MIME 型を取得します。不明な場合は application/octet-stream です。
   const contentType = file.type || getMimeType(extension)
-  // バイト数を表示用文字列にします。例えば 1024 バイトは 1 KB です。
-  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // バイト数を表示用文字列にします。例えば 1024 バイトは 1.00 KB です。
+  const displayedSize = formatFileSize(file.size)
   // 渡された URL に元のファイルと MIME 型でアップロードします。成功は完了、失敗時は error です。
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)

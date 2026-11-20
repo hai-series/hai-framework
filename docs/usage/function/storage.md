@@ -211,13 +211,13 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 
 #### 文件流、条件写与批量删除的约束
 
-`file.put()` 支持 Buffer、Uint8Array、字符串及 `AsyncIterable<Uint8Array>`（如 Node Readable）；流上传内部使用有界 S3 multipart。`getStream()` 返回字节流，支持 Range 与 `signal` 取消；初始失败返回 HaiResult，迭代期间的 I/O/取消错误由消费方处理。原 `get()` 仍返回完整 Buffer，适合小文件。
+`file.put()` 支持 Buffer、Uint8Array、字符串及 `AsyncIterable<Uint8Array>`（如 Node Readable）；流上传内部使用有界 S3 multipart。`getStream()` 返回字节流，支持 Range 与 `signal` 取消。初始失败返回 HaiResult，迭代期间的 I/O 或取消错误由消费方处理。放弃下载时，即使尚未读取第一块，也应取消 `signal` 或调用迭代器的 `return()` 释放连接。`get()` 返回完整 Buffer，适合小文件。
 
 上传选项 `{ ifNoneMatch: '*' }` 通过标准 S3 条件写或本地原子发布拒绝覆盖，冲突返回 `ALREADY_EXISTS`；S3 服务不支持条件写时返回错误，不降级为覆盖。失败/取消会清理临时文件或未完成分片；取消不能撤销已经发布的对象。
 
-Local 在内容文件旁的保留目录 `.hai-storage-meta/` 中准备与文件身份绑定的代际元数据，再以内容文件的原子发布作为提交点。元数据准备失败不会新增或覆盖内容；默认元数据也有空记录，不继承旧对象的类型或业务字段。发布后清理明确旧代际失败只记录诊断，不将已提交写入报告为失败；并发或崩溃可能留下尚未确认可回收的内部记录，不做推测性删除。`.meta.json`、`.upload.tmp` 后缀和 `.hai-storage-meta` 在每个路径段均保留，不能直接读写或删除。代际记录是唯一元数据格式，缺少有效记录时明确返回错误；重建对象使用可信内容及业务元数据，通过 `file.put()` 写入。备份同时保存内容与内部记录，禁止绕过此格式直接混写。
+Local 在内容文件旁的保留目录 `.hai-storage-meta/` 中准备与文件身份绑定的代际元数据，再以内容文件的原子发布作为提交点。元数据准备失败不会新增或覆盖内容；默认元数据也有空记录，不继承旧对象的类型或业务字段。发布后清理明确旧代际失败只记录诊断，不将已提交写入报告为失败；并发或崩溃可能留下尚未确认可回收的内部记录，不做推测性删除。`.meta.json`、`.upload.tmp` 后缀和 `.hai-storage-meta` 在每个路径段均保留，不能直接读写或删除。`file.head()` 和 `file.copy()` 需要有效的代际记录。迁移时请按数据参考导出内容和元数据，再通过 `file.put()` 写入目标后端。[本地备份与恢复](../data/storage.md)
 
-S3 `file.copy()` 对源键按路径段编码，中文、空格及 URL 分隔字符仍作为原始对象键处理；调用方传原始 key，不要提前编码。
+复制时请传原始对象键。S3 `file.copy()` 会对源键按路径段编码。只设置 `contentType` 或 `metadata` 时，另一字段继承源值。S3 在应用覆盖项前校验源 ETag，检查失败时可在重新读取源对象后重试。
 
 `file.deleteMany(keys)` 返回 `StorageDeleteResult`：成功时 `data` 为 `{ deletedKeys, failures: [] }`；任一删除项未确认完成时返回 `OPERATION_FAILED`，进度在 `error.ext?.deleteMany`（初始化等前置错误可能不带进度）。重复输入只处理一次，输出 key 不含配置 prefix。S3 每批最多 1000 项，逐项检查 `Deleted` 与 `Errors`；HTTP 200 不代表全部成功，遗漏/重复/未知回执标为 `unknown`。本地删除最多并发 32 项。
 
@@ -351,7 +351,7 @@ value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurren
 
 ![私有文件：先授权，再直传或下载](../images/function-storage-presign.svg)
 
-API 返回 URL 仅表示已经签发访问凭据，文件尚未上传或下载。浏览器随后直连对象存储，校验签名和期限后才传输字节；上传的 Content-Type 要与签发时一致。publicUrl 只计算公开地址规则，不做授权，也不会把私有文件改成公开。
+API 返回 URL 后，浏览器连接对象存储，服务验证签名和期限后传输文件。PUT 签名绑定 `Content-Type` 请求头。上传时请显式发送签发时的值，签发时省略 `contentType` 则发送 `application/octet-stream`。`publicUrl()` 按路径段编码对象键，并附加到配置的公开地址。
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
@@ -444,7 +444,7 @@ value(await storage.checksum.verify('changed', digest)) // false
 | --- | --- | --- | --- | --- |
 | `uploadWithPresignedUrl` | 直传文件 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
 | `downloadWithPresignedUrl` | 读取下载内容 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | 下载并触发保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `downloadAndSave` | 下载并触发保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
 | `getFileExtension` | 读取扩展名 | `File` | `string` | `getFileExtension(file)` |
 | `getMimeType` | 按扩展名查类型 | `extension: string` | `string` | `getMimeType("txt")` |
 | `formatFileSize` | 显示字节大小 | `bytes: number` | `string` | `formatFileSize(1024)` |
@@ -461,8 +461,8 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   const extension = getFileExtension(file)
   // file.type 缺失时用上一步扩展名取得 MIME 类型，未识别时退回 application/octet-stream。
   const contentType = file.type || getMimeType(extension)
-  // 传文件字节数生成可读字符串，例如 1024 字节显示为 1 KB。
-  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // 传文件字节数生成可读字符串，例如 1024 字节显示为 1.00 KB。
+  const displayedSize = formatFileSize(file.size)
   // 用调用方传的直传 URL、原文件及 MIME 类型上传，成功表示上传完成，失败读取 error。
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)

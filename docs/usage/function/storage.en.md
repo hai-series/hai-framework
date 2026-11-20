@@ -177,6 +177,10 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 
 UTF-8 hello is five bytes. Chunk boundaries vary, and stream iteration can fail after the initial result. Inspect confirmed batch deletions rather than assuming Promise completion means every key was removed.
 
+To abandon a download, abort its signal or call `return()` on its iterator to release the connection, even before reading the first chunk. When copying, setting only `contentType` or `metadata` preserves the other field from the source. For an S3 copy with overrides, Storage checks the source ETag before applying the changes. If the check fails, read the source again before retrying.
+
+With Local storage, `file.head()` and `file.copy()` require the metadata record tied to the file's identity. When moving objects, export their bytes and metadata and write them to the destination with `file.put()`. [Local backup and recovery](../data/storage.en.md)
+
 [Detailed parameters and workflows](storage.md#files)
 
 <a id="directories"></a>
@@ -232,7 +236,7 @@ A signed URL separates authorization from the byte transfer. This requires initi
 
 ![Private files: authorize before direct transfer](../images/function-storage-presign.en.svg)
 
-Returning a URL issues access credentials; it does not transfer a file. The browser then contacts storage, which checks the signature and expiry. Upload Content-Type must match the signed value. publicUrl only computes the configured public address.
+After receiving the URL, the browser connects to object storage, which verifies the signature and expiry before transferring the file. The PUT signature binds the `Content-Type` header. Send the same value with the upload. If `contentType` was omitted when signing, send `application/octet-stream`. `publicUrl()` encodes each key segment and appends the result to the configured public address.
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
@@ -294,7 +298,7 @@ These helpers consume server-authorized URLs or user-selected files. They do not
 | --- | --- | --- | --- | --- |
 | `uploadWithPresignedUrl` | Upload bytes | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
 | `downloadWithPresignedUrl` | Download a Blob | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | Download and save | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `downloadAndSave` | Download and save | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
 | `getFileExtension` | Read an extension | `File` | `string` | `getFileExtension(file)` |
 | `getMimeType` | Resolve a MIME type | `extension: string` | `string` | `getMimeType("txt")` |
 | `formatFileSize` | Format a byte count | `bytes: number` | `string` | `formatFileSize(1024)` |
@@ -311,8 +315,8 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   const extension = getFileExtension(file)
   // If file.type is missing, use the extension to resolve the MIME type, falling back to application/octet-stream.
   const contentType = file.type || getMimeType(extension)
-  // Format the file's byte count. For example, 1024 bytes displays as 1 KB.
-  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // Format the file's byte count. For example, 1024 bytes displays as 1.00 KB.
+  const displayedSize = formatFileSize(file.size)
   // Upload the original file to the supplied URL with the MIME type. Success signals completion. Read error on failure.
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)

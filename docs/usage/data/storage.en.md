@@ -45,6 +45,8 @@ Local files do not inherently retain uploaded MIME type and custom attributes, s
 
 This file is text/plain and relates to order-42. Only business attributes are shown; do not edit the internal versioned sidecar manually.
 
+When restoring a filesystem snapshot, retain both the content and `.hai-storage-meta/`. Verify that the file's device ID, inode and creation time still match its record. A regular file copy can change those values even when the metadata directory is copied too, so `file.head()` may fail to find the record. To migrate between filesystems, pause writes on the source. Read the content type and custom metadata with `file.head()` and the bytes with `file.getStream()`. Write them with `file.put()` on the destination to recreate the record.
+
 ## Field, storage and cleanup reference
 
 Objects live on the backend under caller-supplied keys. Storage creates no SQL tables or Redis keys.

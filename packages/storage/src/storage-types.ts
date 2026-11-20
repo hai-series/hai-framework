@@ -206,13 +206,13 @@ export interface UploadOptions {
   ifNoneMatch?: '*'
   /** 取消上传；失败或取消时清理未完成的临时文件/分片。 */
   signal?: AbortSignal
-  /** 内容类型（不指定时根据文件扩展名自动推断） */
+  /** 内容类型；省略时 Local 按扩展名推断，S3 由对象服务决定。 */
   contentType?: string
   /** 自定义元数据键值对（存储后可通过 head 获取） */
   metadata?: Record<string, string>
-  /** Cache-Control 响应头（例如 'max-age=3600'） */
+  /** S3 对象的 Cache-Control（例如 'max-age=3600'）。 */
   cacheControl?: string
-  /** Content-Disposition 响应头（例如 'attachment; filename="a.txt"'） */
+  /** S3 对象的 Content-Disposition（例如 'attachment; filename="a.txt"'）。 */
   contentDisposition?: string
 }
 
@@ -242,7 +242,7 @@ export interface DownloadOptions {
  * 复制选项
  *
  * 用于控制 `storage.file.copy()` 的目标文件元数据。
- * 提供任意字段时，S3 Provider 会使用 MetadataDirective='REPLACE' 覆盖源文件元数据。
+ * 指定的字段覆盖源对象对应字段，其余字段继承源值。S3 有覆盖选项时会校验源 ETag。
  * @example
  * ```ts
  * import type { CopyOptions } from '@h-ai/storage'
@@ -371,7 +371,7 @@ export interface FileOperations {
   get: (key: string, options?: DownloadOptions) => Promise<HaiResult<Buffer>>
 
   /**
-   * 读取字节流，支持 Range 与取消；消费方负责及时迭代或关闭流。
+   * 读取字节流，支持 Range 与取消。调用方应及时消费并在放弃时取消 signal 或调用迭代器的 return()。
    * @throws 迭代期间的 I/O/取消错误；初始请求失败通过 HaiResult 返回。
    * @example
    * ```ts

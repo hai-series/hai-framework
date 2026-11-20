@@ -4,7 +4,7 @@
 
 ## 运行环境
 
-Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。读取需要有效的代际元数据，备份须同时保存内容和内部记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
+Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。`file.head()` 和 `file.copy()` 需要有效的代际元数据。快照恢复要保留内容、内部记录及用于匹配记录的文件身份。普通文件级迁移应先在源端读取内容和元数据，再在目标端用 `file.put()` 重建记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
 
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
 
@@ -177,6 +177,8 @@ if (!downloadUrl.success) return downloadUrl
 ```
 
 > `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
+
+PUT 签名绑定 `Content-Type`。调用 `uploadWithPresignedUrl()` 或发送 PUT 请求时显式使用签发时的类型。签发时省略 `contentType`，上传须发送 `application/octet-stream`。
 
 ## 错误码 — `HaiStorageError`
 
