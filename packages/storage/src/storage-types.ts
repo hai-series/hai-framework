@@ -127,14 +127,35 @@ export interface FileMetadata {
   key: string
   /** 文件大小（字节） */
   size: number
-  /** 内容类型（MIME），未指定时根据扩展名自动推断 */
+  /** 对象的 MIME 类型。Local 上传省略类型时按扩展名推断。 */
   contentType: string
-  /** 最后修改时间 */
+  /** 对象修改时间。S3 上传回执记录收到成功响应的时间。 */
   lastModified: Date
   /** ETag（缓存验证标记；本地为 size-mtime，S3 由服务端生成，不等同于内容 checksum） */
   etag?: string
   /** 自定义元数据键值对 */
   metadata?: Record<string, string>
+}
+
+/**
+ * 同一次打开操作得到的完整对象元数据和字节流。调用方持有流，放弃读取时应主动关闭。
+ * @example
+ * ```ts
+ * import type { StorageFileRead } from '@h-ai/storage'
+ *
+ * async function release(read: StorageFileRead) {
+ *   // 跳过不需要的对象时关闭未消费的流，释放连接或文件句柄。
+ *   await read.close()
+ * }
+ * ```
+ */
+export interface StorageFileRead {
+  /** 与流中正文对应的完整对象元数据。 */
+  metadata: FileMetadata
+  /** 单次消费的字节流。迭代时可能抛出读取或取消错误。 */
+  stream: AsyncIterable<Uint8Array>
+  /** 可重复调用，终止读取并释放已打开的流。 */
+  close: () => Promise<void>
 }
 
 /**
@@ -206,13 +227,13 @@ export interface UploadOptions {
   ifNoneMatch?: '*'
   /** 取消上传；失败或取消时清理未完成的临时文件/分片。 */
   signal?: AbortSignal
-  /** 内容类型（不指定时根据文件扩展名自动推断） */
+  /** 内容类型；省略时 Local 按扩展名推断，S3 由对象服务决定。 */
   contentType?: string
   /** 自定义元数据键值对（存储后可通过 head 获取） */
   metadata?: Record<string, string>
-  /** Cache-Control 响应头（例如 'max-age=3600'） */
+  /** S3 对象的 Cache-Control（例如 'max-age=3600'）。 */
   cacheControl?: string
-  /** Content-Disposition 响应头（例如 'attachment; filename="a.txt"'） */
+  /** S3 对象的 Content-Disposition（例如 'attachment; filename="a.txt"'）。 */
   contentDisposition?: string
 }
 
@@ -242,7 +263,7 @@ export interface DownloadOptions {
  * 复制选项
  *
  * 用于控制 `storage.file.copy()` 的目标文件元数据。
- * 提供任意字段时，S3 Provider 会使用 MetadataDirective='REPLACE' 覆盖源文件元数据。
+ * 指定的字段覆盖源对象对应字段，其余字段继承源值。S3 有覆盖选项时会校验源 ETag。
  * @example
  * ```ts
  * import type { CopyOptions } from '@h-ai/storage'
@@ -343,6 +364,8 @@ export interface FileOperations {
    * @returns 成功包含文件元数据。失败包含错误码和消息，底层原因可用时保留在 error.cause。
    * `ifNoneMatch: '*'` 的目标冲突返回 ALREADY_EXISTS，上传源读取失败返回 UPLOAD_FAILED。
    * S3 流式上传可从 error.ext.s3Operation 获取失败操作，清理错误单独保存在 error.ext.cleanupError。
+   * S3 成功结果来自本次写入，包含实际字节数、提交的元数据和后端提供的 ETag。
+   * S3 的 lastModified 记录收到成功响应的时间，省略 contentType 时返回 application/octet-stream。
    * @example
    * ```ts
    * const result = await storage.file.put('uploads/a.txt', 'hello')
@@ -371,7 +394,7 @@ export interface FileOperations {
   get: (key: string, options?: DownloadOptions) => Promise<HaiResult<Buffer>>
 
   /**
-   * 读取字节流，支持 Range 与取消；消费方负责及时迭代或关闭流。
+   * 读取字节流，支持 Range 与取消。调用方应及时消费并在放弃时取消 signal 或调用迭代器的 return()。
    * @throws 迭代期间的 I/O/取消错误；初始请求失败通过 HaiResult 返回。
    * @example
    * ```ts
@@ -388,6 +411,30 @@ export interface FileOperations {
    * ```
    */
   getStream: (key: string, options?: DownloadOptions) => Promise<HaiResult<AsyncIterable<Uint8Array>>>
+
+  /**
+   * 在同一次读取中打开完整对象及其元数据，适用于同时使用 MIME、大小或 ETag 和正文的场景。
+   * @param key - 完整对象键。
+   * @param options - 可选的取消信号。
+   * @returns 成功时返回元数据、单次消费的字节流及关闭方法，打开失败时返回 HaiResult 错误。
+   * @throws 字节流迭代期间可能抛出 I/O 或取消异常。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const opened = await storage.file.getStreamWithMetadata('reports/a.txt')
+   * if (!opened.success) throw new Error(opened.error.message)
+   * const { metadata, stream, close } = opened.data
+   * try {
+   *   if (metadata.contentType === 'text/plain') {
+   *     for await (const chunk of stream) void chunk.byteLength
+   *   }
+   * } finally {
+   *   await close()
+   * }
+   * ```
+   */
+  getStreamWithMetadata: (key: string, options?: Pick<DownloadOptions, 'signal'>) => Promise<HaiResult<StorageFileRead>>
 
   /**
    * 获取文件元数据

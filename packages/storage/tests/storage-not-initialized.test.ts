@@ -29,6 +29,14 @@ describe('storage (not initialized)', { concurrent: false }, () => {
     }
   })
 
+  it('file.getStreamWithMetadata 应返回 NOT_INITIALIZED', async () => {
+    const result = await storage.file.getStreamWithMetadata('test.txt')
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiStorageError.NOT_INITIALIZED.code },
+    })
+  })
+
   it('file.head 应返回 NOT_INITIALIZED', async () => {
     const result = await storage.file.head('test.txt')
     expect(result.success).toBe(false)

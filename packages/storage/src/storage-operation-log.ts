@@ -169,13 +169,24 @@ export async function logStorageResult<Value>(operation: string, pending: Promis
   return result
 }
 
-async function* logReadStream(stream: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
-  try {
-    yield* stream
-  }
-  catch (cause) {
-    warnFailure('file.getStream', { code: HaiStorageError.DOWNLOAD_FAILED.code, cause })
-    throw cause
+function logReadStream(operation: string, stream: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
+  return {
+    [Symbol.asyncIterator]() {
+      const iterator = stream[Symbol.asyncIterator]()
+      return {
+        async next() {
+          try {
+            return await iterator.next()
+          }
+          catch (cause) {
+            warnFailure(operation, { code: HaiStorageError.DOWNLOAD_FAILED.code, cause })
+            throw cause
+          }
+        },
+        // 包装器也要转发首次 next() 前的关闭，S3 响应可能已经占用连接。
+        return: iterator.return?.bind(iterator),
+      }
+    },
   }
 }
 
@@ -223,7 +234,17 @@ export function withStorageOperationLogs(provider: StorageOperations, config?: S
       async getStream(key, options) {
         const result = await run('read', 'file.getStream', () => file.getStream(key, options))
         return result.success
-          ? ok(logReadStream(result.data))
+          ? ok(logReadStream('file.getStream', result.data))
+          : result
+      },
+      async getStreamWithMetadata(key, options) {
+        const operation = 'file.getStreamWithMetadata'
+        const result = await run('read', operation, () => file.getStreamWithMetadata(key, options))
+        return result.success
+          ? ok({
+              ...result.data,
+              stream: logReadStream(operation, result.data.stream),
+            })
           : result
       },
       head: key => run('read', 'file.head', () => file.head(key)),

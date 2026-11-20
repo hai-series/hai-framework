@@ -6,15 +6,17 @@
  * @module storage-provider-s3
  */
 
-import type { BucketLocationConstraint, S3ClientConfig } from '@aws-sdk/client-s3'
+import type { BucketLocationConstraint, HeadObjectCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3'
+import type { Upload } from '@aws-sdk/lib-storage'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { DirOperations, DownloadOptions, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary, StorageFileRead } from '../storage-types.js'
 import type { StorageProvider } from './storage-provider-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import {
+  AbortMultipartUploadCommand,
   CopyObjectCommand,
   CreateBucketCommand,
   DeleteObjectCommand,
@@ -33,7 +35,7 @@ import { core, err, ok } from '@h-ai/core'
 import { PresignOptionsSchema, PresignUploadOptionsSchema } from '../storage-config.js'
 import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
-import { toByteStream } from '../storage-stream.js'
+import { createStorageReadStream, toByteStream } from '../storage-stream.js'
 import {
 
   HaiStorageError,
@@ -54,18 +56,20 @@ const RETRYABLE_DELETE_CODES = new Set([
 ])
 
 /**
- * 同一次流式上传的 SDK 写入和清理诊断；并发上传各自隔离。
+ * 同一次流式上传的停止信号和首个失败；并发上传各自隔离。
  * @example 模块内部上下文
  * ```ts
- * const diagnostics: UploadDiagnostics = { bucket: 'uploads', key: 'report.zip' }
+ * const stop = new AbortController()
+ * const diagnostics: UploadDiagnostics = { bucket: 'uploads', key: 'report.zip', signal: stop.signal, stop }
  * uploadDiagnostics.run(diagnostics, () => void uploadDiagnostics.getStore())
  * ```
  */
 interface UploadDiagnostics {
   bucket: string
   key: string
+  signal: AbortSignal
+  stop: AbortController
   failure?: { cause: unknown, operation?: string }
-  cleanup?: { cause: unknown }
 }
 
 const uploadDiagnostics = new AsyncLocalStorage<UploadDiagnostics>()
@@ -74,10 +78,9 @@ const UPLOAD_COMMANDS = new Set([
   'CreateMultipartUpload',
   'UploadPart',
   'CompleteMultipartUpload',
-  'AbortMultipartUpload',
 ])
 
-/** SDK 自动清理分片时可能抛出第二个错误，提前保留写入失败及其操作名。 */
+/** 记录首个写入失败，并在上传中止后拒绝发送新的分片或提交请求。 */
 function observeUploadRequests(client: S3Client): void {
   client.middlewareStack.add((next, context) => async (args) => {
     const diagnostics = uploadDiagnostics.getStore()
@@ -90,6 +93,7 @@ function observeUploadRequests(client: S3Client): void {
       || !('Key' in input) || input.Key !== diagnostics.key) {
       return next(args)
     }
+    diagnostics.signal.throwIfAborted()
     try {
       const response = await next(args)
       // SDK 在请求返回后才检查 ETag；提前归入分片失败，清理报错时仍可定位原始响应。
@@ -107,10 +111,8 @@ function observeUploadRequests(client: S3Client): void {
       return response
     }
     catch (cause) {
-      if (operation === 'AbortMultipartUpload')
-        diagnostics.cleanup = { cause }
-      else
-        diagnostics.failure ??= { cause, operation }
+      diagnostics.failure ??= { cause, operation }
+      diagnostics.stop.abort(cause)
       throw cause
     }
   }, { step: 'initialize', name: 'haiStorageObserveUploadRequests' })
@@ -122,9 +124,9 @@ function observeUploadRequests(client: S3Client): void {
  * 将 S3 SDK 错误转换为 StorageError
  *
  * 映射规则：
+ * - NoSuchBucket → CONFIG_ERROR，优先于通用 HTTP 状态码
  * - NoSuchKey / NotFound / 404 → NOT_FOUND
  * - AccessDenied → PERMISSION_DENIED
- * - NoSuchBucket → CONFIG_ERROR
  * - NetworkError / ECONNREFUSED → NETWORK_ERROR
  * - 其他 → OPERATION_FAILED
  *
@@ -146,6 +148,14 @@ function toStorageError(error: unknown, key?: string): HaiError {
   }
 
   // S3 特定错误处理
+  if (e.name === 'NoSuchBucket' || e.Code === 'NoSuchBucket') {
+    return {
+      ...HaiStorageError.CONFIG_ERROR,
+      message: storageM('storage_bucketNotExist'),
+      cause: error,
+    }
+  }
+
   if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey'
     || e.name === 'NotFound' || e.Code === 'NotFound'
     || e.name === '404' || e.$metadata?.httpStatusCode === 404) {
@@ -164,14 +174,6 @@ function toStorageError(error: unknown, key?: string): HaiError {
       message: storageM('storage_permissionDenied', {
         params: { key: key ?? '' },
       }),
-      cause: error,
-    }
-  }
-
-  if (e.name === 'NoSuchBucket' || e.Code === 'NoSuchBucket') {
-    return {
-      ...HaiStorageError.CONFIG_ERROR,
-      message: storageM('storage_bucketNotExist'),
       cause: error,
     }
   }
@@ -224,6 +226,18 @@ function withoutPrefix(key: string, prefix: string): string {
   return key
 }
 
+/** 按相同字段解释 HeadObject 和 GetObject 响应中的对象元数据。 */
+function objectMetadata(key: string, response: Pick<HeadObjectCommandOutput, 'ContentLength' | 'ContentType' | 'LastModified' | 'ETag' | 'Metadata'>): FileMetadata {
+  return {
+    key,
+    size: response.ContentLength ?? 0,
+    contentType: response.ContentType || 'application/octet-stream',
+    lastModified: response.LastModified ?? new Date(),
+    etag: response.ETag,
+    metadata: response.Metadata,
+  }
+}
+
 // ─── S3 Provider 实现 ───
 
 /**
@@ -234,7 +248,7 @@ function withoutPrefix(key: string, prefix: string): string {
  * 支持配置 prefix 重定向所有 key，对用户透明。
  *
  * 实现说明：
- * - copy 时若指定了 contentType 或 metadata，使用 MetadataDirective='REPLACE'
+ * - copy 指定 contentType 或 metadata 时，结合源 ETag 和继承字段使用 MetadataDirective='REPLACE'
  * - dir.delete 通过先 list 再批量删除实现
  * - presign 使用 @aws-sdk/s3-request-presigner 签名
  *
@@ -293,9 +307,9 @@ export function createS3Provider(): StorageProvider {
   // 内部辅助
   // -------------------------------------------------------------------------
 
-  /** 预签名仅使用外部端点；CRUD 与健康检查仍使用内部端点，批量删除禁用 SDK 重试。 */
-  function getClient(operation?: 'deleteMany' | 'presign'): S3Client {
-    const selected = operation === 'deleteMany'
+  /** 预签名可使用外部端点；删除与其他存储请求使用内部端点，删除禁用 SDK 重试。 */
+  function getClient(operation?: 'delete' | 'presign'): S3Client {
+    const selected = operation === 'delete'
       ? deleteClient
       : operation === 'presign'
         ? presignClient ?? client
@@ -337,6 +351,34 @@ export function createS3Provider(): StorageProvider {
     return withPrefix(key, getConfig().prefix)
   }
 
+  /** 用一次 S3 请求打开正文，同时取得相同响应的元数据。 */
+  async function openObject(key: string, options: DownloadOptions): Promise<HaiResult<StorageFileRead>> {
+    try {
+      const s3Client = getClient()
+      const s3Config = getConfig()
+      const fullPath = fullKey(key)
+      const Range = options.rangeStart !== undefined || options.rangeEnd !== undefined
+        ? `bytes=${options.rangeStart ?? 0}-${options.rangeEnd ?? ''}`
+        : undefined
+      const response = await s3Client.send(new GetObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: fullPath,
+        Range,
+      }), { abortSignal: options.signal })
+
+      if (!(response.Body instanceof Readable))
+        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_responseBodyEmpty'))
+
+      return ok({
+        metadata: objectMetadata(key, response),
+        ...createStorageReadStream(response.Body, options.signal),
+      })
+    }
+    catch (error) {
+      return err(toStorageError(error, key))
+    }
+  }
+
   // -------------------------------------------------------------------------
   // 文件操作实现
   // -------------------------------------------------------------------------
@@ -354,91 +396,106 @@ export function createS3Provider(): StorageProvider {
           : data
         const buffered = body instanceof Uint8Array
         let size = buffered ? body.byteLength : 0
+        let etag: string | undefined
         const params = {
           Bucket: s3Config.bucket,
           Key: fullPath,
           ContentType: options.contentType,
-          Metadata: options.metadata,
+          Metadata: options.metadata
+            ? { ...options.metadata }
+            : undefined,
           CacheControl: options.cacheControl,
           ContentDisposition: options.contentDisposition,
           IfNoneMatch: options.ifNoneMatch,
         }
         if (buffered) {
-          await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
+          const receipt = await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
+          etag = receipt.ETag
         }
         else {
-          const diagnostics: UploadDiagnostics = { bucket: s3Config.bucket, key: fullPath }
+          const stop = new AbortController()
+          const signal = options.signal
+            ? AbortSignal.any([options.signal, stop.signal])
+            : stop.signal
+          const diagnostics: UploadDiagnostics = {
+            bucket: s3Config.bucket,
+            key: fullPath,
+            signal,
+            stop,
+          }
           async function* counted(): AsyncIterable<Uint8Array> {
             try {
-              for await (const chunk of toByteStream(data, options.signal)) {
+              for await (const chunk of toByteStream(data, signal)) {
                 size += chunk.byteLength
                 yield chunk
               }
             }
             catch (cause) {
               diagnostics.failure ??= { cause }
+              stop.abort(cause)
               throw cause
             }
           }
           const stream = Readable.from(counted(), { objectMode: false })
-          const controller = new AbortController()
-          const abort = () => controller.abort()
-          options.signal?.addEventListener('abort', abort, { once: true })
+          let upload: Upload | undefined
           try {
-            if (options.signal?.aborted)
-              abort()
-            // SDK 按配置切片并限制单次上传的分片并发。
+            // SDK 负责切片与并发。取消经输入和发送前检查传递，避免 done() 提前返回，确保在途分片已结束再清理。
             const { Upload } = await import('@aws-sdk/lib-storage')
-            const upload = new Upload({
+            const multipart = new Upload({
               client: s3Client,
               params: { ...params, Body: stream },
               partSize: s3Config.multipart.partSizeBytes,
               queueSize: s3Config.multipart.queueSize,
-              leavePartsOnError: false,
-              abortController: controller,
+              leavePartsOnError: true,
             })
-            await uploadDiagnostics.run(diagnostics, () => upload.done())
+            upload = multipart
+            const receipt = await uploadDiagnostics.run(diagnostics, () => multipart.done())
+            etag = receipt.ETag
           }
           catch (cause) {
             const failure = diagnostics.failure
-            const cleanup = diagnostics.cleanup
-            const original = cleanup && failure && Object.is(cause, cleanup.cause)
-              ? failure.cause
-              : cause
-            const error = toStorageError(original, key)
-            const s3Operation = failure && Object.is(failure.cause, original)
-              ? failure.operation
-              : undefined
-            if (s3Operation || cleanup) {
+            const error = toStorageError(failure ? failure.cause : cause, key)
+            const s3Operation = failure?.operation
+            let cleanupError: HaiError | undefined
+            if (upload?.uploadId) {
+              // SDK 在 CompleteMultipartUpload 失败时也可能留下分片。统一在请求收尾后显式清理。
+              try {
+                await s3Client.send(new AbortMultipartUploadCommand({
+                  Bucket: params.Bucket,
+                  Key: params.Key,
+                  UploadId: upload.uploadId,
+                }))
+              }
+              catch (cleanupCause) {
+                if (!(cleanupCause && typeof cleanupCause === 'object'
+                  && (('name' in cleanupCause && cleanupCause.name === 'NoSuchUpload')
+                    || ('Code' in cleanupCause && cleanupCause.Code === 'NoSuchUpload')))) {
+                  cleanupError = toStorageError(cleanupCause)
+                }
+              }
+            }
+            if (s3Operation || cleanupError) {
               error.ext = {
                 ...error.ext,
                 s3Operation,
-                ...(cleanup && {
-                  cleanupPending: true,
-                  cleanupError: toStorageError(cleanup.cause),
-                }),
+                ...(cleanupError && { cleanupPending: true, cleanupError }),
               }
             }
             return err(error)
           }
           finally {
-            options.signal?.removeEventListener('abort', abort)
             stream.destroy()
           }
         }
 
-        // 获取上传后的元数据
-        const headResult = await file.head(key)
-        if (headResult.success) {
-          return headResult
-        }
-
-        // 如果获取元数据失败，返回基本信息
+        // 按本次写入回执返回，避免读取同键被并发覆盖后的对象。
         return ok({
           key,
           size,
-          contentType: options.contentType || 'application/octet-stream',
+          contentType: params.ContentType || 'application/octet-stream',
           lastModified: new Date(),
+          etag,
+          metadata: params.Metadata,
         })
       }
       catch (error) {
@@ -462,41 +519,13 @@ export function createS3Provider(): StorageProvider {
     },
 
     async getStream(key, options = {}) {
-      try {
-        const s3Client = getClient()
-        const s3Config = getConfig()
-        const fullPath = fullKey(key)
-
-        let Range: string | undefined
-        if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
-          const start = options.rangeStart ?? 0
-          const end = options.rangeEnd !== undefined
-            ? options.rangeEnd
-            : ''
-          Range = `bytes=${start}-${end}`
-        }
-
-        const response = await s3Client.send(new GetObjectCommand({
-          Bucket: s3Config.bucket,
-          Key: fullPath,
-          Range,
-        }), { abortSignal: options.signal })
-
-        if (!response.Body) {
-          return err(
-            HaiStorageError.OPERATION_FAILED,
-            storageM('storage_responseBodyEmpty'),
-          )
-        }
-
-        // Node SDK 的 Body 是字节可迭代流；SDK 类型联合也包含其他运行时的 Blob。
-        const stream = response.Body as AsyncIterable<Uint8Array>
-        return ok(stream)
-      }
-      catch (error) {
-        return err(toStorageError(error, key))
-      }
+      const opened = await openObject(key, options)
+      return opened.success
+        ? ok(opened.data.stream)
+        : opened
     },
+
+    getStreamWithMetadata: (key, options) => openObject(key, { signal: options?.signal }),
 
     async head(key): Promise<HaiResult<FileMetadata>> {
       try {
@@ -509,14 +538,7 @@ export function createS3Provider(): StorageProvider {
           Key: fullPath,
         }))
 
-        return ok({
-          key,
-          size: response.ContentLength || 0,
-          contentType: response.ContentType || 'application/octet-stream',
-          lastModified: response.LastModified || new Date(),
-          etag: response.ETag,
-          metadata: response.Metadata,
-        })
+        return ok(objectMetadata(key, response))
       }
       catch (error) {
         return err(toStorageError(error, key))
@@ -536,7 +558,7 @@ export function createS3Provider(): StorageProvider {
 
     async delete(key): Promise<HaiResult<void>> {
       try {
-        const s3Client = getClient()
+        const s3Client = getClient('delete')
         const s3Config = getConfig()
         const fullPath = fullKey(key)
 
@@ -554,7 +576,7 @@ export function createS3Provider(): StorageProvider {
 
     async deleteMany(keys): Promise<StorageDeleteResult> {
       try {
-        const s3Client = getClient('deleteMany')
+        const s3Client = getClient('delete')
         const s3Config = getConfig()
         const uniqueKeys = [
           ...new Set(keys),
@@ -663,6 +685,7 @@ export function createS3Provider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
+      const replaceMetadata = options.metadata !== undefined || options.contentType !== undefined
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -676,21 +699,37 @@ export function createS3Provider(): StorageProvider {
           .map(part => encodeURIComponent(part).replace(/[!'()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`))
           .join('/')
 
+        const sourceMetadata = replaceMetadata
+          ? await s3Client.send(new HeadObjectCommand({ Bucket: s3Config.bucket, Key: sourceFullPath }))
+          : undefined
+        if (sourceMetadata && !sourceMetadata.ETag)
+          return err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceETagMissing'))
+
         await s3Client.send(new CopyObjectCommand({
           Bucket: s3Config.bucket,
           CopySource: copySource,
           Key: destFullPath,
-          ContentType: options.contentType,
-          Metadata: options.metadata,
-          MetadataDirective: (options.metadata || options.contentType)
-            ? 'REPLACE'
-            : 'COPY',
+          MetadataDirective: replaceMetadata ? 'REPLACE' : 'COPY',
+          ...(sourceMetadata && {
+            CopySourceIfMatch: sourceMetadata.ETag,
+            ContentType: options.contentType ?? sourceMetadata.ContentType,
+            Metadata: options.metadata ?? sourceMetadata.Metadata,
+            CacheControl: sourceMetadata.CacheControl,
+            ContentDisposition: sourceMetadata.ContentDisposition,
+            ContentEncoding: sourceMetadata.ContentEncoding,
+            ContentLanguage: sourceMetadata.ContentLanguage,
+            Expires: sourceMetadata.Expires,
+            WebsiteRedirectLocation: sourceMetadata.WebsiteRedirectLocation,
+          }),
         }))
 
         return file.head(destKey)
       }
       catch (error) {
-        return err(toStorageError(error, sourceKey))
+        const failure = toStorageError(error, sourceKey)
+        if (replaceMetadata && failure.code === HaiStorageError.ALREADY_EXISTS.code)
+          return err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceChanged'), error)
+        return err(failure)
       }
     },
   }
@@ -798,6 +837,7 @@ export function createS3Provider(): StorageProvider {
 
         const url = await getSignedUrl(s3Client, command, {
           expiresIn: parsed.expiresIn,
+          signableHeaders: new Set(['content-type']),
         })
 
         return ok(publicPresignedUrl(url, basePath))
@@ -816,8 +856,10 @@ export function createS3Provider(): StorageProvider {
       if (!s3Config.publicUrl) {
         return null
       }
-      const fullPath = fullKey(key)
-      return `${s3Config.publicUrl.replace(TRAILING_SLASHES_REGEX, '')}/${fullPath}`
+      const url = new URL(s3Config.publicUrl)
+      const objectPath = fullKey(key).split('/').map(part => encodeURIComponent(part)).join('/')
+      url.pathname = `${url.pathname.replace(TRAILING_SLASHES_REGEX, '')}/${objectPath}`
+      return url.href
     },
   }
 

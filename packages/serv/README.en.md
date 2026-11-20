@@ -22,6 +22,8 @@ See the [configuration reference](../../docs/usage/configuration/serv.en.md) for
 
 ## Features
 
+`serv.storageAssets()` serves public read-only files and uses one Storage read for each GET response's headers and body.
+
 [Browse the API list](../../docs/usage/function/serv.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures

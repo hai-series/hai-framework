@@ -20,6 +20,8 @@
 
 ## 機能
 
+オブジェクト全体と MIME タイプや ETag を一度に取得するには、`storage.file.getStreamWithMetadata()` を使います。
+
 `storage.dir.delete(prefix)` はキーの文字列プレフィックスに一致するオブジェクトをページ単位で削除します。たとえば `reports/draft-` は `reports/draft-1.txt` に、`reports/` はそのパス配下のキーに一致します。空のプレフィックスはコンテナ内の全オブジェクトに一致します。
 
 [API 一覧](../../docs/usage/function/storage.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。

@@ -85,7 +85,40 @@ function defineStreamTests() {
 
 describe('storage streams', () => {
   defineStorageSuite('local', localStorageEnv, defineStreamTests)
-  defineS3StorageSuites(defineStreamTests, 'stream')
+  defineS3StorageSuites(() => {
+    defineStreamTests()
+
+    it('打开完整对象后覆盖同键，流和元数据仍来自已打开的对象', async () => {
+      const key = 'stream/report.txt'
+      expect((await storage.file.put(key, 'original', {
+        contentType: 'text/plain',
+        metadata: { revision: 'first' },
+      })).success).toBe(true)
+      const opened = await storage.file.getStreamWithMetadata(key)
+      expect(opened.success).toBe(true)
+      if (!opened.success)
+        return
+      try {
+        expect((await storage.file.put(key, 'new', {
+          contentType: 'text/markdown',
+          metadata: { revision: 'second' },
+        })).success).toBe(true)
+        expect(opened.data.metadata).toMatchObject({
+          key,
+          size: 8,
+          contentType: 'text/plain',
+          metadata: { revision: 'first' },
+        })
+        const chunks: Uint8Array[] = []
+        for await (const chunk of opened.data.stream)
+          chunks.push(chunk)
+        expect(Buffer.concat(chunks).toString()).toBe('original')
+      }
+      finally {
+        await opened.data.close()
+      }
+    })
+  }, 'stream')
 })
 
 it('s3 流式上传按配置切片并并发发送三片', async () => {

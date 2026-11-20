@@ -30,6 +30,10 @@
 
 reports/order-42.txt 是一个5字节的文本文件；lastModified 在代码里是 Date，JSON 显示为 UTC 日期字符串。
 
+### 一次读取打开的对象
+
+`StorageFileRead` 是服务端在一次读取中拿到的对象。以 `reports/order-42.txt` 为例，`metadata` 包含上面的 5 字节和 MIME 类型，`stream` 逐块交付同一对象的字节。应用可据此校验类型或生成响应头。读完可调用 `close()`，决定跳过正文时也可立即调用它释放句柄或连接。
+
 ### 本地文件旁保存的附加信息
 
 对应结构：`Local sidecar`。
@@ -47,6 +51,8 @@ reports/order-42.txt 是一个5字节的文本文件；lastModified 在代码里
 
 此例记录文件是 text/plain，并关联 order-42。这里只展示业务属性；内部文件名按文件版本生成，不应由应用手工修改。
 
+用文件系统快照恢复时，请同时保留内容和 `.hai-storage-meta/`，并验证文件的设备标识、inode 与创建时间仍能匹配记录。普通文件复制即使带上元数据目录，也可能改变这些标识，导致 `file.head()` 无法找到对应记录。迁移到另一文件系统前，先暂停源端写入，再用 `file.head()` 读取类型和自定义元数据，用 `file.getStream()` 读取内容。目标端用 `file.put()` 写入并重建对应记录。
+
 ## 字段、存储与清理参考
 
 ### 数据库与缓存
@@ -60,7 +66,7 @@ reports/order-42.txt 是一个5字节的文本文件；lastModified 在代码里
 | `key`          | 调用方定义的对象标识，支持路径层级，UTF-8 长度上限 1024 字节                                                   |
 | `size`         | 字节数                                                                                                         |
 | `contentType`  | MIME 类型，上传时可指定                                                                                        |
-| `lastModified` | 后端报告的修改时间                                                                                             |
+| `lastModified` | 后端报告的修改时间。S3 上传回执记录应用收到写入成功响应的时间                                                    |
 | `etag`         | 用于校验缓存的标记。本地存储根据大小和修改时间生成，S3 由服务端返回。要校验文件内容，请使用 `storage.checksum` |
 | `metadata`     | 自定义字符串键值映射，上传时可提供                                                                             |
 

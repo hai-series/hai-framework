@@ -6,6 +6,7 @@ import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiStorageError, storage } from '../src/index.js'
@@ -419,6 +420,127 @@ describe('storage 操作日志', () => {
       expect(JSON.stringify(records)).not.toMatch(/private upstream reason|private cleanup reason|cleanup-denied\.zip|missing-etag\.zip/)
     }
     finally {
+      await storage.close()
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
+  })
+
+  it.each(['complete conflict', 'cancelled part', 'cancelled part with cleanup denied'] as const)('s3 waits for multipart cleanup after %s', async (scenario) => {
+    const cancelled = scenario !== 'complete conflict'
+    const cleanupDenied = scenario === 'cancelled part with cleanup denied'
+    const controller = new AbortController()
+    const reason = new Error('cancelled by caller')
+    const partStarted = Promise.withResolvers<void>()
+    const releasePart = Promise.withResolvers<void>()
+    const events: string[] = []
+    const server = createServer((request, response) => {
+      request.resume()
+      request.once('end', async () => {
+        const url = new URL(request.url ?? '/', 'http://fixture')
+        response.setHeader('Content-Type', 'application/xml')
+        if (request.method === 'GET') {
+          response.end('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>')
+        }
+        else if (url.searchParams.has('uploads')) {
+          response.end('<InitiateMultipartUploadResult><UploadId>fixture-upload</UploadId></InitiateMultipartUploadResult>')
+        }
+        else if (url.searchParams.has('partNumber')) {
+          if (cancelled) {
+            partStarted.resolve()
+            await releasePart.promise
+            events.push('part finished')
+          }
+          response.setHeader('ETag', '"fixture-part"')
+          response.end()
+        }
+        else if (request.method === 'DELETE' && url.searchParams.get('uploadId') === 'fixture-upload') {
+          events.push('abort')
+          if (cleanupDenied)
+            response.writeHead(403).end('<Error><Code>AccessDenied</Code></Error>')
+          else
+            response.writeHead(204).end()
+        }
+        else if (request.method === 'POST' && url.searchParams.get('uploadId') === 'fixture-upload') {
+          events.push(`complete ${request.headers['if-none-match']}`)
+          response.writeHead(412).end('<Error><Code>PreconditionFailed</Code></Error>')
+        }
+        else {
+          response.writeHead(400).end('<Error><Code>InvalidRequest</Code></Error>')
+        }
+      })
+    })
+    try {
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing S3 fixture address')
+      expect((await storage.init({
+        type: 's3',
+        bucket: 'fixture',
+        region: 'us-east-1',
+        accessKeyId: 'fixture',
+        secretAccessKey: 'fixture',
+        endpoint: `http://127.0.0.1:${address.port}`,
+        forcePathStyle: true,
+        multipart: { queueSize: 1 },
+      })).success).toBe(true)
+      async function* source() {
+        yield Buffer.alloc(5 * 1024 * 1024 + 1)
+      }
+      const pending = storage.file.put('multipart.txt', source(), { ifNoneMatch: '*', signal: controller.signal }).then((result) => {
+        events.push('settled')
+        return result
+      })
+      if (cancelled) {
+        await Promise.race([
+          partStarted.promise,
+          pending.then(() => { throw new Error('Upload settled before a part was sent') }),
+        ])
+        controller.abort(reason)
+        await setImmediate()
+        releasePart.resolve()
+      }
+      const result = await pending
+      if (cancelled) {
+        expect(events).toEqual(['part finished', 'abort', 'settled'])
+        expect(result).toMatchObject({
+          success: false,
+          error: { code: HaiStorageError.OPERATION_FAILED.code },
+        })
+        if (!result.success)
+          expect(result.error.cause).toBe(reason)
+      }
+      else {
+        expect(events).toEqual(['complete *', 'abort', 'settled'])
+        expect(result).toMatchObject({
+          success: false,
+          error: {
+            code: HaiStorageError.ALREADY_EXISTS.code,
+            ext: { s3Operation: 'CompleteMultipartUpload' },
+          },
+        })
+      }
+      if (cleanupDenied) {
+        expect(result).toMatchObject({
+          success: false,
+          error: {
+            ext: {
+              cleanupPending: true,
+              cleanupError: { code: HaiStorageError.PERMISSION_DENIED.code },
+            },
+          },
+        })
+      }
+      else if (!result.success) {
+        expect(result.error.ext?.cleanupError).toBeUndefined()
+      }
+    }
+    finally {
+      releasePart.resolve()
       await storage.close()
       server.closeAllConnections()
       await new Promise<void>((resolve, reject) => server.close(error => error

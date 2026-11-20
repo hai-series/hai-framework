@@ -1,3 +1,5 @@
+import type { FileHandle } from 'node:fs/promises'
+import { Buffer } from 'node:buffer'
 import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import * as fileSystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -153,6 +155,142 @@ it.each([false, true])('concurrent writes keep content and metadata together wit
       ],
     },
   })
+})
+
+it('copies metadata and bytes from the same source version during an overwrite', async () => {
+  expect(await storage.file.put('source.txt', 'first', {
+    contentType: 'text/plain',
+    metadata: { writer: 'first' },
+  })).toMatchObject({ success: true })
+
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const metadataRead = Promise.withResolvers<void>()
+  const continueCopy = Promise.withResolvers<void>()
+  const read = vi.spyOn(fileSystem, 'readFile').mockImplementationOnce(async (...args) => {
+    const record = await original.readFile(...args)
+    metadataRead.resolve()
+    await continueCopy.promise
+    return record
+  })
+
+  const copying = storage.file.copy('source.txt', 'copy.txt')
+  try {
+    await expect(Promise.race([
+      metadataRead.promise.then(() => 'metadata-read'),
+      copying.then(() => 'finished'),
+    ])).resolves.toBe('metadata-read')
+    expect(await storage.file.put('source.txt', '{"writer":"second"}', {
+      contentType: 'application/json',
+      metadata: { writer: 'second' },
+    })).toMatchObject({ success: true })
+  }
+  finally {
+    continueCopy.resolve()
+    read.mockRestore()
+    await copying
+  }
+
+  expect(await copying).toMatchObject({
+    success: true,
+    data: { key: 'copy.txt', size: 5 },
+  })
+  expect(await storage.file.get('copy.txt')).toEqual({
+    success: true,
+    data: Buffer.from('first'),
+  })
+  expect(await storage.file.head('copy.txt')).toMatchObject({
+    success: true,
+    data: {
+      contentType: 'text/plain',
+      metadata: { writer: 'first' },
+    },
+  })
+})
+
+it('reads the opened generation after a concurrent overwrite replaces the key', async () => {
+  expect((await storage.file.put('shared.txt', 'first', {
+    contentType: 'text/plain',
+    metadata: { writer: 'first' },
+  })).success).toBe(true)
+
+  const opened = await storage.file.getStreamWithMetadata('shared.txt')
+  if (!opened.success)
+    throw new Error(opened.error.message)
+  try {
+    expect((await storage.file.put('shared.txt', '{"writer":"second"}', {
+      contentType: 'application/json',
+      metadata: { writer: 'second' },
+    })).success).toBe(true)
+    const chunks: Uint8Array[] = []
+    for await (const chunk of opened.data.stream)
+      chunks.push(chunk)
+    expect(Buffer.concat(chunks)).toEqual(Buffer.from('first'))
+    expect(opened.data.metadata).toMatchObject({
+      size: 5,
+      contentType: 'text/plain',
+      metadata: { writer: 'first' },
+    })
+  }
+  finally {
+    await opened.data.close()
+  }
+})
+
+it.each(['close', 'abort'] as const)('releases an opened file before the first read (%s)', async (operation) => {
+  expect((await storage.file.put('report.txt', 'content')).success).toBe(true)
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const handles: FileHandle[] = []
+  const open = vi.spyOn(fileSystem, 'open').mockImplementationOnce(async (...args) => {
+    const handle = await original.open(...args)
+    handles.push(handle)
+    return handle
+  })
+  const controller = new AbortController()
+  try {
+    const opened = await storage.file.getStreamWithMetadata('report.txt', { signal: controller.signal })
+    if (!opened.success)
+      throw new Error(opened.error.message)
+    try {
+      expect(handles).toHaveLength(1)
+      expect(handles[0]?.fd).toBeGreaterThanOrEqual(0)
+      if (operation === 'abort') {
+        controller.abort()
+        await expect(opened.data.stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({ name: 'AbortError' })
+      }
+      else {
+        await opened.data.close()
+      }
+      expect(handles[0]?.fd).toBe(-1)
+    }
+    finally {
+      await opened.data.close()
+    }
+  }
+  finally {
+    open.mockRestore()
+  }
+})
+
+it('closes the source when its generation metadata is missing', async () => {
+  await writeFile(join(root, 'report.txt'), 'legacy content')
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const handles: FileHandle[] = []
+  const open = vi.spyOn(fileSystem, 'open').mockImplementationOnce(async (...args) => {
+    const handle = await original.open(...args)
+    handles.push(handle)
+    return handle
+  })
+  try {
+    expect(await storage.file.getStreamWithMetadata('report.txt')).toMatchObject({
+      success: false,
+      error: { code: HaiStorageError.OPERATION_FAILED.code },
+    })
+    expect(handles).toHaveLength(1)
+    expect(handles[0]?.fd).toBe(-1)
+  }
+  finally {
+    open.mockRestore()
+  }
 })
 
 it('cancelled preparation preserves the previous generation and removes only the current temporary files', async () => {

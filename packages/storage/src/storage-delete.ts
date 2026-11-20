@@ -1,7 +1,7 @@
 /** Local/S3 共用的批量删除与前缀删除。 */
 import type { HaiResult } from '@h-ai/core'
 import type { DirOperations, FileOperations, StorageDeleteResult, StorageDeleteSummary } from './storage-types.js'
-import { ok } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { HaiStorageError } from './storage-types.js'
 
@@ -21,16 +21,23 @@ import { HaiStorageError } from './storage-types.js'
  */
 export async function deleteStoragePrefix(prefix: string, list: DirOperations['list'], deleteMany: FileOperations['deleteMany']): Promise<HaiResult<void>> {
   let continuationToken: string | undefined
+  const visited = new Set<string>()
   do {
     const page = await list({ prefix, continuationToken, maxKeys: 1000 })
     if (!page.success)
       return page
+    const next = page.data.nextContinuationToken
+    // 截断但没有游标会漏删，重复游标会重放删除。处理本页之前先验证翻页回执。
+    if (page.data.isTruncated !== Boolean(next) || (next && visited.has(next)))
+      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_listPageInvalid'))
+    if (next)
+      visited.add(next)
     if (page.data.files.length) {
       const deleted = await deleteMany(page.data.files.map(file => file.key))
       if (!deleted.success)
         return deleted
     }
-    continuationToken = page.data.nextContinuationToken
+    continuationToken = next
   } while (continuationToken)
   return ok(undefined)
 }

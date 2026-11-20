@@ -16,7 +16,7 @@
  * void mime
  * ```
  */
-export const MIME_TYPES: Record<string, string> = {
+const MIME_TYPES: Record<string, string> = {
   // 图片
   'jpg': 'image/jpeg',
   'jpeg': 'image/jpeg',
@@ -73,4 +73,24 @@ export const MIME_TYPES: Record<string, string> = {
  * void MIME_TYPE_DEFAULT // application/octet-stream
  * ```
  */
-export const MIME_TYPE_DEFAULT = 'application/octet-stream'
+const MIME_TYPE_DEFAULT = 'application/octet-stream'
+
+/**
+ * 根据文件扩展名获取 MIME 类型，未知扩展名返回 `application/octet-stream`。
+ *
+ * @param extension - 文件扩展名（不含点，大小写不敏感）
+ * @returns MIME 类型字符串
+ * @example
+ * ```ts
+ * import { getMimeType } from '@h-ai/storage/client'
+ *
+ * const mime = getMimeType('pdf')
+ * void mime
+ * ```
+ */
+export function getMimeType(extension: string): string {
+  const key = extension.toLowerCase()
+  return Object.hasOwn(MIME_TYPES, key)
+    ? MIME_TYPES[key]
+    : MIME_TYPE_DEFAULT
+}

@@ -28,6 +28,10 @@ Listings and file details describe location, size and type without downloading c
 
 reports/order-42.txt is a 5-byte text file. lastModified is a Date in code and a UTC date string in JSON.
 
+### An opened object
+
+A server-side `StorageFileRead` contains the result of a single read. For `reports/order-42.txt`, its `metadata` describes the five-byte text file above, and its `stream` yields that object's bytes. The application can use the metadata to validate the type or set response headers. Call `close()` when finished or when skipping the body to free the file handle or connection.
+
 ### Extra information beside a local file
 
 Structure: `Local sidecar`.
@@ -45,6 +49,8 @@ Local files do not inherently retain uploaded MIME type and custom attributes, s
 
 This file is text/plain and relates to order-42. Only business attributes are shown; do not edit the internal versioned sidecar manually.
 
+When restoring a filesystem snapshot, retain both the content and `.hai-storage-meta/`. Verify that the file's device ID, inode and creation time still match its record. A regular file copy can change those values even when the metadata directory is copied too, so `file.head()` may fail to find the record. To migrate between filesystems, pause writes on the source. Read the content type and custom metadata with `file.head()` and the bytes with `file.getStream()`. Write them with `file.put()` on the destination to recreate the record.
+
 ## Field, storage and cleanup reference
 
 Objects live on the backend under caller-supplied keys. Storage creates no SQL tables or Redis keys.
@@ -52,6 +58,6 @@ Objects live on the backend under caller-supplied keys. Storage creates no SQL t
 | Table, key or artifact | Shape and ownership |
 | --- | --- |
 | `key` | Object path, at most 1024 UTF-8 bytes. |
-| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. |
+| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. An S3 upload receipt records when the application received the successful response. |
 | `etag` | Cache validator. Local storage builds it from size and modification time; S3 returns it. Use `storage.checksum` for content verification. |
 | `metadata` | Optional string-to-string attributes on upload. |

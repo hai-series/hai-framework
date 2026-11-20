@@ -70,6 +70,8 @@ describe('storage client 工具函数', () => {
       expect(getMimeType('xyz')).toBe('application/octet-stream')
       expect(getMimeType('unknown')).toBe('application/octet-stream')
       expect(getMimeType('')).toBe('application/octet-stream')
+      expect(getMimeType('constructor')).toBe('application/octet-stream')
+      expect(getMimeType('__proto__')).toBe('application/octet-stream')
     })
 
     it('大写扩展名应正确识别（大小写不敏感）', () => {
@@ -142,6 +144,7 @@ describe('storage client 工具函数', () => {
 
     it('应正确格式化 TB 级别', () => {
       expect(formatFileSize(1024 ** 4)).toBe('1.00 TB')
+      expect(formatFileSize(1024 ** 5)).toBe('1024.00 TB')
     })
 
     it('精确的 KB 值应保留两位小数', () => {
@@ -229,6 +232,21 @@ describe('storage client 工具函数', () => {
       expect(result.success).toBe(false)
     })
 
+    it('fetch 上传取消时使用本地化提示，包括自定义原因', async () => {
+      const controller = new AbortController()
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => {
+        controller.abort(new Error('Do not display this abort reason'))
+        controller.signal.throwIfAborted()
+      }))
+
+      const result = await core.i18n.runWithLocale('en-US', () => uploadWithPresignedUrl(
+        'https://example.com/upload',
+        'data',
+        { abortController: controller },
+      ))
+      expect(result).toEqual({ success: false, error: 'Upload canceled' })
+    })
+
     it('预先取消时不调用 fetch', async () => {
       const fetch = vi.fn()
       vi.stubGlobal('fetch', fetch)
@@ -299,6 +317,23 @@ describe('storage client 工具函数', () => {
       expect(result.success).toBe(false)
     })
 
+    it('读取响应时取消下载应使用本地化提示，包括自定义原因', async () => {
+      const controller = new AbortController()
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => {
+          controller.abort({ source: 'user' })
+          controller.signal.throwIfAborted()
+        },
+      }))
+
+      const result = await core.i18n.runWithLocale('en-US', () => downloadWithPresignedUrl(
+        'https://example.com/download',
+        { abortController: controller },
+      ))
+      expect(result).toEqual({ success: false, error: 'Download canceled' })
+    })
+
     it('传递 abortController.signal 给 fetch', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -325,6 +360,7 @@ describe('storage client 工具函数', () => {
   describe('downloadAndSave', () => {
     afterEach(() => {
       vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     })
 
     it('下载失败时应透传错误', async () => {
@@ -352,6 +388,45 @@ describe('storage client 工具函数', () => {
       // Node.js 环境没有 document.createElement，应触发 catch 分支
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
+    })
+
+    it.each([
+      { clickFails: false, outcome: '成功' },
+      { clickFails: true, outcome: '失败' },
+    ])('点击链接$outcome时清理链接和 Blob URL', async ({ clickFails }) => {
+      const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fixture')
+      const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+      const link = {
+        href: '',
+        download: '',
+        click: vi.fn(() => {
+          if (clickFails)
+            throw new Error('Click failed')
+        }),
+        remove: vi.fn(),
+      }
+      const appendChild = vi.fn()
+      vi.stubGlobal('document', {
+        createElement: () => link,
+        body: { appendChild, removeChild: link.remove },
+      })
+      const blob = new Blob(['content'])
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => blob,
+      }))
+
+      const result = await downloadAndSave('https://example.com/file', { filename: 'report.txt' })
+
+      expect(result.success).toBe(!clickFails)
+      if (clickFails)
+        expect(result.error).toBe('Click failed')
+      expect(createObjectURL).toHaveBeenCalledWith(blob)
+      expect(appendChild).toHaveBeenCalledWith(link)
+      expect(link.download).toBe('report.txt')
+      expect(link.click).toHaveBeenCalledOnce()
+      expect(link.remove).toHaveBeenCalledOnce()
+      expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:fixture')
     })
   })
 

@@ -141,6 +141,7 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 | `storage.file.put` | Store file content and metadata | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
 | `storage.file.get` | Read all file bytes | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
 | `storage.file.getStream` | Read a file as a stream | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata` | Open a full object and its metadata in one read | Object key, optional `{ signal }` | `StorageFileRead` or an open failure | `await storage.file.getStreamWithMetadata('report.txt')` |
 | `storage.file.head` | Read file metadata | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
 | `storage.file.exists` | Check file existence | `key` | `boolean` | `await storage.file.exists('report.txt')` |
 | `storage.file.copy` | Copy to another object key | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
@@ -152,7 +153,7 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 ```ts
 // Write hello as text at the report key. Success metadata has size 5 bytes. value throws on write failure.
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
-// saved describes key demo/report.txt, size 5 and backend timestamps
+// saved describes key demo/report.txt and size 5.
 // Check the newly written report. Success returns true. value throws on lookup failure.
 value(await storage.file.exists('demo/report.txt')) // true
 // Read metadata for the report key. Success returns the same key and size 5. value throws if missing or unavailable.
@@ -165,6 +166,17 @@ let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// Open the report and its MIME type in one read. value throws if opening fails.
+const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+try {
+  if (opened.metadata.contentType === 'text/plain') {
+    // The stream yields five bytes in total. Iteration can throw on I/O failure.
+    for await (const bytes of opened.stream) void bytes.byteLength
+  }
+} finally {
+  // Release the file handle or connection even if the MIME check fails.
+  await opened.close()
+}
 // Copy the report to demo/copy.txt. Success returns the new object's metadata. value throws on failure.
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
 // Delete the original report key. Success has no data. value throws on failure.
@@ -176,6 +188,14 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 ```
 
 UTF-8 hello is five bytes. Chunk boundaries vary, and stream iteration can fail after the initial result. Inspect confirmed batch deletions rather than assuming Promise completion means every key was removed.
+
+For S3, `file.put()` returns the byte count and submitted metadata for that write, plus the ETag when the service supplies it. The receipt uses `application/octet-stream` when the request omits the content type. Its `lastModified` records when the application received the successful response. Use `file.head()` to query the object currently at that key and its service-reported timestamp.
+
+`file.getStreamWithMetadata()` opens a full object. S3 takes the headers and body from one GET response. Local reads the bytes and the matching metadata record for the same open file. Local objects require a valid metadata record. Call `close()` to release an unread or partially read stream, or pass a `signal` to cancel.
+
+To abandon a download, abort its signal or call `return()` on its iterator to release the connection, even before reading the first chunk. When copying, setting only `contentType` or `metadata` preserves the other field from the source. For an S3 copy with overrides, Storage checks the source ETag before applying the changes. If the check fails, read the source again before retrying.
+
+With Local storage, `file.head()` and `file.copy()` require the metadata record tied to the file's identity. When moving objects, export their bytes and metadata and write them to the destination with `file.put()`. [Local backup and recovery](../data/storage.en.md)
 
 [Detailed parameters and workflows](storage.md#files)
 
@@ -232,7 +252,7 @@ A signed URL separates authorization from the byte transfer. This requires initi
 
 ![Private files: authorize before direct transfer](../images/function-storage-presign.en.svg)
 
-Returning a URL issues access credentials; it does not transfer a file. The browser then contacts storage, which checks the signature and expiry. Upload Content-Type must match the signed value. publicUrl only computes the configured public address.
+After receiving the URL, the browser connects to object storage, which verifies the signature and expiry before transferring the file. The PUT signature binds the `Content-Type` header. Send the same value with the upload. If `contentType` was omitted when signing, send `application/octet-stream`. `publicUrl()` encodes each key segment and appends the result to the configured public address.
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
@@ -294,7 +314,7 @@ These helpers consume server-authorized URLs or user-selected files. They do not
 | --- | --- | --- | --- | --- |
 | `uploadWithPresignedUrl` | Upload bytes | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
 | `downloadWithPresignedUrl` | Download a Blob | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | Download and save | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `downloadAndSave` | Download and save | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
 | `getFileExtension` | Read an extension | `File` | `string` | `getFileExtension(file)` |
 | `getMimeType` | Resolve a MIME type | `extension: string` | `string` | `getMimeType("txt")` |
 | `formatFileSize` | Format a byte count | `bytes: number` | `string` | `formatFileSize(1024)` |
@@ -311,8 +331,8 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   const extension = getFileExtension(file)
   // If file.type is missing, use the extension to resolve the MIME type, falling back to application/octet-stream.
   const contentType = file.type || getMimeType(extension)
-  // Format the file's byte count. For example, 1024 bytes displays as 1 KB.
-  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // Format the file's byte count. For example, 1024 bytes displays as 1.00 KB.
+  const displayedSize = formatFileSize(file.size)
   // Upload the original file to the supplied URL with the MIME type. Success signals completion. Read error on failure.
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)

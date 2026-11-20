@@ -4,7 +4,7 @@
 
 ## 运行环境
 
-Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。读取需要有效的代际元数据，备份须同时保存内容和内部记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
+Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。`file.head()` 和 `file.copy()` 需要有效的代际元数据。快照恢复要保留内容、内部记录及用于匹配记录的文件身份。普通文件级迁移应先在源端读取内容和元数据，再在目标端用 `file.put()` 重建记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
 
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
 
@@ -110,11 +110,14 @@ if (!closed.success) {
 - `put(key, data, options?)`
 - `get(key, options?)`
 - `getStream(key, options?)`（字节流，迭代错误可抛出）
+- `getStreamWithMetadata(key, { signal }?)`（同一次读取获得完整对象的元数据和字节流，`close()` 可释放未消费的流）
 - `head(key)`
 - `exists(key)`
 - `delete(key)`
 - `deleteMany(keys)`
 - `copy(sourceKey, destKey, options?)`
+
+S3 `file.put()` 成功时返回本次上传的字节数、提交的元数据和服务端回执中的 ETag。`lastModified` 是应用收到成功响应的时间。需要该键的当前状态或服务端修改时间时，调用 `file.head()`。
 
 ```typescript
 // 上传文件
@@ -178,6 +181,8 @@ if (!downloadUrl.success) return downloadUrl
 
 > `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
 
+PUT 签名绑定 `Content-Type`。调用 `uploadWithPresignedUrl()` 或发送 PUT 请求时显式使用签发时的类型。签发时省略 `contentType`，上传须发送 `application/octet-stream`。
+
 ## 错误码 — `HaiStorageError`
 
 | 错误码 | code | 说明 |
@@ -217,6 +222,8 @@ if (!result.success) return result
 ## 常见模式
 
 大文件上传用 `file.put(key, readableOrAsyncByteStream, { signal, ifNoneMatch: '*' })`，内部使用有界 S3 multipart；下载用 `file.getStream(key, { signal, rangeStart, rangeEnd })`，及时消费或关闭，迭代期间 I/O/取消可能抛错。本地读取目录直接返回 `INVALID_PATH`。checksum 的 signal 取消会停止等待下一块数据并请求关闭输入迭代器。`get()` 返回完整 Buffer，只用于容量可控的数据。仅创建写入采用 S3 标准条件或本地原子发布，冲突返回 `ALREADY_EXISTS`；后端不支持时失败，不退回覆盖。
+
+同时使用 MIME、ETag 或其他元数据和正文时，调用 `file.getStreamWithMetadata()` 打开完整对象。在 `finally` 中调用返回值的 `close()`，包括按元数据决定跳过正文的情况。
 
 `checksum.generate(data, options?)` / `checksum.verify(data, expected, options?)` 默认 SHA-256、小写 hex，可选 sha384/sha512/sha1/md5、base64 编码与 signal；流仅消费一次，读取失败返回 HaiResult 错误，不匹配返回 false。MD5/SHA-1 不作安全认证，ETag 和 multipart 复合 checksum 不当作完整文件摘要。浏览器不导入 Node checksum；离线增量摘要需使用适用的浏览器实现，不把 SubtleCrypto.digest 当流式 API。
 

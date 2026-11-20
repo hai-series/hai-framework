@@ -86,3 +86,56 @@ it('overwriting and copying replace stale destination metadata', async () => {
     },
   })
 })
+
+it('reports only file objects and retains empty-prefix directory operations', async () => {
+  expect(await storage.file.put('reports/report.txt', 'report')).toMatchObject({ success: true })
+  expect(await storage.file.exists('reports')).toEqual({ success: true, data: false })
+  expect(await storage.file.exists('reports/report.txt/child.txt')).toEqual({ success: true, data: false })
+  expect(await storage.file.exists('reports/report.txt')).toEqual({ success: true, data: true })
+  expect(await storage.dir.list({ prefix: '' })).toMatchObject({
+    success: true,
+    data: {
+      files: [
+        { key: 'reports/report.txt' },
+      ],
+    },
+  })
+  expect(await storage.dir.delete('')).toEqual({ success: true, data: undefined })
+  expect(await storage.dir.list({ prefix: '' })).toMatchObject({
+    success: true,
+    data: { files: [] },
+  })
+})
+
+it('rejects an empty object key before reading the upload source', async () => {
+  let sourceRead = false
+  async function* report() {
+    sourceRead = true
+    yield new TextEncoder().encode('report')
+  }
+  expect(await storage.file.put('', report())).toMatchObject({
+    success: false,
+    error: { code: HaiStorageError.INVALID_PATH.code },
+  })
+  expect(sourceRead).toBe(false)
+  expect(await storage.file.exists('')).toMatchObject({
+    success: false,
+    error: { code: HaiStorageError.INVALID_PATH.code },
+  })
+})
+
+it.skipIf(process.platform === 'win32')('uploads and copies objects with 255-byte file names', async () => {
+  const filename = `${'a'.repeat(251)}.txt`
+  expect(await storage.file.put(filename, 'report')).toMatchObject({
+    success: true,
+    data: { key: filename, size: 6 },
+  })
+  expect(await storage.file.copy(filename, `backup/${filename}`)).toMatchObject({
+    success: true,
+    data: { key: `backup/${filename}`, size: 6 },
+  })
+  expect(await storage.file.head(`backup/${filename}`)).toMatchObject({
+    success: true,
+    data: { key: `backup/${filename}`, contentType: 'text/plain' },
+  })
+})

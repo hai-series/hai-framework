@@ -145,6 +145,7 @@ value(await storage.close()) // undefined; saved files remain on disk
 | `storage.file.put` | 内容とメタデータを保存 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
 | `storage.file.get` | ファイル全体を取得 | key, options | `Buffer` | `await storage.file.get('report.txt')` |
 | `storage.file.getStream` | ストリームで取得 | key, options | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata` | オブジェクト全体とメタデータを一度に開く | オブジェクトキー、任意の `{ signal }` | `StorageFileRead`、またはオープン時のエラー | `await storage.file.getStreamWithMetadata('report.txt')` |
 | `storage.file.head` | メタデータを取得 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
 | `storage.file.exists` | ファイルの存在確認 | key | `boolean` | `await storage.file.exists('report.txt')` |
 | `storage.file.copy` | 別キーにコピー | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
@@ -156,7 +157,7 @@ value(await storage.close()) // undefined; saved files remain on disk
 ```ts
 // レポートキーに hello をテキストとして保存します。成功時のサイズは 5 バイト、失敗は value が例外にします。
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
-// saved describes key demo/report.txt, size 5 and backend timestamps
+// saved のキーは demo/report.txt、サイズは 5 バイトです。
 // 保存直後のレポートを確認します。結果は true、失敗は value が例外にします。
 value(await storage.file.exists('demo/report.txt')) // true
 // レポートキーのメタデータを読み、同じキーと 5 バイトのサイズを得ます。失敗は value が例外にします。
@@ -169,6 +170,17 @@ let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// レポートの本文と MIME タイプを一度に開きます。失敗は value が例外にします。
+const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+try {
+  if (opened.metadata.contentType === 'text/plain') {
+    // 合計 5 バイトを読み取ります。I/O の失敗は反復時に例外になります。
+    for await (const bytes of opened.stream) void bytes.byteLength
+  }
+} finally {
+  // MIME タイプの確認に失敗した場合も、ハンドルまたは接続を解放します。
+  await opened.close()
+}
 // レポートを demo/copy.txt に複製し、新しいメタデータを返します。失敗は value が例外にします。
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
 // 元のレポートキーを削除します。成功時の data はなく、失敗は value が例外にします。
@@ -180,6 +192,14 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 ```
 
 UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で、読み出し中に失敗することもあります。一括削除は完了した Promise だけでなく、各キーの確認結果を調べてください。
+
+S3 の `file.put()` は、その書き込みのバイト数と指定したメタデータに加え、サービスが返した ETag を返します。コンテンツ型を省略した場合、結果は `application/octet-stream` です。`lastModified` はアプリが成功応答を受け取った時刻です。現在そのキーにあるオブジェクトとサービス上の更新日時は `file.head()` で取得します。
+
+`file.getStreamWithMetadata()` はオブジェクト全体を開きます。S3 は一回の GET 応答からヘッダーと本文を取得します。Local は同じファイルハンドルから本文を読み、そのファイルに対応するメタデータを取得します。Local のオブジェクトには有効なレコードが必要です。未読や途中で停止したストリームは `close()` で解放できます。`signal` で読み取りを取り消すこともできます。
+
+ダウンロードを中断する場合は、最初のチャンクを読み取る前でも、シグナルを中断するかイテレーターの `return()` を呼び出して接続を解放します。コピーで `contentType` または `metadata` の片方だけを指定すると、もう片方はコピー元から引き継がれます。S3 で上書き項目を指定すると、変更の適用前にコピー元の ETag を検証します。検証に失敗した場合は、コピー元を読み直してから再試行してください。
+
+Local ストレージでは、`file.head()` と `file.copy()` がファイルの識別情報に対応するメタデータを必要とします。移行時はファイルの内容とメタデータを取得し、移行先に `file.put()` で書き込みます。[ローカルストレージのバックアップと復元](../data/storage.ja.md)
 
 [引数と手順の詳細](storage.md#files)
 
@@ -236,7 +256,7 @@ S3 の期限付き URL は特定のキーと操作に対応します。発行前
 
 ![非公開ファイル：認可後に直接転送](../images/function-storage-presign.ja.svg)
 
-URL の返却時点ではファイルは未転送です。ブラウザーが保存先に接続し、署名・期限の検証後に転送します。アップロードの Content-Type は署名時の値と一致させます。publicUrl は設定済みの公開アドレスを計算するだけです。
+URL を受け取ったブラウザーがオブジェクトストレージに接続し、署名と期限の検証後にファイルを転送します。PUT 署名には `Content-Type` ヘッダーが含まれます。アップロード時に署名時の値を送信してください。署名時に `contentType` を省略した場合は `application/octet-stream` を送信します。`publicUrl()` はキーをパスの区切りごとにエンコードして、設定済みの公開アドレスに追加します。
 
 ```ts
 // Requires initialized S3 storage and prior application authorization.
@@ -298,7 +318,7 @@ value(await storage.checksum.verify('changed', digest)) // false
 | --- | --- | --- | --- | --- |
 | `uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
 | `downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
 | `getFileExtension` | 拡張子を取得 | `File` | `string` | `getFileExtension(file)` |
 | `getMimeType` | MIME 型を取得 | `extension: string` | `string` | `getMimeType("txt")` |
 | `formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `formatFileSize(1024)` |
@@ -315,8 +335,8 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   const extension = getFileExtension(file)
   // file.type が空なら拡張子から MIME 型を取得します。不明な場合は application/octet-stream です。
   const contentType = file.type || getMimeType(extension)
-  // バイト数を表示用文字列にします。例えば 1024 バイトは 1 KB です。
-  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  // バイト数を表示用文字列にします。例えば 1024 バイトは 1.00 KB です。
+  const displayedSize = formatFileSize(file.size)
   // 渡された URL に元のファイルと MIME 型でアップロードします。成功は完了、失敗時は error です。
   const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)

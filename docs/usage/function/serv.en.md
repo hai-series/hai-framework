@@ -142,7 +142,7 @@ Choose origins and cookie rules for the deployment; evaluate middleware on every
 | --- | --- | --- | --- | --- |
 | `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
 | `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
-| `serv.storageAssets(config)` | 用 Storage 提供授权后的只读资源 | 传入读取函数、键规则和 MIME 检查，按需配置缓存 | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+| `serv.storageAssets(config)` | Serve public read-only Storage assets | Storage, key and MIME allowlists, optional cache policy | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
 
 #### Scenario: Control access, CORS and assets
 
@@ -155,6 +155,8 @@ const cors = serv.cors({ origin: 'https://app.example.com', credentials: true })
 ```
 
 An explicit production origin returns policy and middleware. Creation itself grants no permissions; mount middleware and inspect actual OPTIONS/GET responses. Full storage reader and MIME options follow.
+
+GET uses the MIME type, ETag and body from one Storage read. A rejected MIME type or a 304 response closes the stream. HEAD reads only metadata. A custom Storage adapter must implement `file.head()` and `file.getStreamWithMetadata()`.
 
 [Detailed parameters and workflows](serv.md#policies)
 
