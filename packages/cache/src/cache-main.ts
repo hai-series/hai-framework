@@ -7,19 +7,13 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
-import type { CacheFunctions, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
+import type { CacheCompositeOperations, CacheFunctions, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
 import type { CacheProvider } from './providers/cache-provider-types.js'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
-
 import { CacheConfigSchema } from './cache-config.js'
-
 import { cacheM } from './cache-i18n.js'
-import {
-
-  HaiCacheError,
-
-} from './cache-types.js'
+import { HaiCacheError } from './cache-types.js'
 import { createMemoryProvider } from './providers/cache-provider-memory.js'
 import { createRedisProvider } from './providers/cache-provider-redis.js'
 
@@ -27,10 +21,19 @@ const logger = core.logger.child({ module: 'cache', scope: 'main' })
 
 // ─── 内部状态 ───
 
-/** 当前活跃的 Provider 实例；init 后赋值，close 后置 null */
-let currentProvider: CacheProvider | null = null
-/** 当前缓存配置（Zod parse 后）；init 后赋值，close 后置 null */
-let currentConfig: CacheConfig | null = null
+/**
+ * 同一次初始化发布的后端、配置和操作对象。
+ * @example 模块内部上下文
+ * ```ts
+ * function getBackend(active: ActiveCache) { return active.config.type }
+ * ```
+ */
+interface ActiveCache extends Omit<CacheCompositeOperations, 'ping'> {
+  provider: CacheProvider
+  config: CacheConfig
+}
+
+let currentCache: ActiveCache | null = null
 /** 并发初始化防护标志；防止多次 init() 同时执行导致资源泄漏 */
 let initInProgress = false
 
@@ -43,11 +46,10 @@ let closingPromise: Promise<HaiResult<void>> | null = null
 
 /** 停止发布资源并重试清理；失败时保留唯一所有权供下一次 close/init 重试。 */
 async function closeOwnedProvider(): Promise<HaiResult<void>> {
-  if (currentProvider) {
-    pendingProvider = currentProvider
-    currentProvider = null
+  if (currentCache) {
+    pendingProvider = currentCache.provider
+    currentCache = null
   }
-  currentConfig = null
   if (!pendingProvider)
     return ok(undefined)
   try {
@@ -123,7 +125,7 @@ function createProvider(config: CacheConfig): HaiResult<CacheProvider> {
 /**
  * 未初始化时的错误工具集
  *
- * 所有子接口（kv/hash/list/set_/zset）在未 init 前使用 proxy 占位，
+ * 所有子接口在未 init 前使用 proxy 占位，
  * 调用任意方法均返回 { success: false, error: { code: NOT_INITIALIZED } }
  */
 const notInitialized = core.module.createNotInitializedKit(
@@ -137,6 +139,23 @@ const notInitializedList = notInitialized.proxy<ListOperations>()
 const notInitializedSet = notInitialized.proxy<SetOperations>()
 const notInitializedZSet = notInitialized.proxy<ZSetOperations>()
 const notInitializedLock = notInitialized.proxy<LockOperations>()
+
+/** 始终将取出的操作绑定到发布它的 Provider，关闭或替换后拒绝调用。 */
+function bindOperations<T extends object>(provider: CacheProvider, operations: T): T {
+  return Object.fromEntries(Object.keys(operations).map((key) => {
+    const operation: unknown = Reflect.get(operations, key)
+    if (typeof operation !== 'function')
+      return [key, operation]
+    return [
+      key,
+      (...args: unknown[]) => {
+        if (currentCache?.provider !== provider)
+          return Promise.resolve(notInitialized.result())
+        return Reflect.apply(operation, operations, args)
+      },
+    ]
+  })) as T
+}
 
 // ─── 缓存服务对象 ───
 
@@ -229,9 +248,17 @@ export const cache: CacheFunctions = {
             logger.error('Cache module initialization failed', { errorCode: connectResult.error.code })
           return await failInitialization(connectResult)
         }
+        currentCache = {
+          provider,
+          config: parsed,
+          kv: bindOperations(provider, provider.kv),
+          hash: bindOperations(provider, provider.hash),
+          list: bindOperations(provider, provider.list),
+          set_: bindOperations(provider, provider.set_),
+          zset: bindOperations(provider, provider.zset),
+          lock: bindOperations(provider, provider.lock),
+        }
         pendingProvider = null
-        currentProvider = provider
-        currentConfig = parsed
         logger.info('Cache module initialized', { type: parsed.type })
         return ok(undefined)
       }
@@ -258,25 +285,25 @@ export const cache: CacheFunctions = {
   },
 
   /** KV 操作子接口；未 init 时所有方法返回 NOT_INITIALIZED */
-  get kv(): KvOperations { return currentProvider?.kv ?? notInitializedKv },
+  get kv(): KvOperations { return currentCache?.kv ?? notInitializedKv },
   /** Hash 操作子接口 */
-  get hash(): HashOperations { return currentProvider?.hash ?? notInitializedHash },
+  get hash(): HashOperations { return currentCache?.hash ?? notInitializedHash },
   /** List 操作子接口 */
-  get list(): ListOperations { return currentProvider?.list ?? notInitializedList },
+  get list(): ListOperations { return currentCache?.list ?? notInitializedList },
   /** Set 操作子接口（名称加 _ 以避免与 JS 关键字冲突） */
-  get set_(): SetOperations { return currentProvider?.set_ ?? notInitializedSet },
+  get set_(): SetOperations { return currentCache?.set_ ?? notInitializedSet },
   /** ZSet（有序集合）操作子接口 */
-  get zset(): ZSetOperations { return currentProvider?.zset ?? notInitializedZSet },
+  get zset(): ZSetOperations { return currentCache?.zset ?? notInitializedZSet },
   /** 分布式锁操作子接口 */
-  get lock(): LockOperations { return currentProvider?.lock ?? notInitializedLock },
+  get lock(): LockOperations { return currentCache?.lock ?? notInitializedLock },
   /** 当前脱敏后的配置快照；未初始化时返回 null */
   get config(): CacheConfig | null {
-    return currentConfig
-      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+    return currentCache
+      ? core.sanitize.sanitizeSensitiveFields(currentCache.config)
       : null
   },
   /** 是否已初始化并连接；Provider 不存在或未连接时返回 false */
-  get isInitialized(): boolean { return currentProvider !== null && currentProvider.isConnected() },
+  get isInitialized(): boolean { return currentCache?.provider.isConnected() ?? false },
 
   /**
    * 测试缓存连接状态
@@ -284,7 +311,7 @@ export const cache: CacheFunctions = {
    * @returns 成功时返回 'PONG'；未初始化时返回 NOT_INITIALIZED 错误
    */
   ping(): Promise<HaiResult<string>> {
-    return currentProvider?.ping() ?? Promise.resolve(notInitialized.result())
+    return currentCache?.provider.ping() ?? Promise.resolve(notInitialized.result())
   },
 
   /**

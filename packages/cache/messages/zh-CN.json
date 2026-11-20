@@ -15,6 +15,10 @@
   "cache_crossSlot": "此操作要求所有键位于同一Redis Cluster slot，请使用共同hash tag",
   "cache_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",
   "cache_invalidSetOptions": "SET 选项无效：期限须为正安全整数且只能选一种，不能与 keepTtl 同时使用，nx/xx 不能同时启用",
+  "cache_invalidLockTtl": "锁期限无效，请用可表示为到期时间的正整数秒数",
+  "cache_invalidLockOwnerOptions": "重入锁时请只传入持有者凭据。需要续期时请调用 extend。",
+  "cache_lockOperationInterrupted": "缓存连接已关闭，锁操作中断",
+  "cache_blockingPopCanceled": "缓存连接已关闭，等待取出队列元素的操作已取消",
   "cache_setUnexpectedReply": "Redis 返回了非预期的 SET 结果",
   "cache_serializationFailed": "缓存值无法序列化为 JSON"
 }

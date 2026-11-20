@@ -46,7 +46,7 @@ export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInf
 /**
  * 可缓存的值类型
  *
- * 说明：`object` 包含普通对象与数组；函数、Symbol、BigInt 等不建议直接缓存。
+ * `object` 包含普通对象与数组。值须能序列化为 JSON 文本，序列化失败返回 SERIALIZATION_FAILED。
  * @example
  * ```ts
  * import type { CacheValue } from '@h-ai/cache'
@@ -186,7 +186,7 @@ export interface KvOperations {
   expireAt: (key: string, timestamp: number) => Promise<HaiResult<boolean>>
   /** 获取剩余过期时间（秒）；-1 永不过期，-2 不存在 */
   ttl: (key: string) => Promise<HaiResult<number>>
-  /** 移除过期时间 */
+  /** 移除过期时间；仅实际清除期限时返回 true。 */
   persist: (key: string) => Promise<HaiResult<boolean>>
   /** 自增 1；键不存在时从 0 开始；值非数字时返回 OPERATION_FAILED */
   incr: (key: string) => Promise<HaiResult<number>>
@@ -196,7 +196,7 @@ export interface KvOperations {
   decr: (key: string) => Promise<HaiResult<number>>
   /** 自减指定值；键不存在时从 0 开始 */
   decrBy: (key: string, decrement: number) => Promise<HaiResult<number>>
-  /** 批量获取；不存在的键对应位置返回 null。Cluster 跨 slot 保留输入顺序，不保证同一时刻快照。 */
+  /** 批量获取；不存在的键或集合类键在对应位置返回 null。Cluster 跨 slot 保留输入顺序，不保证同一时刻快照。 */
   mget: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<(T | null)[]>>
   /** 原子批量设置；Cluster 中所有 key 必须同 slot，可使用共同的 {hash-tag}。 */
   mset: (entries: Array<[string, CacheValue]>) => Promise<HaiResult<void>>
@@ -295,9 +295,9 @@ export interface ListOperations {
   lset: (key: string, index: number, value: CacheValue) => Promise<HaiResult<void>>
   /** 保留指定范围的元素，范围外的元素被删除 */
   ltrim: (key: string, start: number, stop: number) => Promise<HaiResult<void>>
-  /** 阻塞式从左侧弹出；返回 [key, value] 或超时返回 null。Cluster 多键须同 slot；memory 非阻塞立即返回。 */
+  /** Redis 等待 timeout 秒后返回 null，传 0 持续等待。返回 [逻辑键, 值]；关闭缓存会以失败结束等待。Cluster 多键须同 slot；memory 立即返回。 */
   blpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<HaiResult<[string, T] | null>>
-  /** 阻塞式从右侧弹出；返回 [key, value] 或超时返回 null。Cluster 多键须同 slot；memory 非阻塞立即返回。 */
+  /** 从右侧弹出。等待时间、返回键、关闭和 Cluster 约束与 blpop 相同。 */
   brpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<HaiResult<[string, T] | null>>
 }
 
@@ -328,9 +328,9 @@ export interface SetOperations {
   sismember: (key: string, member: CacheValue) => Promise<HaiResult<boolean>>
   /** 获取成员数量；键不存在时返回 0 */
   scard: (key: string) => Promise<HaiResult<number>>
-  /** 随机获取成员；不指定 count 返回单个值，指定 count 返回数组；空集合返回 null */
+  /** 随机获取成员；省略 count 时返回单个值或 null。指定 count 返回数组，正数不重复，负数允许重复。 */
   srandmember: <T = CacheValue>(key: string, count?: number) => Promise<HaiResult<T | T[] | null>>
-  /** 随机弹出成员（会从集合中移除）；不指定 count 返回单个值，指定 count 返回数组；空集合返回 null */
+  /** 随机弹出并移除成员；省略 count 时返回单个值或 null，指定非负 count 时返回最多 count 项的数组。 */
   spop: <T = CacheValue>(key: string, count?: number) => Promise<HaiResult<T | T[] | null>>
   /** 集合交集；任一 key 不存在时返回空数组。Cluster 多键须同 slot，否则返回 CROSS_SLOT。 */
   sinter: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<T[]>>
@@ -395,7 +395,7 @@ export interface ZSetOperations {
 /**
  * 分布式锁操作接口
  *
- * 基于 SET NX EX 模式实现分布式互斥锁，适用于多节点部署场景。
+ * Redis 多节点共享锁。同一个业务执行可凭本次 owner 重入，并按成功进入次数逐次释放。
  * @example
  * ```ts
  * import type { LockOperations } from '@h-ai/cache'
@@ -413,24 +413,25 @@ export interface LockOperations {
   /**
    * 尝试获取分布式锁
    *
-   * 通过 SET NX EX 原子操作实现。每次生成不可复用的所有权凭据；占用时返回 null。
-   * owner 仅用于租约续期/释放，不是资源的 fencing token；暂停/超时后旧操作仍可能继续。
+   * 首次获取生成独立的 owner；锁被占用时返回 null。
+   * 携带有效 owner 时重入，返回原 owner 并保留过期时间。无效或过期的 owner 返回 null。
+   * owner 只校验租约重入、续期和释放；暂停/超时后旧操作仍可能继续。
    * 最终资源写入必须自行使用 CAS/代际条件或数据库事务约束，不能只检查续期或返回失败。
    *
    * @param key - 锁键名
    * @param options - 锁选项
-   * @returns 获锁成功返回唯一凭据，锁占用时返回 null
+   * @returns 获锁或重入成功返回当前凭据，锁占用或重入被拒绝时返回 null。
    */
   acquire: (key: string, options?: LockOptions) => Promise<HaiResult<string | null>>
 
   /**
    * 释放分布式锁
    *
-   * 仅当锁由当前持有者持有时才释放（通过 owner 比对），防止误释放他人的锁。
+   * 当前持有者每调用一次释放一个持有层级，最后一层释放后其他调用方才能取得锁。
    *
    * @param key - 锁键名
    * @param owner - 本次 acquire 返回的唯一凭据，不能使用节点 ID
-   * @returns true 表示释放成功，false 表示锁不存在或非当前持有者
+   * @returns true 表示成功释放一层，false 表示锁不存在或凭据不匹配。
    */
   release: (key: string, owner: string) => Promise<HaiResult<boolean>>
 
@@ -445,10 +446,10 @@ export interface LockOperations {
   /**
    * 续期锁的过期时间
    *
-   * 仅当锁由当前持有者持有时才续期。
+   * 仅持有者可以更新过期时间，持有次数保持原值。
    *
    * @param key - 锁键名
-   * @param ttl - 新的过期时间（秒）
+   * @param ttl - 新的过期时间（正安全整数秒，换算后的到期毫秒须为安全整数）
    * @param owner - 本次 acquire 返回的唯一凭据
    * @returns true 表示续期成功，false 表示锁不存在或非当前持有者
    */
@@ -464,8 +465,10 @@ export interface LockOperations {
  * ```
  */
 export interface LockOptions {
-  /** 锁过期时间（秒）；默认 30 */
+  /** 首次获取的锁过期时间（正安全整数秒，换算后的到期毫秒须为安全整数）；默认 30。与 owner 互斥。 */
   ttl?: number
+  /** 重入凭据，取自首次 acquire 成功返回的 owner。重入保留到期时间，与 ttl 同传失败。 */
+  owner?: string
 }
 
 // ─── 复合操作接口 ───
@@ -473,7 +476,8 @@ export interface LockOptions {
 /**
  * 复合缓存操作接口，聚合所有数据结构的操作子接口
  *
- * 通过 `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` / `cache.lock` 分别访问
+ * 通过 `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` / `cache.lock` 分别访问。
+ * 开始清理原 Provider 后，已取出的操作对象和方法在再次调用时返回 NOT_INITIALIZED。
  * @example
  * ```ts
  * import type { CacheCompositeOperations } from '@h-ai/cache'

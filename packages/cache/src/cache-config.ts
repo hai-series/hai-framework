@@ -1,7 +1,7 @@
 /**
- * @h-ai/cache — 错误码 + 配置 Schema
+ * @h-ai/cache — 配置 Schema
  *
- * 定义缓存模块的错误码常量、Zod Schema 和配置类型。
+ * 定义缓存模块的 Zod Schema 和配置类型。
  * @module cache-config
  */
 
@@ -95,7 +95,7 @@ export const RedisConfigSchema = z.object({
   password: z.string().optional(),
   /** 数据库编号（0~15）；默认 0 */
   db: z.number().int().min(0).max(15).default(0),
-  /** 集群节点列表；配置后以集群模式连接 */
+  /** 集群节点列表；列表非空时以集群模式连接 */
   cluster: z.array(RedisClusterNodeSchema).optional(),
   /** 哨兵配置；配置后以哨兵模式连接 */
   sentinel: RedisSentinelConfigSchema.optional(),
@@ -103,7 +103,7 @@ export const RedisConfigSchema = z.object({
   // 通用选项
   /** 连接超时时间（毫秒）；默认 10000 */
   connectTimeout: z.number().int().min(0).default(10000),
-  /** 命令执行超时（毫秒）；默认 5000 */
+  /** 普通命令执行超时（毫秒）；默认 5000。阻塞弹出使用调用指定的 Redis 等待时间。 */
   commandTimeout: z.number().int().min(0).default(5000),
   /** 键前缀（自动加在所有键前） */
   keyPrefix: z.string().optional(),
@@ -113,7 +113,7 @@ export const RedisConfigSchema = z.object({
   maxRetries: z.number().int().min(0).default(3),
   /** 重试间隔基数（毫秒）；实际间隔 = retryDelay × 重试次数；默认 50 */
   retryDelay: z.number().int().min(0).default(50),
-  /** 是否只读模式；默认 false */
+  /** 非 Cluster 连接启用时发送 Redis READONLY；Cluster 按节点角色处理。写入权限由 Redis ACL 控制；默认 false。 */
   readOnly: z.boolean().default(false),
 })
 

@@ -2859,7 +2859,7 @@
     "name": "HAI_CACHE_CLUSTER",
     "module": "cache",
     "path": "cache.cluster",
-    "description": "集群节点列表；配置后以集群模式连接",
+    "description": "集群节点列表；列表非空时以集群模式连接",
     "value": "",
     "constraint": "JSON 数组；索引可按 0、1、2 扩展"
   },
@@ -2867,7 +2867,7 @@
     "name": "HAI_CACHE_CLUSTER_0",
     "module": "cache",
     "path": "cache.cluster.0",
-    "description": "集群节点列表；配置后以集群模式连接；此变量整体替换单个数组项",
+    "description": "集群节点列表；列表非空时以集群模式连接；此变量整体替换单个数组项",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
@@ -2891,7 +2891,7 @@
     "name": "HAI_CACHE_COMMANDTIMEOUT",
     "module": "cache",
     "path": "cache.commandTimeout",
-    "description": "命令执行超时（毫秒）；默认 5000",
+    "description": "普通命令执行超时（毫秒）；默认 5000。阻塞弹出使用调用指定的 Redis 等待时间。",
     "value": "5000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -2955,7 +2955,7 @@
     "name": "HAI_CACHE_READONLY",
     "module": "cache",
     "path": "cache.readOnly",
-    "description": "是否只读模式；默认 false",
+    "description": "非 Cluster 连接启用时发送 Redis READONLY；Cluster 按节点角色处理。写入权限由 Redis ACL 控制；默认 false。",
     "value": "false",
     "constraint": "true | false"
   },

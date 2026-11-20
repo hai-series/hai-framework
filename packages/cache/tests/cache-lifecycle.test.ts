@@ -1,6 +1,6 @@
 /** 缓存生命周期故障回归：候选连接不可发布，释放失败必须保留并阻止替换。 */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cache } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 
 const faults = vi.hoisted(() => ({
   connect: 0,
@@ -64,15 +64,46 @@ describe('cache lifecycle ownership', { concurrent: false }, () => {
 
   it('failed close retains the resource, rejects replacement, and can be retried', async () => {
     expect((await cache.init({ type: 'memory' })).success).toBe(true)
+    const { kv } = cache
     faults.close = 2
     const result = await cache.close()
     expect(result?.success).toBe(false)
     expect(cache.isInitialized).toBe(false)
     expect((await cache.kv.get('closed')).success).toBe(false)
+    expect(await kv.set('closed', true)).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.NOT_INITIALIZED.code },
+    })
     expect((await cache.init({ type: 'memory' })).success).toBe(false)
     expect(faults.allocated).toBe(1)
     expect((await cache.close())?.success).toBe(true)
     expect((await cache.init({ type: 'memory' })).success).toBe(true)
+  })
+
+  it('reinitialization invalidates all old operation groups and extracted methods', async () => {
+    expect((await cache.init({ type: 'memory' })).success).toBe(true)
+    const { kv, hash, list, set_, zset, lock } = cache
+    const { set } = kv
+    expect(await set('old', 'value')).toEqual({ success: true, data: true })
+
+    expect((await cache.init({ type: 'memory' })).success).toBe(true)
+    const rejected = {
+      success: false,
+      error: { code: HaiCacheError.NOT_INITIALIZED.code },
+    }
+    expect(await kv.get('old')).toMatchObject(rejected)
+    expect(await set('new', 'stale')).toMatchObject(rejected)
+    expect(await hash.hset('hash', 'field', 'stale')).toMatchObject(rejected)
+    expect(await list.rpush('list', 'stale')).toMatchObject(rejected)
+    expect(await set_.sadd('set', 'stale')).toMatchObject(rejected)
+    expect(await zset.zadd('zset', { member: 'stale', score: 1 })).toMatchObject(rejected)
+    expect(await lock.acquire('lock')).toMatchObject(rejected)
+    expect(await cache.kv.get('new')).toEqual({ success: true, data: null })
+    expect(await cache.kv.set('new', 'fresh')).toEqual({ success: true, data: true })
+
+    const current = cache.kv
+    expect((await cache.close()).success).toBe(true)
+    expect(await current.get('new')).toMatchObject(rejected)
   })
 
   it('concurrent close calls release one resource once', async () => {

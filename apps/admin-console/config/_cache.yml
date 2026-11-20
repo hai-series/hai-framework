@@ -24,7 +24,7 @@ db: ${HAI_CACHE_DB:0}
 # 说明：连接超时时间（毫秒）；默认 10000
 # 取值：整数；>= 0
 connectTimeout: ${HAI_CACHE_CONNECTTIMEOUT:10000}
-# 说明：命令执行超时（毫秒）；默认 5000
+# 说明：普通命令执行超时（毫秒）；默认 5000。阻塞弹出使用调用指定的 Redis 等待时间。
 # 取值：整数；>= 0
 commandTimeout: ${HAI_CACHE_COMMANDTIMEOUT:5000}
 # 说明：是否开启 TLS；默认 false
@@ -36,7 +36,7 @@ maxRetries: ${HAI_CACHE_MAXRETRIES:3}
 # 说明：重试间隔基数（毫秒）；实际间隔 = retryDelay × 重试次数；默认 50
 # 取值：整数；>= 0
 retryDelay: ${HAI_CACHE_RETRYDELAY:50}
-# 说明：是否只读模式；默认 false
+# 说明：非 Cluster 连接启用时发送 Redis READONLY；Cluster 按节点角色处理。写入权限由 Redis ACL 控制；默认 false。
 # 取值：true | false
 readOnly: ${HAI_CACHE_READONLY:false}
 
@@ -47,5 +47,5 @@ readOnly: ${HAI_CACHE_READONLY:false}
 # password: '' # 说明：单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。；取值：字符串
 # db: 0 # 说明：数据库编号（0~15）；默认 0；取值：整数；>= 0；<= 15
 # connectTimeout: 10000 # 说明：连接超时时间（毫秒）；默认 10000；取值：整数；>= 0
-# commandTimeout: 5000 # 说明：命令执行超时（毫秒）；默认 5000；取值：整数；>= 0
+# commandTimeout: 5000 # 说明：普通命令执行超时（毫秒）；默认 5000。阻塞弹出使用调用指定的 Redis 等待时间。；取值：整数；>= 0
 # keyPrefix: 'hai:' # 说明：键前缀（自动加在所有键前）；取值：字符串

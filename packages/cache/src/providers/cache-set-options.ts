@@ -1,9 +1,32 @@
-/** SET 的共同输入边界，确保 memory 与 Redis 使用相同的过期及条件契约。 */
+/** SET 和锁操作的共同输入边界。 */
 import type { HaiResult } from '@h-ai/core'
 import type { SetOptions } from '../cache-types.js'
 import { err, ok } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
 import { HaiCacheError } from '../cache-types.js'
+
+/**
+ * 锁期限须是正安全整数秒，换算后的 Unix 毫秒也必须可精确表示。
+ * @example 模块内部上下文
+ * ```ts
+ * const accepted = isValidLockTtl(30)
+ * const rejected = isValidLockTtl(0)
+ * ```
+ */
+export function isValidLockTtl(ttl: number): boolean {
+  return Number.isSafeInteger(ttl) && ttl > 0 && Number.isSafeInteger(Date.now() + ttl * 1000)
+}
+
+/**
+ * 检查凭据形状；实际所有权仍须比对当前锁记录。
+ * @example 模块内部上下文
+ * ```ts
+ * const rejected = isValidLockOwner('worker-1')
+ * ```
+ */
+export function isValidLockOwner(owner: unknown): owner is string {
+  return typeof owner === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(owner)
+}
 
 /**
  * 已验证的单一过期策略；相对时间仍由 Redis 自身时钟执行。

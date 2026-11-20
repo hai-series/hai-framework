@@ -3,7 +3,7 @@ import { lookup } from 'node:dns/promises'
 import { createServer } from 'node:net'
 import Redis from 'ioredis'
 import { GenericContainer, Wait } from 'testcontainers'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { CacheConfigSchema } from '../src/cache-config.js'
 import { HaiCacheError } from '../src/cache-types.js'
 import { createMemoryProvider } from '../src/providers/cache-provider-memory.js'
@@ -146,6 +146,54 @@ done
     ], { lazyConnect: true })
     await rawCluster.connect()
     await rawCluster.set('nsx:other', 'unrelated')
+    const lockKey = '{shared}:lock'
+    const physicalLockKey = `ns[*]:__lock:${lockKey}`
+    const acquired = await left.lock.acquire(lockKey, { ttl: 60 })
+    if (!acquired.success || !acquired.data)
+      throw new Error('Expected to acquire a Cluster lock')
+    const owner = acquired.data
+    expect(await rawCluster.get(physicalLockKey)).toBe(owner)
+    const expiresAt = await rawCluster.pexpiretime(physicalLockKey)
+    const duplicate = vi.spyOn(Redis.Cluster.prototype, 'duplicate')
+    const reentered = await right.lock.acquire(lockKey, { owner })
+    const lockConnection = duplicate.mock.results[0]
+    duplicate.mockRestore()
+    expect(reentered).toEqual({ success: true, data: owner })
+    expect(await rawCluster.get(physicalLockKey)).toBe(`${owner}|2`)
+    expect(await rawCluster.pexpiretime(physicalLockKey)).toBe(expiresAt)
+
+    expect(await right.lock.acquire(lockKey, { owner })).toEqual({ success: true, data: owner })
+    expect(await rawCluster.get(physicalLockKey)).toBe(`${owner}|3`)
+    if (lockConnection?.type !== 'return')
+      throw new Error('Expected a dedicated Cluster lock connection')
+    const slot = Number(await rawCluster.call('CLUSTER', 'KEYSLOT', physicalLockKey))
+    const targetAddress = lockConnection.value.slots[slot]?.[0]
+    const target = lockConnection.value.nodes('master').find(node => `${node.options.host}:${node.options.port}` === targetAddress)
+    if (!target?.stream)
+      throw new Error('Expected an active connection to the lock shard')
+    // 暂停读取响应，实际 Redis 已提交释放，再断开连接来验证命令不会重放。
+    const socket = target.stream
+    socket.pause()
+    const interruptedRelease = right.lock.release(lockKey, owner)
+    try {
+      await vi.waitFor(async () => expect(await rawCluster!.get(physicalLockKey)).toBe(`${owner}|2`))
+    }
+    finally {
+      socket.destroy()
+    }
+    expect(await interruptedRelease).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.OPERATION_FAILED.code },
+    })
+    expect(await rawCluster.get(physicalLockKey)).toBe(`${owner}|2`)
+
+    expect(await right.lock.release(lockKey, owner)).toEqual({ success: true, data: true })
+    expect(await rawCluster.get(physicalLockKey)).toBe(owner)
+    expect(await rawCluster.pexpiretime(physicalLockKey)).toBe(expiresAt)
+    expect(await left.lock.acquire(lockKey)).toEqual({ success: true, data: null })
+    expect(await left.lock.release(lockKey, owner)).toEqual({ success: true, data: true })
+    expect(await rawCluster.get(physicalLockKey)).toBeNull()
+    expect(await right.lock.acquire(lockKey, { owner })).toEqual({ success: true, data: null })
     const found = new Set<string>()
     let cursor = '0'
     let pageCount = 0
@@ -172,6 +220,11 @@ done
       success: true,
       data: [1, null, 70],
     })
+    expect(await left.list.rpush('list-only', 'entry')).toEqual({ success: true, data: 1 })
+    expect(await left.kv.mget('item:70', 'list-only', 'item:1', 'missing', 'item:70')).toEqual({
+      success: true,
+      data: [70, null, 1, null, 70],
+    })
     expect(await left.kv.exists('item:1', 'missing', 'item:70')).toEqual({ success: true, data: 2 })
     expect((await left.kv.mset([
       ['{atomic}:a', 1],
@@ -197,14 +250,51 @@ done
       success: false,
       error: { code: HaiCacheError.INVALID_SCAN.code },
     })
+
+    const pending = left.list.blpop(0, '{queue}:left', '{queue}:right')
+    await vi.waitFor(async () => {
+      const clientsInfo = await Promise.all(clients.map(client => client.info('clients')))
+      expect(clientsInfo.some(info => info.includes('blocked_clients:1'))).toBe(true)
+    })
+    expect(await left.list.rpush('{queue}:right', 'job')).toEqual({ success: true, data: 1 })
+    expect(await pending).toEqual({
+      success: true,
+      data: ['{queue}:right', 'job'],
+    })
+
+    // ioredis 在收到就绪检查回复前断开时，connect Promise 可能不会完成。
+    const connect = Redis.Cluster.prototype.connect
+    let closing: Promise<void> | undefined
+    const connectSpy = vi.spyOn(Redis.Cluster.prototype, 'connect').mockImplementationOnce(function (this: InstanceType<typeof Redis.Cluster>) {
+      this.once('connect', () => {
+        closing = left.close()
+      })
+      return connect.call(this)
+    })
+    try {
+      const interrupted = left.list.brpop(0, '{queue}:left')
+      await vi.waitFor(() => expect(closing).toBeDefined())
+      await closing
+      expect(await interrupted).toMatchObject({
+        success: false,
+        error: { code: HaiCacheError.OPERATION_FAILED.code },
+      })
+    }
+    finally {
+      connectSpy.mockRestore()
+    }
   }
   finally {
     rawCluster?.disconnect()
     for (const client of clients) client.disconnect()
-    await container.stop()
-    await Promise.allSettled([
-      left.close(),
-      right.close(),
-    ])
+    try {
+      await Promise.allSettled([
+        left.close(),
+        right.close(),
+      ])
+    }
+    finally {
+      await container.stop()
+    }
   }
 }, 120000)
