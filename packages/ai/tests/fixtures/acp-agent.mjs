@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline'
@@ -11,12 +12,25 @@ function send(value) {
 const state = process.env.HOME
 const sessions = new Map()
 const resumable = !process.argv.includes('--no-resume')
+const traceFlag = process.argv.indexOf('--recovery-trace')
+const recoveryTrace = traceFlag < 0
+  ? undefined
+  : process.argv[traceFlag + 1]
+const historyPath = join(state, 'session.json')
+const tracedMethods = new Set([
+  'session/new',
+  'session/resume',
+  'session/load',
+  'session/prompt',
+])
 let mcpServers = []
 let pending
 const line = createInterface({ input: process.stdin })
 line.on('line', async (text) => {
   const message = JSON.parse(text)
   const { id, method, params } = message
+  if (recoveryTrace && tracedMethods.has(method))
+    await appendFile(recoveryTrace, `${method}\n`)
   const reply = result => send({ id, result })
   const event = (sessionId, text) =>
     send({
@@ -49,20 +63,30 @@ line.on('line', async (text) => {
   }
   if (method === 'session/new') {
     mcpServers = params.mcpServers
-    const sessionId = 'native-fixture'
+    const sessionId = recoveryTrace
+      ? randomUUID()
+      : 'native-fixture'
     sessions.set(sessionId, params.cwd)
-    await mkdir(state, { recursive: true })
-    await writeFile(
-      join(state, 'session.json'),
-      JSON.stringify({ cwd: params.cwd }),
-    )
+    if (!recoveryTrace) {
+      await mkdir(state, { recursive: true })
+      await writeFile(historyPath, JSON.stringify({ cwd: params.cwd }))
+    }
     event(sessionId, 'created')
     return reply({ sessionId })
   }
   if (method === 'session/resume' || method === 'session/load') {
-    const saved = JSON.parse(
-      await readFile(join(state, 'session.json'), 'utf8'),
-    )
+    const history = await readFile(historyPath, 'utf8').catch((error) => {
+      if (recoveryTrace && error.code === 'ENOENT')
+        return undefined
+      throw error
+    })
+    if (history === undefined) {
+      return send({
+        id,
+        error: { code: -32602, message: 'Native history has not been written' },
+      })
+    }
+    const saved = JSON.parse(history)
     sessions.set(params.sessionId, saved.cwd)
     return reply({})
   }
@@ -84,6 +108,11 @@ line.on('line', async (text) => {
   }
   if (method === 'session/prompt') {
     const content = params.prompt[0].text
+    if (recoveryTrace) {
+      await writeFile(historyPath, JSON.stringify({
+        cwd: sessions.get(params.sessionId),
+      }))
+    }
     if (content === 'exit')
       process.exit(1)
     if (content === 'inspect-repo') {

@@ -1518,7 +1518,7 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 | `ai.acp.sessions.create` | 启动受管开发会话 | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?` | `HaiResult<managed session handle>` | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
 | `ai.acp.sessions.get` | 读取会话句柄 | `framework session id` | `HaiResult<managed session handle>; does not resume` | `ai.acp.sessions.get("task-1")` |
 | `ai.acp.sessions.list` | 查询受管会话 | `workspaceId?` | `HaiResult<ACPSessionInfo[]>` | `ai.acp.sessions.list("project")` |
-| `ai.acp.sessions.resume` | 恢复原生会话 | `framework session id, ACPClientOptions?` | `HaiResult<managed session handle>; definition changes may reject` | `ai.acp.sessions.resume("task-1")` |
+| `ai.acp.sessions.resume` | 恢复或重开原生会话 | 框架会话 ID，连接回调及可选的 `restartNative`（默认 `false`） | `HaiResult` 包含会话句柄。定义改变、工作树失效或会话占用时失败 | `ai.acp.sessions.resume("task-1")` |
 | `ai.acp.sessions.close` | 停止拥有的执行环境 | `framework session id` | `HaiResult<void>; source and native history retained` | `ai.acp.sessions.close("task-1")` |
 | `ai.acp.sessions.reclaimWorktree` | 回收干净检出目录 | `closed framework session id; preview stopped and changes saved` | `HaiResult<void>; branch and normal files retained` | `ai.acp.sessions.reclaimWorktree("task-1")` |
 | `ai.acp.sessions.remove` | 移除会话记录 | `closed or failed framework session id` | `HaiResult<void>; worktree and native history retained` | `ai.acp.sessions.remove("task-1")` |
@@ -1553,6 +1553,8 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 submit 返回可续读的任务回执；run 等待本次结果；两者的受理事件都不能当作执行完成。断线后按同一主体和 taskId 续读 events/get。取消后要核对执行与资源停止状态；向业务分支发布补丁需要再次授权和用户批准。
 
 下面覆盖资源 CRUD、initialize/check/prepare/importFiles、会话 create/get/list/resume/close/reclaim/remove，以及 session/connection 句柄操作。输入归属来自服务端，updateMain/publish 会修改仓库，示例只说明调用契约，不在文档校验中执行真实发布。
+
+使用默认 `ai.acp.sessions.resume(id)` 恢复已有原生历史。智能体配置按 JSON 内容比较，字段顺序变化不影响恢复。准备阶段中断时，可信服务端须持有任务执行租约，并根据持久化任务记录确认首轮尚未发送，才能调用 `ai.acp.sessions.resume(id, { restartNative: true })`。原执行环境停止且原 Git 工作树有效时，新原生会话沿用框架会话 ID、工作目录、分支和文件。首轮已发送或发送状态不明时，使用默认恢复。
 
 #### 场景：选择智能体与工作区
 

@@ -115,6 +115,20 @@ async function inspectProject() {
 
 正常关闭保留工程和原生状态。继续任务用 `ai.acp.sessions.resume(id, callbacks)`，只使用智能体声明的 load/resume 能力；原生不支持或模型/智能体定义已不兼容时返回失败。`sessions.remove(id)` 只移除关闭/失败的记录，不删除目录、worktree 或卷。
 
+如果准备过程在第一轮发送前中断，可信服务端可以在原隔离 Git 工作树重新建立原生会话。调用前须持有任务执行租约，确认原执行环境已关闭，并用持久化阶段记录确认该会话尚未发送首轮。已发送或状态不明时使用默认恢复。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// 框架 ID 来自当前任务的持久记录。调用方已持有执行租约并确认首轮尚未发送。
+async function reopenPreparedSession(sessionId: string) {
+  // 在 sessionId 的原 Git 工作树重开原生会话。成功返回原框架会话的句柄，活动占用、失效工作树或配置冲突时返回错误。
+  return ai.acp.sessions.resume(sessionId, { restartNative: true })
+}
+```
+
+调用方检查返回值的 `success` 后再使用会话句柄。成功时原分支和准备文件保留，由调用方决定何时发送首轮。
+
 ## 将工作树交给预览
 
 成功创建受管会话后，`session.info()` 的 `workspace` 包含会话目录、各登记仓库的绝对路径和存储位置。`info.cwd` 是 Agent 当前绑定的目录。目录模式可以直接使用本机路径。卷模式由可信的同节点执行器使用 `workspace.storage.engine`，将 `workspace.storage.name` 挂到 `workspace.storage.mountPath`，再进入对应仓库路径。Git 工作树的链接需要保持原挂载路径。用于读取的预览可挂只读卷，需要写缓存的开发服务器应单独安排可写目录。

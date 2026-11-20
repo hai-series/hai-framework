@@ -794,7 +794,7 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 | `ai.acp.sessions.create` | 启动受管开发会话 | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?` | `HaiResult<managed session handle>` | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
 | `ai.acp.sessions.get` | 读取会话句柄 | `framework session id` | `HaiResult<managed session handle>; does not resume` | `ai.acp.sessions.get("task-1")` |
 | `ai.acp.sessions.list` | 查询受管会话 | `workspaceId?` | `HaiResult<ACPSessionInfo[]>` | `ai.acp.sessions.list("project")` |
-| `ai.acp.sessions.resume` | 恢复原生会话 | `framework session id, ACPClientOptions?` | `HaiResult<managed session handle>; definition changes may reject` | `ai.acp.sessions.resume("task-1")` |
+| `ai.acp.sessions.resume` | ネイティブセッションを再開または作り直す | フレームワークのセッション ID、接続コールバック、任意の `restartNative`（既定値は `false`） | `HaiResult` にセッションハンドルを返す。定義の変更、無効な作業ツリー、使用中のセッションはエラー | `ai.acp.sessions.resume("task-1")` |
 | `ai.acp.sessions.close` | 停止拥有的执行环境 | `framework session id` | `HaiResult<void>; source and native history retained` | `ai.acp.sessions.close("task-1")` |
 | `ai.acp.sessions.reclaimWorktree` | 回收干净检出目录 | `closed framework session id; preview stopped and changes saved` | `HaiResult<void>; branch and normal files retained` | `ai.acp.sessions.reclaimWorktree("task-1")` |
 | `ai.acp.sessions.remove` | 移除会话记录 | `closed or failed framework session id` | `HaiResult<void>; worktree and native history retained` | `ai.acp.sessions.remove("task-1")` |
@@ -831,6 +831,8 @@ submit は再読込可能な受付情報、run は今回の結果を待ちます
 送信応答が失われた場合は、永続ストレージのセッション ID と元の冪等キーで `tasks.findSubmission` を呼び出します。受領情報の索引も復元します。返された `taskId` で状態確認、イベント取得、キャンセルを行えます。`null` の場合、アプリで確認待ちの状態を維持できます。
 
 以下で CRUD・準備・会話と戻されたハンドルを扱います。主体はサーバー由来です。updateMain/publish はリポジトリを変えるため、文書確認で実際に公開しません。
+
+元のネイティブ履歴は `ai.acp.sessions.resume(id)` で復元します。エージェントの設定は JSON の内容で比較するため、オブジェクトのキーの順番は影響しません。準備中に中断した場合は、信頼できるサーバーがタスクの実行リースを保持し、永続タスク記録で最初のターンが未送信だと確認できたときに限り、`ai.acp.sessions.resume(id, { restartNative: true })` を使えます。元の実行環境が停止し、Git 作業ツリーが有効であれば、新しいネイティブセッションは元のフレームワークのセッション ID、ディレクトリ、ブランチ、ファイルを使用します。最初のターンが送信済み、または送信状況が不明な場合は、既定の復元を使います。
 
 [引数と手順の詳細](ai.md#acp)
 

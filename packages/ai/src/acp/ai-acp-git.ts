@@ -215,6 +215,22 @@ export function createGitOperations(
     if (remoteUrl(await git(path, ['remote', 'get-url', repo.remote])) !== remoteUrl(repo.url))
       throw new ACPFailure('conflict')
   }
+  async function registeredWorktree(main: string, worktree: string) {
+    const registrations = await git(main, [
+      'worktree',
+      'list',
+      '--porcelain',
+      '-z',
+    ])
+    return registrations.split('\0\0').map(entry => entry.split('\0')).find(([entry]) => {
+      if (!entry?.startsWith('worktree '))
+        return false
+      const registeredPath = entry.slice('worktree '.length)
+      return !runtime.resource && process.platform === 'win32'
+        ? win32.relative(registeredPath, worktree) === ''
+        : registeredPath === worktree
+    })
+  }
   async function reports(
     operation: (
       repo: Repository,
@@ -301,6 +317,34 @@ export function createGitOperations(
       await runtime.file('copy', 'main/files', `sessions/${sessionId}/files`)
     },
     /**
+     * 核验所有仓库仍登记在原会话路径与分支，保留准备阶段已写入的内容。
+     * @param sessionId - 持久记录拥有的独立会话目录 ID。
+     * @param branch - 创建时登记的会话分支。
+     * @returns 核验成功后返回；目录、登记、分支或远端失效时抛错。
+     * @example
+     * ```ts
+     * // 模块内部上下文：git 为已打开工作区的操作句柄，调用方持有会话锁。
+     * await git.verifyWorktree('task-1', 'acp/task-1')
+     * ```
+     */
+    async verifyWorktree(sessionId: string, branch: string) {
+      await ready()
+      for (const repo of workspace.repositories) {
+        await checked(repo)
+        const main = source(repo.id)
+        const worktree = runtime.path(`sessions/${sessionId}/${repo.id}`)
+        const registration = await registeredWorktree(main, worktree)
+        if (!registration?.includes(`branch refs/heads/${branch}`))
+          throw new ACPFailure('conflict')
+        await checked(repo, worktree, branch)
+        // 主仓的登记可能在原目录被替换后仍存在，工作树还须使用主仓的 Git 元数据。
+        const mainGitDir = await git(main, ['rev-parse', '--absolute-git-dir'])
+        const commonGitDir = await git(worktree, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+        if (path.relative(mainGitDir, commonGitDir) !== '')
+          throw new ACPFailure('conflict')
+      }
+    },
+    /**
      * 预检所有登记的会话工作树，确认回收状态已持久化后逐个执行 Git 移除。
      * @param sessionId - 持久记录所拥有的会话目录 ID。
      * @param branch - 创建时登记的会话分支。
@@ -320,20 +364,7 @@ export function createGitOperations(
         const main = source(repo.id)
         const worktree = runtime.path(`sessions/${sessionId}/${repo.id}`)
         const exists = (await runtime.file('exists', worktree)) === 'true'
-        const registrations = await git(main, [
-          'worktree',
-          'list',
-          '--porcelain',
-          '-z',
-        ])
-        const registration = registrations.split('\0\0').map(entry => entry.split('\0')).find(([entry]) => {
-          if (!entry?.startsWith('worktree '))
-            return false
-          const registeredPath = entry.slice('worktree '.length)
-          return !runtime.resource && process.platform === 'win32'
-            ? win32.relative(registeredPath, worktree) === ''
-            : registeredPath === worktree
-        })
+        const registration = await registeredWorktree(main, worktree)
         if (!registration && !exists)
           continue
         if (!registration?.includes(`branch refs/heads/${branch}`)

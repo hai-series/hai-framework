@@ -790,7 +790,7 @@ Bind trusted identity, register agents/workspaces and create sessions. Verify ap
 | `ai.acp.sessions.create` | 启动受管开发会话 | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?` | `HaiResult<managed session handle>` | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
 | `ai.acp.sessions.get` | 读取会话句柄 | `framework session id` | `HaiResult<managed session handle>; does not resume` | `ai.acp.sessions.get("task-1")` |
 | `ai.acp.sessions.list` | 查询受管会话 | `workspaceId?` | `HaiResult<ACPSessionInfo[]>` | `ai.acp.sessions.list("project")` |
-| `ai.acp.sessions.resume` | 恢复原生会话 | `framework session id, ACPClientOptions?` | `HaiResult<managed session handle>; definition changes may reject` | `ai.acp.sessions.resume("task-1")` |
+| `ai.acp.sessions.resume` | Resume or reopen the native session | Framework session ID, connection callbacks, optional `restartNative` (default `false`) | `HaiResult` with a session handle. Changed definitions, an invalid worktree or a busy session can prevent recovery | `ai.acp.sessions.resume("task-1")` |
 | `ai.acp.sessions.close` | 停止拥有的执行环境 | `framework session id` | `HaiResult<void>; source and native history retained` | `ai.acp.sessions.close("task-1")` |
 | `ai.acp.sessions.reclaimWorktree` | 回收干净检出目录 | `closed framework session id; preview stopped and changes saved` | `HaiResult<void>; branch and normal files retained` | `ai.acp.sessions.reclaimWorktree("task-1")` |
 | `ai.acp.sessions.remove` | 移除会话记录 | `closed or failed framework session id` | `HaiResult<void>; worktree and native history retained` | `ai.acp.sessions.remove("task-1")` |
@@ -827,6 +827,8 @@ submit returns a resumable receipt; run waits for its result. Acceptance is not 
 If the submission response is lost, load the original session ID and idempotency key from durable storage and call `tasks.findSubmission`. It also restores the receipt index. Use the returned `taskId` to read events, check status or request cancellation. A `null` result means no execution record is currently available and the application can keep the turn pending verification.
 
 The workflow covers resource CRUD, preparation, sessions and returned handles. Identity comes from the server. updateMain/publish mutate repositories; documentation checks do not publish anything.
+
+Use `ai.acp.sessions.resume(id)` to recover the original native history. Agent definitions are compared by JSON content regardless of object key order. After a preparation interruption, a trusted server that holds the task execution lease can use `ai.acp.sessions.resume(id, { restartNative: true })` if durable task state proves the first turn was never sent. Once the old execution environment has stopped and the Git worktree has been verified, the new native session uses the original framework session ID, directory, branch and files. Use default recovery if the first turn was sent or its dispatch status is uncertain.
 
 [Detailed parameters and workflows](ai.md#acp)
 

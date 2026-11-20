@@ -171,7 +171,7 @@ export interface ACPSessionInfo {
   modelId?: string
   /** 模型非密钥配置的摘要；用于阻止不兼容的会话恢复。 */
   modelSignature?: string
-  /** 智能体原生会话 ID，恢复时原样传回。 */
+  /** 当前原生会话 ID。默认恢复时原样传回，显式重开成功后更新。 */
   nativeId?: string
   /** 打开中、运行中、已关闭或打开失败。 */
   status: 'opening' | 'active' | 'closed' | 'failed'

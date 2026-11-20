@@ -455,22 +455,38 @@ export function createACPOperations(
   async function start(
     info: ACPSessionInfo,
     options: ACPClientOptions,
-    resume: boolean,
+    operation: 'create' | 'resume' | 'restart',
     ownedSession?: () => Promise<void>,
   ) {
     const releaseSession = ownedSession ?? await acquire(`session:${info.id}`)
     let releaseDirectory: (() => Promise<void>) | undefined
     let runtime: ACPRuntime | undefined
     let connection: ACPConnection | undefined
-    let recordMutable = !resume
+    let recordMutable = operation === 'create'
+    let restartBranch: string | undefined
     try {
-      if (resume) {
+      if (operation !== 'create') {
         info = await get(sessions, info.id)
         if (info.status === 'opening' || info.status === 'active')
           throw new ACPFailure('busy')
         if (info.worktreeStatus)
           throw new ACPFailure('closed')
-        recordMutable = true
+        if (operation === 'restart') {
+          if (info.resource)
+            throw new ACPFailure('busy')
+          if (!info.workspaceId || !info.workspace?.repositories.length || !info.newWorktree || !info.branch)
+            throw new ACPFailure('unsupported')
+          restartBranch = info.branch
+        }
+        const agent = await getAgent(info.agentId)
+        if (
+          !agent.enabled
+          || !isDeepStrictEqual(JSON.parse(JSON.stringify(agent)), JSON.parse(JSON.stringify(info.agent)))
+          || info.modelSignature !== (await modelSignature(agent))
+        ) {
+          throw new ACPFailure('conflict')
+        }
+        recordMutable = operation === 'resume'
       }
       const agent = info.agent
       const workspace = info.workspaceId
@@ -502,7 +518,7 @@ export function createACPOperations(
           releaseDirectory = await acquire(`${workspaceKey(workspace)}:main`)
         checkStorage(workspace, info)
         const directory = sessionDirectory(info)
-        if (!resume) {
+        if (operation === 'create') {
           const releasePrepare = info.newWorktree
             ? await acquire(`${workspaceKey(workspace)}:main`)
             : undefined
@@ -533,6 +549,10 @@ export function createACPOperations(
         }
         checkLayout(workspace, runtime, info)
         await runtime.file('directory', info.cwd)
+        if (restartBranch) {
+          await createGitOperations(workspace, runtime).verifyWorktree(info.id, restartBranch)
+          recordMutable = true
+        }
       }
       else if (
         agent.mode !== 'custom-service'
@@ -552,22 +572,29 @@ export function createACPOperations(
           ? await mcpLookup(info.mcpServerIds)
           : []),
       ]
-      if (resume) {
-        if (!info.nativeId)
+      let nativeId = info.nativeId
+      if (operation === 'resume') {
+        if (!nativeId)
           throw new ACPFailure('unsupported')
-        await connection.resumeSession(info.nativeId, info.cwd, mcpServers)
+        await connection.resumeSession(nativeId, info.cwd, mcpServers)
       }
       else {
-        info.nativeId = (
+        nativeId = (
           await connection.createSession(info.cwd, mcpServers)
         ).sessionId
+        if (operation === 'create')
+          info.nativeId = nativeId
       }
       ensure()
-      info.status = 'active'
-      info.resource = runtime?.resource
-      await sessions.save(info.id, info)
+      const active: ACPSessionInfo = {
+        ...info,
+        nativeId,
+        status: 'active',
+        resource: runtime?.resource,
+      }
+      await sessions.save(info.id, active)
       const value: LiveSession = {
-        info,
+        info: active,
         connection,
         runtime,
         release: async () => {
@@ -1295,7 +1322,7 @@ export function createACPOperations(
               return info
             })
             handedOff = true
-            return await start(info, options, false, releaseSession)
+            return await start(info, options, 'create', releaseSession)
           }
           finally {
             if (!handedOff)
@@ -1340,10 +1367,10 @@ export function createACPOperations(
           }),
         ),
       /**
-       * 使用原生会话 ID 和保留状态恢复；智能体定义或模型能力已改变时拒绝恢复。
+       * 默认使用原生会话 ID 和原状态恢复。可信宿主确认首轮尚未派发时，可在原隔离工作树重开。
        * @param id - 已关闭或失败的框架会话 ID。
-       * @param options - 本次连接的回调、能力和取消信号，不从数据库恢复回调。
-       * @returns 恢复后的会话句柄；原生服务不支持恢复或配置变化时失败。
+       * @param options - 本次连接选项和可信宿主可显式启用的 restartNative。
+       * @returns 恢复后的会话句柄；占用、工作树失效、原生操作失败或配置变化时返回失败。
        * @example
        * ```ts
        * import { ai } from '@h-ai/ai'
@@ -1352,21 +1379,19 @@ export function createACPOperations(
        * const result = await ai.acp.sessions.resume('task-1')
        * ```
        */
-      resume: (id: string, options: ACPClientOptions = {}) =>
+      resume: (
+        id: string,
+        options: ACPClientOptions & {
+          /** 可信宿主持有任务执行租约或等价的独占执行权，并确认首轮尚未派发时可设为 true。默认 false。 */
+          restartNative?: boolean
+        } = {},
+      ) =>
         protect(async () => {
           const info = await get(sessions, id)
-          if (info.status === 'opening' || info.status === 'active')
-            throw new ACPFailure('busy')
-          const agent = await getAgent(info.agentId)
-          if (
-            !agent.enabled
-            || !isDeepStrictEqual(JSON.parse(JSON.stringify(agent)), JSON.parse(JSON.stringify(info.agent)))
-          ) {
-            throw new ACPFailure('conflict')
-          }
-          if (info.modelSignature !== (await modelSignature(agent)))
-            throw new ACPFailure('conflict')
-          return start(info, options, true)
+          const { restartNative, ...clientOptions } = options
+          return start(info, clientOptions, restartNative === true
+            ? 'restart'
+            : 'resume')
         }),
       /**
        * 关闭本进程拥有的会话并释放锁，不删除历史和工程内容。

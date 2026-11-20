@@ -10,7 +10,7 @@ import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 const exec = promisify(execFile)
 const fixture = resolve('tests/fixtures/acp-agent.mjs')
@@ -202,6 +202,144 @@ describe('aCP managed session E2E', () => {
     expect(JSON.parse(value(await resumed.prompt(prompt('inspect-repo'))).text)).toEqual(expected)
   }, 20000)
 
+  it('准备中断后仅按显式请求在原工作树重开原生会话', async () => {
+    const repository = await seed('code', 'main')
+    await workspace([
+      { id: 'code', url: repository.remote, mainBranch: 'main' },
+    ])
+    const trace = join(temporary, 'recovery.log')
+    value(await ai.acp.agents.register({
+      id: 'recovery',
+      name: 'Recovery fixture',
+      mode: 'embedded',
+      command: process.execPath,
+      args: [fixture, '--recovery-trace', trace],
+    }))
+    const branch = 'task/preparation-retry'
+    const session = value(await ai.acp.sessions.create({
+      agentId: 'recovery',
+      workspaceId: 'project',
+      repositoryId: 'code',
+      newWorktree: true,
+      branch,
+      mcpServers: [
+        {
+          name: 'prepared-tools',
+          command: process.execPath,
+          args: [],
+          env: [],
+        },
+      ],
+    }))
+    const before = value(await session.info())
+    const base = await git(before.cwd, ['rev-parse', 'HEAD'])
+    const prepared = join(before.cwd, 'prepared.txt')
+    await writeFile(prepared, 'Trusted preparation output')
+    value(await session.close())
+    await ai.close()
+    value(await ai.init({
+      acp: { requestTimeout: 5000 },
+    }))
+
+    expect(await ai.acp.sessions.resume(session.id)).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.ACP_OPERATION_FAILED.code },
+    })
+    expect(await readFile(trace, 'utf8')).toBe('session/new\nsession/resume\n')
+    expect(await ai.acp.sessions.resume(session.id, {
+      restartNative: true,
+      onEvent() { throw new Error('Controlled startup failure') },
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.ACP_OPERATION_FAILED.code },
+    })
+    const persisted = value(await ai.acp.sessions.get(session.id))
+    expect(value(await persisted.info())).toMatchObject({ status: 'failed', nativeId: before.nativeId })
+    const beforeRetry = 'session/new\nsession/resume\nsession/new\n'
+    expect(await readFile(trace, 'utf8')).toBe(beforeRetry)
+    const results = await Promise.all([
+      ai.acp.sessions.resume(session.id, { restartNative: true }),
+      ai.acp.sessions.resume(session.id, { restartNative: true }),
+    ])
+    expect(results).toContainEqual(expect.objectContaining({
+      success: false,
+      error: expect.objectContaining({ code: HaiAIError.ACP_BUSY.code }),
+    }))
+    const restarted = results.find(result => result.success)
+    expect(restarted?.success).toBe(true)
+    if (!restarted)
+      throw new Error('Expected one caller to reopen the original worktree')
+    const reopened = restarted.data
+    const after = value(await reopened.info())
+    expect(after).toMatchObject({
+      id: before.id,
+      cwd: before.cwd,
+      branch,
+      workspace: before.workspace,
+      status: 'active',
+    })
+    expect(after.nativeId).toEqual(expect.any(String))
+    expect(after.nativeId).not.toBe(before.nativeId)
+    expect(await git(after.cwd, ['branch', '--show-current'])).toBe(branch)
+    expect(await git(after.cwd, ['rev-parse', 'HEAD'])).toBe(base)
+    expect(await readFile(prepared, 'utf8')).toBe('Trusted preparation output')
+    expect(await readFile(trace, 'utf8')).toBe(`${beforeRetry}session/new\n`)
+    expect(value(await reopened.prompt(prompt('mcp'))).text).toBe('prepared-tools')
+    expect(await readFile(trace, 'utf8')).toBe(`${beforeRetry}session/new\nsession/prompt\n`)
+  }, 20000)
+
+  it.each([false, true])('拒绝在没有 Git 工作树的目录重开原生会话，隔离目录=%s', async (newWorktree) => {
+    await workspace()
+    const session = value(await ai.acp.sessions.create({ agentId: 'fixture', workspaceId: 'project', newWorktree }))
+    value(await session.close())
+    expect(await ai.acp.sessions.resume(session.id, { restartNative: true })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.ACP_UNSUPPORTED.code },
+    })
+    expect(value(await session.info()).status).toBe('closed')
+  })
+
+  it.each(['分支变化', '替换为独立克隆'])('拒绝重开与原 Git 工作树不符的目录，%s', async (change) => {
+    const repository = await seed('code', 'main')
+    await workspace([
+      { id: 'code', url: repository.remote, mainBranch: 'main' },
+    ])
+    const branch = 'task/original'
+    const session = value(await ai.acp.sessions.create({
+      agentId: 'fixture',
+      workspaceId: 'project',
+      newWorktree: true,
+      branch,
+    }))
+    const before = value(await session.info())
+    const project = join(before.cwd, 'code')
+    value(await session.close())
+    if (change === '分支变化') {
+      await git(project, ['switch', '-c', 'moved'])
+    }
+    else {
+      await rm(project, { recursive: true })
+      await exec('git', [
+        'clone',
+        '--branch',
+        'main',
+        '--',
+        repository.remote,
+        project,
+      ])
+      await git(project, ['switch', '-c', branch])
+    }
+    expect(await ai.acp.sessions.resume(session.id, { restartNative: true })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.ACP_CONFLICT.code },
+    })
+    expect(value(await session.info()).nativeId).toBe(before.nativeId)
+    expect(value(await session.info()).status).toBe('closed')
+    expect(await git(project, ['branch', '--show-current'])).toBe(change === '分支变化'
+      ? 'moved'
+      : branch)
+  }, 20000)
+
   it('只回收停止且干净的目标工作树，保留其他会话和 Git 分支', async () => {
     const api = await seed('api', 'trunk')
     const web = await seed('web', 'trunk')
@@ -246,6 +384,10 @@ describe('aCP managed session E2E', () => {
     value(await ai.acp.sessions.reclaimWorktree(target.id))
     expect(value(await target.info()).worktreeStatus).toBe('reclaimed')
     expect((await ai.acp.sessions.resume(target.id)).success).toBe(false)
+    expect(await ai.acp.sessions.resume(target.id, { restartNative: true })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.ACP_CLOSED.code },
+    })
     expect((await target.publish({ mode: 'push-branch', message: 'gone', author })).success).toBe(false)
     await expect(readFile(join(targetInfo.cwd, 'unfinished.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(join(root, 'main', 'web'), ['show', 'acp/target:unfinished.txt'])).toBe('draft')

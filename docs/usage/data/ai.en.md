@@ -538,4 +538,6 @@ AI uses the caller-supplied `storeProvider` or the initialized RelDB and VecDB i
 | `hai_ai_acp_*`, `hai_ai_a2a_*` | Workspace/session and managed request/approval state for ACP, and context/journal/messages for A2A. |
 | `hai_ai_knowledge`, `hai_ai_memory` (VecDB) | Default knowledge and memory vector collections. Binding a memory namespace can change the actual collection. |
 
+The session record keeps the framework session ID and its current native ID. An explicit reopen updates the native ID after the new native session opens successfully.
+
 Still untranslated: individual record fields and schema/index details for memory, knowledge, A2A and ACP. Read the [Chinese source section](ai.md#data-fields).
