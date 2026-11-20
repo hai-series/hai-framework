@@ -7,7 +7,8 @@
 
 import { core } from '@h-ai/core'
 import { storageM } from '../storage-i18n.js'
-import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+
+export { getMimeType } from '../storage-mime.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'client' })
 
@@ -106,9 +107,9 @@ export async function uploadWithPresignedUrl(
   options: ClientUploadOptions = {},
 ): Promise<{ success: boolean, error?: string }> {
   const operation = 'uploadWithPresignedUrl'
+  const signal = options.abortController?.signal
   logger.debug('Storage client operation started', { operation })
   try {
-    const signal = options.abortController?.signal
     if (signal?.aborted) {
       return transferFailure(operation, storageM('storage_uploadCanceled'))
     }
@@ -260,7 +261,7 @@ export async function uploadWithPresignedUrl(
     return { success: true }
   }
   catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
       return transferFailure(operation, storageM('storage_uploadCanceled'))
     }
     return transferFailure(operation, error instanceof Error
@@ -293,10 +294,11 @@ export async function downloadWithPresignedUrl(
   options: ClientDownloadOptions = {},
 ): Promise<{ success: boolean, data?: Blob, error?: string }> {
   const operation = 'downloadWithPresignedUrl'
+  const signal = options.abortController?.signal
   try {
     const response = await fetch(url, {
       method: 'GET',
-      signal: options.abortController?.signal,
+      signal,
     })
 
     if (!response.ok) {
@@ -309,7 +311,7 @@ export async function downloadWithPresignedUrl(
     return { success: true, data: blob }
   }
   catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
       return transferFailure(operation, storageM('storage_downloadCanceled'))
     }
     return transferFailure(operation, error instanceof Error
@@ -323,7 +325,7 @@ export async function downloadWithPresignedUrl(
  *
  * @param url - 下载 URL
  * @param options - 下载选项
- * @returns 声明返回类型对应的操作结果。
+ * @returns 成功表示已触发浏览器保存，失败时包含错误说明。
  * @example
  * ```ts
  * import { downloadAndSave } from '@h-ai/storage/client'
@@ -345,19 +347,22 @@ export async function downloadAndSave(
   }
 
   try {
-    // 创建下载链接
-    const blobUrl = URL.createObjectURL(result.data)
     const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = options.filename || storageM('storage_downloadDefaultFilename')
-
-    // 触发下载
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    // 清理 URL
-    URL.revokeObjectURL(blobUrl)
+    const blobUrl = URL.createObjectURL(result.data)
+    try {
+      link.href = blobUrl
+      link.download = options.filename || storageM('storage_downloadDefaultFilename')
+      document.body.appendChild(link)
+      link.click()
+    }
+    finally {
+      try {
+        link.remove()
+      }
+      finally {
+        URL.revokeObjectURL(blobUrl)
+      }
+    }
 
     return { success: true }
   }
@@ -395,30 +400,9 @@ export function getFileExtension(file: File): string {
 }
 
 /**
- * 根据文件扩展名获取 MIME 类型
- *
- * 内置常见扩展名映射（图片/文档/文本/音视频/压缩包），
- * 未匹配时返回 'application/octet-stream'。
- *
- * @param extension - 文件扩展名（不含点，大小写不敏感）
- * @returns MIME 类型字符串
- * @example
- * ```ts
- * import { getMimeType } from '@h-ai/storage/client'
- *
- * const mime = getMimeType('pdf')
- * void mime
- * ```
- */
-export function getMimeType(extension: string): string {
-  return MIME_TYPES[extension.toLowerCase()] || MIME_TYPE_DEFAULT
-}
-
-/**
  * 格式化文件大小为人类可读字符串
  *
- * 使用 1024 进制，输出单位为 B/KB/MB/GB/TB。
- * 非零值使用对应单位并保留 2 位小数。
+ * 使用 1024 进制，最大单位为 TB。以 B 为单位时显示整数，其余单位保留 2 位小数。
  *
  * @param bytes - 字节数（非负整数）
  * @returns 格式化后的字符串，如 '0 B'、'1.50 KB'、'2.30 MB'
@@ -434,7 +418,7 @@ export function formatFileSize(bytes: number): string {
     return '0 B'
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
   const size = bytes / 1024 ** i
 
   return `${size.toFixed(i > 0

@@ -1,4 +1,4 @@
-/** 真实 Chromium XHR 验证上传取消、终态结算与事件资源清理。 */
+/** 真实 Chromium 验证上传取消、终态结算和浏览器下载资源清理。 */
 import type { Browser } from '@playwright/test'
 import type { Server } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -11,7 +11,7 @@ import { chromium } from '@playwright/test'
 import { build } from 'tsup'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage client real browser cancellation', () => {
+describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage client real browser transfers', () => {
   let browser: Browser | undefined
   let server: Server | undefined
   let temporary: string | undefined
@@ -65,6 +65,11 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       if (url.pathname === '/client.js') {
         response.writeHead(200, { 'Content-Type': 'text/javascript' })
         response.end(bundle)
+        return
+      }
+      if (url.pathname === '/download') {
+        response.writeHead(200, { 'Content-Type': 'text/plain' })
+        response.end('Storage download content')
         return
       }
       if (url.pathname === '/upload') {
@@ -294,6 +299,46 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       }
       if (scenario === 'callback')
         expect(evidence.result.error).toBe('Progress handler failed')
+    }
+    finally {
+      await context.close()
+    }
+  }, 15_000)
+
+  it('下载并保存文件后，移除下载链接并释放 Blob URL', async () => {
+    if (!browser)
+      throw new Error('Real browser was not started')
+    const context = await browser.newContext()
+    try {
+      const page = await context.newPage()
+      await page.goto(origin)
+      const [download, evidence] = await Promise.all([
+        page.waitForEvent('download'),
+        page.evaluate(async () => {
+          const client: typeof import('@h-ai/storage/client') = Reflect.get(globalThis, 'storageClientFixture')
+          const revokeObjectURL = URL.revokeObjectURL
+          const revoked: string[] = []
+          URL.revokeObjectURL = (url) => {
+            revoked.push(url)
+            revokeObjectURL.call(URL, url)
+          }
+          try {
+            const result = await client.downloadAndSave('/download', { filename: 'report.txt' })
+            return { result, revoked, remainingLinks: document.querySelectorAll('a[download]').length }
+          }
+          finally {
+            URL.revokeObjectURL = revokeObjectURL
+          }
+        }),
+      ])
+
+      expect(evidence.result.success).toBe(true)
+      expect(evidence.remainingLinks).toBe(0)
+      expect(evidence.revoked).toEqual([
+        expect.stringMatching(/^blob:/),
+      ])
+      expect(download.suggestedFilename()).toBe('report.txt')
+      expect(await readFile(await download.path(), 'utf8')).toBe('Storage download content')
     }
     finally {
       await context.close()
