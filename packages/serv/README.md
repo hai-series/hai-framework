@@ -22,6 +22,8 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 
 ## 功能说明
 
+`serv.storageAssets()` 提供公开只读文件。GET 从同一次 Storage 读取生成响应头并取得正文。
+
 [查 API 清单](../../docs/usage/function/serv.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构

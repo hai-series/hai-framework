@@ -33679,6 +33679,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StorageFileRead",
+              "kind": "type",
+              "declaration": "StorageFileRead",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "StorageFunctions",
               "kind": "type",
               "declaration": "StorageFunctions",
@@ -33987,6 +33993,12 @@
               "name": "StorageDeleteSummary",
               "kind": "type",
               "declaration": "StorageDeleteSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageFileRead",
+              "kind": "type",
+              "declaration": "StorageFileRead",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -34306,6 +34318,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StorageFileRead",
+              "kind": "type",
+              "declaration": "StorageFileRead",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "StorageFunctions",
               "kind": "type",
               "declaration": "StorageFunctions",
@@ -34622,6 +34640,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StorageFileRead",
+              "kind": "type",
+              "declaration": "StorageFileRead",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "StorageFunctions",
               "kind": "type",
               "declaration": "StorageFunctions",
@@ -34935,6 +34959,12 @@
               "name": "StorageDeleteSummary",
               "kind": "type",
               "declaration": "StorageDeleteSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageFileRead",
+              "kind": "type",
+              "declaration": "StorageFileRead",
               "declarationKind": "InterfaceDeclaration"
             },
             {

@@ -109,11 +109,11 @@
 | @h-ai/serv | `./features/iam (types)` | 3 |
 | @h-ai/serv | `./features/storage (import)` | 3 |
 | @h-ai/serv | `./features/storage (types)` | 3 |
-| @h-ai/storage | `. (browser/default)` | 50 |
-| @h-ai/storage | `. (browser/types)` | 50 |
-| @h-ai/storage | `. (default)` | 51 |
-| @h-ai/storage | `. (import)` | 51 |
-| @h-ai/storage | `. (types)` | 51 |
+| @h-ai/storage | `. (browser/default)` | 51 |
+| @h-ai/storage | `. (browser/types)` | 51 |
+| @h-ai/storage | `. (default)` | 52 |
+| @h-ai/storage | `. (import)` | 52 |
+| @h-ai/storage | `. (types)` | 52 |
 | @h-ai/storage | `./client (import)` | 9 |
 | @h-ai/storage | `./client (types)` | 9 |
 | @h-ai/storage | `./schemas (import)` | 8 |

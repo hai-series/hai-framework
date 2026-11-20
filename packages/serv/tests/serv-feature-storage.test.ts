@@ -37,6 +37,11 @@ function createStorageMock(): StorageFunctions {
       put: async () => ok(baseFileMetadata),
       get: async () => ok(Buffer.from('demo')),
       getStream: async () => ok((async function* () { yield Buffer.from('demo') })()),
+      getStreamWithMetadata: async key => ok({
+        metadata: { ...baseFileMetadata, key },
+        stream: (async function* () { yield Buffer.from('demo') })(),
+        close: async () => {},
+      }),
       head: async key => ok({ ...baseFileMetadata, key }),
       exists: async () => ok(true),
       delete: async () => ok(undefined),

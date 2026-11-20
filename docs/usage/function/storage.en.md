@@ -141,6 +141,7 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 | `storage.file.put` | Store file content and metadata | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
 | `storage.file.get` | Read all file bytes | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
 | `storage.file.getStream` | Read a file as a stream | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata` | Open a full object and its metadata in one read | Object key, optional `{ signal }` | `StorageFileRead` or an open failure | `await storage.file.getStreamWithMetadata('report.txt')` |
 | `storage.file.head` | Read file metadata | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
 | `storage.file.exists` | Check file existence | `key` | `boolean` | `await storage.file.exists('report.txt')` |
 | `storage.file.copy` | Copy to another object key | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
@@ -152,7 +153,7 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 ```ts
 // Write hello as text at the report key. Success metadata has size 5 bytes. value throws on write failure.
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
-// saved describes key demo/report.txt, size 5 and backend timestamps
+// saved describes key demo/report.txt and size 5.
 // Check the newly written report. Success returns true. value throws on lookup failure.
 value(await storage.file.exists('demo/report.txt')) // true
 // Read metadata for the report key. Success returns the same key and size 5. value throws if missing or unavailable.
@@ -165,6 +166,17 @@ let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// Open the report and its MIME type in one read. value throws if opening fails.
+const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+try {
+  if (opened.metadata.contentType === 'text/plain') {
+    // The stream yields five bytes in total. Iteration can throw on I/O failure.
+    for await (const bytes of opened.stream) void bytes.byteLength
+  }
+} finally {
+  // Release the file handle or connection even if the MIME check fails.
+  await opened.close()
+}
 // Copy the report to demo/copy.txt. Success returns the new object's metadata. value throws on failure.
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
 // Delete the original report key. Success has no data. value throws on failure.
@@ -178,6 +190,8 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 UTF-8 hello is five bytes. Chunk boundaries vary, and stream iteration can fail after the initial result. Inspect confirmed batch deletions rather than assuming Promise completion means every key was removed.
 
 For S3, `file.put()` returns the byte count and submitted metadata for that write, plus the ETag when the service supplies it. The receipt uses `application/octet-stream` when the request omits the content type. Its `lastModified` records when the application received the successful response. Use `file.head()` to query the object currently at that key and its service-reported timestamp.
+
+`file.getStreamWithMetadata()` opens a full object. S3 takes the headers and body from one GET response. Local reads the bytes and the matching metadata record for the same open file. Local objects require a valid metadata record. Call `close()` to release an unread or partially read stream, or pass a `signal` to cancel.
 
 To abandon a download, abort its signal or call `return()` on its iterator to release the connection, even before reading the first chunk. When copying, setting only `contentType` or `metadata` preserves the other field from the source. For an S3 copy with overrides, Storage checks the source ETag before applying the changes. If the check fails, read the source again before retrying.
 

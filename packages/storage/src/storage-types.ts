@@ -127,14 +127,35 @@ export interface FileMetadata {
   key: string
   /** 文件大小（字节） */
   size: number
-  /** 内容类型（MIME），未指定时根据扩展名自动推断 */
+  /** 对象的 MIME 类型。Local 上传省略类型时按扩展名推断。 */
   contentType: string
-  /** 最后修改时间 */
+  /** 对象修改时间。S3 上传回执记录收到成功响应的时间。 */
   lastModified: Date
   /** ETag（缓存验证标记；本地为 size-mtime，S3 由服务端生成，不等同于内容 checksum） */
   etag?: string
   /** 自定义元数据键值对 */
   metadata?: Record<string, string>
+}
+
+/**
+ * 同一次打开操作得到的完整对象元数据和字节流。调用方持有流，放弃读取时应主动关闭。
+ * @example
+ * ```ts
+ * import type { StorageFileRead } from '@h-ai/storage'
+ *
+ * async function release(read: StorageFileRead) {
+ *   // 跳过不需要的对象时关闭未消费的流，释放连接或文件句柄。
+ *   await read.close()
+ * }
+ * ```
+ */
+export interface StorageFileRead {
+  /** 与流中正文对应的完整对象元数据。 */
+  metadata: FileMetadata
+  /** 单次消费的字节流。迭代时可能抛出读取或取消错误。 */
+  stream: AsyncIterable<Uint8Array>
+  /** 可重复调用，终止读取并释放已打开的流。 */
+  close: () => Promise<void>
 }
 
 /**
@@ -390,6 +411,30 @@ export interface FileOperations {
    * ```
    */
   getStream: (key: string, options?: DownloadOptions) => Promise<HaiResult<AsyncIterable<Uint8Array>>>
+
+  /**
+   * 在同一次读取中打开完整对象及其元数据，适用于同时使用 MIME、大小或 ETag 和正文的场景。
+   * @param key - 完整对象键。
+   * @param options - 可选的取消信号。
+   * @returns 成功时返回元数据、单次消费的字节流及关闭方法，打开失败时返回 HaiResult 错误。
+   * @throws 字节流迭代期间可能抛出 I/O 或取消异常。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const opened = await storage.file.getStreamWithMetadata('reports/a.txt')
+   * if (!opened.success) throw new Error(opened.error.message)
+   * const { metadata, stream, close } = opened.data
+   * try {
+   *   if (metadata.contentType === 'text/plain') {
+   *     for await (const chunk of stream) void chunk.byteLength
+   *   }
+   * } finally {
+   *   await close()
+   * }
+   * ```
+   */
+  getStreamWithMetadata: (key: string, options?: Pick<DownloadOptions, 'signal'>) => Promise<HaiResult<StorageFileRead>>
 
   /**
    * 获取文件元数据

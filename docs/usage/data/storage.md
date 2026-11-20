@@ -30,6 +30,10 @@
 
 reports/order-42.txt 是一个5字节的文本文件；lastModified 在代码里是 Date，JSON 显示为 UTC 日期字符串。
 
+### 一次读取打开的对象
+
+`StorageFileRead` 是服务端在一次读取中拿到的对象。以 `reports/order-42.txt` 为例，`metadata` 包含上面的 5 字节和 MIME 类型，`stream` 逐块交付同一对象的字节。应用可据此校验类型或生成响应头。读完可调用 `close()`，决定跳过正文时也可立即调用它释放句柄或连接。
+
 ### 本地文件旁保存的附加信息
 
 对应结构：`Local sidecar`。

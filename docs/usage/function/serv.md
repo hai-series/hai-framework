@@ -619,6 +619,7 @@ const app = serv.createApp({
 - `path` 省略时默认 `'*'`
 - 普通 `middlewares` 在解密和访问策略之后执行；提前响应仍受策略约束并经过响应加密。二进制端点须显式列入 `transport.excludePaths`，该排除不会绕过访问策略
 - 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念
+- GET 使用同一次 Storage 读取的 MIME、ETag 和正文。拒绝 MIME 或返回 304 时关闭流。HEAD 只查询元数据。使用自定义适配器时，请提供 `file.head()` 和 `file.getStreamWithMetadata()`
 - 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure，不应套用公开资源 helper
 - 此时 `c.req.json()` 读取解密后的正文；内置 `serv.cors(...)` 的预检仍检查访问策略
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted` 和 `X-Hai-Transport`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露

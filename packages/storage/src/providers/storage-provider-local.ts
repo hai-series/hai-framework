@@ -24,7 +24,7 @@ import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js
 import { storageM } from '../storage-i18n.js'
 import { getMimeType as getMimeTypeByExtension } from '../storage-mime.js'
 import { storageErrorContext } from '../storage-operation-log.js'
-import { toByteStream } from '../storage-stream.js'
+import { createStorageReadStream, toByteStream } from '../storage-stream.js'
 import {
 
   HaiStorageError,
@@ -493,6 +493,48 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
+    async getStreamWithMetadata(key, { signal } = {}) {
+      if (isMetaFile(key)) {
+        return err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
+          params: { key },
+        }))
+      }
+      try {
+        signal?.throwIfAborted()
+        const filePath = await fullPath(key)
+        // 从已打开的文件句柄读取代际和正文，避免并发替换源键时混用不同版本。
+        for (let attempt = 0; attempt < METADATA_READ_ATTEMPTS; attempt++) {
+          signal?.throwIfAborted()
+          const handle = await fsp.open(filePath, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW)
+          let transferred = false
+          try {
+            const stat = await handle.stat({ bigint: true })
+            if (!stat.isFile() && !stat.isDirectory())
+              throw createInvalidPathError()
+            const metadata = await readMetadata(key, filePath, stat)
+            if (!metadata)
+              continue
+            if (!metadata.success)
+              return metadata
+
+            signal?.throwIfAborted()
+            const body = handle.createReadStream()
+            const read = createStorageReadStream(body, signal)
+            transferred = true
+            return ok({ metadata: metadata.data, ...read })
+          }
+          finally {
+            if (!transferred)
+              await handle.close().catch(error => logger.warn('Local file read cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
+          }
+        }
+        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
+      }
+      catch (error) {
+        return err(toStorageError(error, key))
+      }
+    },
+
     async head(key): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(key)) {
         return err(
@@ -607,45 +649,20 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
-      if (isMetaFile(sourceKey)) {
-        return err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
-          params: { key: sourceKey },
-        }))
-      }
+      const source = await file.getStreamWithMetadata(sourceKey)
+      if (!source.success)
+        return source
       try {
-        const sourcePath = await fullPath(sourceKey)
-        // 同一个打开的文件句柄确定代际并读取内容，源键被并发替换也不会混用不同代际。
-        for (let attempt = 0; attempt < METADATA_READ_ATTEMPTS; attempt++) {
-          const handle = await fsp.open(sourcePath, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW)
-          let stream: fs.ReadStream | undefined
-          try {
-            const stat = await handle.stat({ bigint: true })
-            if (!stat.isFile() && !stat.isDirectory())
-              throw createInvalidPathError()
-            const source = await readMetadata(sourceKey, sourcePath, stat)
-            if (!source)
-              continue
-            if (!source.success)
-              return source
-
-            async function* read(): AsyncIterable<Uint8Array> {
-              stream = handle.createReadStream()
-              yield* stream
-            }
-            return await file.put(destKey, read(), {
-              contentType: options.contentType ?? source.data.contentType,
-              metadata: options.metadata ?? source.data.metadata,
-            })
-          }
-          finally {
-            stream?.destroy()
-            await handle.close().catch(error => logger.warn('Local copy source cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
-          }
-        }
-        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
+        return await file.put(destKey, source.data.stream, {
+          contentType: options.contentType ?? source.data.metadata.contentType,
+          metadata: options.metadata ?? source.data.metadata.metadata,
+        })
       }
       catch (error) {
         return err(toStorageError(error, sourceKey))
+      }
+      finally {
+        await source.data.close().catch(error => logger.warn('Local copy source cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
       }
     },
   }

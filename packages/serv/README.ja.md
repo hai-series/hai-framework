@@ -22,6 +22,8 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 ## 機能
 
+`serv.storageAssets()` は公開ファイルを読み取り専用で配信し、GET 応答のヘッダーと本文を一度の Storage 読み取りから取得します。
+
 [API 一覧](../../docs/usage/function/serv.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造

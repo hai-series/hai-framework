@@ -173,6 +173,7 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 | `storage.file.put` | 写入文件内容与元数据 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
 | `storage.file.get` | 读取完整文件字节 | key, options | `Buffer<ArrayBufferLike>` | `await storage.file.get('report.txt')` |
 | `storage.file.getStream` | 取得逐块读取的文件流 | key, options | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata` | 同一次读取取得完整对象及其元数据 | 对象键，可选 `{ signal }` | `StorageFileRead` 或打开失败 | `await storage.file.getStreamWithMetadata('report.txt')` |
 | `storage.file.head` | 读取文件元数据 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
 | `storage.file.exists` | 检查文件是否存在 | key | `boolean` | `await storage.file.exists('report.txt')` |
 | `storage.file.copy` | 复制到另一个对象键 | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'archive/report.txt')` |
@@ -184,7 +185,7 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 ```ts
 // 以纯文本类型保存 hello 到报告键，成功元数据的大小为 5 字节，写入失败由 value 抛出。
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
-// saved describes key demo/report.txt, size 5 and backend timestamps
+// saved 包含对象键 demo/report.txt 和大小 5 字节。
 // 检查刚写入的报告，data 为 true，后端查询失败由 value 抛出。
 value(await storage.file.exists('demo/report.txt')) // true
 // 传报告键读取元数据，返回同一键及 5 字节等属性，缺失或后端失败由 value 抛出。
@@ -197,6 +198,17 @@ let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// 读取同一份报告的 MIME 和正文，打开失败由 value 抛出。
+const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+try {
+  if (opened.metadata.contentType === 'text/plain') {
+    // 实际读取的总字节数为 5，迭代期间可能发生 I/O 错误。
+    for await (const bytes of opened.stream) void bytes.byteLength
+  }
+} finally {
+  // 即使 MIME 检查未通过也释放文件句柄或连接。
+  await opened.close()
+}
 // 将报告复制到 demo/copy.txt，成功返回新键的元数据，复制失败由 value 抛出。
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
 // 删除原报告键，成功无 data，删除失败由 value 抛出。
@@ -214,6 +226,8 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 `file.put()` 支持 Buffer、Uint8Array、字符串及 `AsyncIterable<Uint8Array>`（如 Node Readable）；流上传内部使用有界 S3 multipart。`getStream()` 返回字节流，支持 Range 与 `signal` 取消。初始失败返回 HaiResult，迭代期间的 I/O 或取消错误由消费方处理。放弃下载时，即使尚未读取第一块，也应取消 `signal` 或调用迭代器的 `return()` 释放连接。`get()` 返回完整 Buffer，适合小文件。
 
 S3 `file.put()` 返回本次写入的字节数、提交的类型与自定义元数据，以及对象服务提供的 ETag。省略类型时，回执的 `contentType` 为 `application/octet-stream`，`lastModified` 是应用收到成功响应的时间。需要查询该键当前指向的对象及服务端时间时，调用 `file.head()`。
+
+`file.getStreamWithMetadata()` 读取完整对象。S3 使用同一次 GET 的响应头和正文，Local 读取同一打开文件的代际记录和字节。本地对象须有有效的代际元数据。用 `close()` 释放未消费或提前停止的流，传入 `signal` 也可取消读取。
 
 上传选项 `{ ifNoneMatch: '*' }` 通过标准 S3 条件写或本地原子发布拒绝覆盖，冲突返回 `ALREADY_EXISTS`；S3 服务不支持条件写时返回错误，不降级为覆盖。失败/取消会清理临时文件或未完成分片；取消不能撤销已经发布的对象。
 
@@ -296,7 +310,7 @@ if (key.success) {
 | `file.head`                                        | `POST /storage/files/metadata`          | `storage.files.getMetadata`                           | 返回元数据，不能把 ETag 当内容 checksum                                                       |
 | `file.delete`                                      | `DELETE /storage/files`                 | `storage.files.delete`                                | 逐资源授权                                                                                    |
 | `file.deleteMany`                                  | `POST /storage/files/delete-many`       | `storage.files.deleteMany`                            | HTTP 总量上限 1000，返回可确认的删除进度                                                      |
-| `file.put/get/getStream/copy/exists`、`dir.delete` | 无默认端点                              | 应用自行提供有界且鉴权的服务端流程                    | 流、Range、AbortSignal、metadata、cacheControl、条件写等 Node 选项不能直接作为预签名 API 入参 |
+| `file.put/get/getStream/getStreamWithMetadata/copy/exists`、`dir.delete` | 无默认端点                              | 应用自行提供有界且鉴权的服务端流程                    | 流、Range、AbortSignal、metadata、cacheControl、条件写等 Node 选项不能直接作为预签名 API 入参 |
 | `checksum.generate/verify`                         | 无默认端点                              | 应用选择明确的浏览器实现或服务端校验流程              | Node 无状态工具；不是上传接口自动校验                                                         |
 | `presign.publicUrl`                                | 无默认端点                              | 应用按公开资源策略使用                                | 仅配置公开 S3 地址时有 URL；不是鉴权链接，Local 为 null                                       |
 

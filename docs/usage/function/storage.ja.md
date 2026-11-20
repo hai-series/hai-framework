@@ -145,6 +145,7 @@ value(await storage.close()) // undefined; saved files remain on disk
 | `storage.file.put` | 内容とメタデータを保存 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
 | `storage.file.get` | ファイル全体を取得 | key, options | `Buffer` | `await storage.file.get('report.txt')` |
 | `storage.file.getStream` | ストリームで取得 | key, options | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata` | オブジェクト全体とメタデータを一度に開く | オブジェクトキー、任意の `{ signal }` | `StorageFileRead`、またはオープン時のエラー | `await storage.file.getStreamWithMetadata('report.txt')` |
 | `storage.file.head` | メタデータを取得 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
 | `storage.file.exists` | ファイルの存在確認 | key | `boolean` | `await storage.file.exists('report.txt')` |
 | `storage.file.copy` | 別キーにコピー | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
@@ -156,7 +157,7 @@ value(await storage.close()) // undefined; saved files remain on disk
 ```ts
 // レポートキーに hello をテキストとして保存します。成功時のサイズは 5 バイト、失敗は value が例外にします。
 const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
-// saved describes key demo/report.txt, size 5 and backend timestamps
+// saved のキーは demo/report.txt、サイズは 5 バイトです。
 // 保存直後のレポートを確認します。結果は true、失敗は value が例外にします。
 value(await storage.file.exists('demo/report.txt')) // true
 // レポートキーのメタデータを読み、同じキーと 5 バイトのサイズを得ます。失敗は value が例外にします。
@@ -169,6 +170,17 @@ let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
+// レポートの本文と MIME タイプを一度に開きます。失敗は value が例外にします。
+const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+try {
+  if (opened.metadata.contentType === 'text/plain') {
+    // 合計 5 バイトを読み取ります。I/O の失敗は反復時に例外になります。
+    for await (const bytes of opened.stream) void bytes.byteLength
+  }
+} finally {
+  // MIME タイプの確認に失敗した場合も、ハンドルまたは接続を解放します。
+  await opened.close()
+}
 // レポートを demo/copy.txt に複製し、新しいメタデータを返します。失敗は value が例外にします。
 value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
 // 元のレポートキーを削除します。成功時の data はなく、失敗は value が例外にします。
@@ -182,6 +194,8 @@ value(await storage.file.exists('demo/copy.txt')) // false after confirmed delet
 UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で、読み出し中に失敗することもあります。一括削除は完了した Promise だけでなく、各キーの確認結果を調べてください。
 
 S3 の `file.put()` は、その書き込みのバイト数と指定したメタデータに加え、サービスが返した ETag を返します。コンテンツ型を省略した場合、結果は `application/octet-stream` です。`lastModified` はアプリが成功応答を受け取った時刻です。現在そのキーにあるオブジェクトとサービス上の更新日時は `file.head()` で取得します。
+
+`file.getStreamWithMetadata()` はオブジェクト全体を開きます。S3 は一回の GET 応答からヘッダーと本文を取得します。Local は同じファイルハンドルから本文を読み、そのファイルに対応するメタデータを取得します。Local のオブジェクトには有効なレコードが必要です。未読や途中で停止したストリームは `close()` で解放できます。`signal` で読み取りを取り消すこともできます。
 
 ダウンロードを中断する場合は、最初のチャンクを読み取る前でも、シグナルを中断するかイテレーターの `return()` を呼び出して接続を解放します。コピーで `contentType` または `metadata` の片方だけを指定すると、もう片方はコピー元から引き継がれます。S3 で上書き項目を指定すると、変更の適用前にコピー元の ETag を検証します。検証に失敗した場合は、コピー元を読み直してから再試行してください。
 

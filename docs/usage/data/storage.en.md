@@ -28,6 +28,10 @@ Listings and file details describe location, size and type without downloading c
 
 reports/order-42.txt is a 5-byte text file. lastModified is a Date in code and a UTC date string in JSON.
 
+### An opened object
+
+A server-side `StorageFileRead` contains the result of a single read. For `reports/order-42.txt`, its `metadata` describes the five-byte text file above, and its `stream` yields that object's bytes. The application can use the metadata to validate the type or set response headers. Call `close()` when finished or when skipping the body to free the file handle or connection.
+
 ### Extra information beside a local file
 
 Structure: `Local sidecar`.

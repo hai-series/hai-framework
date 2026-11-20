@@ -4,12 +4,57 @@
  * 供存储 Provider 与 checksum 共用，保持消费有界且支持取消。
  */
 import type { HaiResult } from '@h-ai/core'
-import type { FileMetadata, StorageData } from './storage-types.js'
+import type { FileMetadata, StorageData, StorageFileRead } from './storage-types.js'
 import { Buffer } from 'node:buffer'
-import { finished, Readable } from 'node:stream'
+import { addAbortSignal, finished, Readable } from 'node:stream'
 import { err } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { HaiStorageError } from './storage-types.js'
+
+/**
+ * 接管已打开的 Node 字节流，处理首块前的错误、关闭和取消。
+ * @example 模块内部上下文
+ * ```ts
+ * const opened = createStorageReadStream(Readable.from([Buffer.from('report')]))
+ * await opened.close() // 消费前关闭，释放流。
+ * ```
+ */
+export function createStorageReadStream(body: Readable, signal?: AbortSignal): Pick<StorageFileRead, 'stream' | 'close'> {
+  const settled = new Promise<void>((resolve) => {
+    // 接到响应或文件句柄后，调用方可能稍后才开始消费。迭代器会继续报告读取错误。
+    const cleanup = finished(body, { readable: true, writable: false }, () => {
+      cleanup()
+      resolve()
+    })
+  })
+  if (signal)
+    addAbortSignal(signal, body)
+
+  const iterator: AsyncIterator<Uint8Array> = body[Symbol.asyncIterator]()
+  async function close(): Promise<void> {
+    // Node 迭代器在首次 next() 前调用 return() 不会关闭底层可读流。
+    body.destroy()
+    try {
+      await iterator.return?.()
+    }
+    finally {
+      await settled
+    }
+  }
+
+  return {
+    close,
+    stream: {
+      [Symbol.asyncIterator]: () => ({
+        next: () => iterator.next(),
+        async return() {
+          await close()
+          return { done: true, value: undefined }
+        },
+      }),
+    },
+  }
+}
 
 /**
  * 保护调用方已经打开的上传源，并将源读取失败与目标写入失败区分。

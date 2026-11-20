@@ -558,6 +558,7 @@ const app = serv.createApp({
 
 - 普通 `middlewares` 在解密和策略之后执行，提前响应仍受访问策略和响应加密约束。二进制端点显式加入 transport.excludePaths；内置 CORS 预检和密钥交换也执行策略。
 - 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
+- 资源 GET 使用同一次读取中的 MIME、ETag 和正文，HEAD 只读元数据。需要定制 Storage 适配器时，提供 `file.head()` 和 `file.getStreamWithMetadata()`。
 - 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure。
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted` 和 `X-Hai-Transport`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。

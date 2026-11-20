@@ -6,15 +6,15 @@
  * @module storage-provider-s3
  */
 
-import type { BucketLocationConstraint, S3ClientConfig } from '@aws-sdk/client-s3'
+import type { BucketLocationConstraint, HeadObjectCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3'
 import type { Upload } from '@aws-sdk/lib-storage'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { DirOperations, DownloadOptions, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary, StorageFileRead } from '../storage-types.js'
 import type { StorageProvider } from './storage-provider-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Buffer } from 'node:buffer'
-import { addAbortSignal, finished, Readable } from 'node:stream'
+import { Readable } from 'node:stream'
 import {
   AbortMultipartUploadCommand,
   CopyObjectCommand,
@@ -35,7 +35,7 @@ import { core, err, ok } from '@h-ai/core'
 import { PresignOptionsSchema, PresignUploadOptionsSchema } from '../storage-config.js'
 import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
-import { toByteStream } from '../storage-stream.js'
+import { createStorageReadStream, toByteStream } from '../storage-stream.js'
 import {
 
   HaiStorageError,
@@ -226,6 +226,18 @@ function withoutPrefix(key: string, prefix: string): string {
   return key
 }
 
+/** 按相同字段解释 HeadObject 和 GetObject 响应中的对象元数据。 */
+function objectMetadata(key: string, response: Pick<HeadObjectCommandOutput, 'ContentLength' | 'ContentType' | 'LastModified' | 'ETag' | 'Metadata'>): FileMetadata {
+  return {
+    key,
+    size: response.ContentLength ?? 0,
+    contentType: response.ContentType || 'application/octet-stream',
+    lastModified: response.LastModified ?? new Date(),
+    etag: response.ETag,
+    metadata: response.Metadata,
+  }
+}
+
 // ─── S3 Provider 实现 ───
 
 /**
@@ -337,6 +349,34 @@ export function createS3Provider(): StorageProvider {
   /** 将用户 key 拼接配置前缀，得到完整 S3 对象键 */
   function fullKey(key: string): string {
     return withPrefix(key, getConfig().prefix)
+  }
+
+  /** 用一次 S3 请求打开正文，同时取得相同响应的元数据。 */
+  async function openObject(key: string, options: DownloadOptions): Promise<HaiResult<StorageFileRead>> {
+    try {
+      const s3Client = getClient()
+      const s3Config = getConfig()
+      const fullPath = fullKey(key)
+      const Range = options.rangeStart !== undefined || options.rangeEnd !== undefined
+        ? `bytes=${options.rangeStart ?? 0}-${options.rangeEnd ?? ''}`
+        : undefined
+      const response = await s3Client.send(new GetObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: fullPath,
+        Range,
+      }), { abortSignal: options.signal })
+
+      if (!(response.Body instanceof Readable))
+        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_responseBodyEmpty'))
+
+      return ok({
+        metadata: objectMetadata(key, response),
+        ...createStorageReadStream(response.Body, options.signal),
+      })
+    }
+    catch (error) {
+      return err(toStorageError(error, key))
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -479,56 +519,13 @@ export function createS3Provider(): StorageProvider {
     },
 
     async getStream(key, options = {}) {
-      try {
-        const s3Client = getClient()
-        const s3Config = getConfig()
-        const fullPath = fullKey(key)
-
-        let Range: string | undefined
-        if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
-          const start = options.rangeStart ?? 0
-          const end = options.rangeEnd !== undefined
-            ? options.rangeEnd
-            : ''
-          Range = `bytes=${start}-${end}`
-        }
-
-        const response = await s3Client.send(new GetObjectCommand({
-          Bucket: s3Config.bucket,
-          Key: fullPath,
-          Range,
-        }), { abortSignal: options.signal })
-
-        const body = response.Body
-        if (!(body instanceof Readable)) {
-          return err(
-            HaiStorageError.OPERATION_FAILED,
-            storageM('storage_responseBodyEmpty'),
-          )
-        }
-
-        // 响应头已返回，调用方可能稍后才开始读取。即使此时中止或出错，也要处理流错误。
-        const cleanup = finished(body, { readable: true, writable: false }, () => cleanup())
-        if (options.signal)
-          addAbortSignal(options.signal, body)
-
-        const iterator = body[Symbol.asyncIterator]()
-        return ok({
-          [Symbol.asyncIterator]: () => ({
-            next: () => iterator.next(),
-            async return() {
-              // Node 的迭代器在首次 next() 前执行 return() 不会关闭响应体。
-              body.destroy()
-              await iterator.return?.()
-              return { done: true, value: undefined }
-            },
-          }),
-        })
-      }
-      catch (error) {
-        return err(toStorageError(error, key))
-      }
+      const opened = await openObject(key, options)
+      return opened.success
+        ? ok(opened.data.stream)
+        : opened
     },
+
+    getStreamWithMetadata: (key, options) => openObject(key, { signal: options?.signal }),
 
     async head(key): Promise<HaiResult<FileMetadata>> {
       try {
@@ -541,14 +538,7 @@ export function createS3Provider(): StorageProvider {
           Key: fullPath,
         }))
 
-        return ok({
-          key,
-          size: response.ContentLength || 0,
-          contentType: response.ContentType || 'application/octet-stream',
-          lastModified: response.LastModified || new Date(),
-          etag: response.ETag,
-          metadata: response.Metadata,
-        })
+        return ok(objectMetadata(key, response))
       }
       catch (error) {
         return err(toStorageError(error, key))
