@@ -29,7 +29,7 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 
 配置页先核对实际配置文件与读取者；API 的 config/options、依赖注入和组件 props 写功能页，响应结构写数据页。无独立配置文件时明确说明，不虚构模块 YAML，详见上述模块文档规范。
 
-功能页按大功能写三级标题（任务名称 + 真实入口），每节依次为用途、四级「接口清单」、四级场景。场景串联实际调用流程；逐项核对清单中的每个接口都有输入、调用及输出/可观察效果，不能只给孤立的调用总表。属性、组件、CLI、工厂和流按真实契约展示，三语分组与锚点一致。完整写法以[模块文档规范](../../instructions/module-documentation.md#功能清单与场景示例)为准。
+功能页按大功能写三级标题（任务名称 + 真实入口），每节依次为用途、四级「接口清单」、四级场景。场景串联实际调用流程，每次公共业务 API 调用都用代码块内的相邻注释交代实参、结果及相关失败。同一方法重复调用也逐次解释。属性、组件、CLI、工厂和流按真实契约展示，三语分组与锚点一致。写法和验收见[模块文档规范](../../instructions/module-documentation.md#功能清单与场景示例)。
 
 多阶段、有条件分支、异步状态或跨端协作的接口，在对应场景配流程、时序、状态或职责图，并解释具体路径、失败与清理；按[复杂接口与辅助图](../../instructions/module-documentation.md#复杂接口与辅助图)核对源码、三语和实际渲染。简单接口不强制配图。
 
@@ -184,6 +184,6 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
-- [ ] 中英日 README、三类参考页、逐方法 API 清单及关键场景示例已按[模块文档规范](../../instructions/module-documentation.md)核对；文档链接、锚点和受影响的使用 skill 或 CLI 模板已同步
+- [ ] 中英日 README、三类参考页、逐方法 API 清单及场景示例已按[模块文档规范](../../instructions/module-documentation.md)核对。单独阅读代码块，逐次检查调用行旁的实参、结果和失败说明，并运行关键场景。文档链接、锚点和受影响的使用 skill 或 CLI 模板已同步
 - [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
 - [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过

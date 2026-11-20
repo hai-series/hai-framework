@@ -49,6 +49,7 @@ const XxErrorInfo = {
   CONFIG_ERROR: '012:500',
 } satisfies ErrorInfo
 
+// 以 xx 命名空间和紧凑错误表生成模块错误定义。
 export const HaiXxError = core.error.buildHaiErrorsDef('xx', XxErrorInfo)
 
 export interface ZzOperations {
@@ -123,26 +124,32 @@ import { core, err, ok } from '@h-ai/core'
 import { HaiXxError } from '../xx-types.js'
 import { xxM } from '../xx-i18n.js'
 
+// 创建带模块 xx 和子域 yy 的 logger，返回含固定上下文的子实例。
 const logger = core.logger.child({ module: 'xx', scope: 'yy' })
 
 export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
   const { config } = deps
   return {
     async create(input: CreateYyInput) {
+      // 在 yy.create 开始时记录 debug 级事件，返回 void。
       logger.debug('Creating yy item', { operation: 'yy.create' })
       if (!input.name) {
+        // 用必填名称的本地化文本构造校验失败结果。
         return err(HaiXxError.VALIDATION_ERROR, xxM('xx_yy_nameRequired'))
       }
       try {
         const item = await doCreate(input)
+        // 将新建的 item 封装为成功结果。
         return ok(item)
       }
       catch (error) {
+        // 记录 yy.create 失败的操作名、错误码和错误类名，返回 void。
         logger.warn('Could not create yy item', {
           operation: 'yy.create',
           errorCode: HaiXxError.OPERATION_FAILED.code,
           causeName: error instanceof Error ? error.name : undefined,
         })
+        // 封装领域错误码、本地化的创建失败消息和内部原因。
         return err(HaiXxError.OPERATION_FAILED, xxM('xx_yy_createFailed'), error)
       }
     },
@@ -173,6 +180,7 @@ import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type XxMessageKey = keyof typeof messagesZhCN
+// 把三份消息字典装配为按键读取当前语言消息的函数。
 export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
@@ -198,6 +206,7 @@ src/client/xx-client.ts  —— 工厂函数 createXxClient(config) 创建
 按 [日志与错误诊断](../../../packages/cli/templates/skills/hai-app-create/logging.md) 选择级别和允许记录的字段。连接地址复用 Core 脱敏工具。
 
 ```ts
+// 先脱敏 config.url，再写入 Redis 已连接的日志。logger.info 返回 void。
 logger.info('Redis connected', { address: core.sanitize.sanitizeUrl(config.url) })
 ```
 
@@ -223,10 +232,11 @@ logger.info('Redis connected', { address: core.sanitize.sanitizeUrl(config.url) 
  * 根据配置初始化对应后端（S3/OSS/本地），建立连接并验证凭据。
  *
  * @param config - 存储配置（包含 type、bucket、credentials 等）
- * @returns 成功返回 StorageClient 实例；失败返回含错误码的 HaiResult
+ * @returns 成功时 data 为 undefined，失败时包含错误码。
  *
  * @example
  * ```ts
+ * // 用 S3 配置连接 my-bucket。成功后使用模块的存储操作，失败从 error 中读取错误。
  * const result = await storage.init({ type: 's3', bucket: 'my-bucket' })
  * if (result.success) {
  *   // 使用 storage 客户端

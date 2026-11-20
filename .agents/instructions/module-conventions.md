@@ -57,9 +57,11 @@
 async function create(input: Input): Promise<HaiResult<Item>> {
   try {
     const item = await doCreate(input)
+    // 用已创建的 item 构造成功结果，调用者从 data 读取。
     return ok(item)
   }
   catch (error) {
+    // 将领域错误码、本地化文本和捕获的错误封装为失败结果。
     return err(HaiXxError.CREATE_FAILED, xxM('xx_createFailed'), error)
   }
 }
@@ -67,7 +69,9 @@ async function create(input: Input): Promise<HaiResult<Item>> {
 // ✅ 返回 HaiResult（非异步）
 function register(tool: Tool): HaiResult<void> {
   if (!isInitialized)
+    // 用模块的未初始化错误工厂返回失败结果。
     return notInitialized.result()
+  // 注册成功时返回 success=true，data 为 undefined。
   return ok(undefined)
 }
 ```
@@ -239,6 +243,7 @@ function register(tool: Tool): HaiResult<void> {
 ```ts
 import { ok, type HaiResult } from '@h-ai/core'
 
+// 用示例订单对象创建成功结果，data.id 为 order-1。
 const result: HaiResult<{ id: string }> = ok({ id: 'order-1' })
 const label = result.success ? result.data.id : result.error.message
 ```
