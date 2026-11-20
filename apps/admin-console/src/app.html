@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="%lang%" data-theme="light">
+<html lang="%lang%" data-theme="liquid-glass">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,10 +8,12 @@
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <script>
       // 在页面渲染前应用保存的主题，避免闪烁
-      ;(function () {
-        const theme = localStorage.getItem('theme') || 'light'
-        document.documentElement.setAttribute('data-theme', theme)
-      })()
+      try {
+        const theme = localStorage.getItem('theme')
+        if (theme) document.documentElement.setAttribute('data-theme', theme)
+      } catch {
+        /* 存储不可用时沿用 HTML 的默认主题。 */
+      }
     </script>
     %sveltekit.head%
   </head>

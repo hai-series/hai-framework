@@ -176,14 +176,14 @@
   <!-- 统计卡片 -->
   <div class='grid gap-3 grid-cols-2 lg:grid-cols-4'>
     {#each statCards as card (card.icon)}
-      <div class='relative bg-base-100 rounded-xl border border-base-content/6 p-4 overflow-hidden group hover:-translate-y-0.5 hover:shadow-(--shadow-soft) transition-all duration-200'>
+      <div data-hai-glass-surface class='relative bg-base-100 rounded-xl border border-base-content/6 p-4 overflow-hidden group hover:-translate-y-0.5 hover:shadow-(--shadow-soft) transition-all duration-200'>
         <!-- 左侧色条 -->
         <div class='absolute left-0 top-3 bottom-3 w-0.75 rounded-full {card.bar} opacity-60'></div>
         <div class='flex items-start justify-between pl-2.5'>
           <div class='min-w-0'>
-            <p class='text-xs font-medium text-base-content/50 truncate'>{card.label}</p>
+            <p class='admin-dashboard-note text-xs font-medium text-base-content/50 truncate'>{card.label}</p>
             <p class='text-2xl font-bold {card.color} mt-1 tabular-nums tracking-tight'>{card.value}</p>
-            <p class='text-2xs text-base-content/35 mt-0.5 truncate'>{card.sub}</p>
+            <p class='admin-dashboard-note text-2xs text-base-content/35 mt-0.5 truncate'>{card.sub}</p>
           </div>
           <div class='w-9 h-9 rounded-lg {card.accent} flex items-center justify-center shrink-0'>
             <span class='{card.icon} size-4.5 {card.color}'></span>
@@ -196,7 +196,7 @@
   <!-- 内容区 -->
   <div class='grid gap-4 lg:grid-cols-3'>
     <!-- 快速入口 -->
-    <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+    <div data-hai-glass-surface class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
       <div class='flex items-center gap-2 mb-3'>
         <span class='icon-[tabler--rocket] size-4 text-base-content/40'></span>
         <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_quick_actions()}</h2>
@@ -216,7 +216,7 @@
     {#if data.canReadAudit}
       <!-- 最近活动 -->
       <div class='lg:col-span-2'>
-        <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+        <div data-hai-glass-surface class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
           <div class='flex items-center justify-between mb-3'>
             <div class='flex items-center gap-2'>
               <span class='icon-[tabler--activity] size-4 text-base-content/40'></span>
@@ -240,18 +240,18 @@
                     <Badge variant={getActivityBadgeVariant(activity.action)} size='sm'>
                       {translateAction(activity.action)}
                     </Badge>
-                    <span class='text-base-content/45 text-xs'>{activity.resource}</span>
+                    <span class='admin-dashboard-note text-base-content/45 text-xs'>{activity.resource}</span>
                   </div>
                   {#if activity.details}
-                    <p class='text-xs text-base-content/35 truncate mt-0.5'>{activity.details}</p>
+                    <p class='admin-dashboard-note text-xs text-base-content/35 truncate mt-0.5'>{activity.details}</p>
                   {/if}
                 </div>
-                <div class='text-2xs text-base-content/30 whitespace-nowrap tabular-nums shrink-0'>
+                <div class='admin-dashboard-note text-2xs text-base-content/30 whitespace-nowrap tabular-nums shrink-0'>
                   {formatTime(activity.createdAt)}
                 </div>
               </div>
             {:else}
-              <div class='py-8 text-center text-sm text-base-content/30'>
+              <div class='admin-dashboard-note py-8 text-center text-sm text-base-content/30'>
                 {m.common_no_activity()}
               </div>
             {/each}
@@ -263,7 +263,7 @@
 
   <!-- 活动统计 -->
   {#if data.auditStats.length > 0}
-    <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+    <div data-hai-glass-surface class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
       <div class='flex items-center gap-2 mb-3'>
         <span class='icon-[tabler--chart-bar] size-4 text-base-content/40'></span>
         <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_activity_stats()}</h2>
