@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- 中央保持中性，四侧使用相反的位移方向。 -->
+  <filter id="lens" x="0%" y="0%" width="100%" height="100%" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+    <feFlood x="0" y="0" width="1" height="1" flood-color="#808080" result="center" />
+    <feFlood x="0" y="0" width=".075" height="1" flood-color="#ff9b80" result="left" />
+    <feFlood x=".925" y="0" width=".075" height="1" flood-color="#006580" result="right" />
+    <feFlood x="0" y="0" width="1" height=".075" flood-color="#9bff80" result="top" />
+    <feFlood x="0" y=".925" width="1" height=".075" flood-color="#650080" result="bottom" />
+    <feMerge>
+      <feMergeNode in="center" />
+      <feMergeNode in="left" />
+      <feMergeNode in="right" />
+      <feMergeNode in="top" />
+      <feMergeNode in="bottom" />
+    </feMerge>
+    <feGaussianBlur stdDeviation=".018" edgeMode="duplicate" result="edgeMap" />
+    <feDisplacementMap in="SourceGraphic" in2="edgeMap" scale=".09" xChannelSelector="R" yChannelSelector="G" />
+  </filter>
+</svg>

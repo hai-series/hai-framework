@@ -739,6 +739,8 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 
 最初の表示前に信頼済みの既定テーマを適用し、ページの選択部品で設定を読み取り、更新します。 詳細は[中国語の手順](ui.md#theme)を参照してください。
 
+共有スタイルの `@h-ai/ui/styles/theme.css` には、半透明の面を使った明るいテーマ `liquid-glass` が含まれます。ダイアログやドロワーは背後のレイヤーをぼかし、メニューは重なる領域だけをぼかします。前面のコンテンツはくっきりと表示され、縁では光が屈折します。コントロールのハイライトはマウスに追従し、モーションを減らす設定では静止します。テーマセレクターで「リキッドガラス」を選ぶと、再読み込み後も選択が維持されます。アプリが `fullstack.theme.themes` などで選択肢を指定している場合は、一覧に `liquid-glass` を追加してください。
+
 ```ts
 import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
@@ -750,7 +752,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 18 个主题元数据
+  THEMES, // 19 種類のテーマのメタデータ（ThemeInfo[] 型）
 } from '@h-ai/ui/theme'
 ```
 

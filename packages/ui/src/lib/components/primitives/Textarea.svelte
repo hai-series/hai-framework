@@ -23,6 +23,7 @@
   import type { DataAttributes, TextareaProps } from '../../types.js'
   import { getFormFieldContext } from '../../internal/form-context.js'
   import { createControlValidation, resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { cn, getDataAttributes, getInputSizeClass } from '../../utils.js'
 
   let {
@@ -66,7 +67,7 @@
 
   const wrapperClass = $derived(
     cn(
-      'flex w-full rounded-lg border bg-base-100',
+      'hai-control-surface flex w-full rounded-lg border bg-base-100',
       effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
@@ -116,7 +117,7 @@
 </script>
 
 <div {...dataAttributes} class='fieldset w-full'>
-  <div class={wrapperClass}>
+  <div use:attachGlassPointer class={wrapperClass}>
     <textarea
       bind:this={textareaRef}
       id={id ?? field?.controlId}

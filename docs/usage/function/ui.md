@@ -1324,11 +1324,13 @@ admin-console 示例和 CLI fullstack Web/App/Desktop 默认包含帮助入口�
 
 #### 场景：主题切换
 
-使用内置的主题工具函数管理 15 个精选 DaisyUI 主题、高对比、直角商务及护眼主题：
+使用内置的主题工具函数管理 15 个精选 DaisyUI 主题以及高对比、直角商务、护眼和液态玻璃主题。
 
 `high-contrast` 随共享 theme.css 提供：黑底亮字、清晰边框/焦点、增强次要文字及占位符对比度。ThemeSelector 提供三语名称；示例与默认生成工程可选择，可在 fullstack 的主题配置中指定可选主题。配色按普通文字 7:1 的目标验收，不代表任意业务内容已通过整站无障碍认证。
 
 `eye-care` 随共享 theme.css 提供暖绿色背景、深色正文、可读占位符与清晰焦点。主题选择器显示“护眼”，示例及默认模板可直接选择，刷新后保留偏好；现有默认主题及 fullstack 显式 themes 白名单不变。
+
+`liquid-glass` 随共享 `@h-ai/ui/styles/theme.css` 提供浅色半透明表面。弹窗和抽屉打开时柔化下一层，菜单只柔化它覆盖的区域，前景保留清晰内容与边缘折光。鼠标经过控件时高光随位置移动。系统开启减少动态效果时，高光保持静态。在主题选择器中选择“液态玻璃”，刷新页面后仍使用该主题。应用定义了 `fullstack.theme.themes` 等主题名单时，可将 `liquid-glass` 加入名单以开放选择。
 
 `formal` 提供直角的商务外观，按钮、输入框、卡片与弹窗不使用装饰性圆角；主题选择器提供三语名称，示例和默认模板可选择。Button 的 submitHint 仅在 type=submit 时显示原生 Enter 提示，不绑定全局快捷键；LoginForm 默认在桌面首次就绪且页面无焦点时聚焦标识，autoFocus=false 可关闭。筛选 Enter 即时查询且忽略输入法确认；主题菜单支持方向键/Home/End、Enter/Space 及 Esc 恢复焦点；确认框默认聚焦取消，Esc 同步取消状态。
 
@@ -1343,7 +1345,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 18 个主题元数据
+  THEMES, // 19 个主题的元数据，类型为 ThemeInfo[]
 } from '@h-ai/ui/theme'
 ```
 

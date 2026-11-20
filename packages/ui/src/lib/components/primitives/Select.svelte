@@ -24,6 +24,7 @@
   import { tick, untrack } from 'svelte'
   import { getFormFieldContext } from '../../internal/form-context.js'
   import { createControlValidation, resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes, portal } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -119,7 +120,7 @@
 
   const wrapperClass = $derived(
     cn(
-      'relative flex w-full min-w-0 items-center rounded-lg border bg-base-100 cursor-pointer',
+      'hai-control-surface relative flex w-full min-w-0 items-center rounded-lg border bg-base-100 cursor-pointer',
       sizeClasses.control,
       effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
@@ -318,6 +319,7 @@
     {/each}
   </select>
   <div
+    use:attachGlassPointer
     class={wrapperClass}
     bind:this={triggerRef}
     onclick={handleWrapperClick}

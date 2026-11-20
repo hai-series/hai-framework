@@ -65,7 +65,7 @@ export interface ThemeGroup {
 }
 
 /**
- * 精选 DaisyUI 主题及 UI 共享样式提供的高对比、直角商务与护眼主题。
+ * 精选 DaisyUI 主题及 UI 共享样式提供的高对比、直角商务、护眼与液态玻璃主题。
  *
  * @example
  * ```ts
@@ -137,6 +137,13 @@ export const THEMES: ThemeInfo[] = [
     dark: false,
     primaryColor: '#365e3d',
     bgColor: '#e8f0df',
+  },
+  {
+    id: 'liquid-glass',
+    name: 'Liquid glass',
+    dark: false,
+    primaryColor: '#2458a4',
+    bgColor: '#f7faff',
   },
   // 暗色主题
   {

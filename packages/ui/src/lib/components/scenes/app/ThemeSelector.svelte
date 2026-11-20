@@ -124,6 +124,8 @@
       ? uiM('theme_formal')
       : theme.id === 'eye-care'
       ? uiM('theme_eye_care')
+      : theme.id === 'liquid-glass'
+      ? uiM('theme_liquid_glass')
       : theme.name
   }
 

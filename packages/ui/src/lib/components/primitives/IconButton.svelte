@@ -20,6 +20,7 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, IconButtonProps } from '../../types.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { sanitizeInlineSvg } from '../../internal/icon-safety.js'
   import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
 
@@ -88,6 +89,7 @@
 {#if tooltip}
   <div {...dataAttributes} class='tooltip' data-tip={tooltip}>
     <button
+      use:attachGlassPointer
       type='button'
       class={buttonClass}
       {disabled}
@@ -110,6 +112,7 @@
   </div>
 {:else}
   <button
+    use:attachGlassPointer
     type='button'
     class={buttonClass}
     {disabled}

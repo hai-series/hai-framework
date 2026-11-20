@@ -737,6 +737,8 @@ Apply a trusted default before first paint, then let theme controls read and upd
 
 Apply a trusted default before first paint, then let theme controls read and update browser preferences. For extended examples, see the [Chinese walkthrough](ui.md#theme).
 
+The shared `@h-ai/ui/styles/theme.css` includes `liquid-glass`, a light theme with translucent surfaces. Dialogs and drawers soften the layer beneath them, and menus soften the area they cover. Foreground content stays sharp, with refraction at the edges. Highlights follow the mouse over controls and stay still with reduced motion enabled. Choose “Liquid glass” in the theme selector to keep using it after a reload. If the application uses a theme list such as `fullstack.theme.themes`, add `liquid-glass` to make it selectable.
+
 ```ts
 import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
@@ -748,7 +750,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 18 个主题元数据
+  THEMES, // Metadata for 19 themes, typed as ThemeInfo[]
 } from '@h-ai/ui/theme'
 ```
 

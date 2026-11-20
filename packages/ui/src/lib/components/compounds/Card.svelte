@@ -14,6 +14,7 @@
 -->
 <script lang='ts'>
   import type { CardProps, DataAttributes } from '../../types.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
   const {
@@ -68,7 +69,7 @@
   )
 </script>
 
-<div {...dataAttributes} class={cardClass}>
+<div {...dataAttributes} use:attachGlassPointer class={cardClass}>
   <div class={bodyClass}>
     {#if header}
       <div class='card-title text-sm font-semibold'>

@@ -20,6 +20,7 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, TagInputProps } from '../../types.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -47,7 +48,7 @@
 
   const containerClass = $derived(
     cn(
-      'flex h-auto w-full flex-wrap items-center gap-1 rounded-lg border border-base-content/15 bg-base-100 py-1 transition-[border-color,box-shadow] duration-150 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
+      'hai-control-surface flex h-auto w-full min-w-0 flex-wrap items-center gap-1 rounded-lg border border-base-content/15 bg-base-100 py-1 transition-[border-color,box-shadow] duration-150 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
       sizeClasses.minHeight,
       sizeClasses.spacing,
       disabled && 'cursor-not-allowed opacity-50',
@@ -93,7 +94,7 @@
   }
 </script>
 
-<div {...dataAttributes} class='fieldset w-full' data-form-wide>
+<div {...dataAttributes} use:attachGlassPointer class='fieldset w-full min-w-0' data-form-wide>
   <div
     class={containerClass}
     onclick={() => inputElement?.focus()}

@@ -14,6 +14,8 @@ it('共享自有主题可被首屏初始化识别，并使用对应原生控件�
   expect(normalizeThemeId('eye-care')).toBe('eye-care')
   expect(resolveThemeTone('eye-care')).toBe('light')
   expect(isDarkTheme('eye-care')).toBe(false)
+  expect(normalizeThemeId('liquid-glass')).toBe('liquid-glass')
+  expect(resolveThemeTone('liquid-glass')).toBe('light')
 })
 
 it.each([
@@ -26,6 +28,9 @@ it.each([
   ['zh-CN', '护眼', 'eye-care'],
   ['en-US', 'Eye care', 'eye-care'],
   ['ja-JP', '目にやさしい', 'eye-care'],
+  ['zh-CN', '液态玻璃', 'liquid-glass'],
+  ['en-US', 'Liquid glass', 'liquid-glass'],
+  ['ja-JP', 'リキッドガラス', 'liquid-glass'],
 ])('%s 主题选择器可选择 %s', async (locale, label, theme) => {
   const target = document.createElement('div')
   document.body.append(target)

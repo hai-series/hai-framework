@@ -30,6 +30,7 @@
   import { Combobox } from 'bits-ui'
   import { getFormFieldContext } from '../../internal/form-context.js'
   import { resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -242,7 +243,7 @@
   }
 </script>
 
-<div {...dataAttributes} class='fieldset w-full {className}' data-form-wide={multiple ? '' : undefined}>
+<div {...dataAttributes} use:attachGlassPointer class='fieldset w-full {className}' data-form-wide={multiple ? '' : undefined}>
   {#if fieldLabel}
     <legend class='fieldset-legend font-medium'>{fieldLabel}</legend>
   {/if}
@@ -264,7 +265,7 @@
           bind:this={fieldEl}
           bind:clientWidth={triggerWidth}
           class={cn(
-            'rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
+            'hai-control-surface rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
             sizeClasses.minHeight,
             disabled ? 'opacity-50 cursor-not-allowed bg-base-200' : 'cursor-text',
             controlStateClass,
@@ -381,7 +382,7 @@
           ].filter(Boolean).join(' ') || undefined}
           bind:ref={inputRef}
           class={cn(
-            'w-full rounded-lg border bg-base-100 pr-9 outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
+            'hai-control-surface w-full rounded-lg border bg-base-100 pr-9 outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
             sizeClasses.control,
             controlStateClass,
             disabled && 'opacity-50 cursor-not-allowed',

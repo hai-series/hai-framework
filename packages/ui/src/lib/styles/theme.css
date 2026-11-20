@@ -15,6 +15,7 @@
 @import './high-contrast.css';
 @import './formal.css';
 @import './eye-care.css';
+@import './liquid-glass.css';
 
 :root {
   --hai-theme-color-default: #5765f0;
