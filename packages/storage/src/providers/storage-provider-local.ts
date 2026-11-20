@@ -22,7 +22,8 @@ import { core, err, ok } from '@h-ai/core'
 
 import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
-import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+import { getMimeType as getMimeTypeByExtension } from '../storage-mime.js'
+import { storageErrorContext } from '../storage-operation-log.js'
 import { toByteStream } from '../storage-stream.js'
 import {
 
@@ -33,6 +34,7 @@ import {
 const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
 const PATH_SEGMENT_SPLIT_REGEX = /[\\/]+/
 const METADATA_DIRECTORY = '.hai-storage-meta'
+const METADATA_READ_ATTEMPTS = 3
 
 // ─── 辅助函数 ───
 
@@ -119,14 +121,11 @@ function toStorageError(error: unknown, key?: string): HaiError {
 /**
  * 根据文件扩展名获取 MIME 类型
  *
- * 使用共享 MIME_TYPES 映射表，未匹配时返回 'application/octet-stream'。
- *
  * @param filePath - 文件路径或文件名
  * @returns MIME 类型字符串
  */
 function getMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase().replace('.', '')
-  return MIME_TYPES[ext] || MIME_TYPE_DEFAULT
+  return getMimeTypeByExtension(path.extname(filePath).slice(1))
 }
 
 /**
@@ -189,6 +188,12 @@ function createInvalidPathError(): NodeJS.ErrnoException {
   return error
 }
 
+/** 目标键或其父路径不存在时，读取不到该对象。 */
+function isMissingPath(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
 /**
  * 判断路径片段中是否包含路径穿越标记（..）
  */
@@ -222,14 +227,10 @@ function safePath(root: string, key: string): string {
     throw createInvalidPathError()
   }
 
-  const normalized = path.normalize(key)
-  const fullPath = path.resolve(root, normalized)
-
   // 确保路径在 root 目录下
-  const realRoot = path.resolve(root)
-  const inRoot = fullPath === realRoot || fullPath.startsWith(`${realRoot}${path.sep}`)
-
-  if (!inRoot) {
+  const fullPath = path.resolve(root, key)
+  const relativePath = path.relative(root, fullPath)
+  if (relativePath === '..' || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
     throw createInvalidPathError()
   }
 
@@ -272,13 +273,17 @@ export function createLocalProvider(): StorageProvider {
     return config
   }
 
-  /** 将用户 key 转为安全的绝对路径（经 safePath 防穿越处理） */
-  async function fullPath(key: string): Promise<string> {
+  /** 将对象键或前缀转为安全的绝对路径，只有目录操作允许匹配根目录本身。 */
+  async function fullPath(key: string, allowRoot = false): Promise<string> {
     const root = getConfig().root
     const target = safePath(root, key)
+    const relativePath = path.relative(root, target)
+    if (!allowRoot && !relativePath)
+      throw Object.assign(new Error('Local storage root is a directory'), { code: 'EISDIR' })
+
     // 逐段检查现有路径，拒绝目录 junction 和文件符号链接；不存在的后缀由本次操作创建。
     let current = root
-    for (const segment of path.relative(root, target).split(path.sep).filter(Boolean)) {
+    for (const segment of relativePath.split(path.sep).filter(Boolean)) {
       current = path.join(current, segment)
       try {
         if ((await fsp.lstat(current)).isSymbolicLink())
@@ -296,6 +301,48 @@ export function createLocalProvider(): StorageProvider {
   /** 代际记录不追加到用户文件名上，保留文件系统对长文件名的原有支持。 */
   function metadataKey(filePath: string, stat: fs.BigIntStats): string {
     return path.relative(getConfig().root, path.join(path.dirname(filePath), METADATA_DIRECTORY, `${metadataGeneration(stat)}.meta.json`))
+  }
+
+  /** 读取指定代际的元数据。旧代际已被并发发布回收时返回 undefined，调用方可重新取得对象。 */
+  async function readMetadata(key: string, filePath: string, stat: fs.BigIntStats): Promise<HaiResult<FileMetadata> | undefined> {
+    if (stat.isDirectory()) {
+      return err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
+        params: { key },
+      }))
+    }
+
+    let serializedMetadata: string
+    try {
+      const metaPath = await fullPath(metadataKey(filePath, stat))
+      serializedMetadata = await fsp.readFile(metaPath, 'utf8')
+    }
+    catch (error) {
+      if (!isMissingPath(error))
+        throw error
+      // 身份不变却缺少记录时，明确要求迁移或重新上传。
+      if (metadataGeneration(await fsp.stat(filePath, { bigint: true })) !== metadataGeneration(stat))
+        return undefined
+      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataRequired'))
+    }
+
+    let customMetadata: unknown
+    try {
+      customMetadata = JSON.parse(serializedMetadata)
+    }
+    catch {
+      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
+    }
+    if (!isMetadataRecord(customMetadata))
+      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
+
+    return ok({
+      key,
+      size: Number(stat.size),
+      contentType: customMetadata.contentType || getMimeType(key),
+      lastModified: stat.mtime,
+      etag: calculateEtag(stat),
+      metadata: customMetadata.metadata,
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -331,18 +378,22 @@ export function createLocalProvider(): StorageProvider {
         const dir = path.dirname(filePath)
         await fsp.mkdir(dir, { recursive: true, mode: cfg.directoryMode })
 
-        // 先流式写入同目录临时文件，失败不破坏已有对象；发布采用原子文件系统操作。
-        temporaryPath = `${filePath}.${crypto.randomUUID()}.upload.tmp`
+        // 临时名称独立于对象名，避免合法的长文件名超出文件系统限制。
+        const stagedPath = path.join(dir, `${crypto.randomUUID()}.upload.tmp`)
+        const writable = fs.createWriteStream(stagedPath, { flags: 'wx', mode: cfg.fileMode })
+        writable.once('open', () => {
+          temporaryPath = stagedPath
+        })
         await pipeline(
           Readable.from(toByteStream(data, options.signal), { objectMode: false }),
-          fs.createWriteStream(temporaryPath, { flags: 'wx', mode: cfg.fileMode }),
+          writable,
           { signal: options.signal },
         )
         options.signal?.throwIfAborted()
 
         // 先完整准备该内容身份的不可变元数据；只有主文件发布才让这一代对外可见。
         // 即使没有自定义字段也写入空记录，每次发布都必须有自己的代际记录。
-        const stat = await fsp.stat(temporaryPath, { bigint: true })
+        const stat = await fsp.stat(stagedPath, { bigint: true })
         const metaPath = await fullPath(metadataKey(filePath, stat))
         const serializedMetadata = JSON.stringify({ contentType: options.contentType, metadata: options.metadata })
         await fsp.mkdir(path.dirname(metaPath), { recursive: true, mode: cfg.directoryMode })
@@ -356,9 +407,9 @@ export function createLocalProvider(): StorageProvider {
         }
         options.signal?.throwIfAborted()
         if (options.ifNoneMatch === '*')
-          await fsp.link(temporaryPath, filePath)
+          await fsp.link(stagedPath, filePath)
         else
-          await fsp.rename(temporaryPath, filePath)
+          await fsp.rename(stagedPath, filePath)
         published = true
 
         const metadata: FileMetadata = {
@@ -453,44 +504,10 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const stat = await fsp.stat(filePath, { bigint: true })
-          if (stat.isDirectory()) {
-            return err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
-              params: { key },
-            }))
-          }
-          let serializedMetadata: string
-          try {
-            const metaPath = await fullPath(metadataKey(filePath, stat))
-            serializedMetadata = await fsp.readFile(metaPath, 'utf8')
-          }
-          catch (error) {
-            if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? ''))
-              throw error
-            // 并发发布可能已经回收旧代际；身份不变却缺少记录时明确要求迁移/重传。
-            if (metadataGeneration(await fsp.stat(filePath, { bigint: true })) !== metadataGeneration(stat))
-              continue
-            return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataRequired'))
-          }
-          let customMetadata: unknown
-          try {
-            customMetadata = JSON.parse(serializedMetadata)
-          }
-          catch {
-            return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
-          }
-          if (!isMetadataRecord(customMetadata)) {
-            return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
-          }
-          return ok({
-            key,
-            size: Number(stat.size),
-            contentType: customMetadata.contentType || getMimeType(key),
-            lastModified: stat.mtime,
-            etag: calculateEtag(stat),
-            metadata: customMetadata.metadata,
-          })
+        for (let attempt = 0; attempt < METADATA_READ_ATTEMPTS; attempt++) {
+          const metadata = await readMetadata(key, filePath, await fsp.stat(filePath, { bigint: true }))
+          if (metadata)
+            return metadata
         }
         return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
       }
@@ -510,11 +527,10 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        await fsp.access(filePath, fs.constants.F_OK)
-        return ok(true)
+        return ok((await fsp.lstat(filePath)).isFile())
       }
       catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        if (isMissingPath(error)) {
           return ok(false)
         }
         return err(toStorageError(error, key))
@@ -591,16 +607,46 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
-      const source = await file.head(sourceKey)
-      if (!source.success)
-        return source
-      const stream = await file.getStream(sourceKey)
-      if (!stream.success)
-        return stream
-      return file.put(destKey, stream.data, {
-        contentType: options.contentType ?? source.data.contentType,
-        metadata: options.metadata ?? source.data.metadata,
-      })
+      if (isMetaFile(sourceKey)) {
+        return err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
+          params: { key: sourceKey },
+        }))
+      }
+      try {
+        const sourcePath = await fullPath(sourceKey)
+        // 同一个打开的文件句柄确定代际并读取内容，源键被并发替换也不会混用不同代际。
+        for (let attempt = 0; attempt < METADATA_READ_ATTEMPTS; attempt++) {
+          const handle = await fsp.open(sourcePath, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW)
+          let stream: fs.ReadStream | undefined
+          try {
+            const stat = await handle.stat({ bigint: true })
+            if (!stat.isFile() && !stat.isDirectory())
+              throw createInvalidPathError()
+            const source = await readMetadata(sourceKey, sourcePath, stat)
+            if (!source)
+              continue
+            if (!source.success)
+              return source
+
+            async function* read(): AsyncIterable<Uint8Array> {
+              stream = handle.createReadStream()
+              yield* stream
+            }
+            return await file.put(destKey, read(), {
+              contentType: options.contentType ?? source.data.contentType,
+              metadata: options.metadata ?? source.data.metadata,
+            })
+          }
+          finally {
+            stream?.destroy()
+            await handle.close().catch(error => logger.warn('Local copy source cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
+          }
+        }
+        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
+      }
+      catch (error) {
+        return err(toStorageError(error, sourceKey))
+      }
     },
   }
 
@@ -739,7 +785,7 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         // 保留路径与符号链接校验，实际匹配由列表操作按对象键前缀完成。
-        await fullPath(prefix)
+        await fullPath(prefix, true)
         return await deleteStoragePrefix(prefix, dir.list, file.deleteMany)
       }
       catch (error) {

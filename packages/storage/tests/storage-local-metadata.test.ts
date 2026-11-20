@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import * as fileSystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -151,6 +152,56 @@ it.each([false, true])('concurrent writes keep content and metadata together wit
       files: [
         { key: 'shared.txt' },
       ],
+    },
+  })
+})
+
+it('copies metadata and bytes from the same source version during an overwrite', async () => {
+  expect(await storage.file.put('source.txt', 'first', {
+    contentType: 'text/plain',
+    metadata: { writer: 'first' },
+  })).toMatchObject({ success: true })
+
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const metadataRead = Promise.withResolvers<void>()
+  const continueCopy = Promise.withResolvers<void>()
+  const read = vi.spyOn(fileSystem, 'readFile').mockImplementationOnce(async (...args) => {
+    const record = await original.readFile(...args)
+    metadataRead.resolve()
+    await continueCopy.promise
+    return record
+  })
+
+  const copying = storage.file.copy('source.txt', 'copy.txt')
+  try {
+    await expect(Promise.race([
+      metadataRead.promise.then(() => 'metadata-read'),
+      copying.then(() => 'finished'),
+    ])).resolves.toBe('metadata-read')
+    expect(await storage.file.put('source.txt', '{"writer":"second"}', {
+      contentType: 'application/json',
+      metadata: { writer: 'second' },
+    })).toMatchObject({ success: true })
+  }
+  finally {
+    continueCopy.resolve()
+    read.mockRestore()
+    await copying
+  }
+
+  expect(await copying).toMatchObject({
+    success: true,
+    data: { key: 'copy.txt', size: 5 },
+  })
+  expect(await storage.file.get('copy.txt')).toEqual({
+    success: true,
+    data: Buffer.from('first'),
+  })
+  expect(await storage.file.head('copy.txt')).toMatchObject({
+    success: true,
+    data: {
+      contentType: 'text/plain',
+      metadata: { writer: 'first' },
     },
   })
 })
