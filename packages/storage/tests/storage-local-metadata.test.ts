@@ -1,6 +1,6 @@
 import type { FileHandle } from 'node:fs/promises'
 import { Buffer } from 'node:buffer'
-import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, realpath, rm, unlink, writeFile } from 'node:fs/promises'
 import * as fileSystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +20,8 @@ let root: string
 beforeEach(async () => {
   const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
   vi.mocked(unlink).mockReset().mockImplementation(original.unlink)
-  root = await mkdtemp(join(tmpdir(), 'hai-storage-metadata-'))
+  // 与 Provider 使用同一真实路径，避免 Windows 8.3 别名让故障注入漏掉目标文件。
+  root = await realpath(await mkdtemp(join(tmpdir(), 'hai-storage-metadata-')))
   expect((await storage.init({ type: 'local', root })).success).toBe(true)
 })
 afterEach(async () => {
