@@ -11,6 +11,12 @@
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
+  const themeLabels = new Map([
+    ['high-contrast', m.theme_high_contrast],
+    ['formal', m.theme_formal],
+    ['eye-care', m.theme_eye_care],
+    ['liquid-glass', m.theme_liquid_glass],
+  ])
   const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({
     value: locale,
     label: locale === 'zh-CN'
@@ -21,13 +27,7 @@
   })))
   const themeOptions = $derived(AVAILABLE_THEMES.map(theme => ({
     value: theme,
-    label: theme === 'high-contrast'
-      ? m.theme_high_contrast()
-      : theme === 'formal'
-        ? m.theme_formal()
-        : theme === 'eye-care'
-          ? m.theme_eye_care()
-          : getThemeInfo(theme)?.name ?? theme,
+    label: themeLabels.get(theme)?.() ?? getThemeInfo(theme)?.name ?? theme,
   })))
 </script>
 

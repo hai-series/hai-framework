@@ -34,9 +34,9 @@ import { loadConfigText } from './helpers/config.js'
 /** 每次运行使用独立临时目录，避免并发测试互删生成项目。 */
 let tmpRoot = ''
 
-it('fullstack 默认提供护眼主题，同时保留宿主的默认值与显式主题白名单', () => {
+it('fullstack 默认提供护眼和液态玻璃，同时保留宿主的默认值与显式主题白名单', () => {
   const options = {
-    name: 'eye-care',
+    name: 'scaffold-themes',
     appType: 'fullstack',
     features: [],
     packageManager: 'pnpm',
@@ -44,6 +44,7 @@ it('fullstack 默认提供护眼主题，同时保留宿主的默认值与显式
   const defaults = buildTemplateContext({ ...options, features: [] })
   expect(defaults.fullstack?.theme.defaultTheme).toBe('light')
   expect(defaults.fullstack?.theme.themes).toContain('eye-care')
+  expect(defaults.fullstack?.theme.themes).toContain('liquid-glass')
   const custom = buildTemplateContext({
     ...options,
     features: [],

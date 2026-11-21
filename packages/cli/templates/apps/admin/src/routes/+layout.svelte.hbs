@@ -79,7 +79,7 @@
   <title>{page.data.appConfig.name}</title>
 </svelte:head>
 
-<div class='h-dvh flex flex-col overflow-hidden bg-base-200'>
+<div class='admin-shell h-dvh flex flex-col overflow-hidden bg-base-200'>
   <header class='navbar h-12 min-h-12 shrink-0 border-b border-base-300 bg-base-100 px-3 sm:px-4'>
     <span class='flex-1 text-lg font-semibold'>{page.data.appConfig.name}</span>
     <ThemeSelector {currentTheme} onchange={handleThemeChange} compact />

@@ -37,4 +37,17 @@
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
+{{#if_eq appType 'admin'}}
+
+@media not (prefers-reduced-transparency: reduce) {
+  :where([data-theme='liquid-glass']) .admin-shell {
+    background-color: rgb(247 250 255 / 0.16);
+  }
+
+  :where([data-theme='liquid-glass']) .admin-shell > :is(header, footer),
+  :where([data-theme='liquid-glass']) .admin-shell :is(.drawer-side > nav, .hai-workspace > header) {
+    background-color: var(--hai-glass-chrome-fill);
+  }
+}
+{{/if_eq}}
 {{/if}}

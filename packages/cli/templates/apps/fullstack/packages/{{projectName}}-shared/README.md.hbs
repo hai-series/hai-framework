@@ -60,7 +60,7 @@ Serv的config/_iam.yml控制登录/注册/重置、协议与ui品牌，AuthPanel
 
 共享文案在messages，前端专属文案放各端messages；启用语言及baseLocale一致后执行根 `pnpm i18n:compile`，不手改生成文件。插件来自已安装workspace依赖，不在编译时从CDN获取。
 
-AVAILABLE_THEMES只暴露已编译CSS主题，eye-care为可选护眼主题；默认主题和显式白名单由宿主决定。外观缓存可保存theme，认证token不能复用该存储。修改AppShell、相邻管理组件或ManagementStore时同步三语与键盘/窄屏恢复流程。
+`AVAILABLE_THEMES` 只暴露已编译的 CSS 主题。默认选择项包含护眼 `eye-care` 和液态玻璃 `liquid-glass`，新工程首次使用亮色 `light`。宿主可通过 `fullstack.theme` 指定默认主题与可选名单。外观缓存可保存 `theme`，认证 token 不能复用该存储。修改 AppShell、相邻管理组件或 ManagementStore 时同步三语与键盘、窄屏恢复流程。
 
 引导定义在src/lib/stores/guide-store.ts，组件提供稳定data-guide属性；Web引导偏好用Cookie，App/Desktop用按当前用户与版本划分的localStorage，不存认证信息。设计、实现和复核分别使用根skills中的hai-ui-design、hai-ui、hai-ui-review。
 

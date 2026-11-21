@@ -583,7 +583,7 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 
 ## 主题系统
 
-共享 `@h-ai/ui/styles/theme.css` 提供 `high-contrast` 高对比、`formal` 直角商务、`eye-care` 暖绿护眼和 `liquid-glass` 液态玻璃主题。在使用主题白名单的应用中，将 `liquid-glass` 加入可选名单后即可使用。验收液态玻璃时，在同一控件内移动鼠标检查高光位置。检查叠层后的前景文字与折光，以及后景柔化、密集表格的可读性、键盘焦点、减少动态效果和减少透明度偏好。
+共享 `@h-ai/ui/styles/theme.css` 提供 `high-contrast` 高对比、`formal` 直角商务、`eye-care` 暖绿护眼和 `liquid-glass` 液态玻璃主题。fullstack 生成应用默认可选择液态玻璃。应用显式设置 `fullstack.theme.themes` 时，可在该名单添加 `liquid-glass`。`ThemeSelector` 的可选属性 `themeIds` 将选项限制在已注册且列入名单的主题，省略时显示已注册的所有主题。验收液态玻璃时，在同一控件内移动鼠标检查高光位置。检查叠层后的前景文字与折光，以及后景柔化、密集表格的可读性、键盘焦点、减少动态效果和减少透明度偏好。
 
 ```typescript
 import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'
