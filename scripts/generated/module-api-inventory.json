@@ -33475,6 +33475,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
@@ -33493,22 +33499,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
-              "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "DownloadOptions",
               "kind": "type",
               "declaration": "DownloadOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "FileMetadata",
@@ -33521,24 +33515,6 @@
               "kind": "type",
               "declaration": "FileOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "getStorageKeyIssue",
@@ -33616,6 +33592,12 @@
               "name": "S3ConfigSchema",
               "kind": "value",
               "declaration": "S3ConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "storage",
+              "kind": "value",
+              "declaration": "storage",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -33749,12 +33731,6 @@
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -33792,6 +33768,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
@@ -33810,22 +33792,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
-              "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "DownloadOptions",
               "kind": "type",
               "declaration": "DownloadOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "FileMetadata",
@@ -33838,24 +33808,6 @@
               "kind": "type",
               "declaration": "FileOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "getStorageKeyIssue",
@@ -33933,6 +33885,12 @@
               "name": "S3ConfigSchema",
               "kind": "value",
               "declaration": "S3ConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "storage",
+              "kind": "value",
+              "declaration": "storage",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -34066,12 +34024,6 @@
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -34108,6 +34060,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
@@ -34126,22 +34084,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
-              "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "DownloadOptions",
               "kind": "type",
               "declaration": "DownloadOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "FileMetadata",
@@ -34154,24 +34100,6 @@
               "kind": "type",
               "declaration": "FileOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "getStorageKeyIssue",
@@ -34388,12 +34316,6 @@
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -34430,6 +34352,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
@@ -34448,22 +34376,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
-              "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "DownloadOptions",
               "kind": "type",
               "declaration": "DownloadOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "FileMetadata",
@@ -34476,24 +34392,6 @@
               "kind": "type",
               "declaration": "FileOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "getStorageKeyIssue",
@@ -34710,12 +34608,6 @@
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -34752,6 +34644,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
@@ -34770,22 +34668,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
-              "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "DownloadOptions",
               "kind": "type",
               "declaration": "DownloadOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "FileMetadata",
@@ -34798,24 +34684,6 @@
               "kind": "type",
               "declaration": "FileOperations",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "getStorageKeyIssue",
@@ -35032,12 +34900,6 @@
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -35056,52 +34918,28 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
+              "name": "storage",
               "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
+              "declaration": "storage",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "UploadProgress",
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -35120,52 +34958,28 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ClientOperations",
+              "kind": "type",
+              "declaration": "ClientOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientUploadOptions",
               "kind": "type",
               "declaration": "ClientUploadOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "downloadAndSave",
+              "name": "storage",
               "kind": "value",
-              "declaration": "downloadAndSave",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "downloadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "downloadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "formatFileSize",
-              "kind": "value",
-              "declaration": "formatFileSize",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getFileExtension",
-              "kind": "value",
-              "declaration": "getFileExtension",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "getMimeType",
-              "kind": "value",
-              "declaration": "getMimeType",
-              "declarationKind": "FunctionDeclaration"
+              "declaration": "storage",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "UploadProgress",
               "kind": "type",
               "declaration": "UploadProgress",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "uploadWithPresignedUrl",
-              "kind": "value",
-              "declaration": "uploadWithPresignedUrl",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },

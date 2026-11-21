@@ -61,7 +61,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
-import { uploadWithPresignedUrl } from '@h-ai/storage/client'
+import { storage } from '@h-ai/storage/client'
 
 export async function uploadImage(key: string, file: File) {
   // 用相同的 Content-Type 请求签名和上传。
@@ -73,7 +73,7 @@ export async function uploadImage(key: string, file: File) {
 
   // 直接上传到对象存储，成功时返回服务端确认的对象 key。
   // 署名済み URL に元のファイルと署名時の MIME 型で送信します。成功は受付済み、失敗時は error です。
-  const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
+  const uploaded = await storage.client.uploadWithPresignedUrl(signed.data.url, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
   return signed.data.key
@@ -86,17 +86,7 @@ export async function uploadImage(key: string, file: File) {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。サーバーのファイル、ディレクトリー、署名操作は初期化成功後、終了前に実行します。`storage.checksum` と `storage.client` は初期化不要です。HaiResult を返す呼び出しでは success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="connection"></a>
 
@@ -114,10 +104,16 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：接続と終了
 
 ```ts
-// ./data/files-demo をローカル保存先にします。成功後にファイルを利用でき、失敗は value が例外にします。
-value(await storage.init({ type: 'local', root: './data/files-demo' }))
-// 引数なしでローカル接続を解放します。成功時の data はなく、ファイルは残ります。失敗は value が例外にします。
-value(await storage.close()) // undefined; saved files remain on disk
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// ./data/files-demo をローカル保存先にします。成功後にファイルを利用でき、失敗は 元の失敗結果を返します。
+const initResult = await storage.init({ type: 'local', root: './data/files-demo' })
+if (!initResult.success)
+  return initResult
+// 引数なしでローカル接続を解放します。成功時の data はなく、ファイルは残ります。失敗は 元の失敗結果を返します。
+const closeResult = await storage.close()
+if (!closeResult.success)
+  return closeResult
+// saved files remain on disk
 ```
 
 開発用ディレクトリを入力します。close はインスタンスを解放しますがファイルを削除しません。続行前に再初期化してください。
@@ -155,23 +151,42 @@ value(await storage.close()) // undefined; saved files remain on disk
 #### 利用例：ファイルの読み書きとコピー
 
 ```ts
-// レポートキーに hello をテキストとして保存します。成功時のサイズは 5 バイト、失敗は value が例外にします。
-const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// レポートキーに hello をテキストとして保存します。成功時のサイズは 5 バイト、失敗は 元の失敗結果を返します。
+const savedResult = await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' })
+if (!savedResult.success)
+  return savedResult
+const saved = savedResult.data
 // saved のキーは demo/report.txt、サイズは 5 バイトです。
-// 保存直後のレポートを確認します。結果は true、失敗は value が例外にします。
-value(await storage.file.exists('demo/report.txt')) // true
-// レポートキーのメタデータを読み、同じキーと 5 バイトのサイズを得ます。失敗は value が例外にします。
-const metadata = value(await storage.file.head('demo/report.txt')) // same key and size
-// レポートキーから全バイトを読み、UTF-8 の hello に変換します。失敗は value が例外にします。
-value(await storage.file.get('demo/report.txt')).toString('utf8') // 'hello'
-// レポートキーのバイトストリームを開きます。開始失敗は value が例外にし、後続の I/O は反復時に例外になる場合があります。
-const stream = value(await storage.file.getStream('demo/report.txt'))
+// 保存直後のレポートを確認します。結果は true、失敗は 元の失敗結果を返します。
+const existsResult = await storage.file.exists('demo/report.txt')
+if (!existsResult.success)
+  return existsResult
+existsResult.data // true
+// レポートキーのメタデータを読み、同じキーと 5 バイトのサイズを得ます。失敗は 元の失敗結果を返します。
+const metadataResult = await storage.file.head('demo/report.txt')
+if (!metadataResult.success)
+  return metadataResult
+const metadata = metadataResult.data // same key and size
+// レポートキーから全バイトを読み、UTF-8 の hello に変換します。失敗は 元の失敗結果を返します。
+const getResult = await storage.file.get('demo/report.txt')
+if (!getResult.success)
+  return getResult
+getResult.data.toString('utf8') // 'hello'
+// レポートキーのバイトストリームを開きます。開始失敗時は元の失敗結果を返します。後続の I/O は反復時に例外になる場合があります。
+const streamResult = await storage.file.getStream('demo/report.txt')
+if (!streamResult.success)
+  return streamResult
+const stream = streamResult.data
 let byteCount = 0
 for await (const bytes of stream)
   byteCount += bytes.byteLength
 // byteCount === 5; stream iteration can throw on later I/O failure
-// レポートの本文と MIME タイプを一度に開きます。失敗は value が例外にします。
-const opened = value(await storage.file.getStreamWithMetadata('demo/report.txt'))
+// レポートの本文と MIME タイプを一度に開きます。失敗は 元の失敗結果を返します。
+const openedResult = await storage.file.getStreamWithMetadata('demo/report.txt')
+if (!openedResult.success)
+  return openedResult
+const opened = openedResult.data
 try {
   if (opened.metadata.contentType === 'text/plain') {
     // 合計 5 バイトを読み取ります。I/O の失敗は反復時に例外になります。
@@ -181,14 +196,25 @@ try {
   // MIME タイプの確認に失敗した場合も、ハンドルまたは接続を解放します。
   await opened.close()
 }
-// レポートを demo/copy.txt に複製し、新しいメタデータを返します。失敗は value が例外にします。
-value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
-// 元のレポートキーを削除します。成功時の data はなく、失敗は value が例外にします。
-value(await storage.file.delete('demo/report.txt')) // undefined
-// コピーキーの配列を渡します。成功時は削除集計、部分失敗時は進捗付きエラーを value が例外にします。
-const deleted = value(await storage.file.deleteMany(['demo/copy.txt'])) // per-key deletion progress
-// コピーキーの削除を確認します。再作成されていなければ false、失敗は value が例外にします。
-value(await storage.file.exists('demo/copy.txt')) // false after confirmed deletion
+// レポートを demo/copy.txt に複製し、新しいメタデータを返します。失敗は 元の失敗結果を返します。
+const copyResult = await storage.file.copy('demo/report.txt', 'demo/copy.txt')
+if (!copyResult.success)
+  return copyResult
+copyResult.data // metadata for the new key
+// 元のレポートキーを削除します。成功時の data はなく、失敗は 元の失敗結果を返します。
+const deleteResult = await storage.file.delete('demo/report.txt')
+if (!deleteResult.success)
+  return deleteResult
+// コピーキーの配列を渡します。成功時は削除集計、部分失敗時は進捗付きエラーを 元の失敗結果を返します。
+const deletedResult = await storage.file.deleteMany(['demo/copy.txt'])
+if (!deletedResult.success)
+  return deletedResult
+const deleted = deletedResult.data // per-key deletion progress
+// コピーキーの削除を確認します。再作成されていなければ false、失敗は 元の失敗結果を返します。
+const existsResult2 = await storage.file.exists('demo/copy.txt')
+if (!existsResult2.success)
+  return existsResult2
+existsResult2.data // false after confirmed deletion
 ```
 
 UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で、読み出し中に失敗することもあります。一括削除は完了した Promise だけでなく、各キーの確認結果を調べてください。
@@ -221,15 +247,27 @@ Local ストレージでは、`file.head()` と `file.copy()` がファイルの
 #### 利用例：接頭辞による一覧と削除
 
 ```ts
-// 例のプレフィックスに 1 バイトを書きます。成功時はメタデータ、失敗は value が例外にします。
-value(await storage.file.put('demo-prefix/a.txt', 'a'))
-// demo-prefix/ の最大 20 件を取得します。ページに a.txt が含まれ、失敗は value が例外にします。
-const page = value(await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 例のプレフィックスに 1 バイトを書きます。成功時はメタデータ、失敗は 元の失敗結果を返します。
+const putResult = await storage.file.put('demo-prefix/a.txt', 'a')
+if (!putResult.success)
+  return putResult
+putResult.data
+// demo-prefix/ の最大 20 件を取得します。ページに a.txt が含まれ、失敗は 元の失敗結果を返します。
+const pageResult = await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data
 // page contains metadata for demo-prefix/a.txt and backend pagination information
-// このプレフィックス下のオブジェクトを削除します。成功時の data はなく、部分失敗は value が例外にします。
-value(await storage.dir.delete('demo-prefix/')) // undefined
-// 元のキーで削除を確認します。再作成されていなければ false、照会失敗は value が例外にします。
-value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurrent writer recreates it
+// このプレフィックス下のオブジェクトを削除します。成功時の data はなく、部分失敗は 元の失敗結果を返します。
+const deleteResult = await storage.dir.delete('demo-prefix/')
+if (!deleteResult.success)
+  return deleteResult
+// 元のキーで削除を確認します。再作成されていなければ false、照会失敗は 元の失敗結果を返します。
+const existsResult = await storage.file.exists('demo-prefix/a.txt')
+if (!existsResult.success)
+  return existsResult
+existsResult.data // false when no concurrent writer recreates it
 ```
 
 demo-prefix/ に限定します。一覧はメタデータと継続情報を返します。並行アップロードとは同一トランザクションではないため、削除後に再作成される場合があります。
@@ -259,11 +297,18 @@ S3 の期限付き URL は特定のキーと操作に対応します。発行前
 URL を受け取ったブラウザーがオブジェクトストレージに接続し、署名と期限の検証後にファイルを転送します。PUT 署名には `Content-Type` ヘッダーが含まれます。アップロード時に署名時の値を送信してください。署名時に `contentType` を省略した場合は `application/octet-stream` を送信します。`publicUrl()` はキーをパスの区切りごとにエンコードして、設定済みの公開アドレスに追加します。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // Requires initialized S3 storage and prior application authorization.
-// レポートキーと text/plain で 300 秒のアップロード URL を発行します。成功時は URL、失敗は value が例外にします。
-const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))
-// 同じレポートに 300 秒のダウンロード URL を発行します。成功時は URL、失敗は value が例外にします。
-const downloadUrl = value(await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 }))
+// レポートキーと text/plain で 300 秒のアップロード URL を発行します。成功時は URL、失敗は 元の失敗結果を返します。
+const uploadUrlResult = await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' })
+if (!uploadUrlResult.success)
+  return uploadUrlResult
+const uploadUrl = uploadUrlResult.data
+// 同じレポートに 300 秒のダウンロード URL を発行します。成功時は URL、失敗は 元の失敗結果を返します。
+const downloadUrlResult = await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 })
+if (!downloadUrlResult.success)
+  return downloadUrlResult
+const downloadUrl = downloadUrlResult.data
 // レポートキーと公開 URL 設定から URL を求めます。公開先がなければ null です。
 const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or null
 ```
@@ -275,6 +320,54 @@ const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or nul
 コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](storage.md#download-authorization)にあり、この節は部分翻訳です。
 
 [引数と手順の詳細](storage.md#signed-urls)
+
+<a id="cancel-upload"></a>
+
+#### アップロードのキャンセルと戻り値
+
+`storage.client.uploadWithPresignedUrl()` に `abortController` を渡し、ユーザーがキャンセルしたら `abort()` を呼びます。`onProgress` を指定するとネイティブ XHR、省略すると fetch を使います。キャンセルはローカルのリクエストを止めますが、保存済みのリモートオブジェクトを取り消しません。
+
+`signed.url` はアプリの認可 API から取得し、`signed.contentType` は署名時と同じ値にします。`controls` はページにあるキャンセルボタン、進捗バー、状態表示の要素です。
+
+```ts
+import { storage } from '@h-ai/storage/client'
+
+export async function uploadFile(
+  file: File,
+  signed: { url: string, contentType: string },
+  controls: { cancel: HTMLButtonElement, progress: HTMLProgressElement, status: HTMLElement },
+) {
+  const controller = new AbortController()
+  const cancel = () => controller.abort()
+  controls.cancel.type = 'button'
+  controls.cancel.disabled = false
+  controls.progress.max = 100
+  controls.progress.value = 0
+  controls.status.textContent = 'アップロード中'
+  controls.cancel.addEventListener('click', cancel)
+
+  try {
+    const result = await storage.client.uploadWithPresignedUrl(signed.url, file, {
+      contentType: signed.contentType,
+      abortController: controller,
+      onProgress: ({ percent }) => { controls.progress.value = percent },
+    })
+    if (!result.success) {
+      // キャンセルもこの分岐に入り、error は現在の言語で失敗理由を返します。
+      controls.status.textContent = result.error ?? 'アップロードに失敗しました'
+      return result
+    }
+    controls.status.textContent = 'アップロード完了'
+    return result
+  }
+  finally {
+    controls.cancel.removeEventListener('click', cancel)
+    controls.cancel.disabled = true
+  }
+}
+```
+
+アップロード中にキャンセルすると `success: false` と、現在の言語のキャンセルメッセージを持つ `error` が返ります。完了時は `success: true` です。ネットワーク障害も失敗になるため、すべての失敗をキャンセルと判断せず、`success` を確認して `error` を表示します。どの結果でもボタンのリスナーを解除します。キャンセル後も、オブジェクトがすでに保存されたかを業務サービスで確認してください。
 
 <a id="checksums"></a>
 
@@ -294,12 +387,22 @@ Node は大きなメモリー入力のダイジェストを容量制限付き Wo
 #### 利用例：バイト列の整合性確認
 
 ```ts
-// hello のバイト列から既定の SHA-256 ダイジェストを作ります。失敗は value が例外にします。
-const digest = value(await storage.checksum.generate('hello'))
-// 同じバイト列と生成済みダイジェストを照合します。成功時は true、処理失敗は value が例外にします。
-value(await storage.checksum.verify('hello', digest)) // true
-// 変更後のバイト列を元のダイジェストと照合します。成功時は false、処理失敗は value が例外にします。
-value(await storage.checksum.verify('changed', digest)) // false
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// hello のバイト列から既定の SHA-256 ダイジェストを作ります。失敗は 元の失敗結果を返します。
+const digestResult = await storage.checksum.generate('hello')
+if (!digestResult.success)
+  return digestResult
+const digest = digestResult.data
+// 同じバイト列と生成済みダイジェストを照合します。成功時は true、処理失敗は 元の失敗結果を返します。
+const verifyResult = await storage.checksum.verify('hello', digest)
+if (!verifyResult.success)
+  return verifyResult
+verifyResult.data // true
+// 変更後のバイト列を元のダイジェストと照合します。成功時は false、処理失敗は 元の失敗結果を返します。
+const verifyResult2 = await storage.checksum.verify('changed', digest)
+if (!verifyResult2.success)
+  return verifyResult2
+verifyResult2.data // false
 ```
 
 同じ hello のバイト列は true、変更後は false です。チェックサムは認証情報ではなく、S3 の ETag とも同一ではありません。
@@ -308,45 +411,47 @@ value(await storage.checksum.verify('changed', digest)) // false
 
 <a id="browser-files"></a>
 
-### ブラウザのアップロード・保存：クライアント補助
+### ブラウザのアップロード・保存：`storage.client`
 
-サーバー認可済み URL や選択ファイルを扱います。Storage のサーバー初期化や業務認可は行いません。
+`storage.client` はサーバー認可済み URL や選択ファイルを扱い、`storage.init()` は不要です。業務上のアクセス権を付与する機能はありません。Node のルート入口、Browser 条件入口、`@h-ai/storage/client` は同じ `storage.client.xxx` で呼び出します。ブラウザー入口はサーバーのファイル、ディレクトリー、署名、ライフサイクル操作を提供しません。
+
+`ClientOperations` は以下の六つのメソッドを定義します。アップロードは `ClientUploadOptions`、進捗コールバックは `UploadProgress`、ダウンロードと保存は `ClientDownloadOptions` を使います。これらの型は `@h-ai/storage/client` から import できます。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
-| `downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
-| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
-| `getFileExtension` | 拡張子を取得 | `File` | `string` | `getFileExtension(file)` |
-| `getMimeType` | MIME 型を取得 | `extension: string` | `string` | `getMimeType("txt")` |
-| `formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `formatFileSize(1024)` |
+| `storage.client.uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `storage.client.downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
+| `storage.client.downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
+| `storage.client.getFileExtension` | 拡張子を取得 | `File` | `string` | `storage.client.getFileExtension(file)` |
+| `storage.client.getMimeType` | MIME 型を取得 | `extension: string` | `string` | `storage.client.getMimeType("txt")` |
+| `storage.client.formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `storage.client.formatFileSize(1024)` |
 
 #### 利用例：選択ファイルの送信とダウンロード保存
 
 二つの URL は署名 API の成功結果、file は選択されたファイルです。ユーザー操作で呼び出します。転送結果は HaiResult とは別の success/error 形式です。
 
 ```ts
-import { downloadAndSave, downloadWithPresignedUrl, formatFileSize, getFileExtension, getMimeType, uploadWithPresignedUrl } from '@h-ai/storage/client'
+import { storage } from '@h-ai/storage/client'
 
 async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   // 呼び出し元のファイル名から拡張子を取得します。なければ空文字列です。
-  const extension = getFileExtension(file)
+  const extension = storage.client.getFileExtension(file)
   // file.type が空なら拡張子から MIME 型を取得します。不明な場合は application/octet-stream です。
-  const contentType = file.type || getMimeType(extension)
+  const contentType = file.type || storage.client.getMimeType(extension)
   // バイト数を表示用文字列にします。例えば 1024 バイトは 1.00 KB です。
-  const displayedSize = formatFileSize(file.size)
+  const displayedSize = storage.client.formatFileSize(file.size)
   // 渡された URL に元のファイルと MIME 型でアップロードします。成功は完了、失敗時は error です。
-  const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
+  const uploaded = await storage.client.uploadWithPresignedUrl(uploadUrl, file, { contentType })
   if (!uploaded.success)
     throw new Error(uploaded.error ?? 'Upload failed')
   // 署名済みダウンロード URL から取得します。成功時の data は Blob、失敗時は error です。
-  const downloaded = await downloadWithPresignedUrl(downloadUrl)
+  const downloaded = await storage.client.downloadWithPresignedUrl(downloadUrl)
   if (!downloaded.success || !downloaded.data)
     throw new Error(downloaded.error ?? 'Download failed')
   // 同じ URL と元のファイル名でブラウザーの保存を開始します。失敗時は error です。
-  const saved = await downloadAndSave(downloadUrl, { filename: file.name })
+  const saved = await storage.client.downloadAndSave(downloadUrl, { filename: file.name })
   if (!saved.success)
     throw new Error(saved.error ?? 'Save failed')
   return { extension, displayedSize, blob: downloaded.data }

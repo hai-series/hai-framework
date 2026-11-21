@@ -20,7 +20,7 @@
 
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { downloadWithPresignedUrl, storage, uploadWithPresignedUrl } from '../src/index.js'
+import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
 import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
@@ -350,7 +350,7 @@ describe('storage workflow', () => {
         return
 
       // 通过客户端函数上传
-      const uploadResult = await uploadWithPresignedUrl(
+      const uploadResult = await storage.client.uploadWithPresignedUrl(
         putUrlResult.data,
         content,
         { contentType: 'text/plain' },
@@ -382,7 +382,7 @@ describe('storage workflow', () => {
         return
 
       // 通过客户端函数下载
-      const downloadResult = await downloadWithPresignedUrl(getUrlResult.data)
+      const downloadResult = await storage.client.downloadWithPresignedUrl(getUrlResult.data)
       expect(downloadResult.success).toBe(true)
       if (downloadResult.success && downloadResult.data) {
         const text = await downloadResult.data.text()

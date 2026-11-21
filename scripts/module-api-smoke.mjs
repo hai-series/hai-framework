@@ -201,7 +201,34 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
     }
     if (directory === 'ui')
       source.push('// @ts-expect-error Only explicit component barrels are public', 'import * as internal from \'@h-ai/ui/components/scenes/ai/highlight\'')
-    if (browser && ['ai', 'iam', 'storage'].includes(directory))
+    if (directory === 'storage') {
+      source.push('const storageClient: import("@h-ai/storage/client").ClientOperations = api.storage.client', 'const mime: string = storageClient.getMimeType("report.txt")')
+      for (const name of [
+        'uploadWithPresignedUrl',
+        'downloadWithPresignedUrl',
+        'downloadAndSave',
+        'getMimeType',
+        'getFileExtension',
+        'formatFileSize',
+      ])
+        source.push('// @ts-expect-error 客户端操作只从 storage.client 访问', `api.${name}`)
+      for (const name of [
+        'init',
+        'close',
+        'file',
+        'dir',
+        'presign',
+        'checksum',
+        'config',
+        'isInitialized',
+      ]) {
+        if (browser)
+          source.push('// @ts-expect-error 浏览器门面不提供 Node 存储能力', `api.storage.${name}`)
+        else
+          source.push(`export const serverStorage_${name} = api.storage.${name}`)
+      }
+    }
+    if (browser && ['ai', 'iam'].includes(directory))
       source.push('// @ts-expect-error Server singleton is unavailable in browser', `api.${directory}`)
     if (browser && directory === 'ai')
       source.push('// @ts-expect-error Server constructors are unavailable in browser', 'api.McpServer', '// @ts-expect-error Server factories are unavailable in browser', 'api.createMcpServer')

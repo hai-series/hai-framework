@@ -12,9 +12,60 @@
 
 ## 配置示例
 
+### 本机开发：把文件保存到磁盘
+
+相对路径从服务启动目录算起。例如应用上传 `reports/june.pdf` 后，文件保存在 `./data/files/reports/june.pdf`。服务账号需要该目录的读写权限；换一台服务器运行时，这个本地目录不会自动共享。
+
+Windows 上的本地存储还要求文件系统支持硬链接，并允许服务账号在对象目录创建和删除临时文件。读取时会短暂创建链接，使已经打开的流不会阻止同一键被覆盖；详见[本地文件的保存方式](../data/storage.md)。
+
 ```yaml schema=@h-ai/storage:StorageConfigSchema
 type: local
 root: ./data/files
+```
+
+### 连接 S3 兼容服务
+
+写入 `config/_storage.yml`。服务端通过内网地址访问 `orders-files` 桶，应用传入的 `reports/june.pdf` 会存成 `orders/reports/june.pdf`。先创建桶，凭据通过服务端私有环境变量提供；`${…}` 由 Core 读取配置时替换。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+forcePathStyle: true
+prefix: orders/
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### 内网存文件，浏览器从公网下载
+
+这一段同样可作为完整的 `_storage.yml`。服务端继续连接内网，预签名链接则使用 `publicEndpoint`。反向代理须把 `/files` 转发到 S3 服务，去掉该目录并保留签名所用的 Host；地址里不填桶名。先从浏览器打开一条实际签名链接验证代理。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+publicEndpoint: https://downloads.example.com/files
+forcePathStyle: true
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### 上传大文件时限制分片并发
+
+每片设为 8 MiB，每次上传最多同时发送两片。这个设置用于服务端流式上传，不是浏览器请求体的大小上限；HTTP 上传限制仍由接收请求的服务配置。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+multipart:
+  partSizeBytes: 8388608
+  queueSize: 2
 ```
 
 ## 配置清单

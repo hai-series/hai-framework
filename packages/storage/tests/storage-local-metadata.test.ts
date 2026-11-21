@@ -4,6 +4,7 @@ import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promi
 import * as fileSystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { HaiStorageError, storage } from '../src/index.js'
 
@@ -217,6 +218,7 @@ it('reads the opened generation after a concurrent overwrite replaces the key', 
   if (!opened.success)
     throw new Error(opened.error.message)
   try {
+    expect((await readdir(root)).some(name => name.endsWith('.upload.tmp'))).toBe(false)
     expect((await storage.file.put('shared.txt', '{"writer":"second"}', {
       contentType: 'application/json',
       metadata: { writer: 'second' },
@@ -233,6 +235,66 @@ it('reads the opened generation after a concurrent overwrite replaces the key', 
   }
   finally {
     await opened.data.close()
+  }
+})
+
+it('keeps an actively consumed ordinary stream on its original bytes during an overwrite', async () => {
+  const original = Buffer.alloc(256 * 1024, 'a')
+  expect((await storage.file.put('shared.bin', original)).success).toBe(true)
+  const opened = await storage.file.getStream('shared.bin', { rangeStart: 1, rangeEnd: original.length - 2 })
+  if (!opened.success)
+    throw new Error(opened.error.message)
+  const iterator = opened.data[Symbol.asyncIterator]()
+  const chunks: Uint8Array[] = []
+  try {
+    const first = await iterator.next()
+    expect(first.done).toBe(false)
+    if (!first.done)
+      chunks.push(first.value)
+    expect((await storage.file.put('shared.bin', 'replacement')).success).toBe(true)
+    for (let next = await iterator.next(); !next.done; next = await iterator.next())
+      chunks.push(next.value)
+    expect(Buffer.concat(chunks)).toEqual(original.subarray(1, -1))
+    expect(await storage.file.get('shared.bin')).toEqual({
+      success: true,
+      data: Buffer.from('replacement'),
+    })
+  }
+  finally {
+    await iterator.return?.()
+  }
+})
+
+it.each(['return', 'abort'] as const)('releases an active ordinary stream when the consumer chooses %s', async (operation) => {
+  expect((await storage.file.put('report.bin', Buffer.alloc(256 * 1024))).success).toBe(true)
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const handles: FileHandle[] = []
+  const open = vi.spyOn(fileSystem, 'open').mockImplementationOnce(async (...args) => {
+    const handle = await original.open(...args)
+    handles.push(handle)
+    return handle
+  })
+  const controller = new AbortController()
+  const opened = await storage.file.getStream('report.bin', { signal: controller.signal })
+  if (!opened.success)
+    throw new Error(opened.error.message)
+  const iterator = opened.data[Symbol.asyncIterator]()
+  try {
+    expect((await iterator.next()).done).toBe(false)
+    expect(handles).toHaveLength(1)
+    if (operation === 'abort') {
+      controller.abort()
+      await expect(iterator.next()).rejects.toMatchObject({ name: 'AbortError' })
+    }
+    else {
+      await iterator.return?.()
+    }
+    expect(handles[0]?.fd).toBe(-1)
+    expect((await readdir(root)).some(name => name.endsWith('.upload.tmp'))).toBe(false)
+  }
+  finally {
+    await iterator.return?.()
+    open.mockRestore()
   }
 })
 
@@ -265,6 +327,35 @@ it.each(['close', 'abort'] as const)('releases an opened file before the first r
     finally {
       await opened.data.close()
     }
+  }
+  finally {
+    open.mockRestore()
+  }
+})
+
+it.skipIf(process.platform !== 'win32').each(['open', 'unlink'] as const)('cleans the Windows read link and handle when %s fails', async (operation) => {
+  expect((await storage.file.put('report.txt', 'content')).success).toBe(true)
+  const before = (await readdir(root, { recursive: true })).sort()
+  const original = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const handles: FileHandle[] = []
+  const failure = Object.assign(new Error('Fixture read preparation denied'), { code: 'EACCES' })
+  const open = vi.spyOn(fileSystem, 'open').mockImplementationOnce(async (...args) => {
+    if (operation === 'open')
+      throw failure
+    const handle = await original.open(...args)
+    handles.push(handle)
+    return handle
+  })
+  if (operation === 'unlink')
+    vi.mocked(unlink).mockRejectedValueOnce(failure)
+  try {
+    expect(await storage.file.getStreamWithMetadata('report.txt')).toMatchObject({
+      success: false,
+      error: { code: HaiStorageError.PERMISSION_DENIED.code },
+    })
+    expect(handles.every(handle => handle.fd === -1)).toBe(true)
+    expect((await readdir(root, { recursive: true })).sort()).toEqual(before)
+    expect(await readFile(join(root, 'report.txt'), 'utf8')).toBe('content')
   }
   finally {
     open.mockRestore()

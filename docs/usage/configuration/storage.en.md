@@ -4,10 +4,66 @@
 
 At startup, the generated app reads `config/_storage.yml` with `core.config.get('storage')` and passes the result to `storage.init()`. To override a field with an environment variable, use the `HAI_STORAGE_` prefix. Local mode writes files to disk on the server. For several servers that must see the same files, use an S3-compatible service.
 
+## Configuration examples
+
+### Store files on the local disk
+
+Relative paths start at the service working directory. Uploading `reports/june.pdf` stores it at `./data/files/reports/june.pdf`. The service account needs read and write access. This local directory is not automatically shared with another server.
+
+On Windows, local storage also requires a filesystem that supports hard links and permission to create and delete temporary files in object directories. Reads briefly create a link so an opened stream does not block replacement of the same key. See [local file storage](../data/storage.en.md).
+
 ```yaml schema=@h-ai/storage:StorageConfigSchema
 type: local
 root: ./data/files
 ```
+
+### Connect to an S3-compatible service
+
+Put this in `config/_storage.yml`. The backend accesses the `orders-files` bucket through the internal endpoint. The application key `reports/june.pdf` becomes `orders/reports/june.pdf`. Create the bucket first and supply credentials through private server environment variables; Core resolves `${…}` when loading the configuration.
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+forcePathStyle: true
+prefix: orders/
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### Use a public download endpoint
+
+This is another complete `_storage.yml`. Backend traffic stays internal, while presigned links use `publicEndpoint`. The reverse proxy must forward `/files` to S3, remove that prefix, and preserve the Host used for signing. Leave the bucket name out of the endpoint. Verify an actual signed link in the browser.
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+publicEndpoint: https://downloads.example.com/files
+forcePathStyle: true
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### Limit concurrent parts for large uploads
+
+Use 8 MiB parts and at most two concurrent parts per upload. These settings apply to backend streaming uploads. They do not set the browser request-body limit, which belongs to the HTTP service.
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+multipart:
+  partSizeBytes: 8388608
+  queueSize: 2
+```
+
+## Configuration reference
+
 
 | Field | Applies to | Default or requirement | Meaning |
 | --- | --- | --- | --- |

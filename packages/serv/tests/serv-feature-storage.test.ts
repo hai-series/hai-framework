@@ -4,6 +4,7 @@ import type { ServContext } from '../src/serv-context.js'
 import { Buffer } from 'node:buffer'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError, ok } from '@h-ai/core'
+import { storage } from '@h-ai/storage'
 import { describe, expect, it, vi } from 'vitest'
 import { createStorageProcedures } from '../src/features/serv-feature-storage.js'
 import { serv } from '../src/serv-main.js'
@@ -25,6 +26,7 @@ const baseListResult: ListResult = {
 
 function createStorageMock(): StorageFunctions {
   return {
+    client: storage.client,
     init: async () => ok(undefined),
     close: async () => ok(undefined),
     config: null,

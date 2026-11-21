@@ -1,10 +1,10 @@
 # hai-storage 参考
 
-> `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 访问存储，`storage.checksum` 提供 Node 端无需初始化的字节完整性工具。
+> `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 访问存储，`storage.checksum` 提供 Node 端无需初始化的字节完整性工具。客户端统一通过 `storage.client` 上传、下载及处理文件信息。
 
 ## 运行环境
 
-Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。`file.head()` 和 `file.copy()` 需要有效的代际元数据。快照恢复要保留内容、内部记录及用于匹配记录的文件身份。普通文件级迁移应先在源端读取内容和元数据，再在目标端用 `file.put()` 重建记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
+Windows 本地读取通过同目录的短期硬链接打开文件后立即移除链接，使已打开的流不会阻止原子覆盖；文件系统须支持硬链接，服务账号须能在对象目录创建和删除临时文件。链接复用 `.upload.tmp` 内部命名，不复制正文。Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。`file.head()` 和 `file.copy()` 需要有效的代际元数据。快照恢复要保留内容、内部记录及用于匹配记录的文件身份。普通文件级迁移应先在源端读取内容和元数据，再在目标端用 `file.put()` 重建记录。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
 
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
 
@@ -181,7 +181,7 @@ if (!downloadUrl.success) return downloadUrl
 
 > `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
 
-PUT 签名绑定 `Content-Type`。调用 `uploadWithPresignedUrl()` 或发送 PUT 请求时显式使用签发时的类型。签发时省略 `contentType`，上传须发送 `application/octet-stream`。
+PUT 签名绑定 `Content-Type`。调用 `storage.client.uploadWithPresignedUrl()` 或发送 PUT 请求时显式使用签发时的类型。签发时省略 `contentType`，上传须发送 `application/octet-stream`。
 
 ## 错误码 — `HaiStorageError`
 
@@ -308,13 +308,13 @@ if (result.success) {
 
 ## 浏览器端文件上传（预签名 URL 模式）
 
-`uploadWithPresignedUrl` 传 `onProgress` 时使用 XHR，否则使用 fetch。`abortController` 预取消不发送；准备中/进行中取消、外部 XHR abort、网络/超时和进度回调异常一次结算失败并解绑本次监听，完成后取消不会触碰旧 XHR。取消不能撤销远端已发布的对象；应用先核对业务/对象状态，再授权清理，不把本地取消当作服务端回滚。实际 Chrome 门禁设置 `HAI_STORAGE_RUN_BROWSER_GATES=1`，执行 `pnpm --filter @h-ai/storage exec vitest run tests/storage-client-browser.test.ts`；浏览器缺失直接失败。
+`storage.client.uploadWithPresignedUrl` 传 `onProgress` 时使用 XHR，否则使用 fetch。`abortController` 预取消不发送；准备中/进行中取消、外部 XHR abort、网络/超时和进度回调异常一次结算失败并解绑本次监听，完成后取消不会触碰旧 XHR。取消不能撤销远端已发布的对象；应用先核对业务/对象状态，再授权清理，不把本地取消当作服务端回滚。实际 Chrome 门禁设置 `HAI_STORAGE_RUN_BROWSER_GATES=1`，执行 `pnpm --filter @h-ai/storage exec vitest run tests/storage-client-browser.test.ts`；浏览器缺失直接失败。
 
-浏览器端无法直接使用 `storage` 模块。服务端使用 S3 时，通过 typed API 获取预签名 URL，检查失败后再直传：
+浏览器从 `@h-ai/storage/client` 导入 `storage`，通过 `storage.client` 调用六个客户端方法，无需初始化。Node 根入口和 Browser 条件入口也提供相同的 `storage.client`；浏览器不提供 `storage.file`、`storage.dir`、`storage.presign`、`storage.checksum` 或生命周期方法。服务端使用 S3 时，通过 typed API 获取预签名 URL，检查失败后再直传：
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'
-import { uploadWithPresignedUrl } from '@h-ai/storage/client'
+import { storage } from '@h-ai/storage/client'
 
 // apiClient 已初始化；用户和资源范围由服务端授权策略决定。
 // 让已初始化客户端以当前用户 ID 派生对象键并申请 PNG 直传。成功 data 有地址和对象键，失败原样返回。
@@ -324,7 +324,7 @@ const result = await apiClient.storage.presignedUrls.createUpload({
 })
 if (!result.success) return result
 // 用上一步 URL、调用方文件及签名的 PNG 类型直传。返回上传结果，失败从 error 读取详情。
-return uploadWithPresignedUrl(result.data.url, file, { contentType: 'image/png' })
+return storage.client.uploadWithPresignedUrl(result.data.url, file, { contentType: 'image/png' })
 ```
 
 ## 相关 Skills

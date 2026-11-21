@@ -22,6 +22,10 @@ See the [configuration reference](../../docs/usage/configuration/storage.en.md) 
 
 Use `storage.file.getStreamWithMetadata()` to read a full object and obtain its MIME type or ETag from the same read.
 
+In the browser, import `storage` from `@h-ai/storage/client` and call `storage.client.uploadWithPresignedUrl()` with an authorized URL. Download, save and file helpers also use `storage.client` and require no initialization. The Node root and Browser conditional entry use the same client shape.
+
+See the [upload cancellation example](../../docs/usage/function/storage.en.md#cancel-upload) for progress reporting and a cancel button.
+
 `storage.dir.delete(prefix)` deletes objects page by page based on the literal start of each key. For example, `reports/draft-` matches `reports/draft-1.txt`, and `reports/` matches keys under that path. An empty prefix clears the objects in the container.
 
 [Browse the API list](../../docs/usage/function/storage.en.md#api-reference) for entry points, inputs, results and examples.

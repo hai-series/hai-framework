@@ -154,6 +154,46 @@ function metadataGeneration(stat: fs.BigIntStats): string {
   ].join(':')).digest('hex')
 }
 
+/** Windows 从临时硬链接打开后立即移除链接，使正文流不会阻止原键的原子覆盖。 */
+async function openReadHandle(filePath: string): Promise<fsp.FileHandle> {
+  const flags = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW
+  if (process.platform !== 'win32')
+    return fsp.open(filePath, flags)
+
+  const source = await fsp.lstat(filePath)
+  if (source.isDirectory()) {
+    throw Object.assign(new Error(storageM('storage_pathIsDir', {
+      params: { key: '' },
+    })), { code: 'EISDIR' })
+  }
+  if (!source.isFile())
+    throw createInvalidPathError()
+
+  const temporaryPath = path.join(path.dirname(filePath), `${crypto.randomUUID()}.upload.tmp`)
+  let linked = false
+  let handle: fsp.FileHandle | undefined
+  try {
+    await fsp.link(filePath, temporaryPath)
+    linked = true
+    const snapshot = await fsp.lstat(temporaryPath, { bigint: true })
+    if (!snapshot.isFile())
+      throw createInvalidPathError()
+    handle = await fsp.open(temporaryPath, flags)
+    // Windows 没有 O_NOFOLLOW；核对打开的文件身份，拒绝链接被替换后的句柄。
+    if (metadataGeneration(snapshot) !== metadataGeneration(await handle.stat({ bigint: true })))
+      throw createInvalidPathError()
+    await fsp.unlink(temporaryPath)
+    linked = false
+    return handle
+  }
+  catch (error) {
+    await handle?.close().catch(cause => logger.warn('Local file read cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, cause)))
+    if (linked)
+      await fsp.unlink(temporaryPath).catch(cause => logger.warn('Local read link cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, cause)))
+    throw error
+  }
+}
+
 /** 代际记录属于内部格式；损坏时不能把 JSON 片段回显给调用方。 */
 function isMetadataRecord(value: unknown): value is { contentType?: string, metadata?: Record<string, string> } {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -482,9 +522,16 @@ export function createLocalProvider(): StorageProvider {
         }
         // 延迟打开，未消费的返回值不会占用文件句柄；迭代错误交由流消费者处理。
         async function* read(): AsyncIterable<Uint8Array> {
-          const stream = fs.createReadStream(filePath, { start: options.rangeStart, end: options.rangeEnd, signal: options.signal })
-          for await (const chunk of stream)
-            yield chunk
+          options.signal?.throwIfAborted()
+          const handle = await openReadHandle(filePath)
+          try {
+            const stream = handle.createReadStream({ start: options.rangeStart, end: options.rangeEnd, signal: options.signal })
+            for await (const chunk of stream)
+              yield chunk
+          }
+          finally {
+            await handle.close().catch(error => logger.warn('Local file read cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
+          }
         }
         return ok(read())
       }
@@ -505,7 +552,7 @@ export function createLocalProvider(): StorageProvider {
         // 从已打开的文件句柄读取代际和正文，避免并发替换源键时混用不同版本。
         for (let attempt = 0; attempt < METADATA_READ_ATTEMPTS; attempt++) {
           signal?.throwIfAborted()
-          const handle = await fsp.open(filePath, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW)
+          const handle = await openReadHandle(filePath)
           let transferred = false
           try {
             const stat = await handle.stat({ bigint: true })

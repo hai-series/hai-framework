@@ -1,8 +1,8 @@
 /**
  * @h-ai/storage — 浏览器端入口
  *
- * 不包含服务端 storage 单例（依赖 Node.js fs），
- * 仅导出配置 Schema、类型定义和前端客户端工具。
+ * storage 仅提供无需初始化的 client 操作，不包含依赖 Node.js fs 的服务端能力。
+ * 同时保留配置 Schema 与公共类型。
  * @module storage-index.browser
  */
 export * from './client/index.js'

@@ -22,6 +22,10 @@
 
 オブジェクト全体と MIME タイプや ETag を一度に取得するには、`storage.file.getStreamWithMetadata()` を使います。
 
+ブラウザーでは `@h-ai/storage/client` から `storage` を import し、認可済み URL に `storage.client.uploadWithPresignedUrl()` でアップロードします。ダウンロード、保存、ファイル用ツールも `storage.client` に統一し、初期化は不要です。Node のルート入口と Browser 条件入口も同じ呼び出し方です。
+
+進捗表示とキャンセルボタンの使い方は[アップロードのキャンセル例](../../docs/usage/function/storage.ja.md#cancel-upload)を参照してください。
+
 `storage.dir.delete(prefix)` はキーの文字列プレフィックスに一致するオブジェクトをページ単位で削除します。たとえば `reports/draft-` は `reports/draft-1.txt` に、`reports/` はそのパス配下のキーに一致します。空のプレフィックスはコンテナ内の全オブジェクトに一致します。
 
 [API 一覧](../../docs/usage/function/storage.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。

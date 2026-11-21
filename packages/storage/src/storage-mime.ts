@@ -82,9 +82,9 @@ const MIME_TYPE_DEFAULT = 'application/octet-stream'
  * @returns MIME 类型字符串
  * @example
  * ```ts
- * import { getMimeType } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
- * const mime = getMimeType('pdf')
+ * const mime = storage.client.getMimeType('pdf')
  * void mime
  * ```
  */

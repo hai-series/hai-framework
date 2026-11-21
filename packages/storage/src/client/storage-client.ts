@@ -5,79 +5,17 @@
  * @module storage-client
  */
 
+import type { ClientDownloadOptions, ClientOperations, ClientUploadOptions } from '../storage-types.js'
 import { core } from '@h-ai/core'
 import { storageM } from '../storage-i18n.js'
 
-export { getMimeType } from '../storage-mime.js'
+import { getMimeType } from '../storage-mime.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'client' })
 
 function transferFailure(operation: string, error: string, httpStatus?: number): { success: false, error: string } {
   logger.warn('Storage client operation failed', { operation, httpStatus })
   return { success: false, error }
-}
-
-// ─── 客户端类型 ───
-
-/**
- * 上传进度回调数据
- *
- * 由 `uploadWithPresignedUrl` 在上传过程中通过 `onProgress` 回调返回。
- * @example
- * ```ts
- * import type { UploadProgress } from '@h-ai/storage'
- *
- * const value: UploadProgress = { loaded: 50, total: 100, percent: 50 }
- * void value
- * ```
- */
-export interface UploadProgress {
-  /** 已上传字节数 */
-  loaded: number
-  /** 总字节数（仅在 lengthComputable 时可靠） */
-  total: number
-  /** 进度百分比 (0–100)，四舍五入到整数 */
-  percent: number
-}
-
-/**
- * 前端上传选项
- *
- * 控制 `uploadWithPresignedUrl` 的行为，包括内容类型、进度监听和取消。
- * @example
- * ```ts
- * import type { ClientUploadOptions } from '@h-ai/storage'
- *
- * const value: ClientUploadOptions = { contentType: 'text/plain', onProgress: progress => { document.title = `${progress.percent}%` } }
- * void value
- * ```
- */
-export interface ClientUploadOptions {
-  /** 内容类型（设置后会加到请求 Content-Type 头） */
-  contentType?: string
-  /** 进度回调（设置后会使用 XMLHttpRequest；仅 lengthComputable=true 时回调） */
-  onProgress?: (progress: UploadProgress) => void
-  /** 取消上传；预取消不发送请求，进行中取消返回失败，完成后移除本次监听。取消不能撤销远端已写入对象。 */
-  abortController?: AbortController
-}
-
-/**
- * 前端下载选项
- *
- * 控制 `downloadWithPresignedUrl` / `downloadAndSave` 的行为。
- * @example
- * ```ts
- * import type { ClientDownloadOptions } from '@h-ai/storage'
- *
- * const value: ClientDownloadOptions = { filename: 'report.pdf', abortController: new AbortController() }
- * void value
- * ```
- */
-export interface ClientDownloadOptions {
-  /** 保存的文件名（仅 downloadAndSave 使用，默认为 'download'） */
-  filename?: string
-  /** AbortController 用于取消下载（abort 后返回 {success: false}） */
-  abortController?: AbortController
 }
 
 // ─── 上传功能 ───
@@ -92,16 +30,16 @@ export interface ClientDownloadOptions {
  * 取消不代表远端对象已回滚；上传完成后的撤销由应用另行授权删除。
  * @example
  * ```ts
- * import { uploadWithPresignedUrl } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
  * // url 由应用鉴权接口返回，且 S3 签名包含相同 Content-Type。
  * async function upload(url: string, file: File) {
- *   const result = await uploadWithPresignedUrl(url, file, { contentType: file.type })
+ *   const result = await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })
  *   if (!result.success) throw new Error(result.error)
  * }
  * ```
  */
-export async function uploadWithPresignedUrl(
+async function uploadWithPresignedUrl(
   url: string,
   data: File | Blob | ArrayBuffer | string,
   options: ClientUploadOptions = {},
@@ -280,16 +218,16 @@ export async function uploadWithPresignedUrl(
  * @returns 下载结果（成功时 data 为 Blob）
  * @example
  * ```ts
- * import { downloadWithPresignedUrl } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
  * async function download(url: string) {
- *   const result = await downloadWithPresignedUrl(url)
+ *   const result = await storage.client.downloadWithPresignedUrl(url)
  *   if (!result.success || !result.data) throw new Error(result.error ?? 'Empty download')
  *   return result.data
  * }
  * ```
  */
-export async function downloadWithPresignedUrl(
+async function downloadWithPresignedUrl(
   url: string,
   options: ClientDownloadOptions = {},
 ): Promise<{ success: boolean, data?: Blob, error?: string }> {
@@ -328,15 +266,15 @@ export async function downloadWithPresignedUrl(
  * @returns 成功表示已触发浏览器保存，失败时包含错误说明。
  * @example
  * ```ts
- * import { downloadAndSave } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
  * async function save(url: string) {
- *   const result = await downloadAndSave(url, { filename: 'report.pdf' })
+ *   const result = await storage.client.downloadAndSave(url, { filename: 'report.pdf' })
  *   if (!result.success) throw new Error(result.error)
  * }
  * ```
  */
-export async function downloadAndSave(
+async function downloadAndSave(
   url: string,
   options: ClientDownloadOptions = {},
 ): Promise<{ success: boolean, error?: string }> {
@@ -385,13 +323,13 @@ export async function downloadAndSave(
  * @returns 扩展名（不含点），如 'png'、'tar.gz' 返回 'gz'
  * @example
  * ```ts
- * import { getFileExtension } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
- * const extension = getFileExtension(new File(['hello'], 'report.txt'))
+ * const extension = storage.client.getFileExtension(new File(['hello'], 'report.txt'))
  * void extension
  * ```
  */
-export function getFileExtension(file: File): string {
+function getFileExtension(file: File): string {
   const name = file.name
   const lastDot = name.lastIndexOf('.')
   return lastDot > -1
@@ -408,12 +346,12 @@ export function getFileExtension(file: File): string {
  * @returns 格式化后的字符串，如 '0 B'、'1.50 KB'、'2.30 MB'
  * @example
  * ```ts
- * import { formatFileSize } from '@h-ai/storage/client'
+ * import { storage } from '@h-ai/storage/client'
  *
- * void formatFileSize(1536)
+ * void storage.client.formatFileSize(1536)
  * ```
  */
-export function formatFileSize(bytes: number): string {
+function formatFileSize(bytes: number): string {
   if (bytes === 0)
     return '0 B'
 
@@ -425,3 +363,32 @@ export function formatFileSize(bytes: number): string {
     ? 2
     : 0)} ${units[i]}`
 }
+
+/**
+ * 客户端操作的模块内部装配；公开入口只通过 storage.client 暴露。
+ * @example 模块内部上下文
+ * ```ts
+ * const mime = client.getMimeType('txt')
+ * void mime
+ * ```
+ */
+export const client: ClientOperations = {
+  uploadWithPresignedUrl,
+  downloadWithPresignedUrl,
+  downloadAndSave,
+  getFileExtension,
+  getMimeType,
+  formatFileSize,
+}
+
+/**
+ * 浏览器与纯客户端子路径的存储入口，无需初始化，也不提供服务端能力。
+ * @example
+ * ```ts
+ * import { storage } from '@h-ai/storage/client'
+ *
+ * const mime = storage.client.getMimeType('txt')
+ * void mime
+ * ```
+ */
+export const storage: { readonly client: ClientOperations } = { client }

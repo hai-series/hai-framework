@@ -13,6 +13,7 @@ import type { DirOperations, FileOperations, PresignOperations, StorageFunctions
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
+import { client } from './client/storage-client.js'
 import { createLocalProvider } from './providers/storage-provider-local.js'
 import { createS3Provider } from './providers/storage-provider-s3.js'
 import { checksum } from './storage-checksum.js'
@@ -184,6 +185,7 @@ const unavailableOperations = withStorageOperationLogs({
  * ```
  */
 export const storage: StorageFunctions = {
+  client,
   checksum: {
     generate: (data, options) => logStorageResult('checksum.generate', checksum.generate(data, options)),
     verify: (data, expected, options) => logStorageResult('checksum.verify', checksum.verify(data, expected, options)),

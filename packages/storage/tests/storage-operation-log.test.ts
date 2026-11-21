@@ -67,7 +67,7 @@ describe('storage 操作日志', () => {
       ['debug', 'file.deleteMany'],
       ['warn', 'file.deleteMany'],
     ])
-    expect(operations[0].context.payload).toBe('{"byteLength":3}')
+    expect(operations[0].context.payload).toEqual({ byteLength: 3 })
     expect(JSON.stringify(operations)).not.toContain('private-fixture-')
   })
 

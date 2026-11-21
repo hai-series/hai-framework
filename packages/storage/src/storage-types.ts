@@ -8,6 +8,7 @@
  * - 文件操作接口（FileOperations）
  * - 目录操作接口（DirOperations）
  * - 签名 URL 操作接口（PresignOperations）
+ * - 客户端操作接口（ClientOperations）
  * - 函数接口（StorageFunctions）
  * @module storage-types
  */
@@ -625,7 +626,96 @@ export interface PresignOperations {
   publicUrl: (key: string) => string | null
 }
 
+// ─── 客户端类型 ───
+
+/**
+ * 上传进度回调数据
+ *
+ * 由 `storage.client.uploadWithPresignedUrl` 在上传过程中通过 `onProgress` 回调返回。
+ * @example
+ * ```ts
+ * import type { UploadProgress } from '@h-ai/storage'
+ *
+ * const value: UploadProgress = { loaded: 50, total: 100, percent: 50 }
+ * void value
+ * ```
+ */
+export interface UploadProgress {
+  /** 已上传字节数 */
+  loaded: number
+  /** 总字节数（仅在 lengthComputable 时可靠） */
+  total: number
+  /** 进度百分比 (0–100)，四舍五入到整数 */
+  percent: number
+}
+
+/**
+ * 前端上传选项
+ *
+ * 控制 `storage.client.uploadWithPresignedUrl` 的行为，包括内容类型、进度监听和取消。
+ * @example
+ * ```ts
+ * import type { ClientUploadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientUploadOptions = { contentType: 'text/plain', onProgress: progress => { document.title = `${progress.percent}%` } }
+ * void value
+ * ```
+ */
+export interface ClientUploadOptions {
+  /** 内容类型（设置后会加到请求 Content-Type 头） */
+  contentType?: string
+  /** 进度回调（设置后会使用 XMLHttpRequest；仅 lengthComputable=true 时回调） */
+  onProgress?: (progress: UploadProgress) => void
+  /** 取消上传；预取消不发送请求，进行中取消返回失败，完成后移除本次监听。取消不能撤销远端已写入对象。 */
+  abortController?: AbortController
+}
+
+/**
+ * 前端下载选项
+ *
+ * 控制 `storage.client.downloadWithPresignedUrl` / `storage.client.downloadAndSave` 的行为。
+ * @example
+ * ```ts
+ * import type { ClientDownloadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientDownloadOptions = { filename: 'report.pdf', abortController: new AbortController() }
+ * void value
+ * ```
+ */
+export interface ClientDownloadOptions {
+  /** 保存的文件名（仅 downloadAndSave 使用，默认为 'download'） */
+  filename?: string
+  /** AbortController 用于取消下载（abort 后返回 {success: false}） */
+  abortController?: AbortController
+}
+
 // ─── 函数接口 ───
+
+/**
+ * 无状态客户端传输与文件展示操作；无需 storage.init()。
+ * downloadAndSave 需要浏览器 DOM，带进度的上传需要 XMLHttpRequest。
+ * @example
+ * ```ts
+ * import { storage } from '@h-ai/storage/client'
+ *
+ * const displayedSize = storage.client.formatFileSize(1536)
+ * void displayedSize
+ * ```
+ */
+export interface ClientOperations {
+  /** 使用签名 URL 直传字节；失败返回说明，取消不代表远端对象回滚。 */
+  uploadWithPresignedUrl: (url: string, data: File | Blob | ArrayBuffer | string, options?: ClientUploadOptions) => Promise<{ success: boolean, error?: string }>
+  /** 使用签名 URL 下载；成功 data 为 Blob，失败包含 error。 */
+  downloadWithPresignedUrl: (url: string, options?: ClientDownloadOptions) => Promise<{ success: boolean, data?: Blob, error?: string }>
+  /** 下载并触发浏览器保存，随后释放下载链接和 Blob URL。 */
+  downloadAndSave: (url: string, options?: ClientDownloadOptions) => Promise<{ success: boolean, error?: string }>
+  /** 取得文件名最后一个点号后的扩展名，转为小写。 */
+  getFileExtension: (file: File) => string
+  /** 查询扩展名的 MIME；未知值返回 application/octet-stream。 */
+  getMimeType: (extension: string) => string
+  /** 按 1024 进制格式化字节数，最大单位为 TB。 */
+  formatFileSize: (bytes: number) => string
+}
 
 /**
  * 存储函数接口
@@ -636,6 +726,7 @@ export interface PresignOperations {
  * - `storage.file` — 文件操作（上传/下载/删除/复制等）
  * - `storage.dir` — 目录操作（列表/删除）
  * - `storage.presign` — 签名 URL 操作
+ * - `storage.client` — 无需初始化的客户端传输与文件展示操作
  * - `storage.config` — 当前脱敏配置快照（未初始化时为 null）
  * - `storage.isInitialized` — 初始化状态
  * @example
@@ -657,6 +748,8 @@ export interface PresignOperations {
  * ```
  */
 export interface StorageFunctions {
+  /** 无状态客户端操作；Node、Browser 与 /client 入口调用形态一致。 */
+  readonly client: ClientOperations
   /** 无状态 checksum 生成与校验，Node 专用，无需初始化。 */
   readonly checksum: ChecksumOperations
   /**

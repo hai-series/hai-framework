@@ -4,10 +4,66 @@
 
 生成されたアプリは、起動時に `core.config.get('storage')` で `config/_storage.yml` を読み込み、`storage.init()` に渡します。環境変数で上書きする場合は `HAI_STORAGE_` を使います。ローカル方式ではファイルをサーバーのディスクに保存します。複数のサーバーが同じファイルを参照する必要がある場合は、S3 互換サービスを使います。
 
+## 設定例
+
+### ローカルディスクにファイルを保存する
+
+相対パスの起点はサービスの作業ディレクトリです。`reports/june.pdf` をアップロードすると `./data/files/reports/june.pdf` に保存されます。サービスのアカウントには読み書き権限が必要です。このローカルディレクトリは別のサーバーと自動では共有されません。
+
+Windows のローカルストレージでは、ハードリンクに対応したファイルシステムと、オブジェクトのディレクトリで一時ファイルを作成・削除する権限も必要です。読み取り時に一時的なリンクを使うため、開いたストリームが同じキーの上書きを妨げません。[ローカルファイルの保存方法](../data/storage.ja.md)も参照してください。
+
 ```yaml schema=@h-ai/storage:StorageConfigSchema
 type: local
 root: ./data/files
 ```
+
+### S3 互換サービスに保存する
+
+`config/_storage.yml` に記述します。サーバーは内部 URL で `orders-files` バケットへ接続し、`reports/june.pdf` を `orders/reports/june.pdf` として保存します。バケットを先に作成し、認証情報はサーバーの非公開環境変数から渡します。`${…}` は Core が設定を読む際に置換します。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+forcePathStyle: true
+prefix: orders/
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### 保存は内部 URL、ダウンロードは公開 URL を使う
+
+これも完全な `_storage.yml` の例です。保存は内部 URL を使い、署名付きリンクは `publicEndpoint` を使います。プロキシは `/files` を除いて S3 へ転送し、署名に使用する Host を維持します。URL にバケット名は含めません。実際の署名付きリンクをブラウザで確認してください。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+endpoint: https://s3.internal.example.com
+publicEndpoint: https://downloads.example.com/files
+forcePathStyle: true
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+```
+
+### 大きなファイルの分割アップロードを調整する
+
+1 パートを 8 MiB、1 回のアップロードで同時に送るパートを 2 個にします。サーバーのストリームアップロード向けの設定です。ブラウザから受け取る HTTP リクエストの上限は、HTTP サービス側で設定します。
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+type: s3
+bucket: orders-files
+region: us-east-1
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+multipart:
+  partSizeBytes: 8388608
+  queueSize: 2
+```
+
+## 設定一覧
+
 
 | 項目 | 適用先 | 既定値・必須条件 | 用途 |
 | --- | --- | --- | --- |

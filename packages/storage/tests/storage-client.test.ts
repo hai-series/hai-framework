@@ -5,80 +5,99 @@
 import type { LogRecord } from '@h-ai/core'
 import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  downloadAndSave,
-  downloadWithPresignedUrl,
-  formatFileSize,
-  getFileExtension,
-  getMimeType,
-  uploadWithPresignedUrl,
-} from '../src/index.js'
+import * as storageClientEntry from '../src/client/index.js'
+import { storage } from '../src/index.js'
+import * as storageNode from '../src/index.js'
 import * as storageBrowser from '../src/storage-index.browser.js'
 
 describe('storage client 工具函数', () => {
+  it.each([
+    { name: 'Node', entry: storageNode },
+    { name: 'Browser', entry: storageBrowser },
+    { name: 'client', entry: storageClientEntry },
+  ])('公开入口 $name 统一通过 storage.client 使用客户端能力', ({ name, entry }) => {
+    const methods = [
+      'downloadAndSave',
+      'downloadWithPresignedUrl',
+      'formatFileSize',
+      'getFileExtension',
+      'getMimeType',
+      'uploadWithPresignedUrl',
+    ]
+    expect(entry.storage?.client).toBeDefined()
+    expect(Object.keys(entry.storage.client).sort()).toEqual(methods)
+    expect(entry.storage.client.getMimeType('txt')).toBe('text/plain')
+    for (const method of methods) {
+      expect(entry).not.toHaveProperty(method)
+      expect(entry.storage.client).toHaveProperty(method, expect.any(Function))
+    }
+    if (name !== 'Node')
+      expect(Object.keys(entry.storage)).toEqual(['client'])
+  })
+
   // ─── getMimeType ───
 
   describe('getMimeType', () => {
     it('常见图片扩展名应返回正确 MIME 类型', () => {
-      expect(getMimeType('jpg')).toBe('image/jpeg')
-      expect(getMimeType('jpeg')).toBe('image/jpeg')
-      expect(getMimeType('png')).toBe('image/png')
-      expect(getMimeType('gif')).toBe('image/gif')
-      expect(getMimeType('webp')).toBe('image/webp')
-      expect(getMimeType('svg')).toBe('image/svg+xml')
-      expect(getMimeType('ico')).toBe('image/x-icon')
+      expect(storage.client.getMimeType('jpg')).toBe('image/jpeg')
+      expect(storage.client.getMimeType('jpeg')).toBe('image/jpeg')
+      expect(storage.client.getMimeType('png')).toBe('image/png')
+      expect(storage.client.getMimeType('gif')).toBe('image/gif')
+      expect(storage.client.getMimeType('webp')).toBe('image/webp')
+      expect(storage.client.getMimeType('svg')).toBe('image/svg+xml')
+      expect(storage.client.getMimeType('ico')).toBe('image/x-icon')
     })
 
     it('常见文档扩展名应返回正确 MIME 类型', () => {
-      expect(getMimeType('pdf')).toBe('application/pdf')
-      expect(getMimeType('doc')).toBe('application/msword')
-      expect(getMimeType('docx')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-      expect(getMimeType('xls')).toBe('application/vnd.ms-excel')
-      expect(getMimeType('xlsx')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      expect(getMimeType('ppt')).toBe('application/vnd.ms-powerpoint')
-      expect(getMimeType('pptx')).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation')
-      expect(getMimeType('json')).toBe('application/json')
-      expect(getMimeType('xml')).toBe('application/xml')
+      expect(storage.client.getMimeType('pdf')).toBe('application/pdf')
+      expect(storage.client.getMimeType('doc')).toBe('application/msword')
+      expect(storage.client.getMimeType('docx')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+      expect(storage.client.getMimeType('xls')).toBe('application/vnd.ms-excel')
+      expect(storage.client.getMimeType('xlsx')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      expect(storage.client.getMimeType('ppt')).toBe('application/vnd.ms-powerpoint')
+      expect(storage.client.getMimeType('pptx')).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation')
+      expect(storage.client.getMimeType('json')).toBe('application/json')
+      expect(storage.client.getMimeType('xml')).toBe('application/xml')
     })
 
     it('常见文本扩展名应返回正确 MIME 类型', () => {
-      expect(getMimeType('txt')).toBe('text/plain')
-      expect(getMimeType('html')).toBe('text/html')
-      expect(getMimeType('css')).toBe('text/css')
-      expect(getMimeType('js')).toBe('text/javascript')
-      expect(getMimeType('csv')).toBe('text/csv')
-      expect(getMimeType('md')).toBe('text/markdown')
+      expect(storage.client.getMimeType('txt')).toBe('text/plain')
+      expect(storage.client.getMimeType('html')).toBe('text/html')
+      expect(storage.client.getMimeType('css')).toBe('text/css')
+      expect(storage.client.getMimeType('js')).toBe('text/javascript')
+      expect(storage.client.getMimeType('csv')).toBe('text/csv')
+      expect(storage.client.getMimeType('md')).toBe('text/markdown')
     })
 
     it('音视频扩展名应返回正确 MIME 类型', () => {
-      expect(getMimeType('mp3')).toBe('audio/mpeg')
-      expect(getMimeType('wav')).toBe('audio/wav')
-      expect(getMimeType('ogg')).toBe('audio/ogg')
-      expect(getMimeType('mp4')).toBe('video/mp4')
-      expect(getMimeType('webm')).toBe('video/webm')
+      expect(storage.client.getMimeType('mp3')).toBe('audio/mpeg')
+      expect(storage.client.getMimeType('wav')).toBe('audio/wav')
+      expect(storage.client.getMimeType('ogg')).toBe('audio/ogg')
+      expect(storage.client.getMimeType('mp4')).toBe('video/mp4')
+      expect(storage.client.getMimeType('webm')).toBe('video/webm')
     })
 
     it('常见压缩包扩展名应返回正确 MIME 类型', () => {
-      expect(getMimeType('zip')).toBe('application/zip')
-      expect(getMimeType('gz')).toBe('application/gzip')
-      expect(getMimeType('tar')).toBe('application/x-tar')
-      expect(getMimeType('rar')).toBe('application/x-rar-compressed')
-      expect(getMimeType('7z')).toBe('application/x-7z-compressed')
+      expect(storage.client.getMimeType('zip')).toBe('application/zip')
+      expect(storage.client.getMimeType('gz')).toBe('application/gzip')
+      expect(storage.client.getMimeType('tar')).toBe('application/x-tar')
+      expect(storage.client.getMimeType('rar')).toBe('application/x-rar-compressed')
+      expect(storage.client.getMimeType('7z')).toBe('application/x-7z-compressed')
     })
 
     it('未知扩展名应返回 application/octet-stream', () => {
-      expect(getMimeType('xyz')).toBe('application/octet-stream')
-      expect(getMimeType('unknown')).toBe('application/octet-stream')
-      expect(getMimeType('')).toBe('application/octet-stream')
-      expect(getMimeType('constructor')).toBe('application/octet-stream')
-      expect(getMimeType('__proto__')).toBe('application/octet-stream')
+      expect(storage.client.getMimeType('xyz')).toBe('application/octet-stream')
+      expect(storage.client.getMimeType('unknown')).toBe('application/octet-stream')
+      expect(storage.client.getMimeType('')).toBe('application/octet-stream')
+      expect(storage.client.getMimeType('constructor')).toBe('application/octet-stream')
+      expect(storage.client.getMimeType('__proto__')).toBe('application/octet-stream')
     })
 
     it('大写扩展名应正确识别（大小写不敏感）', () => {
-      expect(getMimeType('PNG')).toBe('image/png')
-      expect(getMimeType('JPG')).toBe('image/jpeg')
-      expect(getMimeType('PDF')).toBe('application/pdf')
-      expect(getMimeType('Mp4')).toBe('video/mp4')
+      expect(storage.client.getMimeType('PNG')).toBe('image/png')
+      expect(storage.client.getMimeType('JPG')).toBe('image/jpeg')
+      expect(storage.client.getMimeType('PDF')).toBe('application/pdf')
+      expect(storage.client.getMimeType('Mp4')).toBe('video/mp4')
     })
   })
 
@@ -87,32 +106,32 @@ describe('storage client 工具函数', () => {
   describe('getFileExtension', () => {
     it('应从文件名中提取扩展名', () => {
       const file = new File(['content'], 'photo.jpg')
-      expect(getFileExtension(file)).toBe('jpg')
+      expect(storage.client.getFileExtension(file)).toBe('jpg')
     })
 
     it('多层扩展名应取最后一段', () => {
       const file = new File([''], 'archive.tar.gz')
-      expect(getFileExtension(file)).toBe('gz')
+      expect(storage.client.getFileExtension(file)).toBe('gz')
     })
 
     it('无扩展名的文件应返回空字符串', () => {
       const file = new File([''], 'Makefile')
-      expect(getFileExtension(file)).toBe('')
+      expect(storage.client.getFileExtension(file)).toBe('')
     })
 
     it('扩展名应转为小写', () => {
       const file = new File([''], 'Image.PNG')
-      expect(getFileExtension(file)).toBe('png')
+      expect(storage.client.getFileExtension(file)).toBe('png')
     })
 
     it('以点开头的隐藏文件应正确处理', () => {
       const file = new File([''], '.gitignore')
-      expect(getFileExtension(file)).toBe('gitignore')
+      expect(storage.client.getFileExtension(file)).toBe('gitignore')
     })
 
     it('文件名含多个点应取最后一段', () => {
       const file = new File([''], 'my.report.2024.pdf')
-      expect(getFileExtension(file)).toBe('pdf')
+      expect(storage.client.getFileExtension(file)).toBe('pdf')
     })
   })
 
@@ -120,36 +139,36 @@ describe('storage client 工具函数', () => {
 
   describe('formatFileSize', () => {
     it('0 字节应返回 "0 B"', () => {
-      expect(formatFileSize(0)).toBe('0 B')
+      expect(storage.client.formatFileSize(0)).toBe('0 B')
     })
 
     it('小于 1KB 应以 B 为单位', () => {
-      expect(formatFileSize(512)).toBe('512 B')
-      expect(formatFileSize(1)).toBe('1 B')
-      expect(formatFileSize(1023)).toBe('1023 B')
+      expect(storage.client.formatFileSize(512)).toBe('512 B')
+      expect(storage.client.formatFileSize(1)).toBe('1 B')
+      expect(storage.client.formatFileSize(1023)).toBe('1023 B')
     })
 
     it('1024 字节应显示为 1.00 KB', () => {
-      expect(formatFileSize(1024)).toBe('1.00 KB')
+      expect(storage.client.formatFileSize(1024)).toBe('1.00 KB')
     })
 
     it('应正确格式化 MB 级别', () => {
-      expect(formatFileSize(1024 * 1024)).toBe('1.00 MB')
-      expect(formatFileSize(1.5 * 1024 * 1024)).toBe('1.50 MB')
+      expect(storage.client.formatFileSize(1024 * 1024)).toBe('1.00 MB')
+      expect(storage.client.formatFileSize(1.5 * 1024 * 1024)).toBe('1.50 MB')
     })
 
     it('应正确格式化 GB 级别', () => {
-      expect(formatFileSize(1024 * 1024 * 1024)).toBe('1.00 GB')
+      expect(storage.client.formatFileSize(1024 * 1024 * 1024)).toBe('1.00 GB')
     })
 
     it('应正确格式化 TB 级别', () => {
-      expect(formatFileSize(1024 ** 4)).toBe('1.00 TB')
-      expect(formatFileSize(1024 ** 5)).toBe('1024.00 TB')
+      expect(storage.client.formatFileSize(1024 ** 4)).toBe('1.00 TB')
+      expect(storage.client.formatFileSize(1024 ** 5)).toBe('1024.00 TB')
     })
 
     it('精确的 KB 值应保留两位小数', () => {
-      expect(formatFileSize(2048)).toBe('2.00 KB')
-      expect(formatFileSize(1536)).toBe('1.50 KB')
+      expect(storage.client.formatFileSize(2048)).toBe('2.00 KB')
+      expect(storage.client.formatFileSize(1536)).toBe('1.50 KB')
     })
   })
 
@@ -163,7 +182,7 @@ describe('storage client 工具函数', () => {
     it('fetch 成功时应返回 success', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }))
 
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'file-data')
+      const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'file-data')
       expect(result.success).toBe(true)
     })
 
@@ -180,7 +199,7 @@ describe('storage client 工具函数', () => {
           warnings.push(record)
       })
       try {
-        const result = await uploadWithPresignedUrl('https://example.com/upload?X-Amz-Signature=fixture-value', 'private body')
+        const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload?X-Amz-Signature=fixture-value', 'private body')
         expect(result.success).toBe(false)
         expect(result.error).toBeDefined()
         expect(warnings).toMatchObject([
@@ -198,7 +217,7 @@ describe('storage client 工具函数', () => {
     it('fetch 抛出网络错误时应返回失败', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data')
+      const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'data')
       expect(result.success).toBe(false)
       expect(result.error).toContain('Network error')
     })
@@ -207,7 +226,7 @@ describe('storage client 工具函数', () => {
       const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 })
       vi.stubGlobal('fetch', mockFetch)
 
-      await uploadWithPresignedUrl('https://example.com/upload', 'data', {
+      await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'data', {
         contentType: 'text/plain',
       })
 
@@ -226,7 +245,7 @@ describe('storage client 工具函数', () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortError))
 
       const controller = new AbortController()
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data', {
+      const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'data', {
         abortController: controller,
       })
       expect(result.success).toBe(false)
@@ -239,7 +258,7 @@ describe('storage client 工具函数', () => {
         controller.signal.throwIfAborted()
       }))
 
-      const result = await core.i18n.runWithLocale('en-US', () => uploadWithPresignedUrl(
+      const result = await core.i18n.runWithLocale('en-US', () => storage.client.uploadWithPresignedUrl(
         'https://example.com/upload',
         'data',
         { abortController: controller },
@@ -252,7 +271,7 @@ describe('storage client 工具函数', () => {
       vi.stubGlobal('fetch', fetch)
       const controller = new AbortController()
       controller.abort(new Error('Cancelled before upload'))
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data', { abortController: controller })
+      const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'data', { abortController: controller })
       expect(result.success).toBe(false)
       expect(result.error).toBeTruthy()
       expect(fetch).not.toHaveBeenCalled()
@@ -261,7 +280,7 @@ describe('storage client 工具函数', () => {
     it('非 Error 异常也应被捕获', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue('string error'))
 
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data')
+      const result = await storage.client.uploadWithPresignedUrl('https://example.com/upload', 'data')
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
     })
@@ -281,7 +300,7 @@ describe('storage client 工具函数', () => {
         blob: () => Promise.resolve(blob),
       }))
 
-      const result = await downloadWithPresignedUrl('https://example.com/download')
+      const result = await storage.client.downloadWithPresignedUrl('https://example.com/download')
       expect(result.success).toBe(true)
       expect(result.data).toBeInstanceOf(Blob)
     })
@@ -293,7 +312,7 @@ describe('storage client 工具函数', () => {
         statusText: 'Not Found',
       }))
 
-      const result = await downloadWithPresignedUrl('https://example.com/download')
+      const result = await storage.client.downloadWithPresignedUrl('https://example.com/download')
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
     })
@@ -301,7 +320,7 @@ describe('storage client 工具函数', () => {
     it('fetch 抛出网络错误时应返回失败', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Connection refused')))
 
-      const result = await downloadWithPresignedUrl('https://example.com/download')
+      const result = await storage.client.downloadWithPresignedUrl('https://example.com/download')
       expect(result.success).toBe(false)
       expect(result.error).toContain('Connection refused')
     })
@@ -311,7 +330,7 @@ describe('storage client 工具函数', () => {
       abortError.name = 'AbortError'
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortError))
 
-      const result = await downloadWithPresignedUrl('https://example.com/download', {
+      const result = await storage.client.downloadWithPresignedUrl('https://example.com/download', {
         abortController: new AbortController(),
       })
       expect(result.success).toBe(false)
@@ -327,7 +346,7 @@ describe('storage client 工具函数', () => {
         },
       }))
 
-      const result = await core.i18n.runWithLocale('en-US', () => downloadWithPresignedUrl(
+      const result = await core.i18n.runWithLocale('en-US', () => storage.client.downloadWithPresignedUrl(
         'https://example.com/download',
         { abortController: controller },
       ))
@@ -342,7 +361,7 @@ describe('storage client 工具函数', () => {
       vi.stubGlobal('fetch', mockFetch)
 
       const controller = new AbortController()
-      await downloadWithPresignedUrl('https://example.com/download', {
+      await storage.client.downloadWithPresignedUrl('https://example.com/download', {
         abortController: controller,
       })
 
@@ -370,7 +389,7 @@ describe('storage client 工具函数', () => {
         statusText: 'Internal Server Error',
       }))
 
-      const result = await downloadAndSave('https://example.com/file')
+      const result = await storage.client.downloadAndSave('https://example.com/file')
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
     })
@@ -382,7 +401,7 @@ describe('storage client 工具函数', () => {
         blob: () => Promise.resolve(blob),
       }))
 
-      const result = await downloadAndSave('https://example.com/file', {
+      const result = await storage.client.downloadAndSave('https://example.com/file', {
         filename: 'test.txt',
       })
       // Node.js 环境没有 document.createElement，应触发 catch 分支
@@ -416,7 +435,7 @@ describe('storage client 工具函数', () => {
         blob: async () => blob,
       }))
 
-      const result = await downloadAndSave('https://example.com/file', { filename: 'report.txt' })
+      const result = await storage.client.downloadAndSave('https://example.com/file', { filename: 'report.txt' })
 
       expect(result.success).toBe(!clickFails)
       if (clickFails)
@@ -433,20 +452,22 @@ describe('storage client 工具函数', () => {
   // ─── 浏览器入口导出 ───
 
   describe('browser entry exports', () => {
-    it('浏览器入口不应导出 storage 主对象', () => {
-      expect('storage' in storageBrowser).toBe(false)
-    })
-
-    it('浏览器入口应导出前端客户端方法', () => {
-      expect(typeof storageBrowser.uploadWithPresignedUrl).toBe('function')
-      expect(typeof storageBrowser.downloadWithPresignedUrl).toBe('function')
-      expect(typeof storageBrowser.downloadAndSave).toBe('function')
-    })
-
-    it('浏览器入口应导出工具函数', () => {
-      expect(typeof storageBrowser.getMimeType).toBe('function')
-      expect(typeof storageBrowser.formatFileSize).toBe('function')
-      expect(typeof storageBrowser.getFileExtension).toBe('function')
+    it('浏览器与纯客户端入口不提供服务端生命周期或存储操作', () => {
+      for (const entry of [storageBrowser, storageClientEntry]) {
+        for (const operation of [
+          'init',
+          'close',
+          'file',
+          'dir',
+          'presign',
+          'checksum',
+          'config',
+          'isInitialized',
+        ])
+          expect(entry.storage).not.toHaveProperty(operation)
+      }
+      expect(storageBrowser.storage.client).toBe(storageClientEntry.storage.client)
+      expect(storageNode.storage.client).toBe(storageClientEntry.storage.client)
     })
 
     it('浏览器入口应导出配置与类型', () => {

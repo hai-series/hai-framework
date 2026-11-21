@@ -48,6 +48,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       tsconfig: browserConfig,
       entry: {
         client: fileURLToPath(new URL('../src/client/index.ts', import.meta.url)),
+        browser: fileURLToPath(new URL('../src/storage-index.browser.ts', import.meta.url)),
       },
       outDir: temporary,
       format: ['iife'],
@@ -60,11 +61,17 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       silent: true,
     })
     const bundle = await readFile(path.join(temporary, 'client.global.js'), 'utf8')
+    const browserBundle = await readFile(path.join(temporary, 'browser.global.js'), 'utf8')
     server = createServer((request, response) => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1')
       if (url.pathname === '/client.js') {
         response.writeHead(200, { 'Content-Type': 'text/javascript' })
         response.end(bundle)
+        return
+      }
+      if (url.pathname === '/browser.js') {
+        response.writeHead(200, { 'Content-Type': 'text/javascript' })
+        response.end(browserBundle)
         return
       }
       if (url.pathname === '/download') {
@@ -98,7 +105,9 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
         return
       }
       response.writeHead(200, { 'Content-Type': 'text/html' })
-      response.end('<!doctype html><title>Storage upload cancellation</title><script src="/client.js"></script>')
+      response.end(`<!doctype html><title>Storage upload cancellation</title><script src="/${url.searchParams.get('entry') === 'browser'
+        ? 'browser'
+        : 'client'}.js"></script>`)
     })
     await new Promise<void>((resolve, reject) => {
       server?.once('error', reject)
@@ -132,6 +141,40 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
     }
   })
 
+  it('浏览器根入口通过 storage.client 使用相同客户端能力，不包含服务端操作', async () => {
+    if (!browser)
+      throw new Error('Real browser was not started')
+    const context = await browser.newContext()
+    try {
+      const page = await context.newPage()
+      const pageErrors: string[] = []
+      page.on('pageerror', error => pageErrors.push(error.message))
+      await page.goto(`${origin}/?entry=browser`)
+      const evidence = await page.evaluate(async () => {
+        const module: typeof import('@h-ai/storage') = Reflect.get(globalThis, 'storageClientFixture')
+        const result = await module.storage.client.downloadWithPresignedUrl('/download')
+        return {
+          operations: Object.keys(module.storage),
+          mime: module.storage.client.getMimeType('txt'),
+          hasLegacyUpload: Object.hasOwn(module, 'uploadWithPresignedUrl'),
+          content: result.success && result.data
+            ? await result.data.text()
+            : result.error,
+        }
+      })
+      expect(pageErrors).toEqual([])
+      expect(evidence).toEqual({
+        operations: ['client'],
+        mime: 'text/plain',
+        hasLegacyUpload: false,
+        content: 'Storage download content',
+      })
+    }
+    finally {
+      await context.close()
+    }
+  })
+
   it.each([
     'pre',
     'open-race',
@@ -155,7 +198,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       expect(pageErrors).toEqual([])
       const evidence = await page.evaluate(async ({ origin, scenario }) => {
         // 页面已从本次真实bundle加载公开客户端；避免Vitest改写浏览器内的动态import。
-        const client: typeof import('@h-ai/storage/client') = Reflect.get(globalThis, 'storageClientFixture')
+        const { storage }: typeof import('@h-ai/storage/client') = Reflect.get(globalThis, 'storageClientFixture')
         const controller = new AbortController()
         const native = XMLHttpRequest
         const requests: XMLHttpRequest[] = []
@@ -222,7 +265,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
           const data = new Blob([
             new Uint8Array(8 * 1024 * 1024),
           ])
-          const pending = client.uploadWithPresignedUrl(url, data, {
+          const pending = storage.client.uploadWithPresignedUrl(url, data, {
             abortController: controller,
             contentType: 'application/octet-stream',
             onProgress: () => {
@@ -315,7 +358,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       const [download, evidence] = await Promise.all([
         page.waitForEvent('download'),
         page.evaluate(async () => {
-          const client: typeof import('@h-ai/storage/client') = Reflect.get(globalThis, 'storageClientFixture')
+          const { storage }: typeof import('@h-ai/storage/client') = Reflect.get(globalThis, 'storageClientFixture')
           const revokeObjectURL = URL.revokeObjectURL
           const revoked: string[] = []
           URL.revokeObjectURL = (url) => {
@@ -323,7 +366,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
             revokeObjectURL.call(URL, url)
           }
           try {
-            const result = await client.downloadAndSave('/download', { filename: 'report.txt' })
+            const result = await storage.client.downloadAndSave('/download', { filename: 'report.txt' })
             return { result, revoked, remainingLinks: document.querySelectorAll('a[download]').length }
           }
           finally {

@@ -22,6 +22,10 @@
 
 读取完整对象并同时使用 MIME 或 ETag 时，用 `storage.file.getStreamWithMetadata()` 取得同一次读取的元数据和正文。
 
+浏览器从 `@h-ai/storage/client` 导入 `storage`，通过 `storage.client.uploadWithPresignedUrl()` 上传已授权的文件；下载、保存和文件工具也统一放在 `storage.client`，无需初始化。Node 根入口和 Browser 条件入口使用相同的客户端调用方式。
+
+需要显示进度和允许用户取消时，参考[取消上传示例](../../docs/usage/function/storage.md#cancel-upload)。
+
 `storage.dir.delete(prefix)` 按对象键的字符串前缀逐页删除。例如 `reports/draft-` 匹配 `reports/draft-1.txt`，`reports/` 匹配该目录样式的键。空前缀清空容器中的对象。
 
 [查 API 清单](../../docs/usage/function/storage.md#api-reference)，包含调用入口、输入、返回值和用法。
