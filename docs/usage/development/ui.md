@@ -210,11 +210,11 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 ## 主题、语言与可访问性
 
-主题来自已编译的主题 CSS 与 design tokens；默认主题由宿主选择。`@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme` 管理应用与持久化。可选主题必须在应用 CSS 中存在，不能只给选择器增加名称。
+主题来自已编译的主题 CSS 与 design tokens；默认主题由宿主选择。`@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme` 管理应用与持久化。可选主题必须在应用 CSS 中存在。使用 `ThemeSelector` 时可通过 `themeIds` 只显示应用支持的内置主题。
 
 共享 theme.css 内置 `eye-care` 护眼主题，使用暖绿色背景和深色正文，次要文字、占位符与焦点保持清晰。管理台、H5、企业站、移动/桌面示例和默认生成模板可从现有主题入口选择“护眼”，刷新后保留。fullstack 显式设置 `fullstack.theme.themes` 时，可按需加入 `eye-care`。
 
-管理台首次打开时使用 `liquid-glass` 液态玻璃主题，控件采用浅色半透明背景与细高光。在“系统设置 → 外观”选好主题后，刷新页面将恢复该选择。以下截图展示同一页面的 Light 与 Dark 外观。
+有界面的示例应用和默认生成工程均可选择 `liquid-glass` 液态玻璃主题，控件采用浅色半透明背景与细高光。管理台首次打开时默认使用该主题。在“系统设置 → 外观”选好主题后，刷新页面将恢复该选择。以下截图展示同一页面的 Light 与 Dark 外观。
 
 ![浅色主题](../images/settings-light.png)
 

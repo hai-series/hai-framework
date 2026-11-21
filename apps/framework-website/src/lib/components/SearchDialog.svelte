@@ -48,7 +48,7 @@
   })
 </script>
 
-<Modal bind:open title={m.site_search_title()} size='lg'>
+<Modal bind:open title={m.site_search_title()} size='lg' data-site-search=''>
   <label class='sr-only' for='documentation-search'>{m.site_search_title()}</label>
   <Input id='documentation-search' type='search' bind:value={query} placeholder={m.site_search_placeholder()} />
   <div class='search-results' aria-live='polite' aria-busy={loading}>

@@ -13,6 +13,27 @@ async function signup(page: Page, username: string) {
   await expect(page.getByRole('button', { name: 'New task' })).toBeEnabled()
 }
 
+test('selects liquid glass and keeps the choice after reloading the workspace', async ({ page }, testInfo) => {
+  await signup(page, `theme-${Date.now()}`)
+  const themeSelector = page.getByRole('button', { name: 'Select theme' })
+  await themeSelector.click()
+  await page.getByRole('button', { name: 'Liquid glass' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect(themeSelector).toBeEnabled()
+  await page.getByRole('button', { name: 'New task', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Message' }).fill('Summarize the project notes for the next release.')
+  await page.screenshot({
+    path: testInfo.outputPath('agent-workspace-liquid-glass.png'),
+  })
+  await themeSelector.click()
+  await expect(page.getByRole('button', { name: 'Liquid glass' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Dark', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
 test('finds an older task by title and loads it from the next history page', async ({ page }) => {
   await signup(page, `history-${Date.now()}`)
   const headers = { Origin: new URL(page.url()).origin }

@@ -6,7 +6,8 @@
   import { enhance } from '$app/forms'
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeToggle, WorkspaceLayout } from '@h-ai/ui'
+  import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeSelector, WorkspaceLayout } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
   import { onDestroy, onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { AgentClientError, mergePageItems, read, readTaskPage, record, send, speak, transcribe, upload } from '#lib/client.js'
@@ -18,6 +19,14 @@
   import { workbench } from '#lib/services/workbench.js'
 
   const { data, form }: PageProps = $props()
+  const themeIds = ['light', 'dark', 'liquid-glass']
+  let currentTheme = $state('light')
+
+  function changeTheme(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
+
   type Pane = 'workspace' | 'personal' | 'memory' | 'knowledge' | 'files' | 'permissions' | 'settings' | 'artifacts' | 'tools'
   const labels = {
     workspace: m.workspace,
@@ -416,6 +425,7 @@
   }
 
   onMount(() => {
+    currentTheme = getSavedTheme()
     if (!data.user)
       return
     void bootstrap().then(async () => {
@@ -764,7 +774,7 @@
           </div>
         {/if}
         <LanguageSwitch currentLanguage={getLocale()} onchange={(value) => { void setLocale(value as ReturnType<typeof getLocale>) }} compact />
-        <ThemeToggle class='tooltip-end' />
+        <ThemeSelector {currentTheme} {themeIds} onchange={changeTheme} compact grouped={false} />
         {#if pane === 'workspace'}<button class='btn btn-square btn-ghost btn-sm xl:hidden' onclick={() => { showResults = !showResults }} aria-label={m.show_results()}><span class='icon-[tabler--layout-sidebar-right] agent-icon'></span></button>{/if}
       {/snippet}
       {@render logoutFailure()}

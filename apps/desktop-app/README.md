@@ -4,7 +4,7 @@
 
 hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通过 `@h-ai/api-client` + `@h-ai/api-service-contract` 调用 `apps/api-service`。
 
-可从现有主题入口选择“护眼”（`eye-care`）：暖绿色背景、深色文字与清晰焦点，刷新后保留；原有默认主题不变。
+登录后可从顶栏选择液态玻璃或护眼主题。护眼主题采用暖绿色背景、深色文字与清晰焦点。应用重新打开时会恢复已保存的选择。
 
 ## 核心功能清单
 

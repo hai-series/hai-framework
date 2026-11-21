@@ -23,6 +23,9 @@ body {
   color: var(--color-base-content);
   background: var(--color-base-100);
 }
+:root[data-theme='liquid-glass'] body {
+  background-color: transparent;
+}
 * {
   box-sizing: border-box;
 }
@@ -563,6 +566,12 @@ summary {
 }
 .mobile-doc-navigation {
   display: none;
+}
+@media not (prefers-reduced-transparency: reduce) {
+  /* 文档正文与搜索结果重叠时，柔化后景中的字形。 */
+  :where([data-theme='liquid-glass']) .hai-modal[data-site-search] .hai-modal__backdrop {
+    backdrop-filter: blur(9px);
+  }
 }
 .search-results {
   max-height: 55dvh;

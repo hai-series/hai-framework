@@ -1,11 +1,12 @@
 <!--
   AppShell — 已登录后的应用骨架。
-  顶栏使用 @h-ai/ui 的 AppBar，右侧放 ThemeToggle + 用户名 + Logout。
+  顶栏使用 @h-ai/ui 的 AppBar，右侧放主题选择、用户名和退出按钮。
   侧栏使用 @h-ai/ui 的 Button 组件渲染导航。
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, LanguageSwitch, ThemeToggle, toast, WorkspaceLayout } from '@h-ai/ui'
+  import { AppBar, Button, LanguageSwitch, ThemeSelector, toast, WorkspaceLayout } from '@h-ai/ui'
+  import { applyTheme, getCurrentTheme } from '@h-ai/ui/theme'
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { localeStore, desktopM as m } from '../lib/messages.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
@@ -15,6 +16,18 @@
   }
 
   const { children }: Props = $props()
+  const themeIds = [
+    'light',
+    'dark',
+    'eye-care',
+    'liquid-glass',
+  ]
+  let currentTheme = $state(getCurrentTheme())
+
+  function changeTheme(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
 
   const navItems = $derived.by(() => {
     const items = [
@@ -51,7 +64,7 @@
     {#snippet trailing()}
       <div class='flex min-w-0 max-w-full items-center gap-2'>
         <LanguageSwitch compact currentLanguage={localeStore.current} onchange={language => localeStore.set(language)} />
-        <ThemeToggle />
+        <ThemeSelector {currentTheme} {themeIds} onchange={changeTheme} compact grouped={false} />
         {#if currentUser()}
           <span class='hidden max-w-40 truncate text-sm opacity-70 md:inline'>{currentUser()?.username}</span>
         {/if}
