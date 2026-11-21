@@ -61,8 +61,8 @@ export interface ScheduleInputConfig {
   timezone: ScheduleInputTimezone
   /** 输出值精度。 */
   precision: ScheduleInputPrecision
-  /** 是否允许切换到高级 Cron 模式。 */
-  allowCron: boolean
+  /** 是否允许切换到高级 Cron 模式；省略时由规范化结果默认为 false。 */
+  allowCron?: boolean
 }
 
 /**

@@ -6,6 +6,7 @@
  */
 
 import type { Snippet } from 'svelte'
+import type { ScheduleInputConfig } from '../src/lib/components/compounds/schedule-input-config.js'
 import type {
   AiDocumentEditorProps,
   MarkdownInlineFormatKind as AiMarkdownInlineFormatKind,
@@ -88,6 +89,19 @@ describe('基础类型', () => {
     expectTypeOf<InputProps>().toExtend<DataAttributes>()
     expectTypeOf<ModalProps>().toExtend<DataAttributes>()
     expectTypeOf<AiDocumentEditorProps>().toExtend<DataAttributes>()
+  })
+})
+
+describe('调度输入类型', () => {
+  it('允许协议省略 allowCron，并将其声明为可选布尔值', () => {
+    const config: ScheduleInputConfig = {
+      kind: 'schedule',
+      timezone: 'Asia/Shanghai',
+      precision: 'minute',
+    }
+
+    expectTypeOf<ScheduleInputConfig>().toHaveProperty('allowCron').toEqualTypeOf<boolean | undefined>()
+    expectTypeOf(config.allowCron).toEqualTypeOf<boolean | undefined>()
   })
 })
 
