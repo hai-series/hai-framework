@@ -393,6 +393,7 @@ describe('ci 真实workflow依赖图', () => {
     expect(workflow.jobs.windows.steps.some(step => step.run?.includes('ai-acp-process.test.ts'))).toBe(true)
     expect(workflow.jobs.windows.steps.some(step => step.run?.includes('storage-local-boundaries.test.ts'))).toBe(true)
     expect(workflow.jobs.windows.steps.some(step => step.run?.includes('storage-local-metadata.test.ts'))).toBe(true)
+    expect(workflow.jobs.windows.steps.some(step => step.run?.includes('deploy-test-command.test.ts'))).toBe(true)
     expect(workflow.jobs.quality.needs).toContain('windows')
     expect(workflow.jobs.browsers.strategy['fail-fast']).toBe(false)
   })

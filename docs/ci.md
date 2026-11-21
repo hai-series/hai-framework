@@ -12,7 +12,7 @@ Windows、Android 和 iOS 在各自的 runner 上运行。Windows 和 Android �
 
 ## 阶段与依赖
 
-CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全、流读取期间并发覆盖与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总；该 job 还通过根 `scripts/vitest.config.ts` 定向执行 `startup-process`、`run-e2e` 与 `startup-baseline` 回归，验证原生 Job 的后代回收、托管运行器和默认启动。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
+CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全、流读取期间并发覆盖与 CLI 构建和部署命令回归在独立 Windows job 执行，并进入最终必需汇总；该 job 还通过根 `scripts/vitest.config.ts` 定向执行 `startup-process`、`run-e2e` 与 `startup-baseline` 回归，验证原生 Job 的后代回收、托管运行器和默认启动。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
 
 默认开发启动阶段覆盖全部 9 个示例应用，直接在实际目录运行公开的 `pnpm dev`，使用原工程正常加载的公共和私有配置，不注入应用环境变量、补密钥或替换密码。页面或 health 请求触发初始化，前端还在真实浏览器执行模块。CLI 门禁先验证原样生成工程的 dev 与原生 Playwright 入口，再安装框架内部的功能场景夹具；这些复杂用例不交付给生成项目。业务场景继续通过 `start:test`、`dev:test` 或 `preview` 等真实脚本运行，专项配置只写入真实模式文件并在退出后恢复。缺失、无效、不配对的密钥环和错误公共配置必须失败。开发启动、测试模式产物和真实生产后端分别记录，不能互相代替。
 

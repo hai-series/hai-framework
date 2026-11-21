@@ -290,8 +290,8 @@ jobs:
         run: pnpm --filter @h-ai/cli exec playwright install chrome
       - name: Verify Windows startup process trees and managed runners
         run: pnpm exec vitest run --config scripts/vitest.config.ts scripts/tests/startup-process.test.mjs scripts/tests/run-e2e.test.mjs scripts/tests/startup-baseline.test.mjs
-      - name: Verify Windows CLI build commands
-        run: pnpm --filter @h-ai/cli exec vitest run tests/build-command.test.ts
+      - name: Verify Windows CLI build and deployment commands
+        run: pnpm --filter @h-ai/cli exec vitest run tests/build-command.test.ts tests/deploy-test-command.test.ts
       - name: Verify Windows storage boundaries and concurrent streams
         run: pnpm --filter @h-ai/storage exec vitest run tests/storage-local-boundaries.test.ts tests/storage-local-metadata.test.ts
 
