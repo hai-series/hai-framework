@@ -24,7 +24,7 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 
 [API 一覧](../../docs/usage/function/ui.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
-[テーマ切替](../../docs/usage/function/ui.ja.md#theme)では、既存のセレクターから明るいリキッドガラステーマ（`liquid-glass`）を適用して、選択を保存できます。
+[テーマ切替](../../docs/usage/function/ui.ja.md#theme)では、既存のセレクターから明るいリキッドガラステーマ（`liquid-glass`）を適用して、選択を保存できます。`ThemeSelector` の `themeIds` で組み込みテーマの候補を絞り込めます。
 
 [ツールと成果物のワークスペース](../../docs/usage/function/ui.ja.md#tool-workspaces)は、パラメーターフォーム、操作例、タスク進捗、文書編集、バージョン競合、メディアプレビューを提供します。アプリは認可済みの読み取り、保存、実行コールバックを接続します。
 

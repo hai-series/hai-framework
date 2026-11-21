@@ -6,6 +6,7 @@
   @prop {function} onchange - 主题变更回调
   @prop {boolean} showPreview - 是否显示主题预览
   @prop {boolean} grouped - 是否按分组显示
+  @prop {readonly string[]} themeIds - 可选的内置主题 ID，省略时显示全部内置主题
 
   @example
   ```ts
@@ -49,6 +50,8 @@
     /** 紧凑模式：仅显示预览色块，适用于移动端头部 */
     compact?: boolean
     grouped?: boolean
+    /** 仅显示这些内置主题；省略时显示全部内置主题。 */
+    themeIds?: readonly string[]
     class?: string
   }
 
@@ -60,6 +63,7 @@
     align = 'end',
     compact = false,
     grouped = true,
+    themeIds,
     class: className = '',
     ...restProps
   }: Props & DataAttributes = $props()
@@ -79,6 +83,15 @@
   const currentInfo = $derived(
     THEMES.find(t => t.id === currentTheme) ?? THEMES[0],
   )
+  const availableThemes = $derived(themeIds
+    ? THEMES.filter(theme => themeIds.includes(theme.id))
+    : THEMES)
+  const availableGroups = $derived(themeIds
+    ? THEME_GROUPS.map(group => ({
+      ...group,
+      themes: group.themes.filter(theme => themeIds.includes(theme.id)),
+    })).filter(group => group.themes.length > 0)
+    : THEME_GROUPS)
 
   function selectTheme(themeId: string) {
     onchange?.(themeId)
@@ -160,7 +173,7 @@
   : '', open ? 'dropdown-open' : '', className)}>
   <button
     type='button'
-    disabled={!ready}
+    disabled={!ready || availableThemes.length === 0}
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'gap-2'}'
     onclick={() => (open = !open)}
     onkeydown={handleKeydown}
@@ -189,7 +202,7 @@
     <div id={menuId} class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto {compact ? 'w-56 right-0' : ''}'>
       {#if grouped}
         <!-- 分组显示 -->
-        {#each THEME_GROUPS as group (group.nameKey)}
+        {#each availableGroups as group (group.nameKey)}
           <div class='mb-4 last:mb-0'>
             <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider px-2 mb-2'>
               {uiM(group.nameKey)}
@@ -230,7 +243,7 @@
       {:else}
         <!-- 平铺显示 -->
         <div class='flex flex-wrap gap-2'>
-          {#each THEMES as theme (theme.id)}
+          {#each availableThemes as theme (theme.id)}
             <button
               type='button'
               class={cn(

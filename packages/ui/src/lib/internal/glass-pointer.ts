@@ -17,6 +17,14 @@ const GLASS_SURFACES = [
 
 const DISABLED_SURFACES = ':disabled, .btn-disabled, .cursor-not-allowed, [aria-disabled="true"], [data-disabled], [inert]'
 
+/**
+ * 一个文档内共用的鼠标跟踪及其组件引用数。
+ * @example 模块内部上下文
+ * ```ts
+ * const tracker: DocumentTracker = createTracker(document, window)
+ * tracker.stop()
+ * ```
+ */
 interface DocumentTracker {
   references: number
   clearWithin: (node: HTMLElement) => void

@@ -57,3 +57,31 @@ it.each([
     setUILocale('zh-CN')
   }
 })
+
+it.each([true, false])('选择器只显示宿主允许的主题（分组 %s）', async (grouped) => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const onchange = vi.fn()
+  const component = mount(ThemeSelector, {
+    target,
+    props: {
+      grouped,
+      themeIds: ['light', 'liquid-glass'],
+      onchange,
+    },
+  })
+  try {
+    flushSync()
+    target.querySelector('button')!.click()
+    flushSync()
+    const choices = [
+      ...target.querySelectorAll<HTMLButtonElement>('[data-theme-option]'),
+    ]
+    expect(choices.map(choice => choice.dataset.themeOption)).toEqual(['light', 'liquid-glass'])
+    choices[1].click()
+    expect(onchange).toHaveBeenCalledWith('liquid-glass')
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
