@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
-import { windowsTestCommand } from '../../../scripts/test-command-windows.js'
+import { windowsTestCommand } from '../../cli/tests/helpers/startup-windows-job.js'
 import { createUploadScripts, shellArgument } from '../src/container/deploy-scripts.js'
 import { deployM } from '../src/deploy-i18n.js'
 

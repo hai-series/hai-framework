@@ -14,8 +14,10 @@
 
 ### 常用命令
 
+在工程根目录执行。开发命令先构建共享 contract，再启动本服务；测试和生产模式的开发启动分别使用 `pnpm dev:test`、`pnpm dev:prod`。
+
 ```bash
-pnpm --filter {{api.servPackageName}} dev
+pnpm dev
 pnpm --filter {{api.servPackageName}} test
 ```
 

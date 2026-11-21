@@ -34,7 +34,7 @@
     "lint:fix": "eslint . --fix",
     "test": "pnpm paraglide:compile && svelte-kit sync && vitest run",
     "test:watch": "pnpm paraglide:compile && svelte-kit sync && vitest",
-    "test:e2e": "node ../../packages/cli/templates/shared/run-e2e.mjs",
+    "test:e2e": "playwright test",
     "clean": "rimraf .svelte-kit build .turbo",
     "compile": "vite build",
     "build:images": "hai build --target image",

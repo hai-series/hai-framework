@@ -109,7 +109,7 @@ export interface KeyExchangeResponse {
 // ─── 加解密载荷 ───
 
 /**
- * 传输使用的SM2公私钥对；服务端版本从私有Secret注入，客户端可本地生成独立会话密钥。
+ * 传输使用的 SM2 公私钥对；服务端使用按环境配置的密钥环，客户端可本地生成独立会话密钥。
  *
  * @example
  * ```ts

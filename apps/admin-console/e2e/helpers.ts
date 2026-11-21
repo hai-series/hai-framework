@@ -5,15 +5,42 @@
  */
 
 import type { APIRequestContext, Page } from '@playwright/test'
+import path from 'node:path'
+import { core } from '@h-ai/core'
 
-/** 加密验收使用符合 IAM 默认密码策略的独立管理员凭据。 */
-export const transportAdmin = { username: 'admin', password: 'TransportAdmin123!' }
+const loaded = core.config.loadEnvFiles({
+  mode: 'test',
+  envDir: path.resolve(import.meta.dirname, '..'),
+})
+if (!loaded.success)
+  throw new Error('The actual test environment could not be loaded')
+const testEnvironment = loaded.data
+/** 测试读取应用实际加载的密码；缺失时失败，不替应用生成或覆盖凭据。 */
+function configuredPassword(name: string): string {
+  const value = testEnvironment[name]
+  if (!value)
+    throw new Error(`Missing test credential: ${name}`)
+  return value
+}
+export const transportAdmin = {
+  username: 'admin',
+  password: configuredPassword('HAI_ADMIN_DEFAULT_PASSWORD'),
+}
 
 /** 各职责使用独立账号，管理权限由真实启动种子配置。 */
 export const dutyAccounts = {
-  audit: { username: 'audit_admin', password: 'Audit-test-Admin123!' },
-  config: { username: 'config_admin', password: 'Config-test-Admin123!' },
-  operator: { username: 'business_operator', password: 'Operator-test-Admin123!' },
+  audit: {
+    username: 'audit_admin',
+    password: configuredPassword('HAI_AUDIT_ADMIN_PASSWORD'),
+  },
+  config: {
+    username: 'config_admin',
+    password: configuredPassword('HAI_CONFIG_ADMIN_PASSWORD'),
+  },
+  operator: {
+    username: 'business_operator',
+    password: configuredPassword('HAI_BUSINESS_OPERATOR_PASSWORD'),
+  },
 } as const
 
 async function sleep(ms: number) {

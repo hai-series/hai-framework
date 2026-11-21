@@ -2816,14 +2816,6 @@
     "constraint": "字符串"
   },
   {
-    "name": "HAI_AUTH_EVIDENCE_DIR",
-    "module": "auth",
-    "path": "HAI_AUTH_EVIDENCE_DIR",
-    "description": "浏览器验收截图输出目录",
-    "value": "",
-    "constraint": "目录路径"
-  },
-  {
     "name": "HAI_BUILD_COMMIT",
     "module": "build",
     "path": "HAI_BUILD_COMMIT",
@@ -3968,60 +3960,12 @@
     "constraint": "1 启用；其余值关闭"
   },
   {
-    "name": "HAI_E2E_APP_URL",
-    "module": "e2e",
-    "path": "HAI_E2E_APP_URL",
-    "description": "Fullstack 移动端浏览器预览验收地址",
-    "value": "",
-    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
-  },
-  {
-    "name": "HAI_E2E_DATA_ROOT",
-    "module": "e2e",
-    "path": "HAI_E2E_DATA_ROOT",
-    "description": "端到端测试的隔离运行数据目录",
-    "value": "",
-    "constraint": "目录路径"
-  },
-  {
-    "name": "HAI_E2E_DESKTOP_URL",
-    "module": "e2e",
-    "path": "HAI_E2E_DESKTOP_URL",
-    "description": "Fullstack 桌面端浏览器预览验收地址",
-    "value": "",
-    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
-  },
-  {
-    "name": "HAI_E2E_GROUP",
-    "module": "e2e",
-    "path": "HAI_E2E_GROUP",
-    "description": "环境入口；使用位置 packages/cli/templates/apps/fullstack/playwright.config.ts.hbs",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "HAI_E2E_LIVE",
-    "module": "e2e",
-    "path": "HAI_E2E_LIVE",
-    "description": "AI 示例启用真实厂商端到端测试",
-    "value": "",
-    "constraint": "1 启用；其余值关闭"
-  },
-  {
     "name": "HAI_E2E_MOCK",
     "module": "e2e",
     "path": "HAI_E2E_MOCK",
     "description": "AI 示例使用确定性端到端测试服务",
     "value": "",
     "constraint": "1 启用；其余值关闭"
-  },
-  {
-    "name": "HAI_E2E_WEB_URL",
-    "module": "e2e",
-    "path": "HAI_E2E_WEB_URL",
-    "description": "Fullstack Web 端验收地址",
-    "value": "",
-    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
   },
   {
     "name": "HAI_FEEDBACK",
@@ -6256,46 +6200,6 @@
     "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
-    "name": "ADMIN_E2E_BASE_URL",
-    "module": "runtime",
-    "path": "ADMIN_E2E_BASE_URL",
-    "description": "管理台独立 E2E 服务地址，可由根验收透传以避开其它工作区端口",
-    "value": "",
-    "constraint": "本机 HTTP(S) URL；直接运行时 BASE_URL 优先"
-  },
-  {
-    "name": "AGENT_E2E_CHROME",
-    "module": "runtime",
-    "path": "AGENT_E2E_CHROME",
-    "description": "环境入口；使用位置 apps/agent/.env.example",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "AGENT_E2E_DISABLED_TOOLS_URL",
-    "module": "runtime",
-    "path": "AGENT_E2E_DISABLED_TOOLS_URL",
-    "description": "环境入口；使用位置 apps/agent/e2e/tools-workbench.spec.ts",
-    "value": "",
-    "constraint": "有效 URL；不得包含凭据"
-  },
-  {
-    "name": "AGENT_E2E_EXTERNAL",
-    "module": "runtime",
-    "path": "AGENT_E2E_EXTERNAL",
-    "description": "环境入口；使用位置 apps/agent/.env.example",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "AGENT_E2E_PORT",
-    "module": "runtime",
-    "path": "AGENT_E2E_PORT",
-    "description": "环境入口；使用位置 apps/agent/.env.example",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
     "name": "ALL_PROXY",
     "module": "runtime",
     "path": "ALL_PROXY",
@@ -6328,14 +6232,6 @@
     "constraint": "敏感字符串，启用对应厂商时注入"
   },
   {
-    "name": "BASE_URL",
-    "module": "runtime",
-    "path": "BASE_URL",
-    "description": "Playwright 验收访问的前端基础地址",
-    "value": "",
-    "constraint": "有效 HTTP(S) URL；按项目 Playwright 配置选择默认端口"
-  },
-  {
     "name": "CAPACITOR_SERVER_URL",
     "module": "runtime",
     "path": "CAPACITOR_SERVER_URL",
@@ -6350,14 +6246,6 @@
     "description": "环境入口；使用位置 packages/cli/src/commands/cli-build.ts",
     "value": "",
     "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "CI",
-    "module": "runtime",
-    "path": "CI",
-    "description": "持续集成环境标记",
-    "value": "",
-    "constraint": "true 或 1 启用；未设置为本地运行"
   },
   {
     "name": "COMPUTE_TYPE",
@@ -6376,68 +6264,12 @@
     "constraint": "敏感字符串，启用对应厂商时注入"
   },
   {
-    "name": "DASHSCOPE_WORKSPACE_ID",
-    "module": "runtime",
-    "path": "DASHSCOPE_WORKSPACE_ID",
-    "description": "DashScope 厂商工作空间标识",
-    "value": "",
-    "constraint": "字符串，由厂商控制台提供"
-  },
-  {
     "name": "DEVICE",
     "module": "runtime",
     "path": "DEVICE",
     "description": "本地语音模型运行设备",
     "value": "auto",
     "constraint": "auto | cpu | cuda；auto 按 CUDA 可用性选择"
-  },
-  {
-    "name": "E2E_ADMIN_PASSWORD",
-    "module": "runtime",
-    "path": "E2E_ADMIN_PASSWORD",
-    "description": "端到端测试创建的管理员密码",
-    "value": "",
-    "constraint": "满足 IAM 密码策略；仅测试进程使用"
-  },
-  {
-    "name": "E2E_AUDIT_ADMIN_PASSWORD",
-    "module": "runtime",
-    "path": "E2E_AUDIT_ADMIN_PASSWORD",
-    "description": "Fullstack端到端测试的audit_admin初始密码",
-    "value": "",
-    "constraint": "仅测试进程使用；验收已部署服务时与该环境HAI_AUDIT_ADMIN_PASSWORD一致"
-  },
-  {
-    "name": "E2E_BUILD_COMMIT",
-    "module": "runtime",
-    "path": "E2E_BUILD_COMMIT",
-    "description": "环境入口；使用位置 packages/cli/templates/apps/fullstack/e2e/fullstack.spec.ts.hbs",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "E2E_BUSINESS_OPERATOR_PASSWORD",
-    "module": "runtime",
-    "path": "E2E_BUSINESS_OPERATOR_PASSWORD",
-    "description": "Fullstack端到端测试的business_operator初始密码",
-    "value": "",
-    "constraint": "仅测试进程使用；验收已部署服务时与该环境HAI_BUSINESS_OPERATOR_PASSWORD一致"
-  },
-  {
-    "name": "E2E_CONFIG_ADMIN_PASSWORD",
-    "module": "runtime",
-    "path": "E2E_CONFIG_ADMIN_PASSWORD",
-    "description": "Fullstack端到端测试的config_admin初始密码",
-    "value": "",
-    "constraint": "仅测试进程使用；验收已部署服务时与该环境HAI_CONFIG_ADMIN_PASSWORD一致"
-  },
-  {
-    "name": "E2E_PORT",
-    "module": "runtime",
-    "path": "E2E_PORT",
-    "description": "端到端测试 Web 服务监听端口",
-    "value": "",
-    "constraint": "整数 1–65535"
   },
   {
     "name": "FTP_PROXY",
@@ -6523,7 +6355,7 @@
     "name": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
     "module": "runtime",
     "path": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
-    "description": "服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入",
+    "description": "服务端版本化传输密钥环；开发测试示例在公共模式文件，生产使用私有配置或 Secret Manager",
     "value": "",
     "constraint": "JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志"
   },
@@ -6584,30 +6416,6 @@
     "constraint": "HTTP(S) 代理 URL；小写 https_proxy 也受支持；镜像拉取仍取决于引擎代理"
   },
   {
-    "name": "IAM_FIXTURE_LDAP",
-    "module": "runtime",
-    "path": "IAM_FIXTURE_LDAP",
-    "description": "通知测试服务是否启用 LDAP fixture",
-    "value": "",
-    "constraint": "0 关闭；1 启用"
-  },
-  {
-    "name": "IAM_NOTIFICATION_PORT",
-    "module": "runtime",
-    "path": "IAM_NOTIFICATION_PORT",
-    "description": "通知测试服务监听端口",
-    "value": "",
-    "constraint": "整数 1–65535"
-  },
-  {
-    "name": "IAM_NOTIFICATION_URL",
-    "module": "runtime",
-    "path": "IAM_NOTIFICATION_URL",
-    "description": "确定性通知测试服务地址",
-    "value": "",
-    "constraint": "有效 HTTP(S) URL"
-  },
-  {
     "name": "LANG",
     "module": "runtime",
     "path": "LANG",
@@ -6646,14 +6454,6 @@
     "description": "MIMO 厂商凭据回退；优先在模型项配置 apiKey",
     "value": "",
     "constraint": "敏感字符串，启用对应厂商时注入"
-  },
-  {
-    "name": "MOBILE_E2E_PORT",
-    "module": "runtime",
-    "path": "MOBILE_E2E_PORT",
-    "description": "移动示例独立 E2E 预览端口，可由根验收透传",
-    "value": "",
-    "constraint": "整数 1–65535；默认 5175，直接运行时 E2E_PORT 优先"
   },
   {
     "name": "MODEL_PATH",
@@ -6702,22 +6502,6 @@
     "description": "操作系统提供的可执行程序搜索路径；CLI 用于定位已安装的 pnpm",
     "value": "",
     "constraint": "保留系统原值；由操作系统路径分隔符连接，不要在 .env 中置空或作为应用配置覆盖"
-  },
-  {
-    "name": "PLAYWRIGHT_HTML_OUTPUT_DIR",
-    "module": "runtime",
-    "path": "PLAYWRIGHT_HTML_OUTPUT_DIR",
-    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
-  },
-  {
-    "name": "PLAYWRIGHT_HTML_REPORT",
-    "module": "runtime",
-    "path": "PLAYWRIGHT_HTML_REPORT",
-    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
-    "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "POLLINATIONS_API_KEY",

@@ -34,10 +34,11 @@
 - 保留原有 CI/发布门禁的失败阻断；问题收集时继续运行不代表允许失败提交发布或忽略 required checks。
 - 每轮都在 finally/teardown 停止本轮进程、清理本轮临时工程/容器/镜像/数据；确认退出和资源释放后再运行冲突任务。日志、截图与报告保留到问题分析和交付结束，再按项目约定清理，不覆盖失败证据、不提交验收产物、不删除用户资源。
 - 部署夹具先检查固定公开基础镜像，仅确认缺失才拉取；成功 create 先登记完整 ID，再在私有 PID namespace 内异步准备 APT/pip/sshd。所有准备 exec 转交同一取消信号，等待本地客户端 close 后按该 ID 停止全树并核验消失。总准备 deadline 早于 hook 并预留回收预算；公共缓存不删，私有 tag 回收前复核内容 ID/owner。未取得可信 create 回执或测试进程被强制终止时记录未知，不能按名称或 label 认领资源。
-- 浏览器执行器默认将每轮、每组的证据分别放入忽略的 `test-results/run-*/group-*`；只清理本轮临时数据库/上传数据。显式 `HAI_AUTH_EVIDENCE_DIR`、`--output` 和 Playwright HTML 输出目录会保留，取消也不删除已有报告。不要复制私有环境、密钥或业务数据库到证据目录。
-- 带浏览器前端的 fullstack 模板通过 `--next --e2e-group=session-close --config playwright.config.ts` 单独运行会话回归。执行器只把组名传给本轮 Playwright，配置在该轮启用页面离开撤销、短会话超时和首次改密。
-- 经托管 `test:e2e` 入口为服务子进程提供绝对 `HAI_E2E_DATA_ROOT` 和显式测试后端，隔离继承的 `HAI_*` / `PUBLIC_*` / `VITE_*` 与用户 `.env.local`。仅本轮测试启用 `HAI_E2E=1`；普通开发与生产的 dotenv 加载、共享后端守卫不放宽。启用 transport 的验收使用本轮可信 ring 和 registry，不能关闭加密掩盖客户端契约问题。
-- Fullstack验收已部署服务时，通过 `E2E_ADMIN_PASSWORD`、`E2E_AUDIT_ADMIN_PASSWORD`、`E2E_CONFIG_ADMIN_PASSWORD`、`E2E_BUSINESS_OPERATOR_PASSWORD` 分别提供同环境的初始管理员、审计管理员、配置管理员、业务操作员密码；对应 `HAI_ADMIN_DEFAULT_PASSWORD`、`HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD`。测试配置、登录和再次验证共用这些值；固定回退只用于托管测试账号，不能替代随机部署凭据。只核对来源与变量名，不把值写入日志、截图或报告；保留同密码拒绝、初始凭据和再次验证断言。
+- 日常项目的 `test:e2e` 直接运行 `playwright test`，由简短配置调用已有启动脚本。框架内部多场景测试才使用分组执行器；每组证据单独保存，退出后停止本轮进程、恢复模式文件并清理本轮临时数据。报告与截图不放入业务数据目录。
+- 首次改密、短会话和页面离开撤销等专项测试应集中到测试目录并说明用途，不给真实示例应用和 CLI 模板增加一套场景入口。框架仓库的深入功能用例先通过原样生成工程的普通启动和 E2E，再在本轮临时工程安装专项夹具。
+- 构建元数据用例从实际工程的 Git 记录独立取得预期提交号，不通过编译环境回传同一个值冒充核验。
+- 默认启动验收在实际应用目录执行真实 `pnpm dev`，加载它本来使用的公共及私有环境文件；不注入应用环境变量，不整体替换模块配置，不生成临时密钥和密码。前端在真实浏览器执行模块，服务通过页面或 health 触发初始化。专项用例仅将明确的测试条件写入真实 `.env.test`，退出后恢复；不能修改密钥环或用关闭加密替代加密用例。缺失、无效和不配对的密钥环及错误公共配置必须阻止启动。开发启动、构建后启动和生产后端分别报告。
+- 登录与再次验证读取应用实际环境中的 `HAI_ADMIN_DEFAULT_PASSWORD`、`HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD`，缺项直接失败，不设测试密码回退。只记录来源和变量名，不记录值。部署浏览器用例使用其明确的目标地址和凭据来源，不替代本机默认启动验收。
 - 最终报告各项门禁状态、执行/复用范围、修复结果和未验证原因；mock、容器、真实服务及原生结果分别说明。只陈述实际证据，不以“脚本执行完了”代表验证通过。
 
 公开 API 变更需验证 package.exports 实际入口与配套声明，核对根/子路径真实导入和浏览器打包；不使用 src/dist 深层导入绕过缺失公开产物。Svelte 默认组件、明确 selective/type-only 导出与 client/server 分隔按实际契约验收，不把内部 Provider/Deps 扩成公共 API。

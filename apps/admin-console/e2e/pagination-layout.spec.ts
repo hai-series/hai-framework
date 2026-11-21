@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginOnPage, waitForHydration } from './helpers'
+import { loginOnPage, transportAdmin, waitForHydration } from './helpers'
 
 for (const viewport of [
   { width: 1440, height: 900 },
@@ -7,7 +7,7 @@ for (const viewport of [
 ]) {
   test(`列表分页在空数据、少量数据和滚动时保留在底部 (${viewport.width})`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
-    await loginOnPage(page, 'admin', 'admin123456')
+    await loginOnPage(page, 'admin', transportAdmin.password)
 
     for (const state of ['few', 'empty', 'overflow']) {
       const route = state === 'overflow'

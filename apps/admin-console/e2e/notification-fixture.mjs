@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { execFileSync } from 'node:child_process'
 /** 仅 E2E 使用的通知收件箱；真实 HTTP 往返，不输出或持久化验证码/令牌。 */
 import { createServer } from 'node:http'
 import process from 'node:process'
@@ -41,7 +42,32 @@ const server = createServer(async (request, response) => {
   response.end(JSON.stringify({ ready: true }))
 })
 async function start() {
-  if (process.env.IAM_FIXTURE_LDAP === '1') {
+  if (process.argv.includes('--ldap')) {
+    // 只配置本测试夹具的容器客户端，应用仍从实际模式文件读取 LDAP 配置。
+    const engine = process.env.HAI_TEST_CONTAINER_ENGINE
+    if (engine && !['podman', 'docker'].includes(engine))
+      throw new Error('HAI_TEST_CONTAINER_ENGINE must be podman or docker')
+    if (!process.env.DOCKER_HOST && engine !== 'docker') {
+      try {
+        const socket = execFileSync('podman', process.platform === 'win32'
+          ? [
+              'machine',
+              'inspect',
+              '--format',
+              '{{.ConnectionInfo.PodmanPipe.Path}}',
+            ]
+          : ['info', '--format', '{{.Host.RemoteSocket.Path}}'], { encoding: 'utf8', timeout: 5_000, windowsHide: true }).trim()
+        process.env.DOCKER_HOST = process.platform === 'win32'
+          ? `npipe://${socket.replaceAll('\\', '/')}`
+          : socket
+        if (process.platform === 'win32')
+          process.env.TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE = execFileSync('podman', ['info', '--format', '{{.Host.RemoteSocket.Path}}'], { encoding: 'utf8', timeout: 5_000, windowsHide: true }).trim().replace(/^unix:\/\//, '')
+      }
+      catch (error) {
+        if (engine === 'podman')
+          throw error
+      }
+    }
     ldap = await new GenericContainer('docker.io/osixia/openldap:1.5.0')
       .withExposedPorts({ container: 389, host: 12583 })
       .withEnvironment({ LDAP_ORGANISATION: 'IAM UI Test', LDAP_DOMAIN: 'example.org', LDAP_ADMIN_PASSWORD: 'admin' })

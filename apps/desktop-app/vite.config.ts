@@ -23,7 +23,7 @@ export default defineConfig(({ mode, command }) => ({
   base: './',
   envDir: false,
   define: {
-    __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(command === 'build' || process.env.HAI_E2E === '1'
+    __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(command === 'build'
       ? undefined
       : mode),
   },
@@ -35,6 +35,7 @@ export default defineConfig(({ mode, command }) => ({
 
   // Vite 选项专为 Tauri 调整
   clearScreen: false,
+  preview: { port: 5176, strictPort: true },
   server: {
     port: 5176,
     strictPort: true,

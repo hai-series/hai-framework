@@ -17,7 +17,7 @@ import { defineConfig } from 'vite'
 import { publicRuntimeConfig } from '../../packages/cli/templates/shared/vite-runtime-config.js'
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+  const envResult = command === 'build'
     ? { success: true as const, data: {} as Record<string, string> }
     : core.config.loadEnvFiles({
         mode,
@@ -29,6 +29,8 @@ export default defineConfig(({ mode, command }) => {
   Object.assign(process.env, env)
 
   return {
+    server: { port: 5175 },
+    preview: { port: 5175 },
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [

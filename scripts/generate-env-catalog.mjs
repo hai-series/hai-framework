@@ -2,7 +2,6 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { parseEnv } from 'node:util'
 import ts from 'typescript'
 import { environmentReferenceSource } from './env-reference-source.mjs'
 
@@ -438,6 +437,7 @@ async function scan(directory) {
       'target',
       'tests',
       '__tests__',
+      'e2e',
     ].includes(item.name)) {
       continue
     }
@@ -446,7 +446,8 @@ async function scan(directory) {
       await scan(file)
       continue
     }
-    if ((!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs|example)$/.test(item.name) && item.name !== 'hai.json') || item.name.endsWith('.d.ts'))
+    // .env.example 是本脚本的生成结果，不能反过来保留已删除的源码入口。
+    if (item.name === '.env.example' || (!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs)$/.test(item.name) && item.name !== 'hai.json') || item.name.endsWith('.d.ts'))
       continue
     const content = environmentReferenceSource(await readFile(file, 'utf8'), file)
     const location = path.relative(root, file).replaceAll('\\', '/')
@@ -483,17 +484,6 @@ async function scan(directory) {
       if (!explicit.has(match[1]))
         explicit.set(match[1], { source: location, value: match[2] ?? '' })
     }
-    if (item.name === '.env.example') {
-      for (const match of content.matchAll(/^(?:#\s*)?([A-Z][A-Z0-9_]*)=(.*)$/gm)) {
-        // 框架及客户端字段以 Schema、YAML 和代码为准，避免旧清单重新引入已删除别名。
-        if (/^(?:HAI_|PUBLIC_|VITE_)/.test(match[1]))
-          continue
-        if (!explicit.has(match[1])) {
-          const parsed = parseEnv(`${match[1]}=${match[2]}`)
-          explicit.set(match[1], { source: location, value: parsed[match[1]] ?? '' })
-        }
-      }
-    }
   }
 }
 await scan(path.join(root, 'packages'))
@@ -513,7 +503,7 @@ const extraDescriptions = {
   PUBLIC_API_TRANSPORT: ['客户端传输加密开关，须与服务端一致', 'on | off'],
   PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '以 / 开头的路径'],
   HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH: ['桌面示例公开密钥交换端点，构建期插值', '以 / 开头的路径'],
-  HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
+  HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端版本化传输密钥环；开发测试示例在公共模式文件，生产使用私有配置或 Secret Manager', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
   HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true'],
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
   HAI_AUDIT_ADMIN_PASSWORD: ['首次创建审计管理员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
@@ -571,18 +561,10 @@ const extraDescriptions = {
   HAI_ANDROID_STORE_PASSWORD: ['Android 容器发布签名密钥库密码', '仅由构建进程或 CI 注入的敏感字符串'],
   HAI_ANDROID_KEY_ALIAS: ['Android 容器发布签名密钥别名', '密钥库内用于 APK 签名的别名'],
   HAI_ANDROID_KEY_PASSWORD: ['Android 容器发布签名私钥密码', '仅由构建进程或 CI 注入的敏感字符串'],
-  E2E_ADMIN_PASSWORD: ['端到端测试创建的管理员密码', '满足 IAM 密码策略；仅测试进程使用'],
-  E2E_AUDIT_ADMIN_PASSWORD: ['Fullstack端到端测试的audit_admin初始密码', '仅测试进程使用；验收已部署服务时与该环境HAI_AUDIT_ADMIN_PASSWORD一致'],
-  E2E_CONFIG_ADMIN_PASSWORD: ['Fullstack端到端测试的config_admin初始密码', '仅测试进程使用；验收已部署服务时与该环境HAI_CONFIG_ADMIN_PASSWORD一致'],
-  E2E_BUSINESS_OPERATOR_PASSWORD: ['Fullstack端到端测试的business_operator初始密码', '仅测试进程使用；验收已部署服务时与该环境HAI_BUSINESS_OPERATOR_PASSWORD一致'],
-  E2E_PORT: ['端到端测试 Web 服务监听端口', '整数 1–65535'],
-  ADMIN_E2E_BASE_URL: ['管理台独立 E2E 服务地址，可由根验收透传以避开其它工作区端口', '本机 HTTP(S) URL；直接运行时 BASE_URL 优先'],
-  MOBILE_E2E_PORT: ['移动示例独立 E2E 预览端口，可由根验收透传', '整数 1–65535；默认 5175，直接运行时 E2E_PORT 优先'],
   BASE_URL: ['Playwright 验收访问的前端基础地址', '有效 HTTP(S) URL；按项目 Playwright 配置选择默认端口'],
   HAI_E2E_WEB_URL: ['Fullstack Web 端验收地址', '有效 HTTP(S) URL；同时决定对应预览服务的监听地址'],
   HAI_E2E_APP_URL: ['Fullstack 移动端浏览器预览验收地址', '有效 HTTP(S) URL；同时决定对应预览服务的监听地址'],
   HAI_E2E_DESKTOP_URL: ['Fullstack 桌面端浏览器预览验收地址', '有效 HTTP(S) URL；同时决定对应预览服务的监听地址'],
-  IAM_FIXTURE_LDAP: ['通知测试服务是否启用 LDAP fixture', '0 关闭；1 启用'],
   IAM_NOTIFICATION_PORT: ['通知测试服务监听端口', '整数 1–65535'],
   IAM_NOTIFICATION_URL: ['确定性通知测试服务地址', '有效 HTTP(S) URL'],
   LANG: ['子进程默认语言与字符集', '操作系统支持的 locale，例如 en_US.UTF-8'],

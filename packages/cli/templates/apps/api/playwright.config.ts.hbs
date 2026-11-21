@@ -1,71 +1,13 @@
-import process from 'node:process'
 import { defineConfig } from '@playwright/test'
-import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from './scripts/e2e-env.js'
-
-const defaultBaseURL = 'http://127.0.0.1:3000'
-const baseURL = process.env.BASE_URL || defaultBaseURL
-const serviceHost = resolveHostFromBaseUrl(baseURL, '127.0.0.1')
-const servicePort = resolvePortFromBaseUrl(baseURL, '3000')
-
-function resolveHostFromBaseUrl(urlString: string, fallbackHost: string): string {
-  try {
-    const url = new URL(urlString)
-    return url.hostname || fallbackHost
-  }
-  catch {
-    return fallbackHost
-  }
-}
-
-function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string {
-  try {
-    const url = new URL(urlString)
-    if (url.port) {
-      return url.port
-    }
-
-    return url.protocol === 'https:'
-      ? '443'
-      : '80'
-  }
-  catch {
-    return fallbackPort
-  }
-}
 
 export default defineConfig({
   testDir: './e2e',
-  globalSetup: './e2e/capture-evidence.ts',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: 2,
-  reporter: 'list',
-  timeout: 30_000,
-  use: {
-    baseURL,
-    channel: 'chrome',
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+  use: { baseURL: 'http://127.0.0.1:3000' },
+  webServer: {
+    command: 'pnpm compile && pnpm start:test',
+    url: 'http://127.0.0.1:3000/health',
+    reuseExistingServer: false,
+    timeout: 180_000,
   },
-  webServer: [
-    {
-      name: '{{api.servPackageName}}',
-      command: 'pnpm --filter {{api.servPackageName}} exec node dist/index.js',
-      env: createE2eServerEnv({
-        ...createE2eNotificationEnv(),
-        HAI_CORE_ENV: 'test',
-        HAI_DB: JSON.stringify({ type: 'sqlite', database: `${process.env.HAI_E2E_DATA_ROOT}/api.db` }),
-        HAI_CACHE: JSON.stringify({ type: 'memory' }),
-        HAI_STORAGE: JSON.stringify({ type: 'local', root: `${process.env.HAI_E2E_DATA_ROOT}/uploads` }),
-        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: `${process.env.HAI_E2E_DATA_ROOT}/vecdb` }),
-        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
-        HOST: serviceHost,
-        PORT: servicePort,
-      }),
-      url: `${baseURL}/health`,
-      reuseExistingServer: false,
-      timeout: 120_000,
-    },
-  ],
 })

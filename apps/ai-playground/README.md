@@ -234,7 +234,7 @@ pnpm --filter ai-playground test
 pnpm --filter ai-playground test:e2e
 ```
 
-真实 E2E 会依次验证 LLM、Memory、TTS，并把 TTS 生成的 WAV 再交给 ASR 转写。PowerShell：
+真实 E2E 会依次验证 LLM、Memory、TTS，并把 TTS 生成的 WAV 再交给 ASR 转写。先在不提交的 `.env.test.local` 设置 `HAI_E2E_MOCK=0`，并按 `config/_ai.yml` 配置实际模型和凭据；`HAI_E2E_LIVE` 只用于选择测试用例。PowerShell：
 
 ```powershell
 $env:HAI_E2E_LIVE='1'
@@ -250,7 +250,7 @@ HAI_E2E_LIVE=1 pnpm --filter ai-playground test:e2e live-ai.spec.ts
 
 真实 E2E 会调用计费接口，仅在明确需要联调时运行。
 
-经 `test:e2e` 托管入口分配本轮绝对数据目录。服务显式使用隔离的 SQLite、Memory 和 LanceDB，不继承外部模块配置，也不读取开发者 `.env.local`；普通开发与生产加载规则保持不变。live 模式只转发调用方明确注入进程的 `HAI_AI_*` 配置，需自行提供真实服务凭据；默认 mock 结果不代表真实商业模型验收。
+浏览器验证直接使用 Playwright 和实际 `pnpm build`、`pnpm preview --mode test`，正常读取 `.env.test` 及私有覆盖。SQLite、Memory、LanceDB 和模拟开关来自该模式文件，测试启动不替换整块模块配置。默认受控响应不代表真实模型验收。
 
 ## 许可证
 

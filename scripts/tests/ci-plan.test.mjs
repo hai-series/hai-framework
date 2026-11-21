@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { assertChecksPassed, assertLeakScanPassed, baselineFromChecks, canReuseStage, createStageProof, environmentFingerprint, stageFingerprint, stageIds } from '../../.github/scripts/ci-plan.mjs'
@@ -290,6 +290,7 @@ describe('ci 最终汇总守卫', () => {
     'sdk',
     'deploy',
     'browsers',
+    'startup',
     'windows',
   ].map(stage => [
     stage,
@@ -377,6 +378,7 @@ describe('ci 真实workflow依赖图', () => {
       'sdk',
       'deploy',
       'browsers',
+      'startup',
     ]) {
       expect(workflow.jobs[job].needs).toEqual(expect.arrayContaining([
         'build',
@@ -390,12 +392,30 @@ describe('ci 真实workflow依赖图', () => {
     expect(workflow.jobs.windows['runs-on']).toBe('windows-latest')
     expect(workflow.jobs.windows.steps.some(step => step.run?.includes('ai-acp-process.test.ts'))).toBe(true)
     expect(workflow.jobs.windows.steps.some(step => step.run?.includes('storage-local-boundaries.test.ts'))).toBe(true)
+    expect(workflow.jobs.windows.steps.some(step => step.run?.includes('storage-local-metadata.test.ts'))).toBe(true)
     expect(workflow.jobs.quality.needs).toContain('windows')
     expect(workflow.jobs.browsers.strategy['fail-fast']).toBe(false)
   })
 
+  it('在 Windows 使用根脚本配置执行启动 Job、托管运行器与默认启动回归', () => {
+    const startup = workflow.jobs.windows.steps.find(step => step.run?.includes('scripts/tests/startup-process.test.mjs'))
+    expect(startup?.run).toContain('pnpm exec vitest run --config scripts/vitest.config.ts')
+    for (const file of [
+      'startup-process',
+      'run-e2e',
+      'startup-baseline',
+    ])
+      expect(startup.run).toContain(`scripts/tests/${file}.test.mjs`)
+  })
+
   it('浏览器矩阵覆盖全部已登记应用，最终汇总与发布没有绕过阶段', () => {
+    const applications = readdirSync('apps', { withFileTypes: true }).filter(entry => entry.isDirectory()).filter((entry) => {
+      const manifest = JSON.parse(readFileSync(`apps/${entry.name}/package.json`, 'utf8'))
+      return manifest.scripts?.dev && (manifest.scripts.start || manifest.scripts.preview)
+    }).map(entry => `startup-${entry.name}`).sort()
+    expect(stageIds.filter(id => id.startsWith('startup-')).sort()).toEqual(applications)
     expect(workflow.jobs.browsers.strategy.matrix.app.map(app => `browser-${app}`).sort()).toEqual(stageIds.filter(id => id.startsWith('browser-')).sort())
+    expect(workflow.jobs.startup.strategy.matrix.app.map(app => `startup-${app}`).sort()).toEqual(stageIds.filter(id => id.startsWith('startup-')).sort())
     const results = Object.fromEntries(workflow.jobs.quality.needs.map(job => [
       job,
       { result: 'success' },
@@ -403,6 +423,12 @@ describe('ci 真实workflow依赖图', () => {
     expect(() => assertChecksPassed(results)).not.toThrow()
     expect(workflow.jobs.quality.if).toBe('always()')
     expect(workflow.jobs.release.needs).toBe('quality')
+    expect(workflow.jobs.startup.with.browser).toContain('matrix.app !=')
+    expect(workflow.jobs.startup.with.browser).toContain('api-service')
+    const evidence = stage.jobs.check.steps.find(step => step.uses?.startsWith('actions/upload-artifact@') && step.with.path?.includes('error-context.md'))
+    expect(evidence.with.path).toContain('apps/*/test-results/**/startup*.json')
+    expect(evidence.with.path).toContain('apps/*/test-results/**/startup*.log')
+    expect(evidence.if).toContain('startsWith(inputs.stage, \'startup-\')')
   })
 
   it('浏览器验证先启动 Chrome，安装后仍须通过同一探测', () => {

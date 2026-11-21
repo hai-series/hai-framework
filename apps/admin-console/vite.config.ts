@@ -21,7 +21,7 @@ import { browserStartupAssets } from '../../scripts/vite-browser-startup.js'
 import appPackage from './package.json' with { type: 'json' }
 
 export default defineConfig(({ mode, command }) => {
-  if (command !== 'build' && process.env.HAI_E2E !== '1') {
+  if (command !== 'build') {
     const env = core.config.loadEnvFiles({ mode })
     if (!env.success)
       throw new Error(env.error.message)
@@ -59,11 +59,6 @@ export default defineConfig(({ mode, command }) => {
         },
         env: { dir: './.svelte-kit' },
         adapter: adapter(),
-        csrf: {
-          trustedOrigins: process.env.HAI_E2E === '1'
-            ? ['http://localhost:4173', 'http://127.0.0.1:4173']
-            : [],
-        },
         paths: { relative: false },
       }),
       tailwindcss(),

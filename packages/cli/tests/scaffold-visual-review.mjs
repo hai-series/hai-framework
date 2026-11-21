@@ -1,6 +1,6 @@
 /**
  * 对 CLI 实际生成的 fullstack 项目执行交互及截图验收。
- * 先启动 serv 与各端 Vite preview，传入项目路径、截图目录及可选各端 URL。
+ * 先用 pnpm start:test 与 pnpm preview --mode test 启动服务和各端，传入项目路径、截图目录及可选各端 URL。
  * 所有创建的数据均属于独立验收项目，不访问工作区应用数据库。
  */
 import assert from 'node:assert/strict'
@@ -10,14 +10,23 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 
 const [projectDirectory, outputDirectory, webUrl = 'http://127.0.0.1:4173', appUrl = 'http://127.0.0.1:4180', desktopUrl = 'http://127.0.0.1:4181'] = process.argv.slice(2)
 assert(projectDirectory && outputDirectory, 'A generated project and screenshot output directory are required')
 const require = createRequire(path.join(path.resolve(projectDirectory), 'package.json'))
 const { chromium, expect } = require('@playwright/test')
 
+const { core } = await import(pathToFileURL(require.resolve('@h-ai/core')).href)
+const environment = core.config.loadEnvFiles({
+  mode: 'test',
+  envDir: path.resolve(projectDirectory),
+})
+assert(environment.success, 'The actual test environment could not be read')
+const adminPassword = environment.data.HAI_ADMIN_DEFAULT_PASSWORD
+assert(adminPassword, 'Missing HAI_ADMIN_DEFAULT_PASSWORD in the actual test configuration')
+
 const browser = await chromium.launch({ channel: 'chrome' })
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
 const password = 'Visual-test-User123!'
 const screenshots = []
 const pageErrors = []

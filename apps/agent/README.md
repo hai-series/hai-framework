@@ -166,8 +166,8 @@ if (!page.success)
 pnpm --filter agent typecheck # 检查服务端路由和页面契约。
 pnpm --filter agent test      # 验证任务写入、归属和回滚。
 pnpm --filter agent test:e2e  # 在 Chrome 中验证应用用户流程。
-pnpm --filter agent test:e2e --config playwright.workbench.config.ts # 产物编辑、历史、冲突与隔离预览。
-pnpm --filter agent test:e2e --config playwright.tools.config.ts # Runner 真实工具提交、产物与权限。
+pnpm --filter agent test:e2e e2e/workbench.spec.ts # 产物编辑、历史、冲突与隔离预览。
+pnpm --filter agent test:e2e e2e/tools-workbench.spec.ts # Runner 真实工具提交、产物与权限。
 ```
 
 E2E 通过受管入口分配独立数据目录；工具专用配置启用 Runner executor，默认浏览器配置仍不领取作业。跨节点禁用用例另需同数据库与 Storage、`selection: {}` 的 API 节点，并将地址传为 `AGENT_E2E_DISABLED_TOOLS_URL`；缺少该前置时该项明确跳过。

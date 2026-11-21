@@ -224,9 +224,7 @@ test.describe('IAM Users UI', () => {
       has: page.getByRole('heading', { name: /用户.*详情/ }).last(),
     }).last()
     await expect(restoredDrawer).toBeVisible()
-    const restoredBox = await restoredDrawer.boundingBox()
-    expect(restoredBox).not.toBeNull()
-    expect(Math.abs(restoredBox!.width - storedWidth)).toBeLessThanOrEqual(4)
+    await expect.poll(async () => Math.abs(((await restoredDrawer.boundingBox())?.width ?? Infinity) - storedWidth)).toBeLessThanOrEqual(4)
   })
 
   test('分页每页条数浮层首次打开时与触发器左侧对齐', async ({ page, request }) => {

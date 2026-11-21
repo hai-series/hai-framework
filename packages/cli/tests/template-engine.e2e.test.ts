@@ -606,7 +606,7 @@ describe('admin 应用类型生成', () => {
       const content = await readGenerated(projectPath, 'vite.config.ts')
       expect(content).toContain('autoImportHaiUi')
       expect(content).toContain('runes: true')
-      expect(content).toContain('trustedOrigins')
+      expect(content).not.toContain('trustedOrigins')
       expect(content).toContain('relative: false')
     })
 

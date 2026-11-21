@@ -11,9 +11,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'node scripts/serve-pages.mjs',
+    command: 'pnpm build && pnpm start',
     url: 'http://127.0.0.1:4297/hai-framework/',
     reuseExistingServer: false,
-    timeout: 30000,
+    timeout: 180_000,
   },
 })

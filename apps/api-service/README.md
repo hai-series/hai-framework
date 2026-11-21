@@ -19,7 +19,7 @@
 
 ### 快速开始
 
-默认启用 transport，启动前必须通过服务端私有环境或 `apps/api-service/.env.local` 提供 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。密钥环由 Secret Manager/受管配置提供，运行时不随机生成；客户端公钥 registry 复用 reldb。多节点使用相同 ring 和共享数据库，无需会话粘性；私钥不放普通 YAML、PUBLIC_/VITE_ 或日志。解析、轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。CLI 新建项目会为 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成并共享对应 ring，本仓库示例仍应自行注入私有值。
+默认启用 transport，开发和测试所需的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 已在 `.env.dev`、`.env.test` 中提供，克隆后可运行真实 `pnpm dev` 或 `pnpm start:test`。这些密钥只用于示例环境。生产使用独立受管密钥，放入 `.env.prod.local` 或 Secret Manager，不使用公开示例值。密钥环结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`；同一环境所有节点共享 ring 与 reldb registry，运行时不随机生成。私钥不进入 PUBLIC_/VITE_、日志或浏览器。解析、轮换与撤销见 [Crypto 传输说明](../../packages/crypto/README.md)。
 
 ```bash
 pnpm install

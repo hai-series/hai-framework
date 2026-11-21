@@ -41,41 +41,12 @@ import { resolveStaticWebsite, validateStaticRoutes } from './scripts/static-web
 import { publicRuntimeConfig } from './scripts/vite-runtime-config.js'
 {{/if}}
 
-{{#unless isSvelteOnlyApp}}
-const DEFAULT_E2E_ORIGINS = ['http://localhost:4173', 'http://127.0.0.1:4173']
-
-function resolveTrustedOrigins() {
-  if (process.env.HAI_E2E !== '1')
-    return []
-
-  const rawBaseUrl = process.env.BASE_URL ?? DEFAULT_E2E_ORIGINS[0]
-
-  try {
-    const url = new URL(rawBaseUrl)
-    const origins = new Set([url.origin])
-
-    if (url.hostname === 'localhost') {
-      url.hostname = '127.0.0.1'
-      origins.add(url.origin)
-    }
-    else if (url.hostname === '127.0.0.1') {
-      url.hostname = 'localhost'
-      origins.add(url.origin)
-    }
-
-    return [...origins]
-  }
-  catch {
-    return DEFAULT_E2E_ORIGINS
-  }
-}
-{{/unless}}
 export default defineConfig(({ mode, command }) => {
 {{#if_eq appType 'website'}}
   const website = resolveStaticWebsite()
   const staticOutput = staticAdapter({ strict: false })
 {{/if_eq}}
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'{{#if_eq appType 'website'}} || website.enabled{{/if_eq}}
+  const envResult = command === 'build'{{#if_eq appType 'website'}} || website.enabled{{/if_eq}}
     ? { success: true as const, data: {} as Record<string, string> }
     : core.config.loadEnvFiles({
         mode,
@@ -181,9 +152,6 @@ export default defineConfig(({ mode, command }) => {
 {{else}}
         adapter: adapter(),
 {{/if_eq}}
-        csrf: {
-          trustedOrigins: resolveTrustedOrigins(),
-        },
       }),
 {{/if}}
 {{#if hasUi}}

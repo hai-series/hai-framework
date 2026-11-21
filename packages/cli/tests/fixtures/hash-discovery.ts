@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
+import { configuredPassword } from '../scripts/test-server.js'
 
 // 门禁复制此文件时替换应用类型；生产路由器不接收测试参数。
 const appType: string = 'SCAFFOLD_HASH_APP_TYPE'
@@ -16,7 +17,7 @@ test('new page is discovered without changing routes and survives refresh and hi
     : 'admin'
   const password = mobile
     ? 'ScaffoldHash123!'
-    : process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
+    : configuredPassword('HAI_ADMIN_DEFAULT_PASSWORD')
   await page.goto('/#/auto-discovered?source=probe')
   await expect(page.locator('#login-username')).toBeVisible()
   if (mobile) {

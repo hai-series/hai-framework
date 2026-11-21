@@ -7,12 +7,12 @@
   "packageManager": "pnpm@12.11.2",
   "description": "Typed hai API workspace with separated contract and service packages.",
   "scripts": {
-    "dev": "pnpm --filter {{api.servPackageName}} dev",
+    "dev": "pnpm --filter {{api.contractPackageName}} build && pnpm --filter {{api.servPackageName}} dev",
     "start": "pnpm --filter {{api.servPackageName}} start",
     "start:test": "pnpm --filter {{api.servPackageName}} start:test",
     "start:prod": "pnpm --filter {{api.servPackageName}} start:prod",
-    "dev:test": "pnpm --filter {{api.servPackageName}} dev:test",
-    "dev:prod": "pnpm --filter {{api.servPackageName}} dev:prod",
+    "dev:test": "pnpm --filter {{api.contractPackageName}} build && pnpm --filter {{api.servPackageName}} dev:test",
+    "dev:prod": "pnpm --filter {{api.contractPackageName}} build && pnpm --filter {{api.servPackageName}} dev:prod",
     "compile": "pnpm -r --if-present build",
     "build": "hai build",
 {{#if features.deploy}}
@@ -24,7 +24,7 @@
     "lint:fix": "eslint *.js *.ts e2e --fix && pnpm -r --if-present lint:fix",
     "test": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present test",
     "test:watch": "pnpm -r --parallel --if-present test:watch",
-    "test:e2e": "pnpm compile && node scripts/run-e2e.mjs",
+    "test:e2e": "playwright test",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
   },
   "dependencies": {

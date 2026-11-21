@@ -20,6 +20,16 @@
 
 [多用户 Agent 工作台](agent.md)将登录、ACP、知识、记忆、语音、工具表单和可编辑产物接在同一个应用中，可从真实任务操作开始试用。
 
+## 运行 Node SSR 构建产物
+
+当前 SvelteKit adapter-node 6 未固定 `kit.paths.origin`、也未收到已配置的协议头时默认使用 `https`；直接通过普通 HTTP 访问 Node 端口，表单 POST 可能因来源不匹配返回 403，运行期 `ORIGIN` 不生效。使用项目原有构建、启动脚本，并通过可信反向代理访问：例如在 Node 启动前设置 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=x-forwarded-host`，由代理移除来访转发头，校验对外 Host 并重建协议和 Host 头，后端仅允许代理连接；HTTPS 在代理终止 TLS。也可固定 `kit.paths.origin`，但它编入产物，换域名或协议需要重新构建；运行期代理配置可保留跨环境复用同一产物的能力。
+
 ## 结束时核对跨层流程
 
 至少验证一条成功、一条拒绝和一次失败恢复。配置查[领域手册](../configuration/README.md)，问题处理见[反馈与排错](../operations/feedback.md)，门禁职责和证据见[验证说明](../governance/verification.md)。
+
+启动时使用用户实际运行的 package scripts。默认启动验收在实际工程目录执行 `pnpm dev`，正常加载公共和私有环境文件，不注入应用环境变量、生成临时密钥或替换初始密码。前端须在浏览器执行模块，服务须通过页面或 health 触发初始化。普通 E2E 直接调用 Playwright，由简短配置使用已有的 `dev:test`、`start:test` 或 `preview` 脚本。开发启动、测试模式产物和生产后端分别报告。
+
+构建后的 Node SSR 业务组使用本轮独立的 loopback HTTP 代理验证上述转发配置，应用仍运行原有公开命令并保留 CSRF 检查，浏览器正常发送请求；普通开发基线仍直接访问开发服务器。该代理是测试资源，与部署 gateway 使用相同的来源推导机制。
+
+开发和测试示例密钥环在 `.env.dev`、`.env.test` 中提供，生产使用独立私有密钥。首次改密、短会话和通知等专项用例放在测试目录并说明用途，结束后恢复真实模式文件；不能用这些场景代替普通启动验收。

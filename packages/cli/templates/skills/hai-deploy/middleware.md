@@ -31,7 +31,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 分批启动仅在首批清理孤立容器，后续 serv/Web 启动必须保留已经就绪的中间件。
 
-生成时为 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立的初始管理员密码和传输密钥环；文件不提交 Git，克隆后通过受保护配置分发对应环境秘密，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点可直接加载环境文件中的同一有效密钥环，也可由 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+生成工程将开发、测试示例密钥环写入可提交的 `.env.dev`、`.env.test`，生产密钥写入不提交的 `.env.prod.local`。初始账号密码仍在各环境私有文件中，已有密码保持不变。部署缺少或错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，上传前报告配置来源；同一环境所有节点共享 ring 和 registry，不为节点临时生成密钥。CLI 和离线说明只提示密码变量与来源，不打印值；密码只在首次创建缺失账号时生效。
 
 ## 识别与逐项选择
 

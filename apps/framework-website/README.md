@@ -39,7 +39,7 @@ pnpm --filter framework-website compile:pages
 pnpm --filter framework-website test:e2e
 ```
 
-本应用依赖工作区已构建的框架包。浏览器测试使用本机 Chrome、单个 worker，必须先成功构建静态产物。统一通过仓库共享的 `packages/cli/templates/shared/run-e2e.mjs` 托管，每轮在 `test-results/run-*/` 使用独立输出，保留截图和失败跟踪，不覆盖前轮证据；业务临时数据在退出后回收。截图使用 Playwright 的 `testInfo.outputPath`。测试服务器不提供 SPA 回退，用于验证每个深链接都有真实 HTML。测试产物不提交仓库。
+本应用依赖工作区已构建的框架包。浏览器测试直接运行 `playwright test`，使用本机 Chrome 和单个 worker，通过实际 `pnpm build`、`pnpm start` 验证静态产物。截图写入 Playwright 的 `testInfo.outputPath`，测试服务器不提供 SPA 回退，深链接必须有真实 HTML。测试产物不提交仓库。
 
 ## GitHub Pages 构建与预览
 

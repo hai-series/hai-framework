@@ -41,7 +41,7 @@
     "lint:fix": "eslint . --fix",
     "test": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}{{#unless isSvelteOnlyApp}}svelte-kit sync && {{/unless}}vitest run",
     "test:watch": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}{{#unless isSvelteOnlyApp}}svelte-kit sync && {{/unless}}vitest",
-    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:e2e": "playwright test",
     "clean": "{{#if isSvelteOnlyApp}}rimraf dist build .turbo src/lib/paraglide{{else}}rimraf .svelte-kit build .turbo{{/if}}"{{#if isCapacitorApp}},
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",

@@ -258,7 +258,7 @@ const sharedServer = crypto.transport.createServer({
 
 `serverKeyRing` 为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`，ID 为 1–64 个字母、数字、下划线或连字符。根入口 `crypto.transport.parseServerKeyRing(secret)` 接受服务端 Secret JSON 或配置对象，返回 HaiResult，错误不附带原始 Secret 或解析片段。工厂验证每对公私钥并捕获快照；没有隐式随机私钥或 memory registry 回退。`keyStore` 也必填，生产使用 Redis；开发/测试可将显式初始化的 memory cache 传入 `crypto.transport.createKeyStore({ cache })`。
 
-示例服务端读取 `process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，检查解析结果后仅传给服务端工厂；禁止写入普通 YAML、PUBLIC_/VITE_、日志或响应。CLI 创建服务端项目时在 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立 ring；私有环境文件不提交 Git，克隆后从受保护配置来源取得对应环境密钥。可由进程环境、私有覆盖或 Secret Manager 替换，同一环境所有节点使用同一 ring。
+服务端读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，检查解析结果后只传给服务端工厂。开发、测试示例值保存在可提交的 `.env.dev`、`.env.test`；生产值保存在 `.env.prod.local` 或 Secret Manager，不使用公开示例密钥。私钥不能进入 PUBLIC_/VITE_、日志或响应。同一环境所有节点共享 ring 与 registry，启动时不生成替代密钥。
 
 请求密文 `EncryptedRequestPayload` 携带协商的 `serverKeyId`；服务端只按 ID 选择私钥，未知/撤销 ID 拒绝，不尝试其它 key。轮换先向所有节点分发包含新旧版本的 ring，再切 activeKeyId 并滚动重建 manager；过渡期后删除旧 ID 并更新所有节点。旧客户端 destroy 后重协商；禁止自动重放非幂等请求。共享 ring + registry 支持跨节点与重启，不依赖 sticky session。
 

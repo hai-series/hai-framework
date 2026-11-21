@@ -124,6 +124,9 @@ jobs:
             printf 'Retrying browser installation after an interrupted attempt.\n'
             sleep 2
           done
+      - name: Prepare LDAP scenario image
+        if: steps.proof.outputs.run == 'true' && inputs.stage == 'browser-admin-console'
+        run: docker image inspect docker.io/osixia/openldap:1.5.0 >/dev/null 2>&1 || docker pull docker.io/osixia/openldap:1.5.0
       - name: Prepare fixed external middleware images
         if: steps.proof.outputs.run == 'true' && inputs.stage == 'deploy'
         run: |
@@ -170,8 +173,8 @@ jobs:
         with:
           path: ${{ runner.temp }}/hai-ci-proof/${{ inputs.stage }}
           key: hai-ci-pass-v1-${{ inputs.stage }}-${{ github.sha }}-${{ inputs.fingerprint }}-${{ steps.environment.outputs.fingerprint }}
-      - name: Preserve browser and scaffold failure evidence
-        if: failure() && (inputs.browser || inputs.stage == 'scaffold')
+      - name: Preserve application and scaffold failure evidence
+        if: failure() && (inputs.browser || inputs.stage == 'scaffold' || startsWith(inputs.stage, 'startup-'))
         uses: actions/upload-artifact@v6.0.0
         with:
           name: ci-failure-${{ inputs.stage }}-${{ github.run_attempt }}
@@ -180,9 +183,15 @@ jobs:
             apps/*/test-results/**/error-context.md
             packages/cli/test-results/**/*.png
             packages/cli/test-results/**/error-context.md
+            apps/*/test-results/**/startup*.json
+            apps/*/test-results/**/startup*.log
+            packages/cli/test-results/**/startup*.json
+            packages/cli/test-results/**/startup*.log
             tmp/validation/module-review/scaffold-browser/**/*.png
             tmp/validation/module-review/scaffold-browser/**/error-context.md
             tmp/validation/module-review/scaffold-browser/**/trace.zip
+            tmp/validation/module-review/scaffold-browser/**/startup*.json
+            tmp/validation/module-review/scaffold-browser/**/startup*.log
             tmp/validation/module-review/deploy-browser/**/*.png
             tmp/validation/module-review/deploy-browser/**/error-context.md
             tmp/validation/module-review/deploy-browser/**/trace.zip

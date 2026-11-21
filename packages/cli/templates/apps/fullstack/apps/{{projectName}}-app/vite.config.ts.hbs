@@ -14,7 +14,7 @@ import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+  const envResult = command === 'build'
     ? { success: true as const, data: {} as Record<string, string> }
     : core.config.loadEnvFiles({ mode, envDir })
   if (!envResult.success)
@@ -42,8 +42,18 @@ export default defineConfig(({ mode, command }) => {
     define: {
       __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata),
     },
-    server: { proxy },
-    preview: { proxy },
+    server: {
+      proxy,
+      host: '127.0.0.1',
+      port: {{fullstack.ports.app}},
+      strictPort: true,
+    },
+    preview: {
+      proxy,
+      host: '127.0.0.1',
+      port: {{fullstack.ports.app}},
+      strictPort: true,
+    },
     build: {
       rolldownOptions: {
         output: {

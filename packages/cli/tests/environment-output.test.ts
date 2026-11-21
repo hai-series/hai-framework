@@ -1,11 +1,12 @@
 /** 真实生成项目的环境覆盖文件必须与当前 Core Schema 一致。 */
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { core, CoreConfigSchema } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/commands/cli-create.js'
@@ -46,6 +47,9 @@ async function expectProfiles(envRoot: string, configRoot: string): Promise<void
     const values = parseEnv(text)
     expect(text).not.toContain('HAI_CORE_DEBUG')
     expect(values).toMatchObject({ HAI_CORE_ENV: environment, HAI_CORE_LOGGING_LEVEL: level })
+    expect(values.HAI_E2E).toBe(mode === 'test'
+      ? '1'
+      : undefined)
     for (const [key, value] of Object.entries(values))
       vi.stubEnv(key, value)
     const config = CoreConfigSchema.parse(loadConfigText('core', yaml))
@@ -56,6 +60,54 @@ async function expectProfiles(envRoot: string, configRoot: string): Promise<void
 }
 
 describe('generated environment profiles', () => {
+  it.each(['admin', 'api', 'fullstack'] as const)('%s 克隆公共开发与测试文件后可读取独立密钥环，生产密钥只在私有文件', async (appType) => {
+    const root = await fixture()
+    const name = `public-ring-${appType}`
+    await createProject({
+      cwd: root,
+      name,
+      appType,
+      features: ['crypto', 'iam', 'db', 'cache'],
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      frontends: ['web'],
+      packageManager: 'pnpm',
+    })
+    const envRoot = appType === 'api'
+      ? path.join(root, name, 'apps', `${name}-serv`)
+      : path.join(root, name)
+    const clone = path.join(root, 'public-clone')
+    await mkdir(clone)
+    for (const file of [
+      '.env',
+      '.env.dev',
+      '.env.test',
+      '.env.prod',
+    ])
+      await copyFile(path.join(envRoot, file), path.join(clone, file))
+    vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', undefined)
+    const rings: string[] = []
+    for (const mode of ['dev', 'test']) {
+      const loaded = core.config.loadEnvFiles({ mode, envDir: clone })
+      expect(loaded.success).toBe(true)
+      if (!loaded.success)
+        return
+      const serialized = loaded.data.HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+      expect(serialized).toBeTruthy()
+      expect(crypto.transport.parseServerKeyRing(serialized).success).toBe(true)
+      rings.push(serialized!)
+    }
+    expect(parseEnv(await readFile(path.join(clone, '.env.test'), 'utf8')).HAI_DB_DATABASE).toBe('./data/test/app.db')
+    const publicProduction = parseEnv(await readFile(path.join(clone, '.env.prod'), 'utf8'))
+    expect(publicProduction.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).toBeUndefined()
+    const privateProduction = parseEnv(await readFile(path.join(envRoot, '.env.prod.local'), 'utf8'))
+    const production = privateProduction.HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+    expect(crypto.transport.parseServerKeyRing(production).success).toBe(true)
+    expect(new Set([...rings, production]).size).toBe(3)
+  })
+
   it.each(['website', 'api', 'fullstack'] as const)('%s 的 dev/test/prod 文件不再生成无消费的 DEBUG', async (appType) => {
     const root = await fixture()
     const name = `env-${appType}`

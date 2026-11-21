@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test'
 import { clickWorkbenchPreview, createWorkbenchArtifact, expectWorkbenchWidth, postWorkbench, saveWorkbenchArtifact, signupWorkbench, sourceWorkbenchArtifact } from './workbench-flow.js'
 
 test.describe.configure({ timeout: 60_000 })
+test.use({
+  viewport: { width: 1440, height: 900 },
+})
 
 test('keeps the header aligned and mobile artifact controls and document readable', async ({ page }) => {
   await signupWorkbench(page)

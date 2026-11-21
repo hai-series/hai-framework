@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginOnPage, waitForHydration } from './helpers'
+import { loginOnPage, transportAdmin, waitForHydration } from './helpers'
 
 test('登录和查询可按 Enter 执行，直角主题与弹窗可全程用键盘操作', async ({ page }, testInfo) => {
   await page.goto('/auth/login')
@@ -9,7 +9,7 @@ test('登录和查询可按 Enter 执行，直角主题与弹窗可全程用键�
   await expect.poll(() => identifier.evaluate(element => ({ activeId: document.activeElement?.id, activeTag: document.activeElement?.tagName, expected: element.id }))).toMatchObject({ activeId: 'login-username' })
   await identifier.fill('admin')
   const password = login.locator('input[type="password"]')
-  await password.fill('admin123456')
+  await password.fill(transportAdmin.password)
   await expect(login.locator('button[type="submit"]')).toHaveAttribute('aria-keyshortcuts', 'Enter')
   await password.press('Enter')
   await expect(page).toHaveURL(/\/admin(?:\/|$)/)
@@ -89,7 +89,7 @@ for (const theme of [
 ]) {
   test(`${theme.label}主题可从导航选择，刷新保留，真实控件对比度及放大布局可用`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 960 })
-    await loginOnPage(page, 'admin', 'admin123456')
+    await loginOnPage(page, 'admin', transportAdmin.password)
     await page.goto('/admin/iam/users')
     await waitForHydration(page)
     const appearance = page.locator('[data-guide="admin-theme"]')
@@ -169,7 +169,7 @@ for (const theme of [
 }
 
 test('管理工作区压缩留白，导航显示单一标题，分页不挤出视口', async ({ page }, testInfo) => {
-  await loginOnPage(page, 'admin', 'admin123456')
+  await loginOnPage(page, 'admin', transportAdmin.password)
   await page.goto('/admin/iam/users')
   await waitForHydration(page)
   const workspace = page.locator('.hai-workspace')
@@ -206,7 +206,7 @@ for (const [locale, expandedLabel] of [
   ['ja-JP', '絞り込みを展開'],
 ] as const) {
   test(`筛选折叠在 ${locale} 保留输入并支持键盘和主题`, async ({ page, context, browser }, testInfo) => {
-    await loginOnPage(page, 'admin', 'admin123456')
+    await loginOnPage(page, 'admin', transportAdmin.password)
     const origin = new URL(page.url()).origin
     await context.addCookies([
       { name: 'PARAGLIDE_LOCALE', value: locale, url: origin },

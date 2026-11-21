@@ -85,7 +85,7 @@ test.describe('Transport enabled E2E', () => {
 
   test('renews transport before SvelteKit navigation after idle', async ({ page }) => {
     await loginViaUi(page)
-    await expect(page.getByTestId('app-environment-badge')).toBeVisible()
+    await expect(page.locator('a[href="/admin/iam/roles"]').first()).toBeVisible()
 
     // 在收到响应时立即读取密文，避免页面跳转后 Chrome 已释放旧请求的响应体。
     const [networkMe, me] = await Promise.all([

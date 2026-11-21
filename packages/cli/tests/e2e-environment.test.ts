@@ -1,225 +1,73 @@
-import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
-import { createECDH } from 'node:crypto'
-import { once } from 'node:events'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
+/** 框架专项配置只通过真实模式文件生效，不提供临时密钥或子进程 env。 */
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from '../templates/shared/e2e-env.js'
-import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
+import { parseEnv } from 'node:util'
+import { afterEach, expect, it, vi } from 'vitest'
+import { configuredPassword, testServer } from './fixtures/scenarios/test-server.js'
 
 const roots: string[] = []
-afterEach(() => {
+afterEach(async () => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
-  for (const root of roots.splice(0)) {
-    try {
-      // 仅保留已知安全的计数与进程诊断；不复制 .env.local 或本轮业务数据。
-      const source = path.join(root, 'evidence')
-      if (existsSync(source)) {
-        const evidence = new URL(`../../../tmp/validation/module-review/e2e-environment/${path.basename(root)}/`, import.meta.url)
-        mkdirSync(evidence, { recursive: true })
-        for (const name of ['database-isolation.json', 'database-isolation-process.log']) {
-          if (existsSync(path.join(source, name)))
-            copyFileSync(path.join(source, name), new URL(name, evidence))
-        }
-      }
-    }
-    finally {
-      rmSync(root, { recursive: true, force: true })
-    }
+  for (const directory of roots.splice(0)) {
+    if (path.dirname(directory) !== process.cwd() || !path.basename(directory).startsWith('.tmp-cli-scenarios-'))
+      throw new Error('Unexpected scenario cleanup directory')
+    await rm(directory, { recursive: true, force: true })
   }
 })
-
-function temporaryRoot(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'hai-e2e-isolation-'))
-  roots.push(root)
-  return root
+async function fixture() {
+  const cwd = await mkdtemp(path.join(process.cwd(), '.tmp-cli-scenarios-'))
+  roots.push(cwd)
+  const data = path.join(cwd, 'test-data')
+  await mkdir(data)
+  await writeFile(path.join(cwd, 'package.json'), '{"name":"scenario-fixture"}')
+  await writeFile(path.join(cwd, '.env.test'), 'HAI_DB_DATABASE=./data/test/app.db\nHAI_IAM_LOGIN_PASSWORD=true\n')
+  vi.stubEnv('HAI_E2E_DATA_ROOT', data)
+  vi.stubEnv('TEST_WORKER_INDEX', undefined)
+  return { cwd, data, command: 'pnpm dev:test' }
 }
 
-describe('e2E server environment', () => {
-  it('removes ambient module/public values while preserving owned controls without mutating the parent', () => {
-    const root = temporaryRoot()
-    vi.stubEnv('HAI_DB', '{"type":"postgresql"}')
-    vi.stubEnv('HAI_DB_URL', 'postgresql://127.0.0.1/ambient')
-    vi.stubEnv('PUBLIC_TOKEN', 'ambient')
-    vi.stubEnv('VITE_TOKEN', 'ambient')
-    vi.stubEnv('HAI_E2E_DATA_ROOT', root)
-    vi.stubEnv('HAI_AUTH_EVIDENCE_DIR', path.join(root, 'evidence'))
-    vi.stubEnv('HAI_CORE_NAME', 'Configured scaffold')
-    const env = createE2eServerEnv({
-      HAI_DB: JSON.stringify({
-        type: 'sqlite',
-        database: path.join(root, 'test.db'),
-      }),
-    })
-    expect(JSON.parse(env.HAI_DB).type).toBe('sqlite')
-    expect(env.HAI_DB_URL).toBeUndefined()
-    expect(env.PUBLIC_TOKEN).toBeUndefined()
-    expect(env.VITE_TOKEN).toBeUndefined()
-    expect(env.HAI_AUTH_EVIDENCE_DIR).toBe(path.join(root, 'evidence'))
-    expect(env.HAI_CORE_NAME).toBe('Configured scaffold')
-    expect(env.NODE_ENV).toBe('test')
-    expect(env.HAI_E2E).toBe('1')
-    expect(process.env.HAI_DB).toBe('{"type":"postgresql"}')
+it('专项输入经实际 dotenv 加载，保留原模块配置并备份文件，不返回子进程环境', async () => {
+  const server = await fixture()
+  const file = path.join(server.cwd, '.env.test')
+  const original = await readFile(file, 'utf8')
+  const configured = testServer({ HAI_IAM_PASSWORD_REQUIREINITIALCHANGE: 'true' }, server)
+  expect(configured).toBe(server)
+  expect(Object.hasOwn(configured, 'env')).toBe(false)
+  expect(parseEnv(await readFile(file, 'utf8'))).toMatchObject({
+    HAI_DB_DATABASE: path.join(server.data, 'app.db'),
+    HAI_IAM_LOGIN_PASSWORD: 'true',
+    HAI_IAM_PASSWORD_REQUIREINITIALCHANGE: 'true',
   })
-
-  it('requires an absolute owned data directory and a loopback API', () => {
-    vi.stubEnv('HAI_E2E_DATA_ROOT', '')
-    expect(() => createE2eServerEnv({})).toThrow('absolute')
-    expect(() => createE2eServerEnv({ HAI_E2E_DATA_ROOT: './data' })).toThrow('absolute')
-    expect(() => createE2eServerEnv({
-      HAI_E2E_DATA_ROOT: temporaryRoot(),
-      PUBLIC_API_BASE: 'https://example.invalid/api',
-    })).toThrow('loopback')
-    expect(() => createE2eServerEnv({
-      HAI_E2E_DATA_ROOT: temporaryRoot(),
-      PUBLIC_API_BASE: 'http://user:password@localhost/api',
-    })).toThrow('loopback')
-  })
-
-  it('generates distinct real SM2 keys with matching public/private material', () => {
-    const first = JSON.parse(createE2eTransportRing())
-    const second = JSON.parse(createE2eTransportRing())
-    expect(first.activeKeyId).toBe('e2e-v1')
-    const key = first.keys[first.activeKeyId]
-    const ecdh = createECDH('SM2')
-    ecdh.setPrivateKey(Buffer.from(key.privateKey, 'hex'))
-    expect(ecdh.getPublicKey('hex')).toBe(key.publicKey)
-    expect(second.keys['e2e-v1'].publicKey).not.toBe(key.publicKey)
-  })
-
-  it('only forwards an explicitly owned loopback notification fixture', () => {
-    vi.stubEnv('IAM_NOTIFICATION_URL', '')
-    expect(createE2eNotificationEnv()).toEqual({})
-    vi.stubEnv('IAM_NOTIFICATION_URL', 'https://example.invalid')
-    expect(() => createE2eNotificationEnv()).toThrow('loopback')
-    vi.stubEnv('IAM_NOTIFICATION_URL', 'http://127.0.0.1:12580')
-    const env = createE2eNotificationEnv()
-    expect(JSON.parse(env.HAI_REACH_PROVIDERS)).toEqual([
-      { name: 'email', type: 'api', url: 'http://127.0.0.1:12580/send' },
-      { name: 'sms', type: 'api', url: 'http://127.0.0.1:12580/send' },
-    ])
-    expect(env.HAI_IAM_LOGIN_OTP).toBe('true')
-  })
+  expect(JSON.parse(await readFile(path.join(server.data, 'environment-backups.json'), 'utf8'))[file]).toBe(original)
+  testServer({ HAI_IAM_CAPTCHA_ENABLED: 'true' }, server)
+  expect(JSON.parse(await readFile(path.join(server.data, 'environment-backups.json'), 'utf8'))[file]).toBe(original)
 })
 
-describe('independent database connection counter', () => {
-  function fixture() {
-    const root = temporaryRoot()
-    const evidence = path.join(root, 'evidence')
-    mkdirSync(evidence)
-    const local = path.join(root, '.env.local')
-    writeFileSync(local, 'PRIVATE_FIXTURE=preserved\n')
-    return { root, evidence, local }
-  }
+it('禁止专项夹具提供替代密钥，缺失真实模式文件也不补齐', async () => {
+  const server = await fixture()
+  expect(() => testServer({ HAI_CRYPTO_TRANSPORT_SERVERKEYRING: '{}' }, server)).toThrow('cannot supply a server keyring')
+  await rm(path.join(server.cwd, '.env.test'))
+  expect(() => testServer({}, server)).toThrow('must declare its test environment')
+})
 
-  it('has a real positive connection, then confirms no connection and a real process exit for isolated children', async () => {
-    const { root, evidence, local } = fixture()
-    const env = { ...process.env }
-    await withDatabaseIsolation(root, evidence, env, () => {
-      expect(readFileSync(local, 'utf8')).toContain('HAI_DB=')
-      const serverEnv = createE2eServerEnv({
-        HAI_E2E_DATA_ROOT: root,
-        HAI_DB: JSON.stringify({
-          type: 'sqlite',
-          database: path.join(root, 'owned.db'),
-        }),
-      })
-      const result = spawnSync(process.execPath, ['-e', 'if (JSON.parse(process.env.HAI_DB).type !== "sqlite") process.exit(2)'], {
-        env: {
-          ...env,
-          ...serverEnv,
-        },
-      })
-      expect(result.status).toBe(0)
-    })
-    expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
-    expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
-  })
+it('playwright worker 与只收集用例不改写配置', async () => {
+  const server = await fixture()
+  const file = path.join(server.cwd, '.env.test')
+  const original = await readFile(file, 'utf8')
+  vi.stubEnv('TEST_WORKER_INDEX', '0')
+  testServer({ HAI_IAM_LOGIN_PASSWORD: 'false' }, server)
+  expect(await readFile(file, 'utf8')).toBe(original)
+  expect(existsSync(path.join(server.data, 'environment-backups.json'))).toBe(false)
+})
 
-  it.each([
-    'BASE_URL',
-    'SERVICE_BASE_URL',
-    'PUBLIC_API_BASE',
-    'HAI_E2E_WEB_URL',
-    'HAI_E2E_APP_URL',
-    'HAI_E2E_DESKTOP_URL',
-  ])('does not occupy the planned %s port or count HTTP health probes as database connections', async (control) => {
-    const { root, evidence } = fixture()
-    const preview = createServer((_request, response) => response.end('owned preview'))
-    preview.listen(0, '127.0.0.1')
-    await once(preview, 'listening')
-    const address = preview.address()
-    if (!address || typeof address === 'string')
-      throw new Error('Expected an owned preview port')
-    const baseUrl = `http://127.0.0.1:${address.port}`
-    preview.close()
-    await once(preview, 'close')
-    // 强制计数进程首次分配到尚未启动的预览端口，重现 CI 的抢占窗口。
-    const preload = path.join(root, 'preview-port-collision.mjs')
-    writeFileSync(preload, `import net from 'node:net'; if(process.argv[2]==='serve'){const original=net.Server.prototype.listen;let first=true;net.Server.prototype.listen=function(port,...args){if(port===0&&first){first=false;return original.call(this,${address.port},...args)}return original.call(this,port,...args)}}`)
-    const env = {
-      ...process.env,
-      [control]: baseUrl,
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim(),
-    }
-    vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
-    try {
-      await withDatabaseIsolation(root, evidence, env, async () => {
-        preview.listen(address.port, '127.0.0.1')
-        await once(preview, 'listening')
-        const response = await fetch(baseUrl)
-        expect(await response.text()).toBe('owned preview')
-      })
-      const final = JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))
-      expect(final).toMatchObject({ connections: 1, closed: true })
-      expect(final.port).not.toBe(address.port)
-    }
-    finally {
-      if (preview.listening) {
-        preview.close()
-        await once(preview, 'close')
-      }
-    }
-  })
-
-  it.skipIf(process.platform !== 'win32')('短暂的快照共享冲突可重试，计数与真实关闭仍通过独立进程确认', async () => {
-    const { root, evidence } = fixture()
-    const preload = path.join(root, 'rename-conflict.mjs')
-    const trace = path.join(root, 'rename-attempts.json')
-    writeFileSync(preload, `import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module'; if(process.argv[2]==='serve'){const original=fs.promises.rename;let failures=0;fs.promises.rename=async(...args)=>{if(failures<3){failures++;fs.writeFileSync(${JSON.stringify(trace)},JSON.stringify({failures}));throw Object.assign(new Error('fixture sharing conflict'),{code:'EPERM'});}return original(...args)};syncBuiltinESMExports();}`)
-    const env = {
-      ...process.env,
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim(),
-    }
-    vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
-    await withDatabaseIsolation(root, evidence, env, () => {})
-    expect(JSON.parse(readFileSync(trace, 'utf8'))).toEqual({ failures: 3 })
-    expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
-  })
-
-  it('detects actual consumption of the ambient database and still restores files and stops its process', async () => {
-    const { root, evidence, local } = fixture()
-    const env = { ...process.env }
-    await expect(withDatabaseIsolation(root, evidence, env, () => {
-      const result = spawnSync(process.execPath, ['-e', 'const n=require("node:net"); const c=JSON.parse(process.env.HAI_DB); const s=n.createConnection({host:c.host,port:c.port}); s.on("error",()=>process.exit(1)); s.on("connect",()=>s.end())'], { env })
-      expect(result.status).toBe(0)
-    })).rejects.toThrow('unexpected connections')
-    expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
-    expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 2, closed: true })
-  })
-
-  it('keeps the original gate failure while restoring files and stopping its counter', async () => {
-    const { root, evidence, local } = fixture()
-    await expect(withDatabaseIsolation(root, evidence, { ...process.env }, async () => {
-      await Promise.resolve()
-      throw new Error('Original gate failure')
-    })).rejects.toThrow('Original gate failure')
-    expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
-    expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
-  }, 30_000)
+it('登录用例读取应用的实际私有覆盖，缺失密码直接失败', async () => {
+  const server = await fixture()
+  await writeFile(path.join(server.cwd, '.env.test'), 'HAI_ADMIN_DEFAULT_PASSWORD=public-test-value\n')
+  await writeFile(path.join(server.cwd, '.env.test.local'), 'HAI_ADMIN_DEFAULT_PASSWORD=private-test-value\n')
+  vi.spyOn(process, 'cwd').mockReturnValue(server.cwd)
+  expect(configuredPassword('HAI_ADMIN_DEFAULT_PASSWORD')).toBe('private-test-value')
+  expect(() => configuredPassword('HAI_AUDIT_ADMIN_PASSWORD')).toThrow('Missing actual test configuration')
 })

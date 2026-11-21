@@ -1,0 +1,35 @@
+/** 仅供框架仓库验收 API 功能，不随 CLI 工程交付。 */
+import process from 'node:process'
+import path from 'node:path'
+import { defineConfig } from '@playwright/test'
+import { notificationConfig, testServer } from './scripts/test-server.js'
+
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:3000'
+const address = new URL(baseURL)
+
+export default defineConfig({
+  testDir: './e2e',
+  globalSetup: './e2e/capture-evidence.ts',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: 0,
+  workers: 2,
+  reporter: 'list',
+  timeout: 30_000,
+  use: { baseURL, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  webServer: testServer({
+    ...notificationConfig(),
+    HOST: address.hostname,
+    PORT: address.port || '80',
+    HAI_SERV_SERVER_PORT: address.port || '80',
+    HAI_SERV_SERVER_HOST: address.hostname,
+    HAI_CORE_NAME: 'Configured scaffold',
+    HAI_CORE_VERSION: '9.8.7',
+  }, {
+    name: '{{api.servPackageName}}',
+    command: 'pnpm compile && pnpm --filter {{api.servPackageName}} start:test',
+    url: `${baseURL}/health`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  }, path.resolve('apps/{{api.servPackageName}}')),
+})

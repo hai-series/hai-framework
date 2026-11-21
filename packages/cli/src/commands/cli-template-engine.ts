@@ -1260,10 +1260,8 @@ export async function generateFromTemplates(
   // ─── ④ 渲染 .hbs 动态模板 ───
   await renderDynamicFiles(root, projectPath, context)
 
-  // 多包模板不继承 base；所有应用统一复制共享启动与 E2E 清理入口。
-  await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
+  // 仅复制应用真实运行所需的工具；专项验收脚本留在框架仓库测试目录。
   await fse.copy(path.join(root, 'shared', 'run-node.mjs'), path.join(projectPath, 'scripts', 'run-node.mjs'))
-  await fse.copy(path.join(root, 'shared', 'e2e-env.ts'), path.join(projectPath, 'scripts', 'e2e-env.ts'))
   await fse.copy(path.join(root, 'shared', 'build-metadata.ts'), path.join(projectPath, 'scripts', 'build-metadata.ts'))
   if (context.isCapacitorApp || context.fullstack?.frontends.app || context.fullstack?.frontends.desktop) {
     for (const file of ['native-name.mjs', 'native-name.d.mts'])

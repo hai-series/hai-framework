@@ -23,6 +23,7 @@ export const stageIds = [
   'scaffold',
   'sdk',
   'deploy',
+  ...[...browserApps, 'api-service', 'desktop-app'].map(app => `startup-${app}`),
   ...browserApps.map(app => `browser-${app}`),
 ]
 const requiredJobs = [
@@ -36,6 +37,7 @@ const requiredJobs = [
   'sdk',
   'deploy',
   'browsers',
+  'startup',
   'windows',
 ]
 const digestPattern = /^[a-f\d]{64}$/

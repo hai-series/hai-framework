@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/test-command-windows.ts", "$TURBO_ROOT$/scripts/test-process-identity.ts"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/cli/tests/helpers/startup-windows-job.ts", "$TURBO_ROOT$/scripts/test-process-identity.ts"]
     }
   }
 }

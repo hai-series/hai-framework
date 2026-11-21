@@ -6,7 +6,7 @@
 {{#if features.crypto}}
 import type { TransportEncryptionOptions } from '@h-ai/kit'
 {{/if}}
-import type { Handle } from '@sveltejs/kit/hooks'
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks'
 import process from 'node:process'
 {{#if hasI18n}}
 import { resolve as resolvePath } from '$app/paths'
@@ -22,7 +22,7 @@ import { resolve as resolvePath } from '$app/paths'
 {{#if features.cache}}
 import { cache } from '@h-ai/cache'
 {{/if}}
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
 {{/if}}
@@ -191,3 +191,22 @@ export const handle = kit.sequence(
 {{/if}}
   haiHandle,
 )
+
+/** 初始化发生在 kit Handle 之前，未预期错误也须保留结构化根因和追踪编号。 */
+export const handleError: HandleServerError = ({ kind, error, event }) => {
+  if (kind !== 'unknown')
+    return
+  const publicError = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: '' }, event.locals.requestId, event.locals.locale)
+  core.logger.error('Request failed', {
+    module: '{{projectName}}',
+    scope: 'hooks',
+    method: event.request.method,
+    route: event.route.id,
+    traceId: publicError.traceId,
+    error,
+  })
+  return {
+    message: publicError.message,
+    code: String(publicError.code),
+  }
+}

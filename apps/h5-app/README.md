@@ -167,7 +167,7 @@ pnpm --filter h5-app paraglide:compile # 编译 i18n 翻译文件
 
 ## 开发测试
 
-浏览器验证通过 `pnpm --filter h5-app test:e2e` 分配本轮绝对数据目录。服务子进程显式选择隔离的 SQLite/Memory/Local，清除继承的模块变量并跳过用户 `.env.local`；普通开发和生产的 dotenv 与共享后端要求不变。
+浏览器验证直接运行 `pnpm --filter h5-app test:e2e`。Playwright 使用实际 `pnpm build` 和 `pnpm preview --mode test`，正常读取 `.env.test` 及私有覆盖；测试数据目录由该模式文件指定。邮件验证码和密码重置用例使用测试目录中的本机通知收件箱。
 
 ```sh
 pnpm --filter h5-app typecheck

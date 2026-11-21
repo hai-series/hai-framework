@@ -1,0 +1,24 @@
+import process from 'node:process'
+import { defineConfig } from '@playwright/test'
+import { notificationConfig, testServer } from './scripts/test-server.js'
+
+const baseURL = process.env.BASE_URL || 'http://localhost:4173'
+const url = new URL(baseURL)
+export default defineConfig({
+  testDir: './e2e',
+  retries: 0,
+  workers: 2,
+  reporter: 'list',
+  timeout: 30_000,
+  use: { baseURL, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  webServer: testServer({
+    ...notificationConfig(),
+    HAI_CORE_NAME: 'Configured scaffold',
+    HAI_CORE_VERSION: '9.8.7',
+  }, {
+    command: `pnpm build && pnpm preview --mode test --host ${url.hostname} --port ${url.port || '4173'} --strictPort`,
+    url: baseURL,
+    reuseExistingServer: false,
+    timeout: 180_000,
+  }),
+})

@@ -11,8 +11,8 @@ import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
 
 /**
- * 解析服务端私有JSON或受管对象，不读取环境或初始化模块；实际密钥配对由createServer验证。
- * @param serialized - Secret Manager提供的JSON字符串或对象。
+ * 解析服务端密钥环 JSON 或受管对象，不读取环境或初始化模块；实际密钥配对由 createServer 验证。
+ * @param serialized - 按环境配置的 JSON 字符串或对象。
  * @returns 结构有效的密钥环或脱敏INVALID_KEY，不回显私钥/原始输入。
  *
  * @example
@@ -38,7 +38,7 @@ export function parseTransportServerKeyRing(serialized: unknown): HaiResult<Tran
 
 /**
  * 内部结构守卫，限制版本ID、公钥/私钥文本长度，不把配置值带入错误。
- * @param value - 未知Secret解析结果。
+ * @param value - 待验证的配置解析结果。
  * @returns 是否满足密钥环结构；真实密钥配对仍由服务端工厂校验。
  *
  * @example 模块内部上下文

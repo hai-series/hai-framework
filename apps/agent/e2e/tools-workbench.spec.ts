@@ -6,6 +6,9 @@ import { expect, test } from '@playwright/test'
 import { expectWorkbenchWidth, postWorkbench, signupWorkbench } from './workbench-flow.js'
 
 test.describe.configure({ timeout: 60_000 })
+test.use({
+  viewport: { width: 1440, height: 900 },
+})
 
 /** 用实际目录选择稳定协议名称，界面仍显示工具的可读标题。 */
 async function chooseTool(page: Page, name: string) {

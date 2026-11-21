@@ -476,7 +476,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         : isFullstack
           ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n# Independent first-start audit/configuration administrator passwords.\nHAI_AUDIT_ADMIN_PASSWORD=\nHAI_CONFIG_ADMIN_PASSWORD=\nHAI_BUSINESS_OPERATOR_PASSWORD=\n\n# Public API origin; never include credentials.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
           : context.isSvelteOnlyApp
-            ? `${envContents}\n# Public API URL including /api/v1; never include credentials.\nPUBLIC_API_BASE=http://10.0.2.2:3000/api/v1\n`
+            ? `${envContents}\n# Browser development API URL; Android emulator uses http://10.0.2.2:3000/api/v1.\nPUBLIC_API_BASE=http://localhost:3000/api/v1\n`
             : envContents
 
       const runtimeVariables = new Map<string, ConfigEnvironmentVariable>()
@@ -508,11 +508,22 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         ['prod', 'production'],
       ] as const) {
         let privateValues = '# 模式私有配置，不提交 Git；各节点通过受管配置共享对应秘密。\n'
-        const values = mode === 'prod'
+        let values = mode === 'prod'
           ? generateProductionEnvironment(envFeatures, configs)
           : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test'
             ? 'warn'
             : 'debug'}\n`
+        if (mode === 'test') {
+          // preview 使用生产 Node 进程；测试模式须明确允许所配置的本地后端。
+          values += '\nHAI_E2E=1\n'
+          // 模式密码各自独立，测试也须使用自己的本地数据，不能复用开发账号库。
+          if ((isFullstack || envFeatures.includes('db')) && (configs?.db?.type ?? 'sqlite') === 'sqlite')
+            values += '\nHAI_DB_DATABASE=./data/test/app.db\n'
+          if ((isFullstack || envFeatures.includes('storage')) && (configs?.storage?.type ?? 'local') === 'local')
+            values += 'HAI_STORAGE_ROOT=./data/test/uploads\n'
+          if (envFeatures.includes('vecdb'))
+            values += 'HAI_VECDB_PATH=./data/test/vecdb\n'
+        }
         if (isFullstack) {
           // 各职责账号分别生成初始密码，仅写入模式私有文件。
           for (const name of [
@@ -524,7 +535,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
             privateValues += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
         }
         if (isFullstack || (!context.isSvelteOnlyApp && resolvedOptions.features.includes('crypto'))) {
-          // 每个环境独立生成版本化密钥环；运行时不隐式生成或轮换。
+          // 开发与测试示例随公共模式文件提交；生产密钥仅写入私有文件。
           const key = createECDH('SM2')
           key.generateKeys()
           const id = `${mode}-${randomBytes(6).toString('hex')}`
@@ -537,12 +548,20 @@ export async function createProject(options: CreateProjectOptions): Promise<void
               },
             },
           }
-          privateValues += `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
+          const assignment = `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
+          if (mode === 'prod') {
+            privateValues += assignment
+          }
+          else {
+            values += `\n# ${mode === 'dev'
+              ? '本地开发'
+              : '自动化测试'}专用示例密钥环，可随工程提交；生产环境使用独立私有密钥。\n${assignment}`
+          }
         }
         await writeFile(path.join(envDirectory, `.env.${mode}`), values)
         await fse.writeFile(path.join(envDirectory, `.env.${mode}.local`), privateValues, { mode: 0o600 })
       }
-      await fse.writeFile(path.join(envDirectory, '.env.local'), '# 本机通用私有覆盖，不提交 Git；初始密码和传输密钥环分别位于 .env.dev.local / .env.test.local / .env.prod.local。\n', { mode: 0o600 })
+      await fse.writeFile(path.join(envDirectory, '.env.local'), '# 本机通用私有覆盖，不提交 Git；初始密码位于各模式私有文件。开发和测试示例密钥在公共模式文件，生产密钥仅在 .env.prod.local。\n', { mode: 0o600 })
     }
 
     // 生成 Skill 文件
@@ -1589,7 +1608,7 @@ CLI 在根目录 .env.dev.local、.env.test.local、.env.prod.local 中为 admin
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
-服务端版本化传输密钥环在创建时分别写入不提交 Git 的 \`.env.dev.local\`、\`.env.test.local\`、\`.env.prod.local\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，各环境密钥不同；运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry，也可通过进程环境或 Secret Manager 覆盖。私钥不进入 PUBLIC_/VITE_、日志或浏览器。
+服务端传输密钥环在创建时按环境分别生成：开发和测试示例值写入可提交的 \`.env.dev\`、\`.env.test\`，克隆后可直接使用；生产值只写入不提交 Git 的 \`.env.prod.local\`。变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry。生产密钥由受保护配置或 Secret Manager 分发，不能进入 PUBLIC_/VITE_、日志或浏览器。
 
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 

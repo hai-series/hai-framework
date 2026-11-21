@@ -3,11 +3,10 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Page, TestInfo } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 import { readFile, writeFile } from 'node:fs/promises'
-import process from 'node:process'
 import { readFeedbackBundle } from '@h-ai/feedback/bundle'
 import { expect, test } from '@playwright/test'
 import { readAdminBuildFacts } from './build-metadata'
-import { dutyAccounts, loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
+import { dutyAccounts, loginOnPage, registerViaApi, transportAdmin, uniqueUser, waitForHydration } from './helpers'
 
 let buildFacts: ReturnType<typeof readAdminBuildFacts>
 
@@ -515,7 +514,7 @@ test('无反馈管理权限的用户不能读取列表或修改已有反馈', as
   const report = acceptedBody.data!
   const user = uniqueUser('fblimit')
   await page.request.post('/api/auth/logout')
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, 'admin', transportAdmin.password)
   const created = await page.request.post('/api/iam/users', {
     data: { ...user, roles: [] },
   })
@@ -744,7 +743,7 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     userId = registeredBody.data.user.id
     // 系统管理员配置基础成员，业务操作员随后处理该成员的反馈。
     await page.request.post('/api/auth/logout')
-    await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+    await loginOnPage(page, 'admin', transportAdmin.password)
     const rolesResponse = await page.request.get('/api/iam/roles')
     expect(rolesResponse.ok()).toBe(true)
     const rolesBody: HaiResult<{ id: string, code: string }[]> = await rolesResponse.json()
@@ -867,7 +866,7 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     await context.close()
     if (userId) {
       await page.request.post('/api/auth/logout')
-      await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+      await loginOnPage(page, 'admin', transportAdmin.password)
       expect((await page.request.delete(`/api/iam/users/${userId}`)).ok()).toBe(true)
     }
   }

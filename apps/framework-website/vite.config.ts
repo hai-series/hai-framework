@@ -20,7 +20,7 @@ import { resolveBuildMetadata } from './scripts/build-metadata.js'
 import { docLocaleStrategy } from './src/lib/doc-links.js'
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+  const envResult = command === 'build'
     ? { success: true as const, data: {} as Record<string, string> }
     : core.config.loadEnvFiles({
         mode,

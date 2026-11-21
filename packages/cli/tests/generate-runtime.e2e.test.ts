@@ -1,8 +1,6 @@
 /** 显式运行真实生成工程，构建并访问 SvelteKit/serv/fullstack 新路由。 */
 
-import type { Buffer } from 'node:buffer'
-import type { ChildProcess } from 'node:child_process'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { appendFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -10,22 +8,23 @@ import { createServer } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { parseEnv } from 'node:util'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
-import { createE2eServerEnv, createE2eTransportRing } from '../templates/shared/e2e-env.js'
+import { DeployTestCommandError, runPnpmTestCommand } from './helpers/deploy-test-command.js'
 
 const enabled = process.env.HAI_CLI_RUN_GENERATE_GATES === '1'
 const repository = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const tempParent = path.join(repository, 'tmp')
 const roots: string[] = []
-const processes: ChildProcess[] = []
+const processes: Array<{ controller: AbortController, completion: Promise<void>, failure: () => unknown }> = []
 const clients: Array<ReturnType<typeof crypto.transport.createClient>> = []
 const serverOutputs: Array<() => string> = []
-const environments = new Map<string, NodeJS.ProcessEnv>()
 let evidence = ''
 
 beforeAll(async () => {
@@ -39,47 +38,34 @@ beforeAll(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   const failures: unknown[] = []
+  let processCleanupFailed = false
   try {
-    for (const output of serverOutputs.splice(0))
-      await appendFile(path.join(evidence, 'runtime-servers.log'), `${output()}\n`)
-  }
-  catch (error) {
-    failures.push(error)
-  }
-  finally {
-    // 日志持久化失败也必须收回所有句柄；任一清理失败不能阻断其他独立资源的回收。
-    let processCleanupFailed = false
-    for (const child of processes.splice(0)) {
+    // pnpm 退出后才能取得有界诊断；先核验整棵进程树，再持久化日志和清理数据。
+    for (const command of processes.splice(0)) {
       try {
-        if (child.exitCode !== null || child.signalCode !== null)
-          continue
-        await new Promise<void>((resolve, reject) => {
-          let forced = false
-          let forcedDeadline: ReturnType<typeof setTimeout> | undefined
-          const timer = setTimeout(() => {
-            forced = true
-            child.kill('SIGKILL')
-            forcedDeadline = setTimeout(() => reject(new Error('Generated server termination could not be confirmed')), 5000)
-          }, 15_000)
-          child.once('error', (error) => {
-            clearTimeout(timer)
-            clearTimeout(forcedDeadline)
-            reject(error)
-          })
-          child.once('close', () => {
-            clearTimeout(timer)
-            clearTimeout(forcedDeadline)
-            if (forced)
-              reject(new Error('Generated server required forced shutdown'))
-            else resolve()
-          })
-          child.kill()
-        })
+        command.controller.abort()
+        await command.completion
+        const failure = command.failure()
+        if (!(failure instanceof DeployTestCommandError && failure.reason === 'abort' && failure.localTermination === 'confirmed')) {
+          failures.push(failure)
+          if (failure instanceof DeployTestCommandError && failure.localTermination === 'unknown')
+            processCleanupFailed = true
+        }
       }
       catch (error) {
-        processCleanupFailed = true
+        if (error instanceof DeployTestCommandError && error.localTermination === 'unknown')
+          processCleanupFailed = true
         failures.push(error)
       }
+    }
+  }
+  finally {
+    try {
+      for (const output of serverOutputs.splice(0))
+        await appendFile(path.join(evidence, 'runtime-servers.log'), `${output()}\n`)
+    }
+    catch (error) {
+      failures.push(error)
     }
     for (const root of roots.splice(0)) {
       if (processCleanupFailed)
@@ -99,7 +85,6 @@ afterEach(async () => {
       catch (error) {
         failures.push(error)
       }
-      environments.delete(root)
     }
     for (const client of clients.splice(0)) {
       try {
@@ -120,59 +105,34 @@ afterEach(async () => {
     throw new AggregateError(failures, 'Generated runtime evidence or cleanup failed')
 }, 30_000)
 
-/** 编译器和真实服务仅使用本轮明确后端；不继承开发者的模块或私有 dotenv 配置。 */
-function runtimeEnvironment(cwd: string): NodeJS.ProcessEnv {
+/** 场景输入写入本轮真实模式文件；已有密钥、模块和密码均沿用生成结果。 */
+async function configureRuntime(cwd: string, values: Record<string, string>): Promise<void> {
   const root = roots.find(root => cwd.startsWith(`${root}${path.sep}`))
   if (!root)
     throw new Error('Generated runtime requires an owned temporary project')
-  let env = environments.get(root)
-  if (!env) {
-    const data = path.join(root, 'runtime-data')
-    env = {
-      ...process.env,
-      ...createE2eServerEnv({
-        HAI_E2E_DATA_ROOT: data,
-        HAI_CORE_ENV: 'test',
-        HAI_DB: '{}',
-        HAI_DB_TYPE: 'sqlite',
-        HAI_DB_DATABASE: path.join(data, 'app.db'),
-        HAI_CACHE: JSON.stringify({ type: 'memory' }),
-        HAI_STORAGE: JSON.stringify({
-          type: 'local',
-          root: path.join(data, 'uploads'),
-        }),
-        HAI_VECDB: JSON.stringify({
-          type: 'lancedb',
-          path: path.join(data, 'vecdb'),
-        }),
-        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
-        HAI_ADMIN_DEFAULT_PASSWORD: `Aa1!${randomBytes(24).toString('base64url')}`,
-      }),
-    }
-    environments.set(root, env)
-  }
-  return env
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'package.json'), 'utf8'))
+  const relative = /run-node\.mjs\s+test\s+(\S+)/.exec(manifest.scripts?.['start:test'] ?? '')?.[1]
+  const directory = relative
+    ? path.resolve(cwd, relative)
+    : cwd
+  const file = path.join(directory, '.env.test')
+  await writeFile(file, core.config.stringifyEnv({
+    ...parseEnv(await readFile(file, 'utf8')),
+    ...values,
+  }))
 }
 
-/** 从已安装工具的真实 bin 启动，复用仓库依赖，不触发自动 install 或全量构建。 */
+/** 编译与检查复用生成工程已有脚本；只有定向 lint 使用 pnpm exec。 */
 async function tool(name: 'tsup' | 'vite' | 'eslint' | 'typescript', args: string[], cwd: string): Promise<void> {
-  const manifestPath = fileURLToPath(import.meta.resolve(`${name}/package.json`))
-  const manifest: { bin: Record<string, string> } = JSON.parse(await readFile(manifestPath, 'utf8'))
-  const result = spawnSync(process.execPath, [
-    path.join(path.dirname(manifestPath), manifest.bin[name === 'typescript'
-      ? 'tsc'
-      : name]!),
-    ...args,
-  ], {
-    cwd,
-    windowsHide: true,
-    encoding: 'utf8',
-    timeout: 120_000,
-    env: runtimeEnvironment(cwd),
-  })
-  await appendFile(path.join(evidence, 'runtime-builds.log'), `${cwd}\n${result.stdout}\n${result.stderr}\n`)
-  expect(result.error?.message).toBeUndefined()
-  expect(result.status, result.stderr).toBe(0)
+  const command = name === 'tsup'
+    ? ['build']
+    : name === 'vite'
+      ? ['compile']
+      : name === 'typescript'
+        ? ['typecheck']
+        : ['exec', 'eslint', ...args]
+  const output = await runPnpmTestCommand(command, { cwd, timeoutMs: 120_000 })
+  await appendFile(path.join(evidence, 'runtime-builds.log'), `${cwd} pnpm ${command.join(' ')}\n${output}\n`)
 }
 
 /** 分配本机临时端口，服务通过既有配置入口接收。 */
@@ -186,32 +146,40 @@ async function port(): Promise<number> {
   return address.port
 }
 
-/** 启动实际编译入口并等待 HTTP 服务，失败保留有界日志。 */
-async function start(cwd: string, args: string[], selectedPort: number): Promise<string> {
+/** 通过生成工程公开启动脚本等待 HTTP 服务，进程树由既有命令夹具托管。 */
+async function start(cwd: string, selectedPort: number, healthPath = '/health'): Promise<string> {
   let output = ''
+  let failure: unknown
   serverOutputs.push(() => output)
-  const child = spawn(process.execPath, args, {
-    cwd,
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...runtimeEnvironment(cwd),
-      PORT: String(selectedPort),
-      HOST: '127.0.0.1',
-      HAI_SERV_SERVER_PORT: String(selectedPort),
-    },
+  const controller = new AbortController()
+  await configureRuntime(cwd, {
+    PORT: String(selectedPort),
+    HOST: '127.0.0.1',
+    HAI_SERV_SERVER_PORT: String(selectedPort),
   })
-  processes.push(child)
-  const capture = (data: Buffer) => {
-    output = (output + data.toString()).slice(-16_000)
-  }
-  child.stdout?.on('data', capture)
-  child.stderr?.on('data', capture)
+  const completion = runPnpmTestCommand(['start:test'], {
+    cwd,
+    signal: controller.signal,
+  }).then((result) => {
+    output = result
+    failure = new Error('Generated server exited before cleanup')
+  }, (error: unknown) => {
+    failure = error
+    output = error instanceof Error
+      ? error.message
+      : String(error)
+  })
+  processes.push({
+    controller,
+    completion,
+    failure: () => failure,
+  })
   const base = `http://127.0.0.1:${selectedPort}`
   for (let attempt = 0; attempt < 120; attempt++) {
-    if (child.exitCode !== null)
-      throw new Error(`Generated server exited: ${output}`)
-    if (await fetch(`${base}/health`).catch(() => null))
+    if (failure)
+      throw failure
+    const response = await fetch(`${base}${healthPath}`).catch(() => null)
+    if (response?.ok)
       return base
     await new Promise(resolve => setTimeout(resolve, 250))
   }
@@ -339,12 +307,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
     await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
     await tool('vite', ['build'], project)
-    const base = await start(project, [
-      'scripts/run-node.mjs',
-      'dev',
-      '.',
-      'build/index.js',
-    ], await port())
+    const base = await start(project, await port(), '/api/health')
     expect((await fetch(base)).status).toBe(200)
     expect((await fetch(`${base}/api/health`)).status).toBe(200)
   }, 180_000)
@@ -387,19 +350,13 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     let request: typeof fetch = fetch
     if (appType === 'website') {
       // 本门禁验证生成路由和真实会话；验证码的完整交互由脚手架浏览器门禁验证。
-      runtimeEnvironment(project).HAI_IAM_CAPTCHA_ENABLED = 'false'
-      runtimeEnvironment(project).HAI_IAM_REGISTER_ENABLED = 'true'
+      await configureRuntime(project, { HAI_IAM_CAPTCHA_ENABLED: 'false', HAI_IAM_REGISTER_ENABLED: 'true' })
       // Paraglide 工程以 ./node_modules 显式加载插件；复用本仓库已安装的同版本依赖。
       await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
       await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
       await generate({ type: 'page', name: 'route-page', cwd: project })
       await tool('vite', ['build'], project)
-      base = await start(project, [
-        'scripts/run-node.mjs',
-        'dev',
-        '.',
-        'build/index.js',
-      ], selectedPort)
+      base = await start(project, selectedPort, '/api/health')
       const page = await fetch(`${base}/route-page`)
       expect(page.status).toBe(200)
       expect(await page.text()).toContain('RoutePage')
@@ -443,62 +400,53 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       const environmentRoot = appType === 'api'
         ? service
         : project
-      // 模拟克隆工程没有本机覆盖文件；正常运行仍使用本轮隔离后端。
-      await rm(path.join(environmentRoot, '.env.local'), { force: true })
-      await rm(path.join(environmentRoot, '.env.dev.local'), { force: true })
-      const entryArgs = [
-        path.join(project, 'scripts/run-node.mjs'),
-        'dev',
-        environmentRoot,
-        'dist/index.js',
-      ]
-      const expectFailure = async (override: NodeJS.ProcessEnv, expected: string[]) => {
+      const expectFailure = async (expected: string[]) => {
         let output = ''
         serverOutputs.push(() => `${appType} failure ${expected.join(', ')}\n${output}`)
-        const child = spawn(process.execPath, entryArgs, {
-          cwd: service,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: {
-            ...runtimeEnvironment(service),
-            PORT: String(selectedPort),
-            HOST: '127.0.0.1',
-            HAI_SERV_SERVER_PORT: String(selectedPort),
-            ...override,
-          },
-        })
-        processes.push(child)
-        child.stdout?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
-        child.stderr?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
-        const code = await new Promise<number | null>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            child.kill()
-            reject(new Error(`Startup failure did not release its resources (${expected.join(', ')}): ${output}`))
-          }, 15_000)
-          child.once('error', (error) => {
-            clearTimeout(timer)
-            reject(error)
+        let failure: unknown
+        try {
+          await runPnpmTestCommand(['start:test'], {
+            cwd: service,
+            timeoutMs: 15_000,
           })
-          child.once('close', (code) => {
-            clearTimeout(timer)
-            resolve(code)
-          })
-        })
-        expect(code, output).toBe(1)
+        }
+        catch (error) {
+          failure = error
+          output = error instanceof Error
+            ? error.message
+            : String(error)
+        }
+        expect(failure).toBeInstanceOf(DeployTestCommandError)
+        expect(failure).toMatchObject({ reason: 'exit', localTermination: 'confirmed', exitCode: 1 })
         for (const text of expected)
           expect(output).toContain(text)
         await appendFile(path.join(evidence, 'startup-diagnostics.log'), `${appType}: ${expected.join(', ')}\n${output}\n`)
       }
       const expectMissing = async (name: string, expected: string[]) => {
-        const profilePath = path.join(environmentRoot, '.env.dev')
-        const profile = await readFile(profilePath, 'utf8')
+        const backups = new Map<string, string>()
+        for (const file of [
+          '.env',
+          '.env.test',
+          '.env.local',
+          '.env.test.local',
+        ]) {
+          const target = path.join(environmentRoot, file)
+          const original = await readFile(target, 'utf8').catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== 'ENOENT')
+              throw error
+            return undefined
+          })
+          if (original !== undefined)
+            backups.set(target, original)
+        }
         try {
-          // Windows 可能省略空环境值；真正移除环境文件中的值才能模拟配置缺失。
-          await writeFile(profilePath, profile.split('\n').filter(line => !line.startsWith(`${name}=`)).join('\n'))
-          await expectFailure({ [name]: undefined }, [name, ...expected])
+          // 真正删除当前所有加载层的字段，不用子进程 env 覆盖模拟缺失。
+          for (const [file, original] of backups)
+            await writeFile(file, original.split('\n').filter(line => !line.startsWith(`${name}=`)).join('\n'))
+          await expectFailure([name, ...expected])
         }
         finally {
-          await writeFile(profilePath, profile)
+          for (const [file, original] of backups) await writeFile(file, original)
         }
       }
       if (appType === 'fullstack') {
@@ -509,9 +457,9 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
           '.env',
         ])
       }
-      base = await start(service, entryArgs, selectedPort)
-      expect((await readFile(path.join(root, 'runtime-data/app.db'))).subarray(0, 16).toString()).toBe('SQLite format 3\0')
-      await expectFailure({}, [
+      base = await start(service, selectedPort)
+      expect((await readFile(path.join(service, 'data/test/app.db'))).subarray(0, 16).toString()).toBe('SQLite format 3\0')
+      await expectFailure([
         'EADDRINUSE',
         String(selectedPort),
       ])

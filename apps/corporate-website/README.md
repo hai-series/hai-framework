@@ -39,7 +39,7 @@
 
 #### 合作管理后台账号
 
-用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
+用户名默认是 `partner-admin`，开发示例密码见 `.env.dev` 的 `HAI_PARTNER_PASSWORD`，本机私有覆盖仍优先。测试模式读取 `.env.test`；生产使用独立私有密码。缺少密码时启动失败，凭据不写入日志。
 
 ## 使用入门
 
@@ -105,7 +105,7 @@ pnpm --filter corporate-website preview
 | `HAI_CACHE_TYPE`        | 缓存类型                                 | `memory`                      |
 | `HAI_STORAGE_TYPE`      | 存储类型                                 | `local`                       |
 | `HAI_PARTNER_USERNAME`  | 合作管理后台用户名                       | `partner-admin`               |
-| `HAI_PARTNER_PASSWORD`  | 合作管理后台密码（必填）                 | _（无）_                      |
+| `HAI_PARTNER_PASSWORD`  | 合作管理后台密码                         | 开发见 `.env.dev`，生产必填   |
 | `HAI_CONTACT_RECIPIENT` | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_                      |
 
 ### 🌍 国际化 (i18n)
@@ -165,7 +165,7 @@ pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 
 ## 开发测试
 
-浏览器验证通过 `pnpm --filter corporate-website test:e2e` 分配本轮绝对数据目录。服务子进程显式选择隔离的 SQLite/Memory/Local，清除继承的模块变量并跳过用户 `.env.local`；普通开发和生产的 dotenv 与共享后端要求不变。
+浏览器验证直接运行 `pnpm --filter corporate-website test:e2e`。Playwright 使用实际 `pnpm build` 和 `pnpm preview --mode test`，正常读取 `.env.test` 及私有覆盖；测试数据目录由该模式文件指定。登录用例读取同一环境的合作后台凭据，不另设测试密码。
 
 ```sh
 pnpm --filter corporate-website typecheck

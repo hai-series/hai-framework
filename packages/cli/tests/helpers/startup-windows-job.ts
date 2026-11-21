@@ -1,4 +1,4 @@
-/** 测试专用 Windows Job：挂起创建、入不可 breakaway Job 后恢复，供 CLI 命令和上传入口测试共用。 */
+/** 验收进程 Windows Job：挂起创建、入不可 breakaway Job 后恢复，供启动器、CLI 命令和上传测试共用。 */
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 
@@ -76,7 +76,7 @@ public static class HaiCommandJob {
     result.Append('\\', slashes * 2).Append('"');
     return result.ToString();
   }
-  public static int Run(string name, string command, string[] arguments) {
+  public static int Run(string name, string command, string[] arguments, bool stopAfterRootExit) {
     IntPtr job = CreateJobObject(IntPtr.Zero, name);
     if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
     ProcessInfo process = new ProcessInfo();
@@ -101,6 +101,13 @@ public static class HaiCommandJob {
       if (WaitForSingleObject(process.Process, 0xFFFFFFFF) != 0) throw new Win32Exception(Marshal.GetLastWin32Error());
       uint code;
       Check(GetExitCodeProcess(process.Process, out code));
+      // 启动执行器以根命令为完成边界；遗留服务不能让 owner 永远等不到退出。
+      if (stopAfterRootExit && Active(job) != 0) Check(TerminateJobObject(job, 125));
+      if (stopAfterRootExit) {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (Active(job) != 0 && deadline.ElapsedMilliseconds < 5000) Thread.Sleep(20);
+        if (Active(job) != 0) throw new InvalidOperationException("Startup command descendants did not stop");
+      }
       while (Active(job) != 0) Thread.Sleep(20);
       return unchecked((int)code);
     }
@@ -141,7 +148,7 @@ function powershell(script: string): string[] {
 // 测试与生产包没有共用的公开进程控制入口；保留必需的原生结构/argv 编码，不跨包导入私有源码。
 const compile = `Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(nativeJob, 'utf8').toString('base64')}')))`
 
-export function windowsTestCommand(command: string, args: string[]): { name: string, args: string[], env: Record<string, string> } {
+export function windowsTestCommand(command: string, args: string[], stopAfterRootExit = false): { name: string, args: string[], env: Record<string, string> } {
   const name = `Local\\hai-deploy-test-${randomUUID()}`
   const key = `__HAI_DEPLOY_TEST_JOB_${randomUUID().replaceAll('-', '')}`
   const script = `$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $InformationPreference='SilentlyContinue'
@@ -149,13 +156,18 @@ try {
   ${compile}
   $config = [Environment]::GetEnvironmentVariable('${key}') | ConvertFrom-Json
   [Environment]::SetEnvironmentVariable('${key}', $null)
-  exit ([HaiCommandJob]::Run([string]$config.name, [string]$config.command, [string[]]$config.args))
+  exit ([HaiCommandJob]::Run([string]$config.name, [string]$config.command, [string[]]$config.args, [bool]$config.stopAfterRootExit))
 } catch { [Console]::Error.WriteLine('Windows deployment test command job failed'); exit 125 }`
   return {
     name,
     args: powershell(script),
     env: {
-      [key]: JSON.stringify({ name, command, args }),
+      [key]: JSON.stringify({
+        name,
+        command,
+        args,
+        stopAfterRootExit,
+      }),
     },
   }
 }

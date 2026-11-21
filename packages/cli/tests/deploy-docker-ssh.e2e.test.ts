@@ -34,6 +34,7 @@ import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
 import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages, testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 import { createDeployTestCommands, DeployTestCommandError } from './helpers/deploy-test-command.js'
+import { installScenarios } from './helpers/scaffold-scenarios.js'
 
 /** 尊重显式测试引擎，否则优先 Podman；用 version 确认引擎可达。 */
 function detectRuntime(): 'podman' | 'docker' | null {
@@ -548,10 +549,11 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
  * ```
  */
 async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir, buildMetadata: ReadonlyArray<{ service: string, source: string, destination: string }> = []): Promise<void> {
-  const local = {
-    ...parseEnv(readFileSync(path.join(project, '.env.test'), 'utf8')),
-    ...parseEnv(readFileSync(path.join(project, '.env.test.local'), 'utf8')),
-  }
+  const fullstack = existsSync(path.join(project, 'packages', `${path.basename(project)}-serv`))
+  await installScenarios(project, {
+    title: fullstack ? 'fullstack-feedback' : 'admin',
+    projectName: path.basename(project),
+  })
   const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
   mkdirSync(parent, { recursive: true })
   const evidence = mkdtempSync(path.join(parent, `${RUN_ID}-${path.basename(project)}-`))
@@ -578,12 +580,7 @@ async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { n
     HAI_CORE_NAME: metadata.name,
     HAI_CORE_VERSION: metadata.version,
     HAI_CORE_ENV: metadata.env,
-    E2E_ADMIN_PASSWORD: local.HAI_ADMIN_DEFAULT_PASSWORD,
-    E2E_AUDIT_ADMIN_PASSWORD: local.HAI_AUDIT_ADMIN_PASSWORD,
-    E2E_CONFIG_ADMIN_PASSWORD: local.HAI_CONFIG_ADMIN_PASSWORD,
-    E2E_BUSINESS_OPERATOR_PASSWORD: local.HAI_BUSINESS_OPERATOR_PASSWORD,
     SERVICE_BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
-    PUBLIC_API_BASE: '',
     BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
     HAI_AUTH_EVIDENCE_DIR: evidence,
     HAI_E2E_DATA_ROOT: path.join(workDir, 'browser-data'),
@@ -593,7 +590,7 @@ async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { n
           PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(evidence, 'html'),
         }),
   }
-  writeFileSync(path.join(project, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
+  writeFileSync(path.join(project, 'playwright.deploy.config.ts'), `import process from 'node:process'\nimport config from './playwright.config.js'\nexport default { ...config, use: { ...config.use, baseURL: process.env.BASE_URL }, webServer: [] }\n`)
   try {
     const output = await runPnpm(commands, [
       'exec',

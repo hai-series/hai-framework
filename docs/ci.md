@@ -12,7 +12,9 @@ Windows、Android 和 iOS 在各自的 runner 上运行。Windows 和 Android �
 
 ## 阶段与依赖
 
-CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
+CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全、流读取期间并发覆盖与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总；该 job 还通过根 `scripts/vitest.config.ts` 定向执行 `startup-process`、`run-e2e` 与 `startup-baseline` 回归，验证原生 Job 的后代回收、托管运行器和默认启动。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
+
+默认开发启动阶段覆盖全部 9 个示例应用，直接在实际目录运行公开的 `pnpm dev`，使用原工程正常加载的公共和私有配置，不注入应用环境变量、补密钥或替换密码。页面或 health 请求触发初始化，前端还在真实浏览器执行模块。CLI 门禁先验证原样生成工程的 dev 与原生 Playwright 入口，再安装框架内部的功能场景夹具；这些复杂用例不交付给生成项目。业务场景继续通过 `start:test`、`dev:test` 或 `preview` 等真实脚本运行，专项配置只写入真实模式文件并在退出后恢复。缺失、无效、不配对的密钥环和错误公共配置必须失败。开发启动、测试模式产物和真实生产后端分别记录，不能互相代替。
 
 发布完成判定从版本标签读取当时的公开包清单，再核验这些包的 npm 版本、GitHub Release 和 npm `latest`。例如，标签之后才加入的包需要新版本，不会让已经完成的旧版本重新进入发布。尚无标签时使用当前提交的公开包清单。已有标签但其发布尚未完成时，从原标签提交恢复；其他提交使用同一版本会在规划阶段报错。
 
@@ -34,18 +36,20 @@ flowchart TD
   E --> S[CLI 脚手架]
   E --> D[部署 SDK]
   E --> I[CLI 全量、增量与恢复]
-  E --> A[六个应用浏览器矩阵]
+  E --> A[七个应用浏览器矩阵及默认 dev]
+  E --> N[API 与桌面客户端默认 dev]
   S --> Q[全部必需结果汇总]
   D --> Q
   I --> Q
   A --> Q
+  N --> Q
   U --> Q
   W --> Q
   Q --> R[npm 发布及版本同步]
   R --> G[完整 CI 成功后发布 Pages]
 ```
 
-构建与 lint 在不同 runner 上同时开始。构建完成后，类型、配置/公开契约与单元测试可以并行。静态检查通过后，脚手架、SDK、真实部署和六个应用浏览器分支在各自 runner 执行，不等待单元分支结束；最终汇总等待所有必需结果。
+构建与 lint 在不同 runner 上同时开始。构建完成后，类型、配置/公开契约与单元测试可以并行。静态检查通过后，脚手架、SDK、真实部署、七个应用浏览器分支及 API/桌面默认启动分支在各自 runner 执行，不等待单元分支结束；最终汇总等待所有必需结果。
 
 每个 runner 有自己的工作区、容器引擎、端口和测试数据。根单元入口内部仍遵守容器资源预算：普通包有界并发，容器包串行。浏览器矩阵关闭全局 fail-fast，以保留其他应用的独立结果。`pnpm e2e` 的本地串行入口保留，避免在同一工作区同时重写产物。
 
@@ -101,7 +105,7 @@ DaisyUI 使用包含 [join 焦点/悬停层级修复](https://github.com/saadegh
 
 `deepmerge@4.3.1` 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 已于 2026-11-16 撤回，公告明确不构成安全漏洞。工作区与生成应用使用上游发布文件，已移除本地补丁、注册及只验证该自定义补丁的测试。
 
-仓库应用与测试直接复用 `packages/cli/templates/shared/` 中的 Node/E2E 启动器、环境隔离、原生名称和公开运行配置脚本；CLI 将同一份文件复制到生成工程。Turbo 将共享目录纳入全局输入，Native delivery 通过已有的 `packages/**` 触发规则覆盖这些文件，无需保留根 `scripts/` 的重复副本与旧路径。
+应用和 CLI 模板复用 `packages/cli/templates/shared/` 中真实运行所需的 Node 启动、原生名称和公开运行配置脚本。默认启动检查、进程所有权和多场景编排位于 `packages/cli/tests/helpers/`，仅供框架仓库测试使用，不随 CLI 模板发布或复制到用户工程。Turbo 将共享目录纳入全局输入，Native delivery 的 `packages/**` 触发规则覆盖这些文件。
 
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。

@@ -1,6 +1,8 @@
 import type { Linter } from 'eslint'
 import type { AppType } from '../src/cli-types.js'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { ESLint } from 'eslint'
 import ts from 'typescript'
@@ -9,6 +11,7 @@ import { parse } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
+import { runPnpmTestCommand } from './helpers/deploy-test-command.js'
 
 /** 每次运行独有的目录，避免进程 ID 复用导致误删其他运行中的工程。 */
 let tmpRoot = ''
@@ -352,6 +355,64 @@ describe('构建元数据配置的静态质量', () => {
     // 复用beforeAll预热后的真实linter；前端App和build-metadata消费者由下方业务源码门禁覆盖。
     expect(await lintFiles(appType, [...targets, 'scripts/build-metadata.ts'])).toEqual([])
   })
+})
+
+describe('生成工程的原生 Playwright 入口', () => {
+  it.each(projectTypes)('%s 只交付日常入口，不带框架场景编排器', async (appType) => {
+    const project = path.join(tmpRoot, `quality-${appType}`)
+    for (const file of [
+      'run-e2e.mjs',
+      'startup-baseline.mjs',
+      'startup-process.mjs',
+      'startup-windows-job.ts',
+      'e2e-env.ts',
+      'e2e-node-proxy.mjs',
+    ])
+      expect(existsSync(path.join(project, 'scripts', file))).toBe(false)
+    expect(JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')).scripts['test:e2e']).toBe('playwright test')
+    expect(await lintFiles(appType, ['playwright.config.ts', 'e2e'])).toEqual([])
+  })
+
+  it.each(projectTypes)('%s 的配置通过真实 Playwright 加载器并发现生成用例', async (appType) => {
+    // 独立目录避免无根 tsconfig 的 workspace 被仓库祖先的 IDE 源码映射污染。
+    const loaderRoot = await mkdtemp(path.join(tmpdir(), 'hai-cli-playwright-loader-'))
+    const project = path.join(loaderRoot, `quality-${appType}`)
+    try {
+      await cp(path.join(tmpRoot, `quality-${appType}`), project, { recursive: true })
+      await mkdir(path.join(project, 'node_modules'), { recursive: true })
+      // 此配置单测只复用已安装公共依赖；完整独立安装仍由脚手架门禁验证。
+      for (const name of [
+        '@h-ai',
+        '@playwright',
+        '@types',
+        'zod',
+        'tsup',
+        'typescript',
+      ]) {
+        const rootDependency = path.resolve(process.cwd(), '../../node_modules', name)
+        const dependency = existsSync(rootDependency)
+          ? rootDependency
+          : path.join(process.cwd(), 'node_modules', name)
+        await symlink(dependency, path.join(project, 'node_modules', name), 'junction')
+      }
+      const output = await runPnpmTestCommand([
+        'exec',
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--list',
+      ], {
+        cwd: project,
+        timeoutMs: 30_000,
+      })
+      // 只验证真实配置加载与用例发现；公开服务和浏览器流程仍由脚手架门禁验收。
+      expect(output).toMatch(/Total: [1-9]\d* tests? in [1-9]/)
+    }
+    finally {
+      await rm(loaderRoot, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
 
 describe('生成 fullstack 的业务 workspace 质量', () => {

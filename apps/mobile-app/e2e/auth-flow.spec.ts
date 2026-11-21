@@ -36,7 +36,7 @@ for (const platform of ['mobile', 'desktop'] as const) {
     test.setTimeout(90_000)
     const url = platform === 'mobile'
       ? `${baseURL}/auth/login`
-      : 'http://127.0.0.1:12582/#/login'
+      : 'http://localhost:5176/#/login'
     if (platform === 'desktop')
       await page.setViewportSize({ width: 1280, height: 800 })
     const suffix = Date.now()

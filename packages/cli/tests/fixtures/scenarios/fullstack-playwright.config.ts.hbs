@@ -1,0 +1,76 @@
+/** 仅供框架仓库验收多端与 IAM 场景，不随 CLI 工程交付。 */
+import process from 'node:process'
+import { defineConfig } from '@playwright/test'
+import { notificationConfig, testServer } from './scripts/test-server.js'
+
+const sessionClose = process.env.HAI_E2E_GROUP === 'session-close'
+const baseURL = process.env.BASE_URL || '{{#if fullstack.e2eFrontend}}http://127.0.0.1:{{fullstack.e2eFrontend.port}}{{else}}http://127.0.0.1:3000{{/if}}'
+const serviceBaseURL = process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000'
+const service = new URL(serviceBaseURL)
+const primaryFrontend = '{{fullstack.e2eFrontend.target}}'
+const frontendUrls = {
+  web: process.env.HAI_E2E_WEB_URL,
+  app: process.env.HAI_E2E_APP_URL,
+  desktop: process.env.HAI_E2E_DESKTOP_URL,
+}
+const frontends = [
+{{#each fullstack.frontendApps}}
+  { target: '{{target}}', name: '{{packageName}}', url: frontendUrls.{{target}} || 'http://127.0.0.1:{{port}}' },
+{{/each}}
+]
+
+export default defineConfig({
+  testDir: './e2e',
+{{#if fullstack.e2eFrontend}}
+  ...(sessionClose ? { testMatch: '**/session-close.spec.ts' } : { testIgnore: '**/session-close.spec.ts' }),
+{{/if}}
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: 0,
+  workers: 1,
+  reporter: 'list',
+  timeout: 30_000,
+  use: { baseURL, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  webServer: [
+    testServer({
+      ...notificationConfig(),
+      HOST: service.hostname,
+      PORT: service.port || '80',
+      HAI_SERV_SERVER_PORT: service.port || '80',
+      HAI_SERV_SERVER_HOST: service.hostname,
+      HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD: 'true',
+      HAI_IAM_CAPTCHA_ENABLED: 'true',
+      HAI_IAM_CAPTCHA_COST: '100',
+      HAI_IAM_CAPTCHA_MAXCOUNTER: '2',
+      HAI_IAM_INITIALCREDENTIALS_ENABLED: 'true',
+      ...(sessionClose ? {
+        HAI_IAM_SESSION_ENDONPAGEHIDE: 'true',
+        HAI_IAM_SESSION_IDLETIMEOUT: '5',
+        HAI_IAM_SESSION_ABSOLUTETIMEOUT: '60',
+        HAI_IAM_PASSWORD_REQUIREINITIALCHANGE: 'true',
+      } : {}),
+      HAI_IAM_REAUTHENTICATION_ENABLED: 'true',
+      HAI_IAM_REAUTHENTICATION_OPERATIONS: JSON.stringify(['iam.users.invite', 'audit.backup']),
+      HAI_AUDIT_BACKUP_ENABLED: 'true',
+      HAI_CORE_NAME: 'Configured scaffold',
+      HAI_CORE_VERSION: '9.8.7',
+    }, {
+      name: '{{fullstack.servPackageName}}',
+      command: 'pnpm compile && pnpm --filter {{fullstack.servPackageName}} start:test',
+      url: `${serviceBaseURL}/health`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    }),
+    ...frontends.map((frontend) => {
+      const url = frontend.target === primaryFrontend ? baseURL : frontend.url
+      const address = new URL(url)
+      return testServer({ PUBLIC_API_BASE: serviceBaseURL }, {
+        name: frontend.name,
+        command: `pnpm --filter ${frontend.name} preview --mode test --host ${address.hostname} --port ${address.port || '80'} --strictPort`,
+        url,
+        reuseExistingServer: false,
+        timeout: 120_000,
+      })
+    }),
+  ],
+})

@@ -4,7 +4,6 @@
     "test": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/scripts/test-command-windows.ts",
         "$TURBO_ROOT$/scripts/test-process-identity.ts",
         "$TURBO_ROOT$/scripts/test-image-cleanup-setup.mjs",
         "$TURBO_ROOT$/scripts/cleanup-test-images.mjs",

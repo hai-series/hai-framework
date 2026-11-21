@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
-import { loginOnPage, registerAndLogin, uniqueUser, waitForHydration } from './helpers'
+import { loginOnPage, registerAndLogin, transportAdmin, uniqueUser, waitForHydration } from './helpers'
 
 async function capture(page: Page, name: string, testInfo: TestInfo) {
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
@@ -69,7 +69,7 @@ test('个人资料失焦校验与响应式布局', async ({ page, request }, tes
 })
 
 test('CRUD 新建和编辑失焦后提示，关闭重开清除错误', async ({ page }, testInfo) => {
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, 'admin', transportAdmin.password)
   const editUser = uniqueUser('ablur')
   // 使用真实分页让待编辑用户离开当前页，避免依赖全量测试的数据量与执行顺序。
   for (const user of [

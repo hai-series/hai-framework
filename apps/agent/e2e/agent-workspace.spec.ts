@@ -13,6 +13,17 @@ async function signup(page: Page, username: string) {
   await expect(page.getByRole('button', { name: 'New task' })).toBeEnabled()
 }
 
+test('accepts same-origin registration forms and rejects cross-site forms', async ({ page }) => {
+  await signup(page, `csrf-${Date.now()}`)
+  const rejected = await page.request.post('/?/login', {
+    headers: { Origin: 'https://other.example.invalid' },
+    form: { username: `blocked-${Date.now()}`, password: 'Reliable-Passphrase-42', operation: 'signup' },
+  })
+  expect(rejected.status()).toBe(403)
+  expect(await rejected.text()).toContain('Cross-site POST form submissions are forbidden')
+  expect((await page.request.get('/api/workspace')).status()).toBe(200)
+})
+
 test('selects liquid glass and keeps the choice after reloading the workspace', async ({ page }, testInfo) => {
   await signup(page, `theme-${Date.now()}`)
   const themeSelector = page.getByRole('button', { name: 'Select theme' })

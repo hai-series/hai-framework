@@ -255,7 +255,7 @@ describe('createProject — api 类型', () => {
       cwd: tmpRoot,
     })
     const prefix = `apps/${name}-serv`
-    const ring = crypto.transport.parseServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = crypto.transport.parseServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
     if (!ring.success)
       throw new Error(ring.error.message)
@@ -436,12 +436,13 @@ describe('createProject — api 类型', () => {
 
   it('应生成 service 级 E2E 测试', async () => {
     const spec = await readText(projectPath, 'e2e/api-serv.spec.ts')
-    expect(spec).toContain('service health endpoint returns ok')
+    expect(spec).toContain('request.get(\'/health\')')
+    expect(spec).toContain('request.get(\'/ready\')')
     expect(spec).not.toContain('page.goto')
 
     const config = await readText(projectPath, 'playwright.config.ts')
-    expect(config).toMatch(/channel:\s+'chrome'/)
-    expect(config).toContain('proj-api-serv')
+    expect(config).toContain('pnpm compile && pnpm start:test')
+    expect(config).toContain('reuseExistingServer: false')
   })
 
   it('应生成 api 兼容的全量 skills', async () => {
@@ -599,7 +600,7 @@ describe('createProject — admin 类型 + iam', () => {
   it('应生成从页面发起的 E2E 测试', async () => {
     const spec = await readText(projectPath, 'e2e/app.spec.ts')
     expect(spec).toContain('page.goto')
-    expect(spec).toContain('home page renders from browser')
+    expect(spec).toContain('application opens')
   })
 
   it('不应再生成 .github/skills 目录', async () => {
@@ -946,7 +947,7 @@ describe('createProject — fullstack 类型', () => {
     })
   })
 
-  it('各环境私有文件生成独立随机密码和密钥环，公共文件不含真实秘密', async () => {
+  it('初始密码和生产密钥私有，开发测试示例密钥可提交且环境间独立', async () => {
     const env = await readText(projectPath, '.env.dev.local')
     const password = env.match(/^HAI_ADMIN_DEFAULT_PASSWORD=(.+)$/m)?.[1]?.trim()
     expect(password).toBeDefined()
@@ -958,7 +959,7 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
-    const serializedRing = parseEnv(env).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+    const serializedRing = parseEnv(await readText(projectPath, '.env.dev')).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
     const ring = crypto.transport.parseServerKeyRing(serializedRing)
     expect(ring.success).toBe(true)
     if (!ring.success)
@@ -983,9 +984,13 @@ describe('createProject — fullstack 类型', () => {
     for (const mode of ['dev', 'test', 'prod']) {
       const values = parseEnv(await readText(projectPath, `.env.${mode}.local`))
       const publicValues = parseEnv(await readText(projectPath, `.env.${mode}`))
-      expect(publicValues).not.toHaveProperty('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
       expect(publicValues).not.toHaveProperty('HAI_ADMIN_DEFAULT_PASSWORD')
-      const parsed = crypto.transport.parseServerKeyRing(values.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+      if (mode === 'prod')
+        expect(publicValues).not.toHaveProperty('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+      else expect(values).not.toHaveProperty('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+      const parsed = crypto.transport.parseServerKeyRing((mode === 'prod'
+        ? values
+        : publicValues).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       expect(parsed.success).toBe(true)
       if (!parsed.success)
         throw new Error(parsed.error.message)
@@ -1065,7 +1070,7 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.scripts.typecheck).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present typecheck')
     expect(pkg.scripts.test).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present test')
     expect(pkg.scripts.postinstall).toBe('pnpm i18n:compile')
-    expect(pkg.scripts['test:e2e']).toContain('node scripts/run-e2e.mjs')
+    expect(pkg.scripts['test:e2e']).toBe('playwright test')
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
     expect(pkg.devDependencies['@playwright/test']).toBe(CATALOG_DEP_SPECIFIER)
@@ -1221,16 +1226,11 @@ describe('createProject — fullstack 类型', () => {
     expect(iamConfig).toContain('variant: split')
     const envExample = await readText(projectPath, '.env.example')
     for (const name of [
-      'BASE_URL',
       'HAI_E2E_WEB_URL',
       'HAI_E2E_APP_URL',
       'HAI_E2E_DESKTOP_URL',
-      'E2E_ADMIN_PASSWORD',
-      'E2E_AUDIT_ADMIN_PASSWORD',
-      'E2E_CONFIG_ADMIN_PASSWORD',
-      'E2E_BUSINESS_OPERATOR_PASSWORD',
     ])
-      expect(envExample).toContain(`# ${name}=`)
+      expect(envExample).not.toContain(`# ${name}=`)
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
@@ -1465,19 +1465,16 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/package.json')).toBe(false)
   })
 
-  it('应生成根 E2E 测试和 Playwright 多服务配置', async () => {
+  it('普通 E2E 复用真实 dev:test，不把框架场景交付到用户工程', async () => {
     const config = await readText(projectPath, 'playwright.config.ts')
-    expect(config).toContain('webServer: [')
-    expect(config).toContain('proj-fullstack-serv')
-    expect(config).toContain('proj-fullstack-web')
-    expect(config).toMatch(/channel:\s+'chrome'/)
+    expect(config).toContain('command: \'pnpm dev:test\'')
     expect(config).toContain('reuseExistingServer: false')
-
+    expect(config).not.toContain('env:')
+    expect(await exists(projectPath, 'scripts/run-e2e.mjs')).toBe(false)
+    expect(await exists(projectPath, 'e2e/session-close.spec.ts')).toBe(false)
     const spec = await readText(projectPath, 'e2e/fullstack.spec.ts')
-    expect(spec).toContain('service rejects plaintext business requests')
-    expect(spec).toContain('frontend displays configured core metadata')
-    expect(spec).toContain('administrator and user complete account')
     expect(spec).toContain('page.goto')
+    expect(spec).toContain('login-form')
   })
 
   it('应生成 fullstack 兼容的全量 skills', async () => {

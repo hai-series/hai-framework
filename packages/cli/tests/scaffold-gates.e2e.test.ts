@@ -15,18 +15,17 @@ import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
-import { createE2eServerEnv, createE2eTransportRing } from '../templates/shared/e2e-env.js'
-import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
+import { DeployTestCommandError, runDeployTestCommand, runPnpmTestCommand } from './helpers/deploy-test-command.js'
+import { installScenarios } from './helpers/scaffold-scenarios.js'
+import { runDefaultDev } from './helpers/startup-baseline.mjs'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
 const cliBin = path.resolve(process.cwd(), 'dist/index.js')
-const pnpmBin = process.platform === 'win32'
-  ? 'pnpm.cmd'
-  : 'pnpm'
 const tempRoots = new Set<string>()
 const localPackageSpecifiers = parseLocalPackageSpecifiers(process.env.HAI_CLI_PACKAGE_SPECIFIERS)
 let notificationUrl = ''
 let closeNotifications: (() => Promise<void>) | undefined
+const harnessNodeEnv = process.env.NODE_ENV
 
 interface ScaffoldGateCase {
   title: string
@@ -38,7 +37,6 @@ interface ScaffoldGateCase {
 interface GateEnvOptions {
   baseUrl?: string
   serviceBaseUrl?: string
-  publicApiBase?: string
   frontendUrls?: Record<string, string>
   expectedBuildCommit?: string
 }
@@ -156,13 +154,15 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
 beforeAll(async () => {
   if (!runScaffoldGates)
     return
-  notificationUrl = await allocateBaseUrl()
+  // 默认 dev 继承真实环境，不能携带 Vitest 自动设置的 NODE_ENV=test。
+  delete process.env.NODE_ENV
+  await getFreePort(12580)
+  notificationUrl = 'http://127.0.0.1:12580'
   const fixture = spawn(process.execPath, [
     path.resolve(process.cwd(), '../../apps/admin-console/e2e/notification-fixture.mjs'),
   ], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, IAM_NOTIFICATION_PORT: new URL(notificationUrl).port, IAM_FIXTURE_LDAP: '0' },
   })
   closeNotifications = async () => {
     if (fixture.exitCode !== null)
@@ -187,6 +187,8 @@ afterAll(async () => {
   // 只收尾未完成场景；Windows 不同时递归删除多个大型 node_modules，避免磁盘争用。
   for (const root of tempRoots)
     await removeTempRoot(root)
+  if (harnessNodeEnv !== undefined)
+    process.env.NODE_ENV = harnessNodeEnv
 }, 300_000)
 
 describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
@@ -221,14 +223,21 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     await runPnpm(projectPath, ['install', '--prefer-offline'])
     await runPnpm(projectPath, ['typecheck'])
     await runPnpm(projectPath, ['lint'])
+    await runDefaultDev(projectPath, {
+      evidence: path.join(projectPath, 'test-results/default-dev'),
+    })
     const sentinel = 'static-private-env-must-not-be-published-1793205000'
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\nHAI_PRIVATE_TOKEN='${sentinel}'\n`)
     await writeFile(path.join(projectPath, 'static/public-probe.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>Public static asset</title></svg>\n')
-    runGate(pnpmBin, ['build'], projectPath, {
-      ...buildChildEnv({}, 'production'),
-      HAI_BUILD_STATIC: '1',
-      PUBLIC_BASE_PATH: basePath,
-    }, true)
+    await runPnpmTestCommand(['build'], {
+      cwd: projectPath,
+      env: {
+        ...buildChildEnv(),
+        HAI_BUILD_STATIC: '1',
+        PUBLIC_BASE_PATH: basePath,
+      },
+      timeoutMs: 900_000,
+    })
     const output = path.join(projectPath, 'build')
     for (const file of [
       'index.html',
@@ -250,7 +259,8 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       }
     }
     expect(checked).toBeGreaterThan(0)
-    // 仅为临时生成工程提供纯静态服务器；没有Node宿主、API或SPA回退。
+    // 本场景验收静态托管产物及 404/深链规则；真实默认 dev 由共享启动基线独立验收。
+    // 隔离副本不携带源工程 build，托管前须用公开 build 命令重新生成本轮静态产物。
     await writeFile(path.join(projectPath, 'scripts/static-gate-server.mjs'), `import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import path from 'node:path'
@@ -297,12 +307,18 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${jsStringLiteral(baseUrl)}, reuseExistingServer: false },
+  // 静态托管夹具验证部署文件；它不替代工程的默认开发或 Node 启动入口。
+  webServer: {
+    command: 'node scripts/static-gate-server.mjs',
+    url: ${jsStringLiteral(baseUrl)},
+    reuseExistingServer: false,
+    timeout: 180000,
+  },
 })
 `)
     await writeFile(path.join(projectPath, 'e2e/static-website.spec.ts'), `import { expect, test } from '@playwright/test'
 
-test('static Pages deep links, public assets and honest contact feedback', async ({ page, request }, testInfo) => {
+test('static hosting artifacts: Pages deep links, assets and honest contact feedback', async ({ page, request }, testInfo) => {
   const errors: string[] = []
   const failed: string[] = []
   const posts: string[] = []
@@ -374,11 +390,11 @@ test('static Pages deep links, public assets and honest contact feedback', async
       const envOptions: GateEnvOptions = { baseUrl }
 
       if (scenario.title.startsWith('fullstack')) {
-        envOptions.serviceBaseUrl = await allocateBaseUrl()
+        envOptions.serviceBaseUrl = 'http://127.0.0.1:3000'
         envOptions.frontendUrls = { app: await allocateBaseUrl(), desktop: await allocateBaseUrl() }
       }
 
-      runNode([
+      await runNode([
         cliBin,
         '--cwd',
         root,
@@ -387,7 +403,7 @@ test('static Pages deep links, public assets and honest contact feedback', async
         ...scenario.createArgs,
       ])
       if (scenario.title === 'website') {
-        runNode([
+        await runNode([
           cliBin,
           '--cwd',
           projectPath,
@@ -415,107 +431,120 @@ test('static Pages deep links, public assets and honest contact feedback', async
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
-      if (scenario.title.startsWith('fullstack') || scenario.title === 'mobile-app') {
-        const pageRoot = scenario.title.startsWith('fullstack')
-          ? `packages/${scenario.projectName}-shared/src/lib/pages`
-          : 'src/lib/pages'
-        // 生成后只新增页面文件，禁止修改路由器或菜单，验证页面目录自动发现。
-        await writeFile(path.join(projectPath, pageRoot, 'auto-discovered.svelte'), '<section data-testid=\'route-probe\'>Scaffold discovered page</section>\n')
-        const discovery = await readFile(path.resolve(process.cwd(), 'tests/fixtures/hash-discovery.ts'), 'utf8')
-        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title.startsWith('fullstack')
-          ? 'fullstack'
-          : scenario.title))
-      }
-      if (scenario.title === 'admin' || scenario.title.startsWith('fullstack')) {
+      const closeService = scenario.title === 'mobile-app'
+        ? await startNativeApiService('http://127.0.0.1:3000')
+        : undefined
+      try {
+        await runQualityGates(projectPath, {}, scenario)
+        await installScenarios(projectPath, scenario)
+        if (scenario.title.startsWith('fullstack') || scenario.title === 'mobile-app') {
+          const pageRoot = scenario.title.startsWith('fullstack')
+            ? `packages/${scenario.projectName}-shared/src/lib/pages`
+            : 'src/lib/pages'
+          // 生成后只新增页面文件，禁止修改路由器或菜单，验证页面目录自动发现。
+          await writeFile(path.join(projectPath, pageRoot, 'auto-discovered.svelte'), '<section data-testid=\'route-probe\'>Scaffold discovered page</section>\n')
+          const discovery = await readFile(path.resolve(process.cwd(), 'tests/fixtures/hash-discovery.ts'), 'utf8')
+          await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title.startsWith('fullstack')
+            ? 'fullstack'
+            : scenario.title))
+        }
+        if (scenario.title === 'admin' || scenario.title.startsWith('fullstack')) {
         // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
-        if (scenario.title === 'admin') {
+          if (scenario.title === 'admin') {
           // 通用能力夹具自己声明额外测试依赖，不能要求模板预装其未使用的业务模块。
-          const manifestPath = path.join(projectPath, 'package.json')
-          const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { devDependencies: Record<string, string> }
-          for (const name of ['audit', 'storage']) {
-            const specifier = localPackageSpecifiers[`@h-ai/${name}`]
-            if (!specifier)
-              throw new Error(`Missing local fixture dependency: @h-ai/${name}`)
-            manifest.devDependencies[`@h-ai/${name}`] = specifier
+            const manifestPath = path.join(projectPath, 'package.json')
+            const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { devDependencies: Record<string, string> }
+            for (const name of ['audit', 'storage']) {
+              const specifier = localPackageSpecifiers[`@h-ai/${name}`]
+              if (!specifier)
+                throw new Error(`Missing local fixture dependency: @h-ai/${name}`)
+              manifest.devDependencies[`@h-ai/${name}`] = specifier
+            }
+            await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
           }
-          await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+          const moduleRoot = scenario.title.startsWith('fullstack')
+            ? `packages/${scenario.projectName}-serv`
+            : '.'
+          const testsRoot = path.join(projectPath, moduleRoot, 'tests')
+          const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
+          await writeFile(path.join(testsRoot, 'public-capabilities.test.ts'), await readFile(path.join(fixtures, 'public-capabilities.ts')))
+          const include = [`${moduleRoot}/tests/public-capabilities.test.ts`]
+          if (scenario.title.startsWith('fullstack')) {
+            await writeFile(path.join(testsRoot, 'public-client-ip.test.ts'), await readFile(path.join(fixtures, 'public-client-ip.ts')))
+            include.push(`${moduleRoot}/tests/public-client-ip.test.ts`)
+          }
+          await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), `${JSON.stringify({
+            extends: `./${moduleRoot}/tsconfig.json`,
+            compilerOptions: {
+              types: ['node'],
+              noEmit: true,
+            },
+            include,
+            exclude: ['node_modules'],
+          }, null, 2)}\n`)
         }
-        const moduleRoot = scenario.title.startsWith('fullstack')
-          ? `packages/${scenario.projectName}-serv`
-          : '.'
-        const testsRoot = path.join(projectPath, moduleRoot, 'tests')
-        const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
-        await writeFile(path.join(testsRoot, 'public-capabilities.test.ts'), await readFile(path.join(fixtures, 'public-capabilities.ts')))
-        const include = [`${moduleRoot}/tests/public-capabilities.test.ts`]
-        if (scenario.title.startsWith('fullstack')) {
-          await writeFile(path.join(testsRoot, 'public-client-ip.test.ts'), await readFile(path.join(fixtures, 'public-client-ip.ts')))
-          include.push(`${moduleRoot}/tests/public-client-ip.test.ts`)
-        }
-        await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), `${JSON.stringify({
-          extends: `./${moduleRoot}/tsconfig.json`,
-          compilerOptions: {
-            types: ['node'],
-            noEmit: true,
-          },
-          include,
-          exclude: ['node_modules'],
-        }, null, 2)}\n`)
-      }
-      if (scenario.title === 'admin') {
+        if (scenario.title === 'admin') {
         // 用生成应用的真实 SvelteKit Handle 验证独立策略生效；规则只限制专用夹具路径。
-        const policies = {
-          rules: [
-            {
-              id: 'scaffold-private-probe',
-              paths: ['/api/public/request-denied', '/yyy/api/public/request-denied'],
-              denyIps: ['0.0.0.0/0', '::/0'],
-              encryption: 'disabled',
+          const policies = {
+            rules: [
+              {
+                id: 'scaffold-private-probe',
+                paths: ['/api/public/request-denied', '/yyy/api/public/request-denied'],
+                denyIps: ['0.0.0.0/0', '::/0'],
+                encryption: 'disabled',
+              },
+              {
+                id: 'scaffold-plain',
+                paths: [
+                  '/api/public/request-open',
+                  '/yyy/api/public/request-open',
+                  '/api/prefix-probe',
+                  '/yyy/api/prefix-probe',
+                ],
+                encryption: 'disabled',
+              },
+              {
+                id: 'scaffold-encrypted',
+                paths: ['/api/public/request-required', '/yyy/api/public/request-required'],
+                encryption: 'required',
+              },
+            ],
+          }
+          await mkdir(path.join(projectPath, 'config/security'), { recursive: true })
+          await writeFile(path.join(projectPath, 'config/security/request-access.yml'), stringify(policies))
+          const kitConfig = path.join(projectPath, 'config/_kit.yml')
+          await writeFile(kitConfig, stringify({
+            ...parse(await readFile(kitConfig, 'utf8')),
+            access: { file: './config/security/request-access.yml' },
+            transport: {
+              excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
             },
-            {
-              id: 'scaffold-plain',
-              paths: [
-                '/api/public/request-open',
-                '/yyy/api/public/request-open',
-                '/api/prefix-probe',
-                '/yyy/api/prefix-probe',
-              ],
-              encryption: 'disabled',
+          }))
+          // 场景显式启用策略和传输；公共 dotenv 的 false 同样必须按正常优先级同步，不能只改 YAML。
+          await setPublicSceneConfig(projectPath, {
+            HAI_KIT_ACCESS: { file: './config/security/request-access.yml' },
+            HAI_KIT_TRANSPORT: {
+              excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
             },
-            {
-              id: 'scaffold-encrypted',
-              paths: ['/api/public/request-required', '/yyy/api/public/request-required'],
-              encryption: 'required',
-            },
-          ],
-        }
-        await mkdir(path.join(projectPath, 'config/security'), { recursive: true })
-        await writeFile(path.join(projectPath, 'config/security/request-access.yml'), stringify(policies))
-        const kitConfig = path.join(projectPath, 'config/_kit.yml')
-        await writeFile(kitConfig, stringify({
-          ...parse(await readFile(kitConfig, 'utf8')),
-          access: { file: './config/security/request-access.yml' },
-          transport: {
-            excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
-          },
-        }))
-        // 本夹具额外启用传输加密，须等待浏览器安装协议再发唯一业务请求；默认模板可能关闭该能力。
-        const authSmokeFile = path.join(projectPath, 'e2e/app.spec.ts')
-        const authSmoke = await readFile(authSmokeFile, 'utf8')
-        const meAssertion = '  expect(await page.evaluate(async url => (await fetch(url)).status, new URL(\'./api/auth/me\', test.info().project.use.baseURL).href)).toBe(200)'
-        if (!authSmoke.includes(meAssertion))
-          throw new Error('Encrypted fixture could not locate the authentication reload check')
-        await writeFile(authSmokeFile, authSmoke.replace(meAssertion, `  await page.waitForFunction(() => Reflect.get(globalThis, '__haiKitTransportFetchInstalled') === true)\n${meAssertion}`))
-        for (const name of ['request-open', 'request-denied', 'request-required']) {
-          const route = path.join(projectPath, 'src/routes/api/public', name)
-          await mkdir(route, { recursive: true })
-          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'
+          })
+          // 本夹具额外启用传输加密，须等待浏览器安装协议再发唯一业务请求；默认模板可能关闭该能力。
+          const authSmokeFile = path.join(projectPath, 'e2e/app.spec.ts')
+          const authSmoke = await readFile(authSmokeFile, 'utf8')
+          const meAssertion = '  expect(await page.evaluate(async url => (await fetch(url)).status, new URL(\'./api/auth/me\', test.info().project.use.baseURL).href)).toBe(200)'
+          if (!authSmoke.includes(meAssertion))
+            throw new Error('Encrypted fixture could not locate the authentication reload check')
+          await writeFile(authSmokeFile, authSmoke.replace(meAssertion, `  await page.waitForFunction(() => Reflect.get(globalThis, '__haiKitTransportFetchInstalled') === true)\n${meAssertion}`))
+          for (const name of ['request-open', 'request-denied', 'request-required']) {
+            const route = path.join(projectPath, 'src/routes/api/public', name)
+            await mkdir(route, { recursive: true })
+            await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = ({ getClientAddress }) => Response.json({
   ip: getClientAddress(),
 })
 `)
-        }
-        await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), `import { mkdir, writeFile } from 'node:fs/promises'
+          }
+          await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), `import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
@@ -591,28 +620,28 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
   }, null, 2))
 })
 `)
-        // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
-        for (const [type, name, output] of [
-          ['page', 'review-page', 'src/routes'],
-          ['component', 'ReviewCard', 'src/lib/components'],
-          ['api', 'review-api', 'src/routes/api'],
-          ['model', 'review-model', 'src/lib/models'],
-          ['migration', 'review-records', 'src/lib/server/migrations'],
-        ]) {
-          runNode([
-            cliBin,
-            '--cwd',
-            projectPath,
-            'generate',
-            type,
-            name,
-            '--output',
-            output,
-          ])
-        }
-        const migrationDir = path.join(projectPath, 'src/lib/server/migrations')
-        const migration = (await readdir(migrationDir)).find(name => name.endsWith('_review_records.ts'))!
-        await writeFile(path.join(projectPath, 'tests/generated-migration.test.ts'), `import { reldb } from '@h-ai/reldb'
+          // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
+          for (const [type, name, output] of [
+            ['page', 'review-page', 'src/routes'],
+            ['component', 'ReviewCard', 'src/lib/components'],
+            ['api', 'review-api', 'src/routes/api'],
+            ['model', 'review-model', 'src/lib/models'],
+            ['migration', 'review-records', 'src/lib/server/migrations'],
+          ]) {
+            await runNode([
+              cliBin,
+              '--cwd',
+              projectPath,
+              'generate',
+              type,
+              name,
+              '--output',
+              output,
+            ])
+          }
+          const migrationDir = path.join(projectPath, 'src/lib/server/migrations')
+          const migration = (await readdir(migrationDir)).find(name => name.endsWith('_review_records.ts'))!
+          await writeFile(path.join(projectPath, 'tests/generated-migration.test.ts'), `import { reldb } from '@h-ai/reldb'
 import { expect, it } from 'vitest'
 import { down, up } from '../src/lib/server/migrations/${migration.replace(/\.ts$/, '')}'
 
@@ -629,173 +658,169 @@ it('generated migration executes up and down with HaiResult', async () => {
   }
 })
 `)
-      }
-      if (scenario.title === 'fullstack-feedback') {
-        const servDirectory = path.join(projectPath, 'packages', `${scenario.projectName}-serv`)
-        const policyFile = path.join(servDirectory, 'config/security/request-access.yml')
-        await mkdir(path.dirname(policyFile), { recursive: true })
-        await writeFile(policyFile, stringify({
-          rules: [
-            {
-              id: 'external-plain',
-              paths: ['/api/v1/policy-plain'],
-              allowIps: ['127.0.0.1', '::1'],
-              encryption: 'disabled',
+        }
+        if (scenario.title === 'fullstack-feedback') {
+          const servDirectory = path.join(projectPath, 'packages', `${scenario.projectName}-serv`)
+          const policyFile = path.join(servDirectory, 'config/security/request-access.yml')
+          await mkdir(path.dirname(policyFile), { recursive: true })
+          await writeFile(policyFile, stringify({
+            rules: [
+              {
+                id: 'external-plain',
+                paths: ['/api/v1/policy-plain'],
+                allowIps: ['127.0.0.1', '::1'],
+                encryption: 'disabled',
+              },
+              {
+                id: 'external-denied',
+                paths: ['/api/v1/policy-denied'],
+                denyIps: ['0.0.0.0/0', '::/0'],
+                encryption: 'disabled',
+              },
+              {
+                id: 'internal-encrypted',
+                paths: ['/api/v1/policy-required'],
+                encryption: 'required',
+              },
+            ],
+          }))
+          const configFile = path.join(servDirectory, 'config/_serv.yml')
+          const settings = parse(await readFile(configFile, 'utf8'))
+          await writeFile(configFile, stringify({
+            ...settings,
+            http: {
+              ...settings.http,
+              access: { file: './config/security/request-access.yml' },
             },
-            {
-              id: 'external-denied',
-              paths: ['/api/v1/policy-denied'],
-              denyIps: ['0.0.0.0/0', '::/0'],
-              encryption: 'disabled',
-            },
-            {
-              id: 'internal-encrypted',
-              paths: ['/api/v1/policy-required'],
-              encryption: 'required',
-            },
-          ],
-        }))
-        const configFile = path.join(servDirectory, 'config/_serv.yml')
-        const settings = parse(await readFile(configFile, 'utf8'))
-        await writeFile(configFile, stringify({
-          ...settings,
-          http: {
-            ...settings.http,
-            access: { file: './config/security/request-access.yml' },
-          },
-        }))
-        const appFile = path.join(servDirectory, 'src/app-server.ts')
-        const source = await readFile(appFile, 'utf8')
-        await writeFile(appFile, injectRequestPolicyEndpoints(source))
-        await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), await readFile(path.resolve(process.cwd(), 'tests/fixtures/request-encryption.ts'), 'utf8'))
-        // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
-        for (const [target, version] of [
-          ['apps/sample-fullstack-feedback-web', '2.4.6-frontend'],
-          ['packages/sample-fullstack-feedback-serv', '7.8.9-serv'],
+          }))
+          await setPublicSceneConfig(projectPath, {
+            HAI_SERV_HTTP_ACCESS: { file: './config/security/request-access.yml' },
+          })
+          const appFile = path.join(servDirectory, 'src/app-server.ts')
+          const source = await readFile(appFile, 'utf8')
+          await writeFile(appFile, injectRequestPolicyEndpoints(source))
+          await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), await readFile(path.resolve(process.cwd(), 'tests/fixtures/request-encryption.ts'), 'utf8'))
+          // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
+          for (const [target, version] of [
+            ['apps/sample-fullstack-feedback-web', '2.4.6-frontend'],
+            ['packages/sample-fullstack-feedback-serv', '7.8.9-serv'],
+          ]) {
+            const manifestPath = path.join(projectPath, target, 'package.json')
+            const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+            await writeFile(manifestPath, `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
+          }
+          await runDeployTestCommand('git', ['init', '--quiet'], { cwd: projectPath })
+          await runDeployTestCommand('git', ['add', '--all'], { cwd: projectPath })
+          await runDeployTestCommand('git', [
+            '-c',
+            'core.hooksPath=.git/empty-hooks',
+            '-c',
+            'user.name=Scaffold metadata',
+            '-c',
+            'user.email=scaffold@example.invalid',
+            'commit',
+            '--quiet',
+            '-m',
+            'metadata acceptance fixture',
+          ], { cwd: projectPath })
+          const committed = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: projectPath, encoding: 'utf8', windowsHide: true })
+          if (committed.status !== 0 || !/^[a-f\d]{40,64}$/i.test(committed.stdout.trim()))
+            throw new Error('The metadata fixture must have its own exact Git commit')
+          envOptions.expectedBuildCommit = committed.stdout.trim()
+        }
+        await runScenarioGates(projectPath, envOptions, scenario)
+
+        if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback') {
+          await runPrefixBrowserGates(projectPath, scenario.title === 'admin'
+            ? 'sveltekit'
+            : 'vite', envOptions)
+        }
+
+        if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
+          const appRoot = scenario.title === 'mobile-app'
+            ? projectPath
+            : path.join(projectPath, `apps/${scenario.projectName}-app`)
+          for (const platform of ['android', 'ios']) {
+            await mkdir(path.join(appRoot, platform), { recursive: true })
+            await writeFile(path.join(appRoot, platform, 'native-source.txt'), 'Keep native project sources\n')
+          }
+          await runPnpm(appRoot, ['clean'], envOptions)
+          for (const platform of ['android', 'ios'])
+            expect(await readFile(path.join(appRoot, platform, 'native-source.txt'), 'utf8')).toBe('Keep native project sources\n')
+        }
+
+        if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
+          if (process.platform !== 'win32')
+            throw new Error('This installer acceptance case requires a Windows runner')
+          // 根版本故意不同于桌面子包，验证 CLI 与 Tauri 产物确实跟随应用根版本。
+          const applicationManifest = path.join(projectPath, 'package.json')
+          const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
+          await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
+          await runPnpm(projectPath, [
+            'build',
+            '--target',
+            'desktop',
+            '--platform',
+            'windows',
+            '--arch',
+            'x64',
+          ])
+          const output = path.join(projectPath, '.hai/build/desktop/windows/release')
+          const batch = path.join(output, (await readFile(path.join(output, 'latest'), 'utf8')).trim())
+          const manifest = JSON.parse(await readFile(path.join(batch, 'manifest.json'), 'utf8')) as { files: Array<{ file: string }> }
+          const installer = manifest.files.find(({ file }) => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))
+          expect(installer && await fileExists(path.join(batch, installer.file))).toBe(true)
+        }
+
+        for (const relativePath of scenario.expectedFiles) {
+          expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
+        }
+        const loggingGuide = 'hai-app-create/logging.md'
+        expect(await readFile(path.join(projectPath, '.agents/skills', loggingGuide), 'utf8'))
+          .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', loggingGuide), 'utf8'))
+        for (const resource of [
+          'SKILL.md',
+          'workflow.md',
+          'templates.md',
+          'changes.md',
+          'handoff.md',
+          'evaluation.md',
         ]) {
-          const manifestPath = path.join(projectPath, target, 'package.json')
-          const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-          await writeFile(manifestPath, `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
-        }
-        runGate('git', ['init', '--quiet'], projectPath, process.env, false)
-        runGate('git', ['add', '--all'], projectPath, process.env, false)
-        runGate('git', [
-          '-c',
-          'core.hooksPath=.git/empty-hooks',
-          '-c',
-          'user.name=Scaffold metadata',
-          '-c',
-          'user.email=scaffold@example.invalid',
-          'commit',
-          '--quiet',
-          '-m',
-          'metadata acceptance fixture',
-        ], projectPath, process.env, false)
-        const committed = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: projectPath, encoding: 'utf8', windowsHide: true })
-        if (committed.status !== 0 || !/^[a-f\d]{40,64}$/i.test(committed.stdout.trim()))
-          throw new Error('The metadata fixture must have its own exact Git commit')
-        envOptions.expectedBuildCommit = committed.stdout.trim()
-      }
-      if (scenario.title === 'mobile-app') {
-        envOptions.serviceBaseUrl = await allocateBaseUrl()
-        envOptions.publicApiBase = `${envOptions.serviceBaseUrl}/api/v1`
-        const closeService = await startNativeApiService(root, envOptions.serviceBaseUrl)
-        try {
-          await runQualityGates(projectPath, envOptions)
-        }
-        finally { await closeService() }
-      }
-      else {
-        await runQualityGates(projectPath, envOptions)
-      }
-
-      if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback') {
-        await runPrefixBrowserGates(projectPath, scenario.title === 'admin'
-          ? 'sveltekit'
-          : 'vite', envOptions)
-      }
-
-      if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
-        const appRoot = scenario.title === 'mobile-app'
-          ? projectPath
-          : path.join(projectPath, `apps/${scenario.projectName}-app`)
-        for (const platform of ['android', 'ios']) {
-          await mkdir(path.join(appRoot, platform), { recursive: true })
-          await writeFile(path.join(appRoot, platform, 'native-source.txt'), 'Keep native project sources\n')
-        }
-        await runPnpm(appRoot, ['clean'], envOptions)
-        for (const platform of ['android', 'ios'])
-          expect(await readFile(path.join(appRoot, platform, 'native-source.txt'), 'utf8')).toBe('Keep native project sources\n')
-      }
-
-      if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
-        if (process.platform !== 'win32')
-          throw new Error('This installer acceptance case requires a Windows runner')
-        // 根版本故意不同于桌面子包，验证 CLI 与 Tauri 产物确实跟随应用根版本。
-        const applicationManifest = path.join(projectPath, 'package.json')
-        const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
-        await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
-        await runPnpm(projectPath, [
-          'build',
-          '--target',
-          'desktop',
-          '--platform',
-          'windows',
-          '--arch',
-          'x64',
-        ])
-        const output = path.join(projectPath, '.hai/build/desktop/windows/release')
-        const batch = path.join(output, (await readFile(path.join(output, 'latest'), 'utf8')).trim())
-        const manifest = JSON.parse(await readFile(path.join(batch, 'manifest.json'), 'utf8')) as { files: Array<{ file: string }> }
-        const installer = manifest.files.find(({ file }) => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))
-        expect(installer && await fileExists(path.join(batch, installer.file))).toBe(true)
-      }
-
-      for (const relativePath of scenario.expectedFiles) {
-        expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
-      }
-      const loggingGuide = 'hai-app-create/logging.md'
-      expect(await readFile(path.join(projectPath, '.agents/skills', loggingGuide), 'utf8'))
-        .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', loggingGuide), 'utf8'))
-      for (const resource of [
-        'SKILL.md',
-        'workflow.md',
-        'templates.md',
-        'changes.md',
-        'handoff.md',
-        'evaluation.md',
-      ]) {
         // 从实际 CLI 构建生成，工作流入口及其按需范本必须完整且未被模板渲染改写。
-        expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
-          .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
-      }
-      if (scenario.title.startsWith('fullstack')) {
-        for (const [skill, resource] of [
-          ['hai-ui-design', 'patterns.md'],
-          ['hai-ui-review', 'checklist.md'],
-        ]) {
-          expect(await readFile(path.join(projectPath, '.agents/skills', skill, resource), 'utf8'))
-            .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))
+          expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
+            .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
         }
-      }
-      if (scenario.title === 'api-feedback') {
+        if (scenario.title.startsWith('fullstack')) {
+          for (const [skill, resource] of [
+            ['hai-ui-design', 'patterns.md'],
+            ['hai-ui-review', 'checklist.md'],
+          ]) {
+            expect(await readFile(path.join(projectPath, '.agents/skills', skill, resource), 'utf8'))
+              .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))
+          }
+        }
+        if (scenario.title === 'api-feedback') {
         // API 样板验收实际接入的认证、通知、上传、反馈和加密，保留未接入模块的配置参考。
-        const servicePath = path.join(projectPath, 'apps/sample-api-feedback-serv')
-        const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
-        for (const name of [
-          'iam',
-          'reach',
-          'feedback',
-          'crypto',
-          'storage',
-        ])
-          expect(manifest.dependencies).toHaveProperty(`@h-ai/${name}`)
-        for (const name of ['ai', 'vecdb', 'payment', 'datapipe'])
-          expect(manifest.dependencies).not.toHaveProperty(`@h-ai/${name}`)
-        expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(true)
-      }
+          const servicePath = path.join(projectPath, 'apps/sample-api-feedback-serv')
+          const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
+          for (const name of [
+            'iam',
+            'reach',
+            'feedback',
+            'crypto',
+            'storage',
+          ])
+            expect(manifest.dependencies).toHaveProperty(`@h-ai/${name}`)
+          for (const name of ['ai', 'vecdb', 'payment', 'datapipe'])
+            expect(manifest.dependencies).not.toHaveProperty(`@h-ai/${name}`)
+          expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(true)
+        }
       // 每个成功场景立即释放磁盘资源，清理计入该场景的整体超时预算。
-      await removeTempRoot(root)
+      }
+      finally {
+        await closeService?.()
+        await removeTempRoot(root)
+      }
     }, 1_800_000)
   }
 })
@@ -821,58 +846,31 @@ async function removeTempRoot(root: string): Promise<void> {
 }
 
 /** 独立移动模板通过真实 API 示例服务验证；进程和数据只属于本次样板门禁。 */
-async function startNativeApiService(root: string, baseUrl: string): Promise<() => Promise<void>> {
+async function startNativeApiService(baseUrl: string): Promise<() => Promise<void>> {
+  await getFreePort(Number(new URL(baseUrl).port))
   const repo = path.resolve(process.cwd(), '../..')
-  await runPnpm(repo, ['--filter', 'api-service', 'build'])
-  const service = spawn(process.execPath, ['dist/index.js'], {
-    cwd: path.join(repo, 'apps/api-service'),
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      ...createE2eServerEnv({
-        ...authFixtureEnv(),
-        HAI_E2E_DATA_ROOT: path.join(root, 'api-data'),
-        HAI_CORE_ENV: 'test',
-        HAI_CORE_LOGGING_LEVEL: 'error',
-        HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
-        HAI_DB: JSON.stringify({
-          type: 'sqlite',
-          database: path.join(root, 'api-data/app.db'),
-        }),
-        HAI_CACHE: JSON.stringify({ type: 'memory' }),
-        HAI_VECDB: JSON.stringify({
-          type: 'lancedb',
-          path: path.join(root, 'api-data/vecdb'),
-        }),
-        HAI_STORAGE: JSON.stringify({
-          type: 'local',
-          root: path.join(root, 'api-data/uploads'),
-        }),
-        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
-        HAI_IAM_REGISTER_ENABLED: 'true',
-      }),
-    },
-  })
-  let startupError = ''
-  service.stdout?.setEncoding('utf8').on('data', (chunk: string) => {
-    startupError = (startupError + chunk).slice(-4000)
-  })
-  service.stderr?.setEncoding('utf8').on('data', (chunk: string) => {
-    startupError = (startupError + chunk).slice(-4000)
+  const service = path.join(repo, 'apps/api-service')
+  await runPnpm(service, ['build'])
+  const controller = new AbortController()
+  let serviceFailure: unknown
+  const completion = runPnpmTestCommand(['start:test'], {
+    cwd: service,
+    signal: controller.signal,
+  }).then(() => {
+    serviceFailure = new Error('Native API fixture exited before cleanup')
+  }, (error: unknown) => {
+    serviceFailure = error
   })
   const close = async () => {
-    if (service.exitCode !== null)
-      return
-    await new Promise<void>((resolve) => {
-      service.once('exit', () => resolve())
-      service.kill()
-    })
+    controller.abort()
+    await completion
+    if (!(serviceFailure instanceof DeployTestCommandError && serviceFailure.localTermination === 'confirmed'))
+      throw serviceFailure
   }
   try {
     for (let attempt = 0; attempt < 120; attempt++) {
-      if (service.exitCode !== null)
-        throw new Error(`Native API fixture exited before ready: ${startupError}`)
+      if (serviceFailure)
+        throw serviceFailure
       const response = await fetch(`${baseUrl}/health`).catch(() => null)
       if (response?.ok)
         return close
@@ -891,12 +889,12 @@ async function allocateBaseUrl(): Promise<string> {
   return `http://127.0.0.1:${port}`
 }
 
-async function getFreePort(): Promise<number> {
+async function getFreePort(selectedPort = 0): Promise<number> {
   return await new Promise((resolve, reject) => {
     const server = createServer()
     server.unref()
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(selectedPort, '127.0.0.1', () => {
       const address = server.address()
       if (!address || typeof address === 'string') {
         server.close(() => reject(new Error('Failed to resolve free port')))
@@ -912,6 +910,25 @@ async function getFreePort(): Promise<number> {
       })
     })
   })
+}
+
+/** 场景只覆盖公共文件中已声明的 JSON 配置，不新增重复键或通过私有文件改变本轮功能。 */
+async function setPublicSceneConfig(projectPath: string, values: Record<string, Record<string, unknown>>): Promise<void> {
+  const file = path.join(projectPath, '.env')
+  const source = await readFile(file, 'utf8')
+  const lines = source.split(/\r?\n/)
+  for (const [name, value] of Object.entries(values)) {
+    const matches = lines.flatMap((line, index) => line.startsWith(`${name}=`)
+      ? [index]
+      : [])
+    const encoded = JSON.stringify(value)
+    if (matches.length !== 1 || !encoded || encoded.includes('\''))
+      throw new Error(`The public scene must declare ${name} once and use a valid JSON object`)
+    lines[matches[0]!] = `${name}='${encoded}'`
+  }
+  await writeFile(file, lines.join(source.includes('\r\n')
+    ? '\r\n'
+    : '\n'))
 }
 
 /** 动态地址作为 JS 字符串编码；单引号输出与生成工程的 lint 规则一致。 */
@@ -978,6 +995,11 @@ async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'v
   const rootUrl = envOptions.baseUrl!
   const prefixUrl = `${proxyUrl ?? rootUrl}/yyy/`
   if (kind === 'sveltekit') {
+    const vite = path.join(projectPath, 'vite.config.ts')
+    const source = await readFile(vite, 'utf8')
+    if (!source.includes('resolvePublicBasePath()'))
+      throw new Error('The SvelteKit configuration must declare its actual base path')
+    await writeFile(vite, source.replaceAll('resolvePublicBasePath()', 'resolvePublicBasePath(\'/yyy\')'))
     const route = path.join(projectPath, 'src/routes/api/prefix-probe')
     await mkdir(route, { recursive: true })
     await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */
@@ -999,7 +1021,8 @@ export function GET() {
     await writeFile(testFile, scoped)
   }
   const config = `import { defineConfig } from '@playwright/test'
-import original from './playwright.config'
+import original from './playwright.scenarios.config'
+import { testServer } from './scripts/test-server'
 
 const servers = Array.isArray(original.webServer) ? original.webServer : [original.webServer!]
 export default defineConfig({
@@ -1011,17 +1034,19 @@ export default defineConfig({
     : ['prefix-browser.spec.ts', 'request-policy.spec.ts'])},
   use: { ...original.use, baseURL: ${JSON.stringify(prefixUrl)} },
   webServer: ${kind === 'sveltekit'
-    ? `servers.map(server => ({ ...server, env: { ...server.env, PUBLIC_BASE_PATH: '/yyy' }, url: ${JSON.stringify(prefixUrl)} }))`
+    ? `servers.map(server => {
+      const readiness = new URL(server.url || ${JSON.stringify(rootUrl)})
+      readiness.pathname = '/yyy/'
+      return testServer({ PUBLIC_BASE_PATH: '/yyy' }, { ...server, url: readiness.href })
+    })`
     : `[...servers.map(server => {
       if (server.name?.endsWith('-web')) return {
         ...server,
-        command: ${JSON.stringify(`pnpm --filter ${path.basename(projectPath)}-web exec vite preview --host 127.0.0.1 --port ${new URL(rootUrl).port} --strictPort`)},
+        command: ${JSON.stringify(`pnpm --filter ${path.basename(projectPath)}-web preview --mode test --host 127.0.0.1 --port ${new URL(rootUrl).port} --strictPort`)},
         url: ${JSON.stringify(rootUrl)},
       }
       if (server.name?.endsWith('-serv')) {
-        const settings: Record<string, unknown> | undefined = server.env?.HAI_SERV ? JSON.parse(server.env.HAI_SERV) : undefined
-        const http = settings?.http
-        return { ...server, env: { ...server.env, HAI_SERV_HTTP_APIPREFIX: '/yyy/api/v1', ...(settings ? { HAI_SERV: JSON.stringify({ ...settings, http: { ...(http && typeof http === 'object' ? http : {}), apiPrefix: '/yyy/api/v1' } }) } : {}) } }
+        return testServer({ HAI_SERV_HTTP_APIPREFIX: '/yyy/api/v1' }, server)
       }
       return server
     }), {
@@ -1058,7 +1083,7 @@ export default defineConfig({
   })
 }
 
-async function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): Promise<void> {
+async function runQualityGates(projectPath: string, envOptions: GateEnvOptions, scenario: ScaffoldGateCase): Promise<void> {
   await runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
   await runPnpm(projectPath, ['typecheck'], envOptions)
   if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json'))) {
@@ -1071,33 +1096,83 @@ async function runQualityGates(projectPath: string, envOptions: GateEnvOptions =
     ], envOptions)
   }
   await runPnpm(projectPath, ['lint'], envOptions)
-  // 注入仅属于构建机器的公开值，确认 Vite 和 Kit 都不会将 .env.local 固化进交付包。
+  // 独立构建隔离场景：私有 sentinel 属于本轮临时工程，实际 build 必须忽略该文件。
   const sentinel = 'hai-build-must-ignore-local-1792584600'
   const checksBuildIsolation = existsSync(path.join(projectPath, 'vite.config.ts'))
-  if (checksBuildIsolation)
+  if (checksBuildIsolation) {
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\n`)
-  await runPnpm(projectPath, ['test'], envOptions)
-  // 各模板的 E2E 入口或 webServer 自带完整构建，保留一次真实编译和浏览器验收。
-  await runPnpm(projectPath, ['test:e2e'], envOptions)
-  if (!checksBuildIsolation)
-    return
-  let checkedFiles = 0
-  for (const output of ['build', 'dist', '.svelte-kit/output']) {
-    const directory = path.join(projectPath, output)
-    if (!existsSync(directory))
-      continue
-    for (const file of readdirSync(directory, { recursive: true })) {
-      if (/\.(?:js|json|html|css|map)$/.test(String(file))) {
-        checkedFiles++
-        expect(readFileSync(path.join(directory, String(file)), 'utf8'), `Build leaked .env.local into ${output}/${String(file)}`).not.toContain(sentinel)
+    await runPnpm(projectPath, ['build'], envOptions)
+    let checkedFiles = 0
+    for (const output of ['build', 'dist', '.svelte-kit/output']) {
+      const directory = path.join(projectPath, output)
+      if (!existsSync(directory))
+        continue
+      for (const file of readdirSync(directory, { recursive: true })) {
+        if (/\.(?:js|json|html|css|map)$/.test(String(file))) {
+          checkedFiles++
+          expect(readFileSync(path.join(directory, String(file)), 'utf8'), `Build leaked .env.local into ${output}/${String(file)}`).not.toContain(sentinel)
+        }
       }
     }
+    expect(checkedFiles, 'Build isolation requires actual generated output files').toBeGreaterThan(0)
   }
-  expect(checkedFiles, 'Build isolation requires actual generated output files').toBeGreaterThan(0)
+  await runPnpm(projectPath, ['test'], envOptions)
+  // 首先验证原样生成工程：实际 dev 和用户拿到的原生 Playwright 入口均不接收应用环境覆盖。
+  const evidence = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || '../../tmp/validation/module-review/scaffold-browser', scenario.title)
+  await runDefaultDev(projectPath, {
+    evidence: path.join(evidence, 'default-dev'),
+  })
+  await runPnpm(projectPath, ['test:e2e'])
 }
 
-function runNode(args: string[]): void {
-  runGate(process.execPath, args, process.cwd(), buildChildEnv(), false)
+async function runScenarioGates(projectPath: string, envOptions: GateEnvOptions, scenario: ScaffoldGateCase): Promise<void> {
+  if (scenario.title === 'admin')
+    await runPnpm(projectPath, ['install', '--no-frozen-lockfile', '--prefer-offline'])
+  await runPnpm(projectPath, ['typecheck'])
+  if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json'))) {
+    await runPnpm(projectPath, [
+      'exec',
+      'tsc',
+      '--noEmit',
+      '-p',
+      'tsconfig.capabilities.json',
+    ])
+  }
+  // 深入功能场景仅安装到本次临时工程；不增加用户模板和 package scripts 的内容。
+  await runPnpm(projectPath, [
+    'exec',
+    'eslint',
+    'playwright.scenarios.config.ts',
+    'e2e',
+    'scripts/test-server.ts',
+    '--fix',
+  ])
+  await runPnpm(projectPath, ['lint'])
+  await runPnpm(projectPath, ['test'])
+  if (scenario.title.startsWith('fullstack'))
+    await runPnpm(projectPath, ['compile'])
+  await runPnpm(projectPath, [
+    'exec',
+    'node',
+    'scripts/run-e2e.mjs',
+    '--config',
+    'playwright.scenarios.config.ts',
+    ...(scenario.title.startsWith('fullstack')
+      ? [
+          '--next',
+          '--e2e-group=session-close',
+          '--config',
+          'playwright.scenarios.config.ts',
+        ]
+      : []),
+  ], envOptions)
+}
+
+async function runNode(args: string[]): Promise<void> {
+  process.stdout.write(await runDeployTestCommand(process.execPath, args, {
+    cwd: process.cwd(),
+    env: buildChildEnv(),
+  }))
 }
 
 /**
@@ -1114,143 +1189,37 @@ function runNode(args: string[]): void {
  */
 async function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): Promise<void> {
   const isBrowser = args[0] === 'test:e2e' || (args[0] === 'exec' && args[1] === 'node' && args[2] === 'scripts/run-e2e.mjs')
-  const nodeEnv = args[0] === 'build' || isBrowser
-    ? 'production'
-    : 'test'
-  const env = buildChildEnv(envOptions, nodeEnv)
+  const env = buildChildEnv(envOptions)
   if (isBrowser) {
-    // 只持久保留浏览器产物，临时工程及私有环境仍由 removeTempRoot 回收。
     const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || path.join(process.cwd(), '../../tmp/validation/module-review/scaffold-browser'))
     mkdirSync(parent, { recursive: true })
     env.HAI_AUTH_EVIDENCE_DIR = mkdtempSync(path.join(parent, `${path.basename(cwd)}-`))
-    const owner = [...tempRoots].find((root) => {
-      const relative = path.relative(root, cwd)
-      return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative)
-    })
-    if (!owner)
-      throw new Error('Database isolation requires an owned scaffold project')
-    await withDatabaseIsolation(cwd, env.HAI_AUTH_EVIDENCE_DIR, env, () => runGate(pnpmBin, args, cwd, env, true))
-    return
   }
-  runGate(pnpmBin, args, cwd, env, true)
+  process.stdout.write(await runPnpmTestCommand(args, { cwd, env, timeoutMs: 900_000 }))
 }
 
-/**
- * 运行一个门禁命令，捕获输出并在失败时把末尾输出并入错误信息。
- *
- * 用 stdio:'inherit' 时子进程输出只进 CI 原始日志（需鉴权才能读），失败断言只剩
- * `output:[null,null,null]`，无法定位真正的报错。这里捕获 stdout/stderr 后透传显示，
- * 失败时把末尾若干行并入抛出的错误，使其出现在测试报告 / CI check-run annotation 中。
- */
-function runGate(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, shell: boolean): void {
-  const result = spawnSync(command, args, {
-    cwd,
-    env,
-    shell,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  if (result.stdout)
-    process.stdout.write(result.stdout)
-  if (result.stderr)
-    process.stderr.write(result.stderr)
-  if (result.error)
-    throw result.error
-  if (result.status !== 0) {
-    const tail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
-      .split('\n')
-      .filter(line => line.trim().length > 0)
-      .slice(-40)
-      .join('\n')
-    throw new Error(`Command failed: ${command} ${args.join(' ')} (cwd=${cwd}, status=${result.status ?? 'null'})\n--- output tail ---\n${tail}\n--- @h-ai resolution ---\n${describeHaiModules(cwd)}`)
-  }
-}
-
-/**
- * 报告生成项目中已安装的 @h-ai 包及其类型声明是否存在，用于定位
- * "Cannot find module '@h-ai/xxx' or its corresponding type declarations" 到底是未安装
- * 还是安装了但缺少 .d.ts。hoisted 布局下根 node_modules/@h-ai 包含全部提升包。
- */
-function describeHaiModules(cwd: string): string {
-  const haiDir = path.join(cwd, 'node_modules', '@h-ai')
-  let names: string[]
-  try {
-    names = readdirSync(haiDir).sort()
-  }
-  catch {
-    return `node_modules/@h-ai not found under ${cwd}`
-  }
-  return names
-    .map((name) => {
-      const directory = path.join(haiDir, name)
-      try {
-        const manifest = JSON.parse(readFileSync(path.join(directory, 'package.json'), 'utf8'))
-        const declared = typeof manifest.types === 'string'
-          ? manifest.types
-          : undefined
-        return `${name}(types=${declared
-          ? existsSync(path.resolve(directory, declared))
-          : 'unspecified'})`
-      }
-      catch {
-        return `${name}(manifest=unreadable)`
-      }
-    })
-    .join(', ')
-}
-
-function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'production' = 'test'): NodeJS.ProcessEnv {
-  return {
+/** 只传测试客户端地址和报告位置，不提供 HAI_* 应用配置、PUBLIC_API_BASE 或替代密钥。 */
+function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
+  const env = {
     ...process.env,
-    ...authFixtureEnv(),
     ...(envOptions.baseUrl
       ? { BASE_URL: envOptions.baseUrl }
       : {}),
     ...(envOptions.serviceBaseUrl
-      ? {
-          PUBLIC_API_BASE: envOptions.publicApiBase ?? envOptions.serviceBaseUrl,
-          SERVICE_BASE_URL: envOptions.serviceBaseUrl,
-        }
+      ? { SERVICE_BASE_URL: envOptions.serviceBaseUrl }
       : {}),
     ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target.toUpperCase()}_URL`, url])),
     ...(envOptions.expectedBuildCommit
       ? { E2E_BUILD_COMMIT: envOptions.expectedBuildCommit }
       : {}),
+    ...(notificationUrl
+      ? { IAM_NOTIFICATION_URL: notificationUrl }
+      : {}),
     CI: '1',
-    // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
-    NODE_ENV: nodeEnv,
-    // 各种脚手架必须消费 core 的覆盖值，避免包名/翻译名称或固定日志级别冒充配置。
-    HAI_CORE_NAME: 'Configured scaffold',
-    HAI_CORE_VERSION: '9.8.7',
-    HAI_CORE_ENV: 'test',
-    HAI_CORE_LOGGING_LEVEL: 'warn',
-    // 浏览器执行时由 runPnpm 分配独立证据目录，不覆盖调用方的证据根目录。
   }
-}
-
-/** 验证真实通知 HTTP 链路；验证码只在内存收件箱中保留。 */
-function authFixtureEnv(): NodeJS.ProcessEnv {
-  if (!notificationUrl)
-    return {}
-  return {
-    IAM_NOTIFICATION_URL: notificationUrl,
-    HAI_IAM_LOGIN_OTP: 'true',
-    HAI_IAM_PASSWORDRESET_ENABLED: 'true',
-    HAI_REACH_PROVIDERS: JSON.stringify(['email', 'sms'].map(name => ({ name, type: 'api', url: `${notificationUrl}/send` }))),
-    HAI_REACH_TEMPLATES: JSON.stringify([
-      { name: 'otp_email', provider: 'email', body: 'Code: {code}' },
-      { name: 'otp_sms', provider: 'sms', body: 'Code: {code}' },
-      { name: 'password_reset', provider: 'email', body: 'Reset: {token}' },
-      { name: 'password_reset_sms', provider: 'sms', body: 'Reset: {token}' },
-    ]),
-    HAI_IAM_AGREEMENTS: JSON.stringify({
-      showOnRegister: true,
-      showOnLogin: true,
-      userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.',
-      userAgreementUrl: `${notificationUrl}/terms`,
-      privacyPolicyUrl: `${notificationUrl}/privacy`,
-    }),
-  }
+  // Vitest 自身的 NODE_ENV=test 不属于被验收应用的启动环境。
+  delete env.NODE_ENV
+  return env
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

@@ -163,8 +163,8 @@ if (!page.success)
 pnpm --filter agent typecheck
 pnpm --filter agent test
 pnpm --filter agent test:e2e
-pnpm --filter agent test:e2e --config playwright.workbench.config.ts
-pnpm --filter agent test:e2e --config playwright.tools.config.ts
+pnpm --filter agent test:e2e e2e/workbench.spec.ts
+pnpm --filter agent test:e2e e2e/tools-workbench.spec.ts
 ```
 
 管理された E2E 入口が独立データを作成します。ツール専用設定は Runner executor を有効化し、既定のブラウザー設定はジョブを取得しません。ノード間の無効化テストには同じテスト DB・Storage を共有し `selection: {}` の別 API ノードが必要です。`AGENT_E2E_DISABLED_TOOLS_URL` で渡し、ない場合はその項目を明示的にスキップします。

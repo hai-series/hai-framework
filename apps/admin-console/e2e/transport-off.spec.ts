@@ -1,14 +1,10 @@
 import { expect, test } from '@playwright/test'
-
-const DEFAULT_ADMIN = {
-  username: 'admin',
-  password: 'admin123456',
-}
+import { transportAdmin } from './helpers'
 
 test.describe('Transport disabled E2E', () => {
   test('plain auth request works without encrypted response headers', async ({ request }) => {
     const loginRes = await request.post('/api/auth/login', {
-      data: { identifier: DEFAULT_ADMIN.username, password: DEFAULT_ADMIN.password },
+      data: { identifier: transportAdmin.username, password: transportAdmin.password },
     })
     const rawBody = await loginRes.text()
 
@@ -35,6 +31,6 @@ test.describe('Transport disabled E2E', () => {
     }
 
     expect(meBody.success).toBe(true)
-    expect(meBody.data?.user?.username).toBe(DEFAULT_ADMIN.username)
+    expect(meBody.data?.user?.username).toBe(transportAdmin.username)
   })
 })

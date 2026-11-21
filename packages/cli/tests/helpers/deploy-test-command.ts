@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
-import { windowsTestCommand, windowsTestJobProbe } from '../../../../scripts/test-command-windows.js'
+import { windowsTestCommand, windowsTestJobProbe } from './startup-windows-job.js'
 
 export interface DeployTestCommandOptions {
   cwd?: string
@@ -205,6 +205,24 @@ export async function runDeployTestCommand(command: string, args: string[], opti
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', abort)
   }
+}
+
+/** 复用当前 pnpm 的真实入口；Windows Job 不能把 .cmd 当作原生程序启动。 */
+export function runPnpmTestCommand(args: string[], options: DeployTestCommandOptions = {}): Promise<string> {
+  const entry = Object.entries(process.env).find(([name]) => name.toLowerCase() === 'npm_execpath')?.[1]
+  if (!entry || !/(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry))
+    throw new Error('Run CLI runtime tests through pnpm to preserve the package manager entrypoint')
+  // 去掉 Vitest 自身的编译模式；应用模式仍由真实脚本和 dotenv 决定。
+  const env = {
+    ...process.env,
+    ...options.env,
+  }
+  if (options.env?.NODE_ENV === undefined)
+    delete env.NODE_ENV
+  options = { ...options, env }
+  return /\.[cm]?js$/i.test(entry)
+    ? runDeployTestCommand(process.execPath, [entry, ...args], options)
+    : runDeployTestCommand(entry, args, options)
 }
 
 export interface DeployTestCommands {

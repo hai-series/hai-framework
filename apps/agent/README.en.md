@@ -163,8 +163,8 @@ if (!page.success)
 pnpm --filter agent typecheck
 pnpm --filter agent test
 pnpm --filter agent test:e2e
-pnpm --filter agent test:e2e --config playwright.workbench.config.ts
-pnpm --filter agent test:e2e --config playwright.tools.config.ts
+pnpm --filter agent test:e2e e2e/workbench.spec.ts
+pnpm --filter agent test:e2e e2e/tools-workbench.spec.ts
 ```
 
 The managed E2E entry allocates isolated data. The tools config enables the Runner executor; the default browser config does not claim jobs. Cross-node disabling additionally needs an API node sharing the test database/Storage with `selection: {}`, supplied as `AGENT_E2E_DISABLED_TOOLS_URL`; otherwise that case is explicitly skipped.

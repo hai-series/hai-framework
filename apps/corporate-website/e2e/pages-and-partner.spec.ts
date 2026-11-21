@@ -1,4 +1,20 @@
+import path from 'node:path'
+import { core } from '@h-ai/core'
 import { expect, test } from '@playwright/test'
+
+const environment = core.config.loadEnvFiles({
+  mode: 'test',
+  envDir: path.resolve(import.meta.dirname, '..'),
+})
+if (!environment.success)
+  throw new Error('The actual test environment could not be loaded')
+const partnerPassword = environment.data.HAI_PARTNER_PASSWORD
+if (!partnerPassword)
+  throw new Error('Missing HAI_PARTNER_PASSWORD in the actual test configuration')
+const partnerAdmin = {
+  username: environment.data.HAI_PARTNER_USERNAME || 'partner-admin',
+  password: partnerPassword,
+}
 
 interface ApiResponse<T = unknown> {
   success: boolean
@@ -10,11 +26,12 @@ interface ApiResponse<T = unknown> {
 }
 
 test.describe('Corporate pages and partner flow', () => {
-  test('failed logout keeps the administrator signed in for a successful retry', async ({ page }, testInfo) => {
+  test('failed logout keeps the administrator signed in for a successful retry', async ({ page, baseURL }, testInfo) => {
     const login = await page.request.post('/api/partners/admin/login', {
-      form: { username: 'partner-admin', password: 'CHANGE_ME_STRONG_PASSWORD' },
+      headers: { Origin: new URL(baseURL!).origin },
+      form: partnerAdmin,
     })
-    expect(login.ok()).toBe(true)
+    expect(login.ok(), `Login returned HTTP ${login.status()}`).toBe(true)
     await page.goto('/partners/admin')
     await page.route('**/api/partners/admin/logout', route => route.fulfill({
       status: 500,
@@ -136,7 +153,7 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.getByRole('link', { name: 'About', exact: true }).first()).toBeVisible()
   })
 
-  test('partner register and admin records flow works', async ({ page }, testInfo) => {
+  test('partner register and admin records flow works', async ({ page, baseURL }, testInfo) => {
     test.setTimeout(60_000)
     await page.goto('/partners')
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/合作登记|Partner Registration/)
@@ -177,12 +194,13 @@ test.describe('Corporate pages and partner flow', () => {
     expect([401, 403]).toContain(unauthorized.status())
 
     const loginRes = await page.request.post('/api/partners/admin/login', {
+      headers: { Origin: new URL(baseURL!).origin },
       form: {
-        username: 'partner-admin',
-        password: 'CHANGE_ME_STRONG_PASSWORD',
+        username: partnerAdmin.username,
+        password: partnerAdmin.password,
       },
     })
-    expect(loginRes.ok()).toBeTruthy()
+    expect(loginRes.ok(), `Login returned HTTP ${loginRes.status()}`).toBeTruthy()
     const loginBody = await loginRes.json() as ApiResponse<{ username: string, loggedIn: boolean, expiresIn: number }>
     expect(loginBody.success).toBe(true)
     expect(loginBody.data?.loggedIn).toBe(true)
@@ -214,6 +232,10 @@ test.describe('Corporate pages and partner flow', () => {
     await expect.poll(() => new URL(page.url()).searchParams.has('status')).toBe(false)
     await expect.poll(() => new URL(page.url()).searchParams.has('search')).toBe(false)
 
+    // 测试环境可能已有登记，只对本次创建的两条记录验证排序。
+    await filters.getByTestId('partner-search').locator('input').fill(companyName)
+    await filters.locator('button[type="submit"]').click()
+    await expect(page.locator('tbody tr')).toHaveCount(2)
     const companyHeader = page.getByRole('columnheader', { name: /公司|Company/ })
     await companyHeader.getByRole('button').click()
     await expect(companyHeader).toHaveAttribute('aria-sort', 'ascending')
@@ -221,7 +243,7 @@ test.describe('Corporate pages and partner flow', () => {
     await companyHeader.getByRole('button').click()
     await expect(companyHeader).toHaveAttribute('aria-sort', 'descending')
     await expect(page.locator('tbody tr').first()).toContainText(`${companyName} Z`)
-    const ascending = await page.request.get('/api/partners/admin/records?page=1&pageSize=20&sortBy=company_name&sortDirection=asc')
+    const ascending = await page.request.get(`/api/partners/admin/records?page=1&pageSize=20&sortBy=company_name&sortDirection=asc&search=${encodeURIComponent(companyName)}`)
     const ascendingData = await ascending.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
     expect(ascendingData.data?.items[0]?.company_name).toBe(companyName)
     const invalidSort = await page.request.get('/api/partners/admin/records?sortBy=company_name%3BDROP&sortDirection=asc')
@@ -235,7 +257,7 @@ test.describe('Corporate pages and partner flow', () => {
         animations: 'disabled',
       })
     }
-    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
+    const recordsRes = await page.request.get(`/api/partners/admin/records?page=1&pageSize=20&search=${encodeURIComponent(companyName)}`)
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
     expect(body.success).toBe(true)

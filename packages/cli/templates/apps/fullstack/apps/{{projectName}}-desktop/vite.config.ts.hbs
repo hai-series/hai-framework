@@ -15,7 +15,7 @@ const host = process.env.TAURI_DEV_HOST
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+  const envResult = command === 'build'
     ? { success: true as const, data: {} as Record<string, string> }
     : core.config.loadEnvFiles({ mode, envDir })
   if (!envResult.success)
@@ -44,7 +44,12 @@ export default defineConfig(({ mode, command }) => {
     define: {
       __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata),
     },
-    preview: { proxy },
+    preview: {
+      proxy,
+      host: '127.0.0.1',
+      port: {{fullstack.ports.desktop}},
+      strictPort: true,
+    },
     build: {
       rolldownOptions: {
         output: {
@@ -75,7 +80,7 @@ export default defineConfig(({ mode, command }) => {
       proxy,
       port: {{fullstack.ports.desktop}},
       strictPort: true,
-      host: host || false,
+      host: host || '127.0.0.1',
       hmr: host
         ? {
             protocol: 'ws',

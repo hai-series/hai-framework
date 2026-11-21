@@ -44,7 +44,7 @@ admin、website、h5 和 Fullstack Web 在入口 HTML 加载 `_hai/browser-check
 | `.env.test`    | 测试环境公共覆盖                                       | 提交   |
 | `.env.prod`    | 生产环境公共覆盖                                       | 提交   |
 | `.env.local`   | 当前机器的私有配置，覆盖公共配置                       | 不提交 |
-| `.env.<mode>.local` | 当前模式的私有覆盖、初始密码和传输密钥环 | 不提交 |
+| `.env.<mode>.local` | 当前模式的私有覆盖、初始密码和生产传输密钥环 | 不提交 |
 
 YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时的本地默认值。应用仍通过 `core.config.validate(name, ModuleConfigSchema)` 和模块初始化校验类型、枚举、范围和必填项；插值本身不能代替校验。只开启实际使用的模块，未启用模块的整份 YAML 保留注释。
 
@@ -65,17 +65,19 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 | Vite / SvelteKit | `pnpm dev` | `pnpm dev:test`          | `pnpm dev:prod` 预览；build 不选择环境 |
 | Node service     | `pnpm dev` | 构建后 `pnpm start:test` | 构建后 `pnpm start:prod`                      |
 
-`hai create` 为 fullstack 在 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成初始密码和传输密钥环，API 启用 crypto 时也生成 ring；这些私有文件不提交 Git。克隆后通过受保护配置或 Secret Manager 分发对应环境秘密。同环境节点共享 ring 和 registry，运行时不生成或轮换。模板默认 `pretty` 并声明运行依赖 `pino-pretty`，需要 JSON 时覆盖 `HAI_CORE_LOGGING_FORMAT`。启动失败检查模块、错误码和字段路径；监听冲突检查 `EADDRINUSE` 的地址与端口。
+`hai create` 为启用传输加密的服务端项目分别生成开发、测试和生产的 SM2 密钥环。开发、测试示例值保存在可提交的 `.env.dev`、`.env.test`，克隆后即可运行；生产密钥保存在不提交的 `.env.prod.local`。`.env.test` 明确声明 `HAI_E2E=1`，使构建后的测试预览可以使用其本地测试后端；开发和生产模式不设置此开关。初始账号密码仍保存在各模式私有文件，保留已有密码。同环境节点共享 ring 和 registry，运行时不生成或轮换。模板默认 `pretty`，需要 JSON 时设置 `HAI_CORE_LOGGING_FORMAT`。启动失败按模块、错误码和字段路径排查；监听冲突检查 `EADDRINUSE` 的地址与端口。
 
 所有入口优先级一致：**进程环境 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**。Vite 在 Node 阶段通过 `core.config.loadEnvFiles` 读取并检查结果；Node 服务复用 `scripts/run-node.mjs <mode> <环境目录> <入口>`，让来源与对象覆盖规则一致，`NODE_OPTIONS` 在子进程启动前生效。`development`/`production` 映射为 `dev`/`prod`，`core.init` 不自行读取 dotenv。
 
-托管 `test:e2e` 是明确的隔离测试入口：服务子进程使用本轮绝对数据目录和完整模块配置，不继承 ambient 模块变量，也不读取用户 `.env.local`。Svelte 仅在 `HAI_E2E=1` 的测试分支跳过 dotenv；API 测试直接执行已构建产物。普通开发与生产的上述优先级和共享后端守卫保持不变，transport 使用测试独立可信 ring 与实际 registry。
+应用的 `test:e2e` 直接使用 Playwright 调用真实启动脚本，正常读取模式文件。默认启动验收单独在实际工程执行 `pnpm dev`，不注入应用环境变量、补密钥或替换密码。认证安全、通知和短会话等专项条件放在测试目录，不能替代默认启动证据；需要切换配置时修改真实 `.env.test` 并在结束后恢复。开发启动、测试模式构建产物与生产后端分别报告。
 
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node scripts/run-node.mjs prod . build/index.js`。路径相对工作目录，公共文件提交 Git，私有文件不进入镜像或版本库。部署容器由 SDK 统一运行文件加载，浏览器只接收公开白名单。
 
 当前 SDK 的 Node 后端默认读取实际挂载的发布 `.env.runtime`，修改后重启容器生效；托管连接保持更高优先级，静态 Web、中间件、网关路径、端口/挂载和 Node 启动参数按部署流程更新。长期修改同步回源环境，下一次后端发布会重新生成；已交付 `hai-deploy` 的工程按该技能“后端运行配置重载”小节处理，未交付时以本工程实际启动/部署脚本为准。自行维护且只使用 Compose `env_file` 注入环境的容器，改文件后需要重新创建，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。同一来源先应用 `HAI_SERV` / `HAI_KIT` 父 JSON，再由叶子变量覆盖；更高来源的父对象才清除低来源细项，遵循本节统一来源顺序。待上传归档与 SDK 策略快照不能手改；运维外部文件和 Compose override 另行备份，SDK 自动回滚不恢复外部文件。
 
-SDK 的 SvelteKit SSR 在 HTTP/HTTPS 下均通过独立 gateway，后端不公开端口；协议、Host 与客户端地址由网关覆盖，adapter 转发信任由 Compose 固定。adapter-node 6 不读取运行期 `ORIGIN`，不能靠改该变量切换访问地址；应用默认不固定 `paths.origin`，旧直接公开 SSR 的部署须重新生成全量交付包。
+SDK 的 SvelteKit SSR 在 HTTP/HTTPS 下均通过独立 gateway，后端不公开端口；协议、Host 与客户端地址由网关覆盖，adapter 转发信任由 Compose 固定。adapter-node 6 未固定 `kit.paths.origin`、也未收到已配置的协议头时默认使用 `https`；直接通过普通 HTTP 访问 Node 端口，表单 POST 可能因来源不匹配返回 403。运行期 `ORIGIN` 不生效；`kit.paths.origin` 编入构建产物，修改来源需要重建，应用默认不固定它。旧直接公开 SSR 的部署须重新生成全量交付包。
+
+本地构建后 Node SSR 业务 E2E 使用独立的 loopback HTTP 代理，Node 启动前设置 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=x-forwarded-host`。代理移除来访转发头，校验对外 Host 并重建协议和 Host 头，后端仅绑定 loopback；正式 HTTPS 入口由可信代理终止 TLS。测试仍执行应用原有公开构建、启动脚本，正常加载 dotenv 并保留 CSRF 检查；普通 `pnpm dev` 基线仍直接运行开发服务器。代理是本轮测试资源，与部署 gateway 使用相同的来源推导机制。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-serv/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
 

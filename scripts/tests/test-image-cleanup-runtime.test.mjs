@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
-import { windowsTestCommand, windowsTestJobProbe } from '../test-command-windows.js'
+import { windowsTestCommand, windowsTestJobProbe } from '../../packages/cli/tests/helpers/startup-windows-job.js'
 
 const enabled = process.env.HAI_TEST_IMAGE_SMOKE === '1'
 const runtime = process.env.HAI_TEST_IMAGE_RUNTIME ?? 'podman'
