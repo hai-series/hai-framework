@@ -27,6 +27,7 @@ import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { pbkdf2, solveChallenge } from 'altcha/lib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -86,6 +87,14 @@ let knownHostsPath: string
 let appDir: string
 const testImages = new Map<string, DeployTestImage>()
 let fixtureContext: DeployTestFixture | undefined
+
+/** 修改临时工程的真实模式文件；按来源合并，避免重复变量和残留旧后端细项。 */
+function configureTestEnvironment(file: string, values: Record<string, string>): void {
+  writeFileSync(file, core.config.stringifyEnv(core.config.mergeEnv([
+    core.config.parseEnv(readFileSync(file, 'utf8')),
+    values,
+  ])))
+}
 
 /** 返回已由本轮成功创建的夹具；不通过名称探测或接管其他容器。 */
 function fixture(): DeployTestFixture {
@@ -951,7 +960,12 @@ done`
         'HAI_IAM_REAUTHENTICATION_OPERATIONS=["iam.users.invite","audit.backup"]',
         'HAI_AUDIT_BACKUP_ENABLED=true',
       ].join('\n')
-      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\n${browserSecurityProfile}\nHAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=redis\nHAI_STORAGE_TYPE=s3\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
+      configureTestEnvironment(path.join(appDir, '.env.test'), {
+        ...core.config.parseEnv(browserSecurityProfile),
+        HAI_DB: '{"type":"postgresql","database":"hai"}',
+        HAI_CACHE: '{"type":"redis"}',
+        HAI_STORAGE: '{"type":"s3"}',
+      })
       const deployConfig = {
         provider: {
           type: 'docker-ssh',
@@ -968,7 +982,9 @@ done`
         },
         container: { s3Engine: 'rustfs' },
       }
-      writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
+      configureTestEnvironment(path.join(appDir, '.env.local'), {
+        HAI_DEPLOY_PROVIDER: JSON.stringify(deployConfig.provider),
+      })
       writeFileSync(path.join(appDir, 'hai.json'), JSON.stringify({
         ...JSON.parse(readFileSync(path.join(appDir, 'hai.json'), 'utf8')),
         deploy: deployConfig,
@@ -1642,7 +1658,11 @@ done`
     const fixtureEnvironment = path.join(project, appType === 'api'
       ? `apps/${name}-serv/.env.test`
       : '.env.test')
-    writeFileSync(fixtureEnvironment, `${readFileSync(fixtureEnvironment, 'utf8')}\nHAI_E2E=1\nHAI_DB='{"type":"sqlite","database":"/app/data/e2e.db"}'\nHAI_CACHE='{"type":"memory"}'\nHAI_STORAGE='{"type":"local","root":"/app/data/uploads"}'\n`)
+    configureTestEnvironment(fixtureEnvironment, {
+      HAI_DB: '{"type":"sqlite","database":"/app/data/e2e.db"}',
+      HAI_CACHE: '{"type":"memory"}',
+      HAI_STORAGE: '{"type":"local","root":"/app/data/uploads"}',
+    })
     await runPnpm(commands, ['install', '--prefer-offline'], project)
     const dockerfilePath = path.join(project, appType === 'api'
       ? 'images/serv.Dockerfile'
@@ -1682,7 +1702,7 @@ done`
       const apiProject = path.join(workDir, 'delivery-api')
       const apiService = path.join(apiProject, 'apps/delivery-api-serv')
       const apiEnvironment = path.join(apiService, '.env.test')
-      writeFileSync(apiEnvironment, `${readFileSync(apiEnvironment, 'utf8')}\nHAI_SERV_CORS_ORIGIN=http://127.0.0.1:${fixture().webHostPort}\n`)
+      configureTestEnvironment(apiEnvironment, { HAI_SERV_CORS_ORIGIN: `http://127.0.0.1:${fixture().webHostPort}` })
       const apiBuildId = readFileSync(path.join(apiProject, '.hai/build/docker/latest'), 'utf8').trim()
       await runSdkDeployment(commands, {
         config: {
@@ -1705,7 +1725,7 @@ done`
         project,
       })
       const environment = path.join(project, '.env.test')
-      writeFileSync(environment, `${readFileSync(environment, 'utf8')}\nPUBLIC_API_BASE=http://127.0.0.1:${fixture().apiHostPort}/api/v1\n`)
+      configureTestEnvironment(environment, { PUBLIC_API_BASE: `http://127.0.0.1:${fixture().apiHostPort}/api/v1` })
     }
     const service = appType === 'api'
       ? path.join(project, `apps/${name}-serv`)
