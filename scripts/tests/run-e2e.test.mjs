@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -9,7 +9,7 @@ import { spawnOwned, stopOwned } from '../../packages/cli/tests/helpers/startup-
 
 let directory
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), 'hai-e2e-cleanup-'))
+  directory = realpathSync(mkdtempSync(join(tmpdir(), 'hai-e2e-cleanup-')))
   vi.stubEnv('HAI_TEST_RUNNER_OBSERVATIONS_ROOT', directory)
   const module = join(directory, 'node_modules/@playwright/test')
   mkdirSync(module, { recursive: true })
