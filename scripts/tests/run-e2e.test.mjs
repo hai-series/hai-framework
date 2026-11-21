@@ -9,7 +9,7 @@ import { spawnOwned, stopOwned } from '../../packages/cli/tests/helpers/startup-
 
 let directory
 beforeEach(() => {
-  directory = realpathSync(mkdtempSync(join(tmpdir(), 'hai-e2e-cleanup-')))
+  directory = realpathSync.native(mkdtempSync(join(tmpdir(), 'hai-e2e-cleanup-')))
   vi.stubEnv('HAI_TEST_RUNNER_OBSERVATIONS_ROOT', directory)
   const module = join(directory, 'node_modules/@playwright/test')
   mkdirSync(module, { recursive: true })
