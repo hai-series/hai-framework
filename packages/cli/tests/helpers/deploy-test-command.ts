@@ -1,9 +1,9 @@
 /** 部署门禁的本地命令；实际执行期限保持十五分钟。 */
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { readdir, readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
+import { ownedGroups, signalOwned } from './startup-process.mjs'
 import { windowsTestCommand, windowsTestJobProbe } from './startup-windows-job.js'
 
 export interface DeployTestCommandOptions {
@@ -49,40 +49,10 @@ async function tool(command: string, args: string[], deadline: number): Promise<
   })
 }
 
-function exited(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return false
-  }
-  catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
-  }
-}
-
-/** Linux zombie 已停止执行；其他平台仅接受进程组确实不存在。 */
+/** 与普通启动复用会话核验；未知状态不能当作已经回收。 */
 async function groupExited(pid: number): Promise<boolean> {
-  if (exited(-pid))
-    return true
-  if (process.platform !== 'linux')
-    return false
   try {
-    for (const name of await readdir('/proc')) {
-      if (!/^\d+$/.test(name))
-        continue
-      let stat: string
-      try {
-        stat = await readFile(`/proc/${name}/stat`, 'utf8')
-      }
-      catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
-          continue
-        return false
-      }
-      const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
-      if (Number(fields[2]) === pid && fields[0] !== 'Z' && fields[0] !== 'X')
-        return false
-    }
-    return true
+    return (await ownedGroups(pid)).length === 0
   }
   catch {
     return false
@@ -147,9 +117,9 @@ export async function runDeployTestCommand(command: string, args: string[], opti
       }
       else {
         try {
-          process.kill(-pid, 'SIGKILL')
+          await signalOwned(pid, 'SIGKILL')
         }
-        catch (error) { verified = exited(-pid) && error instanceof Error && 'code' in error && error.code === 'ESRCH' }
+        catch { verified = false }
       }
       while (performance.now() < deadline) {
         const treeStopped = job
@@ -166,6 +136,15 @@ export async function runDeployTestCommand(command: string, args: string[], opti
     })()
     void stopping.then(finishInterruption)
   }
+  // 根命令退出后立即检查，避免仍持有管道的后代阻止 close。
+  child.once('exit', () => {
+    if (!job && child.pid) {
+      void groupExited(child.pid).then((empty) => {
+        if (!empty)
+          stop('exit')
+      })
+    }
+  })
   const capture = (text: string, stream: 'stdout' | 'stderr'): void => {
     bytes += Buffer.byteLength(text)
     if (stream === 'stdout') {
@@ -191,7 +170,7 @@ export async function runDeployTestCommand(command: string, args: string[], opti
   try {
     // stop 自身有界；不让未关闭的 stdio 无限阻止取消完成。
     await Promise.race([completion, interrupted])
-    // POSIX 组长退出不代表整个进程组结束；Windows owner 在原生 Job 清空前不会正常返回。
+    // POSIX 根进程退出不代表整个会话结束；Windows owner 在原生 Job 清空前不会正常返回。
     if (!stopping && child.pid && !job && !await groupExited(child.pid))
       stop('exit')
     const localTermination = stopping

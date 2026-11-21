@@ -1,4 +1,5 @@
 /** 使用真实父/子进程和持续心跳验证部署门禁命令超时及取消回收。 */
+import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -6,17 +7,18 @@ import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readWindowsFixtureProcesses, windowsFixtureProcessesStopped, windowsTreeFixture } from '../../../scripts/test-process-identity.js'
-import { createDeployTestCommands, runDeployTestCommand } from './helpers/deploy-test-command.js'
+import { createDeployTestCommands, runDeployTestCommand, runPnpmTestCommand } from './helpers/deploy-test-command.js'
 
 let directory: string
 
 function exited(pid: number): boolean {
   try {
     process.kill(pid, 0)
-    return false
+    // Linux 孤儿僵尸已经停止执行，等待 init 回收；仍用心跳验证没有后台代码运行。
+    return process.platform === 'linux' && /^[ZX]/.test(readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ').at(-1) ?? '')
   }
   catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+    return error instanceof Error && 'code' in error && ['ESRCH', 'ENOENT'].includes(String(error.code))
   }
 }
 
@@ -33,7 +35,7 @@ async function recordedPids(): Promise<number[]> {
   return pids as number[]
 }
 
-async function tree(earlyExit?: number): Promise<{ command: string, args: string[] }> {
+async function tree(earlyExit?: number, stdio: 'ignore' | 'inherit' = 'ignore'): Promise<{ command: string, args: string[] }> {
   const filename = path.join(directory, 'child.cjs')
   const record = process.platform === 'win32'
     ? ''
@@ -47,7 +49,7 @@ async function tree(earlyExit?: number): Promise<{ command: string, args: string
     : `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(directory, 'pids.json'))}))process.exit(${earlyExit})},10)`
   return {
     command: process.execPath,
-    args: ['-e', `require('node:child_process').spawn(process.execPath,[${JSON.stringify(filename)}],{stdio:'ignore'});${wait}`],
+    args: ['-e', `require('node:child_process').spawn(process.execPath,[${JSON.stringify(filename)}],{stdio:${JSON.stringify(stdio)}});${wait}`],
   }
 }
 
@@ -142,6 +144,16 @@ it('取消先杀树再返回；已经取消时不启动新命令', async () => {
 it.each([0, 7])('父提前 exit %i 后仍回收断链后代，不能只凭父 close 确认整树', async (code) => {
   const input = await tree(code)
   await expect(runDeployTestCommand(input.command, input.args, { timeoutMs: 3000 })).rejects.toMatchObject({ localTermination: 'confirmed' })
+  await assertStopped()
+}, 20_000)
+
+it.skipIf(process.platform !== 'linux')('真实 pnpm 退出后回收另建进程组且持有 stdio 的后代，不等待超时', async () => {
+  const input = await tree(7, 'inherit')
+  await expect(runPnpmTestCommand(['exec', input.command, ...input.args], { cwd: directory, timeoutMs: 7000 })).rejects.toMatchObject({
+    reason: 'exit',
+    exitCode: 7,
+    localTermination: 'confirmed',
+  })
   await assertStopped()
 }, 20_000)
 

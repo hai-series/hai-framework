@@ -1,4 +1,4 @@
-/** 启动验收进程的所有权与回收；Windows Job 和 POSIX 进程组均需确认完整退出。 */
+/** 启动验收进程的所有权与回收；Windows Job、Linux 会话和其他 POSIX 进程组均需确认退出。 */
 import { spawn } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import process from 'node:process'
@@ -38,32 +38,44 @@ function gone(pid) {
   catch (error) { return error?.code === 'ESRCH' }
 }
 
-/** Linux 的僵尸已停止执行；其他系统仅接受组已不存在。 */
-async function groupEmpty(pid) {
-  if (gone(-pid))
-    return true
-  if (process.platform !== 'linux')
-    return false
-  try {
-    for (const name of await readdir('/proc')) {
-      if (!/^\d+$/.test(name))
-        continue
-      let stat
-      try {
-        stat = await readFile(`/proc/${name}/stat`, 'utf8')
-      }
-      catch (error) {
-        if (error?.code === 'ENOENT')
-          continue
-        return false
-      }
-      const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
-      if (Number(fields[2]) === pid && !['Z', 'X'].includes(fields[0]))
-        return false
-    }
-    return true
+/** pnpm 可为子命令另建进程组；Linux 按本轮独占会话识别，不能只检查根进程组。 */
+export async function ownedGroups(pid) {
+  if (process.platform !== 'linux') {
+    return gone(-pid)
+      ? []
+      : [pid]
   }
-  catch { return false }
+  const groups = new Set()
+  for (const name of await readdir('/proc')) {
+    if (!/^\d+$/.test(name))
+      continue
+    let stat
+    try {
+      stat = await readFile(`/proc/${name}/stat`, 'utf8')
+    }
+    catch (error) {
+      if (error?.code === 'ENOENT')
+        continue
+      throw error
+    }
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+    if (Number(fields[3]) === pid && !['Z', 'X'].includes(fields[0]))
+      groups.add(Number(fields[2]))
+  }
+  return [...groups]
+}
+
+/** 只向本轮独占会话内的进程组发信号；不存在的组视为已退出。 */
+export async function signalOwned(pid, signal) {
+  for (const group of await ownedGroups(pid)) {
+    try {
+      process.kill(-group, signal)
+    }
+    catch (error) {
+      if (error?.code !== 'ESRCH')
+        throw error
+    }
+  }
 }
 
 /** 探测命令有独立期限，未知状态不能算作 Job 已空。 */
@@ -102,30 +114,18 @@ export async function stopOwned(child) {
         throw new Error('Could not stop the Windows startup Job owner')
     }
     else if (child.pid) {
-      try {
-        process.kill(-child.pid, 'SIGTERM')
-      }
-      catch (error) {
-        if (error?.code !== 'ESRCH')
-          throw error
-      }
+      await signalOwned(child.pid, 'SIGTERM')
     }
     let forced = false
     while (performance.now() < deadline) {
       const empty = owner.job
         ? await jobEmpty(owner.job.name, deadline)
-        : !child.pid || await groupEmpty(child.pid)
+        : !child.pid || (await ownedGroups(child.pid)).length === 0
       if (owner.closed && empty)
         return
       if (!owner.job && child.pid && !forced && deadline - performance.now() < 12_000) {
         forced = true
-        try {
-          process.kill(-child.pid, 'SIGKILL')
-        }
-        catch (error) {
-          if (error?.code !== 'ESRCH')
-            throw error
-        }
+        await signalOwned(child.pid, 'SIGKILL')
       }
       await delay(25)
     }
