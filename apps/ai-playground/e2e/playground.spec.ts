@@ -336,9 +336,11 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
   await page.getByTestId('demo-select-mcp-remote').click()
   await expect(page.getByTestId('demo-run')).toBeDisabled()
   await page.reload()
+  await expect(page.getByTestId('connection-status')).toContainText('已连接')
   await expect(page.getByTestId('demo-select-mcp-remote')).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTestId('demo-select-mcp-remote').click()
+  await expect(page.getByTestId('demo-select-mcp-remote')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('demo-run')).toBeDisabled()
   await page.screenshot({
     path: testInfo.outputPath('playground-integrations-mobile.png'),
