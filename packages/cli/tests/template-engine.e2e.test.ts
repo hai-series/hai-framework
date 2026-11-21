@@ -18,7 +18,6 @@ import type { AppType, FeatureId } from '../src/cli-types.js'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { runInNewContext } from 'node:vm'
 import { core } from '@h-ai/core'
 import { loadDeploymentConfig } from '@h-ai/deploy'
 import fse from 'fs-extra'
@@ -147,7 +146,8 @@ it.each([
     throw new Error(loaded.error.message)
   expect(loaded.data.container).toEqual({ s3Engine: 'rustfs' })
   const build = (JSON.parse(await readGenerated(project, 'hai.json')) as { build: { images: Array<{ name: string, dockerfile: string }> } }).build
-  expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
+  expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(false)
+  expect(JSON.parse(await readGenerated(project, 'package.json')).scripts['test:e2e']).toBe('playwright test')
   expect(build.images.map(image => image.name)).toEqual(target === 'web'
     ? ['serv', 'web']
     : ['serv'])
@@ -421,7 +421,7 @@ it.each([
   ['web', 'app', 'desktop'],
   ['app', 'desktop'],
   ['desktop', 'web'],
-] as const)('fullstack E2E 应使用大写环境变量覆盖预览地址（%s）', async (...frontends) => {
+] as const)('fullstack E2E 直接运行 dev:test 并访问首个前端的真实地址（%s）', async (...frontends) => {
   const projectPath = path.join(tmpRoot, `preview-${frontends.join('-')}`)
   await generateFromTemplates(projectPath, buildTemplateContext({
     name: `preview-${frontends.join('-')}`,
@@ -431,27 +431,11 @@ it.each([
     packageManager: 'pnpm',
   }))
   const spec = await readGenerated(projectPath, 'e2e/fullstack.spec.ts')
-  const expression = spec.match(/const additionalFrontends = ([\s\S]*?)\n\nfor \(const frontend/)?.[1]
-  expect(expression).toBeDefined()
+  const config = await readGenerated(projectPath, 'playwright.config.ts')
   const ports = { web: 4173, app: 5175, desktop: 5176 }
-  const env: Record<string, string> = {
-    HAI_E2E_WEB_URL: 'http://127.0.0.1:45173',
-    HAI_E2E_APP_URL: 'http://127.0.0.1:45175',
-    HAI_E2E_DESKTOP_URL: 'http://127.0.0.1:45176',
-  }
-  // 使用区分大小写的独立环境，在 Windows 上也能复现 Linux CI 的变量解析。
-  for (const overrides of [env, {}]) {
-    expect(runInNewContext(expression!, {
-      process: { env: overrides },
-    })).toEqual(
-      frontends.slice(1).map(target => ({
-        target,
-        url: overrides === env
-          ? env[`HAI_E2E_${target.toUpperCase()}_URL`]
-          : `http://127.0.0.1:${ports[target]}`,
-      })),
-    )
-  }
+  expect(config).toContain('command: \'pnpm dev:test\'')
+  expect(config).toContain(`const baseURL = 'http://127.0.0.1:${ports[frontends[0]]}'`)
+  expect(spec).toContain('page.goto(\'./\')')
 })
 
 // =============================================================================

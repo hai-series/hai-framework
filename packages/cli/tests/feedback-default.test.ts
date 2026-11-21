@@ -63,8 +63,11 @@ describe('fullstack 默认反馈生成', () => {
     expect(shell).toContain('<FeedbackEntry />')
     expect(shell).toContain('m.nav_feedback()')
     expect(await readFile(path.join(directory, shared, 'src/lib/pages/feedback.svelte'), 'utf8')).toContain('<FeedbackList')
-    // 默认完整样板场景必须执行同一段真实截图、大日志上传和 ZIP 下载验收。
-    const browserTests = await readFile(path.join(directory, 'e2e/fullstack.spec.ts'), 'utf8')
+    // 默认工程只交付基础用例；深入的反馈场景由框架脚手架门禁安装并执行。
+    const ordinaryTests = await readFile(path.join(directory, 'e2e/fullstack.spec.ts'), 'utf8')
+    expect(ordinaryTests).toContain('application opens')
+    expect(ordinaryTests).not.toContain('feedback submits an empty description')
+    const browserTests = await readFile(new URL('./fixtures/scenarios/fullstack.spec.ts.hbs', import.meta.url), 'utf8')
     expect(browserTests).toContain('feedback submits an empty description')
     expect(browserTests).toContain('attached-large-log.txt')
     expect(browserTests).toContain('getImageData(12, 12, 1, 1)')
