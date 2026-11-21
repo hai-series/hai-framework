@@ -116,7 +116,18 @@ Keep field values in page state and update them through bindings. The applicatio
 | `TagInput` | Editing updates tags | `tags`, `maxTags`, `allowDuplicates`, `size` | Editing updates tags | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `Combobox` | Search and update selected value | `options`, `value`, `multiple`, `placeholder`, `size` | Search and update selected value | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `Calendar` | Selection updates DateValue | `value: DateValue`, `minValue`, `maxValue` | Selection updates DateValue | `<Calendar bind:value={date} />` |
-| `DatePicker` | Calendar popup updates date | `value: DateValue`, `minValue`, `maxValue`, `error`, `size` | Calendar popup updates date | `<DatePicker bind:value={date} />` |
+| `DatePicker` | Calendar popup updates date | `value: DateValue`, `minValue`, `maxValue`, `error`, `ariaLabel`, `size` | Calendar popup updates date | `<DatePicker ariaLabel='Date' bind:value={date} />` |
+| `CronExpressionBuilder` | Visual editor for common Cron expressions | `value`, `disabled`, `required`, `error`, `presets`, `labels`, `weekdayOptions`, `onchange` | Writes back a five-field Cron expression | `<CronExpressionBuilder bind:value={cron} />` |
+| `ScheduleInput` | Date-time and advanced Cron scheduling input | `config: ScheduleInputConfig` (normalized), `value`, `required`, `disabled`, `valid`, `onchange` | Validates and writes a fixed `+08:00` date-time or Cron value | `<ScheduleInput config={scheduleConfig} bind:value={schedule} />` |
+| `normalizeScheduleInputConfig` | Validate and normalize schedule schema metadata | `value: unknown`; `allowCron` may be omitted | `ScheduleInputConfig`; `undefined` for unsupported input, omitted `allowCron` becomes `false` | `normalizeScheduleInputConfig(rawSchema)` |
+| `ScheduleInputConfig` | Normalized `ScheduleInput` schema type | `kind: 'schedule'`, `timezone: 'Asia/Shanghai'`, `precision: 'minute'`, `allowCron: boolean` | Configuration accepted by `ScheduleInput.config` | `const config: ScheduleInputConfig = { kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: false }` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | Monday-to-Sunday order for the Cron builder | None | `readonly CronWeekdayValue[]` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
+| `createDefaultCronBuilderState` | Create default Cron builder state | None | `CronBuilderState` | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState` | Parse a common Cron expression into builder state | `expression: string` | `CronBuilderState`; unsupported expressions stay in `custom` mode | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression` | Serialize builder state as Cron | `state: CronBuilderState` | Five-field Cron string | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid` | Validate an expression with the Cron parser | `expression: string` | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CronBuilderMode`, `CronWeekdayValue`, `CronBuilderState`, `CronExpressionBuilderLabels`, `CronExpressionBuilderPreset`, `CronExpressionBuilderWeekdayOption` | Cron builder mode, state, label, preset and weekday option types | TypeScript types | Constrain builder helpers and component configuration | `import type { CronBuilderState } from '@h-ai/ui'` |
+| `@h-ai/ui/components/compounds/schedule-input` | Lightweight entry for Node/schema consumers | Only `normalizeScheduleInputConfig` and `ScheduleInputConfig` | Does not load Svelte; returns normalized schema metadata | `import { normalizeScheduleInputConfig, type ScheduleInputConfig } from '@h-ai/ui/components/compounds/schedule-input'` |
 
 #### Scenario: Select the same date in two controls
 
@@ -132,6 +143,25 @@ Keep field values in page state and update them through bindings. The applicatio
 <Calendar bind:value={date} />
 <!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
+```
+
+#### Scenario: Enter a date-time or Cron schedule
+
+Call `normalizeScheduleInputConfig` before passing schema metadata to the control. The raw schema may omit `allowCron`; normalization adds `false`. Unsupported kinds, timezones, precisions or fields return `undefined`. `ScheduleInput.config` should receive the normalized `ScheduleInputConfig`. Node/schema consumers can import the normalizer and type from `@h-ai/ui/components/compounds/schedule-input`; that entry exports only those two APIs and does not load Svelte.
+
+`ScheduleInput` uses Beijing Time with minute precision by default and serializes date-time values with a fixed `+08:00` offset. Set `allowCron` to `true` to let users switch between date-time and five-field Cron modes; `valid` reflects the current draft and future-time constraints.
+
+```svelte
+<script lang='ts'>
+  import { ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let scheduleValid = $state(false)
+  const scheduleConfig = {
+    kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: true,
+  } as const
+</script>
+<ScheduleInput config={scheduleConfig} bind:value={schedule} bind:valid={scheduleValid} required />
 ```
 
 <a id="overlays"></a>

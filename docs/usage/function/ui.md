@@ -193,7 +193,18 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 | `TagInput` | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` | 编辑后更新 tags | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `Combobox` | 可搜索下拉选择（单选/多选） | `options`, `value`, `multiple`, `placeholder`, `size` | 搜索并写回选择值 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `Calendar` | 独立日历 | `value: DateValue`, `minValue`, `maxValue` | 选择后写回 DateValue | `<Calendar bind:value={date} />` |
-| `DatePicker` | 日期输入+弹出 | `value: DateValue`, `minValue`, `maxValue`, `error`, `size` | 弹出日历并写回日期 | `<DatePicker bind:value={date} />` |
+| `DatePicker` | 日期输入+弹出 | `value: DateValue`, `minValue`, `maxValue`, `error`, `ariaLabel`, `size` | 弹出日历并写回日期 | `<DatePicker ariaLabel='日期' bind:value={date} />` |
+| `CronExpressionBuilder` | 可视化编辑常用 Cron 表达式 | `value`, `disabled`, `required`, `error`, `presets`, `labels`, `weekdayOptions`, `onchange` | 编辑后写回五段 Cron 表达式 | `<CronExpressionBuilder bind:value={cron} />` |
+| `ScheduleInput` | 日期时间与高级 Cron 调度输入 | `config: ScheduleInputConfig`（已归一化）, `value`, `required`, `disabled`, `valid`, `onchange` | 校验并写回固定 `+08:00` 日期时间或 Cron 值 | `<ScheduleInput config={scheduleConfig} bind:value={schedule} />` |
+| `normalizeScheduleInputConfig` | 校验并归一化调度 schema | `value: unknown`；`allowCron` 可省略 | `ScheduleInputConfig`；不支持时为 `undefined`，省略 `allowCron` 时归一化为 `false` | `normalizeScheduleInputConfig(rawSchema)` |
+| `ScheduleInputConfig` | `ScheduleInput` 的归一化 schema 类型 | `kind: 'schedule'`, `timezone: 'Asia/Shanghai'`, `precision: 'minute'`, `allowCron: boolean` | 可传给 `ScheduleInput.config` 的配置 | `const config: ScheduleInputConfig = { kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: false }` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | Cron builder 的周一到周日顺序 | 无 | `readonly CronWeekdayValue[]` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
+| `createDefaultCronBuilderState` | 创建 Cron builder 默认状态 | 无 | `CronBuilderState` | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState` | 把常见 Cron 表达式解析为 builder 状态 | `expression: string` | `CronBuilderState`；不支持的表达式保留为 `custom` | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression` | 把 builder 状态序列化为 Cron | `state: CronBuilderState` | 五段 Cron 字符串 | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid` | 使用 Cron parser 校验表达式 | `expression: string` | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CronBuilderMode`, `CronWeekdayValue`, `CronBuilderState`, `CronExpressionBuilderLabels`, `CronExpressionBuilderPreset`, `CronExpressionBuilderWeekdayOption` | Cron builder 的模式、状态、标签、预设和星期选项类型 | TypeScript 类型 | 用于限制 builder helper 与组件配置 | `import type { CronBuilderState } from '@h-ai/ui'` |
+| `@h-ai/ui/components/compounds/schedule-input` | Node/schema 消费者的轻量入口 | 仅 `normalizeScheduleInputConfig`、`ScheduleInputConfig` | 不加载 Svelte；返回 schema 归一化结果 | `import { normalizeScheduleInputConfig, type ScheduleInputConfig } from '@h-ai/ui/components/compounds/schedule-input'` |
 
 #### 场景：在日历和输入框中选择同一日期
 
@@ -212,6 +223,25 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```
 
 两者共享 date，任意一处选择后另一处显示同一日期。
+
+#### 场景：输入日期时间或 Cron 调度
+
+`normalizeScheduleInputConfig` 用于在传给控件前校验 schema。原始 schema 可以省略 `allowCron`，归一化结果会补为 `false`；不支持的 `kind`、时区、精度或字段会返回 `undefined`。`ScheduleInput.config` 应使用归一化后的 `ScheduleInputConfig`。Node/schema 消费者可从 `@h-ai/ui/components/compounds/schedule-input` 导入 normalizer 和类型；该入口只提供这两个 API，不加载 Svelte。
+
+`ScheduleInput` 默认使用北京时间的分钟精度，并把日期时间值写成固定 `+08:00` 偏移。将 `allowCron` 设为 `true` 后，用户可以在日期时间和五段 Cron 模式之间切换；`valid` 反映当前草稿是否满足必填、格式和未来时间约束。
+
+```svelte
+<script lang='ts'>
+  import { ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let scheduleValid = $state(false)
+  const scheduleConfig = {
+    kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: true,
+  } as const
+</script>
+<ScheduleInput config={scheduleConfig} bind:value={schedule} bind:valid={scheduleValid} required />
+```
 
 #### 场景：表单布局与校验
 

@@ -118,7 +118,18 @@ export default {
 | `TagInput` | 編集で tags を更新 | `tags`, `maxTags`, `allowDuplicates`, `size` | 編集で tags を更新 | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `Combobox` | 検索して選択値を更新 | `options`, `value`, `multiple`, `placeholder`, `size` | 検索して選択値を更新 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `Calendar` | 選択で DateValue を更新 | `value: DateValue`, `minValue`, `maxValue` | 選択で DateValue を更新 | `<Calendar bind:value={date} />` |
-| `DatePicker` | ポップアップで日付を更新 | `value: DateValue`, `minValue`, `maxValue`, `error`, `size` | ポップアップで日付を更新 | `<DatePicker bind:value={date} />` |
+| `DatePicker` | ポップアップで日付を更新 | `value: DateValue`, `minValue`, `maxValue`, `error`, `ariaLabel`, `size` | ポップアップで日付を更新 | `<DatePicker ariaLabel='Date' bind:value={date} />` |
+| `CronExpressionBuilder` | よく使う Cron 式を視覚的に編集 | `value`, `disabled`, `required`, `error`, `presets`, `labels`, `weekdayOptions`, `onchange` | 5フィールド Cron 式を返す | `<CronExpressionBuilder bind:value={cron} />` |
+| `ScheduleInput` | 日時と高度な Cron のスケジュール入力 | `config: ScheduleInputConfig`（正規化済み）, `value`, `required`, `disabled`, `valid`, `onchange` | 固定 `+08:00` の日時または Cron 値を検証して返す | `<ScheduleInput config={scheduleConfig} bind:value={schedule} />` |
+| `normalizeScheduleInputConfig` | スケジュール schema メタデータを検証・正規化 | `value: unknown`；`allowCron` は省略可能 | `ScheduleInputConfig`；未対応の場合は `undefined`、省略した `allowCron` は `false` に正規化 | `normalizeScheduleInputConfig(rawSchema)` |
+| `ScheduleInputConfig` | 正規化済み `ScheduleInput` schema 型 | `kind: 'schedule'`, `timezone: 'Asia/Shanghai'`, `precision: 'minute'`, `allowCron: boolean` | `ScheduleInput.config` に渡せる設定 | `const config: ScheduleInputConfig = { kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: false }` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | Cron builder の月曜から日曜の順序 | なし | `readonly CronWeekdayValue[]` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
+| `createDefaultCronBuilderState` | Cron builder の既定状態を作成 | なし | `CronBuilderState` | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState` | よく使う Cron 式を builder 状態へ解析 | `expression: string` | `CronBuilderState`；未対応の式は `custom` モードに保持 | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression` | builder 状態を Cron 式へシリアライズ | `state: CronBuilderState` | 5フィールド Cron 文字列 | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid` | Cron parser で式を検証 | `expression: string` | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CronBuilderMode`, `CronWeekdayValue`, `CronBuilderState`, `CronExpressionBuilderLabels`, `CronExpressionBuilderPreset`, `CronExpressionBuilderWeekdayOption` | Cron builder のモード、状態、ラベル、プリセット、曜日オプションの型 | TypeScript 型 | builder helper とコンポーネント設定を型付け | `import type { CronBuilderState } from '@h-ai/ui'` |
+| `@h-ai/ui/components/compounds/schedule-input` | Node/schema 消費者向けの軽量入口 | `normalizeScheduleInputConfig` と `ScheduleInputConfig` のみ | Svelte を読み込まず schema の正規化結果を返す | `import { normalizeScheduleInputConfig, type ScheduleInputConfig } from '@h-ai/ui/components/compounds/schedule-input'` |
 
 #### 利用例：二つの入力で同じ日付を選ぶ
 
@@ -134,6 +145,25 @@ export default {
 <Calendar bind:value={date} />
 <!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
+```
+
+#### 利用例：日時または Cron スケジュールを入力する
+
+schema メタデータをコントロールへ渡す前に `normalizeScheduleInputConfig` を呼び出します。元の schema では `allowCron` を省略でき、正規化時に `false` が補われます。未対応の種別、タイムゾーン、精度、フィールドは `undefined` になります。`ScheduleInput.config` には正規化済みの `ScheduleInputConfig` を渡します。Node/schema 消費者は `@h-ai/ui/components/compounds/schedule-input` から normalizer と型だけを読み込めます。この入口は Svelte を読み込みません。
+
+`ScheduleInput` は既定で北京時間の分精度を使い、日時を固定 `+08:00` オフセットでシリアライズします。`allowCron` を `true` にすると、日時と5フィールド Cron モードを切り替えられます。`valid` は現在の草稿、必須条件、未来時刻の検証結果を示します。
+
+```svelte
+<script lang='ts'>
+  import { ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let scheduleValid = $state(false)
+  const scheduleConfig = {
+    kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: true,
+  } as const
+</script>
+<ScheduleInput config={scheduleConfig} bind:value={schedule} bind:valid={scheduleValid} required />
 ```
 
 <a id="overlays"></a>

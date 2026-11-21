@@ -372,6 +372,9 @@ catalogs:
     chromadb:
       specifier: ^3.5.0
       version: 3.5.0
+    cron-parser:
+      specifier: 5.6.1
+      version: 5.6.1
     croner:
       specifier: ^11.0.0
       version: 11.0.0
@@ -2556,6 +2559,9 @@ importers:
       bits-ui:
         specifier: 'catalog:'
         version: 2.20.6(@internationalized/date@3.12.4)(@sveltejs/kit@3.1.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.71.1))(zod@4.6.7)
+      cron-parser:
+        specifier: 'catalog:'
+        version: 5.6.1
       driver.js:
         specifier: 'catalog:'
         version: 1.10.2
@@ -6292,6 +6298,10 @@ packages:
   crelt@1.0.7:
     resolution: {integrity: sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA==}
 
+  cron-parser@5.6.1:
+    resolution: {integrity: sha512-QBm4o1PwZiuY7KFbVvW7FLC8bozy7YWzv+Fz6KRS7sQghzcbDZCGxr/Bc5b6TQreAoSwuWVP491dIcK0THCX6A==}
+    engines: {node: '>=18'}
+
   croner@11.0.0:
     resolution: {integrity: sha512-T17ADjdttrVToyzLpLq9Xb9xzcMwpQ/M3Qs9szhh0MVNTbv6NWQ9OFYa2qlzPYXFMn+uoDlnW1IpIv6cAvFtyA==}
     engines: {node: '>=18.0'}
@@ -7811,6 +7821,10 @@ packages:
   lru.min@1.1.5:
     resolution: {integrity: sha512-5J9ysMYUpYIg9RF2vJpy9SinEmSviFSe0GyPpCQ4L5QSkLAgeLXlTAOu2ZwWUU5m+0SBl6gUU1R1ZQB3aKypfA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
+
+  luxon@3.7.2:
+    resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
+    engines: {node: '>=12'}
 
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
@@ -13549,6 +13563,10 @@ snapshots:
 
   crelt@1.0.7: {}
 
+  cron-parser@5.6.1:
+    dependencies:
+      luxon: 3.7.2
+
   croner@11.0.0: {}
 
   cross-spawn@7.0.6:
@@ -15272,6 +15290,8 @@ snapshots:
 
   lru.min@1.1.5:
     optional: true
+
+  luxon@3.7.2: {}
 
   lz-string@1.5.0: {}
 
