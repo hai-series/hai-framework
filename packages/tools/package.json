@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/tools",
   "type": "module",
-  "version": "1.0.0-beta.33",
+  "version": "1.0.0-beta.34",
   "description": "Model-neutral tools, validation, authorization and execution for hai-framework",
   "license": "Apache-2.0",
   "exports": {
