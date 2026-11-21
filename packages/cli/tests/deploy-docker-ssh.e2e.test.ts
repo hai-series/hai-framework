@@ -550,6 +550,7 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
  * @param metadata.env - 预期的运行环境。
  * @param project - 本轮生成并已部署的工程路径，默认使用 appDir。
  * @param buildMetadata - 此工程浏览器用例需要读取的镜像旁证；其他模板不使用 Fullstack 路径。
+ * @param scenario - 与实际应用类型一致的私有测试场景。
  * @returns 验收成功后返回。
  * @throws 浏览器验收或证据持久化失败时抛错。
  * @example
@@ -557,10 +558,9 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
  * await verifyDeployedBrowser(commands, { name: 'Acceptance app', version: '2.4.6', env: 'test' }, appDir)
  * ```
  */
-async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir, buildMetadata: ReadonlyArray<{ service: string, source: string, destination: string }> = []): Promise<void> {
-  const fullstack = existsSync(path.join(project, 'packages', `${path.basename(project)}-serv`))
+async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir, buildMetadata: ReadonlyArray<{ service: string, source: string, destination: string }> = [], scenario: 'fullstack-feedback' | 'admin' | 'mobile-app' = 'fullstack-feedback'): Promise<void> {
   await installScenarios(project, {
-    title: fullstack ? 'fullstack-feedback' : 'admin',
+    title: scenario,
     projectName: path.basename(project),
   })
   const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
@@ -1633,7 +1633,7 @@ done`
   })
 
   // admin/website/h5 复用同一 SSR Dockerfile 与部署分支；逐模板差异由八个 scaffold 场景验收。
-  it.for<AppType>(['api', 'admin', 'mobile-app'])('%s 运行形态能真实构建、生成离线包并在隔离服务器启动', { timeout: 1_200_000 }, (appType, context) => withCommands(1_200_000, async (commands) => {
+  it.for<Extract<AppType, 'api' | 'admin' | 'mobile-app'>>(['api', 'admin', 'mobile-app'])('%s 运行形态能真实构建、生成离线包并在隔离服务器启动', { timeout: 1_200_000 }, (appType, context) => withCommands(1_200_000, async (commands) => {
     // 内层引擎存储独占且不挂宿主 engine/socket/storage；只在本轮已记录外层 ID 内释放上一场景。
     await commands.run(runtime!, [
       'exec',
@@ -1774,6 +1774,6 @@ done`
       : '/'}`)
     expect(response.ok).toBe(true)
     if (appType !== 'api')
-      await verifyDeployedBrowser(commands, { name, version: artifact.appVersion, env: 'test' }, project)
+      await verifyDeployedBrowser(commands, { name, version: artifact.appVersion, env: 'test' }, project, [], appType)
   }, context))
 })

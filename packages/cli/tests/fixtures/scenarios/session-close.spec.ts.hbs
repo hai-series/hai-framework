@@ -5,6 +5,9 @@ import process from 'node:process'
 import { expect, test } from '@playwright/test'
 import { configuredPassword } from '../scripts/test-server.js'
 
+// 仅验收已明确启用短会话及首次改密的专项服务；普通部署保留正常会话策略。
+test.skip(process.env.HAI_E2E_GROUP !== 'session-close', 'Requires the session-close server profile')
+
 const configAdminPassword = configuredPassword('HAI_CONFIG_ADMIN_PASSWORD')
 
 async function dismissToasts(page: Page) {

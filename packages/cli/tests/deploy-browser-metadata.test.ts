@@ -11,7 +11,7 @@ import ts from 'typescript'
 import { expect, it, vi } from 'vitest'
 
 interface MetadataEntry { service: string, source: string, destination: string }
-type Verify = (commands: Pick<DeployTestCommands, 'run'>, metadata: { name: string, version: string, env: string }, project: string, entries?: readonly MetadataEntry[]) => Promise<void>
+type Verify = (commands: Pick<DeployTestCommands, 'run'>, metadata: { name: string, version: string, env: string }, project: string, entries?: readonly MetadataEntry[], scenario?: 'fullstack-feedback' | 'admin' | 'mobile-app') => Promise<void>
 
 const file = new URL('./deploy-docker-ssh.e2e.test.ts', import.meta.url)
 const source = ts.createSourceFile(file.pathname, readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true)
@@ -22,7 +22,7 @@ const compiled = ts.transpileModule(`${declaration.getText(source).replaceAll('i
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText
 
-async function withHelper(name: string, body: (fixture: { verify: Verify, project: string, evidence: string, browser: ReturnType<typeof vi.fn> }) => Promise<void>) {
+async function withHelper(name: string, body: (fixture: { verify: Verify, project: string, evidence: string, browser: ReturnType<typeof vi.fn>, install: ReturnType<typeof vi.fn> }) => Promise<void>) {
   const directory = await mkdtemp(path.join(tmpdir(), 'hai-deploy-metadata-'))
   if (path.dirname(directory) !== path.resolve(tmpdir()) || !path.basename(directory).startsWith('hai-deploy-metadata-'))
     throw new Error('Unexpected metadata fixture cleanup path')
@@ -34,6 +34,7 @@ async function withHelper(name: string, body: (fixture: { verify: Verify, projec
     await writeFile(path.join(project, '.env.test.local'), '')
     const exports: { verify?: Verify } = {}
     const browser = vi.fn(async () => 'Browser checks completed')
+    const install = vi.fn()
     runInNewContext(compiled, {
       exports,
       path,
@@ -54,6 +55,7 @@ async function withHelper(name: string, body: (fixture: { verify: Verify, projec
       workDir: directory,
       fixture: () => ({ containerId: 'owned-fixture', webHostPort: 19000 }),
       runPnpm: browser,
+      installScenarios: install,
     })
     if (!exports.verify)
       throw new Error('The deployment browser helper did not load')
@@ -62,6 +64,7 @@ async function withHelper(name: string, body: (fixture: { verify: Verify, projec
       project,
       evidence,
       browser,
+      install,
     })
   }
   finally {
@@ -69,13 +72,17 @@ async function withHelper(name: string, body: (fixture: { verify: Verify, projec
   }
 }
 
-it.each(['delivery-admin', 'delivery-mobile-app'])('%s 保留浏览器验收，不请求不存在的 Fullstack 容器或目录', name => withHelper(name, async ({ verify, project, browser }) => {
+it.each(['delivery-admin', 'delivery-mobile-app'])('%s 保留对应应用的浏览器场景，不请求不存在的 Fullstack 容器或目录', name => withHelper(name, async ({ verify, project, browser, install }) => {
   const commands = {
     run: vi.fn<DeployTestCommands['run']>(async () => {
       throw new Error('This template has no Fullstack metadata files')
     }),
   }
-  await verify(commands, { name, version: '1.2.3', env: 'test' }, project)
+  const scenario = name === 'delivery-admin'
+    ? 'admin'
+    : 'mobile-app'
+  await verify(commands, { name, version: '1.2.3', env: 'test' }, project, [], scenario)
+  expect(install).toHaveBeenCalledWith(project, { title: scenario, projectName: name })
   expect(commands.run).not.toHaveBeenCalled()
   expect(browser).toHaveBeenCalledOnce()
   expect(browser.mock.calls[0]?.[0]).toBe(commands)
