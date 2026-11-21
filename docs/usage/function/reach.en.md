@@ -91,17 +91,7 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="sending"></a>
 
@@ -126,8 +116,12 @@ reach.send may contact a provider or return a queue receipt for an ordinary noti
 Ordinary messages may be durably deferred unless the caller selects reject. Sensitive messages are not automatically retried after quiet hours, expiry or unknown outcomes. Provider acceptance is not final delivery or a read receipt; reconcile unknown results before recovery.
 
 ```ts
-// Render Ada into the stored demo-welcome template for demo@example.com. A deferred receipt means queued; value throws on a template or provider error.
-const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
+// Fragment inside an async application function; return failed results to its caller.
+// Render Ada into the stored demo-welcome template for demo@example.com. A deferred receipt means queued; return the failed result on a template or provider error.
+const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
+if (!sentResult.success)
+  return sentResult
+const sent = sentResult.data
 // sent: SendResult for this provider attempt, not proof that a person read the message
 ```
 
@@ -159,18 +153,34 @@ Templates select a provider, body and subject. Render previews variable substitu
 #### Scenario: Maintain and preview templates
 
 ```ts
-// Save demo-welcome with subject Welcome and body Hello {name} for the local provider. Success has no data; value throws on persistence failure.
-value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+// Fragment inside an async application function; return failed results to its caller.
+// Save demo-welcome with subject Welcome and body Hello {name} for the local provider. Success has no data; return the failed result on persistence failure.
+const saveResult = await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })
+if (!saveResult.success)
+  return saveResult
 // Upsert the local demo-goodbye template with body Bye {name}. Success has no data; a failure does not roll back other completed writes.
-value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
-// Look up the saved demo-welcome template by name; value throws if it cannot be found.
-const template = value(await reach.template.resolve('demo-welcome')) // saved template
+const saveBatchResult = await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }])
+if (!saveBatchResult.success)
+  return saveBatchResult
+// Look up the saved demo-welcome template by name; return the failed result if it cannot be found.
+const templateResult = await reach.template.resolve('demo-welcome')
+if (!templateResult.success)
+  return templateResult
+const template = templateResult.data // saved template
 // Preview demo-welcome with name Ada. The result contains body Hello Ada and the subject without sending; a missing template fails.
-const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
-// List stored templates with no arguments, including both saved entries. value throws on a lookup error.
-const templates = value(await reach.template.list()) // includes both templates
-// Delete demo-goodbye by name. Success has no data; value throws on a storage error.
-value(await reach.template.remove('demo-goodbye')) // undefined
+const previewResult = await reach.template.render('demo-welcome', { name: 'Ada' })
+if (!previewResult.success)
+  return previewResult
+const preview = previewResult.data // body 'Hello Ada'
+// List stored templates with no arguments, including both saved entries. Return the failed result on a lookup error.
+const templatesResult = await reach.template.list()
+if (!templatesResult.success)
+  return templatesResult
+const templates = templatesResult.data // includes both templates
+// Delete demo-goodbye by name. Success has no data; return the failed result on a storage error.
+const removeResult = await reach.template.remove('demo-goodbye')
+if (!removeResult.success)
+  return removeResult
 ```
 
 Configure a test provider named mail first. The name variable produces Hello Ada. Removing a template does not recall sent messages.
@@ -193,11 +203,18 @@ Save queue IDs when sends are queued. Read their status or list dead letters for
 #### Scenario: Inspect queued and failed sends
 
 ```ts
-// Read up to 20 dead queue entries. An empty match yields an empty array; value throws on a read error.
-const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
+// Fragment inside an async application function; return failed results to its caller.
+// Read up to 20 dead queue entries. An empty match yields an empty array; return the failed result on a read error.
+const entriesResult = await reach.queue.list({ status: 'dead', limit: 20 })
+if (!entriesResult.success)
+  return entriesResult
+const entries = entriesResult.data
 if (entries.length > 0) {
   // Read the current entry for the first summary's queueId. A removed entry gives null; a query error fails.
-  const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
+  const entryResult = await reach.queue.get(entries[0].queueId)
+  if (!entryResult.success)
+    return entryResult
+  const entry = entryResult.data // current entry or null
 }
 ```
 
@@ -227,12 +244,20 @@ import type { ReachUnknownResolution } from '@h-ai/reach'
 
 async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
   // Read the current entry using the supplied queue receipt. A missing entry is null; only unknown proceeds to manual resolution.
-  const current = value(await reach.queue.get(queueId))
+  const currentResult = await reach.queue.get(queueId)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown delivery')
   // Record the verified decision for this unknown entry without resending. Success has no data; changed state or an invalid decision fails.
-  value(await reach.queue.resolveUnknown(queueId, decision))
+  const resolveUnknownResult = await reach.queue.resolveUnknown(queueId, decision)
+  if (!resolveUnknownResult.success)
+    return resolveUnknownResult
   // Read the same queueId after reconciliation to inspect sent or discarded. The read can independently fail.
-  return value(await reach.queue.get(queueId)) // status is sent or discarded
+  const getResult = await reach.queue.get(queueId)
+  if (!getResult.success)
+    return getResult
+  return getResult.data // status is sent or discarded
 }
 ```

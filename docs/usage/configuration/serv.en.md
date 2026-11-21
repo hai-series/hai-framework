@@ -6,6 +6,8 @@
 
 Load `config/_serv.yml` in the server entry point. Pass the settings to the HTTP boundary and keep deployment credentials in server environment variables.
 
+## Configuration examples
+
 ```yaml schema=@h-ai/serv:ServConfigSchema
 server:
   port: 3000
@@ -14,6 +16,39 @@ http:
   trustedProxies: auto
   access: false
 ```
+
+### Allow a separate console origin
+
+Put this in `config/_serv.yml`. Allow the console origin to read cross-origin responses and send credentials. CORS does not replace authentication or authorization. Cookie clients also need suitable cookie attributes. Replace the origin with your console URL.
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+server:
+  host: 0.0.0.0
+  port: 3000
+cors:
+  origin: https://console.example.com
+  credentials: true
+```
+
+### Enable API docs and custom health paths
+
+Serve OpenAPI at `/openapi.json`, the docs UI at `/docs`, and health checks at `/healthz` and `/readyz`. The docs UI requires an authenticated identity supplied by the application. Health endpoints support deployment probes; they do not prove every external business system is working.
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+    requireAuth: true
+  health:
+    path: /healthz
+    readyPath: /readyz
+```
+
+## Configuration reference
+
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |

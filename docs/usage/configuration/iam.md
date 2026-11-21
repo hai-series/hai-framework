@@ -10,6 +10,8 @@
 
 应用先连接数据库和缓存、初始化加密模块，再运行 `iam.init()`。服务端路由仍需设置哪些请求必须登录、哪些操作需要权限。登录页用 `apiClient.iam.auth.publicConfig()` 请求服务端。服务端调用 `iam.getPublicConfig()`，只返回登录开关、密码长度等可给访客看的信息。数据库地址、LDAP 凭据和签名密钥都留在服务端。
 
+配置校验失败时，`iam.init()` 返回 `CONFIG_ERROR`，消息和 `error.ext.fields` 列出错误字段路径，`error.cause` 保留原始校验原因。服务端日志用 `issues` 数组记录路径、错误类别和说明，排错时无需查看整段配置。
+
 ## 配置示例
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
@@ -20,6 +22,39 @@ register:
   enabled: false
 session:
   maxAge: 3600
+```
+
+### 只允许密码登录，并在闲置 30 分钟后结束会话
+
+写入 `config/_iam.yml`。最短密码设为 12 个字符，关闭自助注册。`idleTimeout` 和 `absoluteTimeout` 都以秒为单位：连续无操作 30 分钟，或登录满 8 小时，需要重新登录。此处不会替已有账号自动修改密码。
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  otp: false
+  ldap: false
+register:
+  enabled: false
+password:
+  minLength: 12
+session:
+  idleTimeout: 1800
+  absoluteTimeout: 28800
+```
+
+### 连接公司的 LDAP 目录
+
+填写完整连接地址、绑定账号和用户搜索范围，绑定密码从服务端私有环境提供。此例仍保留本地密码登录。没有使用 LDAP 时，省略整个 `ldap` 段和相应的 `HAI_IAM_LDAP_*` 环境变量；只留下密码变量会形成不完整配置，并阻止启动。
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  ldap: true
+ldap:
+  url: ldaps://directory.example.com:636
+  bindDn: cn=app-reader,ou=services,dc=example,dc=com
+  bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}
+  searchBase: ou=people,dc=example,dc=com
 ```
 
 <a id="configuration-fields"></a>

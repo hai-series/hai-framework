@@ -44,17 +44,7 @@ if (failures.length)
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="platform"></a>
 
@@ -77,19 +67,28 @@ Initialization detects the actual platform. Device and version data depend on th
 #### Scenario: Prepare native access and read device data
 
 ```ts
-// Initialize this platform with defaults. value returns undefined on success and throws the framework error on failure.
-value(await capacitor.init())
+// Fragment inside an async application function; return failed results to its caller.
+// Initialize this platform with defaults. Success has no data; return the original failed result on failure.
+const initResult = await capacitor.init()
+if (!initResult.success)
+  return initResult
 // Read the detected platform without arguments. The result is web, ios, or android.
 const platform = capacitor.getPlatform() // 'web', 'ios' or 'android'
 // Check the detected platform without arguments. true means an iOS or Android native shell.
 const native = capacitor.isNative() // true on the native shell
 capacitor.isInitialized // true
-// Read platform, OS, and model from the active device. value throws if the device operation fails.
-const info = value(await capacitor.device.getInfo()) // actual platform, OS and model
+// Read platform, OS, and model from the active device. Return the failed result if the device operation fails.
+const infoResult = await capacitor.device.getInfo()
+if (!infoResult.success)
+  return infoResult
+const info = infoResult.data // actual platform, OS and model
 // Ask the current app for version and build. Check success because native application data may be unavailable on web.
 const version = await capacitor.device.getAppVersion() // check success; web may not supply native app data
-// Close the current instance and release listeners. value throws if cleanup fails.
-value(await capacitor.close()) // undefined; listeners released
+// Close the current instance and release listeners. Return the failed result if cleanup fails.
+const closeResult = await capacitor.close()
+if (!closeResult.success)
+  return closeResult
+// listeners released
 ```
 
 These calls take no input. Device data comes from actual plugins; initialize and check support before other examples.
@@ -161,17 +160,27 @@ Native push registration requests permission and waits for plugin events. Succes
 The 30-second boundary covers permission, listeners and registration events. Denial, timeout, cancellation or close cleans up known and late handles. Success requires a real registration event and successful listener cleanup. Cleanup failure also returns failure; close can retry cleanup. The application must still associate the token with the account on its server.
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 const received: unknown[] = []
 const actions: unknown[] = []
-// Register this device for push with default settings. Success contains the platform token. value throws on registration failure.
-const registration = value(await capacitor.push.register()) // { token: '<platform token>' }
-// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. value throws on setup failure.
-const stop = value(await capacitor.push.listen({
+// Register this device for push with default settings. Success contains the platform token. Return the failed result on registration failure.
+const registrationResult = await capacitor.push.register()
+if (!registrationResult.success)
+  return registrationResult
+const registration = registrationResult.data // { token: '<platform token>' }
+// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. Return the failed result on setup failure.
+const stopResult = await capacitor.push.listen({
   onReceived: notification => { received.push(notification) },
   onActionPerformed: action => { actions.push(action) },
-}))
-// Remove the listeners installed above. Success has no data. value throws on cleanup failure.
-value(await stop()) // undefined; registered listeners removed
+})
+if (!stopResult.success)
+  return stopResult
+const stop = stopResult.data
+// Remove the listeners installed above. Success has no data. Return the failed result on cleanup failure.
+const stopResult2 = await stop()
+if (!stopResult2.success)
+  return stopResult2
+// registered listeners removed
 ```
 
 Inputs are application callbacks receiving real platform events. Do not log tokens; unsupported native push in web returns failure.
@@ -195,12 +204,19 @@ Use the native status-bar plugin to configure style and overlay, then show or hi
 #### Scenario: Control the system status bar
 
 ```ts
-// Apply dark status text and enable overlay on the active native view. value surfaces unsupported platform or plugin errors.
-value(await capacitor.statusBar.configure({ style: 'dark', overlay: true }))
-// Hide the status bar for the active app. value throws if the plugin operation fails.
-value(await capacitor.statusBar.hide())
-// Show the status bar again. value throws if restoration fails.
-value(await capacitor.statusBar.show())
+// Fragment inside an async application function; return failed results to its caller.
+// Apply dark status text and enable overlay on the active native view. Return the failed result for unsupported platform or plugin errors.
+const configureResult = await capacitor.statusBar.configure({ style: 'dark', overlay: true })
+if (!configureResult.success)
+  return configureResult
+// Hide the status bar for the active app. Return the failed result if the plugin operation fails.
+const hideResult = await capacitor.statusBar.hide()
+if (!hideResult.success)
+  return hideResult
+// Show the status bar again. Return the failed result if restoration fails.
+const showResult = await capacitor.statusBar.show()
+if (!showResult.success)
+  return showResult
 ```
 
 Successful calls have no business data; observe the actual system bar on a supported native device. Browser output does not prove native behavior.
@@ -227,21 +243,39 @@ Store non-sensitive strings such as theme preferences. Independent safe helpers 
 #### Scenario: Save ordinary preferences
 
 ```ts
+// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from '@h-ai/capacitor'
-// Write dark at demo-theme through the initialized Preferences API. value throws on a failed write.
-value(await capacitor.preferences.set('demo-theme', 'dark'))
-// Read demo-theme through Preferences. It returns dark, or null if the key is gone. value throws on failure.
-value(await capacitor.preferences.get('demo-theme')) // 'dark'
-// Remove demo-theme through Preferences. Success has no data. value surfaces storage errors.
-value(await capacitor.preferences.remove('demo-theme'))
-// Use the standalone helper to write light at demo-theme. value surfaces storage errors.
-value(await safeSetPreference('demo-theme', 'light'))
-// Read the same key with the standalone helper. Expect light. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // 'light'
+// Write dark at demo-theme through the initialized Preferences API. Return the failed result on a failed write.
+const setResult = await capacitor.preferences.set('demo-theme', 'dark')
+if (!setResult.success)
+  return setResult
+// Read demo-theme through Preferences. It returns dark, or null if the key is gone. Return the failed result on failure.
+const getResult = await capacitor.preferences.get('demo-theme')
+if (!getResult.success)
+  return getResult
+getResult.data // 'dark'
+// Remove demo-theme through Preferences. Success has no data. Return the failed result for storage errors.
+const removeResult = await capacitor.preferences.remove('demo-theme')
+if (!removeResult.success)
+  return removeResult
+// Use the standalone helper to write light at demo-theme. Return the failed result for storage errors.
+const safeSetPreferenceResult = await safeSetPreference('demo-theme', 'light')
+if (!safeSetPreferenceResult.success)
+  return safeSetPreferenceResult
+// Read the same key with the standalone helper. Expect light. Return the failed result on a failed read.
+const safeGetPreferenceResult = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult.success)
+  return safeGetPreferenceResult
+safeGetPreferenceResult.data // 'light'
 // Delete demo-theme with the standalone helper. The returned result is void on success.
-value(await safeRemovePreference('demo-theme'))
-// Read demo-theme after deletion. Expect null on success. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // null
+const safeRemovePreferenceResult = await safeRemovePreference('demo-theme')
+if (!safeRemovePreferenceResult.success)
+  return safeRemovePreferenceResult
+// Read demo-theme after deletion. Expect null on success. Return the failed result on a failed read.
+const safeGetPreferenceResult2 = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult2.success)
+  return safeGetPreferenceResult2
+safeGetPreferenceResult2.data // null
 ```
 
 Values are strings. set/remove have no business data; get returns a string or null.

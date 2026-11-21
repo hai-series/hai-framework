@@ -8,10 +8,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
-Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
-
 ### The user account
 
 Structure: `hai_iam_users`.
@@ -163,7 +159,7 @@ Store token-backed sessions for verification, renewal and logout; concurrent upd
 }
 ```
 
-The token belongs to user-42. Access expires the next day, refresh may last longer, and revision changes with updates. Tokens are redacted.
+The token belongs to user-42. Access expires at 2026-11-18 00:00 UTC; refresh may last longer, with `refreshExpiresAt` in Unix milliseconds. `revision` changes with updates. Tokens are redacted.
 
 ### One-time code and resend delay
 
@@ -181,7 +177,7 @@ Track the current code for one identity, failed attempts and when another may be
 }
 ```
 
-No failed attempts yet; the code lasts five minutes and resend waits 60 seconds. The redacted code cannot be reused after success.
+Assuming issue at 2026-11-17 00:00 UTC, this code has no failed attempts, lasts five minutes and has a 60-second resend delay. `expiresAt` and `cooldownUntil` are Unix milliseconds. The redacted code cannot be reused after success.
 
 ### Server record for a CAPTCHA challenge
 
@@ -216,7 +212,7 @@ Issue temporary authorization checked against subject and purpose, then consume 
 }
 ```
 
-user-42 may transcribe through ai-audio for 30 seconds. A second connection with the same ticket fails.
+user-42 may transcribe through ai-audio. Assuming issue at 2026-11-17 00:00 UTC, the ticket expires 30 seconds later; `expiresAt` is Unix milliseconds. A second connection with the same ticket fails.
 
 ### Whether cached permissions remain current
 

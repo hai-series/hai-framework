@@ -18,6 +18,37 @@ providers:
     type: console
 ```
 
+### 用 SMTP 发送订单邮件
+
+写入 `config/_reach.yml`。调用方用渠道名 `email` 选择这个邮箱服务。465 端口使用 TLS；账号和密码从服务端私有环境提供。发送方地址必须获得邮件服务商允许。
+
+```yaml schema=@h-ai/reach:ReachConfigSchema
+providers:
+  - name: email
+    type: smtp
+    host: smtp.example.com
+    port: 465
+    secure: true
+    user: ${SMTP_USER}
+    pass: ${SMTP_PASSWORD}
+    from: orders@example.com
+```
+
+### 把通知发送到公司的 HTTP 网关
+
+服务端向网关发送 POST 请求，单次等待最多 5 秒。网关需要的正文转换可在初始化时通过 `gatewayHooks` 提供，配置文件不会定义 JavaScript 回调。这个地址须使用实际可信服务，不能由终端用户任意传入。
+
+```yaml schema=@h-ai/reach:ReachConfigSchema
+providers:
+  - name: company-notify
+    type: api
+    url: https://notify.example.com/messages
+    method: POST
+    timeout: 5000
+    headers:
+      X-Api-Key: ${NOTIFY_API_KEY}
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

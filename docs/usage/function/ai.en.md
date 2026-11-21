@@ -46,17 +46,8 @@ finally {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success, returns the original failed result, and reads data only on success. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="lifecycle"></a>
 
@@ -113,11 +104,18 @@ When a model uses `protocol: "responses"`, `chat` and `chatStream` send text and
 #### Scenario: Chat, structured output and models
 
 ```ts
-// Send the order status question to the default model. The completion contains text in choices; value throws on provider failure.
-const reply = value(await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] }))
+// Fragment inside an async application function; return failed results to its caller.
+// Send the order status question to the default model. The completion contains text in choices; return the failed result on provider failure.
+const replyResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] })
+if (!replyResult.success)
+  return replyResult
+const reply = replyResult.data
 const text = reply.choices[0]?.message.content // model-generated text, not a fixed literal
-// Ask the default model what pending means. Success yields answer text; value throws on a provider failure.
-const answer = value(await ai.llm.ask('What does pending mean?')) // string answer
+// Ask the default model what pending means. Success yields answer text; return the failed result on a provider failure.
+const answerResult = await ai.llm.ask('What does pending mean?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data // string answer
 // Stream Hello to the default model and iterate completion chunks. Connection or generation failure throws from the stream.
 for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] })) {
   const delta = chunk.choices[0]?.delta?.content // incremental text when present
@@ -126,8 +124,11 @@ for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content
 for await (const delta of ai.llm.askStream('Hello')) {
   // consume each returned text fragment; handle stream errors outside the loop
 }
-// List available models with no arguments. value throws if the catalog cannot be read.
-const models = value(await ai.llm.listModels()) // configured model summaries
+// List available models with no arguments. Return the failed result if the catalog cannot be read.
+const modelsResult = await ai.llm.listModels()
+if (!modelsResult.success)
+  return modelsResult
+const models = modelsResult.data // configured model summaries
 ```
 
 Questions are concrete, but model text varies. Structured generation validates against a local schema below. Resource CRUD uses one stable model name; history uses server-verified identities and sessions.
@@ -142,15 +143,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.register>[0]) {
   // Persist the supplied language model definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.llm.models.register(definition))
+  const createdResult = await ai.llm.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database language model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.llm.models.list())
+  const listedResult = await ai.llm.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved language model ID and its database version. A missing ID fails.
-  const current = value(await ai.llm.models.get(definition.id))
+  const currentResult = await ai.llm.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this language model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.llm.models.update(definition, current.version))
+  const updatedResult = await ai.llm.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example language model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.llm.models.remove(definition.id, updated.version))
+  const removeResult = await ai.llm.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -241,12 +256,22 @@ Use the same model and dimensions for documents and queries; batch outputs retai
 #### Scenario: Generate text embeddings
 
 ```ts
-// Embed the supplied installation-guide text as one numeric vector. value throws on a provider failure.
-const one = value(await ai.embedding.embedText('Order installation guide')) // number[]
-// Embed Install and Refund together and return the two corresponding vectors. Provider failure makes value throw.
-const batch = value(await ai.embedding.embedBatch(['Install', 'Refund'])) // vectors in input order
-// Read the full embedding response for the same inputs, including item vectors and indices. value throws on request failure.
-const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] })) // model, data, usage
+// Fragment inside an async application function; return failed results to its caller.
+// Embed the supplied installation-guide text as one numeric vector. Return the failed result on a provider failure.
+const oneResult = await ai.embedding.embedText('Order installation guide')
+if (!oneResult.success)
+  return oneResult
+const one = oneResult.data // number[]
+// Embed Install and Refund together and return the two corresponding vectors. Return the failed result on provider failure.
+const batchResult = await ai.embedding.embedBatch(['Install', 'Refund'])
+if (!batchResult.success)
+  return batchResult
+const batch = batchResult.data // vectors in input order
+// Read the full embedding response for the same inputs, including item vectors and indices. Return the failed result on request failure.
+const detailedResult = await ai.embedding.embed({ input: ['Install', 'Refund'] })
+if (!detailedResult.success)
+  return detailedResult
+const detailed = detailedResult.data // model, data, usage
 ```
 
 The inputs contain one or two texts. Values and dimensions depend on the model; index 0 identifies Install in the detailed response.
@@ -291,15 +316,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers.register>[0]) {
   // Persist the supplied MCP server definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.mcp.servers.register(definition))
+  const createdResult = await ai.mcp.servers.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database MCP server entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.mcp.servers.list())
+  const listedResult = await ai.mcp.servers.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved MCP server ID and its database version. A missing ID fails.
-  const current = value(await ai.mcp.servers.get(definition.id))
+  const currentResult = await ai.mcp.servers.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this MCP server definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.mcp.servers.update(definition, current.version))
+  const updatedResult = await ai.mcp.servers.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example MCP server entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.mcp.servers.remove(definition.id, updated.version))
+  const removeResult = await ai.mcp.servers.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -331,22 +370,36 @@ Register source collections before retrieval and optionally rerank the candidate
 Prepare a populated manual collection matching the embedding dimensions, then register docs. Scores depend on the backend; removing a source retains its documents.
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 // Register docs for the manual vector collection. Success has no data; a duplicate ID fails.
-value(await ai.retrieval.addSource({ id: 'docs', collection: 'manual' }))
+const addSourceResult = await ai.retrieval.addSource({ id: 'docs', collection: 'manual' })
+if (!addSourceResult.success)
+  return addSourceResult
 try {
   // List retrieval sources without arguments. The returned array now includes docs.
   const sources = await ai.retrieval.listSources() // direct RetrievalSource[]
-  // Find up to five deployment matches in docs, with citations. value throws on missing sources or retrieval failures.
-  const found = value(await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 }))
-  // Rerank the two supplied documents for deployment relevance. The result includes ranked items and scores; provider errors throw through value.
-  const ranked = value(await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] }))
+  // Find up to five deployment matches in docs, with citations. Return the failed result on missing sources or retrieval failures.
+  const foundResult = await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 })
+  if (!foundResult.success)
+    return foundResult
+  const found = foundResult.data
+  // Rerank the two supplied documents for deployment relevance. The result includes ranked items and scores; return the failed result on provider errors.
+  const rankedResult = await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] })
+  if (!rankedResult.success)
+    return rankedResult
+  const ranked = rankedResult.data
   // Rerank the same texts and return only the top-ranked text.
-  const texts = value(await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1))
+  const textsResult = await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1)
+  if (!textsResult.success)
+    return textsResult
+  const texts = textsResult.data
   // found has source candidates; ranked/texts carry original indexes and relevance scores.
 }
 finally {
   // Remove the docs source registered for this example. Success has no data; a missing source fails.
-  value(await ai.retrieval.removeSource('docs'))
+  const removeSourceResult = await ai.retrieval.removeSource('docs')
+  if (!removeSourceResult.success)
+    return removeSourceResult
 }
 ```
 
@@ -358,15 +411,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_retrieval_sources(definition: Parameters<typeof ai.retrieval.sources.register>[0]) {
   // Persist the supplied retrieval source definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.retrieval.sources.register(definition))
+  const createdResult = await ai.retrieval.sources.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database retrieval source entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.retrieval.sources.list())
+  const listedResult = await ai.retrieval.sources.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved retrieval source ID and its database version. A missing ID fails.
-  const current = value(await ai.retrieval.sources.get(definition.id))
+  const currentResult = await ai.retrieval.sources.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this retrieval source definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.retrieval.sources.update(definition, current.version))
+  const updatedResult = await ai.retrieval.sources.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example retrieval source entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.retrieval.sources.remove(definition.id, updated.version))
+  const removeResult = await ai.retrieval.sources.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -387,8 +454,12 @@ Pass the question and registered sources to RAG, retain citations with answers a
 #### Scenario: Answer with sources and citations
 
 ```ts
-// Retrieve deployment context from docs and ask the model. Success includes answer, context, and citations; value throws on retrieval or generation failure.
-const answer = value(await ai.rag.query('How do I deploy?', { sources: ['docs'] }))
+// Fragment inside an async application function; return failed results to its caller.
+// Retrieve deployment context from docs and ask the model. Success includes answer, context, and citations; return the failed result on retrieval or generation failure.
+const answerResult = await ai.rag.query('How do I deploy?', { sources: ['docs'] })
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // answer contains answer, context, citations, query and model
 // Stream the same deployment question over docs and consume context, text deltas, and the completion event.
 for await (const event of ai.rag.queryStream('How do I deploy?', { sources: ['docs'] })) {
@@ -432,24 +503,51 @@ Existing vectors do not make a revision visible. This distinguishes revision pre
 Only a published revision becomes current for retrieval. Cleanup failure can leave cleanupPending for repair. Removal revokes visibility before cleanup. Retrieval must check the published revision rather than trusting any old chunk still in the vector store.
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 // Set up the default knowledge collection and revision records with no arguments. Success has no data; setup failure blocks ingestion.
-value(await ai.knowledge.setup())
+const setupResult = await ai.knowledge.setup()
+if (!setupResult.success)
+  return setupResult
 // Ingest the restart instruction as demo-intro. Success returns the published revision, chunk details, and cleanupPending.
-const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
-// Retrieve restart guidance from the default collection with citations. value throws on a retrieval failure.
-const matches = value(await ai.knowledge.retrieve('When should the service restart?'))
-// Answer the same restart question using retrieved evidence. Success includes the answer and references; value throws on failure.
-const answer = value(await ai.knowledge.ask('When should the service restart?'))
+const publishedResult = await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' })
+if (!publishedResult.success)
+  return publishedResult
+const published = publishedResult.data
+// Retrieve restart guidance from the default collection with citations. Return the failed result on a retrieval failure.
+const matchesResult = await ai.knowledge.retrieve('When should the service restart?')
+if (!matchesResult.success)
+  return matchesResult
+const matches = matchesResult.data
+// Answer the same restart question using retrieved evidence. Success includes the answer and references; return the failed result on failure.
+const answerResult = await ai.knowledge.ask('When should the service restart?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // Read visible documents from the default collection; the list includes demo-intro.
-const documents = value(await ai.knowledge.listDocuments())
+const documentsResult = await ai.knowledge.listDocuments()
+if (!documentsResult.success)
+  return documentsResult
+const documents = documentsResult.data
 // List entities with no arguments. Actual entries depend on extraction.
-const entities = value(await ai.knowledge.listEntities())
+const entitiesResult = await ai.knowledge.listEntities()
+if (!entitiesResult.success)
+  return entitiesResult
+const entities = entitiesResult.data
 // Find documents associated with entity service. With no match, the list is empty.
-const related = value(await ai.knowledge.findByEntity('service'))
+const relatedResult = await ai.knowledge.findByEntity('service')
+if (!relatedResult.success)
+  return relatedResult
+const related = relatedResult.data
 // Remove the visible revision for the ingested document ID. Success has no data; handle cleanup failure.
-value(await ai.knowledge.removeDocument('demo-intro')) // no longer visible to retrieval
+const removeDocumentResult = await ai.knowledge.removeDocument('demo-intro')
+if (!removeDocumentResult.success)
+  return removeDocumentResult
+// no longer visible to retrieval
 // Reconcile expired staging or old vectors for up to 100 records from offset 0. Success returns repair progress.
-const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // cleanup progress
+const repairedResult = await ai.knowledge.repair({ offset: 0, limit: 100 })
+if (!repairedResult.success)
+  return repairedResult
+const repaired = repairedResult.data // cleanup progress
 ```
 
 Use an isolated test collection. Revisions, retrieval and cleanup depend on storage and models. File/batch ingestion, progress callbacks, entity queries and collection deletion follow.
@@ -487,28 +585,56 @@ Use a trusted session subject throughout. Add, read, update, recall and remove o
 async function rememberPreference(objectId: string) {
   // Bind the trusted subject and demo-preference topic to a memory instance for subsequent calls.
   const memory = ai.memory.scoped({ objectId, scope: { topicId: 'demo-preference' } })
-  // Store the Chinese-reply preference in the bound scope. Success returns the entry and ID; persistence or embedding failure throws through value.
-  const saved = value(await memory.add({ content: 'Prefers Chinese replies', type: 'preference' }))
+  // Store the Chinese-reply preference in the bound scope. Success returns the entry and ID; return the failed result on persistence or embedding failure.
+  const savedResult = await memory.add({ content: 'Prefers Chinese replies', type: 'preference' })
+  if (!savedResult.success)
+    return savedResult
+  const saved = savedResult.data
   const access = { objectId, scope: { topicId: 'demo-preference' } }
   // Read the saved ID in the same subject and topic. Missing or out-of-scope entries fail.
-  value(await ai.memory.get(saved.id, access))
-  // Change this scoped entry to Japanese replies. Success returns the updated memory with a recalculated embedding; errors throw through value.
-  value(await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access))
+  const getResult = await ai.memory.get(saved.id, access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
+  // Change this scoped entry to Japanese replies. Success returns the updated memory with a recalculated embedding; return the failed result on errors.
+  const updateResult = await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // Find language preference memories in the bound scope. No match gives an empty array.
-  const recalled = value(await memory.recall('language preference'))
+  const recalledResult = await memory.recall('language preference')
+  if (!recalledResult.success)
+    return recalledResult
+  const recalled = recalledResult.data
   const messages = [{ role: 'user' as const, content: 'Hello' }]
   // Inject relevant scoped memories into a new list based on the Hello messages.
-  const enriched = value(await ai.memory.injectMemories(messages, access))
+  const enrichedResult = await ai.memory.injectMemories(messages, access)
+  if (!enrichedResult.success)
+    return enrichedResult
+  const enriched = enrichedResult.data
   // Analyze the Hello message and persist any extracted memories in the same scope. The returned array can be empty.
-  const extracted = value(await ai.memory.extract(messages, access))
-  // List memories for the same subject and topic; value throws on read failure.
-  const all = value(await ai.memory.list(access))
+  const extractedResult = await ai.memory.extract(messages, access)
+  if (!extractedResult.success)
+    return extractedResult
+  const extracted = extractedResult.data
+  // List memories for the same subject and topic; return the failed result on read failure.
+  const allResult = await ai.memory.list(access)
+  if (!allResult.success)
+    return allResult
+  const all = allResult.data
   // Read up to 20 scoped entries from offset 0 and their pagination information.
-  const page = value(await ai.memory.listPage({ ...access, offset: 0, limit: 20 }))
+  const pageResult = await ai.memory.listPage({ ...access, offset: 0, limit: 20 })
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data
   // Delete the original preference using its ID and scope. Success has no data; a scope mismatch fails.
-  value(await ai.memory.remove(saved.id, access))
+  const removeResult = await ai.memory.remove(saved.id, access)
+  if (!removeResult.success)
+    return removeResult
   // Clear the remaining preference entries only within the bound subject and topic. Success has no data.
-  value(await memory.clear({ types: ['preference'] }))
+  const clearResult = await memory.clear({ types: ['preference'] })
+  if (!clearResult.success)
+    return clearResult
   return { recalled, enriched, extracted, all, page }
 }
 ```
@@ -537,18 +663,35 @@ Use demo-tutor under one subject; compose returns prompt text without changing m
 ```ts
 async function usePersona(objectId: string) {
   const access = { objectId }
-  // Save demo-tutor with the stated prompt for this subject. Success returns the full profile; value throws on storage failure.
-  value(await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' }))
-  // Read the profile ID in the same subject scope. A missing profile makes value throw.
-  value(await ai.persona.get('demo-tutor', access))
+  // Save demo-tutor with the stated prompt for this subject. Success returns the full profile; return the failed result on storage failure.
+  const saveResult = await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' })
+  if (!saveResult.success)
+    return saveResult
+  saveResult.data
+  // Read the profile ID in the same subject scope. A missing profile returns a failed result.
+  const getResult = await ai.persona.get('demo-tutor', access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
   // Rename this subject's demo-tutor to Order tutor and return the updated profile.
-  value(await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access))
+  const updateResult = await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // List profiles for this subject, including the updated profile.
-  const profiles = value(await ai.persona.list(access))
+  const profilesResult = await ai.persona.list(access)
+  if (!profilesResult.success)
+    return profilesResult
+  const profiles = profilesResult.data
   // Compose the system prompt for this scoped persona ID. Success gives text; a missing profile fails.
-  const prompt = value(await ai.persona.compose('demo-tutor', access))
+  const promptResult = await ai.persona.compose('demo-tutor', access)
+  if (!promptResult.success)
+    return promptResult
+  const prompt = promptResult.data
   // Remove the example profile for this subject. Success has no data.
-  value(await ai.persona.remove('demo-tutor', access))
+  const removeResult = await ai.persona.remove('demo-tutor', access)
+  if (!removeResult.success)
+    return removeResult
   return { profiles, prompt }
 }
 ```
@@ -644,8 +787,12 @@ Validate file type and size before extracting text; OCR formats require configur
 #### Scenario: Parse text and files
 
 ```ts
-// Parse the supplied order-status text into the common document result. value throws on a parse error.
-const plain = value(await ai.file.parseText('Order status: pending.')) // parsed text result
+// Fragment inside an async application function; return failed results to its caller.
+// Parse the supplied order-status text into the common document result. Return the failed result on a parse error.
+const plainResult = await ai.file.parseText('Order status: pending.')
+if (!plainResult.success)
+  return plainResult
+const plain = plainResult.data // parsed text result
 ```
 
 parse takes a file input and parseText takes text. Outputs carry text and metadata for later chunking/indexing. Unsupported formats or read failures stop ingestion.
@@ -706,15 +853,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_audio_models(definition: Parameters<typeof ai.audio.models.register>[0]) {
   // Persist the supplied audio model definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.audio.models.register(definition))
+  const createdResult = await ai.audio.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database audio model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.audio.models.list())
+  const listedResult = await ai.audio.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved audio model ID and its database version. A missing ID fails.
-  const current = value(await ai.audio.models.get(definition.id))
+  const currentResult = await ai.audio.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this audio model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.audio.models.update(definition, current.version))
+  const updatedResult = await ai.audio.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example audio model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.audio.models.remove(definition.id, updated.version))
+  const removeResult = await ai.audio.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -750,15 +911,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_image_models(definition: Parameters<typeof ai.image.models.register>[0]) {
   // Persist the supplied image model definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.image.models.register(definition))
+  const createdResult = await ai.image.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database image model entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.image.models.list())
+  const listedResult = await ai.image.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved image model ID and its database version. A missing ID fails.
-  const current = value(await ai.image.models.get(definition.id))
+  const currentResult = await ai.image.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this image model definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.image.models.update(definition, current.version))
+  const updatedResult = await ai.image.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example image model entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.image.models.remove(definition.id, updated.version))
+  const removeResult = await ai.image.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -875,15 +1050,29 @@ Supply a validated complete definition with an unused demo ID. File-backed entri
 ```ts
 async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.register>[0]) {
   // Persist the supplied ACP agent definition and get its database version. Duplicate or configuration-owned IDs fail.
-  const created = value(await ai.acp.agents.register(definition))
+  const createdResult = await ai.acp.agents.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // List configured and database ACP agent entries without arguments. Configuration takes precedence for duplicate IDs; the newly registered entry appears here.
-  const listed = value(await ai.acp.agents.list())
+  const listedResult = await ai.acp.agents.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // Look up the saved ACP agent ID and its database version. A missing ID fails.
-  const current = value(await ai.acp.agents.get(definition.id))
+  const currentResult = await ai.acp.agents.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Replace this ACP agent definition using the observed version and get the new version. Stale versions and configuration-owned entries fail.
-  const updated = value(await ai.acp.agents.update(definition, current.version))
+  const updatedResult = await ai.acp.agents.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // Delete the example ACP agent entry against its latest version. Success has no data; a conflict or config-owned entry fails.
-  value(await ai.acp.agents.remove(definition.id, updated.version))
+  const removeResult = await ai.acp.agents.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```

@@ -19,6 +19,29 @@ nodeId: orders-scheduler-east
 retentionDays: 30
 ```
 
+### 开发环境只保留少量执行日志
+
+写入 `config/_scheduler.yml`。最多保留 200 条执行日志，并清理超过 7 天的日志；两项限制各自生效。这里不配置具体任务，任务名称、Cron、时区和执行函数由应用注册。
+
+```yaml schema=@h-ai/scheduler:SchedulerConfigSchema
+nodeId: orders-dev
+tickInterval: 1000
+maxLogs: 200
+retentionDays: 7
+```
+
+### 多个进程共用调度数据库
+
+各进程连接同一数据库，但 `nodeId` 要不同，例如另一台使用 `orders-scheduler-west`。每秒检查一次待执行任务。60 秒是任务执行权的租期，不是任务超时时间，也不能撤销已经发生的外部操作。
+
+```yaml schema=@h-ai/scheduler:SchedulerConfigSchema
+nodeId: orders-scheduler-east
+enableDb: true
+tickInterval: 1000
+leaseMs: 60000
+retentionDays: 30
+```
+
 ## 配置清单
 
 配置示例把 `retentionDays` 显式设为 30 天。省略该字段时，调度器不按记录年龄清理日志。

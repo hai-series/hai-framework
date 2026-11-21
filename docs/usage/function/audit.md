@@ -17,39 +17,47 @@
 本例使用内存 SQLite，不会写入业务数据库。先初始化 RelDB，再初始化 Audit。记录一次登录后用相同的动作名查询，`logs.items` 包含刚写入的记录；退出时先关闭 Audit，再关闭数据库。请在开发环境运行（例如 `NODE_ENV=development`）；生产模式需要跨节点共享的数据库。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
+// 独立的启动/关闭脚本：此边界抛出原错误；返回 HaiResult 的业务函数仍应返回失败结果。
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-function dataOrThrow<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message)
-  return result.data
-}
-
-// 用 SQLite 内存库承载本例审计表，成功无 data，连接失败抛出。
-dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+// 用 SQLite 内存库承载本例审计表，成功无 data，连接失败时在脚本边界抛出原错误。
+const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initResult.success)
+  throw new Error(initResult.error.message, { cause: initResult.error })
 
 try {
-  // 借用已打开的数据库，采用默认审计配置。成功后可写日志，失败抛出。
-  dataOrThrow(await audit.init())
+  // 借用已打开的数据库，采用默认审计配置。成功后可写日志，失败时在脚本边界抛出原错误。
+  const initResult2 = await audit.init()
+  if (!initResult2.success)
+    throw new Error(initResult2.error.message, { cause: initResult2.error })
   try {
-    // 为 demo-user 写入 auth 登录事件，成功返回有 ID 的记录，写入失败抛出。
-    const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
-    // 查询 login 事件，每页最多 20 条。结果是分页对象，新库只包含刚写入的记录，查询失败抛出。
-    const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
+    // 为 demo-user 写入 auth 登录事件，成功返回有 ID 的记录，写入失败时在脚本边界抛出原错误。
+    const logResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
+    if (!logResult.success)
+      throw new Error(logResult.error.message, { cause: logResult.error })
+    const saved = logResult.data
+    // 查询 login 事件，每页最多 20 条。结果是分页对象，新库只包含刚写入的记录，查询失败时在脚本边界抛出原错误。
+    const listResult = await audit.list({ action: 'login', pageSize: 20 })
+    if (!listResult.success)
+      throw new Error(listResult.error.message, { cause: listResult.error })
+    const logs = listResult.data
     // 新数据库中，查询到的第一条记录就是刚写入的那条。
     if (logs.items[0]?.id !== saved.id)
       throw new Error('Expected the new login event')
   }
   finally {
-    // 无参数释放审计状态，成功无 data，失败抛出。
-    dataOrThrow(await audit.close())
+    // 无参数释放审计状态，成功无 data，失败时在脚本边界抛出原错误。
+    const closeResult = await audit.close()
+    if (!closeResult.success)
+      throw new Error(closeResult.error.message, { cause: closeResult.error })
   }
 }
 finally {
-  // 在审计关闭后释放 SQLite 连接，成功无 data，关闭失败抛出。
-  dataOrThrow(await reldb.close())
+  // 在审计关闭后释放 SQLite 连接，成功无 data，关闭失败时在脚本边界抛出原错误。
+  const closeResult2 = await reldb.close()
+  if (!closeResult2.success)
+    throw new Error(closeResult2.error.message, { cause: closeResult2.error })
 }
 ```
 
@@ -57,17 +65,7 @@ finally {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="lifecycle"></a>
 
@@ -86,12 +84,19 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备审计服务
 
 ```ts
-// 采用默认配置并借用已初始化的 RelDB，成功准备审计表，失败由 value 抛出。
-value(await audit.init()) // undefined; audit tables are ready
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 采用默认配置并借用已初始化的 RelDB，成功准备审计表，失败时返回原失败结果。
+const initResult = await audit.init()
+if (!initResult.success)
+  return initResult
+// 审计表已准备好，没有业务数据
 // 读取就绪属性，审计表准备好后本例为 true。
 audit.isInitialized // true
-// 无参数停止审计，成功无 data 且借用的 RelDB 保持打开，失败由 value 抛出。
-value(await audit.close()) // undefined; the borrowed RelDB remains open
+// 无参数停止审计，成功无 data 且借用的 RelDB 保持打开，失败时返回原失败结果。
+const closeResult = await audit.close()
+if (!closeResult.success)
+  return closeResult
+// 借用的 RelDB 仍保持打开，没有业务数据
 ```
 
 输入省略时使用当前默认审计选项。重新初始化后再执行其他示例；close 不关闭借入的数据库。
@@ -123,27 +128,47 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 #### 场景：记录操作与关联身份
 
 ```ts
-// 按用户、动作和资源保存显式登录事件，返回有 ID 和创建时间的记录，失败由 value 抛出。
-const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 按用户、动作和资源保存显式登录事件，返回有 ID 和创建时间的记录，失败时返回原失败结果。
+const savedResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
+if (!savedResult.success)
+  return savedResult
+const saved = savedResult.data
 // saved includes its generated id and createdAt
-// 将 demo-user 读取 orders 的安全字段交给自动采集，写入或按配置跳过时无 data，失败由 value 抛出。
-value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+// 将 demo-user 读取 orders 的安全字段交给自动采集，写入或按配置跳过时无 data，失败时返回原失败结果。
+const captureResult = await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })
+if (!captureResult.success)
+  return captureResult
 // 将可信用户 ID 绑定到下面的异步操作，返回回调产出的事件 ID，回调抛错原样传播。
 const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
-  // 在上下文中写 orders 更新事件，用户 ID 从外层补齐，成功返回记录，失败由 value 抛出。
-  const record = value(await audit.log({ action: 'update', resource: 'orders' }))
+  // 在上下文中写 orders 更新事件，用户 ID 从外层补齐，成功返回记录；写入失败由下方异常分支终止回调。
+  const recordResult = await audit.log({ action: 'update', resource: 'orders' })
+  // withContext 保留普通回调返回值；这里显式抛出写入失败，避免把失败对象当成已保存记录。
+  if (!recordResult.success)
+    throw new Error(recordResult.error.message, { cause: recordResult.error })
+  const record = recordResult.data
   return record.id
 }) // id is the callback's returned record id
-// 以 demo-user 为用户 ID 记录注册。成功无 data，写入失败抛出。
-value(await audit.helper.register('demo-user'))
-// 记录 demo-user 的登录。成功无 data，失败抛出。
-value(await audit.helper.login('demo-user'))
-// 记录 demo-user 的退出。成功无 data，失败抛出。
-value(await audit.helper.logout('demo-user'))
-// 用示例邮箱记录已请求重置。成功无 data，记录失败抛出。
-value(await audit.helper.passwordResetRequest('demo@example.com'))
-// 用 demo-user 记录重置完成。成功无 data，记录失败抛出。
-value(await audit.helper.passwordResetComplete('demo-user'))
+// 以 demo-user 为用户 ID 记录注册。成功无 data，写入失败时返回原失败结果。
+const registerResult = await audit.helper.register('demo-user')
+if (!registerResult.success)
+  return registerResult
+// 记录 demo-user 的登录。成功无 data，失败时返回原失败结果。
+const loginResult = await audit.helper.login('demo-user')
+if (!loginResult.success)
+  return loginResult
+// 记录 demo-user 的退出。成功无 data，失败时返回原失败结果。
+const logoutResult = await audit.helper.logout('demo-user')
+if (!logoutResult.success)
+  return logoutResult
+// 用示例邮箱记录已请求重置。成功无 data，记录失败时返回原失败结果。
+const passwordResetRequestResult = await audit.helper.passwordResetRequest('demo@example.com')
+if (!passwordResetRequestResult.success)
+  return passwordResetRequestResult
+// 用 demo-user 记录重置完成。成功无 data，记录失败时返回原失败结果。
+const passwordResetCompleteResult = await audit.helper.passwordResetComplete('demo-user')
+if (!passwordResetCompleteResult.success)
+  return passwordResetCompleteResult
 // helper calls succeed with undefined; query their saved events using audit.list
 ```
 
@@ -187,10 +212,13 @@ value(await audit.helper.passwordResetComplete('demo-user'))
 输入是可信操作者、资源名和订单 ID；成功结果没有业务数据，持久记录可通过 audit.list 查询。
 
 ```ts
-// 记录 demo-user 对 orders 中 order-42 的更新。成功无 data，失败由 value 抛出。
-value(await audit.helper.crud({
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 记录 demo-user 对 orders 中 order-42 的更新。成功无 data，失败时返回原失败结果。
+const crudResult = await audit.helper.crud({
   userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
-})) // undefined
+})
+if (!crudResult.success)
+  return crudResult
 ```
 
 <a id="queries"></a>
@@ -211,14 +239,27 @@ value(await audit.helper.crud({
 #### 场景：查询与清理旧记录
 
 ```ts
-// 筛选 login 并读取第一页的最多 20 条，返回记录和总数等分页信息，查询失败抛出。
-const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
-// 按用户 ID 读取最近最多 20 条，返回记录数组，查询失败抛出。
-const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
-// 传 7 天统计窗口，返回按操作分组的计数，统计失败抛出。
-const stats = value(await audit.getStats(7)) // action statistics for the last seven days
-// 保留 90 天，返回删除的旧记录数，清理失败抛出。
-const removed = value(await audit.cleanup(90)) // count of records older than 90 days
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 筛选 login 并读取第一页的最多 20 条，返回记录和总数等分页信息，查询失败时返回原失败结果。
+const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data // 记录列表、总数与分页信息
+// 按用户 ID 读取最近最多 20 条，返回记录数组，查询失败时返回原失败结果。
+const recentResult = await audit.getUserRecent('demo-user', 20)
+if (!recentResult.success)
+  return recentResult
+const recent = recentResult.data // 最多 20 条审计记录
+// 传 7 天统计窗口，返回按操作分组的计数，统计失败时返回原失败结果。
+const statsResult = await audit.getStats(7)
+if (!statsResult.success)
+  return statsResult
+const stats = statsResult.data // 最近七天按操作分组的统计
+// 保留 90 天，返回删除的旧记录数，清理失败时返回原失败结果。
+const removedResult = await audit.cleanup(90)
+if (!removedResult.success)
+  return removedResult
+const removed = removedResult.data // 超过 90 天并已删除的记录数
 ```
 
 输出取决于真实历史记录；空页、空统计与删除零条都可成功。cleanup 会真正删除过期记录，示例只在测试数据库执行。
@@ -279,14 +320,21 @@ if (plan) {
 前提：初始化时注入私有 Storage 并开启 backup。输入是本次归档 ID 和时间范围；run 返回的 key 交给 verify，后者返回同一归档的核对结果。
 
 ```ts
-// 传归档 ID 和 UTC 时间范围，成功返回私有归档键及清单，归档失败抛出。
-const archive = value(await audit.backup.run({
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 传归档 ID 和 UTC 时间范围，成功返回私有归档键及清单，归档失败时返回原失败结果。
+const archiveResult = await audit.backup.run({
   id: 'demo-login-archive',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
-}))
-// 用上一步签发的 archive.key 核对归档，数据是验证后的归档信息，损坏或读取失败抛出。
-const verifiedArchive = value(await audit.backup.verify(archive.key))
+})
+if (!archiveResult.success)
+  return archiveResult
+const archive = archiveResult.data
+// 用上一步签发的 archive.key 核对归档，数据是验证后的归档信息，损坏或读取失败时返回原失败结果。
+const verifiedArchiveResult = await audit.backup.verify(archive.key)
+if (!verifiedArchiveResult.success)
+  return verifiedArchiveResult
+const verifiedArchive = verifiedArchiveResult.data
 // verifiedArchive identifies the same private archive; its contents passed verification.
 ```
 
@@ -305,8 +353,12 @@ const verifiedArchive = value(await audit.backup.verify(archive.key))
 #### 场景：检查异常并通知
 
 ```ts
-// 无参数按已配置规则检查窗口，返回通知的提交、入队和失败计数，检查失败抛出。
-const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 无参数按已配置规则检查窗口，返回通知的提交、入队和失败计数，检查失败时返回原失败结果。
+const reportResult = await audit.checkAlerts()
+if (!reportResult.success)
+  return reportResult
+const report = reportResult.data // 本轮告警检查报告
 ```
 
 无参数时按当前规则检查。返回的是本轮检查及通知报告，不意味着每条通知都已送达；看报告中的实际结果。

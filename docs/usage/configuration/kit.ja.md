@@ -4,12 +4,44 @@
 
 SvelteKit サーバーの起動時に `config/_kit.yml` を読み込みます。起動コードは `server` で待ち受け先を決めます。`hooks.server.ts` ではアクセスルールと信頼するプロキシを `kit.createHandle()` に渡します。アプリ層の暗号化を使う場合、サーバーは `transport` を `crypto.transport` にも渡します。秘密鍵や共有ストレージへの接続はサーバー側に置きます。
 
+## 設定例
+
 ```yaml schema=@h-ai/kit:KitConfigSchema
 server:
   port: 3000
 trustedProxies: auto
 access: false
 ```
+
+### 既知のリバースプロキシだけを信頼する
+
+`config/_kit.yml` に記述します。例のプロキシ `192.0.2.10` からの転送元情報だけを信頼し、`203.0.113.0/24` のクライアントだけを許可します。両方を実際のネットワークに置き換えます。プロキシの報告を信頼する設定と、クライアントを許可する設定は別です。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+trustedProxies: [192.0.2.10]
+access:
+  global:
+    allowIps: [203.0.113.0/24]
+```
+
+### エクスポート API を業務時間内だけ許可する
+
+`/api/v1/reports/export` だけを上海時間の月曜から金曜、09:00〜18:00 に制限します。ログイン済みでも時間外の新しいリクエストは拒否されます。ほかのルートはこの規則に一致せず、認証・権限確認は引き続きアプリが行います。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+access:
+  rules:
+    - id: report-hours
+      paths: [/api/v1/reports/export]
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

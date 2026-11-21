@@ -38,17 +38,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="service"></a>
 
@@ -67,8 +57,12 @@ The server accepts reports, collects evidence, notifies and expires records usin
 #### Scenario: Prepare the service and collection jobs
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 // Process a round of feedback jobs without arguments. data.processed is the count for this round; delivery is tracked separately.
-const jobs = value(await feedback.runJobs()) // this round's processed count
+const jobsResult = await feedback.runJobs()
+if (!jobsResult.success)
+  return jobsResult
+const jobs = jobsResult.data // this round's processed count
 ```
 
 The quick start provides init input. init has no business data; runJobs takes no input and reports this round; close stops this instance’s workers. Collection and webhook inputs and recovery are detailed below.
@@ -104,16 +98,31 @@ Use a server-authenticated context authorized for create/read/process. submit su
 import type { FeedbackContext } from '@h-ai/feedback'
 
 async function processReport(context: FeedbackContext, submissionId: string) {
-  // Submit an orders report with the trusted actor and durable submission ID. The result contains the report ID and number; value throws on authorization or storage failure.
-  const report = value(await feedback.submit({ appId: 'orders', submissionId }, context))
+  // Submit an orders report with the trusted actor and durable submission ID. The result contains the report ID and number; return the failed result on authorization or storage failure.
+  const reportResult = await feedback.submit({ appId: 'orders', submissionId }, context)
+  if (!reportResult.success)
+    return reportResult
+  const report = reportResult.data
   // Read page 1 with up to 20 reports visible to this actor. The page has empty items when none are visible.
-  const page = value(await feedback.list({ page: 1, pageSize: 20 }, context)) // authorized report page
-  // Read details and version using the new report ID and current actor. value throws on denied access or a read error.
-  const detail = value(await feedback.get(report.id, context))
+  const pageResult = await feedback.list({ page: 1, pageSize: 20 }, context)
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data // authorized report page
+  // Read details and version using the new report ID and current actor. Return the failed result on denied access or a read error.
+  const detailResult = await feedback.get(report.id, context)
+  if (!detailResult.success)
+    return detailResult
+  const detail = detailResult.data
   // Read the first 20 evidence items for the same report and actor. With no evidence, the returned page has empty items.
-  const evidence = value(await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context))
+  const evidenceResult = await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context)
+  if (!evidenceResult.success)
+    return evidenceResult
+  const evidence = evidenceResult.data
   // Mark the report handled using the observed version. Success returns the new report version; a version conflict or lack of permission fails.
-  const handled = value(await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context))
+  const handledResult = await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context)
+  if (!handledResult.success)
+    return handledResult
+  const handled = handledResult.data
   return { report, page, evidence, handled } // same report ID; handled has the new version
 }
 
@@ -148,16 +157,28 @@ import type { FeedbackContext, FeedbackUploadInput } from '@h-ai/feedback'
 async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadInput) {
   const id = upload.id
   // Append browser event event-demo-1 to the report named by upload.id. Its stable ID supports deduplication. Success returns acknowledged IDs and the evidence revision.
-  const receipt = value(await feedback.appendEvidence({ id, evidence: [{
+  const receiptResult = await feedback.appendEvidence({ id, evidence: [{
     id: 'event-demo-1', source: 'browser', sequence: 1, kind: 'business',
     timestamp: Date.now(), data: { state: 'checkout-failed' },
-  }] }, context)) // acknowledged IDs and evidenceRevision
-  // Write the supplied attachment content and IDs to the report. Success returns metadata; value throws on validation, budget, or write failure.
-  const attachment = value(await feedback.uploadAttachment(upload, context)) // saved attachment metadata
-  // Read the authorized attachment using the report and original attachment IDs. The DTO contains Base64 content; value throws on read failure.
-  const bytes = value(await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context))
+  }] }, context)
+  if (!receiptResult.success)
+    return receiptResult
+  const receipt = receiptResult.data // acknowledged IDs and evidenceRevision
+  // Write the supplied attachment content and IDs to the report. Success returns metadata; return the failed result on validation, budget, or write failure.
+  const attachmentResult = await feedback.uploadAttachment(upload, context)
+  if (!attachmentResult.success)
+    return attachmentResult
+  const attachment = attachmentResult.data // saved attachment metadata
+  // Read the authorized attachment using the report and original attachment IDs. The DTO contains Base64 content; return the failed result on read failure.
+  const bytesResult = await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context)
+  if (!bytesResult.success)
+    return bytesResult
+  const bytes = bytesResult.data
   // Mark collection complete for this report with no known missing material. Success returns the updated report; unmet conditions fail.
-  const completed = value(await feedback.completeCollection({ id, missing: [] }, context)) // updated report
+  const completedResult = await feedback.completeCollection({ id, missing: [] }, context)
+  if (!completedResult.success)
+    return completedResult
+  const completed = completedResult.data // updated report
   return { receipt, attachment, bytes, completed }
 }
 ```
@@ -186,7 +207,10 @@ import type { FeedbackContext } from '@h-ai/feedback'
 
 async function requestArchive(id: string, context: FeedbackContext) {
   // Request an export for the authorized report and receive the durable job receipt. Archive generation may still be pending.
-  const job = value(await feedback.export({ id }, context)) // persistent job receipt
+  const jobResult = await feedback.export({ id }, context)
+  if (!jobResult.success)
+    return jobResult
+  const job = jobResult.data // persistent job receipt
   // Fetch the archive for this report and the newly returned job ID. A pending archive or denied access fails.
   return feedback.getExport({ id, jobId: job.id }, context) // HaiResult<FeedbackAttachmentData>
 }
@@ -232,29 +256,51 @@ import { createFeedbackClient } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
   // Create an independent capture client without arguments. Initialization enables the configured capture.
   const feedbackClient = createFeedbackClient()
-  // Initialize this session with the host's client config. Success has no data; value throws on invalid config or conflicting initialization.
-  value(await feedbackClient.init(config))
+  // Initialize this session with the host's client config. Success has no data; return the failed result on invalid config or conflicting initialization.
+  const initResult = await feedbackClient.init(config)
+  if (!initResult.success)
+    return initResult
   try {
     // Record state: ready as a business event in this capture session. No data is returned.
     feedbackClient.record({ kind: 'business', data: { state: 'ready' } })
-    // Prepare an editable draft with no arguments. Success returns the draft; value throws if the session is unavailable.
-    const draft = value(await feedbackClient.prepare())
+    // Prepare an editable draft with no arguments. Success returns the draft; return the failed result if the session is unavailable.
+    const draftResult = await feedbackClient.prepare()
+    if (!draftResult.success)
+      return draftResult
+    const draft = draftResult.data
     // Read the current draft with no arguments. The result is undefined when no draft exists.
     const current = feedbackClient.getDraft() // current draft or undefined
     // Read the current UI projection without arguments, including evidence, missing material, and available previews.
     const view = feedbackClient.getView() // preview URLs, evidence and missing materials
-    // Capture the visible page into the draft without a replacement ID. Capture failure or a concurrent draft freeze makes value throw.
-    value(await feedbackClient.captureScreenshot()) // refreshes the screenshot attachment
+    // Capture the visible page into the draft without a replacement ID. Capture failure or a concurrent draft freeze returns a failed result.
+    const captureScreenshotResult = await feedbackClient.captureScreenshot()
+    if (!captureScreenshotResult.success)
+      return captureScreenshotResult
+    // refreshes the screenshot attachment
     // Add the in-memory demo.txt file to the draft. Success has no data; limits, validation, or conflicts leave existing files intact.
-    value(await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })]))
+    const addFilesResult = await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })])
+    if (!addFilesResult.success)
+      return addFilesResult
     // Submit the draft with description Checkout failed. Success yields the report ID and number; material uploads may still be pending.
-    const receipt = value(await feedbackClient.submit({ description: 'Checkout failed' })) // accepted report ID/number
+    const receiptResult = await feedbackClient.submit({ description: 'Checkout failed' })
+    if (!receiptResult.success)
+      return receiptResult
+    const receipt = receiptResult.data // accepted report ID/number
     // Resume pending evidence and attachments for the current report without arguments. Success has no data; unfinished material remains pending.
-    value(await feedbackClient.flush()) // resumes pending evidence upload
-    // Export the local draft to ZIP bytes without arguments or upload. value throws if archive generation fails.
-    const archive = value(await feedbackClient.exportDraft()) // Uint8Array ZIP
-    // Send the current draft archive to the platform saver. Check status for saved or cancelled; value throws on a platform error.
-    const saved = value(await feedbackClient.saveDraft()) // inspect saved.status; cancelled is not a saved file
+    const flushResult = await feedbackClient.flush()
+    if (!flushResult.success)
+      return flushResult
+    // resumes pending evidence upload
+    // Export the local draft to ZIP bytes without arguments or upload. Return the failed result if archive generation fails.
+    const archiveResult = await feedbackClient.exportDraft()
+    if (!archiveResult.success)
+      return archiveResult
+    const archive = archiveResult.data // Uint8Array ZIP
+    // Send the current draft archive to the platform saver. Check status for saved or cancelled; return the failed result on a platform error.
+    const savedResult = await feedbackClient.saveDraft()
+    if (!savedResult.success)
+      return savedResult
+    const saved = savedResult.data // inspect saved.status; cancelled is not a saved file
     // Revoke the session's attachment preview URLs without arguments. No data is returned.
     feedbackClient.releasePreviews() // releases generated object URLs
     // Pause active collection with no arguments, retaining the draft and accepted uploads.

@@ -48,17 +48,7 @@ if (failures.length)
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="platform"></a>
 
@@ -81,19 +71,28 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备原生环境与读取设备
 
 ```ts
-// Initialize this platform with defaults. value returns undefined on success and throws the framework error on failure.
-value(await capacitor.init())
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// Initialize this platform with defaults. Success has no data; return the original failed result on failure.
+const initResult = await capacitor.init()
+if (!initResult.success)
+  return initResult
 // Read the detected platform without arguments. The result is web, ios, or android.
 const platform = capacitor.getPlatform() // 'web', 'ios' or 'android'
 // Check the detected platform without arguments. true means an iOS or Android native shell.
 const native = capacitor.isNative() // true on the native shell
 capacitor.isInitialized // true
-// Read platform, OS, and model from the active device. value throws if the device operation fails.
-const info = value(await capacitor.device.getInfo()) // actual platform, OS and model
+// Read platform, OS, and model from the active device. Return the failed result if the device operation fails.
+const infoResult = await capacitor.device.getInfo()
+if (!infoResult.success)
+  return infoResult
+const info = infoResult.data // 设备实际平台、系统及型号
 // Ask the current app for version and build. Check success because native application data may be unavailable on web.
 const version = await capacitor.device.getAppVersion() // check success; web may not supply native app data
-// Close the current instance and release listeners. value throws if cleanup fails.
-value(await capacitor.close()) // undefined; listeners released
+// Close the current instance and release listeners. Return the failed result if cleanup fails.
+const closeResult = await capacitor.close()
+if (!closeResult.success)
+  return closeResult
+// 监听器已释放，没有业务数据
 ```
 
 无输入参数；设备结果来自实际插件，不能写死型号或版本。其他例子先初始化并检查平台支持。
@@ -170,8 +169,8 @@ docker run --rm -it --platform linux/amd64 \
 // Select a photo at quality 80 and request a data URL. Success includes image data and format. Cancellation or plugin failure returns an error.
 const photo = await capacitor.camera.takePhoto({ source: 'photos', resultType: 'dataUrl', quality: 80 })
 if (photo.success) {
-  const source = photo.data.data // selected image data URL
-  const format = photo.data.format // actual image format
+  const source = photo.data.data // 用户所选图片的 Data URL
+  const format = photo.data.format // 实际图片格式
 }
 ```
 
@@ -213,17 +212,27 @@ photo.data // { data: '用户拍摄图片的 Base64 内容', format: 'jpeg' }；
 30 秒边界覆盖权限、挂载监听和等待注册事件。拒绝、超时、取消或模块关闭都会清理已知及迟到句柄；注册与监听清理都成功后，才返回真实事件给出的 token；清理失败同样返回失败，可在 close 时继续清理。取得 token 后仍需应用把它与当前账号关联到服务端，取得 token 不代表消息已推送。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 const received: unknown[] = []
 const actions: unknown[] = []
-// Register this device for push with default settings. Success contains the platform token. value throws on registration failure.
-const registration = value(await capacitor.push.register()) // { token: '<platform token>' }
-// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. value throws on setup failure.
-const stop = value(await capacitor.push.listen({
+// Register this device for push with default settings. Success contains the platform token. Return the failed result on registration failure.
+const registrationResult = await capacitor.push.register()
+if (!registrationResult.success)
+  return registrationResult
+const registration = registrationResult.data // 平台签发的推送 token，不写入日志
+// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. Return the failed result on setup failure.
+const stopResult = await capacitor.push.listen({
   onReceived: notification => { received.push(notification) },
   onActionPerformed: action => { actions.push(action) },
-}))
-// Remove the listeners installed above. Success has no data. value throws on cleanup failure.
-value(await stop()) // undefined; registered listeners removed
+})
+if (!stopResult.success)
+  return stopResult
+const stop = stopResult.data
+// Remove the listeners installed above. Success has no data. Return the failed result on cleanup failure.
+const stopResult2 = await stop()
+if (!stopResult2.success)
+  return stopResult2
+// 已移除本次登记的监听器，没有业务数据
 ```
 
 输入是应用提供的两个处理函数；回调收到真实平台通知。Token 不写日志，Web 不具备原生推送能力时返回失败。
@@ -249,12 +258,19 @@ value(await stop()) // undefined; registered listeners removed
 #### 场景：控制系统状态栏
 
 ```ts
-// Apply dark status text and enable overlay on the active native view. value surfaces unsupported platform or plugin errors.
-value(await capacitor.statusBar.configure({ style: 'dark', overlay: true }))
-// Hide the status bar for the active app. value throws if the plugin operation fails.
-value(await capacitor.statusBar.hide())
-// Show the status bar again. value throws if restoration fails.
-value(await capacitor.statusBar.show())
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// Apply dark status text and enable overlay on the active native view. Return the failed result for unsupported platform or plugin errors.
+const configureResult = await capacitor.statusBar.configure({ style: 'dark', overlay: true })
+if (!configureResult.success)
+  return configureResult
+// Hide the status bar for the active app. Return the failed result if the plugin operation fails.
+const hideResult = await capacitor.statusBar.hide()
+if (!hideResult.success)
+  return hideResult
+// Show the status bar again. Return the failed result if restoration fails.
+const showResult = await capacitor.statusBar.show()
+if (!showResult.success)
+  return showResult
 ```
 
 成功都没有业务数据，结果体现在系统状态栏；本节例子需要支持该插件的原生设备，不能用浏览器截图证明原生行为。
@@ -279,21 +295,39 @@ value(await capacitor.statusBar.show())
 #### 场景：保存普通偏好
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from '@h-ai/capacitor'
-// Write dark at demo-theme through the initialized Preferences API. value throws on a failed write.
-value(await capacitor.preferences.set('demo-theme', 'dark'))
-// Read demo-theme through Preferences. It returns dark, or null if the key is gone. value throws on failure.
-value(await capacitor.preferences.get('demo-theme')) // 'dark'
-// Remove demo-theme through Preferences. Success has no data. value surfaces storage errors.
-value(await capacitor.preferences.remove('demo-theme'))
-// Use the standalone helper to write light at demo-theme. value surfaces storage errors.
-value(await safeSetPreference('demo-theme', 'light'))
-// Read the same key with the standalone helper. Expect light. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // 'light'
+// Write dark at demo-theme through the initialized Preferences API. Return the failed result on a failed write.
+const setResult = await capacitor.preferences.set('demo-theme', 'dark')
+if (!setResult.success)
+  return setResult
+// Read demo-theme through Preferences. It returns dark, or null if the key is gone. Return the failed result on failure.
+const getResult = await capacitor.preferences.get('demo-theme')
+if (!getResult.success)
+  return getResult
+getResult.data // 'dark'
+// Remove demo-theme through Preferences. Success has no data. Return the failed result for storage errors.
+const removeResult = await capacitor.preferences.remove('demo-theme')
+if (!removeResult.success)
+  return removeResult
+// Use the standalone helper to write light at demo-theme. Return the failed result for storage errors.
+const safeSetPreferenceResult = await safeSetPreference('demo-theme', 'light')
+if (!safeSetPreferenceResult.success)
+  return safeSetPreferenceResult
+// Read the same key with the standalone helper. Expect light. Return the failed result on a failed read.
+const safeGetPreferenceResult = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult.success)
+  return safeGetPreferenceResult
+safeGetPreferenceResult.data // 'light'
 // Delete demo-theme with the standalone helper. The returned result is void on success.
-value(await safeRemovePreference('demo-theme'))
-// Read demo-theme after deletion. Expect null on success. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // null
+const safeRemovePreferenceResult = await safeRemovePreference('demo-theme')
+if (!safeRemovePreferenceResult.success)
+  return safeRemovePreferenceResult
+// Read demo-theme after deletion. Expect null on success. Return the failed result on a failed read.
+const safeGetPreferenceResult2 = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult2.success)
+  return safeGetPreferenceResult2
+safeGetPreferenceResult2.data // null
 ```
 
 输入值始终是字符串；set/remove 成功无数据，get 返回字符串或不存在的 null。

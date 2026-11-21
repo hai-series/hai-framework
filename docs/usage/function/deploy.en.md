@@ -23,17 +23,7 @@ pnpm run deploy --env prod --build
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="delivery"></a>
 
@@ -66,15 +56,26 @@ import type { DeployConfigInput } from '@h-ai/deploy'
 import { deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
-  // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. value throws on failure.
-  const scan = value(await deploy.scan(appDir, { environment: 'prod' }))
-  // Initialize the deployment service with the supplied provider and credentials. value throws on invalid config or failed initialization.
-  value(await deploy.init(config))
+  // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. Return the failed result on failure.
+  const scanResult = await deploy.scan(appDir, { environment: 'prod' })
+  if (!scanResult.success)
+    return scanResult
+  const scan = scanResult.data
+  // Initialize the deployment service with the supplied provider and credentials. Return the failed result on invalid config or failed initialization.
+  const initResult = await deploy.init(config)
+  if (!initResult.success)
+    return initResult
   try {
-    // Provision database and cache for orders. Success lists each provisioned resource. value throws on a failed provisioning result.
-    const provisioned = value(await deploy.provisionAll('orders', ['db', 'cache']))
-    // Package the supplied app for prod in offline bundle mode. Success contains its bundle path and instructions. value throws on failure.
-    const delivered = value(await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true }))
+    // Provision database and cache for orders. Success lists each provisioned resource. Return the failed result on a failed provisioning result.
+    const provisionedResult = await deploy.provisionAll('orders', ['db', 'cache'])
+    if (!provisionedResult.success)
+      return provisionedResult
+    const provisioned = provisionedResult.data
+    // Package the supplied app for prod in offline bundle mode. Success contains its bundle path and instructions. Return the failed result on failure.
+    const deliveredResult = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
+    if (!deliveredResult.success)
+      return deliveredResult
+    const delivered = deliveredResult.data
     return { scan, provisioned, delivered } // bundlePath/instructions do not imply remote readiness
   }
   finally {
@@ -102,16 +103,24 @@ The deploy operator owns the private file. Display loaded names rather than cred
 #### Scenario: Manage local private credentials
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 // Read the current user's private credentials file path. This requires no initialized deployment provider.
 const credentialPath = deploy.credentials.getPath() // operator-private path
-// Load saved credentials for this process. Success lists loaded variable names. value throws on a failed read.
-const loadedNames = value(deploy.credentials.load()) // loaded environment variable names
+// Load saved credentials for this process. Success lists loaded variable names. Return the failed result on a failed read.
+const loadedNamesResult = deploy.credentials.load()
+if (!loadedNamesResult.success)
+  return loadedNamesResult
+const loadedNames = loadedNamesResult.data // loaded environment variable names
 // Save only credentials supplied securely by the operator:
-export function saveCredential(providerToken: string) {
-  // Save the operator-supplied token under HAI_DEPLOY_PROVIDER_TOKEN. value throws on persistence failure.
-  value(deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken))
-  // Save the same token using the batch API. value throws if the credentials file cannot be updated.
-  value(deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken }))
+function saveCredential(providerToken: string) {
+  // Save the operator-supplied token under HAI_DEPLOY_PROVIDER_TOKEN. Return the failed result on persistence failure.
+  const saveResult = deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)
+  if (!saveResult.success)
+    return saveResult
+  // Save the same token using the batch API. Return the failed result if the credentials file cannot be updated.
+  const saveAllResult = deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken })
+  if (!saveAllResult.success)
+    return saveAllResult
 }
 ```
 
@@ -144,16 +153,28 @@ import type { MiddlewareRequirement } from '@h-ai/deploy'
 import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
-  // Load the required prod environment from envDir. Success contains the merged values and file information. value throws if loading fails.
-  const environment = value(loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true }))
+  // Load the required prod environment from envDir. Success contains the merged values and file information. Return the failed result if loading fails.
+  const environmentResult = loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
+  if (!environmentResult.success)
+    return environmentResult
+  const environment = environmentResult.data
   // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
   const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
-  // Resolve this app's _cache.yml with those environment values. Success is a cache config object. value throws on load or expansion failure.
-  const config = value(loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values))
-  // Write the memory override to the private production environment. Success lists written variable names. value throws on failure.
-  const written = value(saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true }))
-  // Save the given cache requirement as the memory backend for this app. Success lists updated names. value throws if configuration cannot be written.
-  const middleware = value(saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } }))
+  // Resolve this app's _cache.yml with those environment values. Success is a cache config object. Return the failed result on load or expansion failure.
+  const configResult = loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
+  if (!configResult.success)
+    return configResult
+  const config = configResult.data
+  // Write the memory override to the private production environment. Success lists written variable names. Return the failed result on failure.
+  const writtenResult = saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
+  if (!writtenResult.success)
+    return writtenResult
+  const written = writtenResult.data
+  // Save the given cache requirement as the memory backend for this app. Success lists updated names. Return the failed result if configuration cannot be written.
+  const middlewareResult = saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
+  if (!middlewareResult.success)
+    return middlewareResult
+  const middleware = middlewareResult.data
   return { config, written, middleware } // use the memory cache requirement from this app's scan
 }
 ```
@@ -176,11 +197,15 @@ Check backend suitability, then convert form strings into actual booleans, ports
 #### Scenario: Validate middleware forms: deployment helpers
 
 ```ts
+// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
 import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
 // Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
 validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
-// Parse SMTP secure from the string false. The result is the boolean false. value throws if parsing fails.
-value(parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })) // false
+// Parse SMTP secure from the string false. The result is the boolean false. Return the failed result if parsing fails.
+const parseMiddlewareFieldResult = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+if (!parseMiddlewareFieldResult.success)
+  return parseMiddlewareFieldResult
+parseMiddlewareFieldResult.data // false
 ```
 
 String false produces successful boolean false. canKeepMiddleware returns suitability and describeMiddlewareBackend returns localized purpose for a supplied catalog entry.

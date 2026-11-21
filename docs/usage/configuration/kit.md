@@ -19,6 +19,33 @@ trustedProxies: auto
 access: false
 ```
 
+### 只信任已知的反向代理
+
+写入 `config/_kit.yml`。示例代理地址为 `192.0.2.10`，只接受它报告的客户端地址，并只允许 `203.0.113.0/24` 访问。两处地址都应换成实际网络；“信任代理报告地址”和“允许客户端访问”是两件事。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+trustedProxies: [192.0.2.10]
+access:
+  global:
+    allowIps: [203.0.113.0/24]
+```
+
+### 导出接口仅在工作时间开放
+
+下面只限制 `/api/v1/reports/export`：上海时区周一至周五 09:00–18:00。即使已经登录，时间窗口结束后的新请求仍会被拒绝。其他路由不匹配这条规则，原有登录和权限检查继续由应用执行。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+access:
+  rules:
+    - id: report-hours
+      paths: [/api/v1/reports/export]
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
+```
+
 ## 配置清单
 
 默认不启用 `transport`。设置为 `false` 或省略，Kit 就不会为业务请求启用应用层加密。启用加密后，未填写的协商路径使用 `/api/_hai/key-exchange`，还需要服务端提供配套密钥和共享存储。

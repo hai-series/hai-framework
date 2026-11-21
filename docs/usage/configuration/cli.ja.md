@@ -4,6 +4,45 @@
 
 ビルドとデプロイの既定値を `hai.json` に設定します。コマンドが対応するオプションで上書きできます。非公開の上書きは dotenv のローカルファイルに置きます。
 
+## 設定例
+
+```json
+{
+  "build": {
+    "images": [{ "name": "serv", "context": ".", "dockerfile": "images/serv.Dockerfile", "containerPort": 3000 }],
+    "sources": { "image": { "type": "official" }, "npm": { "type": "official" } },
+    "proxy": { "mode": "inherit" }
+  }
+}
+```
+
+### モバイルとデスクトップの工程を指定する
+
+ルートの `hai.json` の例です。それぞれ Capacitor または Tauri 設定を持つ既存の工程を指定します。パスを書いても工程は作成されません。該当するビルド対象を選んだ際に使用されます。
+
+```json
+{
+  "build": {
+    "app": ["apps/orders-app"],
+    "desktop": ["apps/orders-desktop"]
+  }
+}
+```
+
+### コンテナのビルドで社内 npm レジストリを使う
+
+Dockerfile は実際の工程に合わせます。コンテナ構築中の npm ダウンロードを社内レジストリへ向け、プロキシを無効にします。開発マシン全体の npm 設定は変えません。ビルド環境から接続できる URL を使い、認証情報は URL に含めません。
+
+```json
+{
+  "build": {
+    "images": [{ "name": "serv", "context": ".", "dockerfile": "images/serv.Dockerfile", "containerPort": 3000 }],
+    "sources": { "npm": { "type": "custom", "registry": "https://npm.example.com/" } },
+    "proxy": { "mode": "none" }
+  }
+}
+```
+
 <a id="haijson"></a>
 
 ## `hai.json` の項目

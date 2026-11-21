@@ -6,10 +6,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
-Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
-
 ### One queued or running job
 
 Structure: `hai_runner_executions`.
@@ -34,7 +30,7 @@ Track work, owner, resource budget and state so nodes coordinate one execution.
 }
 ```
 
-execution-42 is queued with no owner. Its budget is one CPU, 256 MiB RAM, 64 processes and 64 MiB scratch; no events yet.
+This excerpt shows a queued `execution-42` with no owner. Its resource limits are one CPU, 256 MiB RAM, 64 processes and 64 MiB scratch space; no events have been recorded. `created_at` and `updated_at` are Unix milliseconds.
 
 ### Ordered messages from a job
 

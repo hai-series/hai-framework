@@ -74,17 +74,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Tools has no module-level init/close. Lightweight examples use the root export; server examples import /server and borrow an initialized Runner. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Tools has no module-level init/close. Lightweight examples use the root export; server examples import /server and borrow an initialized Runner. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="definitions"></a>
 
@@ -109,6 +99,7 @@ Defining a tool does not run its handler. execute applies one cancellation/deadl
 Invalid input or rejected authorization never enters the handler. Registry and per-call authorizers must both allow execution. Timeout/cancellation stops waiting, but handlers must obey signal and external effects are not rolled back. handler values become data; resultHandler preserves HaiResult.
 
 ```ts
+// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
 import { z } from 'zod'
 // Define sum using the numeric Zod rules and addition handler below. Success returns an executable tool; invalid definitions throw TypeError.
 const tool = tools.define({
@@ -118,8 +109,11 @@ const tool = tools.define({
 })
 // Convert the tool metadata and parameter rules without arguments. The example reads name sum; unsupported conversion throws.
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
-// Pass numbers 2 and 3 to sum. Success yields { total: 5 }; value throws if execution fails.
-value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// Pass numbers 2 and 3 to sum. Success yields { total: 5 }; return the failed result if execution fails.
+const executeResult = await tool.execute({ a: 2, b: 3 })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
 // Pass wrong as a string for a. The result is VALIDATION_FAILED and the addition handler is skipped.
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
@@ -192,13 +186,19 @@ The registry contains explicitly registered tools. Host authorization controls e
 #### Scenario: Register, find and execute tools
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 // Continue with the sum tool from the preceding scenario.
 // Create an empty registry allowing execution only as demo-user in the trusted context.
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
 // Register the sum instance defined above. Success has no data; a duplicate tool name fails.
-value(registry.register(tool)) // undefined
+const registerResult = registry.register(tool)
+if (!registerResult.success)
+  return registerResult
 // Register an empty batch. Success has no data and the existing sum remains registered.
-value(registry.registerMany([])) // undefined; no tools added
+const registerManyResult = registry.registerMany([])
+if (!registerManyResult.success)
+  return registerManyResult
+// no tools added
 registry.size // 1
 // Check the newly registered sum name; it returns true.
 registry.has('sum') // true
@@ -209,15 +209,26 @@ registry.getNames() // ['sum']
 // Read the registered tool definitions and project their names to ['sum']. Unsupported input-rule conversion throws.
 registry.getDefinitions().map(definition => definition.name) // ['sum']
 // Run sum with 2 and 3 as trusted demo-user. Success yields { total: 5 }; denied or invalid calls are not run.
-value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
-// Execute one batched sum(4, 1) as demo-user, yielding [{ total: 5 }] in input order. value throws on batch failure.
-value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+const executeResult = await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
+// Execute one batched sum(4, 1) as demo-user, yielding [{ total: 5 }] in input order. Return the failed result on batch failure.
+const executeAllResult = await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })
+if (!executeAllResult.success)
+  return executeAllResult
+executeAllResult.data // [{ total: 5 }]
 // Replace the currently registered sum. Success has no data; invalid replacement keeps the existing tool.
-value(registry.replace(tool)) // undefined; same registered name
+const replaceResult = registry.replace(tool)
+if (!replaceResult.success)
+  return replaceResult
+// same registered name
 // Remove the sum registration. This call returns true; a missing registration returns false.
 registry.unregister('sum') // true
 // Register the removed sum again in a one-item batch. Success has no data; a name conflict fails.
-value(registry.registerMany([tool])) // undefined
+const registerManyResult2 = registry.registerMany([tool])
+if (!registerManyResult2.success)
+  return registerManyResult2
 // Clear the registry with no arguments. sum is no longer present and nothing is returned.
 registry.clear() // undefined
 registry.size // 0
@@ -329,18 +340,33 @@ import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/t
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
   // Read enabled definitions and groups for the trusted context. Submission and execution still authorize independently.
-  const catalog = value(await service.catalog(context))
+  const catalogResult = await service.catalog(context)
+  if (!catalogResult.success)
+    return catalogResult
+  const catalog = catalogResult.data
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
-  // Submit the keyed request for this principal. Success returns the run state and complete receipt; value throws on denial or submission failure.
-  const submitted = value(await service.submit(keyed, context))
+  // Submit the keyed request for this principal. Success returns the run state and complete receipt; return the failed result on denial or submission failure.
+  const submittedResult = await service.submit(keyed, context)
+  if (!submittedResult.success)
+    return submittedResult
+  const submitted = submittedResult.data
   // Find the prior run using the same durable key and principal. A miss returns undefined without submitting a task.
-  const recovered = value(await service.find(keyed.idempotencyKey, context))
+  const recoveredResult = await service.find(keyed.idempotencyKey, context)
+  if (!recoveredResult.success)
+    return recoveredResult
+  const recovered = recoveredResult.data
   // recovered is the same logical run, or undefined if none was accepted.
   // Read status, available output, and events using the full receipt and current principal. A scope mismatch fails.
-  const current = value(await service.inspect(submitted.receipt, context))
+  const currentResult = await service.inspect(submitted.receipt, context)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // Request cancellation with the same receipt and receive the actual run state. cancelling means termination is still pending.
-  const cancelling = value(await service.cancel(submitted.receipt, context))
+  const cancellingResult = await service.cancel(submitted.receipt, context)
+  if (!cancellingResult.success)
+    return cancellingResult
+  const cancelling = cancellingResult.data
   // current/cancelling are ToolRun values; cancellation may still be in progress.
   // Wait for the terminal outcome using the same key and principal. Success yields JSON output; a cancelled or failed run returns an error.
   return service.invoke(keyed, context)

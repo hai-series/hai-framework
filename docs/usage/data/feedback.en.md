@@ -8,10 +8,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
-Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
-
 ### The submitted feedback report
 
 Structure: `hai_feedback_reports`.
@@ -37,7 +33,7 @@ Store the report, submitter and handling state as the entry point for evidence a
 }
 ```
 
-feedback-42 belongs to user-42 in team-1, is pending and collecting. Zero evidence describes this moment, before later collection examples.
+This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
 
 ### Evidence of what happened
 
@@ -59,7 +55,7 @@ Link logs, errors or page evidence by source and order to reconstruct a problem.
 }
 ```
 
-evidence-42 is sequence 1 for feedback-42, 24 bytes. timestamp dates the event; the redacted payload is not expanded here.
+evidence-42 is sequence 1 for feedback-42, 24 bytes. timestamp is the event time in Unix milliseconds; the redacted payload is not expanded here.
 
 ### Where an attachment is and whether it matches
 

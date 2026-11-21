@@ -20,6 +20,40 @@ provider:
     hostPort: 8080
 ```
 
+### 将服务的 3000 端口发布到主机的 8080
+
+这是项目根目录 `hai.json` 的完整外层结构。目标主机已安装容器运行环境，部署账号具备相应权限。SSH 私钥通过部署机的私有环境提供；`expose` 只设置入口端口，不会让任意业务接口绕过认证。
+
+```json
+{
+  "deploy": {
+    "environment": "staging",
+    "provider": {
+      "type": "docker-ssh",
+      "ssh": { "host": "staging.example.com", "username": "deployer" },
+      "expose": { "hostPort": 8080 }
+    }
+  }
+}
+```
+
+### 使用不同的发布环境文件
+
+将 `environment` 改为 `prod` 后，CLI 按 prod 模式读取环境文件，私有值可以保存在 `.env.prod.local`。主机地址和账号只是示例；运行前核对实际目标，不能只改环境名而沿用错误主机。
+
+```json
+{
+  "deploy": {
+    "environment": "prod",
+    "provider": {
+      "type": "docker-ssh",
+      "ssh": { "host": "production.example.com", "username": "deployer" },
+      "expose": { "hostPort": 8080 }
+    }
+  }
+}
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

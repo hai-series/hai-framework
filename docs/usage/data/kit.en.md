@@ -6,8 +6,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
 ### Requests counted in one window
 
 Structure: `rate-limit cache value`.
@@ -21,7 +19,7 @@ Count requests for one visitor or scope; sharing it prevents each node granting 
 }
 ```
 
-count:2 means two requests so far. resetAt ends this example 60-second window; increments do not extend it.
+count:2 means two requests so far. resetAt is the end of this example's 60-second window in Unix milliseconds; increments do not extend it.
 
 ### Access cookie sent with browser requests
 

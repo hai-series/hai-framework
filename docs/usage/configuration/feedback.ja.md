@@ -6,11 +6,41 @@
 
 フィードバックサービスを `_feedback.yml` で設定します。証跡の収集はサーバーで制御し、アプリ外へ送れる項目を選びます。通知と Webhook は個別に設定します。
 
+## 設定例
+
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
 notificationMode: console
 consoleContent: metadata
 ```
+
+### 新しいフィードバックを担当者にメールで知らせる
+
+`config/_feedback.yml` に記述します。`email` には、初期化済みで実際に送信できる Reach 通知先の名前を指定します。Console はログに出すだけです。`adminUrl` は通知に載せる管理画面のリンクで、ページやアクセス権を作成するものではありません。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: reach
+notificationProvider: email
+recipients: [support@example.com]
+adminUrl: https://admin.example.com/feedback
+```
+
+### 添付サイズと保存期間を抑える
+
+添付は 1 件 2 MiB、ユーザーごとの受付は 1 日 10 件に制限します。報告は 7 日、エクスポートした ZIP は 12 時間保存します。`disabled` は通知を止める設定で、報告は保存されます。期限切れのファイルを削除するバックグラウンド処理は稼働させておきます。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: disabled
+maxAttachmentBytes: 2097152
+maxReportsPerUserDay: 10
+retentionDays: 7
+exportRetentionHours: 12
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

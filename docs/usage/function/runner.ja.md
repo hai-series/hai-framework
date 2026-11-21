@@ -101,17 +101,7 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="nodes"></a>
 
@@ -164,17 +154,33 @@ submit は共有 DB の実行受付情報を返します。待機、取消の要
 待機中は直接 cancelled、実行中は通常 cancelling を経て停止を確認します。所有権や後片付けを確認できなければ unknown で、業務取消済みとは言えません。reconcileUnknown は元のノードで資源を確認し、業務結果の不明状態を維持します。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 // studio/alice の月次報告を登録し実行受付を得る。同じ要求には report-nov を使い、提出失敗はそのまま扱う。
-const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+const acceptedResult = await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' })
+if (!acceptedResult.success)
+  return acceptedResult
+const accepted = acceptedResult.data
 // 同じ主体・種類・永続キーで元の実行を検索する。該当なしは成功結果の undefined。
-const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+const recoveredResult = await runner.find(scope, 'report.v1', 'report-nov')
+if (!recoveredResult.success)
+  return recoveredResult
+const recovered = recoveredResult.data // execution or undefined
 // 提出時の受付を同じ主体で読み、状態と取得可能な結果を確認する。主体の不一致や読み取りエラーは失敗。
-const current = value(await runner.get(scope, accepted.id)) // current persisted state
+const currentResult = await runner.get(scope, accepted.id)
+if (!currentResult.success)
+  return currentResult
+const current = currentResult.data // current persisted state
 // カーソル 0 の後から同じタスクの順序付きイベントを最大 20 件読む。イベントがなければ空配列。
-const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+const eventsResult = await runner.events(scope, accepted.id, 0, 20)
+if (!eventsResult.success)
+  return eventsResult
+const events = eventsResult.data // ordered RunnerEvent[]
 // 同じタスクのキャンセルを要求する。終了処理中なら返った状態は cancelling の場合がある。
-const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
+const cancellingResult = await runner.cancel(scope, accepted.id)
+if (!cancellingResult.success)
+  return cancellingResult
+const cancelling = cancellingResult.data // actual state after requesting cancellation
 ```
 
 scope は認証から取り、入門例の report.v1 を登録済みとします。並行実行で状態は変わり、待機・実行中・取消中は成功終端ではありません。イベント番号で差分を読みます。

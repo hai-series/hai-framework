@@ -366,6 +366,8 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 
 默认日志级别为 `info`，格式为 `pretty`。在 YAML 中只写 `logging.level` 时，格式仍为 `pretty`。应用可以显式设置 `logging.format: json` 供日志系统按行读取。Node 找不到可选依赖 `pino-pretty` 时会输出 JSON。浏览器写入开发者控制台，其中的 `bigint` 值输出为十进制字符串，循环引用显示为 `[Circular]`。
 
+上下文中的合法 JSON 对象或数组字符串会先展开，再按字段脱敏；标准输出、浏览器输出和 `core.logger.observe` 都收到展开后的结构。例如 `{ issues: '[{"path":"ldap.url","code":"invalid_type"}]' }` 会记录为包含一项的 `issues` 数组，Node 的 pretty 输出会将其缩进显示。优先直接传对象。日志消息本身、JSON 标量及无效 JSON 保持文本。单个字符串超过 65,536 字符、解析结果的对象嵌套达到 32 层，或重复编码超过 4 次时停止展开，沿用文本脱敏。
+
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |

@@ -17,40 +17,46 @@
 本例用内存 SQLite 保存任务和日志，手动触发一次任务，无需等待 cron，也不会发送网络请求。`trigger()` 加载任务成功后还要查看 `run.status`，因为任务执行失败也能返回一条执行记录。此处应得到 `success`，`logs.items` 包含一条执行记录。长期定时运行时，注册任务后再调用 `scheduler.start()`。请在开发环境运行（例如 `NODE_ENV=development`）；生产模式需要跨节点共享的数据库。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
+// 独立的启动/关闭脚本：此边界抛出原错误；返回 HaiResult 的业务函数仍应返回失败结果。
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
-function dataOrThrow<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message)
-  return result.data
-}
-
 // 用内存 SQLite 启动开发数据库，成功无数据；RelDB 不可用时阻止调度器初始化。
-dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initResult.success)
+  throw new Error(initResult.error.message, { cause: initResult.error })
 
 try {
   // 在已初始化的 RelDB 上准备调度表，并用下方钩子把任务 ID 作为执行结果；初始化失败不登记任务。
-  dataOrThrow(await scheduler.init({
+  const initResult2 = await scheduler.init({
     hooks: {
       onTaskExecute: ({ context }) => ({ taskId: context.taskId }),
     },
-  }))
+  })
+  if (!initResult2.success)
+    throw new Error(initResult2.error.message, { cause: initResult2.error })
   try {
     // 登记每天 02:00 的 daily 报表；成功无数据，重复 ID 或无效表达式时失败。
-    dataOrThrow(await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' }))
+    const registerResult = await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' })
+    if (!registerResult.success)
+      throw new Error(registerResult.error.message, { cause: registerResult.error })
     // 用 docs 来源手动执行 daily，成功返回执行日志；日志 status 仍须单独检查。
-    const run = dataOrThrow(await scheduler.trigger('daily', { source: 'docs' }))
+    const triggerResult = await scheduler.trigger('daily', { source: 'docs' })
+    if (!triggerResult.success)
+      throw new Error(triggerResult.error.message, { cause: triggerResult.error })
+    const run = triggerResult.data
     if (run.status !== 'success')
       throw new Error(run.error ?? 'Task did not succeed')
 
     // 读取 daily 且来源 docs 的第一页、最多 20 条执行日志；此前执行成功时应有一条。
-    const logs = dataOrThrow(await scheduler.getLogs({
+    const getLogsResult = await scheduler.getLogs({
       taskId: 'daily',
       triggerSource: 'docs',
       pagination: { page: 1, pageSize: 20 },
-    }))
+    })
+    if (!getLogsResult.success)
+      throw new Error(getLogsResult.error.message, { cause: getLogsResult.error })
+    const logs = getLogsResult.data
     if (logs.items.length !== 1)
       throw new Error('Expected one execution record')
   }
@@ -60,8 +66,10 @@ try {
   }
 }
 finally {
-  // 在调度器结束后释放数据库，成功无数据，失败由 dataOrThrow 抛出。
-  dataOrThrow(await reldb.close())
+  // 在调度器结束后释放数据库，成功无数据，失败时在脚本边界抛出原错误。
+  const closeResult = await reldb.close()
+  if (!closeResult.success)
+    throw new Error(closeResult.error.message, { cause: closeResult.error })
 }
 ```
 
@@ -69,17 +77,7 @@ finally {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="task-definitions"></a>
 
@@ -101,14 +99,23 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备与维护任务定义
 
 ```ts
-// 以 demo-daily 登记每天 UTC 02:00 的任务；成功无数据，配置不合法时 value 抛错。
-value(await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' }))
-// 禁用刚登记的 demo-daily，不删除任务；更新失败由 value 抛出。
-value(await scheduler.updateTask('demo-daily', { enabled: false }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 以 demo-daily 登记每天 UTC 02:00 的任务；成功无数据，配置不合法时返回原失败结果。
+const registerResult = await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' })
+if (!registerResult.success)
+  return registerResult
+// 禁用刚登记的 demo-daily，不删除任务；更新失败时返回原失败结果。
+const updateTaskResult = await scheduler.updateTask('demo-daily', { enabled: false })
+if (!updateTaskResult.success)
+  return updateTaskResult
 // 无参从持久存储刷新本节点任务定义，成功无数据；读取失败不当作刷新成功。
-value(await scheduler.refreshTasks())
-// 按 ID 删除 demo-daily 的任务定义；成功无数据，持久化错误由 value 抛出。
-value(await scheduler.unregister('demo-daily'))
+const refreshTasksResult = await scheduler.refreshTasks()
+if (!refreshTasksResult.success)
+  return refreshTasksResult
+// 按 ID 删除 demo-daily 的任务定义；成功无数据，持久化错误时返回原失败结果。
+const unregisterResult = await scheduler.unregister('demo-daily')
+if (!unregisterResult.success)
+  return unregisterResult
 // Each successful result has no business data; only the stored definition changes.
 ```
 
@@ -230,18 +237,28 @@ cron 和手动触发先确定一次运行的 occurrenceId。多个节点争用�
 
 ```ts
 async function runAndRead(taskId: string) {
-  // 不传参数启动定时轮询，成功无数据；未初始化时 value 抛出失败。
-  value(scheduler.start())
+  // 不传参数启动定时轮询，成功无数据；未初始化时返回原失败结果。
+  const startResult = scheduler.start()
+  if (!startResult.success)
+    return startResult
   try {
     // 手动执行调用方指定任务并标记 docs-console，返回执行记录；status 决定实际执行结果。
-    const run = value(await scheduler.trigger(taskId, { source: 'docs-console' }))
-    // 查询该任务、该来源的第一页 20 条日志，items 可为空；查询失败由 value 抛出。
-    const logs = value(await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } }))
+    const runResult = await scheduler.trigger(taskId, { source: 'docs-console' })
+    if (!runResult.success)
+      return runResult
+    const run = runResult.data
+    // 查询该任务、该来源的第一页 20 条日志，items 可为空；查询失败时返回原失败结果。
+    const logsResult = await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } })
+    if (!logsResult.success)
+      return logsResult
+    const logs = logsResult.data
     return { status: run.status, logs: logs.items }
   }
   finally {
     // 无参停止后续定时领取，成功无数据；已开始的外部操作不会被撤销。
-    value(scheduler.stop())
+    const stopResult = scheduler.stop()
+    if (!stopResult.success)
+      return stopResult
   }
 }
 ```
@@ -313,30 +330,41 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 四个 onTask* 是传给 setHooks 的回调字段，由调度器调用；不是让应用调用 scheduler.hooks.onTask*。输入任务不带 handler，执行回调返回任务 ID，输出包含 start/finish 事件与成功记录。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 const events: Array<{ stage: string, taskId: string }> = []
-// 用下方三个回调记录开始、中断和结束事件；成功替换宿主钩子，未就绪时 value 抛出。
-value(scheduler.setHooks({
+// 用下方三个回调记录开始、中断和结束事件；成功替换宿主钩子，未就绪时 返回原失败结果。
+const setHooksResult = scheduler.setHooks({
   onTaskStart: event => { events.push({ stage: 'start', taskId: event.task.id }) },
   onTaskExecute: event => ({ taskId: event.context.taskId }),
   onTaskInterrupted: event => { events.push({ stage: 'interrupted', taskId: event.task.id }) },
   onTaskFinish: event => { events.push({ stage: 'finish', taskId: event.task.id }) },
-}))
+})
+if (!setHooksResult.success)
+  return setHooksResult
 // 登记用于观察钩子的 demo-hook 任务，配置每日 02:00；成功无数据，重复 ID 失败。
-value(await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' }))
+const registerResult = await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' })
+if (!registerResult.success)
+  return registerResult
 // 手动执行刚登记的 demo-hook 并产生钩子事件；返回执行日志，检查其 status。
-const run = value(await scheduler.trigger('demo-hook'))
+const runResult = await scheduler.trigger('demo-hook')
+if (!runResult.success)
+  return runResult
+const run = runResult.data
 // run.status === 'success'; events contains start and finish for demo-hook.
-// 删除本例的 demo-hook 定义，成功无数据；失败由 value 抛出。
-value(await scheduler.unregister('demo-hook'))
+// 删除本例的 demo-hook 定义，成功无数据；失败时返回原失败结果。
+const unregisterResult = await scheduler.unregister('demo-hook')
+if (!unregisterResult.success)
+  return unregisterResult
 // 无参清除已登记的宿主钩子，成功无数据。
-value(scheduler.clearHooks()) // undefined; future tasks no longer use these callbacks
+const clearHooksResult = scheduler.clearHooks()
+if (!clearHooksResult.success)
+  return clearHooksResult
+// 后续任务不再使用这些回调，没有业务数据
 ```
 
 #### 任务生命周期回调
 
 这些可选回调由 Scheduler 调用。应用用 `scheduler.init({ hooks })` 或 `scheduler.setHooks(hooks)` 注册；省略某一项就不会调用它。
-
-
 
 #### 可选集成
 
@@ -365,23 +393,40 @@ value(scheduler.clearHooks()) // undefined; future tasks no longer use these cal
 ```ts
 async function repairPendingLogs() {
   // 从偏移 0 读最多 20 条日志写入失败的运行记录；没有待修记录时返回空数组。
-  const pending = value(await scheduler.execution.listLogFailures({ limit: 20, offset: 0 }))
-  for (const entry of pending)
+  const pendingResult = await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })
+  if (!pendingResult.success)
+    return pendingResult
+  const pending = pendingResult.data
+  for (const entry of pending) {
     // 用当前条目的 occurrenceId 修复已存在的观测日志，成功无数据，不重新执行任务。
-    value(await scheduler.execution.repairLog(entry.occurrenceId))
+    const repairLogResult = await scheduler.execution.repairLog(entry.occurrenceId)
+    if (!repairLogResult.success)
+      return repairLogResult
+  }
   return pending.length // at most 20; the next scan starts at offset 0 again
 }
 async function recordVerifiedOutcome(occurrenceId: string, status: 'success' | 'discarded') {
   // 从偏移 0 取最多 20 条效果待核对的 unknown 执行；没有匹配为 []。
-  const unknown = value(await scheduler.execution.listUnknown({ limit: 20, offset: 0 }))
+  const unknownResult = await scheduler.execution.listUnknown({ limit: 20, offset: 0 })
+  if (!unknownResult.success)
+    return unknownResult
+  const unknown = unknownResult.data
   // 按核对的 occurrenceId 读取当前执行及更新时间；不存在时返回 null。
-  const current = value(await scheduler.execution.get(occurrenceId))
+  const currentResult = await scheduler.execution.get(occurrenceId)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown execution')
   // 以现有更新时间为条件写入人工核对的 success 或 discarded；成功无数据，状态已变化则失败。
-  value(await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt }))
-  // 以同一 occurrenceId 重读人工核对后的结果；独立查询失败仍由 value 抛出。
-  return { scanned: unknown.length, entry: value(await scheduler.execution.get(occurrenceId)) }
+  const resolveUnknownResult = await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt })
+  if (!resolveUnknownResult.success)
+    return resolveUnknownResult
+  // 以同一 occurrenceId 重读人工核对后的结果；独立查询失败时仍返回原失败结果。
+  const getResult = await scheduler.execution.get(occurrenceId)
+  if (!getResult.success)
+    return getResult
+  return { scanned: unknown.length, entry: getResult.data }
 }
 ```
 

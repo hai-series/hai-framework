@@ -13,40 +13,46 @@
 この例はメモリ上の SQLite を使い、タスクを手動で 1 回実行します。cron を待つことも、ネットワークへのリクエストもありません。`trigger()` が成功しても失敗した実行の記録を返すことがあるため、`run.status` も確認します。この例では `success` になり、`logs.items` に 1 件の実行記録が入ります。定期実行する場合は、タスクを登録してから `scheduler.start()` を呼びます。開発環境（例: `NODE_ENV=development`）で実行してください。本番モードではノード間で共有するデータベースが必要です。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
+// 独立した開始・終了スクリプトです。この境界では元のエラーを送出し、HaiResult の業務関数では失敗結果を返します。
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
-function dataOrThrow<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message)
-  return result.data
-}
-
 // インメモリ SQLite を開く。成功時にデータはなく、DB の失敗でスケジューラーの初期化を止める。
-dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initResult.success)
+  throw new Error(initResult.error.message, { cause: initResult.error })
 
 try {
   // RelDB 上で調停用テーブルを準備し、タスク ID を返すフックを設定する。初期化失敗時は登録へ進まない。
-  dataOrThrow(await scheduler.init({
+  const initResult2 = await scheduler.init({
     hooks: {
       onTaskExecute: ({ context }) => ({ taskId: context.taskId }),
     },
-  }))
+  })
+  if (!initResult2.success)
+    throw new Error(initResult2.error.message, { cause: initResult2.error })
   try {
     // 日次レポート daily を毎日 02:00 に登録する。成功時にデータはなく、ID 重複や不正なスケジュールは失敗。
-    dataOrThrow(await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' }))
+    const registerResult = await scheduler.register({ id: 'daily', name: 'Daily report', cron: '0 2 * * *' })
+    if (!registerResult.success)
+      throw new Error(registerResult.error.message, { cause: registerResult.error })
     // daily を送信元 docs として手動実行する。実行ログを取得しても status で実行結果を確認する。
-    const run = dataOrThrow(await scheduler.trigger('daily', { source: 'docs' }))
+    const triggerResult = await scheduler.trigger('daily', { source: 'docs' })
+    if (!triggerResult.success)
+      throw new Error(triggerResult.error.message, { cause: triggerResult.error })
+    const run = triggerResult.data
     if (run.status !== 'success')
       throw new Error(run.error ?? 'Task did not succeed')
 
     // 送信元 docs の daily のログを先頭から最大 20 件読む。この実行の記録は一件で、照会失敗は例外になる。
-    const logs = dataOrThrow(await scheduler.getLogs({
+    const getLogsResult = await scheduler.getLogs({
       taskId: 'daily',
       triggerSource: 'docs',
       pagination: { page: 1, pageSize: 20 },
-    }))
+    })
+    if (!getLogsResult.success)
+      throw new Error(getLogsResult.error.message, { cause: getLogsResult.error })
+    const logs = getLogsResult.data
     if (logs.items.length !== 1)
       throw new Error('Expected one execution record')
   }
@@ -56,8 +62,10 @@ try {
   }
 }
 finally {
-  // 調停の終了後に DB を解放する。成功時データはなく、失敗は dataOrThrow が例外にする。
-  dataOrThrow(await reldb.close())
+  // 調停の終了後に DB を解放する。成功時データはなく、失敗は 元の失敗結果を返す。
+  const closeResult = await reldb.close()
+  if (!closeResult.success)
+    throw new Error(closeResult.error.message, { cause: closeResult.error })
 }
 ```
 
@@ -69,17 +77,7 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="task-definitions"></a>
 
@@ -101,14 +99,23 @@ RelDB 接続後に定義を登録し、保存された定義とプロセスの�
 #### 利用例：タスク定義の準備と管理
 
 ```ts
-// demo-daily を毎日 UTC 02:00 に登録する。成功時にデータはなく、設定不正は value が例外にする。
-value(await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' }))
-// 登録した demo-daily を無効化する。タスクは残り、更新失敗は value が例外にする。
-value(await scheduler.updateTask('demo-daily', { enabled: false }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// demo-daily を毎日 UTC 02:00 に登録する。成功時にデータはなく、設定不正は 元の失敗結果を返す。
+const registerResult = await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' })
+if (!registerResult.success)
+  return registerResult
+// 登録した demo-daily を無効化する。タスクは残り、更新失敗は 元の失敗結果を返す。
+const updateTaskResult = await scheduler.updateTask('demo-daily', { enabled: false })
+if (!updateTaskResult.success)
+  return updateTaskResult
 // 引数なしで保存済み定義を読み直す。成功時データはなく、読み取りエラーは失敗。
-value(await scheduler.refreshTasks())
-// ID demo-daily の定義を削除する。成功時にデータはなく、保存エラーは value が例外にする。
-value(await scheduler.unregister('demo-daily'))
+const refreshTasksResult = await scheduler.refreshTasks()
+if (!refreshTasksResult.success)
+  return refreshTasksResult
+// ID demo-daily の定義を削除する。成功時にデータはなく、保存エラーは 元の失敗結果を返す。
+const unregisterResult = await scheduler.unregister('demo-daily')
+if (!unregisterResult.success)
+  return unregisterResult
 // Each successful result has no business data; only the stored definition changes.
 ```
 
@@ -147,18 +154,28 @@ cron と手動実行で occurrenceId を決定し、DB 上の実行資格を共�
 
 ```ts
 async function runAndRead(taskId: string) {
-  // 引数なしで定期ポーリングを始める。成功時データはなく、未初期化時は value が例外にする。
-  value(scheduler.start())
+  // 引数なしで定期ポーリングを始める。成功時データはなく、未初期化時は 元の失敗結果を返す。
+  const startResult = scheduler.start()
+  if (!startResult.success)
+    return startResult
   try {
     // 指定タスクを送信元 docs-console で手動実行し、返った実行記録の status で結果を確認する。
-    const run = value(await scheduler.trigger(taskId, { source: 'docs-console' }))
-    // 指定タスクの docs-console のログを先頭から最大 20 件読む。items は空の場合があり、照会失敗は value が例外にする。
-    const logs = value(await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } }))
+    const runResult = await scheduler.trigger(taskId, { source: 'docs-console' })
+    if (!runResult.success)
+      return runResult
+    const run = runResult.data
+    // 指定タスクの docs-console のログを先頭から最大 20 件読む。items は空の場合があり、照会失敗は 元の失敗結果を返す。
+    const logsResult = await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } })
+    if (!logsResult.success)
+      return logsResult
+    const logs = logsResult.data
     return { status: run.status, logs: logs.items }
   }
   finally {
     // 引数なしで以降の定期取得を止める。成功時データはなく、開始済みの外部処理は取り消されない。
-    value(scheduler.stop())
+    const stopResult = scheduler.stop()
+    if (!stopResult.success)
+      return stopResult
   }
 }
 ```
@@ -181,23 +198,36 @@ async function runAndRead(taskId: string) {
 onTask* は setHooks に渡すコールバックで、スケジューラーが呼び出します。handler のないタスクを実行すると start/finish と実行結果を確認できます。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 const events: Array<{ stage: string, taskId: string }> = []
-// 開始・中断・終了を記録する下記コールバックを設定する。成功するとフックが更新され、利用不能時は value が例外にする。
-value(scheduler.setHooks({
+// 開始・中断・終了を記録する下記コールバックを設定する。成功するとフックが更新され、利用不能時は 元の失敗結果を返す。
+const setHooksResult = scheduler.setHooks({
   onTaskStart: event => { events.push({ stage: 'start', taskId: event.task.id }) },
   onTaskExecute: event => ({ taskId: event.context.taskId }),
   onTaskInterrupted: event => { events.push({ stage: 'interrupted', taskId: event.task.id }) },
   onTaskFinish: event => { events.push({ stage: 'finish', taskId: event.task.id }) },
-}))
+})
+if (!setHooksResult.success)
+  return setHooksResult
 // フックを確認する demo-hook を毎日 02:00 に登録する。成功時にデータはなく、ID 重複は失敗。
-value(await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' }))
+const registerResult = await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' })
+if (!registerResult.success)
+  return registerResult
 // demo-hook を手動実行してフックのイベントを発生させる。実行ログの status で結果を確認する。
-const run = value(await scheduler.trigger('demo-hook'))
+const runResult = await scheduler.trigger('demo-hook')
+if (!runResult.success)
+  return runResult
+const run = runResult.data
 // run.status === 'success'; events contains start and finish for demo-hook.
-// 例の demo-hook 定義を削除する。成功時にデータはなく、失敗は value が例外にする。
-value(await scheduler.unregister('demo-hook'))
+// 例の demo-hook 定義を削除する。成功時にデータはなく、失敗は 元の失敗結果を返す。
+const unregisterResult = await scheduler.unregister('demo-hook')
+if (!unregisterResult.success)
+  return unregisterResult
 // 引数なしで登録済みフックを解除する。成功時にデータはない。
-value(scheduler.clearHooks()) // undefined; future tasks no longer use these callbacks
+const clearHooksResult = scheduler.clearHooks()
+if (!clearHooksResult.success)
+  return clearHooksResult
+// future tasks no longer use these callbacks
 ```
 
 <a id="recovery"></a>
@@ -223,22 +253,39 @@ value(scheduler.clearHooks()) // undefined; future tasks no longer use these cal
 ```ts
 async function repairPendingLogs() {
   // ログ保存に失敗した実行を先頭から最大 20 件取得する。対象がなければ空配列。
-  const pending = value(await scheduler.execution.listLogFailures({ limit: 20, offset: 0 }))
-  for (const entry of pending)
+  const pendingResult = await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })
+  if (!pendingResult.success)
+    return pendingResult
+  const pending = pendingResult.data
+  for (const entry of pending) {
     // この実行 ID の観測ログを修復する。成功時データはなく、タスクを再実行しない。
-    value(await scheduler.execution.repairLog(entry.occurrenceId))
+    const repairLogResult = await scheduler.execution.repairLog(entry.occurrenceId)
+    if (!repairLogResult.success)
+      return repairLogResult
+  }
   return pending.length // at most 20; the next scan starts at offset 0 again
 }
 async function recordVerifiedOutcome(occurrenceId: string, status: 'success' | 'discarded') {
   // 結果の確認を待つ unknown の実行を先頭から最大 20 件読む。対象がなければ空配列。
-  const unknown = value(await scheduler.execution.listUnknown({ limit: 20, offset: 0 }))
+  const unknownResult = await scheduler.execution.listUnknown({ limit: 20, offset: 0 })
+  if (!unknownResult.success)
+    return unknownResult
+  const unknown = unknownResult.data
   // 確認対象の実行 ID から現在の状態と更新時刻を読む。存在しなければ null。
-  const current = value(await scheduler.execution.get(occurrenceId))
+  const currentResult = await scheduler.execution.get(occurrenceId)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown execution')
   // 照会した更新時刻を条件に success または discarded の確認結果を保存する。成功時データはなく、状態が変わっていれば失敗。
-  value(await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt }))
-  // 同じ実行 ID を再読込して確定後の状態を見る。再読込失敗は value が例外にする。
-  return { scanned: unknown.length, entry: value(await scheduler.execution.get(occurrenceId)) }
+  const resolveUnknownResult = await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt })
+  if (!resolveUnknownResult.success)
+    return resolveUnknownResult
+  // 同じ実行 ID を再読込して確定後の状態を見る。再読込失敗は 元の失敗結果を返す。
+  const getResult = await scheduler.execution.get(occurrenceId)
+  if (!getResult.success)
+    return getResult
+  return { scanned: unknown.length, entry: getResult.data }
 }
 ```

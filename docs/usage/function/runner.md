@@ -101,17 +101,7 @@ finally {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="nodes"></a>
 
@@ -200,17 +190,33 @@ submit 返回的是共享数据库中的执行回执。下图将“已排队”�
 排队时取消可直接得到 cancelled；运行中通常先是 cancelling，停止得到确认后才结束。租约或清理无法确认时为 unknown，不能宣称业务已撤销。reconcileUnknown 要在原执行节点核对资源，解除占用后仍保留未知业务结果，不会伪造 succeeded。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 // 提交 studio/alice 的月报，成功拿到执行回执；同业务重试使用 report-nov，状态未确定时保留错误。
-const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+const acceptedResult = await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' })
+if (!acceptedResult.success)
+  return acceptedResult
+const accepted = acceptedResult.data
 // 按相同主体、任务种类和持久键查原执行；无匹配时成功返回 undefined。
-const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+const recoveredResult = await runner.find(scope, 'report.v1', 'report-nov')
+if (!recoveredResult.success)
+  return recoveredResult
+const recovered = recoveredResult.data // 匹配的执行；未找到时为 undefined
 // 读取该主体在提交回执中的任务状态及可用结果；无权访问或读取失败会返回错误。
-const current = value(await runner.get(scope, accepted.id)) // current persisted state
+const currentResult = await runner.get(scope, accepted.id)
+if (!currentResult.success)
+  return currentResult
+const current = currentResult.data // 当前持久化状态
 // 读取同一任务从游标 0 之后的最多 20 条有序事件，暂无数据是空数组。
-const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+const eventsResult = await runner.events(scope, accepted.id, 0, 20)
+if (!eventsResult.success)
+  return eventsResult
+const events = eventsResult.data // 按顺序读取的 RunnerEvent 事件数组
 // 对同一任务请求取消。返回实际执行状态，运行中任务可能先进入 cancelling。
-const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
+const cancellingResult = await runner.cancel(scope, accepted.id)
+if (!cancellingResult.success)
+  return cancellingResult
+const cancelling = cancellingResult.data // 取消请求受理后的实际状态
 ```
 
 输入 scope 必须来自认证，不能用请求体自报。上例依赖最小接入的 report.v1 处理器。输出受并发执行影响，queued/running/cancelling 不是最终成功；事件序号供下次增量读取。

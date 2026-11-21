@@ -110,17 +110,7 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="sending"></a>
 
@@ -145,8 +135,12 @@ reach.send 可能联系渠道，也可能为普通通知返回排队回执。敏
 普通消息允许延迟时，由持久队列稍后领取发送；显式 reject 则拒绝排队。敏感消息遇到免打扰、过期或结果不明时不自动重投。渠道受理成功不代表用户已读或最终送达；超时后的未知结果先核对渠道记录，再决定人工恢复。
 
 ```ts
-// 用已保存的 demo-welcome 模板将 Ada 渲染到正文并通知 demo@example.com。收到 deferred 回执只表示入队；模板或渠道失败由 value 抛出。
-const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 用已保存的 demo-welcome 模板将 Ada 渲染到正文并通知 demo@example.com。收到 deferred 回执只表示入队；模板或渠道失败时返回原失败结果。
+const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
+if (!sentResult.success)
+  return sentResult
+const sent = sentResult.data
 // sent: SendResult for this provider attempt, not proof that a person read the message
 ```
 
@@ -196,18 +190,34 @@ PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的�
 #### 场景：维护与预览通知模板
 
 ```ts
-// 将主题 Welcome、正文 Hello {name} 与 local 渠道关联并保存为 demo-welcome；成功无数据，持久化错误由 value 抛出。
-value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 将主题 Welcome、正文 Hello {name} 与 local 渠道关联并保存为 demo-welcome；成功无数据，持久化错误时返回原失败结果。
+const saveResult = await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })
+if (!saveResult.success)
+  return saveResult
 // 批量保存使用 local 渠道的 demo-goodbye，正文为 Bye {name}。成功无数据，部分失败时已写入项不保证回滚。
-value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
-// 按 demo-welcome 名称读取上面保存的模板；未找到时由 value 抛出。
-const template = value(await reach.template.resolve('demo-welcome')) // saved template
+const saveBatchResult = await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }])
+if (!saveBatchResult.success)
+  return saveBatchResult
+// 按 demo-welcome 名称读取上面保存的模板；未找到时时返回原失败结果。
+const templateResult = await reach.template.resolve('demo-welcome')
+if (!templateResult.success)
+  return templateResult
+const template = templateResult.data // 已保存的模板
 // 传入 demo-welcome 和变量 Ada 预览，返回正文 Hello Ada 及主题，不发送通知；模板缺失会失败。
-const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
-// 无参读取已保存的模板列表，包含上面两项；查询失败由 value 抛出。
-const templates = value(await reach.template.list()) // includes both templates
-// 删除 demo-goodbye 模板，成功无数据；存储错误由 value 抛出。
-value(await reach.template.remove('demo-goodbye')) // undefined
+const previewResult = await reach.template.render('demo-welcome', { name: 'Ada' })
+if (!previewResult.success)
+  return previewResult
+const preview = previewResult.data // 正文为 Hello Ada
+// 无参读取已保存的模板列表，包含上面两项；查询失败时返回原失败结果。
+const templatesResult = await reach.template.list()
+if (!templatesResult.success)
+  return templatesResult
+const templates = templatesResult.data // 包含刚保存的两个模板
+// 删除 demo-goodbye 模板，成功无数据；存储错误时返回原失败结果。
+const removeResult = await reach.template.remove('demo-goodbye')
+if (!removeResult.success)
+  return removeResult
 ```
 
 先配置名为 mail 的测试 Provider。输出中的正文由 name= Ada 得到，remove 只删除模板，不撤回已发送内容。
@@ -228,11 +238,18 @@ value(await reach.template.remove('demo-goodbye')) // undefined
 #### 场景：查询延迟与失败发送
 
 ```ts
-// 从队列读取最多 20 条 dead 状态摘要，没有匹配返回空数组；读取错误由 value 抛出。
-const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 从队列读取最多 20 条 dead 状态摘要，没有匹配返回空数组；读取错误时返回原失败结果。
+const entriesResult = await reach.queue.list({ status: 'dead', limit: 20 })
+if (!entriesResult.success)
+  return entriesResult
+const entries = entriesResult.data
 if (entries.length > 0) {
   // 按第一条摘要的 queueId 重读当前状态；记录已不存在则成功返回 null，读取错误单独失败。
-  const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
+  const entryResult = await reach.queue.get(entries[0].queueId)
+  if (!entryResult.success)
+    return entryResult
+  const entry = entryResult.data // 当前发送记录；已不存在时为 null
 }
 ```
 
@@ -260,13 +277,21 @@ import type { ReachUnknownResolution } from '@h-ai/reach'
 
 async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
   // 按调用方提供的队列回执读取当前记录。缺项是 null，只有仍为 unknown 才继续人工处置。
-  const current = value(await reach.queue.get(queueId))
+  const currentResult = await reach.queue.get(queueId)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown delivery')
   // 把可信核验结论写到指定的 unknown 记录，成功无数据且不重发；状态已变化或结论无效则失败。
-  value(await reach.queue.resolveUnknown(queueId, decision))
+  const resolveUnknownResult = await reach.queue.resolveUnknown(queueId, decision)
+  if (!resolveUnknownResult.success)
+    return resolveUnknownResult
   // 用同一 queueId 读取已处理记录，检查当前状态是 sent 或 discarded；仍需处理独立的读取失败。
-  return value(await reach.queue.get(queueId)) // status is sent or discarded
+  const getResult = await reach.queue.get(queueId)
+  if (!getResult.success)
+    return getResult
+  return getResult.data // 当前状态为 sent 或 discarded
 }
 ```
 
@@ -307,8 +332,6 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 在服务端管理代码中，用 `reach.queue.get(queueId)` 查看发送状态。结果不会包含收件地址或消息正文。看到 `unknown` 时，先停止旧的发送进程，再用 `queueId` 对照发送渠道日志和第三方投递记录。
 
 确认后调用 `reach.queue.resolveUnknown()` 把记录改为 `sent` 或 `discarded`。只有状态仍为 `unknown` 的记录可以修改，多位操作员同时提交时只接受一次。这个操作只更新记录，已经开始的外部发送仍可能生效。确认旧请求不会继续生效后，才可创建一条新消息补发。
-
-
 
 ## 错误处理
 

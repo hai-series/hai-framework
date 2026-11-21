@@ -6,6 +6,10 @@
 
 Load `_iam.yml` after database and required authentication dependencies initialized. Treat login, registration, challenges, permissions and session policies as separate controls. Publish only the form settings intended for browsers.
 
+On configuration validation failure, `iam.init()` returns `CONFIG_ERROR`. Its message and `error.ext.fields` list invalid field paths, while `error.cause` retains the original validation error. Server logs include an `issues` array with paths, error categories and descriptions, without recording the complete configuration.
+
+## Configuration examples
+
 ```yaml schema=@h-ai/iam:IamConfigSchema
 login:
   password: true
@@ -14,6 +18,39 @@ register:
   enabled: false
 session:
   maxAge: 3600
+```
+
+### Use passwords with a 30-minute idle timeout
+
+Put this in `config/_iam.yml`. Require at least 12 characters and disable self-registration. Both timeouts use seconds: users sign in again after 30 idle minutes or eight hours since login. This does not rewrite existing account passwords.
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  otp: false
+  ldap: false
+register:
+  enabled: false
+password:
+  minLength: 12
+session:
+  idleTimeout: 1800
+  absoluteTimeout: 28800
+```
+
+### Connect to the company LDAP directory
+
+Supply the complete URL, bind account and user search base. Load the bind password from the private server environment. This example keeps local password login enabled. When LDAP is unused, omit both the whole `ldap` section and its `HAI_IAM_LDAP_*` variables. Leaving only the password variable creates an incomplete configuration and prevents startup.
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  ldap: true
+ldap:
+  url: ldaps://directory.example.com:636
+  bindDn: cn=app-reader,ou=services,dc=example,dc=com
+  bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}
+  searchBase: ou=people,dc=example,dc=com
 ```
 
 <a id="password"></a>

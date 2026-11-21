@@ -8,15 +8,11 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
+### Record ID, version and content in the database
 
-Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
+Structure: shared fields in the built-in relational tables.
 
-### How SQL wraps a business record
-
-Structure: `SQL envelope`.
-
-AI records share id, version, data and timestamps, with business content inside data.
+AI records share `id`, `version`, `data` and timestamps, with business content inside `data`. This excerpt shows a session record; creation and update times are Unix milliseconds.
 
 ```json
 {

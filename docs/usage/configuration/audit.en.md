@@ -6,11 +6,42 @@
 
 Read `_audit.yml` and initialize Audit after RelDB. Enable notification, backups and retention enforcement separately. Use only the actor and resource data needed for auditing.
 
+## Configuration examples
+
 ```yaml schema=@h-ai/audit:AuditInitConfigSchema
 capture:
   enabled: true
   includeReads: false
 ```
+
+### Protect the last 90 days of audit records
+
+Put this in `config/_audit.yml`. Records cannot be changed or removed during the protection period. They are not automatically deleted on day 91. Cleanup remains an application task, and removing this section does not clear protection already saved in the shared database.
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: false
+retention:
+  enabled: true
+  minDays: 90
+```
+
+### Record reads and hide customer phone numbers
+
+Enabling `includeReads` also captures successful reads at instrumented entry points and increases record volume. `customerPhone` names a field in event details that is hidden on write. Passwords and tokens are always hidden independently of this list.
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: true
+privacy:
+  enabled: true
+  fields: [customerPhone]
+```
+
+## Configuration reference
+
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |

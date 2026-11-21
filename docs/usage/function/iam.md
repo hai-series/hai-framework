@@ -83,18 +83,8 @@ if (!result.success)
 
 ## 功能说明
 
-下面示例在 IAM 成功初始化后运行；value 检查结果，失败中止示例，成功读取 data。管理操作须先在应用入口授权。
+下面示例在 IAM 成功初始化后运行。每次调用后检查 `success`，失败时返回原结果，成功后读取 `data`；未给出函数声明的片段位于应用的异步业务函数内。管理操作须先在应用入口授权。
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="lifecycle"></a>
 
@@ -116,8 +106,12 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备认证服务与公开策略
 
 ```ts
-// 无参读取合并后的公开认证策略；成功不含私密设置，失败由 value 抛出。
-const publicSettings = value(await iam.getPublicConfig()) // merged public IAM settings
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 无参读取合并后的公开认证策略；成功不含私密设置，失败时返回原失败结果。
+const publicSettingsResult = await iam.getPublicConfig()
+if (!publicSettingsResult.success)
+  return publicSettingsResult
+const publicSettings = publicSettingsResult.data // merged public IAM settings
 // Read only the returned public policy; never return iam.config as a public response.
 ```
 
@@ -748,58 +742,136 @@ Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 
 
 ```ts
 async function reviewReader(userId: string) {
-  // 登记 docs:read API 权限并取得含 id 的权限对象；重复代码或写入失败由 value 抛出。
-  const permission = value(await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' }))
+  // 登记 docs:read API 权限并取得含 id 的权限对象；重复代码或写入失败时返回原失败结果。
+  const permissionResult = await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' })
+  if (!permissionResult.success)
+    return permissionResult
+  const permission = permissionResult.data
   // 建立代码 docs_reader 的空权限角色，返回含 id 的角色；同名代码冲突失败。
-  const role = value(await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] }))
+  const roleResult = await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] })
+  if (!roleResult.success)
+    return roleResult
+  const role = roleResult.data
   // 用刚创建的两个 ID 关联 docs:read 到 docs_reader；成功无数据。
-  value(await iam.authz.assignPermissionToRole(role.id, permission.id)) // undefined
-  // 将新角色授给调用方指定的用户，成功无数据；关系写入失败由 value 抛出。
-  value(await iam.authz.assignRole(userId, role.id)) // undefined
+  const assignPermissionToRoleResult = await iam.authz.assignPermissionToRole(role.id, permission.id)
+  if (!assignPermissionToRoleResult.success)
+    return assignPermissionToRoleResult
+  // 成功无业务数据。
+  // 将新角色授给调用方指定的用户，成功无数据；关系写入失败时返回原失败结果。
+  const assignRoleResult = await iam.authz.assignRole(userId, role.id)
+  if (!assignRoleResult.success)
+    return assignRoleResult
+  // 成功无业务数据。
   // 把同一用户全部角色替换为刚创建的单一角色；成功无数据。
-  value(await iam.authz.syncRoles(userId, [role.id])) // replaces the complete role set
-  // 检查该用户的 docs:read；此例为 true，false 表示拒绝，查询失败由 value 抛出。
-  value(await iam.authz.checkPermission(userId, 'docs:read')) // true (RBAC enabled)
+  const syncRolesResult = await iam.authz.syncRoles(userId, [role.id])
+  if (!syncRolesResult.success)
+    return syncRolesResult
+  // replaces the complete role set
+  // 检查该用户的 docs:read；此例为 true，false 表示拒绝，查询失败时返回原失败结果。
+  const checkPermissionResult = await iam.authz.checkPermission(userId, 'docs:read')
+  if (!checkPermissionResult.success)
+    return checkPermissionResult
+  checkPermissionResult.data // true (RBAC enabled)
   // 按用户 ID 读取生效角色和权限 code，包括 docs_reader 与 docs:read。
-  value(await iam.authz.getUserAuthorization(userId)) // role and permission codes
+  const getUserAuthorizationResult = await iam.authz.getUserAuthorization(userId)
+  if (!getUserAuthorizationResult.success)
+    return getUserAuthorizationResult
+  getUserAuthorizationResult.data // role and permission codes
   // 按同一用户 ID 读取角色记录，包含刚分配的 docs_reader。
-  value(await iam.authz.getUserRoles(userId)) // Role[]
+  const getUserRolesResult = await iam.authz.getUserRoles(userId)
+  if (!getUserRolesResult.success)
+    return getUserRolesResult
+  getUserRolesResult.data // Role[]
   // 按用户 ID 读取生效权限对象，本例包含 docs:read。
-  value(await iam.authz.getUserPermissions(userId)) // Permission[]
+  const getUserPermissionsResult = await iam.authz.getUserPermissions(userId)
+  if (!getUserPermissionsResult.success)
+    return getUserPermissionsResult
+  getUserPermissionsResult.data // Permission[]
   // 传只有该用户的一批 ID，返回以用户 ID 为键、角色数组为值的 Map。
-  value(await iam.authz.getUserRolesForMany([userId])) // Map keyed by user ID
+  const getUserRolesForManyResult = await iam.authz.getUserRolesForMany([userId])
+  if (!getUserRolesForManyResult.success)
+    return getUserRolesForManyResult
+  getUserRolesForManyResult.data // Map keyed by user ID
   // 传刚创建的角色 ID 数组，返回角色 ID 到权限数组的 Map。
-  value(await iam.authz.getRolePermissionsForMany([role.id])) // Map keyed by role ID
+  const getRolePermissionsForManyResult = await iam.authz.getRolePermissionsForMany([role.id])
+  if (!getRolePermissionsForManyResult.success)
+    return getRolePermissionsForManyResult
+  getRolePermissionsForManyResult.data // Map keyed by role ID
   // 批量读角色成员数并按当前角色 ID 取值，隔离示例中为 1。
-  value(await iam.authz.getRoleUserCounts([role.id])).get(role.id) // 1 in this isolated example
+  const getRoleUserCountsResult = await iam.authz.getRoleUserCounts([role.id])
+  if (!getRoleUserCountsResult.success)
+    return getRoleUserCountsResult
+  getRoleUserCountsResult.data.get(role.id) // 1 in this isolated example
   // 按刚创建的 ID 查询角色对象，未命中为 null。
-  value(await iam.authz.getRole(role.id)) // the created Role
+  const getRoleResult = await iam.authz.getRole(role.id)
+  if (!getRoleResult.success)
+    return getRoleResult
+  getRoleResult.data // the created Role
   // 按稳定代码 docs_reader 读取相同角色，未命中为 null。
-  value(await iam.authz.getRoleByCode('docs_reader')) // same Role
+  const getRoleByCodeResult = await iam.authz.getRoleByCode('docs_reader')
+  if (!getRoleByCodeResult.success)
+    return getRoleByCodeResult
+  getRoleByCodeResult.data // same Role
   // 读取角色第一页最多 20 条，返回 items 和分页信息。
-  value(await iam.authz.getAllRoles({ page: 1, pageSize: 20 })) // role page
+  const getAllRolesResult = await iam.authz.getAllRoles({ page: 1, pageSize: 20 })
+  if (!getAllRolesResult.success)
+    return getAllRolesResult
+  getAllRolesResult.data // role page
   // 按该角色 ID 更新显示名为 Document readers，成功返回更新记录。
-  value(await iam.authz.updateRole(role.id, { name: 'Document readers' })) // updated Role
+  const updateRoleResult = await iam.authz.updateRole(role.id, { name: 'Document readers' })
+  if (!updateRoleResult.success)
+    return updateRoleResult
+  updateRoleResult.data // updated Role
   // 用创建时的权限 ID 查询权限，没有此项时返回 null。
-  value(await iam.authz.getPermission(permission.id)) // the created Permission
+  const getPermissionResult = await iam.authz.getPermission(permission.id)
+  if (!getPermissionResult.success)
+    return getPermissionResult
+  getPermissionResult.data // the created Permission
   // 按稳定代码 docs:read 找相同权限，未命中为 null。
-  value(await iam.authz.getPermissionByCode('docs:read')) // same Permission
+  const getPermissionByCodeResult = await iam.authz.getPermissionByCode('docs:read')
+  if (!getPermissionByCodeResult.success)
+    return getPermissionByCodeResult
+  getPermissionByCodeResult.data // same Permission
   // 读取权限第一页最多 20 条，结果含 items 和分页信息。
-  value(await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })) // permission page
+  const getAllPermissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })
+  if (!getAllPermissionsResult.success)
+    return getAllPermissionsResult
+  getAllPermissionsResult.data // permission page
   // 按角色 ID 读取已关联的权限数组，仍包含 docs:read。
-  value(await iam.authz.getRolePermissions(role.id)) // includes docs:read
+  const getRolePermissionsResult = await iam.authz.getRolePermissions(role.id)
+  if (!getRolePermissionsResult.success)
+    return getRolePermissionsResult
+  getRolePermissionsResult.data // includes docs:read
   // 把 docs:export 作为该权限的敏感操作规则保存，成功无业务数据。
-  value(await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])) // undefined
+  const setPermissionSensitiveOperationsResult = await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])
+  if (!setPermissionSensitiveOperationsResult.success)
+    return setPermissionSensitiveOperationsResult
+  // 成功无业务数据。
   // 按 docs:export 筛选生效的敏感操作；重认证策略启用时包含该规则，没有匹配则为空数组。
-  value(await iam.authz.getSensitiveOperations('docs:export')) // configured rule when reauthentication is enabled
+  const getSensitiveOperationsResult = await iam.authz.getSensitiveOperations('docs:export')
+  if (!getSensitiveOperationsResult.success)
+    return getSensitiveOperationsResult
+  getSensitiveOperationsResult.data // configured rule when reauthentication is enabled
   // 解除新角色和权限的关联，成功无数据，不删除两者的定义。
-  value(await iam.authz.removePermissionFromRole(role.id, permission.id)) // undefined
+  const removePermissionFromRoleResult = await iam.authz.removePermissionFromRole(role.id, permission.id)
+  if (!removePermissionFromRoleResult.success)
+    return removePermissionFromRoleResult
+  // 成功无业务数据。
   // 从指定用户撤销本例的角色分配，成功无数据。
-  value(await iam.authz.removeRole(userId, role.id)) // undefined
-  // 按 ID 删除本例创建的角色定义，成功无数据；删除失败由 value 抛出。
-  value(await iam.authz.deleteRole(role.id)) // undefined
-  // 按 ID 删除本例创建的权限定义，成功无数据；删除失败由 value 抛出。
-  value(await iam.authz.deletePermission(permission.id)) // undefined
+  const removeRoleResult = await iam.authz.removeRole(userId, role.id)
+  if (!removeRoleResult.success)
+    return removeRoleResult
+  // 成功无业务数据。
+  // 按 ID 删除本例创建的角色定义，成功无数据；删除失败时返回原失败结果。
+  const deleteRoleResult = await iam.authz.deleteRole(role.id)
+  if (!deleteRoleResult.success)
+    return deleteRoleResult
+  // 成功无业务数据。
+  // 按 ID 删除本例创建的权限定义，成功无数据；删除失败时返回原失败结果。
+  const deletePermissionResult = await iam.authz.deletePermission(permission.id)
+  if (!deletePermissionResult.success)
+    return deletePermissionResult
+  // 成功无业务数据。
 }
 ```
 
@@ -1040,30 +1112,60 @@ options 只能由可信服务端在验证用户后构造；这些低层接口不
 import type { CreateSessionOptions } from '@h-ai/iam'
 
 async function manageTrustedSession(options: CreateSessionOptions, refreshToken: string) {
-  // 用宿主提供的用户与可信会话选项直接创建 Session；存储失败由 value 抛出。
-  const created = value(await iam.session.create(options)) // Session, not TokenPair
+  // 用宿主提供的用户与可信会话选项直接创建 Session；存储失败时返回原失败结果。
+  const createdResult = await iam.session.create(options)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data // Session, not TokenPair
   const token = created.accessToken
   // 用刚创建的 access token 读取会话快照；找不到时返回 null。
-  const found = value(await iam.session.get(token)) // Session or null
+  const foundResult = await iam.session.get(token)
+  if (!foundResult.success)
+    return foundResult
+  const found = foundResult.data // Session or null
   // 用同一 access token 做底层会话验证，成功得到现存 Session；缺失、过期等失败。
-  const verified = value(await iam.session.verifyToken(token)) // Session; missing/expired fails
+  const verifiedResult = await iam.session.verifyToken(token)
+  if (!verifiedResult.success)
+    return verifiedResult
+  const verified = verifiedResult.data // Session; missing/expired fails
   // 按刚验证的版本把该会话的 theme 设为 dark，成功无数据；版本冲突失败。
-  value(await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)) // undefined
-  // 为创建选项中的用户同步已验证的角色和权限快照，成功无数据；写错时 value 抛出。
-  value(await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })) // undefined
-  // 用初始 access token 撤销该会话，成功无数据；存储失败由 value 抛出。
-  value(await iam.session.delete(token)) // undefined; revokes this session
+  const updateResult = await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)
+  if (!updateResult.success)
+    return updateResult
+  // 成功无业务数据。
+  // 为创建选项中的用户同步已验证的角色和权限快照，成功无数据；写入失败时返回原失败结果。
+  const patchUserSessionsResult = await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })
+  if (!patchUserSessionsResult.success)
+    return patchUserSessionsResult
+  // 成功无业务数据。
+  // 用初始 access token 撤销该会话，成功无数据；存储失败时返回原失败结果。
+  const deleteResult2 = await iam.session.delete(token)
+  if (!deleteResult2.success)
+    return deleteResult2
+  // undefined; revokes this session
   // 用创建选项的用户 ID 撤销剩余会话并返回数量。
-  value(await iam.session.deleteByUserId(options.userId)) // remaining revoked count
+  const deleteByUserIdResult = await iam.session.deleteByUserId(options.userId)
+  if (!deleteByUserIdResult.success)
+    return deleteByUserIdResult
+  deleteByUserIdResult.data // remaining revoked count
 }
 
 async function rotateThenRevoke(refreshToken: string) {
   // 使用调用方的旧刷新令牌换取新的一对令牌；过期或已用过的令牌失败。
-  const pair = value(await iam.session.refresh(refreshToken)) // new TokenPair
+  const pairResult = await iam.session.refresh(refreshToken)
+  if (!pairResult.success)
+    return pairResult
+  const pair = pairResult.data // new TokenPair
   // 撤销刚换出的刷新令牌，解除再次续期能力，成功无数据；当前访问令牌仍需独立撤销。
-  value(await iam.session.revokeRefresh(pair.refreshToken)) // undefined; access remains valid until expiry/revocation
+  const revokeRefreshResult = await iam.session.revokeRefresh(pair.refreshToken)
+  if (!revokeRefreshResult.success)
+    return revokeRefreshResult
+  // undefined; access remains valid until expiry/revocation
   // 撤销同一轮新发的 access token 会话，成功无数据。
-  value(await iam.session.delete(pair.accessToken)) // undefined
+  const deleteResult = await iam.session.delete(pair.accessToken)
+  if (!deleteResult.success)
+    return deleteResult
+  // 成功无业务数据。
 }
 ```
 

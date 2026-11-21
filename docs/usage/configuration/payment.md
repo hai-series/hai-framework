@@ -19,6 +19,51 @@ stripe:
   successUrl: https://app.example.com/orders/complete
 ```
 
+### 使用 Stripe 托管付款页
+
+写入 `config/_payment.yml`，两个密钥由服务端私有环境提供。支付完成和取消时分别跳转到示例中的页面。页面跳转不代表已收款，订单状态仍应以服务端验签后的支付结果为准；示例域名需替换成自己的站点。
+
+```yaml schema=@h-ai/payment:PaymentConfigSchema
+stripe:
+  secretKey: ${STRIPE_SECRET_KEY}
+  webhookSecret: ${STRIPE_WEBHOOK_SECRET}
+  successUrl: https://shop.example.com/payment/success
+  cancelUrl: https://shop.example.com/payment/cancel
+```
+
+### 先接入支付宝沙箱
+
+使用沙箱商户和密钥验证手机网站付款流程。应用 ID、卖家 ID、私钥和支付宝公钥必须属于同一套沙箱配置。验收真实支付前，换成生产配置并关闭 `sandbox`；`returnUrl` 仍只用于页面导航。
+
+```yaml schema=@h-ai/payment:PaymentConfigSchema
+alipay:
+  appId: ${ALIPAY_APP_ID}
+  sellerId: ${ALIPAY_SELLER_ID}
+  privateKey: ${ALIPAY_PRIVATE_KEY}
+  alipayPublicKey: ${ALIPAY_PUBLIC_KEY}
+  returnUrl: https://shop.example.com/payment/result
+  sandbox: true
+```
+
+### 接入微信公众号 JSAPI 支付
+
+写入 `config/_payment.yml`，所有值都从服务端私有环境读取。商户号、应用 ID、商户 API 证书序列号和签名私钥必须属于已开通支付的同一套商户配置；API v3 密钥用于解密通知。私钥及平台证书或公钥要提供完整 PEM 内容，不能只填文件路径。
+
+把 `YOUR_WECHATPAY_SERIAL` 替换成受信平台证书序列号或公钥 ID，必须与通知头 `Wechatpay-Serial` 完全一致；它不是商户证书的 `serialNo`。这处 YAML 键名需要直接替换，不会通过 `${…}` 展开。轮换期间可同时保留新旧两项，通知携带的未知标识不会自动获得信任。
+
+```yaml schema=@h-ai/payment:PaymentConfigSchema
+wechat:
+  mchId: ${WECHATPAY_MERCHANT_ID}
+  appId: ${WECHATPAY_APP_ID}
+  apiV3Key: ${WECHATPAY_API_V3_KEY}
+  serialNo: ${WECHATPAY_MERCHANT_SERIAL}
+  privateKey: ${WECHATPAY_MERCHANT_PRIVATE_KEY}
+  platformKeys:
+    YOUR_WECHATPAY_SERIAL: ${WECHATPAY_PLATFORM_PUBLIC_KEY}
+```
+
+此配置启用 `wechat` 渠道，不会自动创建订单或注册通知路由。下单时由应用提供当前用户的 OpenID 和实际通知地址；通知处理保留原始请求体及协议头，交给 `payment.handleNotify()` 验签。成功后仍须核对业务订单、金额及处理状态，再更新订单或发货。
+
 ## 配置清单
 
 例如，只填写 `stripe` 时，微信支付和支付宝没有启用。启用 Stripe 时必须填写 `stripe.secretKey`、`stripe.webhookSecret` 及 `stripe.successUrl`。

@@ -18,6 +18,31 @@ notificationMode: console
 consoleContent: metadata
 ```
 
+### 把反馈通知发给值班邮箱
+
+写入 `config/_feedback.yml`。`email` 必须是已经初始化、能够真实投递的 Reach 渠道名；Console 渠道只会打印日志。`adminUrl` 是通知里的管理页链接，配置它不会创建页面或授予访问权限。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: reach
+notificationProvider: email
+recipients: [support@example.com]
+adminUrl: https://admin.example.com/feedback
+```
+
+### 限制附件大小并缩短保存时间
+
+每个附件最多 2 MiB，每个用户每天最多受理 10 份反馈，反馈保存 7 天，导出的 ZIP 保存 12 小时。设为 `disabled` 只关闭通知，仍会保存反馈；到期对象由后台清理任务回收，需要让后台任务保持运行。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: disabled
+maxAttachmentBytes: 2097152
+maxReportsPerUserDay: 10
+retentionDays: 7
+exportRetentionHours: 12
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

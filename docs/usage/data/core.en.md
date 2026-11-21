@@ -6,8 +6,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
 ### Successful result
 
 Structure: `success`.
@@ -78,7 +76,7 @@ Record an event with a request ID connecting related messages.
 }
 ```
 
-Order created occurred at the sample start; timestamp is Unix ms and request-42 is the link. The logging backend decides persistence.
+This log records the order creation. `timestamp` is Unix milliseconds, corresponding to 2026-11-17 00:00 UTC. Use `request-42` to find other logs from the same request. The logging backend decides whether to write logs to a file.
 
 ### Diagnostic scope for one request
 

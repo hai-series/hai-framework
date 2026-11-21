@@ -13,39 +13,47 @@
 この例ではメモリ上の SQLite を使います。RelDB、Audit の順に初期化し、ログインを 1 件記録します。同じアクション名で検索すると、`logs.items` に記録した行が入ります。終了時は Audit を先に閉じます。開発環境（例: `NODE_ENV=development`）で実行してください。本番モードではノード間で共有するデータベースが必要です。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
+// 独立した開始・終了スクリプトです。この境界では元のエラーを送出し、HaiResult の業務関数では失敗結果を返します。
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-function dataOrThrow<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message)
-  return result.data
-}
-
 // 監査表用のインメモリ SQLite を開きます。成功時の data はなく、接続失敗時は例外になります。
-dataOrThrow(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initResult.success)
+  throw new Error(initResult.error.message, { cause: initResult.error })
 
 try {
   // 開いた DB と既定設定で監査を初期化します。成功後に記録でき、失敗時は例外になります。
-  dataOrThrow(await audit.init())
+  const initResult2 = await audit.init()
+  if (!initResult2.success)
+    throw new Error(initResult2.error.message, { cause: initResult2.error })
   try {
-    // demo-user の auth ログインを記録します。成功時は ID 付きの記録、失敗時は例外です。
-    const saved = dataOrThrow(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
-    // login イベントを 1 ページ最大 20 件で取得します。新規 DB の結果には直前の記録が入り、失敗時は例外です。
-    const logs = dataOrThrow(await audit.list({ action: 'login', pageSize: 20 }))
+    // demo-user の auth ログインを記録します。成功時は ID 付きの記録、失敗時はスクリプト境界で元のエラーを送出します。
+    const logResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
+    if (!logResult.success)
+      throw new Error(logResult.error.message, { cause: logResult.error })
+    const saved = logResult.data
+    // login イベントを 1 ページ最大 20 件で取得します。新規 DB の結果には直前の記録が入り、失敗時はスクリプト境界で元のエラーを送出します。
+    const listResult = await audit.list({ action: 'login', pageSize: 20 })
+    if (!listResult.success)
+      throw new Error(listResult.error.message, { cause: listResult.error })
+    const logs = listResult.data
     // 新数据库中，查询到的第一条记录就是刚写入的那条。
     if (logs.items[0]?.id !== saved.id)
       throw new Error('Expected the new login event')
   }
   finally {
-    // 引数なしで監査状態を解放します。成功時の data はなく、失敗時は例外です。
-    dataOrThrow(await audit.close())
+    // 引数なしで監査状態を解放します。成功時の data はなく、失敗時はスクリプト境界で元のエラーを送出します。
+    const closeResult = await audit.close()
+    if (!closeResult.success)
+      throw new Error(closeResult.error.message, { cause: closeResult.error })
   }
 }
 finally {
-  // 監査終了後に SQLite 接続を閉じます。成功時の data はなく、失敗時は例外です。
-  dataOrThrow(await reldb.close())
+  // 監査終了後に SQLite 接続を閉じます。成功時の data はなく、失敗時はスクリプト境界で元のエラーを送出します。
+  const closeResult2 = await reldb.close()
+  if (!closeResult2.success)
+    throw new Error(closeResult2.error.message, { cause: closeResult2.error })
 }
 ```
 
@@ -57,17 +65,7 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="lifecycle"></a>
 
@@ -86,12 +84,19 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：監査サービスの準備
 
 ```ts
-// 初期化済み RelDB と既定設定で監査表を準備します。失敗は value が例外にします。
-value(await audit.init()) // undefined; audit tables are ready
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 初期化済み RelDB と既定設定で監査表を準備します。失敗は 元の失敗結果を返します。
+const initResult = await audit.init()
+if (!initResult.success)
+  return initResult
+// audit tables are ready
 // 監査表が準備できると、準備状態は true です。
 audit.isInitialized // true
-// 引数なしで監査を終了します。成功後も借用した DB は開いたままです。失敗は value が例外にします。
-value(await audit.close()) // undefined; the borrowed RelDB remains open
+// 引数なしで監査を終了します。成功後も借用した DB は開いたままです。失敗は 元の失敗結果を返します。
+const closeResult = await audit.close()
+if (!closeResult.success)
+  return closeResult
+// the borrowed RelDB remains open
 ```
 
 入力省略時は既定の監査設定です。続行前に再初期化します。借用したデータベースは閉じません。
@@ -133,27 +138,47 @@ withContext（コールバックの結果をそのまま返す）以外、出力
 業務の書込みと audit.log(input, tx) に同じ tx を使い、失敗時は呼び出し側で巻き戻します。HTTP 自動採集の失敗は完了済み業務を取り消しません。巻き戻しの失敗イベントは、元のトランザクション終了後に別途記録します。
 
 ```ts
-// ユーザー、操作、対象でログインを記録します。成功時は ID と作成時刻付きの記録、失敗は value が例外にします。
-const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// ユーザー、操作、対象でログインを記録します。成功時は ID と作成時刻付きの記録、失敗は 元の失敗結果を返します。
+const savedResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
+if (!savedResult.success)
+  return savedResult
+const saved = savedResult.data
 // saved includes its generated id and createdAt
-// demo-user の orders 読み取りを自動収集へ渡します。書き込み・条件付きスキップとも data はなく、失敗は value が例外にします。
-value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+// demo-user の orders 読み取りを自動収集へ渡します。書き込み・条件付きスキップとも data はなく、失敗は 元の失敗結果を返します。
+const captureResult = await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })
+if (!captureResult.success)
+  return captureResult
 // 信頼済みユーザー ID を非同期処理に結び付けます。コールバックのイベント ID を返し、例外も伝播します。
 const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
-  // コンテキストのユーザーで orders 更新を記録します。成功時は記録、失敗は value が例外にします。
-  const record = value(await audit.log({ action: 'update', resource: 'orders' }))
+  // コンテキストのユーザーで orders 更新を記録します。成功時は保存した記録を返し、保存失敗時は下の例外分岐でコールバックを終了します。
+  const recordResult = await audit.log({ action: 'update', resource: 'orders' })
+  // withContext は通常の戻り値を保ちます。保存失敗を成功データと扱わないよう、このコールバックでは明示して例外を伝えます。
+  if (!recordResult.success)
+    throw new Error(recordResult.error.message, { cause: recordResult.error })
+  const record = recordResult.data
   return record.id
 }) // id is the callback's returned record id
-// demo-user の登録を記録します。成功時の data はなく、失敗時は例外です。
-value(await audit.helper.register('demo-user'))
-// demo-user のログインを記録します。成功時の data はなく、失敗時は例外です。
-value(await audit.helper.login('demo-user'))
-// demo-user のログアウトを記録します。成功時の data はなく、失敗時は例外です。
-value(await audit.helper.logout('demo-user'))
-// サンプルメールでリセット要求を記録します。成功時の data はなく、失敗時は例外です。
-value(await audit.helper.passwordResetRequest('demo@example.com'))
-// demo-user のリセット完了を記録します。成功時の data はなく、失敗時は例外です。
-value(await audit.helper.passwordResetComplete('demo-user'))
+// demo-user の登録を記録します。成功時の data はなく、失敗時は元の失敗結果を返します。
+const registerResult = await audit.helper.register('demo-user')
+if (!registerResult.success)
+  return registerResult
+// demo-user のログインを記録します。成功時の data はなく、失敗時は元の失敗結果を返します。
+const loginResult = await audit.helper.login('demo-user')
+if (!loginResult.success)
+  return loginResult
+// demo-user のログアウトを記録します。成功時の data はなく、失敗時は元の失敗結果を返します。
+const logoutResult = await audit.helper.logout('demo-user')
+if (!logoutResult.success)
+  return logoutResult
+// サンプルメールでリセット要求を記録します。成功時の data はなく、失敗時は元の失敗結果を返します。
+const passwordResetRequestResult = await audit.helper.passwordResetRequest('demo@example.com')
+if (!passwordResetRequestResult.success)
+  return passwordResetRequestResult
+// demo-user のリセット完了を記録します。成功時の data はなく、失敗時は元の失敗結果を返します。
+const passwordResetCompleteResult = await audit.helper.passwordResetComplete('demo-user')
+if (!passwordResetCompleteResult.success)
+  return passwordResetCompleteResult
 // helper calls succeed with undefined; query their saved events using audit.list
 ```
 
@@ -166,10 +191,13 @@ value(await audit.helper.passwordResetComplete('demo-user'))
 信頼済みの主体、リソース名、注文 ID を渡します。成功データはなく、保存記録は audit.list で取得します。
 
 ```ts
-// demo-user による orders の order-42 更新を記録します。成功時の data はなく、失敗は value が例外にします。
-value(await audit.helper.crud({
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// demo-user による orders の order-42 更新を記録します。成功時の data はなく、失敗は 元の失敗結果を返します。
+const crudResult = await audit.helper.crud({
   userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
-})) // undefined
+})
+if (!crudResult.success)
+  return crudResult
 ```
 
 <a id="queries"></a>
@@ -190,14 +218,27 @@ value(await audit.helper.crud({
 #### 利用例：記録の照会と削除
 
 ```ts
-// login の 1 ページ目を最大 20 件取得します。結果には記録と総数があり、失敗時は例外です。
-const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
-// ユーザー ID の直近最大 20 件を配列で取得します。照会の失敗時は例外です。
-const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
-// 過去 7 日を操作別に集計して件数を返します。失敗時は例外です。
-const stats = value(await audit.getStats(7)) // action statistics for the last seven days
-// 90 日分を保持し、削除件数を返します。解放失敗時は例外です。
-const removed = value(await audit.cleanup(90)) // count of records older than 90 days
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// login の 1 ページ目を最大 20 件取得します。結果には記録と総数があり、失敗時は元の失敗結果を返します。
+const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data // items, total, pagination
+// ユーザー ID の直近最大 20 件を配列で取得します。照会の失敗時は元の失敗結果を返します。
+const recentResult = await audit.getUserRecent('demo-user', 20)
+if (!recentResult.success)
+  return recentResult
+const recent = recentResult.data // up to 20 AuditLog records
+// 過去 7 日を操作別に集計して件数を返します。失敗時は元の失敗結果を返します。
+const statsResult = await audit.getStats(7)
+if (!statsResult.success)
+  return statsResult
+const stats = statsResult.data // action statistics for the last seven days
+// 90 日分を保持し、削除件数を返します。解放失敗時は元の失敗結果を返します。
+const removedResult = await audit.cleanup(90)
+if (!removedResult.success)
+  return removedResult
+const removed = removedResult.data // count of records older than 90 days
 ```
 
 出力は保存済みの記録によります。空一覧・空統計・削除ゼロも成功です。削除の例はテスト用データベースで実行します。
@@ -228,14 +269,21 @@ const removed = value(await audit.cleanup(90)) // count of records older than 90
 非公開 Storage を注入し backup を有効にして初期化します。ID と範囲を渡し、返った key を verify に渡して整合性を確認します。
 
 ```ts
-// アーカイブ ID と UTC の範囲を渡します。成功時は内部キーとマニフェスト情報、失敗時は例外です。
-const archive = value(await audit.backup.run({
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// アーカイブ ID と UTC の範囲を渡します。成功時は内部キーとマニフェスト情報、失敗時は元の失敗結果を返します。
+const archiveResult = await audit.backup.run({
   id: 'demo-login-archive',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
-}))
-// 前の archive.key で検証します。成功時は検証済みの情報、破損や読み込み失敗時は例外です。
-const verifiedArchive = value(await audit.backup.verify(archive.key))
+})
+if (!archiveResult.success)
+  return archiveResult
+const archive = archiveResult.data
+// 前の archive.key で検証します。成功時は検証済みの情報、破損や読み込み失敗時は元の失敗結果を返します。
+const verifiedArchiveResult = await audit.backup.verify(archive.key)
+if (!verifiedArchiveResult.success)
+  return verifiedArchiveResult
+const verifiedArchive = verifiedArchiveResult.data
 // verifiedArchive identifies the same private archive; its contents passed verification.
 ```
 
@@ -254,8 +302,12 @@ const verifiedArchive = value(await audit.backup.verify(archive.key))
 #### 利用例：異常の確認と通知
 
 ```ts
-// 引数なしで設定済みの時間枠を点検し、送信・キュー登録・失敗の件数を返します。点検失敗時は例外です。
-const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 引数なしで設定済みの時間枠を点検し、送信・キュー登録・失敗の件数を返します。点検失敗時は元の失敗結果を返します。
+const reportResult = await audit.checkAlerts()
+if (!reportResult.success)
+  return reportResult
+const report = reportResult.data // AuditAlertReport for this check
 ```
 
 引数なしでは現在の規則を使います。今回の検査と通知試行の報告であり、すべて配信済みとは限りません。

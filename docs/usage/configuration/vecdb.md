@@ -17,9 +17,42 @@ type: lancedb
 path: ./data/vectors
 ```
 
+### 多个 API 实例共用 Qdrant
+
+写入 `config/_vecdb.yml`。所有实例连接同一个服务，才能查询同一批向量。API Key 由服务端私有环境提供。集合名、向量维度和距离算法仍在创建集合时指定。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: qdrant
+url: https://vectors.example.com
+apiKey: ${HAI_VECDB_APIKEY}
+```
+
+### 使用已安装 pgvector 的 PostgreSQL
+
+先由数据库管理员安装 pgvector 扩展，再让服务连接 `knowledge` 数据库。本例使用 HNSW 索引；更改此处不会自动重建已有集合的索引。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: pgvector
+host: postgres.internal
+port: 5432
+database: knowledge
+user: knowledge_app
+password: ${HAI_VECDB_PASSWORD}
+indexType: hnsw
+```
+
+### 连接独立的 Chroma 服务
+
+此例使用已有 Chroma 服务，不把向量写到当前进程的本地目录。连接后创建一个测试集合并写入、检索向量，确认所部署版本支持应用使用的接口。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: chroma
+url: http://chroma.internal:8000
+```
+
 ## 配置清单
 
-如果选 `type: qdrant`，就必须填写 `url`，其他后端的连接字段不适用。需要记录向量操作时，可以填写 `operationLog`，例如 `operationLog: { write: true }` 会打开写入日志，读取日志仍关闭。
+选 `type: qdrant` 时，省略 `url` 会连接 `http://localhost:6333`；使用远程服务时填写实际地址，其他后端的连接字段不适用。需要记录向量操作时，可以填写 `operationLog`，例如 `operationLog: { write: true }` 会打开写入日志，读取日志仍关闭。
 
 | 配置项                   | 适用条件        | 默认值/必填               | 说明                                                                                            |
 | ------------------------ | --------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |

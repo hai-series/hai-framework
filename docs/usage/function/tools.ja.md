@@ -74,17 +74,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-Tools にモジュール単位の init/close はありません。軽量機能はルート、サーバー機能は /server から読み込み、初期化済み Runner を借用します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Tools にモジュール単位の init/close はありません。軽量機能はルート、サーバー機能は /server から読み込み、初期化済み Runner を借用します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="definitions"></a>
 
@@ -109,6 +99,7 @@ function value<T>(result: HaiResult<T>): T {
 検証・認可に失敗したら handler に入りません。登録側と呼出側の認可は両方必要です。中止・期限切れは待機を止めますが、handler は signal に従う必要があり、外部処理は巻き戻しません。handler の値は data、resultHandler は既存の HaiResult を維持します。
 
 ```ts
+// import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
 import { z } from 'zod'
 // 下記の数値 Zod ルールと加算処理で sum を定義する。実行可能なツールが返り、不正な定義は TypeError。
 const tool = tools.define({
@@ -118,8 +109,11 @@ const tool = tools.define({
 })
 // 引数なしでメタデータと入力規則を定義に変換し、名前 sum を読む。変換できなければ例外。
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
-// sum に数値 2 と 3 を渡す。成功時は { total: 5 }、実行失敗は value が例外にする。
-value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// sum に数値 2 と 3 を渡す。成功時は { total: 5 }、実行失敗は 元の失敗結果を返す。
+const executeResult = await tool.execute({ a: 2, b: 3 })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
 // a に文字列 wrong を渡す。VALIDATION_FAILED が返り、加算処理は呼ばれない。
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
@@ -202,13 +196,19 @@ Tools に全体の有効化スイッチはありません。各アプリケー�
 #### 利用例：登録・検索・一括実行
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // Continue with the sum tool from the preceding scenario.
 // 信頼済みの主体 demo-user だけが実行できる空の登録器を作る。
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
 // 上で定義した sum を登録する。成功時にデータはなく、同名ツールは失敗。
-value(registry.register(tool)) // undefined
+const registerResult = registry.register(tool)
+if (!registerResult.success)
+  return registerResult
 // 空配列を渡して一括登録する。成功時にデータはなく、登録済みの sum は残る。
-value(registry.registerMany([])) // undefined; no tools added
+const registerManyResult = registry.registerMany([])
+if (!registerManyResult.success)
+  return registerManyResult
+// no tools added
 registry.size // 1
 // 登録済みの sum の有無を確認する。結果は true。
 registry.has('sum') // true
@@ -219,15 +219,26 @@ registry.getNames() // ['sum']
 // 引数なしで登録済み定義を取得し、名前だけを取り出すと ['sum']。入力規則の変換不可は例外。
 registry.getDefinitions().map(definition => definition.name) // ['sum']
 // 信頼済み demo-user で sum に 2 と 3 を渡す。成功時は { total: 5 }、権限や入力が不正なら実行されない。
-value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
-// demo-user で一件の sum(4, 1) をまとめて実行する。入力順の [{ total: 5 }] が返り、失敗は value が例外にする。
-value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+const executeResult = await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
+// demo-user で一件の sum(4, 1) をまとめて実行する。入力順の [{ total: 5 }] が返り、失敗は 元の失敗結果を返す。
+const executeAllResult = await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })
+if (!executeAllResult.success)
+  return executeAllResult
+executeAllResult.data // [{ total: 5 }]
 // 登録済みの sum を置き換える。成功時にデータはなく、検証に失敗すれば元の登録が残る。
-value(registry.replace(tool)) // undefined; same registered name
+const replaceResult = registry.replace(tool)
+if (!replaceResult.success)
+  return replaceResult
+// same registered name
 // sum を登録解除する。今回は true、もともと登録がなければ false。
 registry.unregister('sum') // true
 // 解除済みの sum を一件のバッチとして再登録する。成功時データはなく、名前の衝突は失敗。
-value(registry.registerMany([tool])) // undefined
+const registerManyResult2 = registry.registerMany([tool])
+if (!registerManyResult2.success)
+  return registerManyResult2
 // 引数なしで登録器を空にする。sum は見つからなくなり、戻り値はない。
 registry.clear() // undefined
 registry.size // 0
@@ -319,18 +330,33 @@ import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/t
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
   // 信頼済みの主体で有効な定義とグループを取得する。提出と実行時には改めて権限を確認する。
-  const catalog = value(await service.catalog(context))
+  const catalogResult = await service.catalog(context)
+  if (!catalogResult.success)
+    return catalogResult
+  const catalog = catalogResult.data
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
-  // 冪等キー付きの要求をこの主体で提出する。成功時は実行状態と完全な受付、権限や提出の失敗は value が例外にする。
-  const submitted = value(await service.submit(keyed, context))
+  // 冪等キー付きの要求をこの主体で提出する。成功時は実行状態と完全な受付、権限や提出の失敗は 元の失敗結果を返す。
+  const submittedResult = await service.submit(keyed, context)
+  if (!submittedResult.success)
+    return submittedResult
+  const submitted = submittedResult.data
   // 同じ永続キーと主体で以前の実行を探す。見つからなければ undefined で、新規タスクは作らない。
-  const recovered = value(await service.find(keyed.idempotencyKey, context))
+  const recoveredResult = await service.find(keyed.idempotencyKey, context)
+  if (!recoveredResult.success)
+    return recoveredResult
+  const recovered = recoveredResult.data
   // recovered is the same logical run, or undefined if none was accepted.
   // 完全な受付と現在の主体で状態・取得可能な出力・イベントを読む。主体が合わなければ失敗。
-  const current = value(await service.inspect(submitted.receipt, context))
+  const currentResult = await service.inspect(submitted.receipt, context)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 同じ受付でキャンセルを要求し、実際の状態を受け取る。cancelling なら停止確認はまだ終わっていない。
-  const cancelling = value(await service.cancel(submitted.receipt, context))
+  const cancellingResult = await service.cancel(submitted.receipt, context)
+  if (!cancellingResult.success)
+    return cancellingResult
+  const cancelling = cancellingResult.data
   // current/cancelling are ToolRun values; cancellation may still be in progress.
   // 同じキーと主体で終端状態を待つ。成功時は JSON 出力、キャンセルや実行失敗はエラー。
   return service.invoke(keyed, context)

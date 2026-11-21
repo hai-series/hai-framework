@@ -59,17 +59,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="client-lifecycle"></a>
 
@@ -90,16 +80,22 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备与隔离客户端
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { apiContract } from '@h-ai/api-contract'
 apiClient.isInitialized // default client readiness
 const settings = apiClient.config // redacted config or null
 // Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
 const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
-// Initialize that client for the HTTPS API and default auth options. value throws on initialization failure.
-value(await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} }))
+// Initialize that client for the HTTPS API and default auth options. Return the failed result on initialization failure.
+const initResult = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+if (!initResult.success)
+  return initResult
 try {
-  // Fetch public authentication settings from this client's server. value returns its data or throws the failed result.
-  const policy = value(await client.iam.auth.publicConfig()) // IamPublicConfig from this server
+  // Fetch public authentication settings from this client's server. Read data only on success and return the original result on failure.
+  const policyResult = await client.iam.auth.publicConfig()
+  if (!policyResult.success)
+    return policyResult
+  const policy = policyResult.data // 该服务端公开的认证配置
 }
 finally {
   // Close only the independent client used in this try block. Its local resources are released.
@@ -287,41 +283,63 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 从页面取得表单字段，通过 actions 等待凭据保存，再把结果交给 UI。下面返回的处理函数分别对应用户选择的流程，不要连续调用它们来测试真实账号。验证码开启时由 AuthPanel 求解并传递 captcha。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // Bind auth actions to the initialized API client and its current credential store.
 const actions = apiClient.createAuthActions(apiClient)
-// Load the server's public IAM settings, or null when unavailable. value throws a failed result.
-const config = value(await actions.publicConfig()) // IamPublicConfig | null
+// Load the server's public IAM settings, or null when unavailable. Return the failed result a failed result.
+const configResult = await actions.publicConfig()
+if (!configResult.success)
+  return configResult
+const config = configResult.data // 公开认证配置；未提供时为 null
 if (!config)
   throw new Error('Public authentication settings are unavailable')
 // Bind page-exit session ending only when the returned setting enables it. Keep the function that unbinds the listener.
 const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
 async function login(input: Parameters<typeof actions.login>[0]) {
-  // Submit the caller's login input. Success returns authenticated identity and tokens. value throws the preserved failure.
-  return value(await actions.login(input)) // authenticated user and tokens, or throws preserved failure
+  // Submit the caller's login input. Success returns authenticated identity and tokens. Return the failed result the preserved failure.
+  const loginResult = await actions.login(input)
+  if (!loginResult.success)
+    return loginResult
+  return loginResult.data // 已认证用户与凭据；上方失败分支返回原结果
 }
 async function register(input: Parameters<typeof actions.register>[0]) {
-  // Submit the caller's registration input. Success returns the registration result. value throws on failed registration.
-  return value(await actions.register(input)) // registration/authentication result
+  // Submit the caller's registration input. Success returns the registration result. Return the failed result on failed registration.
+  const registerResult = await actions.register(input)
+  if (!registerResult.success)
+    return registerResult
+  return registerResult.data // 注册与认证结果
 }
 async function sendCode(identifier: string) {
-  // Request an OTP for the supplied identifier. Success returns its expiry. value throws a failed request.
-  return value(await actions.sendOtp(identifier)) // expiresAt
+  // Request an OTP for the supplied identifier. Success returns its expiry. Return the failed result a failed request.
+  const sendOtpResult = await actions.sendOtp(identifier)
+  if (!sendOtpResult.success)
+    return sendOtpResult
+  return sendOtpResult.data // 验证码有效期 expiresAt
 }
 async function requestReset(identifier: string) {
-  // Request a password reset for the identifier. Success has no data. value throws if the request fails.
-  value(await actions.requestPasswordReset(identifier)) // undefined
+  // Request a password reset for the identifier. Success has no data. Return the failed result if the request fails.
+  const requestPasswordResetResult = await actions.requestPasswordReset(identifier)
+  if (!requestPasswordResetResult.success)
+    return requestPasswordResetResult
 }
 async function resetPassword(token: string, newPassword: string) {
-  // Send the supplied reset token and new password. Success completes the reset without data. value throws on failure.
-  value(await actions.confirmPasswordReset(token, newPassword)) // undefined
+  // Send the supplied reset token and new password. Success completes the reset without data. Return the failed result on failure.
+  const confirmPasswordResetResult = await actions.confirmPasswordReset(token, newPassword)
+  if (!confirmPasswordResetResult.success)
+    return confirmPasswordResetResult
 }
 async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
-  // Submit the caller's renewal input. Success confirms renewal without data. value throws on failure.
-  value(await actions.renewPassword(input)) // undefined
+  // Submit the caller's renewal input. Success confirms renewal without data. Return the failed result on failure.
+  const renewPasswordResult = await actions.renewPassword(input)
+  if (!renewPasswordResult.success)
+    return renewPasswordResult
 }
 async function confirmSensitive(password: string) {
-  // Exchange the current password for a credential scoped to users:delete. value throws on a failed reauthentication.
-  return value(await actions.reauthenticate(password, 'users:delete')) // one-operation credential
+  // Exchange the current password for a credential scoped to users:delete. Return the failed result on a failed reauthentication.
+  const reauthenticateResult = await actions.reauthenticate(password, 'users:delete')
+  if (!reauthenticateResult.success)
+    return reauthenticateResult
+  return reauthenticateResult.data // 仅用于本次敏感操作的验证凭据
 }
 // Request a CAPTCHA for login. Check success before handing the returned challenge to AuthPanel.
 const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
@@ -411,17 +429,27 @@ createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射
 #### 场景：调用认证与用户管理 API
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // Fetch the authenticated current user with no explicit input. Success supplies the profile. Missing authorization or other failures are thrown below.
 const current = await apiClient.iam.auth.currentUser()
 if (!current.success)
   throw new Error(current.error.message)
-// Fetch authorized page 1 with at most 20 users. value throws the failure instead of returning a page.
-const users = value(await apiClient.iam.users.list({ page: 1, pageSize: 20 }))
+// Fetch authorized page 1 with at most 20 users. Return the failed result the failure instead of returning a page.
+const usersResult = await apiClient.iam.users.list({ page: 1, pageSize: 20 })
+if (!usersResult.success)
+  return usersResult
+const users = usersResult.data
 // users.items is the authorized user page, not every user in the database
-// Use default role filters. Success yields the roles visible to the caller. value throws on failure.
-const roles = value(await apiClient.iam.roles.list({})) // configured roles visible to this caller
-// Use default permission filters. Success contains visible permission records. value throws on failure.
-const permissions = value(await apiClient.iam.permissions.list({})) // permitted permission records
+// Use default role filters. Success yields the roles visible to the caller. Return the failed result on failure.
+const rolesResult = await apiClient.iam.roles.list({})
+if (!rolesResult.success)
+  return rolesResult
+const roles = rolesResult.data // 当前调用方可见的角色
+// Use default permission filters. Success contains visible permission records. Return the failed result on failure.
+const permissionsResult = await apiClient.iam.permissions.list({})
+if (!permissionsResult.success)
+  return permissionsResult
+const permissions = permissionsResult.data // 当前调用方有权读取的权限记录
 ```
 
 接口清单逐条给出具体输入及成功数据；用户、角色和权限 ID 来自前一步成功响应。列表内容依真实服务与权限而定；管理接口不是浏览器登录用户自动拥有的能力。
@@ -460,11 +488,18 @@ const permissions = value(await apiClient.iam.permissions.list({})) // permitted
 #### 场景：调用文件与 AI API
 
 ```ts
-// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. value throws on failure.
-const files = value(await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. Return the failed result on failure.
+const filesResult = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
+if (!filesResult.success)
+  return filesResult
+const files = filesResult.data
 // files contains metadata and pagination for this authorized prefix
-// List the AI sessions visible to the caller using default filters. value throws on request failure.
-const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessions
+// List the AI sessions visible to the caller using default filters. Return the failed result on request failure.
+const sessionsResult = await apiClient.ai.sessions.list({})
+if (!sessionsResult.success)
+  return sessionsResult
+const sessions = sessionsResult.data // 当前调用方可见的 AI 会话
 ```
 
 逐接口示例使用 reports/ 对象和成功响应中的会话 ID；删除会产生实际效果，签名结果包含 URL、对象键和期限。AI 文本由模型返回，示例不承诺固定答案。
@@ -540,18 +575,23 @@ finally {
 服务端必须注入受管 serverKeyRing 和共享 registry；客户端只接收 serverKeyId/公钥，并在密文请求带回版本。密钥环/私钥不进入客户端配置。旧版本撤销后，销毁 transport 会话并重新协商；不要自动重放非幂等业务。
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
-// Initialize crypto with defaults for the transport handshake. value throws if initialization fails.
-value(await crypto.init())
+// Initialize crypto with defaults for the transport handshake. Return the failed result if initialization fails.
+const initResult = await crypto.init()
+if (!initResult.success)
+  return initResult
 
-// Configure the HTTPS client with the initialized crypto transport. value throws on a failed initialization.
-value(await apiClient.init({
+// Configure the HTTPS client with the initialized crypto transport. Return the failed result on a failed initialization.
+const initResult2 = await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
   transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
-}))
+})
+if (!initResult2.success)
+  return initResult2
 
 // Close the API client and its transport before releasing its crypto dependency.
 await apiClient.close()

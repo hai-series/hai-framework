@@ -48,17 +48,8 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返し、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="lifecycle"></a>
 
@@ -117,11 +108,18 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：対話・構造化出力・モデル
 
 ```ts
-// 注文状態の質問を既定モデルに送る。回答は completion の choices に入り、上流失敗は value が例外にする。
-const reply = value(await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 注文状態の質問を既定モデルに送る。回答は completion の choices に入り、上流失敗時は元の結果を返す。
+const replyResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] })
+if (!replyResult.success)
+  return replyResult
+const reply = replyResult.data
 const text = reply.choices[0]?.message.content // model-generated text, not a fixed literal
-// pending の意味を既定モデルに尋ねる。成功時は回答文字列、上流失敗は value が例外にする。
-const answer = value(await ai.llm.ask('What does pending mean?')) // string answer
+// pending の意味を既定モデルに尋ねる。成功時は回答文字列、上流失敗時は元の結果を返す。
+const answerResult = await ai.llm.ask('What does pending mean?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data // string answer
 // Hello を既定モデルに送り completion の差分を順に読む。接続や生成の失敗はストリームから例外になる。
 for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] })) {
   const delta = chunk.choices[0]?.delta?.content // incremental text when present
@@ -130,8 +128,11 @@ for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content
 for await (const delta of ai.llm.askStream('Hello')) {
   // consume each returned text fragment; handle stream errors outside the loop
 }
-// 引数なしで現在のモデル一覧を取得する。取得失敗は value が例外にする。
-const models = value(await ai.llm.listModels()) // configured model summaries
+// 引数なしで現在のモデル一覧を取得する。取得失敗時は元の結果を返す。
+const modelsResult = await ai.llm.listModels()
+if (!modelsResult.success)
+  return modelsResult
+const models = modelsResult.data // configured model summaries
 ```
 
 具体的な質問を入力しても文言はモデル依存です。構造化出力は以下の Schema で検証し、モデル管理は同じ名前、履歴は確認済み主体で扱います。
@@ -146,15 +147,29 @@ const models = value(await ai.llm.listModels()) // configured model summaries
 ```ts
 async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.register>[0]) {
   // 渡された言語モデル定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.llm.models.register(definition))
+  const createdResult = await ai.llm.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB の言語モデル一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.llm.models.list())
+  const listedResult = await ai.llm.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID で言語モデル定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.llm.models.get(definition.id))
+  const currentResult = await ai.llm.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID の言語モデル定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.llm.models.update(definition, current.version))
+  const updatedResult = await ai.llm.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例の言語モデル項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.llm.models.remove(definition.id, updated.version))
+  const removeResult = await ai.llm.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -245,12 +260,22 @@ const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role:
 #### 利用例：テキストのベクトル化
 
 ```ts
-// 指定されたインストール案内を一つの数値ベクトルに変換する。上流失敗は value が例外にする。
-const one = value(await ai.embedding.embedText('Order installation guide')) // number[]
-// Install と Refund をまとめてベクトル化し、対応する二つのベクトルを返す。上流失敗は value が例外にする。
-const batch = value(await ai.embedding.embedBatch(['Install', 'Refund'])) // vectors in input order
-// 同じ入力で完全な埋め込み応答を得る。各項目にベクトルと位置が入り、要求失敗は value が例外にする。
-const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] })) // model, data, usage
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 指定されたインストール案内を一つの数値ベクトルに変換する。上流失敗時は元の結果を返す。
+const oneResult = await ai.embedding.embedText('Order installation guide')
+if (!oneResult.success)
+  return oneResult
+const one = oneResult.data // number[]
+// Install と Refund をまとめてベクトル化し、対応する二つのベクトルを返す。上流失敗時は元の結果を返す。
+const batchResult = await ai.embedding.embedBatch(['Install', 'Refund'])
+if (!batchResult.success)
+  return batchResult
+const batch = batchResult.data // vectors in input order
+// 同じ入力で完全な埋め込み応答を得る。各項目にベクトルと位置が入り、要求失敗時は元の結果を返す。
+const detailedResult = await ai.embedding.embed({ input: ['Install', 'Refund'] })
+if (!detailedResult.success)
+  return detailedResult
+const detailed = detailedResult.data // model, data, usage
 ```
 
 一つまたは二つの文字列を入力します。数値と次元はモデル依存で、詳細応答の index 0 が Install に対応します。
@@ -295,15 +320,29 @@ tool/resource/prompt を登録して各結果を取得します。遠隔サー�
 ```ts
 async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers.register>[0]) {
   // 渡されたMCP サーバー定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.mcp.servers.register(definition))
+  const createdResult = await ai.mcp.servers.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB のMCP サーバー一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.mcp.servers.list())
+  const listedResult = await ai.mcp.servers.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID でMCP サーバー定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.mcp.servers.get(definition.id))
+  const currentResult = await ai.mcp.servers.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID のMCP サーバー定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.mcp.servers.update(definition, current.version))
+  const updatedResult = await ai.mcp.servers.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例のMCP サーバー項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.mcp.servers.remove(definition.id, updated.version))
+  const removeResult = await ai.mcp.servers.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -335,22 +374,36 @@ async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers
 埋め込み次元と一致する登録済み manual 集合を準備して docs を登録。スコアはバックエンド依存で、取得元の削除は文書を消しません。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // manual ベクトルコレクションを参照する docs を登録する。成功時データなし、ID 重複は失敗。
-value(await ai.retrieval.addSource({ id: 'docs', collection: 'manual' }))
+const addSourceResult = await ai.retrieval.addSource({ id: 'docs', collection: 'manual' })
+if (!addSourceResult.success)
+  return addSourceResult
 try {
   // 引数なしで検索ソースの配列を読む。今は docs が含まれる。
   const sources = await ai.retrieval.listSources() // direct RetrievalSource[]
-  // docs に絞って deployment の候補を最大五件取得する。引用を含み、ソースや検索の失敗は value が例外にする。
-  const found = value(await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 }))
-  // 二つの文書を deployment との関連度で並べ替える。順位とスコアが返り、失敗は value が例外にする。
-  const ranked = value(await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] }))
+  // docs に絞って deployment の候補を最大五件取得する。引用を含み、ソースや検索の失敗時は元の結果を返す。
+  const foundResult = await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 })
+  if (!foundResult.success)
+    return foundResult
+  const found = foundResult.data
+  // 二つの文書を deployment との関連度で並べ替える。順位とスコアが返り、失敗時は元の結果を返す。
+  const rankedResult = await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] })
+  if (!rankedResult.success)
+    return rankedResult
+  const ranked = rankedResult.data
   // 同じ二つのテキストを並べ替え、最上位の一件だけを返す。
-  const texts = value(await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1))
+  const textsResult = await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1)
+  if (!textsResult.success)
+    return textsResult
+  const texts = textsResult.data
   // found has source candidates; ranked/texts carry original indexes and relevance scores.
 }
 finally {
   // この例で登録した docs を削除する。成功時データなし、ソースがなければ失敗。
-  value(await ai.retrieval.removeSource('docs'))
+  const removeSourceResult = await ai.retrieval.removeSource('docs')
+  if (!removeSourceResult.success)
+    return removeSourceResult
 }
 ```
 
@@ -362,15 +415,29 @@ finally {
 ```ts
 async function maintain_retrieval_sources(definition: Parameters<typeof ai.retrieval.sources.register>[0]) {
   // 渡された検索ソース定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.retrieval.sources.register(definition))
+  const createdResult = await ai.retrieval.sources.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB の検索ソース一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.retrieval.sources.list())
+  const listedResult = await ai.retrieval.sources.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID で検索ソース定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.retrieval.sources.get(definition.id))
+  const currentResult = await ai.retrieval.sources.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID の検索ソース定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.retrieval.sources.update(definition, current.version))
+  const updatedResult = await ai.retrieval.sources.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例の検索ソース項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.retrieval.sources.remove(definition.id, updated.version))
+  const removeResult = await ai.retrieval.sources.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -391,8 +458,12 @@ async function maintain_retrieval_sources(definition: Parameters<typeof ai.retri
 #### 利用例：出典付きで回答する
 
 ```ts
-// docs からデプロイ情報を検索してモデルに渡す。成功時は回答・文脈・引用、検索・生成失敗は value が例外にする。
-const answer = value(await ai.rag.query('How do I deploy?', { sources: ['docs'] }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// docs からデプロイ情報を検索してモデルに渡す。成功時は回答・文脈・引用、検索・生成失敗時は元の結果を返す。
+const answerResult = await ai.rag.query('How do I deploy?', { sources: ['docs'] })
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // answer contains answer, context, citations, query and model
 // 同じ質問を docs でストリーム検索し、検索文脈、テキスト差分、終了イベントを順に受け取る。
 for await (const event of ai.rag.queryStream('How do I deploy?', { sources: ['docs'] })) {
@@ -436,24 +507,51 @@ docs を登録・許可済みにします。文言は変わり、引用は実際
 公開が成功して初めて現在の検索対象になります。旧データの削除が失敗した場合は cleanupPending を repair で補います。削除では先に可視性を取り消します。残存する古いチャンクを現在の資料として扱いません。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // 引数なしで既定の知識コレクションと版の記録を作る。成功時データなし、準備失敗時は取り込まない。
-value(await ai.knowledge.setup())
+const setupResult = await ai.knowledge.setup()
+if (!setupResult.success)
+  return setupResult
 // 設定変更後の再起動手順を demo-intro として取り込む。成功時は公開版、分割情報、cleanupPending が返る。
-const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
-// 既定コレクションで再起動条件を探し、該当部分と引用を得る。検索失敗は value が例外にする。
-const matches = value(await ai.knowledge.retrieve('When should the service restart?'))
-// 同じ再起動の質問に検索結果を用いて回答する。成功時は回答と出典、失敗は value が例外にする。
-const answer = value(await ai.knowledge.ask('When should the service restart?'))
+const publishedResult = await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' })
+if (!publishedResult.success)
+  return publishedResult
+const published = publishedResult.data
+// 既定コレクションで再起動条件を探し、該当部分と引用を得る。検索失敗時は元の結果を返す。
+const matchesResult = await ai.knowledge.retrieve('When should the service restart?')
+if (!matchesResult.success)
+  return matchesResult
+const matches = matchesResult.data
+// 同じ再起動の質問に検索結果を用いて回答する。成功時は回答と出典、失敗時は元の結果を返す。
+const answerResult = await ai.knowledge.ask('When should the service restart?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // 既定コレクションの表示可能な文書を読む。demo-intro が含まれる。
-const documents = value(await ai.knowledge.listDocuments())
+const documentsResult = await ai.knowledge.listDocuments()
+if (!documentsResult.success)
+  return documentsResult
+const documents = documentsResult.data
 // 引数なしで抽出した実体を列挙する。項目は実際の抽出結果による。
-const entities = value(await ai.knowledge.listEntities())
+const entitiesResult = await ai.knowledge.listEntities()
+if (!entitiesResult.success)
+  return entitiesResult
+const entities = entitiesResult.data
 // 実体 service に関連する文書を探す。該当なしなら一覧は空。
-const related = value(await ai.knowledge.findByEntity('service'))
+const relatedResult = await ai.knowledge.findByEntity('service')
+if (!relatedResult.success)
+  return relatedResult
+const related = relatedResult.data
 // 取り込み時の ID で公開版を削除する。成功時データなし、後処理の失敗を扱う。
-value(await ai.knowledge.removeDocument('demo-intro')) // no longer visible to retrieval
+const removeDocumentResult = await ai.knowledge.removeDocument('demo-intro')
+if (!removeDocumentResult.success)
+  return removeDocumentResult
+// no longer visible to retrieval
 // オフセット 0 から最大 100 件の期限切れ一時データや古いベクトルを修復する。修復の進み具合が返る。
-const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // cleanup progress
+const repairedResult = await ai.knowledge.repair({ offset: 0, limit: 100 })
+if (!repairedResult.success)
+  return repairedResult
+const repaired = repairedResult.data // cleanup progress
 ```
 
 独立したテスト集合を使います。版・候補・回答・修復進捗は実環境によります。以下でファイル・一括投入・進捗・エンティティ・集合削除も扱います。
@@ -491,28 +589,56 @@ const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // 
 async function rememberPreference(objectId: string) {
   // 信頼済み主体と demo-preference トピックを記憶インスタンスに結び付け、以降の操作に引き継ぐ。
   const memory = ai.memory.scoped({ objectId, scope: { topicId: 'demo-preference' } })
-  // 結び付けた範囲に中国語応答の好みを保存する。成功時は項目と ID、保存・埋め込み失敗は value が例外にする。
-  const saved = value(await memory.add({ content: 'Prefers Chinese replies', type: 'preference' }))
+  // 結び付けた範囲に中国語応答の好みを保存する。成功時は項目と ID、保存・埋め込み失敗時は元の結果を返す。
+  const savedResult = await memory.add({ content: 'Prefers Chinese replies', type: 'preference' })
+  if (!savedResult.success)
+    return savedResult
+  const saved = savedResult.data
   const access = { objectId, scope: { topicId: 'demo-preference' } }
   // 保存済み ID を同じ主体とトピックで読む。未登録や範囲外は失敗。
-  value(await ai.memory.get(saved.id, access))
-  // 範囲内の好みを日本語応答に変更する。成功時は再計算した埋め込みを持つ項目、失敗は value が例外にする。
-  value(await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access))
+  const getResult = await ai.memory.get(saved.id, access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
+  // 範囲内の好みを日本語応答に変更する。成功時は再計算した埋め込みを持つ項目、失敗時は元の結果を返す。
+  const updateResult = await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // 結び付けた範囲で language preference に関連する記憶を取得する。該当なしは空配列。
-  const recalled = value(await memory.recall('language preference'))
+  const recalledResult = await memory.recall('language preference')
+  if (!recalledResult.success)
+    return recalledResult
+  const recalled = recalledResult.data
   const messages = [{ role: 'user' as const, content: 'Hello' }]
   // 同じ主体とトピックの関連記憶を Hello のメッセージに加えた、新しい配列を返す。
-  const enriched = value(await ai.memory.injectMemories(messages, access))
+  const enrichedResult = await ai.memory.injectMemories(messages, access)
+  if (!enrichedResult.success)
+    return enrichedResult
+  const enriched = enrichedResult.data
   // Hello のメッセージを分析して抽出した記憶を同じ範囲に保存する。結果が空配列の場合もある。
-  const extracted = value(await ai.memory.extract(messages, access))
-  // 同じ主体・トピックの記憶を一覧にする。読み取り失敗は value が例外にする。
-  const all = value(await ai.memory.list(access))
+  const extractedResult = await ai.memory.extract(messages, access)
+  if (!extractedResult.success)
+    return extractedResult
+  const extracted = extractedResult.data
+  // 同じ主体・トピックの記憶を一覧にする。読み取り失敗時は元の結果を返す。
+  const allResult = await ai.memory.list(access)
+  if (!allResult.success)
+    return allResult
+  const all = allResult.data
   // 範囲内の項目を先頭から最大 20 件、ページ情報とともに取得する。
-  const page = value(await ai.memory.listPage({ ...access, offset: 0, limit: 20 }))
+  const pageResult = await ai.memory.listPage({ ...access, offset: 0, limit: 20 })
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data
   // 元の好みを ID と同じ範囲で削除する。成功時データなし、範囲の不一致は失敗。
-  value(await ai.memory.remove(saved.id, access))
+  const removeResult = await ai.memory.remove(saved.id, access)
+  if (!removeResult.success)
+    return removeResult
   // 結び付けた主体とトピック内に残る preference だけを消す。成功時データなし。
-  value(await memory.clear({ types: ['preference'] }))
+  const clearResult = await memory.clear({ types: ['preference'] })
+  if (!clearResult.success)
+    return clearResult
   return { recalled, enriched, extracted, all, page }
 }
 ```
@@ -541,18 +667,35 @@ async function rememberPreference(objectId: string) {
 ```ts
 async function usePersona(objectId: string) {
   const access = { objectId }
-  // 現在の主体に説明用プロンプト付き demo-tutor を保存する。成功時は完全なプロファイル、保存失敗は value が例外にする。
-  value(await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' }))
-  // 同じ主体の範囲からこの ID のプロファイルを取得する。存在しなければ value が例外にする。
-  value(await ai.persona.get('demo-tutor', access))
+  // 現在の主体に説明用プロンプト付き demo-tutor を保存する。成功時は完全なプロファイル、保存失敗時は元の結果を返す。
+  const saveResult = await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' })
+  if (!saveResult.success)
+    return saveResult
+  saveResult.data
+  // 同じ主体の範囲からこの ID のプロファイルを取得する。存在しなければ元の失敗結果を返す。
+  const getResult = await ai.persona.get('demo-tutor', access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
   // 同じ主体の demo-tutor の名前だけを Order tutor に変え、更新済みプロファイルを返す。
-  value(await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access))
+  const updateResult = await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // この主体のプロファイルを列挙する。更新した項目が含まれる。
-  const profiles = value(await ai.persona.list(access))
+  const profilesResult = await ai.persona.list(access)
+  if (!profilesResult.success)
+    return profilesResult
+  const profiles = profilesResult.data
   // この主体と ID のシステムプロンプトを組み立てる。成功時は文字列、プロファイルがなければ失敗。
-  const prompt = value(await ai.persona.compose('demo-tutor', access))
+  const promptResult = await ai.persona.compose('demo-tutor', access)
+  if (!promptResult.success)
+    return promptResult
+  const prompt = promptResult.data
   // この主体に作った例のプロファイルを削除する。成功時データなし。
-  value(await ai.persona.remove('demo-tutor', access))
+  const removeResult = await ai.persona.remove('demo-tutor', access)
+  if (!removeResult.success)
+    return removeResult
   return { profiles, prompt }
 }
 ```
@@ -648,8 +791,12 @@ Node はインストール済みの PDF と DOCX のパーサーを Worker で�
 #### 利用例：本文とファイルの解析
 
 ```ts
-// 指定した注文状態の平文を共通文書の結果へ変換する。解析失敗は value が例外にする。
-const plain = value(await ai.file.parseText('Order status: pending.')) // parsed text result
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 指定した注文状態の平文を共通文書の結果へ変換する。解析失敗時は元の結果を返す。
+const plainResult = await ai.file.parseText('Order status: pending.')
+if (!plainResult.success)
+  return plainResult
+const plain = plainResult.data // parsed text result
 ```
 
 parse はファイル、parseText は文字列を受け取り、後の分割・索引用の本文とメタデータを返します。未対応・読込失敗なら投入を止めます。
@@ -710,15 +857,29 @@ ASR は実音声、TTS は本文から文字起こし・形式付き音声を得
 ```ts
 async function maintain_audio_models(definition: Parameters<typeof ai.audio.models.register>[0]) {
   // 渡された音声モデル定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.audio.models.register(definition))
+  const createdResult = await ai.audio.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB の音声モデル一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.audio.models.list())
+  const listedResult = await ai.audio.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID で音声モデル定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.audio.models.get(definition.id))
+  const currentResult = await ai.audio.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID の音声モデル定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.audio.models.update(definition, current.version))
+  const updatedResult = await ai.audio.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例の音声モデル項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.audio.models.remove(definition.id, updated.version))
+  const removeResult = await ai.audio.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -754,15 +915,29 @@ generate は具体的な prompt から画像とモデル情報を返します。
 ```ts
 async function maintain_image_models(definition: Parameters<typeof ai.image.models.register>[0]) {
   // 渡された画像モデル定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.image.models.register(definition))
+  const createdResult = await ai.image.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB の画像モデル一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.image.models.list())
+  const listedResult = await ai.image.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID で画像モデル定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.image.models.get(definition.id))
+  const currentResult = await ai.image.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID の画像モデル定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.image.models.update(definition, current.version))
+  const updatedResult = await ai.image.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例の画像モデル項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.image.models.remove(definition.id, updated.version))
+  const removeResult = await ai.image.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -879,15 +1054,29 @@ Base64 の値は `hello` と改行です。プレビューは確定したコミ�
 ```ts
 async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.register>[0]) {
   // 渡されたACP エージェント定義を DB に保存して版を取得する。ID 重複や設定由来 ID は失敗。
-  const created = value(await ai.acp.agents.register(definition))
+  const createdResult = await ai.acp.agents.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 引数なしで設定と DB のACP エージェント一覧を読む。同一 ID は設定優先で、今登録した項目も含まれる。
-  const listed = value(await ai.acp.agents.list())
+  const listedResult = await ai.acp.agents.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 保存した ID でACP エージェント定義と DB の版を読む。該当 ID がなければ失敗。
-  const current = value(await ai.acp.agents.get(definition.id))
+  const currentResult = await ai.acp.agents.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 読み取った版を条件に同じ ID のACP エージェント定義を置き換え、新しい版を受け取る。古い版や設定由来の項目は失敗。
-  const updated = value(await ai.acp.agents.update(definition, current.version))
+  const updatedResult = await ai.acp.agents.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 最新の版を条件に例のACP エージェント項目を削除する。成功時データなし、競合や設定項目なら失敗。
-  value(await ai.acp.agents.remove(definition.id, updated.version))
+  const removeResult = await ai.acp.agents.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```

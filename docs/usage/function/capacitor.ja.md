@@ -46,17 +46,7 @@ if (failures.length)
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="platform"></a>
 
@@ -79,19 +69,28 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：ネイティブ環境の準備と端末情報
 
 ```ts
-// Initialize this platform with defaults. value returns undefined on success and throws the framework error on failure.
-value(await capacitor.init())
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// Initialize this platform with defaults. Success has no data; return the original failed result on failure.
+const initResult = await capacitor.init()
+if (!initResult.success)
+  return initResult
 // Read the detected platform without arguments. The result is web, ios, or android.
 const platform = capacitor.getPlatform() // 'web', 'ios' or 'android'
 // Check the detected platform without arguments. true means an iOS or Android native shell.
 const native = capacitor.isNative() // true on the native shell
 capacitor.isInitialized // true
-// Read platform, OS, and model from the active device. value throws if the device operation fails.
-const info = value(await capacitor.device.getInfo()) // actual platform, OS and model
+// Read platform, OS, and model from the active device. Return the failed result if the device operation fails.
+const infoResult = await capacitor.device.getInfo()
+if (!infoResult.success)
+  return infoResult
+const info = infoResult.data // actual platform, OS and model
 // Ask the current app for version and build. Check success because native application data may be unavailable on web.
 const version = await capacitor.device.getAppVersion() // check success; web may not supply native app data
-// Close the current instance and release listeners. value throws if cleanup fails.
-value(await capacitor.close()) // undefined; listeners released
+// Close the current instance and release listeners. Return the failed result if cleanup fails.
+const closeResult = await capacitor.close()
+if (!closeResult.success)
+  return closeResult
+// listeners released
 ```
 
 引数なしです。端末情報は実プラグイン由来なので機種や版を固定しません。他の例でも初期化と対応確認が必要です。
@@ -163,17 +162,27 @@ if (photo.success) {
 30 秒の制限は許可・監視の設定・登録結果の待機を含みます。拒否・時間切れ・中止・close では遅れて届くハンドルも解放します。登録と監視の解放が成功してから実際の token を返します。解放失敗も失敗となり、close で再試行できます。サーバーで本人との関連付けはアプリが行います。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 const received: unknown[] = []
 const actions: unknown[] = []
-// Register this device for push with default settings. Success contains the platform token. value throws on registration failure.
-const registration = value(await capacitor.push.register()) // { token: '<platform token>' }
-// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. value throws on setup failure.
-const stop = value(await capacitor.push.listen({
+// Register this device for push with default settings. Success contains the platform token. Return the failed result on registration failure.
+const registrationResult = await capacitor.push.register()
+if (!registrationResult.success)
+  return registrationResult
+const registration = registrationResult.data // { token: '<platform token>' }
+// Append delivered notifications and actions to the given arrays. Success returns an async listener cleanup function. Return the failed result on setup failure.
+const stopResult = await capacitor.push.listen({
   onReceived: notification => { received.push(notification) },
   onActionPerformed: action => { actions.push(action) },
-}))
-// Remove the listeners installed above. Success has no data. value throws on cleanup failure.
-value(await stop()) // undefined; registered listeners removed
+})
+if (!stopResult.success)
+  return stopResult
+const stop = stopResult.data
+// Remove the listeners installed above. Success has no data. Return the failed result on cleanup failure.
+const stopResult2 = await stop()
+if (!stopResult2.success)
+  return stopResult2
+// registered listeners removed
 ```
 
 アプリの二つの処理関数に実際の通知が渡されます。トークンはログに出さず、Web で未対応なら失敗を扱います。
@@ -197,12 +206,19 @@ value(await stop()) // undefined; registered listeners removed
 #### 利用例：ステータスバーの制御
 
 ```ts
-// Apply dark status text and enable overlay on the active native view. value surfaces unsupported platform or plugin errors.
-value(await capacitor.statusBar.configure({ style: 'dark', overlay: true }))
-// Hide the status bar for the active app. value throws if the plugin operation fails.
-value(await capacitor.statusBar.hide())
-// Show the status bar again. value throws if restoration fails.
-value(await capacitor.statusBar.show())
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// Apply dark status text and enable overlay on the active native view. Return the failed result for unsupported platform or plugin errors.
+const configureResult = await capacitor.statusBar.configure({ style: 'dark', overlay: true })
+if (!configureResult.success)
+  return configureResult
+// Hide the status bar for the active app. Return the failed result if the plugin operation fails.
+const hideResult = await capacitor.statusBar.hide()
+if (!hideResult.success)
+  return hideResult
+// Show the status bar again. Return the failed result if restoration fails.
+const showResult = await capacitor.statusBar.show()
+if (!showResult.success)
+  return showResult
 ```
 
 成功時に業務データはなく、実端末のバーで確認します。ブラウザでネイティブ動作を証明しません。
@@ -229,21 +245,39 @@ value(await capacitor.statusBar.show())
 #### 利用例：一般的な設定の保存
 
 ```ts
+// import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from '@h-ai/capacitor'
-// Write dark at demo-theme through the initialized Preferences API. value throws on a failed write.
-value(await capacitor.preferences.set('demo-theme', 'dark'))
-// Read demo-theme through Preferences. It returns dark, or null if the key is gone. value throws on failure.
-value(await capacitor.preferences.get('demo-theme')) // 'dark'
-// Remove demo-theme through Preferences. Success has no data. value surfaces storage errors.
-value(await capacitor.preferences.remove('demo-theme'))
-// Use the standalone helper to write light at demo-theme. value surfaces storage errors.
-value(await safeSetPreference('demo-theme', 'light'))
-// Read the same key with the standalone helper. Expect light. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // 'light'
+// Write dark at demo-theme through the initialized Preferences API. Return the failed result on a failed write.
+const setResult = await capacitor.preferences.set('demo-theme', 'dark')
+if (!setResult.success)
+  return setResult
+// Read demo-theme through Preferences. It returns dark, or null if the key is gone. Return the failed result on failure.
+const getResult = await capacitor.preferences.get('demo-theme')
+if (!getResult.success)
+  return getResult
+getResult.data // 'dark'
+// Remove demo-theme through Preferences. Success has no data. Return the failed result for storage errors.
+const removeResult = await capacitor.preferences.remove('demo-theme')
+if (!removeResult.success)
+  return removeResult
+// Use the standalone helper to write light at demo-theme. Return the failed result for storage errors.
+const safeSetPreferenceResult = await safeSetPreference('demo-theme', 'light')
+if (!safeSetPreferenceResult.success)
+  return safeSetPreferenceResult
+// Read the same key with the standalone helper. Expect light. Return the failed result on a failed read.
+const safeGetPreferenceResult = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult.success)
+  return safeGetPreferenceResult
+safeGetPreferenceResult.data // 'light'
 // Delete demo-theme with the standalone helper. The returned result is void on success.
-value(await safeRemovePreference('demo-theme'))
-// Read demo-theme after deletion. Expect null on success. value throws on a failed read.
-value(await safeGetPreference('demo-theme')) // null
+const safeRemovePreferenceResult = await safeRemovePreference('demo-theme')
+if (!safeRemovePreferenceResult.success)
+  return safeRemovePreferenceResult
+// Read demo-theme after deletion. Expect null on success. Return the failed result on a failed read.
+const safeGetPreferenceResult2 = await safeGetPreference('demo-theme')
+if (!safeGetPreferenceResult2.success)
+  return safeGetPreferenceResult2
+safeGetPreferenceResult2.data // null
 ```
 
 値は文字列です。set/remove は業務データなし、get は文字列または null です。

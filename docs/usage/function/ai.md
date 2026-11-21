@@ -52,17 +52,8 @@ finally {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`，失败时返回原结果，成功后再读取 `data`。未给出函数声明的片段位于应用的异步业务函数内。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="lifecycle"></a>
 
@@ -264,11 +255,18 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 #### 场景：对话、结构化结果与模型
 
 ```ts
-// 把订单状态问题送到默认模型，返回完整 completion，正文位于 choices；模型错误由 value 抛出。
-const reply = value(await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 把订单状态问题送到默认模型，返回完整 completion，正文位于 choices；模型错误时返回原失败结果。
+const replyResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'Explain order status in one sentence.' }] })
+if (!replyResult.success)
+  return replyResult
+const reply = replyResult.data
 const text = reply.choices[0]?.message.content // model-generated text, not a fixed literal
-// 把 pending 的问题交给默认模型，直接得到回答字符串，上游失败由 value 抛出。
-const answer = value(await ai.llm.ask('What does pending mean?')) // string answer
+// 把 pending 的问题交给默认模型，直接得到回答字符串，上游失败时返回原失败结果。
+const answerResult = await ai.llm.ask('What does pending mean?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data // string answer
 // 以 Hello 启动默认模型的流式请求，迭代得到 completion 增量块；连接或生成错误从流抛出。
 for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content: 'Hello' }] })) {
   const delta = chunk.choices[0]?.delta?.content // incremental text when present
@@ -277,8 +275,11 @@ for await (const chunk of ai.llm.chatStream({ messages: [{ role: 'user', content
 for await (const delta of ai.llm.askStream('Hello')) {
   // consume each returned text fragment; handle stream errors outside the loop
 }
-// 无参读取当前模型目录，返回模型列表；目录读取失败由 value 抛出。
-const models = value(await ai.llm.listModels()) // configured model summaries
+// 无参读取当前模型目录，返回模型列表；目录读取失败时返回原失败结果。
+const modelsResult = await ai.llm.listModels()
+if (!modelsResult.success)
+  return modelsResult
+const models = modelsResult.data // configured model summaries
 ```
 
 输入具体问题；输出文字由模型决定。generateObject 下面给出本地 Schema 校验示例；模型资源的 list/get/register/update/remove 用同一名称串联，历史使用服务端确认的会话与主体。
@@ -355,15 +356,29 @@ if (result.success)
 ```ts
 async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.register>[0]) {
   // 将调用方的完整语言模型定义保存为数据库条目，取得语言模型版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.llm.models.register(definition))
+  const createdResult = await ai.llm.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的语言模型目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.llm.models.list())
+  const listedResult = await ai.llm.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回语言模型定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.llm.models.get(definition.id))
+  const currentResult = await ai.llm.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的语言模型定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.llm.models.update(definition, current.version))
+  const updatedResult = await ai.llm.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例语言模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.llm.models.remove(definition.id, updated.version))
+  const removeResult = await ai.llm.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -496,12 +511,22 @@ const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role:
 #### 场景：生成文本向量
 
 ```ts
-// 将指定订单安装文字送给嵌入模型，data 是单个数值向量；上游失败由 value 抛出。
-const one = value(await ai.embedding.embedText('Order installation guide')) // number[]
-// 批量嵌入 Install 与 Refund，返回对应的两个向量，模型失败由 value 抛出。
-const batch = value(await ai.embedding.embedBatch(['Install', 'Refund'])) // vectors in input order
-// 用相同文本读取完整嵌入响应，其中 data 项包含向量与索引；请求失败由 value 抛出。
-const detailed = value(await ai.embedding.embed({ input: ['Install', 'Refund'] })) // model, data, usage
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 将指定订单安装文字送给嵌入模型，data 是单个数值向量；上游失败时返回原失败结果。
+const oneResult = await ai.embedding.embedText('Order installation guide')
+if (!oneResult.success)
+  return oneResult
+const one = oneResult.data // number[]
+// 批量嵌入 Install 与 Refund，返回对应的两个向量，模型失败时返回原失败结果。
+const batchResult = await ai.embedding.embedBatch(['Install', 'Refund'])
+if (!batchResult.success)
+  return batchResult
+const batch = batchResult.data // vectors in input order
+// 用相同文本读取完整嵌入响应，其中 data 项包含向量与索引；请求失败时返回原失败结果。
+const detailedResult = await ai.embedding.embed({ input: ['Install', 'Refund'] })
+if (!detailedResult.success)
+  return detailedResult
+const detailed = detailedResult.data // model, data, usage
 ```
 
 输入分别为单条和两条文本。向量数值与维度取决于模型，详细响应中 index=0 对应 Install；不得伪造可复用的固定向量。
@@ -660,15 +685,29 @@ async function bindManual(broker: ReturnType<typeof mountTools>['broker'], princ
 ```ts
 async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers.register>[0]) {
   // 将调用方的完整MCP 服务定义保存为数据库条目，取得MCP 服务版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.mcp.servers.register(definition))
+  const createdResult = await ai.mcp.servers.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的MCP 服务目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.mcp.servers.list())
+  const listedResult = await ai.mcp.servers.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回MCP 服务定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.mcp.servers.get(definition.id))
+  const currentResult = await ai.mcp.servers.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的MCP 服务定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.mcp.servers.update(definition, current.version))
+  const updatedResult = await ai.mcp.servers.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例MCP 服务条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.mcp.servers.remove(definition.id, updated.version))
+  const removeResult = await ai.mcp.servers.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -700,22 +739,36 @@ async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers
 先准备与 embedding 维度匹配并已入库的 manual 集合，再登记 docs。结果分数由实际后端决定；移除来源不删除文档。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // 登记指向 manual 向量集合的 docs 源，成功无数据；重复 ID 会失败。
-value(await ai.retrieval.addSource({ id: 'docs', collection: 'manual' }))
+const addSourceResult = await ai.retrieval.addSource({ id: 'docs', collection: 'manual' })
+if (!addSourceResult.success)
+  return addSourceResult
 try {
   // 无参读取当前检索源数组，本例已含 docs；这里直接返回数组。
   const sources = await ai.retrieval.listSources() // direct RetrievalSource[]
-  // 只在 docs 查询 deployment 的最多五个候选，结果含匹配项和引用；来源不可用或检索失败由 value 抛出。
-  const found = value(await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 }))
-  // 用 deployment 作为相关性查询重排两篇固定候选，返回排序项及分数；模型失败由 value 抛出。
-  const ranked = value(await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] }))
+  // 只在 docs 查询 deployment 的最多五个候选，结果含匹配项和引用；来源不可用或检索失败时返回原失败结果。
+  const foundResult = await ai.retrieval.retrieve({ query: 'deployment', sources: ['docs'], topK: 5 })
+  if (!foundResult.success)
+    return foundResult
+  const found = foundResult.data
+  // 用 deployment 作为相关性查询重排两篇固定候选，返回排序项及分数；模型失败时返回原失败结果。
+  const rankedResult = await ai.rerank.rerank({ query: 'deployment', documents: ['Deployment guide', 'Refund policy'] })
+  if (!rankedResult.success)
+    return rankedResult
+  const ranked = rankedResult.data
   // 以相同查询对两篇文本重排，只返回最高分的一条正文。
-  const texts = value(await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1))
+  const textsResult = await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1)
+  if (!textsResult.success)
+    return textsResult
+  const texts = textsResult.data
   // found has source candidates; ranked/texts carry original indexes and relevance scores.
 }
 finally {
   // 删除本例登记的 docs 源，成功无业务数据；找不到源会失败。
-  value(await ai.retrieval.removeSource('docs'))
+  const removeSourceResult = await ai.retrieval.removeSource('docs')
+  if (!removeSourceResult.success)
+    return removeSourceResult
 }
 ```
 
@@ -727,15 +780,29 @@ finally {
 ```ts
 async function maintain_retrieval_sources(definition: Parameters<typeof ai.retrieval.sources.register>[0]) {
   // 将调用方的完整检索源定义保存为数据库条目，取得检索源版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.retrieval.sources.register(definition))
+  const createdResult = await ai.retrieval.sources.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的检索源目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.retrieval.sources.list())
+  const listedResult = await ai.retrieval.sources.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回检索源定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.retrieval.sources.get(definition.id))
+  const currentResult = await ai.retrieval.sources.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的检索源定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.retrieval.sources.update(definition, current.version))
+  const updatedResult = await ai.retrieval.sources.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例检索源条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.retrieval.sources.remove(definition.id, updated.version))
+  const removeResult = await ai.retrieval.sources.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -756,8 +823,12 @@ async function maintain_retrieval_sources(definition: Parameters<typeof ai.retri
 #### 场景：基于来源回答并引用
 
 ```ts
-// 从 docs 检索部署信息并交给模型作答，结果含答案、上下文和引用，检索或模型失败由 value 抛出。
-const answer = value(await ai.rag.query('How do I deploy?', { sources: ['docs'] }))
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 从 docs 检索部署信息并交给模型作答，结果含答案、上下文和引用，检索或模型失败时返回原失败结果。
+const answerResult = await ai.rag.query('How do I deploy?', { sources: ['docs'] })
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // answer contains answer, context, citations, query and model
 // 对同一部署问题和 docs 源流式查询，依次消费检索上下文、文本增量及结束事件。
 for await (const event of ai.rag.queryStream('How do I deploy?', { sources: ['docs'] })) {
@@ -799,24 +870,51 @@ docs 必须是已登记且可访问的来源。回答文字不固定，引用指
 新修订只有发布成功后才成为检索使用的当前版本。旧向量清理失败时，成功结果可能带 cleanupPending，由 repair 后续补偿；删除则先撤销可见性再清理。搜索必须核对已发布版本，不能把向量库中仍存在的旧块重新当成当前资料。
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // 无参创建默认知识集合和版本清单，成功无数据；初始化失败不导入文档。
-value(await ai.knowledge.setup())
+const setupResult = await ai.knowledge.setup()
+if (!setupResult.success)
+  return setupResult
 // 把配置更新后重启的说明按 demo-intro 导入，成功返回已发布版本、分块及 cleanupPending。
-const published = value(await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' }))
-// 在默认知识库检索重启条件，返回相关片段及引用，存储不可用等失败由 value 抛出。
-const matches = value(await ai.knowledge.retrieve('When should the service restart?'))
-// 以相同问题在检索上下文上生成回答，返回答案与信源；检索或模型失败由 value 抛出。
-const answer = value(await ai.knowledge.ask('When should the service restart?'))
+const publishedResult = await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' })
+if (!publishedResult.success)
+  return publishedResult
+const published = publishedResult.data
+// 在默认知识库检索重启条件，返回相关片段及引用，存储不可用等失败时返回原失败结果。
+const matchesResult = await ai.knowledge.retrieve('When should the service restart?')
+if (!matchesResult.success)
+  return matchesResult
+const matches = matchesResult.data
+// 以相同问题在检索上下文上生成回答，返回答案与信源；检索或模型失败时返回原失败结果。
+const answerResult = await ai.knowledge.ask('When should the service restart?')
+if (!answerResult.success)
+  return answerResult
+const answer = answerResult.data
 // 无参读默认集合的可见文档清单，本例包含 demo-intro。
-const documents = value(await ai.knowledge.listDocuments())
+const documentsResult = await ai.knowledge.listDocuments()
+if (!documentsResult.success)
+  return documentsResult
+const documents = documentsResult.data
 // 无参读取导入产生的实体列表，实际项由提取结果决定。
-const entities = value(await ai.knowledge.listEntities())
+const entitiesResult = await ai.knowledge.listEntities()
+if (!entitiesResult.success)
+  return entitiesResult
+const entities = entitiesResult.data
 // 按 service 实体查询关联文档，没有匹配时列表可为空。
-const related = value(await ai.knowledge.findByEntity('service'))
+const relatedResult = await ai.knowledge.findByEntity('service')
+if (!relatedResult.success)
+  return relatedResult
+const related = relatedResult.data
 // 按导入时的 ID 删除文档的可见版本，成功无业务数据；清理失败按错误处理。
-value(await ai.knowledge.removeDocument('demo-intro')) // no longer visible to retrieval
+const removeDocumentResult = await ai.knowledge.removeDocument('demo-intro')
+if (!removeDocumentResult.success)
+  return removeDocumentResult
+// no longer visible to retrieval
 // 从偏移 0 恢复至多 100 条清单的过期暂存或旧向量清理，返回恢复进度。
-const repaired = value(await ai.knowledge.repair({ offset: 0, limit: 100 })) // cleanup progress
+const repairedResult = await ai.knowledge.repair({ offset: 0, limit: 100 })
+if (!repairedResult.success)
+  return repairedResult
+const repaired = repairedResult.data // cleanup progress
 ```
 
 使用独立测试集合；输出文档修订、匹配、回答和清理进度依真实存储/模型而定。下面补充文件/批量导入、进度回调、实体查询和 deleteCollection；删除集合会撤销整组资料。
@@ -866,28 +964,56 @@ Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其�
 async function rememberPreference(objectId: string) {
   // 把服务端主体与 demo-preference 主题绑定到记忆实例，后续调用自动带此范围。
   const memory = ai.memory.scoped({ objectId, scope: { topicId: 'demo-preference' } })
-  // 在绑定范围内写入中文回复偏好，返回完整记忆及 ID；写入或向量生成失败由 value 抛出。
-  const saved = value(await memory.add({ content: 'Prefers Chinese replies', type: 'preference' }))
+  // 在绑定范围内写入中文回复偏好，返回完整记忆及 ID；写入或向量生成失败时返回原失败结果。
+  const savedResult = await memory.add({ content: 'Prefers Chinese replies', type: 'preference' })
+  if (!savedResult.success)
+    return savedResult
+  const saved = savedResult.data
   const access = { objectId, scope: { topicId: 'demo-preference' } }
   // 用写入返回的 ID 和同一主体/主题读记忆；不存在或范围不符时失败。
-  value(await ai.memory.get(saved.id, access))
-  // 按同一范围把已存偏好改为日语回复，成功返回重算向量后的记忆；无权或更新失败由 value 抛出。
-  value(await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access))
+  const getResult = await ai.memory.get(saved.id, access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
+  // 按同一范围把已存偏好改为日语回复，成功返回重算向量后的记忆；无权或更新失败时返回原失败结果。
+  const updateResult = await ai.memory.update(saved.id, { content: 'Prefers Japanese replies' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // 在绑定范围内按 language preference 搜索，返回相关记忆列表，没有匹配时为空。
-  const recalled = value(await memory.recall('language preference'))
+  const recalledResult = await memory.recall('language preference')
+  if (!recalledResult.success)
+    return recalledResult
+  const recalled = recalledResult.data
   const messages = [{ role: 'user' as const, content: 'Hello' }]
   // 用同一主体和主题向 Hello 消息副本注入相关记忆，返回新的消息列表。
-  const enriched = value(await ai.memory.injectMemories(messages, access))
+  const enrichedResult = await ai.memory.injectMemories(messages, access)
+  if (!enrichedResult.success)
+    return enrichedResult
+  const enriched = enrichedResult.data
   // 分析 Hello 消息并把可提取的事项存入同一范围，返回成功提取的记忆数组，可能为空。
-  const extracted = value(await ai.memory.extract(messages, access))
-  // 使用相同主体和主题查当前记忆列表；读错由 value 抛出。
-  const all = value(await ai.memory.list(access))
+  const extractedResult = await ai.memory.extract(messages, access)
+  if (!extractedResult.success)
+    return extractedResult
+  const extracted = extractedResult.data
+  // 使用相同主体和主题查当前记忆列表；读错时返回原失败结果。
+  const allResult = await ai.memory.list(access)
+  if (!allResult.success)
+    return allResult
+  const all = allResult.data
   // 从绑定范围的偏移 0 读取最多 20 项及分页信息。
-  const page = value(await ai.memory.listPage({ ...access, offset: 0, limit: 20 }))
+  const pageResult = await ai.memory.listPage({ ...access, offset: 0, limit: 20 })
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data
   // 以写入返回的 ID 在同一作用域删除已存偏好，成功无数据，范围不符时失败。
-  value(await ai.memory.remove(saved.id, access))
+  const removeResult = await ai.memory.remove(saved.id, access)
+  if (!removeResult.success)
+    return removeResult
   // 仅清除绑定主体/主题里的剩余 preference 记录，成功无数据。
-  value(await memory.clear({ types: ['preference'] }))
+  const clearResult = await memory.clear({ types: ['preference'] })
+  if (!clearResult.success)
+    return clearResult
   return { recalled, enriched, extracted, all, page }
 }
 ```
@@ -943,18 +1069,35 @@ if (result.success) {
 ```ts
 async function usePersona(objectId: string) {
   const access = { objectId }
-  // 为当前主体保存带英文系统提示的 demo-tutor 档案，成功返回完整档案；持久化失败由 value 抛出。
-  value(await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' }))
-  // 在同一主体范围按 ID 读取该档案，找不到时由 value 抛出。
-  value(await ai.persona.get('demo-tutor', access))
+  // 为当前主体保存带英文系统提示的 demo-tutor 档案，成功返回完整档案；持久化失败时返回原失败结果。
+  const saveResult = await ai.persona.save({ id: 'demo-tutor', objectId, name: 'Tutor', systemPrompt: 'Explain terms clearly.' })
+  if (!saveResult.success)
+    return saveResult
+  saveResult.data
+  // 在同一主体范围按 ID 读取该档案，找不到时返回原失败结果。
+  const getResult = await ai.persona.get('demo-tutor', access)
+  if (!getResult.success)
+    return getResult
+  getResult.data
   // 仅把该主体的 demo-tutor 显示名改为 Order tutor，成功返回更新档案。
-  value(await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access))
+  const updateResult = await ai.persona.update('demo-tutor', { name: 'Order tutor' }, access)
+  if (!updateResult.success)
+    return updateResult
+  updateResult.data
   // 列出当前主体全部角色档案，包含刚更新的一项。
-  const profiles = value(await ai.persona.list(access))
+  const profilesResult = await ai.persona.list(access)
+  if (!profilesResult.success)
+    return profilesResult
+  const profiles = profilesResult.data
   // 按当前主体和 ID 组合系统提示词，成功返回字符串；档案不存在会失败。
-  const prompt = value(await ai.persona.compose('demo-tutor', access))
+  const promptResult = await ai.persona.compose('demo-tutor', access)
+  if (!promptResult.success)
+    return promptResult
+  const prompt = promptResult.data
   // 删除当前主体下本例创建的档案，成功无数据。
-  value(await ai.persona.remove('demo-tutor', access))
+  const removeResult = await ai.persona.remove('demo-tutor', access)
+  if (!removeResult.success)
+    return removeResult
   return { profiles, prompt }
 }
 ```
@@ -965,13 +1108,17 @@ Memory 用 `objectId` / `scope` 回答「谁的记忆」；Persona 回答「AI �
 稳定的系统提示词与性格特征，并通过 `scope: { personaId }` 关联其长期记忆：
 
 ```ts
-// 用下方中文系统提示和特征创建或覆盖系统角色 xiaoq；返回保存后的档案，失败由 value 抛出。
-value(await ai.persona.save({
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 用下方中文系统提示和特征创建或覆盖系统角色 xiaoq；返回保存后的档案，失败时返回原失败结果。
+const saveResult = await ai.persona.save({
   id: 'xiaoq',
   name: '小Q',
   systemPrompt: '你是一位经济学家，善于从长期视角分析问题。',
   traits: ['数据驱动', '偏好引用真实案例'],
-}))
+})
+if (!saveResult.success)
+  return saveResult
+saveResult.data
 
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 // 按 xiaoq 读取系统作用域档案并组合系统提示词；成功返回字符串，不存在时保留失败。
@@ -1124,7 +1271,9 @@ async function runSpokenTurn(playback: {
   for await (const event of manager.chatStream('请展开讲讲', { signal })) {
     if (event.type === 'turn_started') {
       // 用开始事件给出的 turnId 标记表达中，成功无数据；轮次不存在时失败。
-      value(await manager.markTurnSpeaking(event.turnId))
+      const markTurnSpeakingResult = await manager.markTurnSpeaking(event.turnId)
+      if (!markTurnSpeakingResult.success)
+        return markTurnSpeakingResult
     }
     else if (event.type === 'delta') {
       playback.enqueue(event.text)
@@ -1132,16 +1281,20 @@ async function runSpokenTurn(playback: {
     else if (event.type === 'done') {
       await playback.finish() // 等到音频实际播放完，再记录确实说出的文字。
       const spoken = { text: playback.spokenText() }
-      value(await (signal.aborted
+      const operationResult = await (signal.aborted
         // 信号已停止时，用本轮 ID 和播放器实际已播文本登记 interrupted。
         ? manager.interruptTurn(event.turnId, spoken)
-        // 未取消时，用相同轮次和实际已播文本提交为 completed；过期或冲突通过 value 抛出。
-        : manager.commitTurn(event.turnId, spoken)))
+        // 未取消时，用相同轮次和实际已播文本提交为 completed；过期或冲突时返回原失败结果。
+        : manager.commitTurn(event.turnId, spoken))
+      if (!operationResult.success)
+        return operationResult
     }
     else if (event.type === 'cancelled') {
       playback.stop()
       // 收到取消事件后，用该轮 ID 和播放器已播出的部分保留实际表达，未播文本不提交。
-      value(await manager.interruptTurn(event.turnId, { text: playback.spokenText() }))
+      const interruptTurnResult = await manager.interruptTurn(event.turnId, { text: playback.spokenText() })
+      if (!interruptTurnResult.success)
+        return interruptTurnResult
     }
   }
   // 无参读取这一会话发生顺序的轮次，分别显示已生成、已提交的文本及状态。
@@ -1178,8 +1331,12 @@ Node 在 Worker 中调用已安装的 PDF 和 DOCX 解析器，也将大 HTML �
 #### 场景：解析文本与文件
 
 ```ts
-// 把给定订单状态纯文本解析为统一文档结果；文本在解析结果中，失败由 value 抛出。
-const plain = value(await ai.file.parseText('Order status: pending.')) // parsed text result
+// 以下为应用异步业务函数体片段；失败时返回原结果。
+// 把给定订单状态纯文本解析为统一文档结果；文本在解析结果中，失败时返回原失败结果。
+const plainResult = await ai.file.parseText('Order status: pending.')
+if (!plainResult.success)
+  return plainResult
+const plain = plainResult.data // parsed text result
 ```
 
 parse 的输入是文件参数，parseText 的输入是文字；输出保留可供后续分块/索引的文本与元数据。格式不支持或读取失败必须停止后续导入。
@@ -1399,15 +1556,29 @@ async function prepareAudio(recorded: Blob) { // 输入浏览器采集且可被 
 ```ts
 async function maintain_audio_models(definition: Parameters<typeof ai.audio.models.register>[0]) {
   // 将调用方的完整语音模型定义保存为数据库条目，取得语音模型版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.audio.models.register(definition))
+  const createdResult = await ai.audio.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的语音模型目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.audio.models.list())
+  const listedResult = await ai.audio.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回语音模型定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.audio.models.get(definition.id))
+  const currentResult = await ai.audio.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的语音模型定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.audio.models.update(definition, current.version))
+  const updatedResult = await ai.audio.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例语音模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.audio.models.remove(definition.id, updated.version))
+  const removeResult = await ai.audio.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -1478,15 +1649,29 @@ async function generateWithReference(referenceBytes: Uint8Array) {
 ```ts
 async function maintain_image_models(definition: Parameters<typeof ai.image.models.register>[0]) {
   // 将调用方的完整图像模型定义保存为数据库条目，取得图像模型版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.image.models.register(definition))
+  const createdResult = await ai.image.models.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的图像模型目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.image.models.list())
+  const listedResult = await ai.image.models.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回图像模型定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.image.models.get(definition.id))
+  const currentResult = await ai.image.models.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的图像模型定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.image.models.update(definition, current.version))
+  const updatedResult = await ai.image.models.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例图像模型条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.image.models.remove(definition.id, updated.version))
+  const removeResult = await ai.image.models.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```
@@ -1698,15 +1883,29 @@ async function publishApprovedChange(approvedSnapshot: ACPPublishSnapshot) {
 ```ts
 async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.register>[0]) {
   // 将调用方的完整ACP Agent定义保存为数据库条目，取得ACP Agent版本；ID 重复或为静态配置时失败。
-  const created = value(await ai.acp.agents.register(definition))
+  const createdResult = await ai.acp.agents.register(definition)
+  if (!createdResult.success)
+    return createdResult
+  const created = createdResult.data
   // 无参读取静态配置与数据库合并的ACP Agent目录；同 ID 时配置优先，本次注册项也在目录中。
-  const listed = value(await ai.acp.agents.list())
+  const listedResult = await ai.acp.agents.list()
+  if (!listedResult.success)
+    return listedResult
+  const listed = listedResult.data
   // 按刚保存的 ID 读回ACP Agent定义及数据库版本；没有该 ID 时失败。
-  const current = value(await ai.acp.agents.get(definition.id))
+  const currentResult = await ai.acp.agents.get(definition.id)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用刚读取的版本作为条件完整替换同 ID 的ACP Agent定义，返回新版本；读到旧版本或遇到配置项时失败。
-  const updated = value(await ai.acp.agents.update(definition, current.version))
+  const updatedResult = await ai.acp.agents.update(definition, current.version)
+  if (!updatedResult.success)
+    return updatedResult
+  const updated = updatedResult.data
   // 按最新版本删除示例ACP Agent条目，成功无数据；版本冲突或配置来源时拒绝删除。
-  value(await ai.acp.agents.remove(definition.id, updated.version))
+  const removeResult = await ai.acp.agents.remove(definition.id, updated.version)
+  if (!removeResult.success)
+    return removeResult
   return { created, listed, updated } // entries include value/source and database version
 }
 ```

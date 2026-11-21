@@ -63,17 +63,7 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="connection"></a>
 
@@ -94,16 +84,21 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：接続と終了
 
 ```ts
-// ./data/docs-demo で LanceDB を開きます。成功時は集合を利用でき、data は undefined です。失敗は value が処理します。
-value(await vecdb.init({ type: 'lancedb', path: './data/docs-demo' }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// ./data/docs-demo で LanceDB を開きます。成功時は集合を利用でき、data は undefined です。失敗は 元の失敗結果を返します。
+const initResult = await vecdb.init({ type: 'lancedb', path: './data/docs-demo' })
+if (!initResult.success)
+  return initResult
 // 準備状態を直接読みます。接続成功後は true です。
 vecdb.isInitialized // true
 // 接続後のマスク済み設定から type を取り出します。この例は lancedb です。
 vecdb.config?.type // 'lancedb'
 // 同一プロセス内の連携用の接続情報を取得します。認証情報が含まれる場合があります。
 const connection = vecdb.rawConnection // backend-specific connection; may contain credentials
-// 引数なしで現在の接続を閉じます。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.close()) // undefined
+// 引数なしで現在の接続を閉じます。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const closeResult = await vecdb.close()
+if (!closeResult.success)
+  return closeResult
 // 終了後の設定を読みます。値は null です。
 vecdb.config // null
 ```
@@ -135,18 +130,35 @@ vecdb.config // null
 #### 利用例：集合の作成と削除
 
 ```ts
-// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
-// 作成直後の demo-docs を確認すると true が返ります。バックエンドの失敗は value が例外にします。
-value(await vecdb.collection.exists('demo-docs')) // true
-// 引数なしで集合名を列挙します。配列には demo-docs が含まれ、失敗は value が例外にします。
-value(await vecdb.collection.list()) // includes 'demo-docs'
-// demo-docs の情報を読みます。3 次元、コサイン、文書数 0 です。失敗は value が例外にします。
-const info = value(await vecdb.collection.info('demo-docs')) // dimension 3, cosine, zero documents
-// demo-docs とそのデータを削除します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.collection.drop('demo-docs')) // undefined
-// 削除後の demo-docs を調べると false が返ります。照会の失敗は value が例外にします。
-value(await vecdb.collection.exists('demo-docs')) // false
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
+if (!createResult.success)
+  return createResult
+// 作成直後の demo-docs を確認すると true が返ります。バックエンドの失敗は 元の失敗結果を返します。
+const existsResult = await vecdb.collection.exists('demo-docs')
+if (!existsResult.success)
+  return existsResult
+existsResult.data // true
+// 引数なしで集合名を列挙します。配列には demo-docs が含まれ、失敗は 元の失敗結果を返します。
+const listResult = await vecdb.collection.list()
+if (!listResult.success)
+  return listResult
+listResult.data // includes 'demo-docs'
+// demo-docs の情報を読みます。3 次元、コサイン、文書数 0 です。失敗は 元の失敗結果を返します。
+const infoResult = await vecdb.collection.info('demo-docs')
+if (!infoResult.success)
+  return infoResult
+const info = infoResult.data // dimension 3, cosine, zero documents
+// demo-docs とそのデータを削除します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const dropResult = await vecdb.collection.drop('demo-docs')
+if (!dropResult.success)
+  return dropResult
+// 削除後の demo-docs を調べると false が返ります。照会の失敗は 元の失敗結果を返します。
+const existsResult2 = await vecdb.collection.exists('demo-docs')
+if (!existsResult2.success)
+  return existsResult2
+existsResult2.data // false
 ```
 
 未使用の集合名を使います。次の例では三次元の集合を再作成してください。バックエンドのエラーは失敗結果です。
@@ -181,24 +193,45 @@ VecDB は数値ベクトルを保存・比較します。テキストの変換�
 例では 3 次元の集合に [1,0,0] を登録・検索し、同方向のコサイン変換スコアは約 1 です。実際の変換はアプリや AI embedding が担当します。検索結果は一致候補とスコアで、回答文や百分率ではありません。
 
 ```ts
-// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
-// doc-1、3 次元ベクトル、本文 Install を demo-docs に挿入します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))
-// 挿入後の demo-docs の文書数は 1 です。失敗は value が例外にします。
-value(await vecdb.vector.count('demo-docs')) // 1
-// 同じ doc-1 の本文を Install v2 に更新します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }]))
-// 同じベクトルで 0.9 以上の上位 1 件を検索します。この例の結果は更新後の doc-1、失敗は value が例外にします。
-const matches = value(await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// demo-docs を 3 次元のコサイン集合として作成します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
+if (!createResult.success)
+  return createResult
+// doc-1、3 次元ベクトル、本文 Install を demo-docs に挿入します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }])
+if (!insertResult.success)
+  return insertResult
+// 挿入後の demo-docs の文書数は 1 です。失敗は 元の失敗結果を返します。
+const countResult = await vecdb.vector.count('demo-docs')
+if (!countResult.success)
+  return countResult
+countResult.data // 1
+// 同じ doc-1 の本文を Install v2 に更新します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }])
+if (!upsertResult.success)
+  return upsertResult
+// 同じベクトルで 0.9 以上の上位 1 件を検索します。この例の結果は更新後の doc-1、失敗は 元の失敗結果を返します。
+const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 })
+if (!matchesResult.success)
+  return matchesResult
+const matches = matchesResult.data
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
-// demo-docs の先頭から最大 32 件の ID を取得します。結果には items と任意の nextCursor が含まれます。失敗は value が例外にします。
-const page = value(await vecdb.vector.scan('demo-docs', { limit: 32 }))
+// demo-docs の先頭から最大 32 件の ID を取得します。結果には items と任意の nextCursor が含まれます。失敗は 元の失敗結果を返します。
+const pageResult = await vecdb.vector.scan('demo-docs', { limit: 32 })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data
 // page.items: [{ id: 'doc-1' }]; continue using nextCursor when present
-// demo-docs から指定した doc-1 を削除します。成功時の data は undefined、失敗は value が例外にします。
-value(await vecdb.vector.delete('demo-docs', ['doc-1'])) // undefined
-// 削除後の demo-docs の文書数は 0 です。照会の失敗は value が例外にします。
-value(await vecdb.vector.count('demo-docs')) // 0
+// demo-docs から指定した doc-1 を削除します。成功時の data は undefined、失敗は 元の失敗結果を返します。
+const deleteResult = await vecdb.vector.delete('demo-docs', ['doc-1'])
+if (!deleteResult.success)
+  return deleteResult
+// 削除後の demo-docs の文書数は 0 です。照会の失敗は 元の失敗結果を返します。
+const countResult2 = await vecdb.vector.count('demo-docs')
+if (!countResult2.success)
+  return countResult2
+countResult2.data // 0
 ```
 
 保存済みと同じベクトルを検索するため、変換後のコサイン得点は約 1 です。本文は最後の upsert の値です。並行更新は scan に影響し、得点は百分率ではありません。

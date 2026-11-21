@@ -93,17 +93,7 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="sending"></a>
 
@@ -128,8 +118,12 @@ reach.send は送信先に接続する場合と、通常通知の待機番号を
 通常通知は許可されれば永続キューで待機し、reject 指定なら待機を拒否します。機密通知は通知禁止時間・期限切れ・結果不明で自動再送しません。送信先の受理は到達・既読ではなく、不明な結果は記録を照合してから回復します。
 
 ```ts
-// 保存済みの demo-welcome に Ada を差し込み demo@example.com に通知する。deferred ならキュー登録済みであり、テンプレート・チャネルの失敗は value が例外にする。
-const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// 保存済みの demo-welcome に Ada を差し込み demo@example.com に通知する。deferred ならキュー登録済みであり、テンプレート・チャネルの失敗は 元の失敗結果を返す。
+const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
+if (!sentResult.success)
+  return sentResult
+const sent = sentResult.data
 // sent: SendResult for this provider attempt, not proof that a person read the message
 ```
 
@@ -163,18 +157,34 @@ const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@exampl
 #### 利用例：テンプレートの管理と確認
 
 ```ts
-// local 向けの demo-welcome を件名 Welcome、本文 Hello {name} で保存する。成功時にデータはなく、保存エラーは value が例外にする。
-value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// local 向けの demo-welcome を件名 Welcome、本文 Hello {name} で保存する。成功時にデータはなく、保存エラーは 元の失敗結果を返す。
+const saveResult = await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })
+if (!saveResult.success)
+  return saveResult
 // local 向けの demo-goodbye を本文 Bye {name} で一括保存する。成功時にデータはなく、一部失敗でも他の成功済み項目のロールバックは保証されない。
-value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
-// 上で保存した demo-welcome を名前で取得する。未登録なら value が例外にする。
-const template = value(await reach.template.resolve('demo-welcome')) // saved template
+const saveBatchResult = await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }])
+if (!saveBatchResult.success)
+  return saveBatchResult
+// 上で保存した demo-welcome を名前で取得する。未登録なら 元の失敗結果を返す。
+const templateResult = await reach.template.resolve('demo-welcome')
+if (!templateResult.success)
+  return templateResult
+const template = templateResult.data // saved template
 // demo-welcome に Ada を渡してプレビューする。本文 Hello Ada と件名が返り、送信は行わない。テンプレートがなければ失敗。
-const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
-// 引数なしで保存済みテンプレートを列挙する。上の二件を含み、読み取り失敗は value が例外にする。
-const templates = value(await reach.template.list()) // includes both templates
-// 名前 demo-goodbye のテンプレートを削除する。成功時にデータはなく、保存先のエラーは value が例外にする。
-value(await reach.template.remove('demo-goodbye')) // undefined
+const previewResult = await reach.template.render('demo-welcome', { name: 'Ada' })
+if (!previewResult.success)
+  return previewResult
+const preview = previewResult.data // body 'Hello Ada'
+// 引数なしで保存済みテンプレートを列挙する。上の二件を含み、読み取り失敗は 元の失敗結果を返す。
+const templatesResult = await reach.template.list()
+if (!templatesResult.success)
+  return templatesResult
+const templates = templatesResult.data // includes both templates
+// 名前 demo-goodbye のテンプレートを削除する。成功時にデータはなく、保存先のエラーは 元の失敗結果を返す。
+const removeResult = await reach.template.remove('demo-goodbye')
+if (!removeResult.success)
+  return removeResult
 ```
 
 mail というテスト Provider を先に設定します。name= Ada により Hello Ada を得ます。テンプレートの削除は送信済み内容を取り消しません。
@@ -197,11 +207,18 @@ mail というテスト Provider を先に設定します。name= Ada により 
 #### 利用例：待機・失敗した通知の確認
 
 ```ts
-// dead のキュー項目を最大 20 件取得する。該当なしは空配列、読み取り失敗は value が例外にする。
-const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// dead のキュー項目を最大 20 件取得する。該当なしは空配列、読み取り失敗は 元の失敗結果を返す。
+const entriesResult = await reach.queue.list({ status: 'dead', limit: 20 })
+if (!entriesResult.success)
+  return entriesResult
+const entries = entriesResult.data
 if (entries.length > 0) {
   // 先頭の一覧項目の queueId から現在の詳細を読む。項目がなければ null、読み取りエラーは失敗。
-  const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
+  const entryResult = await reach.queue.get(entries[0].queueId)
+  if (!entryResult.success)
+    return entryResult
+  const entry = entryResult.data // current entry or null
 }
 ```
 
@@ -231,12 +248,20 @@ import type { ReachUnknownResolution } from '@h-ai/reach'
 
 async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
   // 渡されたキューの受付 ID で現在の項目を読む。存在しなければ null、unknown の場合だけ確認結果を登録する。
-  const current = value(await reach.queue.get(queueId))
+  const currentResult = await reach.queue.get(queueId)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   if (current?.status !== 'unknown')
     throw new Error('Expected an unknown delivery')
   // 確認済みの結論を指定した unknown 項目に記録する。再送は行わず、成功時にデータはない。状態の変化や無効な結論は失敗。
-  value(await reach.queue.resolveUnknown(queueId, decision))
+  const resolveUnknownResult = await reach.queue.resolveUnknown(queueId, decision)
+  if (!resolveUnknownResult.success)
+    return resolveUnknownResult
   // 確認結果を書いた後、同じ queueId を再読込して sent または discarded を確認する。再読込は独立して失敗し得る。
-  return value(await reach.queue.get(queueId)) // status is sent or discarded
+  const getResult = await reach.queue.get(queueId)
+  if (!getResult.success)
+    return getResult
+  return getResult.data // status is sent or discarded
 }
 ```

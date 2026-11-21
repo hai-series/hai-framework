@@ -40,17 +40,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="service"></a>
 
@@ -69,8 +59,12 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：サービスと採取処理の準備
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // 引数なしでフィードバックのジョブを一巡処理する。data.processed は今回の処理数で、通知の配信結果は個別に確認する。
-const jobs = value(await feedback.runJobs()) // this round's processed count
+const jobsResult = await feedback.runJobs()
+if (!jobsResult.success)
+  return jobsResult
+const jobs = jobsResult.data // this round's processed count
 ```
 
 init の入力は入門例の通りで、成功時の業務データはありません。runJobs は引数なしで今回の結果を返し、close はこのインスタンスの処理を停止します。
@@ -108,16 +102,31 @@ create/read/process を認可されたサーバーコンテキストを使いま
 import type { FeedbackContext } from '@h-ai/feedback'
 
 async function processReport(context: FeedbackContext, submissionId: string) {
-  // 信頼済み主体と永続提出 ID で orders の報告を作る。ID と報告番号が返り、権限・保存エラーは value が例外にする。
-  const report = value(await feedback.submit({ appId: 'orders', submissionId }, context))
+  // 信頼済み主体と永続提出 ID で orders の報告を作る。ID と報告番号が返り、権限・保存エラーは 元の失敗結果を返す。
+  const reportResult = await feedback.submit({ appId: 'orders', submissionId }, context)
+  if (!reportResult.success)
+    return reportResult
+  const report = reportResult.data
   // この主体が閲覧できる報告を先頭から最大 20 件読む。該当なしなら items は空。
-  const page = value(await feedback.list({ page: 1, pageSize: 20 }, context)) // authorized report page
-  // 作成した報告 ID と現在の主体で詳細とバージョンを読む。権限・照会の失敗は value が例外にする。
-  const detail = value(await feedback.get(report.id, context))
+  const pageResult = await feedback.list({ page: 1, pageSize: 20 }, context)
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data // authorized report page
+  // 作成した報告 ID と現在の主体で詳細とバージョンを読む。権限・照会の失敗は 元の失敗結果を返す。
+  const detailResult = await feedback.get(report.id, context)
+  if (!detailResult.success)
+    return detailResult
+  const detail = detailResult.data
   // 同じ報告と主体で証拠を先頭から最大 20 件読む。証拠がなければページの items は空。
-  const evidence = value(await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context))
+  const evidenceResult = await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context)
+  if (!evidenceResult.success)
+    return evidenceResult
+  const evidence = evidenceResult.data
   // 照会したバージョンを条件に handled へ更新する。成功時は新バージョンの報告、競合や権限不足は失敗。
-  const handled = value(await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context))
+  const handledResult = await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context)
+  if (!handledResult.success)
+    return handledResult
+  const handled = handledResult.data
   return { report, page, evidence, handled } // same report ID; handled has the new version
 }
 
@@ -152,16 +161,28 @@ import type { FeedbackContext, FeedbackUploadInput } from '@h-ai/feedback'
 async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadInput) {
   const id = upload.id
   // upload.id の報告にブラウザーイベント event-demo-1 を追記する。固定 ID で重複を排除し、成功時は確認済み ID と証拠のリビジョンが返る。
-  const receipt = value(await feedback.appendEvidence({ id, evidence: [{
+  const receiptResult = await feedback.appendEvidence({ id, evidence: [{
     id: 'event-demo-1', source: 'browser', sequence: 1, kind: 'business',
     timestamp: Date.now(), data: { state: 'checkout-failed' },
-  }] }, context)) // acknowledged IDs and evidenceRevision
-  // 受け取った添付の内容と識別子を報告に保存する。成功時はメタデータ、入力・予算・保存エラーは value が例外にする。
-  const attachment = value(await feedback.uploadAttachment(upload, context)) // saved attachment metadata
-  // 報告 ID と元の添付 ID で閲覧可能な添付を取得する。DTO に Base64 の内容が入り、読み取り失敗は value が例外にする。
-  const bytes = value(await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context))
+  }] }, context)
+  if (!receiptResult.success)
+    return receiptResult
+  const receipt = receiptResult.data // acknowledged IDs and evidenceRevision
+  // 受け取った添付の内容と識別子を報告に保存する。成功時はメタデータ、入力・予算・保存エラーは 元の失敗結果を返す。
+  const attachmentResult = await feedback.uploadAttachment(upload, context)
+  if (!attachmentResult.success)
+    return attachmentResult
+  const attachment = attachmentResult.data // saved attachment metadata
+  // 報告 ID と元の添付 ID で閲覧可能な添付を取得する。DTO に Base64 の内容が入り、読み取り失敗は 元の失敗結果を返す。
+  const bytesResult = await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context)
+  if (!bytesResult.success)
+    return bytesResult
+  const bytes = bytesResult.data
   // この報告の収集を欠落なしで完了する。成功時は更新済み報告、条件を満たさなければ失敗。
-  const completed = value(await feedback.completeCollection({ id, missing: [] }, context)) // updated report
+  const completedResult = await feedback.completeCollection({ id, missing: [] }, context)
+  if (!completedResult.success)
+    return completedResult
+  const completed = completedResult.data // updated report
   return { receipt, attachment, bytes, completed }
 }
 ```
@@ -190,7 +211,10 @@ import type { FeedbackContext } from '@h-ai/feedback'
 
 async function requestArchive(id: string, context: FeedbackContext) {
   // 閲覧可能な報告のエクスポートを依頼し、永続ジョブの受付を受け取る。アーカイブは生成待ちの場合がある。
-  const job = value(await feedback.export({ id }, context)) // persistent job receipt
+  const jobResult = await feedback.export({ id }, context)
+  if (!jobResult.success)
+    return jobResult
+  const job = jobResult.data // persistent job receipt
   // 報告 ID と受付のジョブ ID でアーカイブを取得する。未生成または権限不足なら失敗。
   return feedback.getExport({ id, jobId: job.id }, context) // HaiResult<FeedbackAttachmentData>
 }
@@ -236,29 +260,51 @@ import { createFeedbackClient } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
   // 引数なしで独立した収集クライアントを作る。設定した収集は init の後で有効になる。
   const feedbackClient = createFeedbackClient()
-  // ホストのクライアント設定でセッションを起動する。成功時にデータはなく、設定不正や初期化競合は value が例外にする。
-  value(await feedbackClient.init(config))
+  // ホストのクライアント設定でセッションを起動する。成功時にデータはなく、設定不正や初期化競合は 元の失敗結果を返す。
+  const initResult = await feedbackClient.init(config)
+  if (!initResult.success)
+    return initResult
   try {
     // この収集セッションに state: ready の業務イベントを記録する。戻り値はない。
     feedbackClient.record({ kind: 'business', data: { state: 'ready' } })
-    // 引数なしで編集可能な下書きを準備する。成功時は下書きが返り、セッションを利用できなければ value が例外にする。
-    const draft = value(await feedbackClient.prepare())
+    // 引数なしで編集可能な下書きを準備する。成功時は下書きが返り、セッションを利用できなければ 元の失敗結果を返す。
+    const draftResult = await feedbackClient.prepare()
+    if (!draftResult.success)
+      return draftResult
+    const draft = draftResult.data
     // 引数なしで現在の下書きを読む。未作成または削除済みなら undefined。
     const current = feedbackClient.getDraft() // current draft or undefined
     // 引数なしで現在の画面用データを取得する。証拠、欠落項目、利用できる添付プレビューを含む。
     const view = feedbackClient.getView() // preview URLs, evidence and missing materials
-    // 置換対象 ID を指定せず表示中ページの画像を下書きに追加する。撮影失敗や同時の凍結は value が例外にする。
-    value(await feedbackClient.captureScreenshot()) // refreshes the screenshot attachment
+    // 置換対象 ID を指定せず表示中ページの画像を下書きに追加する。撮影失敗や同時の凍結は 元の失敗結果を返す。
+    const captureScreenshotResult = await feedbackClient.captureScreenshot()
+    if (!captureScreenshotResult.success)
+      return captureScreenshotResult
+    // refreshes the screenshot attachment
     // メモリで作った demo.txt を下書きに追加する。成功時データはなく、上限・入力・競合の失敗で部分追加しない。
-    value(await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })]))
+    const addFilesResult = await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })])
+    if (!addFilesResult.success)
+      return addFilesResult
     // 説明 Checkout failed で下書きを提出する。成功時は報告 ID と番号が返り、資料の送信はまだ保留の場合がある。
-    const receipt = value(await feedbackClient.submit({ description: 'Checkout failed' })) // accepted report ID/number
+    const receiptResult = await feedbackClient.submit({ description: 'Checkout failed' })
+    if (!receiptResult.success)
+      return receiptResult
+    const receipt = receiptResult.data // accepted report ID/number
     // 引数なしで現在の報告の未送信資料を続けて送る。成功時にデータはなく、残った資料は保留される。
-    value(await feedbackClient.flush()) // resumes pending evidence upload
-    // 引数なしでローカルの下書きを ZIP バイトに変換する。送信は行わず、生成失敗は value が例外にする。
-    const archive = value(await feedbackClient.exportDraft()) // Uint8Array ZIP
-    // 引数なしで現在の下書きアーカイブを端末に保存する。status が saved か cancelled かを確認し、端末側エラーは value が例外にする。
-    const saved = value(await feedbackClient.saveDraft()) // inspect saved.status; cancelled is not a saved file
+    const flushResult = await feedbackClient.flush()
+    if (!flushResult.success)
+      return flushResult
+    // resumes pending evidence upload
+    // 引数なしでローカルの下書きを ZIP バイトに変換する。送信は行わず、生成失敗は 元の失敗結果を返す。
+    const archiveResult = await feedbackClient.exportDraft()
+    if (!archiveResult.success)
+      return archiveResult
+    const archive = archiveResult.data // Uint8Array ZIP
+    // 引数なしで現在の下書きアーカイブを端末に保存する。status が saved か cancelled かを確認し、端末側エラーは 元の失敗結果を返す。
+    const savedResult = await feedbackClient.saveDraft()
+    if (!savedResult.success)
+      return savedResult
+    const saved = savedResult.data // inspect saved.status; cancelled is not a saved file
     // 引数なしでこのセッションの添付プレビュー URL を取り消す。戻り値はない。
     feedbackClient.releasePreviews() // releases generated object URLs
     // 引数なしで能動的な収集を一時停止する。下書きと受理済みのアップロードは保持される。

@@ -6,6 +6,8 @@
 
 サーバーのエントリーで `config/_serv.yml` を読み込みます。HTTP 層へ設定を渡し、デプロイの認証情報はサーバーの環境変数に置きます。
 
+## 設定例
+
 ```yaml schema=@h-ai/serv:ServConfigSchema
 server:
   port: 3000
@@ -14,6 +16,39 @@ http:
   trustedProxies: auto
   access: false
 ```
+
+### 別ドメインの管理画面から API を利用する
+
+`config/_serv.yml` に記述します。管理画面の Origin からの応答読み取りと認証情報の送信を許可します。CORS は認証や権限確認の代わりにはなりません。Cookie を使う場合は適切な Cookie 属性も必要です。Origin は実際の管理画面に置き換えます。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+server:
+  host: 0.0.0.0
+  port: 3000
+cors:
+  origin: https://console.example.com
+  credentials: true
+```
+
+### API ドキュメントとヘルスチェックの URL を設定する
+
+OpenAPI は `/openapi.json`、閲覧画面は `/docs`、ヘルスチェックは `/healthz` と `/readyz` を使います。閲覧画面にはアプリ側が認証したユーザー情報が必要です。ヘルスチェックは配備時の稼働確認用で、すべての外部業務システムの正常性を保証するものではありません。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+    requireAuth: true
+  health:
+    path: /healthz
+    readyPath: /readyz
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

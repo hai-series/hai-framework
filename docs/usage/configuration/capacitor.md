@@ -21,6 +21,41 @@ const config: CapacitorConfig = {
 export default config
 ```
 
+### 复制 SvelteKit 静态构建产物
+
+此例假定项目使用静态适配器，将产物写到 `build/`。`webDir` 必须与实际构建输出一致，不能填运行中的开发服务地址。构建后同步到原生工程，再在手机上确认页面和插件。
+
+```ts
+import type { CapacitorConfig } from '@capacitor/cli'
+
+const config: CapacitorConfig = {
+  appId: 'com.example.orders',
+  appName: 'Orders',
+  webDir: 'build',
+}
+export default config
+```
+
+### 真机开发时临时连接电脑上的服务
+
+电脑和手机需要网络互通。仅在本机开发环境设置 `CAPACITOR_SERVER_URL`，例如 `http://192.168.1.20:5173`；下面的配置才会读取它。未设置时使用随包静态文件。发布包清除此变量并重新同步，API 地址和允许的来源还需按实际后端配置。
+
+```ts
+import type { CapacitorConfig } from '@capacitor/cli'
+import process from 'node:process'
+
+const developmentUrl = process.env.CAPACITOR_SERVER_URL
+const config: CapacitorConfig = {
+  appId: 'com.example.orders',
+  appName: 'Orders',
+  webDir: 'dist',
+  ...(developmentUrl
+    ? { server: { url: developmentUrl, cleartext: developmentUrl.startsWith('http:') } }
+    : {}),
+}
+export default config
+```
+
 ## 配置清单
 
 | 配置项                                             | 默认值/必填    | 说明                                                                      |

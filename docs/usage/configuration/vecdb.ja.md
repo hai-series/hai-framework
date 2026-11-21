@@ -4,10 +4,48 @@
 
 `config/_vecdb.yml` を読み込み、指定した方式を初期化します。距離尺度はコレクション作成前に選びます。既存のコレクションは作成時の尺度を保持します。
 
+## 設定例
+
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: lancedb
 path: ./data/vectors
 ```
+
+### 複数の API から Qdrant を共有する
+
+`config/_vecdb.yml` に記述します。同じベクトルを検索する各インスタンスは同じサービスへ接続します。API キーはサーバーの非公開環境変数で渡します。コレクション名、次元数、距離の種類は作成時に指定します。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: qdrant
+url: https://vectors.example.com
+apiKey: ${HAI_VECDB_APIKEY}
+```
+
+### pgvector を導入済みの PostgreSQL を使う
+
+DB 管理者が pgvector 拡張を導入した後、`knowledge` データベースへ接続します。この例では HNSW を使います。設定を変えても既存コレクションのインデックスは自動で再作成されません。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: pgvector
+host: postgres.internal
+port: 5432
+database: knowledge
+user: knowledge_app
+password: ${HAI_VECDB_PASSWORD}
+indexType: hnsw
+```
+
+### Chroma サーバーへ接続する
+
+アプリ内のローカルディレクトリではなく、既存の Chroma サーバーを利用します。接続後にテスト用コレクションを作成し、ベクトルの登録と検索を行って、導入済みバージョンの API を確認します。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: chroma
+url: http://chroma.internal:8000
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

@@ -6,11 +6,41 @@
 
 Configure the feedback service in `_feedback.yml`. Use server-side collection controls and choose which evidence may leave the application. Configure notification and webhook delivery independently.
 
+## Configuration examples
+
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
 notificationMode: console
 consoleContent: metadata
 ```
+
+### Email the team about new feedback
+
+Put this in `config/_feedback.yml`. `email` must name an initialized Reach provider that can actually deliver mail; a Console provider only logs it. `adminUrl` is the link included in notifications. It neither creates the page nor grants access.
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: reach
+notificationProvider: email
+recipients: [support@example.com]
+adminUrl: https://admin.example.com/feedback
+```
+
+### Limit attachments and shorten retention
+
+Allow at most 2 MiB per attachment and ten accepted reports per user per day. Retain reports for seven days and exported ZIP files for twelve hours. `disabled` turns off notifications while reports are still stored. Expired objects are removed by background cleanup, so the worker must remain active.
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: disabled
+maxAttachmentBytes: 2097152
+maxReportsPerUserDay: 10
+retentionDays: 7
+exportRetentionHours: 12
+```
+
+## Configuration reference
+
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |

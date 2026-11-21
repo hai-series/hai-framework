@@ -8,10 +8,47 @@
 
 共有 RelDB の初期化後に `_runner.yml` を読み込みます。各プロセスに固有のノード ID を指定し、ジョブの登録前にワーカーノードの実行環境を用意します。
 
+## 設定例
+
 ```yaml schema=@h-ai/runner:RunnerConfigSchema
 nodeId: api-east
 executor: false
 ```
+
+### 実行ノードのリソースと待機数を制限する
+
+`config/_runner.yml` に記述します。通常タスク全体で CPU 2 コア、メモリ 2 GiB、一時領域 1 GiB を共有し、同時実行は 4 件までです。各タスクに同じ量を割り当てる設定ではありません。投入側サービスと DB・タスク定義を共有します。
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: worker-east
+executor: true
+capacity:
+  cpu: 2
+  memoryMiB: 2048
+  pids: 256
+  scratchMiB: 1024
+maxRunning: 4
+maxRunningPerScope: 2
+maxQueued: 1000
+```
+
+### ツール用タスクのリソースを別に確保する
+
+通常タスクとツール用タスクは別々に計算します。ツール全体で CPU 1 コア、メモリ 1 GiB を共有し、同時実行は 2 件までです。ホストには `capacity` と `toolCapacity` の両方を収容できる容量が必要です。ツールの処理関数はアプリ側で登録します。
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: tools-east
+executor: true
+toolCapacity:
+  cpu: 1
+  memoryMiB: 1024
+  pids: 128
+  scratchMiB: 512
+toolMaxRunning: 2
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

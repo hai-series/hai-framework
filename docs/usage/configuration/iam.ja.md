@@ -6,6 +6,10 @@
 
 データベースと認証の依存先の初期化後に `_iam.yml` を読み込みます。ログイン、登録、チャレンジ、権限、セッションは個別に設定します。ブラウザーにはフォームで使う公開項目だけを返します。
 
+設定の検証に失敗すると、`iam.init()` は `CONFIG_ERROR` を返します。メッセージと `error.ext.fields` に問題のフィールドパスが入り、`error.cause` に元の検証エラーを保持します。サーバーログの `issues` 配列にはパス、エラーの種類と説明を記録し、設定全体は記録しません。
+
+## 設定例
+
 ```yaml schema=@h-ai/iam:IamConfigSchema
 login:
   password: true
@@ -14,6 +18,39 @@ register:
   enabled: false
 session:
   maxAge: 3600
+```
+
+### パスワードでログインし、30 分の無操作でセッションを終了する
+
+`config/_iam.yml` に記述します。パスワードは最低 12 文字とし、自己登録を無効にします。両タイムアウトの単位は秒です。30 分の無操作、またはログインから 8 時間で再ログインが必要になります。既存のパスワードが自動で変更されることはありません。
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  otp: false
+  ldap: false
+register:
+  enabled: false
+password:
+  minLength: 12
+session:
+  idleTimeout: 1800
+  absoluteTimeout: 28800
+```
+
+### 社内の LDAP ディレクトリに接続する
+
+接続 URL、バインド用アカウント、ユーザーの検索範囲を揃えて指定します。パスワードはサーバーの非公開環境変数から読み込みます。この例では通常のパスワードログインも残します。LDAP を使わない場合は `ldap` 節と `HAI_IAM_LDAP_*` 環境変数をすべて省略します。パスワード変数だけを残すと、不完全な設定となり起動できません。
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+login:
+  password: true
+  ldap: true
+ldap:
+  url: ldaps://directory.example.com:636
+  bindDn: cn=app-reader,ou=services,dc=example,dc=com
+  bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}
+  searchBase: ou=people,dc=example,dc=com
 ```
 
 <a id="password"></a>

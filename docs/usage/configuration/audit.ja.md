@@ -6,11 +6,42 @@
 
 `_audit.yml` を読み込み、RelDB の後に Audit を初期化します。通知、バックアップ、保存期間の強制はそれぞれ有効にします。監査に必要な操作主体とリソース情報だけを記録します。
 
+## 設定例
+
 ```yaml schema=@h-ai/audit:AuditInitConfigSchema
 capture:
   enabled: true
   includeReads: false
 ```
+
+### 直近 90 日分の監査記録を保護する
+
+`config/_audit.yml` に記述します。保護期間中の記録は変更・削除できません。91 日目に自動削除される設定ではありません。削除処理はアプリ側で別途実行します。この節を消しても DB に保存済みの保護設定は解除されません。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: false
+retention:
+  enabled: true
+  minDays: 90
+```
+
+### 参照操作も記録し、顧客の電話番号を伏せる
+
+`includeReads` を有効にすると、監査に接続済みの入口では成功した参照操作も記録され、記録量が増えます。`customerPhone` は詳細内のフィールド名で、保存時に伏せます。パスワードとトークンはこの一覧に関係なく伏せられます。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: true
+privacy:
+  enabled: true
+  fields: [customerPhone]
+```
+
+## 設定一覧
+
 
 | 項目 | 既定値・必須条件 | 用途 |
 | --- | --- | --- |

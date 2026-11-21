@@ -8,10 +8,47 @@ The actual file is `config/_runner.yml`, loaded by applications such as AI Playg
 
 Load `_runner.yml` after initializing shared RelDB. Every participating process needs its own node ID. Register execution environments on worker nodes before submitting jobs.
 
+## Configuration examples
+
 ```yaml schema=@h-ai/runner:RunnerConfigSchema
 nodeId: api-east
 executor: false
 ```
+
+### Set worker resource and queue limits
+
+Put this in `config/_runner.yml`. Ordinary tasks share two CPU cores, 2 GiB of memory and 1 GiB of scratch space, with at most four running together. This is the combined node budget, not a grant to every task. The node must share the database and task definitions with the submitting service.
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: worker-east
+executor: true
+capacity:
+  cpu: 2
+  memoryMiB: 2048
+  pids: 256
+  scratchMiB: 1024
+maxRunning: 4
+maxRunningPerScope: 2
+maxQueued: 1000
+```
+
+### Reserve a separate budget for tool jobs
+
+Ordinary tasks and tool jobs use separate budgets. Tools share one CPU core and 1 GiB of memory, with at most two active jobs. The host must accommodate both `capacity` and `toolCapacity`. This does not register tools; the application must still register their handlers.
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: tools-east
+executor: true
+toolCapacity:
+  cpu: 1
+  memoryMiB: 1024
+  pids: 128
+  scratchMiB: 512
+toolMaxRunning: 2
+```
+
+## Configuration reference
+
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |

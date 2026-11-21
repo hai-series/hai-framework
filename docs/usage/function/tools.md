@@ -72,17 +72,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## 功能说明
 
-Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景从 /server 导入并借用已经初始化的 Runner。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景从 /server 导入并借用已经初始化的 Runner。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="definitions"></a>
 
@@ -107,6 +97,7 @@ function value<T>(result: HaiResult<T>): T {
 校验失败或授权拒绝不会进入 handler；注册器与单次调用都配置授权时，两者都必须允许。超时或取消返回失败并停止等待，处理函数仍须响应 signal，已经产生的外部效果不会自动回滚。handler 的普通值作为 data；resultHandler 保留已有 HaiResult。
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { z } from 'zod'
 // 用下方 Zod 数字规则和加法处理器定义 sum；返回可执行实例，定义不合法会抛 TypeError。
 const tool = tools.define({
@@ -116,8 +107,11 @@ const tool = tools.define({
 })
 // 无参把工具元数据和参数转换成协议定义，在本例读到名称 sum；无法转换规则时抛异常。
 tool.toDefinition().name // 'sum'; parameters are JSON Schema
-// 向 sum 传数字 2 和 3，成功得到 { total: 5 }；工具失败时 value 抛出。
-value(await tool.execute({ a: 2, b: 3 })) // { total: 5 }
+// 向 sum 传数字 2 和 3，成功得到 { total: 5 }；工具失败时 返回原失败结果。
+const executeResult = await tool.execute({ a: 2, b: 3 })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
 // 把 a 改成字符串 wrong 验证边界，结果为 VALIDATION_FAILED，求和处理器不执行。
 const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
 ```
@@ -188,13 +182,19 @@ const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALID
 #### 场景：登记、查找与批量执行
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // Continue with the sum tool from the preceding scenario.
 // 创建空注册器，仅允许可信上下文里的 demo-user 执行其工具。
 const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
 // 登记前面定义的 sum 实例，成功无数据；同名工具已登记时失败。
-value(registry.register(tool)) // undefined
+const registerResult = registry.register(tool)
+if (!registerResult.success)
+  return registerResult
 // 传入空工具集，成功无数据，现有 sum 保持有效。
-value(registry.registerMany([])) // undefined; no tools added
+const registerManyResult = registry.registerMany([])
+if (!registerManyResult.success)
+  return registerManyResult
+// 空列表未新增工具，没有业务数据
 registry.size // 1
 // 检查刚登记的 sum，返回 true。
 registry.has('sum') // true
@@ -205,15 +205,26 @@ registry.getNames() // ['sum']
 // 无参取得当前注册工具的协议定义，此处提取名称得到 ['sum']；参数规则无法转换时会抛异常。
 registry.getDefinitions().map(definition => definition.name) // ['sum']
 // 使用可信 demo-user 对 sum 传入 2 和 3，成功为 { total: 5 }，未授权或校验失败不执行。
-value(await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })) // { total: 5 }
-// 同一身份批量执行一条 sum(4, 1)，得到输入顺序的 [{ total: 5 }]；批量失败由 value 抛出。
-value(await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })) // [{ total: 5 }]
+const executeResult = await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })
+if (!executeResult.success)
+  return executeResult
+executeResult.data // { total: 5 }
+// 同一身份批量执行一条 sum(4, 1)，得到输入顺序的 [{ total: 5 }]；批量失败时返回原失败结果。
+const executeAllResult = await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })
+if (!executeAllResult.success)
+  return executeAllResult
+executeAllResult.data // [{ total: 5 }]
 // 以已有 sum 名称更新当前实例，成功无数据；校验失败保留旧注册。
-value(registry.replace(tool)) // undefined; same registered name
+const replaceResult = registry.replace(tool)
+if (!replaceResult.success)
+  return replaceResult
+// 替换了同名登记，没有业务数据
 // 删除 sum 的注册；此次返回 true，名称原本不存在时返回 false。
 registry.unregister('sum') // true
 // 把刚移除的 sum 再批量登记一次；成功无数据，名称冲突时失败。
-value(registry.registerMany([tool])) // undefined
+const registerManyResult2 = registry.registerMany([tool])
+if (!registerManyResult2.success)
+  return registerManyResult2
 // 无参清空当前注册表，sum 此后不可查，无返回数据。
 registry.clear() // undefined
 registry.size // 0
@@ -321,18 +332,33 @@ import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/t
 
 async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
   // 按当前可信上下文读取启用目录，返回工具定义和分组，仍需在提交、执行时授权。
-  const catalog = value(await service.catalog(context))
+  const catalogResult = await service.catalog(context)
+  if (!catalogResult.success)
+    return catalogResult
+  const catalog = catalogResult.data
   // catalog.tools describes what this context can submit.
   const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
-  // 把保有幂等键的请求与当前主体提交给服务，返回任务状态和完整回执；拒绝或提交失败由 value 抛错。
-  const submitted = value(await service.submit(keyed, context))
+  // 把保有幂等键的请求与当前主体提交给服务，返回任务状态和完整回执；拒绝或提交失败时返回原失败结果。
+  const submittedResult = await service.submit(keyed, context)
+  if (!submittedResult.success)
+    return submittedResult
+  const submitted = submittedResult.data
   // 以同一持久键和主体查回先前执行，无匹配时成功返回 undefined，不会新建任务。
-  const recovered = value(await service.find(keyed.idempotencyKey, context))
+  const recoveredResult = await service.find(keyed.idempotencyKey, context)
+  if (!recoveredResult.success)
+    return recoveredResult
+  const recovered = recoveredResult.data
   // recovered is the same logical run, or undefined if none was accepted.
   // 用提交返回的完整回执和当前主体查看任务状态、可用输出及事件；回执不属于当前主体时失败。
-  const current = value(await service.inspect(submitted.receipt, context))
+  const currentResult = await service.inspect(submitted.receipt, context)
+  if (!currentResult.success)
+    return currentResult
+  const current = currentResult.data
   // 用同一回执请求取消，返回实际任务状态，cancelling 时尚未确认停止。
-  const cancelling = value(await service.cancel(submitted.receipt, context))
+  const cancellingResult = await service.cancel(submitted.receipt, context)
+  if (!cancellingResult.success)
+    return cancellingResult
+  const cancelling = cancellingResult.data
   // current/cancelling are ToolRun values; cancellation may still be in progress.
   // 以同一幂等键和主体等待对应任务的终态，成功返回工具的 JSON 输出；任务已取消或失败时返回错误。
   return service.invoke(keyed, context)
@@ -376,7 +402,6 @@ function createWorkTools(options: JobToolOptions): ToolSet {
 // The result includes artifact_create/read/save and data_analyze.
 // Job tools appear only for the environments present in options.environments.
 ```
-
 
 #### 作业工具与环境要求
 

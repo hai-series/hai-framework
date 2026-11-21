@@ -55,17 +55,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="client-lifecycle"></a>
 
@@ -86,16 +76,22 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：クライアントの準備と分離
 
 ```ts
+// import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
 import { apiContract } from '@h-ai/api-contract'
 apiClient.isInitialized // default client readiness
 const settings = apiClient.config // redacted config or null
 // Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
 const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
-// Initialize that client for the HTTPS API and default auth options. value throws on initialization failure.
-value(await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} }))
+// Initialize that client for the HTTPS API and default auth options. Return the failed result on initialization failure.
+const initResult = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+if (!initResult.success)
+  return initResult
 try {
-  // Fetch public authentication settings from this client's server. value returns its data or throws the failed result.
-  const policy = value(await client.iam.auth.publicConfig()) // IamPublicConfig from this server
+  // Fetch public authentication settings from this client's server. Read data only on success and return the original result on failure.
+  const policyResult = await client.iam.auth.publicConfig()
+  if (!policyResult.success)
+    return policyResult
+  const policy = policyResult.data // IamPublicConfig from this server
 }
 finally {
   // Close only the independent client used in this try block. Its local resources are released.
@@ -239,41 +235,63 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 フォーム入力を受け、actions が保存完了を待ちます。以下の関数は別々の操作用で、実アカウントに順次実行しません。必要な captcha は AuthPanel が渡します。
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // Bind auth actions to the initialized API client and its current credential store.
 const actions = apiClient.createAuthActions(apiClient)
-// Load the server's public IAM settings, or null when unavailable. value throws a failed result.
-const config = value(await actions.publicConfig()) // IamPublicConfig | null
+// Load the server's public IAM settings, or null when unavailable. Return the failed result a failed result.
+const configResult = await actions.publicConfig()
+if (!configResult.success)
+  return configResult
+const config = configResult.data // IamPublicConfig | null
 if (!config)
   throw new Error('Public authentication settings are unavailable')
 // Bind page-exit session ending only when the returned setting enables it. Keep the function that unbinds the listener.
 const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
 async function login(input: Parameters<typeof actions.login>[0]) {
-  // Submit the caller's login input. Success returns authenticated identity and tokens. value throws the preserved failure.
-  return value(await actions.login(input)) // authenticated user and tokens, or throws preserved failure
+  // Submit the caller's login input. Success returns authenticated identity and tokens. Return the failed result the preserved failure.
+  const loginResult = await actions.login(input)
+  if (!loginResult.success)
+    return loginResult
+  return loginResult.data // authenticated user and tokens; the failure branch above returns the original result
 }
 async function register(input: Parameters<typeof actions.register>[0]) {
-  // Submit the caller's registration input. Success returns the registration result. value throws on failed registration.
-  return value(await actions.register(input)) // registration/authentication result
+  // Submit the caller's registration input. Success returns the registration result. Return the failed result on failed registration.
+  const registerResult = await actions.register(input)
+  if (!registerResult.success)
+    return registerResult
+  return registerResult.data // registration/authentication result
 }
 async function sendCode(identifier: string) {
-  // Request an OTP for the supplied identifier. Success returns its expiry. value throws a failed request.
-  return value(await actions.sendOtp(identifier)) // expiresAt
+  // Request an OTP for the supplied identifier. Success returns its expiry. Return the failed result a failed request.
+  const sendOtpResult = await actions.sendOtp(identifier)
+  if (!sendOtpResult.success)
+    return sendOtpResult
+  return sendOtpResult.data // expiresAt
 }
 async function requestReset(identifier: string) {
-  // Request a password reset for the identifier. Success has no data. value throws if the request fails.
-  value(await actions.requestPasswordReset(identifier)) // undefined
+  // Request a password reset for the identifier. Success has no data. Return the failed result if the request fails.
+  const requestPasswordResetResult = await actions.requestPasswordReset(identifier)
+  if (!requestPasswordResetResult.success)
+    return requestPasswordResetResult
 }
 async function resetPassword(token: string, newPassword: string) {
-  // Send the supplied reset token and new password. Success completes the reset without data. value throws on failure.
-  value(await actions.confirmPasswordReset(token, newPassword)) // undefined
+  // Send the supplied reset token and new password. Success completes the reset without data. Return the failed result on failure.
+  const confirmPasswordResetResult = await actions.confirmPasswordReset(token, newPassword)
+  if (!confirmPasswordResetResult.success)
+    return confirmPasswordResetResult
 }
 async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
-  // Submit the caller's renewal input. Success confirms renewal without data. value throws on failure.
-  value(await actions.renewPassword(input)) // undefined
+  // Submit the caller's renewal input. Success confirms renewal without data. Return the failed result on failure.
+  const renewPasswordResult = await actions.renewPassword(input)
+  if (!renewPasswordResult.success)
+    return renewPasswordResult
 }
 async function confirmSensitive(password: string) {
-  // Exchange the current password for a credential scoped to users:delete. value throws on a failed reauthentication.
-  return value(await actions.reauthenticate(password, 'users:delete')) // one-operation credential
+  // Exchange the current password for a credential scoped to users:delete. Return the failed result on a failed reauthentication.
+  const reauthenticateResult = await actions.reauthenticate(password, 'users:delete')
+  if (!reauthenticateResult.success)
+    return reauthenticateResult
+  return reauthenticateResult.data // one-operation credential
 }
 // Request a CAPTCHA for login. Check success before handing the returned challenge to AuthPanel.
 const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
@@ -329,17 +347,27 @@ unbind() // call when this page is destroyed
 #### 利用例：認証と管理 API の呼び出し
 
 ```ts
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
 // Fetch the authenticated current user with no explicit input. Success supplies the profile. Missing authorization or other failures are thrown below.
 const current = await apiClient.iam.auth.currentUser()
 if (!current.success)
   throw new Error(current.error.message)
-// Fetch authorized page 1 with at most 20 users. value throws the failure instead of returning a page.
-const users = value(await apiClient.iam.users.list({ page: 1, pageSize: 20 }))
+// Fetch authorized page 1 with at most 20 users. Return the failed result the failure instead of returning a page.
+const usersResult = await apiClient.iam.users.list({ page: 1, pageSize: 20 })
+if (!usersResult.success)
+  return usersResult
+const users = usersResult.data
 // users.items is the authorized user page, not every user in the database
-// Use default role filters. Success yields the roles visible to the caller. value throws on failure.
-const roles = value(await apiClient.iam.roles.list({})) // configured roles visible to this caller
-// Use default permission filters. Success contains visible permission records. value throws on failure.
-const permissions = value(await apiClient.iam.permissions.list({})) // permitted permission records
+// Use default role filters. Success yields the roles visible to the caller. Return the failed result on failure.
+const rolesResult = await apiClient.iam.roles.list({})
+if (!rolesResult.success)
+  return rolesResult
+const roles = rolesResult.data // configured roles visible to this caller
+// Use default permission filters. Success contains visible permission records. Return the failed result on failure.
+const permissionsResult = await apiClient.iam.permissions.list({})
+if (!permissionsResult.success)
+  return permissionsResult
+const permissions = permissionsResult.data // permitted permission records
 ```
 
 一覧に個々の入力と成功データを示しています。ID は前の成功応答から取得し、内容は実サービスと権限によります。ログインだけで管理権限は得られません。
@@ -372,11 +400,18 @@ const permissions = value(await apiClient.iam.permissions.list({})) // permitted
 #### 利用例：ファイルと AI API
 
 ```ts
-// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. value throws on failure.
-const files = value(await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 }))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. Return the failed result on failure.
+const filesResult = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
+if (!filesResult.success)
+  return filesResult
+const files = filesResult.data
 // files contains metadata and pagination for this authorized prefix
-// List the AI sessions visible to the caller using default filters. value throws on request failure.
-const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessions
+// List the AI sessions visible to the caller using default filters. Return the failed result on request failure.
+const sessionsResult = await apiClient.ai.sessions.list({})
+if (!sessionsResult.success)
+  return sessionsResult
+const sessions = sessionsResult.data // visible AI sessions
 ```
 
 reports/ と成功応答のセッション ID を使います。削除は実データを変え、署名結果は URL・キー・期限を含みます。AI の文言は固定ではありません。

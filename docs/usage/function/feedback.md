@@ -42,17 +42,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="service"></a>
 
@@ -71,8 +61,12 @@ function value<T>(result: HaiResult<T>): T {
 #### 场景：准备服务与接入采集任务
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // 无参轮询并处理反馈后台任务，data.processed 为本轮处理数，不代表每项通知都已送达。
-const jobs = value(await feedback.runJobs()) // this round's processed count
+const jobsResult = await feedback.runJobs()
+if (!jobsResult.success)
+  return jobsResult
+const jobs = jobsResult.data // 本轮已处理数量
 ```
 
 init 输入来自最小接入，成功无数据；runJobs 无参数，输出本轮处理结果；close 等待并停止本实例后台任务。业务采集与 Webhook 的真实输入、重试和取消见下文。
@@ -203,16 +197,31 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 import type { FeedbackContext } from '@h-ai/feedback'
 
 async function processReport(context: FeedbackContext, submissionId: string) {
-  // 用当前可信身份与持久提交号创建 orders 报告，返回同一报告 ID/编号；认证或持久化失败由 value 抛出。
-  const report = value(await feedback.submit({ appId: 'orders', submissionId }, context))
+  // 用当前可信身份与持久提交号创建 orders 报告，返回同一报告 ID/编号；认证或持久化失败时返回原失败结果。
+  const reportResult = await feedback.submit({ appId: 'orders', submissionId }, context)
+  if (!reportResult.success)
+    return reportResult
+  const report = reportResult.data
   // 读取当前身份有权查看的第一页最多 20 条报告，返回分页记录；无匹配时 items 为空。
-  const page = value(await feedback.list({ page: 1, pageSize: 20 }, context)) // authorized report page
+  const pageResult = await feedback.list({ page: 1, pageSize: 20 }, context)
+  if (!pageResult.success)
+    return pageResult
+  const page = pageResult.data // 当前调用方有权读取的报告分页
   // 按刚创建的报告 ID 与当前身份读取详情和版本；不可访问或查询失败交给 value。
-  const detail = value(await feedback.get(report.id, context))
+  const detailResult = await feedback.get(report.id, context)
+  if (!detailResult.success)
+    return detailResult
+  const detail = detailResult.data
   // 按相同报告和当前身份读取前 20 条证据摘要，返回分页对象；没有证据时 items 为空。
-  const evidence = value(await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context))
+  const evidenceResult = await feedback.getEvidence({ id: report.id, page: 1, pageSize: 20 }, context)
+  if (!evidenceResult.success)
+    return evidenceResult
+  const evidence = evidenceResult.data
   // 用刚读到的版本为条件把报告标为 handled，返回升级版本的记录；并发版本变化或权限不足时失败。
-  const handled = value(await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context))
+  const handledResult = await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: detail.report.version }, context)
+  if (!handledResult.success)
+    return handledResult
+  const handled = handledResult.data
   return { report, page, evidence, handled } // same report ID; handled has the new version
 }
 
@@ -257,16 +266,28 @@ import type { FeedbackContext, FeedbackUploadInput } from '@h-ai/feedback'
 async function appendMaterials(context: FeedbackContext, upload: FeedbackUploadInput) {
   const id = upload.id
   // 为 upload.id 对应报告追加浏览器事件 event-demo-1，稳定事件 ID 用于去重。返回确认 ID 和证据修订号；失效身份或写入失败会报错。
-  const receipt = value(await feedback.appendEvidence({ id, evidence: [{
+  const receiptResult = await feedback.appendEvidence({ id, evidence: [{
     id: 'event-demo-1', source: 'browser', sequence: 1, kind: 'business',
     timestamp: Date.now(), data: { state: 'checkout-failed' },
-  }] }, context)) // acknowledged IDs and evidenceRevision
-  // 把调用方准备的附件内容和标识写入当前报告，返回附件元数据；附件校验、预算或写入失败由 value 抛出。
-  const attachment = value(await feedback.uploadAttachment(upload, context)) // saved attachment metadata
-  // 按报告 ID 和原上传附件 ID 读取授权附件，返回带 Base64 内容的 DTO；读取失败由 value 抛出。
-  const bytes = value(await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context))
+  }] }, context)
+  if (!receiptResult.success)
+    return receiptResult
+  const receipt = receiptResult.data // 已确认的证据编号及当前证据修订号
+  // 把调用方准备的附件内容和标识写入当前报告，返回附件元数据；附件校验、预算或写入失败时返回原失败结果。
+  const attachmentResult = await feedback.uploadAttachment(upload, context)
+  if (!attachmentResult.success)
+    return attachmentResult
+  const attachment = attachmentResult.data // 已保存附件的元数据
+  // 按报告 ID 和原上传附件 ID 读取授权附件，返回带 Base64 内容的 DTO；读取失败时返回原失败结果。
+  const bytesResult = await feedback.getAttachment({ id, attachmentId: upload.attachmentId }, context)
+  if (!bytesResult.success)
+    return bytesResult
+  const bytes = bytesResult.data
   // 为该报告确认采集结束且没有已知缺项，返回更新的报告；条件不满足时保持失败。
-  const completed = value(await feedback.completeCollection({ id, missing: [] }, context)) // updated report
+  const completedResult = await feedback.completeCollection({ id, missing: [] }, context)
+  if (!completedResult.success)
+    return completedResult
+  const completed = completedResult.data // 更新后的报告
   return { receipt, attachment, bytes, completed }
 }
 ```
@@ -295,7 +316,10 @@ import type { FeedbackContext } from '@h-ai/feedback'
 
 async function requestArchive(id: string, context: FeedbackContext) {
   // 按需导出调用方指定且有权访问的报告，先返回持久任务回执；此时不保证归档已生成。
-  const job = value(await feedback.export({ id }, context)) // persistent job receipt
+  const jobResult = await feedback.export({ id }, context)
+  if (!jobResult.success)
+    return jobResult
+  const job = jobResult.data // 已持久化的任务回执
   // 用报告 ID 和刚获得的导出任务 ID 取归档 DTO；尚未生成或无权访问时返回失败。
   return feedback.getExport({ id, jobId: job.id }, context) // HaiResult<FeedbackAttachmentData>
 }
@@ -321,13 +345,17 @@ hai feedback view feedback-FB-1.zip
 从 `@h-ai/feedback/client` 导入 `createFeedbackClient()`。以下 `feedbackClient` 是返回的独立实例，`actions` 是应用提供的 typed HTTP 适配器。返回 `HaiResult` 的步骤须检查 `success`。
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { getFeedbackBundleViewerFiles } from '@h-ai/feedback/bundle'
 import { feedbackDataBytes, saveFeedbackFile } from '@h-ai/feedback/client'
 
 // 将 sample.txt DTO 的 Base64 内容解码成单字节 a，返回 Uint8Array。
 const bytes = feedbackDataBytes({ name: 'sample.txt', contentType: 'text/plain', dataBase64: 'YQ==' }) // 将附件 DTO 中的 Base64 解码成正文 Uint8Array。
-// 用当前平台保存刚解码的文本，saved 和 cancelled 分别表示已交付保存和用户取消；平台出错由 value 抛出。
-const saved = value(await saveFeedbackFile(bytes, 'sample.txt', 'text/plain')) // 交给当前平台的保存工具。读取 HaiResult<FeedbackSaveResult>。
+// 用当前平台保存刚解码的文本，saved 和 cancelled 分别表示已交付保存和用户取消；平台出错时返回原失败结果。
+const savedResult = await saveFeedbackFile(bytes, 'sample.txt', 'text/plain')
+if (!savedResult.success)
+  return savedResult
+const saved = savedResult.data // 交给当前平台的保存工具。读取 HaiResult<FeedbackSaveResult>。
 // 无参取得离线查看器文件映射，再取 HTML 入口的字节，不执行查看器。
 const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输入，取得离线包内置查看器入口的字节。
 ```
@@ -372,29 +400,51 @@ import { createFeedbackClient } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
   // 无参创建独立采集会话，配置和采集在调用 init 后生效。
   const feedbackClient = createFeedbackClient()
-  // 用宿主传入的客户端配置启动本会话，成功无数据；无效配置或并发初始化失败由 value 抛出。
-  value(await feedbackClient.init(config))
+  // 用宿主传入的客户端配置启动本会话，成功无数据；无效配置或并发初始化失败时返回原失败结果。
+  const initResult = await feedbackClient.init(config)
+  if (!initResult.success)
+    return initResult
   try {
     // 记录 state: ready 的业务事件到本次采集会话，不返回业务数据。
     feedbackClient.record({ kind: 'business', data: { state: 'ready' } })
-    // 无参建立可编辑反馈草稿，返回草稿快照；会话未就绪时 value 抛出。
-    const draft = value(await feedbackClient.prepare())
+    // 无参建立可编辑反馈草稿，返回草稿快照；会话未就绪时 返回原失败结果。
+    const draftResult = await feedbackClient.prepare()
+    if (!draftResult.success)
+      return draftResult
+    const draft = draftResult.data
     // 无参读取当前草稿，尚未建立或已清除时为 undefined。
     const current = feedbackClient.getDraft() // current draft or undefined
     // 无参生成当前草稿的界面投影，包含证据、缺项及可用的附件预览。
     const view = feedbackClient.getView() // preview URLs, evidence and missing materials
-    // 不传附件 ID，采集当前可见页面截图到草稿；采集失败或草稿被并发冻结时 value 抛出。
-    value(await feedbackClient.captureScreenshot()) // refreshes the screenshot attachment
+    // 不传附件 ID，采集当前可见页面截图到草稿；采集失败或草稿被并发冻结时 返回原失败结果。
+    const captureScreenshotResult = await feedbackClient.captureScreenshot()
+    if (!captureScreenshotResult.success)
+      return captureScreenshotResult
+    // 已更新草稿的截图附件，没有业务数据
     // 把内存生成的 demo.txt 批量加入草稿，成功无数据；超限、校验或并发失败不加入半批文件。
-    value(await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })]))
+    const addFilesResult = await feedbackClient.addFiles([new File(['demo log'], 'demo.txt', { type: 'text/plain' })])
+    if (!addFilesResult.success)
+      return addFilesResult
     // 提交当前草稿并设置说明 Checkout failed，成功得到报告 ID 和编号；后续材料可能仍待上传。
-    const receipt = value(await feedbackClient.submit({ description: 'Checkout failed' })) // accepted report ID/number
+    const receiptResult = await feedbackClient.submit({ description: 'Checkout failed' })
+    if (!receiptResult.success)
+      return receiptResult
+    const receipt = receiptResult.data // 已受理的报告 ID 与编号
     // 无参续传当前报告未送达的证据及附件，成功无业务数据；未完成时保留可继续处理的状态。
-    value(await feedbackClient.flush()) // resumes pending evidence upload
-    // 无参把本地草稿导出为 ZIP 字节，不发送给服务端；生成失败由 value 抛出。
-    const archive = value(await feedbackClient.exportDraft()) // Uint8Array ZIP
-    // 无参将当前草稿归档交给平台保存。用 status 区分 saved 和 cancelled；平台错误由 value 抛出。
-    const saved = value(await feedbackClient.saveDraft()) // inspect saved.status; cancelled is not a saved file
+    const flushResult = await feedbackClient.flush()
+    if (!flushResult.success)
+      return flushResult
+    // 已续传待确认的证据，没有业务数据
+    // 无参把本地草稿导出为 ZIP 字节，不发送给服务端；生成失败时返回原失败结果。
+    const archiveResult = await feedbackClient.exportDraft()
+    if (!archiveResult.success)
+      return archiveResult
+    const archive = archiveResult.data // ZIP 归档的 Uint8Array 字节
+    // 无参将当前草稿归档交给平台保存。用 status 区分 saved 和 cancelled；平台错误时返回原失败结果。
+    const savedResult = await feedbackClient.saveDraft()
+    if (!savedResult.success)
+      return savedResult
+    const saved = savedResult.data // 检查 saved.status；cancelled 表示取消，不代表已保存
     // 无参撤销会话创建的附件预览 URL，不返回数据。
     feedbackClient.releasePreviews() // releases generated object URLs
     // 无参暂停主动采集，保留草稿及已受理的上传工作。

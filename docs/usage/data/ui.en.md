@@ -6,8 +6,6 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
 ### Remember the selected theme
 
 Structure: `theme`.
@@ -46,7 +44,7 @@ Avoid showing an already completed tour on every visit.
 }
 ```
 
-Version 1 of intro in orders is complete. Cookie storage is the default; a new tour version may show again. updatedAt dates the progress update.
+Version 1 of intro in orders is complete. Cookie storage is the default; a new tour version may show again. updatedAt records the progress update time in Unix milliseconds.
 
 ### Resume a tour after navigation
 

@@ -61,17 +61,7 @@ finally {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="connection"></a>
 
@@ -92,16 +82,21 @@ Connect to a vector backend before using collections; keep raw connection detail
 #### Scenario: Connect and close
 
 ```ts
-// Open LanceDB at ./data/docs-demo. Success enables collection access and has no data. value handles failure.
-value(await vecdb.init({ type: 'lancedb', path: './data/docs-demo' }))
+// Fragment inside an async application function; return failed results to its caller.
+// Open LanceDB at ./data/docs-demo. Success enables collection access and has no data. Return the original failed result on failure.
+const initResult = await vecdb.init({ type: 'lancedb', path: './data/docs-demo' })
+if (!initResult.success)
+  return initResult
 // Read readiness directly. After successful connection this is true.
 vecdb.isInitialized // true
 // Read type from the sanitized configuration after connection. Here it is lancedb.
 vecdb.config?.type // 'lancedb'
 // Read backend connection details for in-process integration. They can contain credentials.
 const connection = vecdb.rawConnection // backend-specific connection; may contain credentials
-// Close the connection without arguments. Success has no data. value throws on failure.
-value(await vecdb.close()) // undefined
+// Close the connection without arguments. Success has no data. Return the failed result on failure.
+const closeResult = await vecdb.close()
+if (!closeResult.success)
+  return closeResult
 // Read the configuration after close. It is null.
 vecdb.config // null
 ```
@@ -133,18 +128,35 @@ A collection fixes the vector dimension and metric. Dropping it removes all its 
 #### Scenario: Prepare and remove collections
 
 ```ts
-// Create demo-docs with dimension 3 and cosine scoring. Success has no data. value throws on failure.
-value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
-// Check the newly created demo-docs. Success returns true. value throws on a backend failure.
-value(await vecdb.collection.exists('demo-docs')) // true
-// List collection names without arguments. The array contains demo-docs. value throws on failure.
-value(await vecdb.collection.list()) // includes 'demo-docs'
-// Read metadata for demo-docs. It has dimension 3, cosine scoring, and zero documents. value throws on failure.
-const info = value(await vecdb.collection.info('demo-docs')) // dimension 3, cosine, zero documents
-// Drop demo-docs and its data. Success has no data. value throws on failure.
-value(await vecdb.collection.drop('demo-docs')) // undefined
-// Check the dropped demo-docs again. Success returns false. value throws on query failure.
-value(await vecdb.collection.exists('demo-docs')) // false
+// Fragment inside an async application function; return failed results to its caller.
+// Create demo-docs with dimension 3 and cosine scoring. Success has no data. Return the failed result on failure.
+const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
+if (!createResult.success)
+  return createResult
+// Check the newly created demo-docs. Success returns true. Return the failed result on a backend failure.
+const existsResult = await vecdb.collection.exists('demo-docs')
+if (!existsResult.success)
+  return existsResult
+existsResult.data // true
+// List collection names without arguments. The array contains demo-docs. Return the failed result on failure.
+const listResult = await vecdb.collection.list()
+if (!listResult.success)
+  return listResult
+listResult.data // includes 'demo-docs'
+// Read metadata for demo-docs. It has dimension 3, cosine scoring, and zero documents. Return the failed result on failure.
+const infoResult = await vecdb.collection.info('demo-docs')
+if (!infoResult.success)
+  return infoResult
+const info = infoResult.data // dimension 3, cosine, zero documents
+// Drop demo-docs and its data. Success has no data. Return the failed result on failure.
+const dropResult = await vecdb.collection.drop('demo-docs')
+if (!dropResult.success)
+  return dropResult
+// Check the dropped demo-docs again. Success returns false. Return the failed result on query failure.
+const existsResult2 = await vecdb.collection.exists('demo-docs')
+if (!existsResult2.success)
+  return existsResult2
+existsResult2.data // false
 ```
 
 Use a new collection name. Recreate the three-dimensional collection before the vector scenario; backend failures remain failed results.
@@ -179,24 +191,45 @@ VecDB stores and compares numeric vectors; it does not embed text. Writes and qu
 The example uses dimension 3, so both write and query use [1,0,0]; identical cosine vectors score about 1. An application or AI embedding model supplies real vectors. Search returns matches and scores, not generated answers or percentages.
 
 ```ts
-// Create demo-docs with dimension 3 and cosine scoring. Success has no data. value throws on failure.
-value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
-// Insert doc-1, its three-dimensional vector, and Install into demo-docs. Success has no data. value throws on failure.
-value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))
-// Count documents in demo-docs after insertion. Success returns 1. value throws on failure.
-value(await vecdb.vector.count('demo-docs')) // 1
-// Update the same doc-1 to Install v2. Success has no data. value throws on failure.
-value(await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }]))
-// Search demo-docs with the matching vector. Return at most one hit scoring at least 0.9, here the updated doc-1. value throws on failure.
-const matches = value(await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 }))
+// Fragment inside an async application function; return failed results to its caller.
+// Create demo-docs with dimension 3 and cosine scoring. Success has no data. Return the failed result on failure.
+const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
+if (!createResult.success)
+  return createResult
+// Insert doc-1, its three-dimensional vector, and Install into demo-docs. Success has no data. Return the failed result on failure.
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }])
+if (!insertResult.success)
+  return insertResult
+// Count documents in demo-docs after insertion. Success returns 1. Return the failed result on failure.
+const countResult = await vecdb.vector.count('demo-docs')
+if (!countResult.success)
+  return countResult
+countResult.data // 1
+// Update the same doc-1 to Install v2. Success has no data. Return the failed result on failure.
+const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }])
+if (!upsertResult.success)
+  return upsertResult
+// Search demo-docs with the matching vector. Return at most one hit scoring at least 0.9, here the updated doc-1. Return the failed result on failure.
+const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 })
+if (!matchesResult.success)
+  return matchesResult
+const matches = matchesResult.data
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
-// Read the first page of up to 32 document IDs from demo-docs. Success contains items and an optional nextCursor. value throws on failure.
-const page = value(await vecdb.vector.scan('demo-docs', { limit: 32 }))
+// Read the first page of up to 32 document IDs from demo-docs. Success contains items and an optional nextCursor. Return the failed result on failure.
+const pageResult = await vecdb.vector.scan('demo-docs', { limit: 32 })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data
 // page.items: [{ id: 'doc-1' }]; continue using nextCursor when present
-// Delete the listed doc-1 from demo-docs. Success has no data. value throws on failure.
-value(await vecdb.vector.delete('demo-docs', ['doc-1'])) // undefined
-// Count demo-docs after deletion. Success returns 0. value throws on failure.
-value(await vecdb.vector.count('demo-docs')) // 0
+// Delete the listed doc-1 from demo-docs. Success has no data. Return the failed result on failure.
+const deleteResult = await vecdb.vector.delete('demo-docs', ['doc-1'])
+if (!deleteResult.success)
+  return deleteResult
+// Count demo-docs after deletion. Success returns 0. Return the failed result on failure.
+const countResult2 = await vecdb.vector.count('demo-docs')
+if (!countResult2.success)
+  return countResult2
+countResult2.data // 0
 ```
 
 The query equals the stored vector, so its normalized cosine score is about 1. Content comes from the latest full upsert. Concurrent changes affect scans; a score is not a percentage.

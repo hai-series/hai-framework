@@ -6,9 +6,7 @@
 
 ## What these records are for
 
-Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
-
-### Identity and metadata for one request
+### User identity and request ID passed to a handler
 
 Structure: `ServContext`.
 

@@ -104,6 +104,8 @@ With `port: 3000` in `config/app.yml`, this logs port 3000 unless `HAI_APP_PORT`
 
 A child logger's fields apply to that child and its descendants. Creating one leaves the parent unchanged. The optional second argument, `ctx`, adds fields to a single entry. When fields share a key, later sources win: global fields → fields bound to the logger (from parent to child) → per-call `ctx` → current `core.context`.
 
+Valid JSON object or array strings in context are expanded before field redaction. Standard output, browser output and `core.logger.observe` receive the resulting structure. For example, `{ issues: '[{"path":"ldap.url","code":"invalid_type"}]' }` produces an `issues` array with one item, indented in Node pretty output. Prefer passing objects directly. The log message, JSON scalars and invalid JSON remain text. Expansion stops for strings over 65,536 characters, parsed object nesting reaching 32 levels, or more than four rounds of JSON encoding; text redaction still applies.
+
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |

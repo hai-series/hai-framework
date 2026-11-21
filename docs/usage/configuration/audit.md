@@ -18,6 +18,32 @@ capture:
   includeReads: false
 ```
 
+### 保护最近 90 天的审计记录
+
+写入 `config/_audit.yml`。这会阻止保护期内的记录被修改或删除，不会在第 91 天自动删除。清理仍由应用另行安排；去掉这一段也不会解除已保存到共享数据库的保护设置。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: false
+retention:
+  enabled: true
+  minDays: 90
+```
+
+### 查询操作也留记录，并隐藏客户手机号
+
+开启 `includeReads` 后，已经接入审计采集的成功查询也会留下记录，日志量会增加。`customerPhone` 是业务详情中的字段名，写入时隐藏；密码和令牌始终由模块隐藏，不依赖这个列表。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: true
+privacy:
+  enabled: true
+  fields: [customerPhone]
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

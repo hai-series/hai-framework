@@ -25,17 +25,7 @@ pnpm run deploy --env prod --build
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="delivery"></a>
 
@@ -68,15 +58,26 @@ import type { DeployConfigInput } from '@h-ai/deploy'
 import { deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
-  // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. value throws on failure.
-  const scan = value(await deploy.scan(appDir, { environment: 'prod' }))
-  // Initialize the deployment service with the supplied provider and credentials. value throws on invalid config or failed initialization.
-  value(await deploy.init(config))
+  // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. Return the failed result on failure.
+  const scanResult = await deploy.scan(appDir, { environment: 'prod' })
+  if (!scanResult.success)
+    return scanResult
+  const scan = scanResult.data
+  // Initialize the deployment service with the supplied provider and credentials. Return the failed result on invalid config or failed initialization.
+  const initResult = await deploy.init(config)
+  if (!initResult.success)
+    return initResult
   try {
-    // Provision database and cache for orders. Success lists each provisioned resource. value throws on a failed provisioning result.
-    const provisioned = value(await deploy.provisionAll('orders', ['db', 'cache']))
-    // Package the supplied app for prod in offline bundle mode. Success contains its bundle path and instructions. value throws on failure.
-    const delivered = value(await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true }))
+    // Provision database and cache for orders. Success lists each provisioned resource. Return the failed result on a failed provisioning result.
+    const provisionedResult = await deploy.provisionAll('orders', ['db', 'cache'])
+    if (!provisionedResult.success)
+      return provisionedResult
+    const provisioned = provisionedResult.data
+    // Package the supplied app for prod in offline bundle mode. Success contains its bundle path and instructions. Return the failed result on failure.
+    const deliveredResult = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
+    if (!deliveredResult.success)
+      return deliveredResult
+    const delivered = deliveredResult.data
     return { scan, provisioned, delivered } // bundlePath/instructions do not imply remote readiness
   }
   finally {
@@ -409,16 +410,24 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 #### 场景：管理本机私有凭据
 
 ```ts
+// 以下为应用异步业务函数体片段；失败时返回原结果。
 // Read the current user's private credentials file path. This requires no initialized deployment provider.
 const credentialPath = deploy.credentials.getPath() // operator-private path
-// Load saved credentials for this process. Success lists loaded variable names. value throws on a failed read.
-const loadedNames = value(deploy.credentials.load()) // loaded environment variable names
+// Load saved credentials for this process. Success lists loaded variable names. Return the failed result on a failed read.
+const loadedNamesResult = deploy.credentials.load()
+if (!loadedNamesResult.success)
+  return loadedNamesResult
+const loadedNames = loadedNamesResult.data // 已加载的环境变量名，不包含变量值
 // Save only credentials supplied securely by the operator:
-export function saveCredential(providerToken: string) {
-  // Save the operator-supplied token under HAI_DEPLOY_PROVIDER_TOKEN. value throws on persistence failure.
-  value(deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken))
-  // Save the same token using the batch API. value throws if the credentials file cannot be updated.
-  value(deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken }))
+function saveCredential(providerToken: string) {
+  // Save the operator-supplied token under HAI_DEPLOY_PROVIDER_TOKEN. Return the failed result on persistence failure.
+  const saveResult = deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)
+  if (!saveResult.success)
+    return saveResult
+  // Save the same token using the batch API. Return the failed result if the credentials file cannot be updated.
+  const saveAllResult = deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken })
+  if (!saveAllResult.success)
+    return saveAllResult
 }
 ```
 
@@ -449,16 +458,28 @@ import type { MiddlewareRequirement } from '@h-ai/deploy'
 import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
-  // Load the required prod environment from envDir. Success contains the merged values and file information. value throws if loading fails.
-  const environment = value(loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true }))
+  // Load the required prod environment from envDir. Success contains the merged values and file information. Return the failed result if loading fails.
+  const environmentResult = loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
+  if (!environmentResult.success)
+    return environmentResult
+  const environment = environmentResult.data
   // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
   const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
-  // Resolve this app's _cache.yml with those environment values. Success is a cache config object. value throws on load or expansion failure.
-  const config = value(loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values))
-  // Write the memory override to the private production environment. Success lists written variable names. value throws on failure.
-  const written = value(saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true }))
-  // Save the given cache requirement as the memory backend for this app. Success lists updated names. value throws if configuration cannot be written.
-  const middleware = value(saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } }))
+  // Resolve this app's _cache.yml with those environment values. Success is a cache config object. Return the failed result on load or expansion failure.
+  const configResult = loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
+  if (!configResult.success)
+    return configResult
+  const config = configResult.data
+  // Write the memory override to the private production environment. Success lists written variable names. Return the failed result on failure.
+  const writtenResult = saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
+  if (!writtenResult.success)
+    return writtenResult
+  const written = writtenResult.data
+  // Save the given cache requirement as the memory backend for this app. Success lists updated names. Return the failed result if configuration cannot be written.
+  const middlewareResult = saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
+  if (!middlewareResult.success)
+    return middlewareResult
+  const middleware = middlewareResult.data
   return { config, written, middleware } // use the memory cache requirement from this app's scan
 }
 ```
@@ -495,7 +516,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 分批启动仅在首批清理孤立容器，后续 serv/Web 启动保留已经就绪的中间件。
 
-创建工程时为 `.env.dev.local`、`.env.test.local`、`.env.prod.local` 分别生成独立初始密码和传输密钥环，文件不提交 Git。克隆工程后通过受保护文件或 Secret Manager 分发对应环境秘密，同环境所有节点使用同一 ring 与共享 registry，不在节点启动时生成。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错。CLI 和离线说明只提示初始密码变量及来源，不输出值；密码仅用于创建缺失账号，已有账号不被重置。
+创建工程时，开发、测试示例密钥环写入可提交的 `.env.dev`、`.env.test`，生产密钥只写入私有 `.env.prod.local`。初始密码按环境分别保存在私有文件中，已有账号密码保持不变。部署节点使用同一环境的 ring 与共享 registry，启动时不生成替代密钥。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错；CLI 和离线说明只提示密码变量及来源，不输出值。
 
 每次交付仍生成 归档内 `config/.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。运行配置变更后需重新打包交付。
 
@@ -537,11 +558,15 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 #### 场景：核对中间件表单
 
 ```ts
+// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
 // Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
 validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
-// Parse SMTP secure from the string false. The result is the boolean false. value throws if parsing fails.
-value(parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })) // false
+// Parse SMTP secure from the string false. The result is the boolean false. Return the failed result if parsing fails.
+const parseMiddlewareFieldResult = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+if (!parseMiddlewareFieldResult.success)
+  return parseMiddlewareFieldResult
+parseMiddlewareFieldResult.data // false
 ```
 
 输入字符串 false，成功数据是 boolean false，不是失败；canKeepMiddleware 输出适用性，describeMiddlewareBackend 输出当前语言的用途文字，具体后端由已有目录项提供。

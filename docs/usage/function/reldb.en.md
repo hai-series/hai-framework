@@ -66,17 +66,8 @@ await reldb.close()
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success, returns the original failed result, and reads data only on success. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="connection"></a>
 
@@ -121,24 +112,44 @@ Use trusted table names, columns and definitions, and inspect destructive change
 #### Scenario: Create and change tables
 
 ```ts
-// Create the sample order table with a text ID primary key. Success has no data. value throws on failure.
-value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
-// Add the nullable TEXT column note to demo_orders. Success updates the schema. value throws on failure.
-value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
-// Inspect the modified table. Success returns ['id', 'note']. value throws on failure.
-value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
-// Create the named index on demo_orders.note. Success changes the schema. value throws on failure.
-value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
-// Drop the new index by name. true allows it to be absent. Success has no data. value throws on failure.
-value(await reldb.ddl.dropIndex('demo_orders_note', true))
-// Drop note and its values from demo_orders. Success has no data. value throws on failure.
-value(await reldb.ddl.dropColumn('demo_orders', 'note'))
-// Rename the table to demo_orders_old. Success has no data. value throws on failure.
-value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
-// Drop the renamed table. true allows absence. Success has no data. value throws on failure.
-value(await reldb.ddl.dropTable('demo_orders_old', true))
-// Execute the trusted constant DDL for the marker table. Success has no data. value throws on failure.
-value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
+// Fragment inside an async application function; return failed results to its caller.
+// Create the sample order table with a text ID primary key. Success has no data. Return the failed result on failure.
+const createTableResult = await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } })
+if (!createTableResult.success)
+  return createTableResult
+// Add the nullable TEXT column note to demo_orders. Success updates the schema. Return the failed result on failure.
+const addColumnResult = await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' })
+if (!addColumnResult.success)
+  return addColumnResult
+// Inspect the modified table. Success returns ['id', 'note']. Return the failed result on failure.
+const schemaColumnsResult = await reldb.schemaColumns('demo_orders')
+if (!schemaColumnsResult.success)
+  return schemaColumnsResult
+schemaColumnsResult.data // ['id', 'note']
+// Create the named index on demo_orders.note. Success changes the schema. Return the failed result on failure.
+const createIndexResult = await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] })
+if (!createIndexResult.success)
+  return createIndexResult
+// Drop the new index by name. true allows it to be absent. Success has no data. Return the failed result on failure.
+const dropIndexResult = await reldb.ddl.dropIndex('demo_orders_note', true)
+if (!dropIndexResult.success)
+  return dropIndexResult
+// Drop note and its values from demo_orders. Success has no data. Return the failed result on failure.
+const dropColumnResult = await reldb.ddl.dropColumn('demo_orders', 'note')
+if (!dropColumnResult.success)
+  return dropColumnResult
+// Rename the table to demo_orders_old. Success has no data. Return the failed result on failure.
+const renameTableResult = await reldb.ddl.renameTable('demo_orders', 'demo_orders_old')
+if (!renameTableResult.success)
+  return renameTableResult
+// Drop the renamed table. true allows absence. Success has no data. Return the failed result on failure.
+const dropTableResult = await reldb.ddl.dropTable('demo_orders_old', true)
+if (!dropTableResult.success)
+  return dropTableResult
+// Execute the trusted constant DDL for the marker table. Success has no data. Return the failed result on failure.
+const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)')
+if (!rawResult.success)
+  return rawResult
 // All successful DDL calls have no business data.
 ```
 
@@ -167,25 +178,46 @@ Pass dynamic values as parameters, distinguish query rows from execution counts 
 #### Scenario: Parameterized queries and pages
 
 ```ts
-// Create the query example table with a text primary key. Success has no data. value throws on failure.
-value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
-// Bind o1 to the insert placeholder. The result includes affected rows. value throws on failure.
-const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
-// Read the inserted ID column. Success returns [{ id: 'o1' }]. value throws on failure.
-value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
-// Bind o1 and read the first matching row, { id: 'o1' }. value throws on failure.
-value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+// Fragment inside an async application function; return failed results to its caller.
+// Create the query example table with a text primary key. Success has no data. Return the failed result on failure.
+const createTableResult = await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } })
+if (!createTableResult.success)
+  return createTableResult
+// Bind o1 to the insert placeholder. The result includes affected rows. Return the failed result on failure.
+const insertedResult = await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])
+if (!insertedResult.success)
+  return insertedResult
+const inserted = insertedResult.data // affected-row result
+// Read the inserted ID column. Success returns [{ id: 'o1' }]. Return the failed result on failure.
+const queryResult = await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')
+if (!queryResult.success)
+  return queryResult
+queryResult.data // [{ id: 'o1' }]
+// Bind o1 and read the first matching row, { id: 'o1' }. Return the failed result on failure.
+const getResult2 = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])
+if (!getResult2.success)
+  return getResult2
+getResult2.data // { id: 'o1' }
 // Normalize page 1 and size 20 into the limit and offset for the first page.
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
-// Run the trusted SQL with normalized pagination. The page contains o1 and total 1. value throws on failure.
-const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
+// Run the trusted SQL with normalized pagination. The page contains o1 and total 1. Return the failed result on failure.
+const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data
 // page.items: [{ id: 'o1' }], total: 1
 // Build the equivalent page envelope from the sample row, total, and page settings.
 reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
-// Execute the deletion of o1 in this batch. Success removes the row and returns no data. value throws on failure.
-value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
-// Look up o1 after deletion. Success returns null. value throws on query failure.
-value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
+// Execute the deletion of o1 in this batch. Success removes the row and returns no data. Return the failed result on failure.
+const batchResult = await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])
+if (!batchResult.success)
+  return batchResult
+// Success has no business data.
+// Look up o1 after deletion. Success returns null. Return the failed result on query failure.
+const getResult = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])
+if (!getResult.success)
+  return getResult
+getResult.data // null
 ```
 
 o1 is a bound value. get returns successful null when missing, query returns an array and batch has no business data. Value parameters cannot substitute identifiers.

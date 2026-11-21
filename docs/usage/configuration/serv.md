@@ -21,6 +21,36 @@ http:
   access: false
 ```
 
+### 允许独立域名的管理台访问 API
+
+写入 `config/_serv.yml`。只允许示例管理台来源读取跨域响应，并允许携带凭据。CORS 不会代替登录或权限检查；如果浏览器使用 Cookie，还需配置匹配的 Cookie 属性。域名换成实际管理台地址。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+server:
+  host: 0.0.0.0
+  port: 3000
+cors:
+  origin: https://console.example.com
+  credentials: true
+```
+
+### 开启接口文档并调整健康检查地址
+
+OpenAPI 文档放在 `/openapi.json`，文档页面放在 `/docs`，健康检查使用 `/healthz` 与 `/readyz`。文档页要求已认证身份，应用需提供真实认证逻辑；健康接口用于部署探活，不代表每个外部业务系统都可用。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+    requireAuth: true
+  health:
+    path: /healthz
+    readyPath: /readyz
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

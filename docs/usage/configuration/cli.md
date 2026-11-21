@@ -20,6 +20,33 @@
 }
 ```
 
+### 分别构建移动端和桌面端工程
+
+这是项目根目录的 `hai.json`。两个路径均须指向已有的原生工程目录，分别具备 Capacitor 或 Tauri 配置。声明路径不会自动创建工程；选择对应构建目标时才会使用这些设置。
+
+```json
+{
+  "build": {
+    "app": ["apps/orders-app"],
+    "desktop": ["apps/orders-desktop"]
+  }
+}
+```
+
+### 容器构建使用公司的 npm 镜像
+
+保留项目实际的 Dockerfile 路径。此例把容器构建的 npm 下载指向公司镜像，并明确不使用代理；它不会修改开发者机器的全局 npm 配置。镜像地址必须由构建环境直接访问，认证信息不写在 URL 中。
+
+```json
+{
+  "build": {
+    "images": [{ "name": "serv", "context": ".", "dockerfile": "images/serv.Dockerfile", "containerPort": 3000 }],
+    "sources": { "npm": { "type": "custom", "registry": "https://npm.example.com/" } },
+    "proxy": { "mode": "none" }
+  }
+}
+```
+
 ## 配置清单
 
 ### `hai.json`

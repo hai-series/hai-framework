@@ -17,6 +17,47 @@ type: sqlite
 database: ./data/orders.db
 ```
 
+### 多个服务连接同一个 PostgreSQL 数据库
+
+写入 `config/_db.yml`。每个服务进程最多使用 10 条连接，等待连接最多 5 秒。密码从服务端私有环境读取；所有服务使用相同地址和库名，才会看到相同数据。
+
+```yaml schema=@h-ai/reldb:ReldbConfigSchema
+type: postgresql
+host: postgres.internal
+port: 5432
+database: orders
+user: orders_app
+password: ${HAI_DB_PASSWORD}
+pool:
+  max: 10
+  acquireTimeout: 5000
+```
+
+### 连接已有 MySQL 数据库
+
+数据库和账号由数据库管理员先创建。此处不填 `url`，所以使用单独的主机、端口和库名。启动成功后再读写一条测试记录，确认账号权限；连上服务器并不代表具备建表权限。
+
+```yaml schema=@h-ai/reldb:ReldbConfigSchema
+type: mysql
+host: mysql.internal
+port: 3306
+database: orders
+user: orders_app
+password: ${HAI_DB_PASSWORD}
+```
+
+### SQLite 查询放到工作线程执行
+
+适合需要避免同步 SQLite 操作占用主线程的服务。数据库仍是同一个本地文件，并未变成远程数据库；目录应允许服务读写。连接工作线程的等待上限为 10 秒。
+
+```yaml schema=@h-ai/reldb:ReldbConfigSchema
+type: sqlite
+database: ./data/orders.db
+sqlite:
+  executor: worker
+  workerConnectTimeoutMs: 10000
+```
+
 <a id="configuration-fields"></a>
 
 ## 配置清单

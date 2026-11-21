@@ -4,12 +4,44 @@
 
 Read `config/_kit.yml` when the SvelteKit server starts. The startup code uses `server` to choose an address and port. In `hooks.server.ts`, the app passes the request policy and trusted proxies to `kit.createHandle()`. If you enable request encryption, the server also passes `transport` to `crypto.transport`. Keep the private keys and connections to shared storage on the server.
 
+## Configuration examples
+
 ```yaml schema=@h-ai/kit:KitConfigSchema
 server:
   port: 3000
 trustedProxies: auto
 access: false
 ```
+
+### Trust a known reverse proxy
+
+Put this in `config/_kit.yml`. Trust forwarded client addresses only from the example proxy `192.0.2.10`, and allow clients only from `203.0.113.0/24`. Replace both with your actual network. Trusting a proxy to report an address and permitting that client to access the service are separate decisions.
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+trustedProxies: [192.0.2.10]
+access:
+  global:
+    allowIps: [203.0.113.0/24]
+```
+
+### Limit an export endpoint to working hours
+
+Restrict only `/api/v1/reports/export` to 09:00–18:00, Monday through Friday in Asia/Shanghai. New requests outside that window are rejected even for signed-in users. Other routes do not match this rule, and the application still performs its authentication and permission checks.
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+access:
+  rules:
+    - id: report-hours
+      paths: [/api/v1/reports/export]
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
+```
+
+## Configuration reference
+
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |

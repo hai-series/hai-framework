@@ -99,17 +99,7 @@ finally {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="nodes"></a>
 
@@ -162,17 +152,33 @@ submit returns a persisted execution receipt. This distinguishes queued work, ca
 Queued work can become cancelled directly. Running work usually enters cancelling until shutdown is confirmed. Unconfirmed ownership or cleanup yields unknown, not a promise that effects were undone. reconcileUnknown verifies resources on the original node and preserves the unknown business outcome.
 
 ```ts
+// Fragment inside an async application function; return failed results to its caller.
 const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
 // Submit the monthly report for studio/alice and obtain an execution receipt. Use report-nov for the same business request; submission errors propagate.
-const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+const acceptedResult = await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' })
+if (!acceptedResult.success)
+  return acceptedResult
+const accepted = acceptedResult.data
 // Look up the original execution by the same scope, kind, and durable key. A successful miss returns undefined.
-const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+const recoveredResult = await runner.find(scope, 'report.v1', 'report-nov')
+if (!recoveredResult.success)
+  return recoveredResult
+const recovered = recoveredResult.data // execution or undefined
 // Read state and any available output for the submitted receipt in this scope. A scope mismatch or read failure returns an error.
-const current = value(await runner.get(scope, accepted.id)) // current persisted state
+const currentResult = await runner.get(scope, accepted.id)
+if (!currentResult.success)
+  return currentResult
+const current = currentResult.data // current persisted state
 // Read up to 20 ordered events for the same task after cursor 0. With no events, the result is an empty array.
-const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+const eventsResult = await runner.events(scope, accepted.id, 0, 20)
+if (!eventsResult.success)
+  return eventsResult
+const events = eventsResult.data // ordered RunnerEvent[]
 // Request cancellation for the same task. The returned state may be cancelling if execution is still stopping.
-const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
+const cancellingResult = await runner.cancel(scope, accepted.id)
+if (!cancellingResult.success)
+  return cancellingResult
+const cancelling = cancellingResult.data // actual state after requesting cancellation
 ```
 
 scope comes from authentication. This example uses quick start’s report.v1 handler. Concurrent execution affects returned state; queued/running/cancelling are not success. Save event sequence numbers for incremental reads.

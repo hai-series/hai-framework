@@ -68,17 +68,8 @@ await reldb.close()
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返し、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
-```ts
-import type { HaiResult } from '@h-ai/core'
-
-function value<T>(result: HaiResult<T>): T {
-  if (!result.success)
-    throw new Error(result.error.message, { cause: result.error })
-  return result.data
-}
-```
 
 <a id="connection"></a>
 
@@ -125,24 +116,44 @@ function value<T>(result: HaiResult<T>): T {
 #### 利用例：テーブルの作成と変更
 
 ```ts
-// テキスト ID を主キーとする注文表を作ります。成功時の data はなく、失敗は value が例外にします。
-value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
-// demo_orders に NULL 可の TEXT 列 note を追加します。失敗は value が例外にします。
-value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
-// 変更後の表の列名は ['id', 'note'] です。失敗は value が例外にします。
-value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
-// demo_orders.note に指定名の索引を作ります。失敗は value が例外にします。
-value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
-// 作成した索引を名前で削除します。true は存在しなくても許容し、失敗は value が例外にします。
-value(await reldb.ddl.dropIndex('demo_orders_note', true))
-// demo_orders から note 列とその値を削除します。失敗は value が例外にします。
-value(await reldb.ddl.dropColumn('demo_orders', 'note'))
-// 表を demo_orders_old に改名します。失敗は value が例外にします。
-value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
-// 改名した表を削除します。true は表がなくても許容し、失敗は value が例外にします。
-value(await reldb.ddl.dropTable('demo_orders_old', true))
-// 固定 DDL でマーカー表を作ります。成功時の data はなく、失敗は value が例外にします。
-value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// テキスト ID を主キーとする注文表を作ります。成功時の data はなく、失敗時は元の結果を返します。
+const createTableResult = await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } })
+if (!createTableResult.success)
+  return createTableResult
+// demo_orders に NULL 可の TEXT 列 note を追加します。失敗時は元の結果を返します。
+const addColumnResult = await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' })
+if (!addColumnResult.success)
+  return addColumnResult
+// 変更後の表の列名は ['id', 'note'] です。失敗時は元の結果を返します。
+const schemaColumnsResult = await reldb.schemaColumns('demo_orders')
+if (!schemaColumnsResult.success)
+  return schemaColumnsResult
+schemaColumnsResult.data // ['id', 'note']
+// demo_orders.note に指定名の索引を作ります。失敗時は元の結果を返します。
+const createIndexResult = await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] })
+if (!createIndexResult.success)
+  return createIndexResult
+// 作成した索引を名前で削除します。true は存在しなくても許容し、失敗時は元の結果を返します。
+const dropIndexResult = await reldb.ddl.dropIndex('demo_orders_note', true)
+if (!dropIndexResult.success)
+  return dropIndexResult
+// demo_orders から note 列とその値を削除します。失敗時は元の結果を返します。
+const dropColumnResult = await reldb.ddl.dropColumn('demo_orders', 'note')
+if (!dropColumnResult.success)
+  return dropColumnResult
+// 表を demo_orders_old に改名します。失敗時は元の結果を返します。
+const renameTableResult = await reldb.ddl.renameTable('demo_orders', 'demo_orders_old')
+if (!renameTableResult.success)
+  return renameTableResult
+// 改名した表を削除します。true は表がなくても許容し、失敗時は元の結果を返します。
+const dropTableResult = await reldb.ddl.dropTable('demo_orders_old', true)
+if (!dropTableResult.success)
+  return dropTableResult
+// 固定 DDL でマーカー表を作ります。成功時の data はなく、失敗時は元の結果を返します。
+const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)')
+if (!rawResult.success)
+  return rawResult
 // All successful DDL calls have no business data.
 ```
 
@@ -171,25 +182,46 @@ value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMA
 #### 利用例：パラメーター付き SQL とページング
 
 ```ts
-// テキスト主キーで照会用の表を作ります。失敗は value が例外にします。
-value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
-// 挿入のプレースホルダーに o1 を束縛します。結果は影響行数を含み、失敗は value が例外にします。
-const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
-// 挿入した ID を取得します。結果は [{ id: 'o1' }]、失敗は value が例外にします。
-value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
-// o1 を束縛して最初の行 { id: 'o1' } を取得します。失敗は value が例外にします。
-value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
+// テキスト主キーで照会用の表を作ります。失敗時は元の結果を返します。
+const createTableResult = await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } })
+if (!createTableResult.success)
+  return createTableResult
+// 挿入のプレースホルダーに o1 を束縛します。結果は影響行数を含み、失敗時は元の結果を返します。
+const insertedResult = await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])
+if (!insertedResult.success)
+  return insertedResult
+const inserted = insertedResult.data // affected-row result
+// 挿入した ID を取得します。結果は [{ id: 'o1' }]、失敗時は元の結果を返します。
+const queryResult = await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')
+if (!queryResult.success)
+  return queryResult
+queryResult.data // [{ id: 'o1' }]
+// o1 を束縛して最初の行 { id: 'o1' } を取得します。失敗時は元の結果を返します。
+const getResult2 = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])
+if (!getResult2.success)
+  return getResult2
+getResult2.data // { id: 'o1' }
 // ページ 1、件数 20 から最初のページの上限とオフセットを得ます。
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
-// 固定 SQL と正規化済みページ設定を渡し、o1 のページと総数 1 を取得します。失敗は value が例外にします。
-const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
+// 固定 SQL と正規化済みページ設定を渡し、o1 のページと総数 1 を取得します。失敗時は元の結果を返します。
+const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
+if (!pageResult.success)
+  return pageResult
+const page = pageResult.data
 // page.items: [{ id: 'o1' }], total: 1
 // 例の行、総数、ページ設定から同等のページオブジェクトを作ります。
 reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
-// バッチで o1 を削除します。成功時は行を削除して data はなく、失敗は value が例外にします。
-value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
-// 削除後に o1 を検索すると null を返します。照会失敗は value が例外にします。
-value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
+// バッチで o1 を削除します。成功時は行を削除して data はなく、失敗時は元の結果を返します。
+const batchResult = await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])
+if (!batchResult.success)
+  return batchResult
+// 成功時の業務データはありません。
+// 削除後に o1 を検索すると null を返します。照会失敗時は元の結果を返します。
+const getResult = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])
+if (!getResult.success)
+  return getResult
+getResult.data // null
 ```
 
 o1 はバインド値です。get の null は正常な該当なし、query は配列、batch は業務データなしです。識別子を値パラメーターにしません。
