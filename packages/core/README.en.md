@@ -22,6 +22,8 @@ See the [configuration reference](../../docs/usage/configuration/core.en.md) for
 
 [Configuration API](../../docs/usage/function/core.en.md#config-api) · [All Core APIs](../../docs/usage/function/core.en.md#api-reference)
 
+Valid JSON object/array strings in log context are expanded and redacted before output and log observation. See [logging](../../docs/usage/function/core.en.md#logging-api) for usage and limits.
+
 ## Data Structures
 
 The module creates no database tables of its own.

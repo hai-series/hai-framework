@@ -157,14 +157,26 @@ export const iam: IamFunctions = {
       // Schema 只保留声明的设置字段，运行时模块和发送回调不会进入配置快照。
       const parseResult = IamConfigSchema.safeParse(config)
       if (!parseResult.success) {
-        logger.error('IAM config validation failed', { error: parseResult.error.message })
-        return err(
-          HaiIamError.CONFIG_ERROR,
-          iamM('iam_configError', {
-            params: { error: parseResult.error.message },
+        // 仅记录问题路径和校验说明，避免 JSON 字符串转义及配置值泄漏。
+        const issues = parseResult.error.issues.map(issue => ({
+          path: issue.path.map(String).join('.'),
+          code: issue.code,
+          message: issue.message,
+        }))
+        const fields = [
+          ...new Set(issues.map(issue => issue.path).filter(Boolean)),
+        ]
+        logger.error('IAM config validation failed', { errorCode: HaiIamError.CONFIG_ERROR.code, issues })
+        return err({
+          ...HaiIamError.CONFIG_ERROR,
+          message: iamM('iam_configError', {
+            params: {
+              error: fields.join(', '),
+            },
           }),
-          parseResult.error,
-        )
+          cause: parseResult.error,
+          ext: { fields },
+        })
       }
       const parsed = parseResult.data
 

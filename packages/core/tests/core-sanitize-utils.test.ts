@@ -378,6 +378,20 @@ describe('core.sanitize', () => {
       .toMatchObject({ message: '[HIDDEN]' })
   })
 
+  it('公开脱敏工具不把 Error 的 JSON 文本自动改成结构', () => {
+    const text = JSON.stringify({ visible: 'diagnostic' })
+    const failure = new Error(text, {
+      cause: { detail: text },
+    })
+    const sanitized = core.sanitize.sanitizeSensitiveFields(failure)
+    expect(sanitized).toMatchObject({
+      message: text,
+      cause: { detail: text },
+    })
+    expect(typeof sanitized.message).toBe('string')
+    expect(failure.message).toBe(text)
+  })
+
   it('异常子图的自定义替换值同样可序列化，普通对象替换语义不变', () => {
     const failure = Object.assign(new Error('Sensitive context'), { password: 'own-password' })
     const numeric = core.sanitize.sanitizeSensitiveValue(failure, null, { replacement: 123n })

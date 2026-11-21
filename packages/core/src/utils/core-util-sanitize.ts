@@ -80,6 +80,8 @@ interface SanitizeSensitiveContext {
   replacement: unknown
   urlReplacement: string
   isSensitiveKey: CompiledSensitiveKeyMatcher
+  /** 仅日志内部入口启用；不可变地沿各路径累计 JSON 展开次数。 */
+  logJsonDepth?: number
 }
 
 const normalizedKeyCache = new Map<string, string>()
@@ -250,6 +252,36 @@ function createSanitizeSensitiveContext(
   }
 }
 
+/** 日志只展开有界 JSON 对象/数组，超限或非 JSON 文本继续使用原文本规则。 */
+function parseLogJson(text: string): object | undefined {
+  if (text.length > 65_536)
+    return undefined
+  const input = text.trim()
+  if (!((input.startsWith('{') && input.endsWith('}')) || (input.startsWith('[') && input.endsWith(']'))))
+    return undefined
+  try {
+    const parsed: unknown = JSON.parse(input)
+    if (!parsed || typeof parsed !== 'object')
+      return undefined
+    const pending = [
+      { value: parsed, depth: 0 },
+    ]
+    while (pending.length) {
+      const entry = pending.pop()!
+      if (entry.depth >= 32)
+        return undefined
+      for (const child of Object.values(entry.value) as unknown[]) {
+        if (child && typeof child === 'object')
+          pending.push({ value: child, depth: entry.depth + 1 })
+      }
+    }
+    return parsed
+  }
+  catch {
+    return undefined
+  }
+}
+
 /**
  * 复用字段/URL 规则递归脱敏；仅异常子图使用活动路径与固定深度避免 JSON 环。
  * @param value - 当前原值。
@@ -284,7 +316,10 @@ function sanitizeSensitiveValueWithContext(
     const normalizedKey = normalizeKeyForMatching(key)
 
     if (typeof value === 'string' && isUrlLikeNormalizedKey(normalizedKey)) {
-      return sanitizeUrlWithContext(value, context)
+      const url = sanitizeUrlWithContext(value, context)
+      return context.logJsonDepth === undefined
+        ? url
+        : sanitizeText(url)
     }
 
     if (context.isSensitiveKey(key, normalizedKey) && !isPlainObjectValue) {
@@ -293,6 +328,20 @@ function sanitizeSensitiveValueWithContext(
         ? sanitizeSensitiveValueWithContext(context.replacement, null, context, cache, errorPath ?? new WeakSet<object>(), errorDepth)
         : context.replacement
     }
+  }
+
+  if (typeof value === 'string' && context.logJsonDepth !== undefined) {
+    // 必须在 Error 文本脱敏前展开，避免先替换凭据后破坏 JSON 和路径脱敏。
+    const parsed = context.logJsonDepth < 4
+      ? parseLogJson(value)
+      : undefined
+    if (parsed) {
+      return sanitizeSensitiveValueWithContext(parsed, null, {
+        ...context,
+        logJsonDepth: context.logJsonDepth + 1,
+      }, cache, errorPath, errorDepth)
+    }
+    return sanitizeText(value)
   }
 
   // 函数和 Symbol 不属于诊断数据，避免把可执行方法带入普通对象副本。
@@ -306,8 +355,12 @@ function sanitizeSensitiveValueWithContext(
       ? Date.prototype.toISOString.call(value)
       : null
   }
-  if (value instanceof URL)
-    return sanitizeUrlWithContext(URL.prototype.toString.call(value), context)
+  if (value instanceof URL) {
+    const url = sanitizeUrlWithContext(URL.prototype.toString.call(value), context)
+    return context.logJsonDepth === undefined
+      ? url
+      : sanitizeText(url)
+  }
 
   // Error 诊断不复用普通对象缓存，避免 cause/context 回指外层对象后重新形成循环。
   if (isErrorDiagnostic) {
@@ -440,6 +493,22 @@ export function sanitizeSensitiveFields<T>(
   options: SanitizeSensitiveFieldsOptions = {},
 ): T {
   return sanitizeSensitiveValue(value, null, options) as T
+}
+
+/**
+ * 模块内部：日志展开 JSON 后复用默认字段脱敏和 Error 有界树，不改变公开工具语义。
+ * @param value - 尚未执行文本脱敏的日志上下文。
+ * @returns 脱敏副本；JSON 展开深度沿各递归路径独立计算。
+ * @example 模块内部上下文
+ * ```ts
+ * const safe = sanitizeLogContext({ error: new Error('{"visible":"diagnostic"}') })
+ * ```
+ */
+export function sanitizeLogContext<T>(value: T): T {
+  return sanitizeSensitiveValueWithContext(value, null, {
+    ...createSanitizeSensitiveContext(),
+    logJsonDepth: 0,
+  }, new WeakMap()) as T
 }
 
 /**

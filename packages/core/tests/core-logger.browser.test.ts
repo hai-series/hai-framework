@@ -10,6 +10,72 @@ import { core } from '../src/core-index.browser.js'
 import { createSerializationFixture } from './fixtures/serialization.js'
 
 describe('core.logger (browser)', () => {
+  it('浏览器 JSON 上下文与观察记录均展开对象和数组并脱敏', () => {
+    const output: string[] = []
+    const observed: Readonly<Record<string, unknown>>[] = []
+    const detail = '{"path":["ldap","url"],"password":"browser-secret","customerId":"private"}'
+    const error = new Error(detail, {
+      cause: { detail },
+    })
+    core.logger.configure({
+      level: 'info',
+      format: 'json',
+      redact: [
+        'detail.customerId',
+        'error.message.customerId',
+        'error.cause.detail.customerId',
+        'error.stack',
+      ],
+    })
+    const logger = core.logger.create({ name: 'browser-json-context', format: 'json' })
+    const raw = log.getLogger('browser-json-context')
+    const previous = raw.info
+    raw.info = (...values: unknown[]) => output.push(values.map(String).join(' '))
+    const stop = core.logger.observe(record => observed.push(record.context))
+    try {
+      logger.info('JSON context', {
+        detail,
+        error,
+        items: '[{"field":"ldap.bindDn","token":"array-secret"}]',
+        invalid: '{broken}',
+        scalar: 'false',
+      })
+    }
+    finally {
+      stop()
+      raw.info = previous
+      core.logger.configure({ format: 'pretty', redact: [] })
+    }
+    const expected = {
+      detail: {
+        path: ['ldap', 'url'],
+        password: '[REDACTED]',
+        customerId: '[REDACTED]',
+      },
+      items: [
+        { field: 'ldap.bindDn', token: '[REDACTED]' },
+      ],
+      invalid: '{broken}',
+      scalar: 'false',
+    }
+    expect(observed).toHaveLength(1)
+    const expectedContext = {
+      ...expected,
+      error: {
+        name: 'Error',
+        message: expected.detail,
+        cause: { detail: expected.detail },
+        stack: '[REDACTED]',
+      },
+    }
+    expect(observed[0]).toMatchObject(expectedContext)
+    expect(output).toHaveLength(1)
+    expect(JSON.parse(output[0]!)).toMatchObject(expectedContext)
+    expect(output.join('')).not.toMatch(/browser-secret|array-secret|private/)
+    expect(error.message).toBe(detail)
+    expect(error.cause).toEqual({ detail })
+  })
+
   it('序列化回归：浏览器输出和观察记录均不会执行自定义 toJSON', () => {
     const { input, serialize, readAccessor } = createSerializationFixture()
     const output: string[] = []

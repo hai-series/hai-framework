@@ -10,6 +10,168 @@ import { core } from '../src/index.js'
 import { createSerializationFixture } from './fixtures/serialization.js'
 
 describe('core.logger (node)', () => {
+  it('日志 JSON 上下文转为结构后再脱敏，stdout 与观察记录保持一致', async () => {
+    const output: string[] = []
+    const observed: Readonly<Record<string, unknown>>[] = []
+    const detail = JSON.stringify({
+      path: ['ldap', 'url'],
+      password: 'encoded-secret',
+      customerId: 'private-customer',
+    })
+    const input = {
+      detail,
+      items: '[{"field":"ldap.bindDn","token":"array-secret"}]',
+      nested: { detail },
+      error: new Error(detail, {
+        cause: { detail },
+      }),
+      invalid: '{broken}',
+      scalar: '42',
+      text: 'ordinary text',
+    }
+    core.logger.configure({
+      level: 'info',
+      format: 'json',
+      redact: [
+        'detail.customerId',
+        'nested.detail.customerId',
+        'error.message.customerId',
+        'error.cause.detail.customerId',
+        'error.stack',
+      ],
+    })
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      output.push(typeof chunk === 'string'
+        ? chunk
+        : new TextDecoder().decode(chunk))
+      return true
+    }) as typeof process.stdout.write)
+    const stop = core.logger.observe(record => observed.push(record.context))
+    try {
+      core.logger.create({ name: 'json-context', format: 'json' }).info('JSON context', input)
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    finally {
+      stop()
+      write.mockRestore()
+      core.logger.configure({ format: 'pretty', redact: [] })
+    }
+    const expected = {
+      detail: {
+        path: ['ldap', 'url'],
+        password: '[REDACTED]',
+        customerId: '[REDACTED]',
+      },
+      items: [
+        { field: 'ldap.bindDn', token: '[REDACTED]' },
+      ],
+      nested: {
+        detail: {
+          path: ['ldap', 'url'],
+          password: '[REDACTED]',
+          customerId: '[REDACTED]',
+        },
+      },
+      invalid: '{broken}',
+      scalar: '42',
+      text: 'ordinary text',
+    }
+    expect(observed).toHaveLength(1)
+    const expectedContext = {
+      ...expected,
+      error: {
+        name: 'Error',
+        message: expected.detail,
+        cause: { detail: expected.detail },
+        stack: '[REDACTED]',
+      },
+    }
+    expect(observed[0]).toMatchObject(expectedContext)
+    expect(JSON.parse(output.join('').trim())).toMatchObject(expectedContext)
+    expect(input.detail).toBe(detail)
+    expect(input.error.message).toBe(detail)
+    expect(input.error.cause).toEqual({ detail })
+    expect(output.join('')).not.toMatch(/encoded-secret|array-secret|private-customer/)
+  })
+
+  it('过大或过深的 JSON 上下文保留为文本，消息本身不转换', () => {
+    const records: { message: string, context: Readonly<Record<string, unknown>> }[] = []
+    const stop = core.logger.observe(record => records.push(record))
+    const large = JSON.stringify({
+      text: 'x'.repeat(65_536),
+    })
+    const deep = `${'['.repeat(40)}0${']'.repeat(40)}`
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    try {
+      core.logger.create({ name: 'bounded-json-context', format: 'json' }).info('{"event":"failed"}', { large, deep })
+    }
+    finally {
+      stop()
+      write.mockRestore()
+    }
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({
+      message: '{"event":"failed"}',
+      context: { large, deep },
+    })
+  })
+
+  it('异常 JSON 的四重编码上限按各路径独立计算，超大或过深文本不展开', () => {
+    const encoded = (layers: number): string => {
+      let text = JSON.stringify({ visible: 'ready' })
+      for (let depth = 1; depth < layers; depth++)
+        text = JSON.stringify({ next: text })
+      return text
+    }
+    const large = JSON.stringify({
+      text: 'x'.repeat(65_536),
+    })
+    const deep = `${'['.repeat(40)}0${']'.repeat(40)}`
+    const error = new Error(JSON.stringify({
+      left: encoded(3),
+      right: encoded(3),
+      over: encoded(4),
+    }), {
+      cause: { large, deep },
+    })
+    const records: Readonly<Record<string, unknown>>[] = []
+    const stop = core.logger.observe(record => records.push(record.context))
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    core.logger.configure({
+      redact: ['error.stack'],
+    })
+    try {
+      core.logger.create({ name: 'bounded-error-json', format: 'json' }).info('Bounded error JSON', { error })
+    }
+    finally {
+      stop()
+      write.mockRestore()
+      core.logger.configure({ redact: [] })
+    }
+    const expanded = {
+      next: {
+        next: { visible: 'ready' },
+      },
+    }
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({
+      error: {
+        message: {
+          left: expanded,
+          right: expanded,
+          over: {
+            next: {
+              next: {
+                next: encoded(1),
+              },
+            },
+          },
+        },
+        cause: { large, deep },
+      },
+    })
+  })
+
   it('序列化回归：stdout 和观察记录均不能被自定义 toJSON 带出凭据', async () => {
     const { input, serialize, readAccessor } = createSerializationFixture()
     const output: string[] = []

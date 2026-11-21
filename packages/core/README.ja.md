@@ -22,6 +22,8 @@ Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`c
 
 [設定 API](../../docs/usage/function/core.ja.md#config-api) · [Core API 全体](../../docs/usage/function/core.ja.md#api-reference)
 
+ログコンテキスト内の有効な JSON オブジェクト・配列文字列は、展開とマスキングを行ってから出力とログ監視に渡します。使い方と制限は[ログの記録](../../docs/usage/function/core.ja.md#logging-api)を参照してください。
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

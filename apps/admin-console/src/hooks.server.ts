@@ -7,11 +7,11 @@
  */
 
 import type { TransportEncryptionOptions } from '@h-ai/kit'
-import type { Handle } from '@sveltejs/kit/hooks'
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks'
 import process from 'node:process'
 import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -184,3 +184,22 @@ const haiHandle: Handle = async (input) => {
 }
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
+
+/** 启动等未预期异常统一写入结构化日志，浏览器只收到安全消息和关联编号。 */
+export const handleError: HandleServerError = ({ kind, error, event }) => {
+  if (kind !== 'unknown')
+    return
+  const publicError = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: '' }, event.locals.requestId, event.locals.locale)
+  core.logger.error('Request failed', {
+    module: 'admin-console',
+    scope: 'hooks',
+    method: event.request.method,
+    route: event.route.id,
+    traceId: publicError.traceId,
+    error,
+  })
+  return {
+    message: publicError.message,
+    code: String(publicError.code),
+  }
+}

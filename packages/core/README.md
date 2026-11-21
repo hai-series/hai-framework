@@ -22,6 +22,8 @@
 
 [查 API 清单](../../docs/usage/function/core.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+日志上下文中的合法 JSON 对象/数组字符串会展开后脱敏，输出与日志观察器使用同一结构。用法与限制见[记录日志](../../docs/usage/function/core.md#logging-api)。
+
 <a id="应用启动与关闭"></a>
 
 [应用启动与关闭](../../docs/usage/function/core.md#应用启动与关闭)

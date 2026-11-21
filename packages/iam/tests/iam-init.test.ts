@@ -10,8 +10,10 @@
  */
 
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
+import { ZodError } from 'zod'
 import { HaiIamError } from '../src/iam-types.js'
 import { iam } from '../src/index.js'
 import { defineIamEnvSuite, sqliteMemoryEnv } from './helpers/iam-test-suite.js'
@@ -71,6 +73,58 @@ describe('iam.init', () => {
       expect(iam.isInitialized).toBe(true)
       expect(iam.config).not.toBeNull()
       await iam.close()
+    })
+
+    it('配置失败返回字段摘要并以结构化日志保留原因，不回显配置值', async () => {
+      await iam.close()
+      const records: unknown[] = []
+      const stop = core.logger.observe(record => records.push(record))
+      try {
+        const result = await iam.init({
+          ldap: {
+            url: 'https://PRIVATE_LDAP_URL.example.com',
+            bindDn: 'PRIVATE_BIND_DN',
+            bindPassword: 'PRIVATE_BIND_PASSWORD',
+            searchBase: 'PRIVATE_SEARCH_BASE',
+          },
+        })
+        expect(result.success).toBe(false)
+        if (result.success)
+          throw new Error('Expected invalid LDAP configuration')
+        expect(result.error.code).toBe(HaiIamError.CONFIG_ERROR.code)
+        expect(result.error.message).toContain('ldap.url')
+        expect(result.error.message).not.toContain('[')
+        expect(result.error.ext).toMatchObject({
+          fields: ['ldap.url'],
+        })
+        expect(result.error.cause).toBeInstanceOf(ZodError)
+        expect(records).toContainEqual(expect.objectContaining({
+          level: 'error',
+          message: 'IAM config validation failed',
+          context: expect.objectContaining({
+            issues: [
+              expect.objectContaining({
+                path: 'ldap.url',
+                code: 'custom',
+                message: expect.any(String),
+              }),
+            ],
+          }),
+        }))
+        for (const value of [
+          'PRIVATE_LDAP_URL',
+          'PRIVATE_BIND_DN',
+          'PRIVATE_BIND_PASSWORD',
+          'PRIVATE_SEARCH_BASE',
+        ]) {
+          expect(JSON.stringify(records)).not.toContain(value)
+          expect(result.error.message).not.toContain(value)
+        }
+        expect(iam.isInitialized).toBe(false)
+      }
+      finally {
+        stop()
+      }
     })
 
     it('重复初始化应重新建立可用的模块状态', async () => {

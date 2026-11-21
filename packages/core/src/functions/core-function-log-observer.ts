@@ -1,6 +1,6 @@
 /** 结构化日志观察点，无数据库/传输依赖，不改变正常日志输出。 */
 import type { LogContext, LogObserver, LogRecord } from '../core-types.js'
-import { sanitize } from '../utils/core-util-sanitize.js'
+import { sanitize, sanitizeLogContext } from '../utils/core-util-sanitize.js'
 
 const observers = new Set<LogObserver>()
 let emitting = false
@@ -52,27 +52,15 @@ export function emitLogRecord(record: LogRecord): void {
 }
 
 /**
- * 默认字段与自定义路径脱敏使用同一份副本，观察者不能绕过 stdout 的策略。
+ * 上下文中的合法 JSON 对象/数组字符串先展开，再按默认字段与自定义路径脱敏。
+ * 输出与观察者使用同一份副本；日志消息本身仍为文本。
  * @example 模块内部上下文
  * ```ts
  * const safe = sanitizeLogFields({ customer: { email: 'private@example.com' } }, ['customer.email'])
  * ```
  */
 export function sanitizeLogFields(value: LogContext, paths: readonly string[]): LogContext {
-  const result = sanitize.sanitizeSensitiveFields(value)
-  const seen = new WeakSet<object>()
-  const clean = (record: Record<string, unknown>) => {
-    if (seen.has(record))
-      return
-    seen.add(record)
-    for (const [key, item] of Object.entries(record)) {
-      if (typeof item === 'string')
-        record[key] = sanitize.sanitizeText(item)
-      else if (item && typeof item === 'object' && (Array.isArray(item) || Object.getPrototypeOf(item) === Object.prototype))
-        clean(item as Record<string, unknown>)
-    }
-  }
-  clean(result)
+  const result = sanitizeLogContext(value)
   if (!result.traceId && result.requestId)
     result.traceId = result.requestId
   for (const path of paths)

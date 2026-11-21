@@ -228,7 +228,7 @@ core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
 
-日志级别、业务错误处理和字段选择见 [日志与错误诊断](../hai-app-create/logging.md)。
+日志上下文中的合法 JSON 对象/数组字符串会展开，再应用默认脱敏与 `redact` 路径；输出和 `observe` 收到的对应字段均为对象/数组。普通消息、JSON 标量和无效 JSON 保持文本。展开限制见[日志与错误诊断](../hai-app-create/logging.md)，该页同时说明日志级别、业务错误处理和字段选择。
 
 ### 国际化 — `core.i18n`
 
