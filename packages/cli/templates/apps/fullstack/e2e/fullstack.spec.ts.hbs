@@ -25,6 +25,11 @@ const businessOperatorPassword = process.env.E2E_BUSINESS_OPERATOR_PASSWORD || '
 const configuredName = process.env.HAI_CORE_NAME || 'Configured scaffold'
 const configuredVersion = process.env.HAI_CORE_VERSION || '9.8.7'
 const configuredEnv = 'test'
+const themes = [
+{{#each fullstack.theme.themes}}
+  '{{this}}',
+{{/each}}
+]
 
 // 测试专用的一像素 PNG；上传仍使用完整前后端加密链路。
 const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
@@ -42,6 +47,13 @@ async function capture(page: Page, name: string, fallback: string) {
     fullPage: true,
     animations: 'disabled',
   })
+}
+
+async function selectLiquidGlass(page: Page) {
+  await page.getByTestId('profile-theme').click()
+  await page.getByRole('option', { name: /^(液态玻璃|Liquid glass|リキッドガラス)$/ }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--hai-glass-field-edge').trim())).toBe('#7084a1')
 }
 
 async function dismissToasts(page: Page) {
@@ -331,6 +343,16 @@ for (const frontend of additionalFrontends) {
       await page.keyboard.press('Escape')
       await expect(popover).toHaveCount(0)
       await capture(page, `{{projectName}}-${frontend.target}-profile.png`, testInfo.outputPath(`${frontend.target}-profile.png`))
+      if (themes.includes('liquid-glass')) {
+        const previousTheme = await page.locator('html').getAttribute('data-theme')
+        await selectLiquidGlass(page)
+        await capture(page, `{{projectName}}-${frontend.target}-liquid-glass.png`, testInfo.outputPath(`${frontend.target}-liquid-glass.png`))
+        if (previousTheme && previousTheme !== 'liquid-glass') {
+          await page.getByTestId('profile-theme').click()
+          await page.getByRole('option').nth(themes.indexOf(previousTheme)).click()
+          await expect(page.locator('html')).toHaveAttribute('data-theme', previousTheme)
+        }
+      }
       expect(pageErrors).toEqual([])
     }
     finally {
@@ -768,11 +790,6 @@ test('administrator and user complete account, avatar, preference, password and 
     await userPage.getByRole('option', { name: 'English', exact: true }).click()
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
     await expect(userPage.locator('html')).toHaveAttribute('lang', 'en-US')
-    const themes = [
-{{#each fullstack.theme.themes}}
-      '{{this}}',
-{{/each}}
-    ]
     const selectedTheme = themes.includes('formal')
       ? 'formal'
       : themes.includes('high-contrast')
@@ -800,6 +817,13 @@ test('administrator and user complete account, avatar, preference, password and 
         path: testInfo.outputPath('fullstack-eye-care.png'),
         animations: 'disabled',
       })
+    }
+    if (themes.includes('liquid-glass')) {
+      await selectLiquidGlass(userPage)
+      await userPage.reload()
+      await expect(userPage.getByTestId('settings-page')).toBeVisible()
+      await expect(userPage.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+      await capture(userPage, '{{projectName}}-liquid-glass.png', testInfo.outputPath('fullstack-liquid-glass.png'))
     }
     await expect(userPage.getByTestId('profile-form').locator('input[name="displayName"]')).toHaveValue('Updated member')
     await expect(userPage.getByTestId('profile-form').locator('input[name="email"]')).toHaveValue('')

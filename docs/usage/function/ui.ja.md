@@ -732,12 +732,14 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 | `getCurrentTheme` | ページに適用中のテーマを取得 | `none` | `theme ID string` | `getCurrentTheme()` |
 | `getSavedTheme` | 保存されたテーマ設定を取得 | `fallback theme ID?` | `theme ID string` | `getSavedTheme("light")` |
 | `ThemeColorPicker` | 選択色を更新 | `value`, `presets`, `onchange` | 選択色を更新 | `<ThemeColorPicker bind:value={color} />` |
-| `ThemeSelector` | テーマを選択 | なし | テーマを選択 | `<ThemeSelector />` |
+| `ThemeSelector` | テーマを選択 | `themeIds?: readonly string[]` | 組み込みテーマの候補を指定できる | `<ThemeSelector />` |
 | `ThemeToggle` | 明暗を切替 | なし | 明暗を切替 | `<ThemeToggle />` |
 
 #### 利用例：設定を読み込んでテーマを切り替える
 
 最初の表示前に信頼済みの既定テーマを適用し、ページの選択部品で設定を読み取り、更新します。 詳細は[中国語の手順](ui.md#theme)を参照してください。
+
+共有スタイルの `@h-ai/ui/styles/theme.css` には、半透明の面を使った明るいテーマ `liquid-glass` が含まれます。ダイアログやドロワーは背後のレイヤーをぼかし、メニューは重なる領域だけをぼかします。前面のコンテンツはくっきりと表示され、縁では光が屈折します。コントロールのハイライトはマウスに追従し、モーションを減らす設定では静止します。テーマセレクターで「リキッドガラス」を選ぶと、再読み込み後も選択が維持されます。UI のある CLI プロジェクトでは、標準でリキッドガラスを選べます。Fullstack プロジェクトで `fullstack.theme.themes` を明示的に設定する場合は、一覧に `liquid-glass` を追加してください。`ThemeSelector` の `themeIds` で組み込みテーマの候補を絞り込めます。省略するとすべての組み込みテーマを表示します。
 
 ```ts
 import {
@@ -750,7 +752,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 18 个主题元数据
+  THEMES, // 19 種類のテーマのメタデータ（ThemeInfo[] 型）
 } from '@h-ai/ui/theme'
 ```
 

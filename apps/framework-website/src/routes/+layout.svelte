@@ -20,8 +20,8 @@
   import type { LayoutProps } from './$types'
   import { afterNavigate, goto, preloadData } from '$app/navigation'
   import { page } from '$app/state'
-  import { LanguageSwitch, setGlobalLocale, ThemeToggle, ToastContainer } from '@h-ai/ui'
-  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
+  import { LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
+  import { applyTheme, getCurrentTheme, getThemeInfo } from '@h-ai/ui/theme'
   import { onMount } from 'svelte'
   import SearchDialog from '#lib/components/SearchDialog.svelte'
   import { localizedDocSlug } from '#lib/doc-links.js'
@@ -31,6 +31,7 @@
   import '../app.css'
 
   const { children, data }: LayoutProps = $props()
+  const themeIds = ['light', 'dark', 'liquid-glass']
   let locale = $state(getLocale())
   let theme = $state('light')
   let searchOpen = $state(false)
@@ -77,8 +78,8 @@
     applyTheme(next)
   }
   onMount(() => {
-    theme = getSavedTheme('light')
-    applyTheme(theme)
+    theme = getCurrentTheme()
+    applyTheme(theme, false)
     interactive = true
   })
   afterNavigate(() => applyLanguage(getLocale()))
@@ -86,9 +87,7 @@
 </script>
 
 <svelte:head>
-  <meta name='theme-color' content={theme === 'dark'
-    ? '#1d232a'
-    : '#ffffff'} />
+  <meta name='theme-color' content={getThemeInfo(theme)?.bgColor ?? '#ffffff'} />
 </svelte:head>
 
 {#key locale}
@@ -112,7 +111,7 @@
       <div class='header-actions' inert={!interactive}>
         <button class='search-trigger' type='button' onclick={() => { searchOpen = true }} aria-label={m.site_search_title()}><span class='icon-[tabler--search] size-4' aria-hidden='true'></span><span>{m.site_search_title()}</span></button>
         <LanguageSwitch currentLanguage={locale} onchange={changeLanguage} />
-        <ThemeToggle currentTheme={theme} onchange={changeTheme} />
+        <ThemeSelector currentTheme={theme} {themeIds} onchange={changeTheme} compact grouped={false} />
       </div>
     </div>
   </header>

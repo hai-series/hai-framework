@@ -8,11 +8,12 @@
   import type { PageData } from './$types'
   import { browser } from '$app/env'
   import { refreshAll } from '$app/navigation'
-  import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+  import { setGlobalLocale } from '@h-ai/ui'
   import { errorMessage as formatOperationError, toast, useToastFeedback } from '@h-ai/ui/toast'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import { saveBusinessNotice } from '#lib/services/business-settings.js'
+  import { getAdminTheme } from '#lib/theme-context.js'
 
   interface Props { data: PageData }
   const { data }: Props = $props()
@@ -41,22 +42,12 @@
   let activeSection = $state('business')
 
   // ========== 主题设置 ==========
-  let currentTheme = $state(browser
-    ? getCurrentTheme()
-    : 'light')
-
-  // 处理主题变更
-  function handleThemeChange(theme: string) {
-    if (!browser)
-      return
-    applyTheme(theme)
-    currentTheme = theme
-  }
+  const theme = getAdminTheme()
 
   // ========== 语言设置 ==========
-  let currentLanguage = $state(browser
+  const currentLanguage = browser
     ? getLocale()
-    : 'zh-CN')
+    : 'zh-CN'
 
   function handleLanguageChange(lang: string) {
     if (!browser)
@@ -69,18 +60,6 @@
     setLocale(lang as 'zh-CN' | 'en-US' | 'ja-JP')
   }
 
-  // ========== 初始化 ==========
-  $effect(() => {
-    if (browser) {
-      // 主题初始化
-      const savedTheme = getSavedTheme()
-      applyTheme(savedTheme, false)
-      currentTheme = savedTheme
-
-      // 语言从 Paraglide getLocale() 获取
-      currentLanguage = getLocale()
-    }
-  })
   useToastFeedback(() => errorMessage)
 </script>
 
@@ -137,8 +116,8 @@
           <p class='mt-1 text-sm text-base-content/50'>{m.settings_theme_desc()}</p>
         </div>
         <ThemeSelector
-          {currentTheme}
-          onchange={handleThemeChange}
+          currentTheme={theme.current}
+          onchange={theme.select}
           showPreview
           grouped
         />

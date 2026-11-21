@@ -122,11 +122,11 @@ export interface FullstackModuleConfig {
     /** 支持的语言列表（≥ 1，必须包含 baseLocale） */
     locales?: string[]
   }
-  /** 主题配置（daisyUI 主题名） */
+  /** 主题配置（daisyUI 或共享 UI 主题名） */
   theme?: {
-    /** 默认主题 */
+    /** 默认主题（默认 light） */
     defaultTheme?: string
-    /** 可切换主题列表（≥ 1，必须包含 defaultTheme） */
+    /** 可切换主题列表，生成时确保包含默认主题。未提供非空列表时使用内置名单。 */
     themes?: string[]
   }
   /** 各前端开发端口 */

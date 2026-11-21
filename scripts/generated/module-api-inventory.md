@@ -143,7 +143,7 @@
 | @h-ai/ui | `./vite (import)` | 2 |
 | @h-ai/ui | `./vite (types)` | 2 |
 | @h-ai/ui | `./components/ 下的显式入口（15 个真实子路径，见 JSON）` | 逐项记录 |
-| @h-ai/ui | `./styles/*（8 个真实子路径，见 JSON）` | 逐项记录 |
+| @h-ai/ui | `./styles/*（9 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/vecdb | `. (default)` | 25 |
 | @h-ai/vecdb | `. (import)` | 25 |
 | @h-ai/vecdb | `. (types)` | 25 |

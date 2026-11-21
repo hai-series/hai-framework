@@ -7,7 +7,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、�
 
 ## 能力契约
 
-主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。共享 theme.css 已包含 high-contrast 高对比、formal 直角商务及 eye-care 暖绿护眼主题；新应用默认提供该选项，显式主题白名单尊重宿主配置。不能通过淡化正文/占位符抵消其对比度，验收实际文字、边框、焦点、缩放及偏好持久化。
+主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`。默认主题与可选主题名单由宿主决定，选择项需要相应的编译样式。共享 `theme.css` 提供 `high-contrast` 高对比、`formal` 直角商务、`eye-care` 暖绿护眼和 `liquid-glass` 液态玻璃主题。fullstack 生成应用默认提供这四种可选主题。验收实际文字与占位符的对比度、边框、焦点、缩放及偏好持久化。
 
 | 项目 | 契约 |
 | --- | --- |

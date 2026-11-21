@@ -28,6 +28,10 @@ body {
   background: var(--color-base-100);
 }
 
+:root[data-theme='liquid-glass'] body {
+  background-color: transparent;
+}
+
 .agent-rail {
   background: var(--agent-rail);
 }

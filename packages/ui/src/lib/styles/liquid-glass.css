@@ -1,0 +1,390 @@
+/* 浅色液态玻璃：将折光留在表面边缘，内容区保持平静。 */
+[data-theme='liquid-glass'] {
+  color-scheme: light;
+  color: #192d48;
+  background-color: #edf4ff;
+  --color-base-100: #f7faff;
+  --color-base-200: #edf4ff;
+  --color-base-300: #dce6f4;
+  --color-base-content: #192d48;
+  --color-primary: #2458a4;
+  --color-primary-content: #ffffff;
+  --color-secondary: #455672;
+  --color-secondary-content: #ffffff;
+  --color-accent: #4e5095;
+  --color-accent-content: #ffffff;
+  --color-neutral: #2b3c56;
+  --color-neutral-content: #ffffff;
+  --color-info: #276083;
+  --color-info-content: #ffffff;
+  --color-success: #226147;
+  --color-success-content: #ffffff;
+  --color-warning: #785016;
+  --color-warning-content: #ffffff;
+  --color-error: #a3323d;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.375rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  --hai-focus-color: #2458a4;
+  --hai-glass-edge: rgb(73 106 155 / 0.3);
+  --hai-glass-field-edge: #7084a1;
+  --hai-glass-muted: #4c6080;
+  --hai-glass-surface: var(--color-base-100);
+  --hai-glass-control-fill: var(--color-base-100);
+  --hai-glass-floating-fill: var(--color-base-100);
+  --hai-glass-menu-fill: var(--color-base-100);
+  --hai-glass-drawer-fill: var(--color-base-100);
+  --hai-glass-chrome-fill: var(--color-base-100);
+  --hai-glass-scrim: rgb(25 48 83 / 0.15);
+  --hai-glass-drawer-scrim: var(--hai-glass-scrim);
+  --hai-glass-overlay-control-fill: var(--color-base-100);
+  --hai-glass-refraction: url('../internal/glass-refraction.svg#lens');
+  --hai-glass-sheen:
+    radial-gradient(ellipse 48% 0.95rem at 23% 0%, rgb(255 255 255 / 0.96), transparent 100%),
+    radial-gradient(ellipse 33% 0.72rem at 91% 100%, rgb(169 218 255 / 0.68), transparent 100%);
+  --hai-glass-control-sheen:
+    radial-gradient(ellipse 64% 120% at 30% -66%, rgb(255 255 255 / 0.88), transparent),
+    linear-gradient(174deg, rgb(255 255 255 / 0.36), transparent 55% 86%, rgb(93 127 180 / 0.1));
+  --hai-glass-rim:
+    inset 0 1px 0 white, inset 1px 0 1px rgb(255 255 255 / 0.62), inset -1px -1px 0 rgb(93 135 192 / 0.36);
+  --hai-glass-depth: var(--hai-glass-rim), 0 5px 15px -11px rgb(39 68 119 / 0.37);
+
+  @media not (prefers-reduced-transparency: reduce) {
+    --hai-glass-surface: rgb(248 251 255 / 0.24);
+    --hai-glass-control-fill: rgb(252 254 255 / 0.17);
+    --hai-glass-floating-fill: rgb(247 252 255 / 0.23);
+    --hai-glass-menu-fill: rgb(247 252 255 / 0.47);
+    --hai-glass-drawer-fill: rgb(245 250 255 / 0.34);
+    --hai-glass-chrome-fill: rgb(248 251 255 / 0.72);
+    --hai-glass-overlay-control-fill: rgb(249 252 255 / 0.69);
+    --hai-glass-scrim: rgb(240 247 255 / 0.24);
+    --hai-glass-drawer-scrim: rgb(240 247 255 / 0.34);
+
+    @media (width < 48rem) {
+      --hai-glass-drawer-scrim: rgb(240 247 255 / 0.44);
+    }
+  }
+}
+
+:root[data-theme='liquid-glass'] {
+  background-image:
+    radial-gradient(ellipse at 19% 5%, #c8e6f5, transparent 55%),
+    radial-gradient(ellipse at 96% 15%, #e4dcf8, transparent 58%),
+    radial-gradient(ellipse at 18% 100%, #dceaff, transparent 64%);
+}
+
+/* 卡片不创建新的滤镜层。嵌套卡片、表格单元格和行操作沿用普通表面。 */
+:where([data-theme='liquid-glass']) :is(.card.bg-base-100:not(:where(.card .card)), [data-hai-glass-surface]) {
+  background-color: var(--hai-glass-surface);
+  background-image: var(--hai-glass-sheen);
+  border-color: var(--hai-glass-edge);
+}
+
+:where([data-theme='liquid-glass'])
+  :is(.card.bg-base-100:not(:where(.card .card, :has(table))), [data-hai-glass-surface]) {
+  box-shadow: var(--hai-glass-depth);
+}
+
+:where([data-theme='liquid-glass']) .card.bg-base-100:not(:where(.card .card)):where(:has(table)) {
+  background-color: var(--color-base-100);
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.88), transparent 2rem);
+}
+
+/* 原生 DaisyUI 下拉框的背景图承载箭头，仅替换底色。 */
+:where([data-theme='liquid-glass'])
+  :is(
+    .input:not(.input-ghost, .bg-transparent),
+    .select:not(.select-ghost, .bg-transparent),
+    .textarea:not(.textarea-ghost, .bg-transparent)
+  ):not(:disabled) {
+  background-color: var(--hai-glass-control-fill);
+}
+
+/* 以相同的表面样式呈现文本、选择、日期和标签控件，保留原有错误边框与焦点。 */
+:where([data-theme='liquid-glass'])
+  .hai-control-surface.bg-base-100:not(:where(:disabled, .cursor-not-allowed, :has(> :disabled))) {
+  background-color: var(--hai-glass-control-fill);
+  background-image: var(--hai-glass-control-sheen);
+
+  &:not(:focus-within, [class*='border-error'], :has(> [aria-expanded='true'])) {
+    border-color: var(--hai-glass-field-edge);
+  }
+
+  &:is(:focus-visible, :has(> :focus-visible)) {
+    outline: 2px solid var(--hai-focus-color);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  &[class*='border-error']:is(:focus-visible, :has(> :focus-visible)) {
+    outline-color: var(--color-error);
+  }
+}
+
+:where([data-theme='liquid-glass']) :is(input, textarea):not(:disabled)::placeholder {
+  color: var(--hai-glass-muted);
+  opacity: 1;
+}
+
+/* 按钮共享透光表面，交互优先级通过色调强度区分。 */
+:where([data-theme='liquid-glass'])
+  .btn:not(:where(.btn-ghost, .btn-link, :disabled, .btn-disabled, [aria-disabled='true'])) {
+  --hai-glass-button-color: var(--btn-color, var(--color-base-content));
+  --hai-glass-button-tint: 12%;
+  color: var(--hai-glass-button-color);
+  background-color: color-mix(
+    in srgb,
+    var(--hai-glass-button-color) var(--hai-glass-button-tint),
+    var(--hai-glass-control-fill)
+  );
+  background-image: var(--hai-glass-control-sheen);
+  background-position:
+    0 0,
+    center;
+  background-size:
+    146% 100%,
+    100% 100%;
+  border-color: color-mix(in srgb, var(--hai-glass-button-color) 50%, transparent);
+
+  &:where(.btn-primary) {
+    --hai-glass-button-tint: 21%;
+  }
+
+  &:where(.btn-outline, .btn-dash) {
+    --hai-glass-button-tint: 3%;
+  }
+
+  &:where(.btn-soft) {
+    --hai-glass-button-tint: 7%;
+  }
+
+  &:not(:focus-visible) {
+    box-shadow: var(--hai-glass-rim);
+  }
+
+  &:where(:hover, .btn-active, [aria-pressed='true']) {
+    background-color: color-mix(
+      in srgb,
+      var(--hai-glass-button-color) calc(var(--hai-glass-button-tint) + 6%),
+      var(--hai-glass-control-fill)
+    );
+  }
+
+  &:active {
+    background-color: color-mix(
+      in srgb,
+      var(--hai-glass-button-color) calc(var(--hai-glass-button-tint) + 12%),
+      var(--hai-glass-control-fill)
+    );
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition:
+      background-color 150ms,
+      border-color 150ms,
+      box-shadow 150ms;
+  }
+}
+
+:where([data-theme='liquid-glass'])
+  .btn:is(:disabled, .btn-disabled, [aria-disabled='true']):not(:where(.btn-ghost, .btn-link)) {
+  color: var(--hai-glass-muted);
+  background-color: color-mix(in srgb, var(--color-base-content) 5%, var(--hai-glass-control-fill));
+  border-color: var(--hai-glass-edge);
+}
+
+/* 轻量操作仅在交互时显示表面，密集列表没有重复装饰。 */
+:where([data-theme='liquid-glass'])
+  .btn.btn-ghost:where(:hover, :focus-visible, :active, [aria-pressed='true']):not(
+    :where(:disabled, .btn-disabled, [aria-disabled='true'])
+  ) {
+  background-color: color-mix(in srgb, currentColor 7%, var(--hai-glass-control-fill));
+  background-image: var(--hai-glass-control-sheen);
+  border-color: var(--hai-glass-edge);
+}
+
+:where([data-theme='liquid-glass']) :is(.checkbox, .radio, .toggle):not(:disabled) {
+  background-color: var(--hai-glass-control-fill);
+  background-image: var(--hai-glass-control-sheen);
+  border-color: var(--hai-glass-field-edge);
+
+  &:is(:checked, :indeterminate, [aria-checked='true']) {
+    background-color: color-mix(in srgb, var(--input-color, var(--color-primary)) 19%, var(--hai-glass-control-fill));
+    border-color: var(--input-color, var(--color-primary));
+  }
+}
+
+:where([data-theme='liquid-glass']) .checkbox:not(:disabled):is(:checked, :indeterminate, [aria-checked='true']) {
+  color: var(--input-color, var(--color-primary));
+}
+
+:where([data-theme='liquid-glass']) .range:not(:disabled) {
+  --range-thumb: var(--hai-glass-control-fill);
+  --range-bg: color-mix(in srgb, currentColor 12%, var(--hai-glass-control-fill));
+}
+
+:where([data-theme='liquid-glass']) .badge:not(:where(.badge-outline, .badge-dash, .badge-ghost, [class*='bg-'])) {
+  --hai-glass-badge-color: var(--badge-color, var(--color-base-content));
+  color: var(--hai-glass-badge-color);
+  background-color: color-mix(in srgb, var(--hai-glass-badge-color) 9%, var(--hai-glass-control-fill));
+  border-color: color-mix(in srgb, var(--hai-glass-badge-color) 25%, transparent);
+}
+
+:where([data-theme='liquid-glass']) .tabs-box .tab-active {
+  background-color: var(--hai-glass-control-fill);
+  background-image: var(--hai-glass-control-sheen);
+}
+
+/* 玻璃中心透出背景，位移滤镜只在窄边缘偏移光线。 */
+:where([data-theme='liquid-glass'])
+  :is(
+    .modal-box,
+    .hai-modal__panel.bg-base-100,
+    .hai-messagebox__panel,
+    .dropdown-content.bg-base-100,
+    .hai-floating-surface.bg-base-100,
+    [role='listbox'].bg-base-100
+  ) {
+  background-color: var(--hai-glass-floating-fill);
+  background-image: var(--hai-glass-sheen);
+  border-color: var(--hai-glass-edge);
+  box-shadow:
+    var(--hai-glass-rim),
+    0 14px 32px -13px rgb(37 69 122 / 0.48);
+
+  @supports (backdrop-filter: url('#lens')) {
+    @media not (prefers-reduced-transparency: reduce) {
+      backdrop-filter: var(--hai-glass-refraction) saturate(112%);
+    }
+  }
+}
+
+:where([data-theme='liquid-glass'])
+  :is(.dropdown-content.bg-base-100, .hai-floating-surface.bg-base-100, [role='listbox'].bg-base-100) {
+  --hai-glass-floating-fill: var(--hai-glass-menu-fill);
+
+  /* 先柔化菜单后方的局部内容，再在菜单边缘折光。 */
+  @media not (prefers-reduced-transparency: reduce) {
+    backdrop-filter: blur(3px);
+
+    @supports (backdrop-filter: url('#lens')) {
+      backdrop-filter: blur(3px) var(--hai-glass-refraction) saturate(112%);
+    }
+  }
+}
+
+:where([data-theme='liquid-glass']) .hai-popover-arrow {
+  --color-base-100: var(--hai-glass-floating-fill);
+}
+
+/* 遮罩只柔化对话框下面的页面或浮层，前景面板保留折光。 */
+:where([data-theme='liquid-glass']) .hai-modal .hai-modal__viewport > .hai-modal__backdrop,
+:where([data-theme='liquid-glass']) dialog:is(.hai-messagebox, .modal)[open]:modal::backdrop {
+  background-color: var(--hai-glass-scrim);
+  backdrop-filter: none;
+
+  @media not (prefers-reduced-transparency: reduce) {
+    backdrop-filter: blur(4px);
+  }
+}
+
+/* DaisyUI 的原生确认框将遮罩颜色画在 dialog 本身，改由原生后景层承接。 */
+:where([data-theme='liquid-glass']) dialog.modal[open]:modal {
+  background-color: transparent;
+}
+
+:where([data-theme='liquid-glass']) dialog.modal[open]:modal::backdrop {
+  display: block;
+}
+
+/* 主题菜单给预览色块、三语名称和选中标记留出一行，长列表在面板内滚动。 */
+:where([data-theme='liquid-glass']) .dropdown-content:has([data-theme-option]) {
+  min-inline-size: min(14rem, calc(100vw - 2rem));
+  max-block-size: min(28rem, 58dvh);
+  overscroll-behavior: contain;
+}
+
+:where([data-theme='liquid-glass']) .drawer-side > .drawer-overlay {
+  background-color: var(--hai-glass-drawer-scrim);
+
+  @media not (prefers-reduced-transparency: reduce) {
+    backdrop-filter: blur(5px);
+  }
+}
+
+:where([data-theme='liquid-glass']) .hai-drawer-actions {
+  background-color: var(--hai-glass-chrome-fill);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65);
+}
+
+/* 抽屉前景只做折光，其下的内容由遮罩柔化。 */
+:where([data-theme='liquid-glass']) .drawer-side > [role='dialog'].bg-base-200 {
+  background-color: var(--hai-glass-drawer-fill);
+  background-image: var(--hai-glass-sheen);
+  box-shadow:
+    var(--hai-glass-rim),
+    0 0 24px rgb(38 62 100 / 0.2);
+
+  @supports (backdrop-filter: url('#lens')) {
+    @media not (prefers-reduced-transparency: reduce) {
+      backdrop-filter: var(--hai-glass-refraction);
+    }
+  }
+}
+
+/* 输入内容需要稳定的底色，局部加强表单面即可。 */
+:where([data-theme='liquid-glass']) :is(.hai-modal__panel, .drawer-side > [role='dialog']) .hai-control-surface {
+  --hai-glass-control-fill: var(--hai-glass-overlay-control-fill);
+}
+
+/* 只有鼠标当前所在的一层表面显示光斑。 */
+@media (any-pointer: fine) and (prefers-reduced-motion: no-preference) {
+  :where([data-theme='liquid-glass']) [data-hai-glass-pointer]:is(.btn, .hai-control-surface) {
+    background-image:
+      radial-gradient(
+        ellipse 3.5rem 2rem at var(--hai-glass-pointer-x) var(--hai-glass-pointer-y),
+        rgb(255 255 255 / 0.95),
+        rgb(227 245 255 / 0.38) 46%,
+        transparent 100%
+      ),
+      var(--hai-glass-control-sheen);
+    background-position: center;
+    background-size: 100% 100%;
+  }
+
+  :where([data-theme='liquid-glass'])
+    [data-hai-glass-pointer]:is(
+      .card.bg-base-100,
+      [data-hai-glass-surface],
+      .modal-box,
+      .hai-modal__panel,
+      .hai-messagebox__panel,
+      .hai-floating-surface,
+      .dropdown-content,
+      [role='listbox'],
+      .drawer-side > [role='dialog']
+    ) {
+    background-image:
+      radial-gradient(
+        ellipse 8.5rem 5.5rem at var(--hai-glass-pointer-x) var(--hai-glass-pointer-y),
+        rgb(255 255 255 / 0.72),
+        rgb(230 245 255 / 0.26) 45%,
+        transparent 100%
+      ),
+      var(--hai-glass-sheen);
+  }
+
+  @supports (backdrop-filter: url('#lens')) {
+    @media not (prefers-reduced-transparency: reduce) {
+      :where([data-theme='liquid-glass']) .btn[data-hai-glass-pointer]:not(.btn-ghost) {
+        backdrop-filter: var(--hai-glass-refraction);
+      }
+    }
+  }
+}

@@ -1,6 +1,24 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('h5-app core flows', () => {
+  test('theme menu stays clickable above the category bar on mobile', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    const themeSelector = page.getByRole('button', { name: /^(选择主题|Select theme|テーマを選択)$/i })
+    const liquidGlass = page.getByRole('button', { name: /^(液态玻璃|Liquid glass|リキッドガラス)$/i })
+    await themeSelector.click()
+    await liquidGlass.click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+    await themeSelector.click()
+    await expect(liquidGlass).toHaveAttribute('aria-pressed', 'true')
+    await page.screenshot({
+      path: testInfo.outputPath('h5-theme-liquid-glass-mobile.png'),
+      animations: 'disabled',
+    })
+  })
+
   test('bottom tabs navigate between pages', async ({ page }) => {
     await page.goto('/')
     const bottomNav = page.getByRole('navigation')

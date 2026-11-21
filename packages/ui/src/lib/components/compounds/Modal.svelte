@@ -17,6 +17,7 @@
   import { setContext } from 'svelte'
   import { focusDialog, handleDialogKeydown } from '../../internal/dialog-focus.js'
   import { FORM_VISIBILITY_CONTEXT } from '../../internal/form-context.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
@@ -148,7 +149,7 @@
       <div class='hai-modal__backdrop' aria-hidden='true'></div>
     {/if}
 
-    <div bind:this={panel} class={modalBoxClass} style={panelStyle} role='dialog' aria-modal='true' aria-labelledby={title && !header
+    <div bind:this={panel} use:attachGlassPointer class={modalBoxClass} style={panelStyle} role='dialog' aria-modal='true' aria-labelledby={title && !header
       ? titleId
       : undefined} aria-label={title && !header
       ? undefined

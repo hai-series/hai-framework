@@ -14,6 +14,7 @@
 -->
 <script lang='ts'>
   import type { ButtonProps, DataAttributes } from '../../types.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
 
@@ -60,6 +61,7 @@
 </script>
 
 <button {...dataAttributes}
+        use:attachGlassPointer
         {type}
         form={form || undefined}
         class={buttonClass}

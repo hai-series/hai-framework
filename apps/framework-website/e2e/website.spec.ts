@@ -81,7 +81,8 @@ test('三语首页和深色主题可切换并保留选择', async ({ page }, tes
   await expect(page.getByRole('link', { name: 'Quick start', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('From an idea')
   await expect(page.getByRole('heading', { name: 'See what the generated projects look like.' })).toBeAttached()
-  await page.getByRole('button', { name: /Switch to dark|深色|ダーク/ }).click()
+  await page.getByRole('button', { name: 'Select theme' }).click()
+  await page.locator('[data-theme-option="dark"]').click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -103,6 +104,46 @@ test('三语首页和深色主题可切换并保留选择', async ({ page }, tes
   await page.screenshot({
     path: testInfo.outputPath('website-home-dark-ja.png'),
     fullPage: false,
+  })
+})
+
+test('液态玻璃主题刷新后保留，文档搜索浮层可用', async ({ page }, testInfo) => {
+  await page.goto('/hai-framework/')
+  const themeSelector = page.getByRole('button', { name: '选择主题' })
+  await themeSelector.click()
+  await page.getByRole('button', { name: '液态玻璃' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect(themeSelector).toBeEnabled()
+  await page.screenshot({
+    path: testInfo.outputPath('website-home-liquid-glass.png'),
+  })
+
+  await page.goto('/hai-framework/docs/configuration/runtime/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.screenshot({
+    path: testInfo.outputPath('website-docs-liquid-glass.png'),
+  })
+  await page.getByRole('button', { name: '搜索文档', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('searchbox').fill('maxAge')
+  await expect(dialog.locator('.search-results a').first()).toBeVisible()
+  await expect(page.locator('[data-site-search] .hai-modal__backdrop')).toHaveCSS('backdrop-filter', 'blur(9px)')
+  await page.screenshot({
+    path: testInfo.outputPath('website-search-liquid-glass.png'),
+  })
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await themeSelector.click()
+  await expect(page.getByRole('button', { name: '液态玻璃' })).toHaveAttribute('aria-pressed', 'true')
+  await page.screenshot({
+    path: testInfo.outputPath('website-theme-liquid-glass-mobile.png'),
+    animations: 'disabled',
   })
 })
 
@@ -213,7 +254,8 @@ test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和�
   await page.screenshot({
     path: testInfo.outputPath('website-yaml-highlight.png'),
   })
-  await page.getByRole('button', { name: /暗色|深色|Switch to dark|ダーク/ }).click()
+  await page.getByRole('button', { name: '选择主题' }).click()
+  await page.locator('[data-theme-option="dark"]').click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await yaml.scrollIntoViewIfNeeded()
   await page.screenshot({

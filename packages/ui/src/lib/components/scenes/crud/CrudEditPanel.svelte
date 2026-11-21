@@ -24,7 +24,7 @@
   import { resolveFormText as resolveText } from '../../../internal/form-validation.svelte.js'
   import { uiM } from '../../../messages.js'
   import { useToastFeedback } from '../../../toast.svelte.js'
-  import { getDataAttributes } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -133,7 +133,10 @@
   const multiSelectLabelClass = $derived(isCompact ? 'inline-flex items-center gap-1.5 cursor-pointer' : 'inline-flex items-center gap-2 cursor-pointer')
   const multiSelectTextClass = $derived(isCompact ? 'text-xs text-base-content' : 'text-sm text-base-content')
   const drawerFormClass = $derived(isCompact ? 'pb-16' : 'pb-20')
-  const drawerFooterClass = $derived(isCompact ? 'absolute bottom-0 left-0 right-0 p-3 bg-base-200 border-t border-base-content/10 flex justify-end gap-2' : 'absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2')
+  const drawerFooterClass = $derived(cn(
+    'hai-drawer-actions absolute bottom-0 left-0 right-0 bg-base-200 border-t border-base-content/10 flex justify-end gap-2',
+    isCompact ? 'p-3' : 'p-4',
+  ))
 
   function handleClose() {
     open = false

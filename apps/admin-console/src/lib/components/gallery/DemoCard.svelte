@@ -47,7 +47,7 @@
   }
 </script>
 
-<div class='overflow-hidden rounded-xl border border-base-300 bg-base-100'>
+<div data-hai-glass-surface class='overflow-hidden rounded-xl border border-base-300 bg-base-100'>
   <button
     type='button'
     class='flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-base-200/50'

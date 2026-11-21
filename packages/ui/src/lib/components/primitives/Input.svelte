@@ -16,6 +16,7 @@
   import type { DataAttributes, InputProps } from '../../types.js'
   import { getFormFieldContext } from '../../internal/form-context.js'
   import { createControlValidation, resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -86,7 +87,7 @@
 
   const containerClass = $derived(
     cn(
-      'flex items-center w-full rounded-lg border bg-base-100 overflow-hidden',
+      'hai-control-surface flex items-center w-full rounded-lg border bg-base-100 overflow-hidden',
       sizeClasses.height,
       effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
@@ -130,7 +131,7 @@
 </script>
 
 <div {...dataAttributes} class='fieldset w-full'>
-  <div class={containerClass}>
+  <div use:attachGlassPointer class={containerClass}>
     <input
       bind:this={inputRef}
       id={id ?? field?.controlId}

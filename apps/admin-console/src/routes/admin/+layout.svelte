@@ -10,7 +10,7 @@
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
+  import { applyTheme, FeedbackModal, getCurrentTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
@@ -22,6 +22,7 @@
   import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '#lib/services/feedback.js'
   import { sensitiveActions } from '#lib/services/sensitive-actions.svelte.js'
   import { sessionRecovery } from '#lib/services/session-recovery.svelte.js'
+  import { setAdminTheme } from '#lib/theme-context.js'
   import { apiFetch } from '#lib/utils/api.js'
 
   interface Props {
@@ -112,15 +113,22 @@
     }
   }
 
-  // 顶栏主题快速切换（亮/暗）
-  let currentTheme = $derived(browser
-    ? getSavedTheme()
-    : 'light')
+  // 读取首屏脚本已恢复的主题，服务端预览沿用管理台默认值。
+  let currentTheme = $state(browser
+    ? getCurrentTheme()
+    : 'liquid-glass')
 
   function handleThemeChange(theme: string) {
     applyTheme(theme)
     currentTheme = theme
   }
+
+  setAdminTheme({
+    get current() {
+      return currentTheme
+    },
+    select: handleThemeChange,
+  })
 
   const authLoginPath = resolve('auth/login')
   const adminHomePath = resolve('admin')
@@ -282,7 +290,7 @@
   <title>{appName}</title>
 </svelte:head>
 
-<div class='flex h-screen bg-base-200/60'>
+<div class='admin-shell flex h-screen bg-base-200/60'>
   <!-- 移动端菜单遮罩 -->
   {#if mobileMenuOpen}
     <BareButton

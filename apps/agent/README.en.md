@@ -19,6 +19,8 @@ Set `HAI_IAM_REGISTER_ENABLED=true` in `apps/agent/.env.local` for local registr
 
 ## Usage
 
+After signing in, choose Liquid glass from the theme menu in the workspace toolbar. The app restores your selection on reload.
+
 Task search covers the current account’s active or archived tasks on the server, including older records. Use **Load more** in task, file, and artifact lists, the knowledge file picker, and the manual tool resource picker.
 
 | Feature                   | Action and observable result                                                                                                                                                                                                                                               |

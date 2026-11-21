@@ -278,7 +278,7 @@
       <div
         bind:this={popoverElement}
         use:portalAction
-        class='fixed z-50 rounded-box border border-base-200 bg-base-100 p-4 shadow-lg'
+        class='hai-floating-surface fixed z-50 rounded-box border border-base-200 bg-base-100 p-4 shadow-lg'
         style={portalStyle}
         role='dialog'
         tabindex='-1'
@@ -286,7 +286,7 @@
         onmouseenter={cancelClose}
         onmouseleave={handleMouseLeave}
       >
-        <div class={cn('absolute w-0 h-0 border-8', arrowClass)}></div>
+        <div class={cn('hai-popover-arrow absolute w-0 h-0 border-8', arrowClass)}></div>
 
         {#if children}
           {@render children()}
@@ -296,7 +296,7 @@
       <div
         bind:this={popoverElement}
         class={cn(
-          'absolute z-50 bg-base-100 rounded-box shadow-lg border border-base-200 p-4',
+          'hai-floating-surface absolute z-50 bg-base-100 rounded-box shadow-lg border border-base-200 p-4',
           positionClass,
         )}
         style='--offset: {offset}px'
@@ -307,7 +307,7 @@
         onmouseleave={handleMouseLeave}
       >
         <!-- 箭头 -->
-        <div class={cn('absolute w-0 h-0 border-8', arrowClass)}></div>
+        <div class={cn('hai-popover-arrow absolute w-0 h-0 border-8', arrowClass)}></div>
 
         {#if children}
           {@render children()}

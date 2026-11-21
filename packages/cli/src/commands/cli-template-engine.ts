@@ -160,6 +160,7 @@ const DEFAULT_THEMES = [
   'high-contrast',
   'formal',
   'eye-care',
+  'liquid-glass',
 ] as const
 const DEFAULT_THEME_NAME = 'light'
 // 模板与框架同步发布，框架依赖使用本次发布的精确版本。
@@ -1108,7 +1109,7 @@ function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext
 }
 
 /**
- * 去重主题列表并确保默认主题可选；未配置时提供亮/暗、高对比、直角商务与护眼主题。
+ * 去重主题列表并确保默认主题可选；未配置时提供亮/暗、高对比、直角商务、护眼与液态玻璃主题。
  * @param moduleConfigs - 创建选项中的模块配置。
  * @returns 包含默认主题的最终主题数据。
  * @example 模块内部上下文

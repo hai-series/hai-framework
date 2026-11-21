@@ -28,6 +28,7 @@
   import { DatePicker as BitsDatePicker } from 'bits-ui'
   import { getFormFieldContext } from '../../internal/form-context.js'
   import { resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
+  import { attachGlassPointer } from '../../internal/glass-pointer.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -91,7 +92,7 @@
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 </script>
 
-<div {...dataAttributes} class='fieldset w-full {className}'>
+<div {...dataAttributes} use:attachGlassPointer class='fieldset w-full {className}'>
   <BitsDatePicker.Root
     bind:value
     {minValue}
@@ -110,7 +111,7 @@
           : '',
       ].filter(Boolean).join(' ') || undefined}
       class={cn(
-        'flex w-full items-center gap-0.5 rounded-lg border bg-base-100 pr-2 transition-[border-color,box-shadow] duration-150',
+        'hai-control-surface flex w-full items-center gap-0.5 rounded-lg border bg-base-100 pr-2 transition-[border-color,box-shadow] duration-150',
         sizeClasses.control,
         effectiveError
           ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
@@ -133,7 +134,7 @@
       {/snippet}
     </BitsDatePicker.Input>
 
-    <BitsDatePicker.Content class='z-50 mt-1 rounded-xl border border-base-content/10 bg-base-100 p-3 shadow-lg' sideOffset={4}>
+    <BitsDatePicker.Content class='hai-floating-surface z-50 mt-1 rounded-xl border border-base-content/10 bg-base-100 p-3 shadow-lg' sideOffset={4}>
       <BitsDatePicker.Calendar>
         {#snippet children({ months, weekdays })}
           <BitsDatePicker.Header class='flex items-center justify-between px-1 pb-3'>

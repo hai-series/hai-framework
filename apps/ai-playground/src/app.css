@@ -25,6 +25,10 @@ body {
   background: var(--color-base-200);
 }
 
+:root[data-theme='liquid-glass'] body {
+  background-color: transparent;
+}
+
 .lab-shell {
   display: grid;
   min-height: calc(100vh - 4rem);

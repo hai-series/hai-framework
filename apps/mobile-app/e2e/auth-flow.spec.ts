@@ -134,5 +134,21 @@ for (const platform of ['mobile', 'desktop'] as const) {
         : 2))
     }
     await reloadAuthenticatedPage(page, username)
+
+    await page.setViewportSize(platform === 'desktop'
+      ? { width: 1440, height: 900 }
+      : { width: 390, height: 844 })
+    if (platform === 'mobile')
+      await page.getByRole('button', { name: /^(我的|Profile|プロフィール)$/i }).click()
+    const themeSelector = page.getByRole('button', { name: /^(选择主题|Select theme|テーマを選択)$/i })
+    const liquidGlass = page.getByRole('button', { name: /^(液态玻璃|Liquid glass|リキッドガラス)$/i })
+    await themeSelector.click()
+    await liquidGlass.click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+    await reloadAuthenticatedPage(page, username)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+    await screenshot(page, `${platform}-liquid-glass`)
+    await themeSelector.click()
+    await expect(liquidGlass).toHaveAttribute('aria-pressed', 'true')
   })
 }

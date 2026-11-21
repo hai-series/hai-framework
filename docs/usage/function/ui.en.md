@@ -730,12 +730,14 @@ Apply a trusted default before first paint, then let theme controls read and upd
 | `getCurrentTheme` | Read the theme currently applied to the page | `none` | `theme ID string` | `getCurrentTheme()` |
 | `getSavedTheme` | Read the saved theme preference | `fallback theme ID?` | `theme ID string` | `getSavedTheme("light")` |
 | `ThemeColorPicker` | Updates chosen color | `value`, `presets`, `onchange` | Updates chosen color | `<ThemeColorPicker bind:value={color} />` |
-| `ThemeSelector` | Selects a theme | No props | Selects a theme | `<ThemeSelector />` |
+| `ThemeSelector` | Selects a theme | `themeIds?: readonly string[]` | Optionally limits the built-in choices | `<ThemeSelector />` |
 | `ThemeToggle` | Toggles light/dark theme | No props | Toggles light/dark theme | `<ThemeToggle />` |
 
 #### Scenario: Read preferences and change theme
 
 Apply a trusted default before first paint, then let theme controls read and update browser preferences. For extended examples, see the [Chinese walkthrough](ui.md#theme).
+
+The shared `@h-ai/ui/styles/theme.css` includes `liquid-glass`, a light theme with translucent surfaces. Dialogs and drawers soften the layer beneath them, and menus soften the area they cover. Foreground content stays sharp, with refraction at the edges. Highlights follow the mouse over controls and stay still with reduced motion enabled. Choose “Liquid glass” in the theme selector to keep using it after a reload. CLI projects with a UI offer Liquid glass by default. If a Fullstack project explicitly sets `fullstack.theme.themes`, include `liquid-glass` in that list to make it selectable. Pass `themeIds` to `ThemeSelector` to limit the built-in choices. Omit the prop to show every built-in theme.
 
 ```ts
 import {
@@ -748,7 +750,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 18 个主题元数据
+  THEMES, // Metadata for 19 themes, typed as ThemeInfo[]
 } from '@h-ai/ui/theme'
 ```
 

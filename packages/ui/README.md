@@ -6,7 +6,7 @@
 
 内置中英日文消息（`zh-CN` / `en-US` / `ja-JP`），语言选择器默认提供三种语言。
 
-基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US / ja-JP），内置 15 个精选 DaisyUI 主题、高对比、直角商务及护眼主题。
+基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US / ja-JP），提供 15 个精选 DaisyUI 主题以及高对比、直角商务、护眼和液态玻璃主题。
 
 HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
 
@@ -23,6 +23,8 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 ## 功能说明
 
 [查 API 清单](../../docs/usage/function/ui.md#api-reference)，包含调用入口、输入、返回值和用法。
+
+[主题切换](../../docs/usage/function/ui.md#theme)支持通过现有选择器应用浅色液态玻璃主题（`liquid-glass`）并保存偏好。宿主可通过 `ThemeSelector` 的 `themeIds` 限定可选的内置主题。
 
 [工具与产物工作台](../../docs/usage/function/ui.md#工具与产物工作台)提供参数表单、示例、任务进度、文档编辑、版本冲突与媒体预览；应用只需连接已授权的读写和执行回调。
 

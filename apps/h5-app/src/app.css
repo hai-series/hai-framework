@@ -29,3 +29,8 @@
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
+
+/* 让玻璃菜单可以模糊正文，顶栏自身的滤镜会截断采样范围。 */
+:where([data-theme='liquid-glass']) .h5-topbar {
+  backdrop-filter: none;
+}

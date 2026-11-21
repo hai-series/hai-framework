@@ -25,3 +25,25 @@
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
+
+:where([data-theme='liquid-glass']) .admin-shell {
+  background-color: rgb(247 250 255 / 0.16);
+}
+
+:where([data-theme='liquid-glass']) .admin-shell :is(aside.bg-base-100, .hai-workspace > header.bg-base-100) {
+  background-color: var(--hai-glass-chrome-fill);
+}
+
+:where([data-theme='liquid-glass'])
+  :is(
+    .admin-dashboard-note,
+    .admin-shell > aside :is(a, button):not(:hover, .text-primary),
+    .admin-shell .hai-workspace > footer p
+  ) {
+  color: var(--hai-glass-muted);
+}
+
+/* 单列表单保持连续排列，避免菜单的换行规则把操作栏推到首屏以外。 */
+:where([data-theme='liquid-glass']) .admin-shell .drawer-side > .menu[role='dialog']:has(> form) {
+  flex-wrap: nowrap;
+}

@@ -52,7 +52,7 @@ test('high contrast appearance is selectable and survives reload', async ({ page
 {{/if_eq}}
 {{#if hasUi}}
 {{#unless isCapacitorApp}}
-test('eye care appearance is selectable and survives reload', async ({ page }, testInfo) => {
+test('eye care and liquid glass appearances are selectable and survive reload', async ({ page }, testInfo) => {
   const header = page.locator('header').first()
   const themeToggle = header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true })
 {{#if_eq appType 'h5'}}
@@ -79,6 +79,21 @@ test('eye care appearance is selectable and survives reload', async ({ page }, t
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({
     path: testInfo.outputPath('eye-care-mobile.png'),
+    animations: 'disabled',
+  })
+  await themeToggle.click()
+  await header.getByRole('button', { name: /液态玻璃|Liquid glass|リキッドガラス/, exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--hai-glass-field-edge').trim())).toBe('#7084a1')
+  await page.screenshot({
+    path: testInfo.outputPath('liquid-glass-mobile.png'),
+    animations: 'disabled',
+  })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.screenshot({
+    path: testInfo.outputPath('liquid-glass-desktop.png'),
     animations: 'disabled',
   })
 })
@@ -215,6 +230,18 @@ test('configured IAM registration and password login', async ({ page, context })
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
   await page.screenshot({
     path: path.join(evidence, '{{projectName}}-eye-care.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await appearance.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).click()
+  await appearance.getByRole('button', { name: /液态玻璃|Liquid glass|リキッドガラス/, exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await page.reload()
+  await expect(appearance).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--hai-glass-field-edge').trim())).toBe('#7084a1')
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-liquid-glass.png'),
     fullPage: true,
     animations: 'disabled',
   })
