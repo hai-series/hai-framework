@@ -92,7 +92,7 @@
   <div class='hai-mobile-viewport'>
     <div class='hai-mobile-shell min-w-0'>
       <!-- 顶部应用栏 -->
-      <AppBar title={m.app_title()} safeArea fixed={false} class='relative z-20 bg-base-100/95 backdrop-blur border-base-content/8'>
+      <AppBar title={m.app_title()} safeArea fixed={false} class='h5-topbar relative z-20 bg-base-100/95 backdrop-blur border-base-content/8'>
         {#snippet trailing()}
           <div class='flex items-center gap-1'>
             <LanguageSwitch currentLanguage={currentLanguage} onchange={handleLanguageChange} compact />
