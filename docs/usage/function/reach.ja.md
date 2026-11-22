@@ -105,9 +105,26 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.init` | プロバイダーと、キューを使う場合の依存先を準備 | `config` 必填，`options?` 可选 | `void` | `await reach.init(config)` |
-| `reach.close` | サービスを停止してリソースを解放 | 无参数 | `Promise<void>` | `await reach.close()` |
-| `reach.send` | 通知を送信・永続キューに追加 | message | `SendResult` | `await reach.send(message)` |
+| `reach.init(config, options?)` | プロバイダーと、キューを使う場合の依存先を準備 | `config: ReachConfigInput`, `options?: ReachInitOptions` · [初期化オプション](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
+| `reach.close()` | サービスを停止してリソースを解放 | なし | `Promise<void>` | `await reach.close()` |
+| `reach.send(message)` | 通知を送信・永続キューに追加 | 宛先と内容を含む `message: ReachMessage` が必須。[メッセージ項目](#reach-message-fields)を参照。 | `SendResult` | `await reach.send(message)` |
+
+<a id="reach-message-fields"></a>
+
+**ReachMessage**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `to` | `string` | 必須 | メールアドレスや電話番号など、チャネルの宛先。 |
+| `template` | `string` | 任意 | レンダリングする保存済みテンプレート名。省略すると直接送信。 |
+| `provider` | `string` | 直接送信で必須 | チャネル選択を上書き。テンプレート送信で省略するとテンプレートの事業者を使用。 |
+| `vars` | `Record<string, string>` | 任意 | キーに対応するテンプレート変数を埋めます。 |
+| `subject / body` | `string` | 任意 | 直接送信の件名と本文。件名はメールなどで使用。 |
+| `extra` | `Record<string, unknown>` | 任意 | SMS テンプレートコードや署名など事業者固有の値を指定。 |
+| `idempotencyKey` | `string` | 任意 | 直接 API 送信の受信側に安定したキーを渡します。キューでは queueId を使用。 |
+| `sensitive` | `boolean` | `false` | 認証情報を送る場合は true。遅延や再送キューを使わずメモリ内で送信します。 |
+| `expiresAt` | `number` | sensitive=true で必須 | 業務認証情報の期限を Unix ミリ秒で指定。 |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 通常の通知が通知停止時間に当たると、queue は既存の遅延設定を使用。reject は DND_BLOCKED を返し、ホストで延期できます。 |
 
 #### 利用例：通知経路の起動と送信
 
@@ -137,6 +154,31 @@ const sent = sentResult.data
 
 [引数と手順の詳細](reach.md#sending)
 
+<a id="reach-init-options"></a>
+
+#### 初期化オプション
+
+[通知設定](../configuration/reach.ja.md)の `config: ReachConfigInput` は必須です。`options: ReachInitOptions` を省略すると、設定に記載したゲートウェイのヘッダーと本文を使います。
+
+`gatewayHooks` はプロバイダー名とコールバックの対応表です。対象には `gateway` が設定された `aliyun-sms` プロバイダーを指定します。引数には `method: POST`、ゲートウェイの `url`、現在の本文 `body: string | undefined` と期限を伝える `signal: AbortSignal` が入ります。`{ headers?, body? }` を同期または非同期で返し、上書きする項目だけを指定できます。`undefined` を返すと設定済みの値を使います。処理はサーバーで実行し、署名付き URL はログに出さないでください。
+
+```ts
+import type { ReachConfigInput } from '@h-ai/reach'
+import { reach } from '@h-ai/reach'
+
+function startReach(config: ReachConfigInput) {
+  // sms ゲートウェイが設定済みの構成を渡します。初期化に成功すると、次のゲートウェイリクエストでコールバックが X-Client を追加します。
+  return reach.init(config, {
+    gatewayHooks: {
+      sms: ({ signal }) => {
+        signal.throwIfAborted()
+        return { headers: { 'X-Client': 'delivery' } }
+      },
+    },
+  })
+}
+```
+
 <a id="templates"></a>
 
 ### テンプレートの管理と確認：`reach.template`
@@ -147,12 +189,12 @@ const sent = sentResult.data
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve` | 有効なテンプレートを取得 | name | `ReachTemplate` | `await reach.template.resolve(name)` |
-| `reach.template.save` | テンプレートを保存 | template | `void` | `await reach.template.save(template)` |
-| `reach.template.saveBatch` | テンプレートを一括保存 | templates | `void` | `await reach.template.saveBatch(templates)` |
-| `reach.template.remove` | 独自テンプレートを削除 | name | `void` | `await reach.template.remove(name)` |
-| `reach.template.list` | 現在のテンプレートを列挙 | 无参数 | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render` | 変数を置き換えてプレビュー | name, vars | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.template.resolve(name)` | 有効なテンプレートを取得 | `name: string` テンプレート検索用の一意な名前 | `ReachTemplate` | `await reach.template.resolve(name)` |
+| `reach.template.save(template)` | テンプレートを保存 | `template: ReachTemplate` name、provider、body が必須。メールの subject は任意。本文と件名に {var} を使用可能 | `void` | `await reach.template.save(template)` |
+| `reach.template.saveBatch(templates)` | テンプレートを一括保存 | `templates: ReachTemplate[]` 一括保存するテンプレート配列。各項目は save と同じ | `void` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove(name)` | 独自テンプレートを削除 | `name: string` テンプレート検索用の一意な名前 | `void` | `await reach.template.remove(name)` |
+| `reach.template.list()` | 現在のテンプレートを列挙 | なし | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | 変数を置き換えてプレビュー | `name: string` テンプレート検索用の一意な名前。`vars: Record<string, string>` プレースホルダー名から置換値へのマップ | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
 
 #### 利用例：テンプレートの管理と確認
 
@@ -201,8 +243,12 @@ mail というテスト Provider を先に設定します。name= Ada により 
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get` | ID で送信記録を取得 | queueId | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
-| `reach.queue.list` | 送信記録を絞り込みページ取得 | options | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
+| `reach.queue.get(queueId)` | ID で送信記録を取得 | `queueId: string` 送信結果またはキュー記録から取得した UUID | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list(options)` | 送信記録を絞り込みページ取得 | `options: ReachQueueListOptions` · [検索の引数](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'unknown' })` |
+
+<a id="reach-queue-options"></a>
+
+`ReachQueueListOptions` は必須です。`status` には `dead` または `unknown` を指定します。`limit` は 1～100（既定 50）、`offset` はスキップする件数で 0～1,000,000（既定 0）です。
 
 #### 利用例：待機・失敗した通知の確認
 
@@ -236,8 +282,18 @@ if (entries.length > 0) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead` | 確認後にデッドレターを再投入 | queueId, options | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
-| `reach.queue.resolveUnknown` | 不明な送信結果を確認 | queueId, resolution | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+| `reach.queue.requeueDead(queueId, options)` | 確認後にデッドレターを再投入 | `queueId: string` はキューのレコードから取得します。必須の `options.expectedUpdatedAt: number` には最後に読み取った `updatedAt` を渡します。 | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | 不明な送信結果を確認 | `queueId: string` 送信結果またはキュー記録から取得した UUID。`resolution: ReachUnknownResolution` 確認済みの裁定が必須。[裁定項目](#reach-resolution-fields)を参照 | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+
+<a id="reach-resolution-fields"></a>
+
+**回復と裁定の項目**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `options.expectedUpdatedAt` | `number` | 必須 | dead の再キュー登録では最後に取得した updatedAt を使います。並行更新後は読み取り直します。 |
+| `resolution.status` | `'sent' \| 'discarded'` | 必須 | 外部で確認した後に送信済みまたは破棄を記録します。 |
+| `resolution.messageId` | `string` | 任意 | 送信済みと確認できた場合、最大 255 文字の事業者の受領 ID を記録できます。 |
 
 #### 利用例：結果を確認して復旧する
 

@@ -37,9 +37,25 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `hai create [name]` | アプリを作成 | 用 `--type` 选模板。省略名称或类型时询问，`--defaults` 采用默认值。默认安装依赖、初始化 Git 并准备部署工具 | 工程ファイルと起動案内 | `hai create orders --type admin --defaults` |
-| `hai add [module]` | モジュールを追加 | 模块名省略时询问。默认安装依赖，可加 `--no-install` | 依存・設定・スキル | `hai add ai` |
-| `hai init` | 不足する設定を作成 | 默认保留已有文件，`--force` 可以重建模块配置 | 不足設定と AI 入口 | `hai init` |
+| `hai create [name] [options]` | アプリを作成 | `name` は作成先のプロジェクト名です。`--type` でテンプレートを選びます。`--defaults` を使わない場合、省略した値は対話で入力します。依存関係の導入、Git、配備の準備はフラグで制御できます。 · [引数表](#cli-projects-arguments) | 工程ファイルと起動案内 | `hai create orders --type admin --defaults` |
+| `hai add [module] [options]` | モジュールを追加 | `module` は追加するモジュールです。省略時は対話で選びます。依存関係は既定で導入し、`--no-install` で省略できます。 · [引数表](#cli-projects-arguments) | 依存・設定・スキル | `hai add ai` |
+| `hai init [options]` | 不足する設定を作成 | `options` は初期化する設定を制御します。既存ファイルは既定で保持し、`--force` でモジュール設定を再生成できます。 · [引数表](#cli-projects-arguments) | 不足設定と AI 入口 | `hai init` |
+
+<a id="cli-projects-arguments"></a>
+
+##### 引数とオプション
+
+| 引数 | コマンドまたは条件 | 用途と既定値 |
+| --- | --- | --- |
+| `[name] / --type` | `create` | 省略時は入力を求める。--defaults で my-app と admin |
+| `--frontends <targets>` | `create, fullstack` | カンマ区切りのフロントエンド。fullstack のみ |
+| `--defaults` | `create` | 未指定の対話項目に既定値を使用 |
+| `--package-manager <pm>` | `create` | pnpm、npm、yarn を選択。api と fullstack は pnpm |
+| `--no-install` | `create, add` | 既定ではインストール。指定時はファイルや依存定義だけを更新 |
+| `--no-deploy` | `create` | デプロイの準備を省略。既定ではツールを含む |
+| `--no-git / --git-remote <url>` | `create` | 既定では Git を初期化。Git を省略するか遠隔 URL を指定 |
+| `[module]` | `add` | 追加するモジュール ID。例は ai。省略時は選択 |
+| `--force` | `init` | モジュール構成を再生成。既定では既存ファイルを保持 |
 
 #### 利用例：プロジェクトの作成と追加
 
@@ -85,11 +101,23 @@ demo-app・website・ai を指定し、工程・設定・skill を得ます。�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `hai generate [type] [name]` 或 `hai g` | ソースを生成 | 类型和名称可交互选择。多 workspace 工程用 `--workspace`；默认保护已有文件 | ソース。既存ファイルは既定で保護 | `hai generate api orders --workspace orders-serv` |
-| `hai g:page <name>` | ページを生成 | 页面名必填，按需设 `--workspace` | ページのソース | `hai g:page orders` |
-| `hai g:component <name>` | コンポーネントを生成 | 组件名必填，按需设 `--workspace` | コンポーネントのソース | `hai g:component OrderList` |
-| `hai g:api <name>` | HTTP 入口を生成 | 名称必填，按需设 `--workspace` 选择应用或服务 | 契約・ハンドラーのソース | `hai g:api orders --workspace orders-serv` |
-| `hai g:model <name>` | モデルを生成 | 名称必填，按需设 `--workspace` | モデルのソース | `hai g:model order` |
+| `hai generate [type] [name] [options]` または `hai g [type] [name] [options]` | ソースを生成 | `type` は生成の種類、`name` は生成物の名前です。省略時は対話で選びます。`--workspace` で対象を選び、既存ファイルは既定で保持します。 · [引数表](#cli-scaffolding-arguments) | ソース。既存ファイルは既定で保護 | `hai generate api orders --workspace orders-serv` |
+| `hai g:page <name> [options]` | ページを生成 | 必須の `name` は生成するページの名前です。`--workspace` で生成先を選びます。 · [引数表](#cli-scaffolding-arguments) | ページのソース | `hai g:page orders` |
+| `hai g:component <name> [options]` | コンポーネントを生成 | 必須の `name` は生成するコンポーネントの名前です。`--workspace` で生成先を選びます。 · [引数表](#cli-scaffolding-arguments) | コンポーネントのソース | `hai g:component OrderList` |
+| `hai g:api <name> [options]` | HTTP 入口を生成 | 必須の `name` は HTTP エントリの名前です。`--workspace` で複数ワークスペース内のアプリやサービスを選びます。 · [引数表](#cli-scaffolding-arguments) | 契約・ハンドラーのソース | `hai g:api orders --workspace orders-serv` |
+| `hai g:model <name> [options]` | モデルを生成 | 必須の `name` は生成するモデルの名前です。`--workspace` で生成先を選びます。 · [引数表](#cli-scaffolding-arguments) | モデルのソース | `hai g:model order` |
+
+<a id="cli-scaffolding-arguments"></a>
+
+##### 引数とオプション
+
+| 引数 | コマンドまたは条件 | 用途と既定値 |
+| --- | --- | --- |
+| `[type] / [name]` | `generate, g` | 生成の種類と名前。省略時は対話で指定 |
+| `<name>` | `g:page, g:component, g:api, g:model` | ページ、コンポーネント、ルート、モデルの必須名 |
+| `--workspace <name>` | `generate, g and aliases` | 複数ワークスペースで対象パッケージ名または相対ディレクトリを指定 |
+| `--output <path>` | `generate, g` | 出力先。既定の場所と許可される範囲は生成器による |
+| `--force` | `generate, g` | 既存の生成先を上書き可能にする。g:* のショートカットは既定の保護を適用 |
 
 #### 利用例：業務の雛形を生成する
 
@@ -120,7 +148,22 @@ hai g:model order
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `hai build` | コンパイルとパッケージ化 | --target の既定は compile。image/app/desktop には各ツールが必要 | 成果物。image --json は構築情報 | `hai build --target image --json` |
+| `hai build [options]` | コンパイルとパッケージ化 | --target の既定は compile。image/app/desktop には各ツールが必要 · [引数表](#cli-builds-arguments) | 成果物。image --json は構築情報 | `hai build --target image --json` |
+
+<a id="cli-builds-arguments"></a>
+
+##### 引数とオプション
+
+| 引数 | コマンドまたは条件 | 用途と既定値 |
+| --- | --- | --- |
+| `--target <target>` | `build` | 既定は compile。image はイメージ、app はモバイル、desktop はデスクトップ |
+| `--images <names> / --concurrency <count> / --json` | `build, image` | 既定では全設定済みイメージを並行数 2 で処理。--json は今回の成果物を標準出力に出す |
+| `--runtime <runtime> / --network <network>` | `build, image or Android container` | auto、podman、docker から選択。auto は利用可能な Podman を優先。ネットワークの既定はエンジン設定 |
+| `--platform <platform> / --arch <arch> / --debug` | `build, native` | ネイティブの対象と x64 または arm64 を選択。既定はホストアーキテクチャ。--debug で release から debug に変更 |
+| `--image-source / --image-mirrors` | `container builds` | official、cn、custom を選択。custom はイメージ接頭辞の対応表を使用。省略時は保存値または選択 |
+| `--npm-source / --npm-registry` | `container builds` | official、cn、custom を選択。custom は指定の registry URL を使用 |
+| `--proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `container builds` | inherit、system、custom、none を選択。既定のフォールバックは inherit。custom は URL と任意の除外ホストを指定。--no-http-proxy で継承を無効化 |
+| `--yes` | `download selection` | 保存済みのダウンロード設定または既定値を対話なしで使用 |
 
 #### 利用例：コンパイルと梱包
 
@@ -145,7 +188,22 @@ hai build --target image --json
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `hai deploy [appDir]` | 計画・梱包・配備 | 目录默认由当前工程确定。需选择或传入 `--env`。制品、服务及环境文件可单独指定 | 計画 JSON・配布ファイル・配備結果 | `hai deploy --env prod --plan` |
+| `hai deploy [appDir] [options]` | 計画・梱包・配備 | `appDir` は対象プロジェクトで、既定は現在のプロジェクトです。配備環境は対話で選ぶか `--env` で指定します。成果物、サービス、環境ファイルはフラグで選べます。 · [引数表](#cli-deployments-arguments) | 計画 JSON・配布ファイル・配備結果 | `hai deploy --env prod --plan` |
+
+<a id="cli-deployments-arguments"></a>
+
+##### 引数とオプション
+
+| 引数 | コマンドまたは条件 | 用途と既定値 |
+| --- | --- | --- |
+| `[appDir] / --env <environment> / --env-dir <path>` | `deploy` | アプリは既定で現在のプロジェクト。非対話では --env が必須。--env-dir で環境ファイルの場所を上書き |
+| `--plan / --inspect-remote` | `deploy` | 計画を出力。リモートの確認は --plan と併用 |
+| `--artifact-dir <path> / --build` | `deploy` | 既存の成果物を使うか先にビルドするかを選択。併用不可 |
+| `--services <names> / --skip-middleware` | `deploy` | カンマ区切りで対象サービスを指定。--skip-middleware でミドルウェアのデプロイを省略 |
+| `--bundle-only / --output <path>` | `deploy` | オフラインパッケージのみ作成。--output は保存先 |
+| `--concurrency / --network / --npm-source / --npm-registry` | `deploy --build` | ビルド段階に渡す。--build が必須。項目はビルドオプションを参照 |
+| `--runtime / --image-source / --image-mirrors / --proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `deploy` | コンテナエンジン、イメージ元、プロキシを指定。値はビルドオプションと同じ。読み取り専用の計画ではダウンロードを行わない |
+| `--yes` | `deploy` | 非対話実行時の確認。環境を明示した --plan は読み取り専用 |
 
 #### 利用例：計画と配布
 
@@ -168,9 +226,22 @@ prod を入力し計画 JSON を得ます。--plan は実際に配置しませ�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `hai upgrade <version>` | 指定版の更新を事前確認 | 填写已发布的精确版本，目录默认当前工程 | 依存・設定・スキルの差分報告 | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle>` | オフライン診断 ZIP を読む | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 | 要約・証拠ページ・ローカル URL | `hai feedback summary feedback.zip` |
-| `hai --version`、`hai --help` | バージョンとヘルプを表示 | 也可用 `hai <command> --help` | バージョン・選択肢のテキスト | `hai deploy --help` |
+| `hai upgrade <version> [options]` | 指定版の更新を事前確認 | `version` は確認する公開済みの正確なバージョンです。`--cwd` でプロジェクトを選び、既定は現在のプロジェクトです。 · [引数表](#cli-diagnostics-arguments) | 依存・設定・スキルの差分報告 | `hai upgrade TARGET_VERSION` |
+| `hai feedback <action> <bundle> [options]` | オフライン診断 ZIP を読む | `action` は、`bundle` で指定した診断 ZIP から何を読み取るかを選びます。`evidence` の `options` では、要求 ID、エラー ID、期間で絞れます。 · [引数表](#cli-diagnostics-arguments) | 要約・証拠ページ・ローカル URL | `hai feedback summary feedback.zip` |
+| `hai --version` または `hai --help` | バージョンとヘルプを表示 | コマンド名の後に `--help` を指定すると、そのコマンドの引数とオプションが表示されます。 | バージョン・選択肢のテキスト | `hai deploy --help` |
+
+<a id="cli-diagnostics-arguments"></a>
+
+##### 引数とオプション
+
+| 引数 | コマンドまたは条件 | 用途と既定値 |
+| --- | --- | --- |
+| `<version> / --cwd <path>` | `upgrade` | 公開済みの完全なバージョンが必須。--cwd で事前確認対象を指定し、既定は現在のディレクトリ |
+| `<action> / <bundle>` | `feedback` | 操作（summary、inspect、evidence、view）と診断 ZIP のパスが必須 |
+| `--page <number> / --page-size <number>` | `feedback evidence` | 既定で 1 ページ目、1 ページ 20 件。最大 100 件 |
+| `--kind / --request-id / --error-id` | `feedback evidence` | 種類、リクエスト ID、エラー ID で絞り込み。エラー ID で関連ログを特定 |
+| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | 証拠の時間範囲を Unix ミリ秒で指定 |
+| `--port <number>` | `feedback view` | ビューアーのポート。既定の 0 は OS が割り当て |
 
 #### 利用例：ヘルプ・更新・診断の確認
 

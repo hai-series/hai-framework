@@ -41,8 +41,8 @@ const digest = digestResult.data
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.init` | 准备加密能力 | `—` | `Promise<HaiResult<void>>` | `await crypto.init()` |
-| `crypto.close` | 释放模块状态 | `—` | `Promise<void>` | `await crypto.close()` |
+| `crypto.init()` | 准备加密能力 | `—` | `Promise<HaiResult<void>>` | `await crypto.init()` |
+| `crypto.close()` | 释放模块状态 | `—` | `Promise<void>` | `await crypto.close()` |
 | `crypto.isInitialized` | 检查可用状态 | `—` | `boolean` | `crypto.isInitialized` |
 
 #### 场景：检查状态并关闭
@@ -74,13 +74,13 @@ crypto.isInitialized // true
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.asymmetric.generateKeyPair` | 生成 SM2 密钥对 | `—` | `HaiResult<{ publicKey, privateKey }>` | `crypto.asymmetric.generateKeyPair()` |
-| `crypto.asymmetric.encrypt` | 用接收方公钥加密 | `data: string, publicKey: string, options?: { cipherMode, outputFormat }` | `HaiResult<string>` | `crypto.asymmetric.encrypt("orders", publicKey)` |
-| `crypto.asymmetric.decrypt` | 用私钥解密 | `ciphertext: string, privateKey: string, options?` | `HaiResult<string>` | `crypto.asymmetric.decrypt(ciphertext, privateKey)` |
-| `crypto.asymmetric.sign` | 为消息签名 | `data: string, privateKey: string, options?: { hash, userId }` | `HaiResult<string>` | `crypto.asymmetric.sign("orders", privateKey)` |
-| `crypto.asymmetric.verify` | 核对消息签名 | `data: string, signature: string, publicKey: string, options?` | `HaiResult<boolean>` | `crypto.asymmetric.verify("orders", signature, publicKey)` |
-| `crypto.asymmetric.isValidPrivateKey` | 检查私钥格式 | `privateKey: string` | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
-| `crypto.asymmetric.isValidPublicKey` | 校验外部提交的 SM2 公钥 | 可传任意值，只有 128 个十六进制字符的坐标或带 `04` 前缀的 130 字符公钥才可能有效 | 直接返回 `boolean` 并收窄为 `string`；编码及曲线点有效为 `true`，否则 `false`；无需初始化 | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
+| `crypto.asymmetric.generateKeyPair()` | 生成 SM2 密钥对 | `—` | `HaiResult<{ publicKey, privateKey }>` | `crypto.asymmetric.generateKeyPair()` |
+| `crypto.asymmetric.encrypt(data, publicKey, options?)` | 用接收方公钥加密 | 必填明文 `data` 和接收方 `publicKey`。可选 `options` 控制密文顺序和编码。见[SM2 参数](#sm2-options)。 | `HaiResult<string>` | `crypto.asymmetric.encrypt("orders", publicKey)` |
+| `crypto.asymmetric.decrypt(ciphertext, privateKey, options?)` | 用私钥解密 | 必填密文字符串 `ciphertext` 与匹配的 `privateKey`。`options.cipherMode` 取 `0`（C1C2C3）或 `1`（C1C3C2，默认），并与加密时一致。 | `HaiResult<string>` | `crypto.asymmetric.decrypt(ciphertext, privateKey)` |
+| `crypto.asymmetric.sign(data, privateKey, options?)` | 为消息签名 | 必填消息 `data` 和签名者 `privateKey`。可选 `options` 控制签名摘要与用户标识。见[SM2 参数](#sm2-options)。 | `HaiResult<string>` | `crypto.asymmetric.sign("orders", privateKey)` |
+| `crypto.asymmetric.verify(data, signature, publicKey, options?)` | 核对消息签名 | 必填原文 `data`、签名 `signature` 和 `publicKey`。`options.hash` 默认 `true`，`options.userId` 默认 `1234567812345678`。两者均须与签名时一致。 | `HaiResult<boolean>` | `crypto.asymmetric.verify("orders", signature, publicKey)` |
+| `crypto.asymmetric.isValidPrivateKey(key)` | 检查私钥格式 | 必填 `key` 是待校验的 SM2 私钥候选值。 | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
+| `crypto.asymmetric.isValidPublicKey(key)` | 校验外部提交的 SM2 公钥 | 必填 `key` 是外部 SM2 公钥候选值。有效格式是 128 个十六进制坐标字符，或带 `04` 前缀的 130 字符公钥。 | 直接返回 `boolean` 并收窄为 `string`；编码及曲线点有效为 `true`，否则 `false`；无需初始化 | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
 
 #### 场景：生成密钥、往返加密并验证签名
 
@@ -129,6 +129,16 @@ if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
 changedMessageResult.data // false
 ```
+
+<a id="sm2-options"></a>
+
+#### SM2 加密与签名参数
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `cipherMode` | 默认 `1` | 选择密文顺序，`1` 为 C1C3C2，`0` 为 C1C2C3。加解密一致。 |
+| `outputFormat` | 默认 `hex` | 加密返回 `hex` 或 `base64` 密文字符串。 |
+| `hash` / `userId` | 默认 `true` 与 `1234567812345678` | 控制签名时的 SM3 预处理与公开的 SM2 标识。验签沿用相同设置。 |
 
 #### 场景：选择密文编码和签名参数
 
@@ -192,9 +202,9 @@ SM2 只加密非空文本；认证失败或密文不完整返回失败。私钥�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.hash.hash` | 计算 SM3 摘要 | `data: string / Uint8Array, options?: { inputEncoding }` | `HaiResult<string>: 64 hex` | `crypto.hash.hash("orders")` |
-| `crypto.hash.hmac` | 计算带密钥的摘要 | `data: string, key: string` | `HaiResult<string>` | `crypto.hash.hmac("orders", hmacKey)` |
-| `crypto.hash.verify` | 核对文本与摘要 | `data: string, expectedHash: string` | `HaiResult<boolean>` | `crypto.hash.verify("orders", digest)` |
+| `crypto.hash.hash(data, options?)` | 计算 SM3 摘要 | 必填待哈希 `data`，可传字符串或 `Uint8Array`。可选 `options.inputEncoding` 默认 `utf8`，传 `hex` 时先解码输入。 | `HaiResult<string>: 64 hex` | `crypto.hash.hash("orders")` |
+| `crypto.hash.hmac(data, key)` | 计算带密钥的摘要 | 必填 `data` 为消息，`key` 是计算 HMAC 的共享密钥。 | `HaiResult<string>` | `crypto.hash.hmac("orders", hmacKey)` |
+| `crypto.hash.verify(data, expectedHash)` | 核对文本与摘要 | 必填 `data` 为待比对的原始消息，`expectedHash` 为预期摘要。 | `HaiResult<boolean>` | `crypto.hash.verify("orders", digest)` |
 
 #### 场景：核对文本、字节与带密钥的消息
 
@@ -249,14 +259,14 @@ SM4 默认 CBC，每次生成新 IV，结果包含解密所需的字段。IV 可
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.symmetric.generateKey` | 生成随机 SM4 密钥 | `—` | `string: 32 hex` | `crypto.symmetric.generateKey()` |
-| `crypto.symmetric.generateIV` | 生成随机初始化向量 | `—` | `string: 32 hex` | `crypto.symmetric.generateIV()` |
-| `crypto.symmetric.encrypt` | 加密并保留解密信息 | `data: string, key: 32 hex, options?: { mode, iv, outputFormat }` | `HaiResult<{ mode, ciphertext, iv?, encoding }>` | `crypto.symmetric.encrypt("orders", key)` |
-| `crypto.symmetric.decrypt` | 解密结构化密文 | `payload: SymmetricEncryptedPayload, key: 32 hex` | `HaiResult<string>` | `crypto.symmetric.decrypt(payload, key)` |
-| `crypto.symmetric.encryptWithIV` | 每次生成新 IV 加密 | `data: string, key: 32 hex` | `HaiResult<{ mode: "cbc", ciphertext, iv, encoding }>` | `crypto.symmetric.encryptWithIV("orders", key)` |
-| `crypto.symmetric.decryptWithIV` | 解密指定 IV 的密文 | `ciphertext: string, key: 32 hex, iv: 32 hex` | `HaiResult<string>` | `crypto.symmetric.decryptWithIV(ciphertext, key, iv)` |
-| `crypto.symmetric.isValidKey` | 检查密钥格式 | `key: string` | `boolean` | `crypto.symmetric.isValidKey(key)` |
-| `crypto.symmetric.isValidIV` | 检查 IV 格式 | `iv: string` | `boolean` | `crypto.symmetric.isValidIV(iv)` |
+| `crypto.symmetric.generateKey()` | 生成随机 SM4 密钥 | `—` | `string: 32 hex` | `crypto.symmetric.generateKey()` |
+| `crypto.symmetric.generateIV()` | 生成随机初始化向量 | `—` | `string: 32 hex` | `crypto.symmetric.generateIV()` |
+| `crypto.symmetric.encrypt(data, key, options?)` | 加密并保留解密信息 | 必填明文 `data` 和 SM4 `key`。可选 `options` 控制 CBC/ECB、IV 和编码。见[SM4 参数](#sm4-options)。 | `HaiResult<{ mode, ciphertext, iv?, encoding }>` | `crypto.symmetric.encrypt("orders", key)` |
+| `crypto.symmetric.decrypt(payload, key)` | 解密结构化密文 | 必填 `payload` 为带模式与编码的密文对象，`key` 为原 SM4 密钥。 | `HaiResult<string>` | `crypto.symmetric.decrypt(payload, key)` |
+| `crypto.symmetric.encryptWithIV(data, key)` | 每次生成新 IV 加密 | 必填明文 `data` 和 SM4 `key`。 | `HaiResult<{ mode: "cbc", ciphertext, iv, encoding }>` | `crypto.symmetric.encryptWithIV("orders", key)` |
+| `crypto.symmetric.decryptWithIV(ciphertext, key, iv)` | 解密指定 IV 的密文 | 必填十六进制 `ciphertext` 和加密时使用的 SM4 `key`、`iv`。 | `HaiResult<string>` | `crypto.symmetric.decryptWithIV(ciphertext, key, iv)` |
+| `crypto.symmetric.isValidKey(key)` | 检查密钥格式 | 必填 `key` 为待检查的 SM4 密钥候选值。 | `boolean` | `crypto.symmetric.isValidKey(key)` |
+| `crypto.symmetric.isValidIV(iv)` | 检查 IV 格式 | 必填 `iv` 为待检查的初始化向量候选值。 | `boolean` | `crypto.symmetric.isValidIV(iv)` |
 
 #### 场景：保存结构化密文再还原
 
@@ -289,6 +299,16 @@ if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
 plaintextWithIVResult.data // 'hello'
 ```
+
+<a id="sm4-options"></a>
+
+#### SM4 加密参数
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `mode` | 默认 `cbc` | 选择 `cbc` 或协议需兼容的 `ecb`。 |
+| `iv` | CBC 省略时自动生成 | 仅 CBC 使用，显式值为 32 位十六进制字符，每次加密使用不同的 IV。 |
+| `outputFormat` | 默认 `hex` | 可选 `hex` 或 `base64`。结果的 `encoding` 记录所选格式。 |
 
 #### 场景：显式提供新 IV 并输出 Base64
 
@@ -328,12 +348,23 @@ SM4 可加密空文本，但解密拒绝空密文、无效编码、非完整16�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.password.hash` | 服务端保存密码摘要 | `password: string, options?: { saltLength, iterations }` | `HaiResult<string>: $hai$…` | `crypto.password.hash(password)` |
-| `crypto.password.verify` | 服务端验证密码 | `password: string, storedHash: string` | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
-| `crypto.password.hashAsync` | 在工作线程生成密码记录 | `password, config?` · 同同步方法，返回可互相验证的记录 | `Promise<HaiResult<string>>` | `await crypto.password.hashAsync(password)` |
-| `crypto.password.verifyAsync` | 在工作线程验证密码 | `password, storedHash` | `Promise<HaiResult<boolean>>` | `await crypto.password.verifyAsync(password, storedHash)` |
+| `crypto.password.hash(password, config?)` | 服务端保存密码摘要 | 必填 `password` 明文。可选 `config.saltLength`、`config.iterations` 见[密码哈希配置](#password-config)。 | `HaiResult<string>: $hai$…` | `crypto.password.hash(password)` |
+| `crypto.password.verify(password, hash)` | 服务端验证密码 | 必填 `password` 是待验证的明文，`hash` 是存储的哈希记录。 | `HaiResult<boolean>` | `crypto.password.verify(password, storedHash)` |
+| `crypto.password.hashAsync(password, config?)` | 在工作线程生成密码记录 | 必填 `password` 明文。可选 `config.saltLength`、`config.iterations` 与[同步方法](#password-config)相同。 | `Promise<HaiResult<string>>` | `await crypto.password.hashAsync(password)` |
+| `crypto.password.verifyAsync(password, hash)` | 在工作线程验证密码 | 必填 `password` 是待验证的明文，`hash` 是存储的哈希记录。 | `Promise<HaiResult<boolean>>` | `await crypto.password.verifyAsync(password, storedHash)` |
 
 在 Node.js 服务的注册或登录请求中使用异步方法。每个进程最多运行 4 个密码 Worker，并保留 32 个等待位置。线程按需启动，等待队列满时返回 `HaiCryptoError.PASSWORD_BUSY`（HTTP 503）。`crypto.close()` 会结束尚未完成的任务并等待线程退出，此类任务返回 `NOT_INITIALIZED`。同步接口与浏览器入口继续使用同一密码记录格式。
+
+<a id="password-config"></a>
+
+#### 密码哈希 config
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `saltLength` | 默认 16，整数范围 8–128 | 生成随机盐的字符数。 |
+| `iterations` | 默认 10,000，整数范围 1–1,000,000 | 哈希迭代轮数。验证从已保存记录读取。 |
+
+传入 `{ saltLength: 24, iterations: 12000 }` 时，成功返回以 `$hai$12000$` 开头、含 24 字符随机盐的记录。
 
 #### 场景：区分匹配、不匹配与记录损坏
 
@@ -401,21 +432,21 @@ Node 服务端通过独立的 Worker 池封包和解包。池满时可返回 `TR
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.transport.createServer` | 创建共享传输管理器 | `{ serverKeyRing, keyStore, maxPlaintextBytes?, … }` | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
-| `crypto.transport.createClient` | 创建加密 HTTP 会话 | `{ keyExchangeUrl: HTTPS URL, fetch?, maxPlaintextBytes? }` | `TransportClient: init / encryptedFetch / destroy` | `crypto.transport.createClient({ keyExchangeUrl: "https://api.example.com/api/v1/_hai/key-exchange" })` |
+| `crypto.transport.createServer(options)` | 创建共享传输管理器 | 必填 `options` 包含服务端密钥环与注册存储。容量及时间限制见[服务端和客户端参数](#call-options)。 | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
+| `crypto.transport.createClient(options)` | 创建加密 HTTP 会话 | 必填 `options.keyExchangeUrl` 指向可信服务，`options.fetch` 与本地明文上限可省略。见[服务端和客户端参数](#call-options)。 | `TransportClient: init / encryptedFetch / destroy` | `crypto.transport.createClient({ keyExchangeUrl: "https://api.example.com/api/v1/_hai/key-exchange" })` |
 | `crypto.transport.protocol` | 复用协议路径与头名 | `—` | `typeof crypto.transport.protocol` | `crypto.transport.protocol` |
-| `manager.getServerKeyId` | 读取当前服务端密钥版本 | `—` | `string` | `manager.getServerKeyId()` |
-| `manager.getServerPublicKey` | 提供握手公钥 | `—` | `string` | `manager.getServerPublicKey()` |
-| `manager.registerClientKey` | 登记客户端公钥 | `clientPublicKey: string` | `Promise<string>: clientId` | `await manager.registerClientKey(clientPublicKey)` |
-| `manager.getClientPublicKey` | 查询共享登记的公钥 | `clientId: string` | `Promise<string / undefined>` | `await manager.getClientPublicKey(clientId)` |
-| `manager.decryptRequest` | 验证并解密请求 | `payload: EncryptedRequestPayload, expected: TransportRequestContext` | `Promise<HaiResult<string>>` | `await manager.decryptRequest(encryptedRequest, requestContext)` |
-| `manager.encryptResponse` | 认证并加密关联响应 | `request: TransportMessageContext, data: string, status: number` | `Promise<HaiResult<EncryptedPayload>>` | `await manager.encryptResponse(messageContext, "{}", 200)` |
-| `manager.close` | 释放管理器资源 | `—` | `Promise<void>` | `await manager.close()` |
-| `session.init` | 取得可用传输会话 | `—` | `Promise<HaiResult<void>>` | `await session.init()` |
-| `session.encryptedFetch` | 按 fetch 契约调用加密接口 | `input: RequestInfo / URL, init?: RequestInit` | `Promise<Response>` | `await session.encryptedFetch("https://api.example.com/api/v1/orders")` |
-| `session.ready` | 检查会话能否发送新请求 | `—` | `boolean` | `session.ready()` |
-| `session.destroy` | 清除本地传输会话 | `—` | `void` | `session.destroy()` |
-| `crypto.transport.parseServerKeyRing` | 解析可信启动代码提供的密钥环 | Secret JSON 或对象 | `HaiResult<TransportServerKeyRing>`，失败不回显密钥 | `crypto.transport.parseServerKeyRing(secret)` |
+| `manager.getServerKeyId()` | 读取当前服务端密钥版本 | `—` | `string` | `manager.getServerKeyId()` |
+| `manager.getServerPublicKey()` | 提供握手公钥 | `—` | `string` | `manager.getServerPublicKey()` |
+| `manager.registerClientKey(clientPublicKey)` | 登记客户端公钥 | 必填 `clientPublicKey` 为客户端登记的 SM2 公钥。 | `Promise<string>: clientId` | `await manager.registerClientKey(clientPublicKey)` |
+| `manager.getClientPublicKey(clientId)` | 查询共享登记的公钥 | 必填 `clientId` 是注册时返回的客户端 ID。 | `Promise<string / undefined>` | `await manager.getClientPublicKey(clientId)` |
+| `manager.decryptRequest(payload, expected)` | 验证并解密请求 | 必填 `payload` 是入站加密封包，`expected` 是由实际请求得到的预期上下文。 | `Promise<HaiResult<string>>` | `await manager.decryptRequest(encryptedRequest, requestContext)` |
+| `manager.encryptResponse(request, data, status)` | 认证并加密关联响应 | 必填 `request` 是已验证的请求上下文，`data` 是响应明文，`status` 是真实 HTTP 状态码。 | `Promise<HaiResult<EncryptedPayload>>` | `await manager.encryptResponse(messageContext, "{}", 200)` |
+| `manager.close()` | 释放管理器资源 | `—` | `Promise<void>` | `await manager.close()` |
+| `session.init()` | 取得可用传输会话 | `—` | `Promise<HaiResult<void>>` | `await session.init()` |
+| `session.encryptedFetch(input, init?)` | 按 fetch 契约调用加密接口 | 必填 Fetch `input` 指定 URL 或 Request。可选 `init` 为请求方法、正文、头部和取消信号等 Fetch 选项。 | `Promise<Response>` | `await session.encryptedFetch("https://api.example.com/api/v1/orders")` |
+| `session.ready()` | 检查会话能否发送新请求 | `—` | `boolean` | `session.ready()` |
+| `session.destroy()` | 清除本地传输会话 | `—` | `void` | `session.destroy()` |
+| `crypto.transport.parseServerKeyRing(serialized)` | 解析可信启动代码提供的密钥环 | 必填 `serialized` 为可信服务端 Secret 中的 JSON 字符串或等价对象。 | `HaiResult<TransportServerKeyRing>`，失败不回显密钥 | `crypto.transport.parseServerKeyRing(secret)` |
 
 <a id="detailed-workflow"></a>
 
@@ -617,12 +648,12 @@ interface Context {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `crypto.transport.createKeyStore` | 创建有期限和容量保底的登记簿 | `{ cache, ttlSeconds?, maxRegistrationsPerMinute?, maxRequestsPerMinute? }` | `TransportKeyStore`，非法参数抛 TypeError，满额 reject `hai:crypto:072` | `crypto.transport.createKeyStore({ cache })` |
-| `registry.register` | 登记客户端公钥并返回编号 | 有效 SM2 公钥 | `Promise<string>`，公钥/存储错误 reject | `await registry.register(publicKey)` |
-| `registry.get` | 按客户端编号读取公钥 | 客户端 ID | `Promise<string / undefined>`，存储错误 reject | `await registry.get(clientId)` |
-| `registry.claimRequest` | 首次接纳编号并拒绝重复请求 | 客户端 ID、请求 ID、保留截止 Unix 毫秒 | `Promise<boolean>`，原子消费，存储错误 reject | `await registry.claimRequest(clientId, requestId, expiresAt)` |
-| `registry.delete?` | 删除公钥登记 | 客户端 ID | `Promise<void>`，只删公钥，存储错误 reject | `await registry.delete?.(clientId)` |
-| `registry.close?` | 清理自定义存储自有资源 | 无 | `Promise<void>`，可选自定义存储清理钩子；内置 Cache registry 不关闭借用连接 | `await registry.close?.()` |
+| `crypto.transport.createKeyStore(options)` | 创建有期限和容量保底的登记簿 | 必填 `options.cache` 为已初始化的 Cache。公钥存活时间与登记配额见[登记选项](#registry-options)。 | `TransportKeyStore`，非法参数抛 TypeError，满额 reject `hai:crypto:072` | `crypto.transport.createKeyStore({ cache })` |
+| `registry.register(publicKey)` | 登记客户端公钥并返回编号 | 必填 `publicKey` 是待登记的有效 SM2 公钥。 | `Promise<string>`，公钥/存储错误 reject | `await registry.register(publicKey)` |
+| `registry.get(clientId)` | 按客户端编号读取公钥 | 必填 `clientId` 是登记返回的标识。 | `Promise<string / undefined>`，存储错误 reject | `await registry.get(clientId)` |
+| `registry.claimRequest(clientId, requestId, expiresAt)` | 首次接纳编号并拒绝重复请求 | 必填 `clientId` 与 `requestId` 标识本次请求。必填 `expiresAt` 为记录保留截止时间，以 Unix 毫秒表示。 | `Promise<boolean>`，原子消费，存储错误 reject | `await registry.claimRequest(clientId, requestId, expiresAt)` |
+| `registry.delete?.(clientId)` | 删除公钥登记 | 必填 `clientId` 指定要注销的客户端标识。 | `Promise<void>`，只删公钥，存储错误 reject | `await registry.delete?.(clientId)` |
+| `registry.close?.()` | 清理自定义存储自有资源 | 无 | `Promise<void>`，可选自定义存储清理钩子；内置 Cache registry 不关闭借用连接 | `await registry.close?.()` |
 
 #### 场景：用一次性测试编号观察登记与重复拒绝
 
@@ -666,6 +697,8 @@ finally {
 await registry.get(clientId) // undefined
 ```
 
+<a id="registry-options"></a>
+
 #### 缓存参数与容量保底
 
 | 参数 | 默认/必填 | 含义 |
@@ -693,15 +726,28 @@ await registry.get(clientId) // undefined
 | `crypto.transport.bodyLimits` | 读取默认的握手、认证头和正文预算 | 无参数；各字段单位为 UTF-8 字节 | `只读 TransportBodyLimits` | `crypto.transport.bodyLimits.plaintextBytes // 1048576` |
 | `crypto.transport.plaintextRange` | 检查允许设置的明文容量范围 | 无参数；字节 | `只读 { min: 1024, max: 67108864 }` | `crypto.transport.plaintextRange.max // 67108864` |
 | `crypto.transport.timeLimits` | 读取请求时效与时钟偏差的允许范围 | 无参数；秒 | `只读时间限制对象` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 600` |
-| `crypto.transport.resolveBodyLimits` | 从明文预算计算传输上限 | 可选明文字节数、`{ requiredPlaintextBytes? }` | 不可变 `TransportBodyLimits`，无效/冲突抛 RangeError | `crypto.transport.resolveBodyLimits(8388608)` |
-| `crypto.transport.createBodyPolicy` | 创建按路径分配容量的策略 | 可选全局明文上限、路由字节映射（默认空） | 策略实例，无效配置抛 RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
-| `policy.acquire` | 为请求申请缓冲名额 | 实际 pathname | `{ limits, release } / null`，并发满返回 null | `policy.acquire('/files/report')` |
-| `lease.release` | 归还已取得的容量名额 | 无 | `void`，可重复调用，释放一次名额 | `lease.release()` |
-| `crypto.transport.readBody` | 有界读取并严格解码 UTF-8 | 原流或 null、`{ maxBytes, signal?, direction?, stage? }` | `Promise<string>`；容量、UTF-8、取消或读取错误抛出 | `await crypto.transport.readBody(request.body, { maxBytes: 16384 })` |
-| `crypto.transport.authenticateRequest` | 认证并解密实际 HTTP 请求 | manager、实际 Request、可选路由预算 | `Promise<HaiResult<{ plaintext, context }>>`，读取/容量异常抛出 | `await crypto.transport.authenticateRequest(manager, request)` |
-| `crypto.transport.createErrorResponse` | 创建脱敏的容量或时间错误响应 | 时间/容量错误、可选已认证 `{ manager, context }` | `Promise<Response>`，有可信上下文时加密错误 | `await crypto.transport.createErrorResponse(error)` |
-| `TransportBodyTooLargeError` | 描述传输方向、阶段与超限字节 | 上限、可选实际字节、方向/阶段选项 | RangeError 子类，`hai:crypto:070` | `new TransportBodyTooLargeError(1024, 1025)` |
-| `TransportTimeError` | 描述已认证的时间窗口拒绝 | 可选可信请求 context、服务器 Unix 毫秒 | Error 子类，非法时间抛 RangeError | `new TransportTimeError(undefined, Date.now())` |
+| `crypto.transport.resolveBodyLimits(maxPlaintextBytes?, options?)` | 从明文预算计算传输上限 | 可选 `maxPlaintextBytes` 与 `options.requiredPlaintextBytes` 决定上限及所需容量。见[正文读取参数](#body-options)。 | 不可变 `TransportBodyLimits`，无效/冲突抛 RangeError | `crypto.transport.resolveBodyLimits(8388608)` |
+| `crypto.transport.createBodyPolicy(maxPlaintextBytes?, routes?)` | 创建按路径分配容量的策略 | 可选 `maxPlaintextBytes` 设置通用上限，`routes` 覆盖指定路径。见[正文读取参数](#body-options)。 | 策略实例，无效配置抛 RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
+| `policy.acquire(pathname)` | 为请求申请缓冲名额 | 必填 `pathname` 为当前请求的实际路径，决定采用哪条容量规则。 | `{ limits, release } / null`，并发满返回 null | `policy.acquire('/files/report')` |
+| `lease.release()` | 归还已取得的容量名额 | 无 | `void`，可重复调用，释放一次名额 | `lease.release()` |
+| `crypto.transport.readBody(stream, options)` | 有界读取并严格解码 UTF-8 | 必填 `stream` 为原始字节流或 `null`。必填 `options.maxBytes` 为读取上限。见[正文读取参数](#body-options)。 | `Promise<string>`；容量、UTF-8、取消或读取错误抛出 | `await crypto.transport.readBody(request.body, { maxBytes: 16384 })` |
+| `crypto.transport.authenticateRequest(manager, request, limits?)` | 认证并解密实际 HTTP 请求 | 必填 `manager` 为服务端管理器，`request` 为实际 Request。可选 `limits` 为本路由容量预算，省略时使用管理器的预算。 | `Promise<HaiResult<{ plaintext, context }>>`，读取/容量异常抛出 | `await crypto.transport.authenticateRequest(manager, request)` |
+| `crypto.transport.createErrorResponse(error, authenticated?)` | 创建脱敏的容量或时间错误响应 | 必填 `error` 是受支持的时间或容量错误。可选 `authenticated` 为已认证的 `{ manager, context }`，用于保护响应。 | `Promise<Response>`，有可信上下文时加密错误 | `await crypto.transport.createErrorResponse(error)` |
+| `new TransportBodyTooLargeError(limitBytes, actualBytes?, options?)` | 描述传输方向、阶段与超限字节 | 必填 `limitBytes` 是上限，可选 `actualBytes` 是实际字节数。 `options` 可指定诊断的方向和阶段。见[正文读取参数](#body-options)。 | RangeError 子类，`hai:crypto:070` | `new TransportBodyTooLargeError(1024, 1025)` |
+| `new TransportTimeError(context, serverTime)` | 描述已认证的时间窗口拒绝 | 两个位置参数均必填。`context` 传已经验证的上下文或 `undefined`。`serverTime` 为服务器 Unix 毫秒时间戳。 | Error 子类，非法时间抛 RangeError | `new TransportTimeError(undefined, Date.now())` |
+
+<a id="body-options"></a>
+
+#### 正文读取与预算参数
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `maxPlaintextBytes` / `options.requiredPlaintextBytes` | 上限省略时取最低需求，均未给出时取 1 MiB | 以 UTF-8 字节计。两者限制在 1 KiB 至 64 MiB 的整数，显式上限不能小于需求。 |
+| `routes` | 默认空映射 | 用完整路径映射明文上限，`*` 匹配一个完整路径段。 |
+| `readBody.options.maxBytes` / `signal` | 上限必填，为非负安全整数。信号可省略。 | 限制从流中读取的总字节数。信号中止时停止等待并取消底层读取。 |
+| `options.direction` / `stage` | 默认 `request` 和 `plaintext` | 为容量错误标记方向（`request`、`response`）和阶段（`plaintext`、`encrypted`、`header`）。 |
+
+`crypto.transport.resolveBodyLimits(undefined, { requiredPlaintextBytes: 2048 })` 返回的 `plaintextBytes` 为 `2048`。
 
 #### 场景：读取有上限的握手正文
 

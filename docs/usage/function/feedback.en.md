@@ -50,9 +50,9 @@ The server accepts reports, collects evidence, notifies and expires records usin
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedback.init` | Start the service with the selected dependencies | `config, options?` | `void` | `await feedback.init(config)` |
-| `feedback.close` | Stop the worker and release service state | None | `void` | `await feedback.close()` |
-| `feedback.runJobs` | Run available background jobs | None | `{ processed: number }` | `await feedback.runJobs()` |
+| `feedback.init(config, options?)` | Start the service with the selected dependencies | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [initialization arguments](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
+| `feedback.close()` | Stop the worker and release service state | None | `void` | `await feedback.close()` |
+| `feedback.runJobs()` | Run available background jobs | None | `{ processed: number }` | `await feedback.runJobs()` |
 
 #### Scenario: Prepare the service and collection jobs
 
@@ -71,6 +71,29 @@ The output is successful HaiResult.data. Build context from the authenticated se
 
 Finalization stops the current collection; it does not wait for all notifications to finish. Read attachments and exports through a server endpoint that checks the caller’s access.
 
+<a id="feedback-init-options"></a>
+
+#### Initialization arguments
+
+Pass the required `config: FeedbackConfigInput`. See the [configuration file reference](../configuration/feedback.en.md) for its fields. Omit `options: FeedbackInitOptions` to skip application-defined evidence collection.
+
+The optional `collectEvidence({ report, signal })` runs after a report is stored. It receives the read-only report and a signal that the application can pass to work that must stop on timeout or shutdown. Return `FeedbackCollectedEvidence` directly or as a promise, with optional `text: string`, structured `data`, and `attachments`. Each attachment has a stable string `id`, file `name`, media type `contentType`, and `bytes: Uint8Array`. For example, a report numbered `FB-42` can yield `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }`.
+
+```ts
+import type { FeedbackConfigInput } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+function startFeedback(config: FeedbackConfigInput) {
+  // Pass application config after its dependencies are ready. The callback uses the report number and stops if the task is cancelled.
+  return feedback.init(config, {
+    collectEvidence: ({ report, signal }) => {
+      signal.throwIfAborted()
+      return { text: `Diagnostics for ${report.number}`, data: { businessSystem: 'orders' } }
+    },
+  })
+}
+```
+
 [Detailed parameters and workflows](feedback.md#service)
 
 <a id="reports"></a>
@@ -83,12 +106,49 @@ Save the accepted report ID, then let authorized operators inspect evidence and 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedback.submit` | Accept a report | `input, context` | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
-| `feedback.list` | Filter and paginate reports | `input, context` | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
-| `feedback.get` | Read report details | `id, context` | `FeedbackDetail` | `await feedback.get(reportId, context)` |
-| `feedback.getEvidence` | Paginate diagnostic evidence | `input, context` | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
-| `feedback.setStatus` | Update status with a version check | `input, context` | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
-| `feedback.retry` | Retry a selected failed job | `input, context` | `void` | `await feedback.retry(retryInput, context)` |
+| `feedback.submit(input, context)` | Accept a report | Required `input: FeedbackSubmitInput` and `context: FeedbackContext`. See [submission fields](#feedback-submission-fields). | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
+| `feedback.list(input, context)` | Filter and paginate reports | `input: FeedbackListInput` Required filter object with optional fields. See [report filters](#feedback-report-options). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.get(id, context)` | Read report details | `id: string` Required report ID. `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackDetail` | `await feedback.get(reportId, context)` |
+| `feedback.getEvidence(input, context)` | Paginate diagnostic evidence | `input: FeedbackEvidenceQuery` Requires id. Optional source, kind, requestId, errorId, Unix milliseconds from/to, and page/pageSize. See [evidence fields](#feedback-evidence-fields). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+| `feedback.setStatus(input, context)` | Update status with a version check | `input: FeedbackSetStatusInput` Report, target status, version, and note. See [processing fields](#feedback-report-options). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
+| `feedback.retry(input, context)` | Retry a selected failed job | `input: FeedbackRetryInput` Requires report id plus target and applicable targetId. See [retry fields](#feedback-report-options). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `void` | `await feedback.retry(retryInput, context)` |
+
+<a id="feedback-report-options"></a>
+
+**Report filters, status and retries**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `list.input.page / pageSize` | `number` | Defaults 1 and 20 | Positive integer page and page size. pageSize is capped at 100. |
+| `list.input.sortDirection` | `'asc' \| 'desc'` | `desc` | Order by creation time. |
+| `list.input.status` | `'pending' \| 'handled'` | Optional | Filter by processing status. |
+| `list.input.collectionStatus` | `'collecting' \| 'complete' \| 'partial' \| 'failed'` | Optional | Filter by evidence collection status. |
+| `list.input.notificationStatus` | `'disabled' \| 'pending' \| 'sending' \| 'sent' \| 'deferred' \| 'failed'` | Optional | Filter by notification status. |
+| `list.input.appId / appVersion` | `string` | Optional | Narrow to app and version within the authorized scope. appVersion is at most 128 characters. |
+| `list.input.search` | `string` | Optional | Literal substring of the report number or summary, up to 200 characters. |
+| `list.input.from / to` | `number` | Optional | Inclusive creation-time bounds as nonnegative safe integer Unix milliseconds. |
+| `setStatus.input.id / status` | `string / FeedbackStatus` | Required | Report ID and target status, pending or handled. |
+| `setStatus.input.expectedVersion` | `number` | Required | Positive integer version from the last read. A concurrent change returns CONFLICT. |
+| `setStatus.input.note` | `string` | Optional | Processing note, up to 10000 characters. |
+| `retry.input.target` | `'collect' \| 'notify' \| 'webhook' \| 'export' \| 'attachment'` | Required | Failed operation category to reschedule. |
+| `retry.input.targetId` | `string` | Supply for attachment retries | ID of the failed attachment within the report. |
+
+For example, `{ status: "pending", page: 1, pageSize: 5 }` returns up to five pending reports within the authorized scope on the first page. A concurrent change after reading a report’s `version` makes its status update return `CONFLICT`.
+
+<a id="feedback-submission-fields"></a>
+
+**Report submission and caller context**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `input.submissionId / appId` | `string` | Required | Stable submission and app IDs. Reuse the submission ID when retrying the same operation. |
+| `input.description / category / contact` | `string` | Optional | Reporter description, app category, and contact details. Length limits are 10000, 64, and 320. |
+| `input.url` | `string` | Optional | Incident page URL, up to 2048 characters. |
+| `input.appVersion / buildId / commit` | `string` | Optional | Identify the affected build. Up to 128 characters each. |
+| `input.anchor` | `{ kind, timestamp, errorId? }` | Optional | Incident anchor. kind is error or feedback, timestamp is Unix milliseconds, and errorId can identify the error. |
+| `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | Optional | Diagnostic events and attachment declarations, limited to 1000 and 20 items respectively. Upload file bytes separately. |
+| `context.scopeId / userId` | `string` | Required | Trusted tenant and user identities from the authorized session. |
+| `context.permissions` | `readonly string[]` | Optional | Permissions granted by the trusted session. The service still checks the access scope. |
 
 #### Scenario: Submit, query and process reports
 
@@ -142,10 +202,26 @@ Bind late evidence to the original report and principal; check attachment type, 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedback.appendEvidence` | Append diagnostic evidence | `input, context` | `{ acknowledged, evidenceRevision }` | `await feedback.appendEvidence(evidence, context)` |
-| `feedback.completeCollection` | Complete an evidence collection | `input, context` | `FeedbackReport` | `await feedback.completeCollection({ id: reportId, revision: 1 }, context)` |
-| `feedback.uploadAttachment` | Upload an authorized attachment | `input, context` | `FeedbackAttachment` | `await feedback.uploadAttachment(upload, context)` |
-| `feedback.getAttachment` | Read an authorized attachment | `{ id, attachmentId }, context` | `FeedbackAttachmentData` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+| `feedback.appendEvidence(input, context)` | Append diagnostic evidence | `input: FeedbackAppendEvidenceInput` Required report id and evidence array (up to 1000 items). See [evidence fields](#feedback-evidence-fields). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `{ acknowledged, evidenceRevision }` | `await feedback.appendEvidence(evidence, context)` |
+| `feedback.completeCollection(input, context)` | Complete an evidence collection | `input: FeedbackCompleteInput` Required report id and optional missing list. See [missing-data fields](#feedback-evidence-fields). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackReport` | `await feedback.completeCollection({ id: reportId, revision: 1 }, context)` |
+| `feedback.uploadAttachment(input, context)` | Upload an authorized attachment | `input: FeedbackUploadInput` Required report id, declared attachmentId, and matching bytes in dataBase64. See [upload fields](#feedback-evidence-fields). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackAttachment` | `await feedback.uploadAttachment(upload, context)` |
+| `feedback.getAttachment(input, context)` | Read an authorized attachment | `input: { id: string, attachmentId: string }` Requires report and attachment IDs. `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackAttachmentData` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+
+<a id="feedback-evidence-fields"></a>
+
+**Evidence and attachment inputs**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `evidence[].id / source / sequence` | `string / string / number` | Required | Stable evidence ID, source (1–128 characters), and nonnegative safe integer sequence within that source. |
+| `evidence[].kind` | `'log' \| 'error' \| 'request' \| 'interaction' \| 'environment' \| 'snapshot' \| 'replay' \| 'business' \| 'missing'` | Required | Evidence category. |
+| `evidence[].timestamp` | `number` | Required | Event time in Unix milliseconds. |
+| `evidence[].data` | `Record<string, unknown>` | Required | JSON object for the given evidence category. |
+| `evidence[].requestId / errorId / missingReason` | `string` | Optional | Relate a request or error, or give a missing-data reason of up to 2000 characters. |
+| `attachments[].id / name / contentType` | `string` | Required | Stable attachment ID, filename, and media type declared on submission. |
+| `attachments[].size / checksum` | `number / string` | Required | Declare byte size (0 to 5 MiB) and 64-character lowercase hexadecimal SHA-256. |
+| `uploadAttachment.input.dataBase64` | `string` | Required | Standard Base64 of the declared file bytes without a data URL prefix. |
+| `completeCollection.input.missing` | `string[]` | Optional | Descriptions of diagnostic items still missing, up to 100 items and 2000 characters each. |
 
 #### Scenario: Append evidence and read attachments
 
@@ -195,8 +271,8 @@ Export creates a job at a fixed evidence revision. Retrieve ZIP only when ready;
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedback.export` | Request an archive of a fixed evidence revision | `input, context` | `FeedbackJob` | `await feedback.export(exportInput, context)` |
-| `feedback.getExport` | Read a completed export | `{ id, jobId }, context` | `FeedbackAttachmentData` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.export(input, context)` | Request an archive of a fixed evidence revision | `input: FeedbackExportInput` Required report id and optional positive integer evidenceRevision, defaulting to the report’s current evidence revision. `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackJob` | `await feedback.export(exportInput, context)` |
+| `feedback.getExport(input, context)` | Read a completed export | `input: { id: string, jobId: string }` Requires report ID and the export job ID from its receipt. `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackAttachmentData` | `await feedback.getExport({ id: reportId, jobId }, context)` |
 
 #### Scenario: Export and inspect offline bundles
 
@@ -226,21 +302,57 @@ Create a client per product session, freeze evidence before opening UI and clean
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedbackClient.init` | Start browser evidence capture | `FeedbackClientConfig` | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedbackClient.prepare` | Prepare evidence for a report | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedbackClient.captureScreenshot` | Capture a page screenshot | `attachmentId?: string` | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedbackClient.getDraft` | Read the current draft | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
-| `feedbackClient.getView` | Read UI view state | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
-| `feedbackClient.releasePreviews` | Release temporary preview resources | `—` | `void` | `feedbackClient.releasePreviews()` |
-| `feedbackClient.addFiles` | Add user-selected files | `files: readonly File[], removedAttachmentIds?: readonly string[]` | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedbackClient.annotate` | Apply annotations and redaction to an image | `attachmentId: string, FeedbackImageAnnotation` | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedbackClient.record` | Record an application fact | `kind, data; requestId?, errorId?` | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedbackClient.submit` | Submit the current draft | `FeedbackClientSubmitInput?` | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedbackClient.flush` | Flush unacknowledged evidence | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedbackClient.exportDraft` | Export a local diagnostic archive | `—` | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedbackClient.saveDraft` | Save a local draft | `—` | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedbackClient.pause` | Pause capture | `—` | `void` | `feedbackClient.pause()` |
-| `feedbackClient.close` | Stop capture and release resources | `{ discard?: boolean }` | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | Start browser evidence capture | Required `config: FeedbackClientConfig`. See [application and capture fields](#feedback-client-config). | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare()` | Prepare evidence for a report | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | Capture a page screenshot | `attachmentId?: string` Add a screenshot when omitted or replace the given draft attachment | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | Read the current draft | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | Read UI view state | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | Release temporary preview resources | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | Add user-selected files | `files: readonly File[], removedAttachmentIds?: readonly string[]` Newly selected files and optional draft attachment IDs to remove in the same batch | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | Apply annotations and redaction to an image | Required `id: string` (draft attachment ID) and `annotation: FeedbackImageAnnotation` (annotation and redaction data) | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | Record an application fact | Required `event` object with an evidence category `kind` and field object `data`. Optional `requestId` and `errorId` correlate an existing request or error | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | Submit the current draft | Optional `input: FeedbackClientSubmitInput`. See [browser submission fields](#feedback-client-submit-input). | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | Flush unacknowledged evidence | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | Export a local diagnostic archive | `input?: FeedbackClientSubmitInput` supplies text and attachment changes for the archive. Omit to export the current draft | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | Save a local draft | `input?: FeedbackClientSubmitInput` follows `exportDraft` before the host save action | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | Pause capture | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | Stop capture and release resources | `options?: { discard?: boolean }` Defaults to false for bounded finalization and cleanup. Set discard to true to discard the local draft | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+
+<a id="feedback-client-config"></a>
+
+**FeedbackClientConfig**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `appId` | `string` | Required | Application identifier matching the server feedback configuration. |
+| `appVersion / buildId / commit` | `string` | Optional | Build identifiers sent with reports. Up to 128 characters each. |
+| `actions` | `FeedbackClientActions` | Required | Host async callbacks submit, appendEvidence, completeCollection, and upload accept the report, append evidence, complete collection, and upload files. Optional policy returns server limits. |
+| `budget` | `FeedbackBudget` | Optional | Used offline or when server policy is unavailable. Online, actions.policy takes precedence. |
+| `cookieAllowlist` | `readonly string[]` | Optional | Cookie names allowed in diagnostics. |
+| `screenshot / keyScreenshots` | `boolean` | `true / false` | Controls screenshots at preparation and additional automatic key screenshots. |
+| `captureScreenshot` | `(options?: { signal: AbortSignal }) => Promise<Uint8Array>` | Optional | Override screenshot capture, returning image bytes and honoring cancellation. |
+| `screenshotTimeoutMs / maxKeyScreenshots / keyScreenshotThrottleMs` | `number` | `3000 / 3 / 10000` | Screenshot timeout ms, retained key shots, and minimum interval ms between automatic shots. Key shots are capped at five and zero disables them. |
+| `replay / replayStart` | `boolean / 'init' \| 'prepare'` | `false / prepare` | Enable DOM replay and choose whether capture starts at initialization or preparation. |
+| `captureConsole / persistDraft` | `boolean` | `false / false` | Explicitly enable console capture or local persistence. |
+| `persistenceKey` | `string` | Required for persistDraft=true | Scope local drafts to the user and tenant. Do not use credentials. |
+| `maxEvents / maxBytes / maxAgeMs` | `number` | `1000 / 2097152 / 300000` | Evidence count, bytes, and retention milliseconds. Server limits further cap count and bytes. |
+| `beforeCount / afterCount / afterTimeoutMs` | `number` | `100 / 100 / 30000` | Events before and after the anchor and maximum collection milliseconds after it. Numeric options require nonnegative safe integers. |
+
+For example, `{ screenshot: false, replay: true, replayStart: "prepare" }` disables screenshots and starts replay only when the user prepares feedback.
+
+<a id="feedback-client-submit-input"></a>
+
+**FeedbackClientSubmitInput**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `description / category / contact` | `string` | Optional | Issue description, application category, and reporter contact. Supply any independently. |
+| `files` | `readonly File[]` | No new files | Files selected for this action. |
+| `removedAttachmentIds` | `readonly string[]` | Keep existing attachments | Remove these IDs from the submission, or exclude them from the offline archive. |
+
+For example, exporting with `{ description: "Checkout failed", removedAttachmentIds: ["draft-image"] }` yields a ZIP with the supplemental description and excludes that attachment.
+
+`submit`, `exportDraft`, and `saveDraft` share an optional `FeedbackClientSubmitInput`. The optional strings `description`, `category`, and `contact` describe the issue, the application-defined category, and how to contact the reporter. `files?: readonly File[]` supplies newly selected files. `removedAttachmentIds?: readonly string[]` supplies IDs to exclude from the draft material. Omit these fields to add no files and keep existing attachments.
 
 #### Scenario: Capture browser evidence and drafts
 

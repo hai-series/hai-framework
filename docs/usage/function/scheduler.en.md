@@ -87,12 +87,29 @@ Register task definitions after connecting RelDB, and distinguish stored definit
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `scheduler.init` | Prepare database tables using an already connected RelDB | `config? = {}` | `Promise<HaiResult<void>>` | `await scheduler.init()` |
-| `scheduler.close` | Stop this instance and wait for its cleanup; the app closes RelDB | None | `Promise<void>` | `await scheduler.close()` |
-| `scheduler.register` | Register a task definition | `task: TaskDefinition` | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
-| `scheduler.unregister` | Remove a task definition | `taskId` | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
-| `scheduler.updateTask` | Update a task definition | `taskId, updates` | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
-| `scheduler.refreshTasks` | Read the current process task snapshot | None | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+| `scheduler.init(config?)` | Prepare database tables using an already connected RelDB | `config? = {}` | `Promise<HaiResult<void>>` | `await scheduler.init()` |
+| `scheduler.close()` | Stop this instance and wait for its cleanup; the app closes RelDB | None | `Promise<void>` | `await scheduler.close()` |
+| `scheduler.register(task)` | Register a task definition | `task: TaskDefinition` Required definition. See [registration fields](#scheduler-task-fields) | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
+| `scheduler.unregister(taskId)` | Remove a task definition | `taskId: string` Registered ID of the target task | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
+| `scheduler.updateTask(taskId, updates)` | Update a task definition | `taskId: string` Registered ID of the target task. `updates: TaskUpdateInput` Required changes. Omitted fields keep their current values. See [update fields](#scheduler-task-fields) | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
+| `scheduler.refreshTasks()` | Read the current process task snapshot | None | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+
+<a id="scheduler-task-fields"></a>
+
+**Task definition and update fields**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `id` | `string` | Required | Unique task ID when registering. Updates take taskId separately. |
+| `name / cron` | `string` | Required when registering | Display name and five-field cron (minute, hour, day, month, weekday). Omitted update fields keep their current value. |
+| `description` | `string` | Optional | Describe what the task does. |
+| `timezone` | `string` | `UTC` | IANA timezone for interpreting the cron. Updating to null restores UTC. |
+| `enabled / deleteAfterRun / idempotent` | `boolean` | `true / false / false` | Controls scheduling, removal after execution, and whether all side effects are durably deduplicated. |
+| `retry` | `TaskRetryPolicy` | Optional | Set a failure retry policy. Update to null to clear it. Unknown outcomes follow reconciliation. |
+| `params` | `TaskParams` | Optional | Business arguments supplied to the task handler. |
+| `handler` | `TaskHandlerConfig` | Optional | See the execution scenario for API and JS shapes. Update to null to clear the built-in handler and allow the global hook to run it. |
+
+Updating an existing `daily` task with `{ timezone: null, enabled: false }` stops scheduling it. It keeps its cron and will interpret it in UTC when enabled again.
 
 #### Scenario: Prepare and maintain tasks
 
@@ -133,10 +150,26 @@ start enables timed claims, trigger requests a specific execution, and stop prev
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `scheduler.start` | Start scheduling | None | `HaiResult<void>` | `scheduler.start()` |
-| `scheduler.stop` | Stop scheduling new work | None | `HaiResult<void>` | `scheduler.stop()` |
-| `scheduler.trigger` | Trigger a task manually | `taskId, { source?, idempotencyKey? }?` | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
-| `scheduler.getLogs` | Paginate execution logs | `options?; pagination.page = 1, pageSize = 20` | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+| `scheduler.start()` | Start scheduling | None | `HaiResult<void>` | `scheduler.start()` |
+| `scheduler.stop()` | Stop scheduling new work | None | `HaiResult<void>` | `scheduler.stop()` |
+| `scheduler.trigger(taskId, options?)` | Trigger a task manually | Required `taskId: string` selects the task. See [fields](#scheduler-trigger-query-fields) for optional `options: TriggerTaskInput`. | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
+| `scheduler.getLogs(options?)` | Paginate execution logs | Optional `options: LogQueryOptions` filters and pages the logs. See [fields](#scheduler-trigger-query-fields). | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+
+<a id="scheduler-trigger-query-fields"></a>
+
+**Manual trigger and log filters**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `TriggerTaskInput.source` | `string` | No source label | Label the caller in the log, such as admin-console. |
+| `TriggerTaskInput.idempotencyKey` | `string` | Optional | 1–128 characters. The same task and key identify one durable execution. Repeated requests do not rerun it. |
+| `LogQueryOptions.taskId / triggerSource` | `string` | Optional | Filter by task and manual trigger source. |
+| `LogQueryOptions.status` | `'success' \| 'failed' \| 'interrupted' \| 'unknown'` | Optional | Filter by the recorded outcome. |
+| `LogQueryOptions.triggerType` | `'scheduled' \| 'manual'` | Optional | Select scheduled or manual executions. |
+| `LogQueryOptions.startedAfter / startedBefore` | `number` | Optional | Inclusive Unix-millisecond bounds on start time. |
+| `LogQueryOptions.pagination` | `PaginationOptionsInput` | Page 1, 20 rows | Set page and pageSize. |
+
+Querying with `{ taskId: "daily", triggerType: "manual", pagination: { page: 1, pageSize: 5 } }` returns only that task’s manual runs, with up to five on the first page.
 
 #### Scenario: Start scheduling and inspect logs
 
@@ -186,8 +219,8 @@ Register business execution and lifecycle callbacks; each callback receives the 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `scheduler.setHooks` | Set executors and lifecycle hooks | `hooks: SchedulerTaskHooks` | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
-| `scheduler.clearHooks` | Clear current hooks | None | `HaiResult<void>` | `scheduler.clearHooks()` |
+| `scheduler.setHooks(hooks)` | Set executors and lifecycle hooks | `hooks: SchedulerTaskHooks` Sets start, execute, interruption, and finish hooks. See the lifecycle guidance below | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
+| `scheduler.clearHooks()` | Clear current hooks | None | `HaiResult<void>` | `scheduler.clearHooks()` |
 
 #### Scenario: Integrate execution hooks
 
@@ -236,11 +269,22 @@ Check external effects when execution is uncertain. Repair a missing log without
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `scheduler.execution.get` | Read an execution by ID | `occurrenceId` | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
-| `scheduler.execution.listUnknown` | Paginate unknown executions | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
-| `scheduler.execution.listLogFailures` | List execution log failures | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
-| `scheduler.execution.repairLog` | Repair a reconciled execution log | `occurrenceId` | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
-| `scheduler.execution.resolveUnknown` | Reconcile an execution outcome | `occurrenceId, { status, expectedUpdatedAt }` | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+| `scheduler.execution.get(occurrenceId)` | Read an execution by ID | `occurrenceId: string` Stable ID from the execution receipt | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
+| `scheduler.execution.listUnknown(options?)` | Paginate unknown executions | `options?: { limit?: number, offset?: number }` See [execution paging](#scheduler-execution-options) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
+| `scheduler.execution.listLogFailures(options?)` | List execution log failures | `options?: { limit?: number, offset?: number }` See [execution paging](#scheduler-execution-options) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
+| `scheduler.execution.repairLog(occurrenceId)` | Repair a reconciled execution log | `occurrenceId: string` Stable ID from the execution receipt | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
+| `scheduler.execution.resolveUnknown(occurrenceId, resolution)` | Reconcile an execution outcome | `occurrenceId: string` Stable ID from the execution receipt. `resolution` Required verified decision. See [resolution fields](#scheduler-execution-options) | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+
+<a id="scheduler-execution-options"></a>
+
+**Execution paging and reconciliation**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `options.limit` | `number` | `50` | For both lists. 1–100 records per page. |
+| `options.offset` | `number` | `0` | For both lists. Skip 0–1000000 records. |
+| `resolution.status` | `'success' \| 'discarded'` | Required | Record confirmed success or end follow-up after verification. This publishes the resolution. |
+| `resolution.expectedUpdatedAt` | `number` | Required | The updatedAt from the last read. Reread and reconcile if concurrent changes occurred. |
 
 #### Scenario: Reconcile unknown outcomes and repair logs
 

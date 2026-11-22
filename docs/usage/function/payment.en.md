@@ -79,10 +79,10 @@ Prepare providers with validated server settings. Custom providers implement the
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.init` | Initialize configured payment channels | `config` | `void` | `await payment.init(config)` |
-| `payment.close` | Release module state | None | `Promise<void>` | `await payment.close()` |
-| `payment.getProvider` | Read a registered payment provider | `name` | `PaymentProvider or undefined` | `payment.getProvider(name)` |
-| `payment.registerProvider` | Register an application payment provider | `provider` | `void` | `payment.registerProvider(customProvider)` |
+| `payment.init(config)` | Initialize configured payment channels | `config` | `void` | `await payment.init(config)` |
+| `payment.close()` | Release module state | None | `Promise<void>` | `await payment.close()` |
+| `payment.getProvider(name)` | Read a registered payment provider | `name: string` Registered name used to look up the instance in this process | `PaymentProvider or undefined` | `payment.getProvider(name)` |
+| `payment.registerProvider(provider)` | Register an application payment provider | `provider: PaymentProvider` Fully implemented provider instance. Registering the same name replaces it in this process | `void` | `payment.registerProvider(customProvider)` |
 
 #### Scenario: Connect payment providers
 
@@ -111,9 +111,26 @@ Create a provider order with your business order number, query its status and cl
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.createOrder` | Create a payment order | `providerName, input` | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder` | Query payment status | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.closeOrder` | Close a payment order | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.createOrder(providerName, input)` | Create a payment order | Required `providerName: string` names a registered provider. See [order fields](#payment-create-order-input) for required `input: CreateOrderInput`. | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder(providerName, orderNo)` | Query payment status | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder(providerName, orderNo)` | Close a payment order | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `void` | `await payment.closeOrder(providerName, orderNo)` |
+
+<a id="payment-create-order-input"></a>
+
+**CreateOrderInput**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `orderNo` | `string` | Required | Persistent merchant order number. Keep it stable when retrying the same business order. |
+| `amount` | `number` | Required | Order amount in the currency’s minor unit, such as fen for CNY. |
+| `currency` | `string` | CNY for WeChat and Alipay, USD for Stripe | Uppercase currency matching the business order. |
+| `description` | `string` | Required | Product or service description. |
+| `tradeType` | `'jsapi' \| 'h5'` | Required | WeChat uses jsapi. Alipay and Stripe use h5. |
+| `userId` | `string` | Required for WeChat jsapi | For WeChat, supply an openid that belongs to the server-configured appId. |
+| `notifyUrl` | `string` | Required | Application callback URL for provider notifications. |
+| `metadata` | `Record<string, string>` | Optional | Attach application fields where the provider supports them. |
+
+Creating a Stripe order with `amount: 100, currency: "USD", tradeType: "h5"` returns hosted Checkout redirect data on success. Confirm the final payment via query or notification.
 
 When WeChat returns `204 No Content`, `payment.closeOrder('wechat', orderNo)` succeeds with `undefined` data. Pass the channel status through the proxy. Other statuses and network errors return `CLOSE_ORDER_FAILED`.
 
@@ -148,7 +165,20 @@ Request a refund using the original order and a distinct refund number; distingu
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.refund` | Request a refund and read acceptance | `providerName, input` | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.refund(providerName, input)` | Request a refund and read acceptance | Required `providerName: string` specifies the original provider. See [refund fields](#payment-refund-input) for `input: RefundInput`. | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+
+<a id="payment-refund-input"></a>
+
+**RefundInput**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `orderNo / refundNo` | `string` | Required | Original merchant order number and stable refund number. Reuse the number and amount on retry. |
+| `amount` | `number` | Required | Refund amount in the original currency’s minor unit. |
+| `totalAmount` | `number` | Provide the original order amount for WeChat | Original order total for WeChat. A partial refund must carry the full original total. |
+| `reason` | `string` | Optional | Reason for the refund. |
+
+For a 50-fen refund on a 100-fen WeChat order, pass `{ amount: 50, totalAmount: 100 }`. Check the refund status if the provider only acknowledges receipt.
 
 #### Scenario: Refund and inspect outcomes
 
@@ -174,7 +204,7 @@ Use the original body and signature headers, verify the provider and update busi
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.handleNotify` | Verify provider notifications and invoke callbacks | `providerName, request` | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.handleNotify(providerName, request)` | Verify provider notifications and invoke callbacks | `providerName: string` Registered name from the trusted notification route. `request: PaymentNotifyRequest` Required raw body string and string-valued headers for provider verification | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
 
 #### Scenario: Verify payment callbacks
 
@@ -207,7 +237,7 @@ Use startPayment in the quick start with an order successfully created by the se
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `invokePayment` | Open the provider payment UI | `orderData: PaymentOrder` | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `invokePayment(order)` | Open the provider payment UI | Required `order: PaymentOrder` from the successful server-side order creation | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
 
 #### Scenario: Handle invocation results
 

@@ -86,9 +86,9 @@ Bind validation and a business function as a neutral tool. Definition does not e
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.define` | Define a tool and validate its input at execution. The default timeout is `30000` ms. Invalid definitions throw `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
-| `tool.execute` | Validate and execute. Options can supply identity, authorization, an abort signal and a deadline | `input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
-| `tool.toDefinition` | Convert parameter rules to JSON Schema. Throws if conversion is unsupported | None | `ToolDefinition` | `tool.toDefinition()` |
+| `tools.define(options)` | Define a tool and validate its input at execution. The default timeout is `30000` ms. Invalid definitions throw `TypeError` | `options: DefineToolOptions<TInput, TOutput>` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tool.execute(input, options?)` | Validate and execute. Options can supply identity, authorization, an abort signal and a deadline | `input: unknown, options?: ToolExecutionOptions`. `input` follows this tool’s parameter schema. Omitted options use the execution defaults. | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition()` | Convert parameter rules to JSON Schema. Throws if conversion is unsupported | No arguments | `ToolDefinition` | `tool.toDefinition()` |
 
 #### Scenario: Define and execute a tool
 
@@ -169,18 +169,18 @@ The registry contains explicitly registered tools. Host authorization controls e
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.createRegistry` | Create an empty registry. Without `authorize` it applies no registry-level authorization | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
-| `registry.register` | Register a tool instance | `tool` | `HaiResult<void>` | `registry.register(tool)` |
-| `registry.registerMany` | Add several tools. If any name is duplicate or any entry invalid, none are added | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
-| `registry.replace` | Replace an existing tool with the same name. The name must already exist | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
-| `registry.unregister` | Remove by name. Returns `true` only if the name existed | `name` | `boolean` | `registry.unregister('sum')` |
-| `registry.get` | Read a tool by name | `name` | `Tool / undefined` | `registry.get('sum')` |
-| `registry.has` | Check whether a name is registered | `name` | `boolean` | `registry.has('sum')` |
-| `registry.getNames` | List the registered names | None | `string[]` | `registry.getNames()` |
-| `registry.getDefinitions` | List registered definitions. Throws if a parameter schema cannot be converted | None | `ToolDefinition[]` | `registry.getDefinitions()` |
-| `registry.execute` | Run a registered tool. When both registry and call define authorization, both must allow it | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
-| `registry.executeAll` | By default runs in order and stops at the first failure. With `parallel: true`, a failure does not undo already started calls | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
-| `registry.clear` | Remove all registrations. Calls already running are not cancelled | None | `void` | `registry.clear()` |
+| `tools.createRegistry(options?)` | Create an empty registry. Without `authorize` it applies no registry-level authorization | `options?: ToolRegistryOptions`. Omission uses an empty options object. | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `registry.register(tool)` | Register a tool instance | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany(tools)` | Add several tools. If any name is duplicate or any entry invalid, none are added | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace(tool)` | Replace an existing tool with the same name. The name must already exist | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister(name)` | Remove by name. Returns `true` only if the name existed | `name: string` | `boolean` | `registry.unregister('sum')` |
+| `registry.get(name)` | Read a tool by name | `name: string` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has(name)` | Check whether a name is registered | `name: string` | `boolean` | `registry.has('sum')` |
+| `registry.getNames()` | List the registered names | No arguments | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions()` | List registered definitions. Throws if a parameter schema cannot be converted | No arguments | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute(name, input, options?)` | Run a registered tool. When both registry and call define authorization, both must allow it | `name: string, input: unknown, options?: ToolExecutionOptions`. `input` follows the registered tool’s schema. Omitted options use the execution defaults. | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll(calls, options?)` | By default runs in order and stops at the first failure. With `parallel: true`, a failure does not undo already started calls | `calls: ToolInvocation[], options?: ToolExecutionOptions & { parallel?: boolean }`. Runs in sequence by default. Set `parallel: true` for concurrent execution. | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear()` | Remove all registrations. Calls already running are not cancelled | No arguments | `void` | `registry.clear()` |
 | `registry.size` | Read the number of registered tools (property) | None | `number` | `registry.size` |
 
 #### Scenario: Register, find and execute tools
@@ -258,14 +258,26 @@ The server factory borrows Runner and connects catalogs, submission, receipts, i
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.createService` | Create a tool service borrowing Runner | `ToolServiceOptions`; id, runner, createTools, enabled and authorize required | `HaiResult<ToolService>` | `tools.createService(options)` |
-| `service.catalog` | List available tools | Trusted context | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
-| `service.submit` | Submit a durable job | `{ name, input, idempotencyKey? }`, context | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
-| `service.find` | Find a job by its idempotency key | Idempotency key, trusted context | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
-| `service.inspect` | Inspect job status and output | Complete receipt, context, optional `{ after }` | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
-| `service.cancel` | Request job cancellation | Complete receipt, context | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
-| `service.invoke` | Invoke a tool and await its result | 与 submit 相同 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
-| `service.close` | Close the service and owned resources | None | `void` | `service.close()` |
+| `tools.createService(options)` | Create a tool service borrowing Runner | `options: ToolServiceOptions`. `id`, `runner`, `createTools`, `enabled`, and `authorize` are required. | `HaiResult<ToolService>` | `tools.createService(options)` |
+| `service.catalog(context)` | List available tools | `context: ToolServiceContext`. Supply trusted context from the application. | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
+| `service.submit(request, context)` | Submit a durable job | `request: ToolSubmitRequest, context: ToolServiceContext`. The request includes the tool name, input, and optional idempotency key. The application supplies the context. | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
+| `service.find(idempotencyKey, context)` | Find a job by its idempotency key | `idempotencyKey: string, context: ToolServiceContext` | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
+| `service.inspect(receipt, context, options?)` | Inspect job status and output | `receipt: ToolReceipt, context: ToolServiceContext, options?: { after?: number }`. Pass the complete receipt. Use `after` to resume after an event sequence number. | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
+| `service.cancel(receipt, context)` | Request job cancellation | `receipt: ToolReceipt, context: ToolServiceContext`. Pass the complete job receipt and trusted context. | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
+| `service.invoke(request, context)` | Invoke a tool and await its result | `request: ToolSubmitRequest, context: ToolServiceContext`. Uses the same request structure as `submit`. | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
+| `service.close()` | Close the service and owned resources | No arguments | `void` | `service.close()` |
+
+#### Service requests, trusted context, and event cursors
+
+| Object | Fields | Conditions and effect |
+| --- | --- | --- |
+| `ToolServiceContext` | `scope`, `sessionId`, `signal`, `execution` | The trusted `scope: { tenantId, userId }` is required with 1–200 characters per ID. Session ID (1–200 characters) and cancellation are optional. The execution node supplies its own `RunnerContext` as execution identity |
+| `ToolSubmitRequest` | `name`, `input`, `idempotencyKey` | Name and input are required. Use a tool from the enabled catalog and JSON matching its schema. An optional idempotency key has 1–200 characters, or omission generates a UUID. Supply a stable key to recover the same action after disconnection |
+| `ToolReceipt` | `id`, `key` | Both required. ID is a 64-digit hexadecimal execution ID and key has 1–200 characters. `inspect/cancel` verify both against the current principal and service. `find` takes the business idempotency key from submission |
+| `inspect` options | `after` | Optional integer 0–100000, default 0. Returns a page of up to 100 events with sequence greater than the cursor, plus current state and `next` |
+| `ToolServiceOptions.enabled` | `groups`, `tools`, `exclude` | Each is an optional array of names. Take the union of groups and tools and remove excluded names. An empty object disables all tools. Each execution still checks authorization |
+
+For events 5, 6, and 7, `inspect(receipt, context, { after: 5 })` returns 6 and 7. Continue with the returned `next`. Selection `{ groups: ['docs'], exclude: ['docs_export'] }` exposes the other registered tools in the docs group and submissions still pass through the authorization callback.
 
 #### Scenario: Submit recoverable tasks
 
@@ -385,8 +397,20 @@ Provide authorized artifact access and environment bindings. Factories return to
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools` | Create artifact and analysis tools | `ArtifactToolOptions`: context, files | `ToolSet` | `tools.createArtifactTools({ context, files })` |
-| `tools.createJobTools` | Create tools for bound job environments | `JobToolOptions`: context, files, runner, environments; browserProxy? | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+| `tools.createArtifactTools(options)` | Create artifact and analysis tools | `options: ArtifactToolOptions`. `context` and `files` are required. | `ToolSet` | `tools.createArtifactTools({ context, files })` |
+| `tools.createJobTools(options)` | Create tools for bound job environments | `options: JobToolOptions`. `context`, `files`, `runner`, and `environments` are required. `browserProxy` is optional. | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+
+#### Artifact access and job environment fields
+
+| Object or callback | Fields | Conditions and effect |
+| --- | --- | --- |
+| `ArtifactToolOptions`, `JobToolOptions` | `context`, `files` | Require the trusted service context and host-authorized `ToolArtifactAccess` |
+| `files.read` | `context`, `{ id }` | Required callback. Verify the current principal can read the artifact ID and return a file with `data: Uint8Array` |
+| `files.publish` | `context`, `{ name, kind, mediaType, data, id? }` | Required callback. Authorize publication, save the bytes, and return a reference. A target ID is optional |
+| `files.save` | `context`, `{ id, baseVersion, content }` | Optional callback. Verify ownership and the base version, save the text, and return a new reference. Omission excludes `artifact_save` |
+| `JobToolOptions` | `runner`, `environments`, `browserProxy` | Borrow an initialized Runner. Map `documents/office/ocr/browser/web/preview/video` to registered environment IDs. Networked tools also require a deployment-controlled HTTP IPv4 proxy with an explicit port. Tools needing a proxy are omitted without a valid one |
+
+For `environments: { documents: 'docs-offline' }`, the job factory produces only the document group. Adding `save` to the artifact factory allows editing by `baseVersion` and returns a new reference. A version conflict is a host callback failure.
 
 #### Scenario: Reuse artifacts, web and document jobs
 

@@ -89,12 +89,29 @@ RelDB 接続後に定義を登録し、保存された定義とプロセスの�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.init` | 接続済みの RelDB を使って必要な表を用意 | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
-| `scheduler.close` | このインスタンスを終了し、後処理を待つ。RelDB はアプリが閉じる | 已发生的外部副作用无法撤销；无 | `Promise<void>` | `await scheduler.close()` |
-| `scheduler.register` | タスク定義を登録 | task | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
-| `scheduler.unregister` | タスク定義を削除 | taskId | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
-| `scheduler.updateTask` | タスク定義を更新 | taskId, updates | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
-| `scheduler.refreshTasks` | 現在のプロセスのタスクを取得 | 无参数 | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+| `scheduler.init(config?)` | 接続済みの RelDB を使って必要な表を用意 | 任意の `config: SchedulerInitInput`。省略時は既定設定 | `Promise<HaiResult<void>>` | `await scheduler.init()` |
+| `scheduler.close()` | このインスタンスを終了し、後処理を待つ。RelDB はアプリが閉じる | なし | `Promise<void>` | `await scheduler.close()` |
+| `scheduler.register(task)` | タスク定義を登録 | `task: TaskDefinition` 必須の定義。[登録項目](#scheduler-task-fields)を参照 | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
+| `scheduler.unregister(taskId)` | タスク定義を削除 | `taskId: string` 対象タスクの登録済み ID | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
+| `scheduler.updateTask(taskId, updates)` | タスク定義を更新 | `taskId: string` 対象タスクの登録済み ID。`updates: TaskUpdateInput` 必須の変更オブジェクト。省略した項目は現在値を保持。[更新項目](#scheduler-task-fields)を参照 | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
+| `scheduler.refreshTasks()` | 現在のプロセスのタスクを取得 | なし | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+
+<a id="scheduler-task-fields"></a>
+
+**タスク定義と更新項目**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `id` | `string` | 必須 | 登録時の一意なタスク ID。更新では別の taskId を渡します。 |
+| `name / cron` | `string` | 登録時に必須 | 表示名と 5 項目の cron（分、時、日、月、曜日）。更新で省略した項目は元の値を保持。 |
+| `description` | `string` | 任意 | タスクの用途を説明。 |
+| `timezone` | `string` | `UTC` | cron の IANA タイムゾーン。更新で null を指定すると UTC に戻ります。 |
+| `enabled / deleteAfterRun / idempotent` | `boolean` | `true / false / false` | スケジュール有効化、実行後の削除、副作用がすべて永続的に重複排除されることを指定。 |
+| `retry` | `TaskRetryPolicy` | 任意 | 失敗時の再試行方針。更新で null を指定すると解除。結果不明の場合は確認手順に従います。 |
+| `params` | `TaskParams` | 任意 | タスクハンドラーに渡す業務パラメーター。 |
+| `handler` | `TaskHandlerConfig` | 任意 | API と JS の項目はこのページの実行例を参照。更新で null を指定すると組み込み処理を解除し、グローバルフックで処理できます。 |
+
+登録済みの `daily` に `{ timezone: null, enabled: false }` を渡すとスケジュールが停止します。cron は維持され、再有効化すると UTC で解釈されます。
 
 #### 利用例：タスク定義の準備と管理
 
@@ -137,10 +154,26 @@ start は時刻に応じた実行、trigger は指定タスクの実行です。
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.start` | スケジュール実行を開始 | 无参数 | `HaiResult<void>` | `scheduler.start()` |
-| `scheduler.stop` | 新規実行の受付を停止 | 无参数 | `HaiResult<void>` | `scheduler.stop()` |
-| `scheduler.trigger` | タスクを手動実行 | taskId, options | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
-| `scheduler.getLogs` | 実行ログをページ取得 | options | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+| `scheduler.start()` | スケジュール実行を開始 | なし | `HaiResult<void>` | `scheduler.start()` |
+| `scheduler.stop()` | 新規実行の受付を停止 | なし | `HaiResult<void>` | `scheduler.stop()` |
+| `scheduler.trigger(taskId, options?)` | タスクを手動実行 | 必須の `taskId: string` でタスクを選びます。任意の `options: TriggerTaskInput` は[フィールド](#scheduler-trigger-query-fields)を参照。 | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
+| `scheduler.getLogs(options?)` | 実行ログをページ取得 | 任意の `options: LogQueryOptions` でログの絞り込みとページを指定。[フィールド](#scheduler-trigger-query-fields)を参照。 | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+
+<a id="scheduler-trigger-query-fields"></a>
+
+**手動起動とログフィルター**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `TriggerTaskInput.source` | `string` | 発行元ラベルなし | admin-console などの呼び出し元をログに記録します。 |
+| `TriggerTaskInput.idempotencyKey` | `string` | 任意 | 1–128 文字。同じタスクとキーは一つの永続実行に対応し、再送で再実行しません。 |
+| `LogQueryOptions.taskId / triggerSource` | `string` | 任意 | タスクと手動実行元で絞り込みます。 |
+| `LogQueryOptions.status` | `'success' \| 'failed' \| 'interrupted' \| 'unknown'` | 任意 | 記録された実行結果で絞り込みます。 |
+| `LogQueryOptions.triggerType` | `'scheduled' \| 'manual'` | 任意 | 定時実行または手動実行を選択。 |
+| `LogQueryOptions.startedAfter / startedBefore` | `number` | 任意 | 開始時刻の両端を含む Unix ミリ秒範囲。 |
+| `LogQueryOptions.pagination` | `PaginationOptionsInput` | 1 ページ目、20 件 | page と pageSize を指定。 |
+
+`{ taskId: "daily", triggerType: "manual", pagination: { page: 1, pageSize: 5 } }` を指定すると、このタスクの手動実行だけが最初のページに最大 5 件返ります。
 
 #### 利用例：実行の開始とログ確認
 
@@ -190,8 +223,8 @@ async function runAndRead(taskId: string) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.setHooks` | 実行関数とフックを設定 | hooks | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
-| `scheduler.clearHooks` | 現在のフックを削除 | 无参数 | `HaiResult<void>` | `scheduler.clearHooks()` |
+| `scheduler.setHooks(hooks)` | 実行関数とフックを設定 | `hooks: SchedulerTaskHooks` 開始、実行、中断、完了のフックを設定。下のライフサイクル説明を参照 | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
+| `scheduler.clearHooks()` | 現在のフックを削除 | なし | `HaiResult<void>` | `scheduler.clearHooks()` |
 
 #### 利用例：業務処理とコールバック
 
@@ -240,11 +273,22 @@ if (!clearHooksResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.execution.get` | 実行 ID で取得 | occurrenceId | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
-| `scheduler.execution.listUnknown` | 結果不明の実行をページ取得 | options | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
-| `scheduler.execution.listLogFailures` | ログ記録失敗を取得 | options | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
-| `scheduler.execution.repairLog` | 確認済みの実行ログを修復 | occurrenceId | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
-| `scheduler.execution.resolveUnknown` | 実行結果を確認 | occurrenceId, resolution | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+| `scheduler.execution.get(occurrenceId)` | 実行 ID で取得 | `occurrenceId: string` 実行結果から取得した安定した ID | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
+| `scheduler.execution.listUnknown(options?)` | 結果不明の実行をページ取得 | `options?: { limit?: number, offset?: number }` [ページ指定](#scheduler-execution-options)を参照 | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
+| `scheduler.execution.listLogFailures(options?)` | ログ記録失敗を取得 | `options?: { limit?: number, offset?: number }` [ページ指定](#scheduler-execution-options)を参照 | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
+| `scheduler.execution.repairLog(occurrenceId)` | 確認済みの実行ログを修復 | `occurrenceId: string` 実行結果から取得した安定した ID | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
+| `scheduler.execution.resolveUnknown(occurrenceId, resolution)` | 実行結果を確認 | `occurrenceId: string` 実行結果から取得した安定した ID。`resolution` 確認済みの裁定オブジェクトが必須。[裁定項目](#scheduler-execution-options)を参照 | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+
+<a id="scheduler-execution-options"></a>
+
+**実行記録のページ指定と裁定**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `options.limit` | `number` | `50` | 両方の一覧で使用。ページごとに 1–100 件。 |
+| `options.offset` | `number` | `0` | 両方の一覧で使用。0–1000000 件を飛ばします。 |
+| `resolution.status` | `'success' \| 'discarded'` | 必須 | 確認後に成功を確定するか、追跡を終了します。ここでは裁定を記録します。 |
+| `resolution.expectedUpdatedAt` | `number` | 必須 | 最後に読み取った updatedAt。並行更新があった場合は読み直して確認します。 |
 
 #### 利用例：不明な結果の確認とログ修復
 

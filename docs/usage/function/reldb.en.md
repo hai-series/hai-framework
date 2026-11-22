@@ -79,9 +79,9 @@ Connect first, coordinate schema preparation with prepareSchema and end transact
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.init` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
-| `reldb.close` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.init(config)` | Create and verify the database connection | Required `config: ReldbConfigInput`. See [backend configuration](../configuration/reldb.en.md). | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
+| `reldb.close()` | Release the connection after ending active transactions | None | `Promise<HaiResult<void>>` | `await reldb.close()` |
+| `reldb.prepareSchema(key, prepare)` | Coordinate a schema change by name on the same database connection | Required `key: string` identifies the schema work. The async `prepare` callback receives the current connection’s `ddl` and `sql`. | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
 
 #### Scenario: Connect, prepare and close
 
@@ -99,15 +99,32 @@ Use trusted table names, columns and definitions, and inspect destructive change
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.ddl.createTable` | Create a table | tableName, columns, ifNotExists | `void` | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })` |
-| `reldb.ddl.dropTable` | Drop a table and its data | tableName, ifExists | `void` | `await reldb.ddl.dropTable('orders_archive', true)` |
-| `reldb.ddl.addColumn` | Add a column | tableName, columnName, columnDef | `void` | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })` |
-| `reldb.ddl.dropColumn` | Drop a column | tableName, columnName | `void` | `await reldb.ddl.dropColumn('orders', 'note')` |
-| `reldb.ddl.renameTable` | Rename a table | oldName, newName | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
-| `reldb.ddl.createIndex` | Create an index | tableName, indexName, indexDef | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
-| `reldb.ddl.dropIndex` | Drop an index | indexName, ifExists | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
-| `reldb.ddl.raw` | Execute trusted DDL | sql | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
-| `reldb.schemaColumns` | Inspect table columns | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
+| `reldb.ddl.createTable(tableName, columns, ifNotExists?)` | Create a table | `tableName: string` Trusted table name. `columns: ReldbTableDef` Object mapping names to column definitions. `ifNotExists?: boolean` Defaults to true, skipping an existing table. See [column and index fields](#reldb-ddl-fields) | `void` | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })` |
+| `reldb.ddl.dropTable(tableName, ifExists?)` | Drop a table and its data | `tableName: string` Trusted table name. `ifExists?: boolean` Defaults to true, skipping an absent target | `void` | `await reldb.ddl.dropTable('orders_archive', true)` |
+| `reldb.ddl.addColumn(tableName, columnName, columnDef)` | Add a column | `tableName: string` Trusted table name. `columnName: string` Trusted column name. `columnDef: ReldbColumnDef` Definition of the new column. See [column and index fields](#reldb-ddl-fields) | `void` | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })` |
+| `reldb.ddl.dropColumn(tableName, columnName)` | Drop a column | `tableName: string` Trusted table name. `columnName: string` Trusted column name | `void` | `await reldb.ddl.dropColumn('orders', 'note')` |
+| `reldb.ddl.renameTable(oldName, newName)` | Rename a table | `oldName: string, newName: string` Trusted former and new table names | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
+| `reldb.ddl.createIndex(tableName, indexName, indexDef)` | Create an index | `tableName: string` Trusted table name. `indexName: string` Trusted index name. `indexDef: ReldbIndexDef` Indexed columns and options. See [column and index fields](#reldb-ddl-fields) | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
+| `reldb.ddl.dropIndex(indexName, ifExists?)` | Drop an index | `indexName: string` Trusted index name. `ifExists?: boolean` Defaults to true, skipping an absent target | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
+| `reldb.ddl.raw(sql)` | Execute trusted DDL | `sql: string` Trusted schema SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+| `reldb.schemaColumns(table, sql?)` | Inspect table columns | `table: string` Trusted table name. `sql?: DmlOperations` Optional existing SQL operations, defaulting to the current connection | `string[]` | `await reldb.schemaColumns('orders')` |
+
+<a id="reldb-ddl-fields"></a>
+
+**Column and index definitions**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `ReldbColumnDef.type` | `ColumnType` | Required | Portable column type such as TEXT, INTEGER, BIGINT or JSON. |
+| `ReldbColumnDef.primaryKey / autoIncrement` | `boolean` | `false` | Mark a primary key and auto-increment respectively. Auto-increment applies to primary keys only. |
+| `ReldbColumnDef.notNull / unique` | `boolean` | `false` | Restrict null and duplicate values respectively. |
+| `ReldbColumnDef.defaultValue` | `string \| number \| boolean \| null` | Optional | Database default when an insert omits the column. |
+| `ReldbColumnDef.references` | `{ table, column, onDelete?, onUpdate? }` | Optional | Foreign table and column names are required when specified. Optional delete/update actions are CASCADE, SET NULL, RESTRICT, or NO ACTION. |
+| `ReldbIndexDef.columns` | `string[]` | Required | Ordered list of index column names. |
+| `ReldbIndexDef.unique` | `boolean` | `false` | Disallow duplicate indexed key combinations. |
+| `ReldbIndexDef.where` | `string` | Optional | Trusted static SQL condition to restrict a partial index on supporting backends. |
+
+For example, `{ id: { type: "TEXT", primaryKey: true }, paid: { type: "BOOLEAN", defaultValue: false } }` defines a text primary key and payment flag. Inserts omitting `paid` use `false`.
 
 #### Scenario: Create and change tables
 
@@ -167,13 +184,31 @@ Pass dynamic values as parameters, distinguish query rows from execution counts 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.sql.query` | Query multiple rows with parameters | sql, params | `T[]` | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])` |
-| `reldb.sql.get` | Query one row with parameters | sql, params | `T \| null` | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])` |
-| `reldb.sql.execute` | Execute a parameterized write | sql, params | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
-| `reldb.sql.batch` | Execute a batch of statements | statements | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
-| `reldb.sql.queryPage` | Read a result page and total | options | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
-| `reldb.pagination.normalize` | Normalize pagination values | options, overrides | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
-| `reldb.pagination.build` | Build a paginated result | items, total, pagination | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+| `reldb.sql.query(sql, params?)` | Query multiple rows with parameters | `sql: string` Trusted SQL with placeholders for runtime values. `params?: unknown[]` Bind values in placeholder order. Omit for no bindings | `T[]` | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])` |
+| `reldb.sql.get(sql, params?)` | Query one row with parameters | `sql: string` Trusted SQL with placeholders for runtime values. `params?: unknown[]` Bind values in placeholder order. Omit for no bindings | `T \| null` | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])` |
+| `reldb.sql.execute(sql, params?)` | Execute a parameterized write | `sql: string` Trusted SQL with placeholders for runtime values. `params?: unknown[]` Bind values in placeholder order. Omit for no bindings | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
+| `reldb.sql.batch(statements)` | Execute a batch of statements | `statements` Ordered SQL entries, each containing sql and optional params | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
+| `reldb.sql.queryPage(options)` | Read a result page and total | Required `options: PaginationQueryOptions`. See [query fields](#reldb-sql-page-options). | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
+| `reldb.pagination.normalize(options?, overrides?)` | Normalize pagination values | Optional `options: PaginationOptionsInput` and `overrides: PaginationOverrides`. See [pagination fields](#reldb-sql-page-options). | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build(items, total, pagination)` | Build a paginated result | `items: T[], total: number, pagination: PaginationOptions` Current rows, total matches, and normalized page and page size | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+
+<a id="reldb-sql-page-options"></a>
+
+**SQL page query and defaults**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `PaginationQueryOptions.sql` | `string` | Required | Trusted SELECT without LIMIT/OFFSET. Use ORDER BY with a unique column for stable pages. |
+| `PaginationQueryOptions.params` | `unknown[]` | `[]` | Bind query values in placeholder order. |
+| `PaginationQueryOptions.pagination` | `PaginationOptionsInput` | Optional | Defaults to the first page. Contains page and pageSize and can also be passed separately to normalize. |
+| `pagination.page / pageSize` | `number` | Default page 1 and size 20 | Explicit valid values are rounded down. Omitted values and values below 1 use their fallbacks. |
+| `PaginationQueryOptions.overrides` | `PaginationOverrides` | Optional | Overrides the defaults and size cap. It is also the second argument to normalize. |
+| `overrides.defaultPage / defaultPageSize` | `number` | Defaults 1 and 20 | Used when the corresponding value is missing or below 1. Use positive integers and keep the default size within the cap. |
+| `overrides.maxPageSize` | `number` | `200` | Caps the explicitly requested page size. |
+
+Requesting page 3 with 50 rows and applying `{ maxPageSize: 10 }` yields `{ page: 3, pageSize: 10, offset: 20, limit: 10 }`.
+
+`params` binds business values in placeholder order and is optional when there are no values to bind. Pagination uses a one-based `page` and the `pageSize` in rows. An omitted value or one below 1 uses `defaultPage` or `defaultPageSize`. Valid inputs round down, and `maxPageSize` caps an explicit `pageSize`. Set `overrides` in application code using positive integers and keep the default size within the maximum.
 
 #### Scenario: Parameterized queries and pages
 
@@ -200,6 +235,9 @@ if (!getResult2.success)
 getResult2.data // { id: 'o1' }
 // Normalize page 1 and size 20 into the limit and offset for the first page.
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+// The user asks for page 3 with 50 rows. This screen caps the size at 10, so skip 20 rows and read up to 10.
+const limited = reldb.pagination.normalize({ page: 3, pageSize: 50 }, { maxPageSize: 10 })
+limited // { page: 3, pageSize: 10, offset: 20, limit: 10 }
 // Run the trusted SQL with normalized pagination. The page contains o1 and total 1. Return the failed result on failure.
 const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
 if (!pageResult.success)
@@ -234,8 +272,8 @@ Use one transaction for related reads and writes. Manually opened transactions m
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.tx.begin` | Begin a manual transaction | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
-| `reldb.tx.wrap` | Commit or roll back a transaction callback | fn | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.begin()` | Begin a manual transaction | None | `DmlWithTxOperations` | `await reldb.tx.begin()` |
+| `reldb.tx.wrap(fn)` | Commit or roll back a transaction callback | `fn: TxWrapCallback<T>` Async callback receiving the transaction. Returning commits, and throwing rolls back | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
 
 #### Scenario: Commit or roll back together
 
@@ -259,22 +297,52 @@ Map table fields to application objects with a repository, then create, query, u
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.crud.table` | Create CRUD operations for a table | Create a typed table handle for common create/read/update/delete operations. | Create a typed table handle for common create/read/update/delete operations. | `reldb.crud.table('orders')` |
+| `reldb.crud.table(config)` | Create CRUD operations for a table | Required `config: CrudConfig<TItem>` maps the table to business records. See [configuration fields](#reldb-crud-config). | Create a typed table handle for common create/read/update/delete operations. | `reldb.crud.table('orders')` |
+| `repository.create(data, tx?)` | Insert a record | `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
+| `repository.createMany(items, tx?)` | Insert records | `items: Array<Record<string, unknown>>` Each item maps a record’s columns to values. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
+| `repository.createOrUpdate(data, tx?)` | Upsert by ID | `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
+| `repository.findById(id, tx?)` | Find, allowing a missing record | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
+| `repository.getById(id, tx?)` | Get, failing if missing | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
+| `repository.findAll(options?, tx?)` | Query records | Optional `options` accepts `where`, `params`, `orderBy`, `limit`, and `offset`. Pass `tx` to use an existing transaction | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
+| `repository.findPage(options, tx?)` | Query a page | The `options` object is required. Its fields are optional. `where`, `params`, and `orderBy` match `findAll`. `pagination` and `overrides` follow [SQL pagination](#sql). Optional `tx` | `Promise<HaiResult<PaginatedResult<TItem>>>` | `await repository.findPage({ pagination: { page: 1, pageSize: 10 } })` |
+| `repository.updateById(id, data, tx?)` | Update by ID | `id` Primary-key value matching the column type. `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.updateById('r1', { name: 'Ada v3' })` |
+| `repository.deleteById(id, tx?)` | Delete by ID | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.deleteById('r2')` |
+| `repository.count(options?, tx?)` | Count records | Optional `options` accepts `where` and `params`. Without a condition, count all rows. Optional `tx` | `Promise<HaiResult<number>>` | `await repository.count()` |
+| `repository.exists(options?, tx?)` | Test a condition | Optional `options` accepts `where` and `params`. Without a condition, check whether the table contains any rows. Optional `tx` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
+| `repository.existsById(id, tx?)` | Test an ID | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
 
-| `repository.create` | Insert a record | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
-| `repository.createMany` | Insert records | `items, tx?` | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
-| `repository.createOrUpdate` | Upsert by ID | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
-| `repository.findById` | Find, allowing a missing record | `id, tx?` | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
-| `repository.getById` | Get, failing if missing | `id, tx?` | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
-| `repository.findAll` | Query records | `options?, tx?` | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
-| `repository.findPage` | Query a page | `options, tx?` | `Promise<HaiResult<PaginatedResult<TItem>>>` | `await repository.findPage({ pagination: { page: 1, pageSize: 10 } })` |
-| `repository.updateById` | Update by ID | `id, data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.updateById('r1', { name: 'Ada v3' })` |
-| `repository.deleteById` | Delete by ID | `id, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.deleteById('r2')` |
-| `repository.count` | Count records | `options?, tx?` | `Promise<HaiResult<number>>` | `await repository.count()` |
-| `repository.exists` | Test a condition | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
-| `repository.existsById` | Test an ID | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
+<a id="reldb-crud-config"></a>
+
+**CrudConfig<TItem>**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `table` | `string` | Required | Trusted table name used by the repository. |
+| `dbType` | `DbType` | Required | Dialect of the current connection, used to generate SQL. |
+| `idColumn` | `string` | `id` | Column used for lookups, conflict updates, and deletes. |
+| `select` | `string[]` | `*` | Columns to return. |
+| `createColumns / updateColumns` | `string[]` | Use input data columns | Restrict writable columns. Updates still exclude the primary key. |
+| `mapRow` | `(row: QueryRow) => TItem` | Optional | Map each queried row into the application object. |
+
+With `idColumn: "order_id"` and `select: ["order_id", "status"]` for `orders`, `findById("o1")` looks up by order_id and returns those columns or null if absent.
+
+<a id="reldb-repository-query-options"></a>
+
+**Repository query options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `where` | `string` | Optional | Applies to findAll, findPage, count, and exists. Trusted static condition without WHERE. |
+| `params` | `unknown[]` | `[]` | Bind dynamic values to where placeholders in order. |
+| `orderBy` | `string` | Optional | Trusted sort expression without ORDER BY for findAll and findPage. Use a stable order with paging or offsets. |
+| `limit / offset` | `number` | Unlimited / no rows skipped | Maximum rows and rows to skip for findAll. An offset alone is accepted. |
+| `pagination / overrides` | `PaginationOptionsInput / PaginationOverrides` | Optional | Only for findPage. Uses the same fields as [SQL pagination](#reldb-sql-page-options). |
+
+With IDs `r1` and `r2` stored, `findAll({ orderBy: "id ASC", offset: 1 })` skips `r1` and returns only `r2`. Optional `tx` joins an existing transaction.
 
 `findAll({ orderBy, offset })` skips the specified number of rows and returns the rest. You can omit `limit` in SQLite, PostgreSQL, and MySQL.
+
+`where` and `orderBy` are developer-written SQL fragments without the WHERE or ORDER BY keywords. Put dynamic values in `params` in placeholder order. Omitting `limit` allows all matching rows after the optional `offset`. Use a stable `orderBy` for an offset or page.
 
 #### Scenario: Work with records
 
@@ -292,11 +360,11 @@ These helpers build parameterized SQL expressions; they do not modify the databa
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reldb.json.extract` | Build a JSON extraction SQL expression | column, path | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')` |
-| `reldb.json.set` | Build a JSON path assignment | column, path, value | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')` |
-| `reldb.json.insert` | Build a JSON path insertion | column, path, value | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
-| `reldb.json.remove` | Build a JSON path removal | column, path | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
-| `reldb.json.merge` | Build a JSON merge SQL expression | column, patch | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
+| `reldb.json.extract(column, path)` | Build a JSON extraction SQL expression | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')` |
+| `reldb.json.set(column, path, value)` | Build a JSON path assignment | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status. `value` JSON value to write at the path | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')` |
+| `reldb.json.insert(column, path, value)` | Build a JSON path insertion | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status. `value` JSON value to write at the path | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
+| `reldb.json.remove(column, path)` | Build a JSON path removal | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
+| `reldb.json.merge(column, patch)` | Build a JSON merge SQL expression | `column: string` Trusted JSON column name or SQL column expression. `patch: Record<string, unknown>` Fields and values to merge into the JSON object | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
 
 #### Scenario: Read and write JSON fields
 

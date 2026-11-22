@@ -66,14 +66,14 @@ export default {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.createHandle` | 请求管道 | `HandleConfig: auth/guards/logging/rateLimit/crypto/access` | `SvelteKit Handle` | `kit.createHandle({ logging: true })` |
-| `kit.sequence` | 组合 Hook | `...Handle` | `Handle preserving resolve options` | `kit.sequence(i18nHandle, authHandle)` |
-| `kit.handler` | 端点异常边界 | `(RequestEvent) => Response \| Promise<Response>` | `SvelteKit request handler` | `kit.handler(async () => kit.response.ok({ ready: true }))` |
-| `kit.middleware.rateLimit` | 固定窗口限流 | `{ windowMs, maxRequests, store, ...options }` | `Middleware; 429 on quota and 503 on store failure` | `kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100, store })` |
-| `kit.middleware.createCacheRateLimitStore` | 共享计数器 | `initialized shared cache, { namespace, allowMemory? }` | `RateLimitStore` | `kit.middleware.createCacheRateLimitStore(cache, { namespace: "orders" })` |
-| `kit.middleware.createMemoryRateLimitStore` | 开发计数器 | `none; development or explicit test only` | `MemoryRateLimitStore` | `kit.middleware.createMemoryRateLimitStore()` |
-| `kit.i18n.setLocale` | 启动默认语言 | `locale string` | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
-| `kit.i18n.runWithLocale` | 请求语言隔离 | `locale, callback; Node server only` | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
+| `kit.createHandle(config?)` | 请求管道 | 可省略的 `config`，包括认证、日志、中间件与访问策略。见 [Hook 参数](#host-options)。 | `SvelteKit Handle` | `kit.createHandle({ logging: true })` |
+| `kit.sequence(...handles)` | 组合 Hook | `handles` 为按执行顺序传入的零个或多个 SvelteKit `Handle`。 | `Handle preserving resolve options` | `kit.sequence(i18nHandle, authHandle)` |
+| `kit.handler(fn)` | 端点异常边界 | 必填 `fn(event)`，输入 SvelteKit 请求事件，返回同步或异步 `Response`。 | `SvelteKit request handler` | `kit.handler(async () => kit.response.ok({ ready: true }))` |
+| `kit.middleware.rateLimit(config)` | 固定窗口限流 | `config` 必填。`windowMs` 为 1–2147483647 毫秒的整数，`maxRequests` 为正安全整数，`store` 提供原子计数。可选 `keyGenerator(event)` 默认按可信地址，`onLimitReached(event)` 默认 429。 | 中间件。存储故障返回 503 | `kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100, store })` |
+| `kit.middleware.createCacheRateLimitStore(backend, options)` | 共享计数器 | 必填初始化后的 Redis `backend` 与 `options.namespace`（1–128 字符）。`allowMemory` 默认关闭，显式启用也仅在开发或测试生效。 | `RateLimitStore` | `kit.middleware.createCacheRateLimitStore(cache, { namespace: "orders" })` |
+| `kit.middleware.createMemoryRateLimitStore()` | 开发计数器 | `none; development or explicit test only` | `MemoryRateLimitStore` | `kit.middleware.createMemoryRateLimitStore()` |
+| `kit.i18n.setLocale(locale)` | 启动默认语言 | 必填 `locale` 设置启动阶段的默认语言，例如 `zh-CN`。 | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
+| `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | 必填请求 `locale` 和保留返回值的 `operation` 回调，只用于 Node 服务端。 | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
 
 #### 场景：组装 SvelteKit 请求管道
 
@@ -167,6 +167,8 @@ export const handle: Handle = haiHandle
 
 `trustedProxies: auto` 在未配置托管代理的应用中不使用转发头；受管 Compose 只有后端私有且存在入口代理时才采用容器网段。自管入口显式指定代理 IP/CIDR，`[]` 可关闭。解析后的 `event.getClientAddress()` 与策略、IAM、审计使用相同地址。外层代理、不可恢复的源地址丢失、环境变量与部署回滚见[请求访问控制手册](../configuration/request-access.md)。
 
+<a id="host-options"></a>
+
 #### Hook 参数与业务 Cookie 加密
 
 在服务端代码中调用 `kit.createHandle()` 时传这些参数。地址等设置可以来自 `_kit.yml`，函数、私钥和已初始化的存储对象由服务端代码提供。
@@ -210,23 +212,23 @@ const handle = kit.createHandle({
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.response.ok` | 成功响应 | `data, requestId?` | `Response with HTTP 200 and success data` | `kit.response.ok({ id: "o1" })` |
-| `kit.response.created` | 创建响应 | `data, requestId?` | `Response with HTTP 201 and success data` | `kit.response.created({ id: "o1" })` |
-| `kit.response.noContent` | 无正文 | `none` | `Response with HTTP 204` | `kit.response.noContent()` |
-| `kit.response.error` | 指定失败 | `code, message, status?, requestId?, public details?` | `safe failure Response` | `kit.response.error("app:orders:001", "请求无效", 400)` |
-| `kit.response.badRequest` | 无效请求 | `message, requestId?` | `HTTP 400 Response` | `kit.response.badRequest("Invalid request")` |
-| `kit.response.unauthorized` | 未认证 | `message?, requestId?` | `HTTP 401 Response` | `kit.response.unauthorized()` |
-| `kit.response.forbidden` | 无权限 | `message?, requestId?` | `HTTP 403 Response` | `kit.response.forbidden()` |
-| `kit.response.notFound` | 未找到 | `message?, requestId?` | `HTTP 404 Response` | `kit.response.notFound()` |
-| `kit.response.conflict` | 版本冲突 | `message, requestId?` | `HTTP 409 Response` | `kit.response.conflict("Data changed")` |
-| `kit.response.validationError` | 字段校验 | `{ field, message }[], requestId?` | `HTTP 422 Response; errors in safe error.cause` | `kit.response.validationError([{ field: "title", message: "请输入标题" }])` |
-| `kit.response.internalError` | 内部失败 | `message?, requestId?` | `HTTP 500 Response with safe message` | `kit.response.internalError()` |
-| `kit.response.redirect` | 重定向 | `location, status?` | `redirect Response` | `kit.response.redirect("/auth/login")` |
-| `kit.response.fromResult` | 映射领域结果 | `HaiResult<T>, httpStatusMap?, requestId?` | `HTTP Response; preserves safe code/status/traceId` | `kit.response.fromResult(result)` |
-| `kit.response.fromError` | 映射领域错误 | `HaiError, requestId?` | `safe HTTP failure Response` | `kit.response.fromError(result.error)` |
-| `kit.validate.body` | JSON/表单校验 | `Request, Zod schema` | `Promise<schema data>; invalid input throws Response` | `kit.validate.body(request, InputSchema)` |
-| `kit.validate.query` | 查询校验 | `URL, Zod schema` | `schema data; invalid input throws Response` | `kit.validate.query(url, QuerySchema)` |
-| `kit.validate.params` | 路径参数校验 | `Record<string,string>, Zod schema` | `schema data; invalid input throws Response` | `kit.validate.params(params, IdSchema)` |
+| `kit.response.ok(data, requestId?)` | 成功响应 | 必填成功数据 `data`。可传同一请求的 `requestId`。 | `Response with HTTP 200 and success data` | `kit.response.ok({ id: "o1" })` |
+| `kit.response.created(data, requestId?)` | 创建响应 | 必填新建资源的 `data`。可传同一请求的 `requestId`。 | `Response with HTTP 201 and success data` | `kit.response.created({ id: "o1" })` |
+| `kit.response.noContent()` | 无正文 | `none` | `Response with HTTP 204` | `kit.response.noContent()` |
+| `kit.response.error(code, message, status?, requestId?, details?)` | 指定失败 | 必填错误码 `code` 和公开 `message`。`status` 默认 400。可传 `requestId` 和允许对外展示的 `details`，5xx 不返回详情。 | `safe failure Response` | `kit.response.error("app:orders:001", "请求无效", 400)` |
+| `kit.response.badRequest(message, requestId?, details?)` | 无效请求 | 必填公开校验提示 `message`。可传 `requestId` 和允许对外展示的 `details`。 | `HTTP 400 Response` | `kit.response.badRequest("Invalid request")` |
+| `kit.response.unauthorized(message?, requestId?)` | 未认证 | 可选公开 `message`，省略时使用框架默认文案。可选 `requestId` 用于关联请求。 | `HTTP 401 Response` | `kit.response.unauthorized()` |
+| `kit.response.forbidden(message?, requestId?)` | 无权限 | 可选公开 `message`，省略时使用框架默认文案。可选 `requestId` 用于关联请求。 | `HTTP 403 Response` | `kit.response.forbidden()` |
+| `kit.response.notFound(message?, requestId?)` | 未找到 | 可选公开 `message`，省略时使用框架默认文案。可选 `requestId` 用于关联请求。 | `HTTP 404 Response` | `kit.response.notFound()` |
+| `kit.response.conflict(message, requestId?)` | 版本冲突 | 必填公开 `message` 说明冲突。可选 `requestId` 用于关联请求。 | `HTTP 409 Response` | `kit.response.conflict("Data changed")` |
+| `kit.response.validationError(errors, requestId?)` | 字段校验 | 必填 `errors` 数组，每项 `field` 是字段名，`message` 是公开校验提示。可传 `requestId`。 | `HTTP 422 Response; errors in safe error.cause` | `kit.response.validationError([{ field: "title", message: "请输入标题" }])` |
+| `kit.response.internalError(message?, requestId?)` | 内部失败 | 可选安全公开 `message`，省略使用默认 500 文案。可选 `requestId` 用于关联请求。 | `HTTP 500 Response with safe message` | `kit.response.internalError()` |
+| `kit.response.redirect(url, status?)` | 重定向 | 必填目标地址字符串 `url`。重定向 `status` 默认 302。 | `redirect Response` | `kit.response.redirect("/auth/login")` |
+| `kit.response.fromResult(result, httpStatusMap?, requestId?)` | 映射领域结果 | 必填领域 `result`。可传按错误码覆盖状态的 `httpStatusMap` 和当前 `requestId`。 | `HTTP Response; preserves safe code/status/traceId` | `kit.response.fromResult(result)` |
+| `kit.response.fromError(haiError, requestId?)` | 映射领域错误 | 必填 `haiError`。`requestId` 省略时从当前请求关联。 | `safe HTTP failure Response` | `kit.response.fromError(result.error)` |
+| `kit.validate.body(request, schema)` | JSON/表单校验 | 必填 HTTP `request` 与验证 JSON 或表单数据的 Zod `schema`。 | `Promise<schema data>; invalid input throws Response` | `kit.validate.body(request, InputSchema)` |
+| `kit.validate.query(url, schema)` | 查询校验 | 必填 `url: URL` 与用于解析搜索参数的 Zod `schema`。 | `schema data; invalid input throws Response` | `kit.validate.query(url, QuerySchema)` |
+| `kit.validate.params(params, schema)` | 路径参数校验 | 必填 `params`（路径参数字符串映射）与 Zod `schema`。 | `schema data; invalid input throws Response` | `kit.validate.params(params, IdSchema)` |
 | `kit.validate.IdParamSchema` | 通用资源编号 | `{ id: string }` | `Zod parsed ID object` | `kit.validate.IdParamSchema.parse({ id: "o1" })` |
 | `kit.validate.PaginationQuerySchema` | 分页输入 | `page/pageSize/search query` | `normalized pagination object` | `kit.validate.PaginationQuerySchema.parse({ page: "1" })` |
 
@@ -325,20 +327,33 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.guard.check` | 检查权限 | `session, permission` | `boolean` | `kit.guard.check(session, "orders.read")` |
-| `kit.guard.require` | 要求权限 | `session, permission` | `void; denied access throws Response` | `kit.guard.require(session, "orders.write")` |
-| `kit.guard.requireSensitive` | 确认操作用途 | `initialized IAM, current RequestEvent request/cookies, operation` | `Promise<void>; invalid proof throws Response` | `kit.guard.requireSensitive(iam, event, "orders.approve")` |
+| `kit.guard.check(session, permission)` | 检查权限 | 必填 `session` 为当前会话，可为 `null`。必填 `permission` 是所需权限标识。 | `boolean` | `kit.guard.check(session, "orders.read")` |
+| `kit.guard.require(session, permission)` | 要求权限 | 必填 `session` 为当前会话，可为 `null`。必填 `permission` 是所需权限标识。 | `void; denied access throws Response` | `kit.guard.require(session, "orders.write")` |
+| `kit.guard.requireSensitive(iam, event, operation)` | 确认操作用途 | 必填已初始化的 `iam`、当前请求事件 `event` 和服务端登记的操作标识 `operation`。 | `Promise<void>; invalid proof throws Response` | `kit.guard.requireSensitive(iam, event, "orders.approve")` |
 | `kit.auth.publicPaths` | 匿名端点名单 | `none` | `string[]; prepend the host base path when needed` | `kit.auth.publicPaths` |
-| `kit.auth.createApi` | 认证 handler 集合 | `initialized IAM service` | `RequestHandler map for login/OTP/reset/config/etc.` | `kit.auth.createApi(iam)` |
-| `kit.auth.login` | 密码登录 | `Cookie writer, PasswordCredentials, request context?` | `Promise<HaiResult<AuthResult>>; writes token cookies on success` | `kit.auth.login(cookies, { identifier: "alice", password })` |
-| `kit.auth.loginWithOtp` | 验证码登录 | `Cookie writer, OtpCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithOtp(cookies, otpCredentials)` |
-| `kit.auth.loginWithLdap` | LDAP 登录 | `Cookie writer, LdapCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithLdap(cookies, ldapCredentials)` |
-| `kit.auth.loginWithApiKey` | API Key 登录 | `Cookie writer, ApiKeyCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithApiKey(cookies, apiKeyCredentials)` |
-| `kit.auth.registerAndLogin` | 注册并登录 | `Cookie writer, RegisterOptions, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.registerAndLogin(cookies, registration)` |
-| `kit.auth.logout` | 显式退出 | `Cookie writer, accessToken?` | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
-| `kit.auth.setBrowserToken` | 页面内存凭据 | `access token string` | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
-| `kit.auth.clearBrowserToken` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
-| `@h-ai/kit` 的 `matchPermission` | 按通配符匹配前端展示权限 | `matchPermission('reports:read', ['reports:read'])` | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+| `kit.auth.createApi(iam)` | 认证 handler 集合 | `iam` 必填，为已初始化并提供认证操作的 IAM 服务实例。 | `RequestHandler map for login/OTP/reset/config/etc.` | `kit.auth.createApi(iam)` |
+| `kit.auth.login(cookies, credentials, context?)` | 密码登录 | 必填 `cookies` 与 `credentials`，其中必填 `identifier` 和 `password`。`captcha` 按策略传入，`expectedUserId` 用于恢复同一用户。 可选 `context` 见[认证参数](#kit-auth-context)。 | `Promise<HaiResult<AuthResult>>; writes token cookies on success` | `kit.auth.login(cookies, { identifier: "alice", password })` |
+| `kit.auth.loginWithOtp(cookies, credentials, context?)` | 验证码登录 | 必填 `cookies` 与 `credentials`，其中必填 `identifier` 和 `code`。`captcha` 按策略传入，`expectedUserId` 用于恢复同一用户。 可选 `context` 见[认证参数](#kit-auth-context)。 | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithOtp(cookies, otpCredentials)` |
+| `kit.auth.loginWithLdap(cookies, credentials, context?)` | LDAP 登录 | 必填 `cookies` 与 `credentials`，其中必填 `username` 和 `password`。`captcha` 按策略传入，`expectedUserId` 用于恢复同一用户。 可选 `context` 见[认证参数](#kit-auth-context)。 | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithLdap(cookies, ldapCredentials)` |
+| `kit.auth.loginWithApiKey(cookies, credentials, context?)` | API Key 登录 | 必填 `cookies` 与 `credentials`，其中必填 `key`。 可选 `context` 见[认证参数](#kit-auth-context)。 | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithApiKey(cookies, apiKeyCredentials)` |
+| `kit.auth.registerAndLogin(cookies, options, context?)` | 注册并登录 | 必填 `cookies` 与 `options.username`、`options.password`。可选 `context` 和注册字段见[认证参数](#kit-auth-context)。 | `Promise<HaiResult<AuthResult>>` | `kit.auth.registerAndLogin(cookies, registration)` |
+| `kit.auth.logout(cookies, accessToken?)` | 显式退出 | `cookies` 是当前 SvelteKit Cookie 写入器。可传本会话的 `accessToken` 让服务端撤销它，省略时仍清理 Cookie。 | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
+| `kit.auth.setBrowserToken(token)` | 页面内存凭据 | 必填 `token` 是保存在页面内存的访问令牌字符串。 | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
+| `kit.auth.clearBrowserToken()` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
+| `@h-ai/kit` 的 `matchPermission(required, userPermissions)` | 按通配符匹配前端展示权限 | 必填 `required` 权限代码与可信会话的 `userPermissions` 代码数组。 | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+
+<a id="kit-auth-context"></a>
+
+#### 认证 context 与注册 options
+
+| 字段 | 默认与条件 | 用途或具体结果 |
+| --- | --- | --- |
+| `context.terminalType` | 默认 `web` | 按 `web`、`app`、`desktop`、`api` 对会话分类。 |
+| `context.ip` / `userAgent` / `requestId` | 均可省略 | 从可信宿主请求取得地址、客户端信息和关联 ID，供 IAM 记录。 |
+| `options.username` / `password` | 必填，按 IAM 策略校验 | 指定要注册的用户名和密码。 |
+| `options.email` / `phone` / `displayName` / `metadata` / `captcha` | 按注册表单和 IAM 策略传入 | 传入联系方式、显示名、自定义资料或验证码。按公开注册端点的 Schema 选取字段。 |
+
+例如登录传入 `{ terminalType: "desktop", requestId: "req-1" }` 时，成功的会话归类为桌面端，对应记录可使用请求 ID 关联。
 
 #### 场景：认证 Cookie 与路由守卫
 
@@ -384,25 +399,35 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.client.create` | 同源客户端 | `KitClientConfig: auth/transport/recoverSession?` | `KitClient { apiFetch, init, destroy, ready }` | `kit.client.create()` |
-| `kit.client.createAuthActions` | 标准认证动作 | `{ basePath?, ...auth client options }?` | `AuthPanel-compatible actions` | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
-| `kit.client.installBrowserTransport` | 按公共配置安装加密 | `public KitConfig, { crypto, basePath? }` | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
-| `kit.client.installBrowserTransportFetch` | 自定义传输安装 | `ClientTransportConfig` | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
-| `@h-ai/kit/client` 的 `createKitClient` | 创建同源客户端 | `createKitClient({})`，可传 CSRF、base path 和加密等选项 | `KitClient` | `createKitClient({})` |
-| `@h-ai/kit/client` 的 `createKitAuthActions` | 创建同源认证表单动作 | `createKitAuthActions({ apiFetch: client.apiFetch })`，指定已创建客户端的 fetch | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
-| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter` | 把路由导航连接到 CRUD | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
+| `kit.client.create(config?)` | 同源客户端 | 可省略的 `config`，字段见下表 | `KitClient { apiFetch, init, destroy, ready }` | `kit.client.create()` |
+| `kit.client.createAuthActions(options?)` | 标准认证动作 | `options` 可省略。`apiFetch` 默认使用新建的默认客户端，`basePath` 默认 `/api/auth`。 | 与 AuthPanel 兼容的动作对象 | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
+| `kit.client.installBrowserTransport(config, deps)` | 按公共配置安装加密 | 必填公开 `config` 与 `deps.crypto`。可选 `deps.basePath` 默认空字符串，表示根目录挂载。 | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
+| `kit.client.installBrowserTransportFetch(transportConfig?)` | 自定义传输安装 | 浏览器可传 `transportConfig`，字段见本节 `transport` 行。省略或在服务端调用时不安装全局 Fetch 包装。 | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
+| `@h-ai/kit/client` 的 `createKitClient(config?)` | 创建同源客户端 | `config` 可省略，字段与 `kit.client.create()` 相同。 | `KitClient` | `createKitClient({})` |
+| `@h-ai/kit/client` 的 `createKitAuthActions(options?)` | 创建同源认证表单动作 | `options` 可省略，字段与 `kit.client.createAuthActions()` 的 `apiFetch`、`basePath` 相同。 | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
+| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()` | 把路由导航连接到 CRUD | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
 
 #### 场景：连接同源浏览器
 
 下面放在浏览器模块中；/api/ping 是应用已实现的同源接口。输入默认客户端选项，输出 Response；destroy 在使用方卸载时释放会话。authActions/nav 为返回的可供 UI 使用的对象。
+
+| 客户端选项 | 默认或必填条件 | 用途 |
+| --- | --- | --- |
+| `auth` | 省略或 `false` 不注入访问令牌 | `true` 使用当前页面内存令牌，也可传入与认证动作共用的 `BrowserTokenStore`。 |
+| `terminalType` | `'web'` | 可选 `'app'`、`'desktop'`、`'api'`。作为 `X-Hai-Terminal` 传给服务端判断该会话终端组。 |
+| `recoverSession` | 省略时不恢复 | 应用提供异步函数，确认已恢复同一用户会话时返回 `true`。收到符合条件的认证失效响应后最多重试一次。 |
+| `csrfCookieName`、`csrfHeaderName` | `hai_csrf`、`X-CSRF-Token` | 写请求从指定 Cookie 取值并写入指定请求头。两项均须与服务端约定一致。 |
+| `transport` | 省略时不启用 | 启用时传已初始化的 `crypto`。`basePath` 默认空字符串，`keyExchangeUrl` 默认 `/api/_hai/key-exchange`。`excludePaths` 指定不加密的路径，应与服务端一致。`maxPlaintextBytes` 以字节限制本地明文大小，省略时使用服务端协商值。 |
+
+`client.apiFetch(input, init?, options?)` 的 `input` 是请求、URL 或路径，`init` 使用原生 Fetch 的请求选项，包括 `method`、`body` 和 `signal`。第三个参数的 `recoverSession: false` 只关闭本次调用的标准会话恢复，避免认证操作回到自己的恢复回调。可选 `reauthorize` 在需要重新获得操作凭据后重试时调用。返回新凭据字符串可替换请求头中的旧值，`null` 取消重试，`undefined` 继续但不附带该凭据。
 
 ```ts
 import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
 
 // Create a browser client with defaults. The returned object has its own request and transport methods.
 const client = createKitClient({}) // same factory as kit.client.create
-// Bind authentication actions to that client's apiFetch.
-const actions = createKitAuthActions({ apiFetch: client.apiFetch })
+// 让认证动作使用这个客户端向 /api/auth 下的路由发请求，返回页面可绑定的动作对象。
+const actions = createKitAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
 // Create a navigation adapter for the current SvelteKit runtime.
 const nav = createSvelteKitNavAdapter()
 // Initialize this client's transport if enabled. A failed enabled handshake rejects.
@@ -457,10 +482,10 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.crud.define` | 声明 CRUD 资源 | `CrudResourceConfig` | `resource operation object` | `kit.crud.define(resourceDefinition)` |
-| `@h-ai/kit` 的 `defineCrud` | 声明资源与表单字段 | `defineCrud(resource)`，用表单字段及资源操作定义 CRUD | `CrudOperations<T>` | `defineCrud(resource)` |
-| `@h-ai/kit` 的 `resolveText` | 读取静态或延迟翻译的文案 | `resolveText('Name')`，或传返回本地化文案的函数 | `string` | `resolveText('Name')` |
-| `@h-ai/kit` 的 `resolveOptions` | 读取静态或延迟生成的选项 | `resolveOptions([{ label: 'Active', value: true }])`，也可传返回选项的函数 | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
+| `kit.crud.define(resource)` | 声明 CRUD 资源 | 必填 CRUD `resource` 定义，包括可用操作、路由和字段。 | `resource operation object` | `kit.crud.define(resourceDefinition)` |
+| `@h-ai/kit` 的 `defineCrud(resource)` | 声明资源与表单字段 | 同 `kit.crud.define()`，必填 `resource` 定义。 | `CrudOperations<T>` | `defineCrud(resource)` |
+| `@h-ai/kit` 的 `resolveText(text)` | 读取静态或延迟翻译的文案 | 必填 `text` 字符串或返回字符串的无参函数。 | `string` | `resolveText('Name')` |
+| `@h-ai/kit` 的 `resolveOptions(options)` | 读取静态或延迟生成的选项 | 必填 `options` 数组或返回该数组的无参函数，每项至少有 `label` 和 `value`。 | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
 
 #### 场景：声明资源与表单字段
 
@@ -498,12 +523,26 @@ function buildResource(resource: Parameters<typeof defineCrud>[0]) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `@h-ai/kit` 的 `resolveKitTransportConfig` | 合并 Kit 传输调用参数 | `resolveKitTransportConfig(false)`，或传传输部分配置 | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
-| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware` | 创建传输认证中间件 | `transportEncryptionMiddleware(transportConfig)`，可传按路径、方法判定加密模式的函数 | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
+| `@h-ai/kit` 的 `resolveKitTransportConfig(input?)` | 合并 Kit 传输调用参数 | `input` 为 `false` 或部署层的传输参数。对象字段见[传输参数](#kit-transport-arguments)。 | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
+| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware(config, encryption?)` | 创建传输认证中间件 | 必填运行时 `config`。可选 `encryption(pathname, method)` 返回匹配路径的方法级加密策略。见[传输参数](#kit-transport-arguments)。 | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
 
 #### 场景：装配传输加密
 
 下面输入传输部分配置，resolveKitTransportConfig 输出 false 或完整选项；中间件输出 SvelteKit 请求处理函数。超限与握手失败保持真实 HTTP 结果，应用负责依赖的生命周期。
+
+<a id="kit-transport-arguments"></a>
+
+#### 公开 transport 配置与中间件参数
+
+| 字段 | 默认与条件 | 用途或具体结果 |
+| --- | --- | --- |
+| `input` | 省略或传 `false` 表示关闭 | `resolveKitTransportConfig` 只解析公开配置。对象形式至少补齐协商路径与排除列表，容量和时间限制交由运行时补齐。 |
+| `enabled` / `crypto` / `serverKeyRing` / `keyStore` | 直接创建中间件时必填 | 从宿主传入启用状态、已初始化 Crypto、服务端密钥环与登记存储。生产应选共享存储。 |
+| `keyExchangePath` / `excludePaths` / `basePath` | 默认 `/api/_hai/key-exchange`、`[]`、空字符串 | 分别指定协商路由、排除的请求路径和构建挂载目录。只在运行时提供 `basePath`。 |
+| `maxPlaintextBytes` / `routePlaintextBytes` | 默认 1 MiB，无路由覆盖。上限值的整数范围为 1 KiB 至 64 MiB。 | 限制正文的 UTF-8 明文字节数，路由映射的 `*` 匹配一个完整路径段。公开设置允许 `"auto"`，运行时直接传数字。 |
+| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 默认 30 秒（0–300）与 300 秒（1–600） | 允许客户端时间领先服务端的秒数，以及从请求签发起的有效秒数。 |
+
+`resolveKitTransportConfig({ excludePaths: ["/api/health"] })` 返回该排除列表和默认 `keyExchangePath`。
 
 #### 场景：同时装配服务端与浏览器加密
 
@@ -681,12 +720,12 @@ export function load() {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `kit.createFeedbackHandler` | 受控反馈入口 | `{ feedback, resolveContext, ...options }` | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
-| `createA2AApiKeyAuthenticator` | 创建 A2A 程序凭据验证函数 | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })`，指定请求头中的凭据名称 | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
-| `createAgentCardHandler` | 创建公开智能体描述处理器 | `createAgentCardHandler(() => card)`，传入返回 Agent Card 文档的回调 | `RequestHandler` | `createAgentCardHandler(() => card)` |
-| `createA2AHandler` | 创建 A2A 请求处理器 | `createA2AHandler(handleRequest, { authenticate })`，传入协议处理函数与认证函数 | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
-| `resolveA2AConfig` | 解析 A2A 调用参数 | `resolveA2AConfig({ operations, rpcPath: '/a2a' })`，传入 `ai.a2a` 操作集或带路径与认证的配置 | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
-| `handleA2ARequest` | 处理已装配的 A2A 请求 | `await handleA2ARequest(event, requestId, config)`，输入当前事件、关联编号及已解析配置 | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
+| `kit.createFeedbackHandler(options)` | 受控反馈入口 | 必填 `options.feedback`（已初始化服务）与 `options.resolveContext(event)`（由可信会话得出的反馈主体，`null` 拒绝）。`options.basePath` 默认 `/api/feedback`。 | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
+| `createA2AApiKeyAuthenticator(config)` | 创建 A2A 程序凭据验证函数 | 必填 `config.in`（`header` 或 `query`）与 `config.name`（参数名）。 | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
+| `createAgentCardHandler(getAgentCard)` | 创建公开智能体描述处理器 | 必填 `getAgentCard()`，返回当前 Agent Card 或其 Promise。 | `RequestHandler` | `createAgentCardHandler(() => card)` |
+| `createA2AHandler(handleRequest, config?)` | 创建 A2A 请求处理器 | 必填处理 JSON-RPC 的 `handleRequest`。可选 `config.authenticate` 启用认证，接受 `apiKey` 或自定义回调，回调返回 `null` 或 `undefined` 时拒绝。 | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
+| `resolveA2AConfig(input)` | 解析 A2A 调用参数 | `input` 可以是操作对象或 `{ operations, cardPath?, rpcPath?, authenticate? }`。未配置传 `undefined`，返回 `null`。 | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
+| `handleA2ARequest(event, requestId, config)` | 处理已装配的 A2A 请求 | 必填当前 `event`、关联 `requestId`、已解析的 A2A `config`。 | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
 
 #### 场景：挂载反馈与 A2A 路由
 
@@ -723,8 +762,6 @@ export const PATCH = handler
 以下入口由 `@h-ai/kit/a2a` 公开，供需要独立处理器或自定义请求管道的 SvelteKit 应用使用。使用 API Key 认证时先初始化 IAM。
 
 `handleRequest` 可包装 `ai.a2a.handleRequest`，`card` 取自成功的 `ai.a2a.getAgentCard()`。更多协议操作见 [AI 的 A2A 边界](./ai.md#a2a-协议边界)。
-
-<a id="host-options"></a>
 
 SvelteKit 部署在 `/yyy` 等目录时，在 Vite 的 sveltekit 配置设置 `paths.relative: false`，从 `$app/paths` 用 `resolve('/').replace(/\/$/, '')` 读取构建挂载目录 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。
 

@@ -96,8 +96,8 @@ Local directories and S3 use the same file API; the application owns startup and
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.init` | Open the selected backend | `config` | `void` | `await storage.init(config)` |
-| `storage.close` | Stop new operations and release the backend | None | `void` | `await storage.close()` |
+| `storage.init(config)` | Open the selected backend | `config: StorageConfigInput` is required. Set `type` to `local` or `s3`. See [storage configuration](../configuration/storage.en.md) for backend fields and defaults | `void` | `await storage.init(config)` |
+| `storage.close()` | Stop new operations and release the backend | None | `void` | `await storage.close()` |
 
 #### Scenario: Connect and close
 
@@ -134,15 +134,44 @@ Identify files by object key. Read content, metadata or streams as needed; inspe
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.file.put` | Store file content and metadata | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
-| `storage.file.get` | Read all file bytes | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
-| `storage.file.getStream` | Read a file as a stream | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
-| `storage.file.getStreamWithMetadata` | Open a full object and its metadata in one read | Object key, optional `{ signal }` | `StorageFileRead` or an open failure | `await storage.file.getStreamWithMetadata('report.txt')` |
-| `storage.file.head` | Read file metadata | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
-| `storage.file.exists` | Check file existence | `key` | `boolean` | `await storage.file.exists('report.txt')` |
-| `storage.file.copy` | Copy to another object key | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
-| `storage.file.delete` | Delete a file | `key` | `void` | `await storage.file.delete('report.txt')` |
-| `storage.file.deleteMany` | Delete files and report per-key progress | `keys` | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+| `storage.file.put(key, data, options?)` | Store file content and metadata | `key: string` and `data: StorageData` are required. Supply a string, Buffer, Uint8Array, or async byte stream. See [`UploadOptions`](#storage-file-options) for optional `options`. | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
+| `storage.file.get(key, options?)` | Read the requested bytes into memory | `key: string` is required. See [`DownloadOptions`](#storage-file-options) for optional `options`. | `Buffer` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream(key, options?)` | Read a file as a stream | `key: string` is required. See [`DownloadOptions`](#storage-file-options) for optional `options`. | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata(key, options?)` | Open a full object and its metadata in one read | `key: string` is required. Pass an optional `options.signal` to cancel the read. | `StorageFileRead` or an open failure | `await storage.file.getStreamWithMetadata('report.txt')` |
+| `storage.file.head(key)` | Read file metadata | `key: string`, required object key | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists(key)` | Check file existence | `key: string`, required object key | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.copy(sourceKey, destKey, options?)` | Copy to another object key | `sourceKey: string` and `destKey: string` are required source and destination keys. In `options?: CopyOptions`, `contentType` and `metadata` each replace the corresponding source field. Omitted fields are inherited · [`CopyOptions`](#storage-file-options) | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
+| `storage.file.delete(key)` | Delete a file | `key: string`, required object key | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany(keys)` | Delete files and report per-key progress | `keys: string[]`, required array of object keys to delete | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+
+<a id="storage-file-options"></a>
+
+##### File options
+
+`key` identifies the object, and `data` is the content to write. All option objects and their fields may be omitted. Read byte offsets start at zero.
+
+`UploadOptions`
+
+| Field | Type | Behavior |
+| --- | --- | --- |
+| `contentType` | `string` | Optional. Local storage infers it from the extension. The S3 service chooses it when omitted. |
+| `metadata` | `Record<string, string>` | Custom string metadata returned by `storage.file.head(key)`. |
+| `ifNoneMatch` | `"*"` | Write only if the key is absent. Use `{ ifNoneMatch: "*" }` to avoid overwriting an existing file. |
+| `signal` | `AbortSignal` | Cancels the upload. |
+| `cacheControl` | `string` | S3 only. Set `Cache-Control`, such as `max-age=3600`. |
+| `contentDisposition` | `string` | S3 only. Set `Content-Disposition` to suggest a download file name. |
+
+Read and copy options
+
+| Field | Type | Behavior |
+| --- | --- | --- |
+| `DownloadOptions.rangeStart` | `number` | Inclusive start byte, from the beginning if omitted. |
+| `DownloadOptions.rangeEnd` | `number` | Inclusive end byte, through the end of the file if omitted. |
+| `DownloadOptions.signal` | `AbortSignal` | Cancels a read. It is the only option for `getStreamWithMetadata`. |
+| `CopyOptions.contentType` | `string` | Destination content type. Inherits the source value when omitted. |
+| `CopyOptions.metadata` | `Record<string, string>` | Destination metadata. Inherits the source value when omitted. |
+
+`metadata` holds application-defined string values that `head` can read after upload. Local infers an omitted `contentType` from the file extension. S3 accepts `cacheControl: "max-age=3600"` for caching and `contentDisposition: 'attachment; filename="report.txt"'` for the downloaded filename.
 
 #### Scenario: Read, write and copy files
 
@@ -169,6 +198,11 @@ const getResult = await storage.file.get('demo/report.txt')
 if (!getResult.success)
   return getResult
 getResult.data.toString('utf8') // 'hello'
+// Read three bytes at zero-based offsets 1 through 3. They decode to ell. Return the failed result on read failure.
+const sample = await storage.file.get('demo/report.txt', { rangeStart: 1, rangeEnd: 3 })
+if (!sample.success)
+  return sample
+sample.data.toString('utf8') // 'ell'
 // Open a byte stream for the report key. Return the failed result on open failure. Later I/O can throw during iteration.
 const streamResult = await storage.file.getStream('demo/report.txt')
 if (!streamResult.success)
@@ -235,8 +269,21 @@ Directories are object-key prefixes. List them in pages and authorize the full p
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.dir.list` | Paginate objects under a prefix | `options?` | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
-| `storage.dir.delete` | Delete objects under a prefix | `prefix` | `void` | `await storage.dir.delete('backup/')` |
+| `storage.dir.list(options?)` | Paginate objects under a prefix | Optional `options: ListOptions` selects key ranges and handles paging. See [list fields](#storage-list-options). | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
+| `storage.dir.delete(prefix)` | Delete objects under a prefix | `prefix: string` is required. Matches the start of an object key. An empty string matches all keys | `void` | `await storage.dir.delete('backup/')` |
+
+<a id="storage-list-options"></a>
+
+**ListOptions**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `prefix` | `string` | `""` | Select object keys starting with this literal prefix. |
+| `delimiter` | `string` | No grouping when omitted | Group at the first delimiter after the prefix into commonPrefixes. An empty delimiter also disables grouping. |
+| `maxKeys` | `number` | Default 1000 | Integer 1–1000. Counts objects and common prefixes together. |
+| `continuationToken` | `string` | Omit on the first page | Pass the previous nextContinuationToken unchanged. Keep the backend, root, prefix, and delimiter. |
+
+With `reports/summary.txt` and `reports/2026/jan.txt` present, `{ prefix: "reports/", delimiter: "/" }` puts the summary in `files` and `["reports/2026/"]` in `commonPrefixes`.
 
 `storage.dir.delete(prefix)` deletes objects page by page based on the literal start of each key. For example, `reports/draft-` matches `reports/draft-1.txt`, and `reports/` matches keys under that path. An empty prefix clears the objects in the container.
 
@@ -280,9 +327,22 @@ S3 supports short-lived URLs for a specific object and operation. Authorize the 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.presign.getUrl` | Sign a temporary download URL | `key, options?` (expires in 3600 seconds by default, range 1–604800) | `string` | `await storage.presign.getUrl('report.txt')` |
-| `storage.presign.putUrl` | Sign a temporary upload URL | `key, options?` (expires in 3600 seconds by default; MIME type defaults to `application/octet-stream`) | `string` | `await storage.presign.putUrl('report.txt')` |
-| `storage.presign.publicUrl` | Resolve a configured public URL | `key` | `string or null` | `storage.presign.publicUrl('report.txt')` |
+| `storage.presign.getUrl(key, options?)` | Sign a temporary download URL | Required `key: string` is the object key. See [signing options](#storage-presign-options) for optional `options: PresignOptions`. | `string` | `await storage.presign.getUrl('report.txt')` |
+| `storage.presign.putUrl(key, options?)` | Sign a temporary upload URL | Required `key: string` is the destination object key. See [signing options](#storage-presign-options) for optional `options: PresignUploadOptions`. | `string` | `await storage.presign.putUrl('report.txt')` |
+| `storage.presign.publicUrl(key)` | Resolve a configured public URL | `key: string`, required object key | `string or null` | `storage.presign.publicUrl('report.txt')` |
+
+<a id="storage-presign-options"></a>
+
+**Signing options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `expiresIn` | `number` | Default 3600 seconds | Used for PUT and GET. Accepts integer seconds from 1 to 604800. |
+| `responseContentType` | `string` | Optional | GET signing only. Overrides the download response Content-Type. |
+| `responseContentDisposition` | `string` | Optional | GET signing only. Can request attachment and a suggested filename. |
+| `contentType` | `string` | `application/octet-stream` | PUT signing only. The actual PUT must send the same Content-Type. |
+
+`responseContentType` and `responseContentDisposition` only affect the download response signed by `getUrl`. In the example, `putUrl` signs `text/plain` for upload, so the client sends that value as Content-Type.
 
 #### Scenario: Authorize direct transfers
 
@@ -377,8 +437,20 @@ Checksums do not require storage initialization. Both sides must use the same al
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.checksum.generate` | Compute a content checksum | `data, options?` | `string` | `await storage.checksum.generate('Hello')` |
-| `storage.checksum.verify` | Verify a content checksum | `data, expected, options?` | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+| `storage.checksum.generate(data, options?)` | Compute a content checksum | Required `data: StorageData` is the content. See [checksum options](#storage-checksum-options) for `options?: ChecksumOptions`. | `string` | `await storage.checksum.generate('Hello')` |
+| `storage.checksum.verify(data, expected, options?)` | Verify a content checksum | Required `data: StorageData` and `expected: string` supply the content and expected digest. Match its algorithm and encoding in [checksum options](#storage-checksum-options). | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+
+<a id="storage-checksum-options"></a>
+
+**ChecksumOptions**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `algorithm` | `'sha256' \| 'sha384' \| 'sha512' \| 'sha1' \| 'md5'` | `sha256` | Select the digest. SHA-1 and MD5 are for compatibility integrity checks only. |
+| `encoding` | `'hex' \| 'base64'` | `hex` | Use the same encoding to generate and verify. Hex output is lowercase. |
+| `signal` | `AbortSignal` | Optional | Cancel digest processing or the stream read. |
+
+For the UTF-8 bytes of `abc`, `{ encoding: "base64" }` encodes the SHA-256 digest as `ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=`.
 
 #### Scenario: Check byte integrity
 
@@ -417,12 +489,23 @@ The same hello bytes match; changed bytes return false. A digest is not an acces
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `storage.client.uploadWithPresignedUrl` | Upload bytes | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
-| `storage.client.downloadWithPresignedUrl` | Download a Blob | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
-| `storage.client.downloadAndSave` | Download and save | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
-| `storage.client.getFileExtension` | Read an extension | `File` | `string` | `storage.client.getFileExtension(file)` |
-| `storage.client.getMimeType` | Resolve a MIME type | `extension: string` | `string` | `storage.client.getMimeType("txt")` |
-| `storage.client.formatFileSize` | Format a byte count | `bytes: number` | `string` | `storage.client.formatFileSize(1024)` |
+| `storage.client.uploadWithPresignedUrl(url, data, options?)` | Upload bytes | Required `url: string` is the authorized upload URL, and `data` is a File, Blob, ArrayBuffer, or string to send. See [browser transfer options](#storage-browser-transfer-options). | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `storage.client.downloadWithPresignedUrl(url, options?)` | Download a Blob | Required `url: string` is the authorized download URL. See [browser transfer options](#storage-browser-transfer-options) for cancellation. | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
+| `storage.client.downloadAndSave(url, options?)` | Download and save | Required `url: string` is the authorized download URL. See [browser transfer options](#storage-browser-transfer-options) for the filename and cancellation. | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
+| `storage.client.getFileExtension(file)` | Read an extension | Required `file: File`. Reads its `name` | `string` | `storage.client.getFileExtension(file)` |
+| `storage.client.getMimeType(extension)` | Resolve a MIME type | `extension: string` File extension such as txt. Unknown values return application/octet-stream | `string` | `storage.client.getMimeType("txt")` |
+| `storage.client.formatFileSize(bytes)` | Format a byte count | `bytes: number` Number of bytes to display, such as the file size | `string` | `storage.client.formatFileSize(1024)` |
+
+<a id="storage-browser-transfer-options"></a>
+
+**Browser transfer options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `ClientUploadOptions.contentType` | `string` | Optional | Set PUT Content-Type. If signed, send the same value explicitly. |
+| `ClientUploadOptions.onProgress` | `(progress: UploadProgress) => void` | Optional | Uses XMLHttpRequest when supplied. Called only when the total is computable. loaded and total are bytes; percent is a percentage. |
+| `ClientUploadOptions.abortController / ClientDownloadOptions.abortController` | `AbortController` | Optional | Cancel this transfer. A pre-aborted controller prevents the request. Upload cancellation does not roll back a stored object. |
+| `ClientDownloadOptions.filename` | `string` | Localized download name | Only for downloadAndSave. Supplies the suggested browser filename. |
 
 #### Scenario: Upload a selected file and save a download
 

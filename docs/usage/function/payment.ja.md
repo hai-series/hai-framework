@@ -81,10 +81,10 @@ export async function startPayment(orderData: PaymentOrder) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.init` | 設定済みの決済チャネルを初期化 | `config: PaymentConfigInput`（必填） | `void` | `await payment.init(config)` |
-| `payment.close` | モジュールの状態を解放 | 无参数 | `Promise<void>` | `await payment.close()` |
-| `payment.getProvider` | 登録済み決済プロバイダーを取得 | name | `PaymentProvider or undefined` | `payment.getProvider(name)` |
-| `payment.registerProvider` | 独自決済プロバイダーを登録 | provider | `void` | `payment.registerProvider(customProvider)` |
+| `payment.init(config)` | 設定済みの決済チャネルを初期化 | 必須の `config: PaymentConfigInput` | `void` | `await payment.init(config)` |
+| `payment.close()` | モジュールの状態を解放 | なし | `Promise<void>` | `await payment.close()` |
+| `payment.getProvider(name)` | 登録済み決済プロバイダーを取得 | `name: string` このプロセス内でインスタンスを検索する登録名 | `PaymentProvider or undefined` | `payment.getProvider(name)` |
+| `payment.registerProvider(provider)` | 独自決済プロバイダーを登録 | `provider: PaymentProvider` 決済インターフェースを実装したインスタンス。同名ならこのプロセス内の登録を置換 | `void` | `payment.registerProvider(customProvider)` |
 
 #### 利用例：決済経路への接続
 
@@ -113,9 +113,26 @@ payment.getProvider('not-registered') // undefined
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.createOrder` | 決済注文を作成 | providerName, input | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder` | 決済状態を取得 | providerName, orderNo | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.closeOrder` | 決済注文をクローズ | providerName, orderNo | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.createOrder(providerName, input)` | 決済注文を作成 | 必須の `providerName: string` は登録済み事業者名。必須の `input: CreateOrderInput` は[注文項目](#payment-create-order-input)を参照。 | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder(providerName, orderNo)` | 決済状態を取得 | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder(providerName, orderNo)` | 決済注文をクローズ | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `void` | `await payment.closeOrder(providerName, orderNo)` |
+
+<a id="payment-create-order-input"></a>
+
+**CreateOrderInput**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `orderNo` | `string` | 必須 | 永続化済みの加盟店注文番号。同じ業務注文の再試行時に維持します。 |
+| `amount` | `number` | 必須 | 通貨の最小単位で指定する注文金額。CNY なら分。 |
+| `currency` | `string` | WeChat と Alipay は CNY、Stripe は USD | 業務注文と一致する大文字の通貨コード。 |
+| `description` | `string` | 必須 | 商品またはサービスの説明。 |
+| `tradeType` | `'jsapi' \| 'h5'` | 必須 | WeChat は jsapi、Alipay と Stripe は h5。 |
+| `userId` | `string` | WeChat jsapi で必須 | WeChat ではサーバー設定の appId に属する openid を指定。 |
+| `notifyUrl` | `string` | 必須 | 決済事業者からアプリへの通知用 URL。 |
+| `metadata` | `Record<string, string>` | 任意 | 事業者が対応する場合に業務項目を添付。 |
+
+Stripe で `amount: 100, currency: "USD", tradeType: "h5"` を指定すると、成功時にホスト型 Checkout の遷移データが返ります。最終的な決済状態は照会または通知で確認します。
 
 微信支付が `204 No Content` を返すと、`payment.closeOrder('wechat', orderNo)` は成功し、`data` は `undefined` です。プロキシは決済サービスのステータスをそのまま転送します。他のステータスや通信エラーは `CLOSE_ORDER_FAILED` です。
 
@@ -150,7 +167,20 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.refund` | 返金要求と受付結果を取得 | providerName, input | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.refund(providerName, input)` | 返金要求と受付結果を取得 | 必須の `providerName: string` は元の決済事業者を指定。`input: RefundInput` は[返金項目](#payment-refund-input)を参照。 | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+
+<a id="payment-refund-input"></a>
+
+**RefundInput**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `orderNo / refundNo` | `string` | 必須 | 元の加盟店注文番号と今回の安定した返金番号。再試行時も番号と金額を維持。 |
+| `amount` | `number` | 必須 | 元の通貨の最小単位で指定する返金額。 |
+| `totalAmount` | `number` | WeChat では元の注文金額を指定 | WeChat の元の注文総額。部分返金でも注文全体の金額を指定。 |
+| `reason` | `string` | 任意 | 返金理由。 |
+
+WeChat の 100 分の注文から 50 分を返金する場合は `{ amount: 50, totalAmount: 100 }`。事業者で受理しただけなら返金状態を確認します。
 
 #### 利用例：返金と結果の確認
 
@@ -176,7 +206,7 @@ async function refundOrder(providerName: string, orderNo: string, refundNo: stri
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.handleNotify` | 通知を検証してコールバックを実行 | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.handleNotify(providerName, request)` | 通知を検証してコールバックを実行 | `providerName: string` 信頼できる通知ルートの登録済み事業者名。`request: PaymentNotifyRequest` 事業者の検証に必要な生の body 文字列と文字列の headers | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
 
 #### 利用例：決済通知の検証
 
@@ -209,7 +239,7 @@ async function verifyNotification(providerName: string, request: Request) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `invokePayment` | 決済画面を開く | `orderData: PaymentOrder` | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `invokePayment(order)` | 決済画面を開く | サーバー側で注文の作成に成功したときの `order: PaymentOrder` が必須 | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
 
 #### 利用例：呼び出し結果を確認
 

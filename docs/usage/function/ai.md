@@ -65,15 +65,27 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.init` | 准备服务 | `AIConfigInput?, AIInitOptions?` | `HaiResult<void>; validate dependencies before use` | `ai.init({ llm: { apiKey: process.env.HAI_AI_LLM_APIKEY } })` |
-| `ai.close` | 反序释放服务 | `none` | `Promise<void>; wait for cleanup` | `ai.close()` |
+| `ai.init(config?, options?)` | 准备服务 | `config?: AIConfigInput, options?: AIInitOptions`。配置字段见 [AI 配置](../configuration/ai.md)。选项可注入 `storeProvider`、受管执行 `runner`、ACP 授权 `acpPolicy` 与适配器 `acpAdapters`、MCP 作业的文件访问 `mcpJobFiles` | `HaiResult<void>; validate dependencies before use` | `ai.init({ llm: { apiKey: process.env.HAI_AI_LLM_APIKEY } })` |
+| `ai.close()` | 反序释放服务 | 无参数 | `Promise<void>; wait for cleanup` | `ai.close()` |
 | `ai.config` | 诊断当前配置 | `none` | `redacted AIConfig or null` | `ai.config` |
 | `ai.isInitialized` | 检查生命周期状态 | `none` | `boolean` | `ai.isInitialized` |
-| `resolveModelEntry` | 按标识解析模型条目 | 已校验 LLM 配置、场景、可选名称及运行选项 | `HaiResult<ResolvedModelEntry>` | `resolveModelEntry(llmConfig, 'summary')` |
-| `resolveModelApi` | 读取模型 API 能力 | 已校验 LLM 配置、可选模型及请求协议覆盖 | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `resolveModelApi(llmConfig, 'claude')` |
-| `resolveImageModel` | 选择图片模型 | 已校验图像配置、可选模型名 | `HaiResult<ResolvedImageModel>` | `resolveImageModel(imageConfig)` |
-| `resolveAudioModel` | 选择语音模型 | 已校验语音配置、操作、可选模型与 LLM 凭据 | `HaiResult<ResolvedAudioModel>` | `resolveAudioModel(audioConfig, 'transcribe')` |
-| `ensureAudioCredential` | 检查语音模型凭据 | 已解析的语音模型 | `HaiError or null` | `ensureAudioCredential(model)` |
+| `resolveModelEntry(llmConfig, scenario, explicit?, options?)` | 按标识解析模型条目 | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `resolveModelEntry(llmConfig, 'summary')` |
+| `resolveModelApi(llmConfig, explicitModel?, tempApi?)` | 读取模型 API 能力 | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `resolveModelApi(llmConfig, 'claude')` |
+| `resolveImageModel(imageConfig, explicit?)` | 选择图片模型 | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `resolveImageModel(imageConfig)` |
+| `resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | 选择语音模型 | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `resolveAudioModel(audioConfig, 'transcribe')` |
+| `ensureAudioCredential(model)` | 检查语音模型凭据 | `model: ResolvedAudioModel` | `HaiError or null` | `ensureAudioCredential(model)` |
+
+#### 初始化依赖和模型选择参数
+
+| 方法或对象 | 字段 | 必填、默认及条件 |
+| --- | --- | --- |
+| `init`、`AIInitOptions` | `config`、`runner`、`storeProvider` | 可省略配置和选项，模型等字段见 [AI 配置](../configuration/ai.md)。`runner` 由宿主初始化和关闭。显式 `storeProvider` 优先，省略时使用初始化后的 RelDB + VecDB 或允许的临时存储 |
+| `AIInitOptions` | `acpPolicy`、`acpAdapters`、`mcpJobFiles` | 可选宿主授权策略、适配器名称到实现的映射、MCP 作业读取和发布暂存的回调；使用相应的受管能力时提供。见 [ACP](#acp) 与 [MCP](#mcp) |
+| `resolveModelEntry`、`resolveModelApi` | `llmConfig`、`scenario`、`explicit/explicitModel`、`options.missingApiKeyMessage`、`tempApi` | 传校验后的 LLM 配置。选择条目时场景必填，显式模型优先，之后按场景、默认场景和全局模型选择。可指定缺密钥提示。查询协议可由 `tempApi` 覆盖 |
+| `resolveImageModel` | `imageConfig`、`explicit` | 传校验后的图像配置。可覆盖模型，省略使用已配置的生成模型 |
+| `resolveAudioModel`、`ensureAudioCredential` | `audioConfig`、`operation`、`explicit`、`llmApiKey`、`model` | 传校验后的音频配置与识别或合成操作。省略模型使用该操作的默认项。只有显式开启继承时才用 LLM 凭据。凭据检查另接收解析结果，按平台返回错误或 `null` |
+
+例如配置 `scenarios: { summary: 'brief' }` 时，`resolveModelEntry(config, 'summary')` 会选 brief 对应的模型条目，有有效凭据时成功返回其协议及运行参数。
 
 #### 场景：准备模型与存储
 
@@ -238,19 +250,37 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.llm.chat` | 单次回答 | `ChatCompletionRequest: messages, model?, signal?, tools?` | `ChatCompletionResponse: choices, model, usage?` | `ai.llm.chat({ messages: [{ role: "user", content: "你好" }] })` |
-| `ai.llm.chatStream` | 逐块回答 | `same ChatCompletionRequest` | `AsyncIterable<ChatCompletionChunk>; iteration may throw` | `ai.llm.chatStream({ messages })` |
-| `ai.llm.ask` | 纯文本问答 | `question: string, AskOptions?` | `string answer` | `ai.llm.ask("解释共享状态")` |
-| `ai.llm.askStream` | 纯文本流 | `question: string, AskOptions?` | `AsyncIterable<string>` | `ai.llm.askStream("解释共享状态")` |
-| `ai.llm.generateObject` | 受 Schema 约束的答案 | `Zod schema, messages, model?, responseFormat?, maxRepairs?, signal?` | `schema-inferred T` | `ai.llm.generateObject({ schema: AnswerSchema, messages })` |
-| `ai.llm.listModels` | 查询模型 | `none` | `string[] model IDs` | `ai.llm.listModels()` |
-| `ai.llm.getHistory` | 读取对话历史 | `{ objectId, sessionId }, { limit?, order? }?` | `ChatRecord[]` | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })` |
-| `ai.llm.listSessions` | 列出主体会话 | `objectId: string` | `SessionInfo[]` | `ai.llm.listSessions("u1")` |
-| `ai.llm.models.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.llm.models.list()` |
-| `ai.llm.models.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.llm.models.get("coding")` |
-| `ai.llm.models.register` | 登记数据库定义 | `ModelEntry input (id/model/protocol/credentials/capabilities)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.llm.models.register(modelDefinition)` |
-| `ai.llm.models.update` | 按版本替换定义 | `ModelEntry input (id/model/protocol/credentials/capabilities), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.llm.models.update(modelDefinition, current.version)` |
-| `ai.llm.models.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.llm.models.remove("coding", current.version)` |
+| `ai.llm.chat(request)` | 单次回答 | `request: ChatCompletionRequest` | `ChatCompletionResponse: choices, model, usage?` | `ai.llm.chat({ messages: [{ role: "user", content: "你好" }] })` |
+| `ai.llm.chatStream(request)` | 逐块回答 | `request: ChatCompletionRequest` | `AsyncIterable<ChatCompletionChunk>; iteration may throw` | `ai.llm.chatStream({ messages })` |
+| `ai.llm.ask(question, options?)` | 纯文本问答 | `question: string, options?: AskOptions` | `string answer` | `ai.llm.ask("解释共享状态")` |
+| `ai.llm.askStream(question, options?)` | 纯文本流 | `question: string, options?: AskOptions` | `AsyncIterable<string>` | `ai.llm.askStream("解释共享状态")` |
+| `ai.llm.generateObject(request)` | 受 Schema 约束的答案 | `request: GenerateObjectRequest<T>` | `schema-inferred T` | `ai.llm.generateObject({ schema: AnswerSchema, messages })` |
+| `ai.llm.listModels()` | 查询模型 | 无参数 | `string[] model IDs` | `ai.llm.listModels()` |
+| `ai.llm.getHistory(scope, options?)` | 读取对话历史 | `scope: InteractionScope, options?: ChatHistoryOptions`。省略会话 ID 时查询该主体的历史 | `ChatRecord[]` | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })` |
+| `ai.llm.listSessions(objectId)` | 列出主体会话 | `objectId: string` | `SessionInfo[]` | `ai.llm.listSessions("u1")` |
+| `ai.llm.models.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.llm.models.list()` |
+| `ai.llm.models.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.llm.models.get("coding")` |
+| `ai.llm.models.register(input)` | 登记数据库定义 | `input: z.input<typeof ModelEntrySchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.llm.models.register(modelDefinition)` |
+| `ai.llm.models.update(input, expectedVersion?)` | 按版本替换定义 | `input: z.input<typeof ModelEntrySchema>, expectedVersion?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.llm.models.update(modelDefinition, current.version)` |
+| `ai.llm.models.remove(id, expectedVersion?)` | 删除数据库模型定义 | `id: string, expectedVersion?: string`。可传上次读取的版本检测并发更新 | `HaiResult<void>` | `ai.llm.models.remove("coding", current.version)` |
+
+#### 对话、结构化输出和历史参数
+
+| 入口 | 字段 | 用法与默认行为 |
+| --- | --- | --- |
+| `chat`、`chatStream` | `messages`、`model` | 必填按顺序发送的消息数组。`model` 可选已配置模型的 ID，省略使用默认聊天模型。框架选择是否流式返回 |
+| `chat`、`chatStream` | `temperature`、`max_tokens`、`tools`、`tool_choice`、`response_format` | 供应商请求字段。设置采样温度、生成预算、可用工具、工具选择方案和输出格式。其他标准字段由安装的 OpenAI SDK 类型定义，实际支持取决于模型和协议 |
+| `ask`、`askStream` | `question`、`systemPrompt`、`temperature` | 必填问题文本。可选提示词会作为问题前的系统消息。可覆盖模型默认温度，例如 `0.2` |
+| `chat`、`chatStream`、`ask`、`askStream` | `objectId`、`sessionId`、`enablePersist` | 用服务端已确认的主体和会话 ID 关联历史。有记录存储和主体时默认保存，省略会话使用 `default`。设 `enablePersist: false` 跳过历史写入 |
+| 上述调用及 `generateObject` | `model`、`tempModel`、`signal` | `tempModel` 为本次请求指定临时端点，优先于 `model`。`signal` 接收请求的 `AbortSignal`，由调用方触发取消 |
+| `tempModel` | `model`、`protocol`、`apiKey`、`baseUrl` | 必填供应商的实际模型名。协议可选 `chat`、`responses` 或 `anthropic`，默认继承全局设置，再回退为 `chat`。凭据和地址应由服务端提供，缺省使用相应的全局配置或协议默认值 |
+| `tempModel` | `maxTokens`、`temperature`、`timeout` | 可覆盖生成 token 上限、采样温度和超时毫秒数，例如 `timeout: 15000`。请求显式传入的生成预算和温度优先 |
+| `generateObject` | `schema`、`messages`、`systemPrompt`、`temperature` | 必填用于本地校验的 Zod Schema 和对话消息。可插入首条系统提示，或覆盖生成温度 |
+| `generateObject` | `responseFormat`、`schemaName`、`maxRepairs` | `responseFormat` 默认 `json_schema`，可选 `json_object`。`schemaName` 对 `json_schema` 生效，默认 `result`。本地解析或校验失败后默认修复一次，`maxRepairs: 0` 表示只请求一次 |
+| `getHistory`、`listSessions` | `objectId`、`sessionId`、`limit`、`order` | 两者都需要可信主体 ID。`getHistory` 可按会话过滤，并用第二参数设置返回条数和时间排序。默认 `desc` 最新在前，`asc` 最早在前。`listSessions` 直接接收主体 ID |
+| `models.register`、`models.update`、`models.remove` | 模型定义、`expectedVersion` | 注册和替换使用模型配置的同一组字段。更新和删除可传 `models.get` 返回的数据库版本来检测并发改动 |
+
+模型定义的字段及默认值见 [AI 配置](../configuration/ai.md)。
 
 #### 场景：对话、结构化结果与模型
 
@@ -393,13 +423,24 @@ async function maintain_llm_models(definition: Parameters<typeof ai.llm.models.r
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.tools.adapt` | 将中立工具适配给模型 | `registry: @h-ai/tools ToolRegistryOperations` | `ToolRegistryOperations; no init required` | `ai.tools.adapt(registry)` |
-| `ai.tools.createBuiltinTools` | 组合图片、语音、文档改写与可选网址视频 | `BuiltinToolOptions: context, files, executeJob?` | `direct ToolSet; model calls run only during execution` | `ai.tools.createBuiltinTools(options)` |
-| `ai.tools.createMcpTools` | 将已登记 MCP 纳入统一执行 | `McpToolOptions: context, definitions, authorize` | `HaiResult<ToolSet>` | `ai.tools.createMcpTools(options)` |
-| `ai.tools.createBroker` | 向原生 Agent 开放同一工具服务 | `BuiltinToolBrokerOptions: service, url` | `HaiResult<BuiltinToolBroker>` | `ai.tools.createBroker({ service, url })` |
-| `modelTools.getDefinitions` | 传给模型的定义 | 无 | `ToolDefinition[]` | `modelTools.getDefinitions()` |
-| `modelTools.execute` | 执行模型工具调用 | `ToolCall, ToolExecutionOptions?` | `Promise<HaiResult<ToolMessage>>` | `modelTools.execute(toolCall, { objectId: "u1" })` |
-| `modelTools.executeAll` | 批量执行模型工具调用 | `ToolCall[], { parallel?, ...executionOptions }` | `Promise<HaiResult<ToolMessage[]>>` | `modelTools.executeAll(toolCalls)` |
+| `ai.tools.adapt(registry)` | 将中立工具适配给模型 | `registry: ToolRegistryOperations`。传入 [Tools 注册器](tools.md) | `ToolRegistryOperations; no init required` | `ai.tools.adapt(registry)` |
+| `ai.tools.createBuiltinTools(options)` | 组合图片、语音、文档改写与可选网址视频 | `options: BuiltinToolOptions`。提供上下文及文件存取，可选 `executeJob` | `direct ToolSet; model calls run only during execution` | `ai.tools.createBuiltinTools(options)` |
+| `ai.tools.createMcpTools(options)` | 将已登记 MCP 纳入统一执行 | `options: McpToolOptions`。提供上下文、MCP 定义和授权回调 | `HaiResult<ToolSet>` | `ai.tools.createMcpTools(options)` |
+| `ai.tools.createBroker(options)` | 向原生 Agent 开放同一工具服务 | `options: BuiltinToolBrokerOptions`。传入工具服务和固定 URL | `HaiResult<BuiltinToolBroker>` | `ai.tools.createBroker({ service, url })` |
+| `modelTools.getDefinitions()` | 传给模型的定义 | 无参数 | `ToolDefinition[]` | `modelTools.getDefinitions()` |
+| `modelTools.execute(toolCall, options?)` | 执行模型工具调用 | `toolCall: ToolCall, options?: ToolExecutionOptions` | `Promise<HaiResult<ToolMessage>>` | `modelTools.execute(toolCall, { objectId: "u1" })` |
+| `modelTools.executeAll(toolCalls, options?)` | 批量执行模型工具调用 | `toolCalls: ToolCall[], options?: ToolExecutionOptions & { parallel?: boolean }` | `Promise<HaiResult<ToolMessage[]>>` | `modelTools.executeAll(toolCalls)` |
+
+#### 工具组合和执行字段
+
+| 对象或方法 | 字段 | 默认值、条件及作用 |
+| --- | --- | --- |
+| `BuiltinToolOptions` | `context`、`files`、`executeJob` | 信任上下文和已授权产物回调必填，见 [Tools 文件存取说明](tools.md#artifact-jobs)。`executeJob(request, context)` 可选，省略时不登记网址视频作业 |
+| `McpToolOptions` | `context`、`definitions`、`authorize` | 均必填。每个定义含工具名、描述、JSON Schema、服务 ID 和远程工具名，授权回调核对实际调用 |
+| `BuiltinToolBrokerOptions` | `service`、`url` | 均必填，分别传已创建的本地工具服务与宿主管理的固定端点 |
+| `modelTools.execute/executeAll` | `toolCall/toolCalls`、`options` | 模型返回的一个或多个工具调用必填。支持 [Tools 执行选项](tools.md#call-options)。批量默认顺序运行，`parallel: true` 仅用于可独立执行的调用 |
+
+例如组合本地工具时只传 `{ context, files }`，成功得到可登记的图像、语音和文档等工具组，网址视频需要显式配置 `executeJob` 才会出现。
 
 #### 场景：让模型使用业务工具
 
@@ -459,10 +500,22 @@ export async function runExample(objectId: string) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.stream.createProcessor` | 积累增量文本 | `none` | `direct StreamProcessor` | `ai.stream.createProcessor()` |
-| `ai.stream.collect` | 完整消费聊天流 | `AsyncIterable<ChatCompletionChunk>` | `Promise<StreamResult>; stream failure rejects` | `ai.stream.collect(ai.llm.chatStream({ messages }))` |
-| `ai.stream.createSSEDecoder` | 跨片段解码 SSE | `none` | `direct SSEDecoder with decode/reset` | `ai.stream.createSSEDecoder()` |
-| `ai.stream.encodeSSE` | 编码事件流 | `SSEEvent: data, event?, id?, retry?` | `direct string; invalid metadata throws` | `ai.stream.encodeSSE({ data: "Hello" })` |
+| `ai.stream.createProcessor()` | 积累增量文本 | 无参数 | `direct StreamProcessor` | `ai.stream.createProcessor()` |
+| `ai.stream.collect(stream)` | 完整消费聊天流 | `stream: AsyncIterable<ChatCompletionChunk>` | `Promise<StreamResult>; stream failure rejects` | `ai.stream.collect(ai.llm.chatStream({ messages }))` |
+| `ai.stream.createSSEDecoder()` | 跨片段解码 SSE | 无参数 | `direct SSEDecoder with decode/reset` | `ai.stream.createSSEDecoder()` |
+| `ai.stream.encodeSSE(event)` | 编码事件流 | `event: SSEEvent` | `direct string; invalid metadata throws` | `ai.stream.encodeSSE({ data: "Hello" })` |
+
+#### 流与事件字段
+
+`collect` 接收一份 `AsyncIterable<ChatCompletionChunk>` 并消费到结束，通常来自 `ai.llm.chatStream`。消费失败由原流抛出。
+
+| `SSEEvent` 字段 | 用法 |
+| --- | --- |
+| `data` | 可选字符串，换行会编码为多条数据行 |
+| `event`、`id` | 可选事件类型和游标。省略类型时解码对象不含 `event`，EventSource 消费者可按 `message` 处理。`id: ''` 清除游标。两者拒绝换行，ID 也拒绝 NUL |
+| `retry` | 可选重连间隔（毫秒），必须是非负安全整数 |
+
+`encodeSSE({ data: 'one' + String.fromCharCode(10) + 'two', retry: 1500 })` 得到一行重试提示，两行数据及结尾空行。解码得到 `data` 为两行合成的文本、`retry` 为 1500。
 
 #### 场景：处理流与 SSE
 
@@ -504,9 +557,19 @@ const collected = await ai.stream.collect(ai.llm.chatStream({ messages: [{ role:
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.embedding.embed` | 通用向量请求 | `EmbeddingRequest with input/model?` | `EmbeddingResponse` | `ai.embedding.embed({ input: "产品说明" })` |
-| `ai.embedding.embedText` | 单段向量 | `text: string` | `number[]` | `ai.embedding.embedText("产品说明")` |
-| `ai.embedding.embedBatch` | 批量向量 | `texts: string[]` | `number[][] in input order` | `ai.embedding.embedBatch(["简介", "部署"])` |
+| `ai.embedding.embed(request)` | 通用向量请求 | `request: EmbeddingRequest` | `EmbeddingResponse` | `ai.embedding.embed({ input: "产品说明" })` |
+| `ai.embedding.embedText(text)` | 单段向量 | `text: string` | `number[]` | `ai.embedding.embedText("产品说明")` |
+| `ai.embedding.embedBatch(texts)` | 批量向量 | `texts: string[]` | `number[][] in input order` | `ai.embedding.embedBatch(["简介", "部署"])` |
+
+#### 文本向量参数
+
+| 字段 | 必填、默认及作用 |
+| --- | --- |
+| `input`、`text`、`texts` | 必填文本。`embed` 接受字符串或字符串数组。`embedText` 传单条文本，`embedBatch` 传字符串数组 |
+| `model` | `embed` 可覆盖 embedding 场景模型，省略沿用当前配置 |
+| `dimensions` | `embed` 可指定输出向量维数，省略沿用已配置维数或模型输出；仅在模型支持时传入，并与写入的向量集合维数一致 |
+
+例如 `embed({ input: ['部署', '回滚'] })` 返回两项向量记录，每项的 `index` 对应原数组位置。只要向量数组时可用 `embedBatch(['部署', '回滚'])`。
 
 #### 场景：生成文本向量
 
@@ -541,19 +604,36 @@ const detailed = detailedResult.data // model, data, usage
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.mcp.registerTool` | 注册本进程工具 | `MCPToolDefinition, typed handler` | `void` | `ai.mcp.registerTool(mcpToolDefinition, toolHandler)` |
-| `ai.mcp.registerResource` | 注册资源 | `MCPResource, async content handler` | `void` | `ai.mcp.registerResource(resourceDefinition, readContent)` |
-| `ai.mcp.registerPrompt` | 注册提示词 | `MCPPrompt, args => Promise<MCPPromptMessage[]>` | `void` | `ai.mcp.registerPrompt(promptDefinition, buildMessages)` |
-| `ai.mcp.callTool` | 调用已注册工具 | `name, arguments, MCPContext?` | `unknown tool result` | `ai.mcp.callTool("search", { query: "配置" })` |
-| `ai.mcp.readResource` | 读取资源 | `resource URI` | `MCPResourceContent with exactly text or blob` | `ai.mcp.readResource("docs://intro")` |
-| `ai.mcp.getPrompt` | 构建提示词 | `name, Record<string,string> arguments` | `MCPPromptMessage[]` | `ai.mcp.getPrompt("review", { topic: "API" })` |
-| `ai.mcp.services.invoke` | 调用授权的远程工具 | 请求、认证主体和授权函数 | `HaiResult<CallToolResult>` | `ai.mcp.services.invoke(request, authorization)` |
-| `ai.mcp.services.createBroker` | 为 ACP 会话挂载工具入口 | 固定 URL 和实时授权函数 | `HaiResult<MCPServiceBroker>` | `ai.mcp.services.createBroker(brokerOptions)` |
-| `ai.mcp.servers.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.mcp.servers.list()` |
-| `ai.mcp.servers.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.mcp.servers.get("tools")` |
-| `ai.mcp.servers.register` | 登记数据库定义 | `MCPExternalServer input (id/transport/url or command)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.mcp.servers.register(mcpServerDefinition)` |
-| `ai.mcp.servers.update` | 按版本替换定义 | `MCPExternalServer input (id/transport/url or command), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.mcp.servers.update(mcpServerDefinition, current.version)` |
-| `ai.mcp.servers.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.mcp.servers.remove("tools", current.version)` |
+| `ai.mcp.registerTool(definition, handler)` | 注册本进程工具 | `definition: MCPToolDefinition, handler: MCPToolHandler<TInput, TOutput>` | `void` | `ai.mcp.registerTool(mcpToolDefinition, toolHandler)` |
+| `ai.mcp.registerResource(resource, handler)` | 注册资源 | `resource: MCPResource, handler: () => Promise<MCPResourceContent>` | `void` | `ai.mcp.registerResource(resourceDefinition, readContent)` |
+| `ai.mcp.registerPrompt(prompt, handler)` | 注册提示词 | `prompt: MCPPrompt, handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>` | `void` | `ai.mcp.registerPrompt(promptDefinition, buildMessages)` |
+| `ai.mcp.callTool(name, args, context?)` | 调用已注册工具 | `name: string, args: unknown, context?: MCPContext`。`args` 是符合已登记工具输入规则的值 | `unknown tool result` | `ai.mcp.callTool("search", { query: "配置" })` |
+| `ai.mcp.readResource(uri)` | 读取资源 | `uri: string` | `MCPResourceContent with exactly text or blob` | `ai.mcp.readResource("docs://intro")` |
+| `ai.mcp.getPrompt(name, args)` | 构建提示词 | `name: string, args: Record<string, string>` | `MCPPromptMessage[]` | `ai.mcp.getPrompt("review", { topic: "API" })` |
+| `ai.mcp.services.invoke(request, authorization)` | 调用授权的远程工具 | `request: MCPServiceRequest, authorization: MCPServiceAuthorization`。传入请求、服务端确认的主体及授权函数 | `HaiResult<CallToolResult>` | `ai.mcp.services.invoke(request, authorization)` |
+| `ai.mcp.services.createBroker(options)` | 为 ACP 会话挂载工具入口 | `options: MCPServiceBrokerOptions`。选项包含固定 URL 和实时授权函数 | `HaiResult<MCPServiceBroker>` | `ai.mcp.services.createBroker(brokerOptions)` |
+| `ai.mcp.servers.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.mcp.servers.list()` |
+| `ai.mcp.servers.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.mcp.servers.get("tools")` |
+| `ai.mcp.servers.register(input)` | 登记数据库定义 | `input: z.input<typeof MCPExternalServerSchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.mcp.servers.register(mcpServerDefinition)` |
+| `ai.mcp.servers.update(input, expectedVersion?)` | 按版本替换定义 | `input: z.input<typeof MCPExternalServerSchema>, expectedVersion?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.mcp.servers.update(mcpServerDefinition, current.version)` |
+| `ai.mcp.servers.remove(id, expectedVersion?)` | 删除数据库定义 | `id: string, expectedVersion?: string` | `HaiResult<void>; external files/services are retained` | `ai.mcp.servers.remove("tools", current.version)` |
+
+#### MCP 注册和调用参数
+
+| 输入对象或方法 | 字段 | 默认值、条件与结果 |
+| --- | --- | --- |
+| `MCPToolDefinition` | `name`、`description`、`inputSchema` | 均必填。名称唯一。参数 Schema 是 JSON Schema，工具收到的 `args` 先通过该规则再交给处理函数 |
+| `registerTool` | `handler(input, context)` | 必填，接收已校验的输入和请求上下文，返回普通值或 Promise。失败进入工具错误结果 |
+| `MCPContext` | `requestId`、`clientInfo`、`metadata` | 均可省略。省略请求 ID 会生成 UUID。`clientInfo` 含客户端 `name` 和 `version`，元数据用于应用附带上下文 |
+| `MCPResource` | `uri`、`name`、`description`、`mimeType` | URI 和名称必填，说明与 MIME 类型可选。`readResource` 用已登记 URI 定位，注册回调无参数，返回含 URI 及 `text` 或 Base64 `blob` 的内容 |
+| `MCPPrompt` | `name`、`description`、`arguments` | 名称必填。可在 `arguments` 声明 `{ name, description?, required? }`，其中 `required` 默认 `false` |
+| `getPrompt` | `name`、`args` | 传登记名和字符串参数表。必填项须是对象本身的属性。校验通过后调用注册回调，返回提示词消息列表 |
+| `MCPServiceRequest` | `serviceId`、`tool`、`arguments` | 服务 ID 与工具名必填，工具参数对象按远程工具定义填写，可省略。地址和认证配置从服务端清单读取 |
+| `MCPServiceAuthorization` | `principal`、`authorize`、`taskId`、`signal` | 主体包含可信 `tenantId` 与 `userId`。授权回调接收主体、请求和取消信号，返回允许或拒绝。可选任务 ID 来自服务端绑定，`signal` 用于取消等待 |
+| `MCPServiceBrokerOptions` | `url`、`authorize` | 均必填。URL 是执行环境可达的固定端点。回调在每次使用时重新核对主体、工具、实参和任务 ID |
+| `servers.register/update/remove` | 服务器输入、`id`、`expectedVersion` | 服务器字段见 [AI 配置](../configuration/ai.md)。`get` 按 ID 读取；更新和删除可传读取到的数据库版本作为并发条件 |
+
+例如登记提示词 `explain`，声明 `arguments: [{ name: 'topic', required: true }]`。请求 `getPrompt('explain', { topic: '缓存' })` 时，回调读取 `args.topic` 生成消息。传 `{}` 时会在调用回调前返回参数错误。
 
 #### 场景：发布与调用 MCP 工具
 
@@ -722,17 +802,32 @@ async function maintain_mcp_servers(definition: Parameters<typeof ai.mcp.servers
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.retrieval.addSource` | 登记检索源 | `RetrievalSource: id, collection, optional metadata` | `void` | `ai.retrieval.addSource({ id: "docs", collection: "manual" })` |
-| `ai.retrieval.removeSource` | 撤销检索源 | `sourceId: string` | `void` | `ai.retrieval.removeSource("docs")` |
-| `ai.retrieval.listSources` | 列出可用检索源 | `none` | `direct Promise<RetrievalSource[]>` | `ai.retrieval.listSources()` |
-| `ai.retrieval.retrieve` | 向量检索 | `RetrievalRequest: query, sources?, topK?, minScore?, enableRerank?` | `RetrievalResult` | `ai.retrieval.retrieve({ query: "部署" })` |
-| `ai.rerank.rerank` | 重排文档对象 | `RerankRequest: query, documents, model?, topN?` | `RerankResponse with model/results` | `ai.rerank.rerank({ query: "部署", documents: ["配置说明"] })` |
-| `ai.rerank.rerankTexts` | 重排文本候选 | `query, string[] texts, topN?` | `RerankItem[] with index/relevanceScore` | `ai.rerank.rerankTexts("部署", ["配置说明"], 1)` |
-| `ai.retrieval.sources.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.retrieval.sources.list()` |
-| `ai.retrieval.sources.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.retrieval.sources.get("docs")` |
-| `ai.retrieval.sources.register` | 登记数据库定义 | `RetrievalSource input (id/collection)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.retrieval.sources.register(sourceDefinition)` |
-| `ai.retrieval.sources.update` | 按版本替换定义 | `RetrievalSource input (id/collection), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.retrieval.sources.update(sourceDefinition, current.version)` |
-| `ai.retrieval.sources.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.retrieval.sources.remove("docs", current.version)` |
+| `ai.retrieval.addSource(source)` | 登记检索源 | `source: RetrievalSource` | `void` | `ai.retrieval.addSource({ id: "docs", collection: "manual" })` |
+| `ai.retrieval.removeSource(sourceId)` | 撤销检索源 | `sourceId: string` | `void` | `ai.retrieval.removeSource("docs")` |
+| `ai.retrieval.listSources()` | 列出可用检索源 | 无参数 | `direct Promise<RetrievalSource[]>` | `ai.retrieval.listSources()` |
+| `ai.retrieval.retrieve(request)` | 向量检索 | `request: RetrievalRequest` | `RetrievalResult` | `ai.retrieval.retrieve({ query: "部署" })` |
+| `ai.rerank.rerank(request)` | 重排文档对象 | `request: RerankRequest` | `RerankResponse with model/results` | `ai.rerank.rerank({ query: "部署", documents: ["配置说明"] })` |
+| `ai.rerank.rerankTexts(query, texts, topN?)` | 重排文本候选 | `query: string, texts: string[], topN?: number` | `RerankItem[] with index/relevanceScore` | `ai.rerank.rerankTexts("部署", ["配置说明"], 1)` |
+| `ai.retrieval.sources.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.retrieval.sources.list()` |
+| `ai.retrieval.sources.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.retrieval.sources.get("docs")` |
+| `ai.retrieval.sources.register(input)` | 登记数据库定义 | `input: z.input<typeof RetrievalSourceSchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.retrieval.sources.register(sourceDefinition)` |
+| `ai.retrieval.sources.update(input, expectedVersion?)` | 按版本替换定义 | `input: z.input<typeof RetrievalSourceSchema>, expectedVersion?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.retrieval.sources.update(sourceDefinition, current.version)` |
+| `ai.retrieval.sources.remove(id, expectedVersion?)` | 删除数据库定义 | `id: string, expectedVersion?: string`。可传上次读取的版本检测并发更新 | `HaiResult<void>` | `ai.retrieval.sources.remove("docs", current.version)` |
+
+#### 检索源、请求与重排参数
+
+| 入口或对象 | 字段 | 用法与默认行为 |
+| --- | --- | --- |
+| `RetrievalSource` | `id`、`collection` | 必填。`id` 用于请求时选择来源，`collection` 对应已写入的向量集合 |
+| `RetrievalSource` | `name`、`url` | 可选显示名和来源地址。向量记录缺少标题或地址时，引用使用这里的值 |
+| `RetrievalSource` | `topK`、`minScore`、`filter` | 来源的候选数默认 `5`。可选最低相似分和向量后端支持的元数据过滤条件，例如 `{ category: 'deployment' }`。分数条件省略时不增加来源阈值 |
+| `retrieve` | `query`、`sources` | `query` 是待检索的文本。`sources` 传来源 ID 数组，例如 `['docs']`。省略或传 `[]` 均会搜索全部登记的来源 |
+| `retrieve` | `topK`、`minScore` | `topK` 同时覆盖每个源的候选数和合并结果的返回上限。省略时，各源使用自身 `topK` 或 `5`，最多返回 `10` 条。`minScore` 覆盖各源阈值 |
+| `retrieve` | `enableRerank`、`rerankModel` | 默认按向量分数排序。设 `enableRerank: true` 时用已初始化的重排能力，`rerankModel` 可覆盖重排模型。重排不可用或失败时使用向量分数 |
+| `rerank` | `query`、`documents` | 必填查询及候选文本数组。需要保留业务 ID 时传 `{ text, id? }[]` |
+| `rerank` | `model`、`topN`、`returnDocuments` | 模型默认按重排配置选择。`topN` 限制返回数，省略则请求全部候选排名。`returnDocuments` 默认 `false`，设为 `true` 时结果包含正文 |
+| `rerankTexts` | `query`、`texts`、`topN` | 必填查询及候选字符串列表，可选排名条数。`topN: 1` 只请求最高分候选 |
+| `sources.update`、`sources.remove` | `expectedVersion` | 传入最近一次 `sources.get` 对数据库来源返回的版本。指定版本不匹配会返回冲突 |
 
 #### 场景：登记检索源并排序
 
@@ -757,7 +852,7 @@ try {
   if (!rankedResult.success)
     return rankedResult
   const ranked = rankedResult.data
-  // 以相同查询对两篇文本重排，只返回最高分的一条正文。
+// 以相同查询对两篇文本重排，只返回最高分的一条排名，包含原索引和分数。
   const textsResult = await ai.rerank.rerankTexts('deployment', ['Deployment guide', 'Refund policy'], 1)
   if (!textsResult.success)
     return textsResult
@@ -817,8 +912,24 @@ async function maintain_retrieval_sources(definition: Parameters<typeof ai.retri
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.rag.query` | 带引用回答 | `query: string, RagOptions?` | `RagResult: answer, context, citations, query, model` | `ai.rag.query("如何部署？", { sources: ["docs"] })` |
-| `ai.rag.queryStream` | 带引用流式回答 | `query: string, RagOptions?` | `AsyncIterable<RagStreamEvent>` | `ai.rag.queryStream("如何部署？", { sources: ["docs"] })` |
+| `ai.rag.query(query, options?)` | 带引用回答 | `query: string, options?: RagOptions` | `RagResult: answer, context, citations, query, model` | `ai.rag.query("如何部署？", { sources: ["docs"] })` |
+| `ai.rag.queryStream(query, options?)` | 带引用流式回答 | `query: string, options?: RagOptions` | `AsyncIterable<RagStreamEvent>` | `ai.rag.queryStream("如何部署？", { sources: ["docs"] })` |
+
+#### 问题和 `RagOptions`
+
+两种回答方式均接收必填的 `query` 字符串和可选的 `options` 对象。
+
+| 选项 | 默认值与用途 |
+| --- | --- |
+| `sources` | 检索源 ID 列表。省略或传 `[]` 均搜索全部登记来源。只让本次请求查部署文档时传 `['docs']`，来源先由应用完成授权 |
+| `topK`、`minScore` | `topK` 默认 `5`，同时限制每个源的候选数和用于回答的总上限。`minScore` 覆盖来源的最低相似分，省略时沿用来源设置 |
+| `enableRerank`、`rerankModel` | 设 `true` 时启用已初始化的重排，`rerankModel` 可覆盖重排模型。默认使用向量分数 |
+| `model`、`temperature` | 可覆盖生成回答的模型和采样温度。省略时沿用 LLM 配置，示例 `temperature: 0.2` 降低采样随机性 |
+| `systemPrompt`、`messages` | `systemPrompt` 覆盖内置的基于来源回答提示，检索上下文仍会附在其中。`messages` 放以前的对话，框架在后面添加当前 `query` |
+| `formatContext` | 回调接收检索结果 `RagContextItem[]` 并返回给模型的字符串。默认使用带编号的来源列表。自定义例子 `items => items.map(item => item.content).join('\n\n')` 只把片段正文拼进提示 |
+| `objectId`、`sessionId` | 传入由服务端确定的主体 ID 和会话 ID，用于内部 LLM 的历史保存。启用持久化并提供 `objectId` 时，省略会话 ID 则使用 `default` |
+| `enablePersist` | 默认允许内部 LLM 保存历史。已由应用记录该轮对话时可传 `false` |
+| `signal` | 可传请求的 `AbortSignal`，用于取消 LLM 生成阶段 |
 
 #### 场景：基于来源回答并引用
 
@@ -848,18 +959,45 @@ docs 必须是已登记且可访问的来源。回答文字不固定，引用指
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.knowledge.setup` | 准备集合 | `KnowledgeSetupOptions?` | `void; collection ready for ingest` | `ai.knowledge.setup()` |
-| `ai.knowledge.ingest` | 发布文本资料 | `{ documentId, content, title?, collection?, ...metadata }` | `KnowledgeIngestResult with revision/cleanupPending` | `ai.knowledge.ingest({ documentId: "intro", content: "入门正文" })` |
-| `ai.knowledge.ingestFile` | 导入文件 | `KnowledgeIngestFileInput including file bytes and document identity` | `KnowledgeIngestResult` | `ai.knowledge.ingestFile(fileInput)` |
-| `ai.knowledge.ingestBatch` | 批量导入 | `KnowledgeIngestInput[], onProgress?` | `KnowledgeIngestBatchResult with per-document outcomes` | `ai.knowledge.ingestBatch(documentInputs, onProgress)` |
-| `ai.knowledge.retrieve` | 检索发布版本 | `query: string, KnowledgeRetrieveOptions?` | `KnowledgeRetrieveResult` | `ai.knowledge.retrieve("部署说明")` |
-| `ai.knowledge.ask` | 基于知识回答 | `query: string, KnowledgeAskOptions?` | `KnowledgeAskResult` | `ai.knowledge.ask("如何恢复备份？")` |
-| `ai.knowledge.findByEntity` | 按实体找资料 | `entityName: string, EntityQueryOptions?` | `EntityDocumentResult[]` | `ai.knowledge.findByEntity("订单")` |
-| `ai.knowledge.listEntities` | 实体清单 | `EntityListOptions?` | `KnowledgeEntity[]` | `ai.knowledge.listEntities()` |
-| `ai.knowledge.listDocuments` | 文档清单 | `KnowledgeDocumentListOptions?` | `KnowledgeDocumentInfo[]` | `ai.knowledge.listDocuments()` |
-| `ai.knowledge.removeDocument` | 撤销文档 | `documentId, KnowledgeDocumentRemoveOptions?` | `void; may fail after visibility revocation if cleanup fails` | `ai.knowledge.removeDocument("intro")` |
-| `ai.knowledge.repair` | 补偿残留向量 | `{ collection?, offset?, limit? }` | `KnowledgeRepairResult with progress` | `ai.knowledge.repair({ offset: 0, limit: 100 })` |
-| `ai.knowledge.deleteCollection` | 撤销整个集合 | `collection name?` | `void; cleanup tombstone remains` | `ai.knowledge.deleteCollection("retired-manual")` |
+| `ai.knowledge.setup(options?)` | 准备集合 | `options?: KnowledgeSetupOptions` | `void; collection ready for ingest` | `ai.knowledge.setup()` |
+| `ai.knowledge.ingest(input)` | 发布文本资料 | `input: KnowledgeIngestInput`。`documentId`、`content` 必填。可传 `cleanOptions` 和 `chunkOptions` 覆盖单篇文档处理配置 | 成功返回 `KnowledgeIngestResult`，包含 `revision` 和 `cleanupPending`。清洗或分块失败返回 `KNOWLEDGE_INGEST_FAILED` | `ai.knowledge.ingest({ documentId: "intro", content: "入门正文" })` |
+| `ai.knowledge.ingestFile(input)` | 导入服务端文本文件 | `input: KnowledgeIngestFileInput`。`filePath` 必填，可传编码、文档信息及清洗分块选项 | `KnowledgeIngestResult` | `ai.knowledge.ingestFile({ filePath: "docs/intro.md" })` |
+| `ai.knowledge.ingestBatch(inputs, onProgress?)` | 批量导入 | `inputs: KnowledgeIngestInput[], onProgress?: (progress: KnowledgeIngestBatchProgress) => void` | `KnowledgeIngestBatchResult with per-document outcomes` | `ai.knowledge.ingestBatch(documentInputs, onProgress)` |
+| `ai.knowledge.retrieve(query, options?)` | 检索发布版本 | `query: string, options?: KnowledgeRetrieveOptions` | `KnowledgeRetrieveResult` | `ai.knowledge.retrieve("部署说明")` |
+| `ai.knowledge.ask(query, options?)` | 基于知识回答 | `query: string, options?: KnowledgeAskOptions` | `KnowledgeAskResult` | `ai.knowledge.ask("如何恢复备份？")` |
+| `ai.knowledge.findByEntity(entityName, options?)` | 按实体找资料 | `entityName: string, options?: EntityQueryOptions` | `EntityDocumentResult[]` | `ai.knowledge.findByEntity("订单")` |
+| `ai.knowledge.listEntities(options?)` | 实体清单 | `options?: EntityListOptions` | `KnowledgeEntity[]` | `ai.knowledge.listEntities()` |
+| `ai.knowledge.listDocuments(options?)` | 文档清单 | `options?: KnowledgeDocumentListOptions` | `KnowledgeDocumentInfo[]` | `ai.knowledge.listDocuments()` |
+| `ai.knowledge.removeDocument(documentId, options?)` | 撤销文档 | `documentId: string, options?: KnowledgeDocumentRemoveOptions` | `void; may fail after visibility revocation if cleanup fails` | `ai.knowledge.removeDocument("intro")` |
+| `ai.knowledge.repair(options?)` | 补偿残留向量 | `options?: KnowledgeRepairOptions` | `KnowledgeRepairResult with progress` | `ai.knowledge.repair({ offset: 0, limit: 100 })` |
+| `ai.knowledge.deleteCollection(collection?)` | 撤销整个集合 | `collection?: string` | `void; cleanup tombstone remains` | `ai.knowledge.deleteCollection("retired-manual")` |
+
+#### 集合、导入和检索参数
+
+文件和单文档选项见下表。集合在首次导入或检索前分别调用 `setup` 准备。
+
+| 入口 | 字段 | 用法与默认行为 |
+| --- | --- | --- |
+| `setup` | `collection`、`dimension` | 覆盖 `knowledge.collection` 和 `knowledge.dimension`，框架默认 `hai_ai_knowledge`、`1536`。维数须匹配 embedding 模型 |
+| `ingest` | `documentId`、`content` | 必填。文档 ID 在集合内唯一，重用它会发布同一文档的新版本。`content` 传文档原始文本 |
+| `ingest` | `title`、`url`、`metadata` | 可选引用标题、地址和附到分块的业务元数据。可用 `metadata: { category: 'deployment' }` 给文档分类，随后用相同字段检索 |
+| `ingest`、`ingestFile` | `collection`、`enableEntityExtraction` | 默认使用知识配置中的集合和实体提取开关。`enableEntityExtraction: false` 仍会生成用于检索的向量 |
+| `ingest`、`ingestFile` | `cleanOptions` | 按字段覆盖知识库清洗配置。默认保留缩进。全文整理空白可传 `normalizeWhitespace: true, trim: true` |
+| `ingest`、`ingestFile` | `chunkOptions` | 可选对象包含 `mode`，其余字段覆盖知识库默认值。默认 `markdown`、`maxSize: 1500`、`overlap: 200`。例如换成 `{ mode: 'paragraph', maxSize: 100, overlap: 10 }` 时显式降低重叠，确保 `overlap < maxSize` |
+| `ingestFile` | `filePath`、`encoding` | Node.js 端必填受信文本文件路径。`encoding` 默认 `utf-8`，读取结果作为待导入正文，路径写入引用 |
+| `ingestFile` | `documentId`、`title`、`metadata` | ID 和标题各自默认使用文件名。同名文件需要分开保存时，为各自指定不同的 ID。元数据随分块发布 |
+| `ingestBatch` | `inputs`、`onProgress` | 输入为 `ingest` 参数对象数组，逐份处理。可选同步回调在每份完成后收到 `completed`、`total`、`currentDocumentId` 和该份的 `result` 或 `error`。用 `data.failureCount` 和 `data.results` 检查部分失败 |
+| `retrieve`、`ask` | `query`、`collection` | 必填搜索文本或问题，可选集合，默认 `knowledge.collection` |
+| `retrieve`、`ask` | `topK`、`minScore`、`enableEntityBoost` | 最多返回 `topK` 条，默认 `10`。可指定向量匹配最低分。实体增强默认开启，关掉后按向量分数取结果 |
+| `retrieve`、`ask` | `filter` | 传给向量后端的元数据条件。例如 `{ category: 'deployment' }` 限制检索范围。LanceDB 仅接受顶层字符串、有限数字、布尔值或 `null`，多个键同时匹配，`null` 匹配显式空值 |
+| `ask` | `model`、`temperature`、`systemPrompt`、`messages` | 覆盖 LLM 模型和温度、知识问答的系统提示词，以及补充此前的对话消息。系统提示词仍会附上检索内容，当前问题放在历史之后 |
+| `findByEntity` | `entityName`、`collection`、`type` | 必填搜索名称。默认数据库 Store 忽略大小写，对实体名称及别名做包含匹配。可按指定类型筛选，集合默认使用知识配置 |
+| `listEntities` | `collection`、`type`、`keyword`、`limit` | 均可省略。默认数据库 Store 会扫描全部集合的当前发布版，按名称排序。`keyword` 匹配名称和别名，可用 `limit` 限制条数 |
+| `listDocuments` | `collection`、`offset`、`limit` | 集合默认用知识配置。默认 Store 从偏移 `0` 开始，省略 `limit` 时返回剩余可见文档。分页示例 `{ offset: 20, limit: 20 }` 跳过前二十条 |
+| `removeDocument`、`deleteCollection` | `documentId`、`collection` | 前者必填文档 ID，并通过第二参数 `{ collection }` 指定集合。后者直接接收集合名。两者缺省集合均为 `knowledge.collection` |
+| `repair` | `collection`、`offset`、`limit` | 集合默认用知识配置。从清单偏移 `0` 检查，包括已删除文档的补偿记录。`limit` 默认 `100`，允许整数 `1–1000` |
+
+清洗和分块的各个字段见 [Datapipe 调用参数](datapipe.md#call-options)。
 
 #### 场景：发布、搜索与撤销知识
 
@@ -869,14 +1007,17 @@ docs 必须是已登记且可访问的来源。回答文字不固定，引用指
 
 新修订只有发布成功后才成为检索使用的当前版本。旧向量清理失败时，成功结果可能带 cleanupPending，由 repair 后续补偿；删除则先撤销可见性再清理。搜索必须核对已发布版本，不能把向量库中仍存在的旧块重新当成当前资料。
 
+示例中的 Markdown 文档含一行缩进代码。默认清洗保留四个前导空格，`# maintenance note` 留在代码行内，整份说明作为一个章节分块。导入纯文本时，可用本次调用的 `cleanOptions: { normalizeWhitespace: true, trim: true }` 整理空白。清洗或分块失败时，导入在生成向量前停止，失败结果保留原始原因，先前发布的版本继续可查。[知识导入配置](../configuration/ai.md#knowledge)
+
 ```ts
 // 以下为应用异步业务函数体片段；失败时返回原结果。
 // 无参创建默认知识集合和版本清单，成功无数据；初始化失败不导入文档。
 const setupResult = await ai.knowledge.setup()
 if (!setupResult.success)
   return setupResult
-// 把配置更新后重启的说明按 demo-intro 导入，成功返回已发布版本、分块及 cleanupPending。
-const publishedResult = await ai.knowledge.ingest({ documentId: 'demo-intro', content: 'Restart the service after updating configuration.' })
+const restartGuide = '# Restart the service\n\n    # maintenance note\n\nRestart the service after updating configuration.'
+// 把含缩进代码的重启说明导入 demo-intro，默认配置下发布一个分块。清洗或分块失败时直接返回错误。
+const publishedResult = await ai.knowledge.ingest({ documentId: 'demo-intro', content: restartGuide })
 if (!publishedResult.success)
   return publishedResult
 const published = publishedResult.data
@@ -917,7 +1058,32 @@ if (!repairedResult.success)
 const repaired = repairedResult.data // cleanup progress
 ```
 
-使用独立测试集合；输出文档修订、匹配、回答和清理进度依真实存储/模型而定。下面补充文件/批量导入、进度回调、实体查询和 deleteCollection；删除集合会撤销整组资料。
+使用独立测试集合。输出文档修订、匹配、回答和清理进度依实际存储和模型而定。
+
+#### 场景：导入文件并统计批量结果
+
+在 Node.js 服务端使用已准备好的集合，`docs/intro.md` 由应用提供。为文件指定业务 ID，随后批量导入两份纯文本手册。
+
+```ts
+// 读取 UTF-8 文件并发布 intro-file，失败时返回读取或导入错误。
+const file = await ai.knowledge.ingestFile({ filePath: 'docs/intro.md', encoding: 'utf-8', documentId: 'intro-file' })
+if (!file.success)
+  return file
+
+const progress: string[] = []
+// 顺序导入两条手册。回调逐份记录进度，汇总包含每份的结果或错误。
+const batch = await ai.knowledge.ingestBatch([
+  { documentId: 'startup', content: 'Start the service after updating its configuration.' },
+  { documentId: 'backup', content: 'Verify the backup before upgrading.' },
+], ({ completed, total, currentDocumentId }) => {
+  progress.push(`${completed}/${total}: ${currentDocumentId}`)
+})
+if (!batch.success)
+  return batch
+const failedIds = batch.data.results.filter(item => item.error).map(item => item.documentId)
+```
+
+两份文档均处理完毕时，`progress` 依次记录 `1/2: startup` 和 `2/2: backup`。`failedIds` 表示这批需要检查的文档。
 
 #### 发布修订与补偿清理
 
@@ -943,18 +1109,33 @@ Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.memory.scoped` | 绑定可信主体 | `{ objectId: nonempty string, scope? }` | `direct ScopedMemoryOperations; invalid binding throws TypeError` | `ai.memory.scoped({ objectId: "u1", scope: { topicId: "orders" } })` |
-| `ai.memory.extract` | 提取事实记忆 | `ChatMessage[], { objectId, scope?, model?, signal?, ...options }` | `MemoryEntry[]` | `ai.memory.extract(messages, { objectId: "u1" })` |
-| `ai.memory.add` | 保存明确事实 | `MemoryEntryInput: objectId, content, type, scope?` | `MemoryEntry` | `ai.memory.add({ objectId: "u1", content: "偏好中文", type: "preference" })` |
-| `ai.memory.get` | 授权读取记忆 | `memoryId, { objectId, scope? } for untrusted IDs` | `MemoryEntry` | `ai.memory.get(memoryId, { objectId: "u1" })` |
-| `ai.memory.update` | 更新已有事实 | `memoryId, MemoryUpdateInput, trusted access scope` | `MemoryEntry` | `ai.memory.update(memoryId, { content: "偏好日文" }, { objectId: "u1" })` |
-| `ai.memory.remove` | 删除授权记忆 | `memoryId, trusted access scope` | `void` | `ai.memory.remove(memoryId, { objectId: "u1" })` |
-| `ai.memory.recall` | 召回相关事实 | `query, { objectId, scope?, topK?, types?, ...options }` | `MemoryEntry[]` | `ai.memory.recall("语言偏好", { objectId: "u1" })` |
-| `ai.memory.injectMemories` | 补充对话上下文 | `ChatMessage[], { objectId, scope?, topK?, ...options }` | `ChatMessage[]` | `ai.memory.injectMemories(messages, { objectId: "u1" })` |
-| `ai.memory.list` | 读取完整列表 | `MemoryListOptions with objectId/scope filters` | `MemoryEntry[]; incomplete scan fails` | `ai.memory.list({ objectId: "u1" })` |
-| `ai.memory.listPage` | 分页浏览记忆 | `MemoryListPageOptions with objectId/pagination` | `StorePage<MemoryEntry>` | `ai.memory.listPage({ objectId: "u1", offset: 0, limit: 20 })` |
-| `ai.memory.clear` | 清理指定范围 | `nonempty MemoryClearOptions` | `void; empty filters are rejected` | `ai.memory.clear({ objectId: "u1" })` |
-| `ai.memory.admin.clearAll` | 可信管理员全清 | `{ confirm: true }; require host administrator authorization` | `void; destructive across subjects` | `ai.memory.admin.clearAll({ confirm: true })` |
+| `ai.memory.scoped(binding)` | 绑定可信主体 | `binding: ScopedMemoryBinding`。传入非空的可信主体 `objectId` 和可选作用域 | `direct ScopedMemoryOperations; invalid binding throws TypeError` | `ai.memory.scoped({ objectId: "u1", scope: { topicId: "orders" } })` |
+| `ai.memory.extract(messages, options?)` | 提取事实记忆 | `messages: ChatMessage[], options?: MemoryExtractOptions` | `MemoryEntry[]` | `ai.memory.extract(messages, { objectId: "u1" })` |
+| `ai.memory.add(entry)` | 保存明确事实 | `entry: MemoryEntryInput` | `MemoryEntry` | `ai.memory.add({ objectId: "u1", content: "偏好中文", type: "preference" })` |
+| `ai.memory.get(memoryId, accessScope?)` | 授权读取记忆 | `memoryId: string, accessScope?: MemoryAccessScope`。操作外部提供的记忆 ID 时，传入服务端根据当前身份确认的访问范围 | `MemoryEntry` | `ai.memory.get(memoryId, { objectId: "u1" })` |
+| `ai.memory.update(memoryId, updates, accessScope?)` | 更新已有事实 | `memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope`。操作外部提供的记忆 ID 时，传入服务端根据当前身份确认的访问范围 | `MemoryEntry` | `ai.memory.update(memoryId, { content: "偏好日文" }, { objectId: "u1" })` |
+| `ai.memory.remove(memoryId, accessScope?)` | 删除授权记忆 | `memoryId: string, accessScope?: MemoryAccessScope`。操作外部提供的记忆 ID 时，传入服务端根据当前身份确认的访问范围 | `void` | `ai.memory.remove(memoryId, { objectId: "u1" })` |
+| `ai.memory.recall(query, options?)` | 召回相关事实 | `query: string, options?: MemoryRecallOptions` | `MemoryEntry[]` | `ai.memory.recall("语言偏好", { objectId: "u1" })` |
+| `ai.memory.injectMemories(messages, options?)` | 补充对话上下文 | `messages: ChatMessage[], options?: MemoryInjectionOptions` | `ChatMessage[]` | `ai.memory.injectMemories(messages, { objectId: "u1" })` |
+| `ai.memory.list(options?)` | 读取完整列表 | `options?: MemoryListOptions` | `MemoryEntry[]; incomplete scan fails` | `ai.memory.list({ objectId: "u1" })` |
+| `ai.memory.listPage(options?)` | 分页浏览记忆 | `options?: MemoryListPageOptions` | `StorePage<MemoryEntry>` | `ai.memory.listPage({ objectId: "u1", offset: 0, limit: 20 })` |
+| `ai.memory.clear(options?)` | 清理指定范围 | `options?: MemoryClearOptions` | `void; empty filters are rejected` | `ai.memory.clear({ objectId: "u1" })` |
+| `ai.memory.admin.clearAll(options)` | 可信管理员全清 | `options: MemoryClearAllOptions`。须由宿主管理员授权，传入 `confirm: true` | `void; destructive across subjects` | `ai.memory.admin.clearAll({ confirm: true })` |
+
+#### 记忆写入、筛选与注入选项
+
+| 输入对象或方法 | 字段 | 默认值、条件与结果 |
+| --- | --- | --- |
+| `ScopedMemoryBinding`、`MemoryAccessScope` | `objectId`、`scope` | 主体 ID 必填，由服务端认证态得出。可选作用域如 `{ topicId: 'shipping' }` 按键值限定所有可见记录。`get/update/remove` 接收记忆 ID，处理外部 ID 时传可信访问范围 |
+| `MemoryEntryInput` | `content`、`type`、`importance`、`objectId`、`scope`、`metadata` | 正文与类型必填。类型可选 `fact/preference/event/entity/instruction`。重要性范围 0–1，原生实现默认 0.5。主体、作用域和附加元数据可选。需要主体隔离时使用绑定后的实例 |
+| `MemoryUpdateInput` | `content`、`type`、`importance`、`metadata` | 仅传要更新的字段。正文变化会使旧向量失效并触发向量更新 |
+| `MemoryExtractOptions` | `types`、`model`、`systemPrompt`、`minImportance`、`objectId`、`scope`、`tempModel`、`signal` | `extract` 从传入的消息提取长期信息。可筛选类型与重要性，阈值默认 0。可覆盖提取模型和提示词，或按 LLM 选项传临时模型及取消信号。主体与作用域决定归属 |
+| `MemoryRecallOptions` | `topK`、`candidateMultiplier`、`types`、`minImportance`、`recencyWeight`、`objectId`、`scope` | `recall` 使用查询字符串。数量与候选倍数默认见 [AI 配置](../configuration/ai.md)。先扩大候选池再按类型、重要性和作用域筛选。时间权重 0–1，原生实现省略时使用 `1 - recencyDecay`；Mem0 省略时保留检索顺序 |
+| `MemoryInjectionOptions` | `topK`、`candidateMultiplier`、`maxTokens`、`position`、`objectId`、`scope`、`types`、`minImportance` | 从消息提取查询，最多注入 5 条；可复用召回筛选。正数 `maxTokens` 限制注入文本的估算 token 数。默认 `system` 追加到系统消息；`before-last` 插在最后一条用户消息之前 |
+| `MemoryListOptions`、`MemoryListPageOptions` | `types`、`objectId`、`scope`、`limit`、分页的 `offset` | 同一组主体与作用域过滤，`list` 可设最大返回数。分页 `offset` 默认 0、`limit` 默认 20 |
+| `MemoryClearOptions`、`MemoryClearAllOptions` | `types`、`objectId`、`scope`、`confirm` | 普通清理按主体和筛选范围删除。全量清理须通过宿主管理员授权并显式传 `confirm: true` |
+
+例如用 `memory.scoped({ objectId: 'reader-1', scope: { topicId: 'shipping' } })` 后召回 `'交付偏好'`，传 `{ topK: 2, types: ['preference'] }` 时，成功数组最多两条，且每条匹配该主体、主题和类型。
 
 #### 场景：按主体保存与召回记忆
 
@@ -1055,12 +1236,22 @@ if (result.success) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.persona.save` | 保存角色 | `PersonaProfileInput: id, name, systemPrompt, objectId?, traits?` | `PersonaProfile` | `ai.persona.save(personaProfile)` |
-| `ai.persona.get` | 读取角色 | `id, { objectId }?; omitted subject selects system profile` | `PersonaProfile` | `ai.persona.get("tutor", { objectId: "u1" })` |
-| `ai.persona.update` | 更新角色 | `id, PersonaProfileUpdate, { objectId }?` | `PersonaProfile` | `ai.persona.update("tutor", updates, { objectId: "u1" })` |
-| `ai.persona.remove` | 删除角色 | `id, { objectId }?` | `void` | `ai.persona.remove("tutor", { objectId: "u1" })` |
-| `ai.persona.list` | 列出主体角色 | `{ objectId }?` | `PersonaProfile[]` | `ai.persona.list({ objectId: "u1" })` |
-| `ai.persona.compose` | 生成系统提示词 | `id, { objectId }?` | `string prompt` | `ai.persona.compose("tutor", { objectId: "u1" })` |
+| `ai.persona.save(profile)` | 保存角色 | `profile: PersonaProfileInput` | `PersonaProfile` | `ai.persona.save(personaProfile)` |
+| `ai.persona.get(id, options?)` | 读取角色 | `id: string, options?: PersonaScopeOptions`。省略主体时读取系统角色 | `PersonaProfile` | `ai.persona.get("tutor", { objectId: "u1" })` |
+| `ai.persona.update(id, updates, options?)` | 更新角色 | `id: string, updates: PersonaProfileUpdate, options?: PersonaScopeOptions` | `PersonaProfile` | `ai.persona.update("tutor", updates, { objectId: "u1" })` |
+| `ai.persona.remove(id, options?)` | 删除角色 | `id: string, options?: PersonaScopeOptions` | `void` | `ai.persona.remove("tutor", { objectId: "u1" })` |
+| `ai.persona.list(options?)` | 列出主体角色 | `options?: PersonaScopeOptions` | `PersonaProfile[]` | `ai.persona.list({ objectId: "u1" })` |
+| `ai.persona.compose(id, options?)` | 生成系统提示词 | `id: string, options?: PersonaScopeOptions` | `string prompt` | `ai.persona.compose("tutor", { objectId: "u1" })` |
+
+#### 角色定义、更新与范围
+
+| 输入对象 | 字段 | 必填、默认及作用 |
+| --- | --- | --- |
+| `PersonaProfileInput` | `id`、`systemPrompt`、`name`、`objectId`、`traits`、`metadata` | ID 与系统提示词必填。显示名和元数据可选，特征为字符串数组（默认空）。省略主体选择系统角色范围 |
+| `PersonaProfileUpdate` | `name`、`systemPrompt`、`traits`、`metadata` | 全部可选，传要修改的字段。角色 ID 仍为独立实参 |
+| `PersonaScopeOptions` | `objectId` | 可选可信主体。`get/update/remove/list/compose` 均使用该范围，省略选择系统角色范围 |
+
+例如系统角色与 `reader-1` 的自定义角色都叫 `guide` 时，`get('guide', { objectId: 'reader-1' })` 返回该主体的角色。同一范围内的 `compose` 把系统提示和特征合成为一份提示词。
 
 #### 场景：维护角色人格与提示词
 
@@ -1149,11 +1340,23 @@ const manager = ai.context.createManager({
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.token.estimateText` | 估算单段 Token | `text: string` | `direct number; estimate, not billing usage` | `ai.token.estimateText("Hello 世界")` |
-| `ai.token.estimateMessages` | 估算消息 Token | `ChatMessage[]` | `direct number including protocol overhead` | `ai.token.estimateMessages(messages)` |
-| `ai.summary.generate` | 生成摘要文本 | `ChatMessage[], SummaryOptions?` | `string` | `ai.summary.generate(messages)` |
-| `ai.summary.summarize` | 生成摘要及覆盖信息 | `ChatMessage[], SummaryOptions?` | `{ summary, tokenCount, coveredMessages }` | `ai.summary.summarize(messages)` |
-| `ai.compress.tryCompress` | 按预算压缩 | `ChatMessage[], { strategy?, maxTokens?, preserveLastN?, ...options }` | `CompressResult: messages and original/compressed token counts` | `ai.compress.tryCompress(messages, { maxTokens: 4000 })` |
+| `ai.token.estimateText(text)` | 估算单段 Token | `text: string` | `direct number; estimate, not billing usage` | `ai.token.estimateText("Hello 世界")` |
+| `ai.token.estimateMessages(messages)` | 估算消息 Token | `messages: ChatMessage[]` | `direct number including protocol overhead` | `ai.token.estimateMessages(messages)` |
+| `ai.summary.generate(messages, options?)` | 生成摘要文本 | `messages: ChatMessage[], options?: SummaryOptions` | `string` | `ai.summary.generate(messages)` |
+| `ai.summary.summarize(messages, options?)` | 生成摘要及覆盖信息 | `messages: ChatMessage[], options?: SummaryOptions` | `{ summary, tokenCount, coveredMessages }` | `ai.summary.summarize(messages)` |
+| `ai.compress.tryCompress(messages, options?)` | 按预算压缩 | `messages: ChatMessage[], options?: CompressOptions` | `CompressResult: messages and original/compressed token counts` | `ai.compress.tryCompress(messages, { maxTokens: 4000 })` |
+
+#### 摘要、预算与压缩策略字段
+
+估算方法接收单段 `text` 或按时间排列的 `messages`。摘要与压缩使用消息数组，估算值用于预算。
+
+| 输入对象 | 字段 | 默认值和作用 |
+| --- | --- | --- |
+| `SummaryOptions` | `model`、`temperature`、`systemPrompt`、`previousSummary` | 模型沿用摘要配置，温度默认 0.3。可覆盖提示词，提供前序摘要时将新消息合并进摘要 |
+| `CompressOptions` | `strategy`、`maxTokens` | 默认见 [AI 配置](../configuration/ai.md)。`sliding-window` 移除最旧消息，`summary` 汇总旧消息，`hybrid` 先窗口后摘要。预算为 token 数，设 0 时取模型预算的 80% |
+| `CompressOptions` | `preserveSystem`、`preserveLastN`、`summaryModel` | 默认保留系统消息。最近保留条数沿用配置，摘要模型可覆盖。受保护内容超过预算时返回 `CONTEXT_BUDGET_EXCEEDED` |
+
+例如传 `{ strategy: 'sliding-window', maxTokens: 100, preserveLastN: 2 }`，成功结果的估算 `compressedTokens` 不超过 100，最近两条受保护。
 
 #### 场景：估算与压缩上下文
 
@@ -1177,26 +1380,44 @@ const messageTokens = ai.token.estimateMessages(messages) // estimate including 
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.context.createManager` | 开始多轮对话 | `ContextManagerOptions with scope { objectId, sessionId }` | `ContextManager` | `ai.context.createManager({ scope: { objectId: "u1", sessionId: "s1" } })` |
-| `ai.context.restoreManager` | 恢复对话 | `{ objectId, sessionId }, options?` | `ContextManager` | `ai.context.restoreManager({ objectId: "u1", sessionId: "s1" })` |
-| `ai.context.listSessions` | 列出可恢复会话 | `objectId` | `SessionInfo[]` | `ai.context.listSessions("u1")` |
-| `ai.context.renameSession` | 修改会话标题 | `scope, title` | `void` | `ai.context.renameSession({ objectId: "u1", sessionId: "s1" }, "订单讨论")` |
-| `ai.context.removeSession` | 删除指定会话 | `scope` | `void; tombstone prevents scope reuse` | `ai.context.removeSession({ objectId: "u1", sessionId: "s1" })` |
-| `manager.addMessage` | 补充对话消息 | `ChatMessage` | `Promise<HaiResult<void>>` | `manager.addMessage({ role: "user", content: "你好" })` |
-| `manager.getMessages` | 读取对话快照 | `none` | `HaiResult<ChatMessage[]>` | `manager.getMessages()` |
-| `manager.reload` | 刷新共享快照 | `none` | `Promise<HaiResult<void>>` | `manager.reload()` |
-| `manager.getTokenUsage` | 观察上下文预算 | `none` | `HaiResult<{ current, budget }>` | `manager.getTokenUsage()` |
-| `manager.getSummaries` | 读取摘要 | `none` | `HaiResult<SummaryResult[]>` | `manager.getSummaries()` |
-| `manager.save` | 持久保存 | `none` | `Promise<HaiResult<void>>` | `manager.save()` |
-| `manager.flush` | 等待后台记忆写入 | `none` | `Promise<HaiResult<void>>` | `manager.flush()` |
-| `manager.reset` | 终止并重置对话 | `ContextResetOptions?` | `Promise<HaiResult<void>>` | `manager.reset({ preserveSystemPrompt: true })` |
-| `manager.getTurns` | 读取真实轮次 | `none` | `HaiResult<ConversationTurn[]>` | `manager.getTurns()` |
-| `manager.markTurnSpeaking` | 记录开始播放 | `turnId` | `Promise<HaiResult<void>>` | `manager.markTurnSpeaking(turnId)` |
-| `manager.commitTurn` | 提交已表达内容 | `turnId, { text? }` | `Promise<HaiResult<void>>` | `manager.commitTurn(turnId, { text: spokenText })` |
-| `manager.interruptTurn` | 提交打断前内容 | `turnId, { text? }` | `Promise<HaiResult<void>>` | `manager.interruptTurn(turnId, { text: spokenText })` |
-| `manager.consolidate` | 固化长期记忆 | `ConsolidateOptions?` | `Promise<HaiResult<{ summary, memories }>>` | `manager.consolidate({ scope: { personaId: "tutor" } })` |
-| `manager.chat` | 多轮回答 | `message: string, ContextChatOptions?` | `Promise<HaiResult<ContextChatResult>>` | `manager.chat("请继续")` |
-| `manager.chatStream` | 多轮流式回答 | `message: string, ContextChatOptions?` | `AsyncIterable<ContextStreamEvent>` | `manager.chatStream("请继续")` |
+| `ai.context.createManager(options)` | 开始多轮对话 | `options: ContextManagerOptions`。选项须含 `scope.objectId` 和 `scope.sessionId` | `ContextManager` | `ai.context.createManager({ scope: { objectId: "u1", sessionId: "s1" } })` |
+| `ai.context.restoreManager(scope, options?)` | 恢复对话 | `scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>` | `ContextManager` | `ai.context.restoreManager({ objectId: "u1", sessionId: "s1" })` |
+| `ai.context.listSessions(objectId)` | 列出可恢复会话 | `objectId: string` | `SessionInfo[]` | `ai.context.listSessions("u1")` |
+| `ai.context.renameSession(scope, title)` | 修改会话标题 | `scope: InteractionScope, title: string` | `void` | `ai.context.renameSession({ objectId: "u1", sessionId: "s1" }, "订单讨论")` |
+| `ai.context.removeSession(scope)` | 删除指定会话 | `scope: InteractionScope` | `void; tombstone prevents scope reuse` | `ai.context.removeSession({ objectId: "u1", sessionId: "s1" })` |
+| `manager.addMessage(message)` | 补充对话消息 | `message: ChatMessage` | `Promise<HaiResult<void>>` | `manager.addMessage({ role: "user", content: "你好" })` |
+| `manager.getMessages()` | 读取对话快照 | 无参数 | `HaiResult<ChatMessage[]>` | `manager.getMessages()` |
+| `manager.reload()` | 刷新共享快照 | 无参数 | `Promise<HaiResult<void>>` | `manager.reload()` |
+| `manager.getTokenUsage()` | 观察上下文预算 | 无参数 | `HaiResult<{ current, budget }>` | `manager.getTokenUsage()` |
+| `manager.getSummaries()` | 读取摘要 | 无参数 | `HaiResult<SummaryResult[]>` | `manager.getSummaries()` |
+| `manager.save()` | 持久保存 | 无参数 | `Promise<HaiResult<void>>` | `manager.save()` |
+| `manager.flush()` | 等待后台记忆写入 | 无参数 | `Promise<HaiResult<void>>` | `manager.flush()` |
+| `manager.reset(options?)` | 终止并重置对话 | `options?: ContextResetOptions` | `Promise<HaiResult<void>>` | `manager.reset({ preserveSystemPrompt: true })` |
+| `manager.getTurns()` | 读取真实轮次 | 无参数 | `HaiResult<ConversationTurn[]>` | `manager.getTurns()` |
+| `manager.markTurnSpeaking(turnId)` | 记录开始播放 | `turnId: string` | `Promise<HaiResult<void>>` | `manager.markTurnSpeaking(turnId)` |
+| `manager.commitTurn(turnId, input?)` | 提交已表达内容 | `turnId: string, input?: CommitTurnInput` | `Promise<HaiResult<void>>` | `manager.commitTurn(turnId, { text: spokenText })` |
+| `manager.interruptTurn(turnId, input?)` | 提交打断前内容 | `turnId: string, input?: CommitTurnInput` | `Promise<HaiResult<void>>` | `manager.interruptTurn(turnId, { text: spokenText })` |
+| `manager.consolidate(options?)` | 固化长期记忆 | `options?: ConsolidateOptions` | `Promise<HaiResult<{ summary, memories }>>` | `manager.consolidate({ scope: { personaId: "tutor" } })` |
+| `manager.chat(message, options?)` | 多轮回答 | `message: string, options?: ContextChatOptions` | `Promise<HaiResult<ContextChatResult>>` | `manager.chat("请继续")` |
+| `manager.chatStream(message, options?)` | 多轮流式回答 | `message: string, options?: ContextChatOptions` | `AsyncIterable<ContextStreamEvent>` | `manager.chatStream("请继续")` |
+
+#### 会话范围、生成与提交参数
+
+| 输入对象或方法 | 字段 | 默认值、条件与结果 |
+| --- | --- | --- |
+| `createManager`、`restoreManager` | `scope`、`systemPrompt`、`model`、`temperature` | `scope` 必填，含服务端确认的非空 `objectId` 和 `sessionId`。创建时在选项中传范围，恢复时单独传。创建可选首条系统提示，模型和温度可覆盖默认生成设置 |
+| `ContextManagerOptions` | `turnCommit`、`concurrency` | 默认 `auto`，生成结束直接提交全文。`manual` 返回待提交轮次。默认 `reject`，同一作用域有活动轮次时返回 `CONTEXT_BUSY`；`queue` 等待前一轮终态，等待可取消 |
+| `ContextManagerOptions` | `compress` | 用 [压缩选项](#token-summary)覆盖默认规则，`auto` 默认开启，设为 `false` 跳过自动压缩 |
+| `ContextManagerOptions.memory` | `enable`、`enableExtract`、`scope`、`types`、`minImportance` | 注入与自动提取分别开启，均默认关闭。其余字段按主体、业务范围、类型和重要性限定 [记忆操作](#memory) |
+| `ContextManagerOptions.memory` | `topK`、`maxTokens`、`position`、`extractionModel`、`extractionSystemPrompt` | 前三项控制注入条数、估算 token 预算和插入位置。后两项可覆盖自动提取的模型和提示词 |
+| `ContextManagerOptions` | `rag`、`reasoning`、`tools`、`maxToolRounds` | RAG 和推理的 `enable` 默认关闭。RAG 可选 `sources/topK/minScore/enableRerank/rerankModel`，见 [RAG 参数](#rag)。推理可选 `strategy/maxRounds`，见 [推理参数](#reasoning)。工具用 [已授权的注册器](tools.md#registry)，最大轮数默认 10 |
+| `manager.chat/chatStream` | `message`、`model`、`temperature`、`enablePersist`、`signal` | 本轮用户文本必填。可覆盖本轮模型和温度，或取消生成。`enablePersist` 默认关闭内部 LLM 历史记录，上下文由管理器存储 |
+| `commitTurn/interruptTurn`、`markTurnSpeaking` | `turnId`、`input.text` | 传本次轮次 ID。已播报或展示的实际文字可显式传入。提交时省略使用生成全文，中断时省略表示空串。标记播放仅接收轮次 ID |
+| `reset` | `preserveSystemPrompt`、`cancelActiveTurn`、`waitForMemoryTasks` | 默认分别为 `true`、`true`、`false`。开启等待时先处理后台记忆，失败则保留现有上下文 |
+| `consolidate` | `scope`、`types`、`model`、`extractionSystemPrompt` | 可指定长期记忆业务范围、提取类型、摘要及提取模型和提取提示词。省略范围沿用管理器记忆配置 |
+| `listSessions/renameSession/removeSession`、`addMessage` | `objectId`、`scope`、`title`、`message` | 列表传可信主体 ID。改名和删除传完整会话范围，改名还传新标题。追加消息使用 `ChatMessage`，例如 `{ role: 'user', content: '查询运费' }` |
+
+例如设置 `turnCommit: 'manual'` 后生成了「预计明天到货，请留意通知」。如果播放只到「预计明天到货」，传 `interruptTurn(turnId, { text: '预计明天到货' })`，成功后续读上下文得到已播报的文本。
 
 #### 场景：管理会话与轮次
 
@@ -1325,8 +1546,19 @@ Node 在 Worker 中调用已安装的 PDF 和 DOCX 解析器，也将大 HTML �
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.file.parse` | 识别文件并提取 | `FileParseRequest with content, filename, options?` | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
-| `ai.file.parseText` | 直接提取文本 | `Buffer\|string content, filename?` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
+| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
+| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Buffer \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
+
+#### 文件内容与解析选项
+
+| 字段 | 必填、默认及作用 |
+| --- | --- |
+| `content`、`filename` | 内容必填，文本文档可传字符串，二进制传 `Buffer`。可选文件名辅助识别 MIME 类型。`parseText` 只接这两个直接参数，返回解析出的文本 |
+| `options.mimeType`、`options.useOcr` | 可用 MIME 值覆盖检测。`useOcr: true` 将有 OCR 支持的输入交给视觉模型，按文件类型决定是否可用 |
+| `options.model`、`options.systemPrompt` | 仅在 OCR 路径生效。省略时使用 OCR 场景模型和文件配置中的提示词或内置提示 |
+| `options.maxPages`、`options.outputFormat` | PDF 原生解析可限制页数，默认全部。输出默认 `text`，设 `markdown` 时支持的解析器保留标题等结构 |
+
+例如将 `'<h1>标题</h1><p>正文</p>'` 作为 `guide.html` 解析并传 `{ outputFormat: 'markdown' }`，成功结果的 `method` 为 `html`，正文以 Markdown 标题保留章节。
 
 #### 场景：解析文本与文件
 
@@ -1357,8 +1589,20 @@ parse 的输入是文件参数，parseText 的输入是文字；输出保留可�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.reasoning.run` | 多步骤求解 | `query, ReasoningOptions including strategy/tools?` | `ReasoningResult` | `ai.reasoning.run("审查方案", { strategy: "cot" })` |
-| `ai.reasoning.runStream` | 观察推理过程 | `query, ReasoningOptions?` | `AsyncIterable<ReasoningStreamEvent>` | `ai.reasoning.runStream("审查方案", { strategy: "react" })` |
+| `ai.reasoning.run(query, options?)` | 多步骤求解 | `query: string, options?: ReasoningOptions` | `ReasoningResult` | `ai.reasoning.run("审查方案", { strategy: "cot" })` |
+| `ai.reasoning.runStream(query, options?)` | 观察推理过程 | `query: string, options?: ReasoningOptions` | `AsyncIterable<ReasoningStreamEvent>` | `ai.reasoning.runStream("审查方案", { strategy: "react" })` |
+
+#### 推理选项
+
+| 字段 | 默认值和作用 |
+| --- | --- |
+| `query`、`options.strategy`、`maxRounds` | 问题字符串必填。策略默认 `react`，也可选一次生成的 `cot` 或先规划后执行的 `plan-execute`。迭代上限默认 10 |
+| `model`、`planModel`、`executeModel` | 可覆盖推理模型。规划和执行模型仅在 `plan-execute` 生效，各自依次回退到 `model`、对应阶段场景、推理场景 |
+| `systemPrompt`、`messages`、`temperature` | 可覆盖策略提示词、插入当前问题前的历史消息并控制采样温度 |
+| `objectId`、`sessionId`、`enablePersist` | 可传可信主体和会话。内部 LLM 默认允许记录，已有上下文存储时可关闭 |
+| `tools`、`signal` | `react` 和 `plan-execute` 可传已授权工具注册器。取消信号中止本次推理等待与生成 |
+
+例如 `{ strategy: 'cot', enablePersist: false }` 为当前问题执行一次策略调用，成功返回生成的答案，无须提供工具注册器。
 
 #### 场景：执行多步推理
 
@@ -1374,16 +1618,31 @@ run 输入问题和选项输出推理结果，runStream 对同类请求输出事
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.audio.transcribe` | 识别完整音频 | `TranscriptionRequest: audio, language?, model?, signal?` | `TranscriptionResult: text, language?, segments?` | `ai.audio.transcribe({ audio: { data: wavBytes, format: "wav" } })` |
-| `ai.audio.transcribeStream` | 持续语音识别 | `TranscriptionStreamRequest: chunks or complete audio` | `AsyncIterable<TranscriptionEvent>` | `ai.audio.transcribeStream(transcriptionInput)` |
-| `ai.audio.synthesize` | 合成完整语音 | `SynthesisRequest: text, language?, model?, signal?` | `SynthesisResult: audio and duration metadata` | `ai.audio.synthesize({ text: "你好" })` |
-| `ai.audio.synthesizeStream` | 按段合成 | `SynthesisStreamRequest: text segment or async segments` | `AsyncIterable<SynthesisEvent>` | `ai.audio.synthesizeStream(synthesisInput)` |
-| `ai.audio.getCapabilities` | 先检查模型能力 | `{ operation: transcribe\|synthesize, model? }` | `AudioModelCapabilities` | `ai.audio.getCapabilities({ operation: "synthesize" })` |
-| `ai.audio.models.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.audio.models.list()` |
-| `ai.audio.models.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.audio.models.get("speech")` |
-| `ai.audio.models.register` | 登记数据库定义 | `AudioModelEntry input (id/provider/model/operations)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.audio.models.register(audioModelDefinition)` |
-| `ai.audio.models.update` | 按版本替换定义 | `AudioModelEntry input (id/provider/model/operations), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.audio.models.update(audioModelDefinition, current.version)` |
-| `ai.audio.models.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.audio.models.remove("speech", current.version)` |
+| `ai.audio.transcribe(request)` | 识别完整音频 | `request: TranscriptionRequest` | `TranscriptionResult: text, language?, segments?` | `ai.audio.transcribe({ audio: { data: wavBytes, format: "wav" } })` |
+| `ai.audio.transcribeStream(request)` | 持续语音识别 | `request: TranscriptionStreamRequest`。提供完整音频或音频分片流 | `AsyncIterable<TranscriptionEvent>` | `ai.audio.transcribeStream(transcriptionInput)` |
+| `ai.audio.synthesize(request)` | 合成完整语音 | `request: SynthesisRequest` | `SynthesisResult: audio and duration metadata` | `ai.audio.synthesize({ text: "你好" })` |
+| `ai.audio.synthesizeStream(request)` | 按段合成 | `request: SynthesisStreamRequest`。提供文本或异步文本片段流 | `AsyncIterable<SynthesisEvent>` | `ai.audio.synthesizeStream(synthesisInput)` |
+| `ai.audio.getCapabilities(request)` | 先检查模型能力 | `request: AudioCapabilitiesRequest`。`operation` 选 `transcribe` 或 `synthesize`，可指定模型 | `AudioModelCapabilities` | `ai.audio.getCapabilities({ operation: "synthesize" })` |
+| `ai.audio.models.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.audio.models.list()` |
+| `ai.audio.models.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.audio.models.get("speech")` |
+| `ai.audio.models.register(input)` | 登记数据库定义 | `input: z.input<typeof AudioModelEntrySchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.audio.models.register(audioModelDefinition)` |
+| `ai.audio.models.update(input, expectedVersion?)` | 按版本替换定义 | `input: z.input<typeof AudioModelEntrySchema>, expectedVersion?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.audio.models.update(audioModelDefinition, current.version)` |
+| `ai.audio.models.remove(id, expectedVersion?)` | 删除数据库定义 | `id: string, expectedVersion?: string` | `HaiResult<void>; external files/services are retained` | `ai.audio.models.remove("speech", current.version)` |
+
+#### 识别、合成和能力查询字段
+
+| 输入对象 | 字段 | 必填、默认及条件 |
+| --- | --- | --- |
+| `AudioContent`、`AudioInputStream` | `data` 或 `chunks`、`format`、`sampleRate`、`channels` | 必填完整字节或异步字节流与编码。编码可为 `pcm16/wav/mp3/opus`。流式输入以及裸 PCM 必须提供采样率（Hz）。声道可为 1 或 2，默认 1 |
+| `TranscriptionOptions` | `language`、`contextHints`、`timestampGranularities`、`vad` | 可选语言提示、热词、时间戳和语音活动检测。语言省略由模型判断。粒度为 `segment` 或 `word`。支持情况按模型查询 |
+| `SynthesisRequest`、`SynthesisStreamRequest` | `text` | 完整合成传字符串，流式传 `{ id, text }` 或其异步序列。流式 ID 用于对应音频事件 |
+| `SynthesisOptions` | `language`、`voice`、`speakerReference`、`styleReference`、`styleStrength`、`instruction` | 可选语言、音色、说话人和风格参考及提示词。参考对象含 `audio`、可选 `transcript/language`，强度范围 0–1。音色省略用模型默认 |
+| `SynthesisOptions` | `speed`、`format`、`sampleRate` | 速度倍数 1 表示正常。输出格式省略时用模型默认，可指定采样率（Hz） |
+| 仅完整合成 | `targetDurationMs`、`durationToleranceMs` | 目标时长是正整数毫秒。容差为非负整数毫秒，提供时要求目标时长。目标时长与 `speed` 互斥，模型须支持目标时长 |
+| 识别和合成选项 | `model`、`strictCapabilities`、`signal` | 模型省略按识别或合成场景选择。严格模式默认关闭；开启时，不支持请求的高级能力会提前失败。信号可取消调用 |
+| `AudioCapabilitiesRequest`、`models` 资源方法 | `operation`、`model`、模型定义及版本 | 能力查询必须传 `transcribe` 或 `synthesize`，可指定模型。模型注册、更新字段见 [AI 配置](../configuration/ai.md)，版本使用模型目录读回的值 |
+
+例如用 `{ timestampGranularities: ['word'], strictCapabilities: true }` 识别已准备好的音频。支持词级时间轴时，可读取词的起止毫秒；所选模型不支持时，会在发请求前返回能力错误。
 
 #### 场景：转写与合成语音
 
@@ -1593,12 +1852,24 @@ async function maintain_audio_models(definition: Parameters<typeof ai.audio.mode
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.image.generate` | 生成或参考图片 | `{ prompt, referenceImages?, model?, size?, signal? }` | `{ images: GeneratedImage[] } with bytes/MIME` | `ai.image.generate({ prompt: "一座灯塔" })` |
-| `ai.image.models.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.image.models.list()` |
-| `ai.image.models.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.image.models.get("poster")` |
-| `ai.image.models.register` | 登记数据库定义 | `ImageModelEntry input (id/provider/model)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.image.models.register(imageModelDefinition)` |
-| `ai.image.models.update` | 按版本替换定义 | `ImageModelEntry input (id/provider/model), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.image.models.update(imageModelDefinition, current.version)` |
-| `ai.image.models.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.image.models.remove("poster", current.version)` |
+| `ai.image.generate(request)` | 生成或参考图片 | `request: GenerateImageRequest` | `{ images: GeneratedImage[] } with bytes/MIME` | `ai.image.generate({ prompt: "一座灯塔" })` |
+| `ai.image.models.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.image.models.list()` |
+| `ai.image.models.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.image.models.get("poster")` |
+| `ai.image.models.register(input)` | 登记数据库定义 | `input: z.input<typeof ImageModelEntrySchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.image.models.register(imageModelDefinition)` |
+| `ai.image.models.update(input, expectedVersion?)` | 按版本替换定义 | `input: z.input<typeof ImageModelEntrySchema>, expectedVersion?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.image.models.update(imageModelDefinition, current.version)` |
+| `ai.image.models.remove(id, expectedVersion?)` | 删除数据库定义 | `id: string, expectedVersion?: string` | `HaiResult<void>; external files/services are retained` | `ai.image.models.remove("poster", current.version)` |
+
+#### 图像请求字段
+
+| 字段 | 必填、默认及条件 |
+| --- | --- |
+| `prompt`、`model` | 文本描述必填。省略模型时使用配置的图像生成模型 |
+| `size` | 可选 `{ width, height }`，宽高是正整数像素值，支持尺寸随模型变化。省略由模型决定尺寸 |
+| `referenceImages` | 可选数组。每张图传非空 `data: Uint8Array` 和 `image/*` MIME 类型。数量及每张字节上限见 [AI 配置](../configuration/ai.md)，默认 4 张、每张 20 MiB |
+| `signal` | 可取消厂商请求和后续图片下载。模型超时限制整次操作 |
+| `models` 的定义、ID、版本 | 注册和替换使用配置中的图像模型字段。按 ID 读取或删除，可用上次读取的数据库版本作为更新或删除条件 |
+
+如使用支持该尺寸的模型并传 `{ prompt: '黑白线稿的灯塔', size: { width: 1024, height: 1024 } }`，成功结果包含此请求生成的图片字节及 MIME。
 
 #### 场景：生成图片与管理模型
 
@@ -1686,50 +1957,67 @@ async function maintain_image_models(definition: Parameters<typeof ai.image.mode
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.acp.scoped` | 给当前工作区或用户创建限定范围的 Agent API | 由应用认证后提供 `RunnerScope` | 包含 `plan`、`sessions`、`tasks` 和 `approvals` 等方法的对象 | `const agent = ai.acp.scoped(identity)` |
-| `scoped.tasks.findSubmission` | 核对原轮次的受理回执 | 原会话 ID、提交的幂等键 | `HaiResult<{ taskId, status }\|null>`，无记录时返回 `null` | `await scoped.tasks.findSubmission(sessionId, turnKey)` |
-| `ai.acp.agents.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()` |
-| `ai.acp.agents.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.agents.get("coder")` |
-| `ai.acp.agents.register` | 登记数据库定义 | `ACPAgent input (id/mode/adapter/modelIds)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.agents.register(agentDefinition)` |
-| `ai.acp.agents.update` | 按版本替换定义 | `ACPAgent input (id/mode/adapter/modelIds), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.acp.agents.update(agentDefinition, current.version)` |
-| `ai.acp.agents.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.acp.agents.remove("coder", current.version)` |
-| `ai.acp.workspaces.list` | 列出合并清单 | `none` | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.workspaces.list()` |
-| `ai.acp.workspaces.get` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.workspaces.get("project")` |
-| `ai.acp.workspaces.register` | 登记数据库定义 | `ACPWorkspace input (id/storage/repositories)` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.workspaces.register(workspaceDefinition)` |
-| `ai.acp.workspaces.update` | 按版本替换定义 | `ACPWorkspace input (id/storage/repositories), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.acp.workspaces.update(workspaceDefinition, current.version)` |
-| `ai.acp.workspaces.remove` | 删除数据库定义 | `id, expectedVersion?; ACP definitions must have no session references` | `HaiResult<void>; external files/services are retained` | `ai.acp.workspaces.remove("project", current.version)` |
-| `ai.acp.agents.initialize` | 预检适配器配置 | `agentId, modelId?` | `HaiResult<{ agentId, mode, modelIds }>; no credentials` | `ai.acp.agents.initialize("coder")` |
-| `ai.acp.agents.check` | 实际连接并握手 | `agentId, { workspaceId?, ...ACPClientOptions }` | `HaiResult<native initialize response>; owned connection is closed` | `ai.acp.agents.check("coder", { workspaceId: "project" })` |
-| `ai.acp.workspaces.prepare` | 准备工作目录 | `workspaceId` | `HaiResult<main absolute path>; dirty content is retained` | `ai.acp.workspaces.prepare("project")` |
-| `ai.acp.workspaces.importFiles` | 导入受控文件 | `workspaceId, { path: relative path, content: string\|Uint8Array }[]` | `HaiResult<{ imported: string[] }>; no overwrite` | `ai.acp.workspaces.importFiles("project", [{ path: "notes.txt", content: "需求" }])` |
-| `ai.acp.sessions.create` | 启动受管开发会话 | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?` | `HaiResult<managed session handle>` | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
-| `ai.acp.sessions.get` | 读取会话句柄 | `framework session id` | `HaiResult<managed session handle>; does not resume` | `ai.acp.sessions.get("task-1")` |
-| `ai.acp.sessions.list` | 查询受管会话 | `workspaceId?` | `HaiResult<ACPSessionInfo[]>` | `ai.acp.sessions.list("project")` |
-| `ai.acp.sessions.resume` | 恢复或重开原生会话 | 框架会话 ID，连接回调及可选的 `restartNative`（默认 `false`） | `HaiResult` 包含会话句柄。定义改变、工作树失效或会话占用时失败 | `ai.acp.sessions.resume("task-1")` |
-| `ai.acp.sessions.close` | 停止拥有的执行环境 | `framework session id` | `HaiResult<void>; source and native history retained` | `ai.acp.sessions.close("task-1")` |
-| `ai.acp.sessions.reclaimWorktree` | 回收干净检出目录 | `closed framework session id; preview stopped and changes saved` | `HaiResult<void>; branch and normal files retained` | `ai.acp.sessions.reclaimWorktree("task-1")` |
-| `ai.acp.sessions.remove` | 移除会话记录 | `closed or failed framework session id` | `HaiResult<void>; worktree and native history retained` | `ai.acp.sessions.remove("task-1")` |
-| `ai.acp.connect` | 接入原生传输 | `ACPTransport: stdio/http/ws, ACPClientOptions?` | `HaiResult<connection handle>` | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })` |
-| `ai.acp.close` | 关闭子系统 | `none; normally call ai.close()` | `Promise<void>; cleanup may throw` | `ai.acp.close()` |
-| `session.info` | 读取受管会话 | `none` | `Promise<HaiResult<ACPSessionInfo>>` | `session.info()` |
-| `session.prompt` | 执行一轮开发 | `ContentBlock[], AbortSignal?` | `Promise<HaiResult<{ text, stopReason, events }>>` | `session.prompt([{ type: "text", text: "检查工程" }])` |
-| `session.promptStructured` | 校验一份 JSON | `ContentBlock[], Zod schema, AbortSignal?` | `Promise<HaiResult<schema-inferred T>>` | `session.promptStructured(content, OutputSchema)` |
-| `session.stream` | 观察原生事件 | `ContentBlock[], AbortSignal?` | `AsyncIterable<SessionNotification>; failure throws` | `session.stream([{ type: "text", text: "检查工程" }])` |
-| `session.cancel` | 取消当前轮次 | `none` | `Promise<HaiResult<void>>` | `session.cancel()` |
-| `session.setMode` | 选择已公布模式 | `native mode ID` | `Promise<HaiResult<native mode response>>` | `session.setMode("code")` |
-| `session.setConfigOption` | 设置已公布选项 | `native option key and allowed value` | `Promise<HaiResult<native config response>>` | `session.setConfigOption("model", "coding")` |
-| `session.updateMain` | 仅快进更新主分支 | `none; execution and preview must be stopped` | `Promise<HaiResult<ACPGitReport[]>>; partial failure reports in cause` | `session.updateMain()` |
-| `session.publish` | 提交并推送 | `{ mode, message, author }; managed isolated session only` | `Promise<HaiResult<ACPGitReport[]>>` | `session.publish(publishOptions)` |
-| `session.close` | 停止执行保留状态 | `none` | `Promise<HaiResult<void>>` | `session.close()` |
-| `connection.authenticate` | 原生认证 | `advertised authentication method ID` | `Promise<HaiResult<native auth response>>` | `connection.authenticate("api-key")` |
-| `connection.createSession` | 创建低层原生会话 | `absolute remote cwd, McpServer[]?` | `Promise<HaiResult<{ id, prompt, cancel }>>` | `connection.createSession("/workspace/project", [])` |
-| `connection.listSessions` | 原生分页会话 | `cursor?` | `Promise<HaiResult<native paginated response>>` | `connection.listSessions()` |
-| `connection.deleteSession` | 删除原生会话 | `native session ID` | `Promise<HaiResult<native delete response>>` | `connection.deleteSession(nativeId)` |
-| `connection.close` | 关闭低层连接 | `none` | `Promise<HaiResult<void>>` | `connection.close()` |
-| `ai.acp.registerManagedExecutors` | 为已装配的 Runner 登记 ACP 执行器 | 无参数；正常初始化流程已调用 | `void` | `ai.acp.registerManagedExecutors()` |
-| `ai.acp.workspaces.readGitSnapshot` | 读取工作区 Git 快照 | `{ directory, revision, maxBytes? }`：已授权仓库的绝对目录和提交引用；`maxBytes` 默认 16 MiB；第二参数 `signal?` 取消操作 | `Promise<HaiResult<ACPProjectSnapshot>>` | `await ai.acp.workspaces.readGitSnapshot({ directory, revision })` |
-| `ai.acp.workspaces.diffSnapshot` | 比较工作区快照 | `before, after: Record<string, string>`：相对路径到 Base64 文件内容的映射；第三参数 `signal?` | `Promise<HaiResult<ACPProjectChanges>>` | `await ai.acp.workspaces.diffSnapshot(before, after)` |
-| `ai.acp.workspaces.publishSnapshot` | 发布已批准的工作区快照 | `ACPPublishSnapshot`：来源目录、远端、基准提交、已批准补丁、任务分支、日期和作者；第二参数 `signal?` | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
+| `ai.acp.scoped(scope)` | 给当前工作区或用户创建限定范围的 Agent API | `scope: RunnerScope`。作用域来自应用完成的身份认证 | 包含 `plan`、`sessions`、`tasks` 和 `approvals` 等方法的对象 | `const agent = ai.acp.scoped(identity)` |
+| `scoped.tasks.findSubmission(sessionId, idempotencyKey)` | 核对原轮次的受理回执 | `sessionId: string, idempotencyKey: string`。传原会话和当时提交使用的幂等键 | `HaiResult<{ taskId, status }\|null>`，无记录时返回 `null` | `await scoped.tasks.findSubmission(sessionId, turnKey)` |
+| `ai.acp.agents.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()` |
+| `ai.acp.agents.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.agents.get("coder")` |
+| `ai.acp.agents.register(input)` | 登记数据库定义 | `input: z.input<typeof ACPAgentSchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.agents.register(agentDefinition)` |
+| `ai.acp.agents.update(input, version?)` | 按版本替换定义 | `input: z.input<typeof ACPAgentSchema>, version?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.acp.agents.update(agentDefinition, current.version)` |
+| `ai.acp.agents.remove(id, version?)` | 删除数据库定义 | `id: string, version?: string`。删除时要求智能体没有会话引用 | `HaiResult<void>; external files/services are retained` | `ai.acp.agents.remove("coder", current.version)` |
+| `ai.acp.workspaces.list()` | 列出合并清单 | 无参数 | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.workspaces.list()` |
+| `ai.acp.workspaces.get(id)` | 读取来源和版本 | `id: string` | `HaiResult<AIResourceEntry> with value/source/version?` | `ai.acp.workspaces.get("project")` |
+| `ai.acp.workspaces.register(input)` | 登记数据库定义 | `input: z.input<typeof ACPWorkspaceSchema>` | `HaiResult<AIResourceEntry>; config entries are read-only` | `ai.acp.workspaces.register(workspaceDefinition)` |
+| `ai.acp.workspaces.update(input, version?)` | 按版本替换定义 | `input: z.input<typeof ACPWorkspaceSchema>, version?: string` | `HaiResult<AIResourceEntry>; full replacement, conflict fails` | `ai.acp.workspaces.update(workspaceDefinition, current.version)` |
+| `ai.acp.workspaces.remove(id, version?)` | 删除数据库定义 | `id: string, version?: string`。删除时要求工作区没有会话引用 | `HaiResult<void>; external files/services are retained` | `ai.acp.workspaces.remove("project", current.version)` |
+| `ai.acp.agents.initialize(id, modelId?)` | 预检适配器配置 | `id: string, modelId?: string` | `HaiResult<{ agentId, mode, modelIds }>; no credentials` | `ai.acp.agents.initialize("coder")` |
+| `ai.acp.agents.check(id, options?)` | 实际连接并握手 | `id: string, options?: ACPClientOptions & { workspaceId?: string }` | `HaiResult<native initialize response>; owned connection is closed` | `ai.acp.agents.check("coder", { workspaceId: "project" })` |
+| `ai.acp.workspaces.prepare(id)` | 准备工作目录 | `id: string` | `HaiResult<main absolute path>; dirty content is retained` | `ai.acp.workspaces.prepare("project")` |
+| `ai.acp.workspaces.importFiles(id, files)` | 导入受控文件 | `id: string, files: Array<{ path: string, content: string \| Uint8Array }>`。各文件的路径相对于工作区 | `HaiResult<{ imported: string[] }>; no overwrite` | `ai.acp.workspaces.importFiles("project", [{ path: "notes.txt", content: "需求" }])` |
+| `ai.acp.sessions.create(options)` | 启动受管开发会话 | `options: ACPCreateSessionOptions` | `HaiResult<managed session handle>` | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
+| `ai.acp.sessions.get(id)` | 读取会话句柄 | `id: string` | `HaiResult<managed session handle>; does not resume` | `ai.acp.sessions.get("task-1")` |
+| `ai.acp.sessions.list(workspaceId?)` | 查询受管会话 | `workspaceId?: string` | `HaiResult<ACPSessionInfo[]>` | `ai.acp.sessions.list("project")` |
+| `ai.acp.sessions.resume(id, options?)` | 恢复或重开原生会话 | `id: string, options?: ACPClientOptions & { restartNative?: boolean }`。`restartNative` 默认 `false` | `HaiResult` 包含会话句柄。定义改变、工作树失效或会话占用时失败 | `ai.acp.sessions.resume("task-1")` |
+| `ai.acp.sessions.close(id)` | 停止拥有的执行环境 | `id: string` | `HaiResult<void>; source and native history retained` | `ai.acp.sessions.close("task-1")` |
+| `ai.acp.sessions.reclaimWorktree(id)` | 回收干净检出目录 | `id: string`。会话须已关闭，预览已停止，且改动已保存 | `HaiResult<void>; branch and normal files retained` | `ai.acp.sessions.reclaimWorktree("task-1")` |
+| `ai.acp.sessions.remove(id)` | 移除会话记录 | `id: string`。传入已关闭或失败的框架会话 ID | `HaiResult<void>; worktree and native history retained` | `ai.acp.sessions.remove("task-1")` |
+| `ai.acp.connect(transport, options?)` | 接入原生传输 | `transport: ACPTransport, options?: ACPClientOptions`。传输方式可选 `stdio`、`http` 或 `ws` | `HaiResult<connection handle>` | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })` |
+| `ai.acp.close()` | 关闭子系统 | 无参数。应用通常通过 `ai.close()` 关闭完整生命周期 | `Promise<void>; cleanup may throw` | `ai.acp.close()` |
+| `session.info()` | 读取受管会话 | 无参数 | `Promise<HaiResult<ACPSessionInfo>>` | `session.info()` |
+| `session.prompt(content, signal?)` | 执行一轮开发 | `content: ContentBlock[], signal?: AbortSignal` | `Promise<HaiResult<{ text, stopReason, events }>>` | `session.prompt([{ type: "text", text: "检查工程" }])` |
+| `session.promptStructured(content, schema, signal?)` | 校验一份 JSON | `content: ContentBlock[], schema: z.ZodType<T>, signal?: AbortSignal` | `Promise<HaiResult<schema-inferred T>>` | `session.promptStructured(content, OutputSchema)` |
+| `session.stream(content, signal?)` | 观察原生事件 | `content: ContentBlock[], signal?: AbortSignal` | `AsyncIterable<SessionNotification>; failure throws` | `session.stream([{ type: "text", text: "检查工程" }])` |
+| `session.cancel()` | 取消当前轮次 | 无参数 | `Promise<HaiResult<void>>` | `session.cancel()` |
+| `session.setMode(mode)` | 选择已公布模式 | `mode: string` | `Promise<HaiResult<native mode response>>` | `session.setMode("code")` |
+| `session.setConfigOption(key, value)` | 设置已公布选项 | `key: string, value: string` | `Promise<HaiResult<native config response>>` | `session.setConfigOption("model", "coding")` |
+| `session.updateMain()` | 仅快进更新主分支 | 无参数。执行和预览须已停止 | `Promise<HaiResult<ACPGitReport[]>>; partial failure reports in cause` | `session.updateMain()` |
+| `session.publish(request)` | 提交并推送 | `request: z.input<typeof ACPPublishSchema>`。请求的 `mode`、`message`、`author` 必填，使用受管隔离会话 | `Promise<HaiResult<ACPGitReport[]>>` | `session.publish(publishOptions)` |
+| `session.close()` | 停止执行保留状态 | 无参数 | `Promise<HaiResult<void>>` | `session.close()` |
+| `connection.authenticate(method)` | 原生认证 | `method: string`。认证方法须为对端握手公布的 ID | `Promise<HaiResult<native auth response>>` | `connection.authenticate("api-key")` |
+| `connection.createSession(cwd, mcpServers?)` | 创建低层原生会话 | `cwd: string, mcpServers?: McpServer[]`。`cwd` 为对端可见的绝对目录 | `Promise<HaiResult<{ id, prompt, cancel }>>` | `connection.createSession("/workspace/project", [])` |
+| `connection.listSessions(cursor?)` | 原生分页会话 | `cursor?: string` | `Promise<HaiResult<native paginated response>>` | `connection.listSessions()` |
+| `connection.deleteSession(id)` | 删除原生会话 | `id: string` | `Promise<HaiResult<native delete response>>` | `connection.deleteSession(nativeId)` |
+| `connection.close()` | 关闭低层连接 | 无参数 | `Promise<HaiResult<void>>` | `connection.close()` |
+| `ai.acp.registerManagedExecutors()` | 为已装配的 Runner 登记 ACP 执行器 | 无参数。正常初始化流程已调用 | `void` | `ai.acp.registerManagedExecutors()` |
+| `ai.acp.workspaces.readGitSnapshot(input, signal?)` | 读取工作区 Git 快照 | `input: { directory: string, revision: string, maxBytes?: number }, signal?: AbortSignal`。传已授权仓库的绝对目录和提交引用。`maxBytes` 默认 16 MiB | `Promise<HaiResult<ACPProjectSnapshot>>` | `await ai.acp.workspaces.readGitSnapshot({ directory, revision })` |
+| `ai.acp.workspaces.diffSnapshot(before, after, signal?)` | 比较工作区快照 | `before: Record<string, string>, after: Record<string, string>, signal?: AbortSignal`。两份快照映射均从相对路径指向 Base64 文件内容 | `Promise<HaiResult<ACPProjectChanges>>` | `await ai.acp.workspaces.diffSnapshot(before, after)` |
+| `ai.acp.workspaces.publishSnapshot(input, signal?)` | 发布已批准的工作区快照 | `input: ACPPublishSnapshot, signal?: AbortSignal`。输入包含来源目录、远端、基准提交、已批准的补丁、任务分支、日期和作者 | `Promise<HaiResult<{ branch: string, commit: string }>>` | `await ai.acp.workspaces.publishSnapshot(approvedSnapshot)` |
+
+#### 连接、会话与工作区参数
+
+| 输入对象或方法 | 字段 | 默认值、条件与结果 |
+| --- | --- | --- |
+| `ACPTransport` | `type`、`command/args/cwd/env`、`url/headers` | `stdio` 必填命令，可选参数数组、工作目录及临时环境。`http` 或 `ws` 必填与协议对应的 URL，可选仅在当前连接使用的认证头 |
+| `ACPClientOptions` | `onEvent`、`handlers`、`capabilities`、`signal` | 均可省略。事件回调含创建完成前的通知，抛错会关闭连接。只声明宿主确已实现的能力，缺少权限回调时默认拒绝。`signal` 取消初始化连接，轮次取消信号单独提供 |
+| `agents.initialize/check`、`workspaces.prepare/importFiles` | `id`、`modelId`、`options.workspaceId`、`files` | 使用已登记的智能体或工作区 ID。可为预检选模型，为握手检查选工作区和连接回调。导入文件传 `{ path, content }[]`，路径相对于工作区，内容可为字符串或 `Uint8Array` |
+| `ACPCreateSessionOptions` | `id`、`agentId`、`workspaceId`、`repositoryId`、`cwd` | 智能体必填。会话 ID 省略时生成 UUID。托管模式要求工作区并计算目录，可从已登记仓库根目录启动。自定义远程模式提供对端可见的绝对 `cwd` |
+| `ACPCreateSessionOptions` | `newWorktree`、`branch`、`modelId`、`mcpServers`、`mcpServerIds` | 默认 `newWorktree: false`。启用后默认分支为 `acp/<会话 ID>`。模型须在该智能体的 `modelIds` 内；可合并原生 MCP 定义和登记服务 ID，并填写上述连接选项 |
+| `sessions.get/list/resume/close/reclaimWorktree/remove` | `id`、`workspaceId`、`options.restartNative` | 会话操作用框架 ID。列表可按工作区筛选。恢复默认继续原生历史；重开选项仅供持有独占执行权、确认首轮未发送的可信宿主使用 |
+| `session.prompt/promptStructured/stream` | `content`、`schema`、`signal` | 原生内容块必填，例如 `[{ type: 'text', text: '列出文档标题' }]`。结构化方法还要求 Zod Schema，对文本解析后的值校验。可用轮次信号取消 |
+| `session.setMode/setConfigOption`、`connection.authenticate/createSession/listSessions/deleteSession` | `mode`、`key/value`、`method`、`cwd`、`mcpServers`、`cursor`、`id` | 模式、配置项和值、认证方式来自对端声明。原生会话创建用对端可见绝对目录和可选 MCP 服务数组。分页传上次返回的游标，删除传原生会话 ID |
+| `session.publish`、`workspaces.publishSnapshot` | 会话发布请求、`ACPPublishSnapshot` | 会话发布传 `mode`（`merge-main` 或 `push-branch`）、提交消息和作者。快照另需来源目录、远端、基准提交、已批准补丁、任务分支、日期与作者。在已有发布授权后调用 |
+| 资源 `get/register/update/remove` | `id`、定义、`version` | 按 ID 查找。智能体与工作区字段见 [ACP 配置](../configuration/ai.md)。更新或删除时可传刚读取的数据库版本。仍有关联会话时不能删除定义 |
+
+例如在已初始化的测试配置中传 `{ agentId: 'editor', workspaceId: 'manual', newWorktree: true }`。创建成功后读取返回句柄的 `info()`，可用框架会话 ID 关联分支与目录；需要独立工作树时核对返回会话，而不是把请求受理当成即将执行完成。
 
 #### 场景：管理智能体、工作区和 ACP 会话
 
@@ -1920,11 +2208,21 @@ async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.r
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.a2a.registerExecutor` | 注册任务执行器 | `SDK AgentExecutor` | `void` | `ai.a2a.registerExecutor(executor)` |
-| `ai.a2a.getAgentCard` | 提供标准发现文档 | `none; configured a2a card` | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)` | `ai.a2a.getAgentCard()` |
-| `ai.a2a.handleRequest` | 处理认证的协议请求 | `unknown JSON-RPC body, trusted context.agentId?` | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
-| `ai.a2a.listMessages` | 可信管理查询 | `A2ATaskFilter: callerId?, contextId?, since?, pagination?` | `StorePage<A2AMessageRecord>` | `ai.a2a.listMessages(messageFilter)` |
-| `ai.a2a.callRemoteAgent` | 调用获准远端 | `allowlisted HTTPS URL, message, A2ACallOptions?` | `A2ACallResult` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
+| `ai.a2a.registerExecutor(executor)` | 注册任务执行器 | `executor: AgentExecutor` | `void` | `ai.a2a.registerExecutor(executor)` |
+| `ai.a2a.getAgentCard()` | 提供标准发现文档 | 无参数。读取配置中的 Agent Card | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)` | `ai.a2a.getAgentCard()` |
+| `ai.a2a.handleRequest(requestBody, context?)` | 处理认证的协议请求 | `requestBody: unknown, context?: Record<string, unknown>`。`requestBody` 为收到的 A2A JSON-RPC 请求值，由入口校验 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
+| `ai.a2a.listMessages(filter)` | 可信管理查询 | `filter: A2ATaskFilter` | `StorePage<A2AMessageRecord>` | `ai.a2a.listMessages(messageFilter)` |
+| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 调用获准远端 | `remoteUrl: string, message: string, options?: A2ACallOptions` | `A2ACallResult` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
+
+#### A2A 请求、分页与调用参数
+
+| 对象或方法 | 字段 | 默认值、条件及作用 |
+| --- | --- | --- |
+| `registerExecutor`、`handleRequest` | `executor`、`requestBody`、`context` | 执行器来自应用，框架将协议任务交给它。入口接收原始 JSON-RPC 值及可选由服务端确认的调用上下文，协议校验失败返回协议错误 |
+| `A2ATaskFilter` | `status`、`contextId`、`callerId`、`since`、`limit`、`offset` | 可按 `user/agent` 消息角色、上下文及可信调用方过滤。`since` 是起始 Unix 毫秒值。分页默认偏移 0、50 条 |
+| `callRemoteAgent`、`A2ACallOptions` | `remoteUrl`、`message`、`timeout`、`headers` | 远端地址和文本必填。超时默认 60000 毫秒。可从服务端传额外请求头，同名字段不区分大小写地覆盖 |
+
+例如 `{ callerId: 'docs-reader', status: 'agent', limit: 10 }` 查询该调用方的最多十条智能体消息，任务最终状态仍从各自的任务结果读取。
 
 #### 场景：发布与调用远程智能体
 

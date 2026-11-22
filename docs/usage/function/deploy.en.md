@@ -35,13 +35,25 @@ Scan requirements and artifacts before choosing a read-only plan, offline bundle
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `deploy.init` | Prepare the configured deployment provider | `config` | `void` | `await deploy.init(config)` |
-| `deploy.close` | Release deployment provider resources | None | `Promise<void>` | `await deploy.close()` |
-| `deploy.scan` | Inspect a project and delivery target | `appDir, options?` | `ScanResult` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
-| `deploy.provisionAll` | Provision selected middleware | `projectName, services?` | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
-| `deploy.deployApp` | Deploy an app or produce a delivery bundle | `appDir, options?` | `DeployResult` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+| `deploy.init(config)` | Prepare the configured deployment provider | Required `config: DeployConfigInput` selects the deployment provider. See [deployment settings](../configuration/deploy.en.md) for fields and defaults. | `Promise<HaiResult<void>>` | `await deploy.init(config)` |
+| `deploy.close()` | Release deployment provider resources | None | `Promise<void>` | `await deploy.close()` |
+| `deploy.scan(appDir, options?)` | Inspect a project and delivery target | Required application directory `appDir`, resolved relative to the current directory. `options.environment` defaults to `prod`, and an explicit value requires the matching environment file. Omit `options.envDir` to search the app or workspace. | `Promise<HaiResult<ScanResult>>` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
+| `deploy.provisionAll(projectName, services?)` | Provision selected middleware | Required string `projectName`. Optional `services` selects service types. Omitting it uses all configured provisioners, while `[]` provisions none. | `Promise<HaiResult<ProvisionResult[]>>` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
+| `deploy.deployApp(appDir, options?)` | Deploy an app or produce a delivery bundle | Required application directory `appDir`. Optional `options` selects the environment, Compose services, image inputs, packaging, and progress, as listed below. | `Promise<HaiResult<DeployResult>>` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
 #### Scenario: Scan and deliver applications
+
+Omit `deploy.deployApp()`'s `options` or supply the fields required by your delivery workflow.
+
+| Field | Default or requirement | Effect |
+| --- | --- | --- |
+| `environment`, `envDir` | Uses the initialized environment or falls back to `prod`. Finds the directory from the app or workspace. | An explicitly selected environment requires the matching `.env.<environment>` file. |
+| `selectedServices` | Full artifacts update all services. Partial artifacts update their included images. | Pass an array of Compose service names such as `['web']` to update just those services. |
+| `serviceModes`, `skipMiddleware` | Modes default to `'default'`. `skipMiddleware` defaults to `false`. | Map env prefixes or service names to `'default'`, `'custom'`, or `'keep'`. Prefix mappings take precedence. `skipMiddleware: true` skips middleware configuration and provisioning. |
+| `artifactDir`, `runtime` | Finds the existing artifacts and packaging engine automatically. | You can provide the built-image directory. Choose `'auto'`, `'podman'`, or `'docker'`. Auto prefers Podman. |
+| `bundleOnly`, `output` | Deploys by default, with delivery paths derived from the app and version. | `bundleOnly: true` is supported by docker-ssh and prepares an archive and scripts without SSH. Set `output` to name the output path. An existing delivery directory is rejected. |
+| `imageSource`, `proxy` | Official image sources and inherited process proxy. | Set `imageSource.type` to `'official'`, `'cn'`, or `'custom'` and add `registries` for custom maps. Set `proxy.mode` to `'inherit'`, `'system'`, `'custom'`, or `'none'`. Custom proxy settings take an HTTP(S) `url` and optional `bypass`. |
+| `onProgress(stage)` | No callback when omitted. | Report the active stage, such as `packaging` or `health`. Other stages are `preflight`, `images`, `dependencies`, `start`, `https`, and `complete`. |
 
 This is the caller’s delivery workflow. plan is read-only, build prepares artifacts, and deploy changes the target environment.
 
@@ -95,10 +107,10 @@ The deploy operator owns the private file. Display loaded names rather than cred
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `deploy.credentials.getPath` | Locate local credentials | None | `string` | `deploy.credentials.getPath()` |
-| `deploy.credentials.load` | Read local credentials | None | `HaiResult<string[]>` | `deploy.credentials.load()` |
-| `deploy.credentials.save` | Save credentials for a target | `key, value` | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
-| `deploy.credentials.saveAll` | Save the credential set | `entries` | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
+| `deploy.credentials.getPath()` | Locate local credentials | None | `string` | `deploy.credentials.getPath()` |
+| `deploy.credentials.load()` | Read local credentials | None | `HaiResult<string[]>` | `deploy.credentials.load()` |
+| `deploy.credentials.save(key, value)` | Save credentials for a target | Required environment variable name `key` and credential string `value` from the trusted administration workflow. | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
+| `deploy.credentials.saveAll(entries)` | Save the credential set | Required `entries` object mapping environment variable names to credential values. | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
 
 #### Scenario: Manage local private credentials
 
@@ -138,11 +150,26 @@ Read deployment and runtime files separately, merge by explicit precedence and s
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `loadDeploymentEnvironment` | Read deployment environment layers | 指定环境名、环境目录，可要求文件存在 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
-| `mergeEnvironmentLayers` | Merge environment layers by priority | 依优先顺序传入变量映射，可按前缀筛选 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
-| `loadDeploymentConfig` | Read target deployment configuration | 运行时模块名、配置文件路径、解析时使用的环境变量 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
-| `saveDeploymentEnvironment` | Save deployment environment variables | 已读取的部署环境、新变量、可选 private/replace 参数 | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
-| `saveMiddlewareEnvironment` | Save middleware environment variables | 部署环境及包含应用路径、后端与配置的选项 | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+| `loadDeploymentEnvironment(options)` | Read deployment environment layers | Required `options` selects the target environment and directory. See [environment arguments](#deployment-environment-options). | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `mergeEnvironmentLayers(layers, prefix?)` | Merge environment layers by priority | Required variable maps `layers`, ordered from lowest to highest precedence. Omit `prefix` to include every name, or supply it to include just that name and its underscore-prefixed descendants. | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `loadDeploymentConfig(name, path, values)` | Read target deployment configuration | Required module `name`, YAML or project JSON `path`, and `values` for environment overrides. | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `saveDeploymentEnvironment(environment, values, options?)` | Save deployment environment variables | Required loaded target `environment` and variable map `values`. Optional `options` controls private writes and replacement. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `saveMiddlewareEnvironment(environment, options)` | Save middleware environment variables | Required target `environment` and connection-selection `options`. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+
+<a id="deployment-environment-options"></a>
+
+#### Environment read and write arguments
+
+| Field | Default and conditions | Purpose |
+| --- | --- | --- |
+| `loadDeploymentEnvironment.options.environment` / `envDir` | Both required | Selects the environment name and dotenv directory, such as `prod` and `./deployment`. |
+| `loadDeploymentEnvironment.options.requireFile` | Default `true` | Set to `false` to continue with existing layers when the target file is absent. |
+| `saveDeploymentEnvironment.options.private` | Default `false` | Set to `true` to write all supplied variables to `.env.<environment>.local`. The default still routes recognized secrets to that private file. |
+| `saveDeploymentEnvironment.options.replace` | Default empty list | Before saving, clears the matching keys and their underscore-prefixed descendants from the target public and private files. Use with a complete replacement. |
+| `saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | All required | Supplies the application root containing config, the scanned config path, and the chosen backend name. |
+| `saveMiddlewareEnvironment.options.configuration` / `updates` | Optional. The connection can be omitted before cloud provisioning. | When supplied, combines the selected backend’s complete connection and other variable updates. |
+
+For example, `saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` for `prod` returns `["HAI_DB_HOST"]` on success and writes the public value to the target `.env.prod`.
 
 #### Scenario: Read, merge and save deployment variables: environment helpers
 
@@ -189,10 +216,21 @@ Check backend suitability, then convert form strings into actual booleans, ports
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `canKeepMiddleware` | Check whether middleware can be retained | 当前依赖需求、目录中选定的后端与目标环境 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
-| `describeMiddlewareBackend` | Describe a middleware backend | 后端目录项，读取其 purpose | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
-| `validateMiddlewareField` | Validate a middleware form field | 表单字符串、字段定义与后端名 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
-| `parseMiddlewareField` | Parse a middleware form field | 表单字符串、字段定义与后端名，可声明托管模式 | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+| `canKeepMiddleware(requirement, backend, environment)` | Check whether middleware can be retained | Required scanned `requirement`, selected catalog `backend`, and target `environment` snapshot. | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
+| `describeMiddlewareBackend(backend)` | Describe a middleware backend | Required `backend`, either a full catalog entry or an object containing its `purpose`. | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
+| `validateMiddlewareField(options)` | Validate a middleware form field | Required `options` contains the form value, field definition, and actual backend. See [middleware field arguments](#middleware-field-options). | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `parseMiddlewareField(options)` | Parse a middleware form field | Required `options` contains the form value, field definition, and backend. It can enable managed provisioning. See [middleware field arguments](#middleware-field-options). | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+
+<a id="middleware-field-options"></a>
+
+#### Middleware form arguments
+
+| Field | Default and conditions | Purpose |
+| --- | --- | --- |
+| `options.value` / `field` / `backend` | All required | Supplies the raw form string, catalog field descriptor, and actual backend. The field and backend jointly determine validation. |
+| `options.managed` | Off by default and available in `parseMiddlewareField` only | Set to `true` to accept an empty value for fields declared `secret` or `managed`, returning `undefined`. |
+
+For example, `parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` returns boolean `false` on success.
 
 #### Scenario: Validate middleware forms: deployment helpers
 
@@ -222,9 +260,9 @@ Use a stable project identity and verify artifact digests. Inspect structured re
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `normalizeProjectName` | Normalize a project identifier | 应用名称 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
-| `artifactChecksum` | Compute a delivery artifact checksum | 现有镜像或交付产物路径 | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
-| `getDeployRecovery` | Read deployment recovery information | 部署失败的 `HaiError` | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+| `normalizeProjectName(name)` | Normalize a project identifier | Required application `name`, optionally with an npm scope. | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
+| `artifactChecksum(file)` | Compute a delivery artifact checksum | Required `file` is the path to an existing local image or delivery artifact. | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
+| `getDeployRecovery(error)` | Read deployment recovery information | Required deployment `error` is a `HaiError` from which to read recovery information. | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
 
 #### Scenario: Check artifact identity and recovery: deployment helpers
 

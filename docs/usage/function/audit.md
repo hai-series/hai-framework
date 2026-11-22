@@ -77,8 +77,8 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.init` | 等待审计表准备完成。先连接 RelDB | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await audit.init()` |
-| `audit.close` | 等待已开始的操作完成；RelDB 由应用关闭 | RelDB 由应用关闭；无 | `Promise<HaiResult<void>>` | `await audit.close()` |
+| `audit.init(config?)` | 等待审计表准备完成。先连接 RelDB | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await audit.init()` |
+| `audit.close()` | 等待已开始的操作完成；RelDB 由应用关闭 | RelDB 由应用关闭；无 | `Promise<HaiResult<void>>` | `await audit.close()` |
 | `audit.isInitialized` | 检查审计服务是否就绪 | 只读属性，无参数 | `boolean` | `audit.isInitialized` |
 
 #### 场景：准备审计服务
@@ -115,15 +115,35 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.log` | 保存一条明确的审计事件 | input, tx | `AuditLog` | `await audit.log(event)` |
-| `audit.capture` | 按自动采集策略记录事件 | input, options | `void` | `await audit.capture(event)` |
-| `audit.withContext` | 给操作绑定可信身份与请求信息 | context, operation | `T` | `audit.withContext(trustedAuditContext, () => saveOrder())` |
-| `audit.helper.login` | 记录登录事件 | userId, ip, ua | `void` | `await audit.helper.login(userId)` |
-| `audit.helper.logout` | 记录退出事件 | userId, ip, ua | `void` | `await audit.helper.logout(userId)` |
-| `audit.helper.register` | 记录注册事件 | userId, ip, ua | `void` | `await audit.helper.register(userId)` |
-| `audit.helper.passwordResetRequest` | 记录密码重置请求 | email, ip, ua | `void` | `await audit.helper.passwordResetRequest(email)` |
-| `audit.helper.passwordResetComplete` | 记录密码重置完成 | userId, ip, ua | `void` | `await audit.helper.passwordResetComplete(userId)` |
-| `audit.helper.crud` | 记录资源增删改查 | input | `void` | `await audit.helper.crud(crudEvent)` |
+| `audit.log(input, tx?)` | 保存一条明确的审计事件 | `input: CreateAuditLogInput` 必填事件，见[事件字段](#audit-event-fields)。`tx?: DmlWithTxOperations` 可选已有事务，让日志与业务同提交 | `AuditLog` | `await audit.log(event)` |
+| `audit.capture(input, options?)` | 按自动采集策略记录事件 | `input: CreateAuditLogInput` 必填事件，见[事件字段](#audit-event-fields)。`options?` 自动采集的 read 标记和事务，见[采集字段](#audit-event-fields) | `void` | `await audit.capture(event)` |
+| `audit.withContext(context, operation)` | 给操作绑定可信身份与请求信息 | `context: AuditContext` 可信异步上下文，见[身份字段](#audit-event-fields)。`operation: () => T` 在上下文中执行并透传其返回值 | `T` | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+| `audit.helper.login(userId, ip?, ua?)` | 记录登录事件 | `userId: string` 会话中的可信用户 ID。`ip?: string, ua?: string` 可选的客户端 IP 和 User-Agent | `void` | `await audit.helper.login(userId)` |
+| `audit.helper.logout(userId, ip?, ua?)` | 记录退出事件 | `userId: string` 会话中的可信用户 ID。`ip?: string, ua?: string` 可选的客户端 IP 和 User-Agent | `void` | `await audit.helper.logout(userId)` |
+| `audit.helper.register(userId, ip?, ua?)` | 记录注册事件 | `userId: string` 会话中的可信用户 ID。`ip?: string, ua?: string` 可选的客户端 IP 和 User-Agent | `void` | `await audit.helper.register(userId)` |
+| `audit.helper.passwordResetRequest(email, ip?, ua?)` | 记录密码重置请求 | `email: string` 申请重置的邮箱。`ip?: string, ua?: string` 可选的客户端 IP 和 User-Agent | `void` | `await audit.helper.passwordResetRequest(email)` |
+| `audit.helper.passwordResetComplete(userId, ip?, ua?)` | 记录密码重置完成 | `userId: string` 会话中的可信用户 ID。`ip?: string, ua?: string` 可选的客户端 IP 和 User-Agent | `void` | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud(input)` | 记录资源增删改查 | `input: CrudAuditInput` 必填 action（create、read、update、delete）和 resource。可带 resourceId、details、userId、ip、ua 及[事件字段](#audit-event-fields) | `void` | `await audit.helper.crud(crudEvent)` |
+
+<a id="audit-event-fields"></a>
+
+**事件、上下文和自动采集选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `CreateAuditLogInput.action / resource` | `string` | 必填 | 操作名与资源类别，例如 update 与 orders。 |
+| `CreateAuditLogInput.userId / resourceId` | `string \| null` | 可省略 | 操作者与受影响资源的 ID。系统操作可无用户。 |
+| `CreateAuditLogInput.details` | `Record<string, unknown> \| null` | 可省略 | 持久化的 JSON 详情，写入前脱敏。 |
+| `category` | `'system' \| 'business' \| null` | 可省略 | 事件类别。AuditContext 也可为当前操作提供默认分类。 |
+| `outcome` | `'success' \| 'failure' \| 'denied' \| null` | 可省略 | 记录业务操作的结果。 |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical' \| null` | 可省略 | 标记事件等级。 |
+| `requestId / traceId / scopeId` | `string` | 可省略 | 在事件或上下文提供可信请求、链路和业务范围标识。事件输入也接受 null。 |
+| `ipAddress / userAgent` | `string` | 可省略 | 可信客户端地址与 User-Agent。事件输入也接受 null。 |
+| `actorSnapshot / AuditContext.actor` | `AuditActorSnapshot \| null` | 可省略 | 记录当时身份。对象必须包含 id，可附 username、displayName、roles。 |
+| `capture.options.read` | `boolean` | `false` | 标记读取操作。配置不采集读取时，成功读取会跳过，而失败和拒绝可继续记录。 |
+| `capture.options.tx` | `DmlWithTxOperations` | 可省略 | 提供当前业务事务，同一事务记录可与业务一起回滚。 |
+
+例如自动采集已启用但不记录读取时，同一读取事件传 `{ read: true }`，`outcome: "success"` 成功返回且不写日志，`outcome: "denied"` 会保存拒绝事件。
 
 #### 场景：记录操作与关联身份
 
@@ -231,10 +251,28 @@ if (!crudResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.list` | 筛选并分页查询事件 | options | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
-| `audit.getUserRecent` | 查询用户近期活动 | userId, limit | `AuditLog[]` | `await audit.getUserRecent(userId, 20)` |
-| `audit.getStats` | 统计指定天数内的操作 | days, filters | `AuditStatItem[]` | `await audit.getStats(7)` |
-| `audit.cleanup` | 按保留策略删除旧记录 | olderThanDays | `number` | `await audit.cleanup(90)` |
+| `audit.list(options?)` | 筛选并分页查询事件 | 可选 `options: ListAuditLogsOptions`。见[筛选与分页字段](#audit-list-options)。 | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent(userId, limit?)` | 查询用户近期活动 | 必填 `userId: string` 指定用户。`limit: number` 可省略，默认最多返回 10 条。 | `AuditLog[]` | `await audit.getUserRecent(userId, 20)` |
+| `audit.getStats(days?, filters?)` | 统计指定天数内的操作 | 可选 `days: number` 默认 7 天。`filters` 可传 [列表字段](#audit-list-options)中的 category、outcome、severity、scopeId、userId、resource。 | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.cleanup(olderThanDays?)` | 按保留策略删除旧记录 | `olderThanDays?: number` 默认 90 天，删除早于截止时间的事件 | `number` | `await audit.cleanup(90)` |
+
+<a id="audit-list-options"></a>
+
+**ListAuditLogsOptions**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `requestId / traceId / scopeId` | `string` | 可省略 | 按请求、链路或业务范围精确匹配。 |
+| `userId / action / resource` | `string` | 可省略 | 按事件用户、操作或资源类型精确匹配。 |
+| `category` | `'system' \| 'business'` | 可省略 | 筛选系统或业务事件。 |
+| `outcome` | `'success' \| 'failure' \| 'denied'` | 可省略 | 仅保留指定结果。 |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical'` | 可省略 | 仅保留指定等级。 |
+| `startDate / endDate` | `Date` | 可省略 | 事件创建时间的含端点范围。两值同时传入时起点不能晚于终点。 |
+| `sortBy` | `'createdAt' \| 'action' \| 'resource' \| 'category' \| 'outcome' \| 'severity'` | `createdAt` | 选择排序字段。 |
+| `sortDirection` | `'asc' \| 'desc'` | `desc` | 指定排序方向。 |
+| `page / pageSize` | `number` | 第 1 页，每页 20 条 | 设置查询页码和每页数量。 |
+
+例如 `{ resource: "orders", outcome: "denied", sortDirection: "asc", pageSize: 5 }` 只查被拒绝的订单事件，按创建时间从旧到新返回，首页最多 5 条。
 
 #### 场景：查询与清理旧记录
 
@@ -274,8 +312,21 @@ const removed = removedResult.data // 超过 90 天并已删除的记录数
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.backup.run` | 创建或核对私有归档 | options | `AuditBackupInfo` | `await audit.backup.run()` |
-| `audit.backup.verify` | 检查归档格式与校验和 | key, options | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+| `audit.backup.run(options?)` | 创建或核对私有归档 | 可选 `options: AuditBackupOptions` 控制 ID 与扫描范围。见[归档字段](#audit-backup-options)。 | `AuditBackupInfo` | `await audit.backup.run()` |
+| `audit.backup.verify(key, options?)` | 检查归档格式与校验和 | 必填 `key: string` 来自私有归档回执。可选 `options.signal: AbortSignal` 用于取消。 | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+
+<a id="audit-backup-options"></a>
+
+**归档与校验选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `AuditBackupOptions.id` | `string` | 随机 UUID | 同一归档任务传稳定 ID。已有同 ID 归档输入相符时核对并复用，冲突时返回失败。 |
+| `AuditBackupOptions.from` | `Date` | 无下限 | 归档事件的开始时间。 |
+| `AuditBackupOptions.to` | `Date` | 开始归档时的数据库时间 | 上界不能晚于归档开始，也不能早于 from。 |
+| `signal` | `AbortSignal` | 可省略 | run 与 verify 都可接收取消信号。 |
+
+需要重试同一归档时，保留 `{ id: "daily-audit", from, to }`。已有完整归档时，成功返回同一对象键的回执。
 
 #### 场景：归档与核对备份
 
@@ -348,7 +399,7 @@ const verifiedArchive = verifiedArchiveResult.data
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.checkAlerts` | 检查阈值并尝试通知 | options | `AuditAlertReport` | `await audit.checkAlerts()` |
+| `audit.checkAlerts(options?)` | 检查阈值并尝试通知 | `options?: { signal?: AbortSignal }` 可取消异常检查或通知过程，省略时按配置执行 | `AuditAlertReport` | `await audit.checkAlerts()` |
 
 #### 场景：检查异常并通知
 

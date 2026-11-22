@@ -80,9 +80,9 @@ Prepare the database and cache before IAM. Public settings drive available authe
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.init` | 先连接 RelDB 和 Cache，再等待身份服务可用 | config | `void` | `await iam.init({})` |
-| `iam.close` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | None | `Promise<void>` | `await iam.close()` |
-| `iam.getPublicConfig` | Read public policy including stored sensitive operations | None | `Promise<HaiResult<IamPublicConfig>>` | `await iam.getPublicConfig()` |
+| `iam.init(config)` | 先连接 RelDB 和 Cache，再等待身份服务可用 | `config: IamConfigInput` is required. An empty object uses defaults. See [configuration](../configuration/iam.en.md). | `void` | `await iam.init({})` |
+| `iam.close()` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | No arguments | `Promise<void>` | `await iam.close()` |
+| `iam.getPublicConfig()` | Read public policy including stored sensitive operations | No arguments | `Promise<HaiResult<IamPublicConfig>>` | `await iam.getPublicConfig()` |
 | `iam.config` | Read the current redacted config | Read-only property; no arguments | `IamConfig \| null` | `iam.config` |
 | `iam.publicConfig` | Read the last public policy snapshot | Read-only property; no arguments | `IamPublicConfig \| null` | `iam.publicConfig` |
 | `iam.isInitialized` | Check whether IAM is ready | Read-only property; no arguments | `boolean` | `iam.isInitialized` |
@@ -121,17 +121,30 @@ Follow enabled server authentication flows, including challenges, password expir
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.auth.login` | Authenticate with a password and create a session | credentials, context? | `AuthResult` | `await iam.auth.login({ identifier, password })` |
-| `iam.auth.loginWithOtp` | Authenticate with a one-time code | credentials, context? | `AuthResult` | `await iam.auth.loginWithOtp({ identifier, code })` |
-| `iam.auth.loginWithLdap` | Authenticate against a directory | credentials, context? | `AuthResult` | `await iam.auth.loginWithLdap({ username, password })` |
-| `iam.auth.loginWithApiKey` | Create a scoped session with an API key | credentials, context? | `AuthResult` | `await iam.auth.loginWithApiKey({ key: rawKey })` |
-| `iam.auth.registerAndLogin` | Register and create a session when allowed | options, context? | `AuthResult` | `await iam.auth.registerAndLogin({ username, password })` |
-| `iam.auth.createCaptcha` | Create a challenge for an operation | input | `IamCaptchaChallenge` | `await iam.auth.createCaptcha({ operation: 'login' })` |
-| `iam.auth.sendOtp` | Send a code through an enabled channel | identifier, options? | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)` |
-| `iam.auth.verifyToken` | Verify an access token and current identity | accessToken | `Session` | `await iam.auth.verifyToken(accessToken)` |
-| `iam.auth.logout` | Revoke the presented access and refresh credentials | accessToken | `void` | `await iam.auth.logout(accessToken)` |
-| `iam.auth.reauthenticate` | Recheck a password and issue an operation ticket | accessToken, password, operation | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
-| `iam.auth.checkSensitiveOperation` | Check and consume operation proof | accessToken, operation, ticket | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+| `iam.auth.login(credentials, context?)` | Authenticate with a password and create a session | `credentials: PasswordCredentials`, `context?: AuthRequestContext` · Password credentials; trusted host context supplies sign-in policy and tracing metadata · [Object arguments](#authentication-arguments) | `AuthResult` | `await iam.auth.login({ identifier, password })` |
+| `iam.auth.loginWithOtp(credentials, context?)` | Authenticate with a one-time code | `credentials: OtpCredentials`, `context?: AuthRequestContext` · Account identifier and one-time code; context supplies policy and tracing metadata · [Object arguments](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithOtp({ identifier, code })` |
+| `iam.auth.loginWithLdap(credentials, context?)` | Authenticate against a directory | `credentials: LdapCredentials`, `context?: AuthRequestContext` · Directory credentials; context supplies policy and tracing metadata · [Object arguments](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithLdap({ username, password })` |
+| `iam.auth.loginWithApiKey(credentials, context?)` | Create a scoped session with an API key | `credentials: ApiKeyCredentials`, `context?: AuthRequestContext` · An issued key; context supplies policy and tracing metadata · [Object arguments](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithApiKey({ key: rawKey })` |
+| `iam.auth.registerAndLogin(options, context?)` | Register and create a session when allowed | `options: RegisterOptions` provides the account, password and profile to register. `context` supplies terminal and request details for the new session · [Object arguments](#users-arguments) · `context?: AuthRequestContext` · [Object arguments](#authentication-arguments) | `AuthResult` | `await iam.auth.registerAndLogin({ username, password })` |
+| `iam.auth.createCaptcha(input)` | Create a challenge for an operation | `input: { operation: CaptchaOperation }` is required. Set `operation` to `login`, `register`, `sendOtp`, `passwordReset`, or `renewPassword` | `IamCaptchaChallenge` | `await iam.auth.createCaptcha({ operation: 'login' })` |
+| `iam.auth.sendOtp(identifier, options?)` | Send a code through an enabled channel | `identifier: string` account identifier for the enabled channel, such as email or phone · `options?: { captcha?: string }` supplies the challenge proof when asked for it | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)` |
+| `iam.auth.verifyToken(accessToken)` | Verify an access token and current identity | `accessToken: string` access token for the current session | `Session` | `await iam.auth.verifyToken(accessToken)` |
+| `iam.auth.logout(accessToken)` | Revoke the presented access and refresh credentials | `accessToken: string` access token for the current session | `void` | `await iam.auth.logout(accessToken)` |
+| `iam.auth.reauthenticate(accessToken, password, operation)` | Recheck a password and issue an operation ticket | `accessToken: string` access token for the current session · `password: string` password checked against the password policy · `operation: string` sensitive operation name registered by the server | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
+| `iam.auth.checkSensitiveOperation(accessToken, operation, ticket?)` | Check and consume operation proof | `accessToken: string` access token for the current session · `operation: string` sensitive operation name registered by the server · `ticket?: string` one-time ticket issued by the server | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+
+<a id="authentication-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `PasswordCredentials` | Requires `identifier` (username, email, or phone) and `password`. |
+| `OtpCredentials` | Requires `identifier` (email or phone) and one-time `code`. |
+| `LdapCredentials` | Requires the directory `username` and `password`. |
+| `PasswordCredentials / OtpCredentials / LdapCredentials` | Send `captcha` when an interactive challenge is required. For session recovery, use `expectedUserId` to bind the attempt to the original account. |
+| `ApiKeyCredentials` | Required `key: string` is the original API key returned at issuance. |
+| `AuthRequestContext` | Optional `terminalType` (`web`, `app`, `desktop`, `api`; ordinary sign-ins default to `web`), `ip`, `userAgent`, and `requestId`. Supply them from the trusted host. |
 
 <a id="ldap-identity-migration"></a>
 
@@ -184,24 +197,61 @@ Authorize the actor before looking up or modifying users. Distinguish self-servi
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.user.createUser` | Create a user as an administrator | options | `RegisterResult` | `await iam.user.createUser({ username, password })` |
-| `iam.user.register` | Register under the public policy | options | `RegisterResult` | `await iam.user.register({ username, password })` |
-| `iam.user.inviteUser` | Create a user and send a password-setup invitation | options | `RegisterResult` | `await iam.user.inviteUser({ username, email })` |
-| `iam.user.getUser` | Find a user by ID | userId, options? | `User \| null` | `await iam.user.getUser(userId)` |
-| `iam.user.getUsers` | Read users and requested relations in bulk | userIds, options? | `User[]` | `await iam.user.getUsers([userId], { include: ['roles'] })` |
-| `iam.user.listUsers` | Filter and paginate users | options? | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })` |
-| `iam.user.getCurrentUser` | Read the current token holder profile | accessToken | `User` | `await iam.user.getCurrentUser(accessToken)` |
-| `iam.user.updateCurrentUser` | Update the current token holder profile | accessToken, data | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
-| `iam.user.updateUser` | Update a user by ID | userId, data | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
-| `iam.user.deleteUser` | Delete a user | userId | `void` | `await iam.user.deleteUser(userId)` |
-| `iam.user.adminResetPassword` | Reset a password as an administrator | userId, newPassword | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
-| `iam.user.renewPassword` | Replace an expired or initial password using original credentials | input | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
-| `iam.user.changePassword` | Change a password after verifying the old one | userId, oldPassword, newPassword | `void` | `await iam.user.changePassword(userId, oldPassword, newPassword)` |
-| `iam.user.changeCurrentUserPassword` | Change the token holder password | accessToken, oldPassword, newPassword | `void` | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
-| `iam.user.requestPasswordReset` | Request reset delivery | identifier, options? | `void` | `await iam.user.requestPasswordReset(identifier)` |
-| `iam.user.confirmPasswordReset` | Consume reset credentials and replace a password | token, newPassword | `void` | `await iam.user.confirmPasswordReset(resetToken, newPassword)` |
-| `iam.user.validatePassword` | Check the password policy synchronously | password | `void` | `iam.user.validatePassword(newPassword)` |
-| `iam.user.scanInactiveAccounts` | Deactivate accounts under inactivity policy | None | `number` | `await iam.user.scanInactiveAccounts()` |
+| `iam.user.createUser(options)` | Create a user as an administrator | `options: RegisterOptions` · Administrator-supplied account details and initial credentials · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.createUser({ username, password })` |
+| `iam.user.register(options)` | Register under the public policy | `options: RegisterOptions` · Account details and password for public registration · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.register({ username, password })` |
+| `iam.user.inviteUser(options)` | Create a user and send a password-setup invitation | `options: Omit<RegisterOptions, "password">` · Supply account details and the contact for the invitation · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.inviteUser({ username, email })` |
+| `iam.user.getUser(userId, options?)` | Find a user by ID | `userId: string` target user ID · `options?: { include?: 'roles'[] }` requests roles when needed · [Object arguments](#users-arguments) | `User \| null` | `await iam.user.getUser(userId)` |
+| `iam.user.getUsers(userIds, options?)` | Read users and requested relations in bulk | `userIds: readonly string[]` user IDs to look up together · `options?: { include?: 'roles'[] }` requests roles when needed · [Object arguments](#users-arguments) | `User[]` | `await iam.user.getUsers([userId], { include: ['roles'] })` |
+| `iam.user.listUsers(options?)` | Filter and paginate users | `options?: ListUsersOptions` · Select accounts, ordering, pagination, and included relations · [Object arguments](#users-arguments) | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })` |
+| `iam.user.getCurrentUser(accessToken)` | Read the current token holder profile | `accessToken: string` access token for the current session | `User` | `await iam.user.getCurrentUser(accessToken)` |
+| `iam.user.updateCurrentUser(accessToken, data)` | Update the current token holder profile | `accessToken: string` access token for the current session · `data: UpdateCurrentUserInput` · [Object arguments](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
+| `iam.user.updateUser(userId, data)` | Update a user by ID | `userId: string` target user ID · `data: Partial<User>` contains fields to change. See the writable-fields guidance in this section | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
+| `iam.user.deleteUser(userId)` | Delete a user | `userId: string` target user ID | `void` | `await iam.user.deleteUser(userId)` |
+| `iam.user.adminResetPassword(userId, newPassword)` | Reset a password as an administrator | `userId: string` target user ID · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
+| `iam.user.renewPassword(input)` | Replace an expired or initial password using original credentials | `input` requires `identifier`, current `password`, `newPassword`, and optional `captcha` | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
+| `iam.user.changePassword(userId, oldPassword, newPassword)` | Change a password after verifying the old one | `userId: string` target user ID · `oldPassword: string` current password · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.changePassword(userId, oldPassword, newPassword)` |
+| `iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` | Change the token holder password | `accessToken: string` access token for the current session · `oldPassword: string` current password · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
+| `iam.user.requestPasswordReset(identifier, options?)` | Request reset delivery | `identifier: string` account identifier for the enabled channel, such as email or phone · `options?: { captcha?: string }` supplies the challenge proof when asked for it | `void` | `await iam.user.requestPasswordReset(identifier)` |
+| `iam.user.confirmPasswordReset(token, newPassword)` | Consume reset credentials and replace a password | `token: string` one-time reset credential delivered to the user · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.confirmPasswordReset(resetToken, newPassword)` |
+| `iam.user.validatePassword(password)` | Check the password policy synchronously | `password: string` password checked against the password policy | `void` | `iam.user.validatePassword(newPassword)` |
+| `iam.user.scanInactiveAccounts()` | Deactivate accounts under inactivity policy | No arguments | `number` | `await iam.user.scanInactiveAccounts()` |
+
+<a id="users-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `RegisterOptions` | Requires `username` and, for direct creation or registration, `password`. Optional fields are `email`, `phone`, `displayName`, and `metadata`. Invitees set their own password. Public registration can require `captcha`. Admin callers may set `accountType`, `accountStatus`, and `accountExpiresAt`; temporary accounts need an expiry. |
+| `getUser / getUsers include` | Omit `include` for users alone. Pass `{ include: ['roles'] }` to load their roles. |
+| `ListUsersOptions` | Optional `page` and `pageSize` paginate. `search` searches username, email, phone, or display name. `roleCode` matches a role exactly. `accountStatus` filters `active`, `dormant`, or `closed`; `include` can load roles. Without `sortBy`, results are newest first. With `sortBy`, `sortDirection` defaults to `desc`. |
+| `UpdateCurrentUserInput` | Pass only the profile fields to change: `username`, `email`, `phone`, `displayName`, `avatarUrl`, or `metadata`. |
+
+##### User query options
+
+| Field | Default or required | Effect and conditions |
+| --- | --- | --- |
+| `page: number` | `1` | One-based page to read |
+| `pageSize: number` | `20` | Maximum users per page, capped at 200 |
+| `search: string` | Optional | Match a substring of username, email, phone or display name |
+| `roleCode: string` | Optional | Match exact role code before pagination |
+| `accountStatus` | Optional | Select active, dormant, or closed. Omit for all statuses |
+| `sortBy / sortDirection` | `createdAt / desc` | Choose username, email, displayName, accountStatus, or createdAt. Direction applies with an explicit field |
+| `include: 'roles'[]` | `[]` | Include each user’s roles when the array contains roles |
+
+Assume the initialized directory contains one dormant user, Ada, with the reader role. The result shows only the relevant fields.
+
+```ts
+import { iam } from '@h-ai/iam'
+
+// Read at most two dormant users on page one with roles. Read error.code on failure.
+const result = await iam.user.listUsers({ accountStatus: 'dormant', page: 1, pageSize: 2, include: ['roles'] })
+if (result.success) {
+  const items = result.data.items.map(user => ({ displayName: user.displayName, roles: user.roles?.map(role => role.code) }))
+  void items // [{ displayName: 'Ada', roles: ['reader'] }]
+}
+else result.error.code
+```
 
 #### Scenario: Maintain users and passwords
 
@@ -227,32 +277,42 @@ Store roles and permissions on the server and authorize sensitive operations aga
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.authz.getUserAuthorization` | Read roles and permissions together | userId | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)` |
-| `iam.authz.checkPermission` | Check a user permission | userId, permission | `boolean` | `await iam.authz.checkPermission(userId, 'orders:read')` |
-| `iam.authz.getUserPermissions` | Read user permissions | userId | `Permission[]` | `await iam.authz.getUserPermissions(userId)` |
-| `iam.authz.getUserRoles` | Read user roles | userId | `Role[]` | `await iam.authz.getUserRoles(userId)` |
-| `iam.authz.getUserRolesForMany` | Read roles for multiple users | userIds | `Map<string, Role[]>` | `await iam.authz.getUserRolesForMany([userId])` |
-| `iam.authz.getRolePermissionsForMany` | Read permissions for multiple roles | roleIds | `Map<string, Permission[]>` | `await iam.authz.getRolePermissionsForMany([roleId])` |
-| `iam.authz.assignRole` | Assign a role to a user | userId, roleId, tx? | `void` | `await iam.authz.assignRole(userId, roleId)` |
-| `iam.authz.removeRole` | Remove a user role | userId, roleId, tx? | `void` | `await iam.authz.removeRole(userId, roleId)` |
-| `iam.authz.syncRoles` | Replace a user role set | userId, roleIds, tx? | `void` | `await iam.authz.syncRoles(userId, [roleId])` |
-| `iam.authz.assignPermissionToRole` | Assign a permission to a role | roleId, permissionId, tx? | `void` | `await iam.authz.assignPermissionToRole(roleId, permissionId)` |
-| `iam.authz.removePermissionFromRole` | Remove a role permission | roleId, permissionId, tx? | `void` | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
-| `iam.authz.createRole` | Create a role | role, tx? | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
-| `iam.authz.getRole` | Read a role by ID | roleId | `Role \| null` | `await iam.authz.getRole(roleId)` |
-| `iam.authz.getRoleByCode` | Read a role by code | code | `Role \| null` | `await iam.authz.getRoleByCode('editor')` |
-| `iam.authz.getAllRoles` | Read all roles | options? | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
-| `iam.authz.getRoleUserCounts` | Count users for roles | roleIds | `Map<string, number>` | `await iam.authz.getRoleUserCounts([roleId])` |
-| `iam.authz.updateRole` | Update a role | roleId, data, tx? | `Role` | `await iam.authz.updateRole(roleId, { name: 'Editor' })` |
-| `iam.authz.deleteRole` | Delete a role | roleId, tx? | `void` | `await iam.authz.deleteRole(roleId)` |
-| `iam.authz.createPermission` | Create a permission | permission, tx? | `Permission` | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })` |
-| `iam.authz.getPermission` | Read a permission by ID | permissionId | `Permission \| null` | `await iam.authz.getPermission(permissionId)` |
-| `iam.authz.getPermissionByCode` | Read a permission by code | code | `Permission \| null` | `await iam.authz.getPermissionByCode('orders:read')` |
-| `iam.authz.getAllPermissions` | Read all permissions | options? | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
-| `iam.authz.deletePermission` | Delete a permission | permissionId, tx? | `void` | `await iam.authz.deletePermission(permissionId)` |
-| `iam.authz.getRolePermissions` | Read role permissions | roleId | `Permission[]` | `await iam.authz.getRolePermissions(roleId)` |
-| `iam.authz.getSensitiveOperations` | Read effective sensitive-operation rules | operation? | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')` |
-| `iam.authz.setPermissionSensitiveOperations` | Set sensitive-operation rules for a permission | permissionId, operations | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+| `iam.authz.getUserAuthorization(userId)` | Read roles and permissions together | `userId: string` target user ID | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)` |
+| `iam.authz.checkPermission(userId, permission)` | Check a user permission | `userId: string` target user ID · `permission: string` permission code to check | `boolean` | `await iam.authz.checkPermission(userId, 'orders:read')` |
+| `iam.authz.getUserPermissions(userId)` | Read user permissions | `userId: string` target user ID | `Permission[]` | `await iam.authz.getUserPermissions(userId)` |
+| `iam.authz.getUserRoles(userId)` | Read user roles | `userId: string` target user ID | `Role[]` | `await iam.authz.getUserRoles(userId)` |
+| `iam.authz.getUserRolesForMany(userIds)` | Read roles for multiple users | `userIds: string[]` user IDs to look up together | `Map<string, Role[]>` | `await iam.authz.getUserRolesForMany([userId])` |
+| `iam.authz.getRolePermissionsForMany(roleIds)` | Read permissions for multiple roles | `roleIds: string[]` target role IDs | `Map<string, Permission[]>` | `await iam.authz.getRolePermissionsForMany([roleId])` |
+| `iam.authz.assignRole(userId, roleId, tx?)` | Assign a role to a user | `userId: string` target user ID · `roleId: string` role ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.assignRole(userId, roleId)` |
+| `iam.authz.removeRole(userId, roleId, tx?)` | Remove a user role | `userId: string` target user ID · `roleId: string` role ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.removeRole(userId, roleId)` |
+| `iam.authz.syncRoles(userId, roleIds, tx?)` | Replace a user role set | `userId: string` target user ID · `roleIds: string[]` target role IDs · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.syncRoles(userId, [roleId])` |
+| `iam.authz.assignPermissionToRole(roleId, permissionId, tx?)` | Assign a permission to a role | `roleId: string` role ID · `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.assignPermissionToRole(roleId, permissionId)` |
+| `iam.authz.removePermissionFromRole(roleId, permissionId, tx?)` | Remove a role permission | `roleId: string` role ID · `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
+| `iam.authz.createRole(role, tx?)` | Create a role | `role` provides the new role’s code, name, description and system-role flag · [Object arguments](#authorization-arguments) · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
+| `iam.authz.getRole(roleId)` | Read a role by ID | `roleId: string` role ID | `Role \| null` | `await iam.authz.getRole(roleId)` |
+| `iam.authz.getRoleByCode(code)` | Read a role by code | `code: string` business code of the role or permission | `Role \| null` | `await iam.authz.getRoleByCode('editor')` |
+| `iam.authz.getAllRoles(options?)` | Read all roles | `options?: PaginationOptionsInput` selects the page, page size and sort order · [Object arguments](#authorization-arguments) | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
+| `iam.authz.getRoleUserCounts(roleIds)` | Count users for roles | `roleIds: string[]` target role IDs | `Map<string, number>` | `await iam.authz.getRoleUserCounts([roleId])` |
+| `iam.authz.updateRole(roleId, data, tx?)` | Update a role | `roleId: string` role ID · `data` sets the role fields to patch, leaving omitted fields unchanged · [Object arguments](#authorization-arguments) · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Role` | `await iam.authz.updateRole(roleId, { name: 'Editor' })` |
+| `iam.authz.deleteRole(roleId, tx?)` | Delete a role | `roleId: string` role ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.deleteRole(roleId)` |
+| `iam.authz.createPermission(permission, tx?)` | Create a permission | `permission` provides the new permission code, display name and category · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Permission` | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })` |
+| `iam.authz.getPermission(permissionId)` | Read a permission by ID | `permissionId: string` permission ID | `Permission \| null` | `await iam.authz.getPermission(permissionId)` |
+| `iam.authz.getPermissionByCode(code)` | Read a permission by code | `code: string` business code of the role or permission | `Permission \| null` | `await iam.authz.getPermissionByCode('orders:read')` |
+| `iam.authz.getAllPermissions(options?)` | Read all permissions | `options?: PermissionQueryOptions` selects the page, page size and sort order, and can filter by permission category · [Object arguments](#authorization-arguments) | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
+| `iam.authz.deletePermission(permissionId, tx?)` | Delete a permission | `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.deletePermission(permissionId)` |
+| `iam.authz.getRolePermissions(roleId)` | Read role permissions | `roleId: string` role ID | `Permission[]` | `await iam.authz.getRolePermissions(roleId)` |
+| `iam.authz.getSensitiveOperations(operation?)` | Read effective sensitive-operation rules | `operation?: string` sensitive operation name registered by the server | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')` |
+| `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` | Set sensitive-operation rules for a permission | `permissionId: string` permission ID · `operations: string[]` sensitive operation names to associate | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+
+<a id="authorization-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `PaginationOptionsInput / PermissionQueryOptions` | Use `page` and `pageSize` to paginate. Permission queries also accept `type` and `search`. |
+| `role / data` | A new role requires `code` and `name` and accepts `description`, `isSystem`, and `permissionIds`. Send only changed fields when updating. |
+| `permission` | `code` and `name` are required. Optional fields are `description`, `type`, `resource`, `action`, and `sensitiveOperations`. |
 
 #### Scenario: Assign roles and check permissions
 
@@ -423,15 +483,24 @@ Validate session tokens on the server. Refresh, list and revoke through the same
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.session.create` | Create a session and token pair | options | `Session` | `await iam.session.create(trustedSessionInput)` |
-| `iam.session.get` | Read a session by access token | accessToken | `Session \| null` | `await iam.session.get(accessToken)` |
-| `iam.session.verifyToken` | Verify a session token | accessToken | `Session` | `await iam.session.verifyToken(accessToken)` |
-| `iam.session.update` | Update session data | accessToken, data, expectedVersion | `void` | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
-| `iam.session.delete` | Delete a session by token | accessToken | `void` | `await iam.session.delete(accessToken)` |
-| `iam.session.deleteByUserId` | Revoke all user sessions | userId | `number` | `await iam.session.deleteByUserId(userId)` |
-| `iam.session.refresh` | Rotate refresh credentials | refreshToken | `TokenPair` | `await iam.session.refresh(refreshToken)` |
-| `iam.session.revokeRefresh` | Revoke refresh credentials | refreshToken | `void` | `await iam.session.revokeRefresh(refreshToken)` |
-| `iam.session.patchUserSessions` | Patch user profile snapshots in sessions | userId, updates | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
+| `iam.session.create(options)` | Create a session and token pair | `options: CreateSessionOptions` · Set session details and lifetime for a trusted principal · [Object arguments](#sessions-arguments) | `Session` | `await iam.session.create(trustedSessionInput)` |
+| `iam.session.get(accessToken)` | Read a session by access token | `accessToken: string` access token for the current session | `Session \| null` | `await iam.session.get(accessToken)` |
+| `iam.session.verifyToken(accessToken)` | Verify a session token | `accessToken: string` access token for the current session | `Session` | `await iam.session.verifyToken(accessToken)` |
+| `iam.session.update(accessToken, data, expectedVersion)` | Update session data | `accessToken: string` access token for the current session · `data: Partial<Session>` supplies allowed session updates, as shown in the low-level session example · `expectedVersion: string` version from the most recent session read, used to reject stale writes | `void` | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
+| `iam.session.delete(accessToken)` | Delete a session by token | `accessToken: string` access token for the current session | `void` | `await iam.session.delete(accessToken)` |
+| `iam.session.deleteByUserId(userId)` | Revoke all user sessions | `userId: string` target user ID | `number` | `await iam.session.deleteByUserId(userId)` |
+| `iam.session.refresh(refreshToken)` | Rotate refresh credentials | `refreshToken: string` refresh token to rotate or revoke | `TokenPair` | `await iam.session.refresh(refreshToken)` |
+| `iam.session.revokeRefresh(refreshToken)` | Revoke refresh credentials | `refreshToken: string` refresh token to rotate or revoke | `void` | `await iam.session.revokeRefresh(refreshToken)` |
+| `iam.session.patchUserSessions(userId, updates)` | Patch user profile snapshots in sessions | `userId: string` target user ID · `updates: SessionFieldUpdates` · [Object arguments](#sessions-arguments) | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
+
+<a id="sessions-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `CreateSessionOptions` | `userId` is required. The trusted host may supply `terminalType`, `expectedCredentialVersion`, and verified `apiKeyId` / `apiKeyScopes`. Other optional fields are `username`, `displayName`, `avatarUrl`, `roles`, `permissions`, `source`, `maxAge` in seconds, and application `data`. |
+| `SessionFieldUpdates` | Optional `roles: string[]` and `permissions: string[]` update existing sessions for the user. |
 
 #### Scenario: Renew and revoke sessions
 
@@ -524,11 +593,32 @@ Issue API keys with ownership and scopes for programmatic access. Give the raw k
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.apiKey.createApiKey` | Issue an API key with one-time plaintext access | userId, options | `CreateApiKeyResult` | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
-| `iam.apiKey.listApiKeys` | Paginate a user API keys | userId, options? | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
-| `iam.apiKey.getApiKey` | Read safe API key metadata by ID | keyId | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
-| `iam.apiKey.revokeApiKey` | Revoke an API key | keyId | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
-| `iam.apiKey.verifyApiKey` | Verify an API key | rawKey | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+| `iam.apiKey.createApiKey(userId, options)` | Issue an API key with one-time plaintext access | `userId: string` target user ID · `options: CreateApiKeyOptions` · Set the key name, lifetime, and permission scope · [Object arguments](#api-keys-arguments) | `CreateApiKeyResult` | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
+| `iam.apiKey.listApiKeys(userId, options?)` | Paginate a user API keys | `userId: string` target user ID · `options?: ListApiKeysOptions` · Filter, sort, and paginate keys for this user · [Object arguments](#api-keys-arguments) | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
+| `iam.apiKey.getApiKey(keyId)` | Read safe API key metadata by ID | `keyId: string` API key metadata ID | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
+| `iam.apiKey.revokeApiKey(keyId)` | Revoke an API key | `keyId: string` API key metadata ID | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
+| `iam.apiKey.verifyApiKey(rawKey)` | Verify an API key | `rawKey: string` plaintext API key returned once when issued | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+
+<a id="api-keys-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `CreateApiKeyOptions` | `name` is required. `expirationDays` is in days, defaults to configuration, and accepts `0` for no expiry. Optional `scopes` is a list of permission codes. |
+| `ListApiKeysOptions` | Optional `page`, `pageSize`, `search` (name or prefix), and `enabled` narrow the list. Sort by `name`, `createdAt`, `lastUsedAt`, or `expiresAt` in `asc` or `desc` order. The default is newest first. |
+
+##### Key issuance and listing options
+
+| Field | Default or required | Effect and conditions |
+| --- | --- | --- |
+| `create.options.name: string` | Required | Display name used to identify the key |
+| `create.options.expirationDays: number` | `config.apikey.defaultExpirationDays` | Lifetime in days. The framework setting defaults to 0; explicit 0 means no expiry |
+| `create.options.scopes: string[]` | `[]` | Limit access to the listed permission codes |
+| `list.options.page / list.options.pageSize` | `1 / 20` | Page number and keys per page |
+| `list.options.search: string` | Optional | Match a substring of the key name or prefix |
+| `list.options.enabled: boolean` | Optional | Select enabled or disabled keys. Omit for both |
+| `list.options.sortBy / list.options.sortDirection` | `createdAt / desc` | Sort on name, createdAt, lastUsedAt or expiresAt |
 
 #### Scenario: Issue and revoke API keys
 
@@ -550,8 +640,27 @@ Allow a verified principal to perform one purpose for a short period. A successf
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.ticket.issue` | Issue a time-bound operation ticket | options | `IssuedTicket` | `await iam.ticket.issue(ticketInput)` |
-| `iam.ticket.consume` | Verify the purpose and atomically consume a ticket | ticket, options | `ConsumedTicket` | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+| `iam.ticket.issue(options)` | Issue a time-bound operation ticket | `options: IssueTicketOptions` · Bind the subject, purpose and expiry · [Object arguments](#tickets-arguments) | `IssuedTicket` | `await iam.ticket.issue(ticketInput)` |
+| `iam.ticket.consume(ticket, options?)` | Verify the purpose and atomically consume a ticket | `ticket: string` one-time ticket issued by the server · `options?: ConsumeTicketOptions` · Optionally constrain the purpose before consuming · [Object arguments](#tickets-arguments) | `ConsumedTicket` | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+
+<a id="tickets-arguments"></a>
+
+##### Object arguments
+
+| Type or call | Fields and values |
+| --- | --- |
+| `IssueTicketOptions` | `subjectId: string` and `purpose: string` are required. Optional `grant` binds authorization details. `ttlMs` defaults to 30000 milliseconds. |
+| `ConsumeTicketOptions` | Specify `purpose: string` to require the issued purpose. A mismatch returns `TICKET_INVALID`. |
+
+##### Ticket issuance and consumption fields
+
+| Field | Default or required | Effect and conditions |
+| --- | --- | --- |
+| `subjectId: string` | Required | Principal bound to the ticket and returned when consumed |
+| `purpose: string` | Required | Purpose recorded at issuance and checked on demand when consumed |
+| `grant: TicketGrant` | Optional | Bind operation, model, sessionId or app fields for the server to check after consumption |
+| `ttlMs: number` | `30000 ms` | Lifetime measured from issuance |
+| `consume.options.purpose: string` | Optional | When supplied, check the issued purpose. A mismatch returns TICKET_INVALID |
 
 #### Scenario: Issue and consume one-time proof
 

@@ -37,13 +37,25 @@ pnpm run deploy --env prod --build
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `deploy.init` | 設定済みのデプロイ先を準備 | `config`（必填） | `void` | `await deploy.init(config)` |
-| `deploy.close` | デプロイ先のリソースを解放 | 无参数 | `Promise<void>` | `await deploy.close()` |
-| `deploy.scan` | プロジェクトと配布先を調査 | appDir, options | `ScanResult` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
-| `deploy.provisionAll` | 選択したミドルウェアを準備 | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
-| `deploy.deployApp` | アプリを配布・配布パッケージを生成 | appDir, options | `DeployResult` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+| `deploy.init(config)` | 設定済みのデプロイ先を準備 | 必須の `config: DeployConfigInput` でデプロイ Provider を指定。[デプロイ設定](../configuration/deploy.ja.md)を参照。 | `Promise<HaiResult<void>>` | `await deploy.init(config)` |
+| `deploy.close()` | デプロイ先のリソースを解放 | 引数なし | `Promise<void>` | `await deploy.close()` |
+| `deploy.scan(appDir, options?)` | プロジェクトと配布先を調査 | アプリのディレクトリ `appDir` が必須。相対指定は現在のディレクトリから解決。`options.environment` の既定値は `prod`。明示する場合は対応する環境ファイルが必要。`options.envDir` を省略するとアプリまたはワークスペースを検索。 | `Promise<HaiResult<ScanResult>>` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
+| `deploy.provisionAll(projectName, services?)` | 選択したミドルウェアを準備 | プロジェクトの識別文字列 `projectName` が必須。任意の `services` で対象種類を選択。省略時は設定済みの全 Provisioner、`[]` の場合は開通なし。 | `Promise<HaiResult<ProvisionResult[]>>` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
+| `deploy.deployApp(appDir, options?)` | アプリを配布・配布パッケージを生成 | アプリのディレクトリ `appDir` が必須。任意の `options` で環境、Compose サービス、イメージ入力、配布パッケージ、進捗を指定する。下記参照。 | `Promise<HaiResult<DeployResult>>` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
 #### 利用例：工程の確認と配布
+
+`deploy.deployApp()` の `options` は省略できます。配布手順に応じて次の項目を指定できます。
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `environment`、`envDir` | 初期化時の環境を使用し、なければ `prod`。アプリかワークスペースからディレクトリを自動検出。 | 環境を明示すると、対応する `.env.<environment>` が必要。 |
+| `selectedServices` | 完全な成果物は全サービス、部分成果物は含まれるイメージを更新。 | `['web']` などの Compose サービス名を配列で渡すと、そのサービスだけ更新。 |
+| `serviceModes`、`skipMiddleware` | 方式の既定値は `'default'`。`skipMiddleware` は既定で `false`。 | 環境変数の接頭辞またはサービス名ごとに `'default'`、`'custom'`、`'keep'` を指定。接頭辞が優先。`skipMiddleware: true` はミドルウェアの設定と開通を省略。 |
+| `artifactDir`、`runtime` | 成果物とパッケージングエンジンを自動検出。 | ビルド済みイメージの場所を指定可能。エンジンは `'auto'`、`'podman'`、`'docker'`。`'auto'` は Podman を優先。 |
+| `bundleOnly`、`output` | 既定ではデプロイを実行。アプリとバージョンから出力先を決定。 | docker-ssh の `bundleOnly: true` で SSH 接続を行わず、アーカイブとスクリプトを作成。`output` で出力先を指定。既存の出力ディレクトリがあればエラー。 |
+| `imageSource`、`proxy` | 公式イメージ配布元と、プロセスのプロキシ設定を使用。 | `imageSource.type` は `'official'`、`'cn'`、`'custom'`。カスタム時は `registries` を渡す。`proxy.mode` は `'inherit'`、`'system'`、`'custom'`、`'none'`。カスタム時は HTTP(S) の `url` と任意の `bypass` を渡す。 |
+| `onProgress(stage)` | 省略時は通知なし。 | `packaging`、`health` などの実行段階を進捗 UI に通知。他の値は `preflight`、`images`、`dependencies`、`start`、`https`、`complete`。 |
 
 呼び出し側の配置手順です。plan は読取専用、build は成果物の準備、deploy が対象環境を変更します。
 
@@ -97,10 +109,10 @@ async function deliver(appDir: string, config: DeployConfigInput) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `deploy.credentials.getPath` | ローカル資格情報の保存先を取得 | 无参数 | `string` | `deploy.credentials.getPath()` |
-| `deploy.credentials.load` | ローカル資格情報を取得 | 无参数 | `HaiResult<string[]>` | `deploy.credentials.load()` |
-| `deploy.credentials.save` | 配布先の資格情報を保存 | key, value | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
-| `deploy.credentials.saveAll` | 資格情報一式を保存 | entries | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
+| `deploy.credentials.getPath()` | ローカル資格情報の保存先を取得 | 引数なし | `string` | `deploy.credentials.getPath()` |
+| `deploy.credentials.load()` | ローカル資格情報を取得 | 引数なし | `HaiResult<string[]>` | `deploy.credentials.load()` |
+| `deploy.credentials.save(key, value)` | 配布先の資格情報を保存 | 信頼済みの管理手順から得た環境変数名 `key` と資格情報文字列 `value` が必須。 | `HaiResult<void>` | `deploy.credentials.save(key, secret)` |
+| `deploy.credentials.saveAll(entries)` | 資格情報一式を保存 | 環境変数名を資格情報の値に対応付けた `entries` オブジェクトが必須。 | `HaiResult<void>` | `deploy.credentials.saveAll(privateEntries)` |
 
 #### 利用例：ローカルの秘密情報管理
 
@@ -140,11 +152,26 @@ save の値は安全な経路で取得し、成功時に業務データはあり
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `loadDeploymentEnvironment` | 配布環境の変数を取得 | 指定环境名、环境目录，可要求文件存在 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
-| `mergeEnvironmentLayers` | 優先順位で環境変数を統合 | 依优先顺序传入变量映射，可按前缀筛选 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
-| `loadDeploymentConfig` | 配布先の設定を取得 | 运行时模块名、配置文件路径、解析时使用的环境变量 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
-| `saveDeploymentEnvironment` | 配布環境変数を保存 | 已读取的部署环境、新变量、可选 private/replace 参数 | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
-| `saveMiddlewareEnvironment` | ミドルウェア環境変数を保存 | 部署环境及包含应用路径、后端与配置的选项 | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+| `loadDeploymentEnvironment(options)` | 配布環境の変数を取得 | 必須の `options` で対象環境とディレクトリーを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `mergeEnvironmentLayers(layers, prefix?)` | 優先順位で環境変数を統合 | 変数マップ `layers` が必須。優先度の低い順に指定。`prefix` を省略すると全件、指定するとその名前とアンダースコアで続く項目だけを結合。 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `loadDeploymentConfig(name, path, values)` | 配布先の設定を取得 | モジュール名 `name`、YAML またはプロジェクト JSON の `path`、環境の上書き `values` が必須。 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `saveDeploymentEnvironment(environment, values, options?)` | 配布環境変数を保存 | 読込済みの対象 `environment` と変数マップ `values` が必須。任意の `options` で非公開保存と置き換えを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `saveMiddlewareEnvironment(environment, options)` | ミドルウェア環境変数を保存 | 対象 `environment` と接続を選択する `options` が必須。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+
+<a id="deployment-environment-options"></a>
+
+#### 環境の読込・保存引数
+
+| 項目 | 既定値と条件 | 用途 |
+| --- | --- | --- |
+| `loadDeploymentEnvironment.options.environment` / `envDir` | 両方必須 | 環境名と dotenv ディレクトリー。例は `prod` と `./deployment`。 |
+| `loadDeploymentEnvironment.options.requireFile` | 既定は `true` | `false` にすると対象ファイルがない場合も既存レイヤーから読み込む。 |
+| `saveDeploymentEnvironment.options.private` | 既定は `false` | `true` で渡した変数をすべて `.env.<environment>.local` に保存。既定でも秘密として検出した変数はこのファイルに保存。 |
+| `saveDeploymentEnvironment.options.replace` | 既定は空リスト | 保存前に対象の公開・非公開ファイルから同名キーとアンダースコアで続く項目を除く。全件置換時に使用。 |
+| `saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | いずれも必須 | config ディレクトリーを持つアプリのルート、スキャンした設定パス、選んだバックエンド名。 |
+| `saveMiddlewareEnvironment.options.configuration` / `updates` | 任意。クラウドの作成前には接続情報を省略可。 | 指定時は選んだバックエンドの接続情報一式と、同時に更新する他の変数をまとめる。 |
+
+たとえば `prod` で `saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` を呼ぶと、成功時は `["HAI_DB_HOST"]` を返し、対象の `.env.prod` に値を保存します。
 
 #### 利用例：配置変数の読込・統合・保存
 
@@ -191,10 +218,21 @@ function updateEnvironment(envDir: string, appDir: string, requirement: Middlewa
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `canKeepMiddleware` | 既存ミドルウェアの保持可否を確認 | 当前依赖需求、目录中选定的后端与目标环境 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
-| `describeMiddlewareBackend` | ミドルウェアのバックエンドを説明 | 后端目录项，读取其 purpose | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
-| `validateMiddlewareField` | ミドルウェアの入力を検証 | 表单字符串、字段定义与后端名 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
-| `parseMiddlewareField` | ミドルウェアの入力を解析 | 表单字符串、字段定义与后端名，可声明托管模式 | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+| `canKeepMiddleware(requirement, backend, environment)` | 既存ミドルウェアの保持可否を確認 | スキャンした依存 `requirement`、カタログで選んだ `backend`、対象の環境スナップショット `environment` が必須。 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
+| `describeMiddlewareBackend(backend)` | ミドルウェアのバックエンドを説明 | 必須の `backend` は `purpose` を含むカタログ項目、またはその項目だけを含むオブジェクト。 | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
+| `validateMiddlewareField(options)` | ミドルウェアの入力を検証 | 必須の `options` にフォーム値、項目定義、実際のバックエンドを渡す。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `parseMiddlewareField(options)` | ミドルウェアの入力を解析 | 必須の `options` にフォーム値、項目定義、バックエンドを渡す。任意でマネージド作成を指定。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+
+<a id="middleware-field-options"></a>
+
+#### ミドルウェアフォームの引数
+
+| 項目 | 既定値と条件 | 用途 |
+| --- | --- | --- |
+| `options.value` / `field` / `backend` | いずれも必須 | 元のフォーム文字列、カタログ項目定義、実際のバックエンド。項目とバックエンドで検証規則が決まる。 |
+| `options.managed` | 既定では無効。 `parseMiddlewareField` 専用 | `true` の場合、`secret` または `managed` の空値を許可し、`undefined` を返す。 |
+
+たとえば `parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` は成功時に真偽値 `false` を返します。
 
 #### 利用例：ミドルウェア入力の検証
 
@@ -224,9 +262,9 @@ parseMiddlewareFieldResult.data // false
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `normalizeProjectName` | プロジェクト識別名を正規化 | 应用名称 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
-| `artifactChecksum` | 配布成果物のチェックサムを計算 | 现有镜像或交付产物路径 | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
-| `getDeployRecovery` | 配布の復旧情報を取得 | 部署失败的 `HaiError` | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+| `normalizeProjectName(name)` | プロジェクト識別名を正規化 | アプリ名 `name` が必須。npm スコープ付きも可。 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
+| `artifactChecksum(file)` | 配布成果物のチェックサムを計算 | 必須の `file` は既存のローカルイメージまたは配布成果物へのパス。 | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
+| `getDeployRecovery(error)` | 配布の復旧情報を取得 | 必須の `error` はデプロイ失敗の `HaiError`。復旧情報の取得元となる。 | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
 
 #### 利用例：成果物の識別と復旧情報
 

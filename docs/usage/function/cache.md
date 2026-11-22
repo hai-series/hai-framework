@@ -64,9 +64,9 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.init` | 按配置创建进程内缓存或连接 Redis | `config`（必填） | `undefined`，连接可用 | `await cache.init({ type: 'memory' })` |
-| `cache.close` | 释放缓存实例。用内存模式时，关闭后该实例中的值不再可用 | 无 | `undefined`，资源已释放 | `await cache.close()` |
-| `cache.ping` | 检查后端连接 | 无参数 | `'PONG'` | `await cache.ping()` |
+| `cache.init(config)` | 按配置创建进程内缓存或连接 Redis | `config`（必填） | `undefined`，连接可用 | `await cache.init({ type: 'memory' })` |
+| `cache.close()` | 释放缓存实例。用内存模式时，关闭后该实例中的值不再可用 | 无 | `undefined`，资源已释放 | `await cache.close()` |
+| `cache.ping()` | 检查后端连接 | 无参数 | `'PONG'` | `await cache.ping()` |
 | `cache.config` | 读取当前脱敏配置 | 只读属性，无参数 | `CacheConfig \| null` | `cache.config` |
 | `cache.isInitialized` | 检查缓存能否接收操作 | 只读属性，无参数 | `boolean` | `cache.isInitialized` |
 
@@ -120,24 +120,40 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.kv.get` | 读取一个缓存值 | key | `T \| null` | `await cache.kv.get('u:1')` |
-| `cache.kv.set` | 写入值并设置期限或写入条件 | key, value, options | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
-| `cache.kv.mget` | 按输入顺序批量读取 | keys | `(T \| null)[]`，缺失键或非 KV 类型对应 `null` | `await cache.kv.mget('u:1', 'u:2')` |
-| `cache.kv.mset` | 批量写入键值 | entries | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
-| `cache.kv.compareAndSwap` | 仅当原值符合预期时修改 | key, expected, value, options | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
-| `cache.kv.del` | 删除指定键 | keys | `number` | `await cache.kv.del('u:1', 'u:2')` |
-| `cache.kv.exists` | 统计指定键中仍存在的数量 | keys | `number` | `await cache.kv.exists('u:1', 'u:2')` |
-| `cache.kv.type` | 查询键保存的数据类型 | key | `string` | `await cache.kv.type('u:1')` |
-| `cache.kv.expire` | 设置相对到期秒数 | key, seconds | `boolean` | `await cache.kv.expire('u:1', 60)` |
-| `cache.kv.expireAt` | 设置绝对到期时间 | key, timestamp | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
-| `cache.kv.ttl` | 读取剩余有效秒数 | key | `number` | `await cache.kv.ttl('u:1')` |
-| `cache.kv.persist` | 移除过期时间 | key | `boolean` | `await cache.kv.persist('u:1')` |
-| `cache.kv.incr` | 计数加一 | key | `number` | `await cache.kv.incr('hits')` |
-| `cache.kv.incrBy` | 按增量增加计数 | key, increment | `number` | `await cache.kv.incrBy('hits', 2)` |
-| `cache.kv.decr` | 计数减一 | key | `number` | `await cache.kv.decr('stock')` |
-| `cache.kv.decrBy` | 按减量减少计数 | key, decrement | `number` | `await cache.kv.decrBy('stock', 2)` |
-| `cache.kv.keys` | 列出符合模式的键 | pattern | `string[]` | `await cache.kv.keys('u:*')` |
-| `cache.kv.scan` | 分批扫描符合模式的键 | cursor, options | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+| `cache.kv.get(key)` | 读取一个缓存值 | `key: string` 必填逻辑缓存键 | `T \| null` | `await cache.kv.get('u:1')` |
+| `cache.kv.set(key, value, options?)` | 写入值并设置期限或写入条件 | `key`、可序列化为 JSON 的 `value`；`options` 可选字段有 `nx`、`xx`、`ex`、`px`、`exat`、`pxat`、`keepTtl`，详见下方写入条件与到期规则 | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
+| `cache.kv.mget(...keys)` | 按输入顺序批量读取 | `...keys: string[]` 按顺序传入逻辑缓存键 | `(T \| null)[]`，缺失键或非 KV 类型对应 `null` | `await cache.kv.mget('u:1', 'u:2')` |
+| `cache.kv.mset(entries)` | 批量写入键值 | `entries: Array<[string, CacheValue]>` 每项为逻辑键及其 JSON 值 | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
+| `cache.kv.compareAndSwap(key, expected, value, options?)` | 仅当原值符合预期时修改 | `key`、`expected`（预期旧值）、`value`（替换值）；`options` 可选 `px`（正安全整数毫秒）或 `keepTtl`（保留现有期限），省略则替换后的值无期限 | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
+| `cache.kv.del(...keys)` | 删除指定键 | `...keys: string[]` 按顺序传入逻辑缓存键 | `number` | `await cache.kv.del('u:1', 'u:2')` |
+| `cache.kv.exists(...keys)` | 统计指定键中仍存在的数量 | `...keys: string[]` 按顺序传入逻辑缓存键 | `number` | `await cache.kv.exists('u:1', 'u:2')` |
+| `cache.kv.type(key)` | 查询键保存的数据类型 | `key: string` 必填逻辑缓存键 | `string` | `await cache.kv.type('u:1')` |
+| `cache.kv.expire(key, seconds)` | 设置相对到期秒数 | `key: string` 必填逻辑缓存键。`seconds: number` 相对到期秒数，用安全整数 | `boolean` | `await cache.kv.expire('u:1', 60)` |
+| `cache.kv.expireAt(key, timestamp)` | 设置绝对到期时间 | `key: string` 必填逻辑缓存键。`timestamp: number` 绝对 Unix 秒，用安全整数 | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
+| `cache.kv.ttl(key)` | 读取剩余有效秒数 | `key: string` 必填逻辑缓存键 | `number` | `await cache.kv.ttl('u:1')` |
+| `cache.kv.persist(key)` | 移除过期时间 | `key: string` 必填逻辑缓存键 | `boolean` | `await cache.kv.persist('u:1')` |
+| `cache.kv.incr(key)` | 计数加一 | `key: string` 必填逻辑缓存键 | `number` | `await cache.kv.incr('hits')` |
+| `cache.kv.incrBy(key, increment)` | 按增量增加计数 | `key: string` 必填逻辑缓存键。`increment: number` 增加量 | `number` | `await cache.kv.incrBy('hits', 2)` |
+| `cache.kv.decr(key)` | 计数减一 | `key: string` 必填逻辑缓存键 | `number` | `await cache.kv.decr('stock')` |
+| `cache.kv.decrBy(key, decrement)` | 按减量减少计数 | `key: string` 必填逻辑缓存键。`decrement: number` 扣减量 | `number` | `await cache.kv.decrBy('stock', 2)` |
+| `cache.kv.keys(pattern)` | 列出符合模式的键 | `pattern: string` 匹配逻辑键名的 glob 模式 | `string[]` | `await cache.kv.keys('u:*')` |
+| `cache.kv.scan(cursor, options?)` | 分批扫描符合模式的键 | `cursor` 首页为 `"0"`，其后使用上一页游标；`options.match` 为键名 glob 模式（默认全部），`count` 为正安全整数（默认 10，Redis 作为工作量提示） | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+
+<a id="cache-kv-options"></a>
+
+**写入与扫描选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `SetOptions.nx / xx` | `boolean` | `false` | 仅键不存在或存在时写入，两者互斥。未命中返回成功且 data=false。 |
+| `SetOptions.ex / px` | `number` | 可省略 | 相对秒数或毫秒数，选其中一个正安全整数。 |
+| `SetOptions.exat / pxat` | `number` | 可省略 | 绝对 Unix 秒或毫秒。正安全整数，过去的绝对时间立即过期。 |
+| `SetOptions.keepTtl / CompareAndSwapOptions.keepTtl` | `boolean` | `false` | 保留已有到期时间。和显式期限互斥。均未指定时，新值无期限。 |
+| `CompareAndSwapOptions.px` | `number` | 可省略 | 比较成功后为替换值设置相对毫秒期限，须为正安全整数。 |
+| `ScanOptions.match` | `string` | 匹配全部键 | 匹配逻辑键的 glob 模式，如 orders:*。 |
+| `ScanOptions.count` | `number` | `10` | 每次扫描使用的正安全整数。Redis 把它当作工作量提示，实际条数可能不同。 |
+
+若 `orders:1` 已存在，传 `{ nx: true, ex: 60 }` 返回 `data: false`，不更新订单或到期时间。写入新键时返回 `data: true` 并设置约 60 秒期限。
 
 通用键操作适用于所有结构。TTL 以秒计，`-1` 表示永久，`-2` 表示键不存在。`persist` 只有移除了期限才返回 `true`。Memory 计数接受安全整数或整数字符串，非法增量或结果超出安全整数范围时保留原值。
 
@@ -171,6 +187,8 @@ core.logger.info('Revision update', { created: created.data, replaced: replaced.
 需要 JSON 序列化的缓存值无法编码时，操作返回 `SERIALIZATION_FAILED`。例如，循环对象和 `toJSON()` 返回 `undefined` 的对象会失败。批量写入遇到此类错误时不写入任何项。
 
 用 `ex`（相对秒数）、`px`（相对毫秒数）、`exat`（Unix 秒）或 `pxat`（Unix 毫秒）设置期限。四种期限只能选一个，且不能与 `keepTtl: true` 同用。期限须是正安全整数，换算后的到期毫秒数也须是安全整数，否则返回 `INVALID_SET_OPTIONS`。指定已过去的正绝对时间会立即到期。省略期限会清除已有 TTL，`keepTtl: true` 则保留原期限，新键仍无期限。
+
+`cache.kv.compareAndSwap()` 只在比较成功时应用期限。例如替换旧值时传 `{ px: 60_000 }`，新值从替换完成时起保留约 60 秒。用 `{ keepTtl: true }` 则保留旧到期时间，新键无期限。两者不可同传。
 
 #### 场景：在 Redis Cluster 扫描和批量操作
 
@@ -217,16 +235,16 @@ else
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.hash.hget` | 读取单个字段 | key, field | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
-| `cache.hash.hset` | 写入一个或多个字段 | `key, field, value` 或 `key, data`（字段名到值的对象） | 新增字段数 | `await cache.hash.hset('u:1', 'name', 'Alice')` 或 `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
-| `cache.hash.hdel` | 删除指定字段 | key, fields | `number` | `await cache.hash.hdel('u:1', 'name')` |
-| `cache.hash.hexists` | 检查字段是否存在 | key, field | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
-| `cache.hash.hgetall` | 读取全部字段和值 | key | `T` | `await cache.hash.hgetall('u:1')` |
-| `cache.hash.hkeys` | 列出字段名 | key | `string[]` | `await cache.hash.hkeys('u:1')` |
-| `cache.hash.hvals` | 列出字段值 | key | `T[]` | `await cache.hash.hvals('u:1')` |
-| `cache.hash.hlen` | 统计字段数量 | key | `number` | `await cache.hash.hlen('u:1')` |
-| `cache.hash.hmget` | 按输入顺序读取多个字段 | key, fields | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
-| `cache.hash.hincrBy` | 增加字段计数 | key, field, increment | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
+| `cache.hash.hget(key, field)` | 读取单个字段 | `key: string` 必填哈希键。`field: string` 哈希字段名称 | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
+| `cache.hash.hset(key, field, value)` 或 `cache.hash.hset(key, data)` | 写入一个或多个字段 | `key: string` 必填哈希键。`field: string, value: CacheValue` 单字段及其 JSON 值。另一种调用方式传 data 对象，键和值分别为字段名和 JSON 值 | 新增字段数 | `await cache.hash.hset('u:1', 'name', 'Alice')` 或 `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
+| `cache.hash.hdel(key, ...fields)` | 删除指定字段 | `key: string` 必填哈希键。`...fields: string[]` 要处理的字段名，按调用顺序传入 | `number` | `await cache.hash.hdel('u:1', 'name')` |
+| `cache.hash.hexists(key, field)` | 检查字段是否存在 | `key: string` 必填哈希键。`field: string` 哈希字段名称 | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
+| `cache.hash.hgetall(key)` | 读取全部字段和值 | `key: string` 必填哈希键 | `T` | `await cache.hash.hgetall('u:1')` |
+| `cache.hash.hkeys(key)` | 列出字段名 | `key: string` 必填哈希键 | `string[]` | `await cache.hash.hkeys('u:1')` |
+| `cache.hash.hvals(key)` | 列出字段值 | `key: string` 必填哈希键 | `T[]` | `await cache.hash.hvals('u:1')` |
+| `cache.hash.hlen(key)` | 统计字段数量 | `key: string` 必填哈希键 | `number` | `await cache.hash.hlen('u:1')` |
+| `cache.hash.hmget(key, ...fields)` | 按输入顺序读取多个字段 | `key: string` 必填哈希键。`...fields: string[]` 要处理的字段名，按调用顺序传入 | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
+| `cache.hash.hincrBy(key, field, increment)` | 增加字段计数 | `key: string` 必填哈希键。`field: string` 哈希字段名称。`increment: number` 增加量 | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
 
 #### 场景：按字段更新资料
 
@@ -259,17 +277,17 @@ Memory 的 `hincrBy` 要求已有字段值、增量和结果均为安全整数�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.list.lpush` | 从左端插入 | key, values | `number` | `await cache.list.lpush('jobs', 'job-1')` |
-| `cache.list.rpush` | 从右端插入 | key, values | `number` | `await cache.list.rpush('jobs', 'job-2')` |
-| `cache.list.lpop` | 取走左端元素 | key | `T \| null` | `await cache.list.lpop('jobs')` |
-| `cache.list.rpop` | 取走右端元素 | key | `T \| null` | `await cache.list.rpop('jobs')` |
-| `cache.list.llen` | 读取列表长度 | key | `number` | `await cache.list.llen('jobs')` |
-| `cache.list.lrange` | 读取包含端点的索引区间 | key, start, stop | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
-| `cache.list.lindex` | 按索引读取一个元素 | key, index | `T \| null` | `await cache.list.lindex('jobs', 0)` |
-| `cache.list.lset` | 替换指定索引的元素 | key, index, value | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
-| `cache.list.ltrim` | 只保留指定索引区间 | key, start, stop | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
-| `cache.list.blpop` | 等待并取走左端元素 | timeout, keys | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
-| `cache.list.brpop` | 等待并取走右端元素 | timeout, keys | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
+| `cache.list.lpush(key, ...values)` | 从左端插入 | `key: string` 必填列表键。`...values: CacheValue[]` 要插入的 JSON 值，按调用顺序传入 | `number` | `await cache.list.lpush('jobs', 'job-1')` |
+| `cache.list.rpush(key, ...values)` | 从右端插入 | `key: string` 必填列表键。`...values: CacheValue[]` 要插入的 JSON 值，按调用顺序传入 | `number` | `await cache.list.rpush('jobs', 'job-2')` |
+| `cache.list.lpop(key)` | 取走左端元素 | `key: string` 必填列表键 | `T \| null` | `await cache.list.lpop('jobs')` |
+| `cache.list.rpop(key)` | 取走右端元素 | `key: string` 必填列表键 | `T \| null` | `await cache.list.rpop('jobs')` |
+| `cache.list.llen(key)` | 读取列表长度 | `key: string` 必填列表键 | `number` | `await cache.list.llen('jobs')` |
+| `cache.list.lrange(key, start, stop)` | 读取包含端点的索引区间 | `key: string` 必填列表键。`start: number, stop: number` 含端点，从 0 开始的范围，-1 表示最后一项 | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
+| `cache.list.lindex(key, index)` | 按索引读取一个元素 | `key: string` 必填列表键。`index: number` 从 0 开始的位置，负值从尾部索引 | `T \| null` | `await cache.list.lindex('jobs', 0)` |
+| `cache.list.lset(key, index, value)` | 替换指定索引的元素 | `key: string` 必填列表键。`index: number` 从 0 开始的位置，负值从尾部索引。`value: CacheValue` 可序列化为 JSON 的新值 | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
+| `cache.list.ltrim(key, start, stop)` | 只保留指定索引区间 | `key: string` 必填列表键。`start: number, stop: number` 含端点，从 0 开始的范围，-1 表示最后一项 | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
+| `cache.list.blpop(timeout, ...keys)` | 等待并取走左端元素 | `timeout: number` Redis 等待的秒数，0 表示持续等待。Memory 仅检查当前可读项。`...keys: string[]` 按顺序传入逻辑缓存键 | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
+| `cache.list.brpop(timeout, ...keys)` | 等待并取走右端元素 | `timeout: number` Redis 等待的秒数，0 表示持续等待。Memory 仅检查当前可读项。`...keys: string[]` 按顺序传入逻辑缓存键 | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
 
 #### 场景：排队与顺序读取
 
@@ -301,16 +319,16 @@ Redis 的 `blpop` 和 `brpop` 各次调用使用独立连接，返回的逻辑�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.set_.sadd` | 添加去重成员 | key, members | `number` | `await cache.set_.sadd('roles', 'editor')` |
-| `cache.set_.srem` | 移除指定成员 | key, members | `number` | `await cache.set_.srem('roles', 'editor')` |
-| `cache.set_.smembers` | 读取全部成员 | key | `T[]` | `await cache.set_.smembers('roles')` |
-| `cache.set_.sismember` | 检查是否包含成员 | key, member | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
-| `cache.set_.scard` | 统计成员数量 | key | `number` | `await cache.set_.scard('roles')` |
-| `cache.set_.srandmember` | 随机读取但不删除 | key, count | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
-| `cache.set_.spop` | 随机取走成员 | key, count | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
-| `cache.set_.sinter` | 求多个集合的交集 | keys | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
-| `cache.set_.sunion` | 求多个集合的并集 | keys | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
-| `cache.set_.sdiff` | 求首个集合相对其余集合的差集 | keys | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
+| `cache.set_.sadd(key, ...members)` | 添加去重成员 | `key: string` 必填集合键。`...members: CacheValue[]` 要添加或移除的 JSON 成员值 | `number` | `await cache.set_.sadd('roles', 'editor')` |
+| `cache.set_.srem(key, ...members)` | 移除指定成员 | `key: string` 必填集合键。`...members: CacheValue[]` 要添加或移除的 JSON 成员值 | `number` | `await cache.set_.srem('roles', 'editor')` |
+| `cache.set_.smembers(key)` | 读取全部成员 | `key: string` 必填集合键 | `T[]` | `await cache.set_.smembers('roles')` |
+| `cache.set_.sismember(key, member)` | 检查是否包含成员 | `key: string` 必填集合键。`member: CacheValue` 用于比较的成员值 | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
+| `cache.set_.scard(key)` | 统计成员数量 | `key: string` 必填集合键 | `number` | `await cache.set_.scard('roles')` |
+| `cache.set_.srandmember(key, count?)` | 随机读取但不删除 | `key: string` 必填集合键。`count?: number` 省略时返回单个成员，指定时返回数组 | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
+| `cache.set_.spop(key, count?)` | 随机取走成员 | `key: string` 必填集合键。`count?: number` 省略时返回单个成员，指定时返回数组 | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
+| `cache.set_.sinter(...keys)` | 求多个集合的交集 | `...keys: string[]` 按顺序传入逻辑缓存键 | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
+| `cache.set_.sunion(...keys)` | 求多个集合的并集 | `...keys: string[]` 按顺序传入逻辑缓存键 | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
+| `cache.set_.sdiff(...keys)` | 求首个集合相对其余集合的差集 | `...keys: string[]` 从首个集合扣除其余集合的成员 | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
 
 #### 场景：去重与集合比较
 
@@ -342,19 +360,31 @@ core.logger.info('Sampled roles', { roles: sampled.data })
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.zset.zadd` | 添加成员及分数 | key, members | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
-| `cache.zset.zrem` | 删除指定成员 | key, members | `number` | `await cache.zset.zrem('scores', 'u1')` |
-| `cache.zset.zscore` | 读取成员分数 | key, member | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
-| `cache.zset.zrank` | 查询从零开始的升序排名 | key, member | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
-| `cache.zset.zrevrank` | 查询从零开始的降序排名 | key, member | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
-| `cache.zset.zrange` | 按升序排名读取 | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
-| `cache.zset.zrevrange` | 按降序排名读取 | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
-| `cache.zset.zrangeByScore` | 按分数区间筛选 | key, min, max, options | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
-| `cache.zset.zcard` | 统计成员总数 | key | `number` | `await cache.zset.zcard('scores')` |
-| `cache.zset.zcount` | 统计分数区间内的成员 | key, min, max | `number` | `await cache.zset.zcount('scores', 10, 100)` |
-| `cache.zset.zincrBy` | 增加成员分数 | key, increment, member | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
-| `cache.zset.zremRangeByRank` | 删除排名区间内的成员 | key, start, stop | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
-| `cache.zset.zremRangeByScore` | 删除分数区间内的成员 | key, min, max | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+| `cache.zset.zadd(key, ...members)` | 添加成员及分数 | `key: string` 必填有序集合键。`...members: ZMember[]` 每项为 member 字符串及 score 数值 | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
+| `cache.zset.zrem(key, ...members)` | 删除指定成员 | `key: string` 必填有序集合键。`...members: string[]` 要删除的成员标识 | `number` | `await cache.zset.zrem('scores', 'u1')` |
+| `cache.zset.zscore(key, member)` | 读取成员分数 | `key: string` 必填有序集合键。`member: string` 有序集合的成员标识 | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
+| `cache.zset.zrank(key, member)` | 查询从零开始的升序排名 | `key: string` 必填有序集合键。`member: string` 有序集合的成员标识 | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
+| `cache.zset.zrevrank(key, member)` | 查询从零开始的降序排名 | `key: string` 必填有序集合键。`member: string` 有序集合的成员标识 | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
+| `cache.zset.zrange(key, start, stop, withScores?)` | 按升序排名读取 | `key: string` 必填有序集合键。`start: number, stop: number` 含端点，从 0 开始的范围，-1 表示最后一项。`withScores?: boolean` 默认 false，仅返回成员名。true 返回成员及分数 | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
+| `cache.zset.zrevrange(key, start, stop, withScores?)` | 按降序排名读取 | `key: string` 必填有序集合键。`start: number, stop: number` 含端点，从 0 开始的范围，-1 表示最后一项。`withScores?: boolean` 默认 false，仅返回成员名。true 返回成员及分数 | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
+| `cache.zset.zrangeByScore(key, min, max, options?)` | 按分数区间筛选 | `key: string` 必填有序集合键。`min: number \| string, max: number \| string` 分数边界默认包含端点。括号前缀如 (10 排除端点，±inf 可作无穷端点。可选 options 见[分数范围选项](#cache-score-range-options) | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
+| `cache.zset.zcard(key)` | 统计成员总数 | `key: string` 必填有序集合键 | `number` | `await cache.zset.zcard('scores')` |
+| `cache.zset.zcount(key, min, max)` | 统计分数区间内的成员 | `key: string` 必填有序集合键。`min: number \| string, max: number \| string` 分数边界默认包含端点。括号前缀如 (10 排除端点，±inf 可作无穷端点 | `number` | `await cache.zset.zcount('scores', 10, 100)` |
+| `cache.zset.zincrBy(key, increment, member)` | 增加成员分数 | `key: string` 必填有序集合键。`increment: number` 增加量。`member: string` 有序集合的成员标识 | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
+| `cache.zset.zremRangeByRank(key, start, stop)` | 删除排名区间内的成员 | `key: string` 必填有序集合键。`start: number, stop: number` 含端点，从 0 开始的范围，-1 表示最后一项 | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
+| `cache.zset.zremRangeByScore(key, min, max)` | 删除分数区间内的成员 | `key: string` 必填有序集合键。`min: number \| string, max: number \| string` 分数边界默认包含端点。括号前缀如 (10 排除端点，±inf 可作无穷端点 | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+
+<a id="cache-score-range-options"></a>
+
+**分数范围选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `withScores` | `boolean` | `false` | 返回成员名列表。为 true 时返回含 member 与 score 的对象。 |
+| `offset` | `number` | `0` | 用安全整数跳过匹配项。负值返回空数组。 |
+| `count` | `number` | `-1` | 最多读取的匹配项，须为安全整数。负值表示不限。 |
+
+已有 `a: 10` 与 `b: 20` 时，用区间 `[10, 20]` 和 `{ offset: 1, count: 1, withScores: true }`，返回 `[{ member: "b", score: 20 }]`。
 
 #### 场景：排行榜与分数筛选
 
@@ -386,10 +416,10 @@ core.logger.info('Scores above ten', { members: aboveTen.data })
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `cache.lock.acquire` | 尝试获取或重入 | `key`，首次可传 `{ ttl: 30 }`，重入用 `{ owner }` | 获得的 `owner`，或 `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
-| `cache.lock.release` | 释放一次获取，最后一次实际解锁 | key, owner | 成功 `true`，凭据无效或锁不存在 `false` | `await cache.lock.release('demo:daily', owner)` |
-| `cache.lock.isLocked` | 观察锁是否存在 | key | 存在为 `true` | `await cache.lock.isLocked('demo:daily')` |
-| `cache.lock.extend` | 更新期限并保留获取次数 | key, ttl（秒）, owner | 期限已更新为 `true` | `await cache.lock.extend('demo:daily', 60, owner)` |
+| `cache.lock.acquire(key, options?)` | 尝试获取或重入 | `key` 必填；在 `options` 中，首次可传 `ttl`（正安全整数秒，默认 30）；重入传原 `owner` 并保留原期限，和 `ttl` 互斥 | 获得的 `owner`，或 `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
+| `cache.lock.release(key, owner)` | 释放一次获取，最后一次实际解锁 | `key: string` 必填锁键。`owner: string` 首次获取后返回的持有凭据 | 成功 `true`，凭据无效或锁不存在 `false` | `await cache.lock.release('demo:daily', owner)` |
+| `cache.lock.isLocked(key)` | 观察锁是否存在 | `key: string` 必填锁键 | 存在为 `true` | `await cache.lock.isLocked('demo:daily')` |
+| `cache.lock.extend(key, ttl, owner)` | 更新期限并保留获取次数 | `key: string` 必填锁键。`ttl: number` 新的正安全整数秒数。`owner: string` 首次获取后返回的持有凭据 | 期限已更新为 `true` | `await cache.lock.extend('demo:daily', 60, owner)` |
 
 #### 场景：主任务调用另一节点的受保护步骤
 

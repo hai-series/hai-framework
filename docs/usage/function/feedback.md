@@ -54,9 +54,9 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedback.init` | 准备反馈服务；先按快速开始连接数据库并准备依赖 | 先按快速开始连接数据库并准备依赖；`config` 必填，`options?` 可选 | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
-| `feedback.close` | 停止本实例的反馈后台工作并清理模块状态；共享依赖由应用关闭 | 共享依赖由应用关闭；无 | `Promise<HaiResult<void>>` | `await feedback.close()` |
-| `feedback.runJobs` | 执行当前可领取的后台任务 | 无参数 | `processed 处理数` | `await feedback.runJobs()` |
+| `feedback.init(config, options?)` | 准备反馈服务；先按快速开始连接数据库并准备依赖 | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [初始化参数](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
+| `feedback.close()` | 停止本实例的反馈后台工作并清理模块状态；共享依赖由应用关闭 | 共享依赖由应用关闭；无 | `Promise<HaiResult<void>>` | `await feedback.close()` |
+| `feedback.runJobs()` | 执行当前可领取的后台任务 | 无参数 | `processed 处理数` | `await feedback.runJobs()` |
 
 #### 场景：准备服务与接入采集任务
 
@@ -80,6 +80,14 @@ init 输入来自最小接入，成功无数据；runJobs 无参数，输出本�
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
+
+<a id="feedback-init-options"></a>
+
+#### 初始化参数
+
+启动时使用的 `config: FeedbackConfigInput` 必填，字段见[配置文件](../configuration/feedback.md)。`options: FeedbackInitOptions` 可以省略，省略时不运行应用提供的业务采集函数。
+
+可选的 `collectEvidence({ report, signal })` 在报告入库后运行。`report` 是只读反馈记录，`signal` 用于在超时或关闭时取消外部操作。回调同步或异步返回 `FeedbackCollectedEvidence`，可包含 `text: string`、结构化 `data: FeedbackEvidenceInput['data']` 或 `attachments`。每个附件传稳定的字符串 `id`、文件名 `name`、媒体类型 `contentType` 和 `bytes: Uint8Array`。下方异步采集示例展示如何用反馈编号给材料命名，并将取消信号传给文件读取。
 
 #### 场景：在服务端异步补充业务证据
 
@@ -182,12 +190,49 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedback.submit` | 受理一份反馈 | input, context | `報告` | `await feedback.submit(submission, context)` |
-| `feedback.list` | 筛选并分页查询反馈 | input, context | `报告分页` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
-| `feedback.get` | 读取反馈详情 | id, context | `报告、附件、历史、任务` | `await feedback.get(reportId, context)` |
-| `feedback.getEvidence` | 分页读取诊断证据 | input, context | `证据分页` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
-| `feedback.setStatus` | 按版本条件变更处理状态 | input, context | `更新后的报告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
-| `feedback.retry` | 重新调度指定失败任务 | input, context | `void` | `await feedback.retry({ id: reportId, target: 'collect' }, context)` |
+| `feedback.submit(input, context)` | 受理一份反馈 | 必填 `input: FeedbackSubmitInput` 和 `context: FeedbackContext`。见[提交字段](#feedback-submission-fields)。 | `報告` | `await feedback.submit(submission, context)` |
+| `feedback.list(input, context)` | 筛选并分页查询反馈 | `input: FeedbackListInput` 必填筛选对象，字段可省略。见[报告筛选](#feedback-report-options)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `报告分页` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.get(id, context)` | 读取反馈详情 | `id: string` 必填报告 ID。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `报告、附件、历史、任务` | `await feedback.get(reportId, context)` |
+| `feedback.getEvidence(input, context)` | 分页读取诊断证据 | `input: FeedbackEvidenceQuery` 必填 id，另可传 source、kind、requestId、errorId、Unix 毫秒范围 from/to 和分页 page/pageSize。见[证据字段](#feedback-evidence-fields)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `证据分页` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+| `feedback.setStatus(input, context)` | 按版本条件变更处理状态 | `input: FeedbackSetStatusInput` 报告、目标状态、版本与说明，见[处理字段](#feedback-report-options)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `更新后的报告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
+| `feedback.retry(input, context)` | 重新调度指定失败任务 | `input: FeedbackRetryInput` 必填报告 id，选择 target 及适用的 targetId。见[重试字段](#feedback-report-options)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `void` | `await feedback.retry({ id: reportId, target: 'collect' }, context)` |
+
+<a id="feedback-report-options"></a>
+
+**报告筛选、处理状态与重试**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `list.input.page / pageSize` | `number` | 默认 1 和 20 | 正整数页码和页大小，pageSize 最多 100。 |
+| `list.input.sortDirection` | `'asc' \| 'desc'` | `desc` | 按创建时间排序。 |
+| `list.input.status` | `'pending' \| 'handled'` | 可省略 | 按是否处理筛选。 |
+| `list.input.collectionStatus` | `'collecting' \| 'complete' \| 'partial' \| 'failed'` | 可省略 | 按材料采集状态筛选。 |
+| `list.input.notificationStatus` | `'disabled' \| 'pending' \| 'sending' \| 'sent' \| 'deferred' \| 'failed'` | 可省略 | 按通知状态筛选。 |
+| `list.input.appId / appVersion` | `string` | 可省略 | 在当前受权范围内进一步筛选应用与版本，appVersion 最多 128 字符。 |
+| `list.input.search` | `string` | 可省略 | 编号或摘要的字面量子串，最多 200 字符。 |
+| `list.input.from / to` | `number` | 可省略 | 含端点的创建时间上下界，非负安全整数 Unix 毫秒。 |
+| `setStatus.input.id / status` | `string / FeedbackStatus` | 必填 | 报告 ID 和目标状态。status 为 pending 或 handled。 |
+| `setStatus.input.expectedVersion` | `number` | 必填 | 最后读取的报告版本，正整数。期间有变更时返回 CONFLICT。 |
+| `setStatus.input.note` | `string` | 可省略 | 处理说明，最多 10000 字符。 |
+| `retry.input.target` | `'collect' \| 'notify' \| 'webhook' \| 'export' \| 'attachment'` | 必填 | 要重新调度的失败类别。 |
+| `retry.input.targetId` | `string` | 重试附件时指定 | 定位报告内失败附件的 ID。 |
+
+例如只查询 `{ status: "pending", page: 1, pageSize: 5 }`，结果限于当前授权范围内待处理报告，首页至多 5 条。用其中报告的 `version` 更新状态期间若有并发变更，返回 `CONFLICT`。
+
+<a id="feedback-submission-fields"></a>
+
+**提交报告与调用者身份**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `input.submissionId / appId` | `string` | 必填 | 稳定提交号与应用 ID，同次业务提交重试复用原编号。 |
+| `input.description / category / contact` | `string` | 可省略 | 用户描述、应用分类、联系信息。最大长度分别为 10000、64、320。 |
+| `input.url` | `string` | 可省略 | 现场页面地址，最多 2048 字符。 |
+| `input.appVersion / buildId / commit` | `string` | 可省略 | 用于定位发生问题的构建，各最多 128 字符。 |
+| `input.anchor` | `{ kind, timestamp, errorId? }` | 可省略 | 现场起点。kind 取 error 或 feedback，timestamp 使用 Unix 毫秒，errorId 可关联错误。 |
+| `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | 可省略 | 随报告声明的诊断事件与附件元数据，数组上限分别为 1000 和 20。附件字节后续上传。 |
+| `context.scopeId / userId` | `string` | 必填 | 由可信会话取得的租户与用户身份。 |
+| `context.permissions` | `readonly string[]` | 可省略 | 可信会话授权的权限集合，操作仍由服务核对访问范围。 |
 
 #### 场景：提交、查询与处理反馈
 
@@ -251,10 +296,26 @@ async function retryNotification(id: string, context: FeedbackContext) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedback.appendEvidence` | 追加一批诊断证据 | input, context | `确认 ID 数组与证据修订` | `await feedback.appendEvidence({ id: reportId, evidence }, context)` |
-| `feedback.completeCollection` | 标记本轮证据采集完成 | input, context | `报告` | `await feedback.completeCollection({ id: reportId }, context)` |
-| `feedback.uploadAttachment` | 上传已授权的反馈附件 | input, context | `附件元数据` | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
-| `feedback.getAttachment` | 读取已授权的附件 | input, context | `文件名、类型与 base64` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+| `feedback.appendEvidence(input, context)` | 追加一批诊断证据 | `input: FeedbackAppendEvidenceInput` 必填报告 id 与 evidence 数组（最多 1000 项）。见[证据字段](#feedback-evidence-fields)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `确认 ID 数组与证据修订` | `await feedback.appendEvidence({ id: reportId, evidence }, context)` |
+| `feedback.completeCollection(input, context)` | 标记本轮证据采集完成 | `input: FeedbackCompleteInput` 必填报告 id，可选 missing 列表。见[缺失项字段](#feedback-evidence-fields)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `报告` | `await feedback.completeCollection({ id: reportId }, context)` |
+| `feedback.uploadAttachment(input, context)` | 上传已授权的反馈附件 | `input: FeedbackUploadInput` 必填报告 id、已声明 attachmentId、对应字节 dataBase64。见[上传字段](#feedback-evidence-fields)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `附件元数据` | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
+| `feedback.getAttachment(input, context)` | 读取已授权的附件 | `input: { id: string, attachmentId: string }` 必填报告与其附件 ID。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `文件名、类型与 base64` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+
+<a id="feedback-evidence-fields"></a>
+
+**证据与附件输入**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `evidence[].id / source / sequence` | `string / string / number` | 必填 | 稳定证据 ID、采集来源（1–128 字符）及该来源内的非负安全整数序号。 |
+| `evidence[].kind` | `'log' \| 'error' \| 'request' \| 'interaction' \| 'environment' \| 'snapshot' \| 'replay' \| 'business' \| 'missing'` | 必填 | 证据分类。 |
+| `evidence[].timestamp` | `number` | 必填 | 发生时间，Unix 毫秒。 |
+| `evidence[].data` | `Record<string, unknown>` | 必填 | 与证据类别对应的 JSON 对象。 |
+| `evidence[].requestId / errorId / missingReason` | `string` | 可省略 | 关联请求/错误，或填缺失原因；后者最大 2000 字符。 |
+| `attachments[].id / name / contentType` | `string` | 必填 | 提交时声明的稳定附件 ID、文件名和媒体类型。 |
+| `attachments[].size / checksum` | `number / string` | 必填 | 声明原始字节数（0 至 5 MiB）与 64 字符小写十六进制 SHA-256。 |
+| `uploadAttachment.input.dataBase64` | `string` | 必填 | 与声明对应的文件原字节的标准 Base64，不含 data URL 前缀。 |
+| `completeCollection.input.missing` | `string[]` | 可省略 | 本轮仍缺少的诊断条目描述，最多 100 项，每项最多 2000 字符。 |
 
 #### 场景：追加材料与读取附件
 
@@ -304,8 +365,8 @@ ZIP 压缩和解压使用 Core Worker。浏览器离线导出使用 Web Worker�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedback.export` | 申请固定证据修订的离线包 | input, context | `导出任务` | `await feedback.export({ id: reportId }, context)` |
-| `feedback.getExport` | 读取已完成的离线包 | input, context | `ZIP 文件名、类型与 base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.export(input, context)` | 申请固定证据修订的离线包 | `input: FeedbackExportInput` 必填报告 id，可选正整数 evidenceRevision，默认该报告当前证据修订。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `导出任务` | `await feedback.export({ id: reportId }, context)` |
+| `feedback.getExport(input, context)` | 读取已完成的离线包 | `input: { id: string, jobId: string }` 必填报告 ID 与导出回执的任务 ID。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `ZIP 文件名、类型与 base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
 
 #### 场景：导出与读取离线诊断包
 
@@ -370,21 +431,57 @@ const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedbackClient.init` | 启动浏览器现场采集 | `FeedbackClientConfig` | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedbackClient.prepare` | 为本次反馈准备现场材料 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedbackClient.captureScreenshot` | 采集当前页面截图 | `attachmentId?: string` | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedbackClient.getDraft` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
-| `feedbackClient.getView` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
-| `feedbackClient.releasePreviews` | 释放临时预览资源 | `—` | `void` | `feedbackClient.releasePreviews()` |
-| `feedbackClient.addFiles` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedbackClient.annotate` | 把标注与遮挡写入图片 | `attachmentId: string, FeedbackImageAnnotation` | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedbackClient.record` | 记录一条应用现场事实 | `kind, data; requestId?, errorId?` | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedbackClient.submit` | 提交当前反馈草稿 | `FeedbackClientSubmitInput?` | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedbackClient.flush` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedbackClient.exportDraft` | 生成本地诊断包 | `—` | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedbackClient.saveDraft` | 保存本地草稿 | `—` | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedbackClient.pause` | 暂停现场采集 | `—` | `void` | `feedbackClient.pause()` |
-| `feedbackClient.close` | 停止采集并释放资源 | `{ discard?: boolean }` | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | 启动浏览器现场采集 | 必填 `config: FeedbackClientConfig`。见[应用身份和采集设置](#feedback-client-config)。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare()` | 为本次反馈准备现场材料 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | 采集当前页面截图 | `attachmentId?: string` 省略时新增截图，传草稿附件 ID 时替换该项 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | 释放临时预览资源 | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新选文件和可选的待移除草稿附件 ID。同一批执行 | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | 把标注与遮挡写入图片 | 必填 `id: string`（草稿附件 ID）与 `annotation: FeedbackImageAnnotation`（标注与遮挡数据） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | 记录一条应用现场事实 | 必填事件对象 `event`，包含证据类别 `kind` 和字段对象 `data`。可选 `requestId`、`errorId` 用于关联已有请求或错误 | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | 提交当前反馈草稿 | 可省略 `input: FeedbackClientSubmitInput`。见[浏览器提交字段](#feedback-client-submit-input)。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | 生成本地诊断包 | `input?: FeedbackClientSubmitInput`，指定离线包的补充文字和附件，省略时导出当前草稿 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | 保存本地草稿 | `input?: FeedbackClientSubmitInput`，同 `exportDraft`，随后调用宿主保存入口 | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | 暂停现场采集 | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | 停止采集并释放资源 | `options?: { discard?: boolean }` 默认 false，等待有界收尾并清理。true 请求丢弃本机草稿 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+
+<a id="feedback-client-config"></a>
+
+**FeedbackClientConfig**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `appId` | `string` | 必填 | 当前应用标识，须匹配服务端反馈配置。 |
+| `appVersion / buildId / commit` | `string` | 可省略 | 构建标识，随反馈提交。各最多 128 字符。 |
+| `actions` | `FeedbackClientActions` | 必填 | 宿主提供 submit、appendEvidence、completeCollection、upload 异步回调，分别受理、补采、完成采集和上传附件。可选 policy 返回服务端预算。 |
+| `budget` | `FeedbackBudget` | 可省略 | 离线或服务端预算不可用时使用。在线优先采用 actions.policy 返回的策略。 |
+| `cookieAllowlist` | `readonly string[]` | 可省略 | 允许诊断时采集的 Cookie 名称列表。 |
+| `screenshot / keyScreenshots` | `boolean` | `true / false` | 决定准备反馈时是否截图、是否额外自动捕获关键截图。 |
+| `captureScreenshot` | `(options?: { signal: AbortSignal }) => Promise<Uint8Array>` | 可省略 | 替换默认截图方法，返回图像字节并响应取消信号。 |
+| `screenshotTimeoutMs / maxKeyScreenshots / keyScreenshotThrottleMs` | `number` | `3000 / 3 / 10000` | 分别为截图超时毫秒、最多保留的关键截图数和自动截图最短间隔毫秒。关键截图数上限 5，0 禁用。 |
+| `replay / replayStart` | `boolean / 'init' \| 'prepare'` | `false / prepare` | 是否采集 DOM 回放，以及启用后在初始化或准备反馈时开始。 |
+| `captureConsole / persistDraft` | `boolean` | `false / false` | 显式开启控制台采集或本机持久化。 |
+| `persistenceKey` | `string` | persistDraft 为 true 时必填 | 隔离本机用户和租户草稿的标识，不能使用凭据。 |
+| `maxEvents / maxBytes / maxAgeMs` | `number` | `1000 / 2097152 / 300000` | 临时证据条数、字节数和保留毫秒数。条数与字节数受服务端预算进一步限制。 |
+| `beforeCount / afterCount / afterTimeoutMs` | `number` | `100 / 100 / 30000` | 锚点前后事件数与锚点后最长采集毫秒数。数值选项须为非负安全整数。 |
+
+例如 `{ screenshot: false, replay: true, replayStart: "prepare" }` 关闭截图，初始化后直到用户准备反馈时才启动回放。
+
+<a id="feedback-client-submit-input"></a>
+
+**FeedbackClientSubmitInput**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `description / category / contact` | `string` | 可省略 | 故障描述、应用分类和回访信息。可单独提供。 |
+| `files` | `readonly File[]` | 无新增文件 | 用户本次选择的附件。 |
+| `removedAttachmentIds` | `readonly string[]` | 保留已有附件 | 提交时从待提交附件中移除，离线包中排除这些附件。 |
+
+例如导出时传 `{ description: "Checkout failed", removedAttachmentIds: ["draft-image"] }`，成功的 ZIP 包包含补充描述，不含该草稿附件。
+
+`submit`、`exportDraft` 和 `saveDraft` 共用可省略的 `FeedbackClientSubmitInput`。其中 `description` 是用户补充的故障描述，`category` 是应用分类，`contact` 是回访信息，三个字段均为可选字符串。`files?: readonly File[]` 接收本次新选的文件，`removedAttachmentIds?: readonly string[]` 接收草稿中要排除的附件 ID。省略文件字段时无需补传，省略移除列表时保留原附件。
 
 #### 场景：采集浏览器现场与草稿
 

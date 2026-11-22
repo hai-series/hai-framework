@@ -92,10 +92,10 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `contract`、`procedures`。HTTP、IAM、中间件、传输加密和语音可按需配置，见[默认值](../configuration/serv.md) | 提供 `fetch` 和 `request` 的 `ServHttpApp` | `serv.createApp({ contract, procedures })` |
-| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`。默认 `host: '127.0.0.1'`、`port: 3000`。可传 `onListening`、`onClose` | `ServNodeServer`，含 `server`、`address` 和异步 `close()` | `serv.listen(app, { port: 3001 })` |
-| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 由 `createApp()` 返回的应用 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
-| `serv.implement(contract)` | 实现契约中的路由 | 必填带类型的路由契约 | `ServImplementer`，可继续设置上下文和各路由的鉴权、权限、角色及处理函数 | `serv.implement(contract)` |
+| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `options`。`contract` 和 `procedures` 必填，其余见[工厂参数](#host-options)。 | 提供 `fetch` 和 `request` 的 `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`，可选监听地址、端口和回调，见[监听参数](#listen-options) | `ServNodeServer`，含 `server`、`address` 和异步 `close()` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 必填 `app`，由 `serv.createApp()` 返回。 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
+| `serv.implement(contract)` | 实现契约中的路由 | 必填 `contract`，应用与客户端共享的带类型路由契约。 | `ServImplementer`，可继续设置上下文和各路由的鉴权、权限、角色及处理函数 | `serv.implement(contract)` |
 
 #### 场景：实现契约并启动 HTTP
 
@@ -117,7 +117,16 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 监听句柄可在启动后立即关闭，以取消尚未完成的绑定；重复关闭复用同一结果。地址占用等真实监听失败仍会拒绝关闭结果，不会当作正常退出。
 
+<a id="listen-options"></a>
+
 #### 场景：传入已解析的监听地址
+
+| `options` 字段 | 省略时 | 传入后的行为 |
+| --- | --- | --- |
+| `host` | `'127.0.0.1'` | 本机地址只允许本机连接。`'0.0.0.0'` 绑定所有 IPv4 网卡，也可指定一个接口的 IP 地址。 |
+| `port` | `3000` | 指定 Node 监听端口。`0` 由操作系统分配端口，从 `onListening` 的 `AddressInfo.port` 读取实际值。 |
+| `onListening` | 不执行启动回调 | HTTP 监听就绪后，以 Node `AddressInfo` 通知实际地址和端口。 |
+| `onClose` | 不注册进程退出回调 | 传入异步资源释放函数后，框架在 `SIGINT` 或 `SIGTERM` 时先关闭监听和语音连接，再调用此函数一次。主动 `close()` 后由调用方释放业务资源。 |
 
 host/port 统一由 `config/_serv.yml` 的 `server` 提供，优先级：`HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`。默认 `127.0.0.1` 仅本机可达，容器对外暴露时改为 `0.0.0.0`：
 
@@ -146,6 +155,8 @@ export function createFetchAdapter(app: ServHttpApp) {
 Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。
 
 toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
+
+<a id="host-options"></a>
 
 #### 应用工厂参数与依赖
 
@@ -202,8 +213,6 @@ export function createAuthApp() {
 
 `serv.listen(app, options)` 的 `host`/`port` 省略时为 `127.0.0.1:3000`，不会自行读取 HOST/PORT；应用先解析上述 Serv 配置，再把 `server.host/port` 显式传入监听器。`onListening(info)` 用于记录实际地址，`onClose()` 是可选异步清理回调。提供 onClose 才自动注册信号关闭；手动调用返回句柄的 close() 只停止监听及连接，应用还须显式等待业务模块清理，不能以端口关闭代替数据库、任务和凭据的释放。
 
-<a id="audio-options"></a>
-
 <a id="authentication"></a>
 
 ### 读取身份并守卫路由：`serv`
@@ -214,8 +223,8 @@ export function createAuthApp() {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `request` 必填，`platform` 可选 | `ServContext`，其中令牌尚未验证 | `serv.parseRequestContext({ request })` |
-| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 回调接收访问令牌，返回 `Promise<HaiResult<ServSession>>` | `CreateServContext`，无效令牌时不填 `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
+| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | 必填 `input.request: Request`。可选可信 `remoteAddress` 和已解析 `ip`，用于构造请求元数据。 | `ServContext`，其中令牌尚未验证 | `serv.parseRequestContext({ request })` |
+| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 必填 `verifyToken(token)`，异步验证访问令牌，返回 `HaiResult<ServSession>`。 | `CreateServContext`，无效令牌时不填 `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
 | `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 只读常量 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
 | `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 只读常量 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
 
@@ -521,9 +530,25 @@ resolveTenant 由应用根据已认证 userId 查询，返回可信租户编号�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
-| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | 含 `allowOrigin`、`secureRefreshCookie`、`exposeApiDocs` 的策略 | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
-| `serv.storageAssets(config)` | 用 Storage 提供授权后的只读资源 | 传入读取函数、键规则和 MIME 检查，按需配置缓存 | 支持 GET、HEAD 和 ETag 的 `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+| `serv.cors(config?)` | 处理跨域预检和响应头 | 可省略 `config`，包含来源、方法、头部和缓存设置。见 [HTTP 中间件字段](#serv-middleware-options)。 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
+| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | 必填 `input` 对象。生产要求明确的 `corsOrigin`。环境和来源字段见 [HTTP 中间件字段](#serv-middleware-options)。 | 含 `allowOrigin`、`secureRefreshCookie`、`exposeApiDocs` 的策略 | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
+| `serv.storageAssets(config)` | 用 Storage 提供授权后的只读资源 | `config` 必填，指定 Storage、路径和允许的 key、MIME。见 [HTTP 中间件字段](#serv-middleware-options)。 | 支持 GET、HEAD 和 ETag 的 `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+
+<a id="serv-middleware-options"></a>
+
+#### HTTP 中间件字段
+
+| 字段 | 默认与条件 | 用途或具体结果 |
+| --- | --- | --- |
+| `cors.config.origin` | 默认 `"*"` | 可传单个来源、列表或 `(origin) => boolean`。生产建议从明确的部署来源生成策略。 |
+| `cors.config.methods` / `allowedHeaders` | 默认常规 GET、HEAD、PUT、PATCH、POST、DELETE、OPTIONS 和下述头部 | 声明允许的 HTTP 方法及请求头。预检优先回显请求的头部列表。 |
+| `cors.config.exposedHeaders` / `credentials` / `maxAge` | 默认额外暴露项为空，凭据 `false`，缓存 86,400 秒 | 配置浏览器可读的响应头、凭据与预检缓存时间。总会配置 `X-Request-Id` 和 `X-Trace-Id` 为可读。 |
+| `input.environment` / `corsOrigin` / `nativeOrigins` | `production` 要求显式 HTTP(S) 来源 | 来源用逗号分隔。生产默认启用刷新 Cookie 的 Secure，关闭公开 API 文档。 |
+| `storageAssets.config.storage` / `pathPrefix` | 均必填 | 提供已初始化 Storage 或等价文件适配器。读取时从请求路径移除 `pathPrefix`，挂载路径仍需单独配置。 |
+| `storageAssets.config.keyPattern` / `allowedContentTypes` | 均必填 | 用正则允许完整的 Storage key，并指定 MIME 白名单。 |
+| `storageAssets.config.cacheControl` / `crossOriginResourcePolicy` | 默认 `no-store`，省略跨源资源策略头 | 设定资源缓存，并可选 `same-origin`、`same-site`、`cross-origin`。 |
+
+默认请求头为 `Authorization`、`Content-Type`、`X-Requested-With`、`X-Hai-Reauthentication`、`X-Hai-Terminal`。例如把 `https://app.example.com` 设为明确来源，对应浏览器预检返回 HTTP 204 和匹配的 `Access-Control-Allow-Origin`。
 
 #### 场景：控制访问、跨域与静态资源
 
@@ -645,10 +670,10 @@ const app = serv.createApp({
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 契约必填，标题默认 `hai-framework API`，版本默认 `0.1.0`；描述和前缀可省略 | `Promise<OpenAPI.Document>`，转换失败时拒绝 | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
-| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod Schema 和待校验值必填，语言默认 `zh-CN`，可传当前请求语言 | `HaiResult<z.infer<Schema>>`，失败中含可公开的字段错误 | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
-| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 传入 `Headers` 或头字段对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN` | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
-| `serv.m(key, options?)` | 读取本地化提示 | 消息键必填，可传 `locale` 和插值参数 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
+| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 必填共享 `contract`。可选 `options` 含 `title`（默认 `hai-framework API`）、`version`（默认 `0.1.0`）、`description` 和 `apiPrefix`（设置 `servers[0].url`）。 | `Promise<OpenAPI.Document>`，转换失败时拒绝 | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
+| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | 必填 Zod `schema` 与待校验的 `input`。错误语言 `locale` 可省略，默认 `zh-CN`。 | `HaiResult<z.infer<Schema>>`，失败中含可公开的字段错误 | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
+| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 必填 `headers`，接受 Headers 或字符串键值对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN`。 | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
+| `serv.m(key, options?)` | 读取本地化提示 | 必填已注册的消息 `key`。可选 `options.locale` 覆盖本次语言，`options.params` 提供插值字段。 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
 
 #### 场景：校验输入并提供接口描述
 
@@ -670,8 +695,9 @@ const contract = {
     // Declare a HaiResult response with string success data.
     .output(apiContract.haiResultSchema(z.string())),
 }
-// Generate OpenAPI for the local contract with the Orders title and version 1.0.0.
-const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
+// 将本地契约导出为标题 Orders、版本 1.0.0 的 OpenAPI 文档，转换失败时拒绝 Promise。
+const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0', apiPrefix: '/api/v1' })
+spec.servers?.[0]?.url // '/api/v1'，此选项只改变描述中的服务地址。
 ```
 
 输入明确英文请求头和 title=Order，输出规范化语言和校验后的对象。文档转换失败拒绝 Promise；校验失败返回 HaiResult 错误，二者处理方式不同。
@@ -696,7 +722,7 @@ const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `serv.createApp` | 装配加密、语音和业务路由 | `contract, procedures; transport?, audio?, middlewares?` | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
+| `serv.createApp(options)` | 装配加密、语音和业务路由 | 必填 `options`。`contract` 和 `procedures` 必填，其余见[工厂参数](#host-options)。 | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
 
 #### 场景：接入加密、语音与反馈
 
@@ -938,7 +964,7 @@ const app = serv.createApp({
 
 浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
-<a id="host-options"></a>
+<a id="audio-options"></a>
 
 #### 语音连接的授权与预算
 

@@ -82,10 +82,10 @@ Implement a shared contract and compose a Fetch application; release a Node list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `contract`、`procedures`。HTTP、IAM、中间件、传输加密和语音可按需配置，见[默认值](../configuration/serv.md) | `fetch`; `request`; `ServHttpApp` | `serv.createApp({ contract, procedures })` |
-| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`。默认 `host: '127.0.0.1'`、`port: 3000`。可传 `onListening`、`onClose` | `ServNodeServer`; `server`; `address`; `close()` | `serv.listen(app, { port: 3001 })` |
-| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 由 `createApp()` 返回的应用 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
-| `serv.implement(contract)` | 实现契约中的路由 | 必填带类型的路由契约 | `ServImplementer` | `serv.implement(contract)` |
+| `serv.createApp(options)` | Assemble an HTTP application | Required `options` with `contract` and `procedures`. See [factory settings](#host-options) for optional fields. | `ServHttpApp` with `fetch` and `request` | `serv.createApp({ contract, procedures })` |
+| `serv.listen(app, options?)` | Open a Node listener | Required `app` and optional [listener settings](#listen-options) | `ServNodeServer` with `server`, `address`, and async `close()` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | Required `app` returned by `serv.createApp()`. | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
+| `serv.implement(contract)` | 实现契约中的路由 | Required typed route `contract` shared with the application client. | `ServImplementer` | `serv.implement(contract)` |
 
 #### Scenario: Implement contracts and serve HTTP
 
@@ -95,13 +95,34 @@ Serv assembles an application; only listen starts a Node listener. Middleware, p
 
 Close the Node listener before releasing borrowed database or cache services. Keep request metadata separate from an authenticated session.
 
+<a id="listen-options"></a>
+
+#### Scenario: Pass the resolved listener address
+
+| `options` field | When omitted | Effect when supplied |
+| --- | --- | --- |
+| `host` | `'127.0.0.1'` | Loopback accepts local connections. `'0.0.0.0'` binds every IPv4 interface. A specific IP binds that interface. |
+| `port` | `3000` | Node listener port. `0` lets the OS choose it. Read `AddressInfo.port` in `onListening` for the bound port. |
+| `onListening` | No readiness callback | Receives the Node `AddressInfo` after the listener starts accepting connections. |
+| `onClose` | No process exit callback | Supply an async cleanup function to run once after the listener and audio connections stop on `SIGINT` or `SIGTERM`. After calling `close()` directly, release business resources in the caller. |
+
+The application can resolve `HOST` and `PORT` or the `server` values from its configuration file and pass them explicitly to `serv.listen()`. The listener uses its own defaults for omitted fields.
+
 <a id="host-options"></a>
 
 #### Application factory arguments and dependencies
 
-This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](serv.md#host-options); this subsection is partially translated.
-
-<a id="audio-options"></a>
+| `options` field | Default or requirement | Effect |
+| --- | --- | --- |
+| `contract`, `procedures` | Both required and mutually compatible | The contract describes inputs and outputs. Procedures implement those routes. |
+| `http` | Uses the [HTTP defaults](../configuration/serv.en.md) | Select API, health, and documentation paths and set the request policy. |
+| `middlewares` | No custom middleware | Supply `{ middleware, path? }` mounts. Omitting `path` mounts that middleware on every route. |
+| `iam` | Optional initialized IAM service | Verify bearer access tokens and supply refresh support when `refreshCookie` is configured. |
+| `verifyToken` | Uses IAM's verifier if available | Override access-token verification with a function returning `Promise<HaiResult<ServSession>>`. |
+| `createContext` | Uses Serv's context builder | Construct your own per-request context and authenticated session. This takes precedence over both `verifyToken` and `iam` for context creation. |
+| `refreshCookie` | Disabled | Define browser refresh-cookie behavior and optionally a trusted native request policy. Requires an IAM refresh implementation or `onRefresh`. |
+| `transport` | Disabled | Pass initialized crypto, the managed `serverKeyRing`, and a shared `keyStore` to enable request and response encryption. |
+| `audio` | No WebSocket route | Pass initialized AI and `verifyTicket` to mount audio. `serv.listen()` handles the WebSocket upgrade on Node. |
 
 [Detailed parameters and workflows](serv.md#http-app)
 
@@ -115,10 +136,10 @@ Parsing headers only extracts unverified credentials. Establish session after ve
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `request` 必填，`platform` 可选 | `ServContext` | `serv.parseRequestContext({ request })` |
-| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 回调接收访问令牌，返回 `Promise<HaiResult<ServSession>>` | `CreateServContext`; `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
-| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 只读常量 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
-| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 只读常量 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
+| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | Required `input.request: Request`. Optional trusted `remoteAddress` and already-resolved `ip` contribute request metadata. | `ServContext` | `serv.parseRequestContext({ request })` |
+| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | Required `verifyToken(token)` asynchronously verifies the access token and returns `HaiResult<ServSession>`. | `CreateServContext`; `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
+| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | Read-only constant | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
+| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | Read-only constant | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
 
 #### Scenario: Resolve identity and guard routes
 
@@ -140,9 +161,25 @@ Choose origins and cookie rules for the deployment; evaluate middleware on every
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
-| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
-| `serv.storageAssets(config)` | Serve public read-only Storage assets | Storage, key and MIME allowlists, optional cache policy | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+| `serv.cors(config?)` | 处理跨域预检和响应头 | Optional `config` sets origins, methods, headers, and cache behavior. See [HTTP middleware fields](#serv-middleware-options). | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
+| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | Required `input` object. Production requires explicit `corsOrigin`. See [HTTP middleware fields](#serv-middleware-options) for environment and origin settings. | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
+| `serv.storageAssets(config)` | Serve public read-only Storage assets | Required `config` with Storage, path, and allowed keys and MIME types. See [HTTP middleware fields](#serv-middleware-options). | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+
+<a id="serv-middleware-options"></a>
+
+#### HTTP middleware fields
+
+| Field | Default and conditions | Purpose or concrete result |
+| --- | --- | --- |
+| `cors.config.origin` | Default `"*"` | Accepts a single origin, an array, or `(origin) => boolean`. Use explicit deployment origins for production policy. |
+| `cors.config.methods` / `allowedHeaders` | Defaults to GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS and the headers below | Declares allowed methods and request headers. Preflight echoes the requested header list when present. |
+| `cors.config.exposedHeaders` / `credentials` / `maxAge` | Defaults to no extra exposed headers, `false` credentials, and 86,400 seconds | Controls browser-visible response headers, credentials, and preflight caching. Always includes `X-Request-Id` and `X-Trace-Id` in the exposed headers. |
+| `input.environment` / `corsOrigin` / `nativeOrigins` | `production` requires explicit HTTP(S) origins | Separate origins with commas. Production defaults to Secure refresh cookies and hides API docs. |
+| `storageAssets.config.storage` / `pathPrefix` | Both required | Supplies initialized Storage or an equivalent file adapter. Reading strips `pathPrefix` from the request path. Configure the middleware mount separately. |
+| `storageAssets.config.keyPattern` / `allowedContentTypes` | Both required | Use a regular expression for allowed full Storage keys and a MIME allowlist. |
+| `storageAssets.config.cacheControl` / `crossOriginResourcePolicy` | Defaults to `no-store` with no cross-origin resource policy header | Sets the asset cache policy and can specify `same-origin`, `same-site`, or `cross-origin`. |
+
+Default request headers are `Authorization`, `Content-Type`, `X-Requested-With`, `X-Hai-Reauthentication`, and `X-Hai-Terminal`. A browser preflight from an explicitly configured `https://app.example.com` returns HTTP 204 and a matching `Access-Control-Allow-Origin`.
 
 #### Scenario: Control access, CORS and assets
 
@@ -170,10 +207,10 @@ Resolve the request locale before validating input, and generate OpenAPI from th
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 契约必填，标题默认 `hai-framework API`，版本默认 `0.1.0`；描述和前缀可省略 | `Promise<OpenAPI.Document>` | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
-| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod Schema 和待校验值必填，语言默认 `zh-CN`，可传当前请求语言 | `HaiResult<z.infer<Schema>>` | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
-| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 传入 `Headers` 或头字段对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN` | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
-| `serv.m(key, options?)` | 读取本地化提示 | 消息键必填，可传 `locale` 和插值参数 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
+| `serv.generateSpec(contract, options?)` | Generate an OpenAPI description | Required shared `contract`. Optional `options` has `title` (default `hai-framework API`), `version` (default `0.1.0`), `description`, and `apiPrefix` (sets `servers[0].url`). | `Promise<OpenAPI.Document>` | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
+| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Required Zod `schema` and `input` value. Optional validation message `locale` defaults to `zh-CN`. | `HaiResult<z.infer<Schema>>` | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
+| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | Required `headers` as Headers or a string map. Reads `x-hai-locale`, then `Accept-Language`, defaulting to `zh-CN`. | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
+| `serv.m(key, options?)` | 读取本地化提示 | Required registered message `key`. Optional `options.locale` overrides the current language and `options.params` supplies interpolation values. | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
 
 #### Scenario: Validate input and describe APIs
 
@@ -189,8 +226,9 @@ checked.data // { title: 'Order' }
 // Resolve the localized forbidden message using the selected request locale.
 const denied = serv.m('serv_errorForbidden', { locale }) // localized safe text
 // With the contract from quick start:
-// Generate the OpenAPI document for the quick-start contract with the supplied title and version.
-const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
+// Generate OpenAPI for the quick-start contract with the Orders title and API version. Conversion errors reject the promise.
+const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0', apiPrefix: '/api/v1' })
+spec.servers?.[0]?.url // '/api/v1', the server URL in the description.
 ```
 
 The inputs are an English header and title=Order. Outputs are normalized locale and validated data. Spec conversion rejects on failure; validation uses failed HaiResult instead.
@@ -198,6 +236,7 @@ The inputs are an English header and title=Order. Outputs are normalized locale 
 [Detailed parameters and workflows](serv.md#validation-locales)
 
 <a id="integrations"></a>
+<a id="audio-options"></a>
 
 ### Integrate encryption, audio and feedback: `serv.createApp`
 
@@ -207,7 +246,7 @@ These integrations use createApp parameters and application-owned services rathe
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `serv.createApp` | Mount transport, audio and business routes | `contract, procedures; transport?, audio?, middlewares?` | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
+| `serv.createApp(options)` | Mount transport, audio and business routes | Required `options` with `contract` and `procedures`. See [factory settings](#host-options) for optional fields. | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
 
 #### Scenario: Integrate encryption, audio and feedback
 

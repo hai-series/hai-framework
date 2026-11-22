@@ -84,9 +84,9 @@ Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `tools.define` | 定义工具并约束输入。默认超时 `30000` 毫秒，定义无效时抛出 `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
-| `tool.execute` | 校验输入后执行；可另外传身份、授权、取消信号和期限 | 可另外传身份、授权、取消信号和期限；`input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
-| `tool.toDefinition` | 把参数规则转为 JSON Schema。不能转换时会抛出异常 | 无 | `ToolDefinition` | `tool.toDefinition()` |
+| `tools.define(options)` | 定义工具并约束输入。默认超时 `30000` 毫秒，定义无效时抛出 `TypeError` | `options: DefineToolOptions<TInput, TOutput>` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tool.execute(input, options?)` | 校验输入后执行；可另外传身份、授权、取消信号和期限 | `input: unknown, options?: ToolExecutionOptions`。`input` 须符合本工具的参数 Schema。省略选项时使用默认执行设置 | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition()` | 把参数规则转为 JSON Schema。不能转换时会抛出异常 | 无参数 | `ToolDefinition` | `tool.toDefinition()` |
 
 #### 场景：定义并执行单个工具
 
@@ -165,18 +165,18 @@ const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALID
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `tools.createRegistry` | 创建空的工具注册器。未提供 `authorize` 时注册器不额外检查权限 | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
-| `registry.register` | 登记一个工具实例 | `tool` | `HaiResult<void>` | `registry.register(tool)` |
-| `registry.registerMany` | 批量登记。任一项无效或重名，整批都不添加 | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
-| `registry.replace` | 用新定义替换同名工具。该名称必须已存在 | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
-| `registry.unregister` | 移除指定名称。只有原来存在才返回 `true` | `name` | `boolean` | `registry.unregister('sum')` |
-| `registry.get` | 按工具名取得实例 | `name` | `Tool / undefined` | `registry.get('sum')` |
-| `registry.has` | 检查指定名称是否已注册 | `name` | `boolean` | `registry.has('sum')` |
-| `registry.getNames` | 读取所有已注册工具的名称 | 无 | `string[]` | `registry.getNames()` |
-| `registry.getDefinitions` | 读取所有已注册工具的定义。参数规则无法转换时会抛出异常 | 无 | `ToolDefinition[]` | `registry.getDefinitions()` |
-| `registry.execute` | 执行已注册工具。注册器和单次调用都设置授权时，两者都要通过 | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
-| `registry.executeAll` | 默认顺序执行，遇到失败即停。设置 `parallel: true` 时已启动的调用不会因此回退 | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
-| `registry.clear` | 清空登记，之后不能按名称执行。已开始的调用不会取消 | 无 | `void` | `registry.clear()` |
+| `tools.createRegistry(options?)` | 创建空的工具注册器。未提供 `authorize` 时注册器不额外检查权限 | `options?: ToolRegistryOptions`。省略时使用空选项 | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `registry.register(tool)` | 登记一个工具实例 | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany(tools)` | 批量登记。任一项无效或重名，整批都不添加 | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace(tool)` | 用新定义替换同名工具。该名称必须已存在 | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister(name)` | 移除指定名称。只有原来存在才返回 `true` | `name: string` | `boolean` | `registry.unregister('sum')` |
+| `registry.get(name)` | 按工具名取得实例 | `name: string` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has(name)` | 检查指定名称是否已注册 | `name: string` | `boolean` | `registry.has('sum')` |
+| `registry.getNames()` | 读取所有已注册工具的名称 | 无参数 | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions()` | 读取所有已注册工具的定义。参数规则无法转换时会抛出异常 | 无参数 | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute(name, input, options?)` | 执行已注册工具。注册器和单次调用都设置授权时，两者都要通过 | `name: string, input: unknown, options?: ToolExecutionOptions`。`input` 须符合已登记工具的参数 Schema。省略选项时使用默认执行设置 | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll(calls, options?)` | 默认顺序执行，遇到失败即停。设置 `parallel: true` 时已启动的调用不会因此回退 | `calls: ToolInvocation[], options?: ToolExecutionOptions & { parallel?: boolean }`。默认按顺序执行，`parallel: true` 时并发执行 | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear()` | 清空登记，之后不能按名称执行。已开始的调用不会取消 | 无参数 | `void` | `registry.clear()` |
 | `registry.size` | 读取已注册的工具数（属性） | 无 | `number` | `registry.size` |
 
 #### 场景：登记、查找与批量执行
@@ -252,14 +252,26 @@ Tools 无全局启用开关；应用将自己的配置转换为工厂与 `enable
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `tools.createService` | 创建借用 Runner 的工具服务 | `ToolServiceOptions`；id、runner、createTools、enabled、authorize 必填 | `HaiResult<ToolService>` | `tools.createService(options)` |
-| `service.catalog` | 列出当前可用工具 | 可信上下文 | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
-| `service.submit` | 提交持久任务 | `{ name, input, idempotencyKey? }`、上下文 | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
-| `service.find` | 按业务幂等键查任务 | 幂等键、可信上下文 | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
-| `service.inspect` | 读取任务状态与结果 | 完整回执、上下文、可选 `{ after }` | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
-| `service.cancel` | 请求取消任务 | 完整回执、上下文 | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
-| `service.invoke` | 同步等待工具调用结果 | 与 submit 相同 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
-| `service.close` | 停止服务并清理自有资源 | 无 | `void` | `service.close()` |
+| `tools.createService(options)` | 创建借用 Runner 的工具服务 | `options: ToolServiceOptions`。`id`、`runner`、`createTools`、`enabled` 和 `authorize` 必填 | `HaiResult<ToolService>` | `tools.createService(options)` |
+| `service.catalog(context)` | 列出当前可用工具 | `context: ToolServiceContext`。应用提供可信上下文 | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
+| `service.submit(request, context)` | 提交持久任务 | `request: ToolSubmitRequest, context: ToolServiceContext`。请求包含工具名称、输入及可选幂等键。上下文由应用提供 | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
+| `service.find(idempotencyKey, context)` | 按业务幂等键查任务 | `idempotencyKey: string, context: ToolServiceContext` | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
+| `service.inspect(receipt, context, options?)` | 读取任务状态与结果 | `receipt: ToolReceipt, context: ToolServiceContext, options?: { after?: number }`。传完整回执，可用 `after` 从指定事件序号后续读 | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
+| `service.cancel(receipt, context)` | 请求取消任务 | `receipt: ToolReceipt, context: ToolServiceContext`。传入任务的完整回执和可信上下文 | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
+| `service.invoke(request, context)` | 同步等待工具调用结果 | `request: ToolSubmitRequest, context: ToolServiceContext`。请求与 `submit` 使用同一结构 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
+| `service.close()` | 停止服务并清理自有资源 | 无参数 | `void` | `service.close()` |
+
+#### 服务请求、上下文与续读参数
+
+| 对象 | 字段 | 条件和结果 |
+| --- | --- | --- |
+| `ToolServiceContext` | `scope`、`sessionId`、`signal`、`execution` | 必填可信 `scope: { tenantId, userId }`，两个 ID 均 1–200 字符。可传 1–200 字符的会话 ID 和取消信号。执行节点注入真实 `RunnerContext`，调用方传入值不作为执行归属 |
+| `ToolSubmitRequest` | `name`、`input`、`idempotencyKey` | 前两项必填，工具名称须在已启用目录中，输入为符合该工具 Schema 的 JSON。可传 1–200 字符的幂等键。省略时生成 UUID；要支持断线找回同一操作，应自带稳定键 |
+| `ToolReceipt` | `id`、`key` | 必填完整回执。ID 为 64 位十六进制执行号，键为 1–200 字符。`inspect/cancel` 接受这对值并核对当前主体与服务；`find` 只接收提交时的业务幂等键 |
+| `inspect` 的 `options` | `after` | 可选整数 0–100000，默认 0。读取序号大于游标的一页，最多 100 条事件，同时返回任务当前状态和 `next` |
+| `ToolServiceOptions.enabled` | `groups`、`tools`、`exclude` | 均为可选名称数组。组和工具取并集，再删除排除项。空对象停用全部工具；每次执行仍检查授权 |
+
+例如状态中包含事件 5、6、7，`inspect(receipt, context, { after: 5 })` 返回事件 6、7，下一次用结果中的 `next` 续读。以 `{ groups: ['docs'], exclude: ['docs_export'] }` 选择工具时，目录包含其余已登记的 docs 工具，提交仍需通过授权回调。
 
 #### 场景：提交可恢复业务任务
 
@@ -377,8 +389,20 @@ async function followJob(service: ToolService, context: ToolServiceContext, requ
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools` | 创建产物读写与数据分析工具 | `ArtifactToolOptions`：`context, files` | `ToolSet` | `tools.createArtifactTools({ context, files })` |
-| `tools.createJobTools` | 创建已绑定环境的后台作业工具 | `JobToolOptions`：`context, files, runner, environments`；`browserProxy?` | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+| `tools.createArtifactTools(options)` | 创建产物读写与数据分析工具 | `options: ArtifactToolOptions`。`context`、`files` 必填 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
+| `tools.createJobTools(options)` | 创建已绑定环境的后台作业工具 | `options: JobToolOptions`。`context`、`files`、`runner`、`environments` 必填，`browserProxy` 可选 | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+
+#### 产物访问和作业环境字段
+
+| 对象或回调 | 字段 | 条件和结果 |
+| --- | --- | --- |
+| `ArtifactToolOptions`、`JobToolOptions` | `context`、`files` | 可信服务上下文和宿主授权的 `ToolArtifactAccess` 均必填 |
+| `files.read` | `context`、`{ id }` | 必填回调。验证当前主体对该产物 ID 的读取权限，返回含 `data: Uint8Array` 的文件 |
+| `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必填回调。应用授权发布字节并返回引用，可选关联现有目标 ID |
+| `files.save` | `context`、`{ id, baseVersion, content }` | 可选回调。核对归属和原版本后保存文本并返回新引用。省略时目录中没有 `artifact_save` |
+| `JobToolOptions` | `runner`、`environments`、`browserProxy` | 借用已初始化的 Runner。环境映射可补充 `documents/office/ocr/browser/web/preview/video`，值为登记的环境 ID。需要联网的工具还要求部署控制的 HTTP IPv4 代理和显式端口。缺少有效代理时相关工具不进入目录 |
+
+例如只传 `environments: { documents: 'docs-offline' }`，作业工厂仅生成文档组。为产物工具增加 `save` 后可按 `baseVersion` 更新正文并收到新版本引用；版本冲突由宿主回调返回失败。
 
 #### 场景：复用产物、网页与文档作业
 

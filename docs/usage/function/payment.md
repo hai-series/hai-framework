@@ -92,10 +92,10 @@ export async function startPayment(orderData: PaymentOrder) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `payment.init` | 按配置加载支付渠道；启用 Stripe 前先连接共享数据库 | `config: PaymentConfigInput`（必填） | `Promise<HaiResult<void>>` | `await payment.init(config)` |
-| `payment.close` | 停止当前支付模块；支付渠道中已创建的交易仍由渠道处理 | 无参数 | `Promise<void>` | `await payment.close()` |
-| `payment.getProvider` | 取得已注册支付渠道 | name | `PaymentProvider \| undefined` | `payment.getProvider(providerName)` |
-| `payment.registerProvider` | 注册应用提供的支付渠道 | provider | `void` | `payment.registerProvider(paymentProvider)` |
+| `payment.init(config)` | 按配置加载支付渠道；启用 Stripe 前先连接共享数据库 | `config: PaymentConfigInput`（必填） | `Promise<HaiResult<void>>` | `await payment.init(config)` |
+| `payment.close()` | 停止当前支付模块；支付渠道中已创建的交易仍由渠道处理 | 无参数 | `Promise<void>` | `await payment.close()` |
+| `payment.getProvider(name)` | 取得已注册支付渠道 | `name: string` 已注册渠道名，用于读取进程内实例 | `PaymentProvider \| undefined` | `payment.getProvider(providerName)` |
+| `payment.registerProvider(provider)` | 注册应用提供的支付渠道 | `provider: PaymentProvider` 完整实现支付渠道接口的实例，同名会替换当前进程的注册项 | `void` | `payment.registerProvider(paymentProvider)` |
 
 #### 场景：连接支付渠道
 
@@ -156,9 +156,26 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `payment.createOrder` | 向渠道创建支付订单 | providerName, input | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder` | 查询渠道订单状态 | providerName, orderNo | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.closeOrder` | 向渠道关闭订单 | providerName, orderNo | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.createOrder(providerName, input)` | 向渠道创建支付订单 | 必填 `providerName: string` 为已注册渠道名。必填 `input: CreateOrderInput` 见[下单字段](#payment-create-order-input)。 | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder(providerName, orderNo)` | 查询渠道订单状态 | `providerName: string` 订单所属的已注册渠道名。`orderNo: string` 创建时使用的商户订单号 | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder(providerName, orderNo)` | 向渠道关闭订单 | `providerName: string` 订单所属的已注册渠道名。`orderNo: string` 创建时使用的商户订单号 | `void` | `await payment.closeOrder(providerName, orderNo)` |
+
+<a id="payment-create-order-input"></a>
+
+**CreateOrderInput**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `orderNo` | `string` | 必填 | 商户已持久化的订单号。支付重试保留同一业务编号。 |
+| `amount` | `number` | 必填 | 订单金额，使用币种的最小单位，例如 CNY 的分。 |
+| `currency` | `string` | 微信和支付宝 CNY，Stripe USD | 大写币种，与业务订单币种一致。 |
+| `description` | `string` | 必填 | 商品或服务说明。 |
+| `tradeType` | `'jsapi' \| 'h5'` | 必填 | 微信使用 jsapi，支付宝和 Stripe 使用 h5。 |
+| `userId` | `string` | 微信 jsapi 必填 | 微信场景填写所属服务端 appId 的 openid。 |
+| `notifyUrl` | `string` | 必填 | 渠道用于通知应用的回调 URL。 |
+| `metadata` | `Record<string, string>` | 可省略 | 渠道支持时附带业务字段。 |
+
+例如用 `providerName: "stripe"` 创建 `amount: 100, currency: "USD", tradeType: "h5"` 的订单，成功回执包含托管 Checkout 的跳转数据。下单成功表示渠道订单已创建，最终支付状态通过查询或通知确认。
 
 微信回传 `204 No Content` 时，`payment.closeOrder('wechat', orderNo)` 返回成功，`data` 为 `undefined`。代理应透传微信的状态。其他响应状态或网络错误返回 `CLOSE_ORDER_FAILED`。
 
@@ -201,7 +218,20 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `payment.refund` | 申请退款并读取渠道受理结果 | providerName, input | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.refund(providerName, input)` | 申请退款并读取渠道受理结果 | 必填 `providerName: string` 指定原订单使用的渠道，`input: RefundInput` 见[退款字段](#payment-refund-input)。 | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+
+<a id="payment-refund-input"></a>
+
+**RefundInput**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `orderNo / refundNo` | `string` | 必填 | 原商户订单号与本次退款的稳定编号。重试复用同一编号并保持金额一致。 |
+| `amount` | `number` | 必填 | 本次退款金额，使用订单币种的最小单位。 |
+| `totalAmount` | `number` | 微信退款需传原订单金额 | 微信请求中的原订单总额。部分退款时传完整订单金额，不是本次退款金额。 |
+| `reason` | `string` | 可省略 | 退款原因。 |
+
+微信订单原金额 100 分、退款 50 分时传 `{ amount: 50, totalAmount: 100 }`，渠道仅受理时仍须依据退款状态核对结果。
 
 #### 场景：退款与核对结果
 
@@ -248,7 +278,7 @@ if (closed.success) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `payment.handleNotify` | 验证渠道通知并执行回调 | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
+| `payment.handleNotify(providerName, request)` | 验证渠道通知并执行回调 | `providerName: string` 从可信通知路由取得的已注册渠道名。`request: PaymentNotifyRequest` 必填原始 body 字符串与 headers 字符串键值，用于渠道验签 | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
 
 #### 场景：验证并接收支付通知
 
@@ -325,7 +355,7 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `invokePayment` | 打开渠道付款界面 | `orderData: PaymentOrder` | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `invokePayment(order)` | 打开渠道付款界面 | 必填 `order: PaymentOrder`，来自服务端创建订单的成功结果 | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
 
 #### 场景：处理调起结果
 

@@ -113,11 +113,11 @@ DB で実行記録を共有し、ハンドラーは各ノードで登録しま�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `runner.init(config)` | 为当前进程启动任务服务 | `config.nodeId` 必填。`executor` 默认 `true`。先初始化 RelDB | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
-| `runner.close()` | 停止领取任务并核验本节点执行的清理 | 无参数 | `HaiResult<void>` | `await runner.close()` |
-| `runner.isExecutor` | このノードが実行を担当するか確認 | 无参数 | `boolean` | `runner.isExecutor` |
-| `runner.environment(id)` | 读已登记的执行环境 | 执行环境 ID 必填 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
-| `runner.register(kind, handler)` | 登记一种任务及处理函数 | 任务类型和异步处理函数必填 | `HaiResult<() => void>`; `data` | `runner.register('reports.v1', async input => input)` |
+| `runner.init(config)` | 現在のプロセスでジョブサービスを開始 | `config: RunnerConfigInput`。`nodeId` は必須で、`executor` は既定で `true`。先に RelDB を初期化します。[Runner の設定](../configuration/runner.ja.md)を参照してください。 | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close()` | 取得を停止し、ノードの後処理を確認 | 引数なし | `HaiResult<void>` | `await runner.close()` |
+| `runner.isExecutor` | このノードが実行を担当するか確認 | 読み取り専用プロパティ | `boolean` | `runner.isExecutor` |
+| `runner.environment(id)` | 登録済みの実行環境を取得 | 実行環境 ID の `id: string` は必須です。 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
+| `runner.register(kind, handler)` | ジョブ種別とハンドラーを登録 | `kind: string` はジョブ種別です。必須の `handler: RunnerHandler` は JSON 入力と実行コンテキストを受け取り、JSON の Promise を返します。 | `HaiResult<() => void>`。`data` を呼び出すと登録を解除します。 | `runner.register('reports.v1', async input => input)` |
 
 #### 利用例：ノードとハンドラーの準備
 
@@ -139,11 +139,25 @@ DB で実行記録を共有し、ハンドラーは各ノードで登録しま�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `runner.submit(request)` | 保存任务，等待可用节点领取 | `scope`、`kind`、`input` 必填。排队和运行的超时都默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
-| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | 三个参数均必填 | `data`; `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
-| `runner.get(scope, id)` | 按可信归属读取执行记录 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
-| `runner.cancel(scope, id)` | 保存取消请求 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
-| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | `scope` 和 `id` 必填。`after` 默认 `0`，`limit` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+| `runner.submit(request)` | 空きノードが取得できるようジョブを保存 | `request: RunnerSubmit` の `scope`、`kind`、`input` は必須です。待機と実行の制限時間はそれぞれ既定で `300000` ミリ秒です。 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
+| `runner.find(scope, kind, key)` | 種別と業務上の冪等キーから実行を検索 | `scope: RunnerScope`、`kind: string`、`key: string` はすべて必須です。送信時の冪等キーを渡します。 | `HaiResult<RunnerExecution \| undefined>`。検索が成功して該当なしの場合は `undefined` を返します。 | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
+| `runner.get(scope, id)` | 信頼できる所有者範囲で実行を取得 | `scope: RunnerScope` と実行 ID の `id: string` は必須です。 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
+| `runner.cancel(scope, id)` | キャンセル要求を保存 | `scope: RunnerScope` と実行 ID の `id: string` は必須です。 | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
+| `runner.events(scope, id, after?, limit?)` | ジョブイベントを順に取得 | `scope: RunnerScope` と `id: string` は必須です。カーソル `after: number` は既定で `0`、取得件数 `limit: number` は既定で `100` です。 | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+
+#### 投入・冪等・イベントページの条件
+
+| 項目 | 必須条件、既定値、用途 |
+| --- | --- |
+| `scope`、`kind`、`input` | 必須。`scope` はサーバー認証に基づく `{ tenantId, userId }` で、ID は各 1〜200 文字。`kind` は登録済みの種別、`input` はハンドラーに渡す永続 JSON |
+| `idempotencyKey`、`reuseKey` | 任意の 1〜200 文字。前者は同じ主体・種別・要求で元の受領情報を返し、内容が変わると `CONFLICT`。後者は信頼済みサービスで進行中の実行を再利用する。`find` は業務上の冪等キーを使う |
+| `environmentId`、`resources`、`nodeId` | 登録済み環境、リソースの上書き、対象ノードを指定できる。リソースは `cpu`（コア数）、`memoryMiB`、`pids`、`scratchMiB`。単位と範囲は [Runner の設定](../configuration/runner.ja.md)を参照 |
+| `parentId` | 任意の親実行 ID。子はスケジューリングの条件を引き継ぐ。`nodeId`、`environmentId`、`resources`、`reuseKey`、`concurrency` は省略し、容量クラスは `default` を使う |
+| `capacityClass`、`concurrency`、`warmPool` | クラスは既定で `default`。信頼済みツールサービスは `tool` を使用できる。`{ key, limit }` で同じ種別・キーのノード横断並行数を制限し、上限は 1〜1000 の整数。`warmPool: true` では登録済みプールの環境と並行数に一致させ、ジョブ単位のリソース上書きは省略する |
+| `queueTimeoutMs`、`runTimeoutMs` | 待機・実行の期限。ミリ秒単位の 1〜86400000 の整数で、既定は各 300000 |
+| `events` の `after`、`limit` | `after` より大きな番号を返す。カーソルは既定 0 の非負の安全な整数。ページ件数は 1〜100 で既定 100 |
+
+イベント番号が 1、2、3 の場合、`events(scope, id, 1, 2)` は 2、3 を返します。次は `after: 3` を使います。同じ冪等キーで `input: { page: 1 }` を再投入すると、成功時は元の実行 ID が返ります。
 
 #### 利用例：投入・復元・参照・取消
 
@@ -199,7 +213,16 @@ scope は認証から取り、入門例の report.v1 を登録済みとします
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | `pool` 必填，由应用给出环境、任务类型、预热数量和上限 | `HaiResult<() => void>`; `data` | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+| `runner.registerWarmPool(pool)` | ツールのウォームプールと容量を登録 | 必須の `pool: RunnerWarmPool` に、環境、ジョブ種別、準備済みの目標数、容量上限を指定します。 | `HaiResult<() => void>`。`data` を呼び出すと登録を解除します。 | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+
+#### ウォームプールの項目
+
+| 項目 | 必須条件と用途 |
+| --- | --- |
+| `key`、`kind`、`environmentId` | 必須 ID。ジョブ種別とキーでプールを特定する。登録済みのオフライン環境を使用し、実行ノードは先にハンドラーを登録する |
+| `minReady`、`maxRunning`、`maxTotal` | 必須の整数。準備目標は 0〜1000、実行上限と合計上限は各 1〜1000。最初の二つは合計上限以下にする |
+
+`{ minReady: 1, maxRunning: 2, maxTotal: 3 }` は準備済みを一枠目標とし、実行中は最大二件、合計は三枠です。戻された関数でプールの登録を解除します。
 
 #### 利用例：隔離コンテナーと予熱
 
@@ -217,7 +240,17 @@ scope は認証から取り、入門例の report.v1 を登録済みとします
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope`、`id` 和核验记录必填。无容器凭据时还须核对应用侧资源已停止 | `HaiResult<RunnerExecution>` | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+| `runner.reconcileUnknown(scope, id, review)` | 元の実行ノードでリソースの手動確認結果を記録 | `scope: RunnerScope`、`id: string`、`review: RunnerReconciliation` は必須です。コンテナーの証跡を取得できない場合は、アプリのリソース停止も確認します。 | `HaiResult<RunnerExecution>`。業務結果は不明のままの場合があります。 | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '確認記録 OPS-42', hostResourcesStopped: true })` |
+
+#### 手動確認の記録項目
+
+| 項目 | 条件と結果 |
+| --- | --- |
+| `operatorId` | 必須。運用入口で認証した担当者 ID |
+| `reason` | 必須。前後の空白を除いて空でなく、最大 300 文字。チケット番号や停止確認の根拠を記録できる |
+| `hostResourcesStopped` | 明示的な `true` のみ。コンテナー証跡で確認できない場合は必須で、元のホストプロセスが停止した裏付けも必要 |
+
+アプリのリソース停止を確認したら `{ operatorId: 'ops-1', reason: 'INC-48: host cleanup verified', hostResourcesStopped: true }` を渡します。成功した受領情報には `reconciledAt` が記録され、業務状態は `unknown` のままです。
 
 #### 利用例：不明な実行の手動確認
 
