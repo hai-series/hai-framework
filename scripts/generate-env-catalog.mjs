@@ -574,6 +574,9 @@ const extraDescriptions = {
   PYTHONIOENCODING: ['本地 Python 模型进程标准输入输出编码', 'Python 支持的编码名，通常 utf-8'],
   SERVICE_BASE_URL: ['Fullstack 开发代理访问服务端的地址', '有效 HTTP(S) URL'],
   TAURI_DEV_HOST: ['Tauri 开发时 HMR 可访问的宿主机地址', '主机名或 IP，由 Tauri 开发工具注入'],
+  TAURI_SIGNING_PRIVATE_KEY: ['桌面更新产物的签名私钥', '敏感字符串，由打包签名步骤临时注入'],
+  TAURI_UPDATE_NOTES: ['写入桌面更新清单的发布说明', '可选纯文本'],
+  TAURI_UPDATE_PUBLIC_KEY: ['用于核验桌面安装包签名的更新公钥', 'Tauri 签名工具生成的 .pub 文件内容'],
   VITEST: ['Vitest 自动注入的测试运行标记', 'true 表示运行测试；通常无需手动设置'],
 }
 for (const [name, entry] of explicit) {
