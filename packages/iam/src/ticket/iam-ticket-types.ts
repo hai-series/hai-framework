@@ -78,7 +78,7 @@ export interface IssuedTicket {
  * ```
  */
 export interface ConsumeTicketOptions {
-  /** 期望用途；与签发用途不一致时返回 `TICKET_INVALID`（防止跨用途重放） */
+  /** 期望用途；与签发用途不一致时返回 `TICKET_INVALID`，保留原票据。 */
   purpose?: string
 }
 
@@ -125,7 +125,7 @@ export interface TicketOperations {
   /**
    * 签发一次性票据
    *
-   * 生成密码学安全随机值，绑定主体 / 用途 / 授权信息并按 TTL 存入 cache。
+   * 生成密码学安全随机值，以摘要为缓存键，绑定主体 / 用途 / 授权信息并按 TTL 保存。
    *
    * @param options - 签发选项
    * @returns 票据值与过期时间
@@ -136,7 +136,7 @@ export interface TicketOperations {
    * 原子消费一次性票据
    *
    * 单次有效：并发消费同一票据时只有一个成功，其余返回 `TICKET_INVALID`。
-   * 票据不存在 / 已过期 / 已消费 / 用途不匹配时返回错误。
+   * 票据不存在 / 已过期 / 已消费 / 用途不匹配时返回错误。用途不匹配不消耗票据。
    *
    * @param ticket - 票据值
    * @param options - 消费选项（可校验用途）

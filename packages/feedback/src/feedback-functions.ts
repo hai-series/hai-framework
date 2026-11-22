@@ -1,4 +1,4 @@
-import type { FeedbackAttachment, FeedbackEvidence, FeedbackEvidenceInput, FeedbackHistory, FeedbackJob, FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachment, FeedbackEvidence, FeedbackEvidenceInput, FeedbackHistory, FeedbackJob, FeedbackListInput, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations, DmlWithTxOperations } from '@h-ai/reldb'
 import type { FeedbackCapture } from './feedback-capture.js'
@@ -445,6 +445,85 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     return running
   }
 
+  async function listReports(input: FeedbackListInput, actor: FeedbackContext, mine: boolean) {
+    if (!validActor(actor) || (!mine && !permitted(actor, 'feedback:read')))
+      return forbidden()
+    const parsed = FeedbackListInputSchema.safeParse(input)
+    if (!parsed.success)
+      return invalid()
+    const query = parsed.data
+    if (query.from !== undefined && query.to !== undefined && query.from > query.to)
+      return invalid()
+    const params: unknown[] = []
+    const conditions = [
+      feedbackTextEquals('scope_id', actor.scopeId, params),
+      feedbackTextEquals('app_id', config.appId, params),
+      'deleting = 0',
+    ]
+    if (mine) {
+      conditions.push(feedbackTextEquals('user_id', actor.userId, params), `expires_at > ${clock}`)
+    }
+    if (query.category !== undefined) {
+      // 类别在正式报告 JSON 已存在，旧记录也能匹配。同一类别值跨数据库按原文匹配。
+      const type = reldb.config?.type
+      const filter = type === 'postgresql'
+        ? 'jsonb_typeof(payload::jsonb -> \'category\') = \'string\' AND payload::jsonb ->> \'category\' = ?'
+        : type === 'mysql'
+          ? 'JSON_TYPE(JSON_EXTRACT(payload, \'$.category\')) = \'STRING\' AND CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, \'$.category\')) AS BINARY) = CAST(? AS BINARY)'
+          : 'json_type(payload, \'$.category\') = \'text\' AND json_extract(payload, \'$.category\') = ?'
+      conditions.push(filter)
+      params.push(query.category)
+    }
+    for (const [column, value] of [
+      ['status', query.status],
+      ['collection_status', query.collectionStatus],
+      ['notification_status', query.notificationStatus],
+      ['app_id', query.appId],
+    ] as const) {
+      if (value) {
+        if (column === 'app_id') {
+          conditions.push(feedbackTextEquals(column, value, params))
+        }
+        else {
+          conditions.push(`${column} = ?`)
+          params.push(value)
+        }
+      }
+    }
+    if (query.from !== undefined) {
+      conditions.push('created_at >= ?')
+      params.push(query.from)
+    }
+    if (query.to !== undefined) {
+      conditions.push('created_at <= ?')
+      params.push(query.to)
+    }
+    // 用独立的短摘要列执行跨数据库筛选，不扫描诊断 JSON 大字段。
+    if (query.search) {
+      conditions.push('(number LIKE ? ESCAPE \'!\' OR summary LIKE ? ESCAPE \'!\')')
+      const search = `%${query.search.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')}%`
+      params.push(search, search)
+    }
+    if (query.appVersion) {
+      conditions.push('app_version = ?')
+      params.push(query.appVersion)
+    }
+    const direction = query.sortDirection === 'asc'
+      ? 'ASC'
+      : 'DESC'
+    const page = await reldb.sql.queryPage<FeedbackReportRow>({
+      sql: `SELECT * FROM ${table.reports} WHERE ${conditions.join(' AND ')} ORDER BY created_at ${direction}, id ${direction}`,
+      params,
+      pagination: { page: query.page, pageSize: query.pageSize },
+    })
+    return page.success
+      ? ok({
+          ...page.data,
+          items: page.data.items.map(row => repo.report(row)),
+        })
+      : page
+  }
+
   const operations: FeedbackRuntime = {
     start() {
       if (!config.workerIntervalMs || stopped)
@@ -616,70 +695,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         : result
     },
 
-    async list(input, actor) {
-      if (!validActor(actor) || !permitted(actor, 'feedback:read'))
-        return forbidden()
-      const parsed = FeedbackListInputSchema.safeParse(input)
-      if (!parsed.success)
-        return invalid()
-      const query = parsed.data
-      if (query.from !== undefined && query.to !== undefined && query.from > query.to)
-        return invalid()
-      const params: unknown[] = []
-      const conditions = [
-        feedbackTextEquals('scope_id', actor.scopeId, params),
-        feedbackTextEquals('app_id', config.appId, params),
-        'deleting = 0',
-      ]
-      for (const [column, value] of [
-        ['status', query.status],
-        ['collection_status', query.collectionStatus],
-        ['notification_status', query.notificationStatus],
-        ['app_id', query.appId],
-      ] as const) {
-        if (value) {
-          if (column === 'app_id') {
-            conditions.push(feedbackTextEquals(column, value, params))
-          }
-          else {
-            conditions.push(`${column} = ?`)
-            params.push(value)
-          }
-        }
-      }
-      if (query.from !== undefined) {
-        conditions.push('created_at >= ?')
-        params.push(query.from)
-      }
-      if (query.to !== undefined) {
-        conditions.push('created_at <= ?')
-        params.push(query.to)
-      }
-      // 用独立的短摘要列执行跨数据库筛选，不扫描诊断 JSON 大字段。
-      if (query.search) {
-        conditions.push('(number LIKE ? ESCAPE \'!\' OR summary LIKE ? ESCAPE \'!\')')
-        const search = `%${query.search.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')}%`
-        params.push(search, search)
-      }
-      if (query.appVersion) {
-        conditions.push('app_version = ?')
-        params.push(query.appVersion)
-      }
-      const direction = query.sortDirection === 'asc'
-        ? 'ASC'
-        : 'DESC'
-      const page = await reldb.sql.queryPage<FeedbackReportRow>({
-        sql: `SELECT * FROM ${table.reports} WHERE ${conditions.join(' AND ')} ORDER BY created_at ${direction}, id ${direction}`,
-        params,
-        pagination: { page: query.page, pageSize: query.pageSize },
-      })
-      return page.success
-        ? ok({
-            ...page.data,
-            items: page.data.items.map(row => repo.report(row)),
-          })
-        : page
-    },
+    list: (input, actor) => listReports(input, actor, false),
+    listMine: (input, actor) => listReports(input, actor, true),
 
     async get(id, actor) {
       const report = await access(id, actor)

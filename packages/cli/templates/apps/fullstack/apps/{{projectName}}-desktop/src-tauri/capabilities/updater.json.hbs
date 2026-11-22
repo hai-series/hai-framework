@@ -1,0 +1,11 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+{
+  "identifier": "desktop-updater",
+  "description": "桌面主窗口检查和安装更新",
+  "local": true,
+  "webviews": ["main"],
+  "platforms": ["windows", "linux"],
+  "permissions": ["updater:allow-download-and-install"]
+}
+{{/if}}

@@ -98,8 +98,8 @@ export async function uploadImage(key: string, file: File) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.init` | 指定のストレージを開く | `config`（必填） | `void` | `await storage.init(config)` |
-| `storage.close` | 新規処理を止めてバックエンドを解放 | 已保存的文件仍由原后端持有；无 | `void` | `await storage.close()` |
+| `storage.init(config)` | 指定のストレージを開く | `config: StorageConfigInput` は必須。`type` に `local` または `s3` を指定。バックエンドの項目と既定値は[ストレージ設定](../configuration/storage.ja.md)を参照 | `void` | `await storage.init(config)` |
+| `storage.close()` | 新規処理を止めてバックエンドを解放 | なし | `void` | `await storage.close()` |
 
 #### 利用例：接続と終了
 
@@ -138,15 +138,44 @@ if (!closeResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.file.put` | 内容とメタデータを保存 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
-| `storage.file.get` | ファイル全体を取得 | key, options | `Buffer` | `await storage.file.get('report.txt')` |
-| `storage.file.getStream` | ストリームで取得 | key, options | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
-| `storage.file.getStreamWithMetadata` | オブジェクト全体とメタデータを一度に開く | オブジェクトキー、任意の `{ signal }` | `StorageFileRead`、またはオープン時のエラー | `await storage.file.getStreamWithMetadata('report.txt')` |
-| `storage.file.head` | メタデータを取得 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
-| `storage.file.exists` | ファイルの存在確認 | key | `boolean` | `await storage.file.exists('report.txt')` |
-| `storage.file.copy` | 別キーにコピー | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
-| `storage.file.delete` | ファイルを削除 | key | `void` | `await storage.file.delete('report.txt')` |
-| `storage.file.deleteMany` | 一括削除し個別の進捗を報告 | keys | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+| `storage.file.put(key, data, options?)` | 内容とメタデータを保存 | `key: string` と `data: StorageData` は必須。文字列、Buffer、Uint8Array、非同期バイトストリームを渡せます。[`UploadOptions`](#storage-file-options) を参照してください。 | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
+| `storage.file.get(key, options?)` | 指定範囲のバイトをメモリに取得 | `key: string` は必須。[`DownloadOptions`](#storage-file-options) を参照してください。 | `Buffer` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream(key, options?)` | ストリームで取得 | `key: string` は必須。[`DownloadOptions`](#storage-file-options) を参照してください。 | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata(key, options?)` | オブジェクト全体とメタデータを一度に開く | `key: string` は必須。任意の `options.signal` で読み取りを中断できます。 | `StorageFileRead`、またはオープン時のエラー | `await storage.file.getStreamWithMetadata('report.txt')` |
+| `storage.file.head(key)` | メタデータを取得 | `key: string`、必須のオブジェクトキー | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists(key)` | ファイルの存在確認 | `key: string`、必須のオブジェクトキー | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.copy(sourceKey, destKey, options?)` | 別キーにコピー | `sourceKey: string` と `destKey: string` は必須のコピー元とコピー先キー。`options?: CopyOptions` の `contentType` と `metadata` は対応するコピー元の値を上書き。省略した項目はコピー元から継承 · [`CopyOptions`](#storage-file-options) | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
+| `storage.file.delete(key)` | ファイルを削除 | `key: string`、必須のオブジェクトキー | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany(keys)` | 一括削除し個別の進捗を報告 | `keys: string[]`、削除するオブジェクトキーの配列が必須 | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+
+<a id="storage-file-options"></a>
+
+##### ファイルオプション
+
+`key` はオブジェクトキー、`data` は書き込む内容です。オプションとその各項目は省略できます。読み取り時のオフセットは 0 から数えます。
+
+`UploadOptions`
+
+| 項目 | 型 | 動作 |
+| --- | --- | --- |
+| `contentType` | `string` | 省略可能。ローカルでは拡張子から推定し、S3 ではオブジェクトサービスが決めます。 |
+| `metadata` | `Record<string, string>` | `storage.file.head(key)` で読み取れる文字列のメタデータです。 |
+| `ifNoneMatch` | `"*"` | キーが存在しない場合だけ書き込みます。`{ ifNoneMatch: "*" }` で既存ファイルの上書きを避けます。 |
+| `signal` | `AbortSignal` | アップロードを取り消します。 |
+| `cacheControl` | `string` | S3 専用。`max-age=3600` などの `Cache-Control` を指定します。 |
+| `contentDisposition` | `string` | S3 専用。`Content-Disposition` でダウンロード時のファイル名を提案できます。 |
+
+読み取りとコピーのオプション
+
+| 項目 | 型 | 動作 |
+| --- | --- | --- |
+| `DownloadOptions.rangeStart` | `number` | 開始バイトを含みます。省略時は先頭です。 |
+| `DownloadOptions.rangeEnd` | `number` | 終了バイトを含みます。省略時は末尾までです。 |
+| `DownloadOptions.signal` | `AbortSignal` | 読み取りを取り消します。`getStreamWithMetadata` にはこの項目だけを指定できます。 |
+| `CopyOptions.contentType` | `string` | コピー先のメディアタイプ。省略時はコピー元から引き継ぎます。 |
+| `CopyOptions.metadata` | `Record<string, string>` | コピー先のメタデータ。省略時はコピー元から引き継ぎます。 |
+
+`metadata` はアプリ独自の文字列のキーと値です。アップロード後に `head` で確認できます。Local では `contentType` を省略すると拡張子から推定します。S3 では `cacheControl: "max-age=3600"` でキャッシュ指示、`contentDisposition: 'attachment; filename="report.txt"'` でダウンロード時のファイル名を設定できます。
 
 #### 利用例：ファイルの読み書きとコピー
 
@@ -173,6 +202,11 @@ const getResult = await storage.file.get('demo/report.txt')
 if (!getResult.success)
   return getResult
 getResult.data.toString('utf8') // 'hello'
+// 0 始まりのオフセット 1〜3 にある 3 バイトを取得します。UTF-8 に変換すると ell です。取得に失敗したら失敗結果を返します。
+const sample = await storage.file.get('demo/report.txt', { rangeStart: 1, rangeEnd: 3 })
+if (!sample.success)
+  return sample
+sample.data.toString('utf8') // 'ell'
 // レポートキーのバイトストリームを開きます。開始失敗時は元の失敗結果を返します。後続の I/O は反復時に例外になる場合があります。
 const streamResult = await storage.file.getStream('demo/report.txt')
 if (!streamResult.success)
@@ -239,8 +273,21 @@ Local ストレージでは、`file.head()` と `file.copy()` がファイルの
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.dir.list` | プレフィックス内をページ取得 | options | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
-| `storage.dir.delete` | プレフィックス内を削除 | prefix | `void` | `await storage.dir.delete('backup/')` |
+| `storage.dir.list(options?)` | プレフィックス内をページ取得 | 任意の `options: ListOptions` で範囲とページを指定します。[一覧フィールド](#storage-list-options)を参照。 | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
+| `storage.dir.delete(prefix)` | プレフィックス内を削除 | `prefix: string` は必須。オブジェクトキーの先頭が一致するものを削除。空文字列はすべてのキーに一致 | `void` | `await storage.dir.delete('backup/')` |
+
+<a id="storage-list-options"></a>
+
+**ListOptions**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `prefix` | `string` | `""` | この文字列で始まるオブジェクトキーを選びます。 |
+| `delimiter` | `string` | 省略時はグループ化なし | prefix の後で最初に現れる区切り文字で commonPrefixes にまとめます。空文字列もグループ化しません。 |
+| `maxKeys` | `number` | 既定 1000 | 1–1000 の整数。オブジェクトと共通プレフィックスを合わせて数えます。 |
+| `continuationToken` | `string` | 最初のページでは省略 | 前ページの nextContinuationToken をそのまま指定。同じバックエンド、ルート、prefix、delimiter を使います。 |
+
+`reports/summary.txt` と `reports/2026/jan.txt` がある場合、`{ prefix: "reports/", delimiter: "/" }` は概要ファイルを `files`、`["reports/2026/"]` を `commonPrefixes` に返します。
 
 `storage.dir.delete(prefix)` はキーの文字列プレフィックスに一致するオブジェクトをページ単位で削除します。たとえば `reports/draft-` は `reports/draft-1.txt` に、`reports/` はそのパス配下のキーに一致します。空のプレフィックスはコンテナ内の全オブジェクトに一致します。
 
@@ -284,9 +331,22 @@ S3 の期限付き URL は特定のキーと操作に対応します。発行前
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.presign.getUrl` | 期限付きダウンロード URL を発行 | key, options | `string` | `await storage.presign.getUrl('report.txt')` |
-| `storage.presign.putUrl` | 期限付きアップロード URL を発行 | key, options | `string` | `await storage.presign.putUrl('report.txt')` |
-| `storage.presign.publicUrl` | 設定済み公開 URL を取得 | key | `string or null` | `storage.presign.publicUrl('report.txt')` |
+| `storage.presign.getUrl(key, options?)` | 期限付きダウンロード URL を発行 | 必須の `key: string` はオブジェクトキー。任意の `options: PresignOptions` は[署名オプション](#storage-presign-options)を参照。 | `string` | `await storage.presign.getUrl('report.txt')` |
+| `storage.presign.putUrl(key, options?)` | 期限付きアップロード URL を発行 | 必須の `key: string` は送信先オブジェクトキー。任意の `options: PresignUploadOptions` は[署名オプション](#storage-presign-options)を参照。 | `string` | `await storage.presign.putUrl('report.txt')` |
+| `storage.presign.publicUrl(key)` | 設定済み公開 URL を取得 | `key: string`、必須のオブジェクトキー | `string or null` | `storage.presign.publicUrl('report.txt')` |
+
+<a id="storage-presign-options"></a>
+
+**署名オプション**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `expiresIn` | `number` | 既定 3600 秒 | PUT と GET の両方で使用。1–604800 の整数秒。 |
+| `responseContentType` | `string` | 任意 | GET の署名専用。ダウンロード応答の Content-Type を上書きします。 |
+| `responseContentDisposition` | `string` | 任意 | GET の署名専用。attachment と推奨ファイル名を指定できます。 |
+| `contentType` | `string` | `application/octet-stream` | PUT の署名専用。実際の PUT は同じ Content-Type を送信します。 |
+
+`responseContentType` と `responseContentDisposition` は `getUrl` で署名するダウンロード応答に適用されます。例の `putUrl` はアップロードの型を `text/plain` として署名するため、クライアントは同じ値を Content-Type として送信します。
 
 #### 利用例：直接転送用 URL の発行
 
@@ -381,8 +441,20 @@ Node は大きなメモリー入力のダイジェストを容量制限付き Wo
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.checksum.generate` | 内容のチェックサムを計算 | data, options | `string` | `await storage.checksum.generate('Hello')` |
-| `storage.checksum.verify` | チェックサムを検証 | data, expected, options | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+| `storage.checksum.generate(data, options?)` | 内容のチェックサムを計算 | 必須の `data: StorageData` は対象の内容。任意の `options: ChecksumOptions` は[ダイジェストのオプション](#storage-checksum-options)を参照。 | `string` | `await storage.checksum.generate('Hello')` |
+| `storage.checksum.verify(data, expected, options?)` | チェックサムを検証 | 内容の `data: StorageData` と期待値 `expected: string` が必須。[ダイジェストのオプション](#storage-checksum-options)で期待値を生成したときと同じ方式とエンコーディングを指定。 | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+
+<a id="storage-checksum-options"></a>
+
+**ChecksumOptions**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `algorithm` | `'sha256' \| 'sha384' \| 'sha512' \| 'sha1' \| 'md5'` | `sha256` | ダイジェストの方式。SHA-1 と MD5 は互換性のための整合性確認専用。 |
+| `encoding` | `'hex' \| 'base64'` | `hex` | 生成と検証で同じエンコーディングを使います。hex 出力は小文字です。 |
+| `signal` | `AbortSignal` | 任意 | ダイジェストの計算やストリーム読み取りを中止します。 |
+
+`abc` の UTF-8 バイト列を `{ encoding: "base64" }` で処理すると、SHA-256 は `ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=` になります。
 
 #### 利用例：バイト列の整合性確認
 
@@ -421,12 +493,23 @@ verifyResult2.data // false
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `storage.client.uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
-| `storage.client.downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
-| `storage.client.downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
-| `storage.client.getFileExtension` | 拡張子を取得 | `File` | `string` | `storage.client.getFileExtension(file)` |
-| `storage.client.getMimeType` | MIME 型を取得 | `extension: string` | `string` | `storage.client.getMimeType("txt")` |
-| `storage.client.formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `storage.client.formatFileSize(1024)` |
+| `storage.client.uploadWithPresignedUrl(url, data, options?)` | バイトを送信 | 許可済みアップロード URL の `url: string` と送信する File、Blob、ArrayBuffer または文字列の `data` が必須。[転送オプション](#storage-browser-transfer-options)を参照。 | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `storage.client.downloadWithPresignedUrl(url, options?)` | Blob を取得 | 許可済みダウンロード URL の `url: string` が必須。中止の指定は[転送オプション](#storage-browser-transfer-options)を参照。 | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
+| `storage.client.downloadAndSave(url, options?)` | ダウンロードして保存 | 許可済みダウンロード URL の `url: string` が必須。ファイル名と中止は[転送オプション](#storage-browser-transfer-options)を参照。 | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
+| `storage.client.getFileExtension(file)` | 拡張子を取得 | 必須の `file: File` の `name` を使用 | `string` | `storage.client.getFileExtension(file)` |
+| `storage.client.getMimeType(extension)` | MIME 型を取得 | `extension: string` txt などの拡張子。不明な値は application/octet-stream を返します | `string` | `storage.client.getMimeType("txt")` |
+| `storage.client.formatFileSize(bytes)` | バイト数を整形 | `bytes: number` 表示するバイト数。例えばファイルの size | `string` | `storage.client.formatFileSize(1024)` |
+
+<a id="storage-browser-transfer-options"></a>
+
+**ブラウザー転送のオプション**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `ClientUploadOptions.contentType` | `string` | 任意 | PUT の Content-Type を設定。署名に含まれる場合は同じ値を明示します。 |
+| `ClientUploadOptions.onProgress` | `(progress: UploadProgress) => void` | 任意 | 指定時は XMLHttpRequest を使用。総量を計算できる場合に呼び出し、loaded と total はバイト、percent は割合です。 |
+| `ClientUploadOptions.abortController / ClientDownloadOptions.abortController` | `AbortController` | 任意 | 転送を中止。開始前に中止済みならリクエストは送信しません。送信済みオブジェクトは取り消されません。 |
+| `ClientDownloadOptions.filename` | `string` | 言語に応じたダウンロード名 | downloadAndSave 専用。ブラウザーが推奨するファイル名を指定します。 |
 
 #### 利用例：選択ファイルの送信とダウンロード保存
 

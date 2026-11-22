@@ -197,9 +197,9 @@ operation:login restricts it to login. Secrets are redacted and challenge detail
 
 ### A short-lived one-use ticket
 
-Structure: `hai:iam:ticket:<ticket:redacted>`.
+The key is `hai:iam:ticket:sha256:<ticket digest>`. The client holds the original ticket, and the key contains only its hexadecimal SHA-256 digest. Updated instances still accept old tickets until they expire. When deploying to several instances, switch consumers together because older instances cannot redeem newly issued tickets.
 
-Issue temporary authorization checked against subject and purpose, then consume it once.
+After checking the purpose and expiration, redemption atomically removes the matching record and returns its subject and authorization parameters.
 
 ```json
 {

@@ -308,7 +308,8 @@ const setup = await ai.knowledge.setup()
 if (!setup.success)
   return setup
 
-// 把下方文档 ID 和正文导入默认知识集合，成功发布版本并报告 cleanupPending；写入失败不继续问答。
+// 用 doc-001 导入应用提供的 Markdown 正文，成功发布版本并报告 cleanupPending。
+// 默认保留正文缩进。清洗或分块失败时在生成向量前返回 KNOWLEDGE_INGEST_FAILED。
 const ingest = await ai.knowledge.ingest({
   documentId: 'doc-001',
   content: markdownText,

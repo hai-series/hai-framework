@@ -60,6 +60,29 @@ function makeCompletion(content: string) {
   }
 }
 
+async function* completionChunks(fragments: string[], finishReason = 'stop') {
+  for (const fragment of fragments) {
+    yield {
+      id: 'chatcmpl-test',
+      model: 'gpt-4o-mini',
+      choices: [
+        {
+          index: 0,
+          delta: { content: fragment },
+          finish_reason: null,
+        },
+      ],
+    }
+  }
+  yield {
+    id: 'chatcmpl-test',
+    model: 'gpt-4o-mini',
+    choices: [
+      { index: 0, delta: {}, finish_reason: finishReason },
+    ],
+  }
+}
+
 describe('ai.llm.generateObject', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -143,6 +166,41 @@ describe('ai.llm.generateObject', () => {
         },
       ]),
     })
+  })
+
+  it('只预览指定字段并清除未完成的生成，再返回通过 schema 校验的最终对象', async () => {
+    mockCreate
+      .mockResolvedValueOnce(completionChunks(['{"text":"作废"'], 'length'))
+      .mockResolvedValueOnce(completionChunks(['{"hidden":{"text":"内部"},"text":"已', '记录","ready":true}']))
+    const prefixes: string[] = []
+    const result = await ai.llm.generateObject({
+      schema: z.object({
+        text: z.string(),
+        ready: z.boolean(),
+      }),
+      messages: [
+        { role: 'user', content: '给我处理结论' },
+      ],
+      maxTokens: 500,
+      preview: {
+        field: 'text',
+        onPrefix: (text) => { prefixes.push(text) },
+      },
+    })
+    expect(result).toEqual({
+      success: true,
+      data: { text: '已记录', ready: true },
+    })
+    expect(prefixes).toEqual(['作废', '', '已', '已记录'])
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({ stream: true, max_tokens: 500 })
+  })
+
+  it('分块处理转义和代理对，不预览未指定字段或超出配置的输入', () => {
+    const preview = ai.stream.createJsonFieldPreview('text', { maxLength: 5, maxInputLength: 80 })
+    expect(preview.push('{"nested":{"text":"private"},"text":"ok\\uD8')).toBe('ok')
+    expect(preview.push('3D')).toBeUndefined()
+    expect(preview.push('\\uDE80! extras"}')).toBe('ok🚀!')
+    expect(() => preview.push(' '.repeat(80))).toThrow(RangeError)
   })
 
   it('重试后仍无法解析返回 INVALID_REQUEST', async () => {

@@ -172,12 +172,12 @@ interface TokenPair {
 
 ### 一次性票据 — `iam.ticket`
 
-短期、一次性能力票据，用于无法携带 Bearer Token 的通道（如 WebSocket URL）。密码学安全随机、TTL、原子单次消费、用途绑定。
+短期、一次性能力票据，用于无法携带 Bearer Token 的通道（如 WebSocket URL 或下载链接）。新签发票据以 SHA-256 摘要作为缓存键，用途和时效核验通过才原子消费。应用仍需核验资源的当前权限。
 
 | 方法      | 签名                                                                                    | 说明                               |
 | --------- | --------------------------------------------------------------------------------------- | ---------------------------------- |
 | `issue`   | `({ subjectId, purpose, grant?, ttlMs? }) => Promise<HaiResult<{ ticket, expiresAt }>>` | 签发（默认 30s）                   |
-| `consume` | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>`          | 原子消费（单次有效，用途不符拒绝） |
+| `consume` | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>`          | 原子消费（单次有效，用途不符拒绝且保留票据） |
 
 ```ts
 // 为已认证用户 user-1 签发 ai-audio 的 transcribe 票据。成功 data 含票据字符串及到期毫秒值。
@@ -201,6 +201,7 @@ const consumed = await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-aud
 | `getUsers`                  | `(ids, options?) => Promise<HaiResult<User[]>>`                             | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles |
 | `listUsers`                 | `(options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>` | 用户列表（分页 + 搜索 + roleCode 分页前筛选 + 白名单排序）        |
 | `updateUser`                | `(id, data) => Promise<HaiResult<User>>`                                    | 更新用户信息                                                      |
+| `updateUserWithRoles`       | `(id, { profile?, roleIds? }) => Promise<HaiResult<User>>`                  | 同一事务提交账号和角色。省略 roleIds 保留角色，[] 清空 |
 | `deleteUser`                | `(id) => Promise<HaiResult<void>>`                                          | 删除用户（自动清除会话）                                          |
 | `changePassword`            | `(id, old, new) => Promise<HaiResult<void>>`                                | 修改密码（自动清除会话）                                          |
 | `changeCurrentUserPassword` | `(token, old, new) => Promise<HaiResult<void>>`                             | 当前用户修改密码（通过令牌识别）                                  |

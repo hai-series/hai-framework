@@ -81,9 +81,9 @@ await reldb.close()
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.init` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
-| `reldb.close` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.init(config)` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
+| `reldb.close()` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
+| `reldb.prepareSchema(key, prepare)` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
 
 #### 场景：连接、准备结构与关闭
 
@@ -148,15 +148,32 @@ if (!dropTableResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.ddl.createTable` | 创建业务表 | tableName, columns, ifNotExists | `void` | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })` |
-| `reldb.ddl.dropTable` | 删除表及其中数据 | tableName, ifExists | `void` | `await reldb.ddl.dropTable('orders_archive', true)` |
-| `reldb.ddl.addColumn` | 增加字段 | tableName, columnName, columnDef | `void` | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })` |
-| `reldb.ddl.dropColumn` | 删除字段 | tableName, columnName | `void` | `await reldb.ddl.dropColumn('orders', 'note')` |
-| `reldb.ddl.renameTable` | 重命名表 | oldName, newName | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
-| `reldb.ddl.createIndex` | 创建索引 | tableName, indexName, indexDef | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
-| `reldb.ddl.dropIndex` | 删除索引 | indexName, ifExists | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
-| `reldb.ddl.raw` | 执行可信的结构变更语句 | sql | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
-| `reldb.schemaColumns` | 检查表结构 | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
+| `reldb.ddl.createTable(tableName, columns, ifNotExists?)` | 创建业务表 | `tableName: string` 可信表名。`columns: ReldbTableDef` 列名到列定义的对象。`ifNotExists?: boolean` 默认 true，跳过已存在的表。[列与索引定义](#reldb-ddl-fields) | `void` | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })` |
+| `reldb.ddl.dropTable(tableName, ifExists?)` | 删除表及其中数据 | `tableName: string` 可信表名。`ifExists?: boolean` 默认 true，目标不存在时跳过 | `void` | `await reldb.ddl.dropTable('orders_archive', true)` |
+| `reldb.ddl.addColumn(tableName, columnName, columnDef)` | 增加字段 | `tableName: string` 可信表名。`columnName: string` 可信列名。`columnDef: ReldbColumnDef` 待增加列的定义。[列与索引定义](#reldb-ddl-fields) | `void` | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })` |
+| `reldb.ddl.dropColumn(tableName, columnName)` | 删除字段 | `tableName: string` 可信表名。`columnName: string` 可信列名 | `void` | `await reldb.ddl.dropColumn('orders', 'note')` |
+| `reldb.ddl.renameTable(oldName, newName)` | 重命名表 | `oldName: string, newName: string` 可信的原表名与新表名 | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
+| `reldb.ddl.createIndex(tableName, indexName, indexDef)` | 创建索引 | `tableName: string` 可信表名。`indexName: string` 可信索引名。`indexDef: ReldbIndexDef` 索引列及选项。[列与索引定义](#reldb-ddl-fields) | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
+| `reldb.ddl.dropIndex(indexName, ifExists?)` | 删除索引 | `indexName: string` 可信索引名。`ifExists?: boolean` 默认 true，目标不存在时跳过 | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
+| `reldb.ddl.raw(sql)` | 执行可信的结构变更语句 | `sql: string` 可信代码提供的结构 SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+| `reldb.schemaColumns(table, sql?)` | 检查表结构 | `table: string` 可信表名。`sql?: DmlOperations` 可传已有 SQL 操作对象，默认用当前连接 | `string[]` | `await reldb.schemaColumns('orders')` |
+
+<a id="reldb-ddl-fields"></a>
+
+**列与索引定义**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `ReldbColumnDef.type` | `ColumnType` | 必填 | 数据库无关的列类型，如 TEXT、INTEGER、BIGINT 或 JSON。 |
+| `ReldbColumnDef.primaryKey / autoIncrement` | `boolean` | `false` | 分别标记主键与自增，自增只在主键上生效。 |
+| `ReldbColumnDef.notNull / unique` | `boolean` | `false` | 分别限制空值和重复值。 |
+| `ReldbColumnDef.defaultValue` | `string \| number \| boolean \| null` | 可省略 | 插入时未指定该列时使用的数据库默认值。 |
+| `ReldbColumnDef.references` | `{ table, column, onDelete?, onUpdate? }` | 可省略 | 外键表名和列名必填。删除或更新动作可选 CASCADE、SET NULL、RESTRICT 或 NO ACTION。 |
+| `ReldbIndexDef.columns` | `string[]` | 必填 | 索引列名列表，保持列顺序。 |
+| `ReldbIndexDef.unique` | `boolean` | `false` | 禁止已索引的键值组合重复。 |
+| `ReldbIndexDef.where` | `string` | 可省略 | 支持部分索引的后端用可信静态 SQL 条件缩小索引范围。 |
+
+例如列映射 `{ id: { type: "TEXT", primaryKey: true }, paid: { type: "BOOLEAN", defaultValue: false } }` 建立文本主键与付款标记。插入时省略 `paid` 会采用 `false`。
 
 #### 场景：创建与修改表
 
@@ -218,13 +235,31 @@ if (!rawResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.sql.query` | 参数化读取多行 | sql, params | `T[]` | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])` |
-| `reldb.sql.get` | 参数化读取一行 | sql, params | `T \| null` | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])` |
-| `reldb.sql.execute` | 参数化写入并读取影响行数 | sql, params | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
-| `reldb.sql.batch` | 批量执行语句 | statements | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
-| `reldb.sql.queryPage` | 查询分页数据与总数 | options | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
-| `reldb.pagination.normalize` | 规范化页码和每页条数 | options, overrides | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
-| `reldb.pagination.build` | 组合分页结果 | items, total, pagination | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+| `reldb.sql.query(sql, params?)` | 参数化读取多行 | `sql: string` 可信代码编写的 SQL，业务值用占位符。`params?: unknown[]` 按占位符顺序绑定值，省略时不绑定参数 | `T[]` | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])` |
+| `reldb.sql.get(sql, params?)` | 参数化读取一行 | `sql: string` 可信代码编写的 SQL，业务值用占位符。`params?: unknown[]` 按占位符顺序绑定值，省略时不绑定参数 | `T \| null` | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])` |
+| `reldb.sql.execute(sql, params?)` | 参数化写入并读取影响行数 | `sql: string` 可信代码编写的 SQL，业务值用占位符。`params?: unknown[]` 按占位符顺序绑定值，省略时不绑定参数 | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
+| `reldb.sql.batch(statements)` | 批量执行语句 | `statements` 依次执行的 SQL 项数组，每项为 sql 与可选 params | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
+| `reldb.sql.queryPage(options)` | 查询分页数据与总数 | 必填 `options: PaginationQueryOptions`。见[查询字段](#reldb-sql-page-options)。 | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
+| `reldb.pagination.normalize(options?, overrides?)` | 规范化页码和每页条数 | 可省略 `options: PaginationOptionsInput` 和 `overrides: PaginationOverrides`。见[分页字段](#reldb-sql-page-options)。 | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build(items, total, pagination)` | 组合分页结果 | `items: T[], total: number, pagination: PaginationOptions` 当前页数据、匹配的总条数及页码/每页条数 | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+
+<a id="reldb-sql-page-options"></a>
+
+**SQL 查询分页与默认值**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `PaginationQueryOptions.sql` | `string` | 必填 | 可信查询 SQL，省略 LIMIT/OFFSET。使用含唯一列的 ORDER BY 保持稳定分页。 |
+| `PaginationQueryOptions.params` | `unknown[]` | `[]` | 按占位符顺序绑定查询值。 |
+| `PaginationQueryOptions.pagination` | `PaginationOptionsInput` | 可省略 | 为空时使用默认页。包含 page 与 pageSize，也可单独传给 normalize。 |
+| `pagination.page / pageSize` | `number` | 默认第 1 页、每页 20 条 | 显式有效值向下取整。未传或小于 1 时返默认值。 |
+| `PaginationQueryOptions.overrides` | `PaginationOverrides` | 可省略 | 可改默认页、默认页大小与上限，也可作为 normalize 的第二个参数。 |
+| `overrides.defaultPage / defaultPageSize` | `number` | 默认 1 和 20 | 无效或缺少对应分页值时使用。应用选择正整数，并确保默认条数不超过上限。 |
+| `overrides.maxPageSize` | `number` | `200` | 限制调用方明确传入的页大小。 |
+
+例如请求第 3 页、每页 50 条，应用限制 `{ maxPageSize: 10 }`。实际得到 `{ page: 3, pageSize: 10, offset: 20, limit: 10 }`。
+
+`params` 按占位符顺序绑定业务值，省略时不绑定。分页对象使用从 1 开始的 `page` 和每页条数 `pageSize`。未传或小于 1 时，分别用 `defaultPage` 和 `defaultPageSize`。有效值向下取整，传入的 `pageSize` 受 `maxPageSize` 限制。`overrides` 适合由应用按业务场景选择默认值和上限，请使用正整数并将默认条数设在上限内。
 
 #### 场景：参数化查询与分页
 
@@ -251,6 +286,9 @@ if (!getResult2.success)
 getResult2.data // { id: 'o1' }
 // 将页码 1 和每页 20 条规范化为分页参数，得到首段记录的限制和偏移量。
 const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+// 用户请求第 3 页、每页 50 条。此页面上限为 10，因此实际跳过 20 条并最多读 10 条。
+const limited = reldb.pagination.normalize({ page: 3, pageSize: 50 }, { maxPageSize: 10 })
+limited // { page: 3, pageSize: 10, offset: 20, limit: 10 }
 // 传可信 SQL 及规范化分页选项，返回 o1 所在一页与总条数 1，失败时返回原失败结果。
 const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
 if (!pageResult.success)
@@ -308,8 +346,9 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.tx.begin` | 开启手工事务 | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
-| `reldb.tx.wrap` | 自动提交或回滚回调中的事务 | fn | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.begin()` | 开启手工事务 | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
+| `reldb.tx.wrap(fn)` | 自动提交或回滚回调中的事务 | `fn: TxWrapCallback<T>` 异步回调接收事务句柄。正常返回后提交，抛出时回滚 | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.wrapResult(fn)` | 根据回调的业务结果结束事务 | 返回 `Promise<HaiResult<T>>` 的回调 | 成功提交，失败回滚并保留原业务错误 | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
 #### 场景：一起提交或回滚
 
@@ -325,11 +364,21 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 
 一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
 
-三种使用方式：
+#### 场景：保留业务失败并回滚
+
+数据库已初始化，`users` 表已有用户 `u1`。只在必要写入成功后提交。回调抛错，或数据库无法打开、提交、回滚事务时，调用方收到事务错误。
+
+```ts
+// 用已知用户 ID 更新名称。成功 data.changes 是更新行数。
+// SQL 返回失败时直接带出原错误，回滚此回调中所有数据库写入。
+const changed = await reldb.tx.wrapResult(tx =>
+  tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))
+if (!changed.success) throw new Error(changed.error.message)
+```
 
 #### 场景：一起写入并自动提交
 
-事务回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时，使用下方手动事务。各片段假定数据库已成功初始化且 users 表已经创建。
+`wrap` 的回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时可以调用 `wrapResult`。各片段假定数据库已成功初始化且 users 表已经创建。
 
 ```ts
 // 用回调运行两次插入，正常返回时提交并将 'ok' 放入 data，失败或抛错进入回滚。
@@ -468,20 +517,48 @@ await reldb.tx.wrap(async (tx) => {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.crud.table` | 创建指定表的 CRUD 操作对象 | config | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
+| `reldb.crud.table(config)` | 创建指定表的 CRUD 操作对象 | 必填 `config: CrudConfig<TItem>` 描述表到业务记录的映射。见[配置字段](#reldb-crud-config)。 | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
+| `repository.create(data, tx?)` | 新增记录 | `data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
+| `repository.createMany(items, tx?)` | 批量新增 | `items: Array<Record<string, unknown>>` 每项为一条记录的列名和值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
+| `repository.createOrUpdate(data, tx?)` | 按主键新增或更新 | `data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
+| `repository.findById(id, tx?)` | 查找一条，缺失为空 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
+| `repository.getById(id, tx?)` | 查找一条，缺失失败 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
+| `repository.findAll(options?, tx?)` | 条件查询 | `options` 可选 `where`、`params`、`orderBy`、`limit`、`offset`；可传已有事务 `tx` | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
+| `repository.findPage(options, tx?)` | 分页查询 | `options` 对象必填，可省略各字段；`where`、`params`、`orderBy` 与 `findAll` 相同，`pagination`、`overrides` 与 [SQL 分页](#sql) 相同；可传 `tx` | `Promise<HaiResult<PaginatedResult<TItem>>>` | `await repository.findPage({ pagination: { page: 1, pageSize: 10 } })` |
+| `repository.updateById(id, data, tx?)` | 按主键更新 | `id` 主键值，类型应匹配建表列。`data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.updateById('r1', { name: 'Ada v3' })` |
+| `repository.deleteById(id, tx?)` | 按主键删除 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.deleteById('r2')` |
+| `repository.count(options?, tx?)` | 统计记录数 | `options` 可选 `where` 与 `params`（省略条件时统计整表）；可传 `tx` | `Promise<HaiResult<number>>` | `await repository.count()` |
+| `repository.exists(options?, tx?)` | 检查条件是否命中 | `options` 可选 `where` 与 `params`（省略条件时检查表内是否有记录）；可传 `tx` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
+| `repository.existsById(id, tx?)` | 检查主键是否存在 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
 
-| `repository.create` | 新增记录 | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
-| `repository.createMany` | 批量新增 | `items, tx?` | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
-| `repository.createOrUpdate` | 按主键新增或更新 | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
-| `repository.findById` | 查找一条，缺失为空 | `id, tx?` | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
-| `repository.getById` | 查找一条，缺失失败 | `id, tx?` | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
-| `repository.findAll` | 条件查询 | `options?, tx?` | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
-| `repository.findPage` | 分页查询 | `options, tx?` | `Promise<HaiResult<PaginatedResult<TItem>>>` | `await repository.findPage({ pagination: { page: 1, pageSize: 10 } })` |
-| `repository.updateById` | 按主键更新 | `id, data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.updateById('r1', { name: 'Ada v3' })` |
-| `repository.deleteById` | 按主键删除 | `id, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.deleteById('r2')` |
-| `repository.count` | 统计记录数 | `options?, tx?` | `Promise<HaiResult<number>>` | `await repository.count()` |
-| `repository.exists` | 检查条件是否命中 | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
-| `repository.existsById` | 检查主键是否存在 | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
+<a id="reldb-crud-config"></a>
+
+**CrudConfig<TItem>**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `table` | `string` | 必填 | 仓库所操作的可信表名。 |
+| `dbType` | `DbType` | 必填 | 当前连接的方言，用于生成 SQL。 |
+| `idColumn` | `string` | `id` | 主键定位、冲突更新和删除所用的列。 |
+| `select` | `string[]` | `*` | 返回记录的列。 |
+| `createColumns / updateColumns` | `string[]` | 按传入数据取列 | 限制可写入的列，更新仍排除主键。 |
+| `mapRow` | `(row: QueryRow) => TItem` | 可省略 | 把查询行转换为宿主业务对象。 |
+
+例如为 `orders` 设 `idColumn: "order_id"`、`select: ["order_id", "status"]`，`findById("o1")` 按 order_id 定位并返回两列，找不到返回 null。
+
+<a id="reldb-repository-query-options"></a>
+
+**仓库查询选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `where` | `string` | 可省略 | 适用 findAll、findPage、count、exists。可信静态条件，不含 WHERE。 |
+| `params` | `unknown[]` | `[]` | 给 where 里的占位符依次绑定动态数据。 |
+| `orderBy` | `string` | 可省略 | findAll / findPage 可传可信排序表达式，不含 ORDER BY。分页与 offset 应使用稳定排序。 |
+| `limit / offset` | `number` | 不限条数 / 从开头 | findAll 的返回条数上限与跳过的条数。可只传 offset。 |
+| `pagination / overrides` | `PaginationOptionsInput / PaginationOverrides` | 可省略 | 仅 findPage。与 [SQL 查询分页](#reldb-sql-page-options) 使用相同的字段。 |
+
+若已按 ID 保存 `r1` 和 `r2`，用 `findAll({ orderBy: "id ASC", offset: 1 })` 跳过 `r1`，返回只含 `r2` 的数组。可选的 `tx` 用于让读写参与已有事务。
 
 `findAll({ orderBy, offset })` 会跳过指定条数并返回剩余记录，在 SQLite、PostgreSQL 和 MySQL 中均可省略 `limit`。
 
@@ -722,11 +799,11 @@ if (!wrapResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.json.extract` | 生成提取 JSON 值的 SQL 表达式 | column, path | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')` |
-| `reldb.json.set` | 生成设置 JSON 路径的 SQL 表达式 | column, path, value | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')` |
-| `reldb.json.insert` | 生成仅新增 JSON 路径的 SQL 表达式 | column, path, value | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
-| `reldb.json.remove` | 生成删除 JSON 路径的 SQL 表达式 | column, path | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
-| `reldb.json.merge` | 生成合并 JSON 对象的 SQL 表达式 | column, patch | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
+| `reldb.json.extract(column, path)` | 生成提取 JSON 值的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')` |
+| `reldb.json.set(column, path, value)` | 生成设置 JSON 路径的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status。`value` 要写入指定路径的 JSON 值 | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')` |
+| `reldb.json.insert(column, path, value)` | 生成仅新增 JSON 路径的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status。`value` 要写入指定路径的 JSON 值 | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
+| `reldb.json.remove(column, path)` | 生成删除 JSON 路径的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
+| `reldb.json.merge(column, patch)` | 生成合并 JSON 对象的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`patch: Record<string, unknown>` 合并到 JSON 对象的字段和值 | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
 
 #### 场景：读写 JSON 字段
 

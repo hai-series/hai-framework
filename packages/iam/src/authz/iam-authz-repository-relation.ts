@@ -576,8 +576,11 @@ export async function createDbUserRoleRepository(
   return ok({
     async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
+      const onDuplicate = reldb.config?.type === 'mysql'
+        ? 'ON DUPLICATE KEY UPDATE role_id = role_id'
+        : 'ON CONFLICT DO NOTHING'
       const result = await runner.execute(
-        `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+        `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ${onDuplicate}`,
         [userId, roleId],
       )
 

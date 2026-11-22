@@ -35,9 +35,25 @@ Choose a template for new projects, add modules or missing configuration to exis
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `hai create [name]` | Create an application | 用 `--type` 选模板。省略名称或类型时询问，`--defaults` 采用默认值。默认安装依赖、初始化 Git 并准备部署工具 | Project files and startup instructions | `hai create orders --type admin --defaults` |
-| `hai add [module]` | Add a framework module | 模块名省略时询问。默认安装依赖，可加 `--no-install` | Dependencies, settings and skills | `hai add ai` |
-| `hai init` | Fill missing project configuration | 默认保留已有文件，`--force` 可以重建模块配置 | Missing settings and AI entry files | `hai init` |
+| `hai create [name] [options]` | Create an application | `name` names the project directory. `--type` selects a template. Missing values are prompted for unless `--defaults` applies. Flags also control dependency installation, Git and deployment setup. · [argument table](#cli-projects-arguments) | Project files and startup instructions | `hai create orders --type admin --defaults` |
+| `hai add [module] [options]` | Add a framework module | `module` selects the framework module. Omit it to choose interactively. Dependencies are installed by default. Use `--no-install` to skip. · [argument table](#cli-projects-arguments) | Dependencies, settings and skills | `hai add ai` |
+| `hai init [options]` | Fill missing project configuration | `options` controls which configuration is initialized. Existing files are kept by default. `--force` allows module configuration to be regenerated. · [argument table](#cli-projects-arguments) | Missing settings and AI entry files | `hai init` |
+
+<a id="cli-projects-arguments"></a>
+
+##### Arguments and switches
+
+| Argument | Command or condition | Purpose and defaults |
+| --- | --- | --- |
+| `[name] / --type` | `create` | Prompt when omitted. With --defaults, use my-app and admin |
+| `--frontends <targets>` | `create, fullstack` | Comma-separated frontend targets, used for fullstack |
+| `--defaults` | `create` | Use defaults for unanswered prompts |
+| `--package-manager <pm>` | `create` | Choose pnpm, npm or yarn. API and fullstack use pnpm |
+| `--no-install` | `create, add` | Install by default. With this flag write files or dependency declarations without installing |
+| `--no-deploy` | `create` | Omit deployment setup. Deployment tooling is included by default |
+| `--no-git / --git-remote <url>` | `create` | Initialize Git by default. Skip Git or specify a remote URL |
+| `[module]` | `add` | Module ID to add, for example ai. Choose interactively if omitted |
+| `--force` | `init` | Regenerate module configuration. Existing files are kept by default |
 
 #### Scenario: Create and extend projects
 
@@ -81,11 +97,23 @@ Generate pages, components, HTTP routes or models by business name, selecting a 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `hai generate [type] [name]` 或 `hai g` | Generate source files | 类型和名称可交互选择。多 workspace 工程用 `--workspace`；默认保护已有文件 | Source files; existing files protected by default | `hai generate api orders --workspace orders-serv` |
-| `hai g:page <name>` | Generate a page | 页面名必填，按需设 `--workspace` | Page source | `hai g:page orders` |
-| `hai g:component <name>` | Generate a component | 组件名必填，按需设 `--workspace` | Component source | `hai g:component OrderList` |
-| `hai g:api <name>` | Generate an HTTP entry | 名称必填，按需设 `--workspace` 选择应用或服务 | Contract/handler source | `hai g:api orders --workspace orders-serv` |
-| `hai g:model <name>` | Generate a model | 名称必填，按需设 `--workspace` | Model source | `hai g:model order` |
+| `hai generate [type] [name] [options]` or `hai g [type] [name] [options]` | Generate source files | `type` selects the generator and `name` names its output. Omit them to choose interactively. Use `--workspace` to target one workspace. Existing files are protected by default. · [argument table](#cli-scaffolding-arguments) | Source files; existing files protected by default | `hai generate api orders --workspace orders-serv` |
+| `hai g:page <name> [options]` | Generate a page | Required `name` names the generated page. Use `--workspace` to select the destination workspace. · [argument table](#cli-scaffolding-arguments) | Page source | `hai g:page orders` |
+| `hai g:component <name> [options]` | Generate a component | Required `name` names the generated component. Use `--workspace` to select the destination workspace. · [argument table](#cli-scaffolding-arguments) | Component source | `hai g:component OrderList` |
+| `hai g:api <name> [options]` | Generate an HTTP entry | Required `name` names the HTTP entry. `--workspace` targets an app or service in a multi-workspace project. · [argument table](#cli-scaffolding-arguments) | Contract/handler source | `hai g:api orders --workspace orders-serv` |
+| `hai g:model <name> [options]` | Generate a model | Required `name` names the generated model. Use `--workspace` to select the destination workspace. · [argument table](#cli-scaffolding-arguments) | Model source | `hai g:model order` |
+
+<a id="cli-scaffolding-arguments"></a>
+
+##### Arguments and switches
+
+| Argument | Command or condition | Purpose and defaults |
+| --- | --- | --- |
+| `[type] / [name]` | `generate, g` | Select the generator and output name. Omission prompts for selection |
+| `<name>` | `g:page, g:component, g:api, g:model` | Required page, component, route or model name |
+| `--workspace <name>` | `generate, g and aliases` | Select a target package or relative directory in a multi-workspace project |
+| `--output <path>` | `generate, g` | Set the output path. The default and allowed directory depend on the generator |
+| `--force` | `generate, g` | Allow replacing an existing generation target. The g:* shortcuts retain the default protection |
 
 #### Scenario: Generate business scaffolds
 
@@ -116,7 +144,22 @@ Select the build target, then produce compiled output, container archives or nat
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `hai build` | Compile or package the app | --target defaults to compile; image/app/desktop need their build tools | Artifacts; image --json emits build metadata | `hai build --target image --json` |
+| `hai build [options]` | Compile or package the app | --target defaults to compile; image/app/desktop need their build tools · [argument table](#cli-builds-arguments) | Artifacts; image --json emits build metadata | `hai build --target image --json` |
+
+<a id="cli-builds-arguments"></a>
+
+##### Arguments and switches
+
+| Argument | Command or condition | Purpose and defaults |
+| --- | --- | --- |
+| `--target <target>` | `build` | Defaults to compile. Choose image for containers, app for mobile, or desktop for desktop installers |
+| `--images <names> / --concurrency <count> / --json` | `build, image` | Build all configured images by default with concurrency 2. --json writes this build’s artifact metadata to stdout |
+| `--runtime <runtime> / --network <network>` | `build, image or Android container` | Choose auto, podman or docker. Auto prefers reachable Podman. An omitted network uses the engine setting |
+| `--platform <platform> / --arch <arch> / --debug` | `build, native` | Select a native platform and x64 or arm64. Architecture defaults to the host. --debug switches from release to debug |
+| `--image-source / --image-mirrors` | `container builds` | Choose official, cn or custom. Custom uses image prefix mappings. Omission uses saved choices or prompts |
+| `--npm-source / --npm-registry` | `container builds` | Choose official, cn or custom. Custom uses the specified registry URL |
+| `--proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `container builds` | Choose inherit, system, custom, or none. The fallback is inherit. A custom mode takes a URL and optional bypass hosts. --no-http-proxy disables propagation |
+| `--yes` | `download selection` | Use saved download settings or defaults without prompting |
 
 #### Scenario: Compile and package apps
 
@@ -131,6 +174,8 @@ The first produces compiled files; the second needs a container engine and produ
 
 [Detailed parameters and workflows](cli.md#builds)
 
+TypeScript automation can use `deploy.verifyBuildReceipt` to match the single-line v1 JSON to the archives and enforce the expected commit, platform, and image roles. [SDK example](deploy.en.md#programmatic-release-verification)
+
 <a id="deployments"></a>
 
 ### Plan and deliver: `hai deploy`
@@ -141,7 +186,22 @@ Inspect the environment plan before choosing direct deployment or an offline bun
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `hai deploy [appDir]` | Plan, bundle or deploy | 目录默认由当前工程确定。需选择或传入 `--env`。制品、服务及环境文件可单独指定 | Plan JSON, bundle files or a deployment receipt | `hai deploy --env prod --plan` |
+| `hai deploy [appDir] [options]` | Plan, bundle or deploy | `appDir` identifies the project and defaults to the current project. Choose the environment in the terminal or pass `--env` explicitly. Flags select the artifact, services and environment file. · [argument table](#cli-deployments-arguments) | Plan JSON, bundle files or a deployment receipt | `hai deploy --env prod --plan` |
+
+<a id="cli-deployments-arguments"></a>
+
+##### Arguments and switches
+
+| Argument | Command or condition | Purpose and defaults |
+| --- | --- | --- |
+| `[appDir] / --env <environment> / --env-dir <path>` | `deploy` | The app defaults to the current project. Set --env for noninteractive use. --env-dir overrides the environment file directory |
+| `--plan / --inspect-remote` | `deploy` | Print the plan. Remote inspection requires --plan |
+| `--artifact-dir <path> / --build` | `deploy` | Reuse existing artifacts or build before deploying. The flags are mutually exclusive |
+| `--services <names> / --skip-middleware` | `deploy` | Pass comma-separated service names. --skip-middleware skips middleware deployment |
+| `--bundle-only / --output <path>` | `deploy` | Create an offline bundle only. --output sets the bundle path |
+| `--concurrency / --network / --npm-source / --npm-registry` | `deploy --build` | Forwarded to the build stage. Requires --build. See build options for each field |
+| `--runtime / --image-source / --image-mirrors / --proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `deploy` | Select the container engine, image source, and download proxy. Values match build options. A read-only plan performs no downloads |
+| `--yes` | `deploy` | Confirm noninteractive execution. A plan with an explicit environment is read-only |
 
 #### Scenario: Plan and deliver
 
@@ -164,9 +224,22 @@ Confirm the active CLI and options, use an exact published version for upgrade c
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `hai upgrade <version>` | Inspect an exact release | 填写已发布的精确版本，目录默认当前工程 | Dependency/configuration/skill difference report | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle>` | Read an offline diagnostic bundle | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 | Summary, evidence page or local viewer URL | `hai feedback summary feedback.zip` |
-| `hai --version`、`hai --help` | Show version or help | 也可用 `hai <command> --help` | Version/options text | `hai deploy --help` |
+| `hai upgrade <version> [options]` | Inspect an exact release | `version` selects an exact published release to inspect. `--cwd` selects the project, defaulting to the current project. · [argument table](#cli-diagnostics-arguments) | Dependency/configuration/skill difference report | `hai upgrade TARGET_VERSION` |
+| `hai feedback <action> <bundle> [options]` | Read an offline diagnostic bundle | `action` selects what to read from the diagnostic ZIP at `bundle`. For `evidence`, `options` filter by request ID, error ID or time range. · [argument table](#cli-diagnostics-arguments) | Summary, evidence page or local viewer URL | `hai feedback summary feedback.zip` |
+| `hai --version` or `hai --help` | Show version or help | Pass a command before `--help` for its arguments and options. | Version/options text | `hai deploy --help` |
+
+<a id="cli-diagnostics-arguments"></a>
+
+##### Arguments and switches
+
+| Argument | Command or condition | Purpose and defaults |
+| --- | --- | --- |
+| `<version> / --cwd <path>` | `upgrade` | Pass a published exact version. --cwd selects the project to check, defaulting to the current directory |
+| `<action> / <bundle>` | `feedback` | Required action (summary, inspect, evidence, or view) and path to the diagnostic ZIP |
+| `--page <number> / --page-size <number>` | `feedback evidence` | Defaults to page 1 and 20 rows per page. Maximum page size is 100 |
+| `--kind / --request-id / --error-id` | `feedback evidence` | Filter by evidence kind, request ID or error ID. An error ID anchors related logs |
+| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | Unix milliseconds bounding the evidence time range |
+| `--port <number>` | `feedback view` | Viewer port. Defaults to 0 for OS assignment |
 
 #### Scenario: Inspect help, upgrades and diagnostics
 

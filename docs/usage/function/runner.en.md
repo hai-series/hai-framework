@@ -111,11 +111,11 @@ The database shares executions while handlers are registered per node. API nodes
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `runner.init(config)` | 为当前进程启动任务服务 | `config.nodeId` 必填。`executor` 默认 `true`。先初始化 RelDB | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
-| `runner.close()` | 停止领取任务并核验本节点执行的清理 | 无参数 | `HaiResult<void>` | `await runner.close()` |
+| `runner.init(config)` | Start the job service for this process | `config: RunnerConfigInput`. `nodeId` is required. `executor` defaults to `true`. Initialize RelDB first. See [Runner configuration](../configuration/runner.en.md). | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close()` | Stop claiming jobs and verify cleanup on this node | No arguments | `HaiResult<void>` | `await runner.close()` |
 | `runner.isExecutor` | Check whether this ready node executes jobs | Read-only property | `boolean` | `runner.isExecutor` |
-| `runner.environment(id)` | 读已登记的执行环境 | 执行环境 ID 必填 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
-| `runner.register(kind, handler)` | 登记一种任务及处理函数 | 任务类型和异步处理函数必填 | `HaiResult<() => void>`; `data` | `runner.register('reports.v1', async input => input)` |
+| `runner.environment(id)` | Read a registered execution environment | `id: string` is the required environment ID. | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
+| `runner.register(kind, handler)` | Register a job kind and its handler | `kind: string` identifies the job kind. The required `handler: RunnerHandler` receives the JSON input and execution context and returns a Promise of JSON. | `HaiResult<() => void>`. Call `data` to unregister this handler. | `runner.register('reports.v1', async input => input)` |
 
 #### Scenario: Prepare nodes and handlers
 
@@ -137,13 +137,29 @@ Save an idempotency key and execution ID for one intent. Recover receipts after 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `runner.submit(request)` | 保存任务，等待可用节点领取 | `scope`、`kind`、`input` 必填。排队和运行的超时都默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
-| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | 三个参数均必填 | `data`; `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
-| `runner.get(scope, id)` | 按可信归属读取执行记录 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
-| `runner.cancel(scope, id)` | 保存取消请求 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
-| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | `scope` 和 `id` 必填。`after` 默认 `0`，`limit` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+| `runner.submit(request)` | Store the job for an available node to claim | `request: RunnerSubmit` requires `scope`, `kind`, and `input`. Queue and execution timeouts each default to `300000` ms. | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
+| `runner.find(scope, kind, key)` | Look up a job by kind and idempotency key | `scope: RunnerScope`, `kind: string`, and `key: string` are required. Use the business idempotency key from submission. | `HaiResult<RunnerExecution \| undefined>`. A successful lookup with no match returns `undefined`. | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
+| `runner.get(scope, id)` | Read a job for its trusted owner | Required `scope: RunnerScope` and execution `id: string`. | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
+| `runner.cancel(scope, id)` | Record a cancellation request | Required `scope: RunnerScope` and execution `id: string`. | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
+| `runner.events(scope, id, after?, limit?)` | Read job events in sequence | Required `scope: RunnerScope` and `id: string`. The optional cursor `after: number` defaults to `0`, and the page size `limit: number` defaults to `100`. | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+
+#### Submit conditions, idempotency, and event paging
+
+| Field | Requirements, defaults, and effect |
+| --- | --- |
+| `scope`, `kind`, `input` | Required. `scope` is the server-authenticated `{ tenantId, userId }`, each ID 1–200 characters. `kind` selects a registered type. `input` is persistent JSON passed to the handler |
+| `idempotencyKey`, `reuseKey` | Optional strings of 1–200 characters. The first returns the original receipt for the same request and subject/kind, with `CONFLICT` for different content. The second lets a trusted service reuse an active execution. `find` uses the business idempotency key |
+| `environmentId`, `resources`, `nodeId` | Optionally select a registered environment, override resources, or target a node. Resource overrides include `cpu` (cores), `memoryMiB`, `pids`, and `scratchMiB`. See [Runner settings](../configuration/runner.en.md) for units and bounds |
+| `parentId` | Optional parent execution ID. Its child inherits scheduling constraints. Omit `nodeId`, `environmentId`, `resources`, `reuseKey`, and `concurrency` and use capacity class `default` |
+| `capacityClass`, `concurrency`, `warmPool` | The class defaults to `default`. Trusted tool services can use `tool`. An optional `{ key, limit }` limits admission across nodes for the same job kind and key, with integer limit 1–1000. `warmPool: true` also requires matching registered pool environment and concurrency. Omit a per-job resource override |
+| `queueTimeoutMs`, `runTimeoutMs` | Queue and active execution limits in milliseconds. Both are integers from 1 to 86400000 and default to 300000 |
+| `after` and `limit` in `events` | Return events with sequence greater than `after`. The cursor is a nonnegative safe integer defaulting to 0. Page size is 1–100, default 100 |
+
+With events numbered 1, 2, and 3, `events(scope, id, 1, 2)` returns 2 and 3. Continue with `after: 3`. Resubmitting the same `input: { page: 1 }` with the same idempotency key returns the original execution ID on success.
 
 #### Scenario: Submit, recover, inspect and cancel
+
+When the business record must be saved first, the committed candidate can serve as the source for dispatch. A scanner retries the same request after the transaction with the candidate ID as its `idempotencyKey`. If submission fails or the process stops, the next scan can submit it again. The handler verifies the business scope at claim time and follows the application’s write constraints before publishing an artifact. An `unknown` execution still requires the application to check which external effects occurred.
 
 submit returns a persisted execution receipt. This distinguishes queued work, cancellation requests and confirmed resource shutdown.
 
@@ -197,7 +213,16 @@ Map tools to controlled environments with CPU, memory, process and disk budgets.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | `pool` 必填，由应用给出环境、任务类型、预热数量和上限 | `HaiResult<() => void>`; `data` | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+| `runner.registerWarmPool(pool)` | Register a tool warm pool and its capacity | Required `pool: RunnerWarmPool` includes the environment, job kind, ready target, and capacity limits. | `HaiResult<() => void>`. Call `data` to unregister this pool. | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+
+#### Warm pool fields
+
+| Field | Requirements and effect |
+| --- | --- |
+| `key`, `kind`, `environmentId` | Required identifiers. Job kind plus pool key identifies the pool. Use a registered offline environment. Execution nodes register the job handler first |
+| `minReady`, `maxRunning`, `maxTotal` | Required integers. Ready target is 0–1000, and active and total limits are each 1–1000. The first two must fit the total limit |
+
+For `{ minReady: 1, maxRunning: 2, maxTotal: 3 }`, the pool targets one ready slot, allows up to two active jobs, and holds three slots in total. The returned function unregisters this pool.
 
 #### Scenario: Isolated containers and warm pools
 
@@ -215,7 +240,17 @@ Record a reviewed outcome only after confirming original resources stopped. A da
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope`、`id` 和核验记录必填。无容器凭据时还须核对应用侧资源已停止 | `HaiResult<RunnerExecution>` | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+| `runner.reconcileUnknown(scope, id, review)` | Record a manual resource check on the original execution node | `scope: RunnerScope`, `id: string`, and `review: RunnerReconciliation` are required. Confirm stopped application-owned resources when container evidence is unavailable. | `HaiResult<RunnerExecution>`. The business outcome may still be unknown. | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: 'Review OPS-42', hostResourcesStopped: true })` |
+
+#### Manual review record fields
+
+| Field | Conditions and effect |
+| --- | --- |
+| `operatorId` | Required operator ID from the trusted, authenticated operations entry |
+| `reason` | Required record, nonblank after trimming and at most 300 characters. It can reference the ticket and shutdown evidence |
+| `hostResourcesStopped` | Accepts only explicit `true`. Required when container evidence is unavailable, together with proof that the original host process stopped |
+
+After confirming application resources have stopped, record `{ operatorId: 'ops-1', reason: 'INC-48: host cleanup verified', hostResourcesStopped: true }`. The successful receipt records `reconciledAt` and retains the `unknown` business status.
 
 #### Scenario: Review unknown executions
 

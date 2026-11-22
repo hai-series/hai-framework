@@ -1,6 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { OutputFormat } from './ai-file-types.js'
 import { Buffer } from 'node:buffer'
+import { fileURLToPath } from 'node:url'
 import { err, ok } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -14,44 +15,73 @@ import { parseHtmlFile } from './ai-file-html.js'
  * if (pdfResult.success) void pdfResult.data.pageCount
  * ```
  */
-export async function parsePdfContent(content: Uint8Array, outputFormat: OutputFormat = 'text', maxPages?: number): Promise<HaiResult<{ text: string, pageCount: number }>> {
+export async function parsePdfContent(
+  content: Uint8Array,
+  outputFormat: OutputFormat = 'text',
+  maxPages?: number,
+  maxTextLength?: number,
+): Promise<HaiResult<{ text: string, pageCount: number, truncated?: boolean }>> {
   try {
-    const pdfjs = await import(
-
-      // @ts-expect-error — pdfjs-dist is an optional peer dependency
-      'pdfjs-dist/legacy/build/pdf.mjs',
-    ) as { getDocument: (...args: unknown[]) => { promise: Promise<unknown>, destroy: () => Promise<void> } }
-    const loadingTask = pdfjs.getDocument({ data: content })
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const local = maxTextLength !== undefined
+    const pdfjsRoot = local
+      ? new URL('../../', import.meta.resolve('pdfjs-dist/legacy/build/pdf.mjs'))
+      : undefined
+    const loadingTask = getDocument({
+      data: content,
+      ...(pdfjsRoot && {
+        cMapUrl: fileURLToPath(new URL('cmaps/', pdfjsRoot)),
+        standardFontDataUrl: fileURLToPath(new URL('standard_fonts/', pdfjsRoot)),
+        enableXfa: false,
+        useSystemFonts: false,
+        useWorkerFetch: false,
+        useWasm: false,
+        stopAtErrors: true,
+      }),
+    })
     try {
-      const pdf = await loadingTask.promise as {
-        numPages: number
-        getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }>
-      }
+      const pdf = await loadingTask.promise
       const totalPages = pdf.numPages
       const pagesToProcess = maxPages
         ? Math.min(maxPages, totalPages)
         : totalPages
+      const separator = outputFormat === 'markdown'
+        ? '\n\n---\n\n'
+        : '\n\n'
       const textParts: string[] = []
+      let textLength = 0
 
       for (let i = 1; i <= pagesToProcess; i++) {
         const page = await pdf.getPage(i)
         const textContent = await page.getTextContent()
-        const pageText = textContent.items
-          .map(item => item.str ?? '')
-          .join(' ')
+        const pageText = textContent.items.map((item) => {
+          if (!('str' in item))
+            return ''
+          return local && item.hasEOL
+            ? `${item.str}\n`
+            : item.str
+        }).join(' ')
         textParts.push(pageText)
+        textLength += pageText.length + (i === 1
+          ? 0
+          : separator.length)
+        if (local)
+          page.cleanup()
+        if (maxTextLength !== undefined && textLength > maxTextLength)
+          break
       }
 
-      // markdown 模式用页分隔线区分每页
-      const separator = outputFormat === 'markdown'
-        ? '\n\n---\n\n'
-        : '\n\n'
       return ok({
         text: textParts.join(separator),
         pageCount: totalPages,
+        ...(local && (pagesToProcess < totalPages || textLength > maxTextLength)
+          ? { truncated: true }
+          : {}),
       })
     }
-    finally { await loadingTask.destroy() }
+    finally {
+      await loadingTask.destroy()
+    }
   }
   catch (error) {
     return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
@@ -75,14 +105,7 @@ export async function parsePdfContent(content: Uint8Array, outputFormat: OutputF
  */
 export async function parseDocxContent(content: Uint8Array, outputFormat: OutputFormat = 'text'): Promise<HaiResult<string>> {
   try {
-    const mammoth = await import(
-
-      // @ts-expect-error — mammoth is an optional peer dependency
-      'mammoth',
-    ) as {
-      extractRawText: (options: unknown) => Promise<{ value: string }>
-      convertToHtml: (options: unknown) => Promise<{ value: string }>
-    }
+    const { default: mammoth } = await import('mammoth')
     if (outputFormat === 'markdown') {
       const result = await mammoth.convertToHtml({
         buffer: Buffer.from(content.buffer, content.byteOffset, content.byteLength),

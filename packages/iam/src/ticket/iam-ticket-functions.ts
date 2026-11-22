@@ -2,7 +2,7 @@
  * @h-ai/iam — 一次性票据实现
  *
  * 基于 @h-ai/cache 实现短期、一次性能力票据：签发写入带 TTL 的 cache 键，
- * 消费通过「读取 + 原子删除」保证单次有效（并发消费仅一个成功）。
+ * 缓存键使用票据摘要。消费先核验用途与时效，再原子删除相同记录。
  * @module ticket/iam-ticket-functions
  */
 
@@ -17,6 +17,7 @@ import type {
   TicketOperations,
 } from './iam-ticket-types.js'
 
+import { createHash } from 'node:crypto'
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
@@ -28,6 +29,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'ticket' })
 
 /** 票据缓存键前缀 */
 const TICKET_KEY_PREFIX = 'hai:iam:ticket:'
+/** 32 个随机字节编码为 base64url 后的长度和字符范围。 */
+const TICKET_FORMAT = /^[\w-]{43}$/
 /** 默认有效期（毫秒） */
 const DEFAULT_TICKET_TTL_MS = 30_000
 
@@ -53,7 +56,8 @@ interface StoredTicket {
 
 /** 构建票据缓存键 */
 function buildTicketKey(ticket: string): string {
-  return `${TICKET_KEY_PREFIX}${ticket}`
+  const digest = createHash('sha256').update(ticket).digest('hex')
+  return `${TICKET_KEY_PREFIX}sha256:${digest}`
 }
 
 /**
@@ -95,12 +99,17 @@ export function createTicketOperations(): TicketOperations {
     },
 
     async consume(ticket: string, options?: ConsumeTicketOptions): Promise<HaiResult<ConsumedTicket>> {
-      if (!ticket) {
+      // 老键兼容只接受曾签发的格式，不能以新键的 sha256:... 后缀绕过摘要。
+      if (!TICKET_FORMAT.test(ticket)) {
         return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
-      const key = buildTicketKey(ticket)
-
-      const found = await cache.kv.get<StoredTicket>(key)
+      let key = buildTicketKey(ticket)
+      let found = await cache.kv.get<StoredTicket>(key)
+      if (found.success && !found.data) {
+        // 兼容升级前尚未到期的票据，旧键仍由原 TTL 回收。
+        key = `${TICKET_KEY_PREFIX}${ticket}`
+        found = await cache.kv.get<StoredTicket>(key)
+      }
       if (!found.success) {
         return err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
       }
@@ -109,19 +118,19 @@ export function createTicketOperations(): TicketOperations {
         return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
 
-      // 原子单次消费：删除计数为 1 的调用方胜出；并发消费的其余调用方得到 0 → 视为已消费
-      const removed = await cache.kv.del(key)
-      if (!removed.success || removed.data !== 1) {
-        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
-      }
-
       // TTL 到期兜底（cache 已按 TTL 过期，此处防御时钟/后端差异）
       if (record.expiresAt <= Date.now()) {
         return err(HaiIamError.TICKET_EXPIRED, iamM('iam_ticketExpired'))
       }
 
-      // 用途校验：防止跨用途重放
+      // 用途不符时保留票据，避免其它业务入口撤销本次操作。
       if (options?.purpose !== undefined && options.purpose !== record.purpose) {
+        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
+      }
+
+      // 仅删除本次读到的记录。并发或过期导致比较失败时，本次消费无效。
+      const removed = await cache.kv.compareAndSwap(key, record, undefined)
+      if (!removed.success || !removed.data) {
         return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
 

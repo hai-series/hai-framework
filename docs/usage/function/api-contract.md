@@ -59,9 +59,26 @@ export const appContract = {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.create` | 组合应用接口 | `{ iam: apiContract.iam, payment: false }` | `{ iam: IamContract }` | `apiContract.create({ iam: apiContract.iam, payment: false })` |
-| `apiContract.route` | 声明 HTTP 接口 | `{ method: "GET", path: "/status" }` | `ContractProcedureBuilder` | `apiContract.route({ method: "GET", path: "/status" })` |
-| `apiContract.pathOf` | 取唯一业务路径 | `apiContract.iam.auth.login` | `string: "/auth/login"` | `apiContract.pathOf(apiContract.iam.auth.login)` |
+| `apiContract.create(options)` | 组合应用接口 | `options: CreateApiContractOptions` 必填。对象键是业务域名称，值为契约 router；用 `false` 或 `undefined` 跳过该域。 见[契约与路由字段](#contract-route-options)。 | `{ iam: IamContract }` | `apiContract.create({ iam: apiContract.iam, payment: false })` |
+| `apiContract.route(route)` | 声明 HTTP 接口 | `route: Route` 必填。声明 HTTP 接口时用 `method` 指定方法、`path` 指定以 `/` 开头的业务路径；可加 `summary`、`description`、`tags` 等 OpenAPI 元数据。 见[契约与路由字段](#contract-route-options)。 | `ContractProcedureBuilder` | `apiContract.route({ method: "GET", path: "/status" })` |
+| `apiContract.pathOf(procedure)` | 取唯一业务路径 | `procedure: AnyContractProcedure` 必填，传入声明了 HTTP 路径的 procedure。 | `string: "/auth/login"` | `apiContract.pathOf(apiContract.iam.auth.login)` |
+
+<a id="contract-route-options"></a>
+
+##### 契约与路由字段
+
+这些选项定义契约和 HTTP 映射。示例把 `{ status, iam: apiContract.iam, payment: false }` 组合成只含 `status` 与 `iam` 的对象，并读取路径 `/auth/login`。
+
+| 字段 | 默认值或必填 | 作用与生效条件 |
+| --- | --- | --- |
+| `options[domain]` | 必填对象；域可省略 | 键是业务域名，值是契约 router 或 procedure。值为 `false` 或 `undefined` 时，从组合结果中排除该域。 |
+| `route.method / route.path` | 可填；建议显式声明 HTTP 入口 | `method` 是 HTTP 方法，`path` 是以 `/` 开头的路径。`pathOf` 要求已声明路径。 |
+| `route.operationId` | 默认由 router 路径段连接而成 | 覆盖 OpenAPI 操作标识。 |
+| `route.summary / route.description / route.deprecated / route.tags` | 可省略 | OpenAPI 的摘要、说明、弃用标记和分类标签。 |
+| `route.successStatus / route.successDescription` | `200` / `OK` | 成功响应的状态和说明，状态码范围 200–399。 |
+| `route.inputStructure` | `compact` | `compact` 合并路径参数与查询或正文。`detailed` 分开提供 `params`、`query`、`headers`、`body`。 |
+| `route.outputStructure` | `compact` | `compact` 将返回值直接当响应正文。`detailed` 支持 `status`、`headers`、`body`，省略 `status` 时使用 `successStatus`。 |
+| `route.spec` | 可省略，默认自动生成 | 可传 OpenAPI Operation Object，或接收当前 operation 并返回新对象的函数。 |
 
 #### 场景：定义与组合 HTTP 契约
 
@@ -154,9 +171,9 @@ const body = await response.json() // { success: true, data: { ready: true } }
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.haiResultSchema` | 校验成功或失败结果 | `z.string()` | `ZodSchema<HaiResult<string>>` | `apiContract.haiResultSchema(z.string())` |
-| `apiContract.voidResultSchema` | 校验无业务数据的结果 | `{ success: true, data: undefined }` | `ZodSchema<HaiResult<void>>` | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
-| `apiContract.paginatedSchema` | 校验分页列表 | `z.object({ id: z.string() })` | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))` |
+| `apiContract.haiResultSchema(dataSchema)` | 校验成功或失败结果 | `dataSchema` 必填，传成功分支 `data` 的 Zod Schema。 | `ZodSchema<HaiResult<string>>` | `apiContract.haiResultSchema(z.string())` |
+| `apiContract.voidResultSchema` | 校验无业务数据的结果 | Schema 常量。示例用 `safeParse(input)` 校验无业务数据的结果。 | `ZodSchema<HaiResult<void>>` | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
+| `apiContract.paginatedSchema(itemSchema)` | 校验分页列表 | `itemSchema` 必填，传分页 `items` 数组中单条记录的 Zod Schema。 | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))` |
 
 #### 场景：校验结果与分页
 

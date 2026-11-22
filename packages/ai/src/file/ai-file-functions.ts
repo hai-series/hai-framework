@@ -19,6 +19,7 @@ import type {
 import type { FileParseJob, FileParseReply } from './ai-file-worker.js'
 
 import { Buffer } from 'node:buffer'
+import { Worker } from 'node:worker_threads'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -27,12 +28,14 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { parseHtmlFile } from './ai-file-html.js'
 
+const parserWorkerUrl = new URL(import.meta.url.endsWith('.ts')
+  ? '../../dist/ai-file-worker.js'
+  : './ai-file-worker.js', import.meta.url)
 const filePool = core.worker.createPool<FileParseJob, FileParseReply>(
-  new URL(import.meta.url.endsWith('.ts')
-    ? '../../dist/ai-file-worker.js'
-    : './ai-file-worker.js', import.meta.url),
+  parserWorkerUrl,
   { maxWorkers: 2, maxQueuedJobs: 4, idleTimeoutMs: 15_000 },
 )
+let activeLocalParsers = 0
 
 async function parseInWorker(job: FileParseJob): Promise<HaiResult<FileParseReply>> {
   const result = await filePool.run(job)
@@ -164,6 +167,153 @@ function parseTextContent(content: Buffer | string): string {
   return content.toString('utf-8')
 }
 
+function asBufferOrText(content: Uint8Array | string): Buffer | string {
+  return typeof content === 'string' || Buffer.isBuffer(content)
+    ? content
+    : Buffer.from(content.buffer, content.byteOffset, content.byteLength)
+}
+
+/**
+ * 在独立线程中按本地限额解析。可在 AI 初始化前使用。
+ * @param request - 文件内容、限额与取消信号
+ * @returns 本地解析结果或不含文件原文的失败结果
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = await parseBoundedLocalFile({ content: '仅供内部使用', filename: 'notes.txt' })
+ * if (parsed.success) void parsed.data.text
+ * ```
+ */
+export async function parseBoundedLocalFile(request: FileParseRequest): Promise<HaiResult<FileParseResult>> {
+  const { filename, signal, options = {} } = request
+  const {
+    maxInputBytes = 4 * 1024 * 1024,
+    maxPages = 100,
+    maxTextLength = 12_000,
+    maxZipEntries = 512,
+    maxExpandedBytes = 24 * 1024 * 1024,
+    timeoutMs = 20_000,
+    outputFormat = 'text',
+  } = options
+  const content = asBufferOrText(request.content)
+  const inputBytes = typeof content === 'string'
+    ? Buffer.byteLength(content)
+    : content.byteLength
+  if (options.useOcr || timeoutMs > 0x7FFFFFFF
+    || [
+      maxInputBytes,
+      maxPages,
+      maxTextLength,
+      maxZipEntries,
+      maxExpandedBytes,
+      timeoutMs,
+    ].some(limit => !Number.isSafeInteger(limit) || limit < 1)
+    || !inputBytes || inputBytes > maxInputBytes) {
+    return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileLocalInvalid'))
+  }
+  if (signal?.aborted)
+    return err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
+
+  const mimeType = detectMimeType(content, filename, options.mimeType)
+  const parameters = {
+    format: outputFormat,
+    locale: core.i18n.getGlobalLocale(),
+    limits: { maxTextLength, maxZipEntries, maxExpandedBytes },
+  }
+  // 复制视图范围，避免 Worker 克隆调用方可能更大的底层 ArrayBuffer。
+  const payload = typeof content === 'string'
+    ? content
+    : Uint8Array.from(content)
+  let job: FileParseJob
+  if (TEXT_MIME_TYPES.has(mimeType)) {
+    job = { ...parameters, type: 'text', content: payload }
+  }
+  else if (mimeType === 'text/html') {
+    job = { ...parameters, type: 'html', content: payload }
+  }
+  else if (typeof payload !== 'string' && mimeType === 'application/pdf') {
+    job = {
+      ...parameters,
+      type: 'pdf',
+      content: payload,
+      maxPages,
+    }
+  }
+  else if (typeof payload !== 'string' && mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    job = { ...parameters, type: 'docx', content: payload }
+  }
+  else {
+    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
+      params: { mimeType },
+    }))
+  }
+
+  if (activeLocalParsers >= 3)
+    return err(HaiAIError.FILE_LOCAL_BUSY, aiM('ai_fileLocalBusy'))
+  activeLocalParsers++
+  let worker: Worker | undefined
+  const deadline = AbortSignal.timeout(timeoutMs)
+  const operation = signal
+    ? AbortSignal.any([signal, deadline])
+    : deadline
+  try {
+    const thread = new Worker(parserWorkerUrl, {
+      resourceLimits: { maxOldGenerationSizeMb: 160 },
+    })
+    worker = thread
+    const parsed = await new Promise<FileParseReply | undefined>((resolve) => {
+      const stop = () => finish(undefined)
+      function finish(result: FileParseReply | undefined): void {
+        operation.removeEventListener('abort', stop)
+        resolve(result)
+      }
+      operation.addEventListener('abort', stop, { once: true })
+      thread.once('error', stop)
+      thread.once('exit', stop)
+      thread.once('message', result => finish(result))
+      if (operation.aborted) {
+        stop()
+      }
+      else {
+        thread.postMessage(job, typeof payload === 'string'
+          ? []
+          : [payload.buffer])
+      }
+    })
+    if (signal?.aborted)
+      return err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
+    if (deadline.aborted)
+      return err(HaiAIError.FILE_LOCAL_TIMEOUT, aiM('ai_fileLocalTimeout'))
+    if (!parsed)
+      return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
+    if (!parsed.success)
+      return parsed
+    const { text, pageCount, truncated } = parsed.data
+    return ok({
+      text,
+      method: job.type,
+      ...(pageCount !== undefined && { pageCount }),
+      metadata: {
+        filename,
+        mimeType,
+        charCount: text.length,
+        ...(truncated && { truncated }),
+      },
+    })
+  }
+  catch {
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
+  }
+  finally {
+    try {
+      await worker?.terminate()
+    }
+    catch {
+      logger.warn('Local file parser worker termination failed')
+    }
+    activeLocalParsers--
+  }
+}
+
 /**
  * 使用视觉 LLM 进行 OCR 图片识别
  */
@@ -274,7 +424,10 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
    * 核心解析逻辑
    */
   async function doParse(request: FileParseRequest): Promise<HaiResult<FileParseResult>> {
-    const { content, filename, options = {} } = request
+    if (request.options?.mode === 'local')
+      return parseBoundedLocalFile(request)
+    const { filename, options = {} } = request
+    const content = asBufferOrText(request.content)
     const mimeType = detectMimeType(content, filename, options.mimeType)
     const outputFormat: OutputFormat = options.outputFormat ?? 'text'
 
@@ -400,7 +553,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       }
     },
 
-    async parseText(content: Buffer | string, filename?: string): Promise<HaiResult<string>> {
+    async parseText(content: Uint8Array | string, filename?: string): Promise<HaiResult<string>> {
       const result = await this.parse({ content, filename })
       if (!result.success)
         return result

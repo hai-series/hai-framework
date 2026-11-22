@@ -65,9 +65,9 @@ Browsers may use the default client; SSR creates an isolated client per request 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.init` | Prepare the default client | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
-| `apiClient.close` | Close the default client | 无参数 | `Promise<void>` | `await apiClient.close()` |
-| `apiClient.create` | Create an isolated client | contract: 应用共享契约 | `ApiClient<TContract>` | `apiClient.create(contract)` |
+| `apiClient.init(config)` | Prepare the default client | Required `config` with the API `baseUrl`. See [client settings](#call-options) for optional fields. | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
+| `apiClient.close()` | Close the default client | None | `Promise<void>` | `await apiClient.close()` |
+| `apiClient.create(contract)` | Create an isolated client | Required `contract`, the route contract shared with the server. | `ApiClient<TContract>` | `apiClient.create(contract)` |
 | `apiClient.config` | Read the current redacted client config | Read-only property; no arguments | `ApiClientConfig \| null` | `apiClient.config` |
 | `apiClient.isInitialized` | Check whether the default client is ready | Read-only property; no arguments | `boolean` | `apiClient.isInitialized` |
 
@@ -149,16 +149,16 @@ Let the client coordinate persistence and refresh. Use isolated memory for SSR/t
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.auth.setTokens` | Store current credentials | TokenPair: 可信认证响应 | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
-| `apiClient.auth.clear` | Clear current credentials | 无参数 | `Promise<void>` | `await apiClient.auth.clear()` |
-| `apiClient.auth.onTokenRefreshed` | Subscribe to token rotation | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
-| `apiClient.tokenStorage.memory` | Create in-memory credential storage | 无参数 | `TokenStorage` | `apiClient.tokenStorage.memory()` |
-| `apiClient.tokenStorage.httpOnlyCookie` | Use server-managed refresh cookies | 无参数 | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
-| `storage.getAccessToken` | Read the access token | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
-| `storage.setAccessToken` | Store the access token | token | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
-| `storage.getRefreshToken` | Read the refresh token | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
-| `storage.setRefreshToken` | Store the refresh token | token | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
-| `storage.clear` | Clear stored credentials | — | `Promise<void>` | `await storage.clear()` |
+| `apiClient.auth.setTokens(tokens)` | Store current credentials | `tokens` is a trusted authentication `TokenPair` with access token, lifetime in seconds, and optional refresh token. | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
+| `apiClient.auth.clear()` | Clear current credentials | No arguments | `Promise<void>` | `await apiClient.auth.clear()` |
+| `apiClient.auth.onTokenRefreshed(callback)` | Subscribe to token rotation | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
+| `apiClient.tokenStorage.memory()` | Create in-memory credential storage | No arguments | `TokenStorage` | `apiClient.tokenStorage.memory()` |
+| `apiClient.tokenStorage.httpOnlyCookie()` | Use server-managed refresh cookies | No arguments | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
+| `storage.getAccessToken()` | Read the access token | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
+| `storage.setAccessToken(token)` | Store the access token | Required `token`, the access token string from a trusted authentication response. | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
+| `storage.getRefreshToken()` | Read the refresh token | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
+| `storage.setRefreshToken(token)` | Store the refresh token | Required `token`, the refresh token string from a trusted response. The server manages refresh credentials with the cookie adapter. | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear()` | Clear stored credentials | — | `Promise<void>` | `await storage.clear()` |
 
 #### Scenario: Store and refresh credentials
 
@@ -214,17 +214,17 @@ Give UI the public policy and invoke login, registration, OTP, password recovery
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.createAuthActions` | Build authentication form actions | client: 含标准 IAM 契约 | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
-| `actions.publicConfig` | Read public authentication policy | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
-| `actions.createCaptcha` | Create an operation challenge | { operation } | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
-| `actions.login` | Submit login credentials | IamAuthLoginInput | `Promise<HaiResult<T>>` | `await actions.login({ identifier, password })` |
-| `actions.register` | Submit registration | IamRegisterInput | `Promise<HaiResult<T>>` | `await actions.register({ username, password })` |
-| `actions.sendOtp` | Request a one-time code | identifier, { captcha? }? | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
-| `actions.requestPasswordReset` | Request password reset delivery | identifier, { captcha? }? | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
-| `actions.confirmPasswordReset` | Submit reset credentials and a new password | token, newPassword | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
-| `actions.renewPassword` | Replace an expired or initial password | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
-| `actions.reauthenticate` | Reauthenticate for a sensitive operation | password, operation | `Promise<HaiResult<T>>` | `await actions.reauthenticate(password, 'users:delete')` |
-| `actions.bindPageExit` | Bind page-exit session behavior | { enabled? } | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
+| `apiClient.createAuthActions(client)` | Build authentication form actions | Required `client` with the standard IAM routes and credential management API. Initialize it before using the returned actions. | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
+| `actions.publicConfig()` | Read public authentication policy | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
+| `actions.createCaptcha(input)` | Create an operation challenge | `input` object. Required `operation`: `login`, `register`, `sendOtp`, `passwordReset`, or `renewPassword`. | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
+| `actions.login(input)` | Submit login credentials | `input` object. Required account `identifier` and `password`. Optional operation proof `captcha` and `expectedUserId` for same-user recovery. | `Promise<HaiResult<T>>` | `await actions.login({ identifier, password })` |
+| `actions.register(input)` | Submit registration | `input` object. Required `username` and `password`. Optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. | `Promise<HaiResult<T>>` | `await actions.register({ username, password })` |
+| `actions.sendOtp(identifier, options?)` | Request a one-time code | Required account identifier string `identifier`. When the server requires CAPTCHA, pass the proof for this operation in `options.captcha`. | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
+| `actions.requestPasswordReset(identifier, options?)` | Request password reset delivery | Required account identifier string `identifier`. When the server requires CAPTCHA, pass the proof for this operation in `options.captcha`. | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
+| `actions.confirmPasswordReset(token, newPassword)` | Submit reset credentials and a new password | Required reset token `token` and new password `newPassword`, both strings. The server applies its password policy. | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
+| `actions.renewPassword(input)` | Replace an expired or initial password | `input` object. Required account `identifier`, prior `password`, and `newPassword`. Optional `captcha` for this operation. | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate(password, operation)` | Reauthenticate for a sensitive operation | Required current `password` and a server-registered `operation` such as `users:delete`. | `Promise<HaiResult<T>>` | `await actions.reauthenticate(password, 'users:delete')` |
+| `actions.bindPageExit(options?)` | Bind page-exit session behavior | `options.enabled` is off by default. `true` binds the browser page-exit listener. | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
 
 #### Scenario: Drive authentication forms
 
@@ -305,40 +305,55 @@ Use standard HTTP contracts for accounts, users, roles and permissions. The serv
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.iam.auth.publicConfig` | 读取公开认证配置 | 无必填参数 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
-| `apiClient.iam.auth.createCaptcha` | 生成挑战 | `{ operation: 'login' }` | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
-| `apiClient.iam.auth.login` | 密码登录 | `{ identifier, password }` | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
-| `apiClient.iam.auth.loginWithLdap` | LDAP 登录 | `{ username, password }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
-| `apiClient.iam.auth.sendOtp` | 发送一次性验证码 | `{ identifier }` | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
-| `apiClient.iam.auth.loginWithOtp` | 验证码登录 | `{ identifier, code }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
-| `apiClient.iam.auth.register` | 注册 | `{ username, password }` | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
-| `apiClient.iam.auth.currentUser` | 读取当前账号 | 无必填参数 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
-| `apiClient.iam.auth.updateCurrentUser` | 更新本人资料 | `{ displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
-| `apiClient.iam.auth.changePassword` | 已登录用户修改密码 | `{ oldPassword, newPassword }` | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
-| `apiClient.iam.auth.renewPassword` | 密码到期后续密 | `{ identifier, password, newPassword }` | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
-| `apiClient.iam.auth.requestPasswordReset` | 申请密码重置 | `{ identifier }` | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
-| `apiClient.iam.auth.confirmPasswordReset` | 使用重置凭证 | `{ token, newPassword }` | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
-| `apiClient.iam.auth.reauthenticate` | 申请敏感操作票据 | `{ password, operation: 'users:delete' }` | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
-| `apiClient.iam.auth.refresh` | 刷新凭据 | `{ refreshToken }` | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
-| `apiClient.iam.auth.logout` | 主动退出 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.logout()` |
-| `apiClient.iam.auth.closeSession` | 请求结束当前会话 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.closeSession()` |
-| `apiClient.iam.users.list` | 分页查询用户 | `{ page: 1, pageSize: 20 }` | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
-| `apiClient.iam.users.get` | Get a user | `{ id: userId }` | User details, or `null` when absent | `await apiClient.iam.users.get({ id: userId })` |
-| `apiClient.iam.users.create` | 创建用户 | `{ username, password }` | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
-| `apiClient.iam.users.invite` | 发出邀请 | `{ username, email }` | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
-| `apiClient.iam.users.update` | 修改用户 | `{ id: userId, displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
-| `apiClient.iam.users.delete` | 删除用户 | `{ id: userId }` | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
-| `apiClient.iam.users.resetPassword` | 管理员重置密码 | `{ id: userId, newPassword }` | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
-| `apiClient.iam.roles.list` | 查询角色 | 无必填参数 | 角色分页 | `await apiClient.iam.roles.list({})` |
-| `apiClient.iam.roles.get` | Get a role | `{ id: roleId }` | Role record, or `null` when absent | `await apiClient.iam.roles.get({ id: roleId })` |
-| `apiClient.iam.roles.create` | 创建角色 | `{ code: 'reader', name: 'Reader' }` | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
-| `apiClient.iam.roles.update` | 更新角色 | `{ id: roleId, name: 'Report reader' }` | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
-| `apiClient.iam.roles.delete` | 删除角色 | `{ id: roleId }` | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
-| `apiClient.iam.permissions.list` | 分页查询权限 | `{ page: 1, type: 'api' }` | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
-| `apiClient.iam.permissions.get` | 读取权限 | `{ id: permissionId }` | `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
-| `apiClient.iam.permissions.create` | 创建权限 | `{ code: 'reports:read', name: 'Read reports' }` | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
-| `apiClient.iam.permissions.setSensitiveOperations` | 配置敏感操作 | `{ id: permissionId, sensitiveOperations: ['users:delete'] }` | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
-| `apiClient.iam.permissions.delete` | 删除权限 | `{ id: permissionId }` | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+| `apiClient.iam.auth.publicConfig(input?, options?)` | 读取公开认证配置 | There is no procedure input. Omit `input` or pass `undefined` before the second argument. Optional `options` controls [this request](#request-options). | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
+| `apiClient.iam.auth.createCaptcha(input, options?)` | 生成挑战 | `input` object. Required `operation`: `login`, `register`, `sendOtp`, `passwordReset`, or `renewPassword`. Optional `options` controls [this request](#request-options). | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
+| `apiClient.iam.auth.login(input, options?)` | 密码登录 | `input` object. Required account `identifier` and `password`. Optional operation proof `captcha` and `expectedUserId` for same-user recovery. Optional `options` controls [this request](#request-options). | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
+| `apiClient.iam.auth.loginWithLdap(input, options?)` | LDAP 登录 | `input` object. Required LDAP `username` and `password`. Optional operation proof `captcha` and same-user recovery `expectedUserId`. Optional `options` controls [this request](#request-options). | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
+| `apiClient.iam.auth.sendOtp(input, options?)` | 发送一次性验证码 | `input` object. Required account `identifier`; optional operation proof `captcha`. Optional `options` controls [this request](#request-options). | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
+| `apiClient.iam.auth.loginWithOtp(input, options?)` | 验证码登录 | `input` object. Required account `identifier` and OTP string `code`. Optional `captcha` proof and same-user recovery `expectedUserId`. Optional `options` controls [this request](#request-options). | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
+| `apiClient.iam.auth.register(input, options?)` | 注册 | `input` object. Required `username` and `password`. Optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. Optional `options` controls [this request](#request-options). | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
+| `apiClient.iam.auth.currentUser(input?, options?)` | 读取当前账号 | There is no procedure input. Omit `input` or pass `undefined` before the second argument. Optional `options` controls [this request](#request-options). | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
+| `apiClient.iam.auth.updateCurrentUser(input, options?)` | 更新本人资料 | `input` object. Optional `username`, `email`, `displayName`, `avatarUrl`, `phone`, and `metadata`. Send the fields to update. Optional `options` controls [this request](#request-options). | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
+| `apiClient.iam.auth.changePassword(input, options?)` | 已登录用户修改密码 | `input` object. Required current `oldPassword` and replacement `newPassword`. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `apiClient.iam.auth.renewPassword(input, options?)` | 密码到期后续密 | `input` object. Required account `identifier`, prior `password`, and `newPassword`. Optional `captcha` for this operation. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `apiClient.iam.auth.requestPasswordReset(input, options?)` | 申请密码重置 | `input` object. Required account `identifier` and optional operation `captcha`. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
+| `apiClient.iam.auth.confirmPasswordReset(input, options?)` | 使用重置凭证 | `input` object. Required one-time reset `token` from the notification and `newPassword`. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `apiClient.iam.auth.reauthenticate(input, options?)` | 申请敏感操作票据 | `input` object. Required current `password` and operation ID `operation`, which is 1–128 characters after trimming. Optional `options` controls [this request](#request-options). | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
+| `apiClient.iam.auth.refresh(input, options?)` | 刷新凭据 | `input` object. Required `refreshToken` string in client-managed refresh flows. Optional `options` controls [this request](#request-options). | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
+| `apiClient.iam.auth.logout(input, options?)` | 主动退出 | Required `input` object. Use `{}` to use the current bearer access token, or `{ accessToken }` to specify the token to revoke. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.logout({})` |
+| `apiClient.iam.auth.closeSession(input, options?)` | 请求结束当前会话 | Required `input` object. Use `{}` to use the current bearer access token, or `{ accessToken }` to specify the token to revoke. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.auth.closeSession({})` |
+| `apiClient.iam.users.list(input, options?)` | 分页查询用户 | Required `input` object, which can be `{}`. See [IAM administration fields](#iam-admin-inputs) for pagination, sorting, and filters. Optional `options` controls [this request](#request-options). | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
+| `apiClient.iam.users.get(input, options?)` | Get a user | Required `input.id`, the user identifier string from a prior result. Optional `options` controls [this request](#request-options). | User details, or `null` when absent | `await apiClient.iam.users.get({ id: userId })` |
+| `apiClient.iam.users.create(input, options?)` | 创建用户 | Required `input.username` and `input.password`. See [IAM administration fields](#iam-admin-inputs) for account type, expiry, and profile. Optional `options` controls [this request](#request-options). | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
+| `apiClient.iam.users.invite(input, options?)` | 发出邀请 | Required `input.username`. Supply `email` or `phone` for the notification channel. `accountStatus` only accepts `active`. See [IAM administration fields](#iam-admin-inputs). Optional `options` controls [this request](#request-options). | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
+| `apiClient.iam.users.update(input, options?)` | 修改用户 | Required `input.id`. Supply other fields to update and use `accountExpiresAt: null` to clear expiry. See [IAM administration fields](#iam-admin-inputs). Optional `options` controls [this request](#request-options). | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
+| `apiClient.iam.users.delete(input, options?)` | 删除用户 | Required `input.id`, the user identifier string from a prior result. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
+| `apiClient.iam.users.resetPassword(input, options?)` | 管理员重置密码 | Required `input.id` user identifier and `input.newPassword`, both nonempty strings. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
+| `apiClient.iam.roles.list(input?, options?)` | 查询角色 | There is no procedure input. Omit `input` or pass `undefined` before the second argument. Optional `options` controls [this request](#request-options). | 角色分页 | `await apiClient.iam.roles.list()` |
+| `apiClient.iam.roles.get(input, options?)` | Get a role | Required `input.id`, the role identifier string from a prior result. Optional `options` controls [this request](#request-options). | Role record, or `null` when absent | `await apiClient.iam.roles.get({ id: roleId })` |
+| `apiClient.iam.roles.create(input, options?)` | 创建角色 | Required role code `input.code` and display `input.name`. Optional `description` and `isSystem`. Optional `options` controls [this request](#request-options). | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
+| `apiClient.iam.roles.update(input, options?)` | 更新角色 | Required `input.id`. Optional replacement `name` and `description`. Optional `options` controls [this request](#request-options). | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
+| `apiClient.iam.roles.delete(input, options?)` | 删除角色 | Required `input.id`, the role identifier string from a prior result. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
+| `apiClient.iam.permissions.list(input, options?)` | 分页查询权限 | Required `input` object, which can be `{}`. See [IAM administration fields](#iam-admin-inputs) for pagination and the `type` and `search` filters. Optional `options` controls [this request](#request-options). | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
+| `apiClient.iam.permissions.get(input, options?)` | 读取权限 | Required `input.id`, the permission identifier string from a prior result. Optional `options` controls [this request](#request-options). | `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
+| `apiClient.iam.permissions.create(input, options?)` | 创建权限 | Required `input.code` and `input.name`. See [IAM administration fields](#iam-admin-inputs) for optional `description`, `resource`, `action`, `type`, and `sensitiveOperations`. Optional `options` controls [this request](#request-options). | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
+| `apiClient.iam.permissions.setSensitiveOperations(input, options?)` | 配置敏感操作 | Required permission identifier `input.id`. Supply up to 1000 `sensitiveOperations` IDs, each 1–128 characters. `[]` clears the list. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
+| `apiClient.iam.permissions.delete(input, options?)` | 删除权限 | Required `input.id`, the permission identifier string from a prior result. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+
+<a id="iam-admin-inputs"></a>
+
+#### IAM administration fields
+
+| Field | Usage and defaults |
+| --- | --- |
+| `page`、`pageSize` | For user and permission lists. `page` starts at 1 and defaults to 1. `pageSize` accepts 1–100 and defaults to 20. |
+| `sortBy`、`sortDirection` | On user lists, sort by `username`, `email`, `displayName`, `accountStatus`, or `createdAt`, in `asc` or `desc` order. Omission uses server ordering. |
+| `search`、`roleCode`、`accountStatus` | Use `search` to find users or permissions. User lists can use a 1–100 character `roleCode` or `accountStatus` (`active`, `dormant`, or `closed`). Omission does not filter by that field. |
+| `accountType`、`accountStatus`、`accountExpiresAt` | Optional account settings for create, invite, or update. Type is `permanent` or `temporary`, and invite only accepts `active` status. Supply an expiry date, or `null` on update to clear it. |
+| `email`、`phone`、`displayName`、`avatarUrl`、`metadata`、`roleIds` | Optional email, phone, and display name. Updates can include `avatarUrl`. `metadata` stores application fields. `roleIds` is an array of role IDs to assign. |
+| `type`、`resource`、`action`、`description`、`sensitiveOperations` | Permission `type` is `menu`, `api`, or `button` and also filters lists. Create accepts optional resource, action, and description. `sensitiveOperations` accepts up to 1000 operation IDs of 1–128 characters each and defaults to `[]`. |
+
+For example, in a session with administrative permissions, list users with `{ page: 1, pageSize: 20, accountStatus: 'active' }`. Success returns at most 20 active entries in `data.items`. Read `error` on failure.
 
 #### Scenario: Call identity and administration APIs
 
@@ -355,7 +370,7 @@ if (!usersResult.success)
 const users = usersResult.data
 // users.items is the authorized user page, not every user in the database
 // Use default role filters. Success yields the roles visible to the caller. Return the failed result on failure.
-const rolesResult = await apiClient.iam.roles.list({})
+const rolesResult = await apiClient.iam.roles.list()
 if (!rolesResult.success)
   return rolesResult
 const roles = rolesResult.data // configured roles visible to this caller
@@ -367,6 +382,33 @@ const permissions = permissionsResult.data // permitted permission records
 ```
 
 The list gives per-method inputs and success data. Use IDs from prior successful responses. Results depend on server state and authorization; a signed-in browser does not automatically have administration rights.
+
+<a id="request-options"></a>
+
+#### Per-call request options
+
+Pass the contract input first. For a procedure with no business input, pass `undefined` before the optional second argument.
+
+| Field in the second argument | When omitted | Effect when supplied |
+| --- | --- | --- |
+| `signal` | No caller cancellation | Pass an `AbortController.signal` to cancel waiting and transmission. A server-side write may already be in progress. |
+| `context.autoRefresh` | Inherits the client's refresh policy | `false` disables credential refresh for this call, for example while the application handles its own recovery. The client still sends the current access token according to its configuration. |
+| `context.keepalive` | Uses Fetch defaults | `true` sets Fetch `keepalive`. Browser limits still apply, and delivery after page exit is best effort. |
+| `context.reauthentication` | Sends no operation credential | Sends an operation credential obtained from an authentication action in `X-Hai-Reauthentication` for this request. |
+| `context.reauthorize` | Obtains no new credential on retry | Optional asynchronous callback for an eligible retry that requires reauthorization. Return the new credential string, `null` to cancel, or `undefined` to allow the retry without the header. |
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+// Use this fragment in an async application function with an initialized client authorized to list users.
+// Call controller.abort() when the page is disposed.
+const controller = new AbortController()
+// Request page 1 with up to 20 users. The signal cancels waiting. Success contains a visible page and failure keeps its error.
+const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
+if (!users.success)
+  return users
+const visibleUsers = users.data.items
+```
 
 [Detailed parameters and workflows](api-client.md#iam-requests)
 
@@ -380,18 +422,32 @@ Use signed URLs for direct object transfers and the declared AI routes for chats
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.storage.files.list` | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter` | `maxKeys` 范围 1–1000 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `apiClient.storage.files.getMetadata` | 读对象元数据 | `{ key }` | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
-| `apiClient.storage.files.delete` | 删除单个对象 | `{ key }` | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
-| `apiClient.storage.files.deleteMany` | 批量删除对象 | `{ keys: [key] }` | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
-| `apiClient.storage.presignedUrls.createUpload` | 签发上传地址 | `{ key, contentType: 'application/pdf' }` | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
-| `apiClient.storage.presignedUrls.createDownload` | 签发下载地址 | `{ key, expiresIn: 60 }` | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
-| `apiClient.ai.chats.createCompletion` | `messages` 必填 | 可选模型和生成设置 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
-| `apiClient.ai.chats.sendMessage` | 发送会话消息 | `{ message, sessionId }` | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
-| `apiClient.ai.chats.listHistory` | 查询历史 | `{ sessionId, limit: 20 }` | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
-| `apiClient.ai.memories.list` | 查询记忆 | `{ objectId, limit: 20 }` | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
-| `apiClient.ai.memories.recall` | 按内容检索记忆 | `{ query: 'preferred language', topK: 3 }` | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
-| `apiClient.ai.sessions.list` | 查询对象的会话 | `{ objectId }` | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+| `apiClient.storage.files.list(input, options?)` | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter` | Required `input`, or `{}`. `prefix` filters keys, `maxKeys` accepts 1–1000, `delimiter` groups keys, and `continuationToken` comes from the prior page. Optional `options` controls [this request](#request-options). | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `apiClient.storage.files.getMetadata(input, options?)` | 读对象元数据 | Required `input.key`, an object key the caller is allowed to read. Optional `options` controls [this request](#request-options). | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
+| `apiClient.storage.files.delete(input, options?)` | 删除单个对象 | Required `input.key`, an object key the caller is allowed to delete. Optional `options` controls [this request](#request-options). | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
+| `apiClient.storage.files.deleteMany(input, options?)` | 批量删除对象 | Required nonempty object-key array `input.keys`. The server checks deletion permission for each key. Optional `options` controls [this request](#request-options). | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
+| `apiClient.storage.presignedUrls.createUpload(input, options?)` | 签发上传地址 | Required `input.key`. Optional `contentType` defaults to `application/octet-stream` and `expiresIn` to 900 seconds. Optional `options` controls [this request](#request-options). | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
+| `apiClient.storage.presignedUrls.createDownload(input, options?)` | 签发下载地址 | Required `input.key`. Optional `expiresIn` is the signed URL lifetime in seconds, default 900. Optional `options` controls [this request](#request-options). | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `apiClient.ai.chats.createCompletion(input, options?)` | `messages` 必填 | Required nonempty `input.messages`. See [AI request fields](#ai-input-fields) for generation, tool, and session fields. Optional `options` controls [this request](#request-options). | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
+| `apiClient.ai.chats.sendMessage(input, options?)` | 发送会话消息 | Required `input.message`. `sessionId` defaults to `default`. Optional `objectId`, `systemPrompt`, `model`, and `temperature` (0–2). Optional `options` controls [this request](#request-options). | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
+| `apiClient.ai.chats.listHistory(input, options?)` | 查询历史 | Required `input.sessionId`. Optional owner `objectId`, `limit` (1–200), and `order` (`asc` or `desc`). Optional `options` controls [this request](#request-options). | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `apiClient.ai.memories.list(input, options?)` | 查询记忆 | Required `input` object, or `{}`. Optional `objectId`, `types` array, zero-based `offset`, and `limit` (1–100). Optional `options` controls [this request](#request-options). | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
+| `apiClient.ai.memories.recall(input, options?)` | 按内容检索记忆 | Required `input.query`. Optional owner `objectId`, count `topK` (at least 1), `types` array, and `minImportance` (0–1). Optional `options` controls [this request](#request-options). | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `apiClient.ai.sessions.list(input, options?)` | 查询对象的会话 | Required `input`, or `{}` for the current authenticated owner. Optional `objectId` selects an authorized owner. Optional `options` controls [this request](#request-options). | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+
+<a id="ai-input-fields"></a>
+
+#### Chat completion request fields
+
+| Field | Usage and defaults |
+| --- | --- |
+| `messages` | Required nonempty array. Roles are `system`, `user`, `assistant`, and `tool`. Content can be a string or text parts `{ type: 'text', text }`. Only user messages accept `image_url` parts with `{ url, detail? }`, where detail is `auto`, `low`, or `high`. |
+| `messages[].tool_calls`、`messages[].tool_call_id` | Assistant messages can contain function calls with `id`, `type: 'function'`, `function.name`, and JSON string `function.arguments`. With no `content`, at least one call is required. Tool messages require the original `tool_call_id`. |
+| `objectId`、`sessionId`、`model` | Optional owner, session, and model. Defaults are authenticated owner, the `default` session, and server model settings. Cross-owner access requires authorization. |
+| `temperature`、`top_p`、`max_tokens` | Optional temperature 0–2, sampling probability 0–1, and positive integer `max_tokens`. Omission uses model defaults. |
+| `tools`、`tool_choice` | Optional function tools require `type: 'function'` and `function.name`; description, JSON Schema parameters, and strict mode are optional. Choose `auto`, `none`, `required`, or `{ type: 'function', function: { name } }`. Required or named choices need matching tools. |
+
+For example, pass `{ messages: [{ role: 'user', content: 'Hello' }], max_tokens: 15, tool_choice: 'none' }`. Success returns a completion from the configured model. Its text varies by model.
 
 #### Scenario: Call file and AI APIs
 
@@ -424,7 +480,7 @@ Inject transport during initialization. Logical request observers receive saniti
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `apiClient.observeRequests` | Observe final logical request results | observer(ApiRequestRecord) | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
+| `apiClient.observeRequests(observer)` | Observe final logical request results | Required synchronous `observer(record)` that receives an `ApiRequestRecord` when a logical request settles. | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
 
 #### Scenario: Encrypt transport and observe outcomes
 

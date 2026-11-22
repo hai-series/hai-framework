@@ -86,9 +86,9 @@ Tools にモジュール単位の init/close はありません。軽量機能�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.define` | ツールを定義し、実行時に入力を検証する。既定のタイムアウトは `30000` ms。定義が無効なら `TypeError` | `definition` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
-| `tool.execute` | 入力を検証して実行する。利用者、認可、キャンセル信号、期限も指定できる | 可另外传身份、授权、取消信号和期限；`input, options? = {}` | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
-| `tool.toDefinition` | 入力の規則を JSON Schema に変換する。変換できないときは例外 | 无 | `ToolDefinition` | `tool.toDefinition()` |
+| `tools.define(options)` | ツールを定義し、実行時に入力を検証する。既定のタイムアウトは `30000` ms。定義が無効なら `TypeError` | `options: DefineToolOptions<TInput, TOutput>` | `Tool<TInput, TOutput>` | `const tool = tools.define(definition)` |
+| `tool.execute(input, options?)` | 入力を検証して実行する。利用者、認可、キャンセル信号、期限も指定できる | `input: unknown, options?: ToolExecutionOptions`。`input` はツールのパラメータースキーマに従います。オプションを省略すると既定の実行設定を使います。 | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
+| `tool.toDefinition()` | 入力の規則を JSON Schema に変換する。変換できないときは例外 | 引数なし | `ToolDefinition` | `tool.toDefinition()` |
 
 #### 利用例：単一ツールの定義と実行
 
@@ -179,18 +179,18 @@ Tools に全体の有効化スイッチはありません。各アプリケー�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.createRegistry` | `authorize` を省略すると、登録先独自の認可条件を適用しない空の登録先を作る | `options? = {}` | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
-| `registry.register` | ツールのインスタンスを登録 | `tool` | `HaiResult<void>` | `registry.register(tool)` |
-| `registry.registerMany` | 複数のツールを登録する。重複や無効な項目が一つでもあれば、どれも登録しない | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
-| `registry.replace` | 既存のツールを同名の新しい定義で置き換える。登録済みの名前が必要 | `tool` | `HaiResult<void>` | `registry.replace(updatedTool)` |
-| `registry.unregister` | 指定した名前を削除する。登録済みの場合だけ `true` | `name` | `boolean` | `registry.unregister('sum')` |
-| `registry.get` | 名前でツールを取得 | `name` | `Tool / undefined` | `registry.get('sum')` |
-| `registry.has` | 名前が登録済みか確認する | `name` | `boolean` | `registry.has('sum')` |
-| `registry.getNames` | 登録された名前を一覧にする | 无 | `string[]` | `registry.getNames()` |
-| `registry.getDefinitions` | 登録済みツールの定義を返す。入力を JSON Schema に変換できないときは例外 | 无 | `ToolDefinition[]` | `registry.getDefinitions()` |
-| `registry.execute` | 登録済みツールを実行する。登録先と呼び出しの両方に認可条件があれば、両方を満たす必要がある | `name, input, options? = {}` | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
-| `registry.executeAll` | 既定では順に実行して最初の失敗で停止する。`parallel: true` では、失敗しても実行を開始した処理は取り消されない | `calls: ToolInvocation[], options?` | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
-| `registry.clear` | 登録内容を消去する。進行中の呼び出しはキャンセルしない | 无 | `void` | `registry.clear()` |
+| `tools.createRegistry(options?)` | `authorize` を省略すると、登録先独自の認可条件を適用しない空の登録先を作る | `options?: ToolRegistryOptions`。省略時は空のオプションです。 | `ToolRegistryOperations` | `const registry = tools.createRegistry()` |
+| `registry.register(tool)` | ツールのインスタンスを登録 | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.register(tool)` |
+| `registry.registerMany(tools)` | 複数のツールを登録する。重複や無効な項目が一つでもあれば、どれも登録しない | `tools: Tool[]` | `HaiResult<void>` | `registry.registerMany([tool])` |
+| `registry.replace(tool)` | 既存のツールを同名の新しい定義で置き換える。登録済みの名前が必要 | `tool: Tool<TInput, TOutput>` | `HaiResult<void>` | `registry.replace(updatedTool)` |
+| `registry.unregister(name)` | 指定した名前を削除する。登録済みの場合だけ `true` | `name: string` | `boolean` | `registry.unregister('sum')` |
+| `registry.get(name)` | 名前でツールを取得 | `name: string` | `Tool / undefined` | `registry.get('sum')` |
+| `registry.has(name)` | 名前が登録済みか確認する | `name: string` | `boolean` | `registry.has('sum')` |
+| `registry.getNames()` | 登録された名前を一覧にする | 引数なし | `string[]` | `registry.getNames()` |
+| `registry.getDefinitions()` | 登録済みツールの定義を返す。入力を JSON Schema に変換できないときは例外 | 引数なし | `ToolDefinition[]` | `registry.getDefinitions()` |
+| `registry.execute(name, input, options?)` | 登録済みツールを実行する。登録先と呼び出しの両方に認可条件があれば、両方を満たす必要がある | `name: string, input: unknown, options?: ToolExecutionOptions`。`input` は登録済みツールのスキーマに従います。オプションを省略すると既定の実行設定を使います。 | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
+| `registry.executeAll(calls, options?)` | 既定では順に実行して最初の失敗で停止する。`parallel: true` では、失敗しても実行を開始した処理は取り消されない | `calls: ToolInvocation[], options?: ToolExecutionOptions & { parallel?: boolean }`。既定では順番に実行し、`parallel: true` で並行実行します。 | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
+| `registry.clear()` | 登録内容を消去する。進行中の呼び出しはキャンセルしない | 引数なし | `void` | `registry.clear()` |
 | `registry.size` | 登録済みの件数を取得する（プロパティ） | 无 | `number` | `registry.size` |
 
 #### 利用例：登録・検索・一括実行
@@ -258,14 +258,26 @@ registry.size // 0
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.createService` | Runner を借用するツールサービスを作成 | `ToolServiceOptions`。id、runner、createTools、enabled、authorize 必須 | `HaiResult<ToolService>` | `tools.createService(options)` |
-| `service.catalog` | 利用可能なツールを列挙 | 可信上下文 | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
-| `service.submit` | 永続ジョブを送信 | `{ name, input, idempotencyKey? }` とコンテキスト | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
-| `service.find` | 冪等キーでジョブを検索 | 幂等键、可信上下文 | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
-| `service.inspect` | ジョブの状態と結果を取得 | 完整回执、上下文、可选 `{ after }` | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
-| `service.cancel` | ジョブの中止を要求 | 完整回执、上下文 | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
-| `service.invoke` | ツールを呼び出して結果を待つ | 与 submit 相同 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
-| `service.close` | サービスと所有リソースを終了 | なし | `void` | `service.close()` |
+| `tools.createService(options)` | Runner を借用するツールサービスを作成 | `options: ToolServiceOptions`。`id`、`runner`、`createTools`、`enabled`、`authorize` は必須です。 | `HaiResult<ToolService>` | `tools.createService(options)` |
+| `service.catalog(context)` | 利用可能なツールを列挙 | `context: ToolServiceContext`。アプリが信頼できるコンテキストを渡します。 | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
+| `service.submit(request, context)` | 永続ジョブを送信 | `request: ToolSubmitRequest, context: ToolServiceContext`。リクエストにツール名、入力、任意の冪等キーを含めます。コンテキストはアプリが提供します。 | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
+| `service.find(idempotencyKey, context)` | 冪等キーでジョブを検索 | `idempotencyKey: string, context: ToolServiceContext` | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
+| `service.inspect(receipt, context, options?)` | ジョブの状態と結果を取得 | `receipt: ToolReceipt, context: ToolServiceContext, options?: { after?: number }`。完全な受領情報を渡し、`after` で指定したイベント番号の次から取得できます。 | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
+| `service.cancel(receipt, context)` | ジョブの中止を要求 | `receipt: ToolReceipt, context: ToolServiceContext`。完全なタスク受領情報と、信頼できるコンテキストを渡します。 | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
+| `service.invoke(request, context)` | ツールを呼び出して結果を待つ | `request: ToolSubmitRequest, context: ToolServiceContext`。`submit` と同じリクエスト形式です。 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
+| `service.close()` | サービスと所有リソースを終了 | 引数なし | `void` | `service.close()` |
+
+#### サービス要求・コンテキスト・イベントカーソル
+
+| オブジェクト | 項目 | 条件と結果 |
+| --- | --- | --- |
+| `ToolServiceContext` | `scope`、`sessionId`、`signal`、`execution` | 信頼済みの `scope: { tenantId, userId }` は必須で、各 ID は 1〜200 文字。セッション ID（1〜200 文字）と取消信号は任意。実行の帰属には実行ノードが設定した `RunnerContext` を使用する |
+| `ToolSubmitRequest` | `name`、`input`、`idempotencyKey` | 名前と入力は必須。有効な一覧から選んだツール名と、スキーマに合う JSON を渡す。任意の冪等キーは 1〜200 文字、既定は UUID。切断後に同じ操作を復元するには安定したキーを渡す |
+| `ToolReceipt` | `id`、`key` | 両方必須。ID は 64 桁の十六進数で、キーは 1〜200 文字。`inspect/cancel` は両方を主体とサービスに照合する。`find` は送信時の業務冪等キーを受け付ける |
+| `inspect` の `options` | `after` | 任意の 0〜100000 の整数、既定は 0。カーソルより大きな番号のイベントを最大 100 件と、現在の状態および `next` を返す |
+| `ToolServiceOptions.enabled` | `groups`、`tools`、`exclude` | いずれも任意の名前配列。グループとツールの和集合から除外名を外す。空オブジェクトは全ツールを無効にする。実行ごとに認可を確認する |
+
+イベントが 5、6、7 の場合、`inspect(receipt, context, { after: 5 })` は 6、7 を返します。次は戻り値の `next` を使います。`{ groups: ['docs'], exclude: ['docs_export'] }` を選ぶと、docs の残りの登録済みツールが対象となり、投入時は引き続き認可コールバックを通ります。
 
 #### 利用例：復元可能な業務タスク
 
@@ -375,8 +387,20 @@ async function followJob(service: ToolService, context: ToolServiceContext, requ
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools` | 成果物・分析ツールを作成 | `ArtifactToolOptions`：`context, files` | `ToolSet` | `tools.createArtifactTools({ context, files })` |
-| `tools.createJobTools` | 環境を割り当てた作業ツールを作成 | `JobToolOptions`：`context, files, runner, environments`；`browserProxy?` | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+| `tools.createArtifactTools(options)` | 成果物・分析ツールを作成 | `options: ArtifactToolOptions`。`context` と `files` は必須です。 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
+| `tools.createJobTools(options)` | 環境を割り当てた作業ツールを作成 | `options: JobToolOptions`。`context`、`files`、`runner`、`environments` は必須で、`browserProxy` は省略できます。 | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+
+#### 成果物へのアクセスとジョブ環境の項目
+
+| オブジェクトまたはコールバック | 項目 | 条件と結果 |
+| --- | --- | --- |
+| `ArtifactToolOptions`、`JobToolOptions` | `context`、`files` | 信頼済みのサービスコンテキストとホストが認可する `ToolArtifactAccess` は必須 |
+| `files.read` | `context`、`{ id }` | 必須。現在の主体による成果物 ID の読み取りを認可し、`data: Uint8Array` を持つファイルを返す |
+| `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必須。公開を認可してバイト列を保存し、参照を返す。対象 ID は任意 |
+| `files.save` | `context`、`{ id, baseVersion, content }` | 任意。帰属と元の版を確認してテキストを保存し、新しい参照を返す。省略時は `artifact_save` を含めない |
+| `JobToolOptions` | `runner`、`environments`、`browserProxy` | 初期化済み Runner を借用する。`documents/office/ocr/browser/web/preview/video` に登録済み環境 ID を対応付ける。ネットワークを使うツールには、デプロイで管理する明示ポート付き HTTP IPv4 プロキシも必要。有効なプロキシがなければ対象ツールを一覧に含めない |
+
+`environments: { documents: 'docs-offline' }` だけを指定すると文書グループのみ生成されます。成果物ファクトリーに `save` を追加すると `baseVersion` で本文を更新し、新しい参照を取得できます。版が競合した場合はホストのコールバックがエラーを返します。
 
 #### 利用例：成果物・Web・文書ジョブの再利用
 

@@ -45,6 +45,8 @@ acp:
 
 ## Knowledge ingestion
 
-Choose `knowledge.collection` (default `hai_ai_knowledge`) and a dimension matching the embedding model (default `1536`). Incoming text runs through `knowledge.cleanOptions` before `knowledge.chunkOptions` creates chunks. The default chunker uses Markdown sections, a size of `1500` and overlap of `200`. Adjust these settings before indexing and reindex the collection if you need to change the stored chunks. [Datapipe options](datapipe.en.md)
+Choose `knowledge.collection` (default `hai_ai_knowledge`) and a dimension matching the embedding model (default `1536`). Incoming text runs through `knowledge.cleanOptions` before `knowledge.chunkOptions` creates chunks. The default chunker uses Markdown sections, a size of `1500` and overlap of `200`. Adjust these settings before indexing and reindex the collection if you need to change the stored chunks.
+
+For example, set `knowledge.cleanOptions.removeEmails: true` in `config/_ai.yml` to remove email addresses. The `normalizeWhitespace` and `trim` options still default to `false`. The four spaces at the start of an indented Markdown code line are preserved, so a `#` inside that line stays part of the code. You can enable both options for plain text that needs whitespace cleanup. Direct Datapipe calls default both options to `true`. If cleaning or chunking fails, ingestion stops before generating embeddings. [Datapipe options](../function/datapipe.en.md#call-options) · [Knowledge ingestion example](../function/ai.en.md#knowledge)
 
 Still untranslated: the full model-profile, MCP and ACP option tables. Read the [Chinese source section](ai.md#configuration-fields).

@@ -89,12 +89,29 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.init` | 使用已连接的 RelDB 准备任务表和执行记录。随后另行调用 `scheduler.start()` | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
-| `scheduler.close` | 停止调度并释放自身资源；已发生的外部副作用无法撤销 | 已发生的外部副作用无法撤销；无 | `Promise<void>` | `await scheduler.close()` |
-| `scheduler.register` | 登记任务定义 | task | `Promise<HaiResult<void>>` | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
-| `scheduler.unregister` | 移除任务定义 | taskId | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
-| `scheduler.updateTask` | 修改任务定义 | taskId, updates | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
-| `scheduler.refreshTasks` | 读取当前进程任务快照 | 无参数 | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+| `scheduler.init(config?)` | 使用已连接的 RelDB 准备任务表和执行记录。随后另行调用 `scheduler.start()` | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
+| `scheduler.close()` | 停止调度并释放自身资源；已发生的外部副作用无法撤销 | 已发生的外部副作用无法撤销；无 | `Promise<void>` | `await scheduler.close()` |
+| `scheduler.register(task)` | 登记任务定义 | `task: TaskDefinition` 必填任务定义，见[注册字段](#scheduler-task-fields) | `Promise<HaiResult<void>>` | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
+| `scheduler.unregister(taskId)` | 移除任务定义 | `taskId: string` 目标任务的注册 ID | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
+| `scheduler.updateTask(taskId, updates)` | 修改任务定义 | `taskId: string` 目标任务的注册 ID。`updates: TaskUpdateInput` 必填变更对象，省略的字段保留原值。见[更新字段](#scheduler-task-fields) | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
+| `scheduler.refreshTasks()` | 读取当前进程任务快照 | 无参数 | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+
+<a id="scheduler-task-fields"></a>
+
+**任务定义和可修改字段**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `id` | `string` | 必填 | 注册时提供唯一任务 ID；更新用单独的 taskId。 |
+| `name / cron` | `string` | 注册必填 | 显示名称与 5 字段 cron（分、时、日、月、周）。更新时省略字段会保留原值。 |
+| `description` | `string` | 可省略 | 描述任务用途。 |
+| `timezone` | `string` | `UTC` | 用于解释 cron 的 IANA 时区。更新传 null 会恢复 UTC。 |
+| `enabled / deleteAfterRun / idempotent` | `boolean` | `true / false / false` | 分别控制是否调度、执行后是否删除、是否已为全部副作用实现持久去重。 |
+| `retry` | `TaskRetryPolicy` | 可省略 | 启用时使用失败重试策略。更新为 null 可清除；未知结果按核对流程处理。 |
+| `params` | `TaskParams` | 可省略 | 提供给任务处理器的业务参数。 |
+| `handler` | `TaskHandlerConfig` | 可省略 | API/JS 分支见本页的执行场景；更新传 null 清除内置处理器，可由全局回调接管。 |
+
+例如给已注册的 `daily` 传 `{ timezone: null, enabled: false }`，后续不再调度，保留现有 cron，重新启用时按 UTC 解释。
 
 #### 场景：准备与维护任务定义
 
@@ -220,10 +237,26 @@ start 开始按时间领取任务，trigger 主动执行指定任务；stop 停�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.start` | 启动调度轮询 | 无参数 | `HaiResult<void>` | `scheduler.start()` |
-| `scheduler.stop` | 停止接纳新的调度 | 无参数 | `HaiResult<void>` | `scheduler.stop()` |
-| `scheduler.trigger` | 手动触发任务 | taskId, options | `TaskExecutionLog` | `await scheduler.trigger('daily')` |
-| `scheduler.getLogs` | 分页查询执行日志 | options | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+| `scheduler.start()` | 启动调度轮询 | 无参数 | `HaiResult<void>` | `scheduler.start()` |
+| `scheduler.stop()` | 停止接纳新的调度 | 无参数 | `HaiResult<void>` | `scheduler.stop()` |
+| `scheduler.trigger(taskId, options?)` | 手动触发任务 | 必填 `taskId: string` 指定任务。可选 `options: TriggerTaskInput` 见[字段说明](#scheduler-trigger-query-fields)。 | `TaskExecutionLog` | `await scheduler.trigger('daily')` |
+| `scheduler.getLogs(options?)` | 分页查询执行日志 | 可选 `options: LogQueryOptions` 控制筛选与分页，见[字段说明](#scheduler-trigger-query-fields)。 | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+
+<a id="scheduler-trigger-query-fields"></a>
+
+**手动触发和日志筛选**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `TriggerTaskInput.source` | `string` | 无来源标签 | 在日志记录手工触发入口，例如 admin-console。 |
+| `TriggerTaskInput.idempotencyKey` | `string` | 可省略 | 1–128 字符。相同任务和键对应同一持久执行；重复请求不重新执行。 |
+| `LogQueryOptions.taskId / triggerSource` | `string` | 可省略 | 按任务与手工触发入口筛选。 |
+| `LogQueryOptions.status` | `'success' \| 'failed' \| 'interrupted' \| 'unknown'` | 可省略 | 按已记录的执行结果筛选。 |
+| `LogQueryOptions.triggerType` | `'scheduled' \| 'manual'` | 可省略 | 筛选定时或手工执行。 |
+| `LogQueryOptions.startedAfter / startedBefore` | `number` | 可省略 | 开始时间的含端点 Unix 毫秒范围。 |
+| `LogQueryOptions.pagination` | `PaginationOptionsInput` | 第 1 页，每页 20 条 | 可传 page 与 pageSize。 |
+
+以 `{ taskId: "daily", triggerType: "manual", pagination: { page: 1, pageSize: 5 } }` 查询，只返回该任务的手工执行记录，首页最多 5 条。
 
 #### 场景：启动调度与查看执行日志
 
@@ -322,8 +355,8 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.setHooks` | 设置执行器与生命周期回调 | hooks | `HaiResult<void>` | `scheduler.setHooks(taskHooks)` |
-| `scheduler.clearHooks` | 清除当前回调 | 无参数 | `HaiResult<void>` | `scheduler.clearHooks()` |
+| `scheduler.setHooks(hooks)` | 设置执行器与生命周期回调 | `hooks: SchedulerTaskHooks` 设置开始、执行、中断和完成回调，见本节生命周期说明 | `HaiResult<void>` | `scheduler.setHooks(taskHooks)` |
+| `scheduler.clearHooks()` | 清除当前回调 | 无参数 | `HaiResult<void>` | `scheduler.clearHooks()` |
 
 #### 场景：接入业务执行与回调
 
@@ -380,11 +413,22 @@ if (!clearHooksResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `scheduler.execution.get` | 按编号读取执行记录 | occurrenceId | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)` |
-| `scheduler.execution.listUnknown` | 分页查询结果未知的执行 | options | `SchedulerExecutionEntry[]` | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })` |
-| `scheduler.execution.listLogFailures` | 查询日志写入失败的执行 | options | `SchedulerExecutionEntry[]` | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })` |
-| `scheduler.execution.repairLog` | 修复已核对的执行日志 | occurrenceId | `void` | `await scheduler.execution.repairLog(occurrenceId)` |
-| `scheduler.execution.resolveUnknown` | 人工确认执行结果 | occurrenceId, resolution | `void` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+| `scheduler.execution.get(occurrenceId)` | 按编号读取执行记录 | `occurrenceId: string` 从执行回执取得的稳定 ID | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)` |
+| `scheduler.execution.listUnknown(options?)` | 分页查询结果未知的执行 | `options?: { limit?: number, offset?: number }` 见[分页与人工裁定](#scheduler-execution-options) | `SchedulerExecutionEntry[]` | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })` |
+| `scheduler.execution.listLogFailures(options?)` | 查询日志写入失败的执行 | `options?: { limit?: number, offset?: number }` 见[分页与人工裁定](#scheduler-execution-options) | `SchedulerExecutionEntry[]` | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })` |
+| `scheduler.execution.repairLog(occurrenceId)` | 修复已核对的执行日志 | `occurrenceId: string` 从执行回执取得的稳定 ID | `void` | `await scheduler.execution.repairLog(occurrenceId)` |
+| `scheduler.execution.resolveUnknown(occurrenceId, resolution)` | 人工确认执行结果 | `occurrenceId: string` 从执行回执取得的稳定 ID。`resolution` 必填核对后的裁定对象，见[裁定字段](#scheduler-execution-options) | `void` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+
+<a id="scheduler-execution-options"></a>
+
+**执行记录分页与人工裁定**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `options.limit` | `number` | `50` | 两种列表共有。每页 1–100 条。 |
+| `options.offset` | `number` | `0` | 两种列表共有。跳过 0–1000000 条。 |
+| `resolution.status` | `'success' \| 'discarded'` | 必填 | 核实后确认成功或终止跟进。此操作只发布裁定。 |
+| `resolution.expectedUpdatedAt` | `number` | 必填 | 上一次读取该回执的 updatedAt。并发修改后需重新读取再核对。 |
 
 #### 场景：核对未知结果与修复日志
 

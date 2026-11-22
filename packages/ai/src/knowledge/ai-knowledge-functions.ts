@@ -39,7 +39,6 @@ import type {
 } from './ai-knowledge-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { HaiDatapipeError } from '@h-ai/datapipe'
 import { nanoid } from 'nanoid'
 
 import { aiM } from '../ai-i18n.js'
@@ -147,6 +146,7 @@ export function createKnowledgeOperations(
      * 导入文档到知识库
      *
      * 流程：清洗 → 分块 → Embedding/完整实体准备 → 持久暂存 → vecdb → CAS 发布；
+     * 清洗或分块失败时终止导入，避免对未按规则处理的正文生成向量。
      * 实体提取失败不发布新版本，已发布版本与待清理数据分别报告。
      *
      * @param input - 导入输入（documentId、content、可选 cleanOptions / chunkOptions / metadata 等）
@@ -169,6 +169,8 @@ export function createKnowledgeOperations(
       const cleanOptions: CleanOptionsInput = {
         ...config.cleanOptions,
         ...input.cleanOptions,
+        normalizeWhitespace: input.cleanOptions?.normalizeWhitespace ?? config.cleanOptions.normalizeWhitespace,
+        trim: input.cleanOptions?.trim ?? config.cleanOptions.trim,
       }
       const chunkOptions: ChunkOptionsInput = {
         ...config.chunkOptions,
@@ -180,10 +182,7 @@ export function createKnowledgeOperations(
       try {
         if (!await isCollectionReady(collection))
           return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
-        let chunkResult = await datapipe.pipeline().clean(cleanOptions).chunk(chunkOptions).run(input.content)
-        // 保留清洗失败时按原文分块的契约。分块配置非法时重试仍会返回原配置错误。
-        if (!chunkResult.success && (chunkResult.error.code === HaiDatapipeError.CLEAN_FAILED.code || chunkResult.error.code === HaiDatapipeError.CONFIG_ERROR.code))
-          chunkResult = await datapipe.pipeline().chunk(chunkOptions).run(input.content)
+        const chunkResult = await datapipe.pipeline().clean(cleanOptions).chunk(chunkOptions).run(input.content)
         if (!chunkResult.success) {
           return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
             params: { error: chunkResult.error.message },

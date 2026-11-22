@@ -60,9 +60,9 @@ Choose a backend at startup, use it after its health check, and close dependent 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.init` | Create an in-process cache or connect to Redis | `config` (required) | `undefined` when the connection is ready | `await cache.init({ type: 'memory' })` |
-| `cache.close` | Release the cache instance and discard its in-process data | No arguments | `undefined` when resources have been released | `await cache.close()` |
-| `cache.ping` | Check the backend connection | No arguments | `'PONG'` | `await cache.ping()` |
+| `cache.init(config)` | Create an in-process cache or connect to Redis | `config` (required) | `undefined` when the connection is ready | `await cache.init({ type: 'memory' })` |
+| `cache.close()` | Release the cache instance and discard its in-process data | No arguments | `undefined` when resources have been released | `await cache.close()` |
+| `cache.ping()` | Check the backend connection | No arguments | `'PONG'` | `await cache.ping()` |
 | `cache.config` | Read the current redacted config | Read-only property; no arguments | `CacheConfig \| null` | `cache.config` |
 | `cache.isInitialized` | Check whether cache operations are available | Read-only property; no arguments | `boolean` | `cache.isInitialized` |
 
@@ -110,24 +110,40 @@ Use business keys for serializable values. Compare and swap prevents replacing a
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.kv.get` | Read a cached value | key | `T \| null` | `await cache.kv.get('u:1')` |
-| `cache.kv.set` | Store a value with expiry or a write condition | key, value, options | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
-| `cache.kv.mget` | Read multiple values in input order | keys | `(T \| null)[]`, with `null` for missing or non-KV keys | `await cache.kv.mget('u:1', 'u:2')` |
-| `cache.kv.mset` | Store multiple values | entries | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
-| `cache.kv.compareAndSwap` | Replace only when the current value matches | key, expected, value, options | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
-| `cache.kv.del` | Delete the specified keys | keys | `number` | `await cache.kv.del('u:1', 'u:2')` |
-| `cache.kv.exists` | Count existing keys | keys | `number` | `await cache.kv.exists('u:1', 'u:2')` |
-| `cache.kv.type` | Read the stored structure type | key | `string` | `await cache.kv.type('u:1')` |
-| `cache.kv.expire` | Set expiry in seconds from now | key, seconds | `boolean` | `await cache.kv.expire('u:1', 60)` |
-| `cache.kv.expireAt` | Set an absolute expiry time | key, timestamp | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
-| `cache.kv.ttl` | Read remaining lifetime in seconds | key | `number` | `await cache.kv.ttl('u:1')` |
-| `cache.kv.persist` | Remove expiry | key | `boolean` | `await cache.kv.persist('u:1')` |
-| `cache.kv.incr` | Increment by one | key | `number` | `await cache.kv.incr('hits')` |
-| `cache.kv.incrBy` | Increment by a given amount | key, increment | `number` | `await cache.kv.incrBy('hits', 2)` |
-| `cache.kv.decr` | Decrement by one | key | `number` | `await cache.kv.decr('stock')` |
-| `cache.kv.decrBy` | Decrement by a given amount | key, decrement | `number` | `await cache.kv.decrBy('stock', 2)` |
-| `cache.kv.keys` | List keys matching a pattern | pattern | `string[]` | `await cache.kv.keys('u:*')` |
-| `cache.kv.scan` | Scan matching keys in batches | cursor, options | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+| `cache.kv.get(key)` | Read a cached value | `key: string` Required logical cache key | `T \| null` | `await cache.kv.get('u:1')` |
+| `cache.kv.set(key, value, options?)` | Store a value with expiry or a write condition | `key` and JSON-serializable `value`. Optional `options` fields include `nx`, `xx`, `ex`, `px`, `exat`, `pxat`, and `keepTtl`. See write conditions and expiry below | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
+| `cache.kv.mget(...keys)` | Read multiple values in input order | `...keys: string[]` Pass logical cache keys in order | `(T \| null)[]`, with `null` for missing or non-KV keys | `await cache.kv.mget('u:1', 'u:2')` |
+| `cache.kv.mset(entries)` | Store multiple values | `entries: Array<[string, CacheValue]>` Each entry contains a logical key and its JSON value | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
+| `cache.kv.compareAndSwap(key, expected, value, options?)` | Replace only when the current value matches | `key`, `expected` (current value), and `value` (replacement). In `options`, pass `px` (positive safe integer milliseconds) or `keepTtl` (preserve expiry). Omit both for a replacement with no expiry | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
+| `cache.kv.del(...keys)` | Delete the specified keys | `...keys: string[]` Pass logical cache keys in order | `number` | `await cache.kv.del('u:1', 'u:2')` |
+| `cache.kv.exists(...keys)` | Count existing keys | `...keys: string[]` Pass logical cache keys in order | `number` | `await cache.kv.exists('u:1', 'u:2')` |
+| `cache.kv.type(key)` | Read the stored structure type | `key: string` Required logical cache key | `string` | `await cache.kv.type('u:1')` |
+| `cache.kv.expire(key, seconds)` | Set expiry in seconds from now | `key: string` Required logical cache key. `seconds: number` Relative expiry in safe integer seconds | `boolean` | `await cache.kv.expire('u:1', 60)` |
+| `cache.kv.expireAt(key, timestamp)` | Set an absolute expiry time | `key: string` Required logical cache key. `timestamp: number` Absolute Unix seconds as a safe integer | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
+| `cache.kv.ttl(key)` | Read remaining lifetime in seconds | `key: string` Required logical cache key | `number` | `await cache.kv.ttl('u:1')` |
+| `cache.kv.persist(key)` | Remove expiry | `key: string` Required logical cache key | `boolean` | `await cache.kv.persist('u:1')` |
+| `cache.kv.incr(key)` | Increment by one | `key: string` Required logical cache key | `number` | `await cache.kv.incr('hits')` |
+| `cache.kv.incrBy(key, increment)` | Increment by a given amount | `key: string` Required logical cache key. `increment: number` Amount to add | `number` | `await cache.kv.incrBy('hits', 2)` |
+| `cache.kv.decr(key)` | Decrement by one | `key: string` Required logical cache key | `number` | `await cache.kv.decr('stock')` |
+| `cache.kv.decrBy(key, decrement)` | Decrement by a given amount | `key: string` Required logical cache key. `decrement: number` Amount to subtract | `number` | `await cache.kv.decrBy('stock', 2)` |
+| `cache.kv.keys(pattern)` | List keys matching a pattern | `pattern: string` Glob pattern for logical key names | `string[]` | `await cache.kv.keys('u:*')` |
+| `cache.kv.scan(cursor, options?)` | Scan matching keys in batches | `cursor` starts at `"0"` and then uses the previous page cursor. `options.match` is a key glob (all keys by default). `count` is a positive safe integer (default 10, a work hint in Redis) | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+
+<a id="cache-kv-options"></a>
+
+**Write and scan options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `SetOptions.nx / xx` | `boolean` | `false` | Write only if the key is absent or present, respectively. The flags are mutually exclusive. An unmet condition succeeds with data=false. |
+| `SetOptions.ex / px` | `number` | Optional | Relative seconds or milliseconds. Choose one positive safe integer. |
+| `SetOptions.exat / pxat` | `number` | Optional | Absolute Unix seconds or milliseconds. Use positive safe integers. A past timestamp expires immediately. |
+| `SetOptions.keepTtl / CompareAndSwapOptions.keepTtl` | `boolean` | `false` | Preserve existing expiry. Mutually exclusive with explicit expiry. With neither option, the new value has no expiry. |
+| `CompareAndSwapOptions.px` | `number` | Optional | Give the replacement a positive safe integer lifetime in milliseconds if the comparison succeeds. |
+| `ScanOptions.match` | `string` | All keys | Glob pattern for logical keys, such as orders:*. |
+| `ScanOptions.count` | `number` | `10` | Positive safe integer per scan. Redis treats it as a work hint and may return a different item count. |
+
+With `orders:1` present, `{ nx: true, ex: 60 }` returns `data: false` and preserves both the order and its expiry. For a missing key it returns `data: true` with about 60 seconds of lifetime.
 
 Key operations apply to all structures. TTL is measured in seconds, with `-1` for a persistent key and `-2` for a missing key. `persist` returns `true` only if it removed an expiry. Memory counters accept safe integers or integer strings and preserve the original value if the increment is invalid or the result exceeds the safe integer range.
 
@@ -161,6 +177,8 @@ The comparison and update of the JSON snapshot run in one operation. If another 
 Operations that need to serialize a cache value return `SERIALIZATION_FAILED` if it cannot be encoded as JSON. Examples include circular objects and objects whose `toJSON()` returns `undefined`. If serialization fails during a batch write, no item is written.
 
 Choose one expiry option from `ex` (relative seconds), `px` (relative milliseconds), `exat` (Unix seconds), and `pxat` (Unix milliseconds). `kv.set` returns `INVALID_SET_OPTIONS` for an invalid expiry, a deadline in milliseconds outside the safe integer range, or a combination of expiry and `keepTtl: true`. Expiry values must be positive safe integers. A positive absolute deadline in the past expires the key immediately. Omitting expiry clears any existing TTL. Set `keepTtl: true` to preserve the current TTL or leave a new key without expiry.
+
+`cache.kv.compareAndSwap()` applies expiry only if the comparison succeeds. For example, replacing a matching value with `{ px: 60_000 }` sets about 60 seconds of new lifetime. `{ keepTtl: true }` preserves the old expiry and leaves a new key without expiry. Choose one option.
 
 #### Scenario: Scan and batch operations in Redis Cluster
 
@@ -207,16 +225,16 @@ Use a hash to update one field without replacing the entire object.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.hash.hget` | Read a field | key, field | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
-| `cache.hash.hset` | Store one or more fields | `key, field, value` or `key, data` (an object mapping fields to values) | Number of newly added fields | `await cache.hash.hset('u:1', 'name', 'Alice')` or `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
-| `cache.hash.hdel` | Delete fields | key, fields | `number` | `await cache.hash.hdel('u:1', 'name')` |
-| `cache.hash.hexists` | Check field existence | key, field | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
-| `cache.hash.hgetall` | Read all fields and values | key | `T` | `await cache.hash.hgetall('u:1')` |
-| `cache.hash.hkeys` | List field names | key | `string[]` | `await cache.hash.hkeys('u:1')` |
-| `cache.hash.hvals` | List field values | key | `T[]` | `await cache.hash.hvals('u:1')` |
-| `cache.hash.hlen` | Count fields | key | `number` | `await cache.hash.hlen('u:1')` |
-| `cache.hash.hmget` | Read multiple fields in input order | key, fields | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
-| `cache.hash.hincrBy` | Increment a numeric field | key, field, increment | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
+| `cache.hash.hget(key, field)` | Read a field | `key: string` Required hash key. `field: string` Hash field name | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
+| `cache.hash.hset(key, field, value)` or `cache.hash.hset(key, data)` | Store one or more fields | `key: string` Required hash key. `field: string, value: CacheValue` One field and its JSON value. The other overload takes a data object mapping field names to JSON values | Number of newly added fields | `await cache.hash.hset('u:1', 'name', 'Alice')` or `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
+| `cache.hash.hdel(key, ...fields)` | Delete fields | `key: string` Required hash key. `...fields: string[]` Field names in call order | `number` | `await cache.hash.hdel('u:1', 'name')` |
+| `cache.hash.hexists(key, field)` | Check field existence | `key: string` Required hash key. `field: string` Hash field name | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
+| `cache.hash.hgetall(key)` | Read all fields and values | `key: string` Required hash key | `T` | `await cache.hash.hgetall('u:1')` |
+| `cache.hash.hkeys(key)` | List field names | `key: string` Required hash key | `string[]` | `await cache.hash.hkeys('u:1')` |
+| `cache.hash.hvals(key)` | List field values | `key: string` Required hash key | `T[]` | `await cache.hash.hvals('u:1')` |
+| `cache.hash.hlen(key)` | Count fields | `key: string` Required hash key | `number` | `await cache.hash.hlen('u:1')` |
+| `cache.hash.hmget(key, ...fields)` | Read multiple fields in input order | `key: string` Required hash key. `...fields: string[]` Field names in call order | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
+| `cache.hash.hincrBy(key, field, increment)` | Increment a numeric field | `key: string` Required hash key. `field: string` Hash field name. `increment: number` Amount to add | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
 
 #### Scenario: Update individual fields
 
@@ -247,17 +265,17 @@ Lists preserve order and support pushes and pops at both ends. Blocking pops wai
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.list.lpush` | Push onto the left end | key, values | `number` | `await cache.list.lpush('jobs', 'job-1')` |
-| `cache.list.rpush` | Push onto the right end | key, values | `number` | `await cache.list.rpush('jobs', 'job-2')` |
-| `cache.list.lpop` | Pop the leftmost value | key | `T \| null` | `await cache.list.lpop('jobs')` |
-| `cache.list.rpop` | Pop the rightmost value | key | `T \| null` | `await cache.list.rpop('jobs')` |
-| `cache.list.llen` | Read list length | key | `number` | `await cache.list.llen('jobs')` |
-| `cache.list.lrange` | Read an inclusive index range | key, start, stop | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
-| `cache.list.lindex` | Read a value at an index | key, index | `T \| null` | `await cache.list.lindex('jobs', 0)` |
-| `cache.list.lset` | Replace a value at an index | key, index, value | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
-| `cache.list.ltrim` | Keep only an index range | key, start, stop | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
-| `cache.list.blpop` | Wait for and pop a leftmost value | timeout, keys | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
-| `cache.list.brpop` | Wait for and pop a rightmost value | timeout, keys | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
+| `cache.list.lpush(key, ...values)` | Push onto the left end | `key: string` Required list key. `...values: CacheValue[]` JSON-serializable values to push in call order | `number` | `await cache.list.lpush('jobs', 'job-1')` |
+| `cache.list.rpush(key, ...values)` | Push onto the right end | `key: string` Required list key. `...values: CacheValue[]` JSON-serializable values to push in call order | `number` | `await cache.list.rpush('jobs', 'job-2')` |
+| `cache.list.lpop(key)` | Pop the leftmost value | `key: string` Required list key | `T \| null` | `await cache.list.lpop('jobs')` |
+| `cache.list.rpop(key)` | Pop the rightmost value | `key: string` Required list key | `T \| null` | `await cache.list.rpop('jobs')` |
+| `cache.list.llen(key)` | Read list length | `key: string` Required list key | `number` | `await cache.list.llen('jobs')` |
+| `cache.list.lrange(key, start, stop)` | Read an inclusive index range | `key: string` Required list key. `start: number, stop: number` Inclusive zero-based range, with -1 referring to the last item | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
+| `cache.list.lindex(key, index)` | Read a value at an index | `key: string` Required list key. `index: number` Zero-based position. Negative indexes count from the end | `T \| null` | `await cache.list.lindex('jobs', 0)` |
+| `cache.list.lset(key, index, value)` | Replace a value at an index | `key: string` Required list key. `index: number` Zero-based position. Negative indexes count from the end. `value: CacheValue` New JSON-serializable value | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
+| `cache.list.ltrim(key, start, stop)` | Keep only an index range | `key: string` Required list key. `start: number, stop: number` Inclusive zero-based range, with -1 referring to the last item | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
+| `cache.list.blpop(timeout, ...keys)` | Wait for and pop a leftmost value | `timeout: number` Wait time in seconds on Redis. Zero means indefinite there. Memory only checks available items. `...keys: string[]` Pass logical cache keys in order | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
+| `cache.list.brpop(timeout, ...keys)` | Wait for and pop a rightmost value | `timeout: number` Wait time in seconds on Redis. Zero means indefinite there. Memory only checks available items. `...keys: string[]` Pass logical cache keys in order | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
 
 #### Scenario: Queue and read in order
 
@@ -289,16 +307,16 @@ Use sets for membership, unions and comparisons. Members have no defined order.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.set_.sadd` | Add unique members | key, members | `number` | `await cache.set_.sadd('roles', 'editor')` |
-| `cache.set_.srem` | Remove members | key, members | `number` | `await cache.set_.srem('roles', 'editor')` |
-| `cache.set_.smembers` | Read all members | key | `T[]` | `await cache.set_.smembers('roles')` |
-| `cache.set_.sismember` | Test membership | key, member | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
-| `cache.set_.scard` | Count members | key | `number` | `await cache.set_.scard('roles')` |
-| `cache.set_.srandmember` | Sample without removing | key, count | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
-| `cache.set_.spop` | Remove random members | key, count | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
-| `cache.set_.sinter` | Find the intersection | keys | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
-| `cache.set_.sunion` | Find the union | keys | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
-| `cache.set_.sdiff` | Subtract other sets from the first | keys | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
+| `cache.set_.sadd(key, ...members)` | Add unique members | `key: string` Required set key. `...members: CacheValue[]` JSON member values to add or remove | `number` | `await cache.set_.sadd('roles', 'editor')` |
+| `cache.set_.srem(key, ...members)` | Remove members | `key: string` Required set key. `...members: CacheValue[]` JSON member values to add or remove | `number` | `await cache.set_.srem('roles', 'editor')` |
+| `cache.set_.smembers(key)` | Read all members | `key: string` Required set key | `T[]` | `await cache.set_.smembers('roles')` |
+| `cache.set_.sismember(key, member)` | Test membership | `key: string` Required set key. `member: CacheValue` Member value to compare | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
+| `cache.set_.scard(key)` | Count members | `key: string` Required set key | `number` | `await cache.set_.scard('roles')` |
+| `cache.set_.srandmember(key, count?)` | Sample without removing | `key: string` Required set key. `count?: number` Omit for a single member or supply a count for an array | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
+| `cache.set_.spop(key, count?)` | Remove random members | `key: string` Required set key. `count?: number` Omit for a single member or supply a count for an array | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
+| `cache.set_.sinter(...keys)` | Find the intersection | `...keys: string[]` Pass logical cache keys in order | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
+| `cache.set_.sunion(...keys)` | Find the union | `...keys: string[]` Pass logical cache keys in order | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
+| `cache.set_.sdiff(...keys)` | Subtract other sets from the first | `...keys: string[]` Subtract every subsequent set from the first set | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
 
 #### Scenario: Deduplicate and compare sets
 
@@ -330,19 +348,31 @@ A sorted set associates each member with a score for rankings and range queries.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.zset.zadd` | Store scored members | key, members | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
-| `cache.zset.zrem` | Remove scored members | key, members | `number` | `await cache.zset.zrem('scores', 'u1')` |
-| `cache.zset.zscore` | Read a member score | key, member | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
-| `cache.zset.zrank` | Read a zero-based ascending rank | key, member | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
-| `cache.zset.zrevrank` | Read a zero-based descending rank | key, member | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
-| `cache.zset.zrange` | Read an ascending rank range | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
-| `cache.zset.zrevrange` | Read a descending rank range | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
-| `cache.zset.zrangeByScore` | Read a score range | key, min, max, options | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
-| `cache.zset.zcard` | Count scored members | key | `number` | `await cache.zset.zcard('scores')` |
-| `cache.zset.zcount` | Count members in a score range | key, min, max | `number` | `await cache.zset.zcount('scores', 10, 100)` |
-| `cache.zset.zincrBy` | Increment a member score | key, increment, member | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
-| `cache.zset.zremRangeByRank` | Remove a rank range | key, start, stop | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
-| `cache.zset.zremRangeByScore` | Remove a score range | key, min, max | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+| `cache.zset.zadd(key, ...members)` | Store scored members | `key: string` Required sorted-set key. `...members: ZMember[]` Each item has a member string and numeric score | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
+| `cache.zset.zrem(key, ...members)` | Remove scored members | `key: string` Required sorted-set key. `...members: string[]` Member identifiers to remove | `number` | `await cache.zset.zrem('scores', 'u1')` |
+| `cache.zset.zscore(key, member)` | Read a member score | `key: string` Required sorted-set key. `member: string` Sorted-set member identifier | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
+| `cache.zset.zrank(key, member)` | Read a zero-based ascending rank | `key: string` Required sorted-set key. `member: string` Sorted-set member identifier | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
+| `cache.zset.zrevrank(key, member)` | Read a zero-based descending rank | `key: string` Required sorted-set key. `member: string` Sorted-set member identifier | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
+| `cache.zset.zrange(key, start, stop, withScores?)` | Read an ascending rank range | `key: string` Required sorted-set key. `start: number, stop: number` Inclusive zero-based range, with -1 referring to the last item. `withScores?: boolean` Defaults to false for names only. Set true for members with scores | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
+| `cache.zset.zrevrange(key, start, stop, withScores?)` | Read a descending rank range | `key: string` Required sorted-set key. `start: number, stop: number` Inclusive zero-based range, with -1 referring to the last item. `withScores?: boolean` Defaults to false for names only. Set true for members with scores | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
+| `cache.zset.zrangeByScore(key, min, max, options?)` | Read a score range | `key: string` Required sorted-set key. `min: number \| string, max: number \| string` Score bounds are inclusive by default. A prefix such as (10 excludes the endpoint. Use -inf or +inf for infinity. See [score-range options](#cache-score-range-options) for optional options | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
+| `cache.zset.zcard(key)` | Count scored members | `key: string` Required sorted-set key | `number` | `await cache.zset.zcard('scores')` |
+| `cache.zset.zcount(key, min, max)` | Count members in a score range | `key: string` Required sorted-set key. `min: number \| string, max: number \| string` Score bounds are inclusive by default. A prefix such as (10 excludes the endpoint. Use -inf or +inf for infinity | `number` | `await cache.zset.zcount('scores', 10, 100)` |
+| `cache.zset.zincrBy(key, increment, member)` | Increment a member score | `key: string` Required sorted-set key. `increment: number` Amount to add. `member: string` Sorted-set member identifier | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
+| `cache.zset.zremRangeByRank(key, start, stop)` | Remove a rank range | `key: string` Required sorted-set key. `start: number, stop: number` Inclusive zero-based range, with -1 referring to the last item | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
+| `cache.zset.zremRangeByScore(key, min, max)` | Remove a score range | `key: string` Required sorted-set key. `min: number \| string, max: number \| string` Score bounds are inclusive by default. A prefix such as (10 excludes the endpoint. Use -inf or +inf for infinity | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+
+<a id="cache-score-range-options"></a>
+
+**Score-range options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `withScores` | `boolean` | `false` | Return member names. Set true to return objects containing member and score. |
+| `offset` | `number` | `0` | Safe integer number of matches to skip. A negative value yields an empty array. |
+| `count` | `number` | `-1` | Safe integer maximum number of matches to return. A negative value means unlimited. |
+
+With `a: 10` and `b: 20`, an inclusive range from 10 to 20 and `{ offset: 1, count: 1, withScores: true }` returns `[{ member: "b", score: 20 }]`.
 
 #### Scenario: Rank and filter scores
 
@@ -373,10 +403,10 @@ One execution can acquire the same lease across nodes. Pass its `owner` through 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `cache.lock.acquire` | Acquire or reenter a lease | `key`, optional `{ ttl: 30 }` for first acquisition or `{ owner }` for reentry | The acquired `owner` or `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
-| `cache.lock.release` | Release one acquisition and unlock on the last release | key, owner | `true` on release, `false` for a missing lease or invalid token | `await cache.lock.release('demo:daily', owner)` |
-| `cache.lock.isLocked` | Check whether the lease exists | key | `true` if held | `await cache.lock.isLocked('demo:daily')` |
-| `cache.lock.extend` | Update expiry and preserve the acquisition count | key, ttl in seconds, owner | `true` if updated | `await cache.lock.extend('demo:daily', 60, owner)` |
+| `cache.lock.acquire(key, options?)` | Acquire or reenter a lease | `key` required. For the first acquisition, `options` accepts a `ttl` in positive safe integer seconds (default 30). Reentry uses the original `owner` and preserves expiry. Pass only one of `ttl` and `owner` | The acquired `owner` or `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
+| `cache.lock.release(key, owner)` | Release one acquisition and unlock on the last release | `key: string` Required lock key. `owner: string` Owner token returned by the first acquisition | `true` on release, `false` for a missing lease or invalid token | `await cache.lock.release('demo:daily', owner)` |
+| `cache.lock.isLocked(key)` | Check whether the lease exists | `key: string` Required lock key | `true` if held | `await cache.lock.isLocked('demo:daily')` |
+| `cache.lock.extend(key, ttl, owner)` | Update expiry and preserve the acquisition count | `key: string` Required lock key. `ttl: number` New lifetime in positive safe integer seconds. `owner: string` Owner token returned by the first acquisition | `true` if updated | `await cache.lock.extend('demo:daily', 60, owner)` |
 
 #### Scenario: Delegate a protected step to another node
 

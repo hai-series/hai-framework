@@ -43,9 +43,25 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `hai create [name]` | 创建一个应用 | 用 `--type` 选模板。省略名称或类型时询问，`--defaults` 采用默认值。默认安装依赖、初始化 Git 并准备部署工具 | 新项目及启动提示 | `hai create orders --type admin --defaults` |
-| `hai add [module]` | 向已有应用添加框架能力 | 模块名省略时询问。默认安装依赖，可加 `--no-install` | 依赖、配置和相应 Skills，应用随后接入调用 | `hai add ai` |
-| `hai init` | 给现有工程补配置和 AI 入口 | 默认保留已有文件，`--force` 可以重建模块配置 | 缺少的应用配置和 AI 文件 | `hai init` |
+| `hai create [name] [options]` | 创建一个应用 | 用 `--type` 选模板。省略名称或类型时询问，`--defaults` 采用默认值。默认安装依赖、初始化 Git 并准备部署工具 · [参数表](#cli-projects-arguments) | 新项目及启动提示 | `hai create orders --type admin --defaults` |
+| `hai add [module] [options]` | 向已有应用添加框架能力 | 模块名省略时询问。默认安装依赖，可加 `--no-install` · [参数表](#cli-projects-arguments) | 依赖、配置和相应 Skills，应用随后接入调用 | `hai add ai` |
+| `hai init [options]` | 给现有工程补配置和 AI 入口 | 默认保留已有文件，`--force` 可以重建模块配置 · [参数表](#cli-projects-arguments) | 缺少的应用配置和 AI 文件 | `hai init` |
+
+<a id="cli-projects-arguments"></a>
+
+##### 形参与选项
+
+| 实参 | 命令或生效条件 | 用途与默认行为 |
+| --- | --- | --- |
+| `[name] / --type` | `create` | 省略时询问。加 --defaults 时名称为 my-app、类型为 admin |
+| `--frontends <targets>` | `create, fullstack` | 逗号分隔前端目标，只在 fullstack 生效 |
+| `--defaults` | `create` | 对未填的交互选项采用默认值 |
+| `--package-manager <pm>` | `create` | 选 pnpm、npm 或 yarn。api 与 fullstack 使用 pnpm |
+| `--no-install` | `create, add` | 省略时执行安装。传入后生成文件或更新依赖声明，但跳过安装 |
+| `--no-deploy` | `create` | 跳过部署能力的生成。默认包含部署工具 |
+| `--no-git / --git-remote <url>` | `create` | 默认初始化 Git。前者跳过 Git，后者指定远端仓库地址 |
+| `[module]` | `add` | 要添加的模块 ID，例如 ai。省略时选择 |
+| `--force` | `init` | 重新生成模块配置。默认保留已有文件 |
 
 #### 场景：创建与补齐工程
 
@@ -102,11 +118,23 @@ Fullstack提供用户/角色、审计、反馈、个人设置和主题语言界�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `hai generate [type] [name]` 或 `hai g` | 生成业务骨架 | 类型和名称可交互选择。多 workspace 工程用 `--workspace`；默认保护已有文件 | 页面、组件、路由、模型或迁移文件 | `hai generate api orders --workspace orders-serv` |
-| `hai g:page <name>` | 生成页面 | 页面名必填，按需设 `--workspace` | 页面文件 | `hai g:page orders` |
-| `hai g:component <name>` | 生成组件 | 组件名必填，按需设 `--workspace` | 组件文件 | `hai g:component OrderList` |
-| `hai g:api <name>` | 生成 HTTP 入口 | 名称必填，按需设 `--workspace` 选择应用或服务 | 对应模板的路由，或契约及 procedure | `hai g:api orders --workspace orders-serv` |
-| `hai g:model <name>` | 生成模型定义 | 名称必填，按需设 `--workspace` | 模型文件 | `hai g:model order` |
+| `hai generate [type] [name] [options]` 或 `hai g [type] [name] [options]` | 生成业务骨架 | 类型和名称可交互选择。多 workspace 工程用 `--workspace`；默认保护已有文件 · [参数表](#cli-scaffolding-arguments) | 页面、组件、路由、模型或迁移文件 | `hai generate api orders --workspace orders-serv` |
+| `hai g:page <name> [options]` | 生成页面 | 页面名必填，按需设 `--workspace` · [参数表](#cli-scaffolding-arguments) | 页面文件 | `hai g:page orders` |
+| `hai g:component <name> [options]` | 生成组件 | 组件名必填，按需设 `--workspace` · [参数表](#cli-scaffolding-arguments) | 组件文件 | `hai g:component OrderList` |
+| `hai g:api <name> [options]` | 生成 HTTP 入口 | 名称必填，按需设 `--workspace` 选择应用或服务 · [参数表](#cli-scaffolding-arguments) | 对应模板的路由，或契约及 procedure | `hai g:api orders --workspace orders-serv` |
+| `hai g:model <name> [options]` | 生成模型定义 | 名称必填，按需设 `--workspace` · [参数表](#cli-scaffolding-arguments) | 模型文件 | `hai g:model order` |
+
+<a id="cli-scaffolding-arguments"></a>
+
+##### 形参与选项
+
+| 实参 | 命令或生效条件 | 用途与默认行为 |
+| --- | --- | --- |
+| `[type] / [name]` | `generate, g` | 分别选择生成类别和文件名称。省略时询问 |
+| `<name>` | `g:page, g:component, g:api, g:model` | 必填。对应页面、组件、接口或模型名称 |
+| `--workspace <name>` | `generate, g and aliases` | 选择目标包名或相对目录。多工作区下用于消除歧义 |
+| `--output <path>` | `generate, g` | 指定生成位置，默认按生成器约定选择。服从目标模板的路径限制 |
+| `--force` | `generate, g` | 允许覆盖现有生成目标。快捷 g:* 使用默认保护 |
 
 #### 场景：生成业务骨架
 
@@ -152,7 +180,22 @@ hai generate migration add-orders # 输入迁移名，生成待填写的迁移�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `hai build` | 编译源码或打包 | `--target` 默认 `compile`。镜像默认并行 2 项。原生打包默认 release | 编译结果、镜像归档或安装包。镜像可用 `--json` 输出产物信息 | `hai build --target image --json` |
+| `hai build [options]` | 编译源码或打包 | `--target` 默认 `compile`。镜像默认并行 2 项。原生打包默认 release · [参数表](#cli-builds-arguments) | 编译结果、镜像归档或安装包。镜像可用 `--json` 输出产物信息 | `hai build --target image --json` |
+
+<a id="cli-builds-arguments"></a>
+
+##### 形参与选项
+
+| 实参 | 命令或生效条件 | 用途与默认行为 |
+| --- | --- | --- |
+| `--target <target>` | `build` | 默认 compile。image 生成镜像，app 生成移动包，desktop 生成桌面包 |
+| `--images <names> / --concurrency <count> / --json` | `build, image` | 默认构建所有配置的镜像，并行数 2。--json 在标准输出给出本次构建的制品信息 |
+| `--runtime <runtime> / --network <network>` | `build, image or Android container` | 选择 auto、podman 或 docker。auto 优先可用的 Podman。网络省略时沿用引擎设置 |
+| `--platform <platform> / --arch <arch> / --debug` | `build, native` | 选择目标平台和 x64 或 arm64。架构默认主机值。--debug 选择调试包，默认 release |
+| `--image-source / --image-mirrors` | `container builds` | 选择 official、cn 或 custom，custom 使用镜像前缀映射。省略时读取已保存选择或询问 |
+| `--npm-source / --npm-registry` | `container builds` | 选择 official、cn 或 custom，custom 用指定的 registry URL |
+| `--proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `container builds` | 模式为 inherit、system、custom 或 none，默认 inherit。custom 提供 URL，可指定绕过代理的主机。--no-http-proxy 关闭继承 |
+| `--yes` | `download selection` | 非交互接受已保存设置或适用默认值 |
 
 #### 场景：编译与打包应用
 
@@ -182,6 +225,8 @@ hai build --target desktop --platform windows --arch x64 # 按 Windows x64 目�
 
 website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_BASE_PATH`，再执行 `pnpm build`，只发布build目录并保留.nojekyll。静态构建拒绝动态API/actions、服务端业务初始化、私密资产及链接；联系表单未接服务时只提示并保留输入。网站目录变化需要重建；API地址独立配置。[静态与子目录部署](../configuration/delivery.md)
 
+平台程序可用 `deploy.verifyBuildReceipt` 核对这份单行 v1 JSON 与实际归档，还可按任务约束提交、平台和镜像角色。 [TypeScript 示例](deploy.md#programmatic-release-verification)
+
 <a id="deployments"></a>
 
 ### 查看计划并交付：`hai deploy`
@@ -192,7 +237,22 @@ website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `hai deploy [appDir]` | 计划、打包或部署应用 | 目录默认由当前工程确定。需选择或传入 `--env`。制品、服务及环境文件可单独指定 | 计划 JSON、离线交付包或部署结果 | `hai deploy --env prod --plan` |
+| `hai deploy [appDir] [options]` | 计划、打包或部署应用 | 目录默认由当前工程确定。需选择或传入 `--env`。制品、服务及环境文件可单独指定 · [参数表](#cli-deployments-arguments) | 计划 JSON、离线交付包或部署结果 | `hai deploy --env prod --plan` |
+
+<a id="cli-deployments-arguments"></a>
+
+##### 形参与选项
+
+| 实参 | 命令或生效条件 | 用途与默认行为 |
+| --- | --- | --- |
+| `[appDir] / --env <environment> / --env-dir <path>` | `deploy` | 应用目录默认当前工程。环境交互选择，非交互时必须传 --env。--env-dir 覆盖环境文件目录 |
+| `--plan / --inspect-remote` | `deploy` | --plan 输出计划。远端检查只可与 --plan 一起使用 |
+| `--artifact-dir <path> / --build` | `deploy` | 用既有构建制品，或先构建再部署，两者互斥 |
+| `--services <names> / --skip-middleware` | `deploy` | 逗号分隔目标服务名。--skip-middleware 跳过中间件部署 |
+| `--bundle-only / --output <path>` | `deploy` | 只生成离线包，--output 指定包路径 |
+| `--concurrency / --network / --npm-source / --npm-registry` | `deploy --build` | 传给构建阶段，必须同时指定 --build。字段见构建选项 |
+| `--runtime / --image-source / --image-mirrors / --proxy-mode / --proxy-url / --proxy-bypass / --no-http-proxy` | `deploy` | 选择容器引擎、镜像来源和下载代理，字段取值同构建选项。只读计划不执行下载 |
+| `--yes` | `deploy` | 非交互执行时用于确认操作。--plan 本身可在指定环境后只读运行 |
 
 #### 场景：查看计划并交付
 
@@ -234,9 +294,22 @@ HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1M
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `hai upgrade <version>` | 预检完整发布和迁移差异 | 填写已发布的精确版本，目录默认当前工程 | 依赖、配置及 Skills 差异报告 | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle>` | 查看离线诊断包 | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 | 摘要、清单、证据或本机查看器地址 | `hai feedback summary feedback.zip` |
+| `hai upgrade <version> [options]` | 预检完整发布和迁移差异 | 填写已发布的精确版本，目录默认当前工程 · [参数表](#cli-diagnostics-arguments) | 依赖、配置及 Skills 差异报告 | `hai upgrade TARGET_VERSION` |
+| `hai feedback <action> <bundle> [options]` | 查看离线诊断包 | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 · [参数表](#cli-diagnostics-arguments) | 摘要、清单、证据或本机查看器地址 | `hai feedback summary feedback.zip` |
 | `hai --version`、`hai --help` | 查看版本或选项 | 也可用 `hai <command> --help` | 已安装版本或命令用法 | `hai deploy --help` |
+
+<a id="cli-diagnostics-arguments"></a>
+
+##### 形参与选项
+
+| 实参 | 命令或生效条件 | 用途与默认行为 |
+| --- | --- | --- |
+| `<version> / --cwd <path>` | `upgrade` | 必填已发布精确版本，--cwd 指定预检哪个工程，省略为当前目录 |
+| `<action> / <bundle>` | `feedback` | 必填操作 summary、inspect、evidence、view 和诊断 ZIP 路径 |
+| `--page <number> / --page-size <number>` | `feedback evidence` | 默认第 1 页、每页 20 条。每页最多 100 条 |
+| `--kind / --request-id / --error-id` | `feedback evidence` | 按种类、请求编号或错误编号筛选。错误编号可定位关联日志上下文 |
+| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | 毫秒级 Unix 时间戳，限定证据时间范围 |
+| `--port <number>` | `feedback view` | 查看器端口，默认 0 由系统分配 |
 
 #### 场景：查看帮助、升级与诊断
 
@@ -271,7 +344,7 @@ hai upgrade TARGET_VERSION # 输入已发布精确版本，输出当前工程的
 | 参数 | 默认值/必填 | 说明 |
 | --- | --- | --- |
 | `--yes`                                 | 省略时由当前是否交互终端决定 | 跳过交互选源，尚未配置时使用官方源                                                                                            |
-| `hai deploy --env`                      | 读取 `deploy.environment`    | 选择发布环境及该环境的文件。例如 `--env prod` 选用 `.env.prod`，私有文件仍按优先级合并                                        |
+| `hai deploy --env`                      | 选择部署环境    | 选择发布环境及该环境的文件。例如 `--env prod` 选用 `.env.prod`，私有文件仍按优先级合并 · [参数表](#cli-deployments-arguments) |
 
 ## 错误处理
 

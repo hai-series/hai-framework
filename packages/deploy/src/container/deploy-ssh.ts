@@ -32,9 +32,9 @@ const logger = core.logger.child({ module: 'deploy', scope: 'ssh' })
  */
 export interface SshExecutor {
   /** 在远程主机执行命令（通过远程登录 shell 运行） */
-  exec: (remoteCommand: string, options?: Pick<CommandOptions, 'timeoutMs' | 'terminationTimeoutMs' | 'secrets' | 'maxCaptureChars' | 'onOutput'>) => Promise<HaiResult<CommandResult>>
+  exec: (remoteCommand: string, options?: Pick<CommandOptions, 'signal' | 'timeoutMs' | 'terminationTimeoutMs' | 'secrets' | 'maxCaptureChars' | 'onOutput' | 'discardOutput'>) => Promise<HaiResult<CommandResult>>
   /** 上传本地文件到远程路径 */
-  upload: (localPath: string, remotePath: string) => Promise<HaiResult<void>>
+  upload: (localPath: string, remotePath: string, options?: Pick<CommandOptions, 'signal'>) => Promise<HaiResult<void>>
   /** 远程连通性预检（执行 true 命令） */
   ping: () => Promise<HaiResult<void>>
 }
@@ -55,7 +55,7 @@ export function usesSshPassword(config: Pick<SshConfig, 'auth' | 'password'>): b
 }
 
 /** 构造 ssh 公共连接选项；密码从 child env 供给，不进入参数。 */
-function buildConnectOptions(config: SshConfig): string[] {
+function buildConnectOptions(config: SshConfig, isolated: boolean): string[] {
   const password = usesSshPassword(config)
   const args: string[] = [
     '-o',
@@ -64,7 +64,12 @@ function buildConnectOptions(config: SshConfig): string[] {
   if (password)
     args.push('-o', 'PreferredAuthentications=password', '-o', 'PasswordAuthentication=yes', '-o', 'PubkeyAuthentication=no', '-o', 'NumberOfPasswordPrompts=1')
   args.push('-o', `ConnectTimeout=${config.connectTimeoutSeconds}`)
-  args.push('-o', `StrictHostKeyChecking=${config.strictHostKeyChecking ? 'accept-new' : 'no'}`)
+  if (isolated) {
+    args.push('-F', 'none', '-o', 'GlobalKnownHostsFile=none', '-o', 'IdentityAgent=none', '-o', 'ClearAllForwardings=yes', '-o', 'UpdateHostKeys=no', '-o', 'StrictHostKeyChecking=yes')
+  }
+  else {
+    args.push('-o', `StrictHostKeyChecking=${config.strictHostKeyChecking ? 'accept-new' : 'no'}`)
+  }
   if (config.knownHostsFile) {
     // OpenSSH 会再次按配置语法解析 -o 的值，路径中的空格须保留内部引号。
     const path = config.knownHostsFile.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
@@ -91,9 +96,9 @@ function buildConnectOptions(config: SshConfig): string[] {
  * // 参数供本地无 shell 的 ssh 进程使用；不是可再次拼接进 shell 的字符串。
  * ```
  */
-export function buildSshExecArgs(config: SshConfig, remoteCommand: string): string[] {
+export function buildSshExecArgs(config: SshConfig, remoteCommand: string, isolated = false): string[] {
   return [
-    ...buildConnectOptions(config),
+    ...buildConnectOptions(config, isolated),
     '-p',
     String(config.port),
     `${config.username}@${config.host}`,
@@ -114,9 +119,9 @@ export function buildSshExecArgs(config: SshConfig, remoteCommand: string): stri
  * const args = buildScpUploadArgs(config, '/workspace/shop/.hai/deploy/shop.tar', '/opt/hai/incoming/shop.tar')
  * ```
  */
-export function buildScpUploadArgs(config: SshConfig, localPath: string, remotePath: string): string[] {
+export function buildScpUploadArgs(config: SshConfig, localPath: string, remotePath: string, isolated = false): string[] {
   return [
-    ...buildConnectOptions(config),
+    ...buildConnectOptions(config, isolated),
     '-P',
     String(config.port),
     localPath,
@@ -139,7 +144,7 @@ export function buildScpUploadArgs(config: SshConfig, localPath: string, remoteP
  * if (!connected.success) throw new Error(connected.error.message)
  * ```
  */
-export function createSshExecutor(config: SshConfig): SshExecutor {
+export function createSshExecutor(config: SshConfig, isolated = false): SshExecutor {
   /** 密码 helper 与实际 SSH 共用预算；不引入全局凭据缓存或长连接生命周期。 */
   const runAuthenticated = async (command: string, args: string[], options: CommandOptions): Promise<HaiResult<CommandResult>> => {
     if (!usesSshPassword(config))
@@ -204,7 +209,9 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
   }
 
   const exec: SshExecutor['exec'] = async (remoteCommand, options) => {
-    const result = await runAuthenticated('ssh', buildSshExecArgs(config, remoteCommand), {
+    const result = await runAuthenticated('ssh', buildSshExecArgs(config, remoteCommand, isolated), {
+      signal: options?.signal,
+      discardOutput: options?.discardOutput,
       timeoutMs: options?.timeoutMs,
       terminationTimeoutMs: options?.terminationTimeoutMs,
       maxCaptureChars: options?.maxCaptureChars,
@@ -230,9 +237,9 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
     })
   }
 
-  const upload: SshExecutor['upload'] = async (localPath, remotePath) => {
-    const args = buildScpUploadArgs(config, localPath, remotePath)
-    const result = await runAuthenticated('scp', args, { timeoutMs: 600_000 })
+  const upload: SshExecutor['upload'] = async (localPath, remotePath, options) => {
+    const args = buildScpUploadArgs(config, localPath, remotePath, isolated)
+    const result = await runAuthenticated('scp', args, { timeoutMs: 600_000, signal: options?.signal })
     if (!result.success) {
       return err({
         ...HaiDeployError.IMAGE_TRANSFER_FAILED,

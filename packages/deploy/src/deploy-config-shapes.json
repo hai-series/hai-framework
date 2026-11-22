@@ -3112,8 +3112,8 @@
               "removeHtml": true,
               "removeUrls": false,
               "removeEmails": false,
-              "normalizeWhitespace": true,
-              "trim": true
+              "normalizeWhitespace": false,
+              "trim": false
             },
             "type": "object",
             "properties": {
@@ -3130,11 +3130,11 @@
                 "type": "boolean"
               },
               "normalizeWhitespace": {
-                "default": true,
+                "default": false,
                 "type": "boolean"
               },
               "trim": {
-                "default": true,
+                "default": false,
                 "type": "boolean"
               },
               "customReplacements": {

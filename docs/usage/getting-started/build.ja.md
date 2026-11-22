@@ -68,4 +68,60 @@ Android をコンテナでビルドするには `--runtime auto`、`docker`、`p
 
 Core の `name` は Capacitor の表示名と Tauri の製品名・メインウィンドウのタイトルに使われます。`HAI_CORE_NAME` には他の Core 設定と同じ上書き順序が適用されます。fullstack ではサーバーワークスペースの `_core.yml` とプロジェクトルートの環境ファイルを参照します。既存のネイティブプロジェクトではプラットフォーム側の表示名も更新してインストーラーを作り直します。命名規則、環境の選択、ウィンドウごとの上書き、既存の成果物の扱いは [中国語の原文](build.md#原生应用名称) にあります。
 
+<a id="desktop-updates"></a>
+
+### デスクトップアプリの更新
+
+デスクトップサンプルと新規生成した Fullstack Desktop アプリでは、Linux x64 AppImage と Windows x64 NSIS のリリース版でアプリ内更新を有効にできます。既定は無効です。有効なアプリは起動時に一度だけ確認し、新しいバージョンが見つかると通知します。サインイン前でも「アプリについて」を開いて現在のバージョンを確認し、手動で「更新を確認」を選べます。更新は後回しにでき、「ダウンロードしてインストール」を確定すると開始します。先に作業を保存してください。Linux ではインストール後に「今すぐ再起動」を選びます。Windows ではインストール時にアプリが終了します。再度開いたらバージョンを確認します。
+
+![Linux デスクトップサンプルを更新して再起動すると、アプリ情報にバージョン 1.0.1 と最新版の案内が表示される](../images/desktop-update-linux.png)
+
+以下は Linux x64 で Fullstack プロジェクト `orders` を `1.2.0` から `1.3.0` へ更新する例です。プロジェクトルートで実行します。Windows の PowerShell では `pnpm.cmd` を使います。
+
+1. このアプリ専用の Tauri 更新署名鍵を生成します。例のパスは、プロジェクト外に用意した保護ディレクトリに置き換えてください。秘密鍵とパスワードは後続リリースのために保管します。アプリには `.pub` ファイルの内容を渡します。
+
+   ```sh
+   # orders.key と orders.key.pub を生成する。次回以降も同じ秘密鍵で署名する。
+   pnpm --filter orders-desktop tauri signer generate -w "$HOME/release-secrets/orders.key"
+   ```
+
+2. `apps/orders-desktop/src-tauri/tauri.linux.conf.json` に以下の項目を追加します。Windows では同じディレクトリの `tauri.windows.conf.json` を使います。`pubkey` には `.pub` ファイルの内容、`endpoints` には更新マニフェストを公開する HTTPS URL を入れます。URL には認証情報、クエリ、フラグメントを含めません。この設定は配布物に含まれます。Tauri の `identifier`、更新先、公開鍵は後続バージョンでも引き継ぎます。`requireSignedVersion` を有効にすると、署名に含まれるバージョンとマニフェストのバージョンの一致が必要になります。 更新マニフェストやインストーラーのリダイレクトにも HTTPS が必要です。
+
+   ```json
+   {
+     "plugins": {
+       "updater": {
+         "endpoints": ["https://releases.example.com/orders/linux/latest.json"],
+         "pubkey": "REPLACE_WITH_PUBLIC_KEY_CONTENT",
+         "requireSignedVersion": true
+       }
+     }
+   }
+   ```
+
+3. ルートの `package.json.version` を `1.3.0` に変更し、対象 OS でビルドします。CLI が今回の成果物のパスを表示します。Linux では `.AppImage` を配布用ディレクトリにコピーして署名します。Windows では `--platform windows` を指定し、`*-setup.exe` を選んで必要な Windows コード署名を先に済ませます。`bundle.createUpdaterArtifacts` は既定の無効のままにします。別の署名ステップで秘密鍵を `TAURI_SIGNING_PRIVATE_KEY`、設定済みの場合はパスワードを `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` で渡します。
+
+   ```sh
+   # ルートの package.json のバージョンで Linux x64 の配布物を作成する。失敗したら配布を中止する。
+   pnpm build --target desktop --platform linux --arch x64
+   # 配布用ディレクトリの AppImage に署名する。Tauri が隣に .AppImage.sig を出力する。
+   pnpm --filter orders-desktop tauri signer sign --app-version 1.3.0 "$HOME/release/orders-linux-x64-release-1.3.0.AppImage"
+   ```
+
+4. プラットフォームとバージョンごとに固有の HTTPS URL に配布ファイルをアップロードしてから、手順 2 の URL に `latest.json` を公開します。`signature` は今回生成した `.sig` の内容に置き換えます。Windows では、`https://releases.example.com/orders/windows/latest.json` のように配布ディレクトリと更新先を分け、`windows-x86_64` に NSIS の URL と署名を指定します。更新先を共有する場合は、同じバージョンの両プラットフォームの項目を統合してから公開します。ユーザーの確定後、アプリが配布ファイルを取得し、署名を検証してインストールします。[Tauri の更新マニフェスト形式](https://v2.tauri.app/plugin/updater/#static-json-file)
+
+   ```json
+   {
+     "version": "1.3.0",
+     "platforms": {
+       "linux-x86_64": {
+         "url": "https://releases.example.com/orders/linux/1.3.0/orders-linux-x64-release-1.3.0.AppImage",
+         "signature": "REPLACE_WITH_SIGNATURE_FILE_CONTENT"
+       }
+     }
+   }
+   ```
+
+隔離した対象環境で、同じ更新先と公開鍵を設定した `1.2.0` を起動します。Linux では、書き込み可能なディレクトリに AppImage を置き、実行権限を付けて直接起動します。Windows では、先に NSIS で旧バージョンをインストールします。テスト用マニフェストを使い、後回し、インストール、再度開いた後のバージョン表示を確認します。すでに最新版の場合、更新先に接続できない場合、対象プラットフォーム用の配布物がない場合、署名や署名に含まれるバージョンが一致しない場合も確認します。リポジトリのサンプルでは手動実行の [Desktop update package](../../../.github/workflows/desktop-update.yml) で配布ファイル、署名、マニフェストを生成できます。
+
 配布前にインストーラーを実機で確認します。サーバーのリリースではイメージのチェックサム、ユーザー操作、永続データを確認します。

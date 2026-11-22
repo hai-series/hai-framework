@@ -129,6 +129,8 @@ export interface MarkdownRewriteRequest {
   selectedText: string
   /** 可视正文中的精确纯文本偏移；宿主可据此映射原始 Markdown，不以纯文本猜测源码位置。 */
   selectionSnapshot?: MarkdownSelectionSnapshot
+  /** 仅在选区可与当前 Markdown 源文核对时提供，位置相对于 content。 */
+  sourceRange?: MarkdownSourceRange
   /** 触发请求时的完整文档内容。 */
   content: string
   /** 当前文档标题。 */
@@ -197,6 +199,23 @@ export interface MarkdownSelectionSnapshot {
   /** 选区在文档纯文本中的结束偏移。 */
   end: number
   /** 选中纯文本，用于结构变化后的回退定位。 */
+  text: string
+}
+
+/**
+ * Markdown 源文件中可核对的选区。
+ * @example
+ * ```ts
+ * import type { MarkdownSourceRange } from '@h-ai/ui'
+ * const range: MarkdownSourceRange = { start: 2, end: 4, text: '强调' }
+ * ```
+ */
+export interface MarkdownSourceRange {
+  /** 源文件中的 UTF-16 起始偏移。 */
+  start: number
+  /** 源文件中的 UTF-16 结束偏移，末尾不含。 */
+  end: number
+  /** source.slice(start, end) 对应的原文。 */
   text: string
 }
 
@@ -304,6 +323,8 @@ export interface AiDocumentEditorProps extends DataAttributes {
   showCodePreviewToggle?: boolean
   /** 是否按安全白名单解析原始 HTML。 */
   allowHtmlTags?: boolean
+  /** 默认允许网络图片。设为 false 时 Markdown 图片使用替代文本，HTML 运行预览显示源码。 */
+  remoteImages?: boolean
   /**
    * 是否启用内置的高风险代码预览。
    *

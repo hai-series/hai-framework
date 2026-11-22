@@ -36,6 +36,7 @@ import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { updateSessionInfo } from '../store/ai-store-session.js'
+import { createJsonFieldPreview } from './ai-llm-json-preview.js'
 import {
   collectStream,
   createSSEDecoder,
@@ -531,7 +532,15 @@ export function createAILLMFunctions(
         baseMessages.push({ role: 'system', content: request.systemPrompt })
       baseMessages.push(...request.messages)
 
-      const jsonSchema = z.toJSONSchema(request.schema)
+      let jsonSchema: Record<string, unknown>
+      try {
+        jsonSchema = z.toJSONSchema(request.schema)
+      }
+      catch {
+        return err(HaiAIError.INVALID_REQUEST, aiM('ai_generateObjectFailed', {
+          params: { error: 'schema cannot be represented as JSON Schema' },
+        }))
+      }
       const jsonObject = request.responseFormat === 'json_object'
       if (jsonObject) {
         baseMessages.unshift({
@@ -560,38 +569,90 @@ export function createAILLMFunctions(
                   }),
                 },
               ]
-        const result = await chatWithRecord({
+        const chatRequest: ChatCompletionRequest = {
           messages,
           model: request.model,
           temperature: request.temperature,
           tempModel: request.tempModel,
           enablePersist: false,
           signal: request.signal,
+          max_tokens: request.maxTokens,
           response_format: jsonObject
             ? { type: 'json_object' }
             : {
                 type: 'json_schema',
                 json_schema: { name: schemaName, schema: jsonSchema, strict: true },
               },
-        })
-        if (!result.success)
-          return result as HaiResult<never>
+        }
+        const preview = request.preview
+        let text = ''
+        let previewPublished = false
+        async function clearPreview(): Promise<void> {
+          if (!previewPublished)
+            return
+          try {
+            await preview?.onPrefix('')
+          }
+          catch {
+            logger.warn('Structured output preview cleanup failed')
+          }
+        }
 
-        const content = result.data.choices[0]?.message?.content
-        const text = typeof content === 'string'
-          ? content
-          : ''
+        let finishReason: string | null = null
+        if (preview) {
+          try {
+            const parser = createJsonFieldPreview(preview.field, preview)
+            for await (const chunk of chatStreamWithRecord(chatRequest)) {
+              const choice = chunk.choices.find(item => item.index === 0)
+              if (!choice)
+                continue
+              finishReason = choice.finish_reason ?? finishReason
+              const fragment = choice.delta.content
+              if (!fragment)
+                continue
+              const prefix = parser.push(fragment)
+              text += fragment
+              if (prefix !== undefined) {
+                previewPublished = true
+                await preview.onPrefix(prefix)
+              }
+            }
+          }
+          catch {
+            await clearPreview()
+            return err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
+          }
+          if (request.signal?.aborted || finishReason !== 'stop') {
+            await clearPreview()
+            lastError = 'structured response did not finish'
+            if (request.signal?.aborted)
+              break
+            continue
+          }
+        }
+        else {
+          const result = await chatWithRecord(chatRequest)
+          if (!result.success)
+            return result
+          const content = result.data.choices[0]?.message?.content
+          text = typeof content === 'string'
+            ? content
+            : ''
+        }
+
         let parsed: unknown
         try {
           parsed = JSON.parse(text)
         }
         catch {
+          await clearPreview()
           lastError = 'invalid JSON'
           continue
         }
         const validated = request.schema.safeParse(parsed)
         if (validated.success)
           return ok(validated.data)
+        await clearPreview()
         lastError = validated.error.message
       }
 
@@ -610,6 +671,7 @@ export function createAILLMFunctions(
 
   const stream: StreamOperations = {
     createProcessor: createStreamProcessor,
+    createJsonFieldPreview,
     collect: collectStream,
     createSSEDecoder,
     encodeSSE,

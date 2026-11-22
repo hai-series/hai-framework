@@ -23,6 +23,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 ## 功能说明
 
 [查 API 清单](../../docs/usage/function/ai.md#api-reference)，包含调用入口、输入、返回值和用法。
+私有文件可在 [Node 本地解析](../../docs/usage/function/ai.md#bounded-local-files)。模型流可预览指定 JSON 字段，[浏览器录音](../../docs/usage/function/ai.md#browser-recording)支持麦克风生命周期和有界 WAV 转换。
 
 ## 数据结构
 

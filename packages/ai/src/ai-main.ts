@@ -37,6 +37,8 @@ import { AIConfigSchema } from './ai-config.js'
 import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
+import { parseBoundedLocalFile } from './file/ai-file-functions.js'
+import { createJsonFieldPreview } from './llm/ai-llm-json-preview.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { adaptToolRegistry } from './llm/ai-llm-tool.js'
 import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
@@ -230,7 +232,12 @@ const notInitializedContext: ContextOperations = {
 const notInitializedRerank = notInitialized.proxy<RerankOperations>()
 
 /** File 未初始化占位 */
-const notInitializedFile = notInitialized.proxy<FileOperations>()
+const notInitializedFile: FileOperations = {
+  parse: request => request.options?.mode === 'local'
+    ? parseBoundedLocalFile(request)
+    : Promise.resolve(notInitialized.result()),
+  parseText: () => Promise.resolve(notInitialized.result()),
+}
 
 /**
  * Audio 未初始化占位
@@ -322,6 +329,7 @@ const toolsOperations: ToolsOperations = {
 
 const streamOperations: StreamOperations = {
   createProcessor: createStreamProcessor,
+  createJsonFieldPreview,
   collect: collectStream,
   createSSEDecoder,
   encodeSSE,

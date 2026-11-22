@@ -43,24 +43,24 @@ Check `success` before using `data` from a `HaiResult`. Reloading changes the va
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.init(options?)` | Configure logging and scan YAML at startup | Without `configDir`, Core skips the scan. `configSchemas` optionally supplies field types by config name. `watchConfig` defaults to `false`. Explicit `logging` takes precedence over YAML logging settings | `void`. Logs individual file failures and continues. Directory or logger errors can throw | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
-| `core.config.loadEnvFiles(options)` | Merge dotenv and existing environment variables | `mode` required. `envDir` defaults to the working directory | `HaiResult<Record<string, string>>`. Apply `data` to `process.env` explicitly | `core.config.loadEnvFiles({ mode: 'dev' })` |
+| `core.init(options?)` | Configure logging and scan YAML at startup | `options` is optional. `options` is optional. Without `configDir`, Core skips the scan. `configSchemas` optionally supplies field types by config name. `watchConfig` defaults to `false`. Explicit `logging` takes precedence over YAML logging settings | `void`. Logs individual file failures and continues. Directory or logger errors can throw | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
+| `core.config.loadEnvFiles(options)` | Merge dotenv and existing environment variables | Required `options` object. Required `options` object. `mode` required. `envDir` defaults to the working directory | `HaiResult<Record<string, string>>`. Apply `data` to `process.env` explicitly | `core.config.loadEnvFiles({ mode: 'dev' })` |
 | `core.config.load(name, filePath, schema?)` | Load one file and apply overrides | `name` and `filePath` required. Omit `schema` to load without schema validation | `HaiResult<T>`. A failure preserves the last successful value | `core.config.load('app', './config/app.yml', AppSchema)` |
-| `core.config.validate(name, schema)` | Recheck the last loaded YAML with the current environment | Both parameters required. Use `reload()` to read edits on disk | `HaiResult<T>`. Success saves the checked values and the schema used for future reloads | `core.config.validate('app', AppSchema)` |
-| `core.config.get<T>(name)` | Read the last saved value | `name` required. `T` supplies a TypeScript type | `T` or `undefined` | `core.config.get<{ port: number }>('app')` |
-| `core.config.getOrThrow<T>(name)` | Read a setting required to continue | `name` required | `T`. Throws if the name has not been loaded | `core.config.getOrThrow<{ port: number }>('app')` |
-| `core.config.has(name)` | Check whether a name has been loaded | `name` required | `boolean` | `core.config.has('app')` |
+| `core.config.validate(name, schema)` | Recheck the last loaded YAML with the current environment | Required loaded alias `name` and validating Zod `schema`. Use `reload()` to read disk edits. | `HaiResult<T>`. Success saves the checked values and the schema used for future reloads | `core.config.validate('app', AppSchema)` |
+| `core.config.get<T>(name)` | Read the last saved value | Required `name` is the loaded config key. `T` supplies the expected TypeScript type. | `T` or `undefined` | `core.config.get<{ port: number }>('app')` |
+| `core.config.getOrThrow<T>(name)` | Read a setting required to continue | Required `name` is the config key to read. `T` supplies the expected TypeScript type. | `T`. Throws if the name has not been loaded | `core.config.getOrThrow<{ port: number }>('app')` |
+| `core.config.has(name)` | Check whether a name has been loaded | Required `name` is the config key to look up. | `boolean` | `core.config.has('app')` |
 | `core.config.keys()` | List loaded names | No arguments | `string[]` | `core.config.keys()` |
-| `core.config.reload(name)` | Read the file again and notify subscribers | `name` required | `HaiResult<unknown>`. Missing names return `CONFIG_NOT_LOADED`. Failed reloads preserve the previous value | `core.config.reload('app')` |
-| `core.config.watch<T>(name, callback)` | Reload on file changes | Both parameters required. `T` defaults to `unknown`. The callback receives the new value on success or `null` and an error on failure | A function that removes this subscription. An unloaded name reports `CONFIG_NOT_LOADED` immediately | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
-| `core.config.isWatching(name)` | Check whether a file watch is active | `name` required | `boolean` | `core.config.isWatching('app')` |
+| `core.config.reload(name)` | Read the file again and notify subscribers | Required `name` identifies the registered config to reload from disk. | `HaiResult<unknown>`. Missing names return `CONFIG_NOT_LOADED`. Failed reloads preserve the previous value | `core.config.reload('app')` |
+| `core.config.watch<T>(name, callback)` | Reload on file changes | Required configuration alias `name` and `callback(value, error)`. Receives the new value, or `null` and an error on failure. | A function that removes this subscription. An unloaded name reports `CONFIG_NOT_LOADED` immediately | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
+| `core.config.isWatching(name)` | Check whether a file watch is active | Required `name` identifies the config whose watch status is checked. | `boolean` | `core.config.isWatching('app')` |
 | `core.config.unwatch(name?)` | Stop watches and keep the loaded values | Omit `name` to stop all watches | `void` | `core.config.unwatch('app')` |
 | `core.config.clear(name?)` | Remove loaded values and stop their watches | Omit `name` to clear all names | `void`. Leaves the files on disk intact | `core.config.clear('app')` |
-| `core.config.resolve(options)` | Apply environment overrides in memory | `name` and `value` required. `environment` defaults to `process.env`. A `schema` or `shape` can provide field types. `missing` defaults to `'error'`; `'empty'` inserts an empty string for a missing placeholder | `HaiResult<unknown>`. Validate the result with the application schema | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
-| `core.config.toEnv(options)` | Flatten configuration into environment variables | `prefix` and `value` required. Optional `schema` or `shape` describes fields | `Record<string, string>`. Throws on invalid names | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })` |
-| `core.config.mergeEnv(layers)` | Merge sources by precedence | Pass objects in order from lowest to highest priority | `Record<string, string>` | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
-| `core.config.parseEnv(text)` | Read literal variables from dotenv text | `text` required | `Record<string, string>`. Throws for duplicate keys or malformed values marked as generated JSON | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
-| `core.config.stringifyEnv(values, options?)` | Write dotenv text | `values` required. `target` defaults to `'node'`. Choose `'compose'` for a Compose env file | A string. Throws on invalid names | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
+| `core.config.resolve(options)` | Apply environment overrides in memory | Required `options` object. Required `options` object. `name` and `value` required. `environment` defaults to `process.env`. A `schema` or `shape` can provide field types. `missing` defaults to `'error'`; `'empty'` inserts an empty string for a missing placeholder | `HaiResult<unknown>`. Validate the result with the application schema | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
+| `core.config.toEnv(options)` | Flatten configuration into environment variables | Required `options` object. Required `options` object. `prefix` and `value` required. Optional `schema` or `shape` describes fields | `Record<string, string>`. Throws on invalid names | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })` |
+| `core.config.mergeEnv(layers)` | Merge sources by precedence | `layers` is an array of environment maps from lowest to highest priority. | `Record<string, string>` | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
+| `core.config.parseEnv(text)` | Read literal variables from dotenv text | Required `text` is the dotenv file content. | `Record<string, string>`. Throws for duplicate keys or malformed values marked as generated JSON | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
+| `core.config.stringifyEnv(values, options?)` | Write dotenv text | Required `values` maps names to strings. Optional `options.target` defaults to `node`; choose `compose` to write a Compose env file. | A string. Throws on invalid names | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
 
 #### Scenario: Configuration in Node and the browser
 
@@ -110,24 +110,34 @@ Valid JSON object or array strings in context are expanded before field redactio
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace` | Log the most detailed diagnostic steps | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
-| `core.logger.debug` | Log diagnostic information | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
-| `core.logger.info` | Log routine application events | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
-| `core.logger.warn` | Log a condition that needs attention | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.error` | Log an operation failure | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
-| `core.logger.fatal` | Log a severe failure; the application decides whether to exit | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
-| `core.logger.create` | Create a logger that inherits settings you omit | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
-| `core.logger.child` | Bind fields to a child logger | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure` | Update the supplied global logging options | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel` | Set the global threshold, initially info | `level` | `void` | `core.logger.setLevel('warn')` |
-| `core.logger.getLevel` | Read the current global threshold | None | `LogLevel` | `core.logger.getLevel()` |
-| `core.logger.observe` | Receive records after filtering and redaction | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace(message, context?)` | Log the most detailed diagnostic steps | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug(message, context?)` | Log diagnostic information | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info(message, context?)` | Log routine application events | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn(message, context?)` | Log a condition that needs attention | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error(message, context?)` | Log an operation failure | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal(message, context?)` | Log a severe failure; the application decides whether to exit | Required log message string `message`. Optional `context` adds fields to this entry. | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create(options?)` | Create a logger that inherits settings you omit | Optional `options` with `name`, `level`, `format`, and `context`. See their precedence below. | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child(context)` | Bind fields to a child logger | Required `context` object bound to entries from this child logger and its descendants. | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure(config)` | Update the supplied global logging options | Required `config` object with optional `level`, `format`, `context`, and `redact`. See the table below. | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel(level)` | Set the global threshold, initially info | Required `level`: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`. | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel()` | Read the current global threshold | None | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe(observer)` | Receive records after filtering and redaction | Required synchronous `observer(record)` receiving a filtered and redacted `LogRecord`. | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 #### Scenario: Record business and diagnostic logs by level
+
+| Field | `create(options?)` | `configure(config)` |
+| --- | --- | --- |
+| `name` | Optional string identifying the module, such as `'orders'` | Set the module name through `create()` |
+| `level` | Optional `trace`, `debug`, `info`, `warn`, `error`, or `fatal`. Omitting it inherits the current global threshold at each call. | Initially `info`. A supplied value sets the global threshold. |
+| `format` | `'json'` or `'pretty'`. Omitting it inherits the current global format at each call. | Initially `'pretty'`. A supplied value sets the global format. |
+| `context` | Optional object added to every entry from this logger. Its keys override global context keys. | Optional object merged into global context by top-level key. Omitting it or passing `{}` preserves existing keys. |
+| `redact` | Inherits the global rules. | Optional array of field paths, initially `[]`. Passing `['customer.email']` replaces the extra rules. Passing `[]` clears them and keeps built-in redaction. |
 
 ```ts
 import { core } from '@h-ai/core'
 
+// Use JSON output and mask the customer email globally. This call returns no data.
+core.logger.configure({ format: 'json', redact: ['customer.email'] })
 // Create the orders logger and return its instance.
 const orders = core.logger.create({ name: 'orders' })
 // Set the threshold to info so lower levels are skipped. Returns no value.
@@ -140,7 +150,7 @@ core.logger.fatal('Example startup failure') // Records a log; does not exit the
 const request = orders.child({ requestId: 'request-1' })
 
 // Log creation and the supplied fields with the parent logger. Returns no business data.
-orders.info('Order created', { attempt: 1 })
+orders.info('Order created', { attempt: 1, customer: { email: 'user@example.com' } }) // customer.email is '[REDACTED]'.
 // Log attempt 2 with the child, which also includes request-1. Returns no business data.
 request.warn('Request needs attention', { attempt: 2 })
 // Run the callback in request-2, restore the outer context afterward, and return the callback result.
@@ -164,7 +174,7 @@ Carry trusted request and user IDs across asynchronous calls so logs can be corr
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.context.run(context, operation)` | Run within a request or task context | Fields and callback. Observers are enabled by default. | Callback result, including a promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
+| `core.context.run(context, operation)` | Run within a request or task context | Required `context` supplies trusted request identifiers and optional `suppressLogObservers`. Required `operation` is a sync or async callback. | Callback result, including a promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
 | `core.context.get()` | Read the current context | No arguments | Readonly `RequestContext` (empty object without context) | `const { requestId } = core.context.get()` |
 
 #### Scenario: Keep request IDs across asynchronous calls
@@ -181,12 +191,23 @@ Clean sensitive object fields, URLs and text before diagnostics without altering
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.sanitize.isSensitiveKey(key, matcher?)` | Match a field name | Key and optional matcher | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
-| `core.sanitize.sanitizeSensitiveValue(value, key, options?)` | Redact one value | Value, key (or `null`), optional replacement (default `[REDACTED]`) | Value | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
-| `core.sanitize.sanitizeSensitiveFields(value, options?)` | Copy and redact structured data | Value, optional matcher and replacement | Redacted copy | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
-| `core.sanitize.sanitizeUrl(url, options?)` | Mask URL credentials | URL, optional redaction options | `string` / `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
-| `core.sanitize.sanitizeText(text, secretValues?)` | Mask credential text | Text and known values (default `[]`) | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
+| `core.sanitize.isSensitiveKey(key, matcher?)` | Match a field name | Required field name `key`. Optional `matcher` is a regular expression, an array of field names, or a predicate. Defaults to built-in matching. | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
+| `core.sanitize.sanitizeSensitiveValue(value, key, options?, cache?)` | Redact one value | Required `value` and field `key` (`null` at the root). Optional `options` configures matching and replacement, which defaults to `[REDACTED]`. Optional `cache` is a `WeakMap` of copied objects. Each call gets a fresh cache by default. | Value | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
+| `core.sanitize.sanitizeSensitiveFields(value, options?)` | Copy and redact structured data | Required `value` to copy and redact. See the table below for optional `options.matcher` and `options.replacement`. | Redacted copy | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
+| `core.sanitize.sanitizeUrl(url, options?)` | Mask URL credentials | Required `url` string. Optional `options.matcher` and `options.replacement` affect credential fields in the URL. | `string` / `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
+| `core.sanitize.sanitizeText(text, secretValues?)` | Mask credential text | Required `text` to redact. Optional `secretValues` lists additional known secret strings, default `[]`. | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
 | `core.sanitize.defaultSensitiveKeyRegex`, `defaultSensitiveReplacement` | Read the built-in matcher and replacement | Read-only constants | `RegExp` / `string` | `const replacement = core.sanitize.defaultSensitiveReplacement` |
+
+<a id="sanitize-options"></a>
+
+#### Redaction options
+
+| Field | Values, defaults and behavior |
+| --- | --- |
+| `matcher` | Optional regex, field-name array, or `(key) => boolean`. This selects fields to replace. Omission uses the built-in sensitive-key matcher. |
+| `replacement` | Replacement value, defaulting to the string `[REDACTED]`. URL redaction serializes it as text. |
+
+The scenario below uses `matcher: ['email']` and `replacement: '***'` on a copy whose original password has been redacted. Its email changes to `***`.
 
 #### Scenario: Hide sensitive fields before publishing diagnostics
 
@@ -202,11 +223,11 @@ Define domain errors, build complete diagnostics and safe public responses, and 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.error.buildHaiErrorsDef(module, codes)` | Define stable module error codes | Module name and a name-to-code/status mapping | Error definitions | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
-| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | Attach a message to a failure | Definition, message, optional cause and suggestion | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
-| `core.error.toPublic(error, traceId?)` | Prepare an error for a client | Error and optional trace ID | Public error | `core.error.toPublic(error, 'req-1')` |
-| `core.error.formatMessage(error)` | Format the visible message | Error message and optional trace ID | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`, `err(def, message, cause?)` | Construct a business result | Success data, or error definition and message (or a complete error) | `HaiResult` | `ok({ id: 'order-1' })`, `err(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.buildHaiErrorsDef(module, errorInfo, system?)` | Define stable module error codes | Required `module` and `errorInfo`, which maps error names to `businessCode:httpStatus`. `system` defaults to `hai` and starts each code. | Error definitions | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
+| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | Attach a message to a failure | Required error definition `def` and public `message`. Optional internal `cause` and recovery `suggestion`. | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.toPublic(error, traceId?, locale?)` | Prepare an error for a client | Required `error`. Optional `traceId` overrides the request correlation ID. Optional `locale` selects the generic 5xx message language. | Public error | `core.error.toPublic(error, 'req-1')` |
+| `core.error.formatMessage(error)` | Format the visible message | Required `error` object with a message string and optional `traceId`. | `string` | `core.error.formatMessage(error)` |
+| `ok(data)`, `err(errorOrDef, message?, cause?, suggestion?)` | Construct a business result | Pass success `data` to `ok`. `err` requires `errorOrDef`, an error definition, `HaiError`, or native error, and accepts optional `message`, `cause`, and `suggestion`. | `HaiResult` | `ok({ id: 'order-1' })`, `err(errors.NOT_FOUND, 'Order not found')` |
 
 #### Scenario: Build domain failures and safe public messages
 
@@ -222,11 +243,11 @@ Choose a locale per request and read translated messages; avoid changing global 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)` | Set the default locale | Locale code | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.setGlobalLocale(locale)` | Set the default locale | Required `locale`: `zh-CN`, `en-US`, or `ja-JP`, with aliases `zh`, `en`, and `ja`. | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
 | `core.i18n.getGlobalLocale()` | Read the current locale | None; initial default is `zh-CN` | Locale code | `core.i18n.getGlobalLocale()` |
-| `core.i18n.runWithLocale(locale, operation)` | Scope a Node request locale | Locale and callback | Callback result | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
-| `core.i18n.createMessageGetter(dictionaries)` | Create a message lookup | Dictionaries keyed by locale | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'Welcome' } })` |
-| `core.i18n.coreM(key, options?)` | Read a built-in message | Key, optional locale and interpolation parameters | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
+| `core.i18n.runWithLocale(locale, operation)` | Scope a Node request locale | Required request `locale` and sync or async callback `operation`, whose result is preserved. | Callback result | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
+| `core.i18n.createMessageGetter(messages)` | Create a message lookup | Required `messages`, a map from locales to dictionaries of message keys and translations. | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'Welcome' } })` |
+| `core.i18n.coreM(key, options?)` | Read a built-in message | Required message `key`. Optional `options.locale` overrides the current locale and `options.params` supplies placeholders such as `{name}`. | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
 | `core.i18n.DEFAULT_LOCALE`, `DEFAULT_LOCALES` | Read supported locales | Read-only constants | Locale and choices | `const choices = core.i18n.DEFAULT_LOCALES` |
 
 #### Scenario: Select message language for a request
@@ -243,8 +264,8 @@ Map Zod issues to localized form messages while retaining field paths.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.zodValidation.createPrefixedZodMessageGetter(prefix, message)` | Adapt a module message prefix | Prefix and message getter | Message getter | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
-| `core.zodValidation.mapZodErrorToFormErrors(error, message)` | Map Zod issues to form fields | Failure value and adapted message getter | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
+| `core.zodValidation.createPrefixedZodMessageGetter(prefix, getMessage)` | Adapt a module message prefix | Required message key `prefix` and `getMessage(key, params)` lookup function. | Message getter | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
+| `core.zodValidation.mapZodErrorToFormErrors(error, getMessage)` | Map Zod issues to form fields | Required Zod validation `error` and adapted `getMessage(key, params)` lookup. | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
 
 #### Scenario: Map validation issues to form fields
 
@@ -260,9 +281,9 @@ The mapper turns Zod v3/v4 issues into field-level messages. Array indexes appea
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.module.createRuntime(steps)` | Manage dependency startup and shutdown | Named steps with start and close functions, optional enabled predicate | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | Return consistent failures before a module is ready | Both arguments are required: the error code or definition, and a function that returns the message. | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
-| `core.module.requiresSharedState(environment)` | Check whether a shared backend is required | Environment values. Explicit production E2E runs can opt out. | `boolean` | `core.module.requiresSharedState(process.env)` |
+| `core.module.createRuntime(definitions)` | Manage dependency startup and shutdown | Required `definitions` array in initialization order. Steps require `name`, `start`, and `close`. Optional `enabled` selects whether a step runs. | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | Return consistent failures before a module is ready | Required `codeOrDef` error code or definition and zero-argument `messageFn` to resolve its message. | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.requiresSharedState(environment)` | Check whether a shared backend is required | Required `environment` object. Requires shared state if `NODE_ENV` or `HAI_CORE_ENV` is `production` unless `HAI_E2E` or `HAI_E2E_MOCK` explicitly equals `1`. | `boolean` | `core.module.requiresSharedState(process.env)` |
 
 #### Scenario: Return a failure before initialization
 
@@ -373,14 +394,28 @@ Use a Worker for large document processing or batch computation while the callin
 
 | Entry | Purpose | Inputs | Returns | Example |
 | --- | --- | --- | --- | --- |
-| `core.worker.createPool(entry, limits)` | Create a pool | Entry, positive thread limit, non-negative queue limit and optional idle time in milliseconds | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
-| `pool.run(input, transfer?)` | Submit work | A cloneable input and optional transfer list | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `core.worker.createPool(entry, options)` | Create a pool | Required `entry` Worker URL or browser constructor and `options` for threads, queue, and idle retirement. See the table below. | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | Submit work | Required structured-cloneable `input`. Optional `transfer` lists transferable values. Node accepts ArrayBuffers. | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
 | `pool.close()` | Settle unfinished jobs and stop the threads | None | `Promise<void>` | `await pool.close()` |
-| `core.worker.start(entry, options?)` | Start a dedicated thread | Entry, plus optional Node `workerData` and `execArgv` | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
-| `thread.postMessage(input, transfer?)` | Send a message | Input and optional transfer list | `void` | `thread.postMessage(report)` |
-| `thread.onMessage(listener)` | Subscribe to messages | Function that receives the output | Unsubscribe function | `const unsubscribe = thread.onMessage(receive)` |
+| `core.worker.start(entry, options?)` | Start a dedicated thread | Required `entry`. Node `options` can supply `workerData` and `execArgv`. Browser calls accept the entry only. | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | Send a message | Required structured-cloneable `input`. Optional `transfer` lists transferable values. Node accepts ArrayBuffers. | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | Subscribe to messages | Required `listener(output)` invoked for each worker message. | Unsubscribe function | `const unsubscribe = thread.onMessage(receive)` |
 | `thread.exited` | Observe exit | None | `Promise<WorkerExit>` | `await thread.exited` |
 | `thread.terminate()` | Stop the thread | None | `Promise<void>` | `await thread.terminate()` |
+
+<a id="worker-options"></a>
+
+#### Worker pool and dedicated thread options
+
+| Field | Values, defaults and behavior |
+| --- | --- |
+| `createPool.options.maxWorkers` | Required positive safe integer. Each worker runs one task at a time. |
+| `createPool.options.maxQueuedJobs` | Required nonnegative safe integer. `0` disallows queuing. |
+| `createPool.options.idleTimeoutMs` | Optional integer from 1 to 2147483647 milliseconds. Omit to keep idle threads until close. |
+| `start.options.workerData` | Node only. Pass structured-cloneable startup data that the worker reads as `workerData`. Omission provides no data. |
+| `start.options.execArgv` | Node only. Sets the worker’s Node startup arguments as an array of strings. Node inherits the host arguments when omitted. |
+
+In the document-count scenario below, `{ maxWorkers: 2, maxQueuedJobs: 4 }` runs two tasks at once, queues four more, and rejects further submissions as rate-limited.
 
 #### Scenario: Measure documents and release the threads
 
@@ -485,11 +520,22 @@ A request must satisfy `global` and every matching rule. If none match, only `gl
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.access.normalizeClientIp(value?)` | Normalize an IPv4 or IPv6 address | Optional address string | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | Create a function that selects the IP for each access check | Trusted proxy configuration (default `auto`) | `resolveClientIp(request, remoteAddress?)` → IP or `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
-| `core.access.createConditionCheck(condition)` | Prepare address and schedule conditions | Condition object with address lists and time windows | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | Compile a request policy | Rules, file reference, or `false`. Omission disables the policy. | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
-| `core.access.loadPolicy(input?, baseDirectory?)` | Read and validate policy content | Policy input and base directory (default working directory) | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.normalizeClientIp(value?)` | Normalize an IPv4 or IPv6 address | Optional connection address string `value`. Missing or invalid values return `undefined`. | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
+| `core.access.createClientIpResolver(trustedProxies?)` | Create a function that selects the IP for each access check | `trustedProxies` defaults to `auto`, which uses the container subnet only in a managed private setting. An explicit IP/CIDR array is supported. `[]` ignores forwarding headers. | `resolveClientIp(request, remoteAddress?)` → IP or `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createConditionCheck(condition)` | Prepare address and schedule conditions | Required `condition` containing trusted-address and time constraints. See [access policy](#access-condition-options) for fields and values. | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
+| `core.access.createRequestCheck(input?)` | Compile a request policy | `input` is an inline policy, `{ file }`, or `false` (default). | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.loadPolicy(input?, baseDirectory?)` | Read and validate policy content | `input` is an inline policy, `{ file }`, or `false` (default). `baseDirectory` resolves relative file paths and defaults to the process directory. | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+
+<a id="access-condition-options"></a>
+
+#### Address and time conditions
+
+| Field | Values, defaults and behavior |
+| --- | --- |
+| `allowIps` | IPv4, IPv6, or CIDR array. An empty array allows any address; a nonempty list only allows matches. |
+| `denyIps` | IPv4, IPv6, or CIDR array. An empty array denies no addresses. Matches take precedence over allowed entries. |
+| `timezone` | IANA timezone for evaluation windows, such as `UTC`. |
+| `windows` | Time-window array. `[]` imposes no time restriction. Nonempty windows have `days`, `start`, and `end`; see the scenario below. |
 
 #### Scenario: Which IP should the access check use?
 
@@ -617,14 +663,14 @@ Generate business, request and trace IDs, and check external formats. IDs are no
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.id.generate` | Generate a random ID | `length = 21` | `string` | `core.id.generate(8)` |
-| `core.id.short` | Generate a short ID with 10 characters | None | `string` | `core.id.short()` |
-| `core.id.withPrefix` | Add a business prefix to a random ID | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
-| `core.id.trace` | Generate a trace ID with the trace- prefix | None | `string` | `core.id.trace()` |
-| `core.id.request` | Generate a request ID with the req- prefix | None | `string` | `core.id.request()` |
-| `core.id.uuid` | Generate UUID v4; throws when secure randomness is unavailable | None | `string` | `core.id.uuid()` |
-| `core.id.isValidUUID` | Check the UUID v4 format | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
-| `core.id.isValidNanoId` | Check the character set and length | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
+| `core.id.generate(length?)` | Generate a random ID | Optional ID length in characters, default `21`. | `string` | `core.id.generate(8)` |
+| `core.id.short()` | Generate a short ID with 10 characters | None | `string` | `core.id.short()` |
+| `core.id.withPrefix(prefix, length?)` | Add a business prefix to a random ID | Required prefix string `prefix`. `length` counts the random suffix characters, default `21`. | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace()` | Generate a trace ID with the trace- prefix | None | `string` | `core.id.trace()` |
+| `core.id.request()` | Generate a request ID with the req- prefix | None | `string` | `core.id.request()` |
+| `core.id.uuid()` | Generate UUID v4; throws when secure randomness is unavailable | None | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID(uuid)` | Check the UUID v4 format | Required UUID string `uuid` to validate. | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId(str, length?)` | Check the character set and length | Required candidate string `str`. The expected character count `length` defaults to `21`. | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 #### Scenario: Generate business and request IDs
 
@@ -640,14 +686,14 @@ Check boundary values and narrow TypeScript types; validate business input with 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.typeUtils.isDefined` | Check that a value is neither null nor undefined | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
-| `core.typeUtils.isObject` | Check for an object excluding null and arrays | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
-| `core.typeUtils.isFunction` | Check for a function | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
-| `core.typeUtils.isPromise` | Check for a promise | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
-| `core.typeUtils.isString` | Check for a string | `value` | `boolean` | `core.typeUtils.isString('orders')` |
-| `core.typeUtils.isNumber` | Check for a number other than NaN | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
-| `core.typeUtils.isBoolean` | Check for a boolean | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
-| `core.typeUtils.isArray` | Check for an array | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
+| `core.typeUtils.isDefined(value)` | Check that a value is neither null nor undefined | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject(value)` | Check for an object excluding null and arrays | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction(value)` | Check for a function | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise(value)` | Check for a promise | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString(value)` | Check for a string | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber(value)` | Check for a number other than NaN | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean(value)` | Check for a boolean | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray(value)` | Check for an array | Required `value`, any JavaScript value to inspect. | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
 #### Scenario: Check inputs and narrow types
 
@@ -663,14 +709,14 @@ Copy and merge configuration objects, select fields and convert entries.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.object.deepClone` | Copy a cloneable value; functions and other uncloneable values throw | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
-| `core.object.deepMerge` | Merge plain objects recursively, with later values winning | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
-| `core.object.pick` | Keep the listed keys | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
-| `core.object.omit` | Remove the listed keys | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
-| `core.object.keys` | List own enumerable string keys | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
-| `core.object.values` | List values in the same order | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
-| `core.object.entries` | Return key/value pairs | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
-| `core.object.fromEntries` | Build an object from key/value pairs | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
+| `core.object.deepClone(obj)` | Copy a cloneable value; functions and other uncloneable values throw | Required source `obj`. Supply cloneable data when a copy is needed. | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge(...objects)` | Merge plain objects recursively, with later values winning | Pass `objects` from lowest to highest precedence. Later values win for matching keys. | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick(obj, keys)` | Keep the listed keys | Required source object `obj` and array `keys` of keys to keep. | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit(obj, keys)` | Remove the listed keys | Required source object `obj` and array `keys` of keys to exclude. | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys(obj)` | List own enumerable string keys | Required source object `obj` from which to read own properties. | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values(obj)` | List values in the same order | Required source object `obj` from which to read own properties. | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries(obj)` | Return key/value pairs | Required source object `obj` from which to read own properties. | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries(entries)` | Build an object from key/value pairs | Required `entries`, with one `[key, value]` pair per entry. | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 #### Scenario: Merge settings and select fields
 
@@ -686,18 +732,18 @@ Normalize names, whitespace and display lengths; observe platform limits for sec
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.string.capitalize` | Uppercase the first character | `text` | `string` | `core.string.capitalize('hello')` |
-| `core.string.kebabCase` | Convert to hyphen-separated case | `text` | `string` | `core.string.kebabCase('helloWorld')` |
-| `core.string.camelCase` | Convert to lower camel case | `text` | `string` | `core.string.camelCase('hello-world')` |
-| `core.string.snakeCase` | Convert to underscore-separated case | `text` | `string` | `core.string.snakeCase('helloWorld')` |
-| `core.string.pascalCase` | Convert to Pascal case | `text` | `string` | `core.string.pascalCase('hello-world')` |
-| `core.string.truncate` | Trim to the requested length when needed, then add the suffix | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
-| `core.string.trim` | Remove leading and trailing whitespace | `text` | `string` | `core.string.trim(' hello ')` |
-| `core.string.isBlank` | Check for empty or whitespace-only text | `text` | `boolean` | `core.string.isBlank(' ')` |
-| `core.string.isNotBlank` | Check whether any nonwhitespace character remains | `text` | `boolean` | `core.string.isNotBlank('hello')` |
-| `core.string.padStart` | Pad at the start to reach the target length | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
-| `core.string.padEnd` | Pad at the end to reach the target length | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
-| `core.string.constantTimeEqual` | Compare equal-length strings; different lengths immediately return false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
+| `core.string.capitalize(str)` | Uppercase the first character | Required string `str` to process. | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase(str)` | Convert to hyphen-separated case | Required string `str` to process. | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase(str)` | Convert to lower camel case | Required string `str` to process. | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase(str)` | Convert to underscore-separated case | Required string `str` to process. | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase(str)` | Convert to Pascal case | Required string `str` to process. | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate(str, length, suffix?)` | Trim to the requested length when needed, then add the suffix | Required string `str` and number of UTF-16 code units `length` to keep. Truncation then adds `suffix`, default `...`. `length <= 0` returns the original string. | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim(str)` | Remove leading and trailing whitespace | Required string `str` to process. | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank(str)` | Check for empty or whitespace-only text | Required string `str` to process. | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank(str)` | Check whether any nonwhitespace character remains | Required string `str` to process. | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart(str, length, char?)` | Pad at the start to reach the target length | Required string `str` and target `length`. The padding string `char` defaults to a space. | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd(str, length, char?)` | Pad at the end to reach the target length | Required string `str` and target `length`. The padding string `char` defaults to a space. | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual(a, b)` | Compare equal-length strings; different lengths immediately return false | Required strings `a` and `b` to compare. | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
 #### Scenario: Normalize names and display text
 
@@ -713,16 +759,16 @@ Deduplicate, group and chunk items, then inspect endpoints or compare membership
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.array.unique` | Deduplicate in order of first appearance | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
-| `core.array.groupBy` | Group by the key returned by the selector | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
-| `core.array.chunk` | Split into chunks; invalid sizes return an empty array | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
-| `core.array.first` | Read the first item; empty arrays have no value | `items` | `T or undefined` | `core.array.first([1, 2])` |
-| `core.array.last` | Read the last item; empty arrays have no value | `items` | `T or undefined` | `core.array.last([1, 2])` |
-| `core.array.flatten` | Flatten one level | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
-| `core.array.compact` | Remove null and undefined, preserving zero and other values | `items` | `T[]` | `core.array.compact([0, null, 1])` |
-| `core.array.shuffle` | Return a shuffled copy | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
-| `core.array.intersection` | Keep items in the first array that also appear in the second | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
-| `core.array.difference` | Keep items in the first array that are absent from the second | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
+| `core.array.unique(arr)` | Deduplicate in order of first appearance | Required array `arr` to process. | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy(arr, fn)` | Group by the key returned by the selector | Required array `arr` and grouping function `fn(item)` returning the group key. | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk(arr, size)` | Split into chunks; invalid sizes return an empty array | Required array `arr` and its maximum items per group, `size`. | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first(arr)` | Read the first item; empty arrays have no value | Required array `arr` to process. | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last(arr)` | Read the last item; empty arrays have no value | Required array `arr` to process. | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten(arr)` | Flatten one level | Required nested array `arr`. Flattens one level. | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact(arr)` | Remove null and undefined, preserving zero and other values | Required array `arr` to process. | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle(arr)` | Return a shuffled copy | Required array `arr` to process. | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection(arr1, arr2)` | Keep items in the first array that also appear in the second | Required arrays `arr1` and `arr2`. Selects elements that occur in both. | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference(arr1, arr2)` | Keep items in the first array that are absent from the second | Required arrays `arr1` and `arr2`. Keeps elements of the first array absent from the second. | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
 #### Scenario: Group, chunk and compare collections
 
@@ -738,13 +784,13 @@ Delay, time out, retry or limit concurrency as needed, and debounce or throttle 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.async.delay` | Wait approximately the supplied milliseconds | `ms` | `Promise<void>` | `await core.async.delay(10)` |
-| `core.async.withTimeout` | Bound how long the caller waits; rejects on timeout | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
-| `core.async.retry` | Retry thrown or rejected work; count includes the initial attempt | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
-| `core.async.parallel` | Bound concurrent work and keep results in input order | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
-| `core.async.serial` | Run one action at a time in input order | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
-| `core.async.debounce` | Run the latest call after a quiet period | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
-| `core.async.throttle` | Run the first call immediately and skip later calls during the interval | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
+| `core.async.delay(ms)` | Wait approximately the supplied milliseconds | Required wait duration `ms` in milliseconds. | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout(promise, ms)` | Bound how long the caller waits; rejects on timeout | Required `promise` and deadline `ms` in milliseconds. Timing out stops waiting. | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry(fn, options?)` | Retry thrown or rejected work; count includes the initial attempt | Required async operation `fn`. `options.maxRetries` defaults to `3` total attempts with a minimum of one. `options.delay` defaults to `1000` milliseconds. | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel(items, fn, concurrency?)` | Bound concurrent work and keep results in input order | Required `items` and async `fn(item, index)`. `concurrency` is the positive safe integer limit for simultaneous work and defaults to `5`. | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial(items, fn)` | Run one action at a time in input order | Required `items` and async `fn(item, index)`. Waits for each item in input order. | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce(fn, ms)` | Run the latest call after a quiet period | Required callback `fn` and wait interval `ms` in milliseconds. | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle(fn, ms)` | Run the first call immediately and skip later calls during the interval | Required callback `fn` and wait interval `ms` in milliseconds. | `wrapper` | `core.async.throttle(callback, 100)` |
 
 #### Scenario: Apply timeouts, retries and concurrency limits
 
@@ -760,16 +806,16 @@ Parse and validate dates, format them and calculate local calendar boundaries. I
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `core.time.formatDate` | Fill date placeholders in the local time zone | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
-| `core.time.timeAgo` | Return localized relative time | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
-| `core.time.now` | Read Unix milliseconds | None | `number` | `core.time.now()` |
-| `core.time.nowSeconds` | Read Unix seconds rounded down | None | `number` | `core.time.nowSeconds()` |
-| `core.time.parseDate` | Parse with the native Date parser; invalid input yields an invalid date | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
-| `core.time.isValidDate` | Check whether the Date is valid | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
-| `core.time.addDays` | Shift by days on the local calendar | `date, days` | `Date` | `core.time.addDays(date, 7)` |
-| `core.time.addHours` | Shift by hours on the local clock | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
-| `core.time.startOfDay` | Return local midnight at the start of the day | `date` | `Date` | `core.time.startOfDay(date)` |
-| `core.time.endOfDay` | Return the last millisecond of the local day | `date` | `Date` | `core.time.endOfDay(date)` |
+| `core.time.formatDate(date, format?)` | Fill date placeholders in the local time zone | Required `Date` value `date`. `format` is the output pattern, default `YYYY-MM-DD`. | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo(date)` | Return localized relative time | Required `Date` object `date`. | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now()` | Read Unix milliseconds | None | `number` | `core.time.now()` |
+| `core.time.nowSeconds()` | Read Unix seconds rounded down | None | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate(dateStr)` | Parse with the native Date parser; invalid input yields an invalid date | Required date text `dateStr`, for example `2026-01-01T00:00:00Z`. | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate(date)` | Check whether the Date is valid | Required `Date` object `date`. | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays(date, days)` | Shift by days on the local calendar | Required `date: Date` and number of `days`. Negative values move backward. | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours(date, hours)` | Shift by hours on the local clock | Required `date: Date` and number of `hours`. Negative values move backward. | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay(date)` | Return local midnight at the start of the day | Required `Date` object `date`. | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay(date)` | Return the last millisecond of the local day | Required `Date` object `date`. | `Date` | `core.time.endOfDay(date)` |
 
 #### Scenario: Parse, format and calculate date boundaries
 

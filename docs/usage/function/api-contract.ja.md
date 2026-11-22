@@ -57,9 +57,26 @@ export const appContract = {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.create` | 组合应用接口 | `{ iam: apiContract.iam, payment: false }` | `{ iam: IamContract }` | `apiContract.create({ iam: apiContract.iam, payment: false })` |
-| `apiContract.route` | 声明 HTTP 接口 | `{ method: "GET", path: "/status" }` | `ContractProcedureBuilder` | `apiContract.route({ method: "GET", path: "/status" })` |
-| `apiContract.pathOf` | 取唯一业务路径 | `apiContract.iam.auth.login` | `string: "/auth/login"` | `apiContract.pathOf(apiContract.iam.auth.login)` |
+| `apiContract.create(options)` | ドメインの契約を組み合わせる | 必須の `options: CreateApiContractOptions` には業務ドメイン名と契約ルーターの対応を渡します。`false` または `undefined` のドメインは除外します。 [契約とルートの項目](#contract-route-options)を参照してください。 | `{ iam: IamContract }` | `apiContract.create({ iam: apiContract.iam, payment: false })` |
+| `apiContract.route(route)` | HTTP エンドポイントを宣言 | 必須の `route: Route` に HTTP の `method` と `/` で始まる `path` を指定します。`summary`、`description`、`tags` などの OpenAPI メタデータも指定できます。 [契約とルートの項目](#contract-route-options)を参照してください。 | `ContractProcedureBuilder` | `apiContract.route({ method: "GET", path: "/status" })` |
+| `apiContract.pathOf(procedure)` | 宣言済みの HTTP パスを取得 | 必須の `procedure: AnyContractProcedure` には HTTP パスを宣言済みの procedure を渡します。 | `string: "/auth/login"` | `apiContract.pathOf(apiContract.iam.auth.login)` |
+
+<a id="contract-route-options"></a>
+
+##### 契約とルートの項目
+
+契約と HTTP の対応を設定する項目です。例の `{ status, iam: apiContract.iam, payment: false }` は `status` と `iam` だけを持つ契約になり、`/auth/login` を取得します。
+
+| 項目 | 既定値または必須 | 動作と適用条件 |
+| --- | --- | --- |
+| `options[domain]` | オブジェクトは必須。ドメインは任意 | 各キーはドメイン名です。ルーターや procedure を渡すと追加し、`false` や `undefined` を渡すと除外します。 |
+| `route.method / route.path` | 任意。HTTP 入口では明示を推奨 | `method` は HTTP メソッド、`path` は `/` から始まるパス。`pathOf` には宣言済みのパスが必要です。 |
+| `route.operationId` | 既定はルーターのパス要素の連結 | OpenAPI の操作識別子を上書きします。 |
+| `route.summary / route.description / route.deprecated / route.tags` | 省略可 | OpenAPI の要約、説明、非推奨フラグと分類タグです。 |
+| `route.successStatus / route.successDescription` | `200` / `OK` | 成功時のステータスと説明です。ステータスは 200～399 を指定します。 |
+| `route.inputStructure` | `compact` | `compact` はパス引数とクエリまたは本文をまとめます。`detailed` は `params`、`query`、`headers`、`body` を個別に渡します。 |
+| `route.outputStructure` | `compact` | `compact` は出力をそのまま本文にします。`detailed` は `status`、`headers`、`body` を受け取り、`status` の省略時は `successStatus` を使います。 |
+| `route.spec` | 省略時は自動生成 | OpenAPI Operation Object、または生成済み operation を受け取って置き換える関数を指定できます。 |
 
 #### 利用例：HTTP 契約の定義と組合せ
 
@@ -97,9 +114,9 @@ GET /status と使用するモジュールを入力して契約オブジェク�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.haiResultSchema` | 校验成功或失败结果 | `z.string()` | `ZodSchema<HaiResult<string>>` | `apiContract.haiResultSchema(z.string())` |
-| `apiContract.voidResultSchema` | 校验无业务数据的结果 | `{ success: true, data: undefined }` | `ZodSchema<HaiResult<void>>` | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
-| `apiContract.paginatedSchema` | 校验分页列表 | `z.object({ id: z.string() })` | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))` |
+| `apiContract.haiResultSchema(dataSchema)` | 校验成功或失败结果 | 必須の `dataSchema` には成功時の `data` の Zod スキーマを渡します。 | `ZodSchema<HaiResult<string>>` | `apiContract.haiResultSchema(z.string())` |
+| `apiContract.voidResultSchema` | 校验无业务数据的结果 | スキーマ定数です。例の `safeParse(input)` で業務データのない結果を検証します。 | `ZodSchema<HaiResult<void>>` | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
+| `apiContract.paginatedSchema(itemSchema)` | 校验分页列表 | 必須の `itemSchema` はページ結果の `items` に入る 1 件分の Zod スキーマです。 | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))` |
 
 #### 利用例：結果とページの検証
 

@@ -12,6 +12,7 @@ hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通�
 
 - 使用 Tauri 打包桌面应用，共用 typed API 与认证界面。
 - 支持运行时 API 地址、主题、个人设置和原生安装包验证。
+- 原生应用的「关于」显示当前安装版本。发布方可为 Linux x64 AppImage 和 Windows x64 NSIS 正式包启用签名更新。
 
 ## 使用入门
 
@@ -38,7 +39,6 @@ hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通�
 
 不包含的（保持示例精简）：
 
-- 端到端测试
 - 复杂的权限/菜单系统
 - Storage / AI 子领域 demo（接口可用，UI 未提供）
 
@@ -156,7 +156,7 @@ CLI 将本次安装包归档到应用根的 `.hai/build/desktop/<平台>/<构建
 | ----------- | ------------------------------------ | --------------------------------------- | -------------------------------------------------- |
 | Windows x64 | Rust MSVC、C++ Build Tools、WebView2 | `pnpm --filter desktop-app tauri:build` | `src-tauri/target/release/bundle/nsis/*-setup.exe` |
 
-安装包默认未签名，不是正式发布产物；真机签名、商店发布与升级验收需对应签名身份，不得为跑通流程绕过签名或安全存储。
+默认构建普通安装包。向用户发布时，按实际分发渠道准备平台签名和安装验收。启用应用内更新时另需 Tauri 更新签名。
 
 打包后须在干净环境完成安装后验收：下载同一提交产物、连接独立验收后端、只用测试账号，证据不得含密码 / token / 密钥。
 
@@ -169,6 +169,47 @@ CLI 将本次安装包归档到应用根的 `.hai/build/desktop/<平台>/<构建
 | 退出与升级 | 退出后重启仍未登录、旧 token 不再被读取；同一应用 ID + 递增版本覆盖安装后重复认证 / 退出 / 网络流程        |
 
 Windows 可用 NSIS `/S /D=<绝对路径>` 在隔离目录静默安装。每次结果记录日期、提交 SHA、包 SHA256、平台 / 工具链、真实命令与退出码及逐步骤通过 / 失败 / 未验证；无设备或凭证时保留「未验证」，不用 skip 制造通过。依据 [Tauri Windows 安装包](https://v2.tauri.app/distribute/windows-installer/)。
+
+#### 应用内检查更新
+
+打开桌面应用后，登录前也可以在「关于」查看当前版本。更新默认关闭。发布方启用后，应用启动时会检查一次，有新版本时提示，也可以从「关于」主动点「检查更新」。看到新版本后，可以稍后处理。确认「下载并安装」前先保存工作，Linux AppImage 安装完可点「立即重启」，Windows 安装更新时会关闭应用。重新打开后到「关于」核对版本。
+
+在 Linux x64 上可用 `pnpm --filter desktop-app build --target desktop --platform linux --arch x64` 构建。选择本批次中的 `.AppImage` 签名并交付，更新清单使用 `linux-x86_64`。需要运行 AppImage 的 Linux 桌面环境，并将文件放到用户可写的位置。
+
+##### Windows x64 本地验收
+
+在 Windows 的独立检出中准备 Rust MSVC、C++ Build Tools 和 WebView2。用临时签名密钥，准备可信 HTTPS 更新清单和两版安装包的目录。服务端重定向也必须走 HTTPS。从仓库根目录在 PowerShell 执行以下命令，将域名和密钥路径换成本次验收用的值。
+
+```powershell
+pnpm.cmd install --frozen-lockfile
+pnpm.cmd exec turbo run build "--filter=desktop-app^..."
+$feed = "https://updates.example.test/windows/latest.json"
+$key = Join-Path $env:USERPROFILE "hai-desktop-upgrade-test.key"
+pnpm.cmd --filter desktop-app tauri signer generate -w $key
+$env:TAURI_UPDATE_PUBLIC_KEY = (Get-Content -Raw "$key.pub").Trim()
+node scripts/desktop-update-release.mjs configure apps/desktop-app/src-tauri/tauri.windows.conf.json $feed
+```
+
+在验收检出里先把 `apps/desktop-app/package.json` 的 `version` 设为 `1.0.0`，再设为 `1.0.1`，分别执行下面的构建和签名步骤。每次把 `$version` 设为对应的版本。两版使用相同的应用标识、产品名、安装模式、更新地址和公钥。
+
+```powershell
+$version = "1.0.0"
+pnpm.cmd --filter desktop-app build --target desktop --platform windows --arch x64
+if ($LASTEXITCODE -ne 0) { throw "Windows desktop build failed" }
+$env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content -Raw $key).Trim()
+try {
+  node scripts/desktop-update-release.mjs package windows apps/desktop-app "https://updates.example.test/windows/$version/" "tmp/desktop-update/$version"
+  if ($LASTEXITCODE -ne 0) { throw "Windows desktop signing failed" }
+} finally {
+  Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY
+}
+```
+
+密钥有密码时也仅在签名步骤设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，步骤结束后清除。用 `1.0.0` 的 NSIS 安装包装到验收机。先上传 `1.0.1` 安装包及签名，再把这一版的 `latest.json` 放到 `$feed`。在旧版「关于」里发现更新后先点一次「稍后」，确认旧版仍可用，再确认安装。核对 Windows 关闭应用、完成覆盖安装，重开后显示 `1.0.1` 和「已是最新版」。
+
+##### GitHub Actions 打包
+
+[Desktop update package](../../.github/workflows/desktop-update.yml) 在默认分支包含工作流后可手动运行。使用正式签名密钥前，为 `desktop-update` 环境限制可使用该环境的可信分支和标签。在这个环境将 `.pub` 文件内容存为变量 `TAURI_UPDATE_PUBLIC_KEY`，将私钥文件内容存为机密 `TAURI_SIGNING_PRIVATE_KEY`，有密码时另存机密 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。运行时选 `platform`（`linux` 或 `windows`），填写以 `/latest.json` 结尾的 HTTPS `feed_url`、本次版本的 HTTPS 发布目录 `asset_base_url`，可选填 `release_notes`。每次生成一个平台的发布文件、`.sig` 和 `latest.json`。分别为各平台配置更新清单地址和发布目录。下载构建产物后，先上传发布文件，再发布对应清单。 [GitHub 环境保护规则](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments#deployment-branches-and-tags)
 
 ### 镜像构建与部署
 

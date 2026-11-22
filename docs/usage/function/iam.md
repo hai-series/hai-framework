@@ -96,9 +96,9 @@ if (!result.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.init` | 先连接 RelDB 和 Cache，再等待身份服务可用 | `config`（必填，可传 `{}` 使用默认值） | `Promise<HaiResult<void>>` | `await iam.init({})` |
-| `iam.close` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | 缓存和数据库仍由应用关闭；无 | `Promise<void>` | `await iam.close()` |
-| `iam.getPublicConfig` | 读取包含持久敏感操作规则的公开策略 | 无 | `Promise<HaiResult<IamPublicConfig>>` | `await iam.getPublicConfig()` |
+| `iam.init(config)` | 先连接 RelDB 和 Cache，再等待身份服务可用 | `config: IamConfigInput` 必填，可传空对象。字段见[配置参考](../configuration/iam.md)。 | `Promise<HaiResult<void>>` | `await iam.init({})` |
+| `iam.close()` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | 无参数 | `Promise<void>` | `await iam.close()` |
+| `iam.getPublicConfig()` | 读取包含持久敏感操作规则的公开策略 | 无参数 | `Promise<HaiResult<IamPublicConfig>>` | `await iam.getPublicConfig()` |
 | `iam.config` | 读取当前脱敏配置 | 只读属性，无参数 | `IamConfig \| null` | `iam.config` |
 | `iam.publicConfig` | 读取最近一次公开策略快照 | 只读属性，无参数 | `IamPublicConfig \| null` | `iam.publicConfig` |
 | `iam.isInitialized` | 检查身份服务是否就绪 | 只读属性，无参数 | `boolean` | `iam.isInitialized` |
@@ -207,17 +207,30 @@ agreements:
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.auth.login` | 用密码验证身份并创建会话 | credentials, context | `AuthResult` | `await iam.auth.login({ identifier, password })` |
-| `iam.auth.loginWithOtp` | 用验证码验证身份并创建会话 | credentials, context | `AuthResult` | `await iam.auth.loginWithOtp({ identifier, code })` |
-| `iam.auth.loginWithLdap` | 用目录账号验证身份 | credentials, context | `AuthResult` | `await iam.auth.loginWithLdap({ username, password })` |
-| `iam.auth.loginWithApiKey` | 用程序凭据建立受限会话 | credentials, context | `AuthResult` | `await iam.auth.loginWithApiKey({ key: rawKey })` |
-| `iam.auth.registerAndLogin` | 注册并在允许时创建会话 | options, context | `AuthResult` | `await iam.auth.registerAndLogin({ username, password })` |
-| `iam.auth.createCaptcha` | 为指定操作创建交互挑战 | input | `IamCaptchaChallenge` | `await iam.auth.createCaptcha({ operation: 'login' })` |
-| `iam.auth.sendOtp` | 向已启用通道发送验证码 | identifier, options | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)` |
-| `iam.auth.verifyToken` | 校验访问令牌和当前身份状态 | accessToken | `Session` | `await iam.auth.verifyToken(accessToken)` |
-| `iam.auth.logout` | 撤销所持访问及关联刷新令牌 | accessToken | `void` | `await iam.auth.logout(accessToken)` |
-| `iam.auth.reauthenticate` | 再次验密并签发用途票据 | accessToken, password, operation | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
-| `iam.auth.checkSensitiveOperation` | 检查并消费当前操作的证明 | accessToken, operation, ticket | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+| `iam.auth.login(credentials, context?)` | 用密码验证身份并创建会话 | `credentials: PasswordCredentials`、`context?: AuthRequestContext` · 前者提供密码凭据，上下文由宿主用于登录策略和追踪 · [对象参数](#authentication-arguments) | `AuthResult` | `await iam.auth.login({ identifier, password })` |
+| `iam.auth.loginWithOtp(credentials, context?)` | 用验证码验证身份并创建会话 | `credentials: OtpCredentials`、`context?: AuthRequestContext` · 前者提供账号标识和验证码，上下文用于策略和追踪 · [对象参数](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithOtp({ identifier, code })` |
+| `iam.auth.loginWithLdap(credentials, context?)` | 用目录账号验证身份 | `credentials: LdapCredentials`、`context?: AuthRequestContext` · 前者提供目录账号密码，上下文用于策略和追踪 · [对象参数](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithLdap({ username, password })` |
+| `iam.auth.loginWithApiKey(credentials, context?)` | 用程序凭据建立受限会话 | `credentials: ApiKeyCredentials`、`context?: AuthRequestContext` · 前者提供已签发密钥，上下文用于策略和追踪 · [对象参数](#authentication-arguments) | `AuthResult` | `await iam.auth.loginWithApiKey({ key: rawKey })` |
+| `iam.auth.registerAndLogin(options, context?)` | 注册并在允许时创建会话 | `options: RegisterOptions` 提供注册账号、密码和资料；`context` 补充本次登录会话的终端与请求信息 · [对象参数](#users-arguments) · `context?: AuthRequestContext` · [对象参数](#authentication-arguments) | `AuthResult` | `await iam.auth.registerAndLogin({ username, password })` |
+| `iam.auth.createCaptcha(input)` | 为指定操作创建交互挑战 | `input: { operation: CaptchaOperation }` 必填，指定 `login`、`register`、`sendOtp`、`passwordReset` 或 `renewPassword` | `IamCaptchaChallenge` | `await iam.auth.createCaptcha({ operation: 'login' })` |
+| `iam.auth.sendOtp(identifier, options?)` | 向已启用通道发送验证码 | `identifier: string` 按启用渠道识别的账号标识，例如邮箱或手机号 · `options?: { captcha?: string }` 为当前操作提供交互挑战证明 | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)` |
+| `iam.auth.verifyToken(accessToken)` | 校验访问令牌和当前身份状态 | `accessToken: string` 当前会话的访问令牌 | `Session` | `await iam.auth.verifyToken(accessToken)` |
+| `iam.auth.logout(accessToken)` | 撤销所持访问及关联刷新令牌 | `accessToken: string` 当前会话的访问令牌 | `void` | `await iam.auth.logout(accessToken)` |
+| `iam.auth.reauthenticate(accessToken, password, operation)` | 再次验密并签发用途票据 | `accessToken: string` 当前会话的访问令牌 · `password: string` 按密码策略校验的密码 · `operation: string` 服务端登记的敏感操作名 | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
+| `iam.auth.checkSensitiveOperation(accessToken, operation, ticket?)` | 检查并消费当前操作的证明 | `accessToken: string` 当前会话的访问令牌 · `operation: string` 服务端登记的敏感操作名 · `ticket?: string` 服务端签发的一次性票据 | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+
+<a id="authentication-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `PasswordCredentials` | 必填 `identifier`（用户名、邮箱或手机号）、`password`。 |
+| `OtpCredentials` | 必填 `identifier`（邮箱或手机号）、验证码 `code`。 |
+| `LdapCredentials` | 必填目录用户名 `username` 和 `password`。 |
+| `PasswordCredentials / OtpCredentials / LdapCredentials` | 启用交互挑战时提供 `captcha`。会话恢复时可传 `expectedUserId`，只接受原账号。 |
+| `ApiKeyCredentials` | 必填 `key: string`，传签发时拿到的明文 API Key。 |
+| `AuthRequestContext` | 可选 `terminalType`（`web`、`app`、`desktop`、`api`，普通登录默认 `web`）、`ip`、`userAgent`、`requestId`。由可信宿主读取和解析。 |
 
 #### 场景：登录、注册与再次验证
 
@@ -514,28 +527,80 @@ RBAC 权限支持 `sensitiveOperations: string[]`（持久字段 `sensitive_oper
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.user.createUser` | 由管理端创建用户 | options | `RegisterResult` | `await iam.user.createUser({ username, password })` |
-| `iam.user.register` | 按公共注册策略创建用户 | options | `RegisterResult` | `await iam.user.register({ username, password })` |
-| `iam.user.inviteUser` | 创建用户并发送单次设密邀请 | options | `RegisterResult` | `await iam.user.inviteUser({ username, email })` |
-| `iam.user.getUser` | 按 ID 查询用户 | userId, options | `User \| null` | `await iam.user.getUser(userId)` |
-| `iam.user.getUsers` | 批量查询用户及关联资料 | userIds, options | `User[]` | `await iam.user.getUsers([userId], { include: ['roles'] })` |
-| `iam.user.listUsers` | 筛选并分页查询用户 | options | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })` |
-| `iam.user.getCurrentUser` | 按当前令牌读取本人资料 | accessToken | `User` | `await iam.user.getCurrentUser(accessToken)` |
-| `iam.user.updateCurrentUser` | 按当前令牌更新本人资料 | accessToken, data | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
-| `iam.user.updateUser` | 按 ID 修改用户资料 | userId, data | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
-| `iam.user.deleteUser` | 删除指定用户 | userId | `void` | `await iam.user.deleteUser(userId)` |
-| `iam.user.adminResetPassword` | 由管理端重设用户密码 | userId, newPassword | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
-| `iam.user.renewPassword` | 用原凭据完成到期或首次改密 | input | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
-| `iam.user.changePassword` | 验证旧密码后修改密码 | userId, oldPassword, newPassword | `void` | `await iam.user.changePassword(userId, oldPassword, newPassword)` |
-| `iam.user.changeCurrentUserPassword` | 为当前令牌持有者修改密码 | accessToken, oldPassword, newPassword | `void` | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
-| `iam.user.requestPasswordReset` | 请求发送重置链接或验证码 | identifier, options | `void` | `await iam.user.requestPasswordReset(identifier)` |
-| `iam.user.confirmPasswordReset` | 消费重置凭据并更新密码 | token, newPassword | `void` | `await iam.user.confirmPasswordReset(resetToken, newPassword)` |
-| `iam.user.validatePassword` | 同步检查密码策略 | password | `void` | `iam.user.validatePassword(newPassword)` |
-| `iam.user.scanInactiveAccounts` | 按策略停用长期未活动账号 | 无参数 | `number` | `await iam.user.scanInactiveAccounts()` |
+| `iam.user.createUser(options)` | 由管理端创建用户 | `options: RegisterOptions` · 管理员指定新账号资料与初始凭据 · [对象参数](#users-arguments) | `RegisterResult` | `await iam.user.createUser({ username, password })` |
+| `iam.user.register(options)` | 按公共注册策略创建用户 | `options: RegisterOptions` · 待公开注册的账号资料与密码 · [对象参数](#users-arguments) | `RegisterResult` | `await iam.user.register({ username, password })` |
+| `iam.user.inviteUser(options)` | 创建用户并发送单次设密邀请 | `options: Omit<RegisterOptions, "password">` · 填写新账号资料及接收邀请的联系方式 · [对象参数](#users-arguments) | `RegisterResult` | `await iam.user.inviteUser({ username, email })` |
+| `iam.user.getUser(userId, options?)` | 按 ID 查询用户 | `userId: string` 目标用户 ID · `options?: { include?: 'roles'[] }` 决定是否同时读取角色 · [对象参数](#users-arguments) | `User \| null` | `await iam.user.getUser(userId)` |
+| `iam.user.getUsers(userIds, options?)` | 批量查询用户及关联资料 | `userIds: readonly string[]` 要批量读取的用户 ID · `options?: { include?: 'roles'[] }` 决定是否同时读取角色 · [对象参数](#users-arguments) | `User[]` | `await iam.user.getUsers([userId], { include: ['roles'] })` |
+| `iam.user.listUsers(options?)` | 筛选并分页查询用户 | `options?: ListUsersOptions` · 选择账号范围并设置排序、分页和关联资料 · [对象参数](#users-arguments) | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })` |
+| `iam.user.getCurrentUser(accessToken)` | 按当前令牌读取本人资料 | `accessToken: string` 当前会话的访问令牌 | `User` | `await iam.user.getCurrentUser(accessToken)` |
+| `iam.user.updateCurrentUser(accessToken, data)` | 按当前令牌更新本人资料 | `accessToken: string` 当前会话的访问令牌 · `data: UpdateCurrentUserInput` · [对象参数](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
+| `iam.user.updateUser(userId, data)` | 按 ID 修改用户资料 | `userId: string` 目标用户 ID · `data: Partial<User>` 由管理员传入要修改的字段，参见本节可写字段说明 | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
+| `iam.user.updateUserWithRoles` | 在一次事务中保存用户资料和角色 | userId, { profile?, roleIds? } | `User` 或回滚后的错误 | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
+| `iam.user.deleteUser(userId)` | 删除指定用户 | `userId: string` 目标用户 ID | `void` | `await iam.user.deleteUser(userId)` |
+| `iam.user.adminResetPassword(userId, newPassword)` | 由管理端重设用户密码 | `userId: string` 目标用户 ID · `newPassword: string` 要按当前策略设置的新密码 | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
+| `iam.user.renewPassword(input)` | 用原凭据完成到期或首次改密 | `input` 必填，含 `identifier`、当前 `password`、`newPassword` 和可选 `captcha` | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
+| `iam.user.changePassword(userId, oldPassword, newPassword)` | 验证旧密码后修改密码 | `userId: string` 目标用户 ID · `oldPassword: string` 当前密码 · `newPassword: string` 要按当前策略设置的新密码 | `void` | `await iam.user.changePassword(userId, oldPassword, newPassword)` |
+| `iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` | 为当前令牌持有者修改密码 | `accessToken: string` 当前会话的访问令牌 · `oldPassword: string` 当前密码 · `newPassword: string` 要按当前策略设置的新密码 | `void` | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
+| `iam.user.requestPasswordReset(identifier, options?)` | 请求发送重置链接或验证码 | `identifier: string` 按启用渠道识别的账号标识，例如邮箱或手机号 · `options?: { captcha?: string }` 为当前操作提供交互挑战证明 | `void` | `await iam.user.requestPasswordReset(identifier)` |
+| `iam.user.confirmPasswordReset(token, newPassword)` | 消费重置凭据并更新密码 | `token: string` 发送给用户的一次性重置凭据 · `newPassword: string` 要按当前策略设置的新密码 | `void` | `await iam.user.confirmPasswordReset(resetToken, newPassword)` |
+| `iam.user.validatePassword(password)` | 同步检查密码策略 | `password: string` 按密码策略校验的密码 | `void` | `iam.user.validatePassword(newPassword)` |
+| `iam.user.scanInactiveAccounts()` | 按策略停用长期未活动账号 | 无参数 | `number` | `await iam.user.scanInactiveAccounts()` |
+
+<a id="users-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `RegisterOptions` | 必填 `username`，直接创建或注册还要 `password`。可填 `email`、`phone`、`displayName`、`metadata`；邀请由收件人设置密码，公开注册按策略传 `captcha`。管理端可设置 `accountType`、`accountStatus`、`accountExpiresAt`，临时账号需到期时间。 |
+| `getUser / getUsers 的 include` | 省略时不扩展角色。传 `{ include: ['roles'] }` 会附带角色数据。 |
+| `ListUsersOptions` | 可填 `page`、`pageSize` 分页；`search` 模糊匹配用户名、邮箱、手机或显示名，`roleCode` 精确匹配角色。可用 `accountStatus`（`active`、`dormant`、`closed`）和 `include`。省略排序按创建时间倒序；`sortBy` 指定列后 `sortDirection` 默认 `desc`。 |
+| `UpdateCurrentUserInput` | 只传要修改的 `username`、`email`、`phone`、`displayName`、`avatarUrl` 或 `metadata`。 |
+
+##### 用户列表选项
+
+| 字段 | 默认或必填 | 作用与生效条件 |
+| --- | --- | --- |
+| `page: number` | `1` | 页码从 1 开始 |
+| `pageSize: number` | `20` | 每页最大用户数，上限 200 |
+| `search: string` | 可省略 | 部分匹配用户名、邮箱、手机号或显示名 |
+| `roleCode: string` | 可省略 | 在分页前按角色代码精确筛选 |
+| `accountStatus` | 可省略 | 只列出 active、dormant 或 closed 状态，省略时列出全部 |
+| `sortBy / sortDirection` | `createdAt / desc` | 排序字段可为 username、email、displayName、accountStatus 或 createdAt。方向只在显式指定字段时生效 |
+| `include: 'roles'[]` | `[]` | 传入 roles 时附带该页用户的角色 |
+
+假设已初始化的用户库中只有一名休眠用户 Ada，角色代码为 reader。结果只展示相关字段。
+
+```ts
+import { iam } from '@h-ai/iam'
+
+// 查休眠用户的第一页，每页最多两条，附带角色；失败时读取 error.code。
+const result = await iam.user.listUsers({ accountStatus: 'dormant', page: 1, pageSize: 2, include: ['roles'] })
+if (result.success) {
+  const items = result.data.items.map(user => ({ displayName: user.displayName, roles: user.roles?.map(role => role.code) }))
+  void items // [{ displayName: 'Ada', roles: ['reader'] }]
+}
+else result.error.code
+```
 
 #### 场景：维护用户资料与密码
 
 用户场景展示创建→按 ID/用户名/邮箱查找→分页→修改→删除；密码场景说明重置票据、到期续密与账号停用。成功 null 与失败错误分别处理，不能把查不到用户当数据库故障。
+
+#### 场景：同时更新账号资料和角色
+
+管理端先核验操作者可管理目标账号和指定角色。这里已取得有效的用户 ID 和审核角色 ID。省略 `roleIds` 则保留现有角色，传 `[]` 则清空角色。角色变更后，现有会话使用当前授权，账号生命周期变化时旧会话失效。
+
+```ts
+// 用已核验的用户和角色 ID 保存显示名，并将角色集合替换为审核角色。
+// 成功 data 是提交时的用户资料。角色不合法时，本次资料和角色写入一并回滚。
+const updated = await iam.user.updateUserWithRoles(userId, {
+  profile: { displayName: 'Alice' },
+  roleIds: [reviewerRoleId],
+})
+if (!updated.success) throw new Error(updated.error.message)
+```
 
 #### 用户数据与可写字段
 
@@ -709,32 +774,42 @@ Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.authz.getUserAuthorization` | 一起读取用户角色与权限 | userId | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)` |
-| `iam.authz.checkPermission` | 检查用户是否具备所需权限 | userId, permission | `boolean` | `await iam.authz.checkPermission(userId, 'orders:read')` |
-| `iam.authz.getUserPermissions` | 读取用户权限 | userId | `Permission[]` | `await iam.authz.getUserPermissions(userId)` |
-| `iam.authz.getUserRoles` | 读取用户角色 | userId | `Role[]` | `await iam.authz.getUserRoles(userId)` |
-| `iam.authz.getUserRolesForMany` | 批量读取用户角色 | userIds | `Map<string, Role[]>` | `await iam.authz.getUserRolesForMany([userId])` |
-| `iam.authz.getRolePermissionsForMany` | 批量读取角色权限 | roleIds | `Map<string, Permission[]>` | `await iam.authz.getRolePermissionsForMany([roleId])` |
-| `iam.authz.assignRole` | 给用户添加角色 | userId, roleId, tx | `void` | `await iam.authz.assignRole(userId, roleId)` |
-| `iam.authz.removeRole` | 移除用户角色 | userId, roleId, tx | `void` | `await iam.authz.removeRole(userId, roleId)` |
-| `iam.authz.syncRoles` | 替换用户的角色集合 | userId, roleIds, tx | `void` | `await iam.authz.syncRoles(userId, [roleId])` |
-| `iam.authz.assignPermissionToRole` | 给角色添加权限 | roleId, permissionId, tx | `void` | `await iam.authz.assignPermissionToRole(roleId, permissionId)` |
-| `iam.authz.removePermissionFromRole` | 移除角色权限 | roleId, permissionId, tx | `void` | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
-| `iam.authz.createRole` | 创建角色 | role, tx | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
-| `iam.authz.getRole` | 按 ID 查询角色 | roleId | `Role \| null` | `await iam.authz.getRole(roleId)` |
-| `iam.authz.getRoleByCode` | 按编码查询角色 | code | `Role \| null` | `await iam.authz.getRoleByCode('editor')` |
-| `iam.authz.getAllRoles` | 读取全部角色 | options | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
-| `iam.authz.getRoleUserCounts` | 批量统计角色用户数 | roleIds | `Map<string, number>` | `await iam.authz.getRoleUserCounts([roleId])` |
-| `iam.authz.updateRole` | 修改角色资料 | roleId, data, tx | `Role` | `await iam.authz.updateRole(roleId, { name: 'Editor' })` |
-| `iam.authz.deleteRole` | 删除角色 | roleId, tx | `void` | `await iam.authz.deleteRole(roleId)` |
-| `iam.authz.createPermission` | 创建权限记录 | permission, tx | `Permission` | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })` |
-| `iam.authz.getPermission` | 按 ID 查询权限 | permissionId | `Permission \| null` | `await iam.authz.getPermission(permissionId)` |
-| `iam.authz.getPermissionByCode` | 按编码查询权限 | code | `Permission \| null` | `await iam.authz.getPermissionByCode('orders:read')` |
-| `iam.authz.getAllPermissions` | 读取全部权限 | options | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
-| `iam.authz.deletePermission` | 删除权限 | permissionId, tx | `void` | `await iam.authz.deletePermission(permissionId)` |
-| `iam.authz.getRolePermissions` | 读取角色权限 | roleId | `Permission[]` | `await iam.authz.getRolePermissions(roleId)` |
-| `iam.authz.getSensitiveOperations` | 读取生效的敏感操作规则 | operation | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')` |
-| `iam.authz.setPermissionSensitiveOperations` | 设置权限附带的敏感操作规则 | permissionId, operations | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+| `iam.authz.getUserAuthorization(userId)` | 一起读取用户角色与权限 | `userId: string` 目标用户 ID | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)` |
+| `iam.authz.checkPermission(userId, permission)` | 检查用户是否具备所需权限 | `userId: string` 目标用户 ID · `permission: string` 要检查的权限代码 | `boolean` | `await iam.authz.checkPermission(userId, 'orders:read')` |
+| `iam.authz.getUserPermissions(userId)` | 读取用户权限 | `userId: string` 目标用户 ID | `Permission[]` | `await iam.authz.getUserPermissions(userId)` |
+| `iam.authz.getUserRoles(userId)` | 读取用户角色 | `userId: string` 目标用户 ID | `Role[]` | `await iam.authz.getUserRoles(userId)` |
+| `iam.authz.getUserRolesForMany(userIds)` | 批量读取用户角色 | `userIds: string[]` 要批量读取的用户 ID | `Map<string, Role[]>` | `await iam.authz.getUserRolesForMany([userId])` |
+| `iam.authz.getRolePermissionsForMany(roleIds)` | 批量读取角色权限 | `roleIds: string[]` 目标角色 ID 列表 | `Map<string, Permission[]>` | `await iam.authz.getRolePermissionsForMany([roleId])` |
+| `iam.authz.assignRole(userId, roleId, tx?)` | 给用户添加角色 | `userId: string` 目标用户 ID · `roleId: string` 角色 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.assignRole(userId, roleId)` |
+| `iam.authz.removeRole(userId, roleId, tx?)` | 移除用户角色 | `userId: string` 目标用户 ID · `roleId: string` 角色 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.removeRole(userId, roleId)` |
+| `iam.authz.syncRoles(userId, roleIds, tx?)` | 替换用户的角色集合 | `userId: string` 目标用户 ID · `roleIds: string[]` 目标角色 ID 列表 · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.syncRoles(userId, [roleId])` |
+| `iam.authz.assignPermissionToRole(roleId, permissionId, tx?)` | 给角色添加权限 | `roleId: string` 角色 ID · `permissionId: string` 权限 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.assignPermissionToRole(roleId, permissionId)` |
+| `iam.authz.removePermissionFromRole(roleId, permissionId, tx?)` | 移除角色权限 | `roleId: string` 角色 ID · `permissionId: string` 权限 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
+| `iam.authz.createRole(role, tx?)` | 创建角色 | `role` 定义新角色的业务代码、名称、说明及系统角色标记 · [对象参数](#authorization-arguments) · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
+| `iam.authz.getRole(roleId)` | 按 ID 查询角色 | `roleId: string` 角色 ID | `Role \| null` | `await iam.authz.getRole(roleId)` |
+| `iam.authz.getRoleByCode(code)` | 按编码查询角色 | `code: string` 角色或权限的业务代码 | `Role \| null` | `await iam.authz.getRoleByCode('editor')` |
+| `iam.authz.getAllRoles(options?)` | 读取全部角色 | `options?: PaginationOptionsInput` 选择页码、每页条数和排序 · [对象参数](#authorization-arguments) | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
+| `iam.authz.getRoleUserCounts(roleIds)` | 批量统计角色用户数 | `roleIds: string[]` 目标角色 ID 列表 | `Map<string, number>` | `await iam.authz.getRoleUserCounts([roleId])` |
+| `iam.authz.updateRole(roleId, data, tx?)` | 修改角色资料 | `roleId: string` 角色 ID · `data` 提供要修改的角色字段，未传的字段保持原值 · [对象参数](#authorization-arguments) · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `Role` | `await iam.authz.updateRole(roleId, { name: 'Editor' })` |
+| `iam.authz.deleteRole(roleId, tx?)` | 删除角色 | `roleId: string` 角色 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.deleteRole(roleId)` |
+| `iam.authz.createPermission(permission, tx?)` | 创建权限记录 | `permission` 提供要创建的权限代码、显示名称和分类 · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `Permission` | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })` |
+| `iam.authz.getPermission(permissionId)` | 按 ID 查询权限 | `permissionId: string` 权限 ID | `Permission \| null` | `await iam.authz.getPermission(permissionId)` |
+| `iam.authz.getPermissionByCode(code)` | 按编码查询权限 | `code: string` 角色或权限的业务代码 | `Permission \| null` | `await iam.authz.getPermissionByCode('orders:read')` |
+| `iam.authz.getAllPermissions(options?)` | 读取全部权限 | `options?: PermissionQueryOptions` 选择页码、每页条数和排序，可按权限分类筛选 · [对象参数](#authorization-arguments) | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
+| `iam.authz.deletePermission(permissionId, tx?)` | 删除权限 | `permissionId: string` 权限 ID · `tx?: DmlWithTxOperations` 由调用方提供的 RelDB 事务操作。省略时使用常规入口 | `void` | `await iam.authz.deletePermission(permissionId)` |
+| `iam.authz.getRolePermissions(roleId)` | 读取角色权限 | `roleId: string` 角色 ID | `Permission[]` | `await iam.authz.getRolePermissions(roleId)` |
+| `iam.authz.getSensitiveOperations(operation?)` | 读取生效的敏感操作规则 | `operation?: string` 服务端登记的敏感操作名 | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')` |
+| `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` | 设置权限附带的敏感操作规则 | `permissionId: string` 权限 ID · `operations: string[]` 要绑定的敏感操作名称列表 | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+
+<a id="authorization-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `PaginationOptionsInput / PermissionQueryOptions` | `page`、`pageSize` 分页。权限列表还可传 `type` 与 `search`。 |
+| `role / data` | 创建角色时 `code` 和 `name` 必填，可传 `description`、`isSystem` 和 `permissionIds`。更新时仅传要变更的字段。 |
+| `permission` | `code`、`name` 必填。可传 `description`、`type`、`resource`、`action`、`sensitiveOperations`。 |
 
 #### 场景：分配角色与检查权限
 
@@ -983,15 +1058,24 @@ IAM 在数据库变更前标记这一批缓存暂时不可用。在事务提交�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.session.create` | 创建令牌对与会话 | options | `Session` | `await iam.session.create(trustedSessionInput)` |
-| `iam.session.get` | 按访问令牌查会话 | accessToken | `Session \| null` | `await iam.session.get(accessToken)` |
-| `iam.session.verifyToken` | 校验会话令牌 | accessToken | `Session` | `await iam.session.verifyToken(accessToken)` |
-| `iam.session.update` | 修改会话数据 | accessToken, data, expectedVersion | `void` | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
-| `iam.session.delete` | 删除令牌对应会话 | accessToken | `void` | `await iam.session.delete(accessToken)` |
-| `iam.session.deleteByUserId` | 撤销指定用户全部会话 | userId | `number` | `await iam.session.deleteByUserId(userId)` |
-| `iam.session.refresh` | 轮换刷新凭据并续期 | refreshToken | `TokenPair` | `await iam.session.refresh(refreshToken)` |
-| `iam.session.revokeRefresh` | 撤销指定刷新凭据 | refreshToken | `void` | `await iam.session.revokeRefresh(refreshToken)` |
-| `iam.session.patchUserSessions` | 更新用户会话中的资料快照 | userId, updates | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
+| `iam.session.create(options)` | 创建令牌对与会话 | `options: CreateSessionOptions` · 为可信主体设置会话资料和期限 · [对象参数](#sessions-arguments) | `Session` | `await iam.session.create(trustedSessionInput)` |
+| `iam.session.get(accessToken)` | 按访问令牌查会话 | `accessToken: string` 当前会话的访问令牌 | `Session \| null` | `await iam.session.get(accessToken)` |
+| `iam.session.verifyToken(accessToken)` | 校验会话令牌 | `accessToken: string` 当前会话的访问令牌 | `Session` | `await iam.session.verifyToken(accessToken)` |
+| `iam.session.update(accessToken, data, expectedVersion)` | 修改会话数据 | `accessToken: string` 当前会话的访问令牌 · `data: Partial<Session>` 可更新的会话字段，参见下方低层会话示例 · `expectedVersion: string` 最近读取的会话版本，用来阻止覆盖更新后的会话 | `void` | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
+| `iam.session.delete(accessToken)` | 删除令牌对应会话 | `accessToken: string` 当前会话的访问令牌 | `void` | `await iam.session.delete(accessToken)` |
+| `iam.session.deleteByUserId(userId)` | 撤销指定用户全部会话 | `userId: string` 目标用户 ID | `number` | `await iam.session.deleteByUserId(userId)` |
+| `iam.session.refresh(refreshToken)` | 轮换刷新凭据并续期 | `refreshToken: string` 要轮换或撤销的刷新令牌 | `TokenPair` | `await iam.session.refresh(refreshToken)` |
+| `iam.session.revokeRefresh(refreshToken)` | 撤销指定刷新凭据 | `refreshToken: string` 要轮换或撤销的刷新令牌 | `void` | `await iam.session.revokeRefresh(refreshToken)` |
+| `iam.session.patchUserSessions(userId, updates)` | 更新用户会话中的资料快照 | `userId: string` 目标用户 ID · `updates: SessionFieldUpdates` · [对象参数](#sessions-arguments) | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
+
+<a id="sessions-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `CreateSessionOptions` | 必填 `userId`。可信宿主可提供 `terminalType`、`expectedCredentialVersion`、已验证的 `apiKeyId`／`apiKeyScopes`。可传 `username`、`displayName`、`avatarUrl`、`roles`、`permissions`、`source`、`maxAge`（秒）和业务 `data`。 |
+| `SessionFieldUpdates` | 只接收可选的 `roles: string[]` 和 `permissions: string[]`，按用户更新现有会话。 |
 
 #### 场景：续期与撤销会话
 
@@ -1179,11 +1263,32 @@ async function rotateThenRevoke(refreshToken: string) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.apiKey.createApiKey` | 签发只返回一次明文的程序凭据 | userId, options | `CreateApiKeyResult` | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
-| `iam.apiKey.listApiKeys` | 分页列出用户程序凭据 | userId, options | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
-| `iam.apiKey.getApiKey` | 按 ID 查询安全凭据信息 | keyId | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
-| `iam.apiKey.revokeApiKey` | 撤销程序凭据 | keyId | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
-| `iam.apiKey.verifyApiKey` | 校验程序凭据 | rawKey | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+| `iam.apiKey.createApiKey(userId, options)` | 签发只返回一次明文的程序凭据 | `userId: string` 目标用户 ID · `options: CreateApiKeyOptions` · 设置密钥的名称、期限和权限范围 · [对象参数](#api-keys-arguments) | `CreateApiKeyResult` | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
+| `iam.apiKey.listApiKeys(userId, options?)` | 分页列出用户程序凭据 | `userId: string` 目标用户 ID · `options?: ListApiKeysOptions` · 筛选、排序和分页列出该用户的密钥 · [对象参数](#api-keys-arguments) | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
+| `iam.apiKey.getApiKey(keyId)` | 按 ID 查询安全凭据信息 | `keyId: string` API Key 元数据 ID | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
+| `iam.apiKey.revokeApiKey(keyId)` | 撤销程序凭据 | `keyId: string` API Key 元数据 ID | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
+| `iam.apiKey.verifyApiKey(rawKey)` | 校验程序凭据 | `rawKey: string` 签发时一次性返回的原始 API Key | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+
+<a id="api-keys-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `CreateApiKeyOptions` | 名称 `name` 必填。`expirationDays` 以天计，省略时由配置决定，显式 `0` 表示不设到期。`scopes` 是权限代码列表，可省略。 |
+| `ListApiKeysOptions` | 可填 `page`、`pageSize`、匹配名称或前缀的 `search` 和 `enabled`。可按 `name`、`createdAt`、`lastUsedAt`、`expiresAt` 排序，方向为 `asc` 或 `desc`。省略排序时按创建时间倒序。 |
+
+##### 密钥签发与列表选项
+
+| 字段 | 默认或必填 | 作用与生效条件 |
+| --- | --- | --- |
+| `create.options.name: string` | 必填 | 用来识别密钥的显示名称 |
+| `create.options.expirationDays: number` | `config.apikey.defaultExpirationDays` | 单位为天。框架配置默认 0，显式传 0 表示不设到期时间 |
+| `create.options.scopes: string[]` | `[]` | 用权限代码限制可用的操作 |
+| `list.options.page / list.options.pageSize` | `1 / 20` | 页码和每页密钥数 |
+| `list.options.search: string` | 可省略 | 部分匹配密钥名称或前缀 |
+| `list.options.enabled: boolean` | 可省略 | 筛选启用或停用，省略时包含两种 |
+| `list.options.sortBy / list.options.sortDirection` | `createdAt / desc` | 可按 name、createdAt、lastUsedAt 或 expiresAt 排序 |
 
 #### 场景：签发与撤销程序凭据
 
@@ -1326,12 +1431,31 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `iam.ticket.issue` | 签发有用途和期限的单次票据 | options | `IssuedTicket` | `await iam.ticket.issue(ticketInput)` |
-| `iam.ticket.consume` | 校验用途并原子消费票据 | ticket, options | `ConsumedTicket` | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+| `iam.ticket.issue(options)` | 签发有用途和期限的单次票据 | `options: IssueTicketOptions` · 绑定主体、用途和到期时间 · [对象参数](#tickets-arguments) | `IssuedTicket` | `await iam.ticket.issue(ticketInput)` |
+| `iam.ticket.consume(ticket, options?)` | 校验用途并原子消费票据 | `ticket: string` 服务端签发的一次性票据 · `options?: ConsumeTicketOptions` · 可限定期望用途后再消费 · [对象参数](#tickets-arguments) | `ConsumedTicket` | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+
+<a id="tickets-arguments"></a>
+
+##### 对象参数
+
+| 类型或调用 | 字段与取值 |
+| --- | --- |
+| `IssueTicketOptions` | `subjectId: string` 和 `purpose: string` 必填。可传 `grant` 绑定授权信息、`ttlMs` 设置有效期，默认 30000 毫秒。 |
+| `ConsumeTicketOptions` | 可传 `purpose: string` 来核对签发用途，填错会返回 `TICKET_INVALID`。 |
+
+##### 票据签发与消费字段
+
+| 字段 | 默认或必填 | 作用与生效条件 |
+| --- | --- | --- |
+| `subjectId: string` | 必填 | 票据绑定的用户或主体，消费成功时返回该值 |
+| `purpose: string` | 必填 | 签发时标记用途，可在消费时要求匹配 |
+| `grant: TicketGrant` | 可省略 | 绑定 operation、model、sessionId 或应用字段，成功消费后交给服务端核对 |
+| `ttlMs: number` | `30000 ms` | 从签发到过期的时长 |
+| `consume.options.purpose: string` | 可省略 | 指定时核对签发用途，不匹配返回 TICKET_INVALID |
 
 #### 场景：签发与消费一次性票据
 
-下文 issue 输入用途与绑定信息，输出随机票据；consume 输入票据和预期用途，输出绑定数据或失败。用途不符、过期或重复使用均不能继续业务操作。
+下文 issue 输入用途与绑定信息，输出随机票据；consume 输入票据和预期用途，输出绑定数据或失败。用途不符时请求失败，票据仍可由正确用途兑换。过期或已使用的票据不能继续业务操作。
 
 #### 场景：为语音连接签发并消费短期票据
 

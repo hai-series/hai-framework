@@ -140,6 +140,15 @@ export function observeUsers(operations: UserOperations): UserOperations {
           : {}),
       },
     }),
+    updateUserWithRoles: (id, input) => observe(() => operations.updateUserWithRoles(id, input), {
+      action: 'user.update',
+      resource: 'iam.users',
+      resourceId: id,
+      details: {
+        fields: Object.keys(input.profile ?? {}),
+        rolesUpdated: input.roleIds !== undefined,
+      },
+    }),
     updateCurrentUser: (token, data) => observe(() => operations.updateCurrentUser(token, data), result => ({
       action: 'user.profile',
       resource: 'iam.users',

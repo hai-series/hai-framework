@@ -86,9 +86,9 @@ export type DeploymentArtifact = z.infer<typeof DeploymentArtifactSchema>
  * const digest = await artifactChecksum('.hai/build/docker/build-id/serv-1.0.0.tar')
  * ```
  */
-export async function artifactChecksum(file: string): Promise<string> {
+export async function artifactChecksum(file: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash('sha256')
-  for await (const chunk of createReadStream(file))
+  for await (const chunk of createReadStream(file, { signal }))
     hash.update(chunk)
   return hash.digest('hex')
 }
@@ -106,11 +106,11 @@ export async function artifactChecksum(file: string): Promise<string> {
  * const images = artifact.images.map(image => ({ name: image.name, imageRef: image.imageRef }))
  * ```
  */
-export async function readDeploymentArtifact(directory: string): Promise<DeploymentArtifact> {
+export async function readDeploymentArtifact(directory: string, signal?: AbortSignal): Promise<DeploymentArtifact> {
   const artifact = DeploymentArtifactSchema.parse(JSON.parse(readFileSync(resolve(directory, 'manifest.json'), 'utf8')))
   for (const image of artifact.images) {
     const file = resolve(directory, image.file)
-    if (!existsSync(file) || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink() || await artifactChecksum(file) !== image.sha256)
+    if (!existsSync(file) || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink() || await artifactChecksum(file, signal) !== image.sha256)
       throw new Error(`Invalid artifact: ${image.file}`)
   }
   return artifact

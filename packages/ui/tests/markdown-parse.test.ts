@@ -361,3 +361,13 @@ describe('parseMarkdown - 边界处理', () => {
     expect(html2).not.toContain('hai-md-copy-btn')
   })
 })
+
+it('applies the opted-in image policy to Markdown and sanitized HTML', () => {
+  const source = '![图](https://example.invalid/pic.png) <img src="/guide.png" alt="指南">'
+  expect(parseMarkdown(source, { allowHtmlTags: true })).toContain('src="https://example.invalid/pic.png"')
+  const html = parseMarkdown(source, { allowHtmlTags: true, remoteImages: false })
+  expect(html).toContain('图</span>')
+  expect(html).toContain('指南</span>')
+  expect(html).not.toContain('<img')
+  expect(parseMarkdown(source, { allowHtmlTags: true })).toContain('src="/guide.png"')
+})

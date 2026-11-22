@@ -60,13 +60,13 @@ if (failures.length)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.init` | 检测平台并准备原生插件 | `—` | `Promise<HaiResult<void>>` | `await capacitor.init()` |
-| `capacitor.close` | 释放推送监听等资源 | `—` | `Promise<HaiResult<void>>` | `await capacitor.close()` |
-| `capacitor.getPlatform` | 选择平台行为 | `—` | `string: ios / android / web` | `capacitor.getPlatform()` |
-| `capacitor.isNative` | 判断是否原生环境 | `—` | `boolean` | `capacitor.isNative()` |
+| `capacitor.init()` | 检测平台并准备原生插件 | `—` | `Promise<HaiResult<void>>` | `await capacitor.init()` |
+| `capacitor.close()` | 释放推送监听等资源 | `—` | `Promise<HaiResult<void>>` | `await capacitor.close()` |
+| `capacitor.getPlatform()` | 选择平台行为 | `—` | `string: ios / android / web` | `capacitor.getPlatform()` |
+| `capacitor.isNative()` | 判断是否原生环境 | `—` | `boolean` | `capacitor.isNative()` |
 | `capacitor.isInitialized` | 检查模块状态 | `—` | `boolean` | `capacitor.isInitialized` |
-| `capacitor.device.getInfo` | 显示设备诊断信息 | `—` | `Promise<HaiResult<{ platform, osVersion, model, manufacturer, isVirtual, appVersion?, appBuild? }>>` | `await capacitor.device.getInfo()` |
-| `capacitor.device.getAppVersion` | 显示当前安装版本 | `—` | `Promise<HaiResult<{ version, build }>>` | `await capacitor.device.getAppVersion()` |
+| `capacitor.device.getInfo()` | 显示设备诊断信息 | `—` | `Promise<HaiResult<{ platform, osVersion, model, manufacturer, isVirtual, appVersion?, appBuild? }>>` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion()` | 显示当前安装版本 | `—` | `Promise<HaiResult<{ version, build }>>` | `await capacitor.device.getAppVersion()` |
 
 #### 场景：准备原生环境与读取设备
 
@@ -136,20 +136,18 @@ docker run --rm -it --platform linux/amd64 \
 
 <a id="call-options"></a>
 
-#### 调用参数与接入选项
+#### 原生调用参数
 
-| 参数 | 默认值 | 含义 |
+| 字段 | 默认与条件 | 用途 |
 | --- | --- | --- |
-| API 基础地址                                       | 由应用提供     | 填手机能访问的 API 地址，由应用启动代码交给 `apiClient.init({ baseUrl })` |
-| `camera.takePhoto` 的 `source`                     | `prompt`       | 也可以指定 `camera` 或 `photos`                                           |
-| `camera.takePhoto` 的 `quality`                    | `90`           | 图片质量，范围 0–100                                                      |
-| `camera.takePhoto` 的 `width`、`height`            | 可省略         | 图片最大宽度和高度，单位像素                                              |
-| `camera.takePhoto` 的 `resultType`                 | `uri`          | `uri`、`base64`、`dataUrl` 分别返回路径、Base64 和 Data URL               |
-| `statusBar.configure` 的 `style`                   | 沿用当前样式   | 可用 `dark`、`light`、`default`                                           |
-| `statusBar.configure` 的 `backgroundColor`         | 沿用当前颜色   | 十六进制背景色                                                            |
-| `statusBar.configure` 的 `overlay`                 | 沿用当前状态   | 控制状态栏是否覆盖原生 WebView                                            |
-| `push.register`、`push.listen` 的 `signal`         | 可省略         | 取消本次注册或者释放本次监听                                              |
-| `push.listen` 的 `onReceived`、`onActionPerformed` | 可省略         | 分别接收收件事件和用户点击事件                                            |
+| `takePhoto.options.source` | 默认 `prompt` | 选 `camera` 拍照，`photos` 从相册选，`prompt` 由设备询问。 |
+| `takePhoto.options.quality` / `width` / `height` | 默认画质 90，尺寸无默认限制 | 画质范围 0–100，宽高以像素为单位指定最大值。 |
+| `takePhoto.options.resultType` | 默认 `uri` | 成功时 `data` 是照片路径、Base64 字符串或 Data URL，对应 `uri`、`base64`、`dataUrl`。 |
+| `configure.config.style` / `backgroundColor` / `overlay` | 省略的设置不调用插件写入 | 样式可选 `dark`、`light` 或 `default`。背景色传十六进制颜色。 `overlay` 决定状态栏是否覆盖 WebView。 |
+| `push.register.options.signal` / `push.listen.options.signal` | 可省略 | 取消尚未完成的注册或在取消时移除监听器。 |
+| `push.listen.options.onReceived` / `onActionPerformed` | 可省略 | 分别处理消息送达和用户操作。 |
+
+例如 `takePhoto({ source: "photos", resultType: "uri", width: 1200 })` 从相册选择照片，成功数据包含供预览的 URL 和格式，宽度上限为 1,200 像素。
 
 <a id="camera"></a>
 
@@ -161,7 +159,7 @@ docker run --rm -it --platform linux/amd64 \
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.camera.takePhoto` | 拍照或选择相册图片 | `{ source?: camera/photos/prompt, quality?: 0…100, width?, height?, resultType?: uri/base64/dataUrl }` | `Promise<HaiResult<{ data: string, format: string }>>` | `await capacitor.camera.takePhoto({ source: "photos", resultType: "dataUrl" })` |
+| `capacitor.camera.takePhoto(options?)` | 拍照或选择相册图片 | 可选 `options`，控制来源、画质、尺寸和返回格式。见[原生调用选项](#call-options)。 | `Promise<HaiResult<{ data: string, format: string }>>` | `await capacitor.camera.takePhoto({ source: "photos", resultType: "dataUrl" })` |
 
 #### 场景：取得用户选择的照片
 
@@ -200,8 +198,8 @@ photo.data // { data: '用户拍摄图片的 Base64 内容', format: 'jpeg' }；
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.push.register` | 申请权限并获取推送标识 | `{ signal?: AbortSignal }` | `Promise<HaiResult<{ token: string }>>` | `await capacitor.push.register()` |
-| `capacitor.push.listen` | 接收推送与点击事件 | `{ onReceived?, onActionPerformed? }, { signal? }` | `Promise<HaiResult<() => Promise<HaiResult<void>>>>` | `await capacitor.push.listen(callbacks, { signal })` |
+| `capacitor.push.register(options?)` | 申请权限并获取推送标识 | 可选 `options.signal: AbortSignal` 取消注册等待。省略时没有调用方取消信号。 | `Promise<HaiResult<{ token: string }>>` | `await capacitor.push.register()` |
+| `capacitor.push.listen(callbacks, options?)` | 接收推送与点击事件 | `callbacks` 对象必填，含可选的收件 `onReceived(notification)` 与点击 `onActionPerformed(action)`。`options.signal` 可释放本次监听。 | `Promise<HaiResult<() => Promise<HaiResult<void>>>>` | `await capacitor.push.listen(callbacks, { signal })` |
 
 #### 场景：登记与监听推送
 
@@ -251,9 +249,9 @@ if (!stopResult2.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.statusBar.configure` | 设置状态栏显示 | `{ style?: dark/light/default, backgroundColor?: color, overlay?: boolean }` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.configure({ style: "dark", overlay: true })` |
-| `capacitor.statusBar.show` | 显示状态栏 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.show()` |
-| `capacitor.statusBar.hide` | 隐藏状态栏 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.hide()` |
+| `capacitor.statusBar.configure(config)` | 设置状态栏显示 | 必填 `config` 对象，其中 `style`、`backgroundColor`、`overlay` 可省略。见[原生调用选项](#call-options)。 | `Promise<HaiResult<void>>` | `await capacitor.statusBar.configure({ style: "dark", overlay: true })` |
+| `capacitor.statusBar.show()` | 显示状态栏 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide()` | 隐藏状态栏 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.hide()` |
 
 #### 场景：控制系统状态栏
 
@@ -285,12 +283,12 @@ if (!showResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.preferences.get` | 读取普通偏好 | `key: string` | `Promise<HaiResult<string / null>>` | `await capacitor.preferences.get("theme")` |
-| `capacitor.preferences.set` | 保存普通偏好 | `key: string, value: string` | `Promise<HaiResult<void>>` | `await capacitor.preferences.set("theme", "dark")` |
-| `capacitor.preferences.remove` | 删除普通偏好 | `key: string` | `Promise<HaiResult<void>>` | `await capacitor.preferences.remove("theme")` |
-| `safeGetPreference` | 独立读取非敏感偏好 | `key: string` | `Promise<HaiResult<string / null>>` | `await safeGetPreference("theme")` |
-| `safeSetPreference` | 独立保存非敏感偏好 | `key: string, value: string` | `Promise<HaiResult<void>>` | `await safeSetPreference("theme", "dark")` |
-| `safeRemovePreference` | 独立删除非敏感偏好 | `key: string` | `Promise<HaiResult<void>>` | `await safeRemovePreference("theme")` |
+| `capacitor.preferences.get(key)` | 读取普通偏好 | 必填 `key` 为非敏感偏好设置的键名。 | `Promise<HaiResult<string / null>>` | `await capacitor.preferences.get("theme")` |
+| `capacitor.preferences.set(key, value)` | 保存普通偏好 | 必填 `key` 为偏好设置键名，必填 `value` 为要保存的非敏感字符串。 | `Promise<HaiResult<void>>` | `await capacitor.preferences.set("theme", "dark")` |
+| `capacitor.preferences.remove(key)` | 删除普通偏好 | 必填 `key` 为非敏感偏好设置的键名。 | `Promise<HaiResult<void>>` | `await capacitor.preferences.remove("theme")` |
+| `safeGetPreference(key)` | 独立读取非敏感偏好 | 必填 `key` 为非敏感偏好设置的键名。 | `Promise<HaiResult<string / null>>` | `await safeGetPreference("theme")` |
+| `safeSetPreference(key, value)` | 独立保存非敏感偏好 | 必填 `key` 为偏好设置键名，必填 `value` 为要保存的非敏感字符串。 | `Promise<HaiResult<void>>` | `await safeSetPreference("theme", "dark")` |
+| `safeRemovePreference(key)` | 独立删除非敏感偏好 | 必填 `key` 为非敏感偏好设置的键名。 | `Promise<HaiResult<void>>` | `await safeRemovePreference("theme")` |
 
 #### 场景：保存普通偏好
 
@@ -342,12 +340,12 @@ safeGetPreferenceResult2.data // null
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage` | 创建原生安全凭据适配器 | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
-| `tokens.getAccessToken` | 读取已保存的访问令牌 | `—` | `Promise<string / null>` | `await tokens.getAccessToken()` |
-| `tokens.getRefreshToken` | 读取已保存的刷新令牌 | `—` | `Promise<string / null>` | `await tokens.getRefreshToken()` |
-| `tokens.setAccessToken` | 保存访问令牌 | `token: string` | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
-| `tokens.setRefreshToken` | 保存刷新令牌 | `token: string` | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
-| `tokens.clear` | 删除本机两类凭据 | `—` | `Promise<void>` | `await tokens.clear()` |
+| `createCapacitorTokenStorage()` | 创建原生安全凭据适配器 | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `tokens.getAccessToken()` | 读取已保存的访问令牌 | `—` | `Promise<string / null>` | `await tokens.getAccessToken()` |
+| `tokens.getRefreshToken()` | 读取已保存的刷新令牌 | `—` | `Promise<string / null>` | `await tokens.getRefreshToken()` |
+| `tokens.setAccessToken(token)` | 保存访问令牌 | 必填 `token`，由可信认证响应提供的访问令牌字符串。 | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
+| `tokens.setRefreshToken(token)` | 保存刷新令牌 | 必填 `token`，由可信认证响应提供的刷新令牌字符串。 | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
+| `tokens.clear()` | 删除本机两类凭据 | `—` | `Promise<void>` | `await tokens.clear()` |
 
 #### 场景：安全保存登录凭据
 

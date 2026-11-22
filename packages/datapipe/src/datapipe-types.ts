@@ -23,6 +23,7 @@ const DatapipeErrorInfo = {
   PIPELINE_FAILED: '004:500',
   CONFIG_ERROR: '005:400',
   MISSING_SEPARATOR: '006:400',
+  CHUNK_LIMIT_EXCEEDED: '007:413',
 } as const satisfies ErrorInfo
 
 /**
@@ -113,7 +114,7 @@ export type PipelineStep
  * ```
  */
 export interface PipelineResult {
-  /** 处理后的文本（分块前的最终文本） */
+  /** 最后一个清洗或文本转换步骤结束后的正文；各分块步骤使用各自执行时的正文。 */
   text: string
   /** 分块列表（如果管线包含 chunk 步骤） */
   chunks: DataChunk[]

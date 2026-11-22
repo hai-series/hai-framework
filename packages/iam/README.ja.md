@@ -24,6 +24,8 @@
 
 [API 一覧](../../docs/usage/function/iam.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+`iam.user.updateUserWithRoles` は利用者情報とロールを一緒に確定します。一回用チケットはキャッシュキーにダイジェストを使い、用途確認後に消費します。
+
 LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/function/iam.ja.md#ldap-identity-migration)を参照してください。
 
 ## データ構造

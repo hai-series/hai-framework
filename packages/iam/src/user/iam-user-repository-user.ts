@@ -90,6 +90,26 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
 const TABLE_NAME = 'hai_iam_users'
 
 /**
+ * 在事务读账号和角色前取得同一账号的写入锁。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function lock(tx: DmlWithTxOperations, userId: string) {
+ *   return lockIamUser(tx, userId)
+ * }
+ * ```
+ */
+export async function lockIamUser(tx: DmlWithTxOperations, userId: string): Promise<HaiResult<void>> {
+  // SQLite 没有 FOR UPDATE。先获取写事务，再读取数据，避免从旧快照升级写锁。
+  const locked = reldb.config?.type === 'sqlite'
+    ? await tx.execute(`UPDATE ${TABLE_NAME} SET id = id WHERE id = ?`, [userId])
+    : await tx.get(`SELECT id FROM ${TABLE_NAME} WHERE id = ? FOR UPDATE`, [userId])
+  return locked.success
+    ? ok(undefined)
+    : locked
+}
+
+/**
  * 用户字段定义
  */
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [

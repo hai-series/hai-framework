@@ -75,8 +75,8 @@ Connect RelDB before Audit and close them in reverse order.
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.init` | Prepare audit tables using initialized RelDB | `config?` | `void` | `await audit.init()` |
-| `audit.close` | Release the module without closing borrowed services | None | `void` | `await audit.close()` |
+| `audit.init(config?)` | Prepare audit tables using initialized RelDB | `config?` | `void` | `await audit.init()` |
+| `audit.close()` | Release the module without closing borrowed services | None | `void` | `await audit.close()` |
 | `audit.isInitialized` | Check whether audit is ready | Read-only property; no arguments | `boolean` | `audit.isInitialized` |
 
 #### Scenario: Prepare audit services
@@ -115,15 +115,35 @@ Record events using server-derived identities and request IDs. Helpers cover com
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.log` | Save an explicit audit event | `input, tx?` | `AuditLog` | `await audit.log(event)` |
-| `audit.capture` | Capture according to the configured policy | `input, options?` | `void` | `await audit.capture(event)` |
-| `audit.withContext` | Bind trusted actor and request context | `context, operation` | `T` | `audit.withContext(trustedContext, () => saveOrder())` |
-| `audit.helper.login` | Record a login | `userId, ip?, ua?` | `void` | `await audit.helper.login(userId)` |
-| `audit.helper.logout` | Record a logout | `userId, ip?, ua?` | `void` | `await audit.helper.logout(userId)` |
-| `audit.helper.register` | Record registration | `userId, ip?, ua?` | `void` | `await audit.helper.register(userId)` |
-| `audit.helper.passwordResetRequest` | Record a password reset request | `email, ip?, ua?` | `void` | `await audit.helper.passwordResetRequest(email)` |
-| `audit.helper.passwordResetComplete` | Record a completed password reset | `userId, ip?, ua?` | `void` | `await audit.helper.passwordResetComplete(userId)` |
-| `audit.helper.crud` | Record a CRUD operation | `input` | `void` | `await audit.helper.crud(event)` |
+| `audit.log(input, tx?)` | Save an explicit audit event | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `tx?: DmlWithTxOperations` Optional existing transaction to commit the log with the business operation | `AuditLog` | `await audit.log(event)` |
+| `audit.capture(input, options?)` | Capture according to the configured policy | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `options?` Read flag and transaction. See [capture fields](#audit-event-fields) | `void` | `await audit.capture(event)` |
+| `audit.withContext(context, operation)` | Bind trusted actor and request context | `context: AuditContext` Trusted async context. See [identity fields](#audit-event-fields). `operation: () => T` Run in the context and return its original value | `T` | `audit.withContext(trustedContext, () => saveOrder())` |
+| `audit.helper.login(userId, ip?, ua?)` | Record a login | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.login(userId)` |
+| `audit.helper.logout(userId, ip?, ua?)` | Record a logout | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.logout(userId)` |
+| `audit.helper.register(userId, ip?, ua?)` | Record registration | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.register(userId)` |
+| `audit.helper.passwordResetRequest(email, ip?, ua?)` | Record a password reset request | `email: string` Email requesting the reset. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.passwordResetRequest(email)` |
+| `audit.helper.passwordResetComplete(userId, ip?, ua?)` | Record a completed password reset | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud(input)` | Record a CRUD operation | `input: CrudAuditInput` Required action (create, read, update, or delete) and resource. Optional resourceId, details, userId, ip, ua and [event fields](#audit-event-fields) | `void` | `await audit.helper.crud(event)` |
+
+<a id="audit-event-fields"></a>
+
+**Event, context, and capture fields**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `CreateAuditLogInput.action / resource` | `string` | Required | Action and resource type, such as update and orders. |
+| `CreateAuditLogInput.userId / resourceId` | `string \| null` | Optional | Actor and affected resource identifiers. A system event can have no user. |
+| `CreateAuditLogInput.details` | `Record<string, unknown> \| null` | Optional | JSON details to persist, redacted before writing. |
+| `category` | `'system' \| 'business' \| null` | Optional | Event category. AuditContext can also supply the default for the current operation. |
+| `outcome` | `'success' \| 'failure' \| 'denied' \| null` | Optional | Record the outcome of the operation. |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical' \| null` | Optional | Mark event severity. |
+| `requestId / traceId / scopeId` | `string` | Optional | Trusted request, trace, and scope IDs in the event or context. Event inputs also accept null. |
+| `ipAddress / userAgent` | `string` | Optional | Trusted client address and User-Agent. Event inputs also accept null. |
+| `actorSnapshot / AuditContext.actor` | `AuditActorSnapshot \| null` | Optional | Capture the actor’s identity at event time. The object requires id and can include username, displayName, and roles. |
+| `capture.options.read` | `boolean` | `false` | Mark a read. If read capture is disabled, successful reads are skipped, while failures and denials can still be recorded. |
+| `capture.options.tx` | `DmlWithTxOperations` | Optional | Use the business transaction so its audit write can roll back with the business operation. |
+
+With automatic capture enabled but read capture disabled, `{ read: true }` skips the write for `outcome: "success"` and records it for `outcome: "denied"`.
 
 #### Scenario: Record actions and identity
 
@@ -206,10 +226,29 @@ Investigate by user, action and time, then clean records according to retention 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.list` | Filter and paginate events | `options?` | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
-| `audit.getUserRecent` | Read recent user activity | `userId, limit?` | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
-| `audit.getStats` | Aggregate operations over recent days | `days?, filters?` | `AuditStatItem[]` | `await audit.getStats(7)` |
-| `audit.cleanup` | Delete old events under the retention policy | `olderThanDays?` | `number` | `await audit.cleanup(90)` |
+| `audit.list(options?)` | Filter and paginate events | Optional `options: ListAuditLogsOptions`. See [filter and pagination fields](#audit-list-options). | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent(userId, limit?)` | Read recent user activity | Required `userId: string` selects the user. Optional `limit: number` defaults to 10 results. | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
+| `audit.getStats(days?, filters?)` | Aggregate operations over recent days | Optional `days: number` defaults to seven days. Optional `filters` takes category, outcome, severity, scopeId, userId, and resource from the [list fields](#audit-list-options). | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome` | Count outcomes using the list filters | `options?`, all records by default | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
+| `audit.cleanup(olderThanDays?)` | Delete old events under the retention policy | `olderThanDays?: number` Defaults to 90 days. Deletes events older than the cutoff | `number` | `await audit.cleanup(90)` |
+
+<a id="audit-list-options"></a>
+
+**ListAuditLogsOptions**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `requestId / traceId / scopeId` | `string` | Optional | Match the request, trace, or business scope exactly. |
+| `userId / action / resource` | `string` | Optional | Match the event user, action, or resource type exactly. |
+| `category` | `'system' \| 'business'` | Optional | Select system or business events. |
+| `outcome` | `'success' \| 'failure' \| 'denied'` | Optional | Retain only the specified outcome. |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical'` | Optional | Retain only the specified severity. |
+| `startDate / endDate` | `Date` | Optional | Inclusive event timestamps. If both are supplied, start must not be after end. |
+| `sortBy` | `'createdAt' \| 'action' \| 'resource' \| 'category' \| 'outcome' \| 'severity'` | `createdAt` | Select the sort key. |
+| `sortDirection` | `'asc' \| 'desc'` | `desc` | Set the sort direction. |
+| `page / pageSize` | `number` | Page 1, 20 rows | Set the page and rows per page. |
+
+For example, `{ resource: "orders", outcome: "denied", sortDirection: "asc", pageSize: 5 }` returns only denied order events, oldest first, with at most five on page one.
 
 #### Scenario: Query and clean old records
 
@@ -220,6 +259,11 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
+// Apply the same login filter as the list and count each outcome, including unclassified records. Return the original error on failure.
+const outcomesResult = await audit.countByOutcome({ action: 'login' })
+if (!outcomesResult.success)
+  return outcomesResult
+const outcomes = outcomesResult.data
 // Read up to 20 recent records for the user ID. The result is an array; query return the original failed result on failure.
 const recentResult = await audit.getUserRecent('demo-user', 20)
 if (!recentResult.success)
@@ -251,8 +295,21 @@ Archive history to private object storage and verify it before applying retentio
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.backup.run` | Create or verify a private archive | `options?` | `AuditBackupInfo` | `await audit.backup.run()` |
-| `audit.backup.verify` | Verify archive format and checksum | `key, { signal? }?` | `AuditBackupInfo` | `await audit.backup.verify(backupKey)` |
+| `audit.backup.run(options?)` | Create or verify a private archive | Optional `options: AuditBackupOptions` sets the ID and scanned interval. See [backup fields](#audit-backup-options). | `AuditBackupInfo` | `await audit.backup.run()` |
+| `audit.backup.verify(key, options?)` | Verify archive format and checksum | Required `key: string` comes from the private backup receipt. Optional `options.signal: AbortSignal` cancels verification. | `AuditBackupInfo` | `await audit.backup.verify(backupKey)` |
+
+<a id="audit-backup-options"></a>
+
+**Backup and verification options**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `AuditBackupOptions.id` | `string` | Random UUID | Use a stable ID for the same archival run. A matching existing archive is checked and reused. A conflict fails. |
+| `AuditBackupOptions.from` | `Date` | No lower bound | Start of the archived interval. |
+| `AuditBackupOptions.to` | `Date` | Database clock at archive start | Cannot be after archive start or before from. |
+| `signal` | `AbortSignal` | Optional | Both run and verify accept cancellation. |
+
+Retry the same archive using the same `{ id: "daily-audit", from, to }`. If complete, it returns a receipt for the same object key.
 
 #### Scenario: Archive and verify backups
 
@@ -293,7 +350,7 @@ Check rules that currently meet their thresholds; use Scheduler for recurring ch
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.checkAlerts` | Evaluate thresholds and attempt notifications | `{ signal? }?` | `AuditAlertReport` | `await audit.checkAlerts()` |
+| `audit.checkAlerts(options?)` | Evaluate thresholds and attempt notifications | `options?: { signal?: AbortSignal }` Optionally cancel the check or notification. Omit to use the configured behavior | `AuditAlertReport` | `await audit.checkAlerts()` |
 
 #### Scenario: Check anomalies and notify
 

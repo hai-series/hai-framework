@@ -36,6 +36,7 @@ export default defineConfig({
     '@lancedb/lancedb',
     'undici',
     'ws',
+    'yauzl',
     'zod',
   ],
 })

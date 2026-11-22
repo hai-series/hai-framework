@@ -84,10 +84,10 @@ export function startApi(closeApp: () => Promise<void>) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `contract`、`procedures`。HTTP、IAM、中间件、传输加密和语音可按需配置，见[默认值](../configuration/serv.md) | `fetch`; `request`; `ServHttpApp` | `serv.createApp({ contract, procedures })` |
-| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`。默认 `host: '127.0.0.1'`、`port: 3000`。可传 `onListening`、`onClose` | `ServNodeServer`; `server`; `address`; `close()` | `serv.listen(app, { port: 3001 })` |
-| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 由 `createApp()` 返回的应用 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
-| `serv.implement(contract)` | 实现契约中的路由 | 必填带类型的路由契约 | `ServImplementer` | `serv.implement(contract)` |
+| `serv.createApp(options)` | HTTP アプリを組み立てる | `options`、`contract`、`procedures` が必須。任意項目は[アプリ設定](#host-options)を参照。 | `fetch` と `request` を備えた `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen(app, options?)` | Node の待ち受けを開始 | `app` が必須。[待ち受け設定](#listen-options)は省略可。 | `server`、`address`、非同期 `close()` を備えた `ServNodeServer` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | `serv.createApp()` が返す `app` が必須。 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
+| `serv.implement(contract)` | 实现契约中的路由 | クライアントと共有する型付きルート `contract` が必須。 | `ServImplementer` | `serv.implement(contract)` |
 
 #### 利用例：契約の実装と HTTP の起動
 
@@ -99,13 +99,34 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 
 未翻訳：暗号化通信、ストリーミング・音声、ミドルウェアの接続例。[中国語の該当節](serv.md#detailed-workflow)を参照してください。
 
+<a id="listen-options"></a>
+
+#### 利用例：解決済みの待ち受けアドレスを渡す
+
+| `options` の項目 | 省略時 | 指定した場合 |
+| --- | --- | --- |
+| `host` | `'127.0.0.1'` | ループバックはローカル接続のみ受け付けます。`'0.0.0.0'` はすべての IPv4 インターフェース、特定の IP はそのインターフェースで待ち受けます。 |
+| `port` | `3000` | Node の待ち受けポート。`0` では OS が割り当てます。実際の番号は `onListening` の `AddressInfo.port` を参照してください。 |
+| `onListening` | 準備完了通知なし | 接続の受け付けを開始すると Node の `AddressInfo` を渡して呼び出します。 |
+| `onClose` | 終了シグナルのコールバックなし | 非同期の解放関数を渡すと、`SIGINT` または `SIGTERM` で待ち受けと音声接続を閉じたあと 1 回呼び出します。`close()` を直接呼ぶ場合は呼び出し側で業務リソースを解放します。 |
+
+アプリは環境変数 `HOST`、`PORT` や設定ファイルの `server` から値を解決して `serv.listen()` に明示的に渡せます。省略した項目には待ち受け側の既定値が適用されます。
+
 <a id="host-options"></a>
 
 #### アプリ工場の引数と実行時依存
 
-コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](serv.md#host-options)にあり、この節は部分翻訳です。
-
-<a id="audio-options"></a>
+| `options` の項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `contract`、`procedures` | 両方必須。契約と実装のルート構成を一致させる。 | 契約で入出力を定義し、プロシージャーが各ルートを実装する。 |
+| `http` | [HTTP の既定値](../configuration/serv.ja.md)を使用 | API、ヘルスチェック、文書のパスとリクエスト方針を設定する。 |
+| `middlewares` | 追加のミドルウェアなし | `{ middleware, path? }` の配列。`path` を省略すると全ルートが対象。 |
+| `iam` | 初期化済み IAM を任意で指定 | Bearer アクセストークンを検証し、`refreshCookie` の使用時は更新も行う。 |
+| `verifyToken` | IAM があればその検証を使用 | `Promise<HaiResult<ServSession>>` を返す独自のアクセストークン検証。 |
+| `createContext` | Serv のコンテキストを使用 | リクエストごとのコンテキストと認証済みセッションを自分で構築する。コンテキストの生成時は `verifyToken` と `iam` より優先。 |
+| `refreshCookie` | 無効 | ブラウザーの更新 Cookie や信頼済みネイティブのリクエスト方針を指定。IAM の更新機能か `onRefresh` が必要。 |
+| `transport` | 無効 | 初期化済み crypto、管理された `serverKeyRing`、共有 `keyStore` を渡して送受信を暗号化する。 |
+| `audio` | WebSocket ルートなし | 初期化済み AI と `verifyTicket` を渡して音声ルートを追加。Node の WebSocket アップグレードは `serv.listen()` が処理する。 |
 
 [引数と手順の詳細](serv.md#http-app)
 
@@ -119,10 +140,10 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `request` 必填，`platform` 可选 | `ServContext` | `serv.parseRequestContext({ request })` |
-| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 回调接收访问令牌，返回 `Promise<HaiResult<ServSession>>` | `CreateServContext`; `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
-| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 只读常量 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
-| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 只读常量 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
+| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `input.request: Request` が必須。任意の信頼済み `remoteAddress` と解決済み `ip` をリクエスト情報に反映。 | `ServContext` | `serv.parseRequestContext({ request })` |
+| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | アクセストークンを検証し `HaiResult<ServSession>` を返す非同期 `verifyToken(token)` が必須。 | `CreateServContext`; `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
+| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 読み取り専用定数 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
+| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 読み取り専用定数 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
 
 #### 利用例：主体の解決とルート保護
 
@@ -140,9 +161,25 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
-| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
-| `serv.storageAssets(config)` | Storage の公開リソースを読み取り専用で配信する | Storage、キーと MIME の許可リスト、任意のキャッシュ設定 | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+| `serv.cors(config?)` | 处理跨域预检和响应头 | 任意の `config` でオリジン、メソッド、ヘッダー、キャッシュを設定。[HTTP ミドルウェア項目](#serv-middleware-options)を参照。 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
+| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `input` オブジェクトが必須。本番は明示的な `corsOrigin` が必要。環境とオリジンは[HTTP ミドルウェア項目](#serv-middleware-options)を参照。 | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
+| `serv.storageAssets(config)` | Storage の公開リソースを読み取り専用で配信する | Storage、パス、許可するキーと MIME の `config` が必須。[HTTP ミドルウェア項目](#serv-middleware-options)を参照。 | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+
+<a id="serv-middleware-options"></a>
+
+#### HTTP ミドルウェア項目
+
+| 項目 | 既定値と条件 | 用途と結果 |
+| --- | --- | --- |
+| `cors.config.origin` | 既定は `"*"` | 単一オリジン、一覧、または `(origin) => boolean` を指定。本番のポリシーは明示した配信元から生成する。 |
+| `cors.config.methods` / `allowedHeaders` | 既定は GET、HEAD、PUT、PATCH、POST、DELETE、OPTIONS と下記ヘッダー | 許可するメソッドと要求ヘッダー。プリフライトでは要求された一覧を優先して返す。 |
+| `cors.config.exposedHeaders` / `credentials` / `maxAge` | 既定では追加の公開ヘッダーなし、資格情報は `false`、キャッシュは 86,400 秒 | ブラウザーに公開する応答ヘッダー、資格情報、キャッシュ時間。 `X-Request-Id` と `X-Trace-Id` は常に公開対象。 |
+| `input.environment` / `corsOrigin` / `nativeOrigins` | `production` では HTTP(S) オリジンの明示が必須 | オリジンはカンマ区切り。本番では既定で更新 Cookie を Secure にし、API 文書を非公開にする。 |
+| `storageAssets.config.storage` / `pathPrefix` | 両方必須 | 初期化済み Storage または同等のファイルアダプター。読取時に要求パスから `pathPrefix` を除く。マウントは別途設定。 |
+| `storageAssets.config.keyPattern` / `allowedContentTypes` | 両方必須 | Storage キー全体を正規表現で許可し、許可する MIME を指定。 |
+| `storageAssets.config.cacheControl` / `crossOriginResourcePolicy` | 既定は `no-store`。クロスオリジン資源ポリシーヘッダーは省略。 | 資源キャッシュを設定し、任意で `same-origin`、`same-site`、`cross-origin` を指定。 |
+
+既定の要求ヘッダーは `Authorization`、`Content-Type`、`X-Requested-With`、`X-Hai-Reauthentication`、`X-Hai-Terminal`。明示的に許可した `https://app.example.com` からのプリフライトには HTTP 204 と一致する `Access-Control-Allow-Origin` が返ります。
 
 #### 利用例：アクセス・CORS・資源の制御
 
@@ -170,10 +207,10 @@ GET は Storage の一回の読み取りから MIME タイプ、ETag、本文を
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 契约必填，标题默认 `hai-framework API`，版本默认 `0.1.0`；描述和前缀可省略 | `Promise<OpenAPI.Document>` | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
-| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod Schema 和待校验值必填，语言默认 `zh-CN`，可传当前请求语言 | `HaiResult<z.infer<Schema>>` | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
-| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 传入 `Headers` 或头字段对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN` | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
-| `serv.m(key, options?)` | 读取本地化提示 | 消息键必填，可传 `locale` 和插值参数 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
+| `serv.generateSpec(contract, options?)` | OpenAPI の記述を生成 | 共有 `contract` が必須。任意の `options` には `title`（既定 `hai-framework API`）、`version`（既定 `0.1.0`）、`description`、`apiPrefix`（`servers[0].url` を設定）。 | `Promise<OpenAPI.Document>` | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
+| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod `schema` と検証する `input` が必須。検証メッセージの `locale` は既定 `zh-CN`。 | `HaiResult<z.infer<Schema>>` | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
+| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | `headers` は必須で Headers または文字列マップ。`x-hai-locale`、`Accept-Language` の順に読み、既定 `zh-CN`。 | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
+| `serv.m(key, options?)` | 读取本地化提示 | 登録済みメッセージ `key` が必須。任意の `options.locale` で言語を上書きし、`options.params` で埋め込み値を渡す。 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
 
 #### 利用例：入力の検証と API 記述
 
@@ -189,8 +226,9 @@ checked.data // { title: 'Order' }
 // Resolve the localized forbidden message using the selected request locale.
 const denied = serv.m('serv_errorForbidden', { locale }) // localized safe text
 // With the contract from quick start:
-// Generate the OpenAPI document for the quick-start contract with the supplied title and version.
-const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
+// 入門例の契約を使い、Orders とバージョン 1.0.0 の OpenAPI 文書を生成します。変換に失敗すると Promise が拒否されます。
+const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0', apiPrefix: '/api/v1' })
+spec.servers?.[0]?.url // '/api/v1'。仕様上のサーバー URL。
 ```
 
 英語ヘッダーと title=Order を入力し、言語と検証済みオブジェクトを得ます。仕様生成は Promise 拒否、入力検証は失敗 HaiResult です。
@@ -198,6 +236,7 @@ const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.
 [引数と手順の詳細](serv.md#validation-locales)
 
 <a id="integrations"></a>
+<a id="audio-options"></a>
 
 ### 暗号・音声・フィードバックの接続：`serv.createApp`
 
@@ -207,7 +246,7 @@ const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `serv.createApp` | 暗号化・音声・業務ルートを装配 | `contract, procedures; transport?, audio?, middlewares?` | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
+| `serv.createApp(options)` | 暗号化・音声・業務ルートを装配 | `options`、`contract`、`procedures` が必須。任意項目は[アプリ設定](#host-options)を参照。 | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
 
 #### 利用例：暗号・音声・フィードバックの接続
 

@@ -75,11 +75,11 @@ finally {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `vecdb.init(config)` | 初始化配置指定的后端 | `config.type` 必填；后端字段和默认值见[配置清单](../configuration/vecdb.md) | `HaiResult<void>` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
-| `vecdb.close()` | 等待并释放当前连接 | 无参数 | `HaiResult<void>` | `await vecdb.close()` |
-| `vecdb.isInitialized` | 現在操作できるか確認 | 只读属性，启动前为 `false` | `boolean` | `vecdb.isInitialized` |
-| `vecdb.config` | 認証情報を除いた設定を読む | 只读属性，未打开或关闭中为 `null` | `VecdbConfig or null` | `vecdb.config` |
-| `vecdb.rawConnection` | 信頼済みのサーバーで接続情報を読む。認証情報を含む場合あり | 只读属性，未打开或关闭中为 `null` | `VecdbConnection or null` | `vecdb.rawConnection` |
+| `vecdb.init(config)` | 設定したバックエンドを初期化 | 必須の `config: VecdbConfigInput` の `type` で選択。[設定](../configuration/vecdb.ja.md)を参照。 | `HaiResult<void>` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
+| `vecdb.close()` | 処理を待って現在の接続を解放 | なし | `HaiResult<void>` | `await vecdb.close()` |
+| `vecdb.isInitialized` | 現在操作できるか確認 | 読み取り専用。初期化前は `false` | `boolean` | `vecdb.isInitialized` |
+| `vecdb.config` | 認証情報を除いた設定を読む | 読み取り専用。未接続または終了中は `null` | `VecdbConfig or null` | `vecdb.config` |
+| `vecdb.rawConnection` | 信頼済みのサーバーで接続情報を読む。認証情報を含む場合あり | 読み取り専用。未接続または終了中は `null` | `VecdbConnection or null` | `vecdb.rawConnection` |
 
 #### 利用例：接続と終了
 
@@ -121,11 +121,11 @@ vecdb.config // null
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `vecdb.collection.create(name, options)` | 创建集合 | 集合名和 `options.dimension` 必填；`metric` 默认沿用向量库配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
-| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | 集合名必填 | `void` | `await vecdb.collection.drop('documents')` |
-| `vecdb.collection.exists(name)` | 检查集合是否存在 | 集合名必填 | `boolean` | `await vecdb.collection.exists('documents')` |
-| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | 集合名必填 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
-| `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
+| `vecdb.collection.create(name, options)` | コレクションを作成 | `name` はコレクション名、`options.dimension` は必須の正整数。保存・検索するベクトルの次元をそろえる。`metric` は `cosine`、`euclidean`、`dot`。省略時は接続設定、未設定なら `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
+| `vecdb.collection.drop(name)` | コレクションとベクトルを削除 | `name: string` 必須の設定済みコレクション名 | `void` | `await vecdb.collection.drop('documents')` |
+| `vecdb.collection.exists(name)` | コレクションの存在を確認 | `name: string` 必須の設定済みコレクション名 | `boolean` | `await vecdb.collection.exists('documents')` |
+| `vecdb.collection.info(name)` | 次元、距離尺度、文書数を取得 | `name: string` 必須の設定済みコレクション名 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
+| `vecdb.collection.list()` | コレクション名を一覧表示 | なし | `string[]` | `await vecdb.collection.list()` |
 
 #### 利用例：集合の作成と削除
 
@@ -177,12 +177,30 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | 集合名与文档数组必填。每条文档要有 `id` 和与集合维度一致的 `vector` | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
-| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | 集合名与文档数组必填。替换时传入完整文档 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
-| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | 集合名与 ID 数组必填 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
-| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | 集合名及查询向量必填。`topK` 默认 `10`，可传 `minScore` 和 `filter` | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | 统计集合中的文档数 | 集合名必填 | `number` | `await vecdb.vector.count('documents')` |
-| `vecdb.vector.scan(collection, options?)` | 按页列出可删除的文档 ID | 集合名必填，首页省略 `cursor`，`limit` 默认 `64` | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+| `vecdb.vector.insert(collection, documents)` | 文書ベクトルを挿入 | `collection: string` 必須のコレクション名。`documents: VectorDocument[]` 必須の文書配列。[文書項目](#vecdb-vector-options)を参照 | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
+| `vecdb.vector.upsert(collection, documents)` | ID で文書全体を挿入または置換 | `collection: string` 必須のコレクション名。`documents: VectorDocument[]` 必須の文書配列。[文書項目](#vecdb-vector-options)を参照 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
+| `vecdb.vector.delete(collection, ids)` | ID で文書を削除 | `collection: string` 必須のコレクション名。`ids: string[]` 削除する文書 ID 配列 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
+| `vecdb.vector.search(collection, vector, options?)` | ベクトルの類似度で検索 | `collection: string` 必須のコレクション名。`vector: number[]` コレクションと次元が一致する検索ベクトル。`options?: VectorSearchOptions` [検索項目](#vecdb-vector-options)を参照 | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
+| `vecdb.vector.count(collection)` | コレクション内の文書数を集計 | `collection: string` 必須のコレクション名 | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.scan(collection, options?)` | 文書 ID をページ単位で取得 | `collection: string` 必須のコレクション名。`options?: VectorScanOptions` [走査項目](#vecdb-vector-options)を参照 | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+
+<a id="vecdb-vector-options"></a>
+
+**文書・検索・走査のフィールド**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `VectorDocument.id` | `string` | 必須 | 置換・削除で使うアプリの安定した文書 ID。 |
+| `VectorDocument.vector` | `number[]` | 必須 | コレクションと次元が一致する浮動小数点配列。 |
+| `VectorDocument.content` | `string` | 任意 | ヒット結果に含める元のテキスト。 |
+| `VectorDocument.metadata` | `Record<string, unknown>` | 任意 | source など後で絞り込むための追加データ。 |
+| `VectorSearchOptions.topK` | `number` | `10` | 類似度順に取得する最大件数。 |
+| `VectorSearchOptions.minScore` | `number` | `0` | 0–1 の下限。下限と等しいスコアも含みます。 |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | メタデータの絞り込みなし | メタデータで絞り込み。比較規則は下記を参照。 |
+| `VectorScanOptions.cursor` | `string` | 初回は省略 | 同じバックエンドとコレクションで前回の nextCursor を指定。 |
+| `VectorScanOptions.limit` | `number` | `64` | 1 ページの文書 ID 数。1–128 の整数。 |
+
+`topK` は類似度順で返す最大件数です。`minScore` は 0–1 のスコアの下限です。下限と等しいスコアも含まれます。`filter` は、たとえば `{ source: "handbook" }` のようにメタデータを絞り込みます。LanceDB は上位フィールドの型と値を厳密に比較し、指定した全項目の一致を求めます。文字列、有限の数値、真偽値、`null` に対応し、欠損は `null` と一致しません。未対応の値は `CONFIG_ERROR` になります。他のバックエンドでは比較規則が異なることがあります。下の例は上位フィールドの文字列を使います。
 
 #### 利用例：文書の保存・検索・削除
 
@@ -207,16 +225,21 @@ const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
   return countResult
 countResult.data // 1
-// 同じ doc-1 の本文を Install v2 に更新します。成功時の data は undefined、失敗は 元の失敗結果を返します。
-const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }])
+// doc-1 の本文とメタデータを置き換え、source に handbook を設定します。成功時の data は undefined。失敗時はその結果を返します。
+const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2', metadata: { source: 'handbook' } }])
 if (!upsertResult.success)
   return upsertResult
-// 同じベクトルで 0.9 以上の上位 1 件を検索します。この例の結果は更新後の doc-1、失敗は 元の失敗結果を返します。
-const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 })
+// 同じベクトルで source=handbook、スコア 0.9 以上の上位 1 件を探します。成功時は更新済みの doc-1、失敗時はその結果を返します。
+const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9, filter: { source: 'handbook' } })
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+// source=release-notes で検索します。該当文書がないため、成功時の data は []。失敗時はその結果を返します。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+if (!excluded.success)
+  return excluded
+excluded.data // []
 // demo-docs の先頭から最大 32 件の ID を取得します。結果には items と任意の nextCursor が含まれます。失敗は 元の失敗結果を返します。
 const pageResult = await vecdb.vector.scan('demo-docs', { limit: 32 })
 if (!pageResult.success)

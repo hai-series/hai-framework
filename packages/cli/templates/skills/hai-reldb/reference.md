@@ -108,7 +108,7 @@ if (!closed.success) {
 
 ## 核心 API
 
-事务边界：`tx.wrap` 对正常返回值一律提交，不识别失败 HaiResult；回调内检查每步结果，失败抛错以触发回滚（外层返回 TRANSACTION_FAILED）。需保留原错误码时使用手动事务。
+事务回调返回 HaiResult 时，使用 `tx.wrapResult`。业务成功才提交，业务失败时回滚并在回滚成功后保留原错误。普通值回调用 `tx.wrap`，回调抛错才触发回滚。
 
 ### DDL — `reldb.ddl`
 

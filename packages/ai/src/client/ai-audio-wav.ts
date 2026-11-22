@@ -10,10 +10,30 @@
 const ASR_SAMPLE_RATE = 16000
 
 /**
+ * WAV 转换的目标格式和处理上限。
+ * @example
+ * ```ts
+ * import type { AudioWavOptions } from '@h-ai/ai/client'
+ * const options: AudioWavOptions = { maxInputBytes: 1024 * 1024, maxDurationSeconds: 30, overflow: 'truncate' }
+ * ```
+ */
+export interface AudioWavOptions {
+  /** 输出采样率，单位 Hz，默认 16000。 */
+  sampleRate?: number
+  /** 解码前允许的 Blob 最大字节数。 */
+  maxInputBytes?: number
+  /** 输出 PCM 的最长秒数，在解码后、重采样前检查。 */
+  maxDurationSeconds?: number
+  /** 超过最长秒数时默认拒绝，设为 truncate 时保留开头。 */
+  overflow?: 'reject' | 'truncate'
+}
+
+/**
  * 将任意浏览器可解码的音频 Blob（如 MediaRecorder 的 webm）转换为单声道 16bit PCM WAV。
  *
  * @param blob - 录制得到的原始音频
- * @param sampleRate - 目标采样率（默认 16 kHz）
+ * @param options - 目标采样率（兼容旧调用）或含转换上限的配置
+ * @throws 配置无效、输入超限、解码失败或超时长且未指定截断时抛错
  * @returns `audio/wav` 类型的 Blob
  * @example
  * ```ts
@@ -24,7 +44,18 @@ const ASR_SAMPLE_RATE = 16000
  * }
  * ```
  */
-export async function blobToWav(blob: Blob, sampleRate = ASR_SAMPLE_RATE): Promise<Blob> {
+export async function blobToWav(blob: Blob, options: number | AudioWavOptions = ASR_SAMPLE_RATE): Promise<Blob> {
+  const { sampleRate = ASR_SAMPLE_RATE, maxInputBytes, maxDurationSeconds, overflow = 'reject' }
+    = typeof options === 'number'
+      ? { sampleRate: options }
+      : options
+  if (!Number.isSafeInteger(sampleRate) || sampleRate <= 0
+    || (maxInputBytes !== undefined && (!Number.isSafeInteger(maxInputBytes) || maxInputBytes <= 0))
+    || (maxDurationSeconds !== undefined && (!Number.isFinite(maxDurationSeconds) || Math.floor(maxDurationSeconds * sampleRate) < 1))) {
+    throw new RangeError('Invalid WAV conversion limits')
+  }
+  if (!blob.size || (maxInputBytes !== undefined && blob.size > maxInputBytes))
+    throw new RangeError('Invalid audio input size')
   const arrayBuffer = await blob.arrayBuffer()
 
   // 解码为 AudioBuffer（浏览器自动识别 webm/opus/mp4 等容器）
@@ -38,7 +69,13 @@ export async function blobToWav(blob: Blob, sampleRate = ASR_SAMPLE_RATE): Promi
   }
 
   // 通过离线渲染重采样为目标采样率的单声道
-  const frameCount = Math.max(1, Math.ceil(decoded.duration * sampleRate))
+  const inputFrames = Math.ceil(decoded.duration * sampleRate)
+  const maxFrames = maxDurationSeconds === undefined
+    ? Math.floor((0xFFFFFFFF - 36) / 2)
+    : Math.min(Math.floor(maxDurationSeconds * sampleRate), Math.floor((0xFFFFFFFF - 36) / 2))
+  if (!inputFrames || (inputFrames > maxFrames && overflow !== 'truncate'))
+    throw new RangeError('Invalid audio duration')
+  const frameCount = Math.min(inputFrames, maxFrames)
   const offline = new OfflineAudioContext(1, frameCount, sampleRate)
   const source = offline.createBufferSource()
   source.buffer = decoded

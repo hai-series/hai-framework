@@ -5,6 +5,7 @@
  * 用途绑定、grant 透传。使用 SQLite 内存 + 内存缓存，无需外部依赖。
  */
 
+import { createHash } from 'node:crypto'
 import { cache } from '@h-ai/cache'
 import { ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -37,6 +38,14 @@ describe('iam ticket', () => {
     expect(issued.data.ticket.length).toBeGreaterThan(20)
     expect(issued.data.expiresAt).toBeGreaterThan(Date.now())
 
+    const digest = createHash('sha256').update(issued.data.ticket).digest('hex')
+    expect(await cache.kv.get(`hai:iam:ticket:${issued.data.ticket}`)).toEqual(ok(null))
+    expect(await cache.kv.get(`hai:iam:ticket:sha256:${digest}`)).toMatchObject({
+      success: true,
+      data: { subjectId: 'user-1', purpose: 'ai-audio' },
+    })
+
+    expect((await iam.ticket.consume(`sha256:${digest}`)).success).toBe(false)
     const consumed = await iam.ticket.consume(issued.data.ticket)
     expect(consumed.success).toBe(true)
     if (!consumed.success)
@@ -79,13 +88,40 @@ describe('iam ticket', () => {
     expect(consumed.success).toBe(false)
   })
 
-  it('用途不匹配时拒绝（防止跨用途重放）', async () => {
+  it('用途不匹配时拒绝，保留票据供正确用途消费', async () => {
     const issued = await iam.ticket.issue({ subjectId: 'user-4', purpose: 'ai-audio' })
     if (!issued.success)
       throw new Error('issue failed')
 
     const consumed = await iam.ticket.consume(issued.data.ticket, { purpose: 'other-purpose' })
-    expect(consumed.success).toBe(false)
+    expect(consumed).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.TICKET_INVALID.code },
+    })
+    expect((await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-audio' })).success).toBe(true)
+  })
+
+  it('升级前尚未到期的票据可按原用途原子消费一次', async () => {
+    const ticket = 'L'.repeat(43)
+    const legacy = {
+      subjectId: 'legacy-user',
+      purpose: 'legacy-purpose',
+      grant: { operation: 'test' },
+      expiresAt: Date.now() + 30_000,
+    }
+    expect(await cache.kv.set(`hai:iam:ticket:${ticket}`, legacy, { px: 30_000 })).toEqual(ok(true))
+    expect((await iam.ticket.consume(ticket, { purpose: 'other-purpose' })).success).toBe(false)
+    const requests = await Promise.all([
+      iam.ticket.consume(ticket, { purpose: legacy.purpose }),
+      iam.ticket.consume(ticket, { purpose: legacy.purpose }),
+    ])
+    expect(requests.filter(result => result.success)).toEqual([
+      ok({
+        subjectId: legacy.subjectId,
+        purpose: legacy.purpose,
+        grant: legacy.grant,
+      }),
+    ])
   })
 
   it('两次签发生成不同的票据值（密码学随机）', async () => {

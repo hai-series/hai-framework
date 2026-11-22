@@ -22,6 +22,8 @@
 
 [查 API 清单](../../docs/usage/function/audit.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+用 `audit.countByOutcome(filters)` 统计当前列表命中的成功、失败、拒绝和未分类事件，仍可独立用 `getStats(7)` 查看最近一周的操作趋势。
+
 ## 数据结构
 
 查看[数据结构](../../docs/usage/data/audit.md)，了解审计日志、字段映射、归档对象和告警去重。

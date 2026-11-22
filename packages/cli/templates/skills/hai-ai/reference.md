@@ -163,6 +163,10 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 入库链路：clean/chunk → embedding/完整实体提取 → 持久暂存清单 → vecdb upsert → 单文档 CAS 发布完整正文、实体和元数据。每次产生唯一 revision/chunk ID，相同文档并发重建只允许一个 writer；失败保留旧版，短文档重建不显示旧尾块。向量检索只保留当前发布版，切换期间重试，持续冲突或候选扩展超限返回错误。
 
+知识库默认将 `cleanOptions.normalizeWhitespace` 和 `trim` 设为 `false`，保留 Markdown 缩进。只配置 `removeEmails: true` 时仍保留这两个默认值。对需要整理空白的纯文本，可以在单次 `ingest` 时显式开启两项。清洗或分块失败时，`ingest` 在生成向量和发布前停止，返回 `KNOWLEDGE_INGEST_FAILED` 并保留原始错误原因。
+
+知识分块遵循 Datapipe 的单位和硬上限，word 按词计量，其他模式按 Unicode code point 计量。默认 `chunkOptions` 为 `markdown`、`maxSize: 1500`、`overlap: 200`。减小 `maxSize` 时，要确保合并后的 `overlap` 严格小于它。
+
 `ingest` 成功返回 `revision`、`cleanupPending`。后者为 true 表示完整新版已经发布但旧向量删除失败，须检查并安排 repair，不能当作全部清理完成。`setup` 自动扫描前 100 份清单；应用定期分页 repair（offset≥0，limit 1–1000，默认100），根据 processed/total 覆盖全部页。存储端时钟的 5 分钟暂存过期后旧 owner 不能发布；废弃写入的永久补偿墓碑用于反复清理迟到外部写入，不能随日志删除。SQL 与 vecdb 无跨库事务，故障/重启后的清理依赖持久记录及重复扫描。
 
 删除先撤销可见性，清理失败返回错误并保留补偿信息。集合删除保留物理向量集合与代际墓碑，重新 setup 不会恢复旧代数据。默认 Store 的正文/实体来自同一已发布快照；自定义 KnowledgeStore 必须实现相同发布、删除和补偿契约。Qdrant 写入/删除等待应用，候选上限使用精确计数；LanceDB 使用持久主键原子 merge。
@@ -196,7 +200,7 @@ flush 对本节点后台提取的异常和失败 HaiResult 返回 MEMORY_EXTRACT
 
 ## File / Rerank / Reasoning
 
-- `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
+- `ai.file.parse({ content, filename, options, signal })`：默认解析保留 OCR 回退。严格本地解析设置 `options.mode: "local"`，无需 AI 初始化，支持字节、PDF 页数、DOCX 解压、正文及超时上限。取消、超时或内容非法返回失败。
 - `ai.file.parseText(content, filename?)`：直接返回文本。
 - `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排；模型 `timeout` 覆盖响应头与正文读取，超时返回失败结果。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
@@ -223,6 +227,7 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
+- 轻量浏览器录音使用 `@h-ai/ai/client` 的 `createAudioRecorder` 管理轨道、快照和分段，取消或页面卸载时调用 `close()`。把完整 Blob 交给 `blobToWav(blob, { maxInputBytes, maxDurationSeconds, overflow: "truncate" })` 后可送现有转写 API。保留应用的转写触发、原件留存与服务端校验。
 - 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
 
 能力快照 `getCapabilities` 为同步读取；跨节点更新模型后，先调用异步 `ai.audio.models.get/list` 或音频操作刷新本节点，再据能力决定参数。
@@ -245,7 +250,9 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 
 ## LLM 结构化输出
 
-`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, responseFormat?, schemaName?, maxRepairs?, signal? })` 适用于意图分类等需要结构化结果的场景。默认 `responseFormat: 'json_schema'` 向上游发送严格 Schema，仅在此模式使用 `schemaName`，默认 `result`。只支持通用 JSON 模式的 Chat 网关使用 `'json_object'`，框架将 Schema 加入提示词。两种模式都在本地用相同 Zod Schema 校验。解析或校验失败时按 `maxRepairs` 重试，默认再尝试一次。
+`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, responseFormat?, schemaName?, maxRepairs?, maxTokens?, preview?, signal? })` 适用于意图分类等需要结构化结果的场景。默认 `responseFormat: 'json_schema'` 向上游发送严格 Schema，仅在此模式使用 `schemaName`，默认 `result`。只支持通用 JSON 模式的 Chat 网关使用 `'json_object'`，框架将 Schema 加入提示词。两种模式都在本地用相同 Zod Schema 校验。解析或校验失败时按 `maxRepairs` 重试，默认再尝试一次。
+
+配置 `preview: { field, onPrefix }` 时只预览指定顶层字符串，失败尝试以空字符串清除，最终仍返回校验结果。应用自行处理重试时，每次尝试用 `ai.stream.createJsonFieldPreview(field, options)` 和 `push(fragment)` 读取更新后的累计前缀。累计模型输入超限时 `push` 抛出 `RangeError`。
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -310,8 +317,6 @@ const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 }
 ```
 
 语音：`@h-ai/ai/client` 的 `createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
-
-Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
 
 JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；应用使用所安装版本的公开类型，并通过本应用已有的类型检查验证使用示例。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
 

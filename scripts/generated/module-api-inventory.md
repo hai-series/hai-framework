@@ -4,13 +4,13 @@
 
 | 包 | 公开子路径/条件 | 命名 API 数 |
 | --- | --- | --- |
-| @h-ai/ai | `. (browser/default)` | 339 |
-| @h-ai/ai | `. (browser/types)` | 339 |
-| @h-ai/ai | `. (default)` | 375 |
-| @h-ai/ai | `. (import)` | 375 |
-| @h-ai/ai | `. (types)` | 375 |
-| @h-ai/ai | `./client (import)` | 5 |
-| @h-ai/ai | `./client (types)` | 5 |
+| @h-ai/ai | `. (browser/default)` | 343 |
+| @h-ai/ai | `. (browser/types)` | 343 |
+| @h-ai/ai | `. (default)` | 377 |
+| @h-ai/ai | `. (import)` | 377 |
+| @h-ai/ai | `. (types)` | 377 |
+| @h-ai/ai | `./client (import)` | 9 |
+| @h-ai/ai | `./client (types)` | 9 |
 | @h-ai/api-client | `. (default)` | 14 |
 | @h-ai/api-client | `. (import)` | 14 |
 | @h-ai/api-client | `. (types)` | 14 |
@@ -27,9 +27,9 @@
 | @h-ai/api-contract | `./payment (types)` | 15 |
 | @h-ai/api-contract | `./storage (import)` | 17 |
 | @h-ai/api-contract | `./storage (types)` | 17 |
-| @h-ai/audit | `. (default)` | 21 |
-| @h-ai/audit | `. (import)` | 21 |
-| @h-ai/audit | `. (types)` | 21 |
+| @h-ai/audit | `. (default)` | 22 |
+| @h-ai/audit | `. (import)` | 22 |
+| @h-ai/audit | `. (types)` | 22 |
 | @h-ai/cache | `. (default)` | 25 |
 | @h-ai/cache | `. (import)` | 25 |
 | @h-ai/cache | `. (types)` | 25 |
@@ -49,9 +49,9 @@
 | @h-ai/crypto | `. (types)` | 40 |
 | @h-ai/datapipe | `. (import)` | 19 |
 | @h-ai/datapipe | `. (types)` | 19 |
-| @h-ai/deploy | `. (default)` | 47 |
-| @h-ai/deploy | `. (import)` | 47 |
-| @h-ai/deploy | `. (types)` | 47 |
+| @h-ai/deploy | `. (default)` | 53 |
+| @h-ai/deploy | `. (import)` | 53 |
+| @h-ai/deploy | `. (types)` | 53 |
 | @h-ai/feedback | `. (import)` | 26 |
 | @h-ai/feedback | `. (types)` | 26 |
 | @h-ai/feedback | `./bundle (import)` | 14 |
@@ -62,11 +62,11 @@
 | @h-ai/feedback | `./client (types)` | 17 |
 | @h-ai/feedback | `./tauri (import)` | 1 |
 | @h-ai/feedback | `./tauri (types)` | 1 |
-| @h-ai/iam | `. (browser/default)` | 83 |
-| @h-ai/iam | `. (browser/types)` | 83 |
-| @h-ai/iam | `. (default)` | 84 |
-| @h-ai/iam | `. (import)` | 84 |
-| @h-ai/iam | `. (types)` | 84 |
+| @h-ai/iam | `. (browser/default)` | 84 |
+| @h-ai/iam | `. (browser/types)` | 84 |
+| @h-ai/iam | `. (default)` | 85 |
+| @h-ai/iam | `. (import)` | 85 |
+| @h-ai/iam | `. (types)` | 85 |
 | @h-ai/kit | `. (browser/default)` | 36 |
 | @h-ai/kit | `. (browser/types)` | 36 |
 | @h-ai/kit | `. (import)` | 75 |
@@ -124,9 +124,9 @@
 | @h-ai/tools | `. (types)` | 13 |
 | @h-ai/tools | `./server (import)` | 18 |
 | @h-ai/tools | `./server (types)` | 18 |
-| @h-ai/ui | `. (import)` | 434 |
-| @h-ai/ui | `. (svelte)` | 434 |
-| @h-ai/ui | `. (types)` | 434 |
+| @h-ai/ui | `. (import)` | 435 |
+| @h-ai/ui | `. (svelte)` | 435 |
+| @h-ai/ui | `. (types)` | 435 |
 | @h-ai/ui | `./auto-import (import)` | 1 |
 | @h-ai/ui | `./auto-import (types)` | 1 |
 | @h-ai/ui | `./guide (import)` | 11 |

@@ -65,9 +65,9 @@ finally {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.init` | プロセス内キャッシュを作成するか、Redis に接続 | `config`（必須） | `undefined`。接続準備が完了 | `await cache.init({ type: 'memory' })` |
-| `cache.close` | キャッシュインスタンスを解放し、プロセス内のデータを破棄 | 引数なし | `undefined`。リソースの解放が完了 | `await cache.close()` |
-| `cache.ping` | 接続を確認 | 引数なし | `'PONG'` | `await cache.ping()` |
+| `cache.init(config)` | プロセス内キャッシュを作成するか、Redis に接続 | `config`（必須） | `undefined`。接続準備が完了 | `await cache.init({ type: 'memory' })` |
+| `cache.close()` | キャッシュインスタンスを解放し、プロセス内のデータを破棄 | 引数なし | `undefined`。リソースの解放が完了 | `await cache.close()` |
+| `cache.ping()` | 接続を確認 | 引数なし | `'PONG'` | `await cache.ping()` |
 | `cache.config` | 現在のマスク済み設定を取得 | 読み取り専用プロパティ、引数なし | `CacheConfig \| null` | `cache.config` |
 | `cache.isInitialized` | キャッシュ操作が利用できるか確認 | 読み取り専用プロパティ、引数なし | `boolean` | `cache.isInitialized` |
 
@@ -119,24 +119,40 @@ finally {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.kv.get` | 値を取得 | key | `T \| null` | `await cache.kv.get('u:1')` |
-| `cache.kv.set` | 有効期限・条件付きで保存 | key, value, options | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
-| `cache.kv.mget` | 入力順に一括取得 | keys | `(T \| null)[]`。存在しないキーや KV 以外のキーは `null` | `await cache.kv.mget('u:1', 'u:2')` |
-| `cache.kv.mset` | 複数の値を一括保存 | entries | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
-| `cache.kv.compareAndSwap` | 現在値が一致する場合のみ更新 | key, expected, value, options | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
-| `cache.kv.del` | 指定キーを削除 | keys | `number` | `await cache.kv.del('u:1', 'u:2')` |
-| `cache.kv.exists` | 存在するキーを数える | keys | `number` | `await cache.kv.exists('u:1', 'u:2')` |
-| `cache.kv.type` | 保存したデータ型を確認 | key | `string` | `await cache.kv.type('u:1')` |
-| `cache.kv.expire` | 現在からの有効秒数を設定 | key, seconds | `boolean` | `await cache.kv.expire('u:1', 60)` |
-| `cache.kv.expireAt` | 絶対有効期限を設定 | key, timestamp | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
-| `cache.kv.ttl` | 残り有効秒数を取得 | key | `number` | `await cache.kv.ttl('u:1')` |
-| `cache.kv.persist` | 有効期限を解除 | key | `boolean` | `await cache.kv.persist('u:1')` |
-| `cache.kv.incr` | 1増やす | key | `number` | `await cache.kv.incr('hits')` |
-| `cache.kv.incrBy` | 指定量を加算 | key, increment | `number` | `await cache.kv.incrBy('hits', 2)` |
-| `cache.kv.decr` | 1減らす | key | `number` | `await cache.kv.decr('stock')` |
-| `cache.kv.decrBy` | 指定量を減算 | key, decrement | `number` | `await cache.kv.decrBy('stock', 2)` |
-| `cache.kv.keys` | パターンに一致するキーを列挙 | pattern | `string[]` | `await cache.kv.keys('u:*')` |
-| `cache.kv.scan` | 一致するキーを分割して走査 | cursor, options | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+| `cache.kv.get(key)` | 値を取得 | `key: string` 必須の論理キャッシュキー | `T \| null` | `await cache.kv.get('u:1')` |
+| `cache.kv.set(key, value, options?)` | 有効期限・条件付きで保存 | `key` と JSON 化できる `value`。`options` 内の任意の `nx`、`xx`、`ex`、`px`、`exat`、`pxat`、`keepTtl` は下の「書き込み条件と有効期限」を参照 | `boolean` | `await cache.kv.set('u:1', { name: 'Alice' }, { ex: 60 })` |
+| `cache.kv.mget(...keys)` | 入力順に一括取得 | `...keys: string[]` 論理キャッシュキーを順に指定 | `(T \| null)[]`。存在しないキーや KV 以外のキーは `null` | `await cache.kv.mget('u:1', 'u:2')` |
+| `cache.kv.mset(entries)` | 複数の値を一括保存 | `entries: Array<[string, CacheValue]>` 各項目は論理キーとその JSON 値 | `void` | `await cache.kv.mset([['u:1', { name: 'Alice' }]])` |
+| `cache.kv.compareAndSwap(key, expected, value, options?)` | 現在値が一致する場合のみ更新 | `key`、`expected`（期待する現在値）、`value`（新しい値）。任意の `options` で `px`（正の安全な整数ミリ秒）か `keepTtl`（期限を引き継ぐ）を指定。両方省略すると新しい値に期限は設定されない | `boolean` | `await cache.kv.compareAndSwap('version', 1, 2)` |
+| `cache.kv.del(...keys)` | 指定キーを削除 | `...keys: string[]` 論理キャッシュキーを順に指定 | `number` | `await cache.kv.del('u:1', 'u:2')` |
+| `cache.kv.exists(...keys)` | 存在するキーを数える | `...keys: string[]` 論理キャッシュキーを順に指定 | `number` | `await cache.kv.exists('u:1', 'u:2')` |
+| `cache.kv.type(key)` | 保存したデータ型を確認 | `key: string` 必須の論理キャッシュキー | `string` | `await cache.kv.type('u:1')` |
+| `cache.kv.expire(key, seconds)` | 現在からの有効秒数を設定 | `key: string` 必須の論理キャッシュキー。`seconds: number` 相対期限を安全な整数秒で指定 | `boolean` | `await cache.kv.expire('u:1', 60)` |
+| `cache.kv.expireAt(key, timestamp)` | 絶対有効期限を設定 | `key: string` 必須の論理キャッシュキー。`timestamp: number` 絶対 Unix 秒を安全な整数で指定 | `boolean` | `await cache.kv.expireAt('u:1', Math.floor(Date.now() / 1000) + 60)` |
+| `cache.kv.ttl(key)` | 残り有効秒数を取得 | `key: string` 必須の論理キャッシュキー | `number` | `await cache.kv.ttl('u:1')` |
+| `cache.kv.persist(key)` | 有効期限を解除 | `key: string` 必須の論理キャッシュキー | `boolean` | `await cache.kv.persist('u:1')` |
+| `cache.kv.incr(key)` | 1増やす | `key: string` 必須の論理キャッシュキー | `number` | `await cache.kv.incr('hits')` |
+| `cache.kv.incrBy(key, increment)` | 指定量を加算 | `key: string` 必須の論理キャッシュキー。`increment: number` 加算量 | `number` | `await cache.kv.incrBy('hits', 2)` |
+| `cache.kv.decr(key)` | 1減らす | `key: string` 必須の論理キャッシュキー | `number` | `await cache.kv.decr('stock')` |
+| `cache.kv.decrBy(key, decrement)` | 指定量を減算 | `key: string` 必須の論理キャッシュキー。`decrement: number` 減算量 | `number` | `await cache.kv.decrBy('stock', 2)` |
+| `cache.kv.keys(pattern)` | パターンに一致するキーを列挙 | `pattern: string` 論理キー名に一致する glob パターン | `string[]` | `await cache.kv.keys('u:*')` |
+| `cache.kv.scan(cursor, options?)` | 一致するキーを分割して走査 | `cursor` は初回 `"0"`、以降は前ページの値。`options.match` はキーの glob パターン（既定はすべて）。`count` は正の安全な整数（既定 10、Redis では処理量の目安） | `[string, string[]]` | `await cache.kv.scan('0', { match: 'u:*', count: 100 })` |
+
+<a id="cache-kv-options"></a>
+
+**書き込みと走査のオプション**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `SetOptions.nx / xx` | `boolean` | `false` | それぞれキーが存在しない場合、存在する場合だけ書き込みます。同時指定不可。条件不成立なら成功結果の data=false。 |
+| `SetOptions.ex / px` | `number` | 任意 | 相対秒またはミリ秒。正の安全な整数を一方に指定。 |
+| `SetOptions.exat / pxat` | `number` | 任意 | 絶対 Unix 秒またはミリ秒。正の安全な整数で、過去なら即時失効。 |
+| `SetOptions.keepTtl / CompareAndSwapOptions.keepTtl` | `boolean` | `false` | 既存の期限を維持。明示的な期限と同時指定不可。どちらも省略すると新しい値に期限なし。 |
+| `CompareAndSwapOptions.px` | `number` | 任意 | 比較成功時、置換値の相対期限を正の安全な整数ミリ秒で設定。 |
+| `ScanOptions.match` | `string` | 全キーに一致 | orders:* などの論理キーに対する glob パターン。 |
+| `ScanOptions.count` | `number` | `10` | 走査ごとの正の安全な整数。Redis では処理量の目安で、実際の取得数は異なる場合があります。 |
+
+`orders:1` が存在する場合、`{ nx: true, ex: 60 }` は `data: false` を返し、値と期限を維持します。存在しないキーには `data: true` を返し、約 60 秒の期限を設定します。
 
 キー操作はすべてのデータ構造に適用されます。TTL は秒単位で、`-1` は無期限、`-2` はキーが存在しない場合です。`persist` は期限を解除した場合だけ `true` を返します。Memory のカウンターは安全な整数または整数の文字列を受け付け、増分が無効な場合や結果が安全な整数の範囲を超える場合は元の値を保持します。
 
@@ -170,6 +186,8 @@ JSON の保存内容を比較し、同じ操作で更新します。2 回目の�
 値を JSON に変換できない場合は `SERIALIZATION_FAILED` が返ります。たとえば、循環参照を含むオブジェクトや、`toJSON()` が `undefined` を返すオブジェクトが該当します。一括書き込みでこの失敗が起きた場合、項目は一件も書き込まれません。
 
 有効期限は `ex`（相対秒）、`px`（相対ミリ秒）、`exat`（Unix 秒）、`pxat`（Unix ミリ秒）のいずれか一つを指定します。指定値は正の安全な整数で、ミリ秒に換算した期限も安全な整数である必要があります。無効な値や、有効期限と `keepTtl: true` を同時に指定した場合は `INVALID_SET_OPTIONS` が返ります。絶対時刻に過去の正の値を指定すると、キーは直ちに期限切れになります。期限を省略すると既存の TTL を解除します。`keepTtl: true` は既存の TTL を維持し、新規キーには期限を設定しません。
+
+`cache.kv.compareAndSwap()` は比較が一致したときだけ有効期限を反映します。たとえば `{ px: 60_000 }` で置き換えると新しい値は約 60 秒保持されます。`{ keepTtl: true }` は元の期限を保持し、新しいキーには期限を設けません。どちらか一方を指定します。
 
 #### 利用例：Redis Cluster の走査と一括操作
 
@@ -216,16 +234,16 @@ else
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.hash.hget` | フィールドを取得 | key, field | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
-| `cache.hash.hset` | 一つ以上のフィールドを保存 | `key, field, value` または `key, data`（フィールド名と値を持つオブジェクト） | 新規フィールド数 | `await cache.hash.hset('u:1', 'name', 'Alice')` または `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
-| `cache.hash.hdel` | 指定フィールドを削除 | key, fields | `number` | `await cache.hash.hdel('u:1', 'name')` |
-| `cache.hash.hexists` | フィールドの存在確認 | key, field | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
-| `cache.hash.hgetall` | 全フィールドを取得 | key | `T` | `await cache.hash.hgetall('u:1')` |
-| `cache.hash.hkeys` | フィールド名を列挙 | key | `string[]` | `await cache.hash.hkeys('u:1')` |
-| `cache.hash.hvals` | フィールド値を列挙 | key | `T[]` | `await cache.hash.hvals('u:1')` |
-| `cache.hash.hlen` | フィールド数を取得 | key | `number` | `await cache.hash.hlen('u:1')` |
-| `cache.hash.hmget` | 入力順に複数フィールドを取得 | key, fields | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
-| `cache.hash.hincrBy` | 数値フィールドに加算 | key, field, increment | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
+| `cache.hash.hget(key, field)` | フィールドを取得 | `key: string` 必須のハッシュキー。`field: string` ハッシュのフィールド名 | `T \| null` | `await cache.hash.hget('u:1', 'name')` |
+| `cache.hash.hset(key, field, value)` または `cache.hash.hset(key, data)` | 一つ以上のフィールドを保存 | `key: string` 必須のハッシュキー。`field: string, value: CacheValue` 単一のフィールドと JSON 値。別の呼び出しでは、フィールド名から JSON 値への data オブジェクトを渡します | 新規フィールド数 | `await cache.hash.hset('u:1', 'name', 'Alice')` または `await cache.hash.hset('u:1', { name: 'Alice', visits: 1 })` |
+| `cache.hash.hdel(key, ...fields)` | 指定フィールドを削除 | `key: string` 必須のハッシュキー。`...fields: string[]` 対象フィールド名を呼び出し順に指定 | `number` | `await cache.hash.hdel('u:1', 'name')` |
+| `cache.hash.hexists(key, field)` | フィールドの存在確認 | `key: string` 必須のハッシュキー。`field: string` ハッシュのフィールド名 | `boolean` | `await cache.hash.hexists('u:1', 'name')` |
+| `cache.hash.hgetall(key)` | 全フィールドを取得 | `key: string` 必須のハッシュキー | `T` | `await cache.hash.hgetall('u:1')` |
+| `cache.hash.hkeys(key)` | フィールド名を列挙 | `key: string` 必須のハッシュキー | `string[]` | `await cache.hash.hkeys('u:1')` |
+| `cache.hash.hvals(key)` | フィールド値を列挙 | `key: string` 必須のハッシュキー | `T[]` | `await cache.hash.hvals('u:1')` |
+| `cache.hash.hlen(key)` | フィールド数を取得 | `key: string` 必須のハッシュキー | `number` | `await cache.hash.hlen('u:1')` |
+| `cache.hash.hmget(key, ...fields)` | 入力順に複数フィールドを取得 | `key: string` 必須のハッシュキー。`...fields: string[]` 対象フィールド名を呼び出し順に指定 | `(T \| null)[]` | `await cache.hash.hmget('u:1', 'name', 'age')` |
+| `cache.hash.hincrBy(key, field, increment)` | 数値フィールドに加算 | `key: string` 必須のハッシュキー。`field: string` ハッシュのフィールド名。`increment: number` 加算量 | `number` | `await cache.hash.hincrBy('u:1', 'visits', 1)` |
 
 #### 利用例：フィールド単位の更新
 
@@ -258,17 +276,17 @@ Memory の `hincrBy` ではフィールド値、増分、結果のすべてが�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.list.lpush` | 左端に追加 | key, values | `number` | `await cache.list.lpush('jobs', 'job-1')` |
-| `cache.list.rpush` | 右端に追加 | key, values | `number` | `await cache.list.rpush('jobs', 'job-2')` |
-| `cache.list.lpop` | 左端から取り出す | key | `T \| null` | `await cache.list.lpop('jobs')` |
-| `cache.list.rpop` | 右端から取り出す | key | `T \| null` | `await cache.list.rpop('jobs')` |
-| `cache.list.llen` | リスト長を取得 | key | `number` | `await cache.list.llen('jobs')` |
-| `cache.list.lrange` | 両端を含む範囲を取得 | key, start, stop | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
-| `cache.list.lindex` | 指定位置の値を取得 | key, index | `T \| null` | `await cache.list.lindex('jobs', 0)` |
-| `cache.list.lset` | 指定位置の値を置換 | key, index, value | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
-| `cache.list.ltrim` | 指定範囲だけを残す | key, start, stop | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
-| `cache.list.blpop` | 左端の値を待って取得 | timeout, keys | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
-| `cache.list.brpop` | 右端の値を待って取得 | timeout, keys | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
+| `cache.list.lpush(key, ...values)` | 左端に追加 | `key: string` 必須のリストキー。`...values: CacheValue[]` JSON 化できる値を呼び出し順に指定 | `number` | `await cache.list.lpush('jobs', 'job-1')` |
+| `cache.list.rpush(key, ...values)` | 右端に追加 | `key: string` 必須のリストキー。`...values: CacheValue[]` JSON 化できる値を呼び出し順に指定 | `number` | `await cache.list.rpush('jobs', 'job-2')` |
+| `cache.list.lpop(key)` | 左端から取り出す | `key: string` 必須のリストキー | `T \| null` | `await cache.list.lpop('jobs')` |
+| `cache.list.rpop(key)` | 右端から取り出す | `key: string` 必須のリストキー | `T \| null` | `await cache.list.rpop('jobs')` |
+| `cache.list.llen(key)` | リスト長を取得 | `key: string` 必須のリストキー | `number` | `await cache.list.llen('jobs')` |
+| `cache.list.lrange(key, start, stop)` | 両端を含む範囲を取得 | `key: string` 必須のリストキー。`start: number, stop: number` 0 始まりで両端を含む範囲。-1 は末尾 | `T[]` | `await cache.list.lrange('jobs', 0, 9)` |
+| `cache.list.lindex(key, index)` | 指定位置の値を取得 | `key: string` 必須のリストキー。`index: number` 0 始まりの位置。負値は末尾から数えます | `T \| null` | `await cache.list.lindex('jobs', 0)` |
+| `cache.list.lset(key, index, value)` | 指定位置の値を置換 | `key: string` 必須のリストキー。`index: number` 0 始まりの位置。負値は末尾から数えます。`value: CacheValue` JSON に変換できる新しい値 | `void` | `await cache.list.lset('jobs', 0, 'replacement')` |
+| `cache.list.ltrim(key, start, stop)` | 指定範囲だけを残す | `key: string` 必須のリストキー。`start: number, stop: number` 0 始まりで両端を含む範囲。-1 は末尾 | `void` | `await cache.list.ltrim('jobs', 0, 99)` |
+| `cache.list.blpop(timeout, ...keys)` | 左端の値を待って取得 | `timeout: number` Redis の待機秒数。0 は無期限。Memory は現時点で読める項目のみ確認。`...keys: string[]` 論理キャッシュキーを順に指定 | `[string, T] \| null` | `await cache.list.blpop(5, 'jobs')` |
+| `cache.list.brpop(timeout, ...keys)` | 右端の値を待って取得 | `timeout: number` Redis の待機秒数。0 は無期限。Memory は現時点で読める項目のみ確認。`...keys: string[]` 論理キャッシュキーを順に指定 | `[string, T] \| null` | `await cache.list.brpop(5, 'jobs')` |
 
 #### 利用例：順序付きの読み書き
 
@@ -300,16 +318,16 @@ Redis の `blpop` と `brpop` は呼び出しごとに専用の接続を使い�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.set_.sadd` | 重複を除いて追加 | key, members | `number` | `await cache.set_.sadd('roles', 'editor')` |
-| `cache.set_.srem` | 指定要素を削除 | key, members | `number` | `await cache.set_.srem('roles', 'editor')` |
-| `cache.set_.smembers` | 全要素を取得 | key | `T[]` | `await cache.set_.smembers('roles')` |
-| `cache.set_.sismember` | 要素が含まれるか確認 | key, member | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
-| `cache.set_.scard` | 要素数を取得 | key | `number` | `await cache.set_.scard('roles')` |
-| `cache.set_.srandmember` | 削除せず無作為に取得 | key, count | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
-| `cache.set_.spop` | 無作為に取り出す | key, count | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
-| `cache.set_.sinter` | 共通要素を取得 | keys | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
-| `cache.set_.sunion` | 全体の和集合を取得 | keys | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
-| `cache.set_.sdiff` | 最初の集合から差集合を取得 | keys | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
+| `cache.set_.sadd(key, ...members)` | 重複を除いて追加 | `key: string` 必須の集合キー。`...members: CacheValue[]` 追加または削除する JSON メンバー値 | `number` | `await cache.set_.sadd('roles', 'editor')` |
+| `cache.set_.srem(key, ...members)` | 指定要素を削除 | `key: string` 必須の集合キー。`...members: CacheValue[]` 追加または削除する JSON メンバー値 | `number` | `await cache.set_.srem('roles', 'editor')` |
+| `cache.set_.smembers(key)` | 全要素を取得 | `key: string` 必須の集合キー | `T[]` | `await cache.set_.smembers('roles')` |
+| `cache.set_.sismember(key, member)` | 要素が含まれるか確認 | `key: string` 必須の集合キー。`member: CacheValue` 比較するメンバーの値 | `boolean` | `await cache.set_.sismember('roles', 'editor')` |
+| `cache.set_.scard(key)` | 要素数を取得 | `key: string` 必須の集合キー | `number` | `await cache.set_.scard('roles')` |
+| `cache.set_.srandmember(key, count?)` | 削除せず無作為に取得 | `key: string` 必須の集合キー。`count?: number` 省略すると単一メンバー、指定すると配列 | `T \| T[] \| null` | `await cache.set_.srandmember('roles', 2)` |
+| `cache.set_.spop(key, count?)` | 無作為に取り出す | `key: string` 必須の集合キー。`count?: number` 省略すると単一メンバー、指定すると配列 | `T \| T[] \| null` | `await cache.set_.spop('roles', 1)` |
+| `cache.set_.sinter(...keys)` | 共通要素を取得 | `...keys: string[]` 論理キャッシュキーを順に指定 | `T[]` | `await cache.set_.sinter('roles:a', 'roles:b')` |
+| `cache.set_.sunion(...keys)` | 全体の和集合を取得 | `...keys: string[]` 論理キャッシュキーを順に指定 | `T[]` | `await cache.set_.sunion('roles:a', 'roles:b')` |
+| `cache.set_.sdiff(...keys)` | 最初の集合から差集合を取得 | `...keys: string[]` 先頭の集合からそれ以降の集合のメンバーを差し引きます | `T[]` | `await cache.set_.sdiff('roles:a', 'roles:b')` |
 
 #### 利用例：重複排除と集合の比較
 
@@ -342,19 +360,31 @@ core.logger.info('Sampled roles', { roles: sampled.data })
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.zset.zadd` | 要素とスコアを保存 | key, members | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
-| `cache.zset.zrem` | 指定要素を削除 | key, members | `number` | `await cache.zset.zrem('scores', 'u1')` |
-| `cache.zset.zscore` | スコアを取得 | key, member | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
-| `cache.zset.zrank` | 0始まりの昇順順位を取得 | key, member | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
-| `cache.zset.zrevrank` | 0始まりの降順順位を取得 | key, member | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
-| `cache.zset.zrange` | 順位の昇順で取得 | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
-| `cache.zset.zrevrange` | 順位の降順で取得 | key, start, stop, withScores | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
-| `cache.zset.zrangeByScore` | スコア範囲で取得 | key, min, max, options | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
-| `cache.zset.zcard` | 全要素数を取得 | key | `number` | `await cache.zset.zcard('scores')` |
-| `cache.zset.zcount` | 範囲内の要素数を取得 | key, min, max | `number` | `await cache.zset.zcount('scores', 10, 100)` |
-| `cache.zset.zincrBy` | スコアを加算 | key, increment, member | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
-| `cache.zset.zremRangeByRank` | 順位範囲を削除 | key, start, stop | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
-| `cache.zset.zremRangeByScore` | スコア範囲を削除 | key, min, max | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+| `cache.zset.zadd(key, ...members)` | 要素とスコアを保存 | `key: string` 必須のソート済み集合キー。`...members: ZMember[]` 各要素は member 文字列と数値 score | `number` | `await cache.zset.zadd('scores', { member: 'u1', score: 10 })` |
+| `cache.zset.zrem(key, ...members)` | 指定要素を削除 | `key: string` 必須のソート済み集合キー。`...members: string[]` 削除するメンバー ID | `number` | `await cache.zset.zrem('scores', 'u1')` |
+| `cache.zset.zscore(key, member)` | スコアを取得 | `key: string` 必須のソート済み集合キー。`member: string` ソート済み集合のメンバー ID | `number \| null` | `await cache.zset.zscore('scores', 'u1')` |
+| `cache.zset.zrank(key, member)` | 0始まりの昇順順位を取得 | `key: string` 必須のソート済み集合キー。`member: string` ソート済み集合のメンバー ID | `number \| null` | `await cache.zset.zrank('scores', 'u1')` |
+| `cache.zset.zrevrank(key, member)` | 0始まりの降順順位を取得 | `key: string` 必須のソート済み集合キー。`member: string` ソート済み集合のメンバー ID | `number \| null` | `await cache.zset.zrevrank('scores', 'u1')` |
+| `cache.zset.zrange(key, start, stop, withScores?)` | 順位の昇順で取得 | `key: string` 必須のソート済み集合キー。`start: number, stop: number` 0 始まりで両端を含む範囲。-1 は末尾。`withScores?: boolean` 既定 false は名前のみ。true でスコアも返します | `string[] \| ZMember[]` | `await cache.zset.zrange('scores', 0, 9, true)` |
+| `cache.zset.zrevrange(key, start, stop, withScores?)` | 順位の降順で取得 | `key: string` 必須のソート済み集合キー。`start: number, stop: number` 0 始まりで両端を含む範囲。-1 は末尾。`withScores?: boolean` 既定 false は名前のみ。true でスコアも返します | `string[] \| ZMember[]` | `await cache.zset.zrevrange('scores', 0, 9, true)` |
+| `cache.zset.zrangeByScore(key, min, max, options?)` | スコア範囲で取得 | `key: string` 必須のソート済み集合キー。`min: number \| string, max: number \| string` スコアの範囲は既定で両端を含みます。(10 のような接頭辞で端点を除外し、-inf と +inf で無限大を指定。任意の options は[スコア範囲オプション](#cache-score-range-options)を参照 | `string[] \| ZMember[]` | `await cache.zset.zrangeByScore('scores', 10, 100, { withScores: true })` |
+| `cache.zset.zcard(key)` | 全要素数を取得 | `key: string` 必須のソート済み集合キー | `number` | `await cache.zset.zcard('scores')` |
+| `cache.zset.zcount(key, min, max)` | 範囲内の要素数を取得 | `key: string` 必須のソート済み集合キー。`min: number \| string, max: number \| string` スコアの範囲は既定で両端を含みます。(10 のような接頭辞で端点を除外し、-inf と +inf で無限大を指定 | `number` | `await cache.zset.zcount('scores', 10, 100)` |
+| `cache.zset.zincrBy(key, increment, member)` | スコアを加算 | `key: string` 必須のソート済み集合キー。`increment: number` 加算量。`member: string` ソート済み集合のメンバー ID | `number` | `await cache.zset.zincrBy('scores', 5, 'u1')` |
+| `cache.zset.zremRangeByRank(key, start, stop)` | 順位範囲を削除 | `key: string` 必須のソート済み集合キー。`start: number, stop: number` 0 始まりで両端を含む範囲。-1 は末尾 | `number` | `await cache.zset.zremRangeByRank('scores', 0, 9)` |
+| `cache.zset.zremRangeByScore(key, min, max)` | スコア範囲を削除 | `key: string` 必須のソート済み集合キー。`min: number \| string, max: number \| string` スコアの範囲は既定で両端を含みます。(10 のような接頭辞で端点を除外し、-inf と +inf で無限大を指定 | `number` | `await cache.zset.zremRangeByScore('scores', 0, 10)` |
+
+<a id="cache-score-range-options"></a>
+
+**スコア範囲オプション**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `withScores` | `boolean` | `false` | 通常はメンバー名。true なら member と score を含むオブジェクトを返します。 |
+| `offset` | `number` | `0` | 飛ばす一致項目数を安全な整数で指定。負値は空配列。 |
+| `count` | `number` | `-1` | 取得する一致項目の上限を安全な整数で指定。負値は無制限。 |
+
+`a: 10`、`b: 20` のとき、10〜20 の両端を含む範囲と `{ offset: 1, count: 1, withScores: true }` を指定すると `[{ member: "b", score: 20 }]` が返ります。
 
 #### 利用例：順位と得点による検索
 
@@ -387,10 +417,10 @@ core.logger.info('Scores above ten', { members: aboveTen.data })
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `cache.lock.acquire` | ロックを取得・再取得 | `key`、初回は任意の `{ ttl: 30 }`、再取得は `{ owner }` | 取得した `owner` または `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
-| `cache.lock.release` | 取得分を一つ解放し、最後にロック解除 | key, owner | 解放時は `true`、ロックがないかトークンが無効なら `false` | `await cache.lock.release('demo:daily', owner)` |
-| `cache.lock.isLocked` | ロックの有無を確認 | key | 保持されていれば `true` | `await cache.lock.isLocked('demo:daily')` |
-| `cache.lock.extend` | 取得回数を保持したまま期限を更新 | key, ttl（秒）, owner | 更新時は `true` | `await cache.lock.extend('demo:daily', 60, owner)` |
+| `cache.lock.acquire(key, options?)` | ロックを取得・再取得 | `key` が必須。初回取得の `options.ttl` は正の安全な整数秒（既定 30）。再取得には元の `owner` を指定し、元の期限を維持。`ttl` と `owner` は同時指定不可 | 取得した `owner` または `null` | `await cache.lock.acquire('demo:daily', { ttl: 30 })` |
+| `cache.lock.release(key, owner)` | 取得分を一つ解放し、最後にロック解除 | `key: string` 必須のロックキー。`owner: string` 初回取得で返された所有者トークン | 解放時は `true`、ロックがないかトークンが無効なら `false` | `await cache.lock.release('demo:daily', owner)` |
+| `cache.lock.isLocked(key)` | ロックの有無を確認 | `key: string` 必須のロックキー | 保持されていれば `true` | `await cache.lock.isLocked('demo:daily')` |
+| `cache.lock.extend(key, ttl, owner)` | 取得回数を保持したまま期限を更新 | `key: string` 必須のロックキー。`ttl: number` 新しい期限を正の安全な整数秒で指定。`owner: string` 初回取得で返された所有者トークン | 更新時は `true` | `await cache.lock.extend('demo:daily', 60, owner)` |
 
 #### 利用例：保護された処理を別ノードに委譲する
 

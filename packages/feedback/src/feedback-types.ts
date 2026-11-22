@@ -143,6 +143,16 @@ export interface FeedbackFunctions {
   readonly budget: FeedbackBudget
   submit: (input: FeedbackSubmitInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
   list: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
+  /**
+   * 列出当前可信身份在同一应用和作用域内提交且尚未过期的报告。
+   * @example
+   * ```ts
+   * import { feedback } from '@h-ai/feedback'
+   * const page = await feedback.listMine({ category: 'bug', page: 1 }, { scopeId: 'tenant-a', userId: 'user-a' })
+   * if (page.success) void page.data.items
+   * ```
+   */
+  listMine: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
   get: (id: string, context: FeedbackContext) => Promise<HaiResult<FeedbackDetail>>
   getEvidence: (input: FeedbackEvidenceQuery, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackEvidence>>>
   setStatus: (input: FeedbackSetStatusInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>

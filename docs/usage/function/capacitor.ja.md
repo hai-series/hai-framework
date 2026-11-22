@@ -58,13 +58,13 @@ if (failures.length)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.init` | 実行環境を判定して準備 | `—` | `void` | `await capacitor.init()` |
-| `capacitor.close` | 稼働中のネイティブリスナーを解放 | `—` | `void` | `await capacitor.close()` |
-| `capacitor.getPlatform` | Android・iOS・Web を判別 | `—` | `string` | `capacitor.getPlatform()` |
-| `capacitor.isNative` | ネイティブアプリ内か判定 | `—` | `boolean` | `capacitor.isNative()` |
+| `capacitor.init()` | 実行環境を判定して準備 | `—` | `void` | `await capacitor.init()` |
+| `capacitor.close()` | 稼働中のネイティブリスナーを解放 | `—` | `void` | `await capacitor.close()` |
+| `capacitor.getPlatform()` | Android・iOS・Web を判別 | `—` | `string` | `capacitor.getPlatform()` |
+| `capacitor.isNative()` | ネイティブアプリ内か判定 | `—` | `boolean` | `capacitor.isNative()` |
 | `capacitor.isInitialized` | 检查模块状态 | `—` | `boolean` | `capacitor.isInitialized` |
-| `capacitor.device.getInfo` | OS と端末情報を取得 | `—` | `DeviceInfo` | `await capacitor.device.getInfo()` |
-| `capacitor.device.getAppVersion` | インストール済みアプリの版とビルド番号を取得 | `—` | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.device.getInfo()` | OS と端末情報を取得 | `—` | `DeviceInfo` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion()` | インストール済みアプリの版とビルド番号を取得 | `—` | `{ version, build }` | `await capacitor.device.getAppVersion()` |
 
 #### 利用例：ネイティブ環境の準備と端末情報
 
@@ -101,17 +101,18 @@ if (!closeResult.success)
 
 <a id="call-options"></a>
 
-#### 呼び出し引数と接続オプション
+#### ネイティブ呼び出し引数
 
-| Option | Default | Meaning |
+| 項目 | 既定値と条件 | 用途 |
 | --- | --- | --- |
-| `camera.takePhoto`: `source`, `quality`, `resultType` | `prompt`, `90`, `uri` | カメラ・写真・選択画面、0～100 の品質、URI・Base64・Data URL 出力を指定。 |
-| `camera.takePhoto`: `width`, `height` | 省略可 | 最大の幅と高さ（ピクセル）。 |
-| `statusBar.configure`: `style`, `backgroundColor`, `overlay` | 省略可 | 省略時は現在の設定を保持。16 進カラーと WebView に重ねるかを指定。 |
-| `push.register`, `push.listen`: `signal` | 省略可 | 中断すると登録を取り消すかリスナーを解除。 |
-| `push.listen`: `onReceived`, `onActionPerformed` | 省略可 | 受信時と通知を操作したときのコールバック。 |
+| `takePhoto.options.source` | 既定は `prompt` | `camera` で撮影、`photos` でアルバム、`prompt` で端末の選択画面。 |
+| `takePhoto.options.quality` / `width` / `height` | 既定の画質は 90。寸法指定なし。 | 画質は 0～100。幅と高さの上限はピクセル単位。 |
+| `takePhoto.options.resultType` | 既定は `uri` | 成功時の `data` は `uri` では写真 URL、`base64` では Base64、`dataUrl` ではデータ URL。 |
+| `configure.config.style` / `backgroundColor` / `overlay` | 省略した設定はプラグインで書き換えない | スタイルは `dark`、`light`、`default`。背景色は 16 進数カラー。 `overlay` は WebView に重ねるかどうか。 |
+| `push.register.options.signal` / `push.listen.options.signal` | 任意 | 未完了の登録をキャンセルするか、中止時にリスナーを外す。 |
+| `push.listen.options.onReceived` / `onActionPerformed` | 任意 | 通知受信と利用者の操作をそれぞれ処理。 |
 
-[引数と手順の詳細](capacitor.md#platform)
+たとえば `takePhoto({ source: "photos", resultType: "uri", width: 1200 })` はアルバムから写真を選びます。成功時にはプレビュー URL と形式が返り、幅の上限は 1,200 ピクセルです。
 
 <a id="camera"></a>
 
@@ -123,7 +124,7 @@ if (!closeResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.camera.takePhoto` | 画像を撮影または選択 | `{ source?: camera/photos/prompt, quality?: 0…100, width?, height?, resultType?: uri/base64/dataUrl }` | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.camera.takePhoto(options?)` | 画像を撮影または選択 | 任意の `options` で取得元、画質、サイズ、返却形式を指定。[ネイティブ呼び出し引数](#call-options)を参照。 | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
 
 #### 利用例：利用者が選ぶ写真の取得
 
@@ -150,8 +151,8 @@ if (photo.success) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.push.register` | 端末をプッシュ通知サービスに登録 | `{ signal?: AbortSignal }` | `PushRegistration` | `await capacitor.push.register()` |
-| `capacitor.push.listen` | 通知の受信とタップなどの操作を監視 | `{ onReceived?, onActionPerformed? }, { signal? }` | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
+| `capacitor.push.register(options?)` | 端末をプッシュ通知サービスに登録 | 登録の待機を中断する任意の `options.signal: AbortSignal`。省略時に呼び出し元からの中断なし。 | `PushRegistration` | `await capacitor.push.register()` |
+| `capacitor.push.listen(callbacks, options?)` | 通知の受信とタップなどの操作を監視 | `callbacks` オブジェクトが必須。受信時の `onReceived(notification)` と操作時の `onActionPerformed(action)` は省略可。`options.signal` の中断で今回の監視を解除。 | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
 
 #### 利用例：プッシュの登録と購読
 
@@ -199,9 +200,9 @@ if (!stopResult2.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.statusBar.configure` | 指定したステータスバーの設定だけを適用 | `{ style?: dark/light/default, backgroundColor?: color, overlay?: boolean }` | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
-| `capacitor.statusBar.show` | ネイティブのステータスバーを表示 | `—` | `void` | `await capacitor.statusBar.show()` |
-| `capacitor.statusBar.hide` | ネイティブのステータスバーを非表示 | `—` | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.statusBar.configure(config)` | 指定したステータスバーの設定だけを適用 | `config` は必須。 `style`、`backgroundColor`、`overlay` は任意。[ネイティブ呼び出し引数](#call-options)を参照。 | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show()` | ネイティブのステータスバーを表示 | `—` | `void` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide()` | ネイティブのステータスバーを非表示 | `—` | `void` | `await capacitor.statusBar.hide()` |
 
 #### 利用例：ステータスバーの制御
 
@@ -235,12 +236,12 @@ if (!showResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.preferences.get` | 機密でない設定を取得 | `key: string` | `string or null` | `await capacitor.preferences.get('theme')` |
-| `capacitor.preferences.set` | 機密でない設定を保存 | `key: string, value: string` | `void` | `await capacitor.preferences.set('theme', 'dark')` |
-| `capacitor.preferences.remove` | 指定設定を削除 | `key: string` | `void` | `await capacitor.preferences.remove('theme')` |
-| `safeGetPreference` | 単体ヘルパーで機密でない設定を取得 | `key: string` | `string or null` | `await safeGetPreference('theme')` |
-| `safeSetPreference` | 単体ヘルパーで機密でない設定を保存 | `key: string, value: string` | `void` | `await safeSetPreference('theme', 'dark')` |
-| `safeRemovePreference` | 単体ヘルパーで設定を削除 | `key: string` | `void` | `await safeRemovePreference('theme')` |
+| `capacitor.preferences.get(key)` | 機密でない設定を取得 | 必須の `key` は機密情報を含まない設定のキー名。 | `string or null` | `await capacitor.preferences.get('theme')` |
+| `capacitor.preferences.set(key, value)` | 機密でない設定を保存 | 設定キー `key` と保存する機密性のない文字列 `value` が必須。 | `void` | `await capacitor.preferences.set('theme', 'dark')` |
+| `capacitor.preferences.remove(key)` | 指定設定を削除 | 必須の `key` は機密情報を含まない設定のキー名。 | `void` | `await capacitor.preferences.remove('theme')` |
+| `safeGetPreference(key)` | 単体ヘルパーで機密でない設定を取得 | 必須の `key` は機密情報を含まない設定のキー名。 | `string or null` | `await safeGetPreference('theme')` |
+| `safeSetPreference(key, value)` | 単体ヘルパーで機密でない設定を保存 | 設定キー `key` と保存する機密性のない文字列 `value` が必須。 | `void` | `await safeSetPreference('theme', 'dark')` |
+| `safeRemovePreference(key)` | 単体ヘルパーで設定を削除 | 必須の `key` は機密情報を含まない設定のキー名。 | `void` | `await safeRemovePreference('theme')` |
 
 #### 利用例：一般的な設定の保存
 
@@ -294,12 +295,12 @@ safeGetPreferenceResult2.data // null
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage` | ネイティブの安全な認証情報アダプターを作る | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
-| `tokens.getAccessToken` | アクセストークンを読む | `—` | `Promise<string or null>` | `await tokens.getAccessToken()` |
-| `tokens.getRefreshToken` | リフレッシュトークンを読む | `—` | `Promise<string or null>` | `await tokens.getRefreshToken()` |
-| `tokens.setAccessToken` | アクセストークンを保存 | `token: string` | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
-| `tokens.setRefreshToken` | リフレッシュトークンを保存 | `token: string` | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
-| `tokens.clear` | 両方の認証情報を削除 | `—` | `Promise<void>` | `await tokens.clear()` |
+| `createCapacitorTokenStorage()` | ネイティブの安全な認証情報アダプターを作る | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `tokens.getAccessToken()` | アクセストークンを読む | `—` | `Promise<string or null>` | `await tokens.getAccessToken()` |
+| `tokens.getRefreshToken()` | リフレッシュトークンを読む | `—` | `Promise<string or null>` | `await tokens.getRefreshToken()` |
+| `tokens.setAccessToken(token)` | アクセストークンを保存 | 信頼済みの認証応答から得たアクセストークン文字列 `token` が必須。 | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
+| `tokens.setRefreshToken(token)` | リフレッシュトークンを保存 | 信頼済みの認証応答から得た更新トークン文字列 `token` が必須。 | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
+| `tokens.clear()` | 両方の認証情報を削除 | `—` | `Promise<void>` | `await tokens.clear()` |
 
 #### 利用例：認証情報の安全な保存
 

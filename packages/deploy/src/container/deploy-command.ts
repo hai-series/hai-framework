@@ -30,6 +30,10 @@ export interface CommandOptions {
   cwd?: string
   /** 追加环境；不会自动将全部环境值视为秘密。 */
   env?: Record<string, string>
+  /** 调用方停止时终止并核对本地进程树；远端执行仍须独立核对。 */
+  signal?: AbortSignal
+  /** 仍读取标准流以防阻塞，但不保留或记录输出。 */
+  discardOutput?: boolean
   /** 超时毫秒，须为 1..2147483647 的整数；超时不代表远程进程已终止。 */
   timeoutMs?: number
   /** 超时/异常后核验本地树退出的最长等待，默认 10 秒，最大 60 秒；未确认时返回 unknown。 */
@@ -113,6 +117,8 @@ export async function runCommand(command: string, args: string[], options: Comma
     ext: { commandExecution: state },
   })
   try {
+    if (options.signal?.aborted)
+      return failure(deployM('deploy_commandCancelled'), { reason: 'aborted', localTermination: 'not-started' })
     return await new Promise((resolve) => {
       if (typeof command !== 'string' || !command || command.includes('\0') || args.some(argument => typeof argument !== 'string' || argument.includes('\0')))
         throw new TypeError('Invalid command arguments')
@@ -152,12 +158,14 @@ export async function runCommand(command: string, args: string[], options: Comma
       let interrupted = false
       let interruption: Promise<void> | undefined
       let timer: NodeJS.Timeout | undefined
+      let onAbort: () => void
       const finish = (result: HaiResult<CommandResult>): void => {
         if (settled)
           return
         settled = true
         if (timer)
           clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
         resolve(result)
       }
       /** 先停止输出交付，再终止并等待整棵树；同一失败/close race 只结束一次。 */
@@ -174,9 +182,13 @@ export async function runCommand(command: string, args: string[], options: Comma
         })()
         return interruption
       }
+      onAbort = () => {
+        void interrupt('aborted', deployM('deploy_commandCancelled'))
+      }
+      options.signal?.addEventListener('abort', onAbort, { once: true })
       /** 所有捕获发生在脱敏后；流尾部状态和捕获长度均有上限。 */
       const publish = async (text: string): Promise<void> => {
-        if (!text || settled || interrupted)
+        if (!text || settled || interrupted || options.discardOutput)
           return
         stdoutTruncated ||= stdout.length + text.length > maxCapture
         stdout = (stdout + text).slice(-maxCapture)
@@ -193,6 +205,8 @@ export async function runCommand(command: string, args: string[], options: Comma
         }
       }
       const captureError = (text: string): void => {
+        if (options.discardOutput)
+          return
         stderrTruncated ||= stderr.length + text.length > maxCapture
         stderr = (stderr + text).slice(-maxCapture)
       }

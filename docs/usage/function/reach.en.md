@@ -103,9 +103,26 @@ Prepare mail or SMS providers, then send using a template and recipient. Durable
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.init` | Prepare providers and enabled queue dependencies | `config, options?` | `void` | `await reach.init(config)` |
-| `reach.close` | Stop the service and release its resources | None | `Promise<void>` | `await reach.close()` |
-| `reach.send` | Send a message or enqueue it durably | `message` | `SendResult` | `await reach.send(message)` |
+| `reach.init(config, options?)` | Prepare providers and enabled queue dependencies | `config: ReachConfigInput`, `options?: ReachInitOptions` · [Initialization options](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
+| `reach.close()` | Stop the service and release its resources | None | `Promise<void>` | `await reach.close()` |
+| `reach.send(message)` | Send a message or enqueue it durably | Required `message: ReachMessage` supplies recipient and content. See [message fields](#reach-message-fields). | `SendResult` | `await reach.send(message)` |
+
+<a id="reach-message-fields"></a>
+
+**ReachMessage**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `to` | `string` | Required | Channel recipient, such as an email address or phone number. |
+| `template` | `string` | Optional | Name of a saved template to render. Omit for direct sending. |
+| `provider` | `string` | Required for direct sending | Overrides the selected provider. Template sends use the template provider when omitted. |
+| `vars` | `Record<string, string>` | Optional | Fill template variables by key. |
+| `subject / body` | `string` | Optional | Direct-send subject and body. The subject is used by channels such as email. |
+| `extra` | `Record<string, unknown>` | Optional | Provide provider-specific values, such as an SMS template code or signature. |
+| `idempotencyKey` | `string` | Optional | Stable receiver key for direct API sends. Queued delivery uses its queueId. |
+| `sensitive` | `boolean` | `false` | Set true for credentials. They are delivered in memory without deferred or retry queuing. |
+| `expiresAt` | `number` | Required with sensitive=true | Business credential deadline in Unix milliseconds. |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | During quiet hours, queue follows the existing delay configuration. reject returns DND_BLOCKED so the host can defer it. |
 
 #### Scenario: Start providers and send
 
@@ -133,6 +150,31 @@ Queue acceptance does not prove receipt. Only reconcile an unknown delivery afte
 
 [Detailed parameters and workflows](reach.md#sending)
 
+<a id="reach-init-options"></a>
+
+#### Initialization options
+
+Pass the required `config: ReachConfigInput` from the [notification configuration](../configuration/reach.en.md). Omitting `options: ReachInitOptions` uses the gateway headers and body from the configuration.
+
+`gatewayHooks` maps provider names to callbacks. Each name must identify an `aliyun-sms` provider with a configured `gateway`. The callback receives `method: POST`, the gateway `url`, the current request `body: string | undefined`, and the deadline signal `signal: AbortSignal`. It can return `{ headers?, body? }` directly or as a promise, setting only fields to override. Return `undefined` to use the static configuration. Run the callback on the server and keep signed URLs out of logs.
+
+```ts
+import type { ReachConfigInput } from '@h-ai/reach'
+import { reach } from '@h-ai/reach'
+
+function startReach(config: ReachConfigInput) {
+  // Pass an existing configuration with an sms gateway. On successful initialization, the callback adds X-Client to the next gateway request.
+  return reach.init(config, {
+    gatewayHooks: {
+      sms: ({ signal }) => {
+        signal.throwIfAborted()
+        return { headers: { 'X-Client': 'delivery' } }
+      },
+    },
+  })
+}
+```
+
 <a id="templates"></a>
 
 ### Maintain and preview templates: `reach.template`
@@ -143,12 +185,12 @@ Templates select a provider, body and subject. Render previews variable substitu
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve` | Resolve an effective template | `name` | `ReachTemplate` | `await reach.template.resolve(name)` |
-| `reach.template.save` | Save a template | `template` | `void` | `await reach.template.save(template)` |
-| `reach.template.saveBatch` | Save multiple templates | `templates` | `void` | `await reach.template.saveBatch(templates)` |
-| `reach.template.remove` | Remove a custom template | `name` | `void` | `await reach.template.remove(name)` |
-| `reach.template.list` | List effective templates | None | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render` | Render template variables | `name, vars` | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.template.resolve(name)` | Resolve an effective template | `name: string` Unique name used to look up the template | `ReachTemplate` | `await reach.template.resolve(name)` |
+| `reach.template.save(template)` | Save a template | `template: ReachTemplate` Requires name, provider, and body, with optional email subject. Use {var} in the body and subject | `void` | `await reach.template.save(template)` |
+| `reach.template.saveBatch(templates)` | Save multiple templates | `templates: ReachTemplate[]` Templates to save in a batch, with the same fields as save | `void` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove(name)` | Remove a custom template | `name: string` Unique name used to look up the template | `void` | `await reach.template.remove(name)` |
+| `reach.template.list()` | List effective templates | None | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | Render template variables | `name: string` Unique name used to look up the template. `vars: Record<string, string>` Map placeholder names to replacement values | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
 
 #### Scenario: Maintain and preview templates
 
@@ -197,8 +239,12 @@ Save queue IDs when sends are queued. Read their status or list dead letters for
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get` | Read a delivery by ID | `queueId` | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
-| `reach.queue.list` | Filter and paginate deliveries | `options` | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
+| `reach.queue.get(queueId)` | Read a delivery by ID | `queueId: string` UUID from the send receipt or queue record | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list(options)` | Filter and paginate deliveries | `options: ReachQueueListOptions` · [query arguments](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'unknown' })` |
+
+<a id="reach-queue-options"></a>
+
+Required `ReachQueueListOptions`: `status` is required and accepts `dead` or `unknown`. `limit` is 1–100 (default 50). `offset` skips 0–1,000,000 records (default 0).
 
 #### Scenario: Inspect queued and failed sends
 
@@ -232,8 +278,18 @@ A provider may have sent a message even when its receipt was lost. Check provide
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead` | Requeue a reconciled dead letter | `queueId, options` | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
-| `reach.queue.resolveUnknown` | Reconcile an unknown delivery | `queueId, resolution` | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+| `reach.queue.requeueDead(queueId, options)` | Requeue a reconciled dead letter | `queueId: string` comes from the queue entry. Required `options.expectedUpdatedAt: number` is the `updatedAt` from the most recent read. | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | Reconcile an unknown delivery | `queueId: string` UUID from the send receipt or queue record. `resolution: ReachUnknownResolution` Required verified decision. See [resolution fields](#reach-resolution-fields) | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+
+<a id="reach-resolution-fields"></a>
+
+**Recovery and resolution fields**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `options.expectedUpdatedAt` | `number` | Required | When requeuing a dead item, use its latest read updatedAt. Reread after a concurrent write. |
+| `resolution.status` | `'sent' \| 'discarded'` | Required | Record sent or discarded after external reconciliation. |
+| `resolution.messageId` | `string` | Optional | On confirmed delivery, record up to 255 characters of provider receipt ID. |
 
 #### Scenario: Recover after checking outcomes
 

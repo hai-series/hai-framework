@@ -66,7 +66,7 @@ datapipe.clean(text: string, options?: CleanOptionsInput): HaiResult<string>
 | `removeEmails`       | `boolean`          | false | 移除 Email 地址          |
 | `normalizeWhitespace`| `boolean`          | true  | 多空格→单空格、去多余空行 |
 | `trim`               | `boolean`          | true  | 去除首尾空白             |
-| `customReplacements` | `{ pattern, replacement }[]` | — | 自定义正则替换规则 |
+| `customReplacements` | `{ pattern: string, replacement: string }[]` | — | 由可信配置提供的正则字符串和替换文本 |
 
 ### 分块 — `datapipe.chunk`
 
@@ -93,7 +93,7 @@ datapipe.chunk(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 | `paragraph` | 按段落（双换行）            |
 | `markdown`  | 按 Markdown 标题层级        |
 | `page`      | 按分页符（\f）              |
-| `word`      | 按字数                      |
+| `word`      | 按非空白词数                |
 | `character` | 按字符数                    |
 | `custom`    | 自定义正则分隔符            |
 
@@ -103,7 +103,7 @@ datapipe.chunk(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 interface DataChunk {
   index: number                      // 分块索引（从 0 开始）
   content: string                    // 分块内容
-  metadata?: Record<string, unknown> // 元数据（Markdown 模式含 title、level）
+  metadata?: Record<string, unknown> // Markdown 模式含 title、level，同一节被拆成多块时含 subChunk
 }
 ```
 
@@ -128,7 +128,7 @@ datapipe.pipeline()
 
 ```typescript
 interface PipelineResult {
-  text: string        // 处理后的文本（分块前的最终文本）
+  text: string        // 全部步骤结束后的正文
   chunks: DataChunk[] // 分块列表（如果管线包含 chunk 步骤）
 }
 ```
@@ -143,6 +143,7 @@ interface PipelineResult {
 | `HaiDatapipeError.PIPELINE_FAILED` | `hai:datapipe:004` | 管线执行失败 |
 | `HaiDatapipeError.CONFIG_ERROR` | `hai:datapipe:005` | 配置错误 |
 | `HaiDatapipeError.MISSING_SEPARATOR` | `hai:datapipe:006` | 自定义分隔符缺失 |
+| `HaiDatapipeError.CHUNK_LIMIT_EXCEEDED` | `hai:datapipe:007` | 分块总量超限，HTTP 413 |
 
 ## 常见模式
 
@@ -180,6 +181,24 @@ const docs = result.data.chunks.map((chunk, i) => ({
 }))
 // 将带 ID、向量、正文和元数据的块写入 knowledge 集合。成功 data 为 undefined，写入失败返回错误。
 await vecdb.vector.insert('knowledge', docs)
+```
+
+### 用正则替换标记
+
+`pattern` 是可信配置提供的正则字符串，按全局匹配处理。规则按数组顺序应用。`$1` 引用第一组捕获，空字符串删除匹配项。
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+// 统一两处工单编号，再删除末尾的草稿标记。成功读取替换后的正文，规则格式有误时读取 error.code。
+const cleaned = datapipe.clean('Ticket 120; Ticket 345 [draft]', {
+  customReplacements: [
+    { pattern: 'Ticket\\s+(\\d+)', replacement: 'Case #$1' },
+    { pattern: '\\s*\\[draft\\]$', replacement: '' },
+  ],
+})
+if (cleaned.success) cleaned.data // 'Case #120; Case #345'
+else cleaned.error.code
 ```
 
 ### 多步清洗管线
@@ -226,4 +245,8 @@ if (!result.success) {
 - `hai-ai`：LLM 与 Embedding 能力
 - `hai-core`：HaiResult 模型
 
-分块 `maxSize` 默认 1500，`overlap` 默认 0 且必须满足 `0 <= overlap < maxSize`。word 模式两者均按非空白词计量（连续中文可视为一个长词），其余模式均按 Unicode code point 计量，不是 UTF-16 length、字节或模型 token。上限包含重叠与分隔符；自然句/段/页/自定义边界只影响优先切点，超长段统一按 `maxSize-overlap` 滑窗。保留原始空白、标点、分页符及自定义分隔符，移除重叠后可还原全文；不再 split/join 或 trim 分块。Markdown section 之间不重叠，section 内使用相同硬上限，代码围栏内的标题保留为正文；仅 `markdownKeepTitle=false` 明确移除标题行。空/全空白的整体输入返回空数组。自定义正则须由可信配置提供，非法表达式返回 CHUNK_FAILED。
+分块 `maxSize` 默认 1500，`overlap` 默认 0，必须满足 `0 <= overlap < maxSize`。word 模式按非空白词数计量，其余模式按 Unicode 码点计量。单块上限包含重叠与分隔符。一次分块最多返回 100,000 块，所有块正文与 Markdown 标题累计最多 16,777,216 个 UTF-16 代码单元。超限返回 `CHUNK_LIMIT_EXCEEDED`，可减小重叠或分批处理。
+
+分块保留原文空白和分隔符。Markdown 各节间没有重叠，`markdownKeepTitle: false` 支持 LF、CRLF、CR，且只省掉标题行。选项有效时空白输入返回空数组。即使正文为空白，自定义分隔符格式无效也会返回 `CHUNK_FAILED`。
+
+每次 `run()` 在启动时固定步骤列表。启动后新增的步骤从下一次调用生效。长短文本使用相同的选项校验与错误顺序。返回值 `text` 是全部步骤执行后的正文，`chunks` 可保留更早的正文切片。

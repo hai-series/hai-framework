@@ -141,10 +141,10 @@ const connection = vecdb.rawConnection // 无需参数，返回同进程集成�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `vecdb.collection.create(name, options)` | 创建集合 | 集合名和 `options.dimension` 必填；`metric` 默认沿用向量库配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
-| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | 集合名必填 | `void` | `await vecdb.collection.drop('documents')` |
-| `vecdb.collection.exists(name)` | 检查集合是否存在 | 集合名必填 | `boolean` | `await vecdb.collection.exists('documents')` |
-| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | 集合名必填 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
+| `vecdb.collection.create(name, options)` | 创建集合 | `name` 是集合名，`options.dimension` 必填且为正整数。维度须匹配写入与查询向量。`metric` 为 `cosine`、`euclidean` 或 `dot`，默认沿用连接配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
+| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | `name: string` 必填的已配置集合名 | `void` | `await vecdb.collection.drop('documents')` |
+| `vecdb.collection.exists(name)` | 检查集合是否存在 | `name: string` 必填的已配置集合名 | `boolean` | `await vecdb.collection.exists('documents')` |
+| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | `name: string` 必填的已配置集合名 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
 | `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
 
 #### 场景：准备与删除集合
@@ -195,12 +195,30 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | 集合名与文档数组必填。每条文档要有 `id` 和与集合维度一致的 `vector` | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
-| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | 集合名与文档数组必填。替换时传入完整文档 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
-| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | 集合名与 ID 数组必填 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
-| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | 集合名及查询向量必填。`topK` 默认 `10`，可传 `minScore` 和 `filter` | 按分数从高到低排列的 `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | 统计集合中的文档数 | 集合名必填 | `number` | `await vecdb.vector.count('documents')` |
-| `vecdb.vector.scan(collection, options?)` | 按页列出可删除的文档 ID | 集合名必填，首页省略 `cursor`，`limit` 默认 `64` | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | `collection: string` 必填的集合名。`documents: VectorDocument[]` 必填文档数组，见[文档字段](#vecdb-vector-options) | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
+| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | `collection: string` 必填的集合名。`documents: VectorDocument[]` 必填文档数组，见[文档字段](#vecdb-vector-options) | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
+| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | `collection: string` 必填的集合名。`ids: string[]` 待删除的文档 ID 数组 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
+| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | `collection: string` 必填的集合名。`vector: number[]` 与集合维度一致的查询向量。`options?: VectorSearchOptions` 见[搜索字段](#vecdb-vector-options) | 按分数从高到低排列的 `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
+| `vecdb.vector.count(collection)` | 统计集合中的文档数 | `collection: string` 必填的集合名 | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.scan(collection, options?)` | 按页列出文档 ID | `collection: string` 必填的集合名。`options?: VectorScanOptions` 见[扫描字段](#vecdb-vector-options) | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+
+<a id="vecdb-vector-options"></a>
+
+**文档、搜索与扫描选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `VectorDocument.id` | `string` | 必填 | 应用的稳定文档标识，用于覆盖和删除。 |
+| `VectorDocument.vector` | `number[]` | 必填 | 浮点数数组，维度必须与集合相同。 |
+| `VectorDocument.content` | `string` | 可省略 | 随命中结果返回的原始文本。 |
+| `VectorDocument.metadata` | `Record<string, unknown>` | 可省略 | 存储额外业务信息，例如 source，后续可据此筛选。 |
+| `VectorSearchOptions.topK` | `number` | `10` | 返回的条数上限，按相似度排序。 |
+| `VectorSearchOptions.minScore` | `number` | `0` | 0–1 的分数下限，等于阈值的结果也保留。 |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | 不筛选元数据 | 按元数据筛选。后端比较语义见下文。 |
+| `VectorScanOptions.cursor` | `string` | 首页省略 | 传上次 nextCursor，保持相同后端和集合。 |
+| `VectorScanOptions.limit` | `number` | `64` | 每页 ID 数量，取整数 1–128。 |
+
+`topK` 是按相似度返回的条数上限。`minScore` 是 0–1 的分数下限，结果必须大于等于该值。`filter` 按元数据匹配，例如 `{ source: "handbook" }`。LanceDB 对顶层字段按类型精确比较，多字段须全部匹配，支持字符串、有限数字、布尔值和 `null`。缺失字段不匹配 `null`；不支持的值会返回 `CONFIG_ERROR`。其他后端的类型比较规则可能不同。可移植示例使用顶层字符串字段。
 
 #### 场景：写入、检索和清理文档
 
@@ -225,16 +243,21 @@ const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
   return countResult
 countResult.data // 1
-// 用相同 doc-1 替换其正文为 Install v2，成功无 data，失败时返回原失败结果。
-const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }])
+// 用同一 doc-1 替换正文与元数据，写入 source=handbook。成功无 data，失败时返回原失败结果。
+const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2', metadata: { source: 'handbook' } }])
 if (!upsertResult.success)
   return upsertResult
-// 用相同向量搜索 demo-docs，要求最高 1 条且分数至少 0.9。data 是更新后的 doc-1 所在数组，失败时返回原失败结果。
-const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 })
+// 查询同一向量，仅取 source=handbook 且分数至少 0.9 的最高 1 条。返回更新后的 doc-1；失败时返回原失败结果。
+const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9, filter: { source: 'handbook' } })
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+// 改查 source=release-notes，现有文档不符合，成功 data 为 []；失败时返回原失败结果。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+if (!excluded.success)
+  return excluded
+excluded.data // []
 // 从 demo-docs 首页读取最多 32 个文档 ID，成功 data 含 items 及可选 nextCursor，失败时返回原失败结果。
 const pageResult = await vecdb.vector.scan('demo-docs', { limit: 32 })
 if (!pageResult.success)

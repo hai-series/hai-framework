@@ -218,6 +218,23 @@ export interface AuditStatItem {
 }
 
 /**
+ * 按列表筛选统计的审计结果。没有有效结果分类的历史日志计入 unclassified。
+ * @example
+ * ```ts
+ * import type { AuditOutcomeCounts } from '@h-ai/audit'
+ * const counts: AuditOutcomeCounts = { total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }
+ * void counts
+ * ```
+ */
+export interface AuditOutcomeCounts {
+  total: number
+  success: number
+  failure: number
+  denied: number
+  unclassified: number
+}
+
+/**
  * CRUD 审计操作输入
  *
  * 调用 {@link AuditHelper.crud} 时传入的参数。
@@ -396,6 +413,16 @@ export interface AuditFunctions {
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
    */
   list: (options?: ListAuditLogsOptions) => Promise<HaiResult<PaginatedResult<AuditLogWithUser>>>
+  /**
+   * 使用列表的全部过滤条件统计结果，排序与分页参数不参与统计。
+   * @example
+   * ```ts
+   * import { audit } from '@h-ai/audit'
+   * const result = await audit.countByOutcome({ scopeId: 'workspace-a', action: 'publish' })
+   * if (result.success) void result.data.failure
+   * ```
+   */
+  countByOutcome: (options?: ListAuditLogsOptions) => Promise<HaiResult<AuditOutcomeCounts>>
   /**
    * 获取指定用户的最近活动记录
    *

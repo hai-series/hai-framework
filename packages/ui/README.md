@@ -31,6 +31,8 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 <a id="代码工作区"></a>
 
 [代码工作区](../../docs/usage/function/ui.md#代码工作区)
+私有 Markdown 可使用 [图片策略与源码选区](../../docs/usage/function/ui.md#private-document-media)控制网络图片并定位用户选择的原文。
+
 
 ## 数据结构
 

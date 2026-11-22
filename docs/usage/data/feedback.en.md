@@ -35,6 +35,8 @@ Store the report, submitter and handling state as the entry point for evidence a
 
 This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
 
+The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`, and excludes expired reports and reports being deleted.
+
 ### Evidence of what happened
 
 Structure: `hai_feedback_evidence`.

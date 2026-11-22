@@ -24,6 +24,8 @@ Passwords and API keys share the Crypto worker pool for SM3. Stored hashes are s
 
 [Browse the API list](../../docs/usage/function/iam.en.md#api-reference) for entry points, inputs, results and examples.
 
+`iam.user.updateUserWithRoles` commits profile and roles together. One-time ticket keys use digests, and tickets are consumed after checking their purpose.
+
 For an LDAP upgrade, follow [Migrate existing LDAP identity bindings](../../docs/usage/function/iam.en.md#ldap-identity-migration).
 
 ## Data Structures

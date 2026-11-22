@@ -25,7 +25,7 @@ import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
 import { validateIdentifier, validateIdentifiers } from '../reldb-security.js'
 import { HaiReldbError } from '../reldb-types.js'
-import { createTxWrap } from './reldb-tx-assembler.js'
+import { createTxResultWrap, createTxWrap } from './reldb-tx-assembler.js'
 
 // ─── 操作上下文 ───
 
@@ -459,6 +459,7 @@ export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['be
   return {
     begin,
     wrap: createTxWrap(begin),
+    wrapResult: createTxResultWrap(begin),
   }
 }
 

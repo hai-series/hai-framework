@@ -108,8 +108,8 @@ export async function uploadImage(key: string, file: File) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.init` | 准备本地路径或 S3 存储客户端 | `config`（必填） | `Promise<HaiResult<void>>` | `await storage.init({ type: 'local', root: './data/files' })` |
-| `storage.close` | 释放存储客户端；已保存的文件仍由原后端持有 | 已保存的文件仍由原后端持有；无 | `Promise<HaiResult<void>>` | `await storage.close()` |
+| `storage.init(config)` | 准备本地路径或 S3 存储客户端 | 必填 `config: StorageConfigInput`，用 `type` 选择 `local` 或 `s3`。后端字段与默认值见[存储配置](../configuration/storage.md) | `Promise<HaiResult<void>>` | `await storage.init({ type: 'local', root: './data/files' })` |
+| `storage.close()` | 释放存储客户端；已保存的文件仍由原后端持有 | 无 | `Promise<HaiResult<void>>` | `await storage.close()` |
 
 #### 场景：连接与关闭
 
@@ -166,15 +166,44 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.file.put` | 写入文件内容与元数据 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
-| `storage.file.get` | 读取完整文件字节 | key, options | `Buffer<ArrayBufferLike>` | `await storage.file.get('report.txt')` |
-| `storage.file.getStream` | 取得逐块读取的文件流 | key, options | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')` |
-| `storage.file.getStreamWithMetadata` | 同一次读取取得完整对象及其元数据 | 对象键，可选 `{ signal }` | `StorageFileRead` 或打开失败 | `await storage.file.getStreamWithMetadata('report.txt')` |
-| `storage.file.head` | 读取文件元数据 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
-| `storage.file.exists` | 检查文件是否存在 | key | `boolean` | `await storage.file.exists('report.txt')` |
-| `storage.file.copy` | 复制到另一个对象键 | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'archive/report.txt')` |
-| `storage.file.delete` | 删除指定文件 | key | `void` | `await storage.file.delete('report.txt')` |
-| `storage.file.deleteMany` | 批量删除并报告逐项进度 | keys | `StorageDeleteResult` | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])` |
+| `storage.file.put(key, data, options?)` | 写入文件内容与元数据 | `key: string` 和 `data: StorageData` 必填，内容可为字符串、Buffer、Uint8Array 或异步字节流。`options` 可省略，见[`UploadOptions`](#storage-file-options)。 | `FileMetadata` | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
+| `storage.file.get(key, options?)` | 将请求范围读入内存 | `key: string` 必填。`options` 可省略，见[`DownloadOptions`](#storage-file-options)。 | `Buffer<ArrayBufferLike>` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream(key, options?)` | 取得逐块读取的文件流 | `key: string` 必填。`options` 可省略，见[`DownloadOptions`](#storage-file-options)。 | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.getStreamWithMetadata(key, options?)` | 同一次读取取得完整对象及其元数据 | `key: string` 必填，`options.signal` 可取消读取。 | `StorageFileRead` 或打开失败 | `await storage.file.getStreamWithMetadata('report.txt')` |
+| `storage.file.head(key)` | 读取文件元数据 | `key: string`，必填对象键 | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists(key)` | 检查文件是否存在 | `key: string`，必填对象键 | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.copy(sourceKey, destKey, options?)` | 复制到另一个对象键 | `sourceKey: string` 和 `destKey: string` 分别为源和目标对象键，均必填。`options?: CopyOptions` 可用 `contentType` 和 `metadata` 覆盖对应源字段，省略的字段继承源值 · [`CopyOptions`](#storage-file-options) | `FileMetadata` | `await storage.file.copy('report.txt', 'archive/report.txt')` |
+| `storage.file.delete(key)` | 删除指定文件 | `key: string`，必填对象键 | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany(keys)` | 批量删除并报告逐项进度 | `keys: string[]`，必须传入待删除的对象键数组 | `StorageDeleteResult` | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])` |
+
+<a id="storage-file-options"></a>
+
+##### 文件选项
+
+`key` 是对象键，`data` 是要写入的内容。各选项对象及其字段均可省略。读取的字节偏移从 0 开始。
+
+`UploadOptions`
+
+| 字段 | 类型 | 省略行为与用途 |
+| --- | --- | --- |
+| `contentType` | `string` | 可省略。本地存储按扩展名推断，S3 由对象服务确定。 |
+| `metadata` | `Record<string, string>` | 自定义元数据，可通过 `storage.file.head(key)` 读取。 |
+| `ifNoneMatch` | `"*"` | 只在对象键不存在时写入。用 `{ ifNoneMatch: "*" }` 避免覆盖已有文件。 |
+| `signal` | `AbortSignal` | 可取消上传。 |
+| `cacheControl` | `string` | S3 专用，指定 `Cache-Control`，例如 `max-age=3600`。 |
+| `contentDisposition` | `string` | S3 专用，指定 `Content-Disposition`，可建议下载文件名。 |
+
+读取与复制选项
+
+| 字段 | 类型 | 省略行为与用途 |
+| --- | --- | --- |
+| `DownloadOptions.rangeStart` | `number` | 起始字节，含端点。省略从文件开头读。 |
+| `DownloadOptions.rangeEnd` | `number` | 末尾字节，含端点。省略读到文件末尾。 |
+| `DownloadOptions.signal` | `AbortSignal` | 取消读取。`getStreamWithMetadata` 只接收这个选项。 |
+| `CopyOptions.contentType` | `string` | 目标文件的内容类型，省略时继承源文件。 |
+| `CopyOptions.metadata` | `Record<string, string>` | 目标文件的元数据，省略时继承源文件。 |
+
+`metadata` 是应用自定义的字符串键值，写入后可用 `head` 读取。Local 省略 `contentType` 时按扩展名推断。S3 可用 `cacheControl: "max-age=3600"` 指定缓存指令，用 `contentDisposition: 'attachment; filename="report.txt"'` 指定下载时的文件名。
 
 #### 场景：读写与复制文件
 
@@ -201,6 +230,11 @@ const getResult = await storage.file.get('demo/report.txt')
 if (!getResult.success)
   return getResult
 getResult.data.toString('utf8') // 'hello'
+// 按从 0 开始的字节偏移，读取报告中偏移 1 到 3 的三个字节，得到 UTF-8 的 ell。读取失败时返回原失败结果。
+const sample = await storage.file.get('demo/report.txt', { rangeStart: 1, rangeEnd: 3 })
+if (!sample.success)
+  return sample
+sample.data.toString('utf8') // 'ell'
 // 按报告键打开字节流，打开失败时返回原失败结果，打开成功后读取错误可在遍历时抛出。
 const streamResult = await storage.file.getStream('demo/report.txt')
 if (!streamResult.success)
@@ -352,8 +386,21 @@ if (key.success) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.dir.list` | 分页列出前缀内的对象 | options | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `storage.dir.delete` | 删除指定前缀内的对象 | prefix | `void` | `await storage.dir.delete('reports/')` |
+| `storage.dir.list(options?)` | 分页列出前缀内的对象 | 可省略的 `options: ListOptions` 控制范围与续页。见[列表字段](#storage-list-options)。 | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `storage.dir.delete(prefix)` | 删除指定前缀内的对象 | `prefix: string` 必填，匹配对象键的开头，空字符串会匹配全部对象 | `void` | `await storage.dir.delete('reports/')` |
+
+<a id="storage-list-options"></a>
+
+**ListOptions**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `prefix` | `string` | `""` | 只保留以该字符串开头的对象键。 |
+| `delimiter` | `string` | 省略时不折叠 | 从 prefix 之后首次出现的位置折叠为 commonPrefixes。空字符串也不折叠。 |
+| `maxKeys` | `number` | 默认 1000 | 整数 1–1000，文件与公共前缀合计计数。 |
+| `continuationToken` | `string` | 首页省略 | 续页原样传回 nextContinuationToken，保持后端、根目录、prefix 和 delimiter 相同。 |
+
+若已有 `reports/summary.txt` 和 `reports/2026/jan.txt`，用 `{ prefix: "reports/", delimiter: "/" }` 会在 `files` 看到摘要文件，并在 `commonPrefixes` 看到 `["reports/2026/"]`。
 
 `storage.dir.delete(prefix)` 按对象键的字符串前缀逐页删除。例如 `reports/draft-` 匹配 `reports/draft-1.txt`，`reports/` 匹配该目录样式的键。空前缀清空容器中的对象。
 
@@ -395,9 +442,22 @@ existsResult.data // 没有并发写入者重建对象时为 false
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.presign.getUrl` | 签发短期下载地址 | key, options | `string` | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })` |
-| `storage.presign.putUrl` | 签发短期上传地址 | key, options | `string` | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
-| `storage.presign.publicUrl` | 读取公开地址规则 | key | `string \| null` | `storage.presign.publicUrl('report.txt')` |
+| `storage.presign.getUrl(key, options?)` | 签发短期下载地址 | `key: string` 为必填对象键。可省略的 `options: PresignOptions` 见[签名选项](#storage-presign-options)。 | `string` | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })` |
+| `storage.presign.putUrl(key, options?)` | 签发短期上传地址 | `key: string` 为必填目标对象键。可省略的 `options: PresignUploadOptions` 见[签名选项](#storage-presign-options)。 | `string` | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
+| `storage.presign.publicUrl(key)` | 读取公开地址规则 | `key: string`，必填对象键 | `string \| null` | `storage.presign.publicUrl('report.txt')` |
+
+<a id="storage-presign-options"></a>
+
+**签名选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `expiresIn` | `number` | 默认 3600 秒 | 上传与下载均使用，范围为 1–604800 整数秒。 |
+| `responseContentType` | `string` | 可省略 | 仅下载签名，覆盖下载响应的 Content-Type。 |
+| `responseContentDisposition` | `string` | 可省略 | 仅下载签名，可以指定 attachment 与建议文件名。 |
+| `contentType` | `string` | `application/octet-stream` | 仅上传签名。实际 PUT 须发送相同的 Content-Type。 |
+
+`responseContentType` 和 `responseContentDisposition` 仅作用于 `getUrl` 所签发的下载响应。例中 `putUrl` 把 `text/plain` 绑定到上传请求，客户端应在 Content-Type 请求头中发送同一值。
 
 #### 场景：授权直传与下载
 
@@ -515,8 +575,20 @@ Node 将大块内存输入的摘要交给有界 Worker 池。流式输入继续�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.checksum.generate` | 计算内容校验和 | data, options | `string` | `await storage.checksum.generate('text')` |
-| `storage.checksum.verify` | 核对内容校验和 | data, expected, options | `boolean` | `await storage.checksum.verify(bytes, expectedDigest)` |
+| `storage.checksum.generate(data, options?)` | 计算内容校验和 | `data: StorageData` 是必填的内容。格式与取消设置见[校验和选项](#storage-checksum-options)。 | `string` | `await storage.checksum.generate('text')` |
+| `storage.checksum.verify(data, expected, options?)` | 核对内容校验和 | `data: StorageData` 和 `expected: string` 必填。用[校验和选项](#storage-checksum-options)指定生成期望摘要时使用的算法和编码。 | `boolean` | `await storage.checksum.verify(bytes, expectedDigest)` |
+
+<a id="storage-checksum-options"></a>
+
+**ChecksumOptions**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `algorithm` | `'sha256' \| 'sha384' \| 'sha512' \| 'sha1' \| 'md5'` | `sha256` | 选择计算算法。SHA-1 与 MD5 仅用于兼容性的完整性校验。 |
+| `encoding` | `'hex' \| 'base64'` | `hex` | 生成和校验须使用同一种编码。hex 输出为小写。 |
+| `signal` | `AbortSignal` | 可省略 | 取消摘要计算或流读取。 |
+
+对 UTF-8 的 `abc` 用 `{ encoding: "base64" }` 生成 SHA-256 摘要，得到 `ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=`。
 
 #### 场景：检查字节是否一致
 
@@ -559,12 +631,23 @@ verifyResult2.data // false
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.client.uploadWithPresignedUrl` | 直传文件 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
-| `storage.client.downloadWithPresignedUrl` | 读取下载内容 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
-| `storage.client.downloadAndSave` | 下载并触发保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
-| `storage.client.getFileExtension` | 读取扩展名 | `File` | `string` | `storage.client.getFileExtension(file)` |
-| `storage.client.getMimeType` | 按扩展名查类型 | `extension: string` | `string` | `storage.client.getMimeType("txt")` |
-| `storage.client.formatFileSize` | 显示字节大小 | `bytes: number` | `string` | `storage.client.formatFileSize(1024)` |
+| `storage.client.uploadWithPresignedUrl(url, data, options?)` | 直传文件 | `url: string` 是已授权的上传 URL。`data` 是要发送的 File、Blob、ArrayBuffer 或字符串。两者必填。见[浏览器传输选项](#storage-browser-transfer-options)。 | `Promise<{ success: boolean; error?: string }>` | `await storage.client.uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `storage.client.downloadWithPresignedUrl(url, options?)` | 读取下载内容 | 必填 `url: string` 是已授权的下载 URL。可选取消信号见[浏览器传输选项](#storage-browser-transfer-options)。 | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await storage.client.downloadWithPresignedUrl(url)` |
+| `storage.client.downloadAndSave(url, options?)` | 下载并触发保存 | 必填 `url: string` 是已授权的下载 URL。[浏览器传输选项](#storage-browser-transfer-options)可指定文件名与取消。 | `Promise<{ success: boolean; error?: string }>` | `await storage.client.downloadAndSave(url, { filename: "report.txt" })` |
+| `storage.client.getFileExtension(file)` | 读取扩展名 | 必填 `file: File`，读取其 `name` | `string` | `storage.client.getFileExtension(file)` |
+| `storage.client.getMimeType(extension)` | 按扩展名查类型 | `extension: string` 文件扩展名，如 txt。未知扩展名返回 application/octet-stream | `string` | `storage.client.getMimeType("txt")` |
+| `storage.client.formatFileSize(bytes)` | 显示字节大小 | `bytes: number` 要显示的字节数，如文件的 size | `string` | `storage.client.formatFileSize(1024)` |
+
+<a id="storage-browser-transfer-options"></a>
+
+**浏览器传输选项**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `ClientUploadOptions.contentType` | `string` | 可省略 | 设置 PUT 的 Content-Type。签名绑定此请求头时须显式发送同值。 |
+| `ClientUploadOptions.onProgress` | `(progress: UploadProgress) => void` | 可省略 | 指定后用 XMLHttpRequest。只在总量可计算时回调。loaded、total 为字节，percent 为百分比。 |
+| `ClientUploadOptions.abortController / ClientDownloadOptions.abortController` | `AbortController` | 可省略 | 取消当前传输。预取消不发请求，上传取消不回滚已写入的对象。 |
+| `ClientDownloadOptions.filename` | `string` | 本地化的下载名 | 仅 downloadAndSave 使用，指定浏览器建议的保存文件名。 |
 
 #### 场景：上传用户文件后下载保存
 

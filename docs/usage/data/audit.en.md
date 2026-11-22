@@ -30,6 +30,8 @@ Record actor, resource and outcome for investigation and audit retention.
 
 user-42 read order-42; details says only status was viewed. created_at shows the database event timestamp in UTC.
 
+After filtering by scope and event, `audit.countByOutcome` returns a projection. For example, `{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` includes a historical event without an outcome. The query counts existing logs independently of pagination and ordering.
+
 ### Which audit records must be retained
 
 Structure: `hai_audit_policy`.

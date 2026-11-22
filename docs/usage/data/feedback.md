@@ -35,6 +35,8 @@
 
 这是反馈主单的字段节选。`feedback-42` 属于 `team-1` 的 `user-42`，尚待处理且仍在收集材料；`evidence_count:0` 表示此时还没有关联证据，不代表后面步骤也没有。`created_at` 和 `updated_at` 是 Unix 毫秒。
 
+类别早已保存在报告的 `payload.category`，例如 `"bug"`。本人列表以 `scope_id`、`user_id` 等现有字段限定范围，已过期或正在删除的报告不会进入分页。
+
 ### 帮助还原问题发生过程的证据
 
 对应结构：`hai_feedback_evidence`。

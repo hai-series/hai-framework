@@ -67,9 +67,9 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.init` | 既定クライアントを準備 | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
-| `apiClient.close` | 既定クライアントを終了 | 无参数 | `Promise<void>` | `await apiClient.close()` |
-| `apiClient.create` | 独立クライアントを作成 | contract: 应用共享契约 | `ApiClient<TContract>` | `apiClient.create(contract)` |
+| `apiClient.init(config)` | 既定クライアントを準備 | `config` と API の `baseUrl` は必須。任意の項目は[接続オプション](#call-options)を参照。 | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
+| `apiClient.close()` | 既定クライアントを終了 | 引数なし | `Promise<void>` | `await apiClient.close()` |
+| `apiClient.create(contract)` | 独立クライアントを作成 | サーバーと共有するルート契約 `contract` が必須。 | `ApiClient<TContract>` | `apiClient.create(contract)` |
 | `apiClient.config` | 現在のマスク済みクライアント設定を取得 | 読み取り専用プロパティ、引数なし | `ApiClientConfig \| null` | `apiClient.config` |
 | `apiClient.isInitialized` | 既定クライアントの準備状態を確認 | 読み取り専用プロパティ、引数なし | `boolean` | `apiClient.isInitialized` |
 
@@ -153,16 +153,16 @@ finally {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.auth.setTokens` | 現在の資格情報を保存 | TokenPair: 可信认证响应 | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
-| `apiClient.auth.clear` | 現在の資格情報を削除 | 无参数 | `Promise<void>` | `await apiClient.auth.clear()` |
-| `apiClient.auth.onTokenRefreshed` | トークン更新を購読 | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
-| `apiClient.tokenStorage.memory` | メモリー資格情報ストアを作成 | 无参数 | `TokenStorage` | `apiClient.tokenStorage.memory()` |
-| `apiClient.tokenStorage.httpOnlyCookie` | サーバー管理の更新 Cookie を利用 | 无参数 | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
-| `storage.getAccessToken` | アクセストークンを取得 | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
-| `storage.setAccessToken` | アクセストークンを保存 | token | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
-| `storage.getRefreshToken` | 更新トークンを取得 | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
-| `storage.setRefreshToken` | 更新トークンを保存 | token | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
-| `storage.clear` | 全資格情報を削除 | — | `Promise<void>` | `await storage.clear()` |
+| `apiClient.auth.setTokens(tokens)` | 現在の資格情報を保存 | `tokens` は信頼できる認証応答の `TokenPair`。アクセストークン、秒単位の有効期間、任意の更新トークンを含む。 | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
+| `apiClient.auth.clear()` | 現在の資格情報を削除 | 引数なし | `Promise<void>` | `await apiClient.auth.clear()` |
+| `apiClient.auth.onTokenRefreshed(callback)` | トークン更新を購読 | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
+| `apiClient.tokenStorage.memory()` | メモリー資格情報ストアを作成 | 引数なし | `TokenStorage` | `apiClient.tokenStorage.memory()` |
+| `apiClient.tokenStorage.httpOnlyCookie()` | サーバー管理の更新 Cookie を利用 | 引数なし | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
+| `storage.getAccessToken()` | アクセストークンを取得 | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
+| `storage.setAccessToken(token)` | アクセストークンを保存 | 信頼済みの認証応答に含まれるアクセストークン文字列 `token` が必須。 | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
+| `storage.getRefreshToken()` | 更新トークンを取得 | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
+| `storage.setRefreshToken(token)` | 更新トークンを保存 | 信頼済みの応答に含まれる更新トークン文字列 `token` が必須。Cookie アダプターではサーバーが更新トークンを管理。 | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear()` | 全資格情報を削除 | — | `Promise<void>` | `await storage.clear()` |
 
 #### 利用例：資格情報の保存と更新
 
@@ -218,17 +218,17 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.createAuthActions` | 認証フォームの操作を作成 | client: 含标准 IAM 契约 | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
-| `actions.publicConfig` | 公開認証方針を取得 | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
-| `actions.createCaptcha` | 操作用チャレンジを取得 | { operation } | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
-| `actions.login` | ログインフォームを送信 | IamAuthLoginInput | `Promise<HaiResult<T>>` | `await actions.login({ identifier, password })` |
-| `actions.register` | 登録フォームを送信 | IamRegisterInput | `Promise<HaiResult<T>>` | `await actions.register({ username, password })` |
-| `actions.sendOtp` | ワンタイムコードを要求 | identifier, { captcha? }? | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
-| `actions.requestPasswordReset` | 再設定通知を要求 | identifier, { captcha? }? | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
-| `actions.confirmPasswordReset` | 再設定資格情報と新パスワードを送信 | token, newPassword | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
-| `actions.renewPassword` | 期限切れ・初期パスワードを変更 | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
-| `actions.reauthenticate` | 機密操作のため再認証 | password, operation | `Promise<HaiResult<T>>` | `await actions.reauthenticate(password, 'users:delete')` |
-| `actions.bindPageExit` | ページ離脱時のセッション処理を設定 | { enabled? } | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
+| `apiClient.createAuthActions(client)` | 認証フォームの操作を作成 | 標準 IAM ルートと認証情報の管理 API を備えた `client` が必須。返された操作を実行する前に初期化する。 | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
+| `actions.publicConfig()` | 公開認証方針を取得 | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
+| `actions.createCaptcha(input)` | 操作用チャレンジを取得 | `input` オブジェクト。`operation` は必須で `login`、`register`、`sendOtp`、`passwordReset`、`renewPassword` のいずれか。 | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
+| `actions.login(input)` | ログインフォームを送信 | `input` オブジェクト。アカウント `identifier` と `password` が必須。操作証明 `captcha` と同一利用者の復旧に使う `expectedUserId` は省略可。 | `Promise<HaiResult<T>>` | `await actions.login({ identifier, password })` |
+| `actions.register(input)` | 登録フォームを送信 | `input` オブジェクト。`username`、`password` が必須。`email`、`phone`、`displayName`、`metadata`、`captcha` は省略可。 | `Promise<HaiResult<T>>` | `await actions.register({ username, password })` |
+| `actions.sendOtp(identifier, options?)` | ワンタイムコードを要求 | アカウントの識別子 `identifier` が必須。サーバーが CAPTCHA を要求する場合は `options.captcha` にその操作の証明を渡す。 | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
+| `actions.requestPasswordReset(identifier, options?)` | 再設定通知を要求 | アカウントの識別子 `identifier` が必須。サーバーが CAPTCHA を要求する場合は `options.captcha` にその操作の証明を渡す。 | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
+| `actions.confirmPasswordReset(token, newPassword)` | 再設定資格情報と新パスワードを送信 | 再設定用の `token` と新しい `newPassword` が必須。いずれも文字列で、サーバーがパスワード方針を適用。 | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
+| `actions.renewPassword(input)` | 期限切れ・初期パスワードを変更 | `input` オブジェクト。アカウント `identifier`、元の `password`、`newPassword` が必須。操作用 `captcha` は省略可。 | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate(password, operation)` | 機密操作のため再認証 | 現在の `password` とサーバーに登録した `operation`（例 `users:delete`）が必須。 | `Promise<HaiResult<T>>` | `await actions.reauthenticate(password, 'users:delete')` |
+| `actions.bindPageExit(options?)` | ページ離脱時のセッション処理を設定 | `options.enabled` は既定で無効。`true` にするとブラウザーの離脱リスナーを登録。 | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
 
 #### 利用例：認証フォームの接続
 
@@ -309,40 +309,55 @@ unbind() // call when this page is destroyed
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.iam.auth.publicConfig` | 读取公开认证配置 | 无必填参数 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
-| `apiClient.iam.auth.createCaptcha` | 生成挑战 | `{ operation: 'login' }` | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
-| `apiClient.iam.auth.login` | 密码登录 | `{ identifier, password }` | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
-| `apiClient.iam.auth.loginWithLdap` | LDAP 登录 | `{ username, password }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
-| `apiClient.iam.auth.sendOtp` | 发送一次性验证码 | `{ identifier }` | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
-| `apiClient.iam.auth.loginWithOtp` | 验证码登录 | `{ identifier, code }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
-| `apiClient.iam.auth.register` | 注册 | `{ username, password }` | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
-| `apiClient.iam.auth.currentUser` | 读取当前账号 | 无必填参数 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
-| `apiClient.iam.auth.updateCurrentUser` | 更新本人资料 | `{ displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
-| `apiClient.iam.auth.changePassword` | 已登录用户修改密码 | `{ oldPassword, newPassword }` | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
-| `apiClient.iam.auth.renewPassword` | 密码到期后续密 | `{ identifier, password, newPassword }` | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
-| `apiClient.iam.auth.requestPasswordReset` | 申请密码重置 | `{ identifier }` | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
-| `apiClient.iam.auth.confirmPasswordReset` | 使用重置凭证 | `{ token, newPassword }` | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
-| `apiClient.iam.auth.reauthenticate` | 申请敏感操作票据 | `{ password, operation: 'users:delete' }` | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
-| `apiClient.iam.auth.refresh` | 刷新凭据 | `{ refreshToken }` | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
-| `apiClient.iam.auth.logout` | 主动退出 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.logout()` |
-| `apiClient.iam.auth.closeSession` | 请求结束当前会话 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.closeSession()` |
-| `apiClient.iam.users.list` | 分页查询用户 | `{ page: 1, pageSize: 20 }` | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
-| `apiClient.iam.users.get` | ユーザーを取得 | `{ id: userId }` | ユーザー情報。該当なしの場合は `null` | `await apiClient.iam.users.get({ id: userId })` |
-| `apiClient.iam.users.create` | 创建用户 | `{ username, password }` | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
-| `apiClient.iam.users.invite` | 发出邀请 | `{ username, email }` | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
-| `apiClient.iam.users.update` | 修改用户 | `{ id: userId, displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
-| `apiClient.iam.users.delete` | 删除用户 | `{ id: userId }` | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
-| `apiClient.iam.users.resetPassword` | 管理员重置密码 | `{ id: userId, newPassword }` | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
-| `apiClient.iam.roles.list` | 查询角色 | 无必填参数 | 角色分页 | `await apiClient.iam.roles.list({})` |
-| `apiClient.iam.roles.get` | ロールを取得 | `{ id: roleId }` | ロール情報。該当なしの場合は `null` | `await apiClient.iam.roles.get({ id: roleId })` |
-| `apiClient.iam.roles.create` | 创建角色 | `{ code: 'reader', name: 'Reader' }` | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
-| `apiClient.iam.roles.update` | 更新角色 | `{ id: roleId, name: 'Report reader' }` | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
-| `apiClient.iam.roles.delete` | 删除角色 | `{ id: roleId }` | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
-| `apiClient.iam.permissions.list` | 分页查询权限 | `{ page: 1, type: 'api' }` | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
-| `apiClient.iam.permissions.get` | 读取权限 | `{ id: permissionId }` | `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
-| `apiClient.iam.permissions.create` | 创建权限 | `{ code: 'reports:read', name: 'Read reports' }` | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
-| `apiClient.iam.permissions.setSensitiveOperations` | 配置敏感操作 | `{ id: permissionId, sensitiveOperations: ['users:delete'] }` | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
-| `apiClient.iam.permissions.delete` | 删除权限 | `{ id: permissionId }` | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+| `apiClient.iam.auth.publicConfig(input?, options?)` | 读取公开认证配置 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
+| `apiClient.iam.auth.createCaptcha(input, options?)` | 生成挑战 | `input` オブジェクト。`operation` は必須で `login`、`register`、`sendOtp`、`passwordReset`、`renewPassword` のいずれか。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
+| `apiClient.iam.auth.login(input, options?)` | 密码登录 | `input` オブジェクト。アカウント `identifier` と `password` が必須。操作証明 `captcha` と同一利用者の復旧に使う `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
+| `apiClient.iam.auth.loginWithLdap(input, options?)` | LDAP 登录 | `input` オブジェクト。LDAP の `username` と `password` が必須。操作証明 `captcha` と同一利用者の復旧用 `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
+| `apiClient.iam.auth.sendOtp(input, options?)` | 发送一次性验证码 | `input` オブジェクト。アカウント `identifier` が必須。任意の操作証明 `captcha`。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
+| `apiClient.iam.auth.loginWithOtp(input, options?)` | 验证码登录 | `input` オブジェクト。アカウント `identifier` と OTP 文字列 `code` が必須。`captcha` と復旧する同じ利用者の `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
+| `apiClient.iam.auth.register(input, options?)` | 注册 | `input` オブジェクト。`username`、`password` が必須。`email`、`phone`、`displayName`、`metadata`、`captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
+| `apiClient.iam.auth.currentUser(input?, options?)` | 读取当前账号 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
+| `apiClient.iam.auth.updateCurrentUser(input, options?)` | 更新本人资料 | `input` オブジェクト。`username`、`email`、`displayName`、`avatarUrl`、`phone`、`metadata` は省略可。更新する項目だけ送信。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
+| `apiClient.iam.auth.changePassword(input, options?)` | 已登录用户修改密码 | `input` オブジェクト。現在の `oldPassword` と新しい `newPassword` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `apiClient.iam.auth.renewPassword(input, options?)` | 密码到期后续密 | `input` オブジェクト。アカウント `identifier`、元の `password`、`newPassword` が必須。操作用 `captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `apiClient.iam.auth.requestPasswordReset(input, options?)` | 申请密码重置 | `input` オブジェクト。アカウント `identifier` が必須。操作用 `captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
+| `apiClient.iam.auth.confirmPasswordReset(input, options?)` | 使用重置凭证 | `input` オブジェクト。通知に含まれる一回限りの `token` と `newPassword` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `apiClient.iam.auth.reauthenticate(input, options?)` | 申请敏感操作票据 | `input` オブジェクト。現在の `password` と操作 ID `operation` が必須。後者は空白除去後に 1～128 文字。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
+| `apiClient.iam.auth.refresh(input, options?)` | 刷新凭据 | `input` オブジェクト。クライアント管理の更新処理で、文字列 `refreshToken` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
+| `apiClient.iam.auth.logout(input, options?)` | 主动退出 | `input` オブジェクトが必須。`{}` で現在の Bearer アクセストークンを使用するか、無効化するトークンを `{ accessToken }` で指定。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.logout({})` |
+| `apiClient.iam.auth.closeSession(input, options?)` | 请求结束当前会话 | `input` オブジェクトが必須。`{}` で現在の Bearer アクセストークンを使用するか、無効化するトークンを `{ accessToken }` で指定。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.closeSession({})` |
+| `apiClient.iam.users.list(input, options?)` | 分页查询用户 | `input` オブジェクトが必須で `{}` も可。ページング、ソート、絞り込みは[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
+| `apiClient.iam.users.get(input, options?)` | ユーザーを取得 | 前の処理で取得した利用者の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | ユーザー情報。該当なしの場合は `null` | `await apiClient.iam.users.get({ id: userId })` |
+| `apiClient.iam.users.create(input, options?)` | 创建用户 | `input.username` と `input.password` が必須。種類、有効期限、プロフィールは[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
+| `apiClient.iam.users.invite(input, options?)` | 发出邀请 | `input.username` が必須。通知経路に応じ `email` または `phone` を指定。`accountStatus` は `active` のみ。[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
+| `apiClient.iam.users.update(input, options?)` | 修改用户 | `input.id` が必須。更新する項目を渡し、`accountExpiresAt: null` で期限を解除。[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
+| `apiClient.iam.users.delete(input, options?)` | 删除用户 | 前の処理で取得した利用者の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
+| `apiClient.iam.users.resetPassword(input, options?)` | 管理员重置密码 | 利用者 ID `input.id` と `input.newPassword` が必須。いずれも空でない文字列。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
+| `apiClient.iam.roles.list(input?, options?)` | 查询角色 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 角色分页 | `await apiClient.iam.roles.list()` |
+| `apiClient.iam.roles.get(input, options?)` | ロールを取得 | 前の処理で取得したロールの ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | ロール情報。該当なしの場合は `null` | `await apiClient.iam.roles.get({ id: roleId })` |
+| `apiClient.iam.roles.create(input, options?)` | 创建角色 | ロールコード `input.code` と表示名 `input.name` が必須。`description` と `isSystem` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
+| `apiClient.iam.roles.update(input, options?)` | 更新角色 | `input.id` が必須。新しい `name` と `description` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
+| `apiClient.iam.roles.delete(input, options?)` | 删除角色 | 前の処理で取得したロールの ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
+| `apiClient.iam.permissions.list(input, options?)` | 分页查询权限 | `input` は必須で `{}` も可。ページングと `type`、`search` は[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
+| `apiClient.iam.permissions.get(input, options?)` | 读取权限 | 前の処理で取得した権限の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
+| `apiClient.iam.permissions.create(input, options?)` | 创建权限 | `input.code` と `input.name` が必須。任意の `description`、`resource`、`action`、`type`、`sensitiveOperations` は[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
+| `apiClient.iam.permissions.setSensitiveOperations(input, options?)` | 配置敏感操作 | 権限 ID `input.id` が必須。`sensitiveOperations` は 1～128 文字の操作 ID を最大 1000 件。`[]` でクリア。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
+| `apiClient.iam.permissions.delete(input, options?)` | 删除权限 | 前の処理で取得した権限の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+
+<a id="iam-admin-inputs"></a>
+
+#### IAM 管理用項目
+
+| 項目 | 用途と既定値 |
+| --- | --- |
+| `page`、`pageSize` | 利用者と権限一覧で使用可。`page` は 1 からで既定 1。`pageSize` は 1～100、既定 20。 |
+| `sortBy`、`sortDirection` | 利用者一覧を `username`、`email`、`displayName`、`accountStatus`、`createdAt` で `asc` または `desc` に整列。省略時はサーバー順。 |
+| `search`、`roleCode`、`accountStatus` | `search` は利用者・権限を検索。利用者一覧では 1～100 文字の `roleCode`、`active` / `dormant` / `closed` の `accountStatus` で絞り込み可。省略した項目は絞り込まない。 |
+| `accountType`、`accountStatus`、`accountExpiresAt` | 作成・招待・更新の任意項目。種類は `permanent` / `temporary`、招待の状態は `active` のみ。期限は日付、更新時の `null` で解除。 |
+| `email`、`phone`、`displayName`、`avatarUrl`、`metadata`、`roleIds` | メール、電話、表示名は任意。更新時は `avatarUrl` も指定可。`metadata` はアプリの項目、`roleIds` は割り当てるロール ID の配列。 |
+| `type`、`resource`、`action`、`description`、`sensitiveOperations` | 権限 `type` は `menu`、`api`、`button`。一覧の絞り込みにも使用。作成時の資源、操作、説明は省略可。`sensitiveOperations` は 1～128 文字の操作 ID 最大 1000 件、既定 `[]`。 |
+
+管理権限を持つセッションで `{ page: 1, pageSize: 20, accountStatus: 'active' }` を指定すると、成功時の `data.items` は有効アカウント最大 20 件。失敗時は `error` を確認。
 
 #### 利用例：認証と管理 API の呼び出し
 
@@ -359,7 +374,7 @@ if (!usersResult.success)
 const users = usersResult.data
 // users.items is the authorized user page, not every user in the database
 // Use default role filters. Success yields the roles visible to the caller. Return the failed result on failure.
-const rolesResult = await apiClient.iam.roles.list({})
+const rolesResult = await apiClient.iam.roles.list()
 if (!rolesResult.success)
   return rolesResult
 const roles = rolesResult.data // configured roles visible to this caller
@@ -371,6 +386,33 @@ const permissions = permissionsResult.data // permitted permission records
 ```
 
 一覧に個々の入力と成功データを示しています。ID は前の成功応答から取得し、内容は実サービスと権限によります。ログインだけで管理権限は得られません。
+
+<a id="request-options"></a>
+
+#### 呼び出しごとのオプション
+
+第 1 引数には契約が定める業務入力を渡します。入力のない手続きに第 2 引数を渡すときは、第 1 引数を `undefined` にします。
+
+| 第 2 引数の項目 | 省略時 | 指定した場合 |
+| --- | --- | --- |
+| `signal` | 呼び出し元からの中断なし | `AbortController.signal` で応答待ちと送受信を中断できます。サーバーで開始済みの書き込みは完了することがあります。 |
+| `context.autoRefresh` | クライアントの更新方針を継承 | `false` でこの呼び出しからの認証情報の更新を停止します。現在のアクセストークンはクライアント設定に従って送信します。 |
+| `context.keepalive` | Fetch の既定値 | `true` で Fetch の `keepalive` を有効にします。ブラウザーの制限があり、ページ離脱後の送信は保証されません。 |
+| `context.reauthentication` | 操作用の証明を送信しない | 認証操作から得た証明を、このリクエストの `X-Hai-Reauthentication` ヘッダーに設定します。 |
+| `context.reauthorize` | 再試行用の証明を取得しない | 再承認が必要な再試行の前に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+// アプリの非同期関数内で実行します。初期化済みのクライアントには利用者一覧の権限があります。
+// ページ破棄時は controller.abort() を呼びます。
+const controller = new AbortController()
+// 1 ページ目を最大 20 件取得します。signal で応答待ちを中断でき、成功時は閲覧可能な一覧、失敗時は元のエラーを返します。
+const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
+if (!users.success)
+  return users
+const visibleUsers = users.data.items
+```
 
 [引数と手順の詳細](api-client.md#iam-requests)
 
@@ -384,18 +426,32 @@ const permissions = permissionsResult.data // permitted permission records
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.storage.files.list` | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter` | `maxKeys` 范围 1–1000 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `apiClient.storage.files.getMetadata` | 读对象元数据 | `{ key }` | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
-| `apiClient.storage.files.delete` | 删除单个对象 | `{ key }` | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
-| `apiClient.storage.files.deleteMany` | 批量删除对象 | `{ keys: [key] }` | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
-| `apiClient.storage.presignedUrls.createUpload` | 签发上传地址 | `{ key, contentType: 'application/pdf' }` | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
-| `apiClient.storage.presignedUrls.createDownload` | 签发下载地址 | `{ key, expiresIn: 60 }` | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
-| `apiClient.ai.chats.createCompletion` | `messages` 必填 | 可选模型和生成设置 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
-| `apiClient.ai.chats.sendMessage` | 发送会话消息 | `{ message, sessionId }` | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
-| `apiClient.ai.chats.listHistory` | 查询历史 | `{ sessionId, limit: 20 }` | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
-| `apiClient.ai.memories.list` | 查询记忆 | `{ objectId, limit: 20 }` | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
-| `apiClient.ai.memories.recall` | 按内容检索记忆 | `{ query: 'preferred language', topK: 3 }` | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
-| `apiClient.ai.sessions.list` | 查询对象的会话 | `{ objectId }` | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+| `apiClient.storage.files.list(input, options?)` | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter` | `input` は必須で `{}` も可。`prefix` は接頭辞、`maxKeys` は 1～1000、`delimiter` はグループ化の区切り、`continuationToken` は前ページから取得。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `apiClient.storage.files.getMetadata(input, options?)` | 读对象元数据 | 現在の呼び出し元が読み取れるオブジェクトキー `input.key` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
+| `apiClient.storage.files.delete(input, options?)` | 删除单个对象 | 現在の呼び出し元が削除できるオブジェクトキー `input.key` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
+| `apiClient.storage.files.deleteMany(input, options?)` | 批量删除对象 | 空でないオブジェクトキー配列 `input.keys` が必須。サーバーは各キーの削除権限を確認。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
+| `apiClient.storage.presignedUrls.createUpload(input, options?)` | 签发上传地址 | `input.key` が必須。任意の `contentType` は既定 `application/octet-stream`、`expiresIn` は既定 900 秒。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
+| `apiClient.storage.presignedUrls.createDownload(input, options?)` | 签发下载地址 | `input.key` が必須。任意の `expiresIn` は署名付き URL の有効時間（秒）、既定 900。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `apiClient.ai.chats.createCompletion(input, options?)` | `messages` 必填 | 空でない `input.messages` が必須。生成、ツール、セッションは[AI リクエスト項目](#ai-input-fields)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
+| `apiClient.ai.chats.sendMessage(input, options?)` | 发送会话消息 | `input.message` が必須。`sessionId` の既定値は `default`。`objectId`、`systemPrompt`、`model`、`temperature`（0～2）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
+| `apiClient.ai.chats.listHistory(input, options?)` | 查询历史 | `input.sessionId` が必須。主体 `objectId`、`limit`（1～200）、`order`（`asc` または `desc`）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `apiClient.ai.memories.list(input, options?)` | 查询记忆 | `input` が必須で `{}` も可。`objectId`、`types` 配列、0 以上の `offset`、`limit`（1～100）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
+| `apiClient.ai.memories.recall(input, options?)` | 按内容检索记忆 | `input.query` が必須。主体 `objectId`、`topK`（1 以上）、`types` 配列、`minImportance`（0～1）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `apiClient.ai.sessions.list(input, options?)` | 查询对象的会话 | `input` は必須で `{}` の場合は現在の認証主体。許可された主体を `objectId` で指定可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+
+<a id="ai-input-fields"></a>
+
+#### チャット補完の要求項目
+
+| 項目 | 用途と既定値 |
+| --- | --- |
+| `messages` | 空でない配列が必須。ロールは `system`、`user`、`assistant`、`tool`。本文は文字列または `{ type: 'text', text }` パーツ。利用者メッセージの `image_url` のみ `{ url, detail? }` を追加可。詳細度は `auto`、`low`、`high`。 |
+| `messages[].tool_calls`、`messages[].tool_call_id` | アシスタントは `id`、`type: 'function'`、`function.name`、JSON 文字列の `function.arguments` を持つ呼び出しを付加可。`content` を省略する場合は一件以上必要。ツールの結果には元の `tool_call_id` が必須。 |
+| `objectId`、`sessionId`、`model` | 主体、セッション、モデルは省略可。既定は認証済み主体、`default` セッション、サーバーのモデル設定。別主体には権限が必要。 |
+| `temperature`、`top_p`、`max_tokens` | 任意の温度 0～2、サンプリング確率 0～1、最大生成トークンの正整数。省略時はモデル設定を使用。 |
+| `tools`、`tool_choice` | 任意の関数ツールは `type: 'function'` と `function.name` が必須。説明、JSON Schema の引数、strict 設定は省略可。`auto`、`none`、`required`、`{ type: 'function', function: { name } }` を選択。必須または名前指定の選択には対応ツールが必要。 |
+
+例は `{ messages: [{ role: 'user', content: 'Hello' }], max_tokens: 15, tool_choice: 'none' }`。成功時は設定済みのモデルの補完結果を返す。本文はモデルによる。
 
 #### 利用例：ファイルと AI API
 
@@ -428,7 +484,7 @@ reports/ と成功応答のセッション ID を使います。削除は実デ�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.observeRequests` | 論理リクエストの最終結果を監視 | observer(ApiRequestRecord) | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
+| `apiClient.observeRequests(observer)` | 論理リクエストの最終結果を監視 | 論理リクエストの完了時に `ApiRequestRecord` を受け取る同期 `observer(record)` が必須。 | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
 
 #### 利用例：通信の暗号化と結果の監視
 

@@ -60,14 +60,14 @@ Compose authentication, access, rate limits and locale into hooks; map failures 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.createHandle` | 请求管道 | `HandleConfig: auth/guards/logging/rateLimit/crypto/access` | `SvelteKit Handle` | `kit.createHandle({ logging: true })` |
-| `kit.sequence` | 组合 Hook | `...Handle` | `Handle preserving resolve options` | `kit.sequence(i18nHandle, authHandle)` |
-| `kit.handler` | 端点异常边界 | `(RequestEvent) => Response \| Promise<Response>` | `SvelteKit request handler` | `kit.handler(async () => kit.response.ok({ ready: true }))` |
-| `kit.middleware.rateLimit` | 固定窗口限流 | `{ windowMs, maxRequests, store, ...options }` | `Middleware; 429 on quota and 503 on store failure` | `kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100, store })` |
-| `kit.middleware.createCacheRateLimitStore` | 共享计数器 | `initialized shared cache, { namespace, allowMemory? }` | `RateLimitStore` | `kit.middleware.createCacheRateLimitStore(cache, { namespace: "orders" })` |
-| `kit.middleware.createMemoryRateLimitStore` | 开发计数器 | `none; development or explicit test only` | `MemoryRateLimitStore` | `kit.middleware.createMemoryRateLimitStore()` |
-| `kit.i18n.setLocale` | 启动默认语言 | `locale string` | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
-| `kit.i18n.runWithLocale` | 请求语言隔离 | `locale, callback; Node server only` | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
+| `kit.createHandle(config?)` | 请求管道 | Optional `config` for auth, logging, middleware, and access. See [hook settings](#host-options). | `SvelteKit Handle` | `kit.createHandle({ logging: true })` |
+| `kit.sequence(...handles)` | 组合 Hook | Pass zero or more SvelteKit `Handle` values in `handles`, in execution order. | `Handle preserving resolve options` | `kit.sequence(i18nHandle, authHandle)` |
+| `kit.handler(fn)` | 端点异常边界 | Required `fn(event)` receiving a SvelteKit request event and returning a `Response` or a promise of one. | `SvelteKit request handler` | `kit.handler(async () => kit.response.ok({ ready: true }))` |
+| `kit.middleware.rateLimit(config)` | Limit requests in a fixed window | Required `config` with integer `windowMs` from 1 to 2147483647 milliseconds, positive safe integer `maxRequests`, and atomic `store`. Optional `keyGenerator(event)` defaults to trusted address. `onLimitReached(event)` defaults to a 429 response. | Middleware. Returns 503 if the store fails. | `kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100, store })` |
+| `kit.middleware.createCacheRateLimitStore(backend, options)` | 共享计数器 | Required initialized Redis `backend` and `options.namespace` of 1–128 characters. `allowMemory` is off by default and can only take effect in development or tests. | `RateLimitStore` | `kit.middleware.createCacheRateLimitStore(cache, { namespace: "orders" })` |
+| `kit.middleware.createMemoryRateLimitStore()` | 开发计数器 | `none; development or explicit test only` | `MemoryRateLimitStore` | `kit.middleware.createMemoryRateLimitStore()` |
+| `kit.i18n.setLocale(locale)` | 启动默认语言 | Required `locale` sets the startup default locale, such as `en-US`. | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
+| `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | Required request `locale` and `operation` callback whose result is preserved. Node server only. | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
 
 #### Scenario: Compose SvelteKit hooks
 
@@ -77,9 +77,18 @@ The workflow starts with createHandle and sequence, using an application-initial
 
 #### Hook arguments and runtime dependencies
 
-This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](kit.md#host-options); this subsection is partially translated.
+| Field | Default and conditions | Purpose or concrete result |
+| --- | --- | --- |
+| `trustedProxies` / `access` | Defaults to `auto` / `false` | Determines caller addresses and application access rules. |
+| `auth.verifyToken` / `operations` | Verifier required when `auth` is present | Loads a session from Bearer credentials or a cookie. An operations factory can defer access to initialized IAM. |
+| `auth.cookieName` / `protectedPaths` / `publicPaths` / `loginUrl` | Cookie defaults to `hai_access_token` | Set public and protected routes using deployed paths. Public paths take precedence. |
+| `guards` / `middleware` / `onError` | Optional. The default handler returns a safe 500 response. | Runs business guards after authentication and custom middleware after built-in logging and rate limiting. |
+| `rateLimit.store` / `windowMs` / `maxRequests` / `keyGenerator` / `onLimitReached` | Omitted or `false` disables it. An atomic store is required when enabled. Defaults are 60,000 ms and 100 requests. | Customize the counting key and the response. Exceeding the limit defaults to 429. |
+| `logging` / `logging.logBody` | Logging is on and body logging is off by default | Records request diagnostics. Apply redaction when needed. |
+| `crypto.transport` / `encryptedCookies` / `cookieEncryptionKey` | Encryption is disabled when omitted. The cookie key can also come from `HAI_KIT_COOKIE_KEY`. | Enables authenticated encryption for named cookies. Transport needs the runtime key ring and registration store. |
+| `a2a.operations` / `cardPath` / `rpcPath` / `authenticate` | Operations required when enabled. Paths default to `/.well-known/agent-card.json` and `/a2a`. | Mounts discovery and protocol endpoints and can add endpoint authentication. |
 
-[Detailed parameters and workflows](kit.md#hooks)
+For example, `kit.createHandle({ logging: true, auth: { verifyToken, protectedPaths: ["/admin/**"] } })` requires a session on matching routes.
 
 <a id="responses"></a>
 
@@ -91,23 +100,23 @@ Parse endpoint input before constructing success, no-content, validation or doma
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.response.ok` | 成功响应 | `data, requestId?` | `Response with HTTP 200 and success data` | `kit.response.ok({ id: "o1" })` |
-| `kit.response.created` | 创建响应 | `data, requestId?` | `Response with HTTP 201 and success data` | `kit.response.created({ id: "o1" })` |
-| `kit.response.noContent` | 无正文 | `none` | `Response with HTTP 204` | `kit.response.noContent()` |
-| `kit.response.error` | 指定失败 | `code, message, status?, requestId?, public details?` | `safe failure Response` | `kit.response.error("app:orders:001", "请求无效", 400)` |
-| `kit.response.badRequest` | 无效请求 | `message, requestId?` | `HTTP 400 Response` | `kit.response.badRequest("Invalid request")` |
-| `kit.response.unauthorized` | 未认证 | `message?, requestId?` | `HTTP 401 Response` | `kit.response.unauthorized()` |
-| `kit.response.forbidden` | 无权限 | `message?, requestId?` | `HTTP 403 Response` | `kit.response.forbidden()` |
-| `kit.response.notFound` | 未找到 | `message?, requestId?` | `HTTP 404 Response` | `kit.response.notFound()` |
-| `kit.response.conflict` | 版本冲突 | `message, requestId?` | `HTTP 409 Response` | `kit.response.conflict("Data changed")` |
-| `kit.response.validationError` | 字段校验 | `{ field, message }[], requestId?` | `HTTP 422 Response; errors in safe error.cause` | `kit.response.validationError([{ field: "title", message: "请输入标题" }])` |
-| `kit.response.internalError` | 内部失败 | `message?, requestId?` | `HTTP 500 Response with safe message` | `kit.response.internalError()` |
-| `kit.response.redirect` | 重定向 | `location, status?` | `redirect Response` | `kit.response.redirect("/auth/login")` |
-| `kit.response.fromResult` | 映射领域结果 | `HaiResult<T>, httpStatusMap?, requestId?` | `HTTP Response; preserves safe code/status/traceId` | `kit.response.fromResult(result)` |
-| `kit.response.fromError` | 映射领域错误 | `HaiError, requestId?` | `safe HTTP failure Response` | `kit.response.fromError(result.error)` |
-| `kit.validate.body` | JSON/表单校验 | `Request, Zod schema` | `Promise<schema data>; invalid input throws Response` | `kit.validate.body(request, InputSchema)` |
-| `kit.validate.query` | 查询校验 | `URL, Zod schema` | `schema data; invalid input throws Response` | `kit.validate.query(url, QuerySchema)` |
-| `kit.validate.params` | 路径参数校验 | `Record<string,string>, Zod schema` | `schema data; invalid input throws Response` | `kit.validate.params(params, IdSchema)` |
+| `kit.response.ok(data, requestId?)` | 成功响应 | Required success `data`. Optional `requestId` correlates the response. | `Response with HTTP 200 and success data` | `kit.response.ok({ id: "o1" })` |
+| `kit.response.created(data, requestId?)` | 创建响应 | Required created resource `data`. Optional `requestId` correlates the response. | `Response with HTTP 201 and success data` | `kit.response.created({ id: "o1" })` |
+| `kit.response.noContent()` | 无正文 | `none` | `Response with HTTP 204` | `kit.response.noContent()` |
+| `kit.response.error(code, message, status?, requestId?, details?)` | 指定失败 | Required error `code` and public `message`. `status` defaults to 400. Optionally add `requestId` and safe public `details`, which are omitted for 5xx. | `safe failure Response` | `kit.response.error("app:orders:001", "请求无效", 400)` |
+| `kit.response.badRequest(message, requestId?, details?)` | 无效请求 | Required public validation `message`. Optional `requestId` and safe public `details`. | `HTTP 400 Response` | `kit.response.badRequest("Invalid request")` |
+| `kit.response.unauthorized(message?, requestId?)` | 未认证 | Optional public `message` defaults to the framework text. Optional `requestId` correlates the request. | `HTTP 401 Response` | `kit.response.unauthorized()` |
+| `kit.response.forbidden(message?, requestId?)` | 无权限 | Optional public `message` defaults to the framework text. Optional `requestId` correlates the request. | `HTTP 403 Response` | `kit.response.forbidden()` |
+| `kit.response.notFound(message?, requestId?)` | 未找到 | Optional public `message` defaults to the framework text. Optional `requestId` correlates the request. | `HTTP 404 Response` | `kit.response.notFound()` |
+| `kit.response.conflict(message, requestId?)` | 版本冲突 | Required public `message` describes the conflict. Optional `requestId` correlates the request. | `HTTP 409 Response` | `kit.response.conflict("Data changed")` |
+| `kit.response.validationError(errors, requestId?)` | 字段校验 | Required `errors` array with field name `field` and public validation `message` per entry. Optional `requestId`. | `HTTP 422 Response; errors in safe error.cause` | `kit.response.validationError([{ field: "title", message: "请输入标题" }])` |
+| `kit.response.internalError(message?, requestId?)` | 内部失败 | Optional safe public `message` defaults to the 500 message. Optional `requestId` correlates the request. | `HTTP 500 Response with safe message` | `kit.response.internalError()` |
+| `kit.response.redirect(url, status?)` | 重定向 | Required target URL string `url`. The redirect `status` defaults to 302. | `redirect Response` | `kit.response.redirect("/auth/login")` |
+| `kit.response.fromResult(result, httpStatusMap?, requestId?)` | 映射领域结果 | Required business `result`. Optional `httpStatusMap` overrides status by error code, and `requestId` supplies correlation. | `HTTP Response; preserves safe code/status/traceId` | `kit.response.fromResult(result)` |
+| `kit.response.fromError(haiError, requestId?)` | 映射领域错误 | Required `haiError`. `requestId` is optional and falls back to the current request context. | `safe HTTP failure Response` | `kit.response.fromError(result.error)` |
+| `kit.validate.body(request, schema)` | JSON/表单校验 | Required HTTP `request` and Zod `schema` for its JSON or form data. | `Promise<schema data>; invalid input throws Response` | `kit.validate.body(request, InputSchema)` |
+| `kit.validate.query(url, schema)` | 查询校验 | Required `url: URL` and Zod `schema` for its search parameters. | `schema data; invalid input throws Response` | `kit.validate.query(url, QuerySchema)` |
+| `kit.validate.params(params, schema)` | 路径参数校验 | Required `params`, a route parameter string map, and the Zod `schema`. | `schema data; invalid input throws Response` | `kit.validate.params(params, IdSchema)` |
 | `kit.validate.IdParamSchema` | 通用资源编号 | `{ id: string }` | `Zod parsed ID object` | `kit.validate.IdParamSchema.parse({ id: "o1" })` |
 | `kit.validate.PaginationQuerySchema` | 分页输入 | `page/pageSize/search query` | `normalized pagination object` | `kit.validate.PaginationQuerySchema.parse({ page: "1" })` |
 
@@ -170,20 +179,33 @@ Check permissions against the current session on the server. Auth APIs manage co
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.guard.check` | 检查权限 | `session, permission` | `boolean` | `kit.guard.check(session, "orders.read")` |
-| `kit.guard.require` | 要求权限 | `session, permission` | `void; denied access throws Response` | `kit.guard.require(session, "orders.write")` |
-| `kit.guard.requireSensitive` | 确认操作用途 | `initialized IAM, current RequestEvent request/cookies, operation` | `Promise<void>; invalid proof throws Response` | `kit.guard.requireSensitive(iam, event, "orders.approve")` |
+| `kit.guard.check(session, permission)` | 检查权限 | Required `session` is the current session and can be `null`. Required `permission` is the permission to check. | `boolean` | `kit.guard.check(session, "orders.read")` |
+| `kit.guard.require(session, permission)` | 要求权限 | Required `session` is the current session and can be `null`. Required `permission` is the permission to check. | `void; denied access throws Response` | `kit.guard.require(session, "orders.write")` |
+| `kit.guard.requireSensitive(iam, event, operation)` | 确认操作用途 | Required initialized `iam`, current request `event`, and server-registered `operation`. | `Promise<void>; invalid proof throws Response` | `kit.guard.requireSensitive(iam, event, "orders.approve")` |
 | `kit.auth.publicPaths` | 匿名端点名单 | Obtain public authentication paths for authentication guards. | Obtain public authentication paths for authentication guards. | `kit.auth.publicPaths` |
-| `kit.auth.createApi` | 认证 handler 集合 | `initialized IAM service` | `RequestHandler map for login/OTP/reset/config/etc.` | `kit.auth.createApi(iam)` |
-| `kit.auth.login` | 密码登录 | `Cookie writer, PasswordCredentials, request context?` | `Promise<HaiResult<AuthResult>>; writes token cookies on success` | `kit.auth.login(cookies, { identifier: "alice", password })` |
-| `kit.auth.loginWithOtp` | 验证码登录 | `Cookie writer, OtpCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithOtp(cookies, otpCredentials)` |
-| `kit.auth.loginWithLdap` | LDAP 登录 | `Cookie writer, LdapCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithLdap(cookies, ldapCredentials)` |
-| `kit.auth.loginWithApiKey` | API Key 登录 | `Cookie writer, ApiKeyCredentials, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithApiKey(cookies, apiKeyCredentials)` |
-| `kit.auth.registerAndLogin` | 注册并登录 | `Cookie writer, RegisterOptions, request context?` | `Promise<HaiResult<AuthResult>>` | `kit.auth.registerAndLogin(cookies, registration)` |
-| `kit.auth.logout` | 显式退出 | `Cookie writer, accessToken?` | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
-| `kit.auth.setBrowserToken` | 页面内存凭据 | `access token string` | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
-| `kit.auth.clearBrowserToken` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
-| `@h-ai/kit` 的 `matchPermission` | Match permissions for frontend display | `matchPermission('reports:read', ['reports:read'])` | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+| `kit.auth.createApi(iam)` | 认证 handler 集合 | Required initialized `iam` service providing authentication operations. | `RequestHandler map for login/OTP/reset/config/etc.` | `kit.auth.createApi(iam)` |
+| `kit.auth.login(cookies, credentials, context?)` | 密码登录 | Required `cookies` and `credentials` with `identifier` and `password`. Optional `captcha` follows IAM policy and `expectedUserId` is for same-user recovery. See [authentication parameters](#kit-auth-context) for optional `context`. | `Promise<HaiResult<AuthResult>>; writes token cookies on success` | `kit.auth.login(cookies, { identifier: "alice", password })` |
+| `kit.auth.loginWithOtp(cookies, credentials, context?)` | 验证码登录 | Required `cookies` and `credentials` with `identifier` and `code`. Optional `captcha` follows IAM policy and `expectedUserId` is for same-user recovery. See [authentication parameters](#kit-auth-context) for optional `context`. | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithOtp(cookies, otpCredentials)` |
+| `kit.auth.loginWithLdap(cookies, credentials, context?)` | LDAP 登录 | Required `cookies` and `credentials` with `username` and `password`. Optional `captcha` follows IAM policy and `expectedUserId` is for same-user recovery. See [authentication parameters](#kit-auth-context) for optional `context`. | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithLdap(cookies, ldapCredentials)` |
+| `kit.auth.loginWithApiKey(cookies, credentials, context?)` | API Key 登录 | Required `cookies` and `credentials` with `key`. See [authentication parameters](#kit-auth-context) for optional `context`. | `Promise<HaiResult<AuthResult>>` | `kit.auth.loginWithApiKey(cookies, apiKeyCredentials)` |
+| `kit.auth.registerAndLogin(cookies, options, context?)` | 注册并登录 | Required `cookies`, `options.username`, and `options.password`. See [authentication parameters](#kit-auth-context) for optional `context` and registration fields. | `Promise<HaiResult<AuthResult>>` | `kit.auth.registerAndLogin(cookies, registration)` |
+| `kit.auth.logout(cookies, accessToken?)` | 显式退出 | `cookies` is the current SvelteKit cookie writer. Optional `accessToken` revokes that session at the server. Cookies are cleared even when omitted. | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
+| `kit.auth.setBrowserToken(token)` | 页面内存凭据 | Required `token` is the access-token string to keep in page memory. | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
+| `kit.auth.clearBrowserToken()` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
+| `@h-ai/kit` 的 `matchPermission(required, userPermissions)` | Match permissions for frontend display | Required `required` permission code and trusted session `userPermissions` array. | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+
+<a id="kit-auth-context"></a>
+
+#### Authentication context and registration options
+
+| Field | Default and conditions | Purpose or concrete result |
+| --- | --- | --- |
+| `context.terminalType` | Default `web` | Classifies sessions with `web`, `app`, `desktop`, or `api`. |
+| `context.ip` / `userAgent` / `requestId` | All optional | Passes the caller address, client metadata, and correlation ID from the trusted host request to IAM. |
+| `options.username` / `password` | Required and validated by IAM policy | Names the account to register and supplies its password. |
+| `options.email` / `phone` / `displayName` / `metadata` / `captcha` | Supply according to the form and IAM policy | Supplies contact information, a display name, application metadata, or a CAPTCHA value. Select fields with the public registration schema. |
+
+For example, pass `{ terminalType: "desktop", requestId: "req-1" }` to classify a successful login as a desktop session and correlate the request.
 
 #### Scenario: Authentication cookies and guards
 
@@ -201,25 +223,35 @@ Use the client for same-origin cookies, CSRF and transport; components consume a
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.client.create` | 同源客户端 | `KitClientConfig: auth/transport/recoverSession?` | `KitClient { apiFetch, init, destroy, ready }` | `kit.client.create()` |
-| `kit.client.createAuthActions` | 标准认证动作 | `{ basePath?, ...auth client options }?` | `AuthPanel-compatible actions` | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
-| `kit.client.installBrowserTransport` | 按公共配置安装加密 | `public KitConfig, { crypto, basePath? }` | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
-| `kit.client.installBrowserTransportFetch` | 自定义传输安装 | `ClientTransportConfig` | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
-| `@h-ai/kit/client` 的 `createKitClient` | Create a same-origin client | `options?` | `KitClient` | `createKitClient({})` |
-| `@h-ai/kit/client` 的 `createKitAuthActions` | Create same-origin authentication actions | `options?: { apiFetch, basePath, … }` | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
-| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter` | Adapt SvelteKit navigation for CRUD | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
+| `kit.client.create(config?)` | Create a same-origin client | Optional `config` with the fields below | `KitClient { apiFetch, init, destroy, ready }` | `kit.client.create()` |
+| `kit.client.createAuthActions(options?)` | Create standard authentication actions | Optional `options`. `apiFetch` defaults to a new default client and `basePath` defaults to `/api/auth`. | AuthPanel-compatible actions | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
+| `kit.client.installBrowserTransport(config, deps)` | 按公共配置安装加密 | Required public `config` and `deps.crypto`. Optional `deps.basePath` defaults to an empty string for a root mount. | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
+| `kit.client.installBrowserTransportFetch(transportConfig?)` | 自定义传输安装 | In a browser pass `transportConfig` with the fields in the `transport` row below. Omission or a server-side call installs no Fetch wrapper. | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
+| `createKitClient(config?)` from `@h-ai/kit/client` | Create a same-origin client | Optional `config` with the same fields as `kit.client.create()`. | `KitClient` | `createKitClient({})` |
+| `createKitAuthActions(options?)` from `@h-ai/kit/client` | Create same-origin authentication actions | Optional `options` with the same `apiFetch` and `basePath` as `kit.client.createAuthActions()`. | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
+| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()` | Adapt SvelteKit navigation for CRUD | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
 
 #### Scenario: Connect a same-origin browser
 
 Run in a browser module with an existing same-origin /api/ping endpoint. Defaults create a client; apiFetch returns Response. Destroy on owner teardown. authActions and nav are UI-facing objects.
+
+| Client option | Default or requirement | Effect |
+| --- | --- | --- |
+| `auth` | Omit or use `false` to skip access token injection | `true` uses the current page's in-memory token. You can also supply a `BrowserTokenStore` shared with the authentication flow. |
+| `terminalType` | `'web'` | Also accepts `'app'`, `'desktop'`, or `'api'`. `X-Hai-Terminal` tells the server which session terminal group to use. |
+| `recoverSession` | No recovery when omitted | Provide an async function that returns `true` only when it restored the same user's session. An eligible authentication failure is retried at most once. |
+| `csrfCookieName`, `csrfHeaderName` | `hai_csrf`, `X-CSRF-Token` | Write requests copy the token from this cookie to this header. Match both names to the server. |
+| `transport` | Disabled when omitted | Supply initialized `crypto` to enable it. `basePath` defaults to an empty string and `keyExchangeUrl` to `/api/_hai/key-exchange`. Match `excludePaths` to the server's plaintext paths. `maxPlaintextBytes` limits plaintext in bytes and defaults to the negotiated server limit. |
+
+`client.apiFetch(input, init?, options?)` takes a request, URL, or path and native Fetch options such as `method`, `body`, and `signal`. Set `recoverSession: false` in its third argument to disable normal recovery for that call, for example when calling an authentication endpoint from the recovery flow. Optional `reauthorize` obtains a new operation credential for an eligible retry. Return a credential string to replace the previous header, `null` to cancel, or `undefined` to continue without that credential.
 
 ```ts
 import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
 
 // Create a browser client with defaults. The returned object has its own request and transport methods.
 const client = createKitClient({}) // same factory as kit.client.create
-// Bind authentication actions to that client's apiFetch.
-const actions = createKitAuthActions({ apiFetch: client.apiFetch })
+// Return form actions that call routes under /api/auth through this client's apiFetch.
+const actions = createKitAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
 // Create a navigation adapter for the current SvelteKit runtime.
 const nav = createSvelteKitNavAdapter()
 // Initialize this client's transport if enabled. A failed enabled handshake rejects.
@@ -250,10 +282,10 @@ Declare CRUD fields and operations, and authorize the principal and resource on 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.crud.define` | 声明 CRUD 资源 | `CrudResourceConfig` | `resource operation object` | `kit.crud.define(resourceDefinition)` |
-| `@h-ai/kit` 的 `defineCrud` | Define a resource and form fields | `resource` | `CrudOperations<T>` | `defineCrud(resource)` |
-| `@h-ai/kit` 的 `resolveText` | Resolve static or deferred text | `text: string \| (() => string)` | `string` | `resolveText('Name')` |
-| `@h-ai/kit` 的 `resolveOptions` | Resolve static or deferred options | `options: array \| (() => array)` | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
+| `kit.crud.define(resource)` | 声明 CRUD 资源 | Required CRUD `resource` definition with available actions, routes, and fields. | `resource operation object` | `kit.crud.define(resourceDefinition)` |
+| `@h-ai/kit` 的 `defineCrud(resource)` | Define a resource and form fields | Same as `kit.crud.define()`. The `resource` definition is required. | `CrudOperations<T>` | `defineCrud(resource)` |
+| `@h-ai/kit` 的 `resolveText(text)` | Resolve static or deferred text | Required `text`, a string or zero-argument function returning one. | `string` | `resolveText('Name')` |
+| `@h-ai/kit` 的 `resolveOptions(options)` | Resolve static or deferred options | Required `options` array or zero-argument function returning it, with a `label` and `value` in each item. | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
 
 #### Scenario: Declare resources and form fields
 
@@ -289,8 +321,22 @@ Prepare Crypto and shared Cache, give public policy to the client and a trusted 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `@h-ai/kit` 的 `resolveKitTransportConfig` | Resolve Kit transport arguments | `false \| partial transport options` | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
-| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware` | Create transport authentication middleware | `transportConfig` | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
+| `@h-ai/kit` 的 `resolveKitTransportConfig(input?)` | Resolve Kit transport arguments | `input` is `false` or deployment transport settings. See [transport arguments](#kit-transport-arguments). | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
+| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware(config, encryption?)` | Create transport authentication middleware | Required runtime `config`. Optional `encryption(pathname, method)` supplies per-method path policy. See [transport arguments](#kit-transport-arguments). | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
+
+<a id="kit-transport-arguments"></a>
+
+#### Public transport configuration and middleware arguments
+
+| Field | Default and conditions | Purpose or concrete result |
+| --- | --- | --- |
+| `input` | Omit or pass `false` to disable it | `resolveKitTransportConfig` parses public settings. An object receives the default exchange path and exclusions. The runtime applies the size and time defaults. |
+| `enabled` / `crypto` / `serverKeyRing` / `keyStore` | Required when constructing middleware directly | Pass the enable flag, initialized Crypto, server key ring, and registration store from the host. Share the store in production. |
+| `keyExchangePath` / `excludePaths` / `basePath` | Defaults to `/api/_hai/key-exchange`, `[]`, and the empty string | Sets the exchange route, excluded request paths, and build mount path. Supply `basePath` only at runtime. |
+| `maxPlaintextBytes` / `routePlaintextBytes` | Defaults to 1 MiB with no route overrides. Limits are integers from 1 KiB to 64 MiB. | Limits plaintext UTF-8 bytes. `*` in a route override matches one complete segment. The public config accepts `"auto"` and the middleware takes a number. |
+| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | Defaults to 30 seconds (0–300) and 300 seconds (1–600) | Controls the permitted clock lead and the request lifetime from issuance, in seconds. |
+
+`resolveKitTransportConfig({ excludePaths: ["/api/health"] })` returns that exclusion and the default `keyExchangePath`.
 
 #### Scenario: Assemble encrypted transport: client and middleware
 
@@ -314,12 +360,12 @@ Mount services at explicit paths with host-resolved trusted contexts and authori
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `kit.createFeedbackHandler` | 受控反馈入口 | `{ feedback, resolveContext, ...options }` | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
-| `createA2AApiKeyAuthenticator` | Create an A2A API-key authenticator | `API-key location and name` | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
-| `createAgentCardHandler` | Create an agent-card handler | `getAgentCard` | `RequestHandler` | `createAgentCardHandler(() => card)` |
-| `createA2AHandler` | Create an A2A request handler | `handleRequest, options` | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
-| `resolveA2AConfig` | Resolve A2A arguments | `operations or integration options` | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
-| `handleA2ARequest` | Handle an assembled A2A request | `event, requestId, config` | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
+| `kit.createFeedbackHandler(options)` | 受控反馈入口 | Required `options.feedback` initialized service and `options.resolveContext(event)` to derive feedback identity from a trusted session. `null` denies access. `options.basePath` defaults to `/api/feedback`. | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
+| `createA2AApiKeyAuthenticator(config)` | Create an A2A API-key authenticator | Required `config.in` (`header` or `query`) and `config.name` (parameter name). | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
+| `createAgentCardHandler(getAgentCard)` | Create an agent-card handler | Required `getAgentCard()` supplying the current Agent Card or its promise. | `RequestHandler` | `createAgentCardHandler(() => card)` |
+| `createA2AHandler(handleRequest, config?)` | Create an A2A request handler | Required JSON-RPC `handleRequest`. Optional `config.authenticate` enables authentication with `apiKey` or a custom callback. A callback returning `null` or `undefined` denies access. | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
+| `resolveA2AConfig(input)` | Resolve A2A arguments | `input` is an operations object or `{ operations, cardPath?, rpcPath?, authenticate? }`. `undefined` returns `null`. | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
+| `handleA2ARequest(event, requestId, config)` | Handle an assembled A2A request | Required current `event`, correlation `requestId`, and resolved A2A `config`. | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
 
 #### Scenario: Mount feedback and A2A routes
 

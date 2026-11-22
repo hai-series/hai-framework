@@ -52,9 +52,9 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedback.init` | 必要な依存先でサービスを初期化 | 先按快速开始连接数据库并准备依赖；`config` 必填，`options?` 可选 | `void` | `await feedback.init(config)` |
-| `feedback.close` | ワーカーを停止して状態を解放 | 共享依赖由应用关闭；无 | `void` | `await feedback.close()` |
-| `feedback.runJobs` | 実行可能なバックグラウンド処理を実行 | 无参数 | `{ processed: number }` | `await feedback.runJobs()` |
+| `feedback.init(config, options?)` | 必要な依存先でサービスを初期化 | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [初期化の引数](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
+| `feedback.close()` | ワーカーを停止して状態を解放 | なし | `void` | `await feedback.close()` |
+| `feedback.runJobs()` | 実行可能なバックグラウンド処理を実行 | なし | `{ processed: number }` | `await feedback.runJobs()` |
 
 #### 利用例：サービスと採取処理の準備
 
@@ -75,6 +75,29 @@ init の入力は入門例の通りで、成功時の業務データはありま
 
 未翻訳：証拠収集、非公開添付、エクスポート、再試行の詳しい手順。[中国語の該当節](feedback.md#api-reference)を参照してください。
 
+<a id="feedback-init-options"></a>
+
+#### 初期化の引数
+
+`config: FeedbackConfigInput` は必須です。項目は[設定ファイル](../configuration/feedback.ja.md)を参照してください。`options: FeedbackInitOptions` を省略すると、アプリ独自の資料収集は実行されません。
+
+省略可能な `collectEvidence({ report, signal })` は報告の保存後に実行されます。`report` は読み取り専用の報告、`signal` はタイムアウトや終了に合わせて外部処理を中断するための通知です。同期または非同期で `FeedbackCollectedEvidence` を返し、省略可能な `text: string`、構造化した `data`、`attachments` を指定できます。添付ファイルには固定の文字列 `id`、ファイル名 `name`、メディアタイプ `contentType`、`bytes: Uint8Array` を指定します。報告番号が `FB-42` なら、たとえば `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }` を返せます。
+
+```ts
+import type { FeedbackConfigInput } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+function startFeedback(config: FeedbackConfigInput) {
+  // 依存先を準備した後のアプリ設定を渡します。コールバックは報告番号を使い、タスクの中断時には処理を止めます。
+  return feedback.init(config, {
+    collectEvidence: ({ report, signal }) => {
+      signal.throwIfAborted()
+      return { text: `Diagnostics for ${report.number}`, data: { businessSystem: 'orders' } }
+    },
+  })
+}
+```
+
 [引数と手順の詳細](feedback.md#service)
 
 <a id="reports"></a>
@@ -87,12 +110,67 @@ init の入力は入門例の通りで、成功時の業務データはありま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedback.submit` | フィードバックを受け付け | input, context | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
-| `feedback.list` | 絞り込んでページ取得 | input, context | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
-| `feedback.get` | 詳細を取得 | id, context | `FeedbackDetail` | `await feedback.get(reportId, context)` |
-| `feedback.getEvidence` | 診断証拠をページ取得 | input, context | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
-| `feedback.setStatus` | 版を照合して処理状態を更新 | input, context | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
-| `feedback.retry` | 指定した失敗処理を再投入 | input, context | `void` | `await feedback.retry(retryInput, context)` |
+| `feedback.submit(input, context)` | フィードバックを受け付け | 必須の `input: FeedbackSubmitInput` と `context: FeedbackContext`。[送信項目](#feedback-submission-fields)を参照。 | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
+| `feedback.list(input, context)` | 絞り込んでページ取得 | `input: FeedbackListInput` 必須の絞り込みオブジェクト。各項目は任意。[報告フィルター](#feedback-report-options)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.listMine` | 本人の報告をカテゴリで絞り込む | input, context | `PaginatedResult<FeedbackReport>` | `await feedback.listMine({ category: 'bug', page: 1 }, context)` |
+| `feedback.get(id, context)` | 詳細を取得 | `id: string` 必須の報告 ID。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackDetail` | `await feedback.get(reportId, context)` |
+| `feedback.getEvidence(input, context)` | 診断証拠をページ取得 | `input: FeedbackEvidenceQuery` id は必須。source、kind、requestId、errorId、Unix ミリ秒範囲 from/to と page/pageSize は任意。[証拠項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+| `feedback.setStatus(input, context)` | 版を照合して処理状態を更新 | `input: FeedbackSetStatusInput` 報告、変更先状態、バージョン、メモ。[処理項目](#feedback-report-options)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
+| `feedback.retry(input, context)` | 指定した失敗処理を再投入 | `input: FeedbackRetryInput` 報告 id と target、該当する targetId を指定。[再試行項目](#feedback-report-options)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `void` | `await feedback.retry(retryInput, context)` |
+
+<a id="feedback-report-options"></a>
+
+**報告の絞り込み、状態、再試行**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `list.input.page / pageSize` | `number` | 既定 1 と 20 | 正の整数のページ番号とページサイズ。pageSize は最大 100。 |
+| `list.input.sortDirection` | `'asc' \| 'desc'` | `desc` | 作成時刻で並べます。 |
+| `list.input.status` | `'pending' \| 'handled'` | 任意 | 処理状態で絞り込み。 |
+| `list.input.collectionStatus` | `'collecting' \| 'complete' \| 'partial' \| 'failed'` | 任意 | 資料収集状態で絞り込み。 |
+| `list.input.notificationStatus` | `'disabled' \| 'pending' \| 'sending' \| 'sent' \| 'deferred' \| 'failed'` | 任意 | 通知状態で絞り込み。 |
+| `list.input.appId / appVersion` | `string` | 任意 | 認可済み範囲内でアプリとバージョンを限定。appVersion は最大 128 文字。 |
+| `list.input.search` | `string` | 任意 | 番号または概要の文字列部分一致。最大 200 文字。 |
+| `list.input.from / to` | `number` | 任意 | 作成時刻の両端を含む範囲。非負の安全な整数の Unix ミリ秒。 |
+| `setStatus.input.id / status` | `string / FeedbackStatus` | 必須 | 報告 ID と変更先の pending または handled。 |
+| `setStatus.input.expectedVersion` | `number` | 必須 | 最後に読み込んだ正の整数バージョン。並行更新があると CONFLICT。 |
+| `setStatus.input.note` | `string` | 任意 | 処理メモ。最大 10000 文字。 |
+| `retry.input.target` | `'collect' \| 'notify' \| 'webhook' \| 'export' \| 'attachment'` | 必須 | 再スケジュールする失敗カテゴリ。 |
+| `retry.input.targetId` | `string` | 添付を再試行する場合に指定 | 報告内の失敗した添付 ID。 |
+
+例えば `{ status: "pending", page: 1, pageSize: 5 }` は認可範囲の未処理の報告を最初のページに最大 5 件返します。`version` を読み取った後に並行変更されると状態更新は `CONFLICT` になります。
+
+<a id="feedback-submission-fields"></a>
+
+**報告の送信と呼び出し側情報**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `input.submissionId / appId` | `string` | 必須 | 安定した送信 ID とアプリ ID。同一の操作を再試行する場合は送信 ID を再利用。 |
+| `input.description / category / contact` | `string` | 任意 | 報告者の説明、アプリの分類、連絡先。最大長はそれぞれ 10000、64、320。 |
+| `input.url` | `string` | 任意 | 問題のページ URL。最大 2048 文字。 |
+| `input.appVersion / buildId / commit` | `string` | 任意 | 問題が発生したビルドを特定。各最大 128 文字。 |
+| `input.anchor` | `{ kind, timestamp, errorId? }` | 任意 | 現場の開始点。kind は error または feedback、timestamp は Unix ミリ秒。errorId をエラーに関連付け可能。 |
+| `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | 任意 | 診断イベントと添付の宣言。配列の上限は 1000 件と 20 件。ファイルのバイト列は別途アップロード。 |
+| `context.scopeId / userId` | `string` | 必須 | 認可済みセッションから取得した信頼できるテナント ID とユーザー ID。 |
+| `context.permissions` | `readonly string[]` | 任意 | 信頼できるセッションの権限。操作時はサービス側でもアクセス範囲を確認。 |
+
+#### シナリオ：自分の報告を確認する
+
+サーバーは認証済みユーザーと検証済みスコープから context を作ります。アプリ、スコープ、投稿者、有効期限で絞り込みます。カテゴリは大文字と小文字を区別し、既存の報告から読み出します。管理一覧には引き続き `feedback:read` が必要です。
+
+```ts
+import type { FeedbackContext } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+async function listOwnReports(context: FeedbackContext) {
+  // 現在のアプリとスコープで本人の bug 報告を最大 20 件取得する。該当がなければ空のページを返す。
+  const result = await feedback.listMine({ category: 'bug', page: 1, pageSize: 20 }, context)
+  if (!result.success)
+    return result
+  return result.data
+}
+```
 
 #### 利用例：報告の提出・照会・処理
 
@@ -146,10 +224,26 @@ async function retryNotification(id: string, context: FeedbackContext) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedback.appendEvidence` | 診断証拠を追加 | input, context | `{ acknowledged, evidenceRevision }` | `await feedback.appendEvidence(evidence, context)` |
-| `feedback.completeCollection` | 証拠収集の完了を記録 | input, context | `FeedbackReport` | `await feedback.completeCollection({ id: reportId, revision: 1 }, context)` |
-| `feedback.uploadAttachment` | 許可した添付をアップロード | input, context | `FeedbackAttachment` | `await feedback.uploadAttachment(upload, context)` |
-| `feedback.getAttachment` | 許可した添付を取得 | input, context | `FeedbackAttachmentData` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+| `feedback.appendEvidence(input, context)` | 診断証拠を追加 | `input: FeedbackAppendEvidenceInput` 必須の報告 id と evidence 配列（最大 1000 件）。[証拠項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `{ acknowledged, evidenceRevision }` | `await feedback.appendEvidence(evidence, context)` |
+| `feedback.completeCollection(input, context)` | 証拠収集の完了を記録 | `input: FeedbackCompleteInput` 報告 id は必須、missing の一覧は任意。[欠損項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackReport` | `await feedback.completeCollection({ id: reportId, revision: 1 }, context)` |
+| `feedback.uploadAttachment(input, context)` | 許可した添付をアップロード | `input: FeedbackUploadInput` 報告 id、宣言済みの attachmentId、対応する dataBase64 が必須。[アップロード項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackAttachment` | `await feedback.uploadAttachment(upload, context)` |
+| `feedback.getAttachment(input, context)` | 許可した添付を取得 | `input: { id: string, attachmentId: string }` 報告と添付の ID が必須。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackAttachmentData` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
+
+<a id="feedback-evidence-fields"></a>
+
+**証拠と添付入力**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `evidence[].id / source / sequence` | `string / string / number` | 必須 | 証拠の安定した ID、収集元（1–128 文字）、その収集元内の非負の安全な整数の連番。 |
+| `evidence[].kind` | `'log' \| 'error' \| 'request' \| 'interaction' \| 'environment' \| 'snapshot' \| 'replay' \| 'business' \| 'missing'` | 必須 | 証拠のカテゴリ。 |
+| `evidence[].timestamp` | `number` | 必須 | イベントの時刻。Unix ミリ秒。 |
+| `evidence[].data` | `Record<string, unknown>` | 必須 | そのカテゴリに対応する JSON オブジェクト。 |
+| `evidence[].requestId / errorId / missingReason` | `string` | 任意 | リクエストやエラーとの関連、または欠損理由（最大 2000 文字）。 |
+| `attachments[].id / name / contentType` | `string` | 必須 | 送信時に宣言する安定した添付 ID、ファイル名、メディアタイプ。 |
+| `attachments[].size / checksum` | `number / string` | 必須 | バイトサイズ（0〜5 MiB）と 64 文字の小文字 16 進 SHA-256 を宣言。 |
+| `uploadAttachment.input.dataBase64` | `string` | 必須 | 宣言したファイルのバイト列の標準 Base64。data URL の接頭辞は付けません。 |
+| `completeCollection.input.missing` | `string[]` | 任意 | まだ不足している診断項目。最大 100 件、各 2000 文字。 |
 
 #### 利用例：資料の追加と添付の読取
 
@@ -199,8 +293,8 @@ ZIP の圧縮と展開は Core Worker で行います。ブラウザーのオフ
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedback.export` | 指定証拠版のオフラインパッケージを要求 | input, context | `FeedbackJob` | `await feedback.export(exportInput, context)` |
-| `feedback.getExport` | 完成した出力を取得 | input, context | `FeedbackAttachmentData` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.export(input, context)` | 指定証拠版のオフラインパッケージを要求 | `input: FeedbackExportInput` 報告 id は必須。正整数の evidenceRevision は任意で、既定は現在の証拠リビジョン。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackJob` | `await feedback.export(exportInput, context)` |
+| `feedback.getExport(input, context)` | 完成した出力を取得 | `input: { id: string, jobId: string }` 報告 ID とエクスポート結果に含まれるジョブ ID が必須。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackAttachmentData` | `await feedback.getExport({ id: reportId, jobId }, context)` |
 
 #### 利用例：診断包の出力と参照
 
@@ -230,21 +324,57 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedbackClient.init` | ブラウザー証拠収集を開始 | `FeedbackClientConfig` | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedbackClient.prepare` | 今回のフィードバック証拠を準備 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedbackClient.captureScreenshot` | ページの画面を取得 | `attachmentId?: string` | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedbackClient.getDraft` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
-| `feedbackClient.getView` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
-| `feedbackClient.releasePreviews` | 一時プレビューを解放 | `—` | `void` | `feedbackClient.releasePreviews()` |
-| `feedbackClient.addFiles` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedbackClient.annotate` | 画像に注釈・マスクを反映 | `attachmentId: string, FeedbackImageAnnotation` | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedbackClient.record` | アプリの診断情報を記録 | `kind, data; requestId?, errorId?` | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedbackClient.submit` | 現在の下書きを送信 | `FeedbackClientSubmitInput?` | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedbackClient.flush` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedbackClient.exportDraft` | ローカル診断パッケージを生成 | `—` | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedbackClient.saveDraft` | ローカル下書きを保存 | `—` | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedbackClient.pause` | 収集を一時停止 | `—` | `void` | `feedbackClient.pause()` |
-| `feedbackClient.close` | 収集を終了して解放 | `{ discard?: boolean }` | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | ブラウザー証拠収集を開始 | 必須の `config: FeedbackClientConfig`。[アプリと収集の項目](#feedback-client-config)を参照。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare()` | 今回のフィードバック証拠を準備 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | ページの画面を取得 | `attachmentId?: string` 省略するとスクリーンショットを追加。下書きの添付 ID を指定すると置換 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | 一時プレビューを解放 | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新しく選んだファイルと同じ処理で外す任意の添付 ID | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | 画像に注釈・マスクを反映 | 必須の `id: string`（下書き内の添付 ID）と `annotation: FeedbackImageAnnotation`（注釈とマスクのデータ） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | アプリの診断情報を記録 | 証拠の種類 `kind` とフィールドオブジェクト `data` を含む `event` が必須。任意の `requestId`、`errorId` で既存リクエストやエラーと関連付ける | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | 現在の下書きを送信 | 任意の `input: FeedbackClientSubmitInput`。[ブラウザー送信項目](#feedback-client-submit-input)を参照。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | ローカル診断パッケージを生成 | `input?: FeedbackClientSubmitInput` はオフラインパッケージ用の補足情報と添付変更。省略すると現在の下書きを出力 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | ローカル下書きを保存 | `input?: FeedbackClientSubmitInput` は `exportDraft` と同じ。その後でホストの保存機能を使う | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | 収集を一時停止 | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | 収集を終了して解放 | `options?: { discard?: boolean }` 既定 false で上限付きの終了処理と後片付け。discard を true にしてローカル下書きを破棄 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+
+<a id="feedback-client-config"></a>
+
+**FeedbackClientConfig**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `appId` | `string` | 必須 | サーバーのフィードバック設定と一致するアプリ ID。 |
+| `appVersion / buildId / commit` | `string` | 任意 | 報告と送るビルド識別子。各最大 128 文字。 |
+| `actions` | `FeedbackClientActions` | 必須 | ホストの非同期コールバック submit、appendEvidence、completeCollection、upload が報告受理、証拠追加、収集完了、添付送信を担当。任意の policy はサーバーの予算を返します。 |
+| `budget` | `FeedbackBudget` | 任意 | オフラインまたはサーバー方針が取得できないときに使用。オンラインは actions.policy を優先。 |
+| `cookieAllowlist` | `readonly string[]` | 任意 | 診断で収集を許可する Cookie 名。 |
+| `screenshot / keyScreenshots` | `boolean` | `true / false` | 準備時のスクリーンショットと追加の自動重要スクリーンショットを制御。 |
+| `captureScreenshot` | `(options?: { signal: AbortSignal }) => Promise<Uint8Array>` | 任意 | 既定のスクリーンショット処理を上書き。画像バイトを返し、中止シグナルに対応。 |
+| `screenshotTimeoutMs / maxKeyScreenshots / keyScreenshotThrottleMs` | `number` | `3000 / 3 / 10000` | タイムアウトのミリ秒、保持枚数、自動撮影の最小間隔ミリ秒。重要スクリーンショットは最大 5 枚で、0 なら無効。 |
+| `replay / replayStart` | `boolean / 'init' \| 'prepare'` | `false / prepare` | DOM リプレイを有効化し、初期化時または準備時に開始。 |
+| `captureConsole / persistDraft` | `boolean` | `false / false` | コンソール収集またはローカル永続化を明示的に有効化。 |
+| `persistenceKey` | `string` | persistDraft=true の場合に必須 | ローカル下書きをユーザーとテナントで分ける ID。認証情報は使用不可。 |
+| `maxEvents / maxBytes / maxAgeMs` | `number` | `1000 / 2097152 / 300000` | 証拠件数、バイト数、保持ミリ秒。件数とバイト数はサーバー予算でも制限。 |
+| `beforeCount / afterCount / afterTimeoutMs` | `number` | `100 / 100 / 30000` | アンカー前後の件数と後続収集の最長ミリ秒。数値オプションには非負の安全な整数を指定。 |
+
+例えば `{ screenshot: false, replay: true, replayStart: "prepare" }` はスクリーンショットを無効にし、利用者がフィードバックを準備してからリプレイを開始します。
+
+<a id="feedback-client-submit-input"></a>
+
+**FeedbackClientSubmitInput**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `description / category / contact` | `string` | 任意 | 問題の説明、アプリ分類、連絡先。個別に指定可能。 |
+| `files` | `readonly File[]` | 追加ファイルなし | 今回選択したファイル。 |
+| `removedAttachmentIds` | `readonly string[]` | 既存の添付を維持 | 送信対象から外すか、オフラインパッケージから除く添付 ID。 |
+
+例えば `{ description: "Checkout failed", removedAttachmentIds: ["draft-image"] }` で出力すると、成功時の ZIP に補足説明が入り、その添付は除外されます。
+
+`submit`、`exportDraft`、`saveDraft` は任意の `FeedbackClientSubmitInput` を共用します。`description` は問題の補足説明、`category` はアプリが定める分類、`contact` は報告者への連絡先で、いずれも任意の文字列です。新しく選んだファイルは `files?: readonly File[]`、下書きの対象から外す添付 ID は `removedAttachmentIds?: readonly string[]` に指定します。省略すると新規ファイルを追加せず既存の添付を維持します。
 
 #### 利用例：ブラウザの現場と下書き
 

@@ -45,24 +45,24 @@ Core は指定したディレクトリの直下にある YAML を読み込みま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.init(options?)` | 起動時にログを設定し、YAML を読み込む | `configDir` を省略するとファイルを読み込みません。`configSchemas` で名前ごとの型を渡せます。`watchConfig` は既定で `false`。明示した `logging` が YAML より優先されます | `void`。個別ファイルの失敗はログに記録して続行します。ディレクトリやログの初期化エラーは例外になる場合があります | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
-| `core.config.loadEnvFiles(options)` | dotenv ファイルと既存の環境変数をまとめる | `mode` は必須。`envDir` の既定値は作業ディレクトリ | `HaiResult<Record<string, string>>`。アプリが `data` を `process.env` に書き込みます | `core.config.loadEnvFiles({ mode: 'dev' })` |
+| `core.init(options?)` | 起動時にログを設定し、YAML を読み込む | `options` は省略可。`options` は省略可。`configDir` を省略するとファイルを読み込みません。`configSchemas` で名前ごとの型を渡せます。`watchConfig` は既定で `false`。明示した `logging` が YAML より優先されます | `void`。個別ファイルの失敗はログに記録して続行します。ディレクトリやログの初期化エラーは例外になる場合があります | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
+| `core.config.loadEnvFiles(options)` | dotenv ファイルと既存の環境変数をまとめる | `options` オブジェクトが必須。`options` オブジェクトが必須。`mode` は必須。`envDir` の既定値は作業ディレクトリ | `HaiResult<Record<string, string>>`。アプリが `data` を `process.env` に書き込みます | `core.config.loadEnvFiles({ mode: 'dev' })` |
 | `core.config.load(name, filePath, schema?)` | 1 ファイルを読み込み、環境変数で上書きする | `name` と `filePath` は必須。`schema` を省略すると解析と置換のみ行います | `HaiResult<T>`。失敗時は直前に保存した値を保持します | `core.config.load('app', './config/app.yml', AppSchema)` |
-| `core.config.validate(name, schema)` | 最後に読み込んだ YAML を現在の環境変数で検証し直す | 両方必須。変更したファイルを読み直すには `reload()` を使います | `HaiResult<T>`。成功時は値と今後の再読み込みに使う検証ルールを保存します | `core.config.validate('app', AppSchema)` |
-| `core.config.get<T>(name)` | 保存済みの設定を読む | `name` は必須。`T` は TypeScript で使う型です | `T` または `undefined` | `core.config.get<{ port: number }>('app')` |
-| `core.config.getOrThrow<T>(name)` | 処理の続行に必要な設定を読む | `name` は必須 | `T`。未読み込みなら例外になります | `core.config.getOrThrow<{ port: number }>('app')` |
-| `core.config.has(name)` | 指定の設定が読み込まれたか調べる | `name` は必須 | `boolean` | `core.config.has('app')` |
+| `core.config.validate(name, schema)` | 最後に読み込んだ YAML を現在の環境変数で検証し直す | 読み込み済みの別名 `name` と検証する Zod `schema` が必須。ファイル変更の読み取りは `reload()`。 | `HaiResult<T>`。成功時は値と今後の再読み込みに使う検証ルールを保存します | `core.config.validate('app', AppSchema)` |
+| `core.config.get<T>(name)` | 保存済みの設定を読む | 必須の `name` は読込済み設定名。 `T` は取得値の TypeScript 型。 | `T` または `undefined` | `core.config.get<{ port: number }>('app')` |
+| `core.config.getOrThrow<T>(name)` | 処理の続行に必要な設定を読む | 必須の `name` は取得する設定名。 `T` は取得値の TypeScript 型。 | `T`。未読み込みなら例外になります | `core.config.getOrThrow<{ port: number }>('app')` |
+| `core.config.has(name)` | 指定の設定が読み込まれたか調べる | 必須の `name` は読込済みか確認する設定名。 | `boolean` | `core.config.has('app')` |
 | `core.config.keys()` | 読み込み済みの設定名を一覧にする | 引数なし | `string[]` | `core.config.keys()` |
-| `core.config.reload(name)` | ファイルを読み直し、監視中のコールバックへ知らせる | `name` は必須 | `HaiResult<unknown>`。設定名が未読み込みなら `CONFIG_NOT_LOADED`。失敗時は以前の値を保持します | `core.config.reload('app')` |
-| `core.config.watch<T>(name, callback)` | ファイルの変更後に再読み込みする | 両方必須。`T` は既定で `unknown`。コールバックは成功時に新しい値、失敗時に `null` とエラーを受け取ります | この登録を解除する関数。設定名が未読み込みの場合はすぐに `CONFIG_NOT_LOADED` を通知します | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
-| `core.config.isWatching(name)` | ファイル監視が稼働中か調べる | `name` は必須 | `boolean` | `core.config.isWatching('app')` |
+| `core.config.reload(name)` | ファイルを読み直し、監視中のコールバックへ知らせる | 必須の `name` はディスクから再読込する登録済み設定名。 | `HaiResult<unknown>`。設定名が未読み込みなら `CONFIG_NOT_LOADED`。失敗時は以前の値を保持します | `core.config.reload('app')` |
+| `core.config.watch<T>(name, callback)` | ファイルの変更後に再読み込みする | 設定の別名 `name` と `callback(value, error)` が必須。新しい値、または失敗時に `null` とエラーを受け取る。 | この登録を解除する関数。設定名が未読み込みの場合はすぐに `CONFIG_NOT_LOADED` を通知します | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
+| `core.config.isWatching(name)` | ファイル監視が稼働中か調べる | 必須の `name` は監視状態を確認する設定名。 | `boolean` | `core.config.isWatching('app')` |
 | `core.config.unwatch(name?)` | 監視を止め、現在の値を保持する | `name` を省略すると全件停止 | `void` | `core.config.unwatch('app')` |
 | `core.config.clear(name?)` | 保存済みの設定を消して監視を止める | `name` を省略すると全件削除 | `void`。ディスク上のファイルはそのままです | `core.config.clear('app')` |
-| `core.config.resolve(options)` | メモリ上で環境変数による置換を行う | `name` と `value` は必須。`environment` は既定で `process.env`。`schema` または `shape` で項目の型を渡せます。`missing` は既定で `'error'`、`'empty'` では未設定の変数を空文字列に置き換えます | `HaiResult<unknown>`。用途に応じてアプリが値を検証します | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
-| `core.config.toEnv(options)` | 設定を環境変数へ変換する | `prefix` と `value` は必須。`schema` または `shape` は任意 | `Record<string, string>`。名前が不正なら例外になります | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })` |
-| `core.config.mergeEnv(layers)` | 変数を優先順位に従ってまとめる | 優先度が低い順にオブジェクトを渡す | `Record<string, string>` | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
-| `core.config.parseEnv(text)` | dotenv の文字列を変数に変換する | `text` は必須 | `Record<string, string>`。重複キーや生成用 JSON マーク付きの不正な値は例外になります | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
-| `core.config.stringifyEnv(values, options?)` | 変数を dotenv テキストに変換する | `values` は必須。`target` は既定で `'node'`。Compose 用には `'compose'` を指定 | 文字列。名前が不正なら例外になります | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
+| `core.config.resolve(options)` | メモリ上で環境変数による置換を行う | `options` オブジェクトが必須。`options` オブジェクトが必須。`name` と `value` は必須。`environment` は既定で `process.env`。`schema` または `shape` で項目の型を渡せます。`missing` は既定で `'error'`、`'empty'` では未設定の変数を空文字列に置き換えます | `HaiResult<unknown>`。用途に応じてアプリが値を検証します | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
+| `core.config.toEnv(options)` | 設定を環境変数へ変換する | `options` オブジェクトが必須。`options` オブジェクトが必須。`prefix` と `value` は必須。`schema` または `shape` は任意 | `Record<string, string>`。名前が不正なら例外になります | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })` |
+| `core.config.mergeEnv(layers)` | 変数を優先順位に従ってまとめる | `layers` は優先度の低い順に並べた環境変数マップの配列。 | `Record<string, string>` | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
+| `core.config.parseEnv(text)` | dotenv の文字列を変数に変換する | 必須の `text` は dotenv のファイル内容。 | `Record<string, string>`。重複キーや生成用 JSON マーク付きの不正な値は例外になります | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
+| `core.config.stringifyEnv(values, options?)` | 変数を dotenv テキストに変換する | 名前と文字列値のマップ `values` が必須。任意の `options.target` は既定 `node`。Compose 用には `compose` を指定。 | 文字列。名前が不正なら例外になります | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
 
 #### 利用例：設定の読込・検証・取得
 
@@ -114,24 +114,34 @@ core.logger.info('Listening', { port: loaded.data.port })
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace` | 最も細かい診断手順を記録 | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
-| `core.logger.debug` | デバッグ情報を記録 | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
-| `core.logger.info` | 通常の業務イベントを記録 | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
-| `core.logger.warn` | 処理を続けられる注意事項を記録 | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.error` | 処理の失敗を記録 | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
-| `core.logger.fatal` | 重大障害を記録。終了するかはアプリが決定 | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
-| `core.logger.create` | 未指定の項目を全体設定から継承するロガーを作る | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
-| `core.logger.child` | 固定フィールドを持つ子ロガーを作る | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure` | 指定した全体ログ設定を更新 | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel` | 全体の出力しきい値を変更。初期は info | `level` | `void` | `core.logger.setLevel('warn')` |
-| `core.logger.getLevel` | 現在の全体しきい値を取得 | 引数なし | `LogLevel` | `core.logger.getLevel()` |
-| `core.logger.observe` | 出力レベルによる選別とマスクの後の記録を購読 | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace(message, context?)` | 最も細かい診断手順を記録 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug(message, context?)` | デバッグ情報を記録 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info(message, context?)` | 通常の業務イベントを記録 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn(message, context?)` | 処理を続けられる注意事項を記録 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error(message, context?)` | 処理の失敗を記録 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal(message, context?)` | 重大障害を記録。終了するかはアプリが決定 | ログ本文の文字列 `message` が必須。任意の `context` でこのログ 1 件にフィールドを追加。 | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create(options?)` | 未指定の項目を全体設定から継承するロガーを作る | `options` は省略可。`name`、`level`、`format`、`context` の優先順位は下表を参照。 | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child(context)` | 固定フィールドを持つ子ロガーを作る | 必須の `context` オブジェクト。この子ロガーとその配下のログに固定フィールドとして付加。 | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure(config)` | 指定した全体ログ設定を更新 | `config` オブジェクトが必須。`level`、`format`、`context`、`redact` は省略可。下表を参照。 | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel(level)` | 全体の出力しきい値を変更。初期は info | 必須の `level`。`trace`、`debug`、`info`、`warn`、`error`、`fatal` のいずれか。 | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel()` | 現在の全体しきい値を取得 | 引数なし | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe(observer)` | 出力レベルによる選別とマスクの後の記録を購読 | 必須の同期 `observer(record)`。レベルで選別しマスクした `LogRecord` を受け取る。 | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 #### 利用例：レベル別の業務・診断ログ
+
+| 項目 | `create(options?)` | `configure(config)` |
+| --- | --- | --- |
+| `name` | `'orders'` など、ログの所属モジュールを示す文字列。省略可。 | モジュール名は `create()` で指定。 |
+| `level` | `trace`、`debug`、`info`、`warn`、`error`、`fatal`。省略時は出力時の全体しきい値を継承。 | 初期値は `info`。指定すると全体しきい値を更新。 |
+| `format` | `'json'` または `'pretty'`。省略時は出力時の全体形式を継承。 | 初期値は `'pretty'`。指定すると全体形式を更新。 |
+| `context` | このロガーの各ログに付加するオブジェクト。省略可。同じキーは全体の値を上書き。 | 指定したオブジェクトを最上位キーで全体のコンテキストへマージ。省略または `{}` で既存の値を保持。 |
+| `redact` | 全体のルールを継承。 | 追加でマスクするフィールドパスの配列。初期値は `[]`。`['customer.email']` を渡すと追加ルールを置換し、`[]` で解除。組み込みのマスクは継続。 |
 
 ```ts
 import { core } from '@h-ai/core'
 
+// 全体の出力を JSON にし、顧客メールアドレスをマスクします。戻り値はありません。
+core.logger.configure({ format: 'json', redact: ['customer.email'] })
 // orders 名のロガーを作り、そのオブジェクトを返します。
 const orders = core.logger.create({ name: 'orders' })
 // 閾値を info にし、低いレベルを除外します。戻り値はありません。
@@ -144,7 +154,7 @@ core.logger.fatal('Example startup failure') // ログを記録し、プロセ�
 const request = orders.child({ requestId: 'request-1' })
 
 // 親ロガーで作成メッセージと渡したフィールドを記録します。業務データは返しません。
-orders.info('Order created', { attempt: 1 })
+orders.info('Order created', { attempt: 1, customer: { email: 'user@example.com' } }) // customer.email は '[REDACTED]'。
 // 子ロガーで attempt: 2 と request-1 を記録します。業務データは返しません。
 request.warn('Request needs attention', { attempt: 2 })
 // request-2 の文脈でコールバックを実行し、終了後に外側へ戻って結果を返します。
@@ -168,7 +178,7 @@ core.context.run({ requestId: 'request-2' }, () => {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.context.run(context, operation)` | リクエストやタスクのコンテキストで実行 | 追跡項目とコールバック。ログ監視は既定で有効。 | コールバックの戻り値 | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
+| `core.context.run(context, operation)` | リクエストやタスクのコンテキストで実行 | 信頼できるリクエスト ID と任意の `suppressLogObservers` を持つ `context` が必須。`operation` は同期または非同期の必須コールバック。 | コールバックの戻り値 | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
 | `core.context.get()` | 現在の値を取得 | 引数なし | 空の場合は `{}` | `const { requestId } = core.context.get()` |
 
 #### 利用例：非同期処理への要求 ID の引継ぎ
@@ -185,12 +195,23 @@ core.context.run({ requestId: 'request-2' }, () => {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.sanitize.isSensitiveKey(key, matcher?)` | 機密フィールド名か判定 | キーと任意の判定規則 | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
-| `core.sanitize.sanitizeSensitiveValue(value, key, options?)` | 値を一つマスク | 値、キーまたは `null`、任意の置換値（既定は `[REDACTED]`） | 値 | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
-| `core.sanitize.sanitizeSensitiveFields(value, options?)` | 構造データをコピーしてマスク | 値、任意の判定規則と置換値 | マスク済みコピー | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
-| `core.sanitize.sanitizeUrl(url, options?)` | URL の認証情報をマスク | URL、任意のマスク設定 | `string` / `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
-| `core.sanitize.sanitizeText(text, secretValues?)` | 認証情報を含む文字列をマスク | 文字列と既知の機密値（既定は `[]`） | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
+| `core.sanitize.isSensitiveKey(key, matcher?)` | 機密フィールド名か判定 | 判定対象のフィールド名 `key` が必須。任意の `matcher` は正規表現、フィールド名の配列、判定関数のいずれか。既定は組み込み。 | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
+| `core.sanitize.sanitizeSensitiveValue(value, key, options?, cache?)` | 値を一つマスク | 元の `value` とキー `key` が必須。ルートは `null`。任意の `options` で判定と置換値を設定し、置換値の既定は `[REDACTED]`。コピー済みのオブジェクトを保持する `cache` は `WeakMap` で、省略時は呼び出しごとに作成。 | 値 | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
+| `core.sanitize.sanitizeSensitiveFields(value, options?)` | 構造データをコピーしてマスク | コピーしてマスクする `value` が必須。任意の `options.matcher`、`options.replacement` は下表を参照。 | マスク済みコピー | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
+| `core.sanitize.sanitizeUrl(url, options?)` | URL の認証情報をマスク | `url` 文字列が必須。任意の `options.matcher` と `options.replacement` は URL 内の資格情報フィールドに適用。 | `string` / `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
+| `core.sanitize.sanitizeText(text, secretValues?)` | 認証情報を含む文字列をマスク | マスク対象の `text` が必須。任意の `secretValues` に既知の秘密値の配列を渡す。既定値 `[]`。 | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
 | `core.sanitize.defaultSensitiveKeyRegex`、`defaultSensitiveReplacement` | 組み込みの判定規則と置換値を参照 | 読み取り専用定数 | `RegExp` / `string` | `const replacement = core.sanitize.defaultSensitiveReplacement` |
+
+<a id="sanitize-options"></a>
+
+#### マスクのオプション
+
+| 項目 | 値・既定値・用途 |
+| --- | --- |
+| `matcher` | 任意の正規表現、フィールド名配列、または `(key) => boolean`。置換するフィールドを選ぶ。既定は組み込みの機密キー判定。 |
+| `replacement` | 置換値。既定は文字列 `[REDACTED]`。URL の場合は文字列として反映。 |
+
+下の例ではパスワードをマスク済みのコピーに `matcher: ['email']`、`replacement: '***'` を適用し、メールが `***` になります。
 
 #### 利用例：診断の公開前に秘密を隠す
 
@@ -206,11 +227,11 @@ core.context.run({ requestId: 'request-2' }, () => {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.error.buildHaiErrorsDef(module, codes)` | モジュールの安定したエラーコードを定義 | モジュール名とエラー名・コード・HTTP ステータスの対応 | エラー定義 | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
-| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 失敗にメッセージを付加 | 定義、メッセージ、任意の原因と対処案 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
-| `core.error.toPublic(error, traceId?)` | クライアントに返すエラーを整形 | エラーと任意の追跡 ID | 公開用エラー | `core.error.toPublic(error, 'req-1')` |
-| `core.error.formatMessage(error)` | 表示メッセージを整形 | メッセージと任意の追跡 ID | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`、`err(def, message, cause?)` | 業務処理の結果を構築 | 成功時のデータ、またはエラー定義とメッセージ（完成したエラーも可） | `HaiResult` | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.buildHaiErrorsDef(module, errorInfo, system?)` | モジュールの安定したエラーコードを定義 | `module` と、エラー名を `業務コード:HTTP状態` に対応付けた `errorInfo` が必須。`system` の既定値は `hai` で、コードの先頭に付く。 | エラー定義 | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
+| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 失敗にメッセージを付加 | エラー定義 `def` と公開する `message` が必須。内部原因 `cause` と対処の提案 `suggestion` は省略可。 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.toPublic(error, traceId?, locale?)` | クライアントに返すエラーを整形 | `error` は必須。`traceId` は関連 ID を上書きし、`locale` は 5xx の共通メッセージに使う言語を指定。 | 公開用エラー | `core.error.toPublic(error, 'req-1')` |
+| `core.error.formatMessage(error)` | 表示メッセージを整形 | 文字列メッセージと任意の `traceId` を持つ `error` が必須。 | `string` | `core.error.formatMessage(error)` |
+| `ok(data)`、`err(errorOrDef, message?, cause?, suggestion?)` | 業務処理の結果を構築 | `ok` には成功時の `data` を渡す。`err` にはエラー定義、`HaiError`、標準エラーのいずれかの `errorOrDef` が必須。`message`、`cause`、`suggestion` は省略可。 | `HaiResult` | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
 
 #### 利用例：業務の失敗と安全な公開文言
 
@@ -226,11 +247,11 @@ core.context.run({ requestId: 'request-2' }, () => {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)` | 既定の言語を設定する | 言語コード | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.setGlobalLocale(locale)` | 既定の言語を設定する | 必須の `locale` は `zh-CN`、`en-US`、`ja-JP`。略記 `zh`、`en`、`ja` も利用可。 | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
 | `core.i18n.getGlobalLocale()` | 現在の言語を取得する | なし。初期値は `zh-CN` | 言語コード | `core.i18n.getGlobalLocale()` |
-| `core.i18n.runWithLocale(locale, operation)` | Node の処理中だけ言語を指定 | 言語と関数 | 関数の戻り値 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
-| `core.i18n.createMessageGetter(dictionaries)` | メッセージ取得関数を作成 | 言語ごとの辞書 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'ようこそ' } })` |
-| `core.i18n.coreM(key, options?)` | 組み込みメッセージを取得 | キー、任意の言語と置換パラメーター | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
+| `core.i18n.runWithLocale(locale, operation)` | Node の処理中だけ言語を指定 | リクエスト言語 `locale` と同期または非同期の `operation` が必須。コールバックの値をそのまま返す。 | 関数の戻り値 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
+| `core.i18n.createMessageGetter(messages)` | メッセージ取得関数を作成 | `messages` が必須。言語コードをキーとし、メッセージキーと訳文の辞書を値にする。 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: 'ようこそ' } })` |
+| `core.i18n.coreM(key, options?)` | 組み込みメッセージを取得 | メッセージ `key` が必須。任意の `options.locale` で言語を上書きし、`options.params` で `{name}` などを埋める。 | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
 | `core.i18n.DEFAULT_LOCALE`、`DEFAULT_LOCALES` | 対応言語を参照 | 読み取り専用定数 | 言語と候補一覧 | `const choices = core.i18n.DEFAULT_LOCALES` |
 
 #### 利用例：要求ごとのメッセージ言語
@@ -247,8 +268,8 @@ Zod の問題を、フィールドの位置を保ってフォームの翻訳済�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.zodValidation.createPrefixedZodMessageGetter(prefix, message)` | モジュールのメッセージキーに接頭辞を付ける | 接頭辞とメッセージ取得関数 | 取得関数 | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
-| `core.zodValidation.mapZodErrorToFormErrors(error, message)` | Zod の問題を入力項目に対応付ける | 検証エラーと調整済みの取得関数 | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
+| `core.zodValidation.createPrefixedZodMessageGetter(prefix, getMessage)` | モジュールのメッセージキーに接頭辞を付ける | メッセージキーの `prefix` と、訳文を取得する `getMessage(key, params)` が必須。 | 取得関数 | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
+| `core.zodValidation.mapZodErrorToFormErrors(error, getMessage)` | Zod の問題を入力項目に対応付ける | Zod の検証 `error` と変換済みの `getMessage(key, params)` が必須。 | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
 
 #### 利用例：検証エラーとフォームの対応
 
@@ -264,9 +285,9 @@ Zod v3/v4 の検証結果をフィールドごとのメッセージに変換し�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.module.createRuntime(steps)` | 依存先の起動と終了を管理 | 名前、起動・終了関数、任意の有効化条件を持つ手順 | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 初期化前に共通のエラーを返す | エラーコードまたはエラー定義と、メッセージを返す関数。両方が必須。 | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
-| `core.module.requiresSharedState(environment)` | 共有バックエンドが必要か判定 | 環境値。本番設定での明示的な E2E 実行は除外できる。 | `boolean` | `core.module.requiresSharedState(process.env)` |
+| `core.module.createRuntime(definitions)` | 依存先の起動と終了を管理 | 初期化順の配列 `definitions` が必須。各項目の `name`、`start`、`close` は必須で、任意の `enabled` が実行可否を決める。 | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 初期化前に共通のエラーを返す | エラーコードまたは定義の `codeOrDef` と、メッセージを取得する引数なしの `messageFn` が必須。 | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.requiresSharedState(environment)` | 共有バックエンドが必要か判定 | `environment` オブジェクトが必須。`NODE_ENV` または `HAI_CORE_ENV` が `production` なら共有状態が必要。`HAI_E2E` または `HAI_E2E_MOCK` が `1` の明示的テストは除く。 | `boolean` | `core.module.requiresSharedState(process.env)` |
 
 #### 利用例：依存順の起動と逆順の終了
 
@@ -379,14 +400,28 @@ if (!afterClose.success)
 
 | 入口 | 用途 | 入力 | 戻り値 | 例 |
 | --- | --- | --- | --- | --- |
-| `core.worker.createPool(entry, limits)` | プールを作成 | エントリー、正のスレッド上限、非負の待機件数上限、任意のアイドル時間（ミリ秒） | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
-| `pool.run(input, transfer?)` | 処理を投入 | 構造化クローン可能な入力と任意の転送リスト | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `core.worker.createPool(entry, options)` | プールを作成 | Worker URL またはブラウザーの生成関数 `entry` と、スレッド、待ち行列、アイドル回収を指定する `options` が必須。下表を参照。 | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | 処理を投入 | 構造化クローン可能な `input` が必須。`transfer` は任意の転送リスト。Node は ArrayBuffer を受け付ける。 | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
 | `pool.close()` | 未完了処理を解決してスレッドを終了 | なし | `Promise<void>` | `await pool.close()` |
-| `core.worker.start(entry, options?)` | 専用スレッドを起動 | エントリー。Node では `workerData` と `execArgv` も指定可 | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
-| `thread.postMessage(input, transfer?)` | メッセージを送信 | 入力と任意の転送リスト | `void` | `thread.postMessage(report)` |
-| `thread.onMessage(listener)` | メッセージを購読 | 出力を受け取る関数 | 購読解除関数 | `const unsubscribe = thread.onMessage(receive)` |
+| `core.worker.start(entry, options?)` | 専用スレッドを起動 | `entry` が必須。Node の `options` には `workerData` と `execArgv` を指定可。ブラウザーは入口だけを受け付ける。 | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | メッセージを送信 | 構造化クローン可能な `input` が必須。`transfer` は任意の転送リスト。Node は ArrayBuffer を受け付ける。 | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | メッセージを購読 | Worker の各メッセージを受け取る `listener(output)` が必須。 | 購読解除関数 | `const unsubscribe = thread.onMessage(receive)` |
 | `thread.exited` | 終了を監視 | なし | `Promise<WorkerExit>` | `await thread.exited` |
 | `thread.terminate()` | スレッドを終了 | なし | `Promise<void>` | `await thread.terminate()` |
+
+<a id="worker-options"></a>
+
+#### プールと専用スレッドのオプション
+
+| 項目 | 値・既定値・用途 |
+| --- | --- |
+| `createPool.options.maxWorkers` | 正の安全な整数を必須指定。各スレッドは同時に一つのタスクを実行。 |
+| `createPool.options.maxQueuedJobs` | 非負の安全な整数を必須指定。`0` で待機なし。 |
+| `createPool.options.idleTimeoutMs` | 任意の整数で 1～2147483647 ミリ秒。省略時は閉じるまでアイドルスレッドを保持。 |
+| `start.options.workerData` | Node 専用。構造化クローン可能な起動データを渡し、Worker の `workerData` から読む。既定なし。 |
+| `start.options.execArgv` | Node 専用。Worker の Node 起動引数を文字列配列で指定。省略時はホストの引数を継承。 |
+
+下の文字数の例で `{ maxWorkers: 2, maxQueuedJobs: 4 }` を指定します。同時実行は二件、待機は四件、さらに投入すると制限エラーを返します。
 
 #### 利用例：文書の文字数を測定してスレッドを解放する
 
@@ -491,11 +526,22 @@ Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { t
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.access.normalizeClientIp(value?)` | IPv4 または IPv6 を正規化 | 任意のアドレス文字列 | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | リクエストごとにアクセス判定用の IP を選ぶ関数を作成 | 信頼するプロキシの設定（既定は `auto`） | `resolveClientIp(request, remoteAddress?)` → IP または `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
-| `core.access.createConditionCheck(condition)` | アドレスと時間帯の条件を準備 | アドレスリストと時間帯を指定した条件 | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | リクエストポリシーを準備 | ルール、ファイル参照、または `false`。省略時は無効。 | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
-| `core.access.loadPolicy(input?, baseDirectory?)` | ポリシーを読み込んで検証 | ポリシーと基準ディレクトリ（既定は作業ディレクトリ） | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.normalizeClientIp(value?)` | IPv4 または IPv6 を正規化 | 接続元のアドレス文字列 `value` は省略可。省略時と無効値は `undefined`。 | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
+| `core.access.createClientIpResolver(trustedProxies?)` | リクエストごとにアクセス判定用の IP を選ぶ関数を作成 | `trustedProxies` の既定値は `auto`。管理された非公開環境でだけコンテナのサブネットを使用。IP/CIDR 配列も指定可。`[]` で転送ヘッダーを無視。 | `resolveClientIp(request, remoteAddress?)` → IP または `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createConditionCheck(condition)` | アドレスと時間帯の条件を準備 | 信頼済みアドレスと時間の条件 `condition` が必須。項目と値は[アクセス方針](#access-condition-options)を参照。 | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
+| `core.access.createRequestCheck(input?)` | リクエストポリシーを準備 | `input` はインライン方針、`{ file }`、`false` のいずれか。既定値は `false`。 | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.loadPolicy(input?, baseDirectory?)` | ポリシーを読み込んで検証 | `input` はインライン方針、`{ file }`、`false` のいずれか。既定値は `false`。`baseDirectory` は相対ファイルの基準で、既定は現在のディレクトリ。 | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+
+<a id="access-condition-options"></a>
+
+#### アドレスと時間の条件
+
+| 項目 | 値・既定値・用途 |
+| --- | --- |
+| `allowIps` | IPv4、IPv6、または CIDR の配列。空なら制限なし、指定時は一致したアドレスだけ許可。 |
+| `denyIps` | IPv4、IPv6、または CIDR の配列。空なら拒否対象なし。一致時は許可リストより優先。 |
+| `timezone` | 時間帯の判定に使う IANA タイムゾーン。例は `UTC`。 |
+| `windows` | 時間帯の配列。`[]` で時間制限なし。各時間帯の `days`、`start`、`end` は下の例を参照。 |
 
 #### 利用例：送信元の確認とアクセス規則
 
@@ -625,14 +671,14 @@ Serv または Kit では、同じルールを `_serv.yml` の `http.access` ま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.id.generate` | ランダム ID を生成 | `length = 21` | `string` | `core.id.generate(8)` |
-| `core.id.short` | 10 文字の短い ID を生成 | 引数なし | `string` | `core.id.short()` |
-| `core.id.withPrefix` | ランダム ID に業務用の接頭辞を付ける | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
-| `core.id.trace` | trace- で始まる追跡 ID を生成 | 引数なし | `string` | `core.id.trace()` |
-| `core.id.request` | req- で始まるリクエスト ID を生成 | 引数なし | `string` | `core.id.request()` |
-| `core.id.uuid` | UUID v4 を生成。安全な乱数が得られない場合は例外 | 引数なし | `string` | `core.id.uuid()` |
-| `core.id.isValidUUID` | UUID v4 の形式を確認 | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
-| `core.id.isValidNanoId` | 文字の範囲と長さを確認 | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
+| `core.id.generate(length?)` | ランダム ID を生成 | ID の文字数 `length` は省略可。既定値 `21`。 | `string` | `core.id.generate(8)` |
+| `core.id.short()` | 10 文字の短い ID を生成 | 引数なし | `string` | `core.id.short()` |
+| `core.id.withPrefix(prefix, length?)` | ランダム ID に業務用の接頭辞を付ける | 接頭辞の文字列 `prefix` が必須。`length` は後ろに付ける乱数文字の数で、既定値は `21`。 | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace()` | trace- で始まる追跡 ID を生成 | 引数なし | `string` | `core.id.trace()` |
+| `core.id.request()` | req- で始まるリクエスト ID を生成 | 引数なし | `string` | `core.id.request()` |
+| `core.id.uuid()` | UUID v4 を生成。安全な乱数が得られない場合は例外 | 引数なし | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID(uuid)` | UUID v4 の形式を確認 | 検証する UUID 文字列 `uuid` が必須。 | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId(str, length?)` | 文字の範囲と長さを確認 | 検証する文字列 `str` が必須。期待する文字数 `length` の既定値は `21`。 | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 #### 利用例：業務と要求 ID の生成
 
@@ -648,14 +694,14 @@ Serv または Kit では、同じルールを `_serv.yml` の `http.access` ま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.typeUtils.isDefined` | null でも undefined でもないか確認 | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
-| `core.typeUtils.isObject` | null と配列を除き、オブジェクトか確認 | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
-| `core.typeUtils.isFunction` | 関数か確認 | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
-| `core.typeUtils.isPromise` | Promise か確認 | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
-| `core.typeUtils.isString` | 文字列か確認 | `value` | `boolean` | `core.typeUtils.isString('orders')` |
-| `core.typeUtils.isNumber` | NaN 以外の数値か確認 | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
-| `core.typeUtils.isBoolean` | 真偽値か確認 | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
-| `core.typeUtils.isArray` | 配列か確認 | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
+| `core.typeUtils.isDefined(value)` | null でも undefined でもないか確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject(value)` | null と配列を除き、オブジェクトか確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction(value)` | 関数か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise(value)` | Promise か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString(value)` | 文字列か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber(value)` | NaN 以外の数値か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean(value)` | 真偽値か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray(value)` | 配列か確認 | 判定する任意の JavaScript 値 `value` が必須。 | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
 #### 利用例：入力値の判定と型の絞込み
 
@@ -671,14 +717,14 @@ Serv または Kit では、同じルールを `_serv.yml` の `http.access` ま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.object.deepClone` | 複製可能な値を複製。関数などは例外 | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
-| `core.object.deepMerge` | プレーンなオブジェクトを再帰的に結合。後の値が優先 | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
-| `core.object.pick` | 指定のキーのみ残す | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
-| `core.object.omit` | 指定のキーを除く | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
-| `core.object.keys` | 自身の列挙可能な文字列キーを取得 | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
-| `core.object.values` | 同じ順序で値を取得 | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
-| `core.object.entries` | キーと値の組を取得 | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
-| `core.object.fromEntries` | キーと値の組からオブジェクトを作る | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
+| `core.object.deepClone(obj)` | 複製可能な値を複製。関数などは例外 | 元の `obj` が必須。複製する場合はクローン可能なデータを渡す。 | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge(...objects)` | プレーンなオブジェクトを再帰的に結合。後の値が優先 | `objects` を優先度が低い順に渡す。同じキーは後の値が優先。 | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick(obj, keys)` | 指定のキーのみ残す | 元のオブジェクト `obj` と、残すキーの配列 `keys` が必須。 | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit(obj, keys)` | 指定のキーを除く | 元のオブジェクト `obj` と、除外するキーの配列 `keys` が必須。 | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys(obj)` | 自身の列挙可能な文字列キーを取得 | 所有プロパティを読み出す元のオブジェクト `obj` が必須。 | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values(obj)` | 同じ順序で値を取得 | 所有プロパティを読み出す元のオブジェクト `obj` が必須。 | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries(obj)` | キーと値の組を取得 | 所有プロパティを読み出す元のオブジェクト `obj` が必須。 | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries(entries)` | キーと値の組からオブジェクトを作る | `entries` が必須。各要素は `[key, value]` の組。 | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 #### 利用例：設定の統合とフィールド選択
 
@@ -694,18 +740,18 @@ Serv または Kit では、同じルールを `_serv.yml` の `http.access` ま
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.string.capitalize` | 先頭文字を大文字にする | `text` | `string` | `core.string.capitalize('hello')` |
-| `core.string.kebabCase` | ハイフン区切りの形式に変換 | `text` | `string` | `core.string.kebabCase('helloWorld')` |
-| `core.string.camelCase` | 小文字始まりのキャメルケースに変換 | `text` | `string` | `core.string.camelCase('hello-world')` |
-| `core.string.snakeCase` | アンダースコア区切りの形式に変換 | `text` | `string` | `core.string.snakeCase('helloWorld')` |
-| `core.string.pascalCase` | パスカルケースに変換 | `text` | `string` | `core.string.pascalCase('hello-world')` |
-| `core.string.truncate` | 長すぎる文字列を切って接尾辞を追加 | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
-| `core.string.trim` | 前後の空白を除く | `text` | `string` | `core.string.trim(' hello ')` |
-| `core.string.isBlank` | 空文字列か空白のみか確認 | `text` | `boolean` | `core.string.isBlank(' ')` |
-| `core.string.isNotBlank` | 空白以外の文字があるか確認 | `text` | `boolean` | `core.string.isNotBlank('hello')` |
-| `core.string.padStart` | 指定長になるまで先頭を埋める | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
-| `core.string.padEnd` | 指定長になるまで末尾を埋める | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
-| `core.string.constantTimeEqual` | 同じ長さの文字列を比較。異なる長さは即 false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
+| `core.string.capitalize(str)` | 先頭文字を大文字にする | 処理対象の文字列 `str` が必須。 | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase(str)` | ハイフン区切りの形式に変換 | 処理対象の文字列 `str` が必須。 | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase(str)` | 小文字始まりのキャメルケースに変換 | 処理対象の文字列 `str` が必須。 | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase(str)` | アンダースコア区切りの形式に変換 | 処理対象の文字列 `str` が必須。 | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase(str)` | パスカルケースに変換 | 処理対象の文字列 `str` が必須。 | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate(str, length, suffix?)` | 長すぎる文字列を切って接尾辞を追加 | 文字列 `str` と残す UTF-16 コード単位数 `length` が必須。切り詰めた後に既定 `...` の `suffix` を付ける。`length <= 0` の場合は元の文字列を返す。 | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim(str)` | 前後の空白を除く | 処理対象の文字列 `str` が必須。 | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank(str)` | 空文字列か空白のみか確認 | 処理対象の文字列 `str` が必須。 | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank(str)` | 空白以外の文字があるか確認 | 処理対象の文字列 `str` が必須。 | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart(str, length, char?)` | 指定長になるまで先頭を埋める | 文字列 `str` と対象の長さ `length` が必須。埋める文字列 `char` の既定値は空白。 | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd(str, length, char?)` | 指定長になるまで末尾を埋める | 文字列 `str` と対象の長さ `length` が必須。埋める文字列 `char` の既定値は空白。 | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual(a, b)` | 同じ長さの文字列を比較。異なる長さは即 false | 比較する文字列 `a`、`b` が必須。 | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
 #### 利用例：名前と表示文の変換
 
@@ -721,16 +767,16 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.array.unique` | 最初に現れた順序で重複を除く | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
-| `core.array.groupBy` | 選択関数が返したキーで分類 | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
-| `core.array.chunk` | 分割幅で小分けにする。無効な幅は空配列 | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
-| `core.array.first` | 最初の要素を返す。空配列には値なし | `items` | `T or undefined` | `core.array.first([1, 2])` |
-| `core.array.last` | 最後の要素を返す。空配列には値なし | `items` | `T or undefined` | `core.array.last([1, 2])` |
-| `core.array.flatten` | 一段だけ平坦にする | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
-| `core.array.compact` | null と undefined を除き、0 などを保持 | `items` | `T[]` | `core.array.compact([0, null, 1])` |
-| `core.array.shuffle` | 順序を無作為化したコピーを返す | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
-| `core.array.intersection` | 最初の配列のうち二つ目にもある要素を返す | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
-| `core.array.difference` | 最初の配列のうち二つ目にない要素を返す | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
+| `core.array.unique(arr)` | 最初に現れた順序で重複を除く | 処理対象の配列 `arr` が必須。 | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy(arr, fn)` | 選択関数が返したキーで分類 | 配列 `arr` と、要素が属するグループのキーを返す `fn(item)` が必須。 | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk(arr, size)` | 分割幅で小分けにする。無効な幅は空配列 | 配列 `arr` と各グループの最大件数 `size` が必須。 | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first(arr)` | 最初の要素を返す。空配列には値なし | 処理対象の配列 `arr` が必須。 | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last(arr)` | 最後の要素を返す。空配列には値なし | 処理対象の配列 `arr` が必須。 | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten(arr)` | 一段だけ平坦にする | 入れ子の配列 `arr` が必須。平坦化するのは 1 階層。 | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact(arr)` | null と undefined を除き、0 などを保持 | 処理対象の配列 `arr` が必須。 | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle(arr)` | 順序を無作為化したコピーを返す | 処理対象の配列 `arr` が必須。 | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection(arr1, arr2)` | 最初の配列のうち二つ目にもある要素を返す | 配列 `arr1`、`arr2` が必須。両方にある要素を取得。 | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference(arr1, arr2)` | 最初の配列のうち二つ目にない要素を返す | 配列 `arr1`、`arr2` が必須。前者にあり後者にない項目を残す。 | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
 #### 利用例：分類・分割・集合比較
 
@@ -746,13 +792,13 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.async.delay` | 指定したミリ秒だけ非同期に待機 | `ms` | `Promise<void>` | `await core.async.delay(10)` |
-| `core.async.withTimeout` | 待機時間を制限しタイムアウトで拒否 | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
-| `core.async.retry` | 例外や拒否時に再試行。初回を試行回数に含む | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
-| `core.async.parallel` | 並列数を制限し、入力順に結果を返す | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
-| `core.async.serial` | 入力順に一項目ずつ処理 | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
-| `core.async.debounce` | 呼び出しが途切れてから最後の入力を処理 | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
-| `core.async.throttle` | 初回をすぐに実行し、間隔内の後続呼び出しを飛ばす | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
+| `core.async.delay(ms)` | 指定したミリ秒だけ非同期に待機 | 必須の待ち時間 `ms`。ミリ秒単位。 | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout(promise, ms)` | 待機時間を制限しタイムアウトで拒否 | 待機する `promise` と期限 `ms`（ミリ秒）が必須。タイムアウトで待機を終了。 | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry(fn, options?)` | 例外や拒否時に再試行。初回を試行回数に含む | 非同期処理 `fn` が必須。`options.maxRetries` は試行の総数で既定 `3`、最低 1 回。`options.delay` は既定 `1000` ミリ秒。 | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel(items, fn, concurrency?)` | 並列数を制限し、入力順に結果を返す | 配列 `items` と非同期の `fn(item, index)` が必須。`concurrency` は同時実行上限で、正の安全な整数。既定値 `5`。 | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial(items, fn)` | 入力順に一項目ずつ処理 | 配列 `items` と非同期の `fn(item, index)` が必須。入力順に各処理を待機。 | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce(fn, ms)` | 呼び出しが途切れてから最後の入力を処理 | コールバック `fn` と待ち時間 `ms`（ミリ秒）が必須。 | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle(fn, ms)` | 初回をすぐに実行し、間隔内の後続呼び出しを飛ばす | コールバック `fn` と待ち時間 `ms`（ミリ秒）が必須。 | `wrapper` | `core.async.throttle(callback, 100)` |
 
 #### 利用例：期限・再試行・並列数の調整
 
@@ -768,16 +814,16 @@ Node では長さが等しい UTF-16 のバイト列をネイティブ関数で�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `core.time.formatDate` | ローカル時刻で日付の書式を埋める | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
-| `core.time.timeAgo` | 現在の言語で相対時刻を表示 | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
-| `core.time.now` | Unix ミリ秒を取得 | 引数なし | `number` | `core.time.now()` |
-| `core.time.nowSeconds` | 切り捨てた Unix 秒を取得 | 引数なし | `number` | `core.time.nowSeconds()` |
-| `core.time.parseDate` | Date で解析。無効な入力なら無効な日付を返す | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
-| `core.time.isValidDate` | Date が有効か確認 | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
-| `core.time.addDays` | ローカルの暦で指定日数分ずらす | `date, days` | `Date` | `core.time.addDays(date, 7)` |
-| `core.time.addHours` | ローカルの時計で指定時間分ずらす | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
-| `core.time.startOfDay` | 当日のローカル 0 時を取得 | `date` | `Date` | `core.time.startOfDay(date)` |
-| `core.time.endOfDay` | 当日の最後の 1 ミリ秒を取得 | `date` | `Date` | `core.time.endOfDay(date)` |
+| `core.time.formatDate(date, format?)` | ローカル時刻で日付の書式を埋める | `Date` の値 `date` が必須。`format` は出力形式で、既定値 `YYYY-MM-DD`。 | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo(date)` | 現在の言語で相対時刻を表示 | `Date` オブジェクト `date` が必須。 | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now()` | Unix ミリ秒を取得 | 引数なし | `number` | `core.time.now()` |
+| `core.time.nowSeconds()` | 切り捨てた Unix 秒を取得 | 引数なし | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate(dateStr)` | Date で解析。無効な入力なら無効な日付を返す | 解析する日付テキスト `dateStr` が必須。例は `2026-01-01T00:00:00Z`。 | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate(date)` | Date が有効か確認 | `Date` オブジェクト `date` が必須。 | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays(date, days)` | ローカルの暦で指定日数分ずらす | `date: Date` と日数 `days` が必須。負値で過去へ移動。 | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours(date, hours)` | ローカルの時計で指定時間分ずらす | `date: Date` と時間数 `hours` が必須。負値で過去へ移動。 | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay(date)` | 当日のローカル 0 時を取得 | `Date` オブジェクト `date` が必須。 | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay(date)` | 当日の最後の 1 ミリ秒を取得 | `Date` オブジェクト `date` が必須。 | `Date` | `core.time.endOfDay(date)` |
 
 #### 利用例：日時の解析・表示・境界計算
 

@@ -5,5 +5,6 @@
   "datapipe_transformFailed": "Failed to transform text: {error}",
   "datapipe_pipelineFailed": "Pipeline execution failed: {error}",
   "datapipe_configError": "Datapipe config validation failed: {error}",
-  "datapipe_missingSeparator": "Custom chunk mode requires a separator parameter"
+  "datapipe_missingSeparator": "Custom chunk mode requires a separator parameter",
+  "datapipe_chunkLimitExceeded": "Chunk output exceeds the limit of {maxChunks} chunks or {maxCodeUnits} UTF-16 code units across chunk contents and Markdown titles."
 }

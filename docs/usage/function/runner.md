@@ -113,11 +113,11 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `runner.init(config)` | 为当前进程启动任务服务 | `config.nodeId` 必填。`executor` 默认 `true`。先初始化 RelDB | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.init(config)` | 为当前进程启动任务服务 | `config: RunnerConfigInput`。`nodeId` 必填，`executor` 默认 `true`。先初始化 RelDB，字段见 [Runner 配置](../configuration/runner.md) | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
 | `runner.close()` | 停止领取任务并核验本节点执行的清理 | 无参数 | `HaiResult<void>` | `await runner.close()` |
-| `runner.isExecutor` | 查询当前实例是否已启动并负责执行 | 无参数 | `boolean` | `const canExecute = runner.isExecutor` |
-| `runner.environment(id)` | 读已登记的执行环境 | 执行环境 ID 必填 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
-| `runner.register(kind, handler)` | 登记一种任务及处理函数 | 任务类型和异步处理函数必填 | `HaiResult<() => void>`，`data` 用于移除此登记 | `runner.register('reports.v1', async input => input)` |
+| `runner.isExecutor` | 查询当前实例是否已启动并负责执行 | 只读属性 | `boolean` | `const canExecute = runner.isExecutor` |
+| `runner.environment(id)` | 读已登记的执行环境 | 必填执行环境 ID `id: string` | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
+| `runner.register(kind, handler)` | 登记一种任务及处理函数 | `kind: string` 是任务类型。`handler: RunnerHandler` 接收任务 JSON 和执行上下文，异步返回 JSON | `HaiResult<() => void>`，`data` 用于移除此登记 | `runner.register('reports.v1', async input => input)` |
 
 #### 场景：准备节点与任务处理器
 
@@ -175,13 +175,29 @@ async function startApi(imageId: string) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `runner.submit(request)` | 保存任务，等待可用节点领取 | `scope`、`kind`、`input` 必填。排队和运行的超时都默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
-| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | 三个参数均必填 | `HaiResult<RunnerExecution 或 undefined>`，成功但找不到时 `data` 为 `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
-| `runner.get(scope, id)` | 按可信归属读取执行记录 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
-| `runner.cancel(scope, id)` | 保存取消请求 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>`。后续从记录查看当前状态 | `await runner.cancel(scope, id)` |
-| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | `scope` 和 `id` 必填。`after` 默认 `0`，`limit` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+| `runner.submit(request)` | 保存任务，等待可用节点领取 | `request: RunnerSubmit` 的 `scope`、`kind`、`input` 必填。排队和运行的超时均默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
+| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | `scope: RunnerScope`、`kind: string` 和 `key: string` 均必填。传入提交时的业务幂等键 | `HaiResult<RunnerExecution \| undefined>`，成功但找不到时 `data` 为 `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
+| `runner.get(scope, id)` | 按可信归属读取执行记录 | 必填 `scope: RunnerScope` 和执行 ID `id: string` | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
+| `runner.cancel(scope, id)` | 保存取消请求 | 必填 `scope: RunnerScope` 和执行 ID `id: string` | `HaiResult<RunnerExecution>`。后续从记录查看当前状态 | `await runner.cancel(scope, id)` |
+| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | 必填 `scope: RunnerScope` 和执行 ID `id: string`。游标 `after: number` 默认 `0`，每页条数 `limit: number` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+
+#### 提交条件、幂等与事件页
+
+| 字段 | 必填、默认及作用 |
+| --- | --- |
+| `scope`、`kind`、`input` | 必填。`scope` 是服务端认证的 `{ tenantId, userId }`，两个 ID 均为 1–200 字符。`kind` 选择已登记任务类型，`input` 为交给处理器的持久 JSON |
+| `idempotencyKey`、`reuseKey` | 可选 1–200 字符。相同主体和类型下，前者让相同请求找回原回执，内容冲突时返回 `CONFLICT`。后者让可信服务复用活跃执行；`find` 使用业务幂等键 |
+| `environmentId`、`resources`、`nodeId` | 可选指定登记环境、资源覆盖和目标节点。资源可覆盖 `cpu`（核数）、`memoryMiB`、`pids`、`scratchMiB`，单位和边界见 [Runner 配置](../configuration/runner.md) |
+| `parentId` | 可选已有父执行 ID。子任务继承调度约束；此时省略 `nodeId`、`environmentId`、`resources`、`reuseKey` 和 `concurrency`，容量类别用 `default` |
+| `capacityClass`、`concurrency`、`warmPool` | 容量类别默认 `default`。可信工具服务可用 `tool`。`concurrency` 可传 `{ key, limit }`，同任务类型和键跨节点限并发，`limit` 为 1–1000 的整数。`warmPool: true` 还要求匹配登记池的环境与并发限制，省略单任务资源覆盖 |
+| `queueTimeoutMs`、`runTimeoutMs` | 排队期限与开始执行后时限，单位毫秒，均为 1–86400000 的整数，默认 300000 |
+| `events` 的 `after`、`limit` | 只返回序号大于 `after` 的事件。`after` 为默认 0 的非负安全整数，`limit` 为默认 100 的 1–100 整数 |
+
+若任务已有序号 1、2、3，`events(scope, id, 1, 2)` 返回序号 2、3；下次传 `after: 3` 继续读取。若用同一幂等键重复提交含 `input: { page: 1 }` 的请求，成功回执仍使用原执行 ID。
 
 #### 场景：提交、恢复、读取与取消
+
+如果业务必须先保存候选记录，保存成功后的候选行本身可以作为待投递来源。提交扫描器在事务完成后用固定候选 ID 作为 `idempotencyKey` 重试同一请求，写入失败或进程退出后，下一次扫描可补投。处理器领取候选时再次核对业务作用域，发布产物前仍须通过应用自己的写入约束。Runner 的 `unknown` 需要业务核对，不能单凭任务终态推定外部部署或文件写入的结果。
 
 submit 返回的是共享数据库中的执行回执。下图将“已排队”“请求取消”和“资源确实停止”分开。
 
@@ -266,7 +282,16 @@ async function cancelReport(scope: RunnerScope, key: string) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | `pool` 必填，由应用给出环境、任务类型、预热数量和上限 | `HaiResult<() => void>`，`data` 用于移除此登记 | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | 必填 `pool: RunnerWarmPool`，由应用指定执行环境、任务类型、预热数量和容量上限 | `HaiResult<() => void>`，`data` 用于移除此登记 | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+
+#### 预热池字段
+
+| 字段 | 必填条件和作用 |
+| --- | --- |
+| `key`、`kind`、`environmentId` | 必填标识符。任务类型与池键共同标识一个池。环境须为已登记的离线环境，执行节点先登记任务处理器 |
+| `minReady`、`maxRunning`、`maxTotal` | 必填整数。准备目标 0–1000，执行和总数上限各 1–1000。前两项均不超过总数上限 |
+
+例如 `{ minReady: 1, maxRunning: 2, maxTotal: 3 }` 维持一份就绪目标，允许最多两个活跃任务，池总容量三份。调用返回的注销函数移除此池登记。
 
 #### 场景：隔离容器与预热池
 
@@ -410,7 +435,17 @@ async function queuePrewarmedCopy(scope: RunnerScope) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope`、`id` 和核验记录必填。无容器凭据时还须核对应用侧资源已停止 | `HaiResult<RunnerExecution>`，业务结果仍可能未知 | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope: RunnerScope`、`id: string` 和 `review: RunnerReconciliation` 均必填。无容器凭据时核对应用侧资源已停止 | `HaiResult<RunnerExecution>`，业务结果仍可能未知 | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+
+#### 人工核验记录字段
+
+| 字段 | 条件和结果 |
+| --- | --- |
+| `operatorId` | 必填可信操作员 ID，由运维入口认证后提供 |
+| `reason` | 必填核验记录，去空白后须非空，最多 300 字符。可填写工单号和停机依据 |
+| `hostResourcesStopped` | 仅可显式传 `true`。无法用容器凭据核验时，必填并需要验证原宿主进程已停止 |
+
+例如运维确认应用资源已停止后提交 `{ operatorId: 'ops-1', reason: 'INC-48: host cleanup verified', hostResourcesStopped: true }`，成功回执记录 `reconciledAt`，业务状态仍是 `unknown`。
 
 #### 场景：人工核验未知执行
 

@@ -56,6 +56,8 @@ pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
 pnpm build --target image --image-source custom --image-mirrors "docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io" --npm-source custom --npm-registry https://npm.example.com/registry
 ```
 
+`hai build --target image --json` 的 stdout 是单行 v1 回执，内嵌 v5 制品清单。TypeScript 调用方使用 `deploy.verifyBuildReceipt(stdout, { projectDir, projectName })`，按任务可额外核对 Git 来源、干净状态、平台、镜像角色及完整构建。成功后再使用返回的 `artifactDir`。
+
 首次交互保存尚未配置的 `hai.json.build.sources.image` / `.npm` 与 `build.proxy`。命令参数优先且不回写，已保存值其次；非交互未配置时官方源与 inherit 代理。image 形如 `{ "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`，npm 形如 `{ "type": "custom", "registry": "https://npm.example.com/registry" }`。official/cn 只需 type。cn 使用毫秒镜像的 docker.1ms.run / ghcr.1ms.run 及 registry.npmmirror.com；公共服务有同步延迟和限流，需验证实际版本。打包中间件会复用本地原始镜像，缺失时从所选源拉取并恢复原标签，离线包与部署身份保持一致。
 
 代理形如 `{ "mode": "custom", "url": "http://127.0.0.1:10808", "bypass": "localhost,127.0.0.1" }`。inherit 使用进程变量；system 读取 Windows/macOS 静态代理，PAC/自动发现或其他平台用继承/自定义；none 清空本次代理变量，--no-http-proxy 等价 none。自定义地址不含认证，认证代理仅从环境继承。Podman 默认构建网络保留原代理地址，显式 --network pasta 等隔离网络时回环地址替换为 host.containers.internal；Docker 非 host 网络使用 host.docker.internal。须验证真实构建网络，run 结果不能代替；默认不通时显式试 --network pasta 或改用可达代理地址。Docker/远程 Podman 拉取使用引擎侧代理，不能用构建参数代替配置引擎，修改与重启独立安排。

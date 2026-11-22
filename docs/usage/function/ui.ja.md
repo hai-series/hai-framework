@@ -66,7 +66,7 @@ UI に init/close はありません。Svelte がマウントを管理します�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `autoImportHaiUi` | テンプレートで使う部品のインポートを追加 | `preprocessed Svelte source and filename through markup` | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
+| `autoImportHaiUi()` | テンプレートで使う部品のインポートを追加 | 引数なし。返されたプリプロセッサーを Svelte に登録し、マークアップとファイル名を処理します。 | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
 
 #### 利用例：スタイルと部品のインポートを設定する
 
@@ -92,44 +92,69 @@ export default {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `Button` | クリックで count が1増加 | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` | クリックで count が1増加 | `<Button onclick={() => count += 1}>Add</Button>` |
-| `IconButton` | アイコンボタンとヒント | `icon: trusted SVG string \| Snippet`, `variant`, `size`, `tooltip`, `loading` | アイコンボタンとヒント | `<IconButton icon='<svg viewBox="0 0 24 24"></svg>' tooltip='Save' />` |
-| `BareButton` | 名前付きボタン | `class`, `ariaLabel`, `role`, `tabindex` | 名前付きボタン | `<BareButton ariaLabel='Save'>Save</BareButton>` |
-| `Input` | 入力で name を更新 | `type`, `value`, `size`, `error`, `validationMessage` | 入力で name を更新 | `<Input bind:value={name} />` |
-| `BareInput` | 入力で name を更新 | `type`, `class`, `accept`, `multiple` | 入力で name を更新 | `<BareInput type='text' bind:value={name} />` |
-| `Textarea` | 複数行入力で notes を更新 | `value`, `rows`, `size`, `autoResize`, `error` | 複数行入力で notes を更新 | `<Textarea bind:value={notes} rows={3} />` |
-| `Select` | 選択で status を更新 | `options`, `value`, `placeholder`, `size`, `clearable`, `filterable` | 選択で status を更新 | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
-| `Checkbox` | 選択で enabled を更新 | `checked`, `label`, `size`, `indeterminate` | 選択で enabled を更新 | `<Checkbox bind:checked={enabled} label='Enabled' />` |
-| `Switch` | 切替で enabled を更新 | `checked`, `label`, `size` | 切替で enabled を更新 | `<Switch bind:checked={enabled} label='Enabled' />` |
-| `Radio` | 選択で status を更新 | `options`, `value`, `direction`, `size` | 選択で status を更新 | `<Radio options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
-| `ToggleCheckbox` | チェック状態を enabled に反映 | `checked`, `name`, `onchange` | チェック状態を enabled に反映 | `<ToggleCheckbox bind:checked={enabled} name='enabled' />` |
-| `ToggleInput` | チェック状態を enabled に反映 | `checked`, `name` | チェック状態を enabled に反映 | `<ToggleInput bind:checked={enabled} name='enabled' />` |
-| `ToggleRadio` | 選択済みラジオ | `checked`, `name`, `onchange` | 選択済みラジオ | `<ToggleRadio name='choice' checked />` |
-| `Range` | ドラッグで score を更新 | `value`, `min`, `max`, `step` | ドラッグで score を更新 | `<Range min={0} max={100} bind:value={score} />` |
-| `Rating` | 評価で score を更新 | `value`, `max` | 評価で score を更新 | `<Rating max={5} bind:value={score} />` |
-| `Badge` | New のバッジ | `variant`, `size`, `outline` | New のバッジ | `<Badge variant='info'>New</Badge>` |
-| `Avatar` | 名前のアバター | `src`, `name`, `size`, `shape`, `ring` | 名前のアバター | `<Avatar name='Ada' />` |
-| `Tag` | タグ表示 | `text`, `variant`, `size`, `closable` | タグ表示 | `<Tag text='Release' />` |
-| `Spinner` | 読み込み表示 | `size`, `variant` | 読み込み表示 | `<Spinner size='sm' />` |
-| `Progress` | 進捗30% | `value`, `max`, `variant`, `striped`, `animated` | 進捗30% | `<Progress value={3} max={10} />` |
-| `Form` | 検証後 save を呼出 | `columns`, `labelPosition`, `labelWidth`, `loading`, `disabled`, `onsubmit` | 検証後 save を呼出 | `<Form onsubmit={save}><Input bind:value={name} /></Form>` |
-| `FormField` | ラベルと入力を関連付け | `label`, `for`, `colSpan`, `labelPosition`, `error`, `hint`, `required` | ラベルと入力を関連付け | `<FormField label='Name' for='name'><Input id='name' bind:value={name} /></FormField>` |
-| `FormLayout` | 2列から狭い画面で1列へ | `columns`, `labelPosition`, `labelWidth` | 2列から狭い画面で1列へ | `<FormLayout columns={2}><FormField label='Name'><Input bind:value={name} /></FormField></FormLayout>` |
-| `TagInput` | 編集で tags を更新 | `tags`, `maxTags`, `allowDuplicates`, `size` | 編集で tags を更新 | `<TagInput bind:tags={tags} maxTags={5} />` |
-| `Combobox` | 検索して選択値を更新 | `options`, `value`, `multiple`, `placeholder`, `size` | 検索して選択値を更新 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
-| `Calendar` | 選択で DateValue を更新 | `value: DateValue`, `minValue`, `maxValue` | 選択で DateValue を更新 | `<Calendar bind:value={date} />` |
-| `DatePicker` | ポップアップで日付を更新 | `value: DateValue`, `minValue`, `maxValue`, `error`, `ariaLabel`, `size` | ポップアップで日付を更新 | `<DatePicker ariaLabel='Date' bind:value={date} />` |
-| `CronExpressionBuilder` | よく使う Cron 式を視覚的に編集 | `value`, `disabled`, `required`, `error`, `presets`, `labels`, `weekdayOptions`, `onchange` | 5フィールド Cron 式を返す | `<CronExpressionBuilder bind:value={cron} />` |
-| `ScheduleInput` | 日時と高度な Cron のスケジュール入力 | `config: ScheduleInputConfig`（正規化済み）, `value`, `required`, `disabled`, `valid`, `onchange` | 固定 `+08:00` の日時または Cron 値を検証して返す | `<ScheduleInput config={scheduleConfig} bind:value={schedule} />` |
-| `normalizeScheduleInputConfig` | スケジュール schema メタデータを検証・正規化 | `value: unknown`；`allowCron` は省略可能 | `ScheduleInputConfig`；未対応の場合は `undefined`、省略した `allowCron` は `false` に正規化 | `normalizeScheduleInputConfig(rawSchema)` |
-| `ScheduleInputConfig` | 正規化済み `ScheduleInput` schema 型 | `kind: 'schedule'`, `timezone: 'Asia/Shanghai'`, `precision: 'minute'`, `allowCron: boolean` | `ScheduleInput.config` に渡せる設定 | `const config: ScheduleInputConfig = { kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: false }` |
-| `CRON_BUILDER_WEEKDAY_ORDER` | Cron builder の月曜から日曜の順序 | なし | `readonly CronWeekdayValue[]` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
-| `createDefaultCronBuilderState` | Cron builder の既定状態を作成 | なし | `CronBuilderState` | `createDefaultCronBuilderState()` |
-| `cronExpressionToBuilderState` | よく使う Cron 式を builder 状態へ解析 | `expression: string` | `CronBuilderState`；未対応の式は `custom` モードに保持 | `cronExpressionToBuilderState('0 10 * * *')` |
-| `cronBuilderStateToExpression` | builder 状態を Cron 式へシリアライズ | `state: CronBuilderState` | 5フィールド Cron 文字列 | `cronBuilderStateToExpression(state)` |
-| `isCronExpressionValid` | Cron parser で式を検証 | `expression: string` | `boolean` | `isCronExpressionValid('0 10 * * *')` |
-| `CronBuilderMode`, `CronWeekdayValue`, `CronBuilderState`, `CronExpressionBuilderLabels`, `CronExpressionBuilderPreset`, `CronExpressionBuilderWeekdayOption` | Cron builder のモード、状態、ラベル、プリセット、曜日オプションの型 | TypeScript 型 | builder helper とコンポーネント設定を型付け | `import type { CronBuilderState } from '@h-ai/ui'` |
-| `@h-ai/ui/components/compounds/schedule-input` | Node/schema 消費者向けの軽量入口 | `normalizeScheduleInputConfig` と `ScheduleInputConfig` のみ | Svelte を読み込まず schema の正規化結果を返す | `import { normalizeScheduleInputConfig, type ScheduleInputConfig } from '@h-ai/ui/components/compounds/schedule-input'` |
+| `<Button>` | クリックで count が1増加 | `variant` は外観や状態を選択。`size` はコンポーネントのサイズ。`loading` は処理中の状態を表示。`disabled` は利用者による操作を無効化。`outline` は枠線付きの表示。`circle` は円形ボタンを表示。 | クリックで count が1増加 | `<Button onclick={() => count += 1}>Add</Button>` |
+| `<IconButton>` | アイコンボタンとヒント | `icon` は信頼できる SVG 文字列か、アイコンを描画する Svelte の `Snippet`。`variant` は外観や状態を選択。`size` はコンポーネントのサイズ。`tooltip` はホバー時のヒント。`loading` は処理中の状態を表示。 | アイコンボタンとヒント | `<IconButton icon='<svg viewBox="0 0 24 24"></svg>' tooltip='Save' />` |
+| `<BareButton>` | 名前付きボタン | `class` はCSS クラスを追加。`ariaLabel` は支援技術向けの名前。`role` はアクセシビリティ上の役割。`tabindex` はキーボードフォーカスの順序。 | 名前付きボタン | `<BareButton ariaLabel='Save'>Save</BareButton>` |
+| `<Input>` | 入力で name を更新 | `type` は入力または表示の種類。`value` は現在値を指定。対応時は双方向バインド可。`size` はコンポーネントのサイズ。`error` はエラーメッセージやエラー状態。`validationMessage` は入力検証に失敗したときの文言。 | 入力で name を更新 | `<Input bind:value={name} />` |
+| `<BareInput>` | 入力で name を更新 | `type` は入力または表示の種類。`class` はCSS クラスを追加。`accept` はファイル選択で許可する種類。`multiple` は複数選択を許可。 | 入力で name を更新 | `<BareInput type='text' bind:value={name} />` |
+| `<Textarea>` | 複数行入力で notes を更新 | `value` は現在値を指定。対応時は双方向バインド可。`rows` は最初に表示する行数。`size` はコンポーネントのサイズ。`autoResize` は入力に合わせて高さを調整。`error` はエラーメッセージやエラー状態。 | 複数行入力で notes を更新 | `<Textarea bind:value={notes} rows={3} />` |
+| `<Select>` | 選択で status を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`placeholder` は入力や選択がない場合のヒント。`size` はコンポーネントのサイズ。`clearable` は現在値を消す操作を表示。`filterable` は入力した文字で候補を絞る。[選択肢のフィールド](#choice-options)。 | 選択で status を更新 | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<Checkbox>` | 選択で enabled を更新 | `checked` は選択状態。`label` は表示するラベル。`size` はコンポーネントのサイズ。`indeterminate` は一部選択の状態を表示。 | 選択で enabled を更新 | `<Checkbox bind:checked={enabled} label='Enabled' />` |
+| `<Switch>` | 切替で enabled を更新 | `checked` は選択状態。`label` は表示するラベル。`size` はコンポーネントのサイズ。 | 切替で enabled を更新 | `<Switch bind:checked={enabled} label='Enabled' />` |
+| `<Radio>` | 選択で status を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`direction` は横並びか縦並びかを指定。`size` はコンポーネントのサイズ。[選択肢のフィールド](#choice-options)。 | 選択で status を更新 | `<Radio options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<ToggleCheckbox>` | チェック状態を enabled に反映 | `checked` は選択状態。`name` は識別やグループ化に使う名前。`onchange` は値の変更時に呼び出す。 | チェック状態を enabled に反映 | `<ToggleCheckbox bind:checked={enabled} name='enabled' />` |
+| `<ToggleInput>` | チェック状態を enabled に反映 | `checked` は選択状態。`name` は識別やグループ化に使う名前。 | チェック状態を enabled に反映 | `<ToggleInput bind:checked={enabled} name='enabled' />` |
+| `<ToggleRadio>` | 選択済みラジオ | `checked` は選択状態。`name` は識別やグループ化に使う名前。`onchange` は値の変更時に呼び出す。 | 選択済みラジオ | `<ToggleRadio name='choice' checked />` |
+| `<Range>` | ドラッグで score を更新 | `value` は現在値を指定。対応時は双方向バインド可。`min` は許可する最小値。`max` は上限。`step` は隣り合う値の間隔。 | ドラッグで score を更新 | `<Range min={0} max={100} bind:value={score} />` |
+| `<Rating>` | 評価で score を更新 | `value` は現在値を指定。対応時は双方向バインド可。`max` は上限。 | 評価で score を更新 | `<Rating max={5} bind:value={score} />` |
+| `<Badge>` | New のバッジ | `variant` は外観や状態を選択。`size` はコンポーネントのサイズ。`outline` は枠線付きの表示。 | New のバッジ | `<Badge variant='info'>New</Badge>` |
+| `<Avatar>` | 名前のアバター | `src` は画像 URL。`name` は画像がないときに使うイニシャルの元になる名前。`size` はコンポーネントのサイズ。`shape` は形状。`ring` は周囲のリングを切り替え。 | 名前のアバター | `<Avatar name='Ada' />` |
+| `<Tag>` | タグ表示 | `text` は表示する文言。`variant` は外観や状態を選択。`size` はコンポーネントのサイズ。`closable` は閉じる操作を表示。 | タグ表示 | `<Tag text='Release' />` |
+| `<Spinner>` | 読み込み表示 | `size` はコンポーネントのサイズ。`variant` は外観や状態を選択。 | 読み込み表示 | `<Spinner size='sm' />` |
+| `<Progress>` | 進捗30% | `value` は現在値を指定。対応時は双方向バインド可。`max` は上限。`variant` は外観や状態を選択。`striped` は縞模様を表示。`animated` は進捗表示にアニメーションを付ける。 | 進捗30% | `<Progress value={3} max={10} />` |
+| `<Form>` | 検証後 save を呼出 | `columns` は列数または列定義。`labelPosition` は入力欄に対するラベルの位置。`labelWidth` はラベル欄の幅。`loading` は処理中の状態を表示。`disabled` は利用者による操作を無効化。`onsubmit` はフォームの送信時に呼び出す。 | 検証後 save を呼出 | `<Form onsubmit={save}><Input bind:value={name} /></Form>` |
+| `<FormField>` | ラベルと入力を関連付け | `label` は表示するラベル。`for` はラベルと入力欄の ID を関連付ける。`colSpan` はフィールドが占める列数。`labelPosition` は入力欄に対するラベルの位置。`error` はエラーメッセージやエラー状態。`hint` は入力欄の補足説明。`required` は必須項目として表示。 | ラベルと入力を関連付け | `<FormField label='Name' for='name'><Input id='name' bind:value={name} /></FormField>` |
+| `<FormLayout>` | 2列から狭い画面で1列へ | `columns` は列数または列定義。`labelPosition` は入力欄に対するラベルの位置。`labelWidth` はラベル欄の幅。 | 2列から狭い画面で1列へ | `<FormLayout columns={2}><FormField label='Name'><Input bind:value={name} /></FormField></FormLayout>` |
+| `<TagInput>` | 編集で tags を更新 | `tags` は現在のタグ一覧。`maxTags` はタグの件数上限。`allowDuplicates` は同じタグの重複を許可。`size` はコンポーネントのサイズ。 | 編集で tags を更新 | `<TagInput bind:tags={tags} maxTags={5} />` |
+| `<Combobox>` | 検索して選択値を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`multiple` は複数選択を許可。`placeholder` は入力や選択がない場合のヒント。`size` はコンポーネントのサイズ。 | 検索して選択値を更新 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<Calendar>` | 選択で DateValue を更新 | `value` は現在値を指定。対応時は双方向バインド可。`minValue` は選択可能な最も早い日。`maxValue` は選択可能な最も遅い日。 | 選択で DateValue を更新 | `<Calendar bind:value={date} />` |
+| `<DatePicker>` | ポップアップで日付を更新 | `value` は現在値を指定。対応時は双方向バインド可。`minValue` は選択可能な最も早い日。`maxValue` は選択可能な最も遅い日。`error` はエラーメッセージやエラー状態。`size` はコンポーネントのサイズ。 `ariaLabel` は日付入力のアクセシブルな名前を指定します。 | ポップアップで日付を更新 | `<DatePicker bind:value={date} />` |
+| `<ScheduleInput>` | 実行日時を編集 | `config` はタイムゾーン、精度、Cron の使用可否を指定します。`value` と `valid` は値と検証状態を双方向でバインドできます。`name` は送信フィールド名、`id` は表示中のコントロールに対応します。 | UTC オフセット付きの ISO 文字列または5フィールドの Cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
+| `<CronExpressionBuilder>` | Cron と手入力式を編集 | `value` は式、`presets` は定型式です。`labels` と `weekdayOptions` は表示、`error` と `describedBy` は検証の文言を指定します。 | 手動で調整する式は入力を保持 | `<CronExpressionBuilder bind:value={cron} />` |
+| `normalizeScheduleInputConfig(value)` | 調度スキーマを判定 | `value` は `x-hai-input` の値です。`kind: 'schedule'`、有効な IANA `timezone`、`precision: 'minute'` を指定します。`allowCron` は省略できます。 | 正規化した `ScheduleInputConfig`。無効な値は `undefined` | `normalizeScheduleInputConfig(rawMetadata)` |
+| `createDefaultCronBuilderState()` | 初期状態を生成 | 引数なし。 | 毎日 10:00 の `CronBuilderState` | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState(expression)` | 編集状態へ変換 | `expression` に Cron 文字列を渡します。 | `CronBuilderState`。複雑または無効な値は手入力状態に保持 | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression(state)` | 編集状態を式へ変換 | `state` に現在の `CronBuilderState` を渡します。 | ビジュアルモードは5フィールド、手入力モードは入力したテキスト | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid(expression)` | Cron 構文を検証 | `expression` に検証する文字列を渡します。ホストはフィールド数を制限できます。 | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | 曜日の並びを取得 | 引数なし。 | 月曜から日曜の数字文字列。日曜は `'0'` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
+
+<a id="choice-options"></a>
+
+#### 選択肢のフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `value` | `T` | 必須 | 選択したときにバインドに書き込む値。 |
+| `label` | `string` | 必須 | 利用者に表示する選択肢の名前。 |
+| `disabled` | `boolean` | 未設定（選択可） | `true` でこの項目を選択できなくします。 |
+
+```svelte
+<script lang="ts">
+  import { Select } from '@h-ai/ui'
+
+  let status = $state('draft')
+  const options = [
+    { value: 'draft', label: 'Draft' },
+    { value: 'done', label: 'Done' },
+    { value: 'archived', label: 'Archived', disabled: true },
+  ]
+</script>
+
+<Select {options} bind:value={status} />
+<output>{status}</output>
+```
+
+Done を選ぶと `done` が表示されます。Archived は選択不可で、`status` は変化しません。
 
 #### 利用例：二つの入力で同じ日付を選ぶ
 
@@ -147,24 +172,41 @@ export default {
 <DatePicker bind:value={date} />
 ```
 
-#### 利用例：日時または Cron スケジュールを入力する
+<a id="schedule-input"></a>
 
-schema メタデータをコントロールへ渡す前に `normalizeScheduleInputConfig` を呼び出します。元の schema では `allowCron` を省略でき、正規化時に `false` が補われます。未対応の種別、タイムゾーン、精度、フィールドは `undefined` になります。`ScheduleInput.config` には正規化済みの `ScheduleInputConfig` を渡します。Node/schema 消費者は `@h-ai/ui/components/compounds/schedule-input` から normalizer と型だけを読み込めます。この入口は Svelte を読み込みません。
+#### シナリオ：実行日時を選択して Cron を編集する
 
-`ScheduleInput` は既定で北京時間の分精度を使い、日時を固定 `+08:00` オフセットでシリアライズします。`allowCron` を `true` にすると、日時と5フィールド Cron モードを切り替えられます。`valid` は現在の草稿、必須条件、未来時刻の検証結果を示します。
+ホストのスキーマから `x-hai-input` を取得し、正規化した設定をコントロールへ渡します。コンポーネントの既定値は北京時間と分精度です。`allowCron` を省略すると `false` になります。この例ではロサンゼルス時間の日時と5フィールドの Cron を選べます。
 
 ```svelte
 <script lang='ts'>
-  import { ScheduleInput } from '@h-ai/ui'
+  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
 
   let schedule = $state('')
-  let scheduleValid = $state(false)
-  const scheduleConfig = {
-    kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute', allowCron: true,
-  } as const
+  let result = $state('')
+  const rawMetadata = {
+    kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
+  }
+  // Parse the schema metadata. Invalid zones or precision return undefined.
+  const config = normalizeScheduleInputConfig(rawMetadata)
 </script>
-<ScheduleInput config={scheduleConfig} bind:value={schedule} bind:valid={scheduleValid} required />
+{#if config}
+  <!-- Use the named form field to receive the selected schedule string. -->
+  <Form onsubmit={fields => { result = String(fields.scheduled_at) }}>
+    <!-- Associate the label with the mode's visible input. -->
+    <FormField label='Scheduled time' for='when' required>
+      <!-- A valid date-time includes an offset. Cron mode writes a five-field expression. -->
+      <ScheduleInput id='when' name='scheduled_at' {config} bind:value={schedule} required />
+    </FormField>
+    <button type='submit'>Save</button>
+  </Form>
+  <output>{result}</output>
+{/if}
 ```
+
+2030年7月22日10:05を選ぶと、`2030-07-22T10:05:00-07:00` が送信されます。夏時間で存在しない分は修正が必要です。重複する分は早い方を選び、既存値の有効なオフセットは保持します。期限切れの時刻を送信すると表示中の入力へフォーカスが戻ります。Cron の実行方法はホストが決めます。
+
+Node のスキーマ処理では、正規化関数と型を `@h-ai/ui/components/compounds/schedule-input` から取得できます。この入口は Svelte を読み込みません。
 
 <a id="overlays"></a>
 
@@ -176,12 +218,12 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `Modal` | 開閉で open を更新 | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` | 開閉で open を更新 | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
-| `Drawer` | 開閉をバインドしたドロワー | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` | 開閉をバインドしたドロワー | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
-| `Confirm` | 確認で confirm を呼出 | `open`, `title`, `message`, `variant`, `onconfirm` | 確認で confirm を呼出 | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
-| `Popover` | クリックで開き Escape で閉じる | `open`, `position`, `trigger`, `offset`, `portal` | クリックで開き Escape で閉じる | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
-| `Dropdown` | 操作メニュー | `items`, `trigger`, `triggerClass`, `position` | 操作メニュー | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
-| `Tooltip` | ホバー・フォーカスで説明 | `content`, `position`, `delay`, `portal`（裁剪容器内使用） | ホバー・フォーカスで説明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
+| `<Modal>` | 開閉で open を更新 | `open` は開閉状態。`title` はタイトル。`size` はコンポーネントのサイズ。`radius` は角の丸み。`bodyOverflow` はコンテンツがはみ出した場合の動作。`showClose` は閉じるボタンの表示を切り替え。 | 開閉で open を更新 | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
+| `<Drawer>` | 開閉をバインドしたドロワー | `open` は開閉状態。`position` は表示位置。`title` はタイトル。`size` はコンポーネントのサイズ。`width` は表示幅。`resizable` はドラッグによるドロワーの幅変更を許可。`widthStorageKey` はドロワーの幅を保存するキー。 | 開閉をバインドしたドロワー | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
+| `<Confirm>` | 確認で confirm を呼出 | `open` は開閉状態。`title` はタイトル。`message` は利用者に表示する本文。`variant` は外観や状態を選択。`onconfirm` は利用者が確認したときに呼び出す。 | 確認で confirm を呼出 | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
+| `<Popover>` | クリックで開き Escape で閉じる | `open` は開閉状態。`position` は表示位置。`trigger` は起点となる内容または操作。`offset` はオーバーレイと起点の間隔。`portal` はオーバーレイをクリッピングの外に配置。 | クリックで開き Escape で閉じる | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
+| `<Dropdown>` | 操作メニュー | `items` は表示順の項目一覧。`trigger` は起点となる内容または操作。`triggerClass` は起点となるコントロールに CSS クラスを追加。`position` は表示位置。 | 操作メニュー | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
+| `<Tooltip>` | ホバー・フォーカスで説明 | `content` は表示する本文またはスニペット。`position` は表示位置。`delay` はヒントの表示まで待つ時間。`portal` はオーバーレイをクリッピングの外に配置。 | ホバー・フォーカスで説明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
 
 #### 利用例：注文詳細を開いて閉じる
 
@@ -208,19 +250,64 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `Card` | 見出しと内容 | `title`, `bordered`, `shadow`, `padding` | 見出しと内容 | `<Card title='Order'>Order 42</Card>` |
-| `JsonViewer` | 展開可能な JSON | `value`, `defaultExpandedDepth`, `maxScalarLength`, `showCopy`, `onCopy`；循环引用自动替换为占位符 | 展開可能な JSON | `<JsonViewer value={{ status: 'pending' }} />` |
-| `DataTable` | 列に従い rows を表示 | `data`, `columns`, `keyField`, `loading`, `sortKey`, `sortDir`, `onsort`，`cell` 单元格插槽、`onrowclick`（列 `sortable` 可排序） | 列に従い rows を表示 | `<DataTable data={rows} {columns} keyField='id' />` |
-| `Accordion` | 指定内容を開閉 | `items: AccordionItem[]` | 指定内容を開閉 | `<Accordion items={accordionItems} />` |
-| `Timeline` | 指定順のタイムライン | `items: TimelineItem[]` | 指定順のタイムライン | `<Timeline items={timelineItems} />` |
-| `Tabs` | タブ選択で activeTab を更新 | `items`, `active`, `type`, `size`, `lazy`, `onactivate` | タブ選択で activeTab を更新 | `<Tabs items={tabItems} bind:active={activeTab} />` |
-| `Pagination` | 全3ページ、page を更新 | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast` | 全3ページ、page を更新 | `<Pagination total={42} pageSize={20} bind:page />` |
-| `Breadcrumb` | 階層とリンク | `items`, `separator` | 階層とリンク | `<Breadcrumb items={[{ label: 'Orders', href: '/orders' }, { label: '42' }]} />` |
-| `Steps` | 現在ステップを表示 | `items`, `current`, `direction`, `clickable` | 現在ステップを表示 | `<Steps items={stepItems} current={1} />` |
-| `Skeleton` | 3項目のプレースホルダー | `variant`, `width`, `height`, `count` | 3項目のプレースホルダー | `<Skeleton count={3} />` |
-| `Empty` | 空状態 | `title`, `description`, `icon` | 空状態 | `<Empty title='No orders' />` |
-| `Result` | 結果表示 | `status`, `title`, `description` | 結果表示 | `<Result status='success' title='Saved' />` |
-| `PageHeader` | ページ見出しと操作 | `title`, `description`，支持 `actions` 插槽 | ページ見出しと操作 | `<PageHeader title='Orders' description='Current orders' />` |
+| `<Card>` | 見出しと内容 | `title` はタイトル。`bordered` は枠線の表示を切り替え。`shadow` は影。`padding` はコンテンツの内側の余白。 | 見出しと内容 | `<Card title='Order'>Order 42</Card>` |
+| `<JsonViewer>` | 展開可能な JSON | `value` は現在値を指定。対応時は双方向バインド可。`defaultExpandedDepth` はJSON ツリーを最初に展開する深さ。`maxScalarLength` は個々のスカラー値のプレビュー長を制限。`showCopy` はコピーのボタンを切り替え。`onCopy` はコピー操作を処理。 | 展開可能な JSON | `<JsonViewer value={{ status: 'pending' }} />` |
+| `<DataTable>` | 列に従い rows を表示 | `data` は表示するデータ。`columns` は列ごとの表示方法と並べ替えを定義。`keyField` は各行の一意キーとなるフィールド。`loading` は処理中の状態を表示。`sortKey` は現在の並べ替え列。`sortDir` は現在の並べ替え方向。`onsort` は利用者が指定した並べ替えの変更を受け取る。`cell` はセルの表示内容を変更。`onrowclick` は利用者がクリックした行を受け取る。 [フィールド表](#datatable-options) | 列に従い rows を表示 | `<DataTable data={rows} {columns} keyField='id' />` |
+| `<Accordion>` | 指定内容を開閉 | `items` は表示順の項目一覧。 | 指定内容を開閉 | `<Accordion items={accordionItems} />` |
+| `<Timeline>` | 指定順のタイムライン | `items` は表示順の項目一覧。 | 指定順のタイムライン | `<Timeline items={timelineItems} />` |
+| `<Tabs>` | タブ選択で activeTab を更新 | `items` は表示順の項目一覧。`active` は現在選択中の項目。`type` は入力または表示の種類。`size` はコンポーネントのサイズ。`lazy` は初めて開くまで内容の描画を遅延。`onactivate` はタブが初めて有効になったときに呼び出す。 | タブ選択で activeTab を更新 | `<Tabs items={tabItems} bind:active={activeTab} />` |
+| `<Pagination>` | 全3ページ、page を更新 | `page` は1 から始まる現在のページ番号。`total` は該当するレコードの総件数。`pageSize` はページごとの件数。`showTotal` はレコードの総件数を表示。`showJumper` はページ移動用の入力欄を表示。`showSizeChanger` はページサイズの選択欄を表示。`showPageInfo` はページ情報を表示。`showFirstLast` は先頭・最終ページのボタンを表示。 [フィールド表](#pagination-options) | 全3ページ、page を更新 | `<Pagination total={42} pageSize={20} bind:page />` |
+| `<Breadcrumb>` | 階層とリンク | `items` は表示順の項目一覧。`separator` は項目間の区切り。 | 階層とリンク | `<Breadcrumb items={[{ label: 'Orders', href: '/orders' }, { label: '42' }]} />` |
+| `<Steps>` | 現在ステップを表示 | `items` は表示順の項目一覧。`current` は現在のステップ。`direction` は横並びか縦並びかを指定。`clickable` はステップのクリックを許可。 | 現在ステップを表示 | `<Steps items={stepItems} current={1} />` |
+| `<Skeleton>` | 3項目のプレースホルダー | `variant` は外観や状態を選択。`width` は表示幅。`height` は高さ。`count` は描画する数。 | 3項目のプレースホルダー | `<Skeleton count={3} />` |
+| `<Empty>` | 空状態 | `title` はタイトル。`description` は補足説明。`icon` は表示するアイコン。 | 空状態 | `<Empty title='No orders' />` |
+| `<Result>` | 結果表示 | `status` は表示する結果や状態。`title` はタイトル。`description` は補足説明。 | 結果表示 | `<Result status='success' title='Saved' />` |
+| `<PageHeader>` | ページ見出しと操作 | `title` はタイトル。`description` は補足説明。`actions` は利用可能な操作、または操作欄の内容。 | ページ見出しと操作 | `<PageHeader title='Orders' description='Current orders' />` |
+
+<a id="datatable-options"></a>
+
+#### データテーブルの列と並べ替え
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `columns[].key` | `keyof T` / `string` | 必須 | 表示と並べ替えに使うフィールド。 |
+| `columns[].label` | `string` | 必須 | 列見出しに表示する文言。 |
+| `columns[].width` | `string` | 自動 | `8rem` などの CSS 幅を指定。 |
+| `columns[].align` | `left` / `center` / `right` | テーブルのスタイルを継承 | セルの水平方向の配置。 |
+| `columns[].sortable` | `boolean` | 無効 | 列見出しのクリックで並べ替えを有効にします。`onsort` がなければ現在の `data` だけを並べ替えます。 |
+| `columns[].render` | `(item: T) => string` | フィールドの値 | 行全体を受け取りセルの文言を整形します。`cell` スニペットがある場合はそちらで描画します。 |
+| `columns[].onclick` | `(item: T) => void` | 未設定 | この列のセルをクリックすると対象行を受け取ります。 |
+| `sortKey / sortDir` | `string` / `asc` / `desc` / `null` | 未設定 | `onsort` がある場合に現在の並べ替えを制御します。 |
+| `onsort` | `(key, dir) => void` | コンポーネントが現在のデータを並べ替え | 指定するとホストが並べ替え要求を受け取り、新しいデータを渡します。コンポーネントはその順序を保持します。 |
+
+<a id="pagination-options"></a>
+
+#### ページ移動欄のフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `page / total` | `number` | 呼び出し元が指定 | 現在のページ番号と該当する全件数。ページ番号は 1 から始まります。 |
+| `pageSize` | `number` | `10` | ページ数の計算に使います。 |
+| `showTotal / showPageInfo / showFirstLast` | `boolean` | `true` | 総件数、ページ情報、先頭・最終ページボタンをそれぞれ表示します。 |
+| `showJumper / showSizeChanger` | `boolean` | `false` | ページ移動用の入力欄とページサイズセレクターをそれぞれ表示します。 |
+| `pageSizeOptions` | `number[]` | `[10, 20, 50, 100]` | ページサイズセレクターが表示される場合だけ選択肢に使います。 |
+| `labels` | `PaginationProps["labels"]` | 現在のコンポーネントの翻訳 | ページ移動欄の文言を上書きします。`total` に `{count}`、`pageSize` に `{size}`、`pageInfo` に `{page}` と `{total}` を使えます。 |
+
+```svelte
+<script lang="ts">
+  import { DataTable, Pagination } from '@h-ai/ui'
+
+  let page = $state(1)
+  const data = [{ id: 'b2', name: 'Bex' }, { id: 'a1', name: 'Ada' }]
+  const columns = [{ key: 'name', label: 'Name', sortable: true }]
+</script>
+
+<DataTable {data} {columns} keyField="id" />
+<Pagination bind:page total={42} pageSize={10} showJumper />
+<output>{page}</output>
+```
+
+表の初期表示は Bex、Ada です。Name を一度クリックすると Ada、Bex の順になります。全 5 ページで、3 ページ目に移動すると `3` が表示されます。
 
 #### 利用例：記録を表示してページを切り替える
 
@@ -250,13 +337,13 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `ActionSheet` | 選択で selectAction を呼出 | `open`, `title`, `items`, `cancelText`, `onselect` | 選択で selectAction を呼出 | `<ActionSheet bind:open={open} items={sheetItems} onselect={selectAction} />` |
-| `AppBar` | タイトルと戻るリンク | `title`, `backHref`, `onback`, `fixed`, `safeArea` | タイトルと戻るリンク | `<AppBar title='Orders' backHref='/orders' />` |
-| `BottomNav` | ナビゲーション | `items`, `active`, `centered`, `maxWidth` | ナビゲーション | `<BottomNav items={navItems} active='home' />` |
-| `InfiniteScroll` | 末尾で loadMore を呼出 | `loading`, `finished`, `threshold`, `onload` | 末尾で loadMore を呼出 | `<InfiniteScroll loading={loading} finished={finished} onload={loadMore} />` |
-| `PullRefresh` | プル操作で refresh を呼出 | `refreshing`, `threshold`, `onrefresh` | プル操作で refresh を呼出 | `<PullRefresh refreshing={loading} onrefresh={refresh}>Orders</PullRefresh>` |
-| `SafeArea` | セーフエリアの余白 | `top`, `bottom`, `left`, `right` | セーフエリアの余白 | `<SafeArea top bottom>Orders</SafeArea>` |
-| `SwipeCell` | スワイプで操作を表示 | `leftActions`, `rightActions`, `threshold`, `onaction` | スワイプで操作を表示 | `<SwipeCell rightActions={swipeActions} onaction={selectAction}>Order 42</SwipeCell>` |
+| `<ActionSheet>` | 選択で selectAction を呼出 | `open` は開閉状態。`title` はタイトル。`items` は表示順の項目一覧。`cancelText` はキャンセルボタンのラベル。`onselect` は選択した項目を受け取る。 | 選択で selectAction を呼出 | `<ActionSheet bind:open={open} items={sheetItems} onselect={selectAction} />` |
+| `<AppBar>` | タイトルと戻るリンク | `title` はタイトル。`backHref` は戻るリンクの移動先。`onback` は戻る操作を処理。`fixed` はビューポートに固定。`safeArea` は端末のセーフエリアの余白を確保。 | タイトルと戻るリンク | `<AppBar title='Orders' backHref='/orders' />` |
+| `<BottomNav>` | ナビゲーション | `items` は表示順の項目一覧。`active` は現在選択中の項目。`centered` はナビゲーションを中央に配置。`maxWidth` は最大幅。 | ナビゲーション | `<BottomNav items={navItems} active='home' />` |
+| `<InfiniteScroll>` | 末尾で loadMore を呼出 | `loading` は処理中の状態を表示。`finished` は後続データがない場合に読み込みを停止。`threshold` は操作を開始するしきい値。`onload` はスクロール条件に達したとき追加取得。 | 末尾で loadMore を呼出 | `<InfiniteScroll loading={loading} finished={finished} onload={loadMore} />` |
+| `<PullRefresh>` | プル操作で refresh を呼出 | `refreshing` は更新中と表示。`threshold` は操作を開始するしきい値。`onrefresh` はプル操作のしきい値に達したとき更新。 | プル操作で refresh を呼出 | `<PullRefresh refreshing={loading} onrefresh={refresh}>Orders</PullRefresh>` |
+| `<SafeArea>` | セーフエリアの余白 | `top` は上側のセーフエリアの余白を確保。`bottom` は下側のセーフエリアの余白を確保。`left` は左側のセーフエリアの余白を確保。`right` は右側のセーフエリアの余白を確保。 | セーフエリアの余白 | `<SafeArea top bottom>Orders</SafeArea>` |
+| `<SwipeCell>` | スワイプで操作を表示 | `leftActions` は左側に表示する操作。`rightActions` は右側に表示する操作。`threshold` は操作を開始するしきい値。`onaction` は選択したスワイプ操作を処理。 | スワイプで操作を表示 | `<SwipeCell rightActions={swipeActions} onaction={selectAction}>Order 42</SwipeCell>` |
 
 #### 利用例：モバイルの移動・更新・読み込みを処理する
 
@@ -272,11 +359,11 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `SettingsModal` | 設定ダイアログ | `open`, `onclose` | 設定ダイアログ | `<SettingsModal bind:open={open} />` |
-| `SettingsLayout` | 設定ナビと内容 | `title`, `description`, `sections`, `active`, `onselect` | 設定ナビと内容 | `<SettingsLayout title='Settings' sections={sections} active='profile'>Profile</SettingsLayout>` |
-| `WorkspaceLayout` | ワークスペース | `title`, `leading/actions/footer` snippets | 内容が残り高さを使用 | `<WorkspaceLayout title='Orders'>Orders</WorkspaceLayout>` |
-| `FilterBar` | 折り畳みフィルター | `activeCount`, `onreset`, `expanded` | 折畳みで入力値を保持 | `<FilterBar activeCount={0}>Filters</FilterBar>` |
-| `TableToolbar` | 一覧検索バー | `searchValue`, `onsearch`, `onclearfilters` | 送信時ホストへ通知 | `<TableToolbar bind:searchValue={search} onsearch={query} />` |
+| `<SettingsModal>` | 設定ダイアログ | `open` は開閉状態。`onclose` は閉じる操作を処理。 | 設定ダイアログ | `<SettingsModal bind:open={open} />` |
+| `<SettingsLayout>` | 設定ナビと内容 | `title` はタイトル。`description` は補足説明。`sections` は設定のセクション一覧。`active` は現在選択中の項目。`onselect` は選択した項目を受け取る。 | 設定ナビと内容 | `<SettingsLayout title='Settings' sections={sections} active='profile'>Profile</SettingsLayout>` |
+| `<WorkspaceLayout>` | ワークスペース | `title` はタイトル。`leading` は先頭に表示するスニペット。 | 内容が残り高さを使用 | `<WorkspaceLayout title='Orders'>Orders</WorkspaceLayout>` |
+| `<FilterBar>` | 折り畳みフィルター | `activeCount` は適用中のフィルター数を表示。`onreset` は条件のリセットを処理。`expanded` はフィルター欄の展開状態。 | 折畳みで入力値を保持 | `<FilterBar activeCount={0}>Filters</FilterBar>` |
+| `<TableToolbar>` | 一覧検索バー | `searchValue` は現在の検索文字列。`onsearch` は入力された検索文字列や検索操作を受け取る。`onclearfilters` はフィルターの一括解除を処理。 | 送信時ホストへ通知 | `<TableToolbar bind:searchValue={search} onsearch={query} />` |
 
 #### 利用例：絞り込みと一覧をワークスペースに配置する
 
@@ -316,33 +403,33 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `useToastFeedback` | 状態の変化を共通通知領域に表示 | `() => safely localized message, variant?` | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
-| `notifySuccess` | 成功した操作を通知 | `localized message, duration?` | `toast ID string` | `notifySuccess(m.saved())` |
-| `notifyInfo` | 情報を通知 | `localized message, duration?` | `toast ID string` | `notifyInfo(m.loading())` |
-| `notifyWarning` | 対応が必要な注意を通知 | `localized message, duration?` | `toast ID string` | `notifyWarning(m.warning())` |
-| `notifyError` | 安全なエラーメッセージを表示 | `unknown error, safe fallback?, duration?` | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
-| `errorMessage` | 利用者に表示できるメッセージを取得 | `unknown error, safe fallback?` | `safe localized string` | `errorMessage(error, m.retry())` |
-| `toast.add` | 通知を追加 | `localized options/message` | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
-| `toast.success` | 成功を通知 | `localized safe message, duration?` | `string item ID` | `toast.success(m.result())` |
-| `toast.info` | 情報を通知 | `localized safe message, duration?` | `string item ID` | `toast.info(m.result())` |
-| `toast.warning` | 注意を通知 | `localized safe message, duration?` | `string item ID` | `toast.warning(m.result())` |
-| `toast.error` | 安全なエラーを通知 | `localized safe message, duration?` | `string item ID` | `toast.error(m.result())` |
-| `toast.remove` | ID で通知を削除 | `item ID` | `void` | `toast.remove(id)` |
-| `toast.clear` | すべての通知を削除 | `none` | `void` | `toast.clear()` |
-| `message.add` | 通知を追加 | `localized options/message` | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
-| `message.success` | 成功を通知 | `localized safe message, duration?` | `string item ID` | `message.success(m.result())` |
-| `message.info` | 情報を通知 | `localized safe message, duration?` | `string item ID` | `message.info(m.result())` |
-| `message.warning` | 注意を通知 | `localized safe message, duration?` | `string item ID` | `message.warning(m.result())` |
-| `message.error` | 安全なエラーを通知 | `localized safe message, duration?` | `string item ID` | `message.error(m.result())` |
-| `message.remove` | ID で通知を削除 | `item ID` | `void` | `message.remove(id)` |
-| `message.clear` | すべての通知を削除 | `none` | `void` | `message.clear()` |
-| `toast.pause` | 自動消去を一時停止 | `toast ID` | `void` | `toast.pause(id)` |
-| `toast.resume` | 自動消去を再開 | `toast ID` | `void` | `toast.resume(id)` |
-| `messageBox.confirm` | 確認またはキャンセルを待つ | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
-| `messageBox.alert` | 確認操作を待つ | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
-| `Alert` | 継続的な情報表示 | `variant`, `title`, `dismissible` | 継続的な情報表示 | `<Alert variant='info' title='Saved' />` |
-| `ToastContainer` | 通知キュー表示 | Mount once with `toast` | 通知キュー表示 | `<ToastContainer />` |
-| `ErrorPage` | 503 状態と戻るリンク | `status`, `code`, `title`, `description`, `homeUrl`, `onhome`, `onback` | 503 状態と戻るリンク | `<ErrorPage status={503} homeUrl='/' />` |
+| `useToastFeedback(message, variant?)` | 状態の変化を共通通知領域に表示 | `message` は翻訳済みの文言または空値を返す関数です。`variant` の既定値は `error`。 | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
+| `notifySuccess(message, duration?)` | 成功した操作を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `toast ID string` | `notifySuccess(m.saved())` |
+| `notifyInfo(message, duration?)` | 情報を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `toast ID string` | `notifyInfo(m.loading())` |
+| `notifyWarning(message, duration?)` | 対応が必要な注意を通知 | `message` は翻訳済みの警告です。`duration` は閉じるまでのミリ秒数で、既定は 5000、0 なら表示を保持します。 | `toast ID string` | `notifyWarning(m.warning())` |
+| `notifyError(error, fallback?, duration?)` | 安全なエラーメッセージを表示 | `error` から表示可能な文言と追跡 ID を抽出します。`fallback` は表示可能な文言がない場合の翻訳済みテキストです。`duration` の既定は 5000 ms で、0 なら表示を保持します。 | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
+| `errorMessage(error, fallback?)` | 利用者に表示できるメッセージを取得 | `error` は表示できる文言を取り出すエラー、`fallback` は取り出せない場合の翻訳済みテキストです。 | `safe localized string` | `errorMessage(error, m.retry())` |
+| `toast.add(props)` | 通知を追加 | `props` は本文、種類、表示時間、位置、閉じ方を指定します。[通知のフィールド](#toast-options)を参照。 | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
+| `toast.success(message, duration?)` | 成功を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `toast.success(m.result())` |
+| `toast.info(message, duration?)` | 情報を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `toast.info(m.result())` |
+| `toast.warning(message, duration?)` | 注意を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `toast.warning(m.result())` |
+| `toast.error(message, duration?)` | 安全なエラーを通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `toast.error(m.result())` |
+| `toast.remove(id)` | ID で通知を削除 | `id` は通知の作成時に返る識別子で、操作対象の通知を指定します。 | `void` | `toast.remove(id)` |
+| `toast.clear()` | すべての通知を削除 | 引数はありません。 | `void` | `toast.clear()` |
+| `message.add(options)` | 通知を追加 | `options` は翻訳済み本文、または本文、種類、表示時間、閉じ方を指定するオブジェクトです。[メッセージのフィールド](#message-options)を参照。 | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
+| `message.success(message, duration?)` | 成功を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `message.success(m.result())` |
+| `message.info(message, duration?)` | 情報を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `message.info(m.result())` |
+| `message.warning(message, duration?)` | 注意を通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `message.warning(m.result())` |
+| `message.error(message, duration?)` | 安全なエラーを通知 | `message` は表示する翻訳済み本文です。`duration` は自動で閉じるまでのミリ秒数で、既定は 3000、0 なら表示を保持します。 | `string item ID` | `message.error(m.result())` |
+| `message.remove(id)` | ID で通知を削除 | `id` は通知の作成時に返る識別子で、操作対象の通知を指定します。 | `void` | `message.remove(id)` |
+| `message.clear()` | すべての通知を削除 | 引数はありません。 | `void` | `message.clear()` |
+| `toast.pause(id)` | 自動消去を一時停止 | `id` は通知の作成時に返る識別子で、操作対象の通知を指定します。 | `void` | `toast.pause(id)` |
+| `toast.resume(id)` | 自動消去を再開 | `id` は通知の作成時に返る識別子で、操作対象の通知を指定します。 | `void` | `toast.resume(id)` |
+| `messageBox.confirm(options)` | 確認またはキャンセルを待つ | `options` は翻訳済み本文、またはタイトル、ボタン、閉じ方を設定するオブジェクトです。[ダイアログのフィールド](#message-box-options)を参照。 | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
+| `messageBox.alert(options)` | 確認操作を待つ | `options` は翻訳済み本文、またはタイトル、ボタン、閉じ方を設定するオブジェクトです。[ダイアログのフィールド](#message-box-options)を参照。 | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
+| `<Alert>` | 継続的な情報表示 | `variant` は外観や状態を選択。`title` はタイトル。`dismissible` は閉じるボタンの表示を切り替え。 | 継続的な情報表示 | `<Alert variant='info' title='Saved' />` |
+| `<ToastContainer>` | 通知キュー表示 | ルートレイアウトに一度だけ配置します。`toast` と `message` は共通のキューに通知を追加します。 | 通知キュー表示 | `<ToastContainer />` |
+| `<ErrorPage>` | 503 状態と戻るリンク | `status` は表示する結果や状態。`code` は表示するエラーコードや追跡コード。`title` はタイトル。`description` は補足説明。`homeUrl` はホームへのリンク先。`onhome` はホームに戻る操作を処理。`onback` は戻る操作を処理。 | 503 状態と戻るリンク | `<ErrorPage status={503} homeUrl='/' />` |
 
 #### 利用例：操作結果を表示して通知を管理する
 
@@ -379,24 +466,24 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `matchPermission` | 表示用の権限を照合 | `required permission, userPermissions[]` | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
-| `setPermissionContext` | 子部品に現在の権限を提供 | `() => current permissions; component initialization only` | `void` | `setPermissionContext(() => user.permissions)` |
-| `usePermission` | 現在の権限コンテキストを取得 | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
-| `createSensitiveActions` | 指定した重要操作の再認証を要求 | `standard auth actions providing reauthenticate/publicConfig?` | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
-| `createSessionRecovery` | 同じ利用者の再ログインを管理 | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
-| `AuthPanel` | 認証方針に従い actions を呼出 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` | 認証方針に従い actions を呼出 | `<AuthPanel {config} {actions} />` |
-| `AuthShell` | 認証レイアウト | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 認証レイアウト | `<AuthShell title='Sign in'>Account form</AuthShell>` |
-| `LoginForm` | ログイン項目を login へ | `loading`, `errors`, `showForgotPassword`, `onsubmit` | ログイン項目を login へ | `<LoginForm onsubmit={login} />` |
-| `RegisterForm` | 登録項目を register へ | `loading`, `errors`, `fields`, `onsubmit` | 登録項目を register へ | `<RegisterForm onsubmit={register} />` |
-| `ForgotPasswordForm` | パスワード回復要求 | `mode`, `loading`, `errors`, `onsubmit` | パスワード回復要求 | `<ForgotPasswordForm onsubmit={sendReset} />` |
-| `ResetPasswordForm` | パスワード再設定要求 | `loading`, `errors`, `showCode`, `onsubmit` | パスワード再設定要求 | `<ResetPasswordForm onsubmit={resetPassword} />` |
-| `ChangePasswordForm` | パスワード変更要求 | `loading`, `errors`, `requireOldPassword`, `onsubmit` | パスワード変更要求 | `<ChangePasswordForm onsubmit={changePassword} />` |
-| `PasswordInput` | password と強度を更新 | `value`, `showToggle`, `showStrength`, `minLength` | password と強度を更新 | `<PasswordInput bind:value={password} showStrength />` |
-| `ReauthenticationDialog` | 再認証の送信・取消 | `open`, `loading`, `error`, `onsubmit`, `onclose` | 再認証の送信・取消 | `<ReauthenticationDialog open={confirmation.open} onsubmit={confirmation.submit} onclose={confirmation.cancel} />` |
-| `PermGuard` | 権限に応じた表示、サーバー認可は別途 | `permissions`, `mode`, `fallback` | 権限に応じた表示、サーバー認可は別途 | `<PermGuard permissions='orders:read'>Orders</PermGuard>` |
-| `UserProfile` | true のときだけ編集完了 | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` | true のときだけ編集完了 | `<UserProfile {user} editable onsubmit={saveProfile} />` |
-| `SessionRecoveryDialog` | 元のユーザーの再ログイン・取消 | `recovery`, `actions` | 元のユーザーの再ログイン・取消 | `<SessionRecoveryDialog {recovery} {actions} />` |
-| `SensitiveOperationsForm` | 機密操作ルールを送信 | `operations`, `onsubmit`, `ondone` | 機密操作ルールを送信 | `<SensitiveOperationsForm {operations} onsubmit={saveOperations} />` |
+| `matchPermission(required, userPermissions)` | 表示用の権限を照合 | `required` は画面操作に必要な権限、`userPermissions` は現在の利用者に付与された権限キーの一覧です。 | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
+| `setPermissionContext(getPermissions)` | 子部品に現在の権限を提供 | `getPermissions` は現在の権限キーを返す関数です。コンポーネントの初期化時に設定します。 | `void` | `setPermissionContext(() => user.permissions)` |
+| `usePermission()` | 現在の権限コンテキストを取得 | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
+| `createSensitiveActions(options)` | 指定した重要操作の再認証を要求 | `options` には追加認証を行う `reauthenticate` と、公開ポリシーを読み取る任意の `publicConfig` を渡します。 | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
+| `createSessionRecovery()` | 同じ利用者の再ログインを管理 | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
+| `<AuthPanel>` | 認証方針に従い actions を呼出 | `config` は認証方式や入口の公開ポリシー。`actions` はホスト側でログイン・登録・回復などの認証リクエストを実装。`loginHeader` はログインフォームの上部を変更。`registerHeader` は登録フォームの上部を変更。`loginFields` はログインフォームに追加の入力欄を挿入。`loginFooter` はログインフォームの下部を変更。`registerFields` は登録フォームに追加の入力欄を挿入。`registerFooter` は登録フォームの下部を変更。 | 認証方針に従い actions を呼出 | `<AuthPanel {config} {actions} />` |
+| `<AuthShell>` | 認証レイアウト | `variant` は外観や状態を選択。`title` はタイトル。`subtitle` はサブタイトル。`brandTitle` はブランドの見出し。`brandText` はブランドの説明。`illustration` はイラストの内容。`description` は補足説明。`highlights` は強調表示する情報。 | 認証レイアウト | `<AuthShell title='Sign in'>Account form</AuthShell>` |
+| `<LoginForm>` | ログイン項目を login へ | `loading` は処理中の状態を表示。`errors` はサーバーの検証エラーをフィールド別に指定。`showForgotPassword` はパスワードを忘れた場合のリンクを切り替え。`onsubmit` はフォームの送信時に呼び出す。 | ログイン項目を login へ | `<LoginForm onsubmit={login} />` |
+| `<RegisterForm>` | 登録項目を register へ | `loading` は処理中の状態を表示。`errors` はサーバーの検証エラーをフィールド別に指定。`fields` は表示・入力するフィールドを指定。`onsubmit` はフォームの送信時に呼び出す。 | 登録項目を register へ | `<RegisterForm onsubmit={register} />` |
+| `<ForgotPasswordForm>` | パスワード回復要求 | `mode` はコンポーネントのモード。`loading` は処理中の状態を表示。`errors` はサーバーの検証エラーをフィールド別に指定。`onsubmit` はフォームの送信時に呼び出す。 | パスワード回復要求 | `<ForgotPasswordForm onsubmit={sendReset} />` |
+| `<ResetPasswordForm>` | パスワード再設定要求 | `loading` は処理中の状態を表示。`errors` はサーバーの検証エラーをフィールド別に指定。`showCode` は確認コード入力欄を切り替え。`onsubmit` はフォームの送信時に呼び出す。 | パスワード再設定要求 | `<ResetPasswordForm onsubmit={resetPassword} />` |
+| `<ChangePasswordForm>` | パスワード変更要求 | `loading` は処理中の状態を表示。`errors` はサーバーの検証エラーをフィールド別に指定。`requireOldPassword` は現在のパスワードが必要か指定。`onsubmit` はフォームの送信時に呼び出す。 | パスワード変更要求 | `<ChangePasswordForm onsubmit={changePassword} />` |
+| `<PasswordInput>` | password と強度を更新 | `value` は現在値を指定。対応時は双方向バインド可。`showToggle` はパスワード表示切り替え用ボタンを表示。`showStrength` はパスワード強度の表示を切り替え。`minLength` はパスワード検証に使う最小文字数。 | password と強度を更新 | `<PasswordInput bind:value={password} showStrength />` |
+| `<ReauthenticationDialog>` | 再認証の送信・取消 | `open` は開閉状態。`loading` は処理中の状態を表示。`error` はエラーメッセージやエラー状態。`onsubmit` はフォームの送信時に呼び出す。`onclose` は閉じる操作を処理。 | 再認証の送信・取消 | `<ReauthenticationDialog open={confirmation.open} onsubmit={confirmation.submit} onclose={confirmation.cancel} />` |
+| `<PermGuard>` | 権限に応じた表示、サーバー認可は別途 | `permissions` は内容の表示に必要な権限キー。`mode` はすべての権限が必要か、いずれかでよいかを選択。`fallback` は代替表示の内容。 | 権限に応じた表示、サーバー認可は別途 | `<PermGuard permissions='orders:read'>Orders</PermGuard>` |
+| `<UserProfile>` | true のときだけ編集完了 | `user` は表示または編集する利用者情報。`editable` は編集を許可。`fields` は表示・入力するフィールドを指定。`avatarAccept` は選択できるアバターファイルの種類。`avatarHint` はアバター入力欄の補足説明。`onsubmit` はフォームの送信時に呼び出す。 | true のときだけ編集完了 | `<UserProfile {user} editable onsubmit={saveProfile} />` |
+| `<SessionRecoveryDialog>` | 元のユーザーの再ログイン・取消 | `recovery` はセッション復旧コントローラーと状態。`actions` は利用可能な操作、または操作欄の内容。 | 元のユーザーの再ログイン・取消 | `<SessionRecoveryDialog {recovery} {actions} />` |
+| `<SensitiveOperationsForm>` | 機密操作ルールを送信 | `operations` は設定する機密操作の識別子。`onsubmit` はフォームの送信時に呼び出す。`ondone` は操作の完了を処理。 | 機密操作ルールを送信 | `<SensitiveOperationsForm {operations} onsubmit={saveOperations} />` |
 
 #### 利用例：公開ポリシーと認証処理をページに接続する
 
@@ -439,10 +526,10 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `FileUpload` | 選択ファイルを upload へ | `accept`, `maxSize`, `maxFiles`, `multiple`, `uploadHandler` | 選択ファイルを upload へ | `<FileUpload accept='.txt' uploadHandler={upload} />` |
-| `ImageUpload` | 成功後画像 URL を更新 | `value`, `accept`, `maxSize`, `aspectRatio`, `uploadHandler` | 成功後画像 URL を更新 | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
-| `AvatarUpload` | 成功後アバター URL を更新 | `value`, `size`, `maxSize`, `fallback`, `uploadHandler` | 成功後アバター URL を更新 | `<AvatarUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
-| `FileList` | 指定ファイルを表示 | `files`, `layout`, `showDelete`, `showDownload` | 指定ファイルを表示 | `<FileList files={files} />` |
+| `<FileUpload>` | 選択ファイルを upload へ | `accept` はファイル選択で許可する種類。`maxSize` はファイル 1 件のサイズ上限。`maxFiles` は選べるファイルの件数上限。`multiple` は複数選択を許可。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 選択ファイルを upload へ | `<FileUpload accept='.txt' uploadHandler={upload} />` |
+| `<ImageUpload>` | 成功後画像 URL を更新 | `value` は現在値を指定。対応時は双方向バインド可。`accept` はファイル選択で許可する種類。`maxSize` はファイル 1 件のサイズ上限。`aspectRatio` はプレビューや切り抜き領域の縦横比。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 成功後画像 URL を更新 | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
+| `<AvatarUpload>` | 成功後アバター URL を更新 | `value` は現在値を指定。対応時は双方向バインド可。`size` はコンポーネントのサイズ。`maxSize` はファイル 1 件のサイズ上限。`fallback` は代替表示の内容。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 成功後アバター URL を更新 | `<AvatarUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
+| `<FileList>` | 指定ファイルを表示 | `files` は表示するファイル一覧。`layout` はファイルの並べ方。`showDelete` は削除ボタンを表示。`showDownload` はダウンロードボタンを表示。 | 指定ファイルを表示 | `<FileList files={files} />` |
 
 #### 利用例：ファイルを選んでアップロード処理に渡す
 
@@ -458,9 +545,9 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `EncryptedInput` | 成功時だけ現在入力の暗号文を更新 | `value`, `encryptedValue`, `algorithm`, `showEncrypted` | 成功時だけ現在入力の暗号文を更新 | `<EncryptedInput bind:value={plain} bind:encryptedValue={cipher} onencrypt={encrypt} />` |
-| `HashDisplay` | 既存のダイジェストを表示 | `value`, `algorithm`, `copyable`, `truncate` | 既存のダイジェストを表示 | `<HashDisplay value={digest} algorithm='SM3' />` |
-| `SignatureDisplay` | 署名と指定した検証状態を表示 | `signature`, `publicKey`, `algorithm`, `verified` | 署名と指定した検証状態を表示 | `<SignatureDisplay {signature} {publicKey} verified />` |
+| `<EncryptedInput>` | 成功時だけ現在入力の暗号文を更新 | `value` は現在値を指定。対応時は双方向バインド可。`encryptedValue` は表示する暗号化結果。`algorithm` は画面に表示するアルゴリズム名。`showEncrypted` は暗号化した値の表示を切り替え。 | 成功時だけ現在入力の暗号文を更新 | `<EncryptedInput bind:value={plain} bind:encryptedValue={cipher} onencrypt={encrypt} />` |
+| `<HashDisplay>` | 既存のダイジェストを表示 | `value` は現在値を指定。対応時は双方向バインド可。`algorithm` は画面に表示するアルゴリズム名。`copyable` はコピー操作を有効化。`truncate` は長い値の省略表示。 | 既存のダイジェストを表示 | `<HashDisplay value={digest} algorithm='SM3' />` |
+| `<SignatureDisplay>` | 署名と指定した検証状態を表示 | `signature` は表示する署名。`publicKey` は表示する公開鍵。`algorithm` は画面に表示するアルゴリズム名。`verified` はホストから渡された検証結果を表示。 | 署名と指定した検証状態を表示 | `<SignatureDisplay {signature} {publicKey} verified />` |
 
 #### 利用例：実際の暗号文・要約・検証結果を表示する
 
@@ -478,17 +565,45 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `parseMarkdown` | Markdown を表示用の安全な HTML に変換 | `Markdown source, MarkdownParseOptions?` | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
-| `renderMarkdownDocument` | 本文・見出し・コード情報を解析 | `Markdown source, MarkdownDocumentParseOptions?` | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
-| `isLanguageSupported` | 構文強調が対応する言語か確認 | `language name` | `boolean` | `isLanguageSupported("typescript")` |
-| `highlightCode` | ソースをエスケープして構文を強調 | `code text, supported language` | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
-| `resolveDocumentMarkdownContent` | 文書内容を Markdown に整形 | `text, sourceKind?, language?` | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
-| `resolveDocumentDownloadActions` | 文書のダウンロード選択肢を解決 | `MarkdownToolbarDownloadAction[]?` | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
-| `downloadAiDocument` | 選択した形式で文書をダウンロード | `AiDocumentDownloadRequest` | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
-| `MarkdownRenderer` | 安全な Markdown 表示 | `content`, `fontSize`, `allowHtmlTags`, `showCopyButton`, `enableHighlight` | 安全な Markdown 表示 | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
-| `AiDocumentDownloadMenu` | 選択でダウンロードを呼出 | `actions`, `ondownload` | 選択でダウンロードを呼出 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
-| `AiDocumentEditor` | 編集で markdown を更新 | `content`, `fontSize`, `allowHtmlTags`, `showRunButton`, `showCodePreviewToggle`, `allowUnsafeCodePreview` | 編集で markdown を更新 | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
-| `AiTableEditor` | セル表示と編集通知 | `columns`, `rows`, `editable`, `ondownload` | セル表示と編集通知 | `<AiTableEditor {columns} {rows} editable />` |
+| `parseMarkdown(content, options?)` | Markdown を表示用の安全な HTML に変換 | `content: string` は Markdown 原文です。省略可能な `options: MarkdownParseOptions` は[解析オプション](#markdown-parse-options)を参照。 | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
+| `renderMarkdownDocument(content, options?)` | 本文・見出し・コード情報を解析 | `content: string` は Markdown 原文です。省略可能な `options: MarkdownDocumentParseOptions` は[解析オプション](#markdown-parse-options)を参照。 | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
+| `isLanguageSupported(lang)` | 構文強調が対応する言語か確認 | `lang` は `typescript` など、確認する言語 ID です。 | `boolean` | `isLanguageSupported("typescript")` |
+| `highlightCode(text, lang)` | ソースをエスケープして構文を強調 | `text` はコードの原文、`lang` は強調表示に使う言語規則です。 | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
+| `resolveDocumentMarkdownContent(value, kind?, language?)` | 文書内容を Markdown に整形 | `value` は元の本文です。`kind` の既定は `markdown` で、`code` のときにフェンスで囲み、`language` を言語ラベルに使います。 | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
+| `resolveDocumentDownloadActions(actions?)` | 文書のダウンロード選択肢を解決 | `actions` はダウンロードメニューに表示する項目です。省略か空配列の場合は Word、PDF、Markdown を表示します。[ダウンロードのフィールド](#document-download-options)を参照。 | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
+| `downloadAiDocument(request)` | 選択した形式で文書をダウンロード | `request` はダウンロード操作、本文、ファイル名、元データの形式を指定します。[ダウンロードのフィールド](#document-download-options)を参照。 | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
+| `<MarkdownRenderer>` | 安全な Markdown 表示 | `content` は表示する本文またはスニペット。`fontSize` は本文の文字サイズ。`allowHtmlTags` は保持を許可する HTML タグ。`showCopyButton` はコピー操作用のボタンを切り替え。`enableHighlight` は構文強調表示を切り替え。 | 安全な Markdown 表示 | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
+| `<AiDocumentDownloadMenu>` | 選択でダウンロードを呼出 | `actions` は利用可能な操作、または操作欄の内容。`ondownload` は選択したダウンロードを処理。[ダウンロードのフィールド](#document-download-options)。 | 選択でダウンロードを呼出 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
+| `<AiDocumentEditor>` | 編集で markdown を更新 | `content` は表示する本文またはスニペット。`fontSize` は本文の文字サイズ。`allowHtmlTags` は保持を許可する HTML タグ。`showRunButton` は実行ボタンを切り替え。`showCodePreviewToggle` はコードとプレビューの切り替えボタンを表示。`allowUnsafeCodePreview` は信頼できる内容のコードプレビューを明示的に許可。 `remoteImages` で外部画像への通信を制御し、`onrewrite` で検証済みの原文範囲を受け取れます。 | 編集で markdown を更新 | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
+| `<AiTableEditor>` | セル表示と編集通知 | `columns` は編集対象データの列を定義。`rows` は表示・編集する行データ。`editable` は編集を許可。`ondownload` は選択したダウンロードを処理。 | セル表示と編集通知 | `<AiTableEditor {columns} {rows} editable />` |
+
+<a id="document-download-options"></a>
+
+#### ダウンロードメニューと出力のフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `actions[].id` | `string` | 必須 | 組み込みの `word`、`pdf`、`markdown`、またはホスト独自の操作を選びます。 |
+| `actions[].label` | `string` | 組み込み名または ID | メニューの表示名を上書きします。 |
+| `actions[].badgeLabel` | `string` | 組み込み略称または ID 先頭 4 文字を大文字化 | 短いバッジラベルを上書きします。 |
+| `request.actionId` | `string` | 必須 | 直接ダウンロードに使う組み込みエクスポーターを選びます。 |
+| `request.content` | `string` | 必須 | ファイルに書き込む Markdown、文書本文、またはコードです。 |
+| `request.title` | `string` | 未設定 | ファイル名を省略した場合の名前や、出力メタデータに使います。 |
+| `request.filename` | `string` | 未設定 | タイトルから生成されるファイル名を上書きします。 |
+| `request.sourceKind` | `MarkdownSourceKind` | `markdown` | 元データがコードなら `code` を指定します。出力前に Markdown のフェンスで囲みます。 |
+| `request.codeLanguage` | `string` | 未設定 | `sourceKind: "code"` の場合にフェンスの言語ラベルになります。 |
+
+```ts
+import { resolveDocumentDownloadActions, resolveDocumentMarkdownContent } from '@h-ai/ui'
+
+const menu = resolveDocumentDownloadActions([{ id: 'raw', label: 'Source' }])
+// [{ id: 'raw', label: 'Source', badgeLabel: 'RAW' }]
+
+const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
+// '```typescript\nconst count = 42\n```'
+```
+
+独自の操作は `RAW` バッジ付きの 1 項目になり、コードは出力前に言語付きの Markdown コードブロックになります。
 
 #### 利用例：文書を解析してプレビューする
 
@@ -512,6 +627,36 @@ const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdo
 await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
+<a id="markdown-parse-options"></a>
+
+#### Markdown の解析オプション
+
+どちらのパーサーも `options` を省略でき、必要な項目だけ変更できます。
+
+| 項目 | 既定値 | 動作 |
+| --- | --- | --- |
+| `enableHighlight` | `true` | コードブロックを強調表示します。 |
+| `showCopyButton` | `true` | コードブロックにコピーボタンを表示します。 |
+| `breaks` | `true` | 通常の改行に `<br>` を使います。`false` で Markdown の段落規則に従います。 |
+| `allowHtmlTags` | `false` | 有効時も許可リスト内の生 HTML のみを表示します。 |
+| `showRunButton` | `false` | 文書モードのみ。実行用の入口を表示します。実行はホストが許可します。 |
+| `showCodePreviewToggle` | `false` | 文書モードのみ。コードとプレビューの切り替えを表示します。 |
+| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 文書モードのみ。切り替えが有効な場合の 2 つのラベルです。 |
+| `codePreviewHint` | `''` | 文書モードのみ。言語ラベル横の任意のテキストです。 |
+
+<a id="private-document-media"></a>
+
+#### 利用例：画像を制限して Markdown 原文の範囲を取得する
+
+非公開文書で `remoteImages={false}` を指定すると本文のレイアウトを保ち、通信が必要な画像を代替テキストで表示します。インラインデータ画像は表示でき、HTML 実行プレビューと Mermaid はソース表示になります。既定値ではネットワーク画像を許可します。
+
+```svelte
+<!-- 非公開 Markdown のレイアウトを保ち、通信が必要な画像は代替テキストに置き換えます。 -->
+<AiDocumentEditor content={markdown} remoteImages={false} onrewrite={handleRewrite} />
+```
+
+書き換えコールバックの `sourceRange` は現在の `content` で確認できる選択範囲です。UTF-16 の開始位置と終了位置、および元テキストを含みます。`**同じ** / **同じ**` の二つ目の語は `[11, 13)` です。アプリは書き換え前に版と元の文字列を再確認します。
+
 <a id="tool-workspaces"></a>
 
 ### ツール実行と成果物編集：ワークスペース
@@ -522,8 +667,8 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `ArtifactWorkspace` | 成果物編集 | `artifacts`, `onread`, `onsave?` | 保存で版更新、競合時草稿保持 | `<ArtifactWorkspace artifacts={[report]} onread={readArtifact} onsave={saveArtifact} />` |
-| `ToolWorkspace` | ツール実行 | `tools`, `onrun`, `onstatus?`, `oncancel?` | 2 と3 の入力で total=5 | `<ToolWorkspace tools={catalog} onrun={run} />` |
+| `<ArtifactWorkspace>` | 成果物編集 | `artifacts` はワークスペースの成果物一覧。`onread` は選択した成果物の内容を読み込む。`onsave` は編集した内容を保存。 | 保存で版更新、競合時草稿保持 | `<ArtifactWorkspace artifacts={[report]} onread={readArtifact} onsave={saveArtifact} />` |
+| `<ToolWorkspace>` | ツール実行 | `tools` はワークスペースで実行できるツール。`onrun` はツール実行を依頼。`onstatus` は実行受付 ID で現在の状態と進捗を取得。`oncancel` は実行中タスクの取り消しを要求。 | 2 と3 の入力で total=5 | `<ToolWorkspace tools={catalog} onrun={run} />` |
 
 #### 利用例：ツールを実行して成果物を編集する
 
@@ -560,10 +705,10 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `Chart` | グラフ | `type?`, `preset?`, `data`, `x`, `y` | グループ棒グラフ | `<Chart preset='grouped-bar' {data} x='month' y={['revenue', 'cost']} />` |
-| `DashboardGrid` | ダッシュボードグリッド | `columns`, `label`, children | 2列、狭い画面で縮小 | `<DashboardGrid columns={2} label='Metrics'><MetricCard title='Orders' value={42} /></DashboardGrid>` |
-| `MetricCard` | 指標カード | `title`, `value`, `unit?`, `trend?` | 42 と+12.8% を表示 | `<MetricCard title='Orders' value={42} trend={12.8} />` |
-| `ReportCard` | レポートカード | `title`, `loading?`, children | 見出しと内容 | `<ReportCard title='Revenue'>Chart content</ReportCard>` |
+| `<Chart>` | グラフ | `type` は入力または表示の種類。`preset` はグラフの既定設定。明示プロパティを優先。`data` は描画するレコード。`x` は横軸の値の取得方法。`y` は縦軸の値の取得方法。 | グループ棒グラフ | `<Chart preset='grouped-bar' {data} x='month' y={['revenue', 'cost']} />` |
+| `<DashboardGrid>` | ダッシュボードグリッド | `columns` は列数または列定義。`label` はグリッドのアクセシブルな名前。`children` は本体のコンテンツ。 | 2列、狭い画面で縮小 | `<DashboardGrid columns={2} label='Metrics'><MetricCard title='Orders' value={42} /></DashboardGrid>` |
+| `<MetricCard>` | 指標カード | `title` はタイトル。`value` はホスト側で計算した指標値。`unit` は指標の単位を追加。`trend` は変化量をパーセントで指定。 | 42 と+12.8% を表示 | `<MetricCard title='Orders' value={42} trend={12.8} />` |
+| `<ReportCard>` | レポートカード | `title` はタイトル。`loading` は処理中の状態を表示。`children` は本体のコンテンツ。 | 見出しと内容 | `<ReportCard title='Revenue'>Chart content</ReportCard>` |
 
 #### 利用例：業務データをグラフと指標で表示する
 
@@ -601,15 +746,59 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `defineCrud` | フィールドと CRUD 処理をリソースとして定義 | `CrudResource with fields/API callbacks` | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
-| `createCrudController` | 記録の読み込み・移動・検索状態を管理 | `CrudDef, { autoLoad? }?` | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
-| `mapPaginated` | ページ情報を保って各要素を変換 | `PaginatedResult<T>, (item,index) => R` | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
-| `createBrowserNavAdapter` | CRUD の状態をブラウザー移動に接続 | `none` | `NavAdapter` | `createBrowserNavAdapter()` |
-| `CrudPage` | 一覧・フォームとリソース操作 | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` | 一覧・フォームとリソース操作 | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
-| `CrudFilterBar` | 検索条件を送信 | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset` | 検索条件を送信 | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
-| `CrudDetailPanel` | 指定レコードの詳細 | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` | 指定レコードの詳細 | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
-| `CrudEditPanel` | 宣言した書込項目を送信 | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` | 宣言した書込項目を送信 | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
-| `CrudDeleteConfirm` | 確認で remove を呼出 | `open`, `loading`, `onconfirm` | 確認で remove を呼出 | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
+| `defineCrud(resource)` | フィールドと CRUD 処理をリソースとして定義 | `resource` にはリソース名、フィールド、画面での検索・書き込み用コールバックを定義します。 [フィールド表](#crud-resource-options) | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
+| `createCrudController(crud, options?)` | 記録の読み込み・移動・検索状態を管理 | `crud` は `defineCrud` の戻り値です。`options` は初回読み込み、既存データの保持、URL の同期を設定します。[コントローラーのフィールド](#crud-controller-options)を参照。 | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
+| `mapPaginated(result, map)` | ページ情報を保って各要素を変換 | `result` は元のページです。`map` は各項目とその位置を受け取り、`items` を変換します。 | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
+| `createBrowserNavAdapter()` | CRUD の状態をブラウザー移動に接続 | 引数はありません。 | `NavAdapter` | `createBrowserNavAdapter()` |
+| `<CrudPage>` | 一覧・フォームとリソース操作 | `crud` は`defineCrud` が返したリソース定義。`data` は表示するデータ。`permissions` は画面上の操作可否を決める権限情報。`form` は新規・編集フォームの容器やサイズ。`pagination` はページ移動欄の操作と表示情報。`density` は一覧の行や操作欄の密度。`detailColumns` はクリックで詳細を開ける列を限定。`showHeader` はページ見出しの表示を切り替え。`toolbarLeading` はツールバーの先頭に置く内容。`toolbarActions` はツールバーに追加する操作。`card` はカード形式の一覧表示を設定。`tableCell` は行と列キーを受け取りセルを描画。`onrowclick` は利用者がクリックした行を受け取る。`sortableColumns` は並べ替え可能な列を指定。`nav` は一覧のナビゲーションアダプター。`loading` は処理中の状態を表示。`loaded` は初回読み込み前と読み込み済みを区別。`error` はエラーメッセージやエラー状態。`onRetry` は読み込み失敗後の再試行を処理。`keepPreviousData` は更新中に既存データを表示し続けるか指定。 | 一覧・フォームとリソース操作 | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
+| `<CrudFilterBar>` | 検索条件を送信 | `filterFields` は絞り込み対象のフィールド。`searchValue` は現在の検索文字列。`onsearch` は入力された検索文字列や検索操作を受け取る。`onfilterchange` は絞り込み条件の変更を受け取る。`onreset` は条件のリセットを処理。 | 検索条件を送信 | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
+| `<CrudDetailPanel>` | 指定レコードの詳細 | `open` は開閉状態。`item` は詳細を表示するレコード。`fields` は表示・入力するフィールドを指定。`variant` は外観や状態を選択。`drawerWidth` はドロワーモードでの幅。`modalSize` はダイアログモードでのサイズ。 | 指定レコードの詳細 | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
+| `<CrudEditPanel>` | 宣言した書込項目を送信 | `open` は開閉状態。`fields` は表示・入力するフィールドを指定。`variant` は外観や状態を選択。`drawerWidth` はドロワーモードでの幅。`modalSize` はダイアログモードでのサイズ。`onsubmit` はフォームの送信時に呼び出す。 | 宣言した書込項目を送信 | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
+| `<CrudDeleteConfirm>` | 確認で remove を呼出 | `open` は開閉状態。`loading` は処理中の状態を表示。`onconfirm` は利用者が確認したときに呼び出す。 | 確認で remove を呼出 | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
+
+<a id="crud-resource-options"></a>
+
+#### リソース定義のフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `name / label` | `string` / `CrudText` | 必須 | 業務リソースの識別名と画面タイトル。 |
+| `keyField` | `string` | `id` | 一覧の行、詳細、書き込み対象を識別するフィールド。 |
+| `fields` | `CrudFieldDef[]` | 必須 | 表示・絞り込み・編集用のフィールドを定義します。`id` はレコードのキー、`label` は表示名、`type` は入力の種類です。 |
+| `defaultPageSize` | `number` | `10` | 初回検索のページサイズ。 |
+| `searchable` | `boolean` | `true` | テキスト検索欄の表示を切り替えます。 |
+| `searchPlaceholder` | `CrudText` | 現在のコンポーネントの翻訳 | 検索欄を表示する場合のプレースホルダーを上書きします。 |
+| `api.list` | `CrudApi["list"]` | 必須 | 検索条件と任意のキャンセルシグナルを受け取り、`items`、`total`、`page`、`pageSize` を返します。 |
+| `api.get / create / update / remove` | `CrudApi` | 未設定 | 単件取得、作成、更新、削除が必要な場合は対応するコールバックを指定します。 |
+
+下のコントローラー例では `name: "jobs"` と、ジョブ `j1` だけを返す `api.list` を指定します。
+
+<a id="crud-controller-options"></a>
+
+#### 一覧コントローラーのオプション
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `autoLoad` | `boolean` | `true` | コントローラーの作成直後に検索します。遅延タブでは `false` を指定し、開いたときに `load()` を呼びます。 |
+| `keepPreviousData` | `boolean` | `true` | 再取得中や失敗時に一覧を保持します。`false` なら再取得の開始時に空にします。 |
+| `syncUrl` | `boolean` | `true` | 検索パラメーターをブラウザーのアドレスバーと同期し、パスとフラグメントは保持します。 |
+
+```ts
+import { createCrudController, defineCrud } from '@h-ai/ui'
+
+const crud = defineCrud<{ id: string }>({
+  name: 'jobs',
+  label: 'Jobs',
+  fields: [{ id: 'id', label: 'ID', type: 'text' }],
+  api: {
+    list: async () => ({ items: [{ id: 'j1' }], total: 1, page: 1, pageSize: 20 }),
+  },
+})
+const controller = createCrudController(crud, { autoLoad: false, syncUrl: false })
+await controller.load()
+```
+
+作成時に検索しません。`load()` 後の `controller.data.items` は `[{ id: "j1" }]` で、ブラウザーの URL は変わりません。
 
 #### 利用例：リソース定義から一覧・編集画面を作る
 
@@ -656,7 +845,7 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `CodeWorkspace` | ソースワークスペース | `source: CodeWorkspaceSource` | README.md で # Hello を表示 | `<CodeWorkspace {source} />` |
+| `<CodeWorkspace>` | ソースワークスペース | `source` はコードの読み込み・保存に使うワークスペースのデータ源。 | README.md で # Hello を表示 | `<CodeWorkspace {source} />` |
 
 #### 利用例：ファイルとコードを閲覧する
 
@@ -689,10 +878,10 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `createGuide` | 導覧とヘルプのコントローラーを作成 | `GuideOptions: tours, articles?, nav?, persistence?, persistKey?` | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
-| `resolveGuideText` | 固定値または遅延翻訳の案内文を取得 | `string or translation callback?` | `string` | `resolveGuideText(() => m.help())` |
-| `GuideHost` | ガイドとヘルプ画面 | `guide`, `locale`, `scope`, `autoStart` | ガイドとヘルプ画面 | `<GuideHost {guide} locale='en-US' scope='demo-user' />` |
-| `HelpCenter` | ヘルプの検索と閲覧 | `articles`, `tours`, `locale`, `selectedId`, `onstart` | ヘルプの検索と閲覧 | `<HelpCenter articles={articles} tours={tours} locale='en-US' />` |
+| `createGuide(options)` | 導覧とヘルプのコントローラーを作成 | 必須の `options: GuideOptions` でツアー、ナビゲーション、進捗保存を設定します。[呼び出し引数](#call-options)を参照。 | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
+| `resolveGuideText(text?)` | 固定値または遅延翻訳の案内文を取得 | 任意の `text` は表示する文字列、または現在の言語の翻訳を取得する関数です。 | `string` | `resolveGuideText(() => m.help())` |
+| `<GuideHost>` | ガイドとヘルプ画面 | `guide` はガイドのコントローラーを指定。`locale` は表示する言語。`scope` はツアーの対象ページまたはワークスペースを限定。`autoStart` は条件に合うツアーの自動開始を許可。 | ガイドとヘルプ画面 | `<GuideHost {guide} locale='en-US' scope='demo-user' />` |
+| `<HelpCenter>` | ヘルプの検索と閲覧 | `articles` はヘルプ記事の一覧。`tours` は利用可能なツアーの一覧。`locale` は表示する言語。`selectedId` は現在表示するヘルプ項目。`onstart` はツアーの開始操作を処理。 | ヘルプの検索と閲覧 | `<HelpCenter articles={articles} tours={tours} locale='en-US' />` |
 
 #### 利用例：ガイドを開始してヘルプ記事を開く
 
@@ -751,19 +940,19 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `getThemeInfo` | 対応テーマの情報を取得 | `theme ID` | `ThemeInfo or undefined` | `getThemeInfo("light")` |
-| `isDarkTheme` | ダーク配色のテーマか確認 | `theme ID` | `boolean` | `isDarkTheme("dark")` |
-| `normalizeThemeId` | 対応テーマまたは代替テーマを選択 | `candidate theme ID, fallback?` | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
-| `normalizeHexColor` | 対応する16進色を正規化 | `string or null/undefined` | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
-| `resolveThemeTone` | テーマの明暗を取得 | `theme ID` | `light or dark` | `resolveThemeTone("light")` |
-| `createThemeBootstrapScript` | 初回表示前に信頼済みテーマを適用 | `ThemeBootstrapScriptOptions from trusted host config` | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
-| `getThemeInitScript` | 既定テーマ初期化スクリプトを取得 | `none` | `script string` | `getThemeInitScript()` |
-| `applyTheme` | テーマを適用し、必要に応じて設定を保存 | `theme ID, persist? (default true)` | `void; updates DOM/browser preference` | `applyTheme("dark")` |
-| `getCurrentTheme` | ページに適用中のテーマを取得 | `none` | `theme ID string` | `getCurrentTheme()` |
-| `getSavedTheme` | 保存されたテーマ設定を取得 | `fallback theme ID?` | `theme ID string` | `getSavedTheme("light")` |
-| `ThemeColorPicker` | 選択色を更新 | `value`, `presets`, `onchange` | 選択色を更新 | `<ThemeColorPicker bind:value={color} />` |
-| `ThemeSelector` | テーマを選択 | `themeIds?: readonly string[]` | 組み込みテーマの候補を指定できる | `<ThemeSelector />` |
-| `ThemeToggle` | 明暗を切替 | なし | 明暗を切替 | `<ThemeToggle />` |
+| `getThemeInfo(themeId)` | 対応テーマの情報を取得 | `themeId` は属性やライト・ダークの分類を取得するテーマを指定します。 | `ThemeInfo or undefined` | `getThemeInfo("light")` |
+| `isDarkTheme(themeId)` | ダーク配色のテーマか確認 | `themeId` は属性やライト・ダークの分類を取得するテーマを指定します。 | `boolean` | `isDarkTheme("dark")` |
+| `normalizeThemeId(themeId, fallbackThemeId?)` | 対応テーマまたは代替テーマを選択 | `themeId` は設定などから読み取った候補です。無効なときは `fallbackThemeId` を使い、既定は `light` です。 | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
+| `normalizeHexColor(value)` | 対応する16進色を正規化 | `value` はテーマ設定から取得した 16 進色の候補で、null や undefined も指定できます。 | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
+| `resolveThemeTone(themeId)` | テーマの明暗を取得 | `themeId` は属性やライト・ダークの分類を取得するテーマを指定します。 | `light or dark` | `resolveThemeTone("light")` |
+| `createThemeBootstrapScript(options)` | 初回表示前に信頼済みテーマを適用 | 必須の `options: ThemeBootstrapScriptOptions` は信頼できるホストの設定から渡します。[呼び出し引数](#call-options)を参照。 | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
+| `getThemeInitScript()` | 既定テーマ初期化スクリプトを取得 | 引数はありません。 | `script string` | `getThemeInitScript()` |
+| `applyTheme(theme, persist?)` | テーマを適用し、必要に応じて設定を保存 | `theme` はページに適用するテーマです。`persist` の既定は `true` で、次回の訪問に備えて選択を保存します。 | `void; updates DOM/browser preference` | `applyTheme("dark")` |
+| `getCurrentTheme()` | ページに適用中のテーマを取得 | 引数はありません。 | `theme ID string` | `getCurrentTheme()` |
+| `getSavedTheme(fallbackTheme?)` | 保存されたテーマ設定を取得 | `fallbackTheme` は有効な設定を読み取れない場合に返すテーマで、既定は `light` です。 | `theme ID string` | `getSavedTheme("light")` |
+| `<ThemeColorPicker>` | 選択色を更新 | `value` は現在値を指定。対応時は双方向バインド可。`presets` は利用者が選べる色の一覧。`onchange` は値の変更時に呼び出す。 | 選択色を更新 | `<ThemeColorPicker bind:value={color} />` |
+| `<ThemeSelector>` | テーマを選択 | `themeIds` は表示するテーマ ID を限定。 | 組み込みテーマの候補を指定できる | `<ThemeSelector />` |
+| `<ThemeToggle>` | 明暗を切替 | なし | 明暗を切替 | `<ThemeToggle />` |
 
 #### 利用例：設定を読み込んでテーマを切り替える
 
@@ -796,14 +985,14 @@ import {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `createLocaleStore` | ブラウザーページの言語を管理 | `{ defaultLocale?, supportedLocales?, detectBrowser?, persistKey? }` | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
-| `getGlobalLocale` | 現在のコンテキストの言語を取得 | `none` | `locale string from current context` | `getGlobalLocale()` |
-| `setGlobalLocale` | 現在のリクエストまたはページの言語を設定 | `locale` | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
-| `detectBrowserLocale` | ブラウザーから対応言語を選択 | `supportedLocales?` | `supported locale or null` | `detectBrowserLocale()` |
-| `isLocaleSupported` | 有効な言語か確認 | `locale, supportedLocales?` | `boolean` | `isLocaleSupported("ja-JP")` |
-| `resolveLocale` | 対応言語または代替言語を取得 | `locale, supportedLocales?, fallback?` | `supported locale` | `resolveLocale("en")` |
-| `interpolate` | メッセージ中の名前付き変数を置換 | `template string, InterpolationParams` | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
-| `LanguageSwitch` | UI 言語を変更 | なし | UI 言語を変更 | `<LanguageSwitch />` |
+| `createLocaleStore(options?)` | ブラウザーページの言語を管理 | `options` は省略可能です。既定の言語、対応言語、ブラウザーでの判定、保存キーを指定できます。[呼び出し引数](#call-options)を参照。 | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
+| `getGlobalLocale()` | 現在のコンテキストの言語を取得 | 引数はありません。 | `locale string from current context` | `getGlobalLocale()` |
+| `setGlobalLocale(locale)` | 現在のリクエストまたはページの言語を設定 | `locale` はグローバル翻訳関数に適用する言語タグです。 | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
+| `detectBrowserLocale(supportedLocales?)` | ブラウザーから対応言語を選択 | `supportedLocales` は受け付けるブラウザー言語の一覧で、省略するとフレームワークの対応一覧を使います。 | `supported locale or null` | `detectBrowserLocale()` |
+| `isLocaleSupported(locale, supportedLocales?)` | 有効な言語か確認 | `locale` は確認する言語です。`supportedLocales` は照合対象を限定し、既定ではフレームワークの対応一覧を使います。 | `boolean` | `isLocaleSupported("ja-JP")` |
+| `resolveLocale(locale, supportedLocales?, defaultLocale?)` | 対応言語または代替言語を取得 | `locale` は候補、`supportedLocales` は許可される言語一覧です。`defaultLocale` は候補が一致しない場合に優先し、省略時はフレームワークの既定言語を使います。 | `supported locale` | `resolveLocale("en")` |
+| `interpolate(template, params?)` | メッセージ中の名前付き変数を置換 | `template` はプレースホルダーを含む文字列です。`params` はキー別の置換値を指定し、省略時は元の文字列を返します。 | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
+| `<LanguageSwitch>` | UI 言語を変更 | なし | UI 言語を変更 | `<LanguageSwitch />` |
 
 #### 利用例：ページの言語を選んで文言を整える
 
@@ -842,10 +1031,10 @@ import {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `FeedbackModal` | ホストへ送信、失敗時入力保持 | `open`, `onsubmit` | ホストへ送信、失敗時入力保持 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
-| `FeedbackForm` | 送信データと添付変更 | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` | 送信データと添付変更 | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
-| `FeedbackList` | 照会コールバック、通信はホスト | `data`, `query`, `permissions`, `onquerychange`, `onstatus` | 照会コールバック、通信はホスト | `<FeedbackList data={feedbackRows} onquerychange={queryFeedback} />` |
-| `FeedbackDetail` | 報告と許可済み証拠 | `report`, `evidence`, `attachments`, `history`, `webhook`, `onretry`, `onexport` | 報告と許可済み証拠 | `<FeedbackDetail report={report} />` |
+| `<FeedbackModal>` | ホストへ送信、失敗時入力保持 | `open` は開閉状態。`onsubmit` はフォームの送信時に呼び出す。 | ホストへ送信、失敗時入力保持 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
+| `<FeedbackForm>` | 送信データと添付変更 | `attachments` は表示・編集する添付ファイル。`evidenceSummary` は収集する診断資料の概要を表示。`onsubmit` はフォームの送信時に呼び出す。`onfileschange` は添付ファイル選択の変更を受け取る。 | 送信データと添付変更 | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
+| `<FeedbackList>` | 照会コールバック、通信はホスト | `data` は表示するデータ。`query` は現在の一覧の検索条件。`permissions` は画面上の操作可否を決める権限情報。`onquerychange` は検索条件の変更を受け取る。`onstatus` は利用者が要求した報告の状態変更を受け取る。 | 照会コールバック、通信はホスト | `<FeedbackList data={feedbackRows} onquerychange={queryFeedback} />` |
+| `<FeedbackDetail>` | 報告と許可済み証拠 | `report` は現在のフィードバック報告。`evidence` は表示を許可された診断資料。`attachments` は表示・編集する添付ファイル。`history` は対応履歴。`webhook` は表示する Webhook 配信状態。`onretry` は配信の再試行を処理。`onexport` は利用者の出力操作を処理。 | 報告と許可済み証拠 | `<FeedbackDetail report={report} />` |
 | `FeedbackScreenshot` | 注釈コールバック | `attachment`, `onannotate` | 注釈コールバック | `<FeedbackScreenshot attachment={attachment} onannotate={annotate} />` |
 
 #### 利用例：証拠を表示してフィードバックを送る
@@ -862,23 +1051,23 @@ import {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `registerClipboardHostWriter` | WebView のコピー処理を登録・解除 | `async text => boolean or null to unregister` | `void` | `registerClipboardHostWriter(null)` |
-| `writeTextToClipboard` | テキストをコピーし成否を返す | `text: string` | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
-| `cn` | 条件付きのクラス名を結合 | `...string\|boolean\|null\|undefined values` | `string` | `cn("flex", active && "text-primary")` |
-| `getDataAttributes` | data-* 属性だけを引き継ぐ | `props record` | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
-| `generateId` | 画面要素用の識別子を作成 | `prefix?; not a security token generator` | `string` | `generateId("field")` |
-| `portal` | マウント済みノードを指定先へ移動 | `HTMLElement, target HTMLElement or selector?` | `Svelte action result with cleanup` | `portal(node, document.body)` |
-| `detectPlatform` | 現在の端末種別を検出 | `none` | `Platform` | `detectPlatform()` |
-| `isMobile` | モバイル端末か確認 | `none` | `boolean` | `isMobile()` |
-| `isNativeApp` | ネイティブアプリ内で動作しているか確認 | `none` | `boolean` | `isNativeApp()` |
-| `usePlatform` | 端末情報をリアクティブに取得 | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
-| `getVariantClass` | 表示種別を部品のクラス名へ変換 | `Variant, prefix?` | `string class name` | `getVariantClass("primary", "btn")` |
-| `getSizeClass` | サイズを部品のクラス名へ変換 | `Size, prefix?` | `string class name` | `getSizeClass("sm", "btn")` |
-| `getInputSizeClass` | 入力部品のサイズクラスを取得 | `Size` | `string class name` | `getInputSizeClass("sm")` |
-| `getBadgeVariantClass` | バッジの配色クラスを取得 | `Variant` | `string class name` | `getBadgeVariantClass("info")` |
-| `getBadgeSizeClass` | バッジのサイズクラスを取得 | `Size` | `string class name` | `getBadgeSizeClass("sm")` |
-| `getAlertVariantClass` | 通知の配色クラスを取得 | `Variant` | `string class name` | `getAlertVariantClass("info")` |
-| `getProgressVariantClass` | 進捗表示の配色クラスを取得 | `Variant` | `string class name` | `getProgressVariantClass("primary")` |
+| `registerClipboardHostWriter(writer)` | WebView のコピー処理を登録・解除 | `writer` は文字列を受け取り、ホストでの書き込み成功を非同期で返します。`null` で登録を解除します。 | `void` | `registerClipboardHostWriter(null)` |
+| `writeTextToClipboard(text)` | テキストをコピーし成否を返す | `text` はクリップボードに書き込む文字列です。 | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
+| `cn(...classes)` | 条件付きのクラス名を結合 | `classes` は順に連結する可変個のクラス名です。偽値は無視します。 | `string` | `cn("flex", active && "text-primary")` |
+| `getDataAttributes(props)` | data-* 属性だけを引き継ぐ | `props` は `data-*` 属性の抽出元となるコンポーネント属性です。 | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
+| `generateId(prefix?)` | 画面要素用の識別子を作成 | `prefix` は生成する DOM ID の接頭辞です。省略時は UI ライブラリの既定値を使います。 | `string` | `generateId("field")` |
+| `portal(node, target?)` | マウント済みノードを指定先へ移動 | `node` は移動する DOM 要素です。`target` は移動先の要素またはセレクターで、既定は `document.body` です。 | `Svelte action result with cleanup` | `portal(node, document.body)` |
+| `detectPlatform()` | 現在の端末種別を検出 | 引数はありません。 | `Platform` | `detectPlatform()` |
+| `isMobile()` | モバイル端末か確認 | 引数はありません。 | `boolean` | `isMobile()` |
+| `isNativeApp()` | ネイティブアプリ内で動作しているか確認 | 引数はありません。 | `boolean` | `isNativeApp()` |
+| `usePlatform()` | 端末情報をリアクティブに取得 | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
+| `getVariantClass(variant, prefix?)` | 表示種別を部品のクラス名へ変換 | `variant` は外観の種類、`prefix` はクラスの接頭辞で、既定は `btn` です。 | `string class name` | `getVariantClass("primary", "btn")` |
+| `getSizeClass(size, prefix?)` | サイズを部品のクラス名へ変換 | `size` はコンポーネントのサイズ、`prefix` はクラスの接頭辞で、既定は `btn` です。 | `string class name` | `getSizeClass("sm", "btn")` |
+| `getInputSizeClass(size)` | 入力部品のサイズクラスを取得 | `size` は CSS クラスに変換するコンポーネントのサイズです。 | `string class name` | `getInputSizeClass("sm")` |
+| `getBadgeVariantClass(variant)` | バッジの配色クラスを取得 | `variant` は CSS クラスに変換する表示状態です。 | `string class name` | `getBadgeVariantClass("info")` |
+| `getBadgeSizeClass(size)` | バッジのサイズクラスを取得 | `size` は CSS クラスに変換するコンポーネントのサイズです。 | `string class name` | `getBadgeSizeClass("sm")` |
+| `getAlertVariantClass(variant)` | 通知の配色クラスを取得 | `variant` は CSS クラスに変換する表示状態です。 | `string class name` | `getAlertVariantClass("info")` |
+| `getProgressVariantClass(variant)` | 進捗表示の配色クラスを取得 | `variant` は CSS クラスに変換する表示状態です。 | `string class name` | `getProgressVariantClass("primary")` |
 
 #### 利用例：スタイルを組み立てて診断番号をコピーする
 
@@ -902,7 +1091,14 @@ const copied = await writeTextToClipboard('trace-001') // true if copied; false 
 
 ## 呼び出し引数
 
-詳細は[中国語ガイド](ui.md#call-options).
+| 項目 | 既定値または必須条件 |
+| --- | --- |
+| `createLocaleStore: defaultLocale, supportedLocales` | 既定値は `zh-CN` と組み込み言語一覧です。対応言語には `code` と `label` を指定します。 |
+| `createLocaleStore: detectBrowser, persistKey` | 既定値は `true` と `hai-locale`。`false` にするとブラウザーの言語設定を調べません。 |
+| `createGuide: tours, articles, nav` | `tours` 配列は必須です。ヘルプ記事 `articles` とナビゲーション `nav` は任意です。 |
+| `createGuide: persistence, persistKey, waitTimeout` | 既定値は `cookie`、`hai-guide`、対象要素ごとに 3000 ミリ秒です。`memory` では再読み込み時に進捗を失います。 |
+| `createThemeBootstrapScript: storageKey, defaultThemeId, defaultThemeColor` | `storageKey` は必須。テーマの既定値は `light` です。色を省略すると初期のカスタム色は設定されません。 |
+| `createThemeBootstrapScript: colorCssVar, toneDatasetKey, locale` | CSS 色と明暗属性の出力キーは任意。言語も初期化する場合は `key`、`defaultValue`、`supportedValues` を指定します。 |
 
 <a id="form-layout-guide"></a>
 
@@ -912,9 +1108,74 @@ const copied = await writeTextToClipboard('trace-001') // true if copied; false 
 
 <a id="toast-options"></a>
 
-## 通知オプション
+## 通知の設定
 
-詳細は[中国語ガイド](ui.md#toast-options).
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | 通知に表示する翻訳済み本文。 |
+| `variant` | `Variant` | `info` | 通知の見た目を指定します。 |
+| `duration` | `number` | `3000` ms | 表示時から計測します。0 は自動で閉じません。 |
+| `position` | `ToastProps["position"]` | `bottom-right` | 通知の位置を上下・左中右の組み合わせから選びます。キューは共通です。 |
+| `dismissible` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
+| `traceId` | `string` | 未設定 | 公開可能な追跡 ID があると、利用者が展開して ID を確認できます。 |
+
+```ts
+import { toast } from '@h-ai/ui/toast'
+
+toast.add({ message: '未確認の項目が 2 件あります', variant: 'warning', duration: 0, position: 'top-right' })
+```
+
+右上に警告が表示され、手動で閉じるまで残ります。
+
+<a id="message-options"></a>
+
+## メッセージのフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | 表示する翻訳済みメッセージ。文字列を直接渡すと本文になります。 |
+| `type` | `MessageOptions["type"]` | `info` | 共通キュー内のこのメッセージの見た目を選びます。 |
+| `duration` | `number` | `3000` ms | 自動で閉じるまでのミリ秒数。0 は自動で閉じません。 |
+| `closable` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
+
+```ts
+import { message } from '@h-ai/ui'
+
+const id = message.add({ message: '2 件を保存しました', type: 'success', duration: 2000 })
+```
+
+通知 ID が返り、成功メッセージが 2 秒で消えます。
+
+<a id="message-box-options"></a>
+
+## 確認ダイアログのフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | ダイアログ本文。文字列を直接渡すと本文になり、HTML タグも文字として表示します。 |
+| `title` | `string` | 現在の言語のタイトル | タイトルを上書きします。 |
+| `type` | `confirm` / `alert` | メソッドで設定 | メソッドで選んだモードを上書きします。キャンセルボタンの表示は `showCancel` で指定します。 |
+| `iconType` | `MessageBoxIconType` | 確認は `warning`、通知は `info` | 本文の横に表示するアイコンを上書きします。 |
+| `confirmText` | `string` | 現在の言語の確認ラベル | 確認ボタンのラベルを上書きします。 |
+| `cancelText` | `string` | 現在の言語のキャンセルラベル | キャンセルボタンが表示される場合に使います。 |
+| `confirmVariant` | `MessageBoxOptions["confirmVariant"]` | `primary` | 確認ボタンの見た目を指定します。 |
+| `showCancel` | `boolean` | 確認は `true`、通知は `false` | キャンセルボタンの表示を切り替えます。 |
+| `closeOnClickModal` | `boolean` | `true` | 背景のクリックで閉じる操作を開始するか指定します。 |
+| `showClose` | `boolean` | `true` | 右上の閉じるボタンを表示するか指定します。 |
+| `beforeClose` | `MessageBoxOptions["beforeClose"]` | 未設定 | 確認・キャンセル・閉じる操作と、読み込み状態を変更できるインスタンスを受け取ります。`false` を返すか非同期に解決すると表示を継続します。 |
+
+例の実行前に、ルートレイアウトに `MessageBoxContainer` を配置します。
+
+```ts
+import { messageBox } from '@h-ai/ui'
+
+const accepted = await messageBox.confirm({
+  message: '下書き 2 件を送信しますか？',
+  closeOnClickModal: false,
+})
+```
+
+背景をクリックしても開いたままです。確認を押すと `accepted` は `true`、キャンセルでは `false` になります。
 
 <a id="theme-locale-guide"></a>
 

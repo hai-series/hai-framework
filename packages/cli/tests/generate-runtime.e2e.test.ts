@@ -9,9 +9,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
@@ -257,10 +258,19 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'))
     expect(manifest.devDependencies['@h-ai/core']).toBeDefined()
     const desktop = path.join(project, 'apps/native-names-desktop')
+    const desktopConfig = JSON.parse(await readFile(path.join(desktop, 'src-tauri/tauri.conf.json'), 'utf8'))
+    expect(desktopConfig.plugins?.updater).toBeUndefined()
+    for (const file of ['DesktopUpdateEntry.svelte', 'desktop-update.svelte.ts']) {
+      expect(await readFile(path.join(desktop, 'src/lib/desktop-update', file), 'utf8'))
+        .toBe(await readFile(path.join(repository, 'packages/cli/templates/shared/desktop-update', file), 'utf8'))
+    }
     const fakeTool = path.join(desktop, 'node_modules/@tauri-apps/cli')
     await mkdir(fakeTool, { recursive: true })
     await writeFile(path.join(fakeTool, 'tauri.js'), 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
     const desktopPackage = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'))
+    const workspace = parse(await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8'))
+    expect(desktopPackage.dependencies['@tauri-apps/plugin-updater']).toBe('catalog:')
+    expect(workspace.catalog['@tauri-apps/plugin-updater']).toMatch(/^2\./)
     const [, runner, ...fixedArgs] = desktopPackage.scripts.tauri.split(' ')
     const result = spawnSync(process.execPath, [
       path.resolve(desktop, runner),
@@ -310,6 +320,75 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     const base = await start(project, await port(), '/api/health')
     expect((await fetch(base)).status).toBe(200)
     expect((await fetch(`${base}/api/health`)).status).toBe(200)
+  }, 180_000)
+
+  it('website datapipe 路由处理正文并返回统一校验错误', async () => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await mkdir(tempParent, { recursive: true })
+    const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
+    roots.push(root)
+    const name = 'datapipe-site'
+    await createProject({
+      name,
+      appType: 'website',
+      cwd: root,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })
+    const project = path.join(root, name)
+    await generateFromTemplates(project, buildTemplateContext({
+      name,
+      appType: 'website',
+      features: ['datapipe'],
+      packageManager: 'pnpm',
+      deploy: false,
+    }))
+    const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'))
+    expect(manifest.dependencies).toHaveProperty('@h-ai/datapipe', 'catalog:')
+    await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
+    await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
+    await tool('typescript', [], project)
+    await tool('vite', ['build'], project)
+    const base = await start(project, await port(), '/api/health')
+
+    const requestId = 'datapipe-scaffold-request'
+    const endpoint = `${base}/api/datapipe/pipeline`
+    const requestOptions = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'origin': base, 'x-request-id': requestId },
+    }
+    const accepted = await fetch(endpoint, {
+      ...requestOptions,
+      body: JSON.stringify({ content: '<p>Sample report.</p>' }),
+    })
+    expect(accepted.status).toBe(200)
+    expect(await accepted.json()).toMatchObject({
+      success: true,
+      requestId,
+      data: {
+        cleaned: 'Sample report.',
+        chunkCount: 1,
+        chunks: [
+          { index: 0, content: 'Sample report.' },
+        ],
+      },
+    })
+
+    const rejected = await fetch(endpoint, {
+      ...requestOptions,
+      body: JSON.stringify({ content: '  ' }),
+    })
+    expect(rejected.status).toBe(400)
+    expect(rejected.headers.get('x-trace-id')).toBe(requestId)
+    expect(await rejected.json()).toMatchObject({
+      success: false,
+      requestId,
+      error: { code: HaiCommonError.INVALID_REQUEST.code, traceId: requestId },
+    })
   }, 180_000)
 
   it.each(['website', 'api', 'fullstack'] as const)('%s生成的新路由进入实际构建与HTTP入口', async (appType) => {

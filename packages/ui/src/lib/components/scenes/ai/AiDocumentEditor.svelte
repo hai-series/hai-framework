@@ -50,6 +50,7 @@
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { documentRenderPool, useDocumentRenderWorker } from './document-render-pool.js'
+  import { resolveMarkdownSourceRange } from './document-source-range.js'
   import { parseMarkdown } from './markdown-parse.js'
   import {
     createMermaidSourceSignature,
@@ -353,6 +354,7 @@
     allowUnsafeCodePreview = false,
     // 是否按安全白名单解析原始 HTML 标签。
     allowHtmlTags = false,
+    remoteImages = true,
     // 代码预览切换模式下展示在语言标签旁的提示文案。
     codePreviewHint = '',
     // 是否启用语法高亮。
@@ -484,6 +486,7 @@
   let savedSelectionRange = $state<Range | null>(null)
   // 纯文本快照用于 DOM 被局部重建后的兜底恢复，避免只靠 Range 引用失效。
   let savedSelectionSnapshot = $state<MarkdownSelectionSnapshot | null>(null)
+  let savedSelectionContent = ''
   // 真实尺寸修正只需要排队一帧，避免反复触发 handleSelectionChange 形成抖动。
   let selectionToolbarMeasurePending = false
   // 选区刷新统一合并到同一帧，避免 selectionchange / mouseup / blur 连续触发时抖动。
@@ -522,12 +525,13 @@
       codePreviewHint: normalizedCodePreviewHint,
       breaks,
       allowHtmlTags,
+      remoteImages,
     },
   } satisfies DocumentRenderJob)
   let useBackgroundRender = $state(false)
   let lastRender = $state.raw<{ job: DocumentRenderJob, result: MarkdownRenderResult }>()
   const renderInWorker = $derived(useBackgroundRender && useDocumentRenderWorker(renderJob.content))
-  const renderResult = $derived(renderInWorker
+  const renderResult = $derived(renderInWorker && lastRender?.job.options?.remoteImages === remoteImages
     ? lastRender?.result ?? { outline: [], codeBlocks: [], blocks: [] }
     : renderMarkdownDocument(renderJob.content, renderJob.options))
   const renderPending = $derived(renderInWorker && lastRender?.job !== renderJob)
@@ -1124,7 +1128,7 @@
       ? `<p class="hai-md-preview-desc">${escapePreviewText(result.description)}</p>`
       : ''
 
-    if (result.kind === 'mermaid') {
+    if (result.kind === 'mermaid' && remoteImages) {
       host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-mermaid"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-mermaid hai-md-mermaid-preview" contenteditable="false"></div></div>`
       const mermaidEl = host.querySelector<HTMLElement>('.hai-md-mermaid-preview')
       if (mermaidEl) {
@@ -1139,7 +1143,7 @@
       return
     }
 
-    if (result.kind === 'html') {
+    if (result.kind === 'html' && remoteImages) {
       const previewSandbox = escapePreviewAttribute(
         resolvePreviewSandbox(result.allowScripts),
       )
@@ -1153,6 +1157,7 @@
         showCopyButton: false,
         breaks,
         allowHtmlTags,
+        remoteImages,
       })
 
       host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-preview-rendered">${markdownHtml}</div></div>`
@@ -1848,6 +1853,7 @@
   function rememberPreviewSelection(range: Range): void {
     savedSelectionRange = range.cloneRange()
     savedSelectionSnapshot = capturePreviewSelectionSnapshot(range)
+    savedSelectionContent = content
   }
 
   /**
@@ -2076,6 +2082,7 @@
     linkDraft = ''
     savedSelectionRange = null
     savedSelectionSnapshot = null
+    savedSelectionContent = ''
     selectionFormatState = { ...DEFAULT_SELECTION_FORMAT_STATE }
   }
 
@@ -2514,12 +2521,17 @@
 
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
+    const sourceRange = savedSelectionSnapshot && previewHost && !renderPending
+      && sourceKind !== 'code' && savedSelectionContent === content
+      ? resolveMarkdownSourceRange(content, previewHost.textContent ?? '', savedSelectionSnapshot)
+      : undefined
     await onrewrite({
       actionId,
       selectedText,
       selectionSnapshot: savedSelectionSnapshot
         ? { ...savedSelectionSnapshot }
         : undefined,
+      ...(sourceRange && { sourceRange }),
       content,
       title: title || undefined,
     })

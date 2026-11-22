@@ -77,8 +77,8 @@ finally {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `audit.init` | 初期化済み RelDB に監査テーブルを準備 | `config?`（省略时使用默认配置） | `void` | `await audit.init()` |
-| `audit.close` | 借りているサービスは閉じず Audit を終了 | RelDB 由应用关闭；无 | `void` | `await audit.close()` |
+| `audit.init(config?)` | 初期化済み RelDB に監査テーブルを準備 | 任意の `config: AuditInitConfigInput`。省略時は既定設定 | `void` | `await audit.init()` |
+| `audit.close()` | 借りているサービスは閉じず Audit を終了 | なし | `void` | `await audit.close()` |
 | `audit.isInitialized` | 監査サービスの準備状態を確認 | 読み取り専用プロパティ、引数なし | `boolean` | `audit.isInitialized` |
 
 #### 利用例：監査サービスの準備
@@ -119,15 +119,35 @@ withContext（コールバックの結果をそのまま返す）以外、出力
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `audit.log` | 監査イベントを保存 | input, tx | `AuditLog` | `await audit.log(event)` |
-| `audit.capture` | 自動収集方針に従って記録 | input, options | `void` | `await audit.capture(event)` |
-| `audit.withContext` | 信頼済みの操作主体とリクエストを関連付け | context, operation | `T` | `audit.withContext(trustedContext, () => saveOrder())` |
-| `audit.helper.login` | ログインを記録 | userId, ip, ua | `void` | `await audit.helper.login(userId)` |
-| `audit.helper.logout` | ログアウトを記録 | userId, ip, ua | `void` | `await audit.helper.logout(userId)` |
-| `audit.helper.register` | 登録を記録 | userId, ip, ua | `void` | `await audit.helper.register(userId)` |
-| `audit.helper.passwordResetRequest` | パスワード再設定要求を記録 | email, ip, ua | `void` | `await audit.helper.passwordResetRequest(email)` |
-| `audit.helper.passwordResetComplete` | パスワード再設定完了を記録 | userId, ip, ua | `void` | `await audit.helper.passwordResetComplete(userId)` |
-| `audit.helper.crud` | リソースの操作を記録 | input | `void` | `await audit.helper.crud(event)` |
+| `audit.log(input, tx?)` | 監査イベントを保存 | `input: CreateAuditLogInput` 必須のイベント。[イベント項目](#audit-event-fields)を参照。`tx?: DmlWithTxOperations` 任意の既存トランザクションで業務処理と共にコミット | `AuditLog` | `await audit.log(event)` |
+| `audit.capture(input, options?)` | 自動収集方針に従って記録 | `input: CreateAuditLogInput` 必須のイベント。[イベント項目](#audit-event-fields)を参照。`options?` 読み取りフラグとトランザクション。[収集項目](#audit-event-fields)を参照 | `void` | `await audit.capture(event)` |
+| `audit.withContext(context, operation)` | 信頼済みの操作主体とリクエストを関連付け | `context: AuditContext` 信頼できる非同期コンテキスト。[主体項目](#audit-event-fields)を参照。`operation: () => T` コンテキスト内で実行し、その戻り値を返します | `T` | `audit.withContext(trustedContext, () => saveOrder())` |
+| `audit.helper.login(userId, ip?, ua?)` | ログインを記録 | `userId: string` セッションから得た信頼できるユーザー ID。`ip?: string, ua?: string` 任意のクライアント IP と User-Agent | `void` | `await audit.helper.login(userId)` |
+| `audit.helper.logout(userId, ip?, ua?)` | ログアウトを記録 | `userId: string` セッションから得た信頼できるユーザー ID。`ip?: string, ua?: string` 任意のクライアント IP と User-Agent | `void` | `await audit.helper.logout(userId)` |
+| `audit.helper.register(userId, ip?, ua?)` | 登録を記録 | `userId: string` セッションから得た信頼できるユーザー ID。`ip?: string, ua?: string` 任意のクライアント IP と User-Agent | `void` | `await audit.helper.register(userId)` |
+| `audit.helper.passwordResetRequest(email, ip?, ua?)` | パスワード再設定要求を記録 | `email: string` リセットを要求したメールアドレス。`ip?: string, ua?: string` 任意のクライアント IP と User-Agent | `void` | `await audit.helper.passwordResetRequest(email)` |
+| `audit.helper.passwordResetComplete(userId, ip?, ua?)` | パスワード再設定完了を記録 | `userId: string` セッションから得た信頼できるユーザー ID。`ip?: string, ua?: string` 任意のクライアント IP と User-Agent | `void` | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud(input)` | リソースの操作を記録 | `input: CrudAuditInput` action（create、read、update、delete）と resource が必須。resourceId、details、userId、ip、ua と[イベント項目](#audit-event-fields)は任意 | `void` | `await audit.helper.crud(event)` |
+
+<a id="audit-event-fields"></a>
+
+**イベント、コンテキスト、自動収集の項目**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `CreateAuditLogInput.action / resource` | `string` | 必須 | update と orders など、操作名とリソース種別。 |
+| `CreateAuditLogInput.userId / resourceId` | `string \| null` | 任意 | 操作したユーザーと対象リソースの ID。システムイベントではユーザーなしでも可。 |
+| `CreateAuditLogInput.details` | `Record<string, unknown> \| null` | 任意 | 永続化する JSON 詳細。書き込み前にマスクされます。 |
+| `category` | `'system' \| 'business' \| null` | 任意 | イベント分類。AuditContext から現在の操作の既定値も設定できます。 |
+| `outcome` | `'success' \| 'failure' \| 'denied' \| null` | 任意 | 操作の結果を記録。 |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical' \| null` | 任意 | イベントの重大度を記録。 |
+| `requestId / traceId / scopeId` | `string` | 任意 | イベントまたはコンテキストの信頼できるリクエスト、トレース、範囲 ID。イベント入力では null も可。 |
+| `ipAddress / userAgent` | `string` | 任意 | 信頼できるクライアントアドレスと User-Agent。イベント入力では null も可。 |
+| `actorSnapshot / AuditContext.actor` | `AuditActorSnapshot \| null` | 任意 | イベント時の操作主体。オブジェクトには id が必須で、username、displayName、roles は任意。 |
+| `capture.options.read` | `boolean` | `false` | 読み取り操作として指定。読み取り収集が無効なら成功した読み取りは省略し、失敗と拒否は記録できます。 |
+| `capture.options.tx` | `DmlWithTxOperations` | 任意 | 業務トランザクションを指定すると、監査の書き込みも業務処理と一緒にロールバックできます。 |
+
+自動収集が有効で読み取り収集が無効なら、`{ read: true }` の `outcome: "success"` は書き込みを省略し、`outcome: "denied"` は記録します。
 
 #### 利用例：操作と主体の記録
 
@@ -210,10 +230,29 @@ if (!crudResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `audit.list` | イベントを絞り込みページ取得 | options | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
-| `audit.getUserRecent` | ユーザーの最近の操作を取得 | userId, limit | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
-| `audit.getStats` | 直近の日数で操作を集計 | days, filters | `AuditStatItem[]` | `await audit.getStats(7)` |
-| `audit.cleanup` | 保持方針に従い古い記録を削除 | olderThanDays | `number` | `await audit.cleanup(90)` |
+| `audit.list(options?)` | イベントを絞り込みページ取得 | 任意の `options: ListAuditLogsOptions`。[絞り込みとページ指定](#audit-list-options)を参照。 | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent(userId, limit?)` | ユーザーの最近の操作を取得 | 必須の `userId: string` でユーザーを選択。任意の `limit: number` の既定は 10 件。 | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
+| `audit.getStats(days?, filters?)` | 直近の日数で操作を集計 | 任意の `days: number` は既定 7 日。任意の `filters` は[一覧フィールド](#audit-list-options)の category、outcome、severity、scopeId、userId、resource を指定可能。 | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome` | 一覧と同じ条件で結果を集計 | options、省略時は全件 | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
+| `audit.cleanup(olderThanDays?)` | 保持方針に従い古い記録を削除 | `olderThanDays?: number` 既定 90 日。 cutoff より古いイベントを削除 | `number` | `await audit.cleanup(90)` |
+
+<a id="audit-list-options"></a>
+
+**ListAuditLogsOptions**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `requestId / traceId / scopeId` | `string` | 任意 | リクエスト、トレース、業務範囲に完全一致。 |
+| `userId / action / resource` | `string` | 任意 | イベントのユーザー、操作、リソース種別に完全一致。 |
+| `category` | `'system' \| 'business'` | 任意 | システムまたは業務イベントを選びます。 |
+| `outcome` | `'success' \| 'failure' \| 'denied'` | 任意 | 指定した結果だけを取得。 |
+| `severity` | `'info' \| 'warning' \| 'error' \| 'critical'` | 任意 | 指定した重大度だけを取得。 |
+| `startDate / endDate` | `Date` | 任意 | イベント作成時刻の両端を含む範囲。両方指定する場合は開始が終了以下。 |
+| `sortBy` | `'createdAt' \| 'action' \| 'resource' \| 'category' \| 'outcome' \| 'severity'` | `createdAt` | ソート項目を選択。 |
+| `sortDirection` | `'asc' \| 'desc'` | `desc` | ソート方向を指定。 |
+| `page / pageSize` | `number` | 1 ページ目、20 件 | ページ番号とページごとの件数。 |
+
+例えば `{ resource: "orders", outcome: "denied", sortDirection: "asc", pageSize: 5 }` は拒否された注文イベントだけを古い順に最初のページに最大 5 件返します。
 
 #### 利用例：記録の照会と削除
 
@@ -224,6 +263,11 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
+// 一覧と同じ login 条件で結果別に集計する。未分類も含め、失敗時には元のエラーを返す。
+const outcomesResult = await audit.countByOutcome({ action: 'login' })
+if (!outcomesResult.success)
+  return outcomesResult
+const outcomes = outcomesResult.data
 // ユーザー ID の直近最大 20 件を配列で取得します。照会の失敗時は元の失敗結果を返します。
 const recentResult = await audit.getUserRecent('demo-user', 20)
 if (!recentResult.success)
@@ -255,8 +299,21 @@ const removed = removedResult.data // count of records older than 90 days
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `audit.backup.run` | 非公開アーカイブを作成・照合 | options | `AuditBackupInfo` | `await audit.backup.run()` |
-| `audit.backup.verify` | 形式とチェックサムを検証 | key, options | `AuditBackupInfo` | `await audit.backup.verify(backupKey)` |
+| `audit.backup.run(options?)` | 非公開アーカイブを作成・照合 | 任意の `options: AuditBackupOptions` で ID と対象期間を指定。[アーカイブ項目](#audit-backup-options)を参照。 | `AuditBackupInfo` | `await audit.backup.run()` |
+| `audit.backup.verify(key, options?)` | 形式とチェックサムを検証 | 必須の `key: string` は非公開アーカイブの結果から取得。任意の `options.signal: AbortSignal` で中止できます。 | `AuditBackupInfo` | `await audit.backup.verify(backupKey)` |
+
+<a id="audit-backup-options"></a>
+
+**アーカイブと検証のオプション**
+
+| フィールド | 型 | 必須と既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `AuditBackupOptions.id` | `string` | ランダム UUID | 同じアーカイブ処理に安定した ID を指定。同じ ID の記録が一致すれば確認して再利用し、競合は失敗。 |
+| `AuditBackupOptions.from` | `Date` | 下限なし | アーカイブ対象期間の開始時刻。 |
+| `AuditBackupOptions.to` | `Date` | 開始時のデータベース時刻 | 処理開始より後、または from より前は不可。 |
+| `signal` | `AbortSignal` | 任意 | run と verify の両方で処理を中止できます。 |
+
+同じアーカイブを再試行する際は `{ id: "daily-audit", from, to }` を再利用します。完了済みなら同じオブジェクトキーの結果を返します。
 
 #### 利用例：アーカイブと検証
 
@@ -297,7 +354,7 @@ const verifiedArchive = verifiedArchiveResult.data
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `audit.checkAlerts` | しきい値を調べ通知を試行 | options | `AuditAlertReport` | `await audit.checkAlerts()` |
+| `audit.checkAlerts(options?)` | しきい値を調べ通知を試行 | `options?: { signal?: AbortSignal }` 確認または通知を任意で中止。省略時は設定どおり実行 | `AuditAlertReport` | `await audit.checkAlerts()` |
 
 #### 利用例：異常の確認と通知
 

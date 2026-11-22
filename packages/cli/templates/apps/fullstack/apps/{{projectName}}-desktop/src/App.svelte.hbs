@@ -2,12 +2,15 @@
 {{#if fullstack.frontends.desktop}}
 <script lang="ts">
   import type { ManagementApiOptions } from '{{fullstack.sharedPackageName}}'
+  import type { DesktopUpdateMessage } from './lib/desktop-update/DesktopUpdateEntry.svelte'
   import { apiClient } from '@h-ai/api-client'
   import { AdminWorkspace } from '{{fullstack.sharedPackageName}}'
 {{#if features.feedback}}
   import { buildMetadata } from './build-metadata.js'
 {{/if}}
-  import { setLocale } from './lib/paraglide/runtime.js'
+  import DesktopUpdateEntry from './lib/desktop-update/DesktopUpdateEntry.svelte'
+  import * as m from './lib/paraglide/messages.js'
+  import { getLocale, setLocale } from './lib/paraglide/runtime.js'
 
   const native = '__TAURI_INTERNALS__' in globalThis
   const apiOptions: ManagementApiOptions = {
@@ -22,10 +25,17 @@
       : {}),
   }
 
+  let desktopLocale = $state(getLocale())
   function syncLocale(locale: string) {
-    setLocale(locale as Parameters<typeof setLocale>[0], { reload: false })
+    desktopLocale = locale as Parameters<typeof setLocale>[0]
+    setLocale(desktopLocale, { reload: false })
+  }
+
+  function updateMessage(key: DesktopUpdateMessage): string {
+    return m[key]({}, { locale: desktopLocale })
   }
 </script>
 
 <AdminWorkspace platform="desktop" {apiOptions}{{#if features.feedback}} {buildMetadata}{{/if}} onLocaleChange={syncLocale} />
+<DesktopUpdateEntry message={updateMessage} />
 {{/if}}

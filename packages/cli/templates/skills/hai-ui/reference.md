@@ -437,6 +437,8 @@ const p = usePlatform()
 > - `allowHtmlTags`：默认关闭；开启后按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等标签，危险标签与属性仍会被消毒
 > - 原始 `<img>` 的 `width` / `height` 仅接受 1–99999 的正整数像素值；为延迟加载图片预留空间，避免文档锚点和布局跳变。百分比、负数、小数、事件属性及任意 `style` 仍被移除。
 
+私有文档可以设置 `AiDocumentEditor remoteImages={false}`，网络图片显示替代文字，任意 HTML 运行预览和 Mermaid 显示源码。`onrewrite` 可拿到经核对的可选 `sourceRange`，位置相对于传入的 `content`。应用提交前应检查当前版本和原文片段。
+
 ```svelte
 <!-- 以指定字号渲染传入的 Markdown，允许经过消毒的 HTML。 -->
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />

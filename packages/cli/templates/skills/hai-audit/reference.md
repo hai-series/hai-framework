@@ -113,6 +113,7 @@ alerts.schedule 控制定时开关/cron/timezone；audit.schedulerPlan 统一备
 | `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>`       | 用户最近活动         |
 | `audit.cleanup`       | `(olderThanDays?: number) => Promise<HaiResult<number>>`                   | 清理旧日志           |
 | `audit.getStats`      | `(days?: number, filters?: Pick<ListAuditLogsOptions, 'category' \| 'outcome' \| 'severity' \| 'scopeId' \| 'userId' \| 'resource'>) => Promise<HaiResult<AuditStatItem[]>>` | 操作统计 |
+| `audit.countByOutcome` | `(options?: ListAuditLogsOptions) => Promise<HaiResult<AuditOutcomeCounts>>` | 用与列表相同的筛选统计结果，包含未分类记录 |
 
 ### 便捷记录器 (`audit.helper`)
 

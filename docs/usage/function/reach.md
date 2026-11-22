@@ -122,9 +122,26 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.init` | 准备配置中的通知渠道。存储模板或使用延迟队列时先连接 RelDB | `config` 必填，`options?` 可选 | `Promise<HaiResult<void>>` | `await reach.init(config)` |
-| `reach.close` | 关闭当前通知渠道；持久化记录仍可由后续实例读取 | 无参数 | `Promise<void>` | `await reach.close()` |
-| `reach.send` | 发送消息或交给持久队列 | message | `SendResult` | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
+| `reach.init(config, options?)` | 准备配置中的通知渠道。存储模板或使用延迟队列时先连接 RelDB | `config: ReachConfigInput`, `options?: ReachInitOptions` · [初始化选项](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
+| `reach.close()` | 关闭当前通知渠道；持久化记录仍可由后续实例读取 | 无参数 | `Promise<void>` | `await reach.close()` |
+| `reach.send(message)` | 发送消息或交给持久队列 | 必填 `message: ReachMessage` 包含收件人和内容，见[消息字段](#reach-message-fields)。 | `SendResult` | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
+
+<a id="reach-message-fields"></a>
+
+**ReachMessage**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `to` | `string` | 必填 | 渠道收件人，例如邮箱或手机号。 |
+| `template` | `string` | 可省略 | 按名称读取并渲染已保存模板。省略时使用直接发送字段。 |
+| `provider` | `string` | 直接发送必填 | 覆盖渠道选择。模板发送省略时沿用模板的渠道。 |
+| `vars` | `Record<string, string>` | 可省略 | 按键替换模板中的变量。 |
+| `subject / body` | `string` | 可省略 | 直接发送时的标题和正文。标题用于需要主题的渠道，例如邮件。 |
+| `extra` | `Record<string, unknown>` | 可省略 | 传渠道专有字段，例如短信模板编码或签名。 |
+| `idempotencyKey` | `string` | 可省略 | API 直接发送时可传给接收端作为稳定键。队列固定使用其 queueId。 |
+| `sensitive` | `boolean` | `false` | 凭据类消息用 true，仅在内存发送，不进入延迟或重投队列。 |
+| `expiresAt` | `number` | sensitive 为 true 时必填 | 业务凭据截止时间，Unix 毫秒。 |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 普通通知遇免打扰时，queue 使用已有延迟配置，reject 返回 DND_BLOCKED 以便宿主自行延后。 |
 
 #### 场景：启动渠道并发送通知
 
@@ -151,6 +168,31 @@ const sent = sentResult.data
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 模板用 `name` 标识，`vars` 是替换正文或标题的变量，模板定义包含发送渠道 `provider` 和正文 `body`，还可以包含标题 `subject`。队列用持久化的 `queueId`（UUID）查找。恢复失败消息或确认发送结果之前，先读取当前版本并人工核对实际投递记录。
+
+<a id="reach-init-options"></a>
+
+#### 初始化选项
+
+启动时从[通知配置](../configuration/reach.md)取得 `config: ReachConfigInput`。可省略 `options: ReachInitOptions`，默认沿用配置中的网关请求头和请求体。
+
+`gatewayHooks` 是按 Provider 名称索引的回调对象，只能绑定配置了 `gateway` 的 `aliyun-sms` Provider。回调获知 `method: POST`、网关 `url`、当前请求体 `body: string | undefined` 和请求期限内有效的 `signal: AbortSignal`。它可同步或异步返回 `{ headers?, body? }`，仅设置需要覆盖的字段，或返回 `undefined` 沿用静态配置。回调在服务端执行，避免将带签名的 URL 写入日志。
+
+```ts
+import type { ReachConfigInput } from '@h-ai/reach'
+import { reach } from '@h-ai/reach'
+
+function startReach(config: ReachConfigInput) {
+  // 传入已配置 sms 网关的启动配置。成功时注册的回调会在下一次网关请求中加入 X-Client 请求头。
+  return reach.init(config, {
+    gatewayHooks: {
+      sms: ({ signal }) => {
+        signal.throwIfAborted()
+        return { headers: { 'X-Client': 'delivery' } }
+      },
+    },
+  })
+}
+```
 
 #### 生产共享状态
 
@@ -180,12 +222,12 @@ PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve` | 读取一个生效模板 | name | `ReachTemplate` | `await reach.template.resolve('welcome')` |
-| `reach.template.save` | 保存一个模板 | template | `void` | `await reach.template.save({ name: 'welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })` |
-| `reach.template.saveBatch` | 批量保存模板 | templates | `void` | `await reach.template.saveBatch([{ name: 'welcome', provider: 'local', body: 'Hello {name}' }])` |
-| `reach.template.remove` | 删除自定义模板 | name | `void` | `await reach.template.remove('welcome')` |
-| `reach.template.list` | 列出当前模板 | 无参数 | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render` | 替换模板变量并预览 | name, vars | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })` |
+| `reach.template.resolve(name)` | 读取一个生效模板 | `name: string` 用于查找模板的唯一名称 | `ReachTemplate` | `await reach.template.resolve('welcome')` |
+| `reach.template.save(template)` | 保存一个模板 | `template: ReachTemplate` 必填 name、provider 和 body，可选邮件 subject。正文与标题可写 {var} 占位符 | `void` | `await reach.template.save({ name: 'welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })` |
+| `reach.template.saveBatch(templates)` | 批量保存模板 | `templates: ReachTemplate[]` 批量保存的模板数组，每项与 save 的字段相同 | `void` | `await reach.template.saveBatch([{ name: 'welcome', provider: 'local', body: 'Hello {name}' }])` |
+| `reach.template.remove(name)` | 删除自定义模板 | `name: string` 用于查找模板的唯一名称 | `void` | `await reach.template.remove('welcome')` |
+| `reach.template.list()` | 列出当前模板 | 无参数 | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | 替换模板变量并预览 | `name: string` 用于查找模板的唯一名称。`vars: Record<string, string>` 占位符名称到替换值的映射 | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })` |
 
 #### 场景：维护与预览通知模板
 
@@ -232,8 +274,12 @@ if (!removeResult.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get` | 按 ID 查询发送记录 | queueId | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)` |
-| `reach.queue.list` | 筛选并分页查询发送记录 | options | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'dead', limit: 20 })` |
+| `reach.queue.get(queueId)` | 按 ID 查询发送记录 | `queueId: string` 从发送回执或队列记录取得的 UUID | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list(options)` | 筛选并分页查询发送记录 | `options: ReachQueueListOptions` · [查询参数](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'dead', limit: 20 })` |
+
+<a id="reach-queue-options"></a>
+
+查询选项 `ReachQueueListOptions` 必填。`status` 必填，取 `dead` 或 `unknown`。`limit` 取 1–100，默认 50。`offset` 取 0–1,000,000，默认 0，表示跳过多少条。
 
 #### 场景：查询延迟与失败发送
 
@@ -265,8 +311,18 @@ if (entries.length > 0) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead` | 核对后重新排队死信 | queueId, options | `void` | `await reach.queue.requeueDead(queueId, requeueDecision)` |
-| `reach.queue.resolveUnknown` | 人工确认未知的发送结果 | queueId, resolution | `void` | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
+| `reach.queue.requeueDead(queueId, options)` | 核对后重新排队死信 | `queueId: string` 来自队列记录。`options.expectedUpdatedAt: number` 必填，传最近一次读取记录的 `updatedAt`。 | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, requeueDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | 人工确认未知的发送结果 | `queueId: string` 从发送回执或队列记录取得的 UUID。`resolution: ReachUnknownResolution` 必填人工核对结果，见[裁定字段](#reach-resolution-fields) | `void` | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
+
+<a id="reach-resolution-fields"></a>
+
+**恢复与裁定输入**
+
+| 字段 | 类型 | 必填与默认 | 用途及生效条件 |
+| --- | --- | --- | --- |
+| `options.expectedUpdatedAt` | `number` | 必填 | 重排 dead 时用最近读取回执的 updatedAt，并发写入后重新读取。 |
+| `resolution.status` | `'sent' \| 'discarded'` | 必填 | 只在外部核对后记录已发送或终止处理。 |
+| `resolution.messageId` | `string` | 可省略 | 确认已发送时可记渠道回执编号，最多 255 字符。 |
 
 #### 场景：人工核对后恢复发送
 

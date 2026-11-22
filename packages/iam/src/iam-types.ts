@@ -282,4 +282,4 @@ export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionTyp
 export type { IamPublicConfig } from './iam-public-config.js'
 export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionFieldUpdates, SessionOperations, TokenPair } from './session/iam-session-types.js'
 export type { ConsumedTicket, ConsumeTicketOptions, IssuedTicket, IssueTicketOptions, TicketGrant, TicketOperations } from './ticket/iam-ticket-types.js'
-export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User, UserOperations, UserSortDirection, UserSortField } from './user/iam-user-types.js'
+export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, UpdateUserWithRolesInput, User, UserOperations, UserSortDirection, UserSortField } from './user/iam-user-types.js'

@@ -25,6 +25,7 @@ import { core, CoreConfigSchema, err, ok, RequestAccessConfigSchema } from '@h-a
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { z } from 'zod'
+import { uploadAndApplyBundle } from '../container/deploy-bundle-transport.js'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
 import {
@@ -752,18 +753,13 @@ export function createDockerSshProvider(
     if (!remoteRuntime.success)
       return remoteRuntime
     const remoteDir = `${baseDir}/${projectName}`
-    const remoteTar = `${remoteDir}/incoming/${basename(bundle.bundlePath)}`
-    const prepared = await ssh.exec(`mkdir -p -- ${shellArgument(`${remoteDir}/incoming`)} && chmod 700 -- ${shellArgument(remoteDir)} ${shellArgument(`${remoteDir}/incoming`)}`)
-    if (!prepared.success)
-      return prepared
-    const uploaded = await ssh.upload(bundle.bundlePath, remoteTar)
-    if (!uploaded.success)
-      return uploaded
     let pendingOutput = ''
-    const started = await ssh.exec(
-      `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)} && { rm -rf -- ${shellArgument(`${remoteTar}.contents`)} && rm -f -- ${shellArgument(remoteTar)} || printf '[WARN] Deployment passed; incoming archive cleanup failed\\n' >&2; }`,
+    const { started: didStart, result: started } = await uploadAndApplyBundle(
+      ssh,
+      bundle.bundlePath,
+      remoteDir,
+      bundle.startName,
       {
-        timeoutMs: 600_000,
         secrets: sidecar.secrets,
         onOutput: (output) => {
           const parts = output.split('\n')
@@ -781,6 +777,8 @@ export function createDockerSshProvider(
         },
       },
     )
+    if (!didStart)
+      return started
     if (!started.success) {
       const resultFile = `${remoteDir}/result-${deploymentId}.json`
       const state = getDeployCommandState(started.error)

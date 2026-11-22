@@ -76,6 +76,11 @@ describe('db (not initialized)', { concurrent: false }, () => {
       expect(wrapResult.error.code).toBe(HaiReldbError.NOT_INITIALIZED.code)
     }
 
+    expect(await reldb.tx.wrapResult(tx => tx.execute('SELECT 1'))).toMatchObject({
+      success: false,
+      error: { code: HaiReldbError.NOT_INITIALIZED.code },
+    })
+
     const beginResult = await reldb.tx.begin()
     expect(beginResult.success).toBe(false)
     if (!beginResult.success) {

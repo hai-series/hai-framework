@@ -28,20 +28,20 @@
 | 模块 | 按需入口 |
 | --- | --- |
 | @h-ai/core | [配置、结果/错误、日志、i18n 与工具](packages/cli/templates/skills/hai-core/SKILL.md) · [工作线程与资源回收](docs/usage/function/core.md#worker-api) |
-| @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) |
+| @h-ai/reldb | [SQL、DDL、CRUD、结果式事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) |
 | @h-ai/vecdb | [向量集合、检索与分页扫描](packages/cli/templates/skills/hai-vecdb/SKILL.md) |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) |
 | @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传与操作日志](packages/cli/templates/skills/hai-storage/SKILL.md) · [同一次读取的元数据与正文](docs/usage/function/storage.md#files) · [统一的 storage.client 上传下载入口](docs/usage/function/storage.md#browser-files) |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) |
-| @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md)，[LDAP 身份迁移](docs/usage/function/iam.md#ldap-identity-migration) |
+| @h-ai/iam | [登录、会话、账号与角色更新、一次性票据](packages/cli/templates/skills/hai-iam/SKILL.md)，[LDAP 身份迁移](docs/usage/function/iam.md#ldap-identity-migration) |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) |
-| @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) |
-| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md)，[原生记忆命名空间与升级](docs/usage/configuration/ai.md#共用-qdrant-的应用) |
+| @h-ai/feedback | [用户反馈、本人列表、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) |
+| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md)，[原生记忆命名空间与升级](docs/usage/configuration/ai.md#共用-qdrant-的应用)、[本地文件解析](docs/usage/function/ai.md#bounded-local-files)、[浏览器录音](docs/usage/function/ai.md#browser-recording) |
 | @h-ai/tools | [中立工具定义、注册与授权执行](packages/cli/templates/skills/hai-tools/SKILL.md)，[模块手册](docs/usage/function/tools.md)；轻量工厂无 init/close，/server 提供 createService/createArtifactTools/createJobTools，复用 Runner 与授权产物；模型协议使用 ai.tools.adapt |
 | Agent 示例 | [多用户工作台](docs/usage/development/agent.md)、[应用接入及配置](apps/agent/README.md)；手动与智能体共用工具服务，UI 复用 ArtifactWorkspace/ToolWorkspace |
 | @h-ai/runner | [受管容器、容量、任务保留与失联核验](packages/runner/README.md) |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
-| @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
+| @h-ai/audit | [审计记录、按筛选统计、归档与清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
 | @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
 | @h-ai/crypto | [SM2/SM3/SM4、Node.js 异步密码哈希、缓存传输状态与共享配额](packages/cli/templates/skills/hai-crypto/SKILL.md) |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) |
@@ -49,8 +49,8 @@
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response、服务端/浏览器命名空间类型](packages/cli/templates/skills/hai-kit/SKILL.md) |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) |
 | @h-ai/capacitor | [原生设备、推送、安全存储与 Android 打包](packages/cli/templates/skills/hai-capacitor/SKILL.md) |
-| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md)、[下载排查](docs/usage/configuration/data.md#下载链接无法访问) |
-| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md)、[代码工作区](packages/cli/templates/skills/hai-ui/reference.md#代码工作区) |
+| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[构建回执与分步核验](docs/usage/function/deploy.md#programmatic-release-verification)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md)、[下载排查](docs/usage/configuration/data.md#下载链接无法访问) |
+| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md)、[代码工作区](packages/cli/templates/skills/hai-ui/reference.md#代码工作区)、[图片策略与源码选区](docs/usage/function/ui.md#private-document-media) |
 | @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) |
 | @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) |
 
@@ -62,6 +62,7 @@
 - [HTTP、Cookie 与访问控制](docs/usage/configuration/http.md)：生产 HTTP 入口的 Secure 刷新 Cookie、可信代理、CORS 和文档授权按实际后端配置处理。
 - [业务开发](docs/usage/development/README.md)、[ACP 接入与会话恢复](docs/usage/development/ai-acp.md)、[AI Playground](apps/ai-playground/README.md)：从对应能力的公开入口接入，授权与资源归属由可信服务端落实。
 - [构建与浏览器要求](docs/usage/getting-started/build.md)、[部署与原生交付](docs/usage/configuration/delivery.md)、[部署运维](docs/usage/operations/deployment.md)：版本、构建 ID、目录、静态托管、产物与实际运行结果分别核验。
+- [桌面应用更新](docs/usage/getting-started/build.md#desktop-updates)：配置 HTTPS 更新源、签名发布和原生应用的升级验收。
 - [共享状态与恢复边界](.agents/instructions/distributed-state.md)：核对每个模块真实后端与失败处理，不把数据库连接或锁本身当作一致性保证。
 - [公开 API 清单](scripts/generated/module-api-inventory.md)、[模块规范](.agents/instructions/module-conventions.md)：从公开入口使用真实类型，内部实现不能作为消费者扩展入口。
 

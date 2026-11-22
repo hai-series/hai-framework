@@ -197,9 +197,9 @@ operation:login 表示只能用于登录；秘密已隐藏，公开挑战内容�
 
 ### 短时间内只准用一次的通行票
 
-对应结构：`hai:iam:ticket:<ticket:redacted>`。
+对应结构为 `hai:iam:ticket:sha256:<票据摘要>`。签发后客户端持有原票据，缓存键只保存它的 SHA-256 十六进制摘要。新版可兑换旧版尚未过期的票据，旧键按原有效期回收。多实例部署时同时切换消费者，旧版实例无法兑换新版发出的票据。
 
-需要临时授权连接或操作时签发票据，兑换时检查主体、用途并立即作废。
+需要临时授权连接或操作时签发票据。用途和有效期核验通过后，兑换请求原子删除读到的记录，再取得绑定的主体和授权参数。
 
 ```json
 {
@@ -292,7 +292,7 @@ API Key 原始值只在签发时返回。用 `iam.user`、`iam.authz` 等公开�
 | `hai:iam:sessions:{<scope>}`            | 每个用户范围对应一条缓存记录。`revision` 为记录版本，`sessions` 按访问令牌记录各会话，可带刷新令牌及到期时间                                         | 键中的 scope 是用户范围摘要。访问令牌默认 86400 秒，刷新令牌默认 604800 秒。此键保留到最后一个有效令牌到期。更换或撤销令牌时，只有缓存版本仍匹配才写入 |
 | `hai:iam:otp:<归一化身份>`              | `version`、当前 `code`、`attempts`、`expiresAt`、`cooldownUntil` 保存版本、当前验证码、输错次数、到期时间与可再次发送的时间                          | 一次性验证码默认 300 秒有效，可输错最多 3 次。重发默认需等 60 秒。验证码使用后，如果等待期尚未结束，仍须等到期才能重发                                 |
 | `hai:iam:captcha:<id>`                  | `operation`、`challenge` 与服务端校验秘密保存用途及挑战                                                                                              | 默认 120 秒。一次验证使用后，其他并发请求不能再用同一挑战                                                                                              |
-| `hai:iam:ticket:<ticket>`               | `subjectId` 主体、`purpose` 用途、`grant` 授权参数（默认空对象）、`expiresAt` 截止                                                                   | 默认 30 秒。用途吻合后才能兑换，同一张票只能用一次                                                                                                     |
+| `hai:iam:ticket:sha256:<摘要>`         | `subjectId` 主体、`purpose` 用途、`grant` 授权参数（默认空对象）、`expiresAt` 截止                                                                   | 默认 30 秒。用途吻合后才能兑换，同一张票只能用一次                                                                                                     |
 | `hai:iam:read_cache:revision`           | `epoch` 是当前缓存版本，`writers` 是正在进行的写入次数                                                                                               | 首次创建时生成版本，写入数为 0。该键没有过期时间。正在写入时，查询直接读数据库                                                                         |
 | `hai:iam:read_cache:<epoch>:<查询标识>` | `{ value }` 包装已成功的读取结果，覆盖 `user:v2:<userId>`、`apikey:<id>`、`verified_apikey:<摘要>`、`authorization:<userId>`、`sensitive:<操作或 *>` | 默认 60 秒。读取缓存后再次检查缓存版本，当前权限变化时不再使用旧版本的记录，旧键自行到期                                                               |
 

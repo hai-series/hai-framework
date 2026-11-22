@@ -73,8 +73,8 @@ Connect to a vector backend before using collections; keep raw connection detail
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `vecdb.init(config)` | 初始化配置指定的后端 | `config.type` 必填；后端字段和默认值见[配置清单](../configuration/vecdb.md) | `HaiResult<void>` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
-| `vecdb.close()` | 等待并释放当前连接 | 无参数 | `HaiResult<void>` | `await vecdb.close()` |
+| `vecdb.init(config)` | Initialize the configured backend | Required `config: VecdbConfigInput` selects a backend via `type`. See [configuration](../configuration/vecdb.en.md). | `HaiResult<void>` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
+| `vecdb.close()` | Wait and release the current connection | None | `HaiResult<void>` | `await vecdb.close()` |
 | `vecdb.isInitialized` | Read whether operations can run | Read-only property | `boolean` | `vecdb.isInitialized` |
 | `vecdb.config` | Read the current config with credentials removed | Read-only property | `VecdbConfig or null` | `vecdb.config` |
 | `vecdb.rawConnection` | Read connection details for trusted server code, possibly including credentials | Read-only property | `VecdbConnection or null` | `vecdb.rawConnection` |
@@ -119,11 +119,11 @@ A collection fixes the vector dimension and metric. Dropping it removes all its 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `vecdb.collection.create(name, options)` | 创建集合 | 集合名和 `options.dimension` 必填；`metric` 默认沿用向量库配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
-| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | 集合名必填 | `void` | `await vecdb.collection.drop('documents')` |
-| `vecdb.collection.exists(name)` | 检查集合是否存在 | 集合名必填 | `boolean` | `await vecdb.collection.exists('documents')` |
-| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | 集合名必填 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
-| `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
+| `vecdb.collection.create(name, options)` | Create a collection | `name` names the collection and `options.dimension` must be a positive integer. All stored and query vectors must match that dimension. `metric` is `cosine`, `euclidean`, or `dot`. It defaults to the connection setting or `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
+| `vecdb.collection.drop(name)` | Drop the collection and its vectors | `name: string` Required configured collection name | `void` | `await vecdb.collection.drop('documents')` |
+| `vecdb.collection.exists(name)` | Check whether the collection exists | `name: string` Required configured collection name | `boolean` | `await vecdb.collection.exists('documents')` |
+| `vecdb.collection.info(name)` | Read collection dimension, metric, and document count | `name: string` Required configured collection name | `CollectionInfo` | `await vecdb.collection.info('documents')` |
+| `vecdb.collection.list()` | List collection names | None | `string[]` | `await vecdb.collection.list()` |
 
 #### Scenario: Prepare and remove collections
 
@@ -175,12 +175,30 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | 集合名与文档数组必填。每条文档要有 `id` 和与集合维度一致的 `vector` | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
-| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | 集合名与文档数组必填。替换时传入完整文档 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
-| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | 集合名与 ID 数组必填 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
-| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | 集合名及查询向量必填。`topK` 默认 `10`，可传 `minScore` 和 `filter` | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | 统计集合中的文档数 | 集合名必填 | `number` | `await vecdb.vector.count('documents')` |
-| `vecdb.vector.scan(collection, options?)` | 按页列出可删除的文档 ID | 集合名必填，首页省略 `cursor`，`limit` 默认 `64` | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+| `vecdb.vector.insert(collection, documents)` | Insert document vectors | `collection: string` Required collection name. `documents: VectorDocument[]` Required documents. See [document fields](#vecdb-vector-options) | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
+| `vecdb.vector.upsert(collection, documents)` | Insert or replace a whole document by ID | `collection: string` Required collection name. `documents: VectorDocument[]` Required documents. See [document fields](#vecdb-vector-options) | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
+| `vecdb.vector.delete(collection, ids)` | Delete documents by ID | `collection: string` Required collection name. `ids: string[]` Document IDs to delete | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
+| `vecdb.vector.search(collection, vector, options?)` | Search by vector similarity | `collection: string` Required collection name. `vector: number[]` Query vector matching the collection dimension. `options?: VectorSearchOptions` See [search fields](#vecdb-vector-options) | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
+| `vecdb.vector.count(collection)` | Count documents in the collection | `collection: string` Required collection name | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.scan(collection, options?)` | Page through document IDs | `collection: string` Required collection name. `options?: VectorScanOptions` See [scan fields](#vecdb-vector-options) | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+
+<a id="vecdb-vector-options"></a>
+
+**Document, search and scan fields**
+
+| Field | Type | Required and default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `VectorDocument.id` | `string` | Required | Stable application document identifier used for replacement and deletion. |
+| `VectorDocument.vector` | `number[]` | Required | Floating-point values matching the collection dimension. |
+| `VectorDocument.content` | `string` | Optional | Source text to return with a hit. |
+| `VectorDocument.metadata` | `Record<string, unknown>` | Optional | Store auxiliary data such as source for later filtering. |
+| `VectorSearchOptions.topK` | `number` | `10` | Maximum matches ranked by similarity. |
+| `VectorSearchOptions.minScore` | `number` | `0` | Inclusive 0–1 score threshold. |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | No metadata filter | Filter based on metadata. See backend comparison semantics below. |
+| `VectorScanOptions.cursor` | `string` | Omit for the first page | Pass the previous nextCursor for the same backend and collection. |
+| `VectorScanOptions.limit` | `number` | `64` | Document IDs per page, integer 1–128. |
+
+`topK` caps the number of results ranked by similarity. `minScore` is an inclusive score threshold from 0 to 1. `filter` matches metadata, for example `{ source: "handbook" }`. LanceDB requires a typed exact match on all supplied top-level fields and supports strings, finite numbers, booleans, and `null`. A missing field does not match `null`, and unsupported values yield `CONFIG_ERROR`. Other backends may compare values differently. The portable example below uses a top-level string.
 
 #### Scenario: Write, search and clean documents
 
@@ -205,16 +223,21 @@ const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
   return countResult
 countResult.data // 1
-// Update the same doc-1 to Install v2. Success has no data. Return the failed result on failure.
-const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }])
+// Replace doc-1 content and metadata, setting source to handbook. Success has no data. Return the failed result on failure.
+const upsertResult = await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2', metadata: { source: 'handbook' } }])
 if (!upsertResult.success)
   return upsertResult
-// Search demo-docs with the matching vector. Return at most one hit scoring at least 0.9, here the updated doc-1. Return the failed result on failure.
-const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 })
+// Query the same vector for at most one hit with source=handbook and a score of at least 0.9. Success returns the updated doc-1. Return the failed result on failure.
+const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9, filter: { source: 'handbook' } })
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+// Query source=release-notes instead. No stored document matches, so success returns []. Return the failed result on failure.
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+if (!excluded.success)
+  return excluded
+excluded.data // []
 // Read the first page of up to 32 document IDs from demo-docs. Success contains items and an optional nextCursor. Return the failed result on failure.
 const pageResult = await vecdb.vector.scan('demo-docs', { limit: 32 })
 if (!pageResult.success)

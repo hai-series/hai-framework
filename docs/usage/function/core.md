@@ -107,27 +107,27 @@ core.logger.warn('Request needs attention', { requestId })
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.init(options?)` | 启动时设置日志、读取指定目录里的 YAML | `configDir` 省略时跳过目录扫描。`configSchemas` 省略时仅 `_core.yml` 自动使用内置规则。`watchConfig` 默认 `false`。传入 `logging` 会优先于 `_core.yml` 里的日志设置 | 同步返回 `void`。单个文件加载失败会写日志并继续，目录扫描或日志初始化仍可能抛错 | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
-| `core.config.loadEnvFiles(options)` | 合并 dotenv 文件与进程已有环境变量 | `mode` 必填，例如 `'dev'`。`envDir` 默认当前工作目录 | `HaiResult<Record<string, string>>`。成功后由应用决定是否写入 `process.env` | `core.config.loadEnvFiles({ mode: 'dev' })` |
+| `core.init(options?)` | 启动时设置日志、读取指定目录里的 YAML | `options` 可省略。`configDir` 省略时跳过目录扫描。`configSchemas` 省略时仅 `_core.yml` 自动使用内置规则。`watchConfig` 默认 `false`。传入 `logging` 会优先于 `_core.yml` 里的日志设置 | 同步返回 `void`。单个文件加载失败会写日志并继续，目录扫描或日志初始化仍可能抛错 | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
+| `core.config.loadEnvFiles(options)` | 合并 dotenv 文件与进程已有环境变量 | 必填 `options`。`mode` 必填，例如 `'dev'`。`envDir` 默认当前工作目录 | `HaiResult<Record<string, string>>`。成功后由应用决定是否写入 `process.env` | `core.config.loadEnvFiles({ mode: 'dev' })` |
 | `core.config.load(name, filePath, schema?)` | 读取一个 YAML 文件，应用环境覆盖，成功后保存结果 | `name` 和 `filePath` 必填。省略 `schema` 时只解析与替换 | `HaiResult<T>`。读取或校验失败时保留上次成功的结果 | `core.config.load('app', './config/app.yml', AppSchema)` |
-| `core.config.validate(name, schema)` | 用当前环境和指定规则重新检查上次成功读到的 YAML | `name` 和 `schema` 必填。只改了磁盘文件时应先调用 `core.config.reload()` | `HaiResult<T>`。成功后更新已保存的数据和后续重载使用的规则 | `core.config.validate('app', AppSchema)` |
-| `core.config.get<T>(name)` | 读取已保存的配置值 | `name` 必填。`T` 只用于 TypeScript 类型标注 | `T` 或 `undefined` | `core.config.get<{ port: number }>('app')` |
-| `core.config.getOrThrow<T>(name)` | 读取应用启动所需的配置值 | `name` 必填。`T` 只用于 TypeScript 类型标注 | `T`。配置未加载时抛错 | `core.config.getOrThrow<{ port: number }>('app')` |
-| `core.config.has(name)` | 查询配置是否已加载 | `name` 必填 | `boolean` | `core.config.has('app')` |
+| `core.config.validate(name, schema)` | 用当前环境和指定规则重新检查上次成功读到的 YAML | 必填已加载配置别名 `name` 和检查结构的 Zod `schema`。磁盘变更用 `reload()` 读取。 | `HaiResult<T>`。成功后更新已保存的数据和后续重载使用的规则 | `core.config.validate('app', AppSchema)` |
+| `core.config.get<T>(name)` | 读取已保存的配置值 | 必填 `name` 为已加载的配置名。 `T` 指定读取值的 TypeScript 类型。 | `T` 或 `undefined` | `core.config.get<{ port: number }>('app')` |
+| `core.config.getOrThrow<T>(name)` | 读取应用启动所需的配置值 | 必填 `name` 为要读取的配置名。 `T` 指定读取值的 TypeScript 类型。 | `T`。配置未加载时抛错 | `core.config.getOrThrow<{ port: number }>('app')` |
+| `core.config.has(name)` | 查询配置是否已加载 | 必填 `name` 为要检查是否已加载的配置名。 | `boolean` | `core.config.has('app')` |
 | `core.config.keys()` | 列出已加载的配置名 | 无参数 | `string[]`，首次加载前为空数组 | `core.config.keys()` |
-| `core.config.reload(name)` | 重新读文件，应用当前环境和已保存的校验规则，通知订阅方 | `name` 必填 | `HaiResult<unknown>`。未加载时返回 `CONFIG_NOT_LOADED`，重载失败时保留旧值 | `core.config.reload('app')` |
-| `core.config.watch<T>(name, callback)` | 在文件改变后重载并通知回调 | `name` 和 `callback` 必填。`T` 默认为 `unknown`。回调成功时取得新值，失败时取得 `null` 和错误 | 返回取消本次订阅的函数。未加载配置时立即向回调报告 `CONFIG_NOT_LOADED` | `const stop = core.config.watch('app', (value, error) => { if (error) core.logger.warn('Config watch failed', { code: error.code }) })` |
-| `core.config.isWatching(name)` | 检查某份配置是否有活跃的文件监听 | `name` 必填 | `boolean` | `core.config.isWatching('app')` |
+| `core.config.reload(name)` | 重新读文件，应用当前环境和已保存的校验规则，通知订阅方 | 必填 `name` 指向要从磁盘重新加载的已注册配置。 | `HaiResult<unknown>`。未加载时返回 `CONFIG_NOT_LOADED`，重载失败时保留旧值 | `core.config.reload('app')` |
+| `core.config.watch<T>(name, callback)` | 在文件改变后重载并通知回调 | 必填配置别名 `name` 与 `callback(value, error)`。回调收到新值，或失败时收到 `null` 和错误。 | 返回取消本次订阅的函数。未加载配置时立即向回调报告 `CONFIG_NOT_LOADED` | `const stop = core.config.watch('app', (value, error) => { if (error) core.logger.warn('Config watch failed', { code: error.code }) })` |
+| `core.config.isWatching(name)` | 检查某份配置是否有活跃的文件监听 | 必填 `name` 指定要检查监听状态的配置。 | `boolean` | `core.config.isWatching('app')` |
 | `core.config.unwatch(name?)` | 停止监听，保留已加载的配置 | 省略 `name` 时停止全部监听 | `void` | `core.config.unwatch('app')` |
 | `core.config.clear(name?)` | 清除已加载的配置，并停止对应监听 | 省略 `name` 时清除全部配置 | `void`。文件内容保持原样 | `core.config.clear('app')` |
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.config.resolve(options)` | 在内存里应用覆盖和占位符替换 | `name` 和 `value` 必填。`environment` 默认 `process.env`。可用 `schema`（Zod）或 `shape`（JSON Schema）识别字段。`missing` 默认 `'error'`，可传 `'empty'` 将缺失占位符替换为空字符串 | `HaiResult<unknown>`，应用仍需验证最终数据 | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
-| `core.config.toEnv(options)` | 将配置对象转换为环境变量 | `prefix` 和 `value` 必填。可选 `schema` 或 `shape` 提供字段结构 | `Record<string, string>`，不自动遮盖敏感值。非法名称会抛错 | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000, tags: ['local'] } })` |
-| `core.config.mergeEnv(layers)` | 按优先级合并多个来源 | 传入由低到高排列的变量对象 | `Record<string, string>`。高优先级的整段覆盖会清除低优先级的旧子项 | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
-| `core.config.parseEnv(text)` | 将 dotenv 文本读成字面变量 | `text` 必填 | `Record<string, string>`。重复键或无效的生成标记值会抛错 | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
-| `core.config.stringifyEnv(values, options?)` | 把环境变量编码为可写入 dotenv 的文本 | `values` 必填。`target` 默认 `'node'`，为 Compose 生成时使用 `'compose'` | `string`。非法变量名会抛错 | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
+| `core.config.resolve(options)` | 在内存里应用覆盖和占位符替换 | 必填 `options`。`name` 和 `value` 必填。`environment` 默认 `process.env`。可用 `schema`（Zod）或 `shape`（JSON Schema）识别字段。`missing` 默认 `'error'`，可传 `'empty'` 将缺失占位符替换为空字符串 | `HaiResult<unknown>`，应用仍需验证最终数据 | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
+| `core.config.toEnv(options)` | 将配置对象转换为环境变量 | 必填 `options`。`prefix` 和 `value` 必填。可选 `schema` 或 `shape` 提供字段结构 | `Record<string, string>`，不自动遮盖敏感值。非法名称会抛错 | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000, tags: ['local'] } })` |
+| `core.config.mergeEnv(layers)` | 按优先级合并多个来源 | `layers` 是按优先级从低到高排列的变量对象数组。 | `Record<string, string>`。高优先级的整段覆盖会清除低优先级的旧子项 | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
+| `core.config.parseEnv(text)` | 将 dotenv 文本读成字面变量 | 必填 `text` 为 dotenv 文件正文。 | `Record<string, string>`。重复键或无效的生成标记值会抛错 | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
+| `core.config.stringifyEnv(values, options?)` | 把环境变量编码为可写入 dotenv 的文本 | `values` 必填，键和值都是字符串。可省略 `options`。其 `target` 默认 `node`，为 Compose 的 env 文件使用 `compose`。 | `string`。非法变量名会抛错 | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
 
 <a id="加载校验与读取"></a>
 
@@ -372,20 +372,28 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.logger.trace` | 记录最细的调试步骤 | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
-| `core.logger.debug` | 记录调试信息 | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
-| `core.logger.info` | 记录正常业务事件 | `message, ctx?` | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
-| `core.logger.warn` | 记录需关注但可继续的情况 | `message, ctx?` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
-| `core.logger.error` | 记录失败 | `message, ctx?` | `void` | `core.logger.error('Write failed', { error })` |
-| `core.logger.fatal` | 记录严重故障，是否退出由应用决定 | `message, ctx?` | `void` | `core.logger.fatal('Startup failed')` |
-| `core.logger.create` | 创建 Logger，省略的设置继承全局 | `options?` | `Logger` | `core.logger.create({ name: 'orders' })` |
-| `core.logger.child` | 创建带固定字段的子 Logger | `fields` | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
-| `core.logger.configure` | 修改提供的全局日志设置 | `options` | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
-| `core.logger.setLevel` | 改全局阈值，初始为 info | `level` | `void` | `core.logger.setLevel('warn')` |
-| `core.logger.getLevel` | 读当前全局阈值 | 无参数 | `LogLevel` | `core.logger.getLevel()` |
-| `core.logger.observe` | 接收通过级别筛选且已脱敏的记录 | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
+| `core.logger.trace(message, context?)` | 记录最细的调试步骤 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.trace('Callback entered')` |
+| `core.logger.debug(message, context?)` | 记录调试信息 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
+| `core.logger.info(message, context?)` | 记录正常业务事件 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.info('Order created', { id: 'order-1' })` |
+| `core.logger.warn(message, context?)` | 记录需关注但可继续的情况 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.error(message, context?)` | 记录失败 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.error('Write failed', { error })` |
+| `core.logger.fatal(message, context?)` | 记录严重故障，是否退出由应用决定 | 必填日志消息 `message` 字符串。可传 `context` 对象给本条日志追加字段。 | `void` | `core.logger.fatal('Startup failed')` |
+| `core.logger.create(options?)` | 创建 Logger，省略的设置继承全局 | `options` 可省略，其中 `name`、`level`、`format`、`context` 的优先级见下表。 | `Logger` | `core.logger.create({ name: 'orders' })` |
+| `core.logger.child(context)` | 创建带固定字段的子 Logger | 必填 `context` 对象，固定追加到此子 Logger 及其后代的日志。 | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure(config)` | 修改提供的全局日志设置 | `config` 对象必填，可设 `level`、`format`、`context`、`redact`，见下表。 | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel(level)` | 改全局阈值，初始为 info | 必填 `level`，选 `trace`、`debug`、`info`、`warn`、`error` 或 `fatal`。 | `void` | `core.logger.setLevel('warn')` |
+| `core.logger.getLevel()` | 读当前全局阈值 | 无参数 | `LogLevel` | `core.logger.getLevel()` |
+| `core.logger.observe(observer)` | 接收通过级别筛选且已脱敏的记录 | 必填同步 `observer(record)`，参数为已按级别过滤且经脱敏的 `LogRecord`。 | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 #### 场景：按级别记录业务与诊断日志
+
+| 字段 | `create(options?)` | `configure(config)` |
+| --- | --- | --- |
+| `name` | 可选字符串，标记日志所属模块，例如 `'orders'` | 通过 `create()` 设置模块名 |
+| `level` | 可选 `trace`、`debug`、`info`、`warn`、`error`、`fatal`。省略时动态继承全局阈值 | 初始为 `info`。传入时修改全局阈值，省略时保留当前值 |
+| `format` | `'json'` 或 `'pretty'`，省略时动态继承全局格式 | 初始为 `'pretty'`。传入时修改全局格式，省略时保留当前值 |
+| `context` | 可选对象。其字段添加到此 Logger 的每条记录，同名字段覆盖全局上下文 | 可选对象。按顶层键合并全局上下文，省略或传 `{}` 都会保留旧字段 |
+| `redact` | 继承全局规则 | 可选字段路径数组，默认 `[]`。传入 `['customer.email']` 等路径会替换旧的附加规则。传入 `[]` 清空附加规则，内置敏感字段照常脱敏 |
 
 ```ts
 import { core } from '@h-ai/core'
@@ -477,7 +485,7 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.context.run(context, operation)` | 在回调内设置请求或任务编号 | 传入关联字段对象和回调。默认不暂停日志观察回调 | 回调的原始返回值，含 Promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
+| `core.context.run(context, operation)` | 在回调内设置请求或任务编号 | `context` 必填，为可信请求标识和可选 `suppressLogObservers`。`operation` 是同步或异步回调。 | 回调的原始返回值，含 Promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
 | `core.context.get()` | 读取当前上下文 | 无参数 | 只读 `RequestContext`，无上下文时为空对象 | `const { requestId } = core.context.get()` |
 
 #### 场景：在异步调用中保留请求编号
@@ -517,12 +525,23 @@ core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collect
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.sanitize.isSensitiveKey(key, matcher?)` | 判断字段名是否应隐去 | 字段名必填，默认用内置规则 | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
-| `core.sanitize.sanitizeSensitiveValue(value, key, options?)` | 清理一项值 | 传值和字段名，未知字段名时传 `null`。默认替换标记 `[REDACTED]` | 原值或清理后的值 | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
-| `core.sanitize.sanitizeSensitiveFields(value, options?)` | 生成脱敏后的数据副本 | 值必填，可指定 `matcher` 和 `replacement` | 脱敏后的数据 | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
-| `core.sanitize.sanitizeUrl(url, options?)` | 清理 URL 中的凭据 | URL 字符串，可自定义替换选项 | `string`，解析失败返回 `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
-| `core.sanitize.sanitizeText(text, secretValues?)` | 清理文本中有明确格式或已知值的凭据 | 字符串必填，已知值列表默认 `[]` | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
+| `core.sanitize.isSensitiveKey(key, matcher?)` | 判断字段名是否应隐去 | `key` 必填，为待判断字段名。`matcher` 可用正则、字段名数组或判断函数，省略时用内置规则。 | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
+| `core.sanitize.sanitizeSensitiveValue(value, key, options?, cache?)` | 清理一项值 | 必填原始 `value` 和 `key`，没有字段名时传 `null`。`options` 可指定匹配规则和替换值，默认 `[REDACTED]`。可传存放已复制对象的 `cache: WeakMap`，省略时每次新建。 | 原值或清理后的值 | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
+| `core.sanitize.sanitizeSensitiveFields(value, options?)` | 生成脱敏后的数据副本 | `value` 是要复制与脱敏的值。可选 `options.matcher`、`options.replacement` 见下表。 | 脱敏后的数据 | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
+| `core.sanitize.sanitizeUrl(url, options?)` | 清理 URL 中的凭据 | 必填 `url` 字符串。可选 `options.matcher`、`options.replacement` 适用于 URL 中的凭据字段。 | `string`，解析失败返回 `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
+| `core.sanitize.sanitizeText(text, secretValues?)` | 清理文本中有明确格式或已知值的凭据 | `text` 为待清理文本，`secretValues` 为调用方额外知道的秘密字符串数组，默认 `[]`。 | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
 | `core.sanitize.defaultSensitiveKeyRegex`、`defaultSensitiveReplacement` | 读取内置规则及替换值 | 只读常量 | `RegExp` 和 `string` | `const replacement = core.sanitize.defaultSensitiveReplacement` |
+
+<a id="sanitize-options"></a>
+
+#### 脱敏选项
+
+| 字段 | 取值、缺省与行为 |
+| --- | --- |
+| `matcher` | 可选正则、字段名数组或 `(key) => boolean`。指定时由它选择要替换的字段，默认用内置敏感规则。 |
+| `replacement` | 可替换的值，默认字符串 `[REDACTED]`。URL 输出时转换为字符串。 |
+
+下方示例把 `matcher: ['email']` 与 `replacement: '***'` 用于已移除密码的副本。邮件字段变为 `***`。
 
 #### 场景：发布诊断前隐藏敏感字段
 
@@ -568,11 +587,11 @@ core.sanitize.sanitizeText('Request failed with a known private value', ['privat
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.error.buildHaiErrorsDef(module, codes)` | 生成模块的稳定错误定义 | 模块名和错误名称到 `业务码:HTTP状态` 的映射 | 按键索引的错误定义 | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
-| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 给本次失败附上消息和诊断信息 | 错误定义和消息必填，原因和建议可省略 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
-| `core.error.toPublic(error, traceId?)` | 准备可返回浏览器的错误 | 错误必填，可传追踪编号 | 删除内部诊断字段的错误 | `core.error.toPublic(error, 'req-1')` |
-| `core.error.formatMessage(error)` | 生成带追踪编号的文案 | 传入含消息及可选追踪编号的对象 | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`、`err(def, message, cause?)` | 构造成功或失败结果 | 从 `@h-ai/core` 独立导入。成功传数据，失败传错误定义和消息，也可直接传完整错误 | `HaiResult` 的对应分支 | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.buildHaiErrorsDef(module, errorInfo, system?)` | 生成模块的稳定错误定义 | 必填 `module`、`errorInfo`（错误名 → `业务码:HTTP状态`）。`system` 默认 `hai`，是错误码第一段。 | 按键索引的错误定义 | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
+| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 给本次失败附上消息和诊断信息 | 必填错误定义 `def` 与公开提示 `message`。可选内部 `cause` 与处理建议 `suggestion`。 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.toPublic(error, traceId?, locale?)` | 准备可返回浏览器的错误 | `error` 必填。`traceId` 覆盖当前关联编号，`locale` 覆盖 5xx 通用提示使用的语言。 | 删除内部诊断字段的错误 | `core.error.toPublic(error, 'req-1')` |
+| `core.error.formatMessage(error)` | 生成带追踪编号的文案 | 必填 `error`，含消息字符串及可省略的 `traceId`。 | `string` | `core.error.formatMessage(error)` |
+| `ok(data)`、`err(errorOrDef, message?, cause?, suggestion?)` | 构造成功或失败结果 | `ok` 传成功 `data`。`err` 的 `errorOrDef` 必填，可为错误定义、完整 `HaiError` 或原生错误，可传 `message`、`cause`、`suggestion`。 | `HaiResult` 的对应分支 | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
 
 #### 场景：构造领域失败并返回安全提示
 
@@ -656,11 +675,11 @@ if (!failed.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.i18n.setGlobalLocale(locale)` | 设置默认语言 | 语言代码 | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
+| `core.i18n.setGlobalLocale(locale)` | 设置默认语言 | 必填 `locale`，支持 `zh-CN`、`en-US`、`ja-JP`，分别可简写为 `zh`、`en`、`ja`。 | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
 | `core.i18n.getGlobalLocale()` | 读取当前语言 | 无；初始默认 `zh-CN` | 语言代码 | `core.i18n.getGlobalLocale()` |
-| `core.i18n.runWithLocale(locale, operation)` | 给当前 Node 请求设置独立的语言 | 语言和回调必填 | 回调的返回值，与回调同步或异步行为一致 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
-| `core.i18n.createMessageGetter(dictionaries)` | 从应用字典创建消息函数 | 传入语言到消息字典的映射 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: '欢迎' } })` |
-| `core.i18n.coreM(key, options?)` | 查询 Core 内置文案 | 键必填，可指定 `locale` 和 `params` | `string`，缺少对应键时返回键名 | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
+| `core.i18n.runWithLocale(locale, operation)` | 给当前 Node 请求设置独立的语言 | `locale` 是请求语言，`operation` 是保留返回值的同步或异步回调。两者必填。 | 回调的返回值，与回调同步或异步行为一致 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
+| `core.i18n.createMessageGetter(messages)` | 从应用字典创建消息函数 | `messages` 必填，语言代码到消息键和译文的字典。 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: '欢迎' } })` |
+| `core.i18n.coreM(key, options?)` | 查询 Core 内置文案 | 必填消息 `key`。可选 `options.locale` 覆盖当前语言，`options.params` 为 `{name}` 等占位符供值。 | `string`，缺少对应键时返回键名 | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
 | `core.i18n.DEFAULT_LOCALE`、`DEFAULT_LOCALES` | 读取框架的默认和内置语言 | 只读常量 | `zh-CN` 和语言选项列表 | `const choices = core.i18n.DEFAULT_LOCALES` |
 
 #### 场景：为当前请求选择消息语言
@@ -715,8 +734,8 @@ Node 请求/SSR 用 `runWithLocale()` 包裹实际异步处理；Serv 自动建�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.zodValidation.createPrefixedZodMessageGetter(prefix, message)` | 适配有模块前缀的消息键 | 前缀和实际查询消息的函数必填 | 消息函数 | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
-| `core.zodValidation.mapZodErrorToFormErrors(error, message)` | 生成字段错误列表 | 传入 Zod 校验失败对象和适配后的消息函数 | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
+| `core.zodValidation.createPrefixedZodMessageGetter(prefix, getMessage)` | 适配有模块前缀的消息键 | 必填 `prefix`（消息键前缀）和 `getMessage(key, params)`（按实际键取译文）。 | 消息函数 | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
+| `core.zodValidation.mapZodErrorToFormErrors(error, getMessage)` | 生成字段错误列表 | 必填 Zod 校验 `error` 与适配后的 `getMessage(key, params)`。 | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
 
 #### 场景：把校验问题映射到表单字段
 
@@ -758,9 +777,9 @@ if (!parsed.success) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.module.createRuntime(steps)` | 按顺序管理应用依赖 | 每步传入名称、启动和关闭函数。可用 `enabled` 控制是否执行 | `ModuleRuntime`，其 `start()` 和 `close()` 均返回 `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
-| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 让模块在初始化前返回统一的失败结果 | 两个参数都必填：未初始化的错误码或错误定义，以及生成错误文案的函数 | 带 `error()`、`result<T>()`、`proxy<T>(mode?)` 的对象。代理默认异步 | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
-| `core.module.requiresSharedState(environment)` | 判断当前环境是否要求共享后端 | 传入环境变量对象，生产环境中的显式 E2E 模式可豁免 | `boolean` | `core.module.requiresSharedState(process.env)` |
+| `core.module.createRuntime(definitions)` | 按顺序管理应用依赖 | 必填按初始化顺序列出的 `definitions` 数组，每项有 `name`、`start`、`close`，可选 `enabled` 决定是否运行。 | `ModuleRuntime`，其 `start()` 和 `close()` 均返回 `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
+| `core.module.createNotInitializedKit(codeOrDef, messageFn)` | 让模块在初始化前返回统一的失败结果 | 必填 `codeOrDef`（错误码或定义）和 `messageFn`（无参消息函数）。 | 带 `error()`、`result<T>()`、`proxy<T>(mode?)` 的对象。代理默认异步 | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.requiresSharedState(environment)` | 判断当前环境是否要求共享后端 | 必填 `environment` 对象。`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时要求共享状态，显式测试开关 `HAI_E2E` 或 `HAI_E2E_MOCK` 为 `1` 除外。 | `boolean` | `core.module.requiresSharedState(process.env)` |
 
 <a id="应用启动与关闭"></a>
 
@@ -946,14 +965,28 @@ core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // fal
 
 | 入口 | 用途 | 参数 | 返回 | 示例 |
 | --- | --- | --- | --- | --- |
-| `core.worker.createPool(entry, limits)` | 创建任务池 | 入口、正整数线程数、非负等待上限及可选空闲回收毫秒数 | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
-| `pool.run(input, transfer?)` | 提交一次计算 | 可结构化克隆的输入和可选转移列表 | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
+| `core.worker.createPool(entry, options)` | 创建任务池 | 必填 `entry`（Worker 入口 URL 或浏览器构造函数）及 `options`（线程数、队列和空闲回收）。见下表。 | `WorkerPool<Input, Output>` | `core.worker.createPool<string, number>(entry, limits)` |
+| `pool.run(input, transfer?)` | 提交一次计算 | 必填 `input`，必须支持结构化克隆。`transfer` 是可选的转移列表，Node 仅支持 ArrayBuffer。 | `Promise<HaiResult<Output>>` | `await pool.run(report)` |
 | `pool.close()` | 结算未完成任务并回收线程 | 无 | `Promise<void>` | `await pool.close()` |
-| `core.worker.start(entry, options?)` | 创建独占线程 | 入口；Node 可选 `workerData` 和 `execArgv` | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
-| `thread.postMessage(input, transfer?)` | 发送消息 | 输入和可选转移列表 | `void` | `thread.postMessage(report)` |
-| `thread.onMessage(listener)` | 订阅消息 | 接收输出的函数 | 取消订阅函数 | `const unsubscribe = thread.onMessage(receive)` |
+| `core.worker.start(entry, options?)` | 创建独占线程 | 必填 `entry`。Node 的 `options` 可传 `workerData` 与 `execArgv`，浏览器只接受入口。 | `WorkerThread<Input, Output>` | `core.worker.start<string, number>(entry)` |
+| `thread.postMessage(input, transfer?)` | 发送消息 | 必填 `input`，必须支持结构化克隆。`transfer` 是可选的转移列表，Node 仅支持 ArrayBuffer。 | `void` | `thread.postMessage(report)` |
+| `thread.onMessage(listener)` | 订阅消息 | 必填 `listener(output)`，每条 Worker 消息调用一次。 | 取消订阅函数 | `const unsubscribe = thread.onMessage(receive)` |
 | `thread.exited` | 观察退出 | 无 | `Promise<WorkerExit>` | `await thread.exited` |
 | `thread.terminate()` | 终止线程 | 无 | `Promise<void>` | `await thread.terminate()` |
+
+<a id="worker-options"></a>
+
+#### 线程池与独占线程参数
+
+| 字段 | 取值、缺省与行为 |
+| --- | --- |
+| `createPool.options.maxWorkers` | 必填正安全整数。每个线程同时执行一个任务。 |
+| `createPool.options.maxQueuedJobs` | 必填非负安全整数。`0` 禁止排队。 |
+| `createPool.options.idleTimeoutMs` | 可选整数，范围 1–2147483647 毫秒。省略时空闲线程保留到关闭。 |
+| `start.options.workerData` | 仅 Node。传入可结构化克隆的启动数据，从 Worker 内的 `workerData` 读取。默认无数据。 |
+| `start.options.execArgv` | 仅 Node。显式传 Worker 的 Node 启动参数字符串数组，省略时由 Node 继承宿主参数。 |
+
+例如用 `{ maxWorkers: 2, maxQueuedJobs: 4 }` 运行下方文档统计场景。最多两个任务同时运行，额外四个等待，再提交即返回限流。
 
 #### 场景：统计导入文档并释放线程
 
@@ -1056,11 +1089,22 @@ finally {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.access.normalizeClientIp(value?)` | 检查并整理一个 IP 字符串 | 可省略地址 | 有效 IP 字符串；缺少地址或格式无效时返回 `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
-| `core.access.createClientIpResolver(trustedProxies?)` | 创建一个函数，逐请求选出供访问策略检查的 IP | 默认 `auto`；可传代理的 IP 或 CIDR 列表，`[]` 表示不信任任何代理 | `resolveClientIp(request, remoteAddress?)`，返回 IP 或 `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
-| `core.access.createConditionCheck(condition)` | 单独检查 IP 和当前时段，不匹配路径或方法 | 必须传完整的条件对象；字段见[配置清单](../configuration/core.md#request-access) | `checkCondition(ip?)`，返回 `AccessDecision` | `core.access.createConditionCheck({ allowIps: ['198.51.100.0/24'], denyIps: [], timezone: 'UTC', windows: [] })` |
-| `core.access.createRequestCheck(input?)` | 启动时准备请求检查器 | 内联策略、`{ file }` 或 `false`，省略时为 `false` | `check(pathname, method, ip?)`，返回 `AccessDecision`；无法创建时抛错 | `const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
-| `core.access.loadPolicy(input?, baseDirectory?)` | 只读取和校验策略，适合部署前检查文件 | 策略输入同上；相对路径默认从进程工作目录起算 | 校验后的策略对象或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.normalizeClientIp(value?)` | 检查并整理一个 IP 字符串 | `value` 可为连接地址字符串，缺失或无效时返回 `undefined`。 | 有效 IP 字符串；缺少地址或格式无效时返回 `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
+| `core.access.createClientIpResolver(trustedProxies?)` | 创建一个函数，逐请求选出供访问策略检查的 IP | `trustedProxies` 默认 `auto`，仅受管私有入口采用容器网段。也可明确传 IP/CIDR 数组，`[]` 不采用转发头。 | `resolveClientIp(request, remoteAddress?)`，返回 IP 或 `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createConditionCheck(condition)` | 单独检查 IP 和当前时段，不匹配路径或方法 | 必填 `condition`，包含可信地址与时间条件。字段和取值见[访问策略](../configuration/request-access.md)。 | `checkCondition(ip?)`，返回 `AccessDecision` | `core.access.createConditionCheck({ allowIps: ['198.51.100.0/24'], denyIps: [], timezone: 'UTC', windows: [] })` |
+| `core.access.createRequestCheck(input?)` | 启动时准备请求检查器 | `input` 接受内联策略、`{ file }` 或 `false`，默认 `false`。 | `check(pathname, method, ip?)`，返回 `AccessDecision`；无法创建时抛错 | `const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.loadPolicy(input?, baseDirectory?)` | 只读取和校验策略，适合部署前检查文件 | `input` 接受内联策略、`{ file }` 或 `false`，默认 `false`。`baseDirectory` 用来解析相对文件路径，默认当前目录。 | 校验后的策略对象或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+
+<a id="access-condition-options"></a>
+
+#### 地址和时间条件
+
+| 字段 | 取值、缺省与行为 |
+| --- | --- |
+| `allowIps` | IPv4、IPv6 或 CIDR 数组。空数组不限地址，非空仅允许命中地址。 |
+| `denyIps` | IPv4、IPv6 或 CIDR 数组。空数组不拒绝，匹配时优先于允许项。 |
+| `timezone` | 用于时间窗口的 IANA 时区，例如 `UTC`。 |
+| `windows` | 时间窗口数组。`[]` 不限时间，非空使用窗口中的 `days`、`start`、`end`。见下方案例。 |
 
 #### 场景：解析与检查客户端地址
 
@@ -1207,14 +1251,14 @@ const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.id.generate` | 生成随机 ID | `length = 21` | `string` | `core.id.generate(8)` |
-| `core.id.short` | 生成固定长度短 ID | 无参数 | `string` | `core.id.short()` |
-| `core.id.withPrefix` | 给随机 ID 加上业务前缀 | `prefix, length = 21` | `string` | `core.id.withPrefix('order_')` |
-| `core.id.trace` | 生成以 trace- 开头的追踪编号 | 无参数 | `string` | `core.id.trace()` |
-| `core.id.request` | 生成以 req- 开头的请求编号 | 无参数 | `string` | `core.id.request()` |
-| `core.id.uuid` | 生成 UUID v4，缺安全随机源会抛错 | 无参数 | `string` | `core.id.uuid()` |
-| `core.id.isValidUUID` | 检查 UUID v4 的格式 | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
-| `core.id.isValidNanoId` | 检查字符范围和长度 | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
+| `core.id.generate(length?)` | 生成随机 ID | 可选 ID 字符数 `length`，默认 `21`。 | `string` | `core.id.generate(8)` |
+| `core.id.short()` | 生成固定长度短 ID | 无参数 | `string` | `core.id.short()` |
+| `core.id.withPrefix(prefix, length?)` | 给随机 ID 加上业务前缀 | 必填前缀字符串 `prefix`。`length` 为前缀之后的随机字符数，默认 `21`。 | `string` | `core.id.withPrefix('order_')` |
+| `core.id.trace()` | 生成以 trace- 开头的追踪编号 | 无参数 | `string` | `core.id.trace()` |
+| `core.id.request()` | 生成以 req- 开头的请求编号 | 无参数 | `string` | `core.id.request()` |
+| `core.id.uuid()` | 生成 UUID v4，缺安全随机源会抛错 | 无参数 | `string` | `core.id.uuid()` |
+| `core.id.isValidUUID(uuid)` | 检查 UUID v4 的格式 | 必填待校验的 UUID 字符串 `uuid`。 | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
+| `core.id.isValidNanoId(str, length?)` | 检查字符范围和长度 | 必填待校验字符串 `str`。指定 `length` 检查字符数，默认 `21`。 | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
 #### 场景：生成业务与请求标识
 
@@ -1244,14 +1288,14 @@ ID 不能作为密钥。UUID 只使用密码学安全随机源，不可用时抛
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.typeUtils.isDefined` | 判断值是否既不是 null 也不是 undefined | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
-| `core.typeUtils.isObject` | 判断值是否为对象，排除 null 和数组 | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
-| `core.typeUtils.isFunction` | 判断是否为函数 | `value` | `boolean` | `core.typeUtils.isFunction(() => {})` |
-| `core.typeUtils.isPromise` | 判断是否为 Promise | `value` | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
-| `core.typeUtils.isString` | 判断是否为字符串 | `value` | `boolean` | `core.typeUtils.isString('orders')` |
-| `core.typeUtils.isNumber` | 判断是否为数字，排除 NaN | `value` | `boolean` | `core.typeUtils.isNumber(3000)` |
-| `core.typeUtils.isBoolean` | 判断是否为布尔值 | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
-| `core.typeUtils.isArray` | 判断是否为数组 | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
+| `core.typeUtils.isDefined(value)` | 判断值是否既不是 null 也不是 undefined | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isDefined(null)` |
+| `core.typeUtils.isObject(value)` | 判断值是否为对象，排除 null 和数组 | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
+| `core.typeUtils.isFunction(value)` | 判断是否为函数 | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isFunction(() => {})` |
+| `core.typeUtils.isPromise(value)` | 判断是否为 Promise | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isPromise(Promise.resolve('ready'))` |
+| `core.typeUtils.isString(value)` | 判断是否为字符串 | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isString('orders')` |
+| `core.typeUtils.isNumber(value)` | 判断是否为数字，排除 NaN | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isNumber(3000)` |
+| `core.typeUtils.isBoolean(value)` | 判断是否为布尔值 | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isBoolean(false)` |
+| `core.typeUtils.isArray(value)` | 判断是否为数组 | 必填 `value`，传入待判断的任意 JavaScript 值。 | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
 #### 场景：检查输入值并缩小类型
 
@@ -1279,14 +1323,14 @@ core.typeUtils.isArray([1, 2]) // true。
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.object.deepClone` | 复制可克隆的值，函数等不可克隆输入会抛错 | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
-| `core.object.deepMerge` | 递归合并普通对象，后值优先 | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
-| `core.object.pick` | 只保留列出的键 | `object, keys` | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
-| `core.object.omit` | 移除列出的键 | `object, keys` | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
-| `core.object.keys` | 列出对象自己的可枚举字符串键 | `object` | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
-| `core.object.values` | 依同样顺序列出对象的值 | `object` | `T[keyof T][]` | `core.object.values({ a: 1 })` |
-| `core.object.entries` | 返回键值对 | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
-| `core.object.fromEntries` | 从键值对构造对象 | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
+| `core.object.deepClone(obj)` | 复制可克隆的值，函数等不可克隆输入会抛错 | 必填源值 `obj`，需要复制时传可克隆的数据。 | `T` | `core.object.deepClone({ mode: 'local' })` |
+| `core.object.deepMerge(...objects)` | 递归合并普通对象，后值优先 | 按优先级从低到高传入 `objects`。后一个的同名值覆盖前一个。 | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
+| `core.object.pick(obj, keys)` | 只保留列出的键 | 必填源对象 `obj` 与要保留的键数组 `keys`。 | `Pick<T, K>` | `core.object.pick({ a: 1, b: 2 }, ['a'])` |
+| `core.object.omit(obj, keys)` | 移除列出的键 | 必填源对象 `obj` 与要排除的键数组 `keys`。 | `Omit<T, K>` | `core.object.omit({ a: 1, b: 2 }, ['a'])` |
+| `core.object.keys(obj)` | 列出对象自己的可枚举字符串键 | 必填读取自有属性的源对象 `obj`。 | `(keyof T)[]` | `core.object.keys({ a: 1 })` |
+| `core.object.values(obj)` | 依同样顺序列出对象的值 | 必填读取自有属性的源对象 `obj`。 | `T[keyof T][]` | `core.object.values({ a: 1 })` |
+| `core.object.entries(obj)` | 返回键值对 | 必填读取自有属性的源对象 `obj`。 | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
+| `core.object.fromEntries(entries)` | 从键值对构造对象 | 必填 `entries`，每项是一个 `[key, value]` 键值对。 | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
 #### 场景：合并设置并选取字段
 
@@ -1320,18 +1364,18 @@ deepClone 使用 structuredClone，支持 Date/Map/Set/循环等可克隆值；�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.string.capitalize` | 首字符大写 | `text` | `string` | `core.string.capitalize('hello')` |
-| `core.string.kebabCase` | 转换成连字符分隔的命名 | `text` | `string` | `core.string.kebabCase('helloWorld')` |
-| `core.string.camelCase` | 转换成小驼峰命名 | `text` | `string` | `core.string.camelCase('hello-world')` |
-| `core.string.snakeCase` | 转换成下划线分隔的命名 | `text` | `string` | `core.string.snakeCase('helloWorld')` |
-| `core.string.pascalCase` | 转换成大驼峰命名 | `text` | `string` | `core.string.pascalCase('hello-world')` |
-| `core.string.truncate` | 超过指定长度时截取，再加后缀 | `text, length, suffix = '...'` | `string` | `core.string.truncate('abcdef', 3)` |
-| `core.string.trim` | 移除首尾空白 | `text` | `string` | `core.string.trim(' hello ')` |
-| `core.string.isBlank` | 判断是否为空或只有空白 | `text` | `boolean` | `core.string.isBlank(' ')` |
-| `core.string.isNotBlank` | 判断是否至少有一个非空白字符 | `text` | `boolean` | `core.string.isNotBlank('hello')` |
-| `core.string.padStart` | 在开头填充到指定长度 | `text, length, pad = ' '` | `string` | `core.string.padStart('5', 3, '0')` |
-| `core.string.padEnd` | 在末尾填充到指定长度 | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
-| `core.string.constantTimeEqual` | 比较字符串，不同长度立即返回 false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
+| `core.string.capitalize(str)` | 首字符大写 | 必填待处理字符串 `str`。 | `string` | `core.string.capitalize('hello')` |
+| `core.string.kebabCase(str)` | 转换成连字符分隔的命名 | 必填待处理字符串 `str`。 | `string` | `core.string.kebabCase('helloWorld')` |
+| `core.string.camelCase(str)` | 转换成小驼峰命名 | 必填待处理字符串 `str`。 | `string` | `core.string.camelCase('hello-world')` |
+| `core.string.snakeCase(str)` | 转换成下划线分隔的命名 | 必填待处理字符串 `str`。 | `string` | `core.string.snakeCase('helloWorld')` |
+| `core.string.pascalCase(str)` | 转换成大驼峰命名 | 必填待处理字符串 `str`。 | `string` | `core.string.pascalCase('hello-world')` |
+| `core.string.truncate(str, length, suffix?)` | 超过指定长度时截取，再加后缀 | 必填 `str` 和保留的 UTF-16 代码单元数 `length`。超长时截取前 `length` 个单元，再追加 `suffix`，默认 `...`。`length <= 0` 时返回原文。 | `string` | `core.string.truncate('abcdef', 3)` |
+| `core.string.trim(str)` | 移除首尾空白 | 必填待处理字符串 `str`。 | `string` | `core.string.trim(' hello ')` |
+| `core.string.isBlank(str)` | 判断是否为空或只有空白 | 必填待处理字符串 `str`。 | `boolean` | `core.string.isBlank(' ')` |
+| `core.string.isNotBlank(str)` | 判断是否至少有一个非空白字符 | 必填待处理字符串 `str`。 | `boolean` | `core.string.isNotBlank('hello')` |
+| `core.string.padStart(str, length, char?)` | 在开头填充到指定长度 | 必填字符串 `str` 与目标长度 `length`。填充字符串 `char` 默认空格。 | `string` | `core.string.padStart('5', 3, '0')` |
+| `core.string.padEnd(str, length, char?)` | 在末尾填充到指定长度 | 必填字符串 `str` 与目标长度 `length`。填充字符串 `char` 默认空格。 | `string` | `core.string.padEnd('5', 3, '0')` |
+| `core.string.constantTimeEqual(a, b)` | 比较字符串，不同长度立即返回 false | 必填要比较的两个字符串 `a`、`b`。 | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
 #### 场景：转换命名与显示文本
 
@@ -1368,16 +1412,16 @@ Node 的 constantTimeEqual 对等长 UTF-16 字节使用原生 timingSafeEqual�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.array.unique` | 按首次出现的顺序去重 | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
-| `core.array.groupBy` | 按回调返回的键分组 | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
-| `core.array.chunk` | 按正整数大小分块，无效大小返回空数组 | `items, size` | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
-| `core.array.first` | 读取首项，空数组没有值 | `items` | `T or undefined` | `core.array.first([1, 2])` |
-| `core.array.last` | 读取末项，空数组没有值 | `items` | `T or undefined` | `core.array.last([1, 2])` |
-| `core.array.flatten` | 展开一层嵌套数组 | `items` | `T[]` | `core.array.flatten([[1], [2, 3]])` |
-| `core.array.compact` | 移除 null 和 undefined，保留 0 等值 | `items` | `T[]` | `core.array.compact([0, null, 1])` |
-| `core.array.shuffle` | 返回随机排列的副本 | `items` | `T[]` | `core.array.shuffle([1, 2, 3])` |
-| `core.array.intersection` | 保留第一个数组中也出现在第二个数组的元素 | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
-| `core.array.difference` | 只保留第一个数组中未出现在第二个数组的元素 | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
+| `core.array.unique(arr)` | 按首次出现的顺序去重 | 必填待处理数组 `arr`。 | `T[]` | `core.array.unique([1, 1, 2])` |
+| `core.array.groupBy(arr, fn)` | 按回调返回的键分组 | 必填数组 `arr` 和分组函数 `fn(item)`，返回将该项放入的分组键。 | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
+| `core.array.chunk(arr, size)` | 按正整数大小分块，无效大小返回空数组 | 必填数组 `arr` 和每组最多容纳的项数 `size`。 | `T[][]` | `core.array.chunk([1, 2, 3], 2)` |
+| `core.array.first(arr)` | 读取首项，空数组没有值 | 必填待处理数组 `arr`。 | `T or undefined` | `core.array.first([1, 2])` |
+| `core.array.last(arr)` | 读取末项，空数组没有值 | 必填待处理数组 `arr`。 | `T or undefined` | `core.array.last([1, 2])` |
+| `core.array.flatten(arr)` | 展开一层嵌套数组 | 必填嵌套数组 `arr`，只展开一层。 | `T[]` | `core.array.flatten([[1], [2, 3]])` |
+| `core.array.compact(arr)` | 移除 null 和 undefined，保留 0 等值 | 必填待处理数组 `arr`。 | `T[]` | `core.array.compact([0, null, 1])` |
+| `core.array.shuffle(arr)` | 返回随机排列的副本 | 必填待处理数组 `arr`。 | `T[]` | `core.array.shuffle([1, 2, 3])` |
+| `core.array.intersection(arr1, arr2)` | 保留第一个数组中也出现在第二个数组的元素 | 必填左右两个数组 `arr1`、`arr2`，取同时出现的元素。 | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
+| `core.array.difference(arr1, arr2)` | 只保留第一个数组中未出现在第二个数组的元素 | 必填 `arr1`、`arr2`，保留只在第一个数组中出现的元素。 | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
 #### 场景：分组、分块与比较集合
 
@@ -1421,13 +1465,13 @@ core.array.difference([2, 3], [1, 2]) // [3]：交换参数会改变结果。
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.async.delay` | 异步等待指定毫秒数 | `ms` | `Promise<void>` | `await core.async.delay(10)` |
-| `core.async.withTimeout` | 限制等待时间，超时让等待方失败 | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
-| `core.async.retry` | 抛错时重试；次数包含第一次 | `operation, { maxRetries = 3, delay = 1000 }?` | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
-| `core.async.parallel` | 限制同时执行的数量，按原顺序返回 | `items, action, concurrency = 5` | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
-| `core.async.serial` | 按输入顺序逐项执行 | `items, action` | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
-| `core.async.debounce` | 等调用停止一段时间后处理最后一次输入 | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
-| `core.async.throttle` | 立即处理第一次，在间隔内跳过后续调用 | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
+| `core.async.delay(ms)` | 异步等待指定毫秒数 | 必填等待时长 `ms`，单位毫秒。 | `Promise<void>` | `await core.async.delay(10)` |
+| `core.async.withTimeout(promise, ms)` | 限制等待时间，超时让等待方失败 | 必填等待的 `promise` 和期限 `ms`（毫秒）。超时只结束等待。 | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
+| `core.async.retry(fn, options?)` | 抛错时重试；次数包含第一次 | 必填异步操作 `fn`。`options.maxRetries` 默认 `3` 次总尝试，最少执行一次。`options.delay` 默认 `1000` 毫秒。 | `Promise<T>` | `await core.async.retry(async () => 'ready')` |
+| `core.async.parallel(items, fn, concurrency?)` | 限制同时执行的数量，按原顺序返回 | 必填 `items` 数组与异步 `fn(item, index)`。`concurrency` 为同时运行上限，默认 `5`，须是正安全整数。 | `Promise<R[]>` | `await core.async.parallel([1, 2], async n => n * 2, 2)` |
+| `core.async.serial(items, fn)` | 按输入顺序逐项执行 | 必填 `items` 数组与异步 `fn(item, index)`，按输入顺序逐项等待。 | `Promise<R[]>` | `await core.async.serial([1, 2], async n => n * 2)` |
+| `core.async.debounce(fn, ms)` | 等调用停止一段时间后处理最后一次输入 | 必填回调 `fn` 和以毫秒计的等待间隔 `ms`。 | `wrapper` | `core.async.debounce(callback, 100)` |
+| `core.async.throttle(fn, ms)` | 立即处理第一次，在间隔内跳过后续调用 | 必填回调 `fn` 和以毫秒计的等待间隔 `ms`。 | `wrapper` | `core.async.throttle(callback, 100)` |
 
 #### 场景：限时、重试与限制并发
 
@@ -1470,16 +1514,16 @@ scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `core.time.formatDate` | 按本地时区填写格式中的日期占位符 | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
-| `core.time.timeAgo` | 按当前语言显示距今时间 | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
-| `core.time.now` | 读取 Unix 毫秒 | 无参数 | `number` | `core.time.now()` |
-| `core.time.nowSeconds` | 读取向下取整的 Unix 秒 | 无参数 | `number` | `core.time.nowSeconds()` |
-| `core.time.parseDate` | 将字符串交给原生 Date 解析，无效输入得到无效日期 | `text` | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
-| `core.time.isValidDate` | 检查 Date 是否代表有效时间 | `date` | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
-| `core.time.addDays` | 按本地日历移动指定天数 | `date, days` | `Date` | `core.time.addDays(date, 7)` |
-| `core.time.addHours` | 按本地时钟移动指定小时数 | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
-| `core.time.startOfDay` | 取当天的本地午夜 | `date` | `Date` | `core.time.startOfDay(date)` |
-| `core.time.endOfDay` | 取当天最后一毫秒 | `date` | `Date` | `core.time.endOfDay(date)` |
+| `core.time.formatDate(date, format?)` | 按本地时区填写格式中的日期占位符 | 必填 `Date` 值 `date`。`format` 为输出格式字符串，默认 `YYYY-MM-DD`。 | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
+| `core.time.timeAgo(date)` | 按当前语言显示距今时间 | 必填 `Date` 对象 `date`。 | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
+| `core.time.now()` | 读取 Unix 毫秒 | 无参数 | `number` | `core.time.now()` |
+| `core.time.nowSeconds()` | 读取向下取整的 Unix 秒 | 无参数 | `number` | `core.time.nowSeconds()` |
+| `core.time.parseDate(dateStr)` | 将字符串交给原生 Date 解析，无效输入得到无效日期 | 必填待解析的日期文本 `dateStr`，例如 `2026-01-01T00:00:00Z`。 | `Date` | `core.time.parseDate('2026-01-01T00:00:00Z')` |
+| `core.time.isValidDate(date)` | 检查 Date 是否代表有效时间 | 必填 `Date` 对象 `date`。 | `boolean` | `core.time.isValidDate(new Date('invalid'))` |
+| `core.time.addDays(date, days)` | 按本地日历移动指定天数 | 必填 `date: Date` 和天数 `days`，负值向前移动。 | `Date` | `core.time.addDays(date, 7)` |
+| `core.time.addHours(date, hours)` | 按本地时钟移动指定小时数 | 必填 `date: Date` 和小时数 `hours`，负值向前移动。 | `Date` | `core.time.addHours(date, 2)` |
+| `core.time.startOfDay(date)` | 取当天的本地午夜 | 必填 `Date` 对象 `date`。 | `Date` | `core.time.startOfDay(date)` |
+| `core.time.endOfDay(date)` | 取当天最后一毫秒 | 必填 `Date` 对象 `date`。 | `Date` | `core.time.endOfDay(date)` |
 
 #### 场景：解析、格式化与计算日期边界
 

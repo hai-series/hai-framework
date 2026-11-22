@@ -29,6 +29,7 @@
   "deploy_provisionNoResult": "No connection info returned from {service}",
   "deploy_recoveryFailure": "Deployment stopped at {stage}; inspect the recovery details.",
   "deploy_recoverySuggestion": "Inspect listed resources in the provider console before retrying with the same project name. Unknown means the request may have created a resource. Reused resources are never deleted automatically; remove newly created resources manually only after checking their use.",
+  "deploy_commandCancelled": "Command execution was cancelled.",
   "deploy_commandTimeout": "Command timed out: {command}",
   "deploy_commandFailed": "Command failed ({command}): {error}",
   "deploy_remoteConnectFailed": "Cannot connect to remote host {host}: {error}",

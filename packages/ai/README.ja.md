@@ -23,6 +23,7 @@
 ## 機能
 
 [API 一覧](../../docs/usage/function/ai.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
+非公開ファイルは [Node のローカル解析](../../docs/usage/function/ai.ja.md#bounded-local-files)を使えます。構造化出力は指定した項目をプレビューでき、[ブラウザー録音](../../docs/usage/function/ai.ja.md#browser-recording)でマイク制御と上限付き WAV 変換を利用できます。
 
 ## データ構造
 

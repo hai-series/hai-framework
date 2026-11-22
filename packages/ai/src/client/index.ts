@@ -6,4 +6,7 @@
  */
 export * from './ai-audio-client.js'
 
+export { createAudioRecorder } from './ai-audio-recorder.js'
+export type { AudioRecorder, AudioRecorderOptions } from './ai-audio-recorder.js'
 export { blobToWav } from './ai-audio-wav.js'
+export type { AudioWavOptions } from './ai-audio-wav.js'

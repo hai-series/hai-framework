@@ -17,6 +17,7 @@ import { isMermaidLanguage } from './mermaid-render.js'
 import {
   escapeHtml,
   isExternalLinkHref,
+  renderImagePlaceholder,
   sanitizeImageSrc,
   sanitizeLinkHref,
   sanitizeMarkdownHtml,
@@ -50,6 +51,8 @@ export interface MarkdownDocumentParseOptions {
   breaks?: boolean
   /** 是否按安全白名单解析原始 HTML 标签。 */
   allowHtmlTags?: boolean
+  /** 默认允许网络图片。禁用时网络图片显示替代文本，只保留内联数据图片。 */
+  remoteImages?: boolean
 }
 
 /**
@@ -155,6 +158,7 @@ const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   codePreviewHint: '',
   breaks: true,
   allowHtmlTags: false,
+  remoteImages: true,
 }
 
 function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
@@ -306,7 +310,8 @@ function createRendererObject(
 
       // mermaid 块在阅读态自动渲染为图表；只有 code 模式的代码/预览切换才保留源码视图。
       if (
-        isMermaidLanguage(rawLanguage)
+        options.remoteImages
+        && isMermaidLanguage(rawLanguage)
         && !options.showCodePreviewToggle
         && isClosedFencedCodeBlock(token)
       ) {
@@ -386,7 +391,7 @@ function createRendererObject(
     html(token: Tokens.HTML | Tokens.Tag): string {
       const source = readHtmlTokenSource(token)
       return options.allowHtmlTags
-        ? sanitizeMarkdownHtml(source)
+        ? sanitizeMarkdownHtml(source, options.remoteImages)
         : escapeHtml(source)
     },
 
@@ -411,7 +416,9 @@ function createRendererObject(
 
     image({ href, title, text }: Tokens.Image): string {
       // safeSrc prevents dangerous image protocols.
-      const safeSrc = sanitizeImageSrc(href)
+      const safeSrc = sanitizeImageSrc(href, options.remoteImages)
+      if (!options.remoteImages && !safeSrc)
+        return renderImagePlaceholder(text ?? '')
       // attrs is the flattened HTML attribute string.
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
@@ -544,7 +551,7 @@ function renderMarkdownDocumentBlocks(
   }
 
   for (const token of tokens) {
-    if (!isClosedMermaidToken(token, options)) {
+    if (!options.remoteImages || !isClosedMermaidToken(token, options)) {
       htmlTokens.push(token)
       continue
     }

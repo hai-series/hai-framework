@@ -447,11 +447,14 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('rolls back roles when profile persistence fails and keeps role changes effective in active sessions', async () => {
-    const update = vi.spyOn(iam.user, 'updateUser').mockResolvedValueOnce(err(HaiCommonError.API_ERROR, 'Injected user persistence failure'))
+  it('rolls back the profile when role persistence fails and applies successful role changes to active sessions', async () => {
+    const before = await iam.user.getUser(user.id)
+    expect(before.success).toBe(true)
+    const update = vi.spyOn(iam.authz, 'syncRoles').mockResolvedValueOnce(err(HaiCommonError.API_ERROR, 'Injected role persistence failure'))
     const failed = await call('/admin/users/update', { id: user.id, role: 'admin', email: 'changed@example.com' }, adminToken)
     update.mockRestore()
     expect(failed.success).toBe(false)
+    expect(await iam.user.getUser(user.id)).toEqual(before)
     const roles = await iam.authz.getUserRoles(user.id)
     expect(roles.success).toBe(true)
     if (roles.success)
@@ -531,8 +534,8 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const entry = new Promise<void>((resolve) => {
       entered = resolve
     })
-    const original = iam.user.updateUser
-    const update = vi.spyOn(iam.user, 'updateUser').mockImplementationOnce(async (id, data) => {
+    const original = iam.user.updateUserWithRoles
+    const update = vi.spyOn(iam.user, 'updateUserWithRoles').mockImplementationOnce(async (id, data) => {
       entered()
       await paused
       return original(id, data)

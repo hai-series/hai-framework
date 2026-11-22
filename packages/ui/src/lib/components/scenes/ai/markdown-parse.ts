@@ -14,6 +14,7 @@ import { highlightCode, isLanguageSupported } from './highlight.js'
 import {
   escapeHtml,
   isExternalLinkHref,
+  renderImagePlaceholder,
   sanitizeImageSrc,
   sanitizeLinkHref,
   sanitizeMarkdownHtml,
@@ -37,6 +38,8 @@ export interface MarkdownParseOptions {
   breaks?: boolean
   /** 是否按安全白名单解析原始 HTML（默认 false）；img可保留1–99999正整数width/height以预留空间 */
   allowHtmlTags?: boolean
+  /** 默认允许网络图片。禁用时网络图片显示替代文本，只保留内联数据图片。 */
+  remoteImages?: boolean
 }
 
 function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
@@ -125,13 +128,13 @@ function renderHtmlWithCode(source: string, options: Required<MarkdownParseOptio
   let html = ''
   let offset = 0
   for (const match of source.matchAll(/<pre\b[^>]*>\s*<code\b([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi)) {
-    html += sanitizeMarkdownHtml(source.slice(offset, match.index))
+    html += sanitizeMarkdownHtml(source.slice(offset, match.index), options.remoteImages)
     const classes = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(match[1])
     const language = /(?:^|\s)language-([a-z\d#+.-]+)(?:\s|$)/i.exec(classes?.[1] ?? classes?.[2] ?? '')?.[1]
     html += renderCodeBlock(decodeCodeText(match[2]), language, options)
     offset = match.index + match[0].length
   }
-  return html + sanitizeMarkdownHtml(source.slice(offset))
+  return html + sanitizeMarkdownHtml(source.slice(offset), options.remoteImages)
 }
 
 /**
@@ -174,7 +177,9 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
     // 图片：添加 loading="lazy"，验证 src 协议
     image({ href, title, text }: Tokens.Image): string {
       // 安全检查：仅允许安全协议
-      const safeSrc = sanitizeImageSrc(href)
+      const safeSrc = sanitizeImageSrc(href, options.remoteImages)
+      if (!options.remoteImages && !safeSrc)
+        return renderImagePlaceholder(text ?? '')
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,
@@ -231,6 +236,7 @@ const DEFAULT_OPTIONS: Required<MarkdownParseOptions> = {
   showCopyButton: true,
   breaks: true,
   allowHtmlTags: false,
+  remoteImages: true,
 }
 
 /** 缓存 Marked 实例，避免重复创建 */
@@ -241,7 +247,7 @@ let cachedOptionsKey = ''
  * 获取配置签名，用于实例缓存比较
  */
 function getOptionsKey(options: Required<MarkdownParseOptions>): string {
-  return `${options.enableHighlight}-${options.showCopyButton}-${options.breaks}-${options.allowHtmlTags}`
+  return `${options.enableHighlight}-${options.showCopyButton}-${options.breaks}-${options.allowHtmlTags}-${options.remoteImages}`
 }
 
 /**

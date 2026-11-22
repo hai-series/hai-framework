@@ -1,7 +1,7 @@
 import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { iam } from '../src/index.js'
+import { HaiIamError, iam } from '../src/index.js'
 import { TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam atomic role permission replacement', () => {
@@ -136,6 +136,90 @@ describe('iam atomic role permission replacement', () => {
             : b.data.id,
         },
       ],
+    })
+  })
+
+  it('commits profile, lifecycle and roles together and revokes the old credential generation only on success', async () => {
+    const created = await iam.user.createUser({ username: 'atomic-account', password: TEST_PASSWORD, displayName: 'before' })
+    const login = await iam.auth.login({ identifier: 'atomic-account', password: TEST_PASSWORD })
+    const role = await iam.authz.createRole({ code: 'atomic-account-reviewer', name: 'Reviewer' })
+    expect(created.success && login.success && role.success).toBe(true)
+    if (!created.success || !login.success || !role.success)
+      return
+
+    const { id } = created.data.user
+    const accessToken = login.data.tokens.accessToken
+    const storedVersion = () => reldb.sql.get('SELECT credential_version, reset_version FROM hai_iam_users WHERE id = ?', [id])
+    const before = await storedVersion()
+    const oldRoles = await iam.authz.getUserRoles(id)
+    expect(before.success && oldRoles.success).toBe(true)
+    expect(await iam.user.updateUserWithRoles(id, {
+      profile: { displayName: 'after', accountStatus: 'dormant' },
+      roleIds: [role.data.id, 'no-such-role'],
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.ROLE_NOT_FOUND.code },
+    })
+    expect(await iam.user.getUser(id)).toMatchObject({
+      success: true,
+      data: { displayName: 'before', accountStatus: 'active' },
+    })
+    expect(await iam.authz.getUserRoles(id)).toEqual(oldRoles)
+    expect(await storedVersion()).toEqual(before)
+    expect((await iam.auth.verifyToken(accessToken)).success).toBe(true)
+
+    expect(await iam.user.updateUserWithRoles(id, {
+      profile: { displayName: 'after', accountStatus: 'dormant' },
+      roleIds: [role.data.id],
+    })).toMatchObject({
+      success: true,
+      data: { displayName: 'after', accountStatus: 'dormant' },
+    })
+    expect(await iam.authz.getUserRoles(id)).toMatchObject({
+      success: true,
+      data: [
+        { id: role.data.id },
+      ],
+    })
+    const after = await storedVersion()
+    expect(after.success).toBe(true)
+    expect(after).not.toEqual(before)
+    expect((await iam.auth.verifyToken(accessToken)).success).toBe(false)
+  })
+
+  it('preserves omitted roles, clears an empty set and keeps active sessions on role-only updates', async () => {
+    const created = await iam.user.createUser({ username: 'atomic-role-only', password: TEST_PASSWORD })
+    const login = await iam.auth.login({ identifier: 'atomic-role-only', password: TEST_PASSWORD })
+    const role = await iam.authz.createRole({ code: 'atomic-only-reviewer', name: 'Reviewer' })
+    expect(created.success && login.success && role.success).toBe(true)
+    if (!created.success || !login.success || !role.success)
+      return
+
+    const { id } = created.data.user
+    const accessToken = login.data.tokens.accessToken
+    expect((await iam.user.updateUserWithRoles(id, {
+      roleIds: [role.data.id],
+    })).success).toBe(true)
+    expect((await iam.user.updateUserWithRoles(id, {
+      profile: { displayName: 'Renamed' },
+    })).success).toBe(true)
+    expect(await iam.auth.verifyToken(accessToken)).toMatchObject({
+      success: true,
+      data: {
+        roles: [role.data.code],
+      },
+    })
+    expect(await iam.session.get(accessToken)).toMatchObject({
+      success: true,
+      data: {
+        roles: [role.data.code],
+      },
+    })
+    expect((await iam.user.updateUserWithRoles(id, { roleIds: [] })).success).toBe(true)
+    expect(await iam.authz.getUserRoles(id)).toMatchObject({ success: true, data: [] })
+    expect(await iam.auth.verifyToken(accessToken)).toMatchObject({
+      success: true,
+      data: { roles: [] },
     })
   })
 })

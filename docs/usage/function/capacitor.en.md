@@ -56,13 +56,13 @@ Initialization detects the actual platform. Device and version data depend on th
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.init` | Detect platform and prepare the runtime | None | `void` | `await capacitor.init()` |
-| `capacitor.close` | Release active native listeners | None | `void` | `await capacitor.close()` |
-| `capacitor.getPlatform` | Identify Android, iOS or web | None | `string` | `capacitor.getPlatform()` |
-| `capacitor.isNative` | Check whether code runs in a native app | None | `boolean` | `capacitor.isNative()` |
+| `capacitor.init()` | Detect platform and prepare the runtime | None | `void` | `await capacitor.init()` |
+| `capacitor.close()` | Release active native listeners | None | `void` | `await capacitor.close()` |
+| `capacitor.getPlatform()` | Identify Android, iOS or web | None | `string` | `capacitor.getPlatform()` |
+| `capacitor.isNative()` | Check whether code runs in a native app | None | `boolean` | `capacitor.isNative()` |
 | `capacitor.isInitialized` | 检查模块状态 | `—` | `boolean` | `capacitor.isInitialized` |
-| `capacitor.device.getInfo` | Read OS and hardware information | None | `DeviceInfo` | `await capacitor.device.getInfo()` |
-| `capacitor.device.getAppVersion` | Read the installed app version and build | None | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.device.getInfo()` | Read OS and hardware information | None | `DeviceInfo` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion()` | Read the installed app version and build | None | `{ version, build }` | `await capacitor.device.getAppVersion()` |
 
 #### Scenario: Prepare native access and read device data
 
@@ -99,17 +99,18 @@ The caller supplies callbacks and an optional AbortSignal. Save the cleanup call
 
 <a id="call-options"></a>
 
-#### Call arguments and integration options
+#### Native call options
 
-| Option | Default | Meaning |
+| Field | Default and conditions | Purpose |
 | --- | --- | --- |
-| `camera.takePhoto`: `source`, `quality`, `resultType` | `prompt`, `90`, `uri` | Select camera, album or prompt, quality from 0 to 100, and URI/Base64/Data URL output. |
-| `camera.takePhoto`: `width`, `height` | Optional | Maximum dimensions in pixels. |
-| `statusBar.configure`: `style`, `backgroundColor`, `overlay` | Optional | Preserve current settings when omitted. Use a hex color and choose whether to cover the WebView. |
-| `push.register`, `push.listen`: `signal` | Optional | Cancel registration or remove listeners when aborted. |
-| `push.listen`: `onReceived`, `onActionPerformed` | Optional | Callbacks for delivery and interaction. |
+| `takePhoto.options.source` | Default `prompt` | Use `camera` for capture, `photos` for the gallery, or `prompt` for the device chooser. |
+| `takePhoto.options.quality` / `width` / `height` | Default quality 90. Dimensions are unset. | Quality is 0–100. Width and height specify the maximum size in pixels. |
+| `takePhoto.options.resultType` | Default `uri` | On success, `data` is a photo URL, Base64 string, or data URL for `uri`, `base64`, or `dataUrl`, respectively. |
+| `configure.config.style` / `backgroundColor` / `overlay` | Omitted settings cause no plugin write | Style accepts `dark`, `light`, or `default`. Pass a hex background color. `overlay` controls whether the bar covers the WebView. |
+| `push.register.options.signal` / `push.listen.options.signal` | Optional | Cancels pending registration or removes listeners when aborted. |
+| `push.listen.options.onReceived` / `onActionPerformed` | Optional | Handles delivery and user interaction, respectively. |
 
-[Detailed parameters and workflows](capacitor.md#platform)
+For example, `takePhoto({ source: "photos", resultType: "uri", width: 1200 })` selects a gallery photo. On success, the result contains a preview URL and the format, with a width limit of 1,200 pixels.
 
 <a id="camera"></a>
 
@@ -121,7 +122,7 @@ Let the user choose a camera or photo source and choose uri, base64 or dataUrl f
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.camera.takePhoto` | Capture or select an image | `{ source = "prompt", quality = 90, resultType = "uri", width?, height? }?` | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.camera.takePhoto(options?)` | Capture or select an image | Optional `options` selects the source, quality, dimensions, and output format. See [native call options](#call-options). | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
 
 #### Scenario: Get a user-selected photo
 
@@ -148,8 +149,8 @@ Request system permission, register push and listen for receipt and action event
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.push.register` | Register a device with the native push service | `{ signal? }?` | `PushRegistration` | `await capacitor.push.register()` |
-| `capacitor.push.listen` | Receive deliveries and notification actions | `callbacks, { signal? }?` | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
+| `capacitor.push.register(options?)` | Register a device with the native push service | Optional `options.signal: AbortSignal` cancels registration waiting. Omitting it supplies no caller cancellation signal. | `PushRegistration` | `await capacitor.push.register()` |
+| `capacitor.push.listen(callbacks, options?)` | Receive deliveries and notification actions | Required `callbacks` object with optional `onReceived(notification)` and `onActionPerformed(action)`. Optional `options.signal` releases these listeners on abort. | `PushCleanup` | `await capacitor.push.listen(callbacks)` |
 
 #### Scenario: Register and listen for push
 
@@ -197,9 +198,9 @@ Use the native status-bar plugin to configure style and overlay, then show or hi
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.statusBar.configure` | Apply only the supplied native status bar settings | `{ style?, backgroundColor?, overlay? }` | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
-| `capacitor.statusBar.show` | Show the native status bar | None | `void` | `await capacitor.statusBar.show()` |
-| `capacitor.statusBar.hide` | Hide the native status bar | None | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.statusBar.configure(config)` | Apply only the supplied native status bar settings | Required `config` object with optional `style`, `backgroundColor`, and `overlay`. See [native call options](#call-options). | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show()` | Show the native status bar | None | `void` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide()` | Hide the native status bar | None | `void` | `await capacitor.statusBar.hide()` |
 
 #### Scenario: Control the system status bar
 
@@ -233,12 +234,12 @@ Store non-sensitive strings such as theme preferences. Independent safe helpers 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.preferences.get` | Read a nonsensitive preference | `key` | `string or null` | `await capacitor.preferences.get('theme')` |
-| `capacitor.preferences.set` | Save a nonsensitive preference | `key, value` | `void` | `await capacitor.preferences.set('theme', 'dark')` |
-| `capacitor.preferences.remove` | Remove a named preference | `key` | `void` | `await capacitor.preferences.remove('theme')` |
-| `safeGetPreference` | Read a nonsensitive preference using a named export | `key` | `string or null` | `await safeGetPreference('theme')` |
-| `safeSetPreference` | Save a nonsensitive preference using a named export | `key, value` | `void` | `await safeSetPreference('theme', 'dark')` |
-| `safeRemovePreference` | Remove a preference using a named export | `key` | `void` | `await safeRemovePreference('theme')` |
+| `capacitor.preferences.get(key)` | Read a nonsensitive preference | Required `key` names the nonsensitive preference. | `string or null` | `await capacitor.preferences.get('theme')` |
+| `capacitor.preferences.set(key, value)` | Save a nonsensitive preference | Required `key` names the preference and `value` is the nonsensitive string to save. | `void` | `await capacitor.preferences.set('theme', 'dark')` |
+| `capacitor.preferences.remove(key)` | Remove a named preference | Required `key` names the nonsensitive preference. | `void` | `await capacitor.preferences.remove('theme')` |
+| `safeGetPreference(key)` | Read a nonsensitive preference using a named export | Required `key` names the nonsensitive preference. | `string or null` | `await safeGetPreference('theme')` |
+| `safeSetPreference(key, value)` | Save a nonsensitive preference using a named export | Required `key` names the preference and `value` is the nonsensitive string to save. | `void` | `await safeSetPreference('theme', 'dark')` |
+| `safeRemovePreference(key)` | Remove a preference using a named export | Required `key` names the nonsensitive preference. | `void` | `await safeRemovePreference('theme')` |
 
 #### Scenario: Save ordinary preferences
 
@@ -292,12 +293,12 @@ Use the native secure-storage adapter and give it to api-client to coordinate pe
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage` | Create a native secure credential adapter | None | `TokenStorage` | `createCapacitorTokenStorage()` |
-| `tokens.getAccessToken` | Read the access credential | None | `Promise<string or null>` | `await tokens.getAccessToken()` |
-| `tokens.getRefreshToken` | Read the refresh credential | None | `Promise<string or null>` | `await tokens.getRefreshToken()` |
-| `tokens.setAccessToken` | Save the access credential | `token` | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
-| `tokens.setRefreshToken` | Save the refresh credential | `token` | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
-| `tokens.clear` | Remove both credentials | None | `Promise<void>` | `await tokens.clear()` |
+| `createCapacitorTokenStorage()` | Create a native secure credential adapter | None | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `tokens.getAccessToken()` | Read the access credential | None | `Promise<string or null>` | `await tokens.getAccessToken()` |
+| `tokens.getRefreshToken()` | Read the refresh credential | None | `Promise<string or null>` | `await tokens.getRefreshToken()` |
+| `tokens.setAccessToken(token)` | Save the access credential | Required `token`, the access token string from a trusted authentication response. | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
+| `tokens.setRefreshToken(token)` | Save the refresh credential | Required `token`, the refresh token string from a trusted authentication response. | `Promise<void>` | `await tokens.setRefreshToken(refreshToken)` |
+| `tokens.clear()` | Remove both credentials | None | `Promise<void>` | `await tokens.clear()` |
 
 #### Scenario: Store credentials securely
 

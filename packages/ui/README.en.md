@@ -27,6 +27,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 [Switch themes](../../docs/usage/function/ui.en.md#theme) to apply the light Liquid Glass theme (`liquid-glass`) through the existing selector and save that preference. Set `ThemeSelector`’s `themeIds` prop to limit the built-in choices.
 
 [Tool and artifact workspaces](../../docs/usage/function/ui.en.md#tool-workspaces) provide parameter forms, examples, task progress, document editing, version conflicts, and media previews. Applications connect authorized read, write, and execution callbacks.
+Use the [image policy and Markdown source range](../../docs/usage/function/ui.en.md#private-document-media) to control image requests and map a selection to the source document.
+
 
 ## Data Structures
 
