@@ -37,6 +37,7 @@ export type {
   MarkdownOutlineItem,
   MarkdownRewriteAction,
   MarkdownRewriteRequest,
+  MarkdownSourceRange,
   MarkdownTextAlignKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'

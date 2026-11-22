@@ -528,7 +528,7 @@ Pass text, Markdown, tables or document data to viewers and connect editing, dow
 | `downloadAiDocument(request)` | Download a document using the selected action | `request` specifies the download action, content, file name and source format. See [download fields](#document-download-options). | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
 | `<MarkdownRenderer>` | Safe Markdown rendering | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showCopyButton` toggles the copy control. `enableHighlight` toggles syntax highlighting. | Safe Markdown rendering | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | Selection invokes download action | `actions` supplies available actions or action content. `ondownload` handles the requested download. [download fields](#document-download-options). | Selection invokes download action | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
-| `<AiDocumentEditor>` | Editing updates markdown | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showRunButton` toggles the Run button. `showCodePreviewToggle` shows the control for switching code and preview. `allowUnsafeCodePreview` explicitly enables code preview for trusted content. | Editing updates markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
+| `<AiDocumentEditor>` | Editing updates markdown | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showRunButton` toggles the Run button. `showCodePreviewToggle` shows the control for switching code and preview. `allowUnsafeCodePreview` explicitly enables code preview for trusted content. `remoteImages` controls network image requests. `onrewrite` can receive a verified source range. | Editing updates markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
 | `<AiTableEditor>` | Displays cells and reports edits | `columns` defines the columns of the editable data. `rows` supplies the rows to show or edit. `editable` enables editing. `ondownload` handles the requested download. | Displays cells and reports edits | `<AiTableEditor {columns} {rows} editable />` |
 
 <a id="document-download-options"></a>
@@ -597,6 +597,19 @@ Both parsers accept optional `options`. Override only the fields you need.
 | `showCodePreviewToggle` | `false` | Document mode only. Add a code/preview toggle. |
 | `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | Document mode only. Labels for the two views when the toggle is enabled. |
 | `codePreviewHint` | `''` | Document mode only. Optional text alongside the language label. |
+
+<a id="private-document-media"></a>
+
+#### Scenario: Restrict images and identify Markdown source selections
+
+Set `remoteImages={false}` on private documents to keep the rich text layout and display alternative text for images that require a request. Inline data images may still render. HTML run previews and Mermaid show source. Network images are allowed by default.
+
+```svelte
+<!-- Keep formatting for private Markdown. A remote image is replaced by its alternative text. -->
+<AiDocumentEditor content={markdown} remoteImages={false} onrewrite={handleRewrite} />
+```
+
+The rewrite callback receives a `sourceRange` when the selection can be verified against the current `content` prop. Its offsets are half-open UTF-16 positions. The second word in `**repeat** / **repeat**` maps to `[15, 21)` with text `repeat`. Recheck the current revision and source slice before editing.
 
 <a id="tool-workspaces"></a>
 

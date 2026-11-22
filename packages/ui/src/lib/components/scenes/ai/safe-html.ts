@@ -147,6 +147,7 @@ export function isExternalLinkHref(href: string): boolean {
 /**
  * 拒绝危险图片来源，保留允许的远程、相对或受控数据地址。
  * @param src - 待验证的图片候选地址。
+ * @param remoteImages - 是否允许需要网络请求的图片地址。
  * @returns 允许的图片地址，不安全或空输入返回空字符串。
  *
  * @example 模块内部上下文
@@ -154,11 +155,22 @@ export function isExternalLinkHref(href: string): boolean {
  * const safe = sanitizeImageSrc('https://example.com/image.png')
  * ```
  */
-export function sanitizeImageSrc(src: string | null | undefined): string {
+export function sanitizeImageSrc(src: string | null | undefined, remoteImages = true): string {
   const normalized = src?.trim() ?? ''
-  return SAFE_IMAGE_SRC_REGEX.test(normalized)
+  return SAFE_IMAGE_SRC_REGEX.test(normalized) && (remoteImages || /^data:image\//i.test(normalized))
     ? normalized
     : ''
+}
+
+/**
+ * 为被阻止的图片渲染已转义的替代文字。
+ * @example 模块内部上下文
+ * ```ts
+ * const placeholder = renderImagePlaceholder('图示')
+ * ```
+ */
+export function renderImagePlaceholder(text: string): string {
+  return `<span class="hai-md-image-placeholder">${escapeHtml(text)}</span>`
 }
 
 function sanitizeAlignValue(value: string | null | undefined): string | undefined {
@@ -252,6 +264,7 @@ function readNextHtmlTag(
 function readSanitizedAttributes(
   tagName: string,
   rawAttributes: string,
+  remoteImages: boolean,
 ): ParsedHtmlAttributes {
   const sanitized: ParsedHtmlAttributes = {}
 
@@ -269,7 +282,7 @@ function readSanitizedAttributes(
 
     if (tagName === 'img') {
       if (attrName === 'src') {
-        sanitized.src = sanitizeImageSrc(attrValue)
+        sanitized.src = sanitizeImageSrc(attrValue, remoteImages)
       }
 
       if (attrName === 'alt') {
@@ -311,7 +324,7 @@ function readSanitizedAttributes(
   return sanitized
 }
 
-function sanitizeHtmlTag(rawTag: string): string {
+function sanitizeHtmlTag(rawTag: string, remoteImages: boolean): string {
   if (!rawTag.startsWith('<') || !rawTag.endsWith('>')) {
     return escapeHtml(rawTag)
   }
@@ -354,7 +367,9 @@ function sanitizeHtmlTag(rawTag: string): string {
       : `</${tagName}>`
   }
 
-  const attributes = readSanitizedAttributes(tagName, rawAttributes)
+  const attributes = readSanitizedAttributes(tagName, rawAttributes, remoteImages)
+  if (tagName === 'img' && !remoteImages && !attributes.src)
+    return renderImagePlaceholder(attributes.alt ?? '')
   const renderedAttributes: string[] = []
 
   if (attributes.href !== undefined) {
@@ -408,6 +423,7 @@ function sanitizeHtmlTag(rawTag: string): string {
  * 消毒 Markdown 中嵌入的原始 HTML 片段。
  * 只重建白名单标签，其余内容保持转义。
  * @param fragment - 待消毒的 HTML 片段。
+ * @param remoteImages - 是否保留需要网络请求的图片地址。
  * @returns 仅保留白名单标签和安全属性的 HTML。
  *
  * @example 模块内部上下文
@@ -415,7 +431,7 @@ function sanitizeHtmlTag(rawTag: string): string {
  * const safe = sanitizeMarkdownHtml('<p onclick="alert(1)">正文</p>')
  * ```
  */
-export function sanitizeMarkdownHtml(fragment: string): string {
+export function sanitizeMarkdownHtml(fragment: string, remoteImages = true): string {
   if (!fragment) {
     return ''
   }
@@ -425,7 +441,7 @@ export function sanitizeMarkdownHtml(fragment: string): string {
 
   for (let match = readNextHtmlTag(fragment, lastIndex); match; match = readNextHtmlTag(fragment, lastIndex)) {
     sanitized += escapeHtmlText(fragment.slice(lastIndex, match.start))
-    sanitized += sanitizeHtmlTag(match.rawTag)
+    sanitized += sanitizeHtmlTag(match.rawTag, remoteImages)
     lastIndex = match.end
   }
 

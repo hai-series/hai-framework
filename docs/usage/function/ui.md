@@ -964,7 +964,7 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 | `downloadAiDocument(request)` | 下载已选格式 | `request` 指定下载动作、正文、文件名和源内容格式。见[下载字段表](#document-download-options)。 | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
 | `<MarkdownRenderer>` | Markdown 渲染器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showCopyButton` 控制复制控件是否出现；`enableHighlight` 控制是否按语言高亮代码。 | 渲染安全 Markdown | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | 文档下载菜单 | `actions` 提供可用动作或操作区内容；`ondownload` 处理用户选择的下载；[下载字段表](#document-download-options)。 | 选择后调用下载动作 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
-| `<AiDocumentEditor>` | AI 文档编辑器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showRunButton` 切换运行按钮；`showCodePreviewToggle` 切换代码与预览的控件；`allowUnsafeCodePreview` 允许受信任内容显式启用代码预览。 | 编辑后写回 markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
+| `<AiDocumentEditor>` | AI 文档编辑器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showRunButton` 切换运行按钮；`showCodePreviewToggle` 切换代码与预览的控件；`allowUnsafeCodePreview` 允许受信任内容显式启用代码预览。 `remoteImages` 控制是否请求外部图片，`onrewrite` 可接收已核对的源码区间。 | 编辑后写回 markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
 | `<AiTableEditor>` | AI 表格编辑器 | `columns` 定义可编辑数据的列；`rows` 传入要显示或编辑的数据行；`editable` 允许修改内容；`ondownload` 处理用户选择的下载。 | 显示单元格并报告编辑 | `<AiTableEditor {columns} {rows} editable />` |
 
 <a id="document-download-options"></a>
@@ -1063,6 +1063,19 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 | `showCodePreviewToggle` | `false` | 仅文档模式。为代码块显示代码与预览切换。 |
 | `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 仅文档模式。切换开启时的两项标签文本。 |
 | `codePreviewHint` | `''` | 仅文档模式。代码块语言标签旁的文字，默认不显示。 |
+
+<a id="private-document-media"></a>
+
+#### 场景：受限图片与 Markdown 源码选区
+
+在私有 Markdown 文档中设置 `remoteImages={false}`，可让正文维持排版，同时用替代文字替换需要请求网络的图片。内联数据图片可显示，HTML 运行预览和 Mermaid 显示源码。默认允许网络图片。
+
+```svelte
+<!-- 私有 Markdown 保留正文排版，网络图片显示其替代文字。 -->
+<AiDocumentEditor content={markdown} remoteImages={false} onrewrite={handleRewrite} />
+```
+
+改写回调的 `sourceRange` 包含当前 `content` 的 UTF-16 半开区间与原文。对 `**重复** / **重复**` 选中第二处时，区间为 `[11, 13)`，原文为 `重复`。无法核对的位置不携带 `sourceRange`。提交前应用重新比对版本及当前原文片段。
 
 <a id="tool-workspaces"></a>
 

@@ -182,3 +182,20 @@ describe('renderMarkdownDocument', () => {
     expect(result.outline[0]?.text).toBe('标题')
   })
 })
+
+it('keeps document text and replacement labels without creating network images', () => {
+  const markdown = '# 标题\n\n![远程](https://example.invalid/a.png) ![相对](/asset.png)\n\n<img src="https://example.invalid/b.png" alt="内联 HTML" srcset="/second.png 2x">\n\n![数据](data:image/png;base64,AAA=)'
+  const result = renderMarkdownDocument(markdown, { allowHtmlTags: true, remoteImages: false })
+  const html = result.blocks.flatMap(block => block.kind === 'html'
+    ? [block.html]
+    : []).join('')
+  expect(html).toContain('标题')
+  expect(html).toContain('远程</span>')
+  expect(html).toContain('相对</span>')
+  expect(html).toContain('内联 HTML</span>')
+  expect(html).toContain('src="data:image/png;base64,AAA="')
+  expect(html).not.toContain('example.invalid')
+  expect(html).not.toContain('src="/asset.png"')
+  expect(html).not.toContain('srcset')
+  expect(getHtmlOutput('![默认](https://example.invalid/default.png)')).toContain('src="https://example.invalid/default.png"')
+})
