@@ -14,6 +14,7 @@ import type {
   AuditHelper,
   AuditLog,
   AuditLogWithUser,
+  AuditOutcomeCounts,
   AuditStatItem,
   CreateAuditLogInput,
   ListAuditLogsOptions,
@@ -321,6 +322,20 @@ export const audit: AuditFunctions = {
     }
 
     return currentRepo.listWithUser(options)
+  },
+
+  countByOutcome(options?: ListAuditLogsOptions): Promise<HaiResult<AuditOutcomeCounts>> {
+    if (!currentRepo)
+      return Promise.resolve(notInitialized.result())
+    if (!validAuditQuery(options) || (options?.startDate && options.endDate && options.startDate > options.endDate)) {
+      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+        params: {
+          field: 'query',
+          reason: auditM('audit_queryInvalid'),
+        },
+      })))
+    }
+    return currentRepo.countByOutcome(options)
   },
 
   /**

@@ -30,6 +30,8 @@
 
 user-42 が order-42 の status を読みました。時刻は DB が記録した UTC 表示です。
 
+範囲とイベントを絞り込むと、`audit.countByOutcome` は集計を返します。`{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` には結果が未分類の履歴が 1 件含まれます。既存の監査行を読み取り、ページ番号と並べ替えは集計に影響しません。
+
 ### まだ削除できない監査記録の方針
 
 対応する構造：`hai_audit_policy`。

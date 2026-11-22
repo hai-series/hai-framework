@@ -233,6 +233,7 @@ if (!crudResult.success)
 | `audit.list(options?)` | イベントを絞り込みページ取得 | 任意の `options: ListAuditLogsOptions`。[絞り込みとページ指定](#audit-list-options)を参照。 | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
 | `audit.getUserRecent(userId, limit?)` | ユーザーの最近の操作を取得 | 必須の `userId: string` でユーザーを選択。任意の `limit: number` の既定は 10 件。 | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
 | `audit.getStats(days?, filters?)` | 直近の日数で操作を集計 | 任意の `days: number` は既定 7 日。任意の `filters` は[一覧フィールド](#audit-list-options)の category、outcome、severity、scopeId、userId、resource を指定可能。 | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome` | 一覧と同じ条件で結果を集計 | options、省略時は全件 | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
 | `audit.cleanup(olderThanDays?)` | 保持方針に従い古い記録を削除 | `olderThanDays?: number` 既定 90 日。 cutoff より古いイベントを削除 | `number` | `await audit.cleanup(90)` |
 
 <a id="audit-list-options"></a>
@@ -262,6 +263,11 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
+// 一覧と同じ login 条件で結果別に集計する。未分類も含め、失敗時には元のエラーを返す。
+const outcomesResult = await audit.countByOutcome({ action: 'login' })
+if (!outcomesResult.success)
+  return outcomesResult
+const outcomes = outcomesResult.data
 // ユーザー ID の直近最大 20 件を配列で取得します。照会の失敗時は元の失敗結果を返します。
 const recentResult = await audit.getUserRecent('demo-user', 20)
 if (!recentResult.success)

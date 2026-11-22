@@ -97,6 +97,51 @@ describe('audit.getStats', () => {
       expect(result.error.code).toBe(HaiAuditError.STATS_FAILED.code)
     }
   })
+
+  it('按列表筛选统计结果，并计入未分类的历史记录', async () => {
+    const filters = { action: 'publish', scopeId: 'space-a', requestId: 'publish-a' }
+    for (const outcome of ['success', 'failure'] as const) {
+      expect((await audit.log({ ...filters, resource: 'deployment', outcome })).success).toBe(true)
+    }
+    const legacy = await audit.log({ ...filters, resource: 'deployment' })
+    expect(legacy.success).toBe(true)
+    if (!legacy.success)
+      return
+    expect((await reldb.sql.execute('UPDATE hai_audit_logs SET outcome = NULL WHERE id = ?', [legacy.data.id])).success).toBe(true)
+    expect((await audit.log({
+      ...filters,
+      requestId: 'publish-b',
+      resource: 'deployment',
+      outcome: 'denied',
+    })).success).toBe(true)
+    expect(await audit.countByOutcome(filters)).toMatchObject({
+      success: true,
+      data: {
+        total: 3,
+        success: 1,
+        failure: 1,
+        denied: 0,
+        unclassified: 1,
+      },
+    })
+    expect(await audit.countByOutcome({ ...filters, outcome: 'failure' })).toMatchObject({
+      success: true,
+      data: {
+        total: 1,
+        success: 0,
+        failure: 1,
+        denied: 0,
+        unclassified: 0,
+      },
+    })
+    expect(await audit.countByOutcome({
+      ...filters,
+      endDate: new Date(0),
+    })).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+  })
 })
 
 describe('audit.cleanup', () => {

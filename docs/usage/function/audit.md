@@ -254,6 +254,7 @@ if (!crudResult.success)
 | `audit.list(options?)` | 筛选并分页查询事件 | 可选 `options: ListAuditLogsOptions`。见[筛选与分页字段](#audit-list-options)。 | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
 | `audit.getUserRecent(userId, limit?)` | 查询用户近期活动 | 必填 `userId: string` 指定用户。`limit: number` 可省略，默认最多返回 10 条。 | `AuditLog[]` | `await audit.getUserRecent(userId, 20)` |
 | `audit.getStats(days?, filters?)` | 统计指定天数内的操作 | 可选 `days: number` 默认 7 天。`filters` 可传 [列表字段](#audit-list-options)中的 category、outcome、severity、scopeId、userId、resource。 | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome` | 按列表筛选统计结果 | options，省略查询全部 | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
 | `audit.cleanup(olderThanDays?)` | 按保留策略删除旧记录 | `olderThanDays?: number` 默认 90 天，删除早于截止时间的事件 | `number` | `await audit.cleanup(90)` |
 
 <a id="audit-list-options"></a>
@@ -283,6 +284,11 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // 记录列表、总数与分页信息
+// 使用列表相同的 login 过滤条件，返回成功、失败、拒绝和旧记录未分类的总数，统计失败时返回原错误。
+const outcomesResult = await audit.countByOutcome({ action: 'login' })
+if (!outcomesResult.success)
+  return outcomesResult
+const outcomes = outcomesResult.data
 // 按用户 ID 读取最近最多 20 条，返回记录数组，查询失败时返回原失败结果。
 const recentResult = await audit.getUserRecent('demo-user', 20)
 if (!recentResult.success)

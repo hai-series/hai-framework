@@ -229,6 +229,7 @@ Investigate by user, action and time, then clean records according to retention 
 | `audit.list(options?)` | Filter and paginate events | Optional `options: ListAuditLogsOptions`. See [filter and pagination fields](#audit-list-options). | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
 | `audit.getUserRecent(userId, limit?)` | Read recent user activity | Required `userId: string` selects the user. Optional `limit: number` defaults to 10 results. | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
 | `audit.getStats(days?, filters?)` | Aggregate operations over recent days | Optional `days: number` defaults to seven days. Optional `filters` takes category, outcome, severity, scopeId, userId, and resource from the [list fields](#audit-list-options). | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome` | Count outcomes using the list filters | `options?`, all records by default | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
 | `audit.cleanup(olderThanDays?)` | Delete old events under the retention policy | `olderThanDays?: number` Defaults to 90 days. Deletes events older than the cutoff | `number` | `await audit.cleanup(90)` |
 
 <a id="audit-list-options"></a>
@@ -258,6 +259,11 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
+// Apply the same login filter as the list and count each outcome, including unclassified records. Return the original error on failure.
+const outcomesResult = await audit.countByOutcome({ action: 'login' })
+if (!outcomesResult.success)
+  return outcomesResult
+const outcomes = outcomesResult.data
 // Read up to 20 recent records for the user ID. The result is an array; query return the original failed result on failure.
 const recentResult = await audit.getUserRecent('demo-user', 20)
 if (!recentResult.success)

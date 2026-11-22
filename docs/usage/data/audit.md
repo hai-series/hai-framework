@@ -32,6 +32,8 @@
 
 user-42 读取了 order-42；details 只记录查看 status 字段。created_at 是数据库确认的事件时间，以 UTC 日期展示。
 
+筛选空间和事件后，`audit.countByOutcome` 返回结果投影。例如 `{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` 表示其中一条历史记录缺少结果分类。聚合读取现有审计行，排序和分页不影响统计。
+
 ### 哪些日志还不允许删除
 
 对应结构：`hai_audit_policy`。

@@ -7,7 +7,7 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
-import type { AuditActorSnapshot, AuditLog, AuditLogWithUser, AuditStatItem, CreateAuditLogInput, ListAuditLogsOptions } from './audit-types.js'
+import type { AuditActorSnapshot, AuditLog, AuditLogWithUser, AuditOutcomeCounts, AuditStatItem, CreateAuditLogInput, ListAuditLogsOptions } from './audit-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { readAuditTime } from './audit-database-time.js'
@@ -680,6 +680,45 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         error,
       )
     }
+  }
+
+  /** 使用与列表相同的筛选条件，从一条 SQL 读取各结果和总数。 */
+  async countByOutcome(options: ListAuditLogsOptions = {}): Promise<HaiResult<AuditOutcomeCounts>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
+    const { conditions, params } = this.filters(options)
+    const where = conditions.length
+      ? `WHERE ${conditions.join(' AND ')}`
+      : ''
+    const grouped = await this.sql().query<{ outcome: string | null, count: number | string | bigint }>(
+      `SELECT a.outcome, COUNT(*) AS count FROM ${AUDIT_TABLE} a ${where} GROUP BY a.outcome`,
+      params,
+    )
+    if (!grouped.success) {
+      logger.error('Failed to query audit outcome counts', { errorCode: grouped.error.code, traceId: grouped.error.traceId })
+      return err(HaiAuditError.STATS_FAILED, auditM('audit_statsFailed', {
+        params: { error: grouped.error.message },
+      }), grouped.error)
+    }
+    const counts: AuditOutcomeCounts = {
+      total: 0,
+      success: 0,
+      failure: 0,
+      denied: 0,
+      unclassified: 0,
+    }
+    for (const { outcome, count: rawCount } of grouped.data) {
+      const count = Number(rawCount)
+      if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(counts.total + count))
+        return err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
+      const bucket = outcome === 'success' || outcome === 'failure' || outcome === 'denied'
+        ? outcome
+        : 'unclassified'
+      counts[bucket] += count
+      counts.total += count
+    }
+    return ok(counts)
   }
 
   /**

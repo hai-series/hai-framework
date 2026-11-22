@@ -22,6 +22,8 @@ See the [configuration reference](../../docs/usage/configuration/audit.en.md) fo
 
 [Browse the API list](../../docs/usage/function/audit.en.md#api-reference) for entry points, inputs, results and examples.
 
+Use `audit.countByOutcome(filters)` to count successful, failed, denied, and unclassified events in the filtered list. Use `getStats(7)` for the independent weekly activity trend.
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/audit.en.md) for audit rows, field mappings, archives and alert deduplication.
