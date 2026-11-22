@@ -317,16 +317,24 @@ export async function createDeploymentBundle(options: {
         : '\n',
       'state-backends': backend['state-backends']!,
     }
+    const serverDirectory = `${config.remote.baseDir}/${projectName}`
     put('manifest.json', `${JSON.stringify({
       ...artifact,
       bundleFormat: 2,
       images: artifact.images.filter(image => references.has(image.imageRef)),
       deploymentId: options.deploymentId,
+      deploymentTarget: {
+        projectName,
+        directory: serverDirectory,
+        runtime: config.remote.runtime,
+        host: config.ssh?.host,
+        port: config.ssh?.port,
+        username: config.ssh?.username,
+      },
       selectedServices: selected,
       partial: options.partial,
       metadata,
     }, null, 2)}\n`)
-    const serverDirectory = `${config.remote.baseDir}/${projectName}`
     put('apply.sh', createApplyScript({
       deploymentId: options.deploymentId,
       projectName,

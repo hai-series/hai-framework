@@ -78,6 +78,8 @@ health 步骤通过，用时2秒。这只证明该步骤通过，整个发布是
 
 deploy-orders-42 在 complete 阶段以0退出，用时42秒且无需恢复；这不证明应用业务数据没有变化。
 
+CLI 回执 `schemaVersion: 1` 带 `artifactDir`、`manifestPath` 与 v5 清单。分步部署包内的 `deploymentTarget` 记录项目、目标目录和引擎，与现有的部署 ID 一同受到包摘要保护。核对成功结果带 `proof.deploymentId` 和每个运行角色的 `imageId`、`archiveSha256`。前者是引擎镜像配置摘要，后者是完整镜像 tar 文件摘要。应用在自身数据库或任务记录中保存包收据和最终结果。
+
 ## 字段、存储与清理参考
 
 ### 数据库与缓存

@@ -76,6 +76,8 @@ The script writes a final result so a disconnected caller can verify the same de
 
 deploy-orders-42 completed with exit code 0 in 42 seconds, with no recovery needed. This is not a statement about business-data changes.
 
+A CLI receipt with `schemaVersion: 1` contains `artifactDir`, `manifestPath`, and the v5 manifest. In the private bundle, `deploymentTarget` records the project, remote directory, and runtime. Its bundle digest covers those fields and the deployment ID. Verification success includes `proof.deploymentId` and each running role’s `imageId` and `archiveSha256`, the image configuration digest and the whole image tar digest, respectively. The caller persists bundle receipts and verification outcomes.
+
 ## Field, storage and cleanup reference
 
 <a id="files"></a>

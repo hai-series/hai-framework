@@ -178,6 +178,8 @@ hai build --target image --json
 
 [引数と手順の詳細](cli.md#builds)
 
+TypeScript の自動処理では `deploy.verifyBuildReceipt` で v1 JSON 1 行と実アーカイブを照合し、期待するコミット・プラットフォーム・イメージロールを指定できます。 [SDK の利用例](deploy.ja.md#programmatic-release-verification)
+
 <a id="deployments"></a>
 
 ### 計画と配布：`hai deploy`

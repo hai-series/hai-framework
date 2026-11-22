@@ -24,6 +24,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { readDeploymentArtifact } from './deploy-artifact.js'
+import { buildReceipt, verifyBuildReceipt } from './deploy-build-receipt.js'
 import { DeployConfigSchema, validateComposeServices } from './deploy-config.js'
 import {
   getCredentialsPath,
@@ -36,6 +37,7 @@ import { normalizeProjectName, resolveArtifactDirectory, resolveOutputDir, resol
 import { deployM } from './deploy-i18n.js'
 import { mergeManagedMiddlewareConfig } from './deploy-middleware-config.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
+import { executeBundle, verifyDeployment } from './deploy-release.js'
 import { scanApp } from './deploy-scanner.js'
 import { HaiDeployError } from './deploy-types.js'
 import { createDockerSshProvider } from './providers/deploy-provider-docker-ssh.js'
@@ -211,6 +213,10 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
  */
 export const deploy: DeployFunctions = {
   credentials: deployCredentials,
+  buildReceipt,
+  verifyBuildReceipt,
+  executeBundle,
+  verifyDeployment,
 
   async init(config: DeployConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏

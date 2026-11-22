@@ -174,6 +174,8 @@ The first produces compiled files; the second needs a container engine and produ
 
 [Detailed parameters and workflows](cli.md#builds)
 
+TypeScript automation can use `deploy.verifyBuildReceipt` to match the single-line v1 JSON to the archives and enforce the expected commit, platform, and image roles. [SDK example](deploy.en.md#programmatic-release-verification)
+
 <a id="deployments"></a>
 
 ### Plan and deliver: `hai deploy`

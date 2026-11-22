@@ -644,6 +644,59 @@ async function inspectDelivery(appDir: string, artifactFile: string) {
 }
 ```
 
+<a id="programmatic-release-verification"></a>
+
+### 按构建回执分步执行和核对发布
+
+平台可以用框架读取 CLI 的构建回执，再把私有部署包的 ID、路径与 SHA-256 持久化。准备包仍用 `deploy.deployApp(..., { bundleOnly: true })`。只有登记完成后才调用执行方法。核对方法可在另一进程调用，连接中断后仍按同一部署 ID 核对。
+
+#### 接口清单
+
+| 入口 | 用途 | 输入 | 返回 | 示例 |
+| --- | --- | --- | --- | --- |
+| `deploy.buildReceipt` | 生成 CLI v1 回执和目标路径 | 工程根、项目名、v5 清单 | `HaiResult<BuildReceipt>` | `deploy.buildReceipt(projectDir, 'shop', manifest)` |
+| `deploy.verifyBuildReceipt` | 核验一行 JSON 和本地归档 | stdout、可信路径和预期来源或镜像条件 | `HaiResult<BuildReceipt>` | `await deploy.verifyBuildReceipt(stdout, { projectDir, projectName: 'shop' })` |
+| `deploy.executeBundle` | 上传并执行私有 docker-ssh 包 | 持久化包收据、可信目标、可选取消信号 | 执行调用结果与部署 ID | `await deploy.executeBundle(bundle, { signal })` |
+| `deploy.verifyDeployment` | 独立核对远端运行 | 目标、待核对版本、可选前一版本、健康 URL | 已核实、已恢复、已失败或待核对 | `await deploy.verifyDeployment(verification, { signal })` |
+
+#### 启动后按同一个 ID 核对的场景
+
+```ts
+import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+
+export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
+  // 传入 CLI 的标准输出和工程目录，核对构建来自指定的干净提交。失败时终止当前交付。
+  const receipt = await deploy.verifyBuildReceipt(stdout, {
+    projectDir, projectName: 'shop', sourceCommit: commit, cleanSource: true,
+  })
+  if (!receipt.success) throw new Error(receipt.error.message)
+  return receipt.data.artifactDir
+}
+
+export async function runRelease(bundle: DeployBundleExecution, verification: DeployReleaseVerification, signal: AbortSignal) {
+  // 由应用先持久化包的 ID、绝对路径和 SHA-256。SDK 再校验包和已固定的 SSH 目标并尝试执行。
+  const launched = await deploy.executeBundle(bundle, { signal })
+  // 即使启动连接失败，也使用原部署 ID 核对回执、实际镜像和健康入口。证据不足时保留待核对。
+  const checked = await deploy.verifyDeployment(verification)
+  return { launched, checked }
+}
+```
+
+执行和核对均使用已登记的 SSH 主机密钥与固定 Docker 或 Podman。核对以被冻结的 Docker 镜像归档和摘要推导镜像配置 ID，分别在健康检查前后读取正在运行的镜像和当前发布。工作节点更换后可通过 `prepareImages` 按所选发布 ID 重新准备归档。`pending_verify` 继续调用只读核对，`restored` 的证据属于前一发布。
+
+```mermaid
+flowchart LR
+  A["CLI v1 + manifest v5"] --> B["deploy.verifyBuildReceipt"]
+  B --> C["deployApp bundleOnly"]
+  C --> D["deploymentId + SHA-256"]
+  D --> E["deploy.executeBundle"]
+  E --> F["deploy.verifyDeployment"]
+  F --> G["succeeded / restored / failed"]
+  F --> H["pending_verify"]
+  H --> F
+```
+
+
 ## 错误处理
 
 调用返回 `HaiResult` 的操作后，先检查 `result.success`。失败时在服务端保留错误码、追踪编号和已去除敏感信息的原因。创建客户端、读取流和关闭模块的返回方式见各节示例。

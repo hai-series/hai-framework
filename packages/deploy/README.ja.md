@@ -20,6 +20,8 @@
 
 [API 一覧](../../docs/usage/function/deploy.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+CLI ビルド受領書を共有し、保存した配置 ID から段階的に公開と検証を行えます。 [段階的な公開手順](../../docs/usage/function/deploy.ja.md#programmatic-release-verification)
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

@@ -7,15 +7,15 @@ import type { NativeArtifact } from './cli-build-native.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { appendFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
+import { deploy, normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
 import { nativeNameEnvironment } from '../../templates/shared/native-name.mjs'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildContainerAndroid } from './cli-build-android-container.js'
 import { buildMobileApp, gradleCommand } from './cli-build-app.js'
-import { buildBatchName, createBuildId } from './cli-build-artifact.js'
+import { createBuildId } from './cli-build-artifact.js'
 import { prepareDependencyInputs } from './cli-build-dependencies.js'
 import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
 import { nativeFiles, nativeProjectDirectory, publishNativeArtifacts } from './cli-build-native.js'
@@ -597,20 +597,18 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       }
     }
     // 不覆盖以前成功的构建；manifest 是一次完整构建的提交点。
-    const batch = buildBatchName(projectName, 'image', buildId)
-    const output = join(parent, batch)
+    const receipt = deploy.buildReceipt(cwd, projectName, artifact)
+    if (!receipt.success)
+      throw new Error(receipt.error.message)
+    const output = receipt.data.artifactDir
+    const batch = basename(output)
     // 文件名固定于 manifest 同层；通过构建 ID 子目录中的清单消费，latest 仅存相对路径。
     writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(artifact, null, 2)}\n`)
     renameSync(staging, output)
     writeFileSync(join(parent, `latest-${buildId}`), `${batch}\n`)
     renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
     if (options.json) {
-      process.stdout.write(`${JSON.stringify({
-        schemaVersion: 1,
-        artifactDir: output,
-        manifestPath: join(output, 'manifest.json'),
-        manifest: artifact,
-      })}\n`)
+      process.stdout.write(`${JSON.stringify(receipt.data)}\n`)
     }
     else {
       writeCliMessage(cliM('cli_build_ready', {

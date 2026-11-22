@@ -225,6 +225,8 @@ hai build --target desktop --platform windows --arch x64 # 按 Windows x64 目�
 
 website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_BASE_PATH`，再执行 `pnpm build`，只发布build目录并保留.nojekyll。静态构建拒绝动态API/actions、服务端业务初始化、私密资产及链接；联系表单未接服务时只提示并保留输入。网站目录变化需要重建；API地址独立配置。[静态与子目录部署](../configuration/delivery.md)
 
+平台程序可用 `deploy.verifyBuildReceipt` 核对这份单行 v1 JSON 与实际归档，还可按任务约束提交、平台和镜像角色。 [TypeScript 示例](deploy.md#programmatic-release-verification)
+
 <a id="deployments"></a>
 
 ### 查看计划并交付：`hai deploy`

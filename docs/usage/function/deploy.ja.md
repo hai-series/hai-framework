@@ -286,3 +286,55 @@ async function inspectDelivery(appDir: string, artifactFile: string) {
   return { project, digest, delivery: delivered.data }
 }
 ```
+
+<a id="programmatic-release-verification"></a>
+
+### ビルド受領書から段階的に公開して検証する
+
+プラットフォームは SDK で CLI のビルド受領書を読み、非公開バンドルの配置 ID、パス、SHA-256 を保存できます。`deploy.deployApp(..., { bundleOnly: true })` で梱包し、保存後に実行します。接続が切れても、別プロセスで同じ配置 ID を検証できます。
+
+#### インターフェース一覧
+
+| API | 用途 | 入力 | 戻り値 | 例 |
+| --- | --- | --- | --- | --- |
+| `deploy.buildReceipt` | CLI v1 受領書と出力パスを生成 | プロジェクトルート、名前、v5 マニフェスト | `HaiResult<BuildReceipt>` | `deploy.buildReceipt(projectDir, 'shop', manifest)` |
+| `deploy.verifyBuildReceipt` | JSON 1 行とローカルのアーカイブを照合 | 標準出力、信頼済みのパス、期待するソースやイメージ | `HaiResult<BuildReceipt>` | `await deploy.verifyBuildReceipt(stdout, { projectDir, projectName: 'shop' })` |
+| `deploy.executeBundle` | 非公開 docker-ssh バンドルを転送して適用 | 保存した受領書、接続先、任意の中断シグナル | 実行結果と配置 ID | `await deploy.executeBundle(bundle, { signal })` |
+| `deploy.verifyDeployment` | 公開先の状態を独立に検証 | 対象、検証対象と直前のリリース、ヘルス URL | 成功・復元・失敗・検証待ち | `await deploy.verifyDeployment(verification, { signal })` |
+
+#### 実行後に同じ ID を検証する
+
+```ts
+import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+
+export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
+  // CLI の標準出力とアーカイブを固定コミットと照合してから、配置バンドルを作成します。
+  const receipt = await deploy.verifyBuildReceipt(stdout, {
+    projectDir, projectName: 'shop', sourceCommit: commit, cleanSource: true,
+  })
+  if (!receipt.success) throw new Error(receipt.error.message)
+  return receipt.data.artifactDir
+}
+
+export async function runRelease(bundle: DeployBundleExecution, verification: DeployReleaseVerification, signal: AbortSignal) {
+  // 先にバンドルの ID、絶対パス、SHA-256 を永続化します。SDK でバンドルと固定 SSH 接続先を確認してから実行します。
+  const launched = await deploy.executeBundle(bundle, { signal })
+  // 実行結果にかかわらず元の ID で受領書、稼働イメージ、ヘルス URL を検証します。証拠が不足すると検証待ちになります。
+  const checked = await deploy.verifyDeployment(verification)
+  return { launched, checked }
+}
+```
+
+どちらも登録済みの SSH ホスト鍵と固定の Docker または Podman を使います。保存された Docker イメージアーカイブの情報から構成 ID を求め、ヘルスチェックの前後に現在のリリースと稼働イメージを読み取ります。ワーカーを交換した場合は `prepareImages` で検証対象のアーカイブを準備できます。`pending_verify` は読み取り専用の検証を繰り返せます。`restored` の証拠は直前のリリースを指します。
+
+```mermaid
+flowchart LR
+  A["CLI v1 + manifest v5"] --> B["deploy.verifyBuildReceipt"]
+  B --> C["deployApp bundleOnly"]
+  C --> D["deploymentId + SHA-256"]
+  D --> E["deploy.executeBundle"]
+  E --> F["deploy.verifyDeployment"]
+  F --> G["succeeded / restored / failed"]
+  F --> H["pending_verify"]
+  H --> F
+```

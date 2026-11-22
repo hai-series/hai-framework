@@ -1,4 +1,5 @@
 export * from './deploy-artifact.js'
+export type { BuildReceipt, BuildReceiptExpectation } from './deploy-build-receipt.js'
 export type { DeployConfig, DeployConfigInput, DockerSshProviderConfig, PortExposeConfig, SshConfig } from './deploy-config.js'
 export { DeployConfigSchema, ProviderConfigSchema } from './deploy-config.js'
 export { resolveDownloadProxy, resolveImageReference } from './deploy-download.js'
@@ -10,4 +11,5 @@ export { canKeepMiddleware, parseMiddlewareField, saveMiddlewareEnvironment, val
 export * from './deploy-middleware.js'
 export * from './deploy-plan.js'
 export { getDeployCommandState, getDeployRecovery } from './deploy-recovery.js'
+export type { DeployBundleExecution, DeployReleaseTarget, DeployReleaseVerification, DeployReleaseVerificationResult } from './deploy-release.js'
 export * from './deploy-types.js'

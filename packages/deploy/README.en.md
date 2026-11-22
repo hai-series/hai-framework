@@ -20,6 +20,8 @@ See the [configuration reference](../../docs/usage/configuration/deploy.en.md) f
 
 [Browse the API list](../../docs/usage/function/deploy.en.md#api-reference) for entry points, inputs, results and examples.
 
+Automation can share the CLI build receipt and execute and verify staged releases by their persisted deployment ID. [Staged release workflow](../../docs/usage/function/deploy.en.md#programmatic-release-verification)
+
 ## Data Structures
 
 The module creates no database tables of its own.

@@ -25,6 +25,7 @@ const RecoverySchema = z.object({
 const CommandStateSchema = z.object({
   reason: z.enum([
     'timeout',
+    'aborted',
     'output',
     'input',
     'spawn',

@@ -284,3 +284,55 @@ async function inspectDelivery(appDir: string, artifactFile: string) {
   return { project, digest, delivery: delivered.data }
 }
 ```
+
+<a id="programmatic-release-verification"></a>
+
+### Stage and verify a release from a build receipt
+
+A platform can read the CLI build receipt through the SDK and persist the deployment ID, path, and SHA-256 of the private deployment bundle. Prepare the bundle with `deploy.deployApp(..., { bundleOnly: true })` and execute it after saving the receipt. A separate process can verify the same deployment ID after the SSH connection ends.
+
+#### Interface list
+
+| API | Purpose | Input | Return | Example |
+| --- | --- | --- | --- | --- |
+| `deploy.buildReceipt` | Create the CLI v1 receipt and output path | Project root, project name, v5 manifest | `HaiResult<BuildReceipt>` | `deploy.buildReceipt(projectDir, 'shop', manifest)` |
+| `deploy.verifyBuildReceipt` | Check the JSON line and local archives | stdout, trusted paths and expected source or images | `HaiResult<BuildReceipt>` | `await deploy.verifyBuildReceipt(stdout, { projectDir, projectName: 'shop' })` |
+| `deploy.executeBundle` | Upload and apply a private docker-ssh bundle | Persisted bundle receipt, trusted target, optional abort signal | Execution result and deployment ID | `await deploy.executeBundle(bundle, { signal })` |
+| `deploy.verifyDeployment` | Independently inspect the remote release | Target, requested and optional previous releases, health URL | Verified, restored, failed, or pending | `await deploy.verifyDeployment(verification, { signal })` |
+
+#### Verify the same ID after launching
+
+```ts
+import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+
+export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
+  // Check the CLI stdout and archives against the expected clean Git commit before preparing the deployment package.
+  const receipt = await deploy.verifyBuildReceipt(stdout, {
+    projectDir, projectName: 'shop', sourceCommit: commit, cleanSource: true,
+  })
+  if (!receipt.success) throw new Error(receipt.error.message)
+  return receipt.data.artifactDir
+}
+
+export async function runRelease(bundle: DeployBundleExecution, verification: DeployReleaseVerification, signal: AbortSignal) {
+  // The app persists the bundle ID, absolute path, and SHA-256 first. The SDK checks the bundle and pinned SSH target before launching.
+  const launched = await deploy.executeBundle(bundle, { signal })
+  // Use the original ID after either launch result. The SDK compares the receipt, running images, and health endpoint and leaves incomplete evidence pending.
+  const checked = await deploy.verifyDeployment(verification)
+  return { launched, checked }
+}
+```
+
+Both operations use a pinned SSH host key and a fixed Docker or Podman runtime. Verification derives the image configuration ID from the frozen Docker image archive and checks running images and the current release before and after the health probe. After a worker replacement, `prepareImages` can materialize the archives for the observed release. Poll `pending_verify` with the read-only method. `restored` returns evidence for the previous release.
+
+```mermaid
+flowchart LR
+  A["CLI v1 + manifest v5"] --> B["deploy.verifyBuildReceipt"]
+  B --> C["deployApp bundleOnly"]
+  C --> D["deploymentId + SHA-256"]
+  D --> E["deploy.executeBundle"]
+  E --> F["deploy.verifyDeployment"]
+  F --> G["succeeded / restored / failed"]
+  F --> H["pending_verify"]
+  H --> F
+```

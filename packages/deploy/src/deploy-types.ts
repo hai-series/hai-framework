@@ -6,7 +6,10 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { DeploymentArtifact } from './deploy-artifact.js'
+import type { BuildReceipt, BuildReceiptExpectation } from './deploy-build-receipt.js'
 import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
+import type { DeployBundleExecution, DeployReleaseVerification, DeployReleaseVerificationResult } from './deploy-release.js'
 import { core } from '@h-ai/core'
 
 // ─── 错误定义（照 @h-ai/core 范式） ───
@@ -258,7 +261,7 @@ export interface DeployRecoveryInfo {
  */
 export interface DeployCommandState {
   /** 失败触发原因。 */
-  reason: 'timeout' | 'output' | 'input' | 'spawn' | 'exit' | 'configuration'
+  reason: 'timeout' | 'aborted' | 'output' | 'input' | 'spawn' | 'exit' | 'configuration'
   /** 本地受管理树已全部退出、无法证明，或尚未启动。 */
   localTermination: 'confirmed' | 'unknown' | 'not-started'
   /** SSH 失败默认 unknown；读取匹配部署 ID 的完整终态结果后才为 finished。 */
@@ -427,6 +430,59 @@ export interface DeployCredentialOperations {
 export interface DeployFunctions {
   /** 全局部署凭证文件操作。 */
   readonly credentials: DeployCredentialOperations
+  /**
+   * 由工程根和清单生成 CLI v1 回执及目标路径。无需初始化，不读写文件。
+   * @example
+   * ```ts
+   * import { deploy, type DeploymentArtifact } from '@h-ai/deploy'
+   * function buildOutput(manifest: DeploymentArtifact): string {
+   *   const receipt = deploy.buildReceipt('/workspace/shop', 'shop', manifest)
+   *   if (!receipt.success) throw new Error(receipt.error.message)
+   *   return receipt.data.artifactDir
+   * }
+   * ```
+   */
+  buildReceipt: (projectDir: string, projectName: string, manifest: DeploymentArtifact) => HaiResult<BuildReceipt>
+  /**
+   * 核对 CLI 单行回执、工程路径、预期来源与实际归档摘要。无需初始化。
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * async function verifyBuild(stdout: string): Promise<string> {
+   *   const receipt = await deploy.verifyBuildReceipt(stdout, {
+   *     projectDir: '/workspace/shop', projectName: 'shop', complete: true,
+   *   })
+   *   if (!receipt.success) throw new Error(receipt.error.message)
+   *   return receipt.data.manifest.buildId
+   * }
+   * ```
+   */
+  verifyBuildReceipt: (stdout: string, expected: BuildReceiptExpectation) => Promise<HaiResult<BuildReceipt>>
+  /**
+   * 使用本次固定 SSH 目标上传并执行已经打包的私有包。无需初始化，不自动重放；远端不确定时独立核对。
+   * @example
+   * ```ts
+   * import { deploy, type DeployBundleExecution } from '@h-ai/deploy'
+   * async function run(bundle: DeployBundleExecution, signal: AbortSignal): Promise<boolean> {
+   *   // 先持久化 bundle 的部署 ID 和摘要，再调用本方法。
+   *   const applied = await deploy.executeBundle(bundle, { signal })
+   *   return applied.success // 调用方随后核对实际运行结果。
+   * }
+   * ```
+   */
+  executeBundle: (input: DeployBundleExecution, options?: { signal?: AbortSignal }) => Promise<HaiResult<{ deploymentId: string }>>
+  /**
+   * 只读核对指定部署 ID 的回执、当前发布、实际容器镜像和健康入口。无需初始化。
+   * @example
+   * ```ts
+   * import { deploy, type DeployReleaseVerification } from '@h-ai/deploy'
+   * async function reconcile(input: DeployReleaseVerification): Promise<string | undefined> {
+   *   const checked = await deploy.verifyDeployment(input)
+   *   return checked.success ? checked.data.status : undefined
+   * }
+   * ```
+   */
+  verifyDeployment: (input: DeployReleaseVerification, options?: { signal?: AbortSignal }) => Promise<HaiResult<DeployReleaseVerificationResult>>
   /**
    * 初始化模块（加载配置、创建 Provider 和 Provisioner 实例）
    * @example

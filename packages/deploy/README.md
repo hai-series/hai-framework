@@ -20,6 +20,8 @@
 
 [查 API 清单](../../docs/usage/function/deploy.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+自动化调用方可共用 CLI 构建回执，并按持久化的部署 ID 分步执行和核对。 [分步部署用法](../../docs/usage/function/deploy.md#programmatic-release-verification)
+
 ## 数据结构
 
 模块没有自建数据库表。

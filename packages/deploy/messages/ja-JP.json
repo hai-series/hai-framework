@@ -29,6 +29,7 @@
   "deploy_provisionNoResult": "{service}から接続情報が返されませんでした",
   "deploy_recoveryFailure": "{stage}でデプロイを停止しました。復旧情報を確認してください。",
   "deploy_recoverySuggestion": "同じプロジェクト名で再試行する前に、プロバイダーのコンソールで記載されたリソースを確認してください。「不明」は、リクエストによってリソースが作成された可能性を示します。再利用したリソースは自動削除されません。新規リソースは使用状況を確認してから手動で削除してください。",
+  "deploy_commandCancelled": "コマンドの実行がキャンセルされました。",
   "deploy_commandTimeout": "コマンドがタイムアウトしました: {command}",
   "deploy_commandFailed": "コマンドに失敗しました（{command}）: {error}",
   "deploy_remoteConnectFailed": "リモートホスト{host}に接続できません: {error}",
