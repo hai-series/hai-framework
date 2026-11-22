@@ -5,7 +5,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 test.describe('UI Gallery Compounds', () => {
   test('表单支持四种布局、自动与显式跨列，并按容器宽度收拢', async ({ page, request }, testInfo) => {
@@ -100,7 +100,7 @@ test.describe('UI Gallery Compounds', () => {
   test('Combobox 多选选中后应清空搜索输入，不残留最后一个选项文本', async ({ page, request }) => {
     await registerAndLogin(page, request, 'cmpui')
     await page.goto('/admin/ui-gallery/compounds')
-    await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
 
     await expect(page.getByText('Combobox 可搜索选择（Bits UI）')).toBeVisible()
 
