@@ -175,6 +175,7 @@ catalog:
   cac: ^7.1.0
   chalk: ^6.0.1
   chromadb: ^3.5.0
+  cron-parser: 5.6.1
   croner: ^11.0.0
   d3-shape: ^3.2.1
   daisyui: ^5.8.1

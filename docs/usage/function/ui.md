@@ -193,7 +193,15 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 | `<TagInput>` | 标签输入 | `tags` 提供当前标签列表；`maxTags` 限制标签数量；`allowDuplicates` 允许相同标签出现多次；`size` 设置组件尺寸。 | 编辑后更新 tags | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `<Combobox>` | 可搜索下拉选择（单选/多选） | `options` 提供用户可选的项目；`value` 传入当前值，支持的场合可双向绑定；`multiple` 允许同时选择多项；`placeholder` 设置未输入或未选择时的提示；`size` 设置组件尺寸。 | 搜索并写回选择值 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Calendar>` | 独立日历 | `value` 传入当前值，支持的场合可双向绑定；`minValue` 指定最早可选日期；`maxValue` 指定最晚可选日期。 | 选择后写回 DateValue | `<Calendar bind:value={date} />` |
-| `<DatePicker>` | 日期输入+弹出 | `value` 传入当前值，支持的场合可双向绑定；`minValue` 指定最早可选日期；`maxValue` 指定最晚可选日期；`error` 设置错误信息或错误样式；`size` 设置组件尺寸。 | 弹出日历并写回日期 | `<DatePicker bind:value={date} />` |
+| `<DatePicker>` | 日期输入+弹出 | `value` 传入当前值，支持的场合可双向绑定；`minValue` 指定最早可选日期；`maxValue` 指定最晚可选日期；`error` 设置错误信息或错误样式；`size` 设置组件尺寸。 `ariaLabel` 为日期输入指定无障碍名称。 | 弹出日历并写回日期 | `<DatePicker bind:value={date} />` |
+| `<ScheduleInput>` | 编辑调度时间 | `config` 传入时区、精度和 Cron 开关；`value` 双向绑定值，`valid` 双向绑定校验状态；`name` 用于提交字段，`id` 关联可见控件；`required`、`disabled` 控制必填和禁用。 | 带 UTC 偏移的 ISO 字符串或五段 Cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
+| `<CronExpressionBuilder>` | 编辑五段 Cron 和手工表达式 | `value` 绑定表达式，`presets` 提供常用表达式，`labels` 和 `weekdayOptions` 自定义显示，`error` 和 `describedBy` 关联宿主校验。 | 保留不能映射到可视化模式的手工表达式 | `<CronExpressionBuilder bind:value={cron} />` |
+| `normalizeScheduleInputConfig(value)` | 识别调度 schema | `value` 是 `x-hai-input` 的值。需要 `kind: 'schedule'`、有效的 IANA `timezone`、`precision: 'minute'`，`allowCron` 可省略。 | 归一化的 `ScheduleInputConfig`，无效值返回 `undefined` | `normalizeScheduleInputConfig(rawMetadata)` |
+| `createDefaultCronBuilderState()` | 创建默认编辑状态 | 无参数。 | `CronBuilderState`，默认每天 10:00 | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState(expression)` | 解析为可编辑状态 | `expression` 为字符串。 | `CronBuilderState`，复杂或无效表达式保留在手工模式 | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression(state)` | 序列化编辑状态 | `state` 为当前 `CronBuilderState`。 | 可视模式返回五段 Cron，手工模式返回输入文本 | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid(expression)` | 检查 Cron 语法 | `expression` 为待校验字符串。 | `boolean`，业务字段可另外约束为五段 | `isCronExpressionValid('0 10 * * *')` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | 读取编辑器的星期顺序 | 无参数。 | 周一到周日的数字字符串列表，周日为 `'0'` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
 
 <a id="choice-options"></a>
 
@@ -324,6 +332,42 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 检查标签与 `for` / `id` 关联、Tab顺序、提交失败保留输入和防重复提交。校验错误统一Toast，控件保留 `aria-invalid` 和读屏说明；修正后清除旧提示，关闭提示后再次无效提交仍提示。服务端再次校验输入和权限。
 
 保存型场景组件还要明确成功信号。`UserProfile.onsubmit` 接收表单值，返回 `boolean | Promise<boolean>`：只有 `true` 才退出编辑；`false` 或异常保留草稿。输入一个会被服务端拒绝的值时，应看到安全错误提示且仍能继续编辑；不要把“请求结束”当成“保存成功”。
+
+<a id="schedule-input"></a>
+
+#### 场景：选择调度时间或编辑 Cron
+
+从业务 schema 读取 `x-hai-input` 元数据，再把归一化的配置传给控件。组件省略配置时使用北京时间和分钟精度，`allowCron` 缺省为 `false`。下面指定洛杉矶时区，接受日期时间和五段 Cron。
+
+```svelte
+<script lang='ts'>
+  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let result = $state('')
+  const rawMetadata = {
+    kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
+  }
+  // Parse the schema metadata. Invalid zones or precision return undefined.
+  const config = normalizeScheduleInputConfig(rawMetadata)
+</script>
+{#if config}
+  <!-- Use the named form field to receive the selected schedule string. -->
+  <Form onsubmit={fields => { result = String(fields.scheduled_at) }}>
+    <!-- Associate the label with the mode's visible input. -->
+    <FormField label='Scheduled time' for='when' required>
+      <!-- A valid date-time includes an offset. Cron mode writes a five-field expression. -->
+      <ScheduleInput id='when' name='scheduled_at' {config} bind:value={schedule} required />
+    </FormField>
+    <button type='submit'>Save</button>
+  </Form>
+  <output>{result}</output>
+{/if}
+```
+
+选中 2030 年 7 月 22 日 10:05 时，提交值为 `2030-07-22T10:05:00-07:00`。遇到夏令时跳过的分钟时，表单会提示调整。重叠的分钟默认选较早的一次，已回填的合法偏移会保留。时间到期后提交会被拦截，焦点回到当前可见输入。手工 Cron 表达式的执行行为由宿主决定。
+
+Node 端可通过 `@h-ai/ui/components/compounds/schedule-input` 导入归一化函数和类型，该入口无需加载 Svelte。
 
 <a id="overlays"></a>
 

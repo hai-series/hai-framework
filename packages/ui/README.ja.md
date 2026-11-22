@@ -30,6 +30,8 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 [画像ポリシーと Markdown 原文の範囲](../../docs/usage/function/ui.ja.md#private-document-media)で画像の通信を制御し、ユーザーが選択した原文を特定できます。
 
 
+[実行日時入力](../../docs/usage/function/ui.ja.md#schedule-input)は日付ピッカーを再利用し、IANA タイムゾーン、分精度、5フィールドの Cron に対応します。
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

@@ -27,6 +27,23 @@ export { default as Card } from './Card.svelte'
 // 可搜索下拉选择（Bits UI headless + DaisyUI 样式）
 export { default as Combobox } from './Combobox.svelte'
 export { default as Confirm } from './Confirm.svelte'
+// 可复用的高级 Cron 编辑器
+export type {
+  CronBuilderMode,
+  CronBuilderState,
+  CronExpressionBuilderLabels,
+  CronExpressionBuilderPreset,
+  CronExpressionBuilderWeekdayOption,
+  CronWeekdayValue,
+} from './cron-expression-builder-types.js'
+export {
+  createDefaultCronBuilderState,
+  CRON_BUILDER_WEEKDAY_ORDER,
+  cronBuilderStateToExpression,
+  cronExpressionToBuilderState,
+  isCronExpressionValid,
+} from './cron-expression-builder.js'
+export { default as CronExpressionBuilder } from './CronExpressionBuilder.svelte'
 export { default as DataTable } from './DataTable.svelte'
 // 日期选择器（Bits UI headless + DaisyUI 样式）
 export { default as DatePicker } from './DatePicker.svelte'
@@ -59,6 +76,10 @@ export { default as PullRefresh } from './PullRefresh.svelte'
 export { default as Result } from './Result.svelte'
 // 安全区域包裹
 export { default as SafeArea } from './SafeArea.svelte'
+export { normalizeScheduleInputConfig } from './schedule-input-config.js'
+export type { ScheduleInputConfig } from './schedule-input-config.js'
+// 日期时间与高级 Cron 调度输入
+export { default as ScheduleInput } from './ScheduleInput.svelte'
 export { default as Skeleton } from './Skeleton.svelte'
 export { default as Steps } from './Steps.svelte'
 // 滑动操作

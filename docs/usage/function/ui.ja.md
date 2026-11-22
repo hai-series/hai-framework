@@ -118,7 +118,15 @@ export default {
 | `<TagInput>` | 編集で tags を更新 | `tags` は現在のタグ一覧。`maxTags` はタグの件数上限。`allowDuplicates` は同じタグの重複を許可。`size` はコンポーネントのサイズ。 | 編集で tags を更新 | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `<Combobox>` | 検索して選択値を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`multiple` は複数選択を許可。`placeholder` は入力や選択がない場合のヒント。`size` はコンポーネントのサイズ。 | 検索して選択値を更新 | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Calendar>` | 選択で DateValue を更新 | `value` は現在値を指定。対応時は双方向バインド可。`minValue` は選択可能な最も早い日。`maxValue` は選択可能な最も遅い日。 | 選択で DateValue を更新 | `<Calendar bind:value={date} />` |
-| `<DatePicker>` | ポップアップで日付を更新 | `value` は現在値を指定。対応時は双方向バインド可。`minValue` は選択可能な最も早い日。`maxValue` は選択可能な最も遅い日。`error` はエラーメッセージやエラー状態。`size` はコンポーネントのサイズ。 | ポップアップで日付を更新 | `<DatePicker bind:value={date} />` |
+| `<DatePicker>` | ポップアップで日付を更新 | `value` は現在値を指定。対応時は双方向バインド可。`minValue` は選択可能な最も早い日。`maxValue` は選択可能な最も遅い日。`error` はエラーメッセージやエラー状態。`size` はコンポーネントのサイズ。 `ariaLabel` は日付入力のアクセシブルな名前を指定します。 | ポップアップで日付を更新 | `<DatePicker bind:value={date} />` |
+| `<ScheduleInput>` | 実行日時を編集 | `config` はタイムゾーン、精度、Cron の使用可否を指定します。`value` と `valid` は値と検証状態を双方向でバインドできます。`name` は送信フィールド名、`id` は表示中のコントロールに対応します。 | UTC オフセット付きの ISO 文字列または5フィールドの Cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
+| `<CronExpressionBuilder>` | Cron と手入力式を編集 | `value` は式、`presets` は定型式です。`labels` と `weekdayOptions` は表示、`error` と `describedBy` は検証の文言を指定します。 | 手動で調整する式は入力を保持 | `<CronExpressionBuilder bind:value={cron} />` |
+| `normalizeScheduleInputConfig(value)` | 調度スキーマを判定 | `value` は `x-hai-input` の値です。`kind: 'schedule'`、有効な IANA `timezone`、`precision: 'minute'` を指定します。`allowCron` は省略できます。 | 正規化した `ScheduleInputConfig`。無効な値は `undefined` | `normalizeScheduleInputConfig(rawMetadata)` |
+| `createDefaultCronBuilderState()` | 初期状態を生成 | 引数なし。 | 毎日 10:00 の `CronBuilderState` | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState(expression)` | 編集状態へ変換 | `expression` に Cron 文字列を渡します。 | `CronBuilderState`。複雑または無効な値は手入力状態に保持 | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression(state)` | 編集状態を式へ変換 | `state` に現在の `CronBuilderState` を渡します。 | ビジュアルモードは5フィールド、手入力モードは入力したテキスト | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid(expression)` | Cron 構文を検証 | `expression` に検証する文字列を渡します。ホストはフィールド数を制限できます。 | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | 曜日の並びを取得 | 引数なし。 | 月曜から日曜の数字文字列。日曜は `'0'` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
 
 <a id="choice-options"></a>
 
@@ -163,6 +171,42 @@ Done を選ぶと `done` が表示されます。Archived は選択不可で、`
 <!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
 ```
+
+<a id="schedule-input"></a>
+
+#### シナリオ：実行日時を選択して Cron を編集する
+
+ホストのスキーマから `x-hai-input` を取得し、正規化した設定をコントロールへ渡します。コンポーネントの既定値は北京時間と分精度です。`allowCron` を省略すると `false` になります。この例ではロサンゼルス時間の日時と5フィールドの Cron を選べます。
+
+```svelte
+<script lang='ts'>
+  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let result = $state('')
+  const rawMetadata = {
+    kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
+  }
+  // Parse the schema metadata. Invalid zones or precision return undefined.
+  const config = normalizeScheduleInputConfig(rawMetadata)
+</script>
+{#if config}
+  <!-- Use the named form field to receive the selected schedule string. -->
+  <Form onsubmit={fields => { result = String(fields.scheduled_at) }}>
+    <!-- Associate the label with the mode's visible input. -->
+    <FormField label='Scheduled time' for='when' required>
+      <!-- A valid date-time includes an offset. Cron mode writes a five-field expression. -->
+      <ScheduleInput id='when' name='scheduled_at' {config} bind:value={schedule} required />
+    </FormField>
+    <button type='submit'>Save</button>
+  </Form>
+  <output>{result}</output>
+{/if}
+```
+
+2030年7月22日10:05を選ぶと、`2030-07-22T10:05:00-07:00` が送信されます。夏時間で存在しない分は修正が必要です。重複する分は早い方を選び、既存値の有効なオフセットは保持します。期限切れの時刻を送信すると表示中の入力へフォーカスが戻ります。Cron の実行方法はホストが決めます。
+
+Node のスキーマ処理では、正規化関数と型を `@h-ai/ui/components/compounds/schedule-input` から取得できます。この入口は Svelte を読み込みません。
 
 <a id="overlays"></a>
 

@@ -116,7 +116,15 @@ Keep field values in page state and update them through bindings. The applicatio
 | `<TagInput>` | Editing updates tags | `tags` supplies the current tags. `maxTags` limits the number of tags. `allowDuplicates` allows duplicate tags. `size` sets the component size. | Editing updates tags | `<TagInput bind:tags={tags} maxTags={5} />` |
 | `<Combobox>` | Search and update selected value | `options` supplies the choices available to the user. `value` supplies the current value and can be bound when supported. `multiple` allows multiple selections. `placeholder` sets the hint shown before input or selection. `size` sets the component size. | Search and update selected value | `<Combobox options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Calendar>` | Selection updates DateValue | `value` supplies the current value and can be bound when supported. `minValue` sets the earliest selectable date. `maxValue` sets the latest selectable date. | Selection updates DateValue | `<Calendar bind:value={date} />` |
-| `<DatePicker>` | Calendar popup updates date | `value` supplies the current value and can be bound when supported. `minValue` sets the earliest selectable date. `maxValue` sets the latest selectable date. `error` supplies an error message or state. `size` sets the component size. | Calendar popup updates date | `<DatePicker bind:value={date} />` |
+| `<DatePicker>` | Calendar popup updates date | `value` supplies the current value and can be bound when supported. `minValue` sets the earliest selectable date. `maxValue` sets the latest selectable date. `error` supplies an error message or state. `size` sets the component size. `ariaLabel` supplies an accessible name for the date control. | Calendar popup updates date | `<DatePicker bind:value={date} />` |
+| `<ScheduleInput>` | Edit a scheduled time | `config` supplies the time zone, precision, and cron flag. Bind `value` and `valid` for the current result and validation. `name` sets the submitted field. `id` links the visible control. `required` and `disabled` control form behavior. | ISO string with a UTC offset or five-field cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
+| `<CronExpressionBuilder>` | Edit five-field cron and manual expressions | `value` binds the expression. `presets` lists common expressions. `labels` and `weekdayOptions` set display text. `error` and `describedBy` connect host validation. | Retains expressions that need manual editing | `<CronExpressionBuilder bind:value={cron} />` |
+| `normalizeScheduleInputConfig(value)` | Recognize schedule schema metadata | `value` is the `x-hai-input` value. It needs `kind: 'schedule'`, a valid IANA `timezone`, and `precision: 'minute'`. `allowCron` is optional. | Normalized `ScheduleInputConfig` or `undefined` for invalid input | `normalizeScheduleInputConfig(rawMetadata)` |
+| `createDefaultCronBuilderState()` | Create the default editor state | No arguments. | `CronBuilderState` for 10:00 daily | `createDefaultCronBuilderState()` |
+| `cronExpressionToBuilderState(expression)` | Parse an expression into editor state | `expression` supplies the cron string. | `CronBuilderState`, retaining complex or invalid entries in manual mode | `cronExpressionToBuilderState('0 10 * * *')` |
+| `cronBuilderStateToExpression(state)` | Serialize the editor state | `state` supplies the current `CronBuilderState`. | Five cron fields in visual mode, entered text in manual mode | `cronBuilderStateToExpression(state)` |
+| `isCronExpressionValid(expression)` | Check cron syntax | `expression` supplies the string to validate. The host can also require five fields. | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `CRON_BUILDER_WEEKDAY_ORDER` | Read the editor weekday order | No arguments. | Numeric strings in Monday-to-Sunday order, with `'0'` for Sunday | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
 
 <a id="choice-options"></a>
 
@@ -161,6 +169,42 @@ Keep field values in page state and update them through bindings. The applicatio
 <!-- Bind the picker to the same date. Picking a day updates both controls. -->
 <DatePicker bind:value={date} />
 ```
+
+<a id="schedule-input"></a>
+
+#### Scenario: Choose a time or edit cron
+
+Read the `x-hai-input` metadata from the host schema and normalize it before passing it to the control. The default component uses Beijing time and minute precision. Omitted `allowCron` becomes `false`. This example enables date-time and five-field cron in Los Angeles time.
+
+```svelte
+<script lang='ts'>
+  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
+
+  let schedule = $state('')
+  let result = $state('')
+  const rawMetadata = {
+    kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
+  }
+  // Parse the schema metadata. Invalid zones or precision return undefined.
+  const config = normalizeScheduleInputConfig(rawMetadata)
+</script>
+{#if config}
+  <!-- Use the named form field to receive the selected schedule string. -->
+  <Form onsubmit={fields => { result = String(fields.scheduled_at) }}>
+    <!-- Associate the label with the mode's visible input. -->
+    <FormField label='Scheduled time' for='when' required>
+      <!-- A valid date-time includes an offset. Cron mode writes a five-field expression. -->
+      <ScheduleInput id='when' name='scheduled_at' {config} bind:value={schedule} required />
+    </FormField>
+    <button type='submit'>Save</button>
+  </Form>
+  <output>{result}</output>
+{/if}
+```
+
+Choosing July 22, 2030 at 10:05 submits `2030-07-22T10:05:00-07:00`. A minute skipped during the spring clock change needs a different time. A repeated minute defaults to the earlier occurrence, and a valid offset from a stored value is preserved. Submitting an expired time returns focus to the visible control. The host determines how cron expressions run.
+
+Node consumers can import the normalizer and type from `@h-ai/ui/components/compounds/schedule-input`. This entry does not load Svelte.
 
 <a id="overlays"></a>
 

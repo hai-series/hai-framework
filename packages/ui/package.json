@@ -43,6 +43,11 @@
       "svelte": "./dist/components/compounds/index.js",
       "import": "./dist/components/compounds/index.js"
     },
+    "./components/compounds/schedule-input": {
+      "types": "./dist/components/compounds/schedule-input-config.d.ts",
+      "svelte": "./dist/components/compounds/schedule-input-config.js",
+      "import": "./dist/components/compounds/schedule-input-config.js"
+    },
     "./components/index": {
       "types": "./dist/components/index.d.ts",
       "svelte": "./dist/components/index.js",
@@ -151,6 +156,7 @@
     "@shikijs/langs": "catalog:",
     "altcha": "catalog:",
     "bits-ui": "catalog:",
+    "cron-parser": "catalog:",
     "driver.js": "catalog:",
     "html2canvas": "catalog:",
     "jspdf": "catalog:",

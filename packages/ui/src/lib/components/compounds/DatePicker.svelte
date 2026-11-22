@@ -62,6 +62,8 @@
     size?: Size
     /** 错误消息 */
     error?: FormText
+    /** 无障碍名称；未提供时优先使用外层 FormField 标签。 */
+    ariaLabel?: string
     /** 自定义类名 */
     class?: string
     /** 日期变更回调 */
@@ -77,6 +79,7 @@
     disabled = false,
     size = 'md',
     error,
+    ariaLabel,
     class: className = '',
     onchange,
     ...restProps
@@ -103,7 +106,8 @@
     onValueChange={v => onchange?.(v)}
   >
     <BitsDatePicker.Input
-      aria-labelledby={field?.labelId}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : field?.labelId}
       aria-describedby={[
         field?.messageId,
         localError && !field?.error
