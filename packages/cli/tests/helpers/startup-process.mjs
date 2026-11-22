@@ -54,7 +54,8 @@ export async function ownedGroups(pid) {
       stat = await readFile(`/proc/${name}/stat`, 'utf8')
     }
     catch (error) {
-      if (error?.code === 'ENOENT')
+      // 进程可在列目录、打开文件或读取 stat 之间退出。
+      if (error?.code === 'ENOENT' || error?.code === 'ESRCH')
         continue
       throw error
     }

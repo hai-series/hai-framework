@@ -1,5 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import fs, { rm } from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -8,6 +9,23 @@ import { pathToFileURL } from 'node:url'
 import { expect, it, vi } from 'vitest'
 
 const entry = pathToFileURL(resolve('packages/cli/tests/helpers/startup-process.mjs')).href
+
+it.skipIf(process.platform !== 'linux')('扫描 Linux 会话时忽略刚退出的进程并保留存活进程组', async () => {
+  const { ownedGroups } = await import(entry)
+  const directories = vi.spyOn(fs, 'readdir').mockResolvedValue(['101', '102'])
+  const stat = vi.spyOn(fs, 'readFile')
+    .mockRejectedValueOnce(Object.assign(new Error('No such process'), { code: 'ESRCH' }))
+    .mockResolvedValueOnce('102 (live child) S 1 102 100 0')
+  syncBuiltinESMExports()
+  try {
+    await expect(ownedGroups(100)).resolves.toEqual([102])
+  }
+  finally {
+    directories.mockRestore()
+    stat.mockRestore()
+    syncBuiltinESMExports()
+  }
+})
 
 /** 只等待本例自己写入的观察点，超时保留失败上下文并交 finally 回收。 */
 async function waitFor(check) {
