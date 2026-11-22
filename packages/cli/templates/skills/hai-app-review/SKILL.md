@@ -84,4 +84,6 @@ typecheck/lint 不能证明越权、租户隔离、事务、错误状态或资�
 
 交付说明需求/范围、带路径与影响的发现、已复用能力和必要缺口、已修正项、已执行门禁/行为证据、同步的 contract/调用方/i18n/配置/文档，以及未验证项和原因。只读审查报告问题与验证建议；不能凭审查清单宣称所有测试通过。
 
+按[审查报告与变更影响评估](../hai-app-create/collaboration.md#审查报告与变更影响评估)列出随同一输入可观察的前后结果、示例代码与数据。
+
 相关技能：[hai-app-create](../hai-app-create/SKILL.md)、[hai-app-tests](../hai-app-tests/SKILL.md)、[hai-build](../hai-build/SKILL.md)。
