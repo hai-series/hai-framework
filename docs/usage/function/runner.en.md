@@ -159,6 +159,8 @@ With events numbered 1, 2, and 3, `events(scope, id, 1, 2)` returns 2 and 3. Con
 
 #### Scenario: Submit, recover, inspect and cancel
 
+When the business record must be saved first, the committed candidate can serve as the source for dispatch. A scanner retries the same request after the transaction with the candidate ID as its `idempotencyKey`. If submission fails or the process stops, the next scan can submit it again. The handler verifies the business scope at claim time and follows the application’s write constraints before publishing an artifact. An `unknown` execution still requires the application to check which external effects occurred.
+
 submit returns a persisted execution receipt. This distinguishes queued work, cancellation requests and confirmed resource shutdown.
 
 ![Runner receipts and confirmed terminal states](../images/function-runner-states.en.svg)

@@ -463,6 +463,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "AudioRecorder",
+              "kind": "type",
+              "declaration": "AudioRecorder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioRecorderOptions",
+              "kind": "type",
+              "declaration": "AudioRecorderOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AudioReference",
               "kind": "type",
               "declaration": "AudioReference",
@@ -472,6 +484,12 @@
               "name": "AudioTicketRequest",
               "kind": "type",
               "declaration": "AudioTicketRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioWavOptions",
+              "kind": "type",
+              "declaration": "AudioWavOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -748,6 +766,12 @@
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createAudioRecorder",
+              "kind": "value",
+              "declaration": "createAudioRecorder",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -2508,6 +2532,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "AudioRecorder",
+              "kind": "type",
+              "declaration": "AudioRecorder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioRecorderOptions",
+              "kind": "type",
+              "declaration": "AudioRecorderOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AudioReference",
               "kind": "type",
               "declaration": "AudioReference",
@@ -2517,6 +2553,12 @@
               "name": "AudioTicketRequest",
               "kind": "type",
               "declaration": "AudioTicketRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioWavOptions",
+              "kind": "type",
+              "declaration": "AudioWavOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -2793,6 +2835,12 @@
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createAudioRecorder",
+              "kind": "value",
+              "declaration": "createAudioRecorder",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -5182,6 +5230,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "JsonFieldPreview",
+              "kind": "type",
+              "declaration": "JsonFieldPreview",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JsonFieldPreviewOptions",
+              "kind": "type",
+              "declaration": "JsonFieldPreviewOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "KnowledgeAskOptions",
               "kind": "type",
               "declaration": "KnowledgeAskOptions",
@@ -7439,6 +7499,18 @@
               "name": "InteractionScope",
               "kind": "type",
               "declaration": "InteractionScope",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JsonFieldPreview",
+              "kind": "type",
+              "declaration": "JsonFieldPreview",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JsonFieldPreviewOptions",
+              "kind": "type",
+              "declaration": "JsonFieldPreviewOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -9702,6 +9774,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "JsonFieldPreview",
+              "kind": "type",
+              "declaration": "JsonFieldPreview",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JsonFieldPreviewOptions",
+              "kind": "type",
+              "declaration": "JsonFieldPreviewOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "KnowledgeAskOptions",
               "kind": "type",
               "declaration": "KnowledgeAskOptions",
@@ -10894,9 +10978,27 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AudioRecorder",
+              "kind": "type",
+              "declaration": "AudioRecorder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioRecorderOptions",
+              "kind": "type",
+              "declaration": "AudioRecorderOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AudioTicketRequest",
               "kind": "type",
               "declaration": "AudioTicketRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioWavOptions",
+              "kind": "type",
+              "declaration": "AudioWavOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -10909,6 +11011,12 @@
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createAudioRecorder",
+              "kind": "value",
+              "declaration": "createAudioRecorder",
               "declarationKind": "FunctionDeclaration"
             }
           ]
@@ -10934,9 +11042,27 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AudioRecorder",
+              "kind": "type",
+              "declaration": "AudioRecorder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioRecorderOptions",
+              "kind": "type",
+              "declaration": "AudioRecorderOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AudioTicketRequest",
               "kind": "type",
               "declaration": "AudioTicketRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AudioWavOptions",
+              "kind": "type",
+              "declaration": "AudioWavOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -10949,6 +11075,12 @@
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createAudioRecorder",
+              "kind": "value",
+              "declaration": "createAudioRecorder",
               "declarationKind": "FunctionDeclaration"
             }
           ]
@@ -17365,6 +17497,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuditOutcomeCounts",
+              "kind": "type",
+              "declaration": "AuditOutcomeCounts",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuditStatItem",
               "kind": "type",
               "declaration": "AuditStatItem",
@@ -17501,6 +17639,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuditOutcomeCounts",
+              "kind": "type",
+              "declaration": "AuditOutcomeCounts",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuditStatItem",
               "kind": "type",
               "declaration": "AuditStatItem",
@@ -17634,6 +17778,12 @@
               "name": "AuditLogWithUser",
               "kind": "type",
               "declaration": "AuditLogWithUser",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditOutcomeCounts",
+              "kind": "type",
+              "declaration": "AuditOutcomeCounts",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -22626,6 +22776,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "BuildReceipt",
+              "kind": "type",
+              "declaration": "BuildReceipt",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuildReceiptExpectation",
+              "kind": "type",
+              "declaration": "BuildReceiptExpectation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "canKeepMiddleware",
               "kind": "value",
               "declaration": "canKeepMiddleware",
@@ -22653,6 +22815,12 @@
               "name": "DeployAppOptions",
               "kind": "type",
               "declaration": "DeployAppOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployBundleExecution",
+              "kind": "type",
+              "declaration": "DeployBundleExecution",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -22720,6 +22888,24 @@
               "kind": "type",
               "declaration": "DeployRecoveryInfo",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseTarget",
+              "kind": "type",
+              "declaration": "DeployReleaseTarget",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerification",
+              "kind": "type",
+              "declaration": "DeployReleaseVerification",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerificationResult",
+              "kind": "type",
+              "declaration": "DeployReleaseVerificationResult",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "DeployResult",
@@ -22918,6 +23104,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "BuildReceipt",
+              "kind": "type",
+              "declaration": "BuildReceipt",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuildReceiptExpectation",
+              "kind": "type",
+              "declaration": "BuildReceiptExpectation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "canKeepMiddleware",
               "kind": "value",
               "declaration": "canKeepMiddleware",
@@ -22945,6 +23143,12 @@
               "name": "DeployAppOptions",
               "kind": "type",
               "declaration": "DeployAppOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployBundleExecution",
+              "kind": "type",
+              "declaration": "DeployBundleExecution",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -23012,6 +23216,24 @@
               "kind": "type",
               "declaration": "DeployRecoveryInfo",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseTarget",
+              "kind": "type",
+              "declaration": "DeployReleaseTarget",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerification",
+              "kind": "type",
+              "declaration": "DeployReleaseVerification",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerificationResult",
+              "kind": "type",
+              "declaration": "DeployReleaseVerificationResult",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "DeployResult",
@@ -23210,6 +23432,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "BuildReceipt",
+              "kind": "type",
+              "declaration": "BuildReceipt",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuildReceiptExpectation",
+              "kind": "type",
+              "declaration": "BuildReceiptExpectation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "canKeepMiddleware",
               "kind": "value",
               "declaration": "canKeepMiddleware",
@@ -23237,6 +23471,12 @@
               "name": "DeployAppOptions",
               "kind": "type",
               "declaration": "DeployAppOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployBundleExecution",
+              "kind": "type",
+              "declaration": "DeployBundleExecution",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -23304,6 +23544,24 @@
               "kind": "type",
               "declaration": "DeployRecoveryInfo",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseTarget",
+              "kind": "type",
+              "declaration": "DeployReleaseTarget",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerification",
+              "kind": "type",
+              "declaration": "DeployReleaseVerification",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DeployReleaseVerificationResult",
+              "kind": "type",
+              "declaration": "DeployReleaseVerificationResult",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "DeployResult",
@@ -24789,6 +25047,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "UpdateUserWithRolesInput",
+              "kind": "type",
+              "declaration": "UpdateUserWithRolesInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "User",
               "kind": "type",
               "declaration": "User",
@@ -25295,6 +25559,12 @@
               "name": "UpdateCurrentUserInput",
               "kind": "type",
               "declaration": "UpdateCurrentUserInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "UpdateUserWithRolesInput",
+              "kind": "type",
+              "declaration": "UpdateUserWithRolesInput",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -25812,6 +26082,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "UpdateUserWithRolesInput",
+              "kind": "type",
+              "declaration": "UpdateUserWithRolesInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "User",
               "kind": "type",
               "declaration": "User",
@@ -26326,6 +26602,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "UpdateUserWithRolesInput",
+              "kind": "type",
+              "declaration": "UpdateUserWithRolesInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "User",
               "kind": "type",
               "declaration": "User",
@@ -26837,6 +27119,12 @@
               "name": "UpdateCurrentUserInput",
               "kind": "type",
               "declaration": "UpdateCurrentUserInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "UpdateUserWithRolesInput",
+              "kind": "type",
+              "declaration": "UpdateUserWithRolesInput",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -37370,6 +37658,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -39984,6 +40278,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -42595,6 +42895,12 @@
               "name": "MarkdownRewriteRequest",
               "kind": "type",
               "declaration": "MarkdownRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -45640,6 +45946,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -47429,6 +47741,12 @@
               "name": "MarkdownRewriteRequest",
               "kind": "type",
               "declaration": "MarkdownRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -49224,6 +49542,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -50446,6 +50770,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -50756,6 +51086,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -51063,6 +51399,12 @@
               "name": "MarkdownRewriteRequest",
               "kind": "type",
               "declaration": "MarkdownRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -54598,6 +54940,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -56000,6 +56348,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MarkdownTextAlignKind",
               "kind": "type",
               "declaration": "MarkdownTextAlignKind",
@@ -57399,6 +57753,12 @@
               "name": "MarkdownRewriteRequest",
               "kind": "type",
               "declaration": "MarkdownRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MarkdownSourceRange",
+              "kind": "type",
+              "declaration": "MarkdownSourceRange",
               "declarationKind": "InterfaceDeclaration"
             },
             {
