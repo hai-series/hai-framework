@@ -656,6 +656,13 @@ export type EmbeddingConfig = z.infer<typeof EmbeddingConfigSchema>
 export { CompressionStrategySchema } from './compress/ai-compress-types.js'
 export type { CompressionStrategy } from './compress/ai-compress-types.js'
 
+const KnowledgeCleanOptionsSchema = CleanOptionsSchema.extend({
+  /** 合并多余空格和空行，知识库默认关闭以保留缩进。 */
+  normalizeWhitespace: z.boolean().default(false),
+  /** 去除首尾空白，知识库默认关闭以保留文档开头的缩进。 */
+  trim: z.boolean().default(false),
+})
+
 /**
  * Knowledge 配置 Schema
  *
@@ -686,10 +693,10 @@ export const KnowledgeConfigSchema = z.object({
   /**
    * 默认文本清洗选项
    *
-   * 字段含义与 @h-ai/datapipe CleanOptionsInput 完全一致，
-   * 支持 removeHtml、removeUrls、normalizeWhitespace、customReplacements 等。
+   * 字段含义遵循 Datapipe 的 CleanOptionsInput。
+   * 知识库默认关闭 normalizeWhitespace 和 trim，保留 Markdown 的行首缩进。
    */
-  cleanOptions: CleanOptionsSchema.default(CleanOptionsSchema.parse({})),
+  cleanOptions: KnowledgeCleanOptionsSchema.default(KnowledgeCleanOptionsSchema.parse({})),
   /**
    * 默认分块选项
    *

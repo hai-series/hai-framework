@@ -148,6 +148,8 @@ llm:
 
 给第二个模型设置环境变量时，把 `_0_` 改成 `_1_`。测试和生产使用不同模型时，可分别在 `.env.test` 和 `.env.prod` 写模型名。密钥放在未提交的 `.env.local` 或由部署平台提供。例如同一个文件中同时定义 `HAI_AI_LLM` 和 `HAI_AI_LLM_MODEL`，先读前者的整组 JSON，再用后者改模型名。如果更高优先级的文件重设整个 `HAI_AI_LLM`，低优先级文件中原先的模型名也会被替换。[环境来源](runtime.md#配置从哪里来)
 
+<a id="knowledge"></a>
+
 ## 知识分块与`embedding`
 
 | 项 | 框架默认（对应对象存在时） | 影响 |
@@ -155,12 +157,14 @@ llm:
 | `embedding`.`dimensions`/`batchSize` | 维度无默认/100 | 模型支持时指定输出维度；批次越大不一定越快，受服务上限约束 |
 | `knowledge`.`collection`/`dimension` | hai_ai_knowledge/1536 | 集合维度必须与`embedding`一致；换模型/维度需新集合与重建索引 |
 | `enableEntityExtraction` | `true` | 提取实体可能增加模型调用；`false` 关闭此步骤，不等于关闭向量化 |
-| `cleanOptions` | Datapipe默认 | 去HTML、规范空白、trim；是否去URL/邮箱按业务选择 |
-| `chunkOptions` | markdown/1500/overlap200 | 与独立Datapipe默认overlap0不同，分块失败不能静默退回整篇 |
+| `cleanOptions` | `removeHtml: true`，其余布尔值为 `false` | 移除 HTML 标签，保留文本空白。按资料内容选择是否清理 URL 或邮件地址 |
+| `chunkOptions` | `markdown`、`1500`、重叠 `200` | 按 Markdown 章节分块并保留相邻块的上下文 |
 | `entityBoostWeight` | 0.15 | 实体命中分数增益，范围0–1；需用实际查询评估 |
 | `entityTypes`/`systemPrompt` | 无配置默认 | 覆盖内置实体类型/提示；只写可信业务规则，不能扩大数据可见范围 |
 
-`cleanOptions.removeHtml`、`normalizeWhitespace`、`trim` 默认 `true`，`removeUrls`、`removeEmails` 默认 `false`；`customReplacements` 的每项 `pattern/replacement` 是可信规则，不是允许任意用户提交正则的入口。`chunkOptions.separator` 仅供 custom 模式，`markdownMinLevel` 默认 2、`markdownKeepTitle` 默认 true；具体清洗前后文本与分块结果见[文本处理配置](../function/datapipe.md#text-import-guide)。知识导入默认 overlap 为 200，独立 Datapipe 默认 0，不混用两者预算。
+下例开启 `knowledge.cleanOptions.removeEmails`。`normalizeWhitespace` 和 `trim` 仍为 `false`，因此 Markdown 代码行开头的四个空格会保留，该行内的 `#` 仍是代码内容。对于需要整理空白的纯文本，可显式开启这两项。`customReplacements` 仅接收可信配置中的替换规则。清洗或分块失败时，导入会在生成向量前停止。
+
+`chunkOptions.separator` 仅供 `custom` 模式使用，`markdownMinLevel` 默认 `2`，`markdownKeepTitle` 默认 `true`。独立调用 Datapipe 时，默认 `overlap` 为 `0`，`normalizeWhitespace` 和 `trim` 为 `true`。[文本处理参数](../function/datapipe.md#call-options) · [知识导入示例](../function/ai.md#knowledge)
 
 ```yaml schema=@h-ai/ai:AIConfigSchema
 llm:
@@ -616,8 +620,8 @@ Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入
 | `knowledge.cleanOptions.removeHtml`                       | `true`                                    | 移除 HTML 标签                                                                                                                                             |
 | `knowledge.cleanOptions.removeUrls`                       | `false`                                   | 移除 URL                                                                                                                                                   |
 | `knowledge.cleanOptions.removeEmails`                     | `false`                                   | 移除 Email 地址                                                                                                                                            |
-| `knowledge.cleanOptions.normalizeWhitespace`              | `true`                                    | 标准化空白字符（多空格→单空格、去掉多余空行，默认 true）                                                                                                   |
-| `knowledge.cleanOptions.trim`                             | `true`                                    | 去除首尾空白                                                                                                                                               |
+| `knowledge.cleanOptions.normalizeWhitespace`              | `false`                                   | 开启后合并连续空格和多余空行，可能改变 Markdown 缩进                                                                                                       |
+| `knowledge.cleanOptions.trim`                             | `false`                                   | 开启后去除整篇正文的首尾空白                                                                                                                                 |
 | `knowledge.cleanOptions.customReplacements`               | 可省略                                    | 自定义替换规则（正则→替换字符串） ❗ 安全提示：pattern 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击             |
 | `knowledge.cleanOptions.customReplacements[].pattern`     | 必填                                      | 用于匹配文本的正则格式字符串                                                                                                                               |
 | `knowledge.cleanOptions.customReplacements[].replacement` | 必填                                      | 命中时使用的替换字符串                                                                                                                                     |

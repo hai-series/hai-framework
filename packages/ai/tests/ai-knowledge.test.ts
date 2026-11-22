@@ -9,8 +9,9 @@ import type { ChunkOptionsInput, CleanOptionsInput, PipelineBuilder } from '@h-a
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { KnowledgeDocumentMetadata, KnowledgeDocumentRevision, KnowledgeStore } from '../src/store/ai-store-types.js'
-import { datapipe as realDatapipe } from '@h-ai/datapipe'
+import { HaiDatapipeError, datapipe as realDatapipe } from '@h-ai/datapipe'
 import { describe, expect, it, vi } from 'vitest'
+import { KnowledgeConfigSchema } from '../src/ai-config.js'
 import { HaiAIError } from '../src/ai-types.js'
 import { createKnowledgeOperations } from '../src/knowledge/ai-knowledge-functions.js'
 
@@ -213,30 +214,31 @@ function createMockDatapipe() {
   return datapipe
 }
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG = KnowledgeConfigSchema.parse({
   collection: 'hai_ai_knowledge1',
   dimension: 3,
   enableEntityExtraction: false,
-  cleanOptions: {
-    removeHtml: true,
-    removeUrls: false,
-    removeEmails: false,
-    normalizeWhitespace: true,
-    trim: true,
-  },
-  chunkOptions: {
-    mode: 'markdown' as const,
-    maxSize: 1500,
-    overlap: 200,
-    markdownMinLevel: 2,
-    markdownKeepTitle: true,
-  },
-  entityBoostWeight: 0.15,
-}
+})
 
 // ─── setup ───
 
 describe('knowledge setup', () => {
+  it('部分清洗配置沿用空白处理默认值，也允许显式开启', () => {
+    const partial = KnowledgeConfigSchema.parse({
+      cleanOptions: { removeEmails: true },
+    })
+    expect(partial.cleanOptions).toMatchObject({
+      removeEmails: true,
+      normalizeWhitespace: false,
+      trim: false,
+    })
+
+    const explicit = KnowledgeConfigSchema.parse({
+      cleanOptions: { normalizeWhitespace: true, trim: true },
+    })
+    expect(explicit.cleanOptions).toMatchObject({ normalizeWhitespace: true, trim: true })
+  })
+
   it('正常初始化：调用 store.initialize', async () => {
     const { store } = createMockKnowledgeStore()
 
@@ -435,6 +437,61 @@ describe('knowledge ingest', () => {
     }))
   })
 
+  it('清洗配置无效时在 embedding 与发布前返回原始原因', async () => {
+    const { ops, embedding, store } = await setupOps({ datapipe: realDatapipe })
+    const documentId = 'published-document'
+    const published = await ops.ingest({ documentId, content: 'Published example.' })
+    if (!published.success)
+      throw new Error(published.error.message)
+    vi.mocked(embedding.embedBatch).mockClear()
+    vi.mocked(store.replaceDocument).mockClear()
+
+    const result = await ops.ingest({
+      documentId,
+      content: 'Example document.',
+      cleanOptions: {
+        customReplacements: [
+          { pattern: '[', replacement: '' },
+        ],
+      },
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: HaiAIError.KNOWLEDGE_INGEST_FAILED.code,
+        cause: { code: HaiDatapipeError.CONFIG_ERROR.code },
+      },
+    })
+    expect(embedding.embedBatch).not.toHaveBeenCalled()
+    expect(store.replaceDocument).not.toHaveBeenCalled()
+    expect(await store.getDocument(documentId, DEFAULT_CONFIG.collection)).toMatchObject({ revision: published.data.revision })
+  })
+
+  it.each([
+    undefined,
+    { normalizeWhitespace: undefined, trim: undefined },
+  ])('默认清洗保留 Markdown 缩进代码 %j', async (cleanOptions) => {
+    const { ops, embedding, store } = await setupOps({ datapipe: realDatapipe })
+    const preamble = '    # Shell comment\n\n'
+    const section = '# Report\n\n    # Another comment\n\nReport text.'
+
+    const result = await ops.ingest({
+      documentId: 'markdown-indent',
+      content: preamble + section,
+      cleanOptions,
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { chunkCount: 2 },
+    })
+    expect(embedding.embedBatch).toHaveBeenCalledExactlyOnceWith([preamble, section])
+    expect(store.replaceDocument).toHaveBeenCalledOnce()
+    const published = vi.mocked(store.replaceDocument).mock.calls[0]![0]
+    expect(published.chunks.map(chunk => chunk.content)).toEqual([preamble, section])
+  })
+
   it.each([
     { mode: 'paragraph', maxSize: 0, overlap: 0 },
     { mode: 'paragraph', maxSize: 4, overlap: 4 },
@@ -487,13 +544,17 @@ describe('knowledge ingest', () => {
     const result = await ops.ingest({
       documentId: 'doc-3b',
       content: '<p>Hello world</p>',
-      cleanOptions: { removeHtml: true },
+      cleanOptions: { removeHtml: true, normalizeWhitespace: true, trim: true },
       chunkOptions: { mode: 'paragraph', maxSize: 500, overlap: 50 },
     })
 
     expect(result.success).toBe(true)
-    // datapipe.clean 应收到 removeHtml: true
-    expect(datapipe!.clean).toHaveBeenCalledWith('<p>Hello world</p>', expect.objectContaining({ removeHtml: true }))
+    // 单次导入可以开启清洗选项，覆盖知识库默认值。
+    expect(datapipe!.clean).toHaveBeenCalledWith('<p>Hello world</p>', expect.objectContaining({
+      removeHtml: true,
+      normalizeWhitespace: true,
+      trim: true,
+    }))
     // datapipe.chunk 应收到 mode: 'paragraph'
     expect(datapipe!.chunk).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mode: 'paragraph', maxSize: 500, overlap: 50 }))
   })

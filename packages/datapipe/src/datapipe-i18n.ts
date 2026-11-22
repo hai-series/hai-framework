@@ -5,10 +5,13 @@
  * @module datapipe-i18n
  */
 
-import { core } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
+import type { ZodError } from 'zod'
+import { core, err } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
+import { HaiDatapipeError } from './datapipe-types.js'
 
 // ─── i18n ───
 
@@ -37,3 +40,16 @@ export const datapipeM = core.i18n.createMessageGetter<DatapipeMessageKey>({
   'en-US': messagesEnUS,
   'ja-JP': messagesJaJP,
 })
+
+/**
+ * 用同一错误契约报告直接调用和 Worker 路径上的配置校验失败。
+ * @example 模块内部上下文
+ * ```ts
+ * function failure(error: ZodError) { return datapipeConfigError(error) }
+ * ```
+ */
+export function datapipeConfigError(error: ZodError): HaiResult<never> {
+  return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+    params: { error: error.message },
+  }), error)
+}

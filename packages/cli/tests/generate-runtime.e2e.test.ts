@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
@@ -310,6 +310,75 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     const base = await start(project, await port(), '/api/health')
     expect((await fetch(base)).status).toBe(200)
     expect((await fetch(`${base}/api/health`)).status).toBe(200)
+  }, 180_000)
+
+  it('website datapipe 路由处理正文并返回统一校验错误', async () => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await mkdir(tempParent, { recursive: true })
+    const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
+    roots.push(root)
+    const name = 'datapipe-site'
+    await createProject({
+      name,
+      appType: 'website',
+      cwd: root,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })
+    const project = path.join(root, name)
+    await generateFromTemplates(project, buildTemplateContext({
+      name,
+      appType: 'website',
+      features: ['datapipe'],
+      packageManager: 'pnpm',
+      deploy: false,
+    }))
+    const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'))
+    expect(manifest.dependencies).toHaveProperty('@h-ai/datapipe', 'catalog:')
+    await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
+    await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
+    await tool('typescript', [], project)
+    await tool('vite', ['build'], project)
+    const base = await start(project, await port(), '/api/health')
+
+    const requestId = 'datapipe-scaffold-request'
+    const endpoint = `${base}/api/datapipe/pipeline`
+    const requestOptions = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'origin': base, 'x-request-id': requestId },
+    }
+    const accepted = await fetch(endpoint, {
+      ...requestOptions,
+      body: JSON.stringify({ content: '<p>Sample report.</p>' }),
+    })
+    expect(accepted.status).toBe(200)
+    expect(await accepted.json()).toMatchObject({
+      success: true,
+      requestId,
+      data: {
+        cleaned: 'Sample report.',
+        chunkCount: 1,
+        chunks: [
+          { index: 0, content: 'Sample report.' },
+        ],
+      },
+    })
+
+    const rejected = await fetch(endpoint, {
+      ...requestOptions,
+      body: JSON.stringify({ content: '  ' }),
+    })
+    expect(rejected.status).toBe(400)
+    expect(rejected.headers.get('x-trace-id')).toBe(requestId)
+    expect(await rejected.json()).toMatchObject({
+      success: false,
+      requestId,
+      error: { code: HaiCommonError.INVALID_REQUEST.code, traceId: requestId },
+    })
   }, 180_000)
 
   it.each(['website', 'api', 'fullstack'] as const)('%s生成的新路由进入实际构建与HTTP入口', async (appType) => {

@@ -66,6 +66,27 @@ describe('datapipe.pipeline', () => {
     expect(result.data!.text).toBe('bar baz bar')
   })
 
+  it('新登记的步骤只对之后启动的 run 生效', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const pipeline = datapipe.pipeline().transform(async (text) => {
+      await promise
+      return text
+    })
+    const first = pipeline.run('First')
+    pipeline.transform(text => text.toUpperCase())
+    const second = pipeline.run('Second')
+    resolve()
+
+    expect(await first).toEqual({
+      success: true,
+      data: { text: 'First', chunks: [] },
+    })
+    expect(await second).toEqual({
+      success: true,
+      data: { text: 'SECOND', chunks: [] },
+    })
+  })
+
   it('异步 chunkTransform', async () => {
     const result = await datapipe.pipeline()
       .chunk({ mode: 'paragraph', maxSize: 5000 })

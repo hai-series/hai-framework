@@ -1832,6 +1832,9 @@ importers:
       '@h-ai/crypto':
         specifier: workspace:*
         version: link:../crypto
+      '@h-ai/datapipe':
+        specifier: workspace:*
+        version: link:../datapipe
       '@h-ai/deploy':
         specifier: workspace:*
         version: link:../deploy

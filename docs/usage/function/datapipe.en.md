@@ -47,7 +47,7 @@ Extract text from sources such as HTML and optionally remove URLs or extra white
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `datapipe.clean(text, options?)` | Strip HTML tags and optionally remove other content | Pass a string. By default, remove tags, normalize whitespace, trim, and keep URLs and email addresses | `HaiResult<string>` | `datapipe.clean('<p>Hello</p>')` |
+| `datapipe.clean(text, options?)` | Strip tags and optionally remove or replace other content | Required `text: string` is the source text to strip, normalize, or rewrite. Optional `options: CleanOptionsInput` selects the cleaning steps. See [cleaning arguments](#clean-options). | `HaiResult<string>`. Invalid options or patterns return `CONFIG_ERROR`. | `datapipe.clean('<p>Hello</p>')` |
 
 #### Scenario: Extract and clean text
 
@@ -61,20 +61,42 @@ cleaned.data // 'Hello Ada'
 
 The input has tags and repeated spaces. The successful plain-text result is Hello Ada; whitespace normalization is enabled by default.
 
+HTML cleaning preserves plain-text comparisons such as `x < 2 and y > 3` and strips a tag even if a quoted attribute contains `>`.
+
+<a id="clean-options"></a>
+
 #### Cleaning arguments
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `removeHtml` | `true` | Strip HTML tags. |
-| `removeUrls` | `false` | Remove URLs. |
-| `removeEmails` | `false` | Remove email addresses. |
-| `normalizeWhitespace` | `true` | Collapse extra spaces and blank lines. |
-| `trim` | `true` | Remove leading and trailing whitespace. |
-| `customReplacements` | Optional | Apply the listed replacements in order. |
-| `customReplacements[].pattern` | Required for an entry | A trusted regular expression or a string interpreted as a regular expression. |
-| `customReplacements[].replacement` | Required for an entry | The replacement text. |
+Omit `options` or supply just the fields to override. The enabled steps run in this order: strip tags, remove URLs, remove email addresses, apply custom replacements, normalize whitespace, and trim.
 
-[Detailed parameters and workflows](datapipe.md#cleaning)
+| Field | Type | Default or requirement | Effect |
+| --- | --- | --- | --- |
+| `removeHtml` | `boolean` | `true` | Strip HTML tags and keep the text inside them. |
+| `removeUrls` | `boolean` | `false` | Remove matching `http://` and `https://` URLs. |
+| `removeEmails` | `boolean` | `false` | Remove matching email addresses. |
+| `normalizeWhitespace` | `boolean` | `true` | Collapse runs of spaces or tabs and reduce three or more consecutive `\n` characters to two. |
+| `trim` | `boolean` | `true` | Remove whitespace from both ends of the text. |
+| `customReplacements` | `{ pattern: string, replacement: string }[]` | Optional | Apply entries in array order. Omit the field or pass an empty array to skip replacement. |
+| `customReplacements[].pattern` | `string` | Required for each entry | Regular-expression string from trusted configuration. The module uses the `g` flag to match all occurrences. |
+| `customReplacements[].replacement` | `string` | Required for each entry | Replacement text. `$1` inserts the first capture, and `''` deletes the match. |
+
+#### Scenario: Rewrite ticket numbers with `customReplacements`
+
+Rewrite both `Ticket` numbers as `Case #number`, then remove the trailing `[draft]` marker. In a TypeScript string, write `\d` as `\\d` and escape literal brackets.
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+// Pass the ticket numbers and draft marker. Success returns the rewritten text. Read error.code if a rule is invalid.
+const result = datapipe.clean('Ticket 120; Ticket 345 [draft]', {
+  customReplacements: [
+    { pattern: 'Ticket\\s+(\\d+)', replacement: 'Case #$1' },
+    { pattern: '\\s*\\[draft\\]$', replacement: '' },
+  ],
+})
+if (result.success) result.data // 'Case #120; Case #345'
+else result.error.code // 'hai:datapipe:005' for an invalid pattern
+```
 
 <a id="chunking"></a>
 
@@ -86,7 +108,7 @@ Choose word, sentence, paragraph or Markdown boundaries, then limit chunk size. 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `datapipe.chunk(text, options)` | Split by sentence, paragraph, heading, or another boundary | Pass a string and `mode`. `maxSize` defaults to `1500`, `overlap` to `0` | `HaiResult<DataChunk[]>`. Blank input returns an empty array | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
+| `datapipe.chunk(text, options)` | Split by sentence, paragraph, heading, or another boundary | Required `text: string` is the source text to split. Required `options: ChunkOptionsInput` selects the unit, boundary, and maximum size. See [chunk arguments](#chunk-options). | `HaiResult<DataChunk[]>`. Blank input with valid options returns an empty array. | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
 #### Scenario: Split documents by size
 
@@ -104,20 +126,62 @@ The input is three words with a one-word limit. Spaces remain so chunks can be t
 
 `sentence`, `paragraph`, `markdown`, and `page` use the corresponding document boundaries. `custom` uses the supplied regular expression. `word` counts whitespace-separated words, so a span of Chinese text with no spaces may count as one word. Other modes use Unicode code points. The splitter preserves whitespace, punctuation, and separators. If a natural segment exceeds the limit, the splitter divides it further. Configure overlap smaller than the limit to repeat a short suffix in the next chunk.
 
-Markdown sections do not overlap. A `#` inside a code block is content. Use `markdownKeepTitle: false` to omit headings. See [chunk settings](../configuration/datapipe.en.md).
+Markdown sections do not overlap. A `#` inside a code block is content. Set `markdownKeepTitle: false` to omit just the heading line, with LF, CRLF, or CR line endings. In `custom` mode, an invalid separator returns `CHUNK_FAILED` even when the text is blank. See [chunk settings](../configuration/datapipe.en.md).
+
+One chunk operation returns at most 100,000 chunks. Their contents and repeated Markdown titles can contain up to 16,777,216 UTF-16 code units in total, counting each occurrence of overlapping text. Exceeding either limit returns `CHUNK_LIMIT_EXCEEDED`. Reduce overlap or split the source into smaller inputs. `maxSize` and `overlap` still use the unit of the selected mode.
 
 For HTML display, use the UI's safe rendering features after cleaning. Supply only reviewed regular expressions for custom replacements or separators. Building a regular expression from arbitrary input can make processing take much longer than expected.
 
+<a id="chunk-options"></a>
+
 #### Chunk arguments
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `mode` | Required | Choose `sentence`, `paragraph`, `markdown`, `page`, `word`, `character`, or `custom`. |
-| `maxSize` | `1500` | Positive integer. Maximum units per chunk, including separators and overlapping text. Word mode counts whitespace-separated words. Other modes count Unicode code points. |
-| `overlap` | `0` | Number of units to carry into the next chunk. Use a nonnegative integer smaller than `maxSize`. |
-| `separator` | Required for `custom` | A regular expression supplied by the application. |
-| `markdownMinLevel` | `2` | Split at level 1 and 2 headings by default. Set to 3 to include level 3. Range 1–6. |
-| `markdownKeepTitle` | `true` | Keep the heading in the returned chunk. |
+| Field | Type | Default or requirement | Effect |
+| --- | --- | --- | --- |
+| `mode` | `ChunkMode` | Required | Choose `sentence`, `paragraph`, `markdown`, `page`, `word`, `character`, or `custom`. |
+| `maxSize` | Positive integer | `1500` | Maximum units per chunk, including separators and overlapping text. `word` counts whitespace-separated words. Other modes count Unicode code points. |
+| `overlap` | Nonnegative integer | `0` | Units to carry from the end of one chunk into the next. Uses the same unit as `maxSize` and must be smaller than `maxSize`. |
+| `separator` | `string` | Required and nonempty for `custom` | Trusted regular-expression string. The splitter prefers to cut after the match and includes the separator in the output. |
+| `markdownMinLevel` | Integer from `1` to `6` | `2` | Applies in `markdown` mode. `2` splits at `#` and `##`. `3` also splits at `###`. |
+| `markdownKeepTitle` | `boolean` | `true` | Applies in `markdown` mode. `false` omits the heading lines used as boundaries. The heading text remains in `metadata.title`. |
+
+#### Scenario: Choose split points with `separator` or `overlap`
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+// Prefer splitting after literal || with at most 7 code points per chunk. Success preserves the separators. Read error.code on failure.
+const separated = datapipe.chunk('alpha||beta||gamma', {
+  mode: 'custom', separator: '\\|\\|', maxSize: 7,
+})
+if (separated.success) separated.data.map(chunk => chunk.content) // ['alpha||', 'beta||', 'gamma']
+else separated.error.code
+
+// Limit each chunk to 3 code points and carry 1 into the next. On success both chunks contain 乙. Read error.code on failure.
+const overlapping = datapipe.chunk('甲😀乙丙丁', { mode: 'character', maxSize: 3, overlap: 1 })
+if (overlapping.success) overlapping.data.map(chunk => chunk.content) // ['甲😀乙', '乙丙丁']
+else overlapping.error.code
+```
+
+#### Scenario: Set Markdown heading depth and keep or omit heading lines
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+const text = '# Guide\nIntro.\n### Details\nSteps.'
+// With the default depth of 2, omit the Guide heading line. Success leaves ### Details in the body. Read error.code on failure.
+const main = datapipe.chunk(text, { mode: 'markdown', markdownKeepTitle: false })
+if (main.success) main.data.map(chunk => chunk.content) // ['Intro.\n### Details\nSteps.']
+else main.error.code
+
+// Set depth to 3. Success returns two section bodies with headings in metadata.title. Read error.code on failure.
+const detailed = datapipe.chunk(text, { mode: 'markdown', markdownMinLevel: 3, markdownKeepTitle: false })
+if (detailed.success) {
+  detailed.data.map(chunk => chunk.content) // ['Intro.\n', 'Steps.']
+  detailed.data.map(chunk => chunk.metadata?.title) // ['Guide', 'Details']
+}
+else detailed.error.code
+```
 
 For example, `datapipe.chunk(text, { mode: 'paragraph' })` uses no overlap. The AI knowledge base has its own chunking defaults. Changing the chunk limit, overlap, or heading behavior changes index contents. Reprocess the original text before replacing the existing chunks in the index.
 
@@ -129,18 +193,18 @@ For example, `datapipe.chunk(text, { mode: 'paragraph' })` uses no overlap. The 
 
 On Node, `pipeline.run()` sends consecutive cleaning and chunking steps to a Worker when the text reaches 128 Ki UTF-16 code units. The caller runs custom `transform` and `chunkTransform` callbacks and processes short text directly. A full queue returns a pipeline failure.
 
-Register cleaning, text transforms, chunking and chunk transforms, then run that sequence on each input. Registration itself processes nothing.
+Register cleaning, text transforms, chunking, and chunk transforms, then run that sequence on each input. Each `run` takes the list of steps as it exists at the start. Steps registered during a run apply to later calls. Short and long text use the same option validation and error order.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `datapipe.pipeline()` | Create an independent pipeline | None | PipelineBuilder | `const pipeline = datapipe.pipeline()` |
-| `pipeline.clean(options?)` | Register cleaning | Optional cleaning arguments; same defaults as clean | Same builder | `pipeline.clean({ removeHtml: true })` |
-| `pipeline.transform(fn)` | Register a text transform | Synchronous or asynchronous string transform | Same builder | `pipeline.transform(text => text.toLowerCase())` |
-| `pipeline.chunk(options)` | Register chunking | mode required; same defaults as chunk | Same builder | `pipeline.chunk({ mode: "word", maxSize: 1 })` |
-| `pipeline.chunkTransform(fn)` | Register a chunk transform | Synchronous or asynchronous chunk-array transform | Same builder | `pipeline.chunkTransform(parts => parts.filter(p => p.content.trim() !== "beta"))` |
-| `pipeline.run(text)` | Run steps in order | Source string | Promise<HaiResult<PipelineResult>>; step failures return failure | `await pipeline.run("<p>ALPHA BETA GAMMA</p>")` |
+| `pipeline.clean(options?)` | Register cleaning | Optional `options: CleanOptionsInput` controls how this step cleans the current text. See [cleaning arguments](#clean-options) for defaults. | Same builder. `run` reports invalid options. | `pipeline.clean({ removeHtml: true })` |
+| `pipeline.transform(fn)` | Register a text transform | Required `fn` receives the current `string` and returns a `string` or `Promise<string>`. | Same builder. A thrown error or rejection makes `run` return `TRANSFORM_FAILED`. | `pipeline.transform(text => text.toLowerCase())` |
+| `pipeline.chunk(options)` | Register chunking | Required `options: ChunkOptionsInput` controls how this step splits the text it receives. See [chunk arguments](#chunk-options). | Same builder. `run` reports invalid options. | `pipeline.chunk({ mode: "word", maxSize: 1 })` |
+| `pipeline.chunkTransform(fn)` | Register a chunk transform | Required `fn` receives the current `DataChunk[]` and returns `DataChunk[]` or `Promise<DataChunk[]>`. The callback runs when there are chunks. | Same builder. A thrown error or rejection makes `run` return `PIPELINE_FAILED`. | `pipeline.chunkTransform(parts => parts.filter(p => p.content.trim() !== "beta"))` |
+| `pipeline.run(text)` | Run steps in order | Required `text: string` contains the source text. | `Promise<HaiResult<PipelineResult>>`. A step failure returns an error result. | `await pipeline.run("<p>ALPHA BETA GAMMA</p>")` |
 
 #### Scenario: Compose reusable steps
 
@@ -148,7 +212,7 @@ Chained calls register steps; run(text) executes them. This example cleans, tran
 
 ![pipeline.run: process text and chunks in order](../images/function-datapipe-pipeline.en.svg)
 
-Text and chunks are separate state: transform changes text, chunk snapshots that text into chunks, and chunkTransform changes existing chunks. A later text transform does not rebuild them. Failure stops later steps; without chunk, chunks remains empty.
+`transform` changes the text, `chunk` splits the text as it exists at that step, and `chunkTransform` changes the resulting chunks. On success, `text` holds the text after all steps. Later text transforms leave earlier chunks as produced. A failure stops later steps. Without a `chunk` step, `chunks` is empty.
 
 ```ts
 // Create a reusable builder with no arguments. The following calls register steps for later execution.

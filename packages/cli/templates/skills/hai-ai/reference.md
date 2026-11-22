@@ -163,6 +163,10 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 入库链路：clean/chunk → embedding/完整实体提取 → 持久暂存清单 → vecdb upsert → 单文档 CAS 发布完整正文、实体和元数据。每次产生唯一 revision/chunk ID，相同文档并发重建只允许一个 writer；失败保留旧版，短文档重建不显示旧尾块。向量检索只保留当前发布版，切换期间重试，持续冲突或候选扩展超限返回错误。
 
+知识库默认将 `cleanOptions.normalizeWhitespace` 和 `trim` 设为 `false`，保留 Markdown 缩进。只配置 `removeEmails: true` 时仍保留这两个默认值。对需要整理空白的纯文本，可以在单次 `ingest` 时显式开启两项。清洗或分块失败时，`ingest` 在生成向量和发布前停止，返回 `KNOWLEDGE_INGEST_FAILED` 并保留原始错误原因。
+
+知识分块遵循 Datapipe 的单位和硬上限，word 按词计量，其他模式按 Unicode code point 计量。默认 `chunkOptions` 为 `markdown`、`maxSize: 1500`、`overlap: 200`。减小 `maxSize` 时，要确保合并后的 `overlap` 严格小于它。
+
 `ingest` 成功返回 `revision`、`cleanupPending`。后者为 true 表示完整新版已经发布但旧向量删除失败，须检查并安排 repair，不能当作全部清理完成。`setup` 自动扫描前 100 份清单；应用定期分页 repair（offset≥0，limit 1–1000，默认100），根据 processed/total 覆盖全部页。存储端时钟的 5 分钟暂存过期后旧 owner 不能发布；废弃写入的永久补偿墓碑用于反复清理迟到外部写入，不能随日志删除。SQL 与 vecdb 无跨库事务，故障/重启后的清理依赖持久记录及重复扫描。
 
 删除先撤销可见性，清理失败返回错误并保留补偿信息。集合删除保留物理向量集合与代际墓碑，重新 setup 不会恢复旧代数据。默认 Store 的正文/实体来自同一已发布快照；自定义 KnowledgeStore 必须实现相同发布、删除和补偿契约。Qdrant 写入/删除等待应用，候选上限使用精确计数；LanceDB 使用持久主键原子 merge。
@@ -310,8 +314,6 @@ const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 }
 ```
 
 语音：`@h-ai/ai/client` 的 `createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
-
-Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
 
 JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；应用使用所安装版本的公开类型，并通过本应用已有的类型检查验证使用示例。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
 

@@ -61,7 +61,7 @@ if (!result.success)
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `datapipe.clean(text, options?)` | 移除 HTML 标签，按需清理 URL、邮件地址或自定义文本 | `text` 是字符串。默认移除标签、统一空白并去掉首尾空白，保留 URL 和邮件地址 | `HaiResult<string>` | `datapipe.clean('<p>Hello</p>')` |
+| `datapipe.clean(text, options?)` | 移除标签，按需清理 URL、邮箱或替换文本 | 必填 `text: string`，是需要去标签、整理空白或替换的原始正文。可省略 `options: CleanOptionsInput`；它决定执行哪些清洗步骤，字段见[清洗参数](#clean-options)。 | `HaiResult<string>`。选项或正则格式无效时返回 `CONFIG_ERROR` | `datapipe.clean('<p>Hello</p>')` |
 
 #### 场景：提取与清理文本
 
@@ -75,24 +75,46 @@ cleaned.data // 'Hello Ada'
 
 输入为包含标签及连续空格的字符串；成功输出为普通文本 Hello Ada，默认同时统一空白。
 
-HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时仍需使用 UI 的安全渲染机制。内置标签与邮箱清洗处理长异常输入时避免重复回溯；自定义正则来自可信配置，不直接接收外部用户提交的模式。
+HTML 清洗用于提取文本。标签属性中带引号的 `>` 会随标签一起移除，普通比较表达式 `x < 2 and y > 3` 保留。结果用于 HTML 渲染时仍需使用 UI 的安全渲染机制。自定义正则来自可信配置。
 
 清洗选项见下表；这些是调用参数，不写入独立配置文件。
 
 > 安全提示：`customReplacements` 与 `mode: 'custom'` 的 `separator` 会作为正则使用。仅传入受信任、已审查的模式；不要把用户输入直接拼进正则，避免 ReDoS 或意外大范围替换。
 
+<a id="clean-options"></a>
+
 #### 清洗参数
 
-| 参数                             | 默认值/必填 | 说明                                                     |
-| ---------------------------------- | ----------- | -------------------------------------------------------- |
-| `removeHtml`                       | `true`      | 移除 HTML 标签                                           |
-| `removeUrls`                       | `false`     | 移除 URL                                                 |
-| `removeEmails`                     | `false`     | 移除 Email 地址                                          |
-| `normalizeWhitespace`              | `true`      | 标准化空白字符（多空格→单空格、去掉多余空行，默认 true） |
-| `trim`                             | `true`      | 去除首尾空白                                             |
-| `customReplacements`               | 可省略      | 传入需匹配的文字或正则，以及替换文本。按数组顺序处理     |
-| `customReplacements[].pattern`     | 必填        | 匹配项，支持正则表达式对象及正则格式字符串               |
-| `customReplacements[].replacement` | 必填        | 替换得到的字符串                                         |
+可以省略整个 `options`，也可以只填要覆盖的字段。模块依次去 HTML 标签、去 URL、去邮箱、自定义替换、整理空白、去首尾空白，各步骤按选项执行。
+
+| 字段 | 类型 | 默认值或必填条件 | 效果 |
+| --- | --- | --- | --- |
+| `removeHtml` | `boolean` | `true` | 移除 HTML 标签，保留标签内的文字。 |
+| `removeUrls` | `boolean` | `false` | 移除匹配的 `http://` 和 `https://` 地址。 |
+| `removeEmails` | `boolean` | `false` | 移除匹配的邮箱地址。 |
+| `normalizeWhitespace` | `boolean` | `true` | 合并连续空格或 Tab，将连续三个及以上的 `\n` 压为两个。 |
+| `trim` | `boolean` | `true` | 去掉整段文本首尾的空白。 |
+| `customReplacements` | `{ pattern: string, replacement: string }[]` | 可省略 | 按数组顺序执行。省略或传空数组时跳过替换。 |
+| `customReplacements[].pattern` | `string` | 每条规则必填 | 可信配置提供的正则字符串，模块用 `g` 标志匹配所有位置。 |
+| `customReplacements[].replacement` | `string` | 每条规则必填 | 替换文本。`$1` 引用第一组捕获，`''` 删除匹配内容。 |
+
+#### 场景：用 `customReplacements` 统一工单编号
+
+把两处 `Ticket` 编号改写成 `Case #编号`，再删除末尾的 `[draft]`。正则写在 TypeScript 字符串中，因此 `\d` 写成 `\\d`，字面量方括号也要转义。
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+// 输入工单编号和草稿标记。成功时 data 是替换后的正文，规则写错时读取 error.code。
+const result = datapipe.clean('Ticket 120; Ticket 345 [draft]', {
+  customReplacements: [
+    { pattern: 'Ticket\\s+(\\d+)', replacement: 'Case #$1' },
+    { pattern: '\\s*\\[draft\\]$', replacement: '' },
+  ],
+})
+if (result.success) result.data // 'Case #120; Case #345'
+else result.error.code // 正则格式错误时为 'hai:datapipe:005'
+```
 
 <a id="chunking"></a>
 
@@ -104,7 +126,7 @@ HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `datapipe.chunk(text, options)` | 按句、段、标题等边界拆分文本 | 必填 `text` 和 `options.mode`。每块的 `maxSize` 默认 `1500`，`overlap` 默认 `0` | `HaiResult<DataChunk[]>`。空白文本返回空数组 | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
+| `datapipe.chunk(text, options)` | 按句、段、标题等边界拆分文本 | `text: string` 是将要分块的原始正文。`options: ChunkOptionsInput` 决定单位、边界和每块大小，两者必填，见[分块参数](#chunk-options)。 | `HaiResult<DataChunk[]>`。选项有效时，空白文本返回空数组 | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
 #### 场景：按大小拆分文档
 
@@ -134,18 +156,60 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 
 `word` 模式以空白字符分词，一串未用空白分隔的中文可能计为一个词。其他模式按 Unicode 码点计数，例如一个常见表情符号通常计为一个码点。单块上限包含分隔符和重叠内容。优先在句子、段落、分页符或指定的分隔位置切开。若一个自然段就已超过上限，则在段内逐步切分。
 
-原始空白、标点和分隔符保留，可去掉重叠部分后拼回原文。Markdown 各节之间无重叠，代码块里的 `#` 仍是正文。设置 `markdownKeepTitle: false` 时会主动省掉标题。空文本或全空白返回空数组。使用 `custom` 模式时，将已经检查过的正则作为分隔符，非法正则返回 `CHUNK_FAILED`。
+原始空白、标点和分隔符保留，可去掉重叠部分后拼回原文。Markdown 各节之间无重叠，代码块里的 `#` 仍是正文。`markdownKeepTitle: false` 只省掉标题行，支持 LF、CRLF 和 CR 换行。配置有效时，空文本或全空白返回空数组。`custom` 的分隔符也在空输入时校验，非法正则返回 `CHUNK_FAILED`。
+
+一次分块最多返回 100,000 块。所有块正文和随块返回的 Markdown 标题合计最多 16,777,216 个 UTF-16 代码单元，重叠内容按每次出现计入。任一上限超出时返回 `CHUNK_LIMIT_EXCEEDED`，调用方可减小重叠或分批处理原文。`maxSize` 和 `overlap` 继续使用各模式的计量单位。
+
+<a id="chunk-options"></a>
 
 #### 分块参数
 
-| 参数              | 默认值/必填       | 说明                                                                                                                                  |
-| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`              | 必填              | 按句子、段落、Markdown、页、词、字符或自定义正则分块。可选 `sentence`、`paragraph`、`markdown`、`page`、`word`、`character`、`custom` |
-| `maxSize`           | `1500`            | 每块上限包含 overlap/分隔符；word 按非空白词，其他按 Unicode code point，默认 1500。正整数                                            |
-| `overlap`           | `0`               | 重叠使用与 maxSize 相同的单位，必须严格小于 maxSize。非负整数                                                                         |
-| `separator`         | `custom` 模式必填 | 自定义正则分隔符，由可信调用方提供                                                                                                    |
-| `markdownMinLevel`  | `2`               | Markdown 标题分割深度（1-6，默认 2，即 # 和 ## 作为分块边界；设为 3 则 ### 也作为分块边界）。可填整数，1–6                            |
-| `markdownKeepTitle` | `true`            | 是否保留 Markdown 标题在分块内容中                                                                                                    |
+| 字段 | 类型 | 默认值或必填条件 | 效果 |
+| --- | --- | --- | --- |
+| `mode` | `ChunkMode` | 必填 | 选择 `sentence`、`paragraph`、`markdown`、`page`、`word`、`character` 或 `custom`。 |
+| `maxSize` | 正整数 | `1500` | 单块上限，含重叠和分隔符。`word` 按非空白词数计，其余按 Unicode 码点计。 |
+| `overlap` | 非负整数 | `0` | 将前一块末尾带入下一块。单位同 `maxSize`，且必须小于 `maxSize`。 |
+| `separator` | `string` | `custom` 模式必填且不能为空 | 可信正则字符串。优先在匹配末尾切分，分隔符留在结果中。 |
+| `markdownMinLevel` | `1` 至 `6` 的整数 | `2` | 仅用于 `markdown`。`2` 将 `#` 和 `##` 当作分节边界，`3` 还会按 `###` 分节。 |
+| `markdownKeepTitle` | `boolean` | `true` | 仅用于 `markdown`。`false` 省去用作分节边界的标题行，`metadata.title` 仍保留标题名称。 |
+
+#### 场景：用 `separator` 或 `overlap` 控制切分位置
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+// 优先在字面量 || 后切分，每块最多 7 个码点。成功时分隔符还在块内，失败时读取 error.code。
+const separated = datapipe.chunk('alpha||beta||gamma', {
+  mode: 'custom', separator: '\\|\\|', maxSize: 7,
+})
+if (separated.success) separated.data.map(chunk => chunk.content) // ['alpha||', 'beta||', 'gamma']
+else separated.error.code
+
+// 每块最多 3 个码点，下一块带入 1 个码点。成功时两块共享“乙”，失败时读取 error.code。
+const overlapping = datapipe.chunk('甲😀乙丙丁', { mode: 'character', maxSize: 3, overlap: 1 })
+if (overlapping.success) overlapping.data.map(chunk => chunk.content) // ['甲😀乙', '乙丙丁']
+else overlapping.error.code
+```
+
+#### 场景：选择 Markdown 标题深度和是否保留标题行
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+const text = '# Guide\nIntro.\n### Details\nSteps.'
+// 默认深度 2，只识别 Guide，省去该标题行。成功时 ### Details 留在正文，失败时读取 error.code。
+const main = datapipe.chunk(text, { mode: 'markdown', markdownKeepTitle: false })
+if (main.success) main.data.map(chunk => chunk.content) // ['Intro.\n### Details\nSteps.']
+else main.error.code
+
+// 深度设为 3。成功时得到两节正文，标题仍在 metadata.title 中，失败时读取 error.code。
+const detailed = datapipe.chunk(text, { mode: 'markdown', markdownMinLevel: 3, markdownKeepTitle: false })
+if (detailed.success) {
+  detailed.data.map(chunk => chunk.content) // ['Intro.\n', 'Steps.']
+  detailed.data.map(chunk => chunk.metadata?.title) // ['Guide', 'Details']
+}
+else detailed.error.code
+```
 
 <a id="text-import-guide"></a>
 
@@ -155,18 +219,18 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 
 Node 的 `pipeline.run()` 会把达到 128 Ki 个 UTF-16 代码单元的正文交给 Worker 连续执行内置清洗和分块。自定义 `transform` 与 `chunkTransform` 仍由调用方执行，短文本直接计算。队列满时返回管线失败。
 
-先登记清洗、文本转换、分块和分块筛选，再对每份输入执行 run；登记步骤不会立即处理数据。
+先登记清洗、文本转换、分块和分块筛选，再对每份输入执行 `run`。每次 `run` 在开始时固定步骤列表，期间登记的新步骤从下一次调用生效。长短文本使用相同的选项校验和错误顺序。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `datapipe.pipeline()` | 创建独立处理管线 | 无 | `PipelineBuilder` | `const pipeline = datapipe.pipeline()` |
-| `pipeline.clean(options?)` | 登记清洗步骤 | 清洗参数；默认值同 clean | 同一构造器 | `pipeline.clean({ removeHtml: true })` |
-| `pipeline.transform(fn)` | 登记文本转换 | 同步或异步的字符串转换函数 | 同一构造器 | `pipeline.transform(text => text.toLowerCase())` |
-| `pipeline.chunk(options)` | 登记分块步骤 | 必填 mode；其余默认值同 chunk | 同一构造器 | `pipeline.chunk({ mode: "word", maxSize: 1 })` |
-| `pipeline.chunkTransform(fn)` | 登记分块转换 | 同步或异步的分块数组转换函数 | 同一构造器 | `pipeline.chunkTransform(parts => parts.filter(p => p.content.trim() !== "beta"))` |
-| `pipeline.run(text)` | 依序执行已登记步骤 | 原文字符串 | `Promise<HaiResult<PipelineResult>>`；步骤失败时返回失败 | `await pipeline.run("<p>ALPHA BETA GAMMA</p>")` |
+| `pipeline.clean(options?)` | 登记清洗步骤 | `options: CleanOptionsInput` 控制此步骤怎样清洗当前正文，省略时按[清洗参数](#clean-options)的默认值执行。 | 同一构造器，校验失败由 `run` 返回 | `pipeline.clean({ removeHtml: true })` |
+| `pipeline.transform(fn)` | 登记文本转换 | `fn` 必填。接收当前正文 `string`，返回新的 `string` 或 `Promise<string>` | 同一构造器。回调抛错或拒绝时，`run` 返回 `TRANSFORM_FAILED` | `pipeline.transform(text => text.toLowerCase())` |
+| `pipeline.chunk(options)` | 登记分块步骤 | `options: ChunkOptionsInput` 必填，决定本步骤怎样拆分到达这一环节的正文。字段见[分块参数](#chunk-options)。 | 同一构造器，校验失败由 `run` 返回 | `pipeline.chunk({ mode: "word", maxSize: 1 })` |
+| `pipeline.chunkTransform(fn)` | 登记分块转换 | `fn` 必填。接收现有 `DataChunk[]`，返回 `DataChunk[]` 或 `Promise<DataChunk[]>`。当前分块为空时跳过回调 | 同一构造器。回调抛错或拒绝时，`run` 返回 `PIPELINE_FAILED` | `pipeline.chunkTransform(parts => parts.filter(p => p.content.trim() !== "beta"))` |
+| `pipeline.run(text)` | 依序执行已登记步骤 | `text: string` 必填，传入原始正文 | `Promise<HaiResult<PipelineResult>>`，步骤失败时返回错误 | `await pipeline.run("<p>ALPHA BETA GAMMA</p>")` |
 
 #### 场景：组合可复用处理步骤
 
@@ -174,7 +238,7 @@ Node 的 `pipeline.run()` 会把达到 128 Ki 个 UTF-16 代码单元的正文�
 
 ![pipeline.run：按声明顺序处理文本和分块](../images/function-datapipe-pipeline.svg)
 
-正文与 chunks 是两份不同状态：transform 改正文，chunk 按当时的正文生成分块，chunkTransform 只改已有分块。分块后再 transform 不会重新计算 chunks；任一步失败立即返回失败，不继续后续步骤。没有 chunk 步骤时，chunks 仍为空。
+正文与 chunks 是两份不同状态。`transform` 改正文，`chunk` 按当时的正文生成分块，`chunkTransform` 只改已有分块。成功时 `text` 含全部步骤执行后的正文。分块后再执行正文转换，已有分块仍来自原先的正文。任一步失败立即返回失败。没有 `chunk` 步骤时，`chunks` 为空。
 
 ```ts
 // 无参数创建可复用构建器，下面的调用只登记步骤。
@@ -204,7 +268,7 @@ result.data.chunks.map(part => part.content) // ['alpha ', 'gamma']
 清洗、分块和管线执行返回领域结果，以 `result.success` 区分成功与失败。管线步骤构造器直接返回构造器本身。错误码为字符串格式 `hai:datapipe:NNN`。
 
 ```ts
-import { HaiDatapipeError } from '@h-ai/datapipe'
+import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
 // 对示例句选择 custom 模式但省略 separator，本次返回失败 MISSING_SEPARATOR，无分块数据。
 const result = datapipe.chunk('A sample sentence.', { mode: 'custom' }) // 缺少分隔符，返回 MISSING_SEPARATOR。
@@ -217,7 +281,10 @@ if (!result.success) {
       // 配置参数校验失败
       break
     case HaiDatapipeError.CHUNK_FAILED.code:
-      // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
+      // 自定义正则等处理失败，记录错误并检查选项。
+      break
+    case HaiDatapipeError.CHUNK_LIMIT_EXCEEDED.code:
+      // 分块总量超出预算，减小重叠或分批处理。
       break
   }
 }

@@ -96,6 +96,33 @@ describe('chunk exact bounds and source preservation', () => {
     })
   })
 
+  it('markdown 按 CR、LF 和 CRLF 解析混合行尾，移除标题后正文保持原行尾', () => {
+    const result = datapipe.chunk('# First\rAlpha\r## Second\nBeta\r\n## Third\r\nGamma', {
+      mode: 'markdown',
+      markdownKeepTitle: false,
+    })
+    expect(result).toEqual({
+      success: true,
+      data: [
+        {
+          index: 0,
+          content: 'Alpha\r',
+          metadata: { title: 'First', level: 1 },
+        },
+        {
+          index: 1,
+          content: 'Beta\r\n',
+          metadata: { title: 'Second', level: 2 },
+        },
+        {
+          index: 2,
+          content: 'Gamma',
+          metadata: { title: 'Third', level: 2 },
+        },
+      ],
+    })
+  })
+
   it.each([0, 1, 2])('custom 零宽/捕获分隔符在 maxSize=%s 的合法部分不死循环或复制文本', (index) => {
     const separator = ['(?=.)', '(\\|+)', '$'][index]!
     const result = datapipe.chunk('😀A|||B  ', {
@@ -124,5 +151,49 @@ describe('chunk exact bounds and source preservation', () => {
         error: { code: HaiDatapipeError.CONFIG_ERROR.code },
       })
     }
+  })
+
+  it('即使输入是空白，也先返回非法自定义分隔符的错误', () => {
+    expect(datapipe.chunk(' \t\r\n', { mode: 'custom', separator: '[' })).toMatchObject({
+      success: false,
+      error: { code: HaiDatapipeError.CHUNK_FAILED.code },
+    })
+  })
+
+  it('块数恰好达到上限时成功，多一块时整个操作失败', () => {
+    const text = '甲'.repeat(100_000)
+    const options = { mode: 'character', maxSize: 1 } as const
+    const atLimit = datapipe.chunk(text, options)
+    if (!atLimit.success)
+      throw new Error(atLimit.error.message)
+    expect(atLimit.data).toHaveLength(100_000)
+    expect(datapipe.chunk(`${text}乙`, options)).toMatchObject({
+      success: false,
+      error: { code: HaiDatapipeError.CHUNK_LIMIT_EXCEEDED.code, httpStatus: 413 },
+    })
+  })
+
+  it('总输出预算按 UTF-16 代码单元计，即使词数仅一词也会检查', () => {
+    const text = '😀'.repeat(8_388_608)
+    const options = { mode: 'word', maxSize: 1 } as const
+    const atLimit = datapipe.chunk(text, options)
+    if (!atLimit.success)
+      throw new Error(atLimit.error.message)
+    expect(atLimit.data[0]?.content.length).toBe(16_777_216)
+    expect(datapipe.chunk(`${text}尾`, options)).toMatchObject({
+      success: false,
+      error: { code: HaiDatapipeError.CHUNK_LIMIT_EXCEEDED.code, httpStatus: 413 },
+    })
+  })
+
+  it('markdown 总预算跨章节累计每块携带的标题', () => {
+    const section = `# ${'Title'.repeat(200)}\n${'a'.repeat(9_000)}\n`
+    const options = { mode: 'markdown', maxSize: 1, markdownKeepTitle: false } as const
+    const firstOnly = datapipe.chunk(section, options)
+    expect(firstOnly.success).toBe(true)
+    expect(datapipe.chunk(section + section, options)).toMatchObject({
+      success: false,
+      error: { code: HaiDatapipeError.CHUNK_LIMIT_EXCEEDED.code, httpStatus: 413 },
+    })
   })
 })

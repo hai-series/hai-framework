@@ -5,5 +5,6 @@
   "datapipe_transformFailed": "テキストの変換に失敗しました: {error}",
   "datapipe_pipelineFailed": "パイプラインの実行に失敗しました: {error}",
   "datapipe_configError": "データパイプ設定の検証に失敗しました: {error}",
-  "datapipe_missingSeparator": "カスタム分割モードにはseparatorパラメーターが必要です"
+  "datapipe_missingSeparator": "カスタム分割モードにはseparatorパラメーターが必要です",
+  "datapipe_chunkLimitExceeded": "分割結果が上限を超えました。1 回の上限は {maxChunks} チャンクです。本文と Markdown 見出しを合わせて {maxCodeUnits} UTF-16 コード単位までです。"
 }

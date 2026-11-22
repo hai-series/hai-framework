@@ -1515,8 +1515,8 @@
     "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS",
     "module": "ai",
     "path": "ai.knowledge.cleanOptions",
-    "description": "默认文本清洗选项 字段含义与",
-    "value": "{\"removeHtml\":true,\"removeUrls\":false,\"removeEmails\":false,\"normalizeWhitespace\":true,\"trim\":true}",
+    "description": "默认文本清洗选项 字段含义遵循 Datapipe 的 CleanOptionsInput。 知识库默认关闭 normalizeWhitespace 和 trim，保留 Markdown 的行首缩进。",
+    "value": "{\"removeHtml\":true,\"removeUrls\":false,\"removeEmails\":false,\"normalizeWhitespace\":false,\"trim\":false}",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
@@ -1555,8 +1555,8 @@
     "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_NORMALIZEWHITESPACE",
     "module": "ai",
     "path": "ai.knowledge.cleanOptions.normalizeWhitespace",
-    "description": "标准化空白字符（多空格→单空格、去掉多余空行，默认 true）",
-    "value": "true",
+    "description": "合并多余空格和空行，知识库默认关闭以保留缩进。",
+    "value": "false",
     "constraint": "true | false"
   },
   {
@@ -1587,8 +1587,8 @@
     "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_TRIM",
     "module": "ai",
     "path": "ai.knowledge.cleanOptions.trim",
-    "description": "去除首尾空白（默认 true）",
-    "value": "true",
+    "description": "去除首尾空白，知识库默认关闭以保留文档开头的缩进。",
+    "value": "false",
     "constraint": "true | false"
   },
   {

@@ -164,8 +164,8 @@ export interface KnowledgeIngestInput {
   /**
    * 文本清洗选项（可选，覆盖全局配置默认值）
    *
-   * 字段含义与 @h-ai/datapipe CleanOptionsInput 完全一致，
-   * 支持 removeHtml、removeUrls、normalizeWhitespace、customReplacements 等。
+   * 字段含义与 @h-ai/datapipe CleanOptionsInput 一致。
+   * 知识库默认关闭 normalizeWhitespace 和 trim，调用时可以显式开启。
    */
   cleanOptions?: CleanOptionsInput
   /**
@@ -652,6 +652,7 @@ export interface KnowledgeOperations {
    * 导入文档
    *
    * 执行流程：clean → chunk → embed/实体准备 → 持久暂存 → 写入向量 → CAS 发布完整版本。
+   * 清洗或分块失败时返回 KNOWLEDGE_INGEST_FAILED，保留原始错误，不继续生成向量或发布。
    * 成功包含 revision 与 cleanupPending；旧数据清理失败时检查标志并安排 repair。
    *
    * @param input - 文档导入输入

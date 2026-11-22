@@ -20,7 +20,7 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 import { datapipeM } from './datapipe-i18n.js'
-import { runBuiltinSteps } from './datapipe-pipeline-builtins.js'
+import { normalizeBuiltinStep, runBuiltinSteps } from './datapipe-pipeline-builtins.js'
 import { HaiDatapipeError } from './datapipe-types.js'
 
 const pool = core.worker.createPool<PipelineJob, ReturnType<typeof runBuiltinSteps>>(
@@ -70,13 +70,41 @@ export function createPipelineBuilder(): PipelineBuilder {
       return builder
     },
 
-    run: (text: string) => runPipeline(steps, text),
+    run: (text: string) => runPipeline(steps.slice(), text),
   }
 
   return builder
 }
 
 // ─── 管线执行 ───
+
+/** 在宿主校验可传输选项，由 Worker 执行首次配置错误之前的步骤。 */
+async function runInWorker(batch: BuiltinStep[], text: string): Promise<ReturnType<typeof runBuiltinSteps>> {
+  const steps: BuiltinStep[] = []
+  let invalid: HaiResult<never> | undefined
+  for (const step of batch) {
+    const normalized = normalizeBuiltinStep(step)
+    if (!normalized.success) {
+      invalid = normalized
+      break
+    }
+    steps.push(normalized.data)
+  }
+  if (invalid && steps.length === 0)
+    return invalid
+
+  const computed = await pool.run({
+    steps,
+    text,
+    locale: core.i18n.getGlobalLocale(),
+  })
+  if (!computed.success)
+    return err(HaiDatapipeError.PIPELINE_FAILED, computed.error.message, computed.error)
+  // 配置错误前的步骤仍可产生更早的业务错误。
+  return computed.data.success && invalid
+    ? invalid
+    : computed.data
+}
 
 /**
  * 执行管线步骤
@@ -100,21 +128,10 @@ async function runPipeline(
       }
 
       // 小文本直接计算，避免线程调度和字符串克隆开销。
-      let result: ReturnType<typeof runBuiltinSteps>
       // eslint-disable-next-line node/prefer-global/process -- 此模块也可在浏览器直接运行纯计算。
-      if (currentText.length >= 128 * 1024 && globalThis.process?.versions?.node) {
-        const computed = await pool.run({
-          steps: batch,
-          text: currentText,
-          locale: core.i18n.getGlobalLocale(),
-        })
-        if (!computed.success)
-          return err(HaiDatapipeError.PIPELINE_FAILED, computed.error.message, computed.error)
-        result = computed.data
-      }
-      else {
-        result = runBuiltinSteps(batch, currentText)
-      }
+      const result = currentText.length >= 128 * 1024 && globalThis.process?.versions?.node
+        ? await runInWorker(batch, currentText)
+        : runBuiltinSteps(batch, currentText)
       if (!result.success)
         return result
       currentText = result.data.text

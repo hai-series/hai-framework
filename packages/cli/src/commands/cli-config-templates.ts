@@ -576,9 +576,9 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
 #     removeHtml: true
 #     removeUrls: false
 #     removeEmails: false
-#     normalizeWhitespace: true
-#     trim: true
-#     customReplacements:
+#     normalizeWhitespace: false # 保留 Markdown 行首缩进
+#     trim: false # 保留整篇正文的首尾空白
+#     customReplacements: # 可选规则示例。需要保留制表符缩进时省略此规则
 #       - pattern: '\\t+'
 #         replacement: ' '
 #   chunkOptions:

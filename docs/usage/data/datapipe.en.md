@@ -34,6 +34,19 @@ Clean input and split it into smaller pieces for retrieval or model input. Datap
 
 With three characters per chunk and one repeated character, abcdef becomes abc, cde, ef. index starts at zero.
 
+### Heading metadata on Markdown chunks
+
+This is `data` from a successful `datapipe.chunk` call. The source is `# Q\r\nabcdef`, with Markdown mode, a maximum of four code points per chunk, and heading text omitted from the chunk bodies.
+
+```json
+[
+  { "index": 0, "content": "abcd", "metadata": { "title": "Q", "level": 1, "subChunk": true } },
+  { "index": 1, "content": "ef", "metadata": { "title": "Q", "level": 1, "subChunk": true } }
+]
+```
+
+Both chunks belong to the level 1 heading `Q`. `subChunk` indicates that the section produced multiple chunks and is omitted for a single chunk. Text before any heading has an empty title and level `0`.
+
 ## Field, storage and cleanup reference
 
 ### Database and cache
@@ -42,4 +55,4 @@ Datapipe creates no SQL tables, Redis keys, or disk cache. A call returns the pr
 
 ### Input and output
 
-Text, chunks, and metadata used during processing live in the current invocation. The application can keep returned content and any source information it has, such as the URL, file name, or content type. For deduplication or history across calls, store, compare, and clean up results in the application.
+`PipelineResult.text` contains the text after all steps. `chunks` comes from the most recent chunk step and can be changed by subsequent chunk transforms. The calling application can associate its own source URL, file name, or content type with the result and manage deduplication and history across calls.

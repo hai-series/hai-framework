@@ -11,24 +11,101 @@ import type { CleanOptionsInput } from './datapipe-config.js'
 import { err, ok } from '@h-ai/core'
 
 import { CleanOptionsSchema } from './datapipe-config.js'
-import { datapipeM } from './datapipe-i18n.js'
+import { datapipeConfigError, datapipeM } from './datapipe-i18n.js'
 import { HaiDatapipeError } from './datapipe-types.js'
 
-/** 按首个闭合符提取文本；仅用于清洗，不代替渲染 HTML 前的安全消毒。 */
+const HTML_TAG_OPEN = /<(\/?)[a-z][\w.:-]*/iy
+const HTML_DOCTYPE = /<!doctype[\t\n\f\r ]+html[\t\n\f\r ]*>/iy
+const HTML_SPACE = /[\t\n\f\r ]*/y
+
+const HTML_ATTRIBUTE_NAME = /[^\t\n\f\r \0"'<>/=]+/y
+
+const HTML_ATTRIBUTE_VALUE = /[^\t\n\f\r \0"'`=<>]+/y
+
+function skipHtmlSpace(text: string, offset: number): number {
+  HTML_SPACE.lastIndex = offset
+  HTML_SPACE.test(text)
+  return HTML_SPACE.lastIndex
+}
+
+/** 扫到下一个解析位置。无效标签原样保留，可在未加引号的下一个开头处恢复。 */
+function scanHtmlTag(text: string, start: number): { next: number, complete: boolean } {
+  if (text.startsWith('<!', start)) {
+    HTML_DOCTYPE.lastIndex = start
+    if (HTML_DOCTYPE.test(text))
+      return { next: HTML_DOCTYPE.lastIndex, complete: true }
+  }
+  HTML_TAG_OPEN.lastIndex = start
+  const opening = HTML_TAG_OPEN.exec(text)
+  if (!opening)
+    return { next: start + 1, complete: false }
+
+  const closing = opening[1] === '/'
+  let cursor = HTML_TAG_OPEN.lastIndex
+  while (cursor < text.length) {
+    const attributeStart = skipHtmlSpace(text, cursor)
+    if (text[attributeStart] === '>')
+      return { next: attributeStart + 1, complete: true }
+    if (closing)
+      return { next: attributeStart, complete: false }
+    if (text.startsWith('/>', attributeStart))
+      return { next: attributeStart + 2, complete: true }
+    if (attributeStart === cursor)
+      return { next: cursor, complete: false }
+
+    HTML_ATTRIBUTE_NAME.lastIndex = attributeStart
+    if (!HTML_ATTRIBUTE_NAME.test(text))
+      return { next: attributeStart, complete: false }
+
+    cursor = HTML_ATTRIBUTE_NAME.lastIndex
+    const equals = skipHtmlSpace(text, cursor)
+    if (text[equals] !== '=')
+      continue
+
+    const valueStart = skipHtmlSpace(text, equals + 1)
+    const quote = text[valueStart]
+    if (quote === '"' || quote === '\'') {
+      const valueEnd = text.indexOf(quote, valueStart + 1)
+      if (valueEnd < 0)
+        return { next: text.length, complete: false }
+      cursor = valueEnd + 1
+    }
+    else {
+      HTML_ATTRIBUTE_VALUE.lastIndex = valueStart
+      if (!HTML_ATTRIBUTE_VALUE.test(text))
+        return { next: valueStart, complete: false }
+      cursor = HTML_ATTRIBUTE_VALUE.lastIndex
+    }
+  }
+  return { next: cursor, complete: false }
+}
+
+/** 移除完整标签和注释，保留正文；结果不能用于 HTML 渲染时的安全消毒。 */
 function stripHtmlTags(text: string): string {
   const parts: string[] = []
   let cursor = 0
+  let retained = 0
   while (cursor < text.length) {
     const start = text.indexOf('<', cursor)
     if (start < 0)
       break
-    const end = text.indexOf('>', start + 1)
-    if (end < 0)
-      break
-    parts.push(text.slice(cursor, start))
-    cursor = end + 1
+    if (text.startsWith('<!--', start)) {
+      const end = text.indexOf('-->', start + 4)
+      if (end < 0)
+        break
+      parts.push(text.slice(retained, start))
+      cursor = end + 3
+      retained = cursor
+      continue
+    }
+    const tag = scanHtmlTag(text, start)
+    cursor = tag.next
+    if (tag.complete) {
+      parts.push(text.slice(retained, start))
+      retained = cursor
+    }
   }
-  parts.push(text.slice(cursor))
+  parts.push(text.slice(retained))
   return parts.join('')
 }
 
@@ -70,11 +147,8 @@ const MULTI_SPACE_REGEX = /[ \t]{2,}/g
  */
 export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<string> {
   const parseResult = CleanOptionsSchema.safeParse(options ?? {})
-  if (!parseResult.success) {
-    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
-      params: { error: parseResult.error.message },
-    }), parseResult.error)
-  }
+  if (!parseResult.success)
+    return datapipeConfigError(parseResult.error)
 
   const opts = parseResult.data
   let result = text

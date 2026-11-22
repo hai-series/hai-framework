@@ -24,9 +24,9 @@ describe('datapipe.clean', () => {
     expect(performance.now() - start).toBeLessThan(1000)
   })
 
-  it('标签清洗保留原有对空标签、嵌套开头及未闭合内容的行为', () => {
+  it('只移除完整标签，保留空标签符号、相邻开头及未闭合文本', () => {
     const result = datapipe.clean('<>a<<b>>c<unclosed')
-    expect(result).toMatchObject({ success: true, data: 'a>c<unclosed' })
+    expect(result).toMatchObject({ success: true, data: '<>a<>c<unclosed' })
   })
   // ─── HTML 移除 ───
 
@@ -47,6 +47,17 @@ describe('datapipe.clean', () => {
       const result = datapipe.clean('<div><ul><li>Item</li></ul></div>')
       expect(result.success).toBe(true)
       expect(result.data).toBe('Item')
+    })
+
+    it('完整移除带引号属性、HTML doctype 和注释的标记', () => {
+      const result = datapipe.clean(`<!DOCTYPE html><p title="a > b" data-tag='<code>'>Report</p><!-- 7 > 3 -->`)
+      expect(result).toMatchObject({ success: true, data: 'Report' })
+    })
+
+    it('保留比较表达式和含未闭合属性的文本片段', () => {
+      const text = '2 < 3 && 7 > 5，3<5>2，未闭合片段 <label title="a > b'
+      const result = datapipe.clean(`<section>${text.slice(0, text.indexOf('，未'))}</section>${text.slice(text.indexOf('，未'))}`)
+      expect(result).toMatchObject({ success: true, data: text })
     })
 
     it('removeHtml=false 保留 HTML', () => {

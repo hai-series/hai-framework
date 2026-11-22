@@ -45,6 +45,8 @@ acp:
 
 ## ナレッジの取り込み
 
-`knowledge.collection`（既定は `hai_ai_knowledge`）を指定し、埋め込みモデルに合った次元（既定は `1536`）を設定します。入力は `knowledge.cleanOptions` で整形した後、`knowledge.chunkOptions` で分割します。既定では Markdown の節で分割し、サイズは `1500`、重複は `200` です。登録前に調整し、既存の分割結果を変更する場合は再インデックスします。[Datapipe の設定](datapipe.ja.md)
+`knowledge.collection`（既定は `hai_ai_knowledge`）を指定し、埋め込みモデルに合った次元（既定は `1536`）を設定します。入力は `knowledge.cleanOptions` で整形した後、`knowledge.chunkOptions` で分割します。既定では Markdown の節で分割し、サイズは `1500`、重複は `200` です。登録前に調整し、既存の分割結果を変更する場合は再インデックスします。
+
+たとえば、`config/_ai.yml` で `knowledge.cleanOptions.removeEmails` を `true` にすると、メールアドレスを除去します。`normalizeWhitespace` と `trim` の既定値は引き続き `false` です。Markdown のコード行の先頭にある四つの空白が保持されるため、その行の `#` はコードの一部として扱われます。プレーンテキストの空白を整形する場合は、両方の設定を有効にできます。Datapipe を直接呼び出す場合、両方の既定値は `true` です。整形または分割に失敗すると、埋め込みを生成する前に取り込みを中止します。[Datapipe の引数](../function/datapipe.ja.md#call-options) · [ナレッジの取り込み例](../function/ai.ja.md#knowledge)
 
 未翻訳：モデルプロファイル、MCP、ACP の全設定一覧。[中国語の該当節](ai.md#configuration-fields)を参照してください。
