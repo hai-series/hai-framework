@@ -1,4 +1,4 @@
-/** 浏览器子入口提供音频客户端和录音转换，旧 HTTP/SSE 绑定不可达。 */
+/** 浏览器子入口提供音频客户端、录音管理和 WAV 转换，旧 HTTP/SSE 绑定不可达。 */
 import * as client from '@h-ai/ai/client'
 import { describe, expect, it } from 'vitest'
 
@@ -20,8 +20,8 @@ export type NoAccumulator = typeof import('@h-ai/ai/client').collectStreamConten
 export type NoPlaceholder = typeof import('@h-ai/ai/client').createUnconfiguredAudioClient
 
 describe('published client exports', () => {
-  it('exports the standalone audio factory and recorder conversion', () => {
-    expect(Object.keys(client)).toEqual(['blobToWav', 'createAudioClient'])
+  it('exports the audio client, recorder and WAV conversion', () => {
+    expect(Object.keys(client)).toEqual(['blobToWav', 'createAudioClient', 'createAudioRecorder'])
     const operations = client.createAudioClient({
       url: 'wss://audio.example.com/api/v1/ai/audio',
       getTicket: () => 'test-only-ticket',
