@@ -1,7 +1,7 @@
 {
   "name": "agent",
   "type": "module",
-  "version": "1.0.0-beta.34",
+  "version": "1.0.0-beta.35",
   "private": true,
   "description": "Hai Framework multi-user agent workspace.",
   "keywords": [
