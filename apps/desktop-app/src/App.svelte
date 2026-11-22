@@ -7,6 +7,7 @@
 <script lang='ts'>
   import { Button, ToastContainer, useToastFeedback } from '@h-ai/ui'
   import { onMount } from 'svelte'
+  import DesktopUpdateEntry from '../../../packages/cli/templates/shared/desktop-update/DesktopUpdateEntry.svelte'
   import {
     hasPermission,
     isAuthenticated,
@@ -97,3 +98,4 @@
 {/if}
 
 <ToastContainer />
+<DesktopUpdateEntry message={m} />

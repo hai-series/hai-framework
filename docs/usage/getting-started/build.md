@@ -113,4 +113,60 @@ Android 容器构建先在宿主按同一优先级解析名称和所选模式，
 
 发布仍排除开发热更新地址并核对实际新产物；Windows 依赖目录不能代替 Linux 镜像输入。
 
+<a id="desktop-updates"></a>
+
+### 桌面应用更新
+
+桌面示例和新生成的 Fullstack Desktop 可以为 Linux x64 AppImage 和 Windows x64 NSIS 正式包启用更新，默认关闭。启用后，应用启动时检查一次，有新版才提示。登录前也可以从「关于」查看当前版本和手动检查。用户可稍后再装，确认「下载并安装」后才会下载安装包。先保存工作，Linux AppImage 安装完可点「立即重启」，Windows 在安装时会关闭应用。重新打开后核对版本。
+
+![Linux 桌面示例升级并重启后，「关于」显示 1.0.1 和「已是最新版」](../images/desktop-update-linux.png)
+
+以 Linux x64 上的 Fullstack 工程 `orders` 从 `1.2.0` 升到 `1.3.0` 为例。以下命令均在工程根运行。Windows 在 PowerShell 中使用 `pnpm.cmd`。
+
+1. 为这个应用生成专用的 Tauri 更新签名密钥。将命令里的路径换成项目外已创建的受保护目录。保留私钥及密码供后续版本签名，应用端只需要 `.pub` 文件的内容。
+
+   ```sh
+   # 生成 orders.key 和 orders.key.pub。后续签名使用同一私钥。
+   pnpm --filter orders-desktop tauri signer generate -w "$HOME/release-secrets/orders.key"
+   ```
+
+2. 把以下字段合并到 `apps/orders-desktop/src-tauri/tauri.linux.conf.json`。Windows 使用同目录的 `tauri.windows.conf.json`。将 `pubkey` 换成 `.pub` 文件的内容，并设置更新清单的 HTTPS 地址，地址不能包含凭据、查询参数或片段。配置随原生包交付，后续版本沿用相同的 Tauri `identifier`、更新源和公钥。`requireSignedVersion` 要求签名中记录的版本与清单版本一致。 清单和安装包的跳转也必须使用 HTTPS。
+
+   ```json
+   {
+     "plugins": {
+       "updater": {
+         "endpoints": ["https://releases.example.com/orders/linux/latest.json"],
+         "pubkey": "REPLACE_WITH_PUBLIC_KEY_CONTENT",
+         "requireSignedVersion": true
+       }
+     }
+   }
+   ```
+
+3. 将工程根 `package.json.version` 改为 `1.3.0`，在目标系统打包。CLI 会打印本批次归档路径。Linux 将 `.AppImage` 复制到发布目录准备签名。Windows 改用 `--platform windows`，取 `*-setup.exe`，先完成所需的 Windows 代码签名。保留 `bundle.createUpdaterArtifacts` 的默认关闭状态，在单独的签名步骤通过 `TAURI_SIGNING_PRIVATE_KEY` 和（如有密码）`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 注入私钥及密码。
+
+   ```sh
+   # 用根 package.json 的版本生成 Linux x64 桌面包，失败时停止发布。
+   pnpm build --target desktop --platform linux --arch x64
+   # 对复制到发布目录的 AppImage 签名，生成相邻的 .AppImage.sig 文件。
+   pnpm --filter orders-desktop tauri signer sign --app-version 1.3.0 "$HOME/release/orders-linux-x64-release-1.3.0.AppImage"
+   ```
+
+4. 将发布文件上传到该平台和版本独有的 HTTPS 地址，再将 `latest.json` 发布到第二步配置的地址。将示例中的 `signature` 替换成这次生成的 `.sig` 文件内容。Windows 使用独立的发布目录和清单地址，例如 `https://releases.example.com/orders/windows/latest.json`，用 `windows-x86_64` 记录 NSIS 地址及签名。共用清单时，在发布前合并同一版本的两个平台条目。用户确认后，应用下载文件、验签并安装。查看 [Tauri 更新清单格式](https://v2.tauri.app/plugin/updater/#static-json-file)。
+
+   ```json
+   {
+     "version": "1.3.0",
+     "platforms": {
+       "linux-x86_64": {
+         "url": "https://releases.example.com/orders/linux/1.3.0/orders-linux-x64-release-1.3.0.AppImage",
+         "signature": "REPLACE_WITH_SIGNATURE_FILE_CONTENT"
+       }
+     }
+   }
+   ```
+
+在隔离的目标环境启动配置了相同更新源与公钥的 `1.2.0`。Linux AppImage 放到当前用户可写的目录，添加执行权限后直接启动。Windows 先用 NSIS 安装旧版。用测试地址演练稍后处理、下载安装、重开后版本变为 `1.3.0`，以及已经是最新版本、网络不可用、缺少目标平台制品和签名或签名版本不匹配等分支。示例应用还可以用仓库的 [Desktop update package](../../../.github/workflows/desktop-update.yml) 手动生成发布文件、签名和清单。
+
 交付前检查目标架构、镜像校验和、用户流程与持久数据；原生需真实设备验收。准备好制品后进入[发布运行章节](../operations/README.md)。

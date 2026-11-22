@@ -54,6 +54,7 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 - 静态客户端通过 runtime-config.js 或原生宿主初始化脚本获取公开地址与元数据；仅投影公开白名单，禁止将完整 process.env、服务配置或密钥序列化到浏览器。预览与容器启动均须验证真实登录，不能依赖构建期 API 地址让 E2E 通过。
 - Fullstack Capacitor App 在 `public/runtime-config.js` 提供公开 API 地址，再编译并同步原生资源；Tauri 从启动进程的 PUBLIC_API_BASE 注入。不能把开发代理的 .env 配置当作已安装原生包的运行配置。
 - `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` 调用对应工程的 Tauri build。要求在目标系统准备 Rust target、SDK 和打包工具，不假定跨系统编译。原生安装包必须按目标系统实测。
+- 桌面应用内更新默认关闭，可为 Linux x64 AppImage 和 Windows x64 NSIS 正式包配置 `plugins.updater` 的 HTTPS 清单地址、公钥和 `requireSignedVersion: true`。遵循桌面工作区 README，单独用 `tauri signer sign --app-version` 签名本批发布文件，私钥只传入签名步骤。先发布版本化文件，再发布含同一版本及签名的清单。用户确认后下载安装，在目标系统上重开应用核对结果。
 - deploy 默认消费已有产物，--build 显式先构建。工程已交付 `hai-deploy` 时按需读取该技能；已有工程的通用 AI 支持不假定已安装部署工具，先核对实际 scripts 与依赖。网络不通时 --bundle-only 默认生成 tar.gz（显式--output release.tar保留未压缩格式），按说明手工搬运；packaged 不代表部署已运行。
 - 测试临时工程、镜像、容器、辅助进程和数据必须在 finally/teardown 自动清理，失败/取消也清理；日志、截图和报告保留到分析和交付结束再清理，不得提交测试产物或删除用户既有资源。
 - 浏览器测试的数据放入本轮独立临时目录；Windows 等子进程与服务退出后再删除数据库和上传文件，不依赖下一轮测试补清理。

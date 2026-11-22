@@ -321,6 +321,9 @@ catalogs:
     '@tailwindcss/vite':
       specifier: ^4.3.5
       version: 4.3.5
+    '@tauri-apps/api':
+      specifier: 2.12.4
+      version: 2.12.4
     '@tauri-apps/cli':
       specifier: ^2.12.4
       version: 2.12.4
@@ -330,6 +333,9 @@ catalogs:
     '@tauri-apps/plugin-fs':
       specifier: ^2.7.1
       version: 2.7.1
+    '@tauri-apps/plugin-updater':
+      specifier: 2.14.1
+      version: 2.14.1
     '@types/better-sqlite3':
       specifier: ^9.6.0
       version: 9.6.0
@@ -1155,6 +1161,12 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@tauri-apps/api':
+        specifier: 'catalog:'
+        version: 2.12.4
+      '@tauri-apps/plugin-updater':
+        specifier: 'catalog:'
+        version: 2.14.1
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -5093,6 +5105,9 @@ packages:
 
   '@tauri-apps/plugin-fs@2.7.1':
     resolution: {integrity: sha512-4TBVjpi/q8PuNzjpkAc2iBGXMTLjOrAyfTiiOL8ORaJCZJRG3tjzmQ4sqs2CMG75FvLyRkOkERfP7AyY4iBNwQ==}
+
+  '@tauri-apps/plugin-updater@2.14.1':
+    resolution: {integrity: sha512-Hr7nlBm1wT6xbwzjZ/S36YULazu8MNlj5vvOwMl47fXI7HTa5Bjl1PbDEwVHaZTAKzE1VZsUy35UqnbrQxmYQw==}
 
   '@turbo/darwin-64@2.11.10':
     resolution: {integrity: sha512-By4idRap5+nLnMuRzLB4qkOPRlvNdyY1ne4VJYDyUoUB11H94k7uif9mbe3JT8JSNXs1D68uMcBj6hJ/jMQRvA==}
@@ -12387,6 +12402,10 @@ snapshots:
       '@tauri-apps/api': 2.12.4
 
   '@tauri-apps/plugin-fs@2.7.1':
+    dependencies:
+      '@tauri-apps/api': 2.12.4
+
+  '@tauri-apps/plugin-updater@2.14.1':
     dependencies:
       '@tauri-apps/api': 2.12.4
 

@@ -68,4 +68,60 @@ The default is a release. `--debug` selects a debug build. Each platform and bui
 
 Core's `name` sets the Capacitor display name and the Tauri product name and main window title. The build resolves `HAI_CORE_NAME` with the same precedence as other Core settings. Fullstack projects read the server workspace's `_core.yml` and project-root environment files. Existing native projects also need their platform display-name setting updated and a new installer built. Native package naming, environment selection, per-window overrides, and the handling of existing artifacts are covered in the [Chinese original](build.md#原生应用名称).
 
+<a id="desktop-updates"></a>
+
+### Desktop app updates
+
+The desktop example and newly generated Fullstack Desktop apps support optional updates for Linux x64 AppImage and Windows x64 NSIS releases. Updates are off by default. An enabled app checks once at startup and shows a notification when a newer version is available. Users can open **About** before signing in to see the current version or check manually. They can postpone the update. Download and installation start after they confirm **Download and install**. Save your work before confirming. On Linux, choose **Restart now** after installation. On Windows, the app closes during installation. Check the version after opening the app again.
+
+![About shows version 1.0.1 and confirms it is up to date after updating and restarting the Linux desktop sample](../images/desktop-update-linux.png)
+
+This example updates a Fullstack project called `orders` from `1.2.0` to `1.3.0` on Linux x64. Run the commands from the project root. On Windows, use `pnpm.cmd` in PowerShell.
+
+1. Generate a Tauri update signing key for this app. Replace the example path with an existing protected directory outside the project. Keep the private key and its password for future releases. The app needs the contents of the `.pub` file.
+
+   ```sh
+   # Create orders.key and orders.key.pub. Use the same private key for later releases.
+   pnpm --filter orders-desktop tauri signer generate -w "$HOME/release-secrets/orders.key"
+   ```
+
+2. Merge these fields into `apps/orders-desktop/src-tauri/tauri.linux.conf.json`. On Windows, use `tauri.windows.conf.json` in the same directory. Fill `pubkey` with the contents of the `.pub` file, and set the update manifest's HTTPS URL without credentials, a query string, or a fragment. These settings ship with the release. Keep the Tauri `identifier`, feed URL, and public key consistent across versions. `requireSignedVersion` requires the signed version to match the version in the manifest. Redirects for the manifest and installer must also use HTTPS.
+
+   ```json
+   {
+     "plugins": {
+       "updater": {
+         "endpoints": ["https://releases.example.com/orders/linux/latest.json"],
+         "pubkey": "REPLACE_WITH_PUBLIC_KEY_CONTENT",
+         "requireSignedVersion": true
+       }
+     }
+   }
+   ```
+
+3. Set `package.json.version` in the project root to `1.3.0` and build on the target operating system. The CLI prints the archive paths. On Linux, copy the `.AppImage` to the release directory for signing. On Windows, use `--platform windows`, select the `*-setup.exe` file, and apply Windows code signing first if required. Keep `bundle.createUpdaterArtifacts` at its disabled default. In a separate signing step, supply the private key via `TAURI_SIGNING_PRIVATE_KEY` and its password, if set, via `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+   ```sh
+   # Build the Linux x64 package using the root package.json version. Stop if this fails.
+   pnpm build --target desktop --platform linux --arch x64
+   # Sign the staged AppImage. Tauri writes an .AppImage.sig file beside it.
+   pnpm --filter orders-desktop tauri signer sign --app-version 1.3.0 "$HOME/release/orders-linux-x64-release-1.3.0.AppImage"
+   ```
+
+4. Upload the release file to a distinct HTTPS URL for this platform and version, then publish `latest.json` to the URL configured in step 2. Replace `signature` with the contents of the generated `.sig` file. For Windows, use a separate release directory and feed such as `https://releases.example.com/orders/windows/latest.json`. Put the NSIS URL and signature under `windows-x86_64`. To share a feed, merge both platform entries for the same version before publishing. After the user confirms, the app downloads, verifies, and installs the release. See the [Tauri update manifest format](https://v2.tauri.app/plugin/updater/#static-json-file).
+
+   ```json
+   {
+     "version": "1.3.0",
+     "platforms": {
+       "linux-x86_64": {
+         "url": "https://releases.example.com/orders/linux/1.3.0/orders-linux-x64-release-1.3.0.AppImage",
+         "signature": "REPLACE_WITH_SIGNATURE_FILE_CONTENT"
+       }
+     }
+   }
+   ```
+
+In an isolated target environment, launch `1.2.0` with the same feed and public key. On Linux, put the AppImage in a writable directory, add execute permission, and run it directly. On Windows, install the older release with NSIS. Use a test feed to verify postponement, installation, and the new version shown after reopening the app. Also check an up-to-date installation, an unreachable feed, a missing package for the target platform, and a mismatch in the signature or signed version. For the repository example, the manual [Desktop update package](../../../.github/workflows/desktop-update.yml) workflow can produce the release file, signature, and manifest.
+
 Before delivery, check the new installer on the target device and verify the image checksums, user flow, and persistent data for a server release.

@@ -11,6 +11,7 @@ Tauri v2 + Svelte 5 + Vite桌面工程，前端通过共享contract调用 `{{ful
 - Tauri v2 桌面壳与共享管理界面。
 - 运行时配置 API 地址，无需按环境重复打包。
 - 原生令牌仅存内存，重启后重新登录。
+- 原生应用的「关于」显示当前安装版本。发布方可为 Linux x64 AppImage 和 Windows x64 NSIS 正式包启用签名更新。
 
 ## 使用入门
 
@@ -47,6 +48,17 @@ pnpm build --target desktop --platform windows --arch x64
 打包前需要安装 Rust 工具链和 Tauri 平台依赖。原生名称按 Core 规则读取环境文件，只将名称传入 Tauri 配置；前端源码编译不读取部署环境文件。启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 API 地址的 test/prod 切换重打安装包，修改原生名称仍需重新打包。缺省连接 http://localhost:3000/api/v1。
 
 加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/build-{{projectName}}-desktop-<平台>-<架构>-<类型>-YYYYMMDD-HHmmss-<随机串>-<版本>/` 中的归档路径。Windows 文件名如 `{{projectName}}-windows-x64-release-<版本>-setup.exe`；使用工程标识，产品显示名仍取 Core。
+
+### 发布桌面应用更新
+
+更新默认关闭。启用后，Linux x64 AppImage 和 Windows x64 NSIS 正式包启动时会检查一次，有新版本才提示。用户也可以在登录前打开「关于」查看当前安装版本，并点「检查更新」。确认「下载并安装」后才会下载安装包。先保存工作，Linux AppImage 安装完可点「立即重启」，Windows 安装时会关闭应用。重新打开应用后核对版本。
+
+在 PowerShell 中使用 `pnpm.cmd`。
+
+1. 在工程根运行 `pnpm --filter {{projectName}}-desktop tauri signer generate -w "<项目外的受保护路径>"`，由 Tauri 生成该应用专用的更新签名密钥。保留私钥及密码供后续版本使用。把 `.pub` 文件内容填入桌面端 `src-tauri/tauri.linux.conf.json` 或 `src-tauri/tauri.windows.conf.json` 的 `plugins.updater.pubkey`。同时设 `plugins.updater.endpoints` 为更新清单的 HTTPS 地址数组，设 `plugins.updater.requireSignedVersion` 为 `true`。可分别用 `https://releases.example.com/desktop/linux/latest.json` 和 `https://releases.example.com/desktop/windows/latest.json`。
+2. 保持 Tauri `identifier` 一致，提升工程根 `package.json` 的版本号。在 Linux x64 运行 `pnpm build --target desktop --platform linux --arch x64`，从本批次复制 `.AppImage` 到发布目录。在 Windows x64 用 `--platform windows`，从本批次复制 `*-setup.exe` 到发布目录，先完成所需的 Windows 代码签名。保留 `bundle.createUpdaterArtifacts` 的默认关闭状态，单独通过 `TAURI_SIGNING_PRIVATE_KEY` 和（如有密码）`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 注入私钥和密码，运行 `pnpm --filter {{projectName}}-desktop tauri signer sign --app-version <构建版本> "<发布文件的绝对路径>"` 生成 `.sig`。
+3. 先把发布文件上传到该平台和版本专用的 HTTPS 地址，再发布 `latest.json` 到第一步的相应更新清单地址。令清单 `version` 等于签名时的版本。Linux 使用 `platforms.linux-x86_64`，Windows 使用 `platforms.windows-x86_64`。`url` 填发布文件地址，`signature` 填 `.sig` 文件的内容。共用清单时，先合并同一版本的两个平台条目，再发布。查看 [Tauri 更新清单格式](https://v2.tauri.app/plugin/updater/#static-json-file)。
+4. 使用隔离环境中配置了相同公钥与更新源的旧版本。从用户可写目录启动旧 AppImage，或安装并打开旧 NSIS 版本。从「关于」检查新版本，验证稍后处理与确认安装，再检查重开后显示的新版本。另用隔离清单验证网络失败、同版与签名不匹配时的行为。
 
 ### 认证与模块导航
 

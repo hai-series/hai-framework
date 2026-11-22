@@ -73,6 +73,8 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 const VERSIONS = {
   tauriFs: '2.7.1',
   tauriDialog: '2.8.4',
+  tauriApi: '2.12.4',
+  tauriUpdater: '2.14.1',
   capacitorShare: '8.0.3',
   capacitorFilesystem: '8.1.5',
   antfuEslintConfig: '10.0.0',
@@ -214,8 +216,10 @@ const HAI_CATALOG_PACKAGES: Record<string, string> = Object.fromEntries(
 )
 
 const FULLSTACK_EXTERNAL_CATALOG_PACKAGES: CatalogPackageVersions = {
+  '@tauri-apps/api': VERSIONS.tauriApi,
   '@tauri-apps/plugin-fs': VERSIONS.tauriFs,
   '@tauri-apps/plugin-dialog': VERSIONS.tauriDialog,
+  '@tauri-apps/plugin-updater': VERSIONS.tauriUpdater,
   '@capacitor/share': VERSIONS.capacitorShare,
   '@capacitor/filesystem': VERSIONS.capacitorFilesystem,
   '@antfu/eslint-config': VERSIONS.antfuEslintConfig,
@@ -358,8 +362,10 @@ const FULLSTACK_APP_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES = [
+  '@tauri-apps/api',
   '@tauri-apps/plugin-fs',
   '@tauri-apps/plugin-dialog',
+  '@tauri-apps/plugin-updater',
   ...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES,
   '@tauri-apps/cli',
 ] as const
@@ -1267,8 +1273,10 @@ export async function generateFromTemplates(
     for (const file of ['native-name.mjs', 'native-name.d.mts'])
       await fse.copy(path.join(root, 'shared', file), path.join(projectPath, 'scripts', file))
   }
-  if (context.fullstack?.frontends.desktop)
+  if (context.fullstack?.frontends.desktop) {
     await fse.copy(path.join(root, 'shared', 'run-tauri.mjs'), path.join(projectPath, 'scripts', 'run-tauri.mjs'))
+    await fse.copy(path.join(root, 'shared', 'desktop-update'), path.join(projectPath, 'apps', `${context.projectName}-desktop`, 'src', 'lib', 'desktop-update'))
+  }
   await fse.copy(path.join(root, 'shared', 'public-base-path.mjs'), path.join(projectPath, 'scripts', 'public-base-path.mjs'))
   const browserAssetDirectory = context.fullstack?.frontends.web
     ? path.join(projectPath, 'apps', `${context.projectName}-web`, 'public')

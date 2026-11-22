@@ -12,6 +12,7 @@ import { parseEnv } from 'node:util'
 import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
@@ -257,10 +258,19 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'))
     expect(manifest.devDependencies['@h-ai/core']).toBeDefined()
     const desktop = path.join(project, 'apps/native-names-desktop')
+    const desktopConfig = JSON.parse(await readFile(path.join(desktop, 'src-tauri/tauri.conf.json'), 'utf8'))
+    expect(desktopConfig.plugins?.updater).toBeUndefined()
+    for (const file of ['DesktopUpdateEntry.svelte', 'desktop-update.svelte.ts']) {
+      expect(await readFile(path.join(desktop, 'src/lib/desktop-update', file), 'utf8'))
+        .toBe(await readFile(path.join(repository, 'packages/cli/templates/shared/desktop-update', file), 'utf8'))
+    }
     const fakeTool = path.join(desktop, 'node_modules/@tauri-apps/cli')
     await mkdir(fakeTool, { recursive: true })
     await writeFile(path.join(fakeTool, 'tauri.js'), 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
     const desktopPackage = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'))
+    const workspace = parse(await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8'))
+    expect(desktopPackage.dependencies['@tauri-apps/plugin-updater']).toBe('catalog:')
+    expect(workspace.catalog['@tauri-apps/plugin-updater']).toMatch(/^2\./)
     const [, runner, ...fixedArgs] = desktopPackage.scripts.tauri.split(' ')
     const result = spawnSync(process.execPath, [
       path.resolve(desktop, runner),
