@@ -28,6 +28,8 @@
 
 [事务用法](../../docs/usage/function/reldb.md#事务)
 
+`reldb.tx.wrapResult` 根据回调返回的业务结果提交或回滚，并在成功回滚后保留原业务错误。
+
 ## 数据结构
 
 模块没有自建数据库表。

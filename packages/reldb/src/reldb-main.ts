@@ -158,6 +158,7 @@ const notInitializedJson: ReldbJsonOps = createJsonOps('sqlite')
 const notInitializedTx: TxManager = {
   begin: async () => notInitialized.result(),
   wrap: async () => notInitialized.result(),
+  wrapResult: async () => notInitialized.result(),
 }
 
 // ─── 统一数据库服务对象 ───
@@ -170,7 +171,7 @@ const notInitializedTx: TxManager = {
  * - `reldb.close()` - 关闭连接
  * - `reldb.ddl` - DDL 操作（表结构管理）
  * - `reldb.sql` - SQL 操作（数据查询和修改）
- * - `reldb.tx` - 事务管理器（begin / wrap）
+ * - `reldb.tx` - 事务管理器（begin / wrap / wrapResult）
  * - `reldb.json` - JSON 路径操作 SQL 构建器（提取、设置、插入、删除、合并）
  * - `reldb.config` - 当前配置
  * - `reldb.isInitialized` - 初始化状态

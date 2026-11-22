@@ -278,6 +278,7 @@ o1 はバインド値です。get の null は正常な該当なし、query は�
 | --- | --- | --- | --- | --- |
 | `reldb.tx.begin()` | 手動トランザクションを開始 | なし | `DmlWithTxOperations` | `await reldb.tx.begin()` |
 | `reldb.tx.wrap(fn)` | コールバックを自動コミット・ロールバック | `fn: TxWrapCallback<T>` トランザクションを受け取る非同期コールバック。正常終了でコミット、例外でロールバック | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.wrapResult(fn)` | 業務処理の結果に応じてトランザクションを終了 | `Promise<HaiResult<T>>` を返すコールバック | 成功時はコミット、失敗時はロールバックして元の業務エラーを返す | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
 #### 利用例：まとめて確定・取消する
 
@@ -288,6 +289,18 @@ o1 はバインド値です。get の null は正常な該当なし、query は�
 通常の戻り値は、未確認の失敗 HaiResult も含めてコミットへ進みます。例外でロールバックし、その終了処理の失敗も扱います。外部の送信・支払・ファイル操作は SQL の巻き戻しでは取り消せません。
 
 以下では wrap の戻り値・例外時取消・begin 後の commit/rollback・一括処理を示します。失敗した HaiResult を正常な戻り値として確定しないでください。
+
+#### 利用例：ロールバックして業務エラーを返す
+
+初期化済みのデータベースで、`users` テーブルに `u1` があるとします。開始・コミット・ロールバックに失敗した場合や、コールバックが例外を投げた場合はトランザクションエラーを返します。
+
+```ts
+// 既知のユーザー ID の名前を更新します。成功時の data.changes は更新した行数です。
+// SQL が失敗を返した場合は、そのエラーを返し、コールバック内の書き込みをすべて取り消します。
+const changed = await reldb.tx.wrapResult(tx =>
+  tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))
+if (!changed.success) throw new Error(changed.error.message)
+```
 
 [引数と手順の詳細](reldb.md#transactions)
 

@@ -24,6 +24,8 @@ See the [configuration reference](../../docs/usage/configuration/reldb.en.md) fo
 
 [Browse the API list](../../docs/usage/function/reldb.en.md#api-reference) for entry points, inputs, results and examples.
 
+`reldb.tx.wrapResult` commits or rolls back according to the callback's business result and preserves the original business error after a successful rollback.
+
 ## Data Structures
 
 The module creates no database tables of its own.

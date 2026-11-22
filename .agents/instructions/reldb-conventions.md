@@ -7,7 +7,7 @@
 - `reldb.ddl.*`：Schema 管理（createTable, dropTable, addColumn, createIndex, raw）
 - `reldb.sql.*`：原生 SQL（query, get, execute, batch, queryPage）
 - `reldb.crud.table()`：轻量级 CRUD
-- `reldb.tx.wrap()` / `reldb.tx.begin()`：事务
+- `reldb.tx.wrapResult()`：按回调返回的 HaiResult 提交或回滚；`reldb.tx.wrap()` 只在回调抛错时回滚，`reldb.tx.begin()` 用于手动控制。
 - `reldb.json.*`：JSON 路径操作（extract, set, insert, remove, merge）
 
 ## 错误码段位

@@ -348,6 +348,7 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 | --- | --- | --- | --- | --- |
 | `reldb.tx.begin()` | 开启手工事务 | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
 | `reldb.tx.wrap(fn)` | 自动提交或回滚回调中的事务 | `fn: TxWrapCallback<T>` 异步回调接收事务句柄。正常返回后提交，抛出时回滚 | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.wrapResult(fn)` | 根据回调的业务结果结束事务 | 返回 `Promise<HaiResult<T>>` 的回调 | 成功提交，失败回滚并保留原业务错误 | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
 #### 场景：一起提交或回滚
 
@@ -363,11 +364,21 @@ const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构�
 
 一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
 
-三种使用方式：
+#### 场景：保留业务失败并回滚
+
+数据库已初始化，`users` 表已有用户 `u1`。只在必要写入成功后提交。回调抛错，或数据库无法打开、提交、回滚事务时，调用方收到事务错误。
+
+```ts
+// 用已知用户 ID 更新名称。成功 data.changes 是更新行数。
+// SQL 返回失败时直接带出原错误，回滚此回调中所有数据库写入。
+const changed = await reldb.tx.wrapResult(tx =>
+  tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))
+if (!changed.success) throw new Error(changed.error.message)
+```
 
 #### 场景：一起写入并自动提交
 
-事务回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时，使用下方手动事务。各片段假定数据库已成功初始化且 users 表已经创建。
+`wrap` 的回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时可以调用 `wrapResult`。各片段假定数据库已成功初始化且 users 表已经创建。
 
 ```ts
 // 用回调运行两次插入，正常返回时提交并将 'ok' 放入 data，失败或抛错进入回滚。

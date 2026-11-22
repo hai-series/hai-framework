@@ -157,6 +157,14 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
 
 // ─── tx.wrap 语法糖 ───
 
+function callbackFailure(error: unknown) {
+  return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', {
+    params: {
+      error: String(error),
+    },
+  }), error)
+}
+
 /**
  * 创建统一的 tx.wrap 函数
  *
@@ -189,11 +197,39 @@ export function createTxWrap(
     }
     catch (error) {
       await txResult.data.rollback()
-      return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', {
-        params: {
-          error: String(error),
-        },
-      }), error)
+      return callbackFailure(error)
     }
+  }
+}
+
+/**
+ * 组装在事务边界展开业务结果的入口。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(begin: TxManager['begin']) {
+ *   return createTxResultWrap(begin)
+ * }
+ * ```
+ */
+export function createTxResultWrap(begin: TxManager['begin']): TxManager['wrapResult'] {
+  return async <T>(fn: TxWrapCallback<HaiResult<T>>): Promise<HaiResult<T>> => {
+    const opened = await begin()
+    if (!opened.success)
+      return opened
+
+    const tx = opened.data
+    let result: HaiResult<T>
+    try {
+      result = await fn(tx)
+    }
+    catch (error) {
+      result = callbackFailure(error)
+    }
+
+    const finished = result.success
+      ? await tx.commit()
+      : await tx.rollback()
+    return finished.success ? result : finished
   }
 }

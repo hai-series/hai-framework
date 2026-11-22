@@ -783,6 +783,24 @@ export interface TxManager {
   begin: () => Promise<HaiResult<DmlWithTxOperations>>
   /** 包裹事务（自动提交/回滚） */
   wrap: <T>(fn: TxWrapCallback<T>) => Promise<HaiResult<T>>
+  /**
+   * 回调返回成功时提交，返回业务失败或抛错时回滚。
+   * 回滚成功时保留原业务失败。事务开始、提交或回滚失败时返回对应事务错误。
+   *
+   * @param fn - 仅使用本次事务句柄进行读写，返回本次业务结果。
+   * @returns 提交后的业务成功、回滚后的业务失败，或事务错误。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * // 数据库已初始化，users 表已存在。
+   * const updated = await reldb.tx.wrapResult(tx =>
+   *   tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))
+   * if (!updated.success) throw new Error(updated.error.message)
+   * const changed = updated.data.changes
+   * ```
+   */
+  wrapResult: <T>(fn: TxWrapCallback<HaiResult<T>>) => Promise<HaiResult<T>>
 }
 
 // ─── 数据库函数接口 ───

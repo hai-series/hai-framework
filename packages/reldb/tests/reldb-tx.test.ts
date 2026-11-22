@@ -4,12 +4,38 @@
  * =============================================================================
  */
 
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.tx', () => {
   const defineCommon = (label: 'sqlite' | 'mysql' | 'postgresql') => {
+    it(`${label}: wrapResult 在成功时提交，回滚时保留业务失败，wrap 仍包装普通返回值`, async () => {
+      expect((await reldb.ddl.createTable('tx_result_items', {
+        name: { type: 'TEXT', notNull: true },
+      })).success).toBe(true)
+
+      const rejected = err(HaiCommonError.CONFLICT, 'Invalid item')
+      const rolled = await reldb.tx.wrapResult(async (tx) => {
+        const inserted = await tx.execute('INSERT INTO tx_result_items (name) VALUES (?)', ['rolled back'])
+        return inserted.success ? rejected : inserted
+      })
+      expect(rolled).toEqual(rejected)
+
+      const committed = await reldb.tx.wrapResult(async (tx) => {
+        const inserted = await tx.execute('INSERT INTO tx_result_items (name) VALUES (?)', ['committed'])
+        return inserted.success
+          ? ok(inserted.data.changes)
+          : inserted
+      })
+      expect(committed).toEqual(ok(1))
+      expect(await reldb.tx.wrap(async () => rejected)).toEqual(ok(rejected))
+      expect(await reldb.sql.query('SELECT name FROM tx_result_items')).toEqual(ok([
+        { name: 'committed' },
+      ]))
+    })
+
     it(`${label}: 事务成功应提交数据`, async () => {
       await reldb.ddl.dropTable('users', true)
       const createTable = await reldb.ddl.createTable('users', {

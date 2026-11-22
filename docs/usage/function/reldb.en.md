@@ -274,6 +274,7 @@ Use one transaction for related reads and writes. Manually opened transactions m
 | --- | --- | --- | --- | --- |
 | `reldb.tx.begin()` | Begin a manual transaction | None | `DmlWithTxOperations` | `await reldb.tx.begin()` |
 | `reldb.tx.wrap(fn)` | Commit or roll back a transaction callback | `fn: TxWrapCallback<T>` Async callback receiving the transaction. Returning commits, and throwing rolls back | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+| `reldb.tx.wrapResult(fn)` | End the transaction according to the business result | Callback returning `Promise<HaiResult<T>>` | Commit on success, roll back and preserve the business error on failure | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
 #### Scenario: Commit or roll back together
 
@@ -284,6 +285,18 @@ This shows the automatic transaction boundary. Each operation still returns HaiR
 Any normal callback return, including an unchecked failed HaiResult, enters commit. A throw enters rollback; commit/rollback failures must also be handled. The transaction covers its database operations, not messages, payments or file uploads in other systems.
 
 Below, wrap returns the callback value and rolls back on throws; manual begin ends with commit or rollback. Check failed HaiResult values before allowing the callback to commit.
+
+#### Scenario: Roll back and preserve a business error
+
+The database is initialized and the `users` table contains `u1`. If opening, committing or rolling back fails, or the callback throws, the caller receives a transaction error.
+
+```ts
+// Update the known user ID. On success, data.changes counts the updated rows.
+// If the statement returns a failure, return that error and roll back all writes made in this callback.
+const changed = await reldb.tx.wrapResult(tx =>
+  tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))
+if (!changed.success) throw new Error(changed.error.message)
+```
 
 [Detailed parameters and workflows](reldb.md#transactions)
 
