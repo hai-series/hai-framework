@@ -135,6 +135,7 @@ export const feedback: FeedbackFunctions = {
   },
   submit: (input, actor) => guarded(() => (current?.operations ?? unavailable).submit(input, actor)),
   list: (input, actor) => guarded(() => (current?.operations ?? unavailable).list(input, actor)),
+  listMine: (input, actor) => guarded(() => (current?.operations ?? unavailable).listMine(input, actor)),
   get: (id, actor) => guarded(() => (current?.operations ?? unavailable).get(id, actor)),
   getEvidence: (input, actor) => guarded(() => (current?.operations ?? unavailable).getEvidence(input, actor)),
   setStatus: (input, actor) => guarded(() => (current?.operations ?? unavailable).setStatus(input, actor)),

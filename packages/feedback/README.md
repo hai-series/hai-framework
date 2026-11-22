@@ -22,6 +22,8 @@
 
 [查 API 清单](../../docs/usage/function/feedback.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+`feedback.listMine` 提供当前作者的报告分页。本人和管理列表都可按类别筛选。
+
 ## 数据结构
 
 查看[数据结构](../../docs/usage/data/feedback.md)，了解反馈、证据、动作用队列、附件、离线包和浏览器草稿。

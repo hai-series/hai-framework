@@ -64,6 +64,15 @@ export const feedbackContract = {
     })
       .input(FeedbackListInputSchema)
       .output(haiResultSchema(paginatedSchema(FeedbackReportSchema))),
+    listMine: route({
+      method: 'GET',
+      path: '/feedback/my-reports',
+      operationId: 'feedback.reports.listMine',
+      summary: 'list own feedback',
+      tags: ['feedback'],
+    })
+      .input(FeedbackListInputSchema)
+      .output(haiResultSchema(paginatedSchema(FeedbackReportSchema))),
     get: route({
       method: 'GET',
       path: '/feedback/reports/{id}',

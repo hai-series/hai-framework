@@ -35,6 +35,8 @@
 
 問題票の項目の抜粋です。`feedback-42` は `team-1` の `user-42` が提出し、未処理かつ収集中で、この時点の証拠は0件です。後続例とは別の段階です。`created_at` と `updated_at` は Unix ミリ秒です。
 
+カテゴリは既存の報告の `payload.category` に保存されます。例は `"bug"` です。本人一覧は `scope_id` と `user_id` などで対象を限定し、期限切れや削除中の報告を除外します。
+
 ### 発生経緯を確認する証拠
 
 対応する構造：`hai_feedback_evidence`。

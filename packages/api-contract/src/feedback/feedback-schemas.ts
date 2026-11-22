@@ -190,6 +190,7 @@ export const FeedbackReportSchema = z.object({
  */
 export const FeedbackListInputSchema = PaginationQuerySchema.extend({
   sortDirection: z.enum(['asc', 'desc']).optional(),
+  category: z.string().min(1).max(64).optional(),
   status: FeedbackStatusSchema.optional(),
   collectionStatus: FeedbackCollectionStatusSchema.optional(),
   notificationStatus: FeedbackNotificationStatusSchema.optional(),

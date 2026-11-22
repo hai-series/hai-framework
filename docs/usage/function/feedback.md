@@ -192,6 +192,7 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 | --- | --- | --- | --- | --- |
 | `feedback.submit(input, context)` | 受理一份反馈 | 必填 `input: FeedbackSubmitInput` 和 `context: FeedbackContext`。见[提交字段](#feedback-submission-fields)。 | `報告` | `await feedback.submit(submission, context)` |
 | `feedback.list(input, context)` | 筛选并分页查询反馈 | `input: FeedbackListInput` 必填筛选对象，字段可省略。见[报告筛选](#feedback-report-options)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `报告分页` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.listMine` | 按类别筛选本人的报告 | input, context | `PaginatedResult<FeedbackReport>` | `await feedback.listMine({ category: 'bug', page: 1 }, context)` |
 | `feedback.get(id, context)` | 读取反馈详情 | `id: string` 必填报告 ID。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `报告、附件、历史、任务` | `await feedback.get(reportId, context)` |
 | `feedback.getEvidence(input, context)` | 分页读取诊断证据 | `input: FeedbackEvidenceQuery` 必填 id，另可传 source、kind、requestId、errorId、Unix 毫秒范围 from/to 和分页 page/pageSize。见[证据字段](#feedback-evidence-fields)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `证据分页` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
 | `feedback.setStatus(input, context)` | 按版本条件变更处理状态 | `input: FeedbackSetStatusInput` 报告、目标状态、版本与说明，见[处理字段](#feedback-report-options)。`context: FeedbackContext` 必填可信会话身份，见[调用者上下文](#feedback-submission-fields) | `更新后的报告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
@@ -233,6 +234,23 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 | `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | 可省略 | 随报告声明的诊断事件与附件元数据，数组上限分别为 1000 和 20。附件字节后续上传。 |
 | `context.scopeId / userId` | `string` | 必填 | 由可信会话取得的租户与用户身份。 |
 | `context.permissions` | `readonly string[]` | 可省略 | 可信会话授权的权限集合，操作仍由服务核对访问范围。 |
+
+#### 场景：作者查看自己的反馈
+
+服务端从已认证会话与已核验空间构造 context。本人列表按应用、空间、作者和有效期过滤。类别区分大小写，旧报告的类别直接从原报告读取。管理端继续使用需要 `feedback:read` 的列表。
+
+```ts
+import type { FeedbackContext } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+async function listOwnReports(context: FeedbackContext) {
+  // 同一应用和空间里读取作者自己的 bug 报告，每页最多 20 条；无匹配时返回空页。
+  const result = await feedback.listMine({ category: 'bug', page: 1, pageSize: 20 }, context)
+  if (!result.success)
+    return result
+  return result.data
+}
+```
 
 #### 场景：提交、查询与处理反馈
 

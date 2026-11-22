@@ -70,6 +70,14 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
         return actor
       return core.context.run(actor.data, () => deps.feedback.list(input, actor.data))
     })
+    .route('reports.listMine')
+    .auth()
+    .handle(async ({ input, context }) => {
+      const actor = await contextFor(context)
+      if (!actor.success)
+        return actor
+      return core.context.run(actor.data, () => deps.feedback.listMine(input, actor.data))
+    })
     .route('reports.get')
     .auth()
     .handle(async ({ input, context }) => {

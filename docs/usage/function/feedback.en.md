@@ -108,6 +108,7 @@ Save the accepted report ID, then let authorized operators inspect evidence and 
 | --- | --- | --- | --- | --- |
 | `feedback.submit(input, context)` | Accept a report | Required `input: FeedbackSubmitInput` and `context: FeedbackContext`. See [submission fields](#feedback-submission-fields). | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
 | `feedback.list(input, context)` | Filter and paginate reports | `input: FeedbackListInput` Required filter object with optional fields. See [report filters](#feedback-report-options). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.listMine` | Paginate the author’s reports by category | `input, context` | `PaginatedResult<FeedbackReport>` | `await feedback.listMine({ category: 'bug', page: 1 }, context)` |
 | `feedback.get(id, context)` | Read report details | `id: string` Required report ID. `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackDetail` | `await feedback.get(reportId, context)` |
 | `feedback.getEvidence(input, context)` | Paginate diagnostic evidence | `input: FeedbackEvidenceQuery` Requires id. Optional source, kind, requestId, errorId, Unix milliseconds from/to, and page/pageSize. See [evidence fields](#feedback-evidence-fields). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
 | `feedback.setStatus(input, context)` | Update status with a version check | `input: FeedbackSetStatusInput` Report, target status, version, and note. See [processing fields](#feedback-report-options). `context: FeedbackContext` Required trusted session identity. See [caller context](#feedback-submission-fields) | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
@@ -149,6 +150,23 @@ For example, `{ status: "pending", page: 1, pageSize: 5 }` returns up to five pe
 | `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | Optional | Diagnostic events and attachment declarations, limited to 1000 and 20 items respectively. Upload file bytes separately. |
 | `context.scopeId / userId` | `string` | Required | Trusted tenant and user identities from the authorized session. |
 | `context.permissions` | `readonly string[]` | Optional | Permissions granted by the trusted session. The service still checks the access scope. |
+
+#### Scenario: list your own reports
+
+The server builds the context from an authenticated user and a verified scope. The list filters by application, scope, author, and expiry. Category matches are case-sensitive and read the existing report payload. The administration list still requires `feedback:read`.
+
+```ts
+import type { FeedbackContext } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+async function listOwnReports(context: FeedbackContext) {
+  // Read up to 20 of the author’s bug reports in this application and scope. An empty page is a valid result.
+  const result = await feedback.listMine({ category: 'bug', page: 1, pageSize: 20 }, context)
+  if (!result.success)
+    return result
+  return result.data
+}
+```
 
 #### Scenario: Submit, query and process reports
 

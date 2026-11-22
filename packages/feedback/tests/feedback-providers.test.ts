@@ -270,6 +270,7 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
         const submitted = await feedback.submit({
           submissionId: 'provider-loop',
           appId: config.appId,
+          category: 'bug',
           description: 'A diagnostic description longer than VARCHAR(255). '.repeat(40),
           attachments: [
             {
@@ -303,6 +304,19 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
         expect(smtp.messages.length).toBe(previousMailCount + 1)
         expect(smtp.messages.at(-1)).toContain('administrator@example.test')
         expect((await feedback.list({ page: 1, pageSize: 1, search: 'diagnostic' }, actor)).success).toBe(true)
+        expect(await feedback.listMine({ category: 'bug', pageSize: 1 }, { ...actor, permissions: [] })).toMatchObject({
+          success: true,
+          data: {
+            total: 1,
+            items: [
+              { id: submitted.data.id },
+            ],
+          },
+        })
+        expect(await feedback.listMine({ category: 'Bug' }, actor)).toMatchObject({
+          success: true,
+          data: { total: 0 },
+        })
         expect((await feedback.setStatus({ id: submitted.data.id, status: 'handled', expectedVersion: 1 }, actor)).success).toBe(true)
         const exported = await feedback.export({ id: submitted.data.id }, actor)
         expect(exported.success, JSON.stringify(exported)).toBe(true)

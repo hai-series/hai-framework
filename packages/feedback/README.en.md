@@ -22,6 +22,8 @@ See the [configuration reference](../../docs/usage/configuration/feedback.en.md)
 
 [Browse the API list](../../docs/usage/function/feedback.en.md#api-reference) for entry points, inputs, results and examples.
 
+`feedback.listMine` paginates reports submitted by the current author. Both the personal and administration lists support category filtering.
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/feedback.en.md) for reports, evidence, background jobs, attachments, offline bundles and browser drafts.

@@ -97,6 +97,45 @@ describe('反馈公开流程', { concurrent: false }, () => {
     expect((await feedback.get(first.data.id, secondActor)).success).toBe(false)
   })
 
+  it('本人分页和类别筛选同时约束应用、空间和作者', async () => {
+    const input = { appId: config.appId, category: 'bug', description: 'mine-category-fixture' }
+    const first = await feedback.submit({ ...input, submissionId: 'mine-one' }, actor)
+    expect(first.success).toBe(true)
+    if (!first.success)
+      return
+    expect((await feedback.submit({ ...input, submissionId: 'mine-two', category: 'Bug' }, actor)).success).toBe(true)
+    expect((await feedback.submit({ ...input, submissionId: 'mine-three' }, admin)).success).toBe(true)
+    expect((await feedback.submit({ ...input, submissionId: 'mine-four' }, { ...actor, scopeId: other.scopeId })).success).toBe(true)
+    const query = {
+      category: 'bug',
+      page: 1,
+      pageSize: 1,
+      search: input.description,
+    }
+    expect(await feedback.listMine(query, actor)).toMatchObject({
+      success: true,
+      data: {
+        total: 1,
+        items: [
+          { id: first.data.id },
+        ],
+      },
+    })
+    expect(await feedback.list(query, admin)).toMatchObject({
+      success: true,
+      data: { total: 2 },
+    })
+    expect(await feedback.listMine({ ...query, appId: 'another-app' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 0, items: [] },
+    })
+    expect((await reldb.sql.execute('UPDATE hai_feedback_reports SET expires_at = 0 WHERE id = ?', [first.data.id])).success).toBe(true)
+    expect(await feedback.listMine(query, actor)).toMatchObject({
+      success: true,
+      data: { total: 0, items: [] },
+    })
+  })
+
   it('分页筛选仅返回当前范围，处理/撤销保留历史且拒绝过期版本', async () => {
     const first = await feedback.submit({
       submissionId: 'filter-1',

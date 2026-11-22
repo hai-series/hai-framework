@@ -22,6 +22,8 @@
 
 [API 一覧](../../docs/usage/function/feedback.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+`feedback.listMine` で自分が投稿した報告をページ取得できます。本人一覧と管理一覧の両方でカテゴリを絞り込めます。
+
 ## データ構造
 
 報告、証拠、バックグラウンドジョブ、添付、オフラインバンドル、ブラウザーの下書きについては[データ構造](../../docs/usage/data/feedback.ja.md)を参照してください。

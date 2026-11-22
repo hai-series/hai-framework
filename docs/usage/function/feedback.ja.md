@@ -112,6 +112,7 @@ function startFeedback(config: FeedbackConfigInput) {
 | --- | --- | --- | --- | --- |
 | `feedback.submit(input, context)` | フィードバックを受け付け | 必須の `input: FeedbackSubmitInput` と `context: FeedbackContext`。[送信項目](#feedback-submission-fields)を参照。 | `FeedbackReport` | `await feedback.submit(reportInput, context)` |
 | `feedback.list(input, context)` | 絞り込んでページ取得 | `input: FeedbackListInput` 必須の絞り込みオブジェクト。各項目は任意。[報告フィルター](#feedback-report-options)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `PaginatedResult<FeedbackReport>` | `await feedback.list({ page: 1, pageSize: 20 }, context)` |
+| `feedback.listMine` | 本人の報告をカテゴリで絞り込む | input, context | `PaginatedResult<FeedbackReport>` | `await feedback.listMine({ category: 'bug', page: 1 }, context)` |
 | `feedback.get(id, context)` | 詳細を取得 | `id: string` 必須の報告 ID。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackDetail` | `await feedback.get(reportId, context)` |
 | `feedback.getEvidence(input, context)` | 診断証拠をページ取得 | `input: FeedbackEvidenceQuery` id は必須。source、kind、requestId、errorId、Unix ミリ秒範囲 from/to と page/pageSize は任意。[証拠項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `PaginatedResult<FeedbackEvidence>` | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
 | `feedback.setStatus(input, context)` | 版を照合して処理状態を更新 | `input: FeedbackSetStatusInput` 報告、変更先状態、バージョン、メモ。[処理項目](#feedback-report-options)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackReport` | `await feedback.setStatus(statusUpdate, context)` |
@@ -153,6 +154,23 @@ function startFeedback(config: FeedbackConfigInput) {
 | `input.evidence / attachments` | `FeedbackEvidenceInput[] / FeedbackAttachmentInput[]` | 任意 | 診断イベントと添付の宣言。配列の上限は 1000 件と 20 件。ファイルのバイト列は別途アップロード。 |
 | `context.scopeId / userId` | `string` | 必須 | 認可済みセッションから取得した信頼できるテナント ID とユーザー ID。 |
 | `context.permissions` | `readonly string[]` | 任意 | 信頼できるセッションの権限。操作時はサービス側でもアクセス範囲を確認。 |
+
+#### シナリオ：自分の報告を確認する
+
+サーバーは認証済みユーザーと検証済みスコープから context を作ります。アプリ、スコープ、投稿者、有効期限で絞り込みます。カテゴリは大文字と小文字を区別し、既存の報告から読み出します。管理一覧には引き続き `feedback:read` が必要です。
+
+```ts
+import type { FeedbackContext } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
+
+async function listOwnReports(context: FeedbackContext) {
+  // 現在のアプリとスコープで本人の bug 報告を最大 20 件取得する。該当がなければ空のページを返す。
+  const result = await feedback.listMine({ category: 'bug', page: 1, pageSize: 20 }, context)
+  if (!result.success)
+    return result
+  return result.data
+}
+```
 
 #### 利用例：報告の提出・照会・処理
 

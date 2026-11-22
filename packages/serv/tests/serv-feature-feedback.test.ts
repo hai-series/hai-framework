@@ -1,5 +1,5 @@
 import type { FeedbackFunctions } from '@h-ai/feedback'
-import { apiContract, FeedbackReportSchema } from '@h-ai/api-contract'
+import { apiContract, FeedbackReportSchema, resolveFeedbackBudget } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createFeedbackProcedures } from '../src/features/serv-feature-feedback.js'
@@ -30,13 +30,21 @@ function fixture() {
     acknowledged: input.evidence.map(item => item.id),
     evidenceRevision: 2,
   }))
+  const listMine = vi.fn<FeedbackFunctions['listMine']>(async () => ok({
+    items: [report],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+  }))
   const feedback: FeedbackFunctions = {
     init: async () => ok(undefined),
     close: async () => ok(undefined),
     config: null,
     isInitialized: true,
+    budget: resolveFeedbackBudget(),
     submit,
     list: unused,
+    listMine,
     get: unused,
     getEvidence: unused,
     setStatus: unused,
@@ -75,10 +83,26 @@ function fixture() {
     submit,
     appendEvidence,
     resolveContext,
+    listMine,
+    listOwn: () => app.request('/api/v1/feedback/my-reports?category=bug', {
+      headers: { 'authorization': 'Bearer test-token', 'x-request-id': 'request-1' },
+    }),
   }
 }
 
 describe('feedback default procedures', () => {
+  it('lists the authenticated caller’s reports and preserves the category filter', async () => {
+    const f = fixture()
+    expect(await (await f.listOwn()).json()).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+    expect(f.listMine).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ category: 'bug' }), {
+      scopeId: 'trusted-scope',
+      userId: 'user-1',
+      permissions: ['feedback:create'],
+    })
+  })
   it('uses trusted scope and preserves request identity through asynchronous module calls', async () => {
     const f = fixture()
     const response = await f.request('/reports', { submissionId: 'operation-1', appId: 'orders' })
