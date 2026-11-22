@@ -536,6 +536,7 @@ RBAC 权限支持 `sensitiveOperations: string[]`（持久字段 `sensitive_oper
 | `iam.user.getCurrentUser(accessToken)` | 按当前令牌读取本人资料 | `accessToken: string` 当前会话的访问令牌 | `User` | `await iam.user.getCurrentUser(accessToken)` |
 | `iam.user.updateCurrentUser(accessToken, data)` | 按当前令牌更新本人资料 | `accessToken: string` 当前会话的访问令牌 · `data: UpdateCurrentUserInput` · [对象参数](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
 | `iam.user.updateUser(userId, data)` | 按 ID 修改用户资料 | `userId: string` 目标用户 ID · `data: Partial<User>` 由管理员传入要修改的字段，参见本节可写字段说明 | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
+| `iam.user.updateUserWithRoles` | 在一次事务中保存用户资料和角色 | userId, { profile?, roleIds? } | `User` 或回滚后的错误 | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
 | `iam.user.deleteUser(userId)` | 删除指定用户 | `userId: string` 目标用户 ID | `void` | `await iam.user.deleteUser(userId)` |
 | `iam.user.adminResetPassword(userId, newPassword)` | 由管理端重设用户密码 | `userId: string` 目标用户 ID · `newPassword: string` 要按当前策略设置的新密码 | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
 | `iam.user.renewPassword(input)` | 用原凭据完成到期或首次改密 | `input` 必填，含 `identifier`、当前 `password`、`newPassword` 和可选 `captcha` | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
@@ -586,6 +587,20 @@ else result.error.code
 #### 场景：维护用户资料与密码
 
 用户场景展示创建→按 ID/用户名/邮箱查找→分页→修改→删除；密码场景说明重置票据、到期续密与账号停用。成功 null 与失败错误分别处理，不能把查不到用户当数据库故障。
+
+#### 场景：同时更新账号资料和角色
+
+管理端先核验操作者可管理目标账号和指定角色。这里已取得有效的用户 ID 和审核角色 ID。省略 `roleIds` 则保留现有角色，传 `[]` 则清空角色。角色变更后，现有会话使用当前授权，账号生命周期变化时旧会话失效。
+
+```ts
+// 用已核验的用户和角色 ID 保存显示名，并将角色集合替换为审核角色。
+// 成功 data 是提交时的用户资料。角色不合法时，本次资料和角色写入一并回滚。
+const updated = await iam.user.updateUserWithRoles(userId, {
+  profile: { displayName: 'Alice' },
+  roleIds: [reviewerRoleId],
+})
+if (!updated.success) throw new Error(updated.error.message)
+```
 
 #### 用户数据与可写字段
 
@@ -1440,7 +1455,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 #### 场景：签发与消费一次性票据
 
-下文 issue 输入用途与绑定信息，输出随机票据；consume 输入票据和预期用途，输出绑定数据或失败。用途不符、过期或重复使用均不能继续业务操作。
+下文 issue 输入用途与绑定信息，输出随机票据；consume 输入票据和预期用途，输出绑定数据或失败。用途不符时请求失败，票据仍可由正确用途兑换。过期或已使用的票据不能继续业务操作。
 
 #### 场景：为语音连接签发并消费短期票据
 

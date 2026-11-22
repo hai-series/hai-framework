@@ -206,6 +206,7 @@ Authorize the actor before looking up or modifying users. Distinguish self-servi
 | `iam.user.getCurrentUser(accessToken)` | Read the current token holder profile | `accessToken: string` access token for the current session | `User` | `await iam.user.getCurrentUser(accessToken)` |
 | `iam.user.updateCurrentUser(accessToken, data)` | Update the current token holder profile | `accessToken: string` access token for the current session · `data: UpdateCurrentUserInput` · [Object arguments](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
 | `iam.user.updateUser(userId, data)` | Update a user by ID | `userId: string` target user ID · `data: Partial<User>` contains fields to change. See the writable-fields guidance in this section | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
+| `iam.user.updateUserWithRoles` | Save profile and roles in one transaction | userId, { profile?, roleIds? } | `User` or an error after rollback | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
 | `iam.user.deleteUser(userId)` | Delete a user | `userId: string` target user ID | `void` | `await iam.user.deleteUser(userId)` |
 | `iam.user.adminResetPassword(userId, newPassword)` | Reset a password as an administrator | `userId: string` target user ID · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
 | `iam.user.renewPassword(input)` | Replace an expired or initial password using original credentials | `input` requires `identifier`, current `password`, `newPassword`, and optional `captcha` | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
@@ -256,6 +257,20 @@ else result.error.code
 #### Scenario: Maintain users and passwords
 
 User scenarios cover create, ID/name/email lookup, pages, updates and deletion; password scenarios cover reset proof, expiry and account state. Handle missing users separately from failed database operations.
+
+#### Scenario: Update the account profile and roles together
+
+The admin endpoint has authorized the caller to manage the target account and assign the reviewer role. Omit `roleIds` to keep the current assignments, or pass `[]` to clear them. Role changes take effect in existing sessions through current authorization checks. Account lifecycle changes invalidate prior sessions.
+
+```ts
+// Use the authorized user and role IDs to save the display name and replace the assigned roles.
+// Success returns the profile at commit. An invalid role rolls back both parts of the update.
+const updated = await iam.user.updateUserWithRoles(userId, {
+  profile: { displayName: 'Alice' },
+  roleIds: [reviewerRoleId],
+})
+if (!updated.success) throw new Error(updated.error.message)
+```
 
 #### Parameters and result semantics: User records
 
@@ -664,7 +679,7 @@ Allow a verified principal to perform one purpose for a short period. A successf
 
 #### Scenario: Issue and consume one-time proof
 
-issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. Wrong-purpose, expired or reused proof must stop the operation.
+issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. A purpose mismatch rejects the request and leaves the ticket available for its intended purpose. An expired or consumed ticket cannot be used.
 
 #### Parameters and result semantics: One-time tickets
 

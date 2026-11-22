@@ -100,6 +100,24 @@ export interface User {
   roles?: Role[]
 }
 
+/**
+ * 一次提交用户资料和目标角色集合。
+ * @example
+ * ```ts
+ * import type { UpdateUserWithRolesInput } from '@h-ai/iam'
+ * const changes: UpdateUserWithRolesInput = {
+ *   profile: { displayName: 'Alice', accountStatus: 'active' },
+ *   roleIds: ['role-editor'],
+ * }
+ * ```
+ */
+export interface UpdateUserWithRolesInput {
+  /** 局部资料更新，省略字段保留旧值。长期账号可传 null 显式清除到期时间。 */
+  profile?: Partial<User>
+  /** 最终角色 ID 集合，省略时保留原分配，空数组清除分配。 */
+  roleIds?: string[]
+}
+
 // ─── 协议展示类型 ───
 
 /**
@@ -344,6 +362,26 @@ export interface UserOperations {
    * @returns 成功返回更新后的用户信息；用户不存在返回 USER_NOT_FOUND
    */
   updateUser: (userId: string, data: Partial<User>) => Promise<HaiResult<User>>
+
+  /**
+   * 在同一数据库事务中保存账号资料、生命周期和角色。
+   *
+   * @param userId - 已由应用核验操作权限的目标账号 ID。
+   * @param input - 局部资料和可选的目标角色集合。
+   * @returns 成功返回提交时的用户资料。任何业务失败都回滚本次数据库写入。
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * // IAM 已初始化，调用方已验证可管理 user-1 和 role-editor。
+   * const updated = await iam.user.updateUserWithRoles('user-1', {
+   *   profile: { displayName: 'Alice' },
+   *   roleIds: ['role-editor'],
+   * })
+   * if (!updated.success) throw new Error(updated.error.message)
+   * const name = updated.data.displayName
+   * ```
+   */
+  updateUserWithRoles: (userId: string, input: UpdateUserWithRolesInput) => Promise<HaiResult<User>>
 
   /**
    * 删除用户

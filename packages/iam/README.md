@@ -24,6 +24,8 @@
 
 [查 API 清单](../../docs/usage/function/iam.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+`iam.user.updateUserWithRoles` 一次提交账号资料和角色。一次性票据以摘要作为缓存键，并在核验用途后消费。
+
 <a id="可选-ldap-与通知接入"></a>
 
 [可选 LDAP 与通知接入](../../docs/usage/function/iam.md#可选-ldap-与通知接入)

@@ -27,6 +27,7 @@ import { guardIamMutation, readIamCache } from '../iam-cache.js'
 import { RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+import { lockIamUser } from '../user/iam-user-repository-user.js'
 import { createDbPermissionRepository } from './iam-authz-repository-permission.js'
 import { createDbRolePermissionRepository, createDbUserRoleRepository } from './iam-authz-repository-relation.js'
 import { createDbRoleRepository } from './iam-authz-repository-role.js'
@@ -447,92 +448,54 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     },
 
     async syncRoles(userId: string, roleIds: string[], tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const currentResult = await userRoleRepository.getRoles(userId, tx)
-      if (!currentResult.success) {
-        return currentResult as HaiResult<void>
-      }
+      const write = async (transaction: DmlWithTxOperations): Promise<HaiResult<boolean>> => {
+        // 独立替换角色和资料加角色的组合更新使用同一个账号锁，避免并发从同一旧集合计算差集。
+        const locked = await lockIamUser(transaction, userId)
+        if (!locked.success)
+          return locked
+        const current = await userRoleRepository.getRoles(userId, transaction)
+        if (!current.success)
+          return current
 
-      const currentIds = new Set(currentResult.data.map(r => r.id))
-      const targetIds = new Set(roleIds)
+        const currentIds = new Set(current.data.map(role => role.id))
+        const targetIds = new Set(roleIds)
+        const toRemove = [...currentIds].filter(id => !targetIds.has(id))
+        const toAdd = [...targetIds].filter(id => !currentIds.has(id))
+        if (toRemove.length === 0 && toAdd.length === 0)
+          return ok(false)
 
-      const toRemove = [...currentIds].filter(id => !targetIds.has(id))
-      const toAdd = [...targetIds].filter(id => !currentIds.has(id))
-
-      // 无变化时直接返回
-      if (toRemove.length === 0 && toAdd.length === 0) {
-        return ok(undefined)
-      }
-
-      // 验证新增角色存在性
-      for (const roleId of toAdd) {
-        const existsResult = await roleRepository.existsById(roleId, tx)
-        if (!existsResult.success) {
-          return mapRepositoryError('iam_queryRoleFailed', existsResult.error.message) as HaiResult<void>
-        }
-        if (!existsResult.data) {
-          return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-        }
-      }
-
-      // 使用调用方事务或创建新事务，保证批量操作原子性
-      const ownTx = !tx
-      if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_syncRolesFailed', txResult.error.message) as HaiResult<void>
-        }
-        tx = txResult.data
-      }
-
-      try {
-        // 批量移除
-        for (const roleId of toRemove) {
-          const result = await userRoleRepository.remove(userId, roleId, tx)
-          if (!result.success) {
-            if (ownTx)
-              await tx.rollback()
-            return result
-          }
-        }
-
-        // 批量添加
         for (const roleId of toAdd) {
-          const result = await userRoleRepository.assign(userId, roleId, tx)
-          if (!result.success) {
-            if (ownTx)
-              await tx.rollback()
+          const exists = await roleRepository.existsById(roleId, transaction)
+          if (!exists.success)
+            return mapRepositoryError('iam_queryRoleFailed', exists.error.message)
+          if (!exists.data)
+            return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        }
+
+        for (const roleId of toRemove) {
+          const result = await userRoleRepository.remove(userId, roleId, transaction)
+          if (!result.success)
             return result
-          }
         }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_syncRolesFailed', commitResult.error.message) as HaiResult<void>
-          }
+        for (const roleId of toAdd) {
+          const result = await userRoleRepository.assign(userId, roleId, transaction)
+          if (!result.success)
+            return result
         }
+        return ok(true)
       }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_syncRolesFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
+      const changed = tx
+        ? await write(tx)
+        : await reldb.tx.wrapResult(write)
+      if (!changed.success) {
+        return changed.error.code === HaiReldbError.TRANSACTION_FAILED.code
+          ? mapRepositoryError('iam_syncRolesFailed', changed.error.message)
+          : changed
       }
-
-      logger.info('Roles synced for user', { userId, added: toAdd.length, removed: toRemove.length })
-
-      // 事务提交后统一同步会话角色和权限
-      if (ownTx) {
+      if (changed.data && !tx) {
+        logger.info('Roles synced for user', { userId })
         await syncUserSessionAfterRoleChange(userId)
       }
-
       return ok(undefined)
     },
 

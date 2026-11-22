@@ -312,6 +312,40 @@ function tests() {
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
   })
 
+  it('并发保存同一账号时资料和角色始终来自同一次更新', async () => {
+    const iam = await initIam()
+    const suffix = crypto.randomUUID()
+    const account = await iam.user.createUser({ username: `combined-${suffix}`, password: TEST_PASSWORD })
+    const reviewer = await iam.authz.createRole({ code: `reviewer-${suffix}`, name: 'Reviewer' })
+    const editor = await iam.authz.createRole({ code: `editor-${suffix}`, name: 'Editor' })
+    expect(account.success && reviewer.success && editor.success).toBe(true)
+    if (!account.success || !reviewer.success || !editor.success)
+      return
+
+    const { id } = account.data.user
+    const results = await Promise.all([
+      iam.user.updateUserWithRoles(id, {
+        profile: { displayName: 'Reviewer' },
+        roleIds: [reviewer.data.id],
+      }),
+      iam.user.updateUserWithRoles(id, {
+        profile: { displayName: 'Editor' },
+        roleIds: [editor.data.id],
+      }),
+    ])
+    expect(results.every(result => result.success)).toBe(true)
+    const saved = await iam.user.getUser(id, {
+      include: ['roles'],
+    })
+    expect(saved.success).toBe(true)
+    if (saved.success && saved.data) {
+      const expected = saved.data.displayName === 'Reviewer'
+        ? reviewer.data.id
+        : editor.data.id
+      expect(saved.data.roles?.map(role => role.id)).toEqual([expected])
+    }
+  })
+
   it('配额拒绝的登录不更新成功登录时间，也不能推迟自动休眠', async () => {
     const iam = await initIam({
       accounts: { dormantAfterDays: 90 },

@@ -205,31 +205,21 @@ export async function updateAdminUser(input: AdminUpdateUser, context: ServConte
   if (role?.success && !role.data)
     return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
   const { id, role: _role, ...profile } = input
-  const previousRoles = await iam.authz.getUserRoles(id)
-  if (!previousRoles.success)
-    return previousRoles
-  if (role?.success && role.data) {
-    const assigned = await iam.authz.syncRoles(id, [role.data.id])
-    if (!assigned.success)
-      return assigned
-  }
-  const updated = await iam.user.updateUser(id, {
-    ...profile,
-    accountExpiresAt: profile.accountExpiresAt === undefined
-      ? undefined
-      : profile.accountExpiresAt
-        ? new Date(profile.accountExpiresAt)
-        : null,
+  const updated = await iam.user.updateUserWithRoles(id, {
+    profile: {
+      ...profile,
+      accountExpiresAt: profile.accountExpiresAt === undefined
+        ? undefined
+        : profile.accountExpiresAt
+          ? new Date(profile.accountExpiresAt)
+          : null,
+    },
+    roleIds: role?.data
+      ? [role.data.id]
+      : undefined,
   })
-  if (!updated.success) {
-    // 角色 ID 可精确还原，避免 undefined 资料字段被 updateUser 忽略后无法补偿。
-    if (role?.success && role.data) {
-      const restored = await iam.authz.syncRoles(id, previousRoles.data.map(item => item.id))
-      if (!restored.success)
-        core.logger.error('Failed to restore roles after user update failure', { userId: id, error: restored.error.code })
-    }
+  if (!updated.success)
     return updated
-  }
   await recordAudit(context, 'update', 'users', id, {
     fields: Object.keys(profile),
     role: input.role,

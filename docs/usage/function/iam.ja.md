@@ -210,6 +210,7 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 | `iam.user.getCurrentUser(accessToken)` | 現在のトークン所有者の情報を取得 | `accessToken: string` 現在のセッションのアクセストークン | `User` | `await iam.user.getCurrentUser(accessToken)` |
 | `iam.user.updateCurrentUser(accessToken, data)` | 現在のトークン所有者の情報を更新 | `accessToken: string` 現在のセッションのアクセストークン · `data: UpdateCurrentUserInput` · [オブジェクト引数](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
 | `iam.user.updateUser(userId, data)` | ID でユーザー情報を更新 | `userId: string` 対象ユーザー ID · `data: Partial<User>` に管理者が変更する項目を渡す。この節の変更可能項目を参照 | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
+| `iam.user.updateUserWithRoles` | 利用者情報とロールを同じトランザクションで保存 | userId, { profile?, roleIds? } | `User` またはロールバック後のエラー | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
 | `iam.user.deleteUser(userId)` | 指定ユーザーを削除 | `userId: string` 対象ユーザー ID | `void` | `await iam.user.deleteUser(userId)` |
 | `iam.user.adminResetPassword(userId, newPassword)` | 管理者としてパスワードを再設定 | `userId: string` 対象ユーザー ID · `newPassword: string` 現在のポリシーに従う新しいパスワード | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
 | `iam.user.renewPassword(input)` | 元の資格情報で期限切れ・初期パスワードを更新 | `input` は必須。`identifier`、現在の `password`、`newPassword` と任意の `captcha` を指定 | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
@@ -260,6 +261,20 @@ else result.error.code
 #### 利用例：利用者情報とパスワード管理
 
 作成、ID・名前・メールでの検索、一覧、更新、削除を示します。パスワードではリセット証明・期限・無効化を扱い、該当なしと DB エラーを区別します。
+
+#### 利用例：利用者情報とロールを同時に更新
+
+管理画面のサーバー側で対象アカウントの管理権限とレビュー担当ロールの割当権限を確認済みとします。`roleIds` を省略すると現在のロールを維持し、`[]` を渡すと割当をすべて解除します。ロール変更後は現在の権限で既存セッションを検証し、アカウント状態などが変わると以前のセッションは無効になります。
+
+```ts
+// 確認済みの利用者 ID とロール ID を使い、表示名を保存してロールを置き換えます。
+// 成功時は確定した利用者情報を返し、ロールが無効なら両方の更新を取り消します。
+const updated = await iam.user.updateUserWithRoles(userId, {
+  profile: { displayName: 'Alice' },
+  roleIds: [reviewerRoleId],
+})
+if (!updated.success) throw new Error(updated.error.message)
+```
 
 #### 引数と結果：利用者情報
 
@@ -668,7 +683,7 @@ async function rotateThenRevoke(refreshToken: string) {
 
 #### 利用例：一回用の証明の発行と消費
 
-issue は用途と関連付けを受け取りランダムな証明を返します。consume は期待する用途を検査し、成功時に関連データを返します。不一致・期限切れ・再利用では業務を止めます。
+issue は用途と関連付けを受け取りランダムな証明を返します。consume は期待する用途を検査し、成功時に関連データを返します。用途が一致しない要求は拒否され、元の用途ではチケットを引き続き利用できます。期限切れや使用済みのチケットは使えません。
 
 #### 引数と結果：一回用チケット
 
