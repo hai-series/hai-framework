@@ -30,6 +30,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 Use the [image policy and Markdown source range](../../docs/usage/function/ui.en.md#private-document-media) to control image requests and map a selection to the source document.
 
 
+[Schedule input](../../docs/usage/function/ui.en.md#schedule-input) combines the date picker with IANA time zones, minute precision, and five-field cron.
+
 ## Data Structures
 
 The module creates no database tables of its own.

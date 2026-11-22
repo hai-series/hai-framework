@@ -34,6 +34,8 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 私有 Markdown 可使用 [图片策略与源码选区](../../docs/usage/function/ui.md#private-document-media)控制网络图片并定位用户选择的原文。
 
 
+[调度输入](../../docs/usage/function/ui.md#schedule-input)复用日期选择器，支持 IANA 时区、分钟精度和五段 Cron。
+
 ## 数据结构
 
 模块没有自建数据库表。

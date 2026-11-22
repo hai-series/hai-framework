@@ -259,13 +259,17 @@ const p = usePlatform()
 | `DataTable`  | `data`, `columns`, `keyField`, `sortKey`, `sortDir`, `onsort`, snippet slots | 数据表格（列定义 `sortable` 可排序） |
 | `Combobox`   | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择    |
 | `Calendar`   | `value`, `minValue`, `maxValue`                                    | 独立日历      |
-| `DatePicker` | `value`, `minValue`, `maxValue`, `error`                           | 日期输入+弹出 |
+| `DatePicker` | `value`, `minValue`, `maxValue`, `error`, `ariaLabel`                           | 日期输入+弹出 |
+| `ScheduleInput` | `config`, `value`, `valid`, `name`, `required`, `disabled` | IANA 时区的分钟调度输入，可选五段 Cron |
+| `CronExpressionBuilder` | `value`, `presets`, `labels`, `error` | 可视化或手工编辑 Cron |
 | `Tabs`       | `items: TabItem[]`, `active`, `type`                               | 标签页        |
 | `Pagination` | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast`, `onchange` | 分页（统一为 shadcn table 风格） |
 | `Dropdown`   | `items: DropdownItem[]`, `trigger`                                 | 下拉菜单      |
 | `Accordion`  | `items: AccordionItem[]`                                           | 折叠面板      |
 | `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
 | `Empty`      | `title`, `description`, `icon`                                     | 空状态        |
+
+从 `@h-ai/ui` 接入 `ScheduleInput`，将 `x-hai-input` 经 `normalizeScheduleInputConfig` 后用于 `config`。默认北京时间，明确指定其他 IANA 时区可得到对应日期的 UTC 偏移。通过 `name` 提交 ISO 或五段 Cron 字符串。纯 Node schema 处理可导入 `@h-ai/ui/components/compounds/schedule-input`。
 
 滚动或裁剪容器中的 `Dropdown` 使用默认 `click` 或 `hover` 触发，菜单挂载到 `body`。由调用方控制开关时，使用 `trigger='manual'`，通过 `class` 切换 `dropdown-open` 显示内联菜单。`Popover` 默认挂载到 `body`，`click` 模式下键盘打开后焦点进入面板，Escape 关闭并返回触发控件。
 
