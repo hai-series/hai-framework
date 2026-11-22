@@ -1,6 +1,7 @@
 <script lang='ts'>
   // 麦克风实时转写面板：录音期间周期转写当前快照，停止时仅补齐最后一段
-  import { blobToWav } from '@h-ai/ai/client'
+  import type { AudioRecorder } from '@h-ai/ai/client'
+  import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import ApiGuide from '#lib/components/ApiGuide.svelte'
@@ -18,11 +19,10 @@
   let error = $state('')
   let seconds = $state(0)
   let liveTranscribing = $state(false)
+  let requestingPermission = $state(false)
 
-  // 非响应式引用：录音器、音频流、数据分片、转写任务与计时器
-  let mediaRecorder: MediaRecorder | undefined
-  let mediaStream: MediaStream | undefined
-  let chunks: Blob[] = []
+  // 转写任务使用应用自己的录音轮次，每个麦克风会话独立管理轨道和分段。
+  let recorder: AudioRecorder | undefined
   let activeTranscription: Promise<void> | undefined
   let lastTranscribedBytes = 0
   let recordingId = 0
@@ -36,17 +36,6 @@
       clearInterval(timer)
       timer = undefined
     }
-  }
-
-  /** 停止并释放麦克风音频流。 */
-  function releaseStream() {
-    mediaStream?.getTracks().forEach(track => track.stop())
-    mediaStream = undefined
-  }
-
-  /** 获取当前已录制音频的不可变快照。 */
-  function recordingSnapshot(): Blob {
-    return new Blob([...chunks], { type: chunks[0]?.type || mediaRecorder?.mimeType || 'audio/webm' })
   }
 
   /** 转写一个录音快照；仅当前录音会更新 UI，避免旧任务覆盖新会话。 */
@@ -78,12 +67,14 @@
   function transcribeLiveSnapshot() {
     if (phase !== 'recording' || activeTranscription)
       return
-    const recorded = recordingSnapshot()
-    if (recorded.size === 0 || recorded.size === lastTranscribedBytes)
+    const recorded = recorder?.snapshot()
+    if (!recorded?.size || recorded.size === lastTranscribedBytes)
       return
-    const currentRecordingId = recordingId
-    activeTranscription = transcribeSnapshot(recorded, currentRecordingId).finally(() => {
-      activeTranscription = undefined
+    const task = transcribeSnapshot(recorded, recordingId)
+    activeTranscription = task
+    void task.finally(() => {
+      if (activeTranscription === task)
+        activeTranscription = undefined
     })
   }
 
@@ -93,26 +84,43 @@
       error = m.mic_error_unsupported()
       return
     }
+    if (requestingPermission || phase !== 'idle')
+      return
     error = ''
     transcript = ''
+    requestingPermission = true
+    const current = ++recordingId
+    lastTranscribedBytes = 0
+    recorder = createAudioRecorder({
+      timesliceMs: 500,
+      onStop: recorded => void finalizeRecording(recorded, current),
+      onError: (cause) => {
+        if (current !== recordingId)
+          return
+        recordingId += 1
+        activeTranscription = undefined
+        stopTimer()
+        liveTranscribing = false
+        phase = 'idle'
+        error = m.error_request({
+          detail: errorMessage(cause, m.error_unknown()),
+        })
+      },
+    })
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      await recorder.start()
     }
     catch {
-      error = m.mic_error_permission()
+      if (current === recordingId)
+        error = m.mic_error_permission()
       return
     }
-
-    recordingId += 1
-    chunks = []
-    lastTranscribedBytes = 0
-    mediaRecorder = new MediaRecorder(mediaStream)
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0)
-        chunks.push(event.data)
+    finally {
+      if (current === recordingId)
+        requestingPermission = false
     }
-    mediaRecorder.onstop = () => void finalizeRecording(recordingId)
-    mediaRecorder.start(500)
+    if (current !== recordingId)
+      return
 
     phase = 'recording'
     seconds = 0
@@ -129,16 +137,16 @@
       return
     stopTimer()
     phase = 'finalizing'
-    mediaRecorder?.stop()
+    recorder?.stop()
   }
 
   /** 等待正在进行的实时请求，再转写包含最终数据块的完整快照。 */
-  async function finalizeRecording(currentRecordingId: number) {
-    releaseStream()
+  async function finalizeRecording(recorded: Blob, currentRecordingId: number) {
     if (activeTranscription)
       await activeTranscription
+    if (currentRecordingId !== recordingId)
+      return
 
-    const recorded = recordingSnapshot()
     if (recorded.size === 0) {
       error = m.mic_error_empty()
       phase = 'idle'
@@ -154,11 +162,7 @@
   $effect(() => () => {
     recordingId += 1
     stopTimer()
-    if (mediaRecorder?.state === 'recording') {
-      mediaRecorder.onstop = null
-      mediaRecorder.stop()
-    }
-    releaseStream()
+    recorder?.close()
   })
   useToastFeedback(() => error)
 </script>
@@ -171,7 +175,7 @@
   <p class='mt-1 text-sm text-base-content/55'>{m.mic_description()}</p>
 
   <label class='mt-4 block text-sm font-medium' for='mic-language'>{m.asr_language_label()}</label>
-  <select id='mic-language' class='select select-bordered mt-2 w-full' bind:value={language} disabled={phase !== 'idle'}>
+  <select id='mic-language' class='select select-bordered mt-2 w-full' bind:value={language} disabled={phase !== 'idle' || requestingPermission}>
     <option value='auto'>{m.asr_language_auto()}</option>
     <option value='zh'>{m.asr_language_zh()}</option>
     <option value='en'>{m.asr_language_en()}</option>
@@ -207,7 +211,7 @@
       {m.mic_stop()}
     </Button>
   {:else}
-    <Button class='mt-4 w-full' variant='primary' onclick={start} disabled={!supported || phase === 'finalizing'} data-testid='mic-start'>
+    <Button class='mt-4 w-full' variant='primary' onclick={start} disabled={!supported || requestingPermission || phase === 'finalizing'} data-testid='mic-start'>
       {#if phase === 'finalizing'}<span class='loading loading-spinner loading-sm'></span>{/if}
       <span class='icon-[tabler--microphone] size-4'></span>
       {phase === 'finalizing'

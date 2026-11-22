@@ -23,6 +23,7 @@ See the [configuration reference](../../docs/usage/configuration/ai.en.md) for c
 ## Features
 
 [Browse the API list](../../docs/usage/function/ai.en.md#api-reference) for entry points, inputs, results and examples.
+[Local parsing](../../docs/usage/function/ai.en.md#bounded-local-files) extracts private files in Node. Structured output supports a selected-field preview, and [browser recording](../../docs/usage/function/ai.en.md#browser-recording) shares microphone control and bounded WAV conversion.
 
 ## Data Structures
 

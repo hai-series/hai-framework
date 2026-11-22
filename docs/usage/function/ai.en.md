@@ -126,6 +126,7 @@ When a model uses `protocol: "responses"`, `chat` and `chatStream` send text and
 | `tempModel` | `maxTokens`, `temperature`, `timeout` | Override the output token limit, sampling temperature, and timeout in milliseconds. For example, `timeout: 15000` sets fifteen seconds. Explicit request budget and temperature take precedence |
 | `generateObject` | `schema`, `messages`, `systemPrompt`, `temperature` | Required Zod schema for local validation and messages. Optionally prepend a system prompt or override sampling temperature |
 | `generateObject` | `responseFormat`, `schemaName`, `maxRepairs` | `responseFormat` defaults to `json_schema` and also accepts `json_object`. `schemaName` applies to `json_schema` and defaults to `result`. A local parse or validation failure gets one repair by default. Set `maxRepairs: 0` to try only once |
+| `generateObject` | `maxTokens`, `preview` | Cap completion tokens. An optional callback previews the requested top-level field while the final result still requires schema validation. |
 | `getHistory`, `listSessions` | `objectId`, `sessionId`, `limit`, `order` | Both require a trusted subject ID. `getHistory` optionally filters by session and takes a second object for count and time order. Default `desc` puts the newest first. `asc` puts the oldest first. `listSessions` takes the subject ID directly |
 | `models.register`, `models.update`, `models.remove` | Model definition, `expectedVersion` | Register and replace use the model configuration fields. Pass the database version from `models.get` to update or remove with a concurrent change check |
 
@@ -259,10 +260,24 @@ Process chunks, collect responses and encode/decode SSE without initializing AI.
 | `data` | Optional string. Line breaks become separate data lines |
 | `event`, `id` | Optional event type and cursor. An omitted event type leaves `event` absent in the decoded object. EventSource consumers can treat it as `message`. `id: ''` clears the cursor. The encoder rejects line breaks in either and NUL in an ID |
 | `retry` | Optional retry interval in milliseconds. Must be a nonnegative safe integer |
+| `ai.stream.createJsonFieldPreview` | JSON text preview | `field, maxLength? (12000), maxInputLength? (1000000)` | `push(fragment)` → prefix or `undefined`; invalid limits and excess input throw | `ai.stream.createJsonFieldPreview('text')` |
 
 `encodeSSE({ data: 'one' + String.fromCharCode(10) + 'two', retry: 1500 })` yields a retry line, two data lines, and an empty line. Decoding returns the joined two-line `data` and `retry` of 1500.
 
 #### Scenario: Process streams and SSE
+
+To show an explanation while an object is being generated, pass `preview: { field: "text", onPrefix }` to `ai.llm.generateObject`. The callback receives only the cumulative prefix of that top-level string, followed by an empty string if the attempt fails. Check the final `success` before consuming the schema-validated `data`. For application-managed retries, create a fresh preview parser on every attempt.
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// Create a fresh parser for one response. It keeps only the top-level text prefix for the preview.
+const preview = ai.stream.createJsonFieldPreview('text', { maxLength: 1000 })
+// Supply the first JSON fragment. The growing field is visible before the JSON object closes.
+const first = preview.push('{"text":"Done') // "Done"
+// Complete the chosen field. ready belongs to the final object and does not appear in the preview.
+const next = preview.push(' today","ready":true}') // "Done today"
+```
 
 Input is SSE text and a real chat stream. decode waits for the blank event delimiter; collect consumes a complete stream and rejects on failure.
 
@@ -1002,8 +1017,8 @@ Validate file type and size before extracting text; OCR formats require configur
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
-| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Buffer \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
+| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` (`signal` optional) | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
+| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Uint8Array \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
 
 #### File content and parsing options
 
@@ -1030,6 +1045,27 @@ const plain = plainResult.data // parsed text result
 parse takes a file input and parseText takes text. Outputs carry text and metadata for later chunking/indexing. Unsupported formats or read failures stop ingestion.
 
 [Detailed parameters and workflows](ai.md#files)
+
+<a id="bounded-local-files"></a>
+
+For private attachments use `options.mode: "local"`. Install `pdfjs-dist` for PDF and `mammoth` for DOCX. Local parsing runs in a Node worker and is available before AI initialization. The regular mode retains OCR fallback. Local defaults are 4 MiB per file, 100 PDF pages, 512 DOCX entries and 24 MiB expanded, 12,000 UTF-16 code units of text, and 20 seconds. Page or text truncation returns an ellipsis and `metadata.truncated: true`. Oversized input, empty text, timeout, cancellation, and a busy parser return failures.
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// Parse the supplied private text in Node without AI init. Inspect the HaiResult before reading the body.
+const parsed = await ai.file.parse({
+  content: new TextEncoder().encode('Internal review'),
+  filename: 'review.txt',
+  options: { mode: 'local', maxInputBytes: 1024, timeoutMs: 5000 },
+})
+if (parsed.success) {
+  const body = parsed.data.text // "Internal review"
+}
+else {
+  const errorCode = parsed.error.code
+}
+```
 
 <a id="reasoning"></a>
 
@@ -1095,6 +1131,8 @@ Inspect model capabilities before choosing complete or streaming audio. Browser 
 | Full synthesis only | `targetDurationMs`, `durationToleranceMs` | Target is a positive integer in ms. Tolerance is a nonnegative integer in ms and requires a target. Target is mutually exclusive with `speed` and requires model support |
 | Transcription and synthesis options | `model`, `strictCapabilities`, `signal` | Omitted model uses the operation’s configuration. Strict mode is off by default. With it on, unsupported advanced capabilities fail before the request. Pass a signal to cancel |
 | `AudioCapabilitiesRequest` and `models` resources | `operation`, `model`, definition, and version | Choose `transcribe` or `synthesize` for capability queries, with optional model. See [AI settings](../configuration/ai.en.md) for model definition fields. Use the version read from the model registry |
+| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
 
 For example, transcribe prepared audio with `{ timestampGranularities: ['word'], strictCapabilities: true }`. A supporting model can return word times in milliseconds. An unsupported model returns a capability error before dispatch.
 
@@ -1104,6 +1142,40 @@ ASR takes real audio bytes and TTS text, returning transcription or formatted au
 
 [Detailed parameters and workflows](ai.md#audio)
 
+
+<a id="browser-recording"></a>
+
+#### Scenario: Record and convert browser audio
+
+Request microphone access from a user action. The application can transcribe snapshots during recording or wait for the final Blob from `onStop`. Call `close()` on cancellation or unmount to release tracks and discard the session.
+
+```ts
+import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
+
+function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
+  // Create a session with a 30-second stop and a 1 MiB encoded-size limit. No tracks are opened until start().
+  const recorder = createAudioRecorder({
+    maxDurationSeconds: 30,
+    maxInputBytes: 1_048_576,
+    onError,
+    onStop(recorded) {
+      // Convert the complete Blob to mono PCM16. A delayed final chunk is trimmed to 30 seconds.
+      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+        .then(onReady, onError)
+    },
+  })
+  return {
+    // Request microphone permission and start. A denied request rejects.
+    start: () => recorder.start(),
+    // End normally. onStop receives the recording including its final data.
+    stop: () => recorder.stop(),
+    // Discard the recording and release microphone tracks on cancel or unmount.
+    cancel: () => recorder.close(),
+  }
+}
+```
+
+The browser checks Blob size before decoding and duration after decoding. The numeric sample-rate argument to `blobToWav(recorded, 16000)` remains supported. A duration limit rejects by default. Set `overflow: "truncate"` to keep the beginning. Validate uploaded audio on the server.
 
 #### Scenario: Maintain a stored definition
 

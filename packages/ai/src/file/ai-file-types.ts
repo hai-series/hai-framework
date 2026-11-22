@@ -6,7 +6,6 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { Buffer } from 'node:buffer'
 
 // ─── 文件解析方法 ───
 
@@ -56,6 +55,18 @@ export type OutputFormat = 'text' | 'markdown'
  * ```
  */
 export interface FileParseOptions {
+  /** 默认模式允许现有 OCR 路径。local 仅在当前 Node 进程解析，且无需初始化 AI。 */
+  mode?: 'auto' | 'local'
+  /** 本地模式单文件字节上限，默认 4 MiB。 */
+  maxInputBytes?: number
+  /** 本地模式输出 UTF-16 长度上限，默认 12000，超限返回标有省略号的摘录。 */
+  maxTextLength?: number
+  /** 本地 DOCX 的 ZIP 条目上限，默认 512。 */
+  maxZipEntries?: number
+  /** 本地 DOCX 的实际解压总字节上限，默认 24 MiB。 */
+  maxExpandedBytes?: number
+  /** 本地解析超时毫秒数，默认 20000，超时会停止解析线程。 */
+  timeoutMs?: number
   /** 强制使用指定 MIME 类型（覆盖自动检测） */
   mimeType?: string
   /** 强制使用 OCR（即使有原生解析器支持） */
@@ -69,7 +80,7 @@ export interface FileParseOptions {
   model?: string
   /** OCR 系统提示词（覆盖全局 `file.systemPrompt` 配置） */
   systemPrompt?: string
-  /** PDF 最大解析页数（默认解析全部页） */
+  /** PDF 最大解析页数（本地模式默认 100，其他模式默认解析全部页）。 */
   maxPages?: number
   /**
    * 输出格式（默认 `'text'`）
@@ -91,14 +102,16 @@ export interface FileParseRequest {
   /**
    * 文件内容
    *
-   * - `Buffer` — 二进制文件（图片、PDF、DOCX 等）
+   * - `Buffer` 或 `Uint8Array` — 二进制文件（图片、PDF、DOCX 等）
    * - `string` — 文本内容（直接传入文本格式文件）
    */
-  content: Buffer | string
+  content: Uint8Array | string
   /** 文件名（用于 MIME 类型自动检测，可选） */
   filename?: string
   /** 解析选项 */
   options?: FileParseOptions
+  /** 本地模式取消信号，取消时停止解析线程。 */
+  signal?: AbortSignal
 }
 
 /**
@@ -125,6 +138,8 @@ export interface FileParseResult {
     filename?: string
     mimeType?: string
     charCount?: number
+    /** 本地模式因页数或字符上限返回了摘录。 */
+    truncated?: boolean
   }
 }
 
@@ -133,7 +148,7 @@ export interface FileParseResult {
 /**
  * File 操作接口（通过 `ai.file` 访问）
  *
- * 需要先调用 `ai.init()` 初始化后使用（OCR 功能需要 LLM 配置）。
+ * 可在初始化前调用 `parse({ options: { mode: 'local' } })`。默认模式需要 AI 初始化，OCR 需要 LLM 配置。
  *
  * 支持的格式：
  * - 文本格式（txt、md、csv 等）：直接解码
@@ -173,5 +188,5 @@ export interface FileOperations {
    * @param filename - 文件名（用于格式检测，可选）
    * @returns 提取的文本内容
    */
-  parseText: (content: Buffer | string, filename?: string) => Promise<HaiResult<string>>
+  parseText: (content: Uint8Array | string, filename?: string) => Promise<HaiResult<string>>
 }

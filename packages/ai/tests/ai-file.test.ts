@@ -7,10 +7,12 @@
 import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { Buffer } from 'node:buffer'
+import { readFile } from 'node:fs/promises'
 import { Worker } from 'node:worker_threads'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createFileOperations } from '../src/file/ai-file-functions.js'
+import { ai } from '../src/index.js'
 
 // pdfjs-dist 是可选解析路径；测试固定模拟不可用，验证 PDF 能稳定回退到 OCR。
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => {
@@ -606,5 +608,103 @@ describe('file operations — outputFormat: markdown', () => {
       expect(result.data.text).toBe('plain text')
       expect(result.data.method).toBe('text')
     }
+  })
+})
+
+describe('file operations — strictly local', () => {
+  it('parses PDF and DOCX before initialization and enforces archive limits', async () => {
+    expect(ai.isInitialized).toBe(false)
+    const pdf = await readFile(new URL('./fixtures/file/sample.pdf', import.meta.url))
+    const docx = await readFile(new URL('./fixtures/file/sample.docx', import.meta.url))
+    await expect(ai.file.parse({
+      content: pdf,
+      filename: 'sample.pdf',
+      options: { mode: 'local' },
+    })).resolves.toMatchObject({
+      success: true,
+      data: {
+        method: 'pdf',
+        text: expect.stringContaining('PDF evidence: limit is 3'),
+      },
+    })
+    await expect(ai.file.parse({
+      content: docx,
+      filename: 'sample.docx',
+      options: { mode: 'local' },
+    })).resolves.toMatchObject({
+      success: true,
+      data: { method: 'docx', text: 'Word evidence: owners may edit' },
+    })
+    await expect(ai.file.parse({
+      content: docx,
+      filename: 'sample.docx',
+      options: { mode: 'local', maxExpandedBytes: 8 },
+    })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiAIError.FILE_INVALID_CONTENT.code },
+    })
+  })
+
+  it('distinguishes a bounded excerpt from empty, oversized and canceled input', async () => {
+    const local = { mode: 'local' as const, maxTextLength: 4 }
+    const parsed = await ai.file.parse({
+      content: new TextEncoder().encode('规则内容示例'),
+      options: local,
+    })
+    expect(parsed).toMatchObject({
+      success: true,
+      data: {
+        text: '规则\n…',
+        metadata: { charCount: 4, truncated: true },
+      },
+    })
+    for (const content of [
+      '   ',
+      Uint8Array.of(0, 255),
+      '超过容量',
+    ]) {
+      await expect(ai.file.parse({
+        content,
+        options: { ...local, maxInputBytes: 4 },
+      })).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiAIError.FILE_INVALID_CONTENT.code },
+      })
+    }
+    await expect(ai.file.parse({
+      content: '有效文本',
+      options: { ...local, timeoutMs: 1 },
+    })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiAIError.FILE_LOCAL_TIMEOUT.code },
+    })
+    await expect(ai.file.parse({
+      content: '有效文本',
+      signal: AbortSignal.abort(),
+      options: local,
+    })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiAIError.FILE_LOCAL_CANCELLED.code },
+    })
+  })
+
+  it('keeps local parse failure separate from the OCR fallback', async () => {
+    const llm = makeMockLLM('不应调用')
+    const operations = createFileOperations(mockConfig, llm)
+    const content = Buffer.from('%PDF-truncated')
+    await expect(operations.parse({
+      content,
+      filename: 'sample.pdf',
+      options: { mode: 'local' },
+    })).resolves.toMatchObject({ success: false })
+    await expect(operations.parse({
+      content: Buffer.of(1),
+      filename: 'sample.png',
+      options: { mode: 'local' },
+    })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiAIError.FILE_UNSUPPORTED_FORMAT.code },
+    })
+    expect(llm.chat).not.toHaveBeenCalled()
   })
 })

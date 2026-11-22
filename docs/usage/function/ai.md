@@ -277,6 +277,7 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 | `tempModel` | `maxTokens`、`temperature`、`timeout` | 可覆盖生成 token 上限、采样温度和超时毫秒数，例如 `timeout: 15000`。请求显式传入的生成预算和温度优先 |
 | `generateObject` | `schema`、`messages`、`systemPrompt`、`temperature` | 必填用于本地校验的 Zod Schema 和对话消息。可插入首条系统提示，或覆盖生成温度 |
 | `generateObject` | `responseFormat`、`schemaName`、`maxRepairs` | `responseFormat` 默认 `json_schema`，可选 `json_object`。`schemaName` 对 `json_schema` 生效，默认 `result`。本地解析或校验失败后默认修复一次，`maxRepairs: 0` 表示只请求一次 |
+| `generateObject` | `maxTokens`, `preview` | 限制本次完成 token 数。可选预览回调只接收指定顶层字段，完整结果通过 Schema 校验后返回。 |
 | `getHistory`、`listSessions` | `objectId`、`sessionId`、`limit`、`order` | 两者都需要可信主体 ID。`getHistory` 可按会话过滤，并用第二参数设置返回条数和时间排序。默认 `desc` 最新在前，`asc` 最早在前。`listSessions` 直接接收主体 ID |
 | `models.register`、`models.update`、`models.remove` | 模型定义、`expectedVersion` | 注册和替换使用模型配置的同一组字段。更新和删除可传 `models.get` 返回的数据库版本来检测并发改动 |
 
@@ -514,10 +515,24 @@ export async function runExample(objectId: string) {
 | `data` | 可选字符串，换行会编码为多条数据行 |
 | `event`、`id` | 可选事件类型和游标。省略类型时解码对象不含 `event`，EventSource 消费者可按 `message` 处理。`id: ''` 清除游标。两者拒绝换行，ID 也拒绝 NUL |
 | `retry` | 可选重连间隔（毫秒），必须是非负安全整数 |
+| `ai.stream.createJsonFieldPreview` | JSON text preview | `field, maxLength? (12000), maxInputLength? (1000000)` | `push(fragment)` → prefix or `undefined`; invalid limits and excess input throw | `ai.stream.createJsonFieldPreview('text')` |
 
 `encodeSSE({ data: 'one' + String.fromCharCode(10) + 'two', retry: 1500 })` 得到一行重试提示，两行数据及结尾空行。解码得到 `data` 为两行合成的文本、`retry` 为 1500。
 
 #### 场景：处理流与 SSE
+
+需要先显示说明、随后再使用结构化结论时，在 `ai.llm.generateObject` 传入 `preview: { field: "text", onPrefix }`。回调只收到该顶层字符串的累计前缀。生成失败后回调收到空字符串，以便清除预览。最终仍要检查 `success` 并读取通过 Schema 校验的 `data`。应用自管模型重试时，每次尝试创建独立预览器。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// 为一次响应创建预览器，只保留 text 顶层字段的累计前缀。
+const preview = ai.stream.createJsonFieldPreview('text', { maxLength: 1000 })
+// 输入第一段 JSON。对象尚未结束时已经可以展示已收到的文字。
+const first = preview.push('{"text":"Done') // "Done"
+// 补齐目标字段。ready 只出现在最终对象中。
+const next = preview.push(' today","ready":true}') // "Done today"
+```
 
 输入是一份事件文本和实际聊天流。decode 会等待空行再输出事件；collect 完整读取模型流，失败拒绝 Promise。
 
@@ -1546,8 +1561,8 @@ Node 在 Worker 中调用已安装的 PDF 和 DOCX 解析器，也将大 HTML �
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
-| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Buffer \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
+| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` (`signal` optional) | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
+| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Uint8Array \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
 
 #### 文件内容与解析选项
 
@@ -1578,6 +1593,27 @@ parse 的输入是文件参数，parseText 的输入是文字；输出保留可�
 向 `ai.file.parse({ content, filename, options: { outputFormat: 'markdown' } })` 传入业务文件内容和名称；先检查 `success`，再读取 `data.text`，纯文本输出选择 `outputFormat: 'text'`。HTML 使用 parse5 解析结构并迭代提取，忽略 script/style，保留标题、列表、链接、图片、引用、代码和表格等常见 Markdown 结构，不以截断正常文档规避畸形标签的正则回溯。
 
 结果是文本或 Markdown，不是可信 HTML；界面使用文本绑定或框架的 `MarkdownRenderer`，不要直接交给 `{@html}`。配置、调用参数和错误码保持原有契约。
+
+<a id="bounded-local-files"></a>
+
+处理私有附件时设置 `options.mode: "local"`。PDF 需要安装 `pdfjs-dist`，DOCX 需要安装 `mammoth`。本地模式在 Node Worker 内解析，无需初始化 AI。普通模式沿用 OCR 回退。本地默认限制为单文件 4 MiB、PDF 100 页、DOCX 512 项及解压总量 24 MiB、输出 12000 个 UTF-16 单元、20 秒。页数或正文越限时返回带省略号的摘录及 `metadata.truncated: true`。输入超限、无文字、超时、取消或解析繁忙返回失败。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// 在 Node 当前进程解析这段私有文字，无需初始化 AI。读取正文前检查成功状态。
+const parsed = await ai.file.parse({
+  content: new TextEncoder().encode('Internal review'),
+  filename: 'review.txt',
+  options: { mode: 'local', maxInputBytes: 1024, timeoutMs: 5000 },
+})
+if (parsed.success) {
+  const body = parsed.data.text // "Internal review"
+}
+else {
+  const errorCode = parsed.error.code
+}
+```
 
 <a id="reasoning"></a>
 
@@ -1641,6 +1677,8 @@ run 输入问题和选项输出推理结果，runStream 对同类请求输出事
 | 仅完整合成 | `targetDurationMs`、`durationToleranceMs` | 目标时长是正整数毫秒。容差为非负整数毫秒，提供时要求目标时长。目标时长与 `speed` 互斥，模型须支持目标时长 |
 | 识别和合成选项 | `model`、`strictCapabilities`、`signal` | 模型省略按识别或合成场景选择。严格模式默认关闭；开启时，不支持请求的高级能力会提前失败。信号可取消调用 |
 | `AudioCapabilitiesRequest`、`models` 资源方法 | `operation`、`model`、模型定义及版本 | 能力查询必须传 `transcribe` 或 `synthesize`，可指定模型。模型注册、更新字段见 [AI 配置](../configuration/ai.md)，版本使用模型目录读回的值 |
+| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
 
 例如用 `{ timestampGranularities: ['word'], strictCapabilities: true }` 识别已准备好的音频。支持词级时间轴时，可读取词的起止毫秒；所选模型不支持时，会在发请求前返回能力错误。
 
@@ -1795,18 +1833,39 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent 与 multipart �
 
 > 自托管模型服务（faster-whisper / IndexTTS / Qwen3-4B 的 CPU/GPU Docker 镜像、权重下载与离线打包）见 [`models/`](../../../packages/ai/models/README.md)。镜像与权重下载优先使用 ModelScope，自动回退 HuggingFace 镜像。
 
-#### 场景：在浏览器转换音频
+<a id="browser-recording"></a>
 
-Node 和浏览器根入口都导出模型解析器与配置 Schema。配置含凭据时，仅在服务端解析并限制结果的可见范围。
+#### 场景：在浏览器录音与转换音频
+
+在按钮交互中请求麦克风。应用可在录制期间调用 `snapshot()` 做快照转写，或等 `onStop` 收到完整录音后提交。取消或离开页面时调用 `close()`，释放轨道并放弃该次录音。
 
 ```ts
-import { blobToWav } from '@h-ai/ai/client'
+import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
 
-async function prepareAudio(recorded: Blob) { // 输入浏览器采集且可被 AudioContext 解码的音频。
-  return await blobToWav(recorded, 16_000) // 返回指定采样率的 WAV Blob；解码失败会拒绝 Promise。
+function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
+  // 创建最长 30 秒且编码上限为 1 MiB 的录音会话。调用 start() 时才申请麦克风。
+  const recorder = createAudioRecorder({
+    maxDurationSeconds: 30,
+    maxInputBytes: 1_048_576,
+    onError,
+    onStop(recorded) {
+      // 将完整录音转换为单声道 PCM16。最后的分片延迟时只保留前 30 秒。
+      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+        .then(onReady, onError)
+    },
+  })
+  return {
+    // 申请麦克风权限并开始录音。授权失败时 Promise 会被拒绝。
+    start: () => recorder.start(),
+    // 正常停止。onStop 会收到包含最后一段数据的录音。
+    stop: () => recorder.stop(),
+    // 取消录音或卸载组件时放弃本次录音并释放麦克风。
+    cancel: () => recorder.close(),
+  }
 }
 ```
 
+浏览器先检查 Blob 大小、再解码并检查时长。`blobToWav(recorded, 16000)` 仍接受数值采样率。设置 `maxDurationSeconds` 时超过上限默认拒绝，显式使用 `overflow: "truncate"` 才保留开头。服务端仍须校验上传数据。
 
 #### 场景：维护数据库中的定义
 

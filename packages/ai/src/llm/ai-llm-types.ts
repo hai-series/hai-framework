@@ -407,6 +407,35 @@ export interface SSEDecoder {
 }
 
 /**
+ * 流式 JSON 文本预览的字符上限，均以 UTF-16 单元计。
+ * @example
+ * ```ts
+ * import type { JsonFieldPreviewOptions } from '@h-ai/ai'
+ * const options: JsonFieldPreviewOptions = { maxLength: 1000, maxInputLength: 20000 }
+ * ```
+ */
+export interface JsonFieldPreviewOptions {
+  /** 预览字段的上限，默认 12000。 */
+  maxLength?: number
+  /** 累计输入的上限，默认 1000000。 */
+  maxInputLength?: number
+}
+
+/**
+ * 针对一次模型回复的预览器。只预览指定的顶层字符串字段，最终结果仍需校验完整 JSON。
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * const preview = ai.stream.createJsonFieldPreview('text')
+ * const prefix = preview.push('{"text":"已记录')
+ * ```
+ */
+export interface JsonFieldPreview {
+  /** 输入下一段 JSON。返回累计前缀，未变时返回 undefined。累计输入超限时抛出 RangeError。 */
+  push: (fragment: string) => string | undefined
+}
+
+/**
  * 流处理操作接口（通过 `ai.stream` 访问，纯函数，无需初始化）
  *
  * @example
@@ -419,6 +448,8 @@ export interface SSEDecoder {
  * ```
  */
 export interface StreamOperations {
+  /** 创建顶层字符串字段的增量预览器。字段名或上限无效时抛出 RangeError。 */
+  createJsonFieldPreview: (field: string, options?: JsonFieldPreviewOptions) => JsonFieldPreview
   /** 创建新的流处理器实例 */
   createProcessor: () => StreamProcessor
   /** 完整消费流并返回累积结果 */
@@ -605,6 +636,13 @@ export interface GenerateObjectRequest<T> {
   responseFormat?: 'json_schema' | 'json_object'
   /** 解析失败时的修复重试次数（默认 1） */
   maxRepairs?: number
+  /** 单次生成的最大输出 token 数。 */
+  maxTokens?: number
+  /** 选用流式调用，预览只包含指定顶层字段。失败尝试的内容经空串清除。 */
+  preview?: JsonFieldPreviewOptions & {
+    field: string
+    onPrefix: (text: string) => void | Promise<void>
+  }
   /** 取消信号 */
   signal?: AbortSignal
 }

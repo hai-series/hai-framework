@@ -130,6 +130,7 @@ finally {
 | `tempModel` | `maxTokens`、`temperature`、`timeout` | 出力トークン上限、サンプリング温度、タイムアウトのミリ秒数を上書きする。`timeout: 15000` は十五秒。リクエストに出力上限と温度を明示するとそちらが優先される |
 | `generateObject` | `schema`、`messages`、`systemPrompt`、`temperature` | ローカル検証用の Zod スキーマとメッセージは必須。最初にシステムプロンプトを追加したり、サンプリング温度を上書きしたりできる |
 | `generateObject` | `responseFormat`、`schemaName`、`maxRepairs` | `responseFormat` の既定は `json_schema`。`json_object` も選べる。`schemaName` は `json_schema` 用で既定は `result`。ローカルの解析・検証に失敗すると既定で一回修復し、`maxRepairs: 0` では一回だけ要求する |
+| `generateObject` | `maxTokens`, `preview` | 出力トークン数を制限する。任意のコールバックで指定した最上位フィールドを先行表示し、最終結果はスキーマで検証する。 |
 | `getHistory`、`listSessions` | `objectId`、`sessionId`、`limit`、`order` | どちらも信頼できる主体 ID は必須。`getHistory` ではセッションで絞り込み、第二引数で件数と時刻順を指定できる。既定の `desc` は新しい順、`asc` は古い順。`listSessions` は主体 ID を直接受け取る |
 | `models.register`、`models.update`、`models.remove` | モデル定義、`expectedVersion` | 登録と置換にはモデル設定の項目を使う。更新や削除では `models.get` が返したデータベース定義の版を渡すと、並行変更を確認できる |
 
@@ -263,10 +264,24 @@ AI の初期化なしで断片処理・収集・SSE の変換を行えます。
 | `data` | 任意の文字列。改行は別々のデータ行になる |
 | `event`、`id` | 任意のイベント種別とカーソル。種別を省略すると復号オブジェクトに `event` が入らず、EventSource の利用側は `message` として扱える。`id: ''` でカーソルを消去する。どちらも改行を拒否し、ID は NUL も拒否する |
 | `retry` | 任意の再接続間隔（ミリ秒）。非負の安全な整数 |
+| `ai.stream.createJsonFieldPreview` | JSON text preview | `field, maxLength? (12000), maxInputLength? (1000000)` | `push(fragment)` → prefix or `undefined`; invalid limits and excess input throw | `ai.stream.createJsonFieldPreview('text')` |
 
 `encodeSSE({ data: 'one' + String.fromCharCode(10) + 'two', retry: 1500 })` は再接続間隔の行、データ二行、空行を返します。復号時は二行を結合した `data` と 1500 の `retry` が得られます。
 
 #### 利用例：ストリームと SSE
+
+オブジェクト生成中に説明を表示する場合は、`ai.llm.generateObject` に `preview: { field: "text", onPrefix }` を渡します。コールバックは指定したトップレベル文字列の先頭から現在までを受け取り、試行が失敗すると空文字列で表示を消します。最終結果は `success` を確認してから、スキーマ検証済みの `data` を読みます。アプリが再試行を管理する場合は試行ごとにプレビューを作成します。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// 応答ごとのパーサーを作成し、トップレベルの text の先頭から現在までをプレビューします。
+const preview = ai.stream.createJsonFieldPreview('text', { maxLength: 1000 })
+// 最初の JSON 断片を渡すと、オブジェクトの完了前でも受信済みの文字を表示できます。
+const first = preview.push('{"text":"Done') // "Done"
+// 対象のフィールドを完了します。ready は最終オブジェクトに含まれます。
+const next = preview.push(' today","ready":true}') // "Done today"
+```
 
 SSE テキストと実際のチャットストリームを入力。decode は空行まで待ち、collect は全体を読み失敗時に拒否します。
 
@@ -1006,8 +1021,8 @@ Node はインストール済みの PDF と DOCX のパーサーを Worker で�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
-| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Buffer \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
+| `ai.file.parse(request)` | 识别文件并提取 | `request: FileParseRequest` (`signal` optional) | `FileParseResult; extraction is not HTML sanitization` | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })` |
+| `ai.file.parseText(content, filename?)` | 直接提取文本 | `content: Uint8Array \| string, filename?: string` | `string` | `ai.file.parseText("Hello", "intro.txt")` |
 
 #### ファイル内容と解析オプション
 
@@ -1034,6 +1049,27 @@ const plain = plainResult.data // parsed text result
 parse はファイル、parseText は文字列を受け取り、後の分割・索引用の本文とメタデータを返します。未対応・読込失敗なら投入を止めます。
 
 [引数と手順の詳細](ai.md#files)
+
+<a id="bounded-local-files"></a>
+
+非公開の添付ファイルには `options.mode: "local"` を指定します。PDF には `pdfjs-dist`、DOCX には `mammoth` のインストールが必要です。Node Worker で処理し、AI 初期化前にも使えます。通常モードは OCR に切り替えられます。ローカルの既定値は入力 4 MiB、PDF 100 ページ、DOCX 512 項目と展開後 24 MiB、本文 12000 UTF-16 単位、20 秒です。ページ数や本文長で切り詰める場合、省略記号と `metadata.truncated: true` を返します。入力超過、空の本文、タイムアウト、キャンセル、混雑時は失敗結果を返します。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+// AI を初期化せず Node で非公開のテキストを解析します。本文を読む前に結果を確認します。
+const parsed = await ai.file.parse({
+  content: new TextEncoder().encode('Internal review'),
+  filename: 'review.txt',
+  options: { mode: 'local', maxInputBytes: 1024, timeoutMs: 5000 },
+})
+if (parsed.success) {
+  const body = parsed.data.text // "Internal review"
+}
+else {
+  const errorCode = parsed.error.code
+}
+```
 
 <a id="reasoning"></a>
 
@@ -1099,6 +1135,8 @@ run は問題と設定から結果、runStream はイベントを返します。
 | 一括合成のみ | `targetDurationMs`、`durationToleranceMs` | 目標時間は正の整数ミリ秒。許容差は非負の整数ミリ秒で目標時間が必要。目標時間と `speed` は同時指定不可で、モデルの対応が必要 |
 | 認識・合成オプション | `model`、`strictCapabilities`、`signal` | モデルの省略時は操作別の設定を使う。厳格モードは既定で無効。有効時は非対応の高度な機能を要求すると送信前に失敗する。信号で取消可能 |
 | `AudioCapabilitiesRequest` と `models` リソース | `operation`、`model`、定義と版 | 照会では `transcribe` または `synthesize` を選び、モデルを指定できる。登録・更新項目は [AI の設定](../configuration/ai.ja.md)を参照。版はモデル一覧から取得した値 |
+| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
 
 準備済みの音声で `{ timestampGranularities: ['word'], strictCapabilities: true }` を指定します。対応モデルでは単語の開始・終了時刻をミリ秒で取得でき、非対応モデルでは送信前に機能エラーが返ります。
 
@@ -1108,6 +1146,40 @@ ASR は実音声、TTS は本文から文字起こし・形式付き音声を得
 
 [引数と手順の詳細](ai.md#audio)
 
+
+<a id="browser-recording"></a>
+
+#### 利用例：ブラウザーで録音して音声を変換する
+
+ユーザー操作からマイクへのアクセスを要求します。録音中の `snapshot()` で文字起こしするか、`onStop` に完全な録音が届いてから処理できます。取り消しや画面の破棄時は `close()` でトラックを解放し、録音を破棄します。
+
+```ts
+import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
+
+function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
+  // 30 秒と 1 MiB の制限付きで録音セッションを作ります。開始時にマイクへアクセスします。
+  const recorder = createAudioRecorder({
+    maxDurationSeconds: 30,
+    maxInputBytes: 1_048_576,
+    onError,
+    onStop(recorded) {
+      // 録音全体をモノラル PCM16 に変換します。最後のデータが遅れた場合は 30 秒に切り詰めます。
+      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+        .then(onReady, onError)
+    },
+  })
+  return {
+    // マイクへのアクセスを要求して録音します。拒否されると Promise が失敗します。
+    start: () => recorder.start(),
+    // 正常終了すると onStop に最後のデータを含む録音が届きます。
+    stop: () => recorder.stop(),
+    // キャンセルやアンマウント時に録音を破棄し、マイクを解放します。
+    cancel: () => recorder.close(),
+  }
+}
+```
+
+Blob のサイズはデコード前に、時間はデコード後に確認します。`blobToWav(recorded, 16000)` の数値引数は引き続き使えます。時間を超えた場合の既定値はエラーです。`overflow: "truncate"` を指定すると先頭部分を保持します。サーバーでもアップロード済み音声を検証します。
 
 #### 利用例：保存済み定義を管理
 

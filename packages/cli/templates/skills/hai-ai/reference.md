@@ -200,7 +200,7 @@ flush 对本节点后台提取的异常和失败 HaiResult 返回 MEMORY_EXTRACT
 
 ## File / Rerank / Reasoning
 
-- `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
+- `ai.file.parse({ content, filename, options, signal })`：默认解析保留 OCR 回退。严格本地解析设置 `options.mode: "local"`，无需 AI 初始化，支持字节、PDF 页数、DOCX 解压、正文及超时上限。取消、超时或内容非法返回失败。
 - `ai.file.parseText(content, filename?)`：直接返回文本。
 - `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排；模型 `timeout` 覆盖响应头与正文读取，超时返回失败结果。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
@@ -227,6 +227,7 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
+- 轻量浏览器录音使用 `@h-ai/ai/client` 的 `createAudioRecorder` 管理轨道、快照和分段，取消或页面卸载时调用 `close()`。把完整 Blob 交给 `blobToWav(blob, { maxInputBytes, maxDurationSeconds, overflow: "truncate" })` 后可送现有转写 API。保留应用的转写触发、原件留存与服务端校验。
 - 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
 
 能力快照 `getCapabilities` 为同步读取；跨节点更新模型后，先调用异步 `ai.audio.models.get/list` 或音频操作刷新本节点，再据能力决定参数。
@@ -249,7 +250,9 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 
 ## LLM 结构化输出
 
-`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, responseFormat?, schemaName?, maxRepairs?, signal? })` 适用于意图分类等需要结构化结果的场景。默认 `responseFormat: 'json_schema'` 向上游发送严格 Schema，仅在此模式使用 `schemaName`，默认 `result`。只支持通用 JSON 模式的 Chat 网关使用 `'json_object'`，框架将 Schema 加入提示词。两种模式都在本地用相同 Zod Schema 校验。解析或校验失败时按 `maxRepairs` 重试，默认再尝试一次。
+`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, responseFormat?, schemaName?, maxRepairs?, maxTokens?, preview?, signal? })` 适用于意图分类等需要结构化结果的场景。默认 `responseFormat: 'json_schema'` 向上游发送严格 Schema，仅在此模式使用 `schemaName`，默认 `result`。只支持通用 JSON 模式的 Chat 网关使用 `'json_object'`，框架将 Schema 加入提示词。两种模式都在本地用相同 Zod Schema 校验。解析或校验失败时按 `maxRepairs` 重试，默认再尝试一次。
+
+配置 `preview: { field, onPrefix }` 时只预览指定顶层字符串，失败尝试以空字符串清除，最终仍返回校验结果。应用自行处理重试时，每次尝试用 `ai.stream.createJsonFieldPreview(field, options)` 和 `push(fragment)` 读取更新后的累计前缀。累计模型输入超限时 `push` 抛出 `RangeError`。
 
 ```ts
 import { ai } from '@h-ai/ai'
