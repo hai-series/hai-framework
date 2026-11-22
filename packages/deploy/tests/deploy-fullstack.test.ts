@@ -660,7 +660,7 @@ it.each([
   const target = JSON.parse(readFileSync(join(directory, 'deploy-target.json'), 'utf8'))
   expect(target.directory).toBe(`/opt/hai/apps/${expected}-test`)
   if (online) {
-    expect(ssh.upload).toHaveBeenCalledWith(join(directory, target.bundle), `${target.directory}/incoming/${target.bundle}`)
+    expect(ssh.upload).toHaveBeenCalledWith(join(directory, target.bundle), `${target.directory}/incoming/${target.bundle}`, { signal: undefined })
     expect(ssh.exec.mock.calls.some(([command]) => String(command).includes(`'${target.directory}'`))).toBe(true)
   }
   expect(target.bundle).toMatch(new RegExp(`^bundle-${expected}-test-.*-1\\.2\\.3\\.tar\\.gz$`))
