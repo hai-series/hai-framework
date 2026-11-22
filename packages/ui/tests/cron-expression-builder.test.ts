@@ -6,6 +6,14 @@ import {
   isCronExpressionValid,
 } from '../src/lib/components/compounds/cron-expression-builder.js'
 
+it('keeps out-of-range fields in manual input without clamping them into another schedule', () => {
+  const original = '99 25 * * *'
+  const state = cronExpressionToBuilderState(original)
+  expect(isCronExpressionValid(original)).toBe(false)
+  expect(state.mode).toBe('custom')
+  expect(cronBuilderStateToExpression(state)).toBe(original)
+})
+
 describe('cron expression builder state', () => {
   it('creates the same defaults as the task builder', () => {
     expect(createDefaultCronBuilderState()).toEqual({

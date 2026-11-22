@@ -24,11 +24,23 @@ describe('scheduleInput schema metadata', () => {
     })).toEqual({ ...DEFAULT_SCHEDULE_INPUT_CONFIG, allowCron: true })
   })
 
+  it('retains an explicit supported IANA time zone', () => {
+    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute' }))
+      .toEqual({
+        kind: 'schedule',
+        timezone: 'America/Los_Angeles',
+        precision: 'minute',
+        allowCron: false,
+      })
+    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'UTC', precision: 'minute' })?.timezone).toBe('UTC')
+    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Unsupported/Zone', precision: 'minute' })).toBeUndefined()
+  })
+
   it('rejects unsupported or malformed schema metadata', () => {
     expect(normalizeScheduleInputConfig(undefined)).toBeUndefined()
     expect(normalizeScheduleInputConfig(null)).toBeUndefined()
     expect(normalizeScheduleInputConfig({ kind: 'other', timezone: 'Asia/Shanghai', precision: 'minute' })).toBeUndefined()
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'UTC', precision: 'minute' })).toBeUndefined()
+    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: '+08:00', precision: 'minute' })).toBeUndefined()
     expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'second' })).toBeUndefined()
     expect(normalizeScheduleInputConfig({
       kind: 'schedule',
@@ -64,6 +76,22 @@ describe('scheduleInput date-time values', () => {
       seconds: '00',
       offset: '+08:00',
     })
+  })
+
+  it('preserves valid offsets across daylight-saving transitions and rejects missing local minutes', () => {
+    const timezone = 'America/Los_Angeles'
+    const standard = { date: '2030-01-22', hour: '10', minute: '05' }
+    const daylight = { ...standard, date: '2030-07-22' }
+    const overlap = { date: '2030-11-03', hour: '01', minute: '30' }
+    const missing = { date: '2030-03-10', hour: '02', minute: '30' }
+    expect(serializeScheduleDateTime(standard, timezone)).toBe('2030-01-22T10:05:00-08:00')
+    expect(serializeScheduleDateTime(daylight, timezone)).toBe('2030-07-22T10:05:00-07:00')
+    expect(serializeScheduleDateTime(overlap, timezone)).toBe('2030-11-03T01:30:00-07:00')
+    expect(serializeScheduleDateTime(overlap, timezone, '-08:00')).toBe('2030-11-03T01:30:00-08:00')
+    expect(serializeScheduleDateTime(missing, timezone)).toBeUndefined()
+    expect(serializeScheduleDateTime(daylight, timezone, '-08:00')).toBeUndefined()
+    expect(inspectScheduleDateTimeValue('2030-11-03T01:30:00-08:00', now, timezone)).toBe('valid')
+    expect(inspectScheduleDateTimeValue('2030-01-22T10:05:00Z', now, 'UTC')).toBe('valid')
   })
 
   it('rejects empty required values, partial values, impossible dates, past values and non-minute values', () => {

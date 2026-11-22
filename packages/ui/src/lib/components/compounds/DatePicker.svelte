@@ -107,7 +107,7 @@
   >
     <BitsDatePicker.Input
       aria-label={ariaLabel}
-      aria-labelledby={field?.labelId}
+      aria-labelledby={ariaLabel ? undefined : field?.labelId}
       aria-describedby={[
         field?.messageId,
         localError && !field?.error

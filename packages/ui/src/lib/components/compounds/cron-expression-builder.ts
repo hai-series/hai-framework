@@ -90,14 +90,9 @@ export function cronExpressionToBuilderState(expression: string): CronBuilderSta
     }
   }
 
-  if (!isIntegerSegment(minutePart)) {
-    return {
-      ...baseState,
-      mode: 'custom',
-    }
-  }
-
-  const minute = clampNumber(Number.parseInt(minutePart, 10), 0, 59, defaults.minute)
+  const minute = parseSegment(minutePart, 0, 59)
+  if (minute === undefined)
+    return { ...baseState, mode: 'custom', customExpression: normalized }
 
   if (hourPart === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
     return {
@@ -107,15 +102,15 @@ export function cronExpressionToBuilderState(expression: string): CronBuilderSta
     }
   }
 
-  if (!isIntegerSegment(hourPart)) {
+  const hour = parseSegment(hourPart, 0, 23)
+  if (hour === undefined) {
     return {
       ...baseState,
       mode: 'custom',
+      customExpression: normalized,
       minute,
     }
   }
-
-  const hour = clampNumber(Number.parseInt(hourPart, 10), 0, 23, defaults.hour)
 
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
     return {
@@ -139,19 +134,21 @@ export function cronExpressionToBuilderState(expression: string): CronBuilderSta
     }
   }
 
-  if (month === '*' && dayOfWeek === '*' && isIntegerSegment(dayOfMonth)) {
+  const monthDay = parseSegment(dayOfMonth, 1, 31)
+  if (month === '*' && dayOfWeek === '*' && monthDay !== undefined) {
     return {
       ...baseState,
       mode: 'month',
       hour,
       minute,
-      monthDay: clampNumber(Number.parseInt(dayOfMonth, 10), 1, 31, defaults.monthDay),
+      monthDay,
     }
   }
 
   return {
     ...baseState,
     mode: 'custom',
+    customExpression: normalized,
     hour,
     minute,
   }
@@ -224,6 +221,15 @@ function isIntegerSegment(value: string | undefined): value is string {
   return value !== undefined && INTEGER_RE.test(value)
 }
 
+function parseSegment(value: string | undefined, min: number, max: number): number | undefined {
+  if (!isIntegerSegment(value))
+    return undefined
+  const number = Number.parseInt(value, 10)
+  return number >= min && number <= max
+    ? number
+    : undefined
+}
+
 function parseMinuteInterval(value: string | undefined): number | null {
   if (value === undefined) {
     return null
@@ -277,8 +283,9 @@ function expandCronWeekDays(dayOfWeek: string | undefined): CronWeekdayValue[] {
     }
 
     if (token.includes('-')) {
-      const [startToken, endToken] = token.split('-', 2)
-      if (!isIntegerSegment(startToken) || !isIntegerSegment(endToken)) {
+      const parts = token.split('-')
+      const [startToken, endToken] = parts
+      if (parts.length !== 2 || !isIntegerSegment(startToken) || !isIntegerSegment(endToken)) {
         return []
       }
 

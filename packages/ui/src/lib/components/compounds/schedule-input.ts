@@ -1,21 +1,12 @@
 /**
- * ScheduleInput 的公开配置与日期时间值工具。
- *
- * 调度输入的日期时间序列化固定使用 Asia/Shanghai 的 +08:00 偏移；浏览器
- * 当前时区只负责显示，不参与值的生成或校验。
+ * ScheduleInput 的 schema 配置和分钟级日期时间工具。
+ * 计算使用配置的 IANA 时区，并保留有效回填值的显式 UTC 偏移。
  */
 
-const SCHEDULE_INPUT_TIMEZONE = 'Asia/Shanghai' as const
+import { parseAbsolute, parseZonedDateTime } from '@internationalized/date'
+
+const SCHEDULE_INPUT_TIMEZONE: string = 'Asia/Shanghai'
 const SCHEDULE_INPUT_PRECISION = 'minute' as const
-/**
- * ScheduleInput 使用的固定 UTC 偏移。
- *
- * @example 模块内部上下文
- * ```ts
- * const offset = SCHEDULE_INPUT_OFFSET
- * ```
- */
-export const SCHEDULE_INPUT_OFFSET = '+08:00' as const
 
 const SCHEDULE_INPUT_CONFIG_KEYS = new Set([
   'kind',
@@ -24,15 +15,6 @@ const SCHEDULE_INPUT_CONFIG_KEYS = new Set([
   'allowCron',
 ])
 
-/**
- * `ScheduleInput` 当前支持的固定 IANA 时区。
- *
- * @example 模块内部上下文
- * ```ts
- * const timezone: ScheduleInputTimezone = 'Asia/Shanghai'
- * ```
- */
-type ScheduleInputTimezone = typeof SCHEDULE_INPUT_TIMEZONE
 /**
  * `ScheduleInput` 当前支持的值精度。
  *
@@ -57,8 +39,8 @@ type ScheduleInputPrecision = typeof SCHEDULE_INPUT_PRECISION
 export interface ScheduleInputConfig {
   /** 输入类型标识。 */
   kind: 'schedule'
-  /** 固定使用的 IANA 时区。 */
-  timezone: ScheduleInputTimezone
+  /** IANA 时区，例如 `Asia/Shanghai` 或 `America/Los_Angeles`。 */
+  timezone: string
   /** 输出值精度。 */
   precision: ScheduleInputPrecision
   /** 是否允许切换到高级 Cron 模式；省略时由规范化结果默认为 false。 */
@@ -106,7 +88,7 @@ export function normalizeScheduleInputConfig(value: unknown): ScheduleInputConfi
   }
 
   if (value.kind !== 'schedule'
-    || value.timezone !== SCHEDULE_INPUT_TIMEZONE
+    || !isIanaTimezone(value.timezone)
     || value.precision !== SCHEDULE_INPUT_PRECISION
     || (value.allowCron !== undefined && typeof value.allowCron !== 'boolean')) {
     return undefined
@@ -114,7 +96,7 @@ export function normalizeScheduleInputConfig(value: unknown): ScheduleInputConfi
 
   return {
     kind: 'schedule',
-    timezone: SCHEDULE_INPUT_TIMEZONE,
+    timezone: value.timezone,
     precision: SCHEDULE_INPUT_PRECISION,
     allowCron: value.allowCron ?? false,
   }
@@ -194,22 +176,53 @@ export function parseScheduleDateTimeValue(value: unknown): ParsedScheduleDateTi
 }
 
 /**
- * 根据日期时间草稿生成固定 +08:00 的 canonical 值。
+ * 将分钟级草稿转换为带 UTC 偏移的 ISO 日期时间。
+ * 缺失的夏令时分钟会返回 undefined。重叠分钟默认取较早的一次，回填值可指定实际偏移。
  *
  * @param draft 日期时间编辑草稿。
- * @returns canonical 值；草稿结构无效时返回 undefined。
+ * @param timezone IANA 时区，默认 `Asia/Shanghai`。
+ * @param offset 回填值已有的偏移，传入时核对该偏移与时区、日期和分钟一致。
+ * @returns ISO 日期时间；草稿、时区或偏移不合法时返回 undefined。
  *
  * @example 模块内部上下文
  * ```ts
- * const value = serializeScheduleDateTime({ date: '2026-11-22', hour: '10', minute: '05' })
+ * const value = serializeScheduleDateTime({ date: '2030-01-22', hour: '10', minute: '05' }, 'America/Los_Angeles')
+ * // '2030-01-22T10:05:00-08:00'
  * ```
  */
-export function serializeScheduleDateTime(draft: ScheduleDateTimeDraft): string | undefined {
-  if (!isStructurallyValidDraft(draft)) {
+export function serializeScheduleDateTime(
+  draft: ScheduleDateTimeDraft,
+  timezone = SCHEDULE_INPUT_TIMEZONE,
+  offset?: string,
+): string | undefined {
+  if (!isStructurallyValidDraft(draft) || !isIanaTimezone(timezone))
+    return undefined
+
+  const local = `${draft.date}T${padTwoDigits(Number.parseInt(draft.hour, 10))}:${padTwoDigits(Number.parseInt(draft.minute, 10))}:00`
+  try {
+    if (offset !== undefined) {
+      const resolved = isoPart(parseAbsolute(`${local}${offset}`, timezone).toString())
+      const normalizedOffset = offset === 'Z'
+        ? '+00:00'
+        : offset
+      return resolved === `${local}${normalizedOffset}`
+        ? `${local}${offset}`
+        : undefined
+    }
+
+    const resolved = isoPart(parseZonedDateTime(`${local}[${timezone}]`, 'earlier').toString())
+    // 春季跳时可能把不存在的分钟挪到上一小时，比较本地字段可识别这种情况。
+    return resolved.startsWith(local)
+      ? resolved
+      : undefined
+  }
+  catch {
     return undefined
   }
+}
 
-  return `${draft.date}T${padTwoDigits(Number.parseInt(draft.hour, 10))}:${padTwoDigits(Number.parseInt(draft.minute, 10))}:00${SCHEDULE_INPUT_OFFSET}`
+function isoPart(zoned: string): string {
+  return zoned.slice(0, zoned.indexOf('['))
 }
 
 /**
@@ -217,6 +230,7 @@ export function serializeScheduleDateTime(draft: ScheduleDateTimeDraft): string 
  *
  * @param value 待校验的 canonical 值。
  * @param now 用于未来时间比较的当前时间。
+ * @param timezone IANA 时区，默认北京时间。
  * @returns 日期时间的结构和未来性状态。
  *
  * @example 模块内部上下文
@@ -224,7 +238,7 @@ export function serializeScheduleDateTime(draft: ScheduleDateTimeDraft): string 
  * const status = inspectScheduleDateTimeValue('2026-11-22T10:05:00+08:00')
  * ```
  */
-export function inspectScheduleDateTimeValue(value: unknown, now: Date = new Date()): ScheduleDateTimeStatus {
+export function inspectScheduleDateTimeValue(value: unknown, now = new Date(), timezone = SCHEDULE_INPUT_TIMEZONE): ScheduleDateTimeStatus {
   if (value === undefined || value === null || value === '') {
     return 'empty'
   }
@@ -238,11 +252,11 @@ export function inspectScheduleDateTimeValue(value: unknown, now: Date = new Dat
     return 'invalid'
   }
 
-  if (parsed.seconds !== '00' || parsed.offset !== SCHEDULE_INPUT_OFFSET) {
+  if (parsed.seconds !== '00') {
     return 'invalid'
   }
 
-  return inspectScheduleDateTimeDraft(parsed, now)
+  return inspectScheduleDateTimeDraft(parsed, now, timezone, parsed.offset)
 }
 
 /**
@@ -250,6 +264,8 @@ export function inspectScheduleDateTimeValue(value: unknown, now: Date = new Dat
  *
  * @param draft 日期时间编辑草稿。
  * @param now 用于未来时间比较的当前时间。
+ * @param timezone IANA 时区，默认北京时间。
+ * @param offset 回填的显式偏移。
  * @returns 草稿的结构和未来性状态。
  *
  * @example 模块内部上下文
@@ -259,7 +275,9 @@ export function inspectScheduleDateTimeValue(value: unknown, now: Date = new Dat
  */
 export function inspectScheduleDateTimeDraft(
   draft: ScheduleDateTimeDraft,
-  now: Date = new Date(),
+  now = new Date(),
+  timezone = SCHEDULE_INPUT_TIMEZONE,
+  offset?: string,
 ): ScheduleDateTimeStatus {
   const { date, hour, minute } = draft
   if (!date && !hour && !minute) {
@@ -270,28 +288,11 @@ export function inspectScheduleDateTimeDraft(
     return 'partial'
   }
 
-  const dateMatch = DATE_RE.exec(date)
-  if (!dateMatch || !isValidCalendarDate(dateMatch)) {
+  const value = serializeScheduleDateTime(draft, timezone, offset)
+  if (!value || !Number.isFinite(now.getTime()))
     return 'invalid'
-  }
 
-  if (!isTwoDigitInteger(hour, 0, 23) || !isTwoDigitInteger(minute, 0, 59)) {
-    return 'invalid'
-  }
-
-  const scheduledDate = new Date(0)
-  scheduledDate.setUTCFullYear(
-    Number.parseInt(dateMatch[1] ?? '', 10),
-    Number.parseInt(dateMatch[2] ?? '', 10) - 1,
-    Number.parseInt(dateMatch[3] ?? '', 10),
-  )
-  scheduledDate.setUTCHours(Number.parseInt(hour, 10), Number.parseInt(minute, 10), 0, 0)
-  const scheduledAt = scheduledDate.getTime() - 8 * 60 * 60 * 1000
-
-  if (!Number.isFinite(scheduledAt)) {
-    return 'invalid'
-  }
-
+  const scheduledAt = Date.parse(value)
   return scheduledAt <= now.getTime()
     ? 'past'
     : 'valid'
@@ -303,6 +304,7 @@ export function inspectScheduleDateTimeDraft(
  * @param value 待校验的 canonical 值。
  * @param required 是否要求非空值。
  * @param now 用于未来时间比较的当前时间。
+ * @param timezone IANA 时区，默认北京时间。
  * @returns 值满足字段约束时为 true。
  *
  * @example 模块内部上下文
@@ -313,10 +315,23 @@ export function inspectScheduleDateTimeDraft(
 export function isScheduleDateTimeValid(
   value: unknown,
   required = false,
-  now: Date = new Date(),
+  now = new Date(),
+  timezone = SCHEDULE_INPUT_TIMEZONE,
 ): boolean {
-  const status = inspectScheduleDateTimeValue(value, now)
+  const status = inspectScheduleDateTimeValue(value, now, timezone)
   return status === 'valid' || (status === 'empty' && !required)
+}
+
+function isIanaTimezone(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^[a-z][\w+-]*(?:\/[\w+-]+)*$/i.test(value))
+    return false
+  try {
+    // 排除不受当前运行时支持的时区名称，固定偏移不能代替 IANA 名称。
+    return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone.length > 0
+  }
+  catch {
+    return false
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

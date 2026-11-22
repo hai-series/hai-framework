@@ -2,8 +2,8 @@
   @component ScheduleInput
   日期时间与高级 Cron 的统一调度输入。
 
-  日期时间值固定序列化为 Asia/Shanghai 的 +08:00 偏移；Cron 编辑交给
-  CronExpressionBuilder，组件本身只负责输入模式、值同步和边界校验。
+  日期时间使用配置的 IANA 时区，默认 Asia/Shanghai。Cron 编辑由
+  CronExpressionBuilder 提供。
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
@@ -24,7 +24,6 @@
     inspectScheduleDateTimeDraft,
     normalizeScheduleInputConfig,
     parseScheduleDateTimeValue,
-    SCHEDULE_INPUT_OFFSET,
     serializeScheduleDateTime,
   } from './schedule-input.js'
 
@@ -108,6 +107,7 @@
   let lastSyncedValue = $state<string | undefined>(undefined)
   let hasSyncedExternalValue = $state(false)
   let dateTimeFormatValid = $state(true)
+  let dateTimeOffset = $state<string>()
   let validationClock = $state(Date.now())
   let nativeInput = $state<HTMLInputElement | undefined>(undefined)
 
@@ -136,8 +136,8 @@
     fieldMonthDay: uiM('schedule_input_cron_field_month_day'),
     fieldExpression: uiM('schedule_input_cron_field_expression'),
   })
-  const dateTimeStatus = $derived(inspectScheduleDateTimeDraft(dateDraft, new Date(validationClock)))
-  const dateTimeDraftValue = $derived(serializeScheduleDateTime(dateDraft) ?? '')
+  const dateTimeStatus = $derived(inspectScheduleDateTimeDraft(dateDraft, new Date(validationClock), effectiveConfig.timezone, dateTimeOffset))
+  const dateTimeDraftValue = $derived(serializeScheduleDateTime(dateDraft, effectiveConfig.timezone, dateTimeOffset) ?? '')
   const draftMatchesValue = $derived(mode === 'datetime'
     ? dateTimeDraftValue === value
     : cronDraft.trim() === value.trim())
@@ -214,17 +214,58 @@
     }
   })
 
-  // 过去值在时间流逝后需要重新计算；间隔更新也避免为每个输入事件创建定时器。
   $effect(() => {
-    const timer = setInterval(() => validationClock = Date.now(), 30_000)
-    return () => clearInterval(timer)
+    if (mode !== 'datetime' || !dateTimeDraftValue)
+      return
+
+    const deadline = Date.parse(dateTimeDraftValue)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    function updateClock() {
+      const now = Date.now()
+      validationClock = now
+      const remaining = deadline - now
+      if (remaining > 0)
+        timer = setTimeout(updateClock, Math.min(remaining, 2_147_483_647))
+    }
+    updateClock()
+    return () => clearTimeout(timer)
   })
+
+  $effect(() => {
+    const form = nativeInput?.form
+    if (!form)
+      return
+    // 后台标签页可能延迟计时器，原生提交用即时钟再核对一次。
+    form.addEventListener('submit', checkSubmissionTime, true)
+    return () => form.removeEventListener('submit', checkSubmissionTime, true)
+  })
+
+  function checkSubmissionTime(event: SubmitEvent): void {
+    const now = Date.now()
+    if (disabled || mode !== 'datetime' || !dateTimeDraftValue || Date.parse(dateTimeDraftValue) > now)
+      return
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    validationClock = now
+    nativeInput?.setCustomValidity(uiM('schedule_input_past'))
+    nativeInput?.reportValidity()
+  }
+
+  function focusInvalidControl(event: Event & { currentTarget: HTMLInputElement }): void {
+    // 表单值由代理输入提交，用户在当前模式的可见输入中修正错误。
+    event.preventDefault()
+    const input = event.currentTarget
+    if (!input.form || input.form.querySelector(':invalid') === input)
+      input.ownerDocument.getElementById(controlId)?.focus()
+  }
 
   function syncExternalValue(incoming: string): void {
     const parsed = parseScheduleDateTimeValue(incoming)
     if (parsed) {
       mode = 'datetime'
-      dateTimeFormatValid = parsed.seconds === '00' && parsed.offset === SCHEDULE_INPUT_OFFSET
+      dateTimeFormatValid = parsed.seconds === '00'
+      dateTimeOffset = parsed.offset
       dateDraft = {
         date: parsed.date,
         hour: parsed.hour,
@@ -242,14 +283,9 @@
 
     mode = 'datetime'
     dateTimeFormatValid = !incoming.trim()
-    if (!incoming.trim()) {
-      dateDraft = { date: '', hour: '', minute: '' }
-      calendarDate = undefined
-    }
-    else {
-      dateDraft = { date: '', hour: '', minute: '' }
-      calendarDate = undefined
-    }
+    dateTimeOffset = undefined
+    dateDraft = { date: '', hour: '', minute: '' }
+    calendarDate = undefined
   }
 
   function setValue(nextValue: string): void {
@@ -264,7 +300,8 @@
 
   function syncDateTimeValue(): void {
     dateTimeFormatValid = true
-    setValue(serializeScheduleDateTime(dateDraft) ?? '')
+    dateTimeOffset = undefined
+    setValue(dateTimeDraftValue)
   }
 
   function handleDateChange(nextDate: DateValue | undefined): void {
@@ -299,9 +336,8 @@
 
     mode = nextMode
     if (nextMode === 'datetime') {
-      dateTimeFormatValid = true
       calendarDate = parseCalendarDate(dateDraft.date)
-      syncDateTimeValue()
+      setValue(dateTimeDraftValue)
     }
     else {
       setValue(cronDraft.trim())
@@ -337,7 +373,6 @@
 <div {...dataAttributes} class={cn('fieldset w-full min-w-0', className)}>
   <input
     bind:this={nativeInput}
-    id={controlId}
     type='text'
     class='sr-only'
     tabindex='-1'
@@ -353,6 +388,7 @@
     {required}
     {disabled}
     value={value}
+    oninvalid={focusInvalidControl}
   />
 
   <div class={cn('grid min-w-0 gap-3', effectiveError && 'rounded-lg ring-1 ring-error/35', size === 'sm' && 'gap-2')}>
@@ -378,9 +414,11 @@
           onchange={handleDateChange}
         />
         <div class='grid min-w-0 grid-cols-2 gap-2'>
-          <label class='sr-only' for={`${controlId}-hour`}>{uiM('schedule_input_hour')}</label>
+          <label class='sr-only' for={controlId}>{uiM('schedule_input_hour')}</label>
           <Input
-            id={`${controlId}-hour`}
+            id={controlId}
+            data-schedule-hour
+            error={localError || undefined}
             type='number'
             size={size}
             min={0}
@@ -408,15 +446,22 @@
           />
         </div>
       </div>
-      <p class='text-xs text-base-content/55'>{uiM('schedule_input_timezone_hint')}</p>
+      <p class='text-xs text-base-content/55'>
+        {effectiveConfig.timezone === 'Asia/Shanghai'
+          ? uiM('schedule_input_timezone_hint')
+          : uiM('schedule_input_timezone_explicit', { timezone: effectiveConfig.timezone })}
+      </p>
     {:else}
       <CronExpressionBuilder
-        id={`${controlId}-cron`}
+        id={controlId}
         name=''
         value={cronDraft}
         disabled={disabled}
         required={required}
         error={cronError || undefined}
+        describedBy={field?.error
+          ? field.messageId
+          : cronError ? messageId : undefined}
         labels={cronLabels}
         onchange={handleCronChange}
       />

@@ -68,6 +68,8 @@
     disabled?: boolean
     required?: boolean
     error?: string
+    /** 关联宿主提供的表单提示或错误文案 ID。 */
+    describedBy?: string
     presets?: CronExpressionBuilderPreset[]
     labels?: Partial<CronExpressionBuilderLabels>
     weekdayOptions?: CronExpressionBuilderWeekdayOption[]
@@ -81,6 +83,7 @@
     disabled = false,
     required = false,
     error = '',
+    describedBy,
     presets = [],
     labels: labelOverrides = {},
     weekdayOptions = DEFAULT_WEEKDAY_OPTIONS,
@@ -318,6 +321,7 @@
         disabled={disabled}
         aria-label={labels.fieldExpression}
         aria-invalid={Boolean(error)}
+        aria-describedby={describedBy}
         onfocus={openConfigPanel}
         oninput={handleManualInput}
       />
