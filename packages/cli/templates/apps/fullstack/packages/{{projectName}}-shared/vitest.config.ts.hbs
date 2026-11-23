@@ -8,5 +8,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    server: {
+      // UI 根入口依赖引导组件的样式，由 Vitest 转换后再加载。
+      deps: {
+        inline: ['@h-ai/ui', 'driver.js'],
+      },
+    },
   },
 })
