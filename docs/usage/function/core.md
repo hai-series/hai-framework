@@ -86,7 +86,7 @@ core.logger.warn('Request needs attention', { requestId })
 | 日志、结果/错误、消息、通用工具，以及模块的顺序启动与关闭 | 支持                                                           | 支持                                                                     |
 | YAML、dotenv、环境映射与文件监听                          | 可以读取和监听本地配置文件                                     | 不能读取或监听本地文件；调用加载方法会返回失败                           |
 | 请求关联 `core.context.run`                               | 每个请求保留自己的编号等信息，等待异步操作后仍能读取，互不串用 | 只在回调的同步代码中保留信息，`await` 后不再保留                         |
-| 请求语言 `core.i18n.runWithLocale`                        | 请求使用自己的语言，等待异步操作后也不会受其他请求影响         | 调用会抛错；用 `setGlobalLocale()` 设置页面语言，或在取消息时指定 locale |
+| 请求语言 `core.i18n.runWithLocale`                        | 请求使用自己的语言，等待异步操作后也不会受其他请求影响         | 调用会抛错。用 `core.i18n.setGlobalLocale()` 设置页面语言，或在取消息时指定 locale |
 | 请求策略 `core.access`                                    | 可以检查请求地址、路径和时段                                   | 不提供此工具                                                             |
 
 `core.init()` 只负责 Core 的配置和日志设置，同步返回 `void`，Core 没有 `close()` 方法。应用如果还需要启动数据库、缓存等模块，可用 `core.module.createRuntime()` 集中管理它们：调用返回对象的 `start()` 依次初始化，调用 `close()` 按相反顺序清理。下方“应用启动与关闭”给出完整示例。
@@ -722,7 +722,7 @@ const greeting = await core.i18n.runWithLocale('en-US', async () => {
 core.logger.info('Greeting prepared', { greeting })
 ```
 
-Node 请求/SSR 用 `runWithLocale()` 包裹实际异步处理；Serv 自动建立请求语言上下文，Kit 提供同名入口。在请求上下文内 `setGlobalLocale()` 只修改当前请求；上下文外仅用于启动默认值。浏览器使用应用级 `setGlobalLocale()` 或显式 locale；SSR 的 UI store 不应修改进程默认语言。
+Node 请求和 SSR 用 `core.i18n.runWithLocale()` 包裹异步处理。Serv 自动建立请求语言上下文，Kit 提供同名入口。在上下文内，`core.i18n.setGlobalLocale()` 设置当前请求的语言。上下文外用它设置启动默认值。浏览器可用 `core.i18n.setGlobalLocale()` 设置应用语言，或在取消息时指定 locale。SSR 的 UI store 不应修改进程默认语言。
 
 <a id="validation-api"></a>
 

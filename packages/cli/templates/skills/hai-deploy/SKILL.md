@@ -121,7 +121,7 @@ deploy.init 后检查 HaiResult.success，deploy.deployApp 接收 artifactDir、
 
 内部命令工具须显式枚举 `secrets`（包括转换后的敏感字面量），成功/失败/回调均跨块脱敏；不得向日志附加原始异常 cause。捕获默认每流末尾 1 Mi 字符，结构化消费先检查截断标志；异步输出回调按序等待并保持 pipe 背压。进度每行最多解析 512 字符，超时后确认远程执行状态。详细边界见 [middleware.md](middleware.md#命令输出)。
 
-超时或输入/输出失败会终止本地受管理 Job/进程组并等待核验；Windows 用系统 PowerShell/.NET 内嵌 Job，先挂起创建、分配成功才恢复，失败不降级裸进程；POSIX 后代须保留继承的进程组。`terminationTimeoutMs` 默认 10000、最大 60000 毫秒，核验失败返回 unknown。失败分支用 `getDeployCommandState(error)` 读取 localTermination 和 remoteExecution；CLI 分别显示。本地已退出不能证明 SSH 远端停止；仅新连接读到完整、ID 匹配的原子结果才确认 finished，给出结果路径/退出码。未知状态不自动重跑发布或回滚，先核对 current、步骤和实际服务。
+超时或输入/输出失败会终止本地受管理 Job/进程组并等待核验。Windows 用系统 PowerShell/.NET 内嵌 Job，先挂起创建、分配成功才恢复，失败不降级裸进程。POSIX 后代须保留继承的进程组。`terminationTimeoutMs` 默认 10000、最大 60000 毫秒，核验失败返回 unknown。失败分支用 `deploy.getDeployCommandState(error)` 读取 localTermination 和 remoteExecution，CLI 分别显示。仅新连接读到完整、ID 匹配的原子结果才确认远端 finished，并给出结果路径和退出码。状态未知时，先核对 current、步骤和实际服务，再决定是否重跑发布或回滚。
 
 终态包含 credentials/recover 等真实阶段。`remoteRecovery` 透传已匹配结果的恢复状态；passed 只证明旧容器和 HTTP 通过。服务器本地健康通过并提交 current 后，SDK 还从操作机检查公开地址；此时网络/防火墙造成失败会保留 remoteStage=complete、remoteExitCode=0，不自动撤销服务器成功部署，须核对结果和外部网络。
 

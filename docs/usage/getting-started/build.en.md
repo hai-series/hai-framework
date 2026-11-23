@@ -54,7 +54,7 @@ The root `package.json` supplies the project name and version. An image batch go
 hai build --target image --json
 ```
 
-On success the CLI emits one JSON line on stdout, with `schemaVersion: 1`, absolute `artifactDir` and `manifestPath`. Progress and failures go to stderr. Use `manifest.images[].file` to locate archives within that directory. Keep each concurrent task's own result and pass its `artifactDir` to `hai deploy --artifact-dir`. Use `readDeploymentArtifact(artifactDir)` to verify archives and SHA-256 checksums.
+On success the CLI emits one JSON line on stdout, with `schemaVersion: 1`, absolute `artifactDir` and `manifestPath`. Progress and failures go to stderr. Use `manifest.images[].file` to locate archives within that directory. Keep each concurrent task's own result and pass its `artifactDir` to `hai deploy --artifact-dir`. Use `deploy.readDeploymentArtifact(artifactDir)` to verify archives and SHA-256 checksums.
 
 `manifest.source` reports the observed Git commit and whether the project and build inputs had changes. A commit the CLI could not identify is `unknown`, and an incomplete dirty check gives `null`. Use a clean checkout pinned to the intended commit for traceable releases. Check `manifest.images[].platform` against the target architecture. Source builds and image builds keep runtime credentials separate. Check the target requirements before deploying a partial batch.
 

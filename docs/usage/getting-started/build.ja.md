@@ -54,7 +54,7 @@ pnpm build --target app --platform android --runtime auto
 hai build --target image --json
 ```
 
-成功時の標準出力は、`schemaVersion: 1` と絶対パスの `artifactDir`、`manifestPath` を含む JSON 一行です。進捗とエラーは標準エラーに出力します。アーカイブは `manifest.images[].file` を使って成果物ディレクトリから探します。並行実行では各タスクの結果を保存し、その `artifactDir` を `hai deploy --artifact-dir` に渡します。`readDeploymentArtifact(artifactDir)` でアーカイブと SHA-256 を検証できます。
+成功時の標準出力は、`schemaVersion: 1` と絶対パスの `artifactDir`、`manifestPath` を含む JSON 一行です。進捗とエラーは標準エラーに出力します。アーカイブは `manifest.images[].file` を使って成果物ディレクトリから探します。並行実行では各タスクの結果を保存し、その `artifactDir` を `hai deploy --artifact-dir` に渡します。`deploy.readDeploymentArtifact(artifactDir)` でアーカイブと SHA-256 を検証できます。
 
 `manifest.source` は認識した Git コミットと、プロジェクトおよび対象のビルド入力に変更があるかを記録します。コミットが判定できない場合は `unknown`、変更を完全に確認できない場合は `null` です。リリースを追跡できるように、対象コミットを固定し、未コミットの変更がない状態でビルドします。`manifest.images[].platform` と対象アーキテクチャも比較してください。ソースとイメージは実行時の認証情報を含めずにビルドします。部分ビルドを配布する前に対象環境の条件を確認します。
 
