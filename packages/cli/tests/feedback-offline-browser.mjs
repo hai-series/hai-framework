@@ -13,7 +13,7 @@ const requireBrowser = createRequire(path.join(repository, 'apps/admin-console/p
 const requireFeedback = createRequire(path.join(repository, 'packages/feedback/package.json'))
 const { chromium, expect } = requireBrowser('@playwright/test')
 const { build } = requireFeedback('esbuild')
-const { createFeedbackBundle, readFeedbackBundle } = await import('../../feedback/dist/bundle/index.js')
+const { feedback } = await import('../../feedback/dist/bundle/index.js')
 const evidenceParent = path.join(repository, 'tmp/validation/feedback-offline-browser')
 await mkdir(evidenceParent, { recursive: true })
 const evidenceDirectory = await mkdtemp(path.join(evidenceParent, 'run-'))
@@ -99,7 +99,7 @@ try {
   assert(events.length >= 2, 'A real browser recording must include snapshot and events')
   const screenshot = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
   const description = '<img src=x onerror="globalThis.__USER_SCRIPT__=true"> user-provided text'
-  const created = await createFeedbackBundle({
+  const created = await feedback.createBundle({
     report: {
       id: 'offline-browser',
       number: 'FB-OFFLINE-BROWSER',
@@ -140,7 +140,7 @@ try {
     missing: ['External application assets are not retained in this offline fixture'],
   })
   assert(created.success, 'Built feedback package must generate a bundle')
-  const read = await readFeedbackBundle(created.data)
+  const read = await feedback.readBundle(created.data)
   assert(read.success, 'Built feedback package must validate its bundle')
   assert(read.data.files['viewer/replay.js'].byteLength > 10000, 'Built viewer must embed its replay engine')
   const archive = path.join(evidenceDirectory, 'feedback.zip')

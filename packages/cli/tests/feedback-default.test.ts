@@ -57,7 +57,7 @@ describe('fullstack 默认反馈生成', () => {
     expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')
-    expect(procedures).toContain('createFeedbackProcedures')
+    expect(procedures).toContain('serv.createFeedbackProcedures(')
     expect(procedures).toContain(`scopeId: '${name}'`)
     const shell = await readFile(path.join(directory, shared, 'src/lib/components/AppShell.svelte'), 'utf8')
     expect(shell).toContain('<FeedbackEntry />')
@@ -71,7 +71,8 @@ describe('fullstack 默认反馈生成', () => {
     expect(browserTests).toContain('feedback submits an empty description')
     expect(browserTests).toContain('attached-large-log.txt')
     expect(browserTests).toContain('getImageData(12, 12, 1, 1)')
-    expect(browserTests).toContain('readFeedbackBundle')
+    expect(browserTests).toContain('import { feedback } from \'@h-ai/feedback/bundle\'')
+    expect(browserTests).toContain('feedback.readBundle(')
   })
 
   it('api 新工程也包含完整反馈能力与自动容量预算', async () => {
@@ -92,6 +93,6 @@ describe('fullstack 默认反馈生成', () => {
     const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))
     expect(manifest.dependencies['@h-ai/feedback']).toBe('catalog:')
     expect(parseEnv(await readFile(path.join(directory, service, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
-    expect(await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')).toContain('createFeedbackProcedures')
+    expect(await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')).toContain('serv.createFeedbackProcedures(')
   })
 })
