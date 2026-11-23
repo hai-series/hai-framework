@@ -596,7 +596,23 @@ fi
     const app = application('发布 空格', 'dist-consumer')
     const entry = path.join(root, 'dist-consumer.mjs')
     const published = pathToFileURL(path.join(repository, 'packages/deploy/dist/index.js')).href
-    writeFileSync(entry, `import {deploy,getDeployCommandState} from ${JSON.stringify(published)};try{const init=await deploy.init({provider:{type:'docker-ssh',expose:{hostPort:18080}}});if(!init.success)throw new Error(init.error.message);const result=await deploy.deployApp(process.argv[2],{environment:'test',bundleOnly:true});if(!result.success)throw new Error(result.error.message);process.stdout.write('DIST:'+JSON.stringify({bundle:result.data.bundlePath,stateReader:typeof getDeployCommandState})+'\\n');}finally{await deploy.close()}`)
+    writeFileSync(entry, `
+import { deploy } from ${JSON.stringify(published)}
+
+try {
+  const init = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+  if (!init.success) throw new Error(init.error.message)
+
+  const result = await deploy.deployApp(process.argv[2], { environment: 'test', bundleOnly: true })
+  if (!result.success) throw new Error(result.error.message)
+
+  const evidence = { bundle: result.data.bundlePath, stateReader: typeof deploy.getDeployCommandState }
+  process.stdout.write('DIST:' + JSON.stringify(evidence) + '\\n')
+}
+finally {
+  await deploy.close()
+}
+`)
     const output = execFileSync(process.execPath, [entry, app], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
     const evidence = JSON.parse(output.split('\n').find(line => line.startsWith('DIST:'))!.slice(5))
     expect(evidence.stateReader).toBe('function')
