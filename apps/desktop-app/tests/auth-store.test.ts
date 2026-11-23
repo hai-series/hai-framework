@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const locale = vi.hoisted(() => ({ current: 'en-US' }))
-vi.mock('@h-ai/ui/i18n', async importOriginal => ({
-  ...await importOriginal<typeof import('@h-ai/ui/i18n')>(),
-  getGlobalLocale: () => locale.current,
-}))
+vi.mock('@h-ai/ui/i18n', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@h-ai/ui/i18n')>()
+  return {
+    ...original,
+    ui: {
+      ...original.ui,
+      getGlobalLocale: () => locale.current,
+    },
+  }
+})
 
 const login = vi.fn()
 const register = vi.fn()
