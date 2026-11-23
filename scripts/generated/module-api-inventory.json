@@ -18425,24 +18425,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "safeGetPreference",
-              "kind": "value",
-              "declaration": "safeGetPreference",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "safeRemovePreference",
-              "kind": "value",
-              "declaration": "safeRemovePreference",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "safeSetPreference",
-              "kind": "value",
-              "declaration": "safeSetPreference",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "StatusBarConfig",
               "kind": "type",
               "declaration": "StatusBarConfig",
@@ -18577,24 +18559,6 @@
               "kind": "type",
               "declaration": "PushRegistration",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "safeGetPreference",
-              "kind": "value",
-              "declaration": "safeGetPreference",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "safeRemovePreference",
-              "kind": "value",
-              "declaration": "safeRemovePreference",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "safeSetPreference",
-              "kind": "value",
-              "declaration": "safeSetPreference",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "StatusBarConfig",

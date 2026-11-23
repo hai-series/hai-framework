@@ -49,7 +49,7 @@ interface PushScope {
   assertOpen: () => void
   attach: (add: () => Promise<PluginListenerHandle>) => Promise<void>
   wait: <T>(operation: () => Promise<T>) => Promise<T>
-  finishSetup: () => void
+  cancel: () => void
   dispose: () => Promise<void>
 }
 
@@ -59,15 +59,18 @@ const activeScopes = new Set<PushScope>()
 function createPushScope(options?: PushOptions): PushScope {
   let scope: PushScope
   const controller = new AbortController()
+  // 正常收尾也会停止业务回调，但不能中断等待清理完成的注册结果。
+  const operationController = new AbortController()
   const handles = new Set<PluginListenerHandle>()
   const removals = new Map<PluginListenerHandle, Promise<void>>()
   let pending = 0
+  let waiting = false
   let closing: Promise<void> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   const cancelled = () => new Error(capacitorM('capacitor_pushCancelled'))
 
   function releaseIfComplete(): void {
-    if (controller.signal.aborted && pending === 0 && handles.size === 0)
+    if (controller.signal.aborted && !waiting && pending === 0 && handles.size === 0)
       activeScopes.delete(scope)
   }
 
@@ -94,8 +97,11 @@ function createPushScope(options?: PushOptions): PushScope {
 
   function dispose(): Promise<void> {
     controller.abort()
-    finishSetup()
-    options?.signal?.removeEventListener('abort', onAbort)
+    // 注册仍在等待正常清理时，原始期限和调用方取消信号必须继续有效。
+    if (!waiting) {
+      finishSetup()
+      options?.signal?.removeEventListener('abort', onAbort)
+    }
     if (closing)
       return closing
     closing = Promise.allSettled([...handles].map(remove)).then((results) => {
@@ -108,6 +114,7 @@ function createPushScope(options?: PushOptions): PushScope {
   }
 
   function onAbort(): void {
+    scope.cancel()
     void dispose().catch(error => logCleanupFailure('Push listener cleanup failed; retry cleanup or capacitor.close', error))
   }
 
@@ -135,23 +142,35 @@ function createPushScope(options?: PushOptions): PushScope {
     },
     async wait(operation) {
       scope.assertOpen()
+      waiting = true
       let interrupt: (() => void) | undefined
       const aborted = new Promise<never>((_, reject) => {
         interrupt = () => reject(cancelled())
-        controller.signal.addEventListener('abort', interrupt, { once: true })
+        operationController.signal.addEventListener('abort', interrupt, { once: true })
       })
       try {
-        return await Promise.race([
+        const result = await Promise.race([
           Promise.resolve().then(operation),
           aborted,
         ])
+        if (operationController.signal.aborted)
+          throw cancelled()
+        return result
       }
       finally {
+        waiting = false
+        finishSetup()
         if (interrupt)
-          controller.signal.removeEventListener('abort', interrupt)
+          operationController.signal.removeEventListener('abort', interrupt)
+        if (controller.signal.aborted)
+          options?.signal?.removeEventListener('abort', onAbort)
+        releaseIfComplete()
       }
     },
-    finishSetup,
+    cancel() {
+      operationController.abort()
+      controller.abort()
+    },
     dispose,
   }
   activeScopes.add(scope)
@@ -183,7 +202,10 @@ async function loadPushPlugin() {
  * ```
  */
 export async function closePushListeners(): Promise<HaiResult<void>> {
-  const results = await Promise.allSettled([...activeScopes].map(scope => scope.dispose()))
+  const results = await Promise.allSettled([...activeScopes].map((scope) => {
+    scope.cancel()
+    return scope.dispose()
+  }))
   const failure = results.find(result => result.status === 'rejected')
   if (failure) {
     logCleanupFailure('Push listener cleanup failed during capacitor.close', failure.reason)
@@ -193,8 +215,8 @@ export async function closePushListeners(): Promise<HaiResult<void>> {
 }
 
 /**
- * 注册原生推送 Token；30 秒包含权限、挂载监听器与原生注册等待。
- * 部分失败、超时、AbortSignal 和模块关闭都会回收已知及迟到句柄。
+ * 注册原生推送 Token；30 秒总期限包含权限、挂载、注册事件和收尾清理。
+ * 失败、超时、取消或模块关闭及时返回失败，已知及迟到句柄继续由模块清理。
  * @param options - 可选取消信号；取消返回失败结果，不注册后续原生操作。
  * @returns 真实原生插件返回的 token 或 PUSH_REGISTER_FAILED。
  * @example
@@ -242,16 +264,18 @@ export async function registerPush(options?: PushOptions): Promise<HaiResult<Pus
         scope.assertOpen()
         await push.register()
       }
-      return (await Promise.all([
+      const registered = (await Promise.all([
         setup(),
         tokenResult,
       ]))[1]
+      scope.assertOpen()
+      await scope.dispose()
+      return registered
     })
-    await scope.dispose()
     return ok({ token })
   }
   catch (cause) {
-    await scope.dispose().catch(error => logCleanupFailure('Push registration cleanup failed; retry capacitor.close', error))
+    void scope.dispose().catch(error => logCleanupFailure('Push registration cleanup failed; retry capacitor.close', error))
     return err(HaiCapacitorError.PUSH_REGISTER_FAILED, capacitorM('capacitor_pushRegisterFailed'), cause)
   }
 }
@@ -310,7 +334,6 @@ export async function listenPush(callbacks: PushNotificationCallbacks, options?:
       }
     })
     scope.assertOpen()
-    scope.finishSetup()
     return ok(async () => {
       try {
         await scope.dispose()
@@ -322,7 +345,7 @@ export async function listenPush(callbacks: PushNotificationCallbacks, options?:
     })
   }
   catch (cause) {
-    await scope.dispose().catch(error => logCleanupFailure('Push setup cleanup failed; retry capacitor.close', error))
+    void scope.dispose().catch(error => logCleanupFailure('Push setup cleanup failed; retry capacitor.close', error))
     return err(HaiCapacitorError.PUSH_LISTEN_FAILED, capacitorM('capacitor_pushListenFailed'), cause)
   }
 }

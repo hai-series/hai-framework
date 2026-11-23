@@ -35,8 +35,13 @@
   },
   "peerDependencies": {
     "@aparajita/capacitor-secure-storage": "catalog:",
+    "@capacitor/app": "catalog:",
+    "@capacitor/camera": "catalog:",
     "@capacitor/core": "catalog:",
-    "@capacitor/preferences": "catalog:"
+    "@capacitor/device": "catalog:",
+    "@capacitor/preferences": "catalog:",
+    "@capacitor/push-notifications": "catalog:",
+    "@capacitor/status-bar": "catalog:"
   },
   "peerDependenciesMeta": {
     "@aparajita/capacitor-secure-storage": {

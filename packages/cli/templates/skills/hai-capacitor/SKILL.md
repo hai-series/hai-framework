@@ -18,6 +18,7 @@ description: "在 Android/iOS 应用中接入 @h-ai/capacitor 设备、相机、
 ## 使用路径
 
 - 先判断平台和插件可用性，复用已有 SPA 入口；原生 UI 变化验证权限拒绝、取消和返回路径。
+- 普通偏好仅通过 `capacitor.preferences.*` 操作，先检查 `capacitor.init()` 成功；未初始化或关闭后返回 `NOT_INITIALIZED`。`close()` 使在途 `init()` 失效，旧初始化结束时返回既有 `INIT_FAILED`，不能在关闭后重新激活模块。
 - TokenStorage 在原生端使用安全插件；Web/插件不可用或存储失败时拒绝 Promise。调用方处理 setTokens/clear 失败并释放 loading；clear 的实例内屏蔽不替代服务端撤销。
 - 原生打包前确认公开 API 地址的运行配置入口；fullstack App 使用 `public/runtime-config.js`，构建不会读取部署环境文件。这里只放公开地址，不能放 Token 或密钥。
 - Linux Android 打包可使用包内的 SDK 镜像定义，按 [Android 容器打包](reference.md#android-容器打包) 执行应用已有打包入口。
@@ -35,4 +36,6 @@ description: "在 Android/iOS 应用中接入 @h-ai/capacitor 设备、相机、
 - 插件依赖
 - 相关 Skills
 
-推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
+推送仅在实际原生平台调用插件。`push.register({ signal? })` 自调用开始，平台检测、插件加载、权限申请、取得 token 与收尾清理共用 30 秒期限；成功要求 token 和清理均在期限内完成。超时或 AbortSignal 中止会及时返回失败并停止回调，失败返回可以先于原生清理完成。`push.listen(callbacks, { signal? })` 仅设置阶段限时 30 秒，成功后信号仍可停止回调并发起清理，也可调用返回的 cleanup。
+
+cleanup 与 `capacitor.close()` 返回 `Promise<HaiResult<void>>`，不设清理超时，等待已取得句柄的实际移除。尚未返回的 addListener 不阻塞本次关闭，迟到句柄到达后仍发起移除；未完成或移除失败的句柄由模块保留，移除失败返回 `PUSH_CLEANUP_FAILED`（`hai:capacitor:032`），可用同一 cleanup 或后续 close 重试。成功移除的句柄不重复操作，不调用影响其他消费者的 removeAllListeners。模块关闭后立即不可用，重新初始化前先重试遗留清理；失败或中止本身不证明原生资源已释放。详见 [推送通知](reference.md#4-推送通知)。自动化验证不代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。

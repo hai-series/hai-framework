@@ -5,5 +5,5 @@
  */
 
 export * from './capacitor-main.js'
-export * from './capacitor-token-storage.js'
+export { createCapacitorTokenStorage } from './capacitor-token-storage.js'
 export * from './capacitor-types.js'

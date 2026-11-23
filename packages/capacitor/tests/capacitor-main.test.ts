@@ -5,8 +5,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { capacitor } from '../src/capacitor-main.js'
-import { HaiCapacitorError } from '../src/capacitor-types.js'
+import { capacitor, HaiCapacitorError } from '../src/index.js'
 
 // mock @capacitor/core
 vi.mock('@capacitor/core', () => ({
@@ -18,6 +17,7 @@ vi.mock('@capacitor/core', () => ({
 describe('capacitor main', () => {
   afterEach(async () => {
     await capacitor.close()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -50,6 +50,40 @@ describe('capacitor main', () => {
 
   it('isNative 在非原生环境返回 false', () => {
     expect(capacitor.isNative()).toBe(false)
+  })
+
+  it('关闭使进行中的初始化失败，完成后允许重新初始化', async () => {
+    vi.stubGlobal('window', { Capacitor: {} })
+    const initializing = capacitor.init()
+    const closing = capacitor.close()
+    const concurrent = await capacitor.init()
+    expect(concurrent).toMatchObject({
+      success: false,
+      error: { code: HaiCapacitorError.INIT_IN_PROGRESS.code },
+    })
+
+    const [initialized, closed] = await Promise.all([initializing, closing])
+    expect(initialized).toMatchObject({
+      success: false,
+      error: { code: HaiCapacitorError.INIT_FAILED.code },
+    })
+    expect(closed.success).toBe(true)
+    expect(capacitor.isInitialized).toBe(false)
+    expect(await capacitor.preferences.get('theme')).toMatchObject({
+      success: false,
+      error: { code: HaiCapacitorError.NOT_INITIALIZED.code },
+    })
+
+    expect((await capacitor.init()).success).toBe(true)
+    expect(capacitor.isInitialized).toBe(true)
+  })
+
+  it('初始化时的内部重置不误取消重新初始化', async () => {
+    vi.stubGlobal('window', { Capacitor: {} })
+    expect((await capacitor.init()).success).toBe(true)
+    expect((await capacitor.init()).success).toBe(true)
+    expect(capacitor.isInitialized).toBe(true)
+    expect(capacitor.getPlatform()).toBe('android')
   })
 })
 

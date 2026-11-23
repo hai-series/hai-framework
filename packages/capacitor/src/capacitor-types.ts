@@ -95,7 +95,7 @@ export interface CameraOperations {
  * ```
  */
 export interface PushOperations {
-  /** 注册原生 Token；30 秒总超时，可取消，结束时回收监听器。 */
+  /** 注册原生 Token；获取 Token 和收尾清理共用 30 秒期限，失败可先于后台清理完成。 */
   register: (options?: PushOptions) => Promise<HaiResult<PushRegistration>>
   /** 监听原生事件；设置阶段限时 30 秒，成功后由 cleanup/信号/模块关闭释放。 */
   listen: (callbacks: PushNotificationCallbacks, options?: PushOptions) => Promise<HaiResult<PushCleanup>>
@@ -168,9 +168,9 @@ export interface PreferencesOperations {
  * ```
  */
 export interface CapacitorFunctions {
-  /** 初始化 Capacitor 模块 */
+  /** 初始化模块；期间调用 close 会使本次初始化返回 INIT_FAILED。 */
   init: () => Promise<HaiResult<void>>
-  /** 关闭模块并回收推送监听；失败时保持不可用，保留句柄供再次 close 重试。 */
+  /** 立即停用模块并使进行中的初始化失效；等待已知推送句柄清理，失败句柄保留供重试。 */
   close: () => Promise<HaiResult<void>>
   /** 获取当前平台 */
   getPlatform: () => string
@@ -396,7 +396,7 @@ export type StatusBarStyle = 'dark' | 'light' | 'default'
  * ```
  */
 export interface StatusBarConfig {
-  /** 状态栏文字样式 */
+  /** 背景主题：dark 为深底浅字，light 为浅底深字，default 跟随系统；不设置背景色。 */
   style?: StatusBarStyle
   /** 背景颜色（十六进制） */
   backgroundColor?: string

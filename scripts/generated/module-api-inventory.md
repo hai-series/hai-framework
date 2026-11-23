@@ -33,8 +33,8 @@
 | @h-ai/cache | `. (default)` | 25 |
 | @h-ai/cache | `. (import)` | 25 |
 | @h-ai/cache | `. (types)` | 25 |
-| @h-ai/capacitor | `. (import)` | 24 |
-| @h-ai/capacitor | `. (types)` | 24 |
+| @h-ai/capacitor | `. (import)` | 21 |
+| @h-ai/capacitor | `. (types)` | 21 |
 | @h-ai/cli | `. (import)` | 0 |
 | @h-ai/cli | `. (types)` | 0 |
 | @h-ai/core | `. (browser/default)` | 85 |

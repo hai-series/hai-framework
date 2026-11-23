@@ -26,6 +26,9 @@ let initialized = false
 /** 是否正在初始化中（并发防护） */
 let initInProgress = false
 
+/** close 递增代际，使关闭前启动的异步初始化不能重新启用模块。 */
+let lifecycleGeneration = 0
+
 /** 缓存平台信息 */
 let cachedPlatform: string | null = null
 
@@ -114,16 +117,19 @@ export const capacitor: CapacitorFunctions = {
       )
     }
     initInProgress = true
+    const initGeneration = lifecycleGeneration
 
     try {
       if (initialized) {
         logger.warn('Capacitor module is already initialized, reinitializing')
-        const closed = await capacitor.close()
-        if (!closed.success)
-          return closed
+        // 内部重置沿用本次初始化代际；只有外部 close 才取消本次初始化。
+        initialized = false
+        cachedPlatform = null
       }
       // 先重试上次关闭未释放的句柄，不把资源清理失败隐藏成新的初始化成功。
       const cleaned = await closePushListeners()
+      if (initGeneration !== lifecycleGeneration)
+        return err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
       if (!cleaned.success)
         return cleaned
 
@@ -139,6 +145,9 @@ export const capacitor: CapacitorFunctions = {
 
       const { Capacitor } = await import('@capacitor/core')
       const platform = Capacitor.getPlatform()
+
+      if (initGeneration !== lifecycleGeneration)
+        return err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
 
       if (!platform) {
         logger.error('Capacitor initialization failed, platform not detected')
@@ -168,6 +177,7 @@ export const capacitor: CapacitorFunctions = {
 
   async close() {
     logger.info('Closing capacitor module')
+    lifecycleGeneration++
     initialized = false
     cachedPlatform = null
     const cleaned = await closePushListeners()

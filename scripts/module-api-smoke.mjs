@@ -1,18 +1,21 @@
 /**
  * 针对已构建公开入口做导入/浏览器打包冒烟；不初始化服务或执行完整业务测试。
- * @example `node scripts/module-api-smoke.mjs`
+ * @example `node scripts/module-api-smoke.mjs --package capacitor`
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { expandPackageExports } from './module-api-inventory.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
+if (process.argv.length > 2 && (process.argv.length !== 4 || process.argv[2] !== '--package'))
+  throw new Error('Usage: node scripts/module-api-smoke.mjs [--package <package-directory>]')
+const packageFilter = process.argv[3]
 const require = createRequire(join(root, 'packages/ai/package.json'))
 // 复用包构建器已经安装的 esbuild，不引入另一个版本或工作区外的工具。
 const { build } = createRequire(require.resolve('tsup'))('esbuild')
@@ -93,6 +96,10 @@ const hidden = new Map([
     ['CacheProvider'],
   ],
   [
+    'capacitor',
+    ['safeGetPreference', 'safeSetPreference', 'safeRemovePreference'],
+  ],
+  [
     'storage',
     ['StorageProvider'],
   ],
@@ -150,6 +157,8 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
+    if (directory === 'capacitor')
+      source.push('export const nativeTokens: import("@h-ai/api-client").TokenStorage = api.createCapacitorTokenStorage()', 'export const preferences: api.PreferencesOperations = api.capacitor.preferences')
     if (directory === 'crypto') {
       source.push('export const limits = api.crypto.transport.resolveBodyLimits(2048)', 'export const protocol = api.crypto.transport.protocol', 'export const invalidRing = api.crypto.transport.parseServerKeyRing(null)', 'export function publicKeyLength(input: unknown) { return api.crypto.asymmetric.isValidPublicKey(input) ? input.length : 0 }')
       for (const removed of [
@@ -308,6 +317,32 @@ function child(directory, args) {
     throw new Error(`${directory}: ${result.error?.message ?? result.stderr ?? result.stdout}`)
 }
 
+/** 仅安装入门依赖的应用也须能打包；隔离提升的可选插件，实际验证 Vite 的 optional peer 解析。 */
+async function capacitorConsumerSmoke(base, manifest, temporary) {
+  const consumer = join(temporary, 'capacitor-consumer')
+  const copiedPackage = join(consumer, 'node_modules/@h-ai/capacitor')
+  mkdirSync(copiedPackage, { recursive: true })
+  cpSync(join(base, 'dist'), join(copiedPackage, 'dist'), { recursive: true })
+  writeFileSync(join(copiedPackage, 'package.json'), JSON.stringify(manifest))
+  writeFileSync(join(consumer, 'package.json'), JSON.stringify({ type: 'module', private: true }))
+  writeFileSync(join(consumer, 'index.html'), '<script type="module" src="/main.js"></script>')
+  writeFileSync(join(consumer, 'main.js'), 'import { capacitor, createCapacitorTokenStorage } from "@h-ai/capacitor"; globalThis.nativeBridge = { capacitor, createCapacitorTokenStorage }')
+  for (const name of ['@h-ai/core', '@capacitor/core', '@capacitor/preferences']) {
+    const destination = join(consumer, 'node_modules', name)
+    mkdirSync(dirname(destination), { recursive: true })
+    symlinkSync(realpathSync(join(root, 'node_modules', name)), destination, 'junction')
+  }
+  // Vite 是实际移动端消费者已声明的依赖，不为脚本额外安装构建器。
+  const consumerRequire = createRequire(join(root, 'apps/mobile-app/package.json'))
+  const { build: buildConsumer } = await import(pathToFileURL(consumerRequire.resolve('vite')).href)
+  await buildConsumer({
+    root: consumer,
+    configFile: false,
+    logLevel: 'silent',
+    build: { write: false, minify: false },
+  })
+}
+
 const temporary = mkdtempSync(join(tmpdir(), 'hai-api-smoke-'))
 const generated = []
 const generatedDirectories = [
@@ -322,6 +357,8 @@ let bundles = 0
 const directories = []
 try {
   for (const directory of readdirSync(join(root, 'packages'))) {
+    if (packageFilter && directory !== packageFilter)
+      continue
     const base = join(root, 'packages', directory)
     let manifest
     try {
@@ -332,6 +369,8 @@ try {
     }
     directories.push({ directory, manifest, base })
   }
+  if (!directories.length)
+    throw new Error(`No package found for ${packageFilter}`)
   for (const browser of [false, true]) {
     try {
       typeSmoke(directories, basename(temporary), browser, generated)
@@ -340,11 +379,13 @@ try {
       failures.push(`${browser ? 'Browser' : 'Node'} public declarations: ${error.message}`)
     }
   }
-  try {
-    typeSmoke(directories.filter(({ directory }) => directory === 'core'), `${basename(temporary)}-core-only`, false, generated, true)
-  }
-  catch (error) {
-    failures.push(`Core Node declarations without DOM types: ${error.message}`)
+  if (directories.some(({ directory }) => directory === 'core')) {
+    try {
+      typeSmoke(directories.filter(({ directory }) => directory === 'core'), `${basename(temporary)}-core-only`, false, generated, true)
+    }
+    catch (error) {
+      failures.push(`Core Node declarations without DOM types: ${error.message}`)
+    }
   }
   for (const { directory, manifest, base } of directories) {
     const entries = expandPackageExports(base, manifest.exports ?? {})
@@ -384,11 +425,22 @@ try {
         child(base, ['--input-type=module', '--eval', `for (const name of ${JSON.stringify(paths)}) await import(name)`])
         if (directory === 'core')
           child(base, ['--input-type=module', '--eval', 'const api = await import(\'@h-ai/core\'); if (\'createRequestCheck\' in api || !api.core.access.createRequestCheck(false)(\'/api/example\', \'GET\').allowed) throw new Error(\'Core access registration mismatch\')'])
+        if (directory === 'capacitor')
+          child(base, ['--input-type=module', '--eval', 'const api = await import("@h-ai/capacitor"); if (typeof api.createCapacitorTokenStorage !== "function" || ["safeGetPreference", "safeSetPreference", "safeRemovePreference"].some(name => name in api)) throw new Error("Capacitor public exports mismatch")'])
       }
       imports++
     }
     catch (error) {
       failures.push(`${manifest.name} Node import: ${error.message}`)
+    }
+    if (directory === 'capacitor') {
+      try {
+        await capacitorConsumerSmoke(base, manifest, temporary)
+        bundles++
+      }
+      catch (error) {
+        failures.push(`${manifest.name} minimal Vite consumer: ${error.message}`)
+      }
     }
     const paths = directory === 'ui'
       ? [
