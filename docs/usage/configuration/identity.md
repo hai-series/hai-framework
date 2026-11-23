@@ -199,7 +199,7 @@ apikey: { maxKeysPerUser: 10, defaultExpirationDays: 30, prefix: 'orders_' }
 
 `apikey.prefix` 只是新生成 Key 的开头。例如 `orders_` 会生成形如 `orders_<随机内容>` 的 Key，便于区分应用；它不增加权限，也不应包含密码。修改前缀只影响之后创建的 Key，已有 Key 不会被重写。
 
-UI 使用 `createSensitiveActions` / `ReauthenticationDialog`；服务端同时校验证明是否属于当前用户、会话、操作和资源，并将证明标记为已使用。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
+UI 使用 `ui.createSensitiveActions` 和 `ReauthenticationDialog`。服务端同时校验证明是否属于当前用户、会话、操作和资源，并将证明标记为已使用。取消验证不发送敏感业务请求。通过普通用户、管理员和跨资源 ID 的实际请求验证授权边界。
 
 ## 账号生命周期与管理
 

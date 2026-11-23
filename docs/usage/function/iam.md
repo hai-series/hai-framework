@@ -762,7 +762,7 @@ async function resetByAdministrator(userId: string, newPassword: string) {
 
 `session.terminalLimits: { web: 2, app: 1 }` 设置分终端会话数，默认 `{}` 关闭。非空时未列出的 `desktop/api` 等类型不能新登录；旧会话按 `web` 处理。`terminalLimitMode: reject` 为默认，`replace` 仅替换同类最早会话。全局 `maxSessions` 和 `singleDevice` 继续约束所有终端，配额同一 CAS 原子提交。服务端登录上下文的 `terminalType` 和标准客户端 `auth.terminalType` 选择分组；类型不是硬件身份或授权凭据。
 
-Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 与 SDK 的 `recoverSession`，复用正常登录策略。`expectedUserId` 在密码、OTP、LDAP 登录签发会话前限制原主体；验证失败不签发恢复会话。仅重发明确未认证拒绝的一笔请求，网络结果不明时不重发。页面刷新/关闭后的内存草稿不在恢复范围内。
+Web 原地恢复使用 `ui.createSessionRecovery`、`SessionRecoveryDialog` 与 SDK 的 `recoverSession`，复用正常登录策略。`expectedUserId` 在密码、OTP、LDAP 登录签发会话前限制原主体。验证失败不签发恢复会话。仅重发明确未认证拒绝的一笔请求，网络结果不明时不重发。页面刷新或关闭后的内存草稿不在恢复范围内。
 
 <a id="authorization"></a>
 

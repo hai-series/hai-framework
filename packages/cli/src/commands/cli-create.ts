@@ -1526,7 +1526,7 @@ ${generateBuildDeploymentReadme(pm, `apps/${name}-serv`)}
 
 - 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
 - 在 \`${name}-serv\` 中扩展 procedures、模块初始化与配置。
-- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
+- 需要 IAM、Storage 或 AI 时，使用 \`@h-ai/api-contract\` 的共享契约，从 \`@h-ai/serv\` 导入 \`serv\`，按需调用 \`serv.createIamProcedures\`、\`serv.createStorageProcedures\` 或 \`serv.createAiProcedures\`。
 
 ${generateAiDevelopmentReadme()}### 文档
 
