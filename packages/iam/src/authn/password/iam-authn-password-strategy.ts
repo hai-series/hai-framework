@@ -10,7 +10,7 @@ import type { PasswordConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser } from '../../user/iam-user-types.js'
 import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
 import { PasswordConfigSchema } from '../../iam-config.js'
@@ -104,7 +104,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
    */
   function validatePasswordStrength(password: string): HaiResult<void> {
     if (password.length < passwordConfig.minLength) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordMinLength', {
           params: { minLength: passwordConfig.minLength },
@@ -113,7 +113,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (password.length > passwordConfig.maxLength) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordMaxLength', {
           params: { maxLength: passwordConfig.maxLength },
@@ -122,28 +122,28 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (passwordConfig.requireUppercase && !PASSWORD_UPPERCASE_REGEX.test(password)) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedUppercase'),
       )
     }
 
     if (passwordConfig.requireLowercase && !PASSWORD_LOWERCASE_REGEX.test(password)) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedLowercase'),
       )
     }
 
     if (passwordConfig.requireNumber && !PASSWORD_DIGIT_REGEX.test(password)) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedNumber'),
       )
     }
 
     if (passwordConfig.requireSpecialChar && !PASSWORD_SPECIAL_CHAR_REGEX.test(password)) {
-      return err(
+      return core.err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedSpecialChar'),
       )
@@ -156,12 +156,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       PASSWORD_SPECIAL_CHAR_REGEX,
     ].filter(pattern => pattern.test(password)).length
     if (classes < passwordConfig.minCharacterClasses) {
-      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', {
+      return core.err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', {
         params: { count: passwordConfig.minCharacterClasses },
       }))
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /**
@@ -169,12 +169,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
    */
   function checkAccountStatus(user: StoredUser): HaiResult<void> {
     if (!isUserActive(user)) {
-      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     }
     if (isAccountLocked(user, failurePolicy)) {
-      return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+      return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /**
@@ -193,10 +193,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       if (!failureResult.success)
         return failureResult
       logger.warn('Password verification failed', { userId: user.id })
-      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   const strategy: AuthStrategy = {
@@ -239,7 +239,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return resetResult
       logger.debug('Password authentication succeeded', { userId: storedUser.id })
 
-      return ok({
+      return core.ok({
         ...toUser(storedUser),
         credentialVersion: storedUser.credentialVersion ?? '',
       })
@@ -251,7 +251,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     if (!hashResult.success) {
       return mapPasswordWorkError(hashResult.error)
     }
-    return ok(hashResult.data)
+    return core.ok(hashResult.data)
   }
 
   return {

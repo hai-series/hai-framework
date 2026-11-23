@@ -14,17 +14,13 @@ import type {
   InteractionScope,
   ToolCall,
 } from '@h-ai/ai'
-import type {
-  AiChatCompletionData,
-  AiChatCompletionInput,
-  AiChatRecord,
-  AiSendMessageInput,
-} from '@h-ai/api-contract'
+
+import type { AiChatCompletionData, AiChatCompletionInput, AiChatRecord, AiSendMessageInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 import { wrapItemsResult } from './serv-feature-helpers.js'
@@ -60,10 +56,10 @@ export interface AiObjectAuthorizationRequest {
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
- * import { createAiProcedures } from '@h-ai/serv/features/ai'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 AI 及其共享存储；省略策略时只允许当前 session.userId。
- * const procedures = createAiProcedures({ ai })
+ * const procedures = serv.createAiProcedures({ ai })
  * // 默认 completion 为非流式 JSON；object/session 作用域来自可信认证上下文。
  * ```
  */
@@ -86,10 +82,10 @@ export interface AiProcedureDeps {
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
- * import { createAiProcedures } from '@h-ai/serv/features/ai'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 AI 及其共享存储；省略策略时只允许当前 session.userId。
- * const procedures = createAiProcedures({ ai })
+ * const procedures = serv.createAiProcedures({ ai })
  * // 默认 completion 为非流式 JSON；object/session 作用域来自可信认证上下文。
  * ```
  */
@@ -107,9 +103,9 @@ export function createAiProcedures(deps: AiProcedureDeps) {
         sessionId: input.sessionId,
         operation,
       }) !== true) {
-      return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
+      return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
     }
-    return ok(objectId)
+    return core.ok(objectId)
   }
 
   return implement(aiContract)
@@ -199,7 +195,7 @@ function mapChatCompletionResult(result: HaiResult<ChatCompletionResponse>): Hai
     return result
   }
 
-  return ok({
+  return core.ok({
     id: result.data.id,
     object: 'chat.completion',
     created: result.data.created,
@@ -234,7 +230,7 @@ function mapChatRecordsResult(result: HaiResult<Array<import('@h-ai/ai').ChatRec
     return result
   }
 
-  return ok({
+  return core.ok({
     items: result.data.map(toApiChatRecord),
   })
 }
@@ -363,7 +359,7 @@ async function sendMessage(
     return result
   }
 
-  return ok({
+  return core.ok({
     content: result.data,
     model: input.model ?? deps.ai.config?.llm.model ?? 'default',
   })

@@ -11,10 +11,10 @@ import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
 import type { ReachFunctions, ReachGatewayHook, ReachInitOptions, ReachMessage, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
+
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 import process from 'node:process'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.js'
@@ -195,7 +195,7 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
   const parseResult = ReachConfigSchema.safeParse(config)
   if (!parseResult.success) {
     logger.error('Reach config validation failed', { error: parseResult.error.message })
-    return err(
+    return core.err(
       HaiReachError.CONFIG_ERROR,
       reachM('reach_configError', {
         params: { error: parseResult.error.message },
@@ -207,14 +207,14 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
   const gatewayHooks = new Map(Object.entries(options?.gatewayHooks ?? {}))
   for (const [name, hook] of gatewayHooks) {
     if (typeof hook !== 'function' || !parsed.providers.some(provider => provider.name === name && provider.type === 'aliyun-sms' && provider.gateway))
-      return err(HaiReachError.CONFIG_ERROR, reachM('reach_gatewayHookInvalid'))
+      return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_gatewayHookInvalid'))
   }
   // Console只证明本机日志调用；生产环境不能把它当作真实触达成功。
   if (core.module.requiresSharedState(process.env) && parsed.providers.some(provider => provider.type === 'console'))
-    return err(HaiReachError.CONFIG_ERROR, reachM('reach_productionProviderRequired'))
+    return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_productionProviderRequired'))
 
   if (parsed.templates?.length && !reldb.isInitialized)
-    return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
+    return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
 
   const newProviders = new Map<string, ReachProvider>()
   let published = false
@@ -223,10 +223,10 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
     let requiredQueue: SendLogRepository | null = null
     if (parsed.dnd?.enabled && parsed.dnd.strategy === 'delay') {
       if (!reldb.isInitialized)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       const queue = await createSendLogRepository(reldb)
       if (!queue.success)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'), queue.error)
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'), queue.error)
       requiredQueue = queue.data
     }
 
@@ -248,7 +248,7 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
     // 显式模板属于就绪条件，不能把仓库/保存失败降级为可选日志。
     const candidateTemplateRepo = await tryInitTemplateRepo()
     if (parsed.templates?.length && !candidateTemplateRepo)
-      return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
+      return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
     const candidateRegistry = createTemplateRegistry(candidateTemplateRepo)
 
     // 配置文件中定义的模板写入数据库
@@ -256,7 +256,7 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
       const saveResult = await candidateRegistry.saveBatch(parsed.templates)
       if (!saveResult.success) {
         logger.warn('Failed to save config templates to database', { errorCode: saveResult.error.code })
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'), saveResult.error)
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'), saveResult.error)
       }
     }
 
@@ -277,11 +277,11 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
 
     const providerNames = parsed.providers.map(p => p.name)
     logger.info('Reach module initialized', { providers: providerNames })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Reach module initialization failed', { error })
-    return err(
+    return core.err(
       HaiReachError.CONFIG_ERROR,
       reachM('reach_initFailed', {
         params: {
@@ -375,9 +375,9 @@ export const reach: ReachFunctions = {
       if (providers.size === 0)
         return notInitialized.result()
       if (!sendLogRepo)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       if (!ReachQueueIdSchema.safeParse(queueId).success)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
       const rows = await sendLogRepo.findAll({
         where: 'queue_id = ?',
         params: [queueId],
@@ -386,7 +386,7 @@ export const reach: ReachFunctions = {
       if (!rows.success)
         return rows
       const row = rows.data[0]
-      return ok(row
+      return core.ok(row
         ? queueEntry(row)
         : null)
     },
@@ -394,10 +394,10 @@ export const reach: ReachFunctions = {
       if (providers.size === 0)
         return notInitialized.result()
       if (!sendLogRepo)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       const parsed = ReachQueueListSchema.safeParse(options)
       if (!parsed.success)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
       const rows = await sendLogRepo.findAll({
         where: 'status = ? AND queue_id IS NOT NULL',
         params: [parsed.data.status],
@@ -406,34 +406,34 @@ export const reach: ReachFunctions = {
         offset: parsed.data.offset,
       })
       return rows.success
-        ? ok(rows.data.map(queueEntry))
+        ? core.ok(rows.data.map(queueEntry))
         : rows
     },
     async requeueDead(queueId, options) {
       if (providers.size === 0)
         return notInitialized.result()
       if (!sendLogRepo)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       const parsed = ReachDeadRequeueSchema.safeParse(options)
       if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
       return sendLogRepo.requeueDead(queueId, parsed.data.expectedUpdatedAt)
     },
     async resolveUnknown(queueId, resolution) {
       if (providers.size === 0)
         return notInitialized.result()
       if (!sendLogRepo)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       const parsed = ReachUnknownResolutionSchema.safeParse(resolution)
       if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
       return sendLogRepo.resolveUnknown(queueId, parsed.data)
     },
   },
   async init(config: ReachConfigInput, options?: ReachInitOptions): Promise<HaiResult<void>> {
     if (initInProgress || closeInProgress) {
       logger.warn('Reach module init already in progress, skipping')
-      return err(
+      return core.err(
         HaiReachError.CONFIG_ERROR,
         reachM('reach_configError', {
           params: { error: 'init already in progress' },

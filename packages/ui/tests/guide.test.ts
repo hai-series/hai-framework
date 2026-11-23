@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import type { GuideController, GuideOptions } from '../src/lib/guide.js'
+import { GuideHost, HelpCenter, ui } from '@h-ai/ui'
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createGuide, GuideHost, HelpCenter } from '../src/lib/guide.js'
-import { toast } from '../src/lib/toast.svelte.js'
 
 const controllers: GuideController[] = []
 function makeGuide(options: Partial<GuideOptions> = {}) {
-  const guide = createGuide({
+  const guide = ui.createGuide({
     persistence: 'memory',
     tours: [
       {
@@ -52,7 +51,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {}
 })
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   controllers.splice(0).forEach(guide => guide.stop())
   document.body.innerHTML = ''
   for (const cookie of document.cookie.split(';'))
@@ -477,7 +476,7 @@ it('坏文章回调仅禁用帮助内容，业务按钮仍可使用', async () =
   })
   try {
     flushSync()
-    expect(toast.items.some(item => item.variant === 'warning')).toBe(true)
+    expect(ui.toast.items.some(item => item.variant === 'warning')).toBe(true)
     expect(target.querySelector('[role=alert]')).toBeNull()
     expect(target.textContent).toContain('Still available')
     button.click()

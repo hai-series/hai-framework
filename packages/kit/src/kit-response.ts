@@ -311,13 +311,13 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
  * @returns 标准化 JSON Response
  * @example
  * ```ts
- * import { err, HaiCommonError, type HaiResult } from '@h-ai/core'
+ * import { HaiCommonError, type HaiResult, core } from '@h-ai/core'
  * import { kit } from '@h-ai/kit'
  *
  * function respond(result: HaiResult<{ id: string }>): Response {
  *   return kit.response.fromResult(result)
  * }
- * const response = kit.response.fromResult(err(HaiCommonError.NOT_FOUND, 'Article missing'))
+ * const response = kit.response.fromResult(core.err(HaiCommonError.NOT_FOUND, 'Article missing'))
  * void response.status
  * ```
  */

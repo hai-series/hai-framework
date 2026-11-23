@@ -12,7 +12,7 @@
 import type { HaiResult, ValidationFormError } from '@h-ai/core'
 import type { ZodType } from 'zod'
 import type { ServMessageKey } from './serv-i18n.js'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { normalizeServLocale, servM } from './serv-i18n.js'
 
 const DEFAULT_LOCALE = 'zh-CN'
@@ -26,8 +26,8 @@ const DEFAULT_LOCALE = 'zh-CN'
  *
  * @example
  * ```ts
- * import type { ServValidationFailureBody } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServValidationFailureBody, serv } from '@h-ai/serv'
  *
  * function fields(body: ServValidationFailureBody) {
  *   return body.error.cause ?? body.errors
@@ -140,7 +140,7 @@ export function validateInputOrFail<TOutput>(
   const resolvedLocale = normalizeServLocale(locale)
   const result = schema.safeParse(input)
   if (result.success)
-    return ok(result.data)
+    return core.ok(result.data)
   const errors = localizeZodError(result.error, resolvedLocale)
-  return err(HaiCommonError.VALIDATION_ERROR, servM('serv_validationFailed', { locale: resolvedLocale }), errors)
+  return core.err(HaiCommonError.VALIDATION_ERROR, servM('serv_validationFailed', { locale: resolvedLocale }), errors)
 }

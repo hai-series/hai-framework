@@ -126,7 +126,7 @@ async function configure(service: MiddlewareRequirement['service'], config: Reco
     ],
   }))
   const scanned = await deployment.deploy.scan(root, { environment: 'test' })
-  const environment = deployment.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployment.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!scanned.success || !environment.success)
     throw new Error('External fixture scan failed')
   core.i18n.setGlobalLocale('en-US')
@@ -147,7 +147,7 @@ async function configure(service: MiddlewareRequirement['service'], config: Reco
   if (!saved.success)
     throw new Error('Saved external fixture scan failed')
   expect(saved.data.middlewares?.[0]?.config).toMatchObject(config)
-  const plan = await deployment.createDeploymentPlan(root, deployConfig, { environment: 'test', serviceModes: modes })
+  const plan = await deployment.deploy.createDeploymentPlan(root, deployConfig, { environment: 'test', serviceModes: modes })
   if (!plan.success)
     throw new Error('External fixture deployment plan failed')
   expect(plan.data.logicalVolumes).toEqual([])

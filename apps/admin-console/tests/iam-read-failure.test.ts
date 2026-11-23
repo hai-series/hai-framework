@@ -1,5 +1,5 @@
 import { cache } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
@@ -10,7 +10,7 @@ import { createRequestEvent } from './fixtures/request-event.js'
 
 describe('admin read failures', () => {
   it('keeps database failure status and hides internal details at the HTTP boundary', async () => {
-    vi.spyOn(iam.authz, 'createRole').mockResolvedValueOnce(err({ code: 'db.failed', httpStatus: 500, message: 'SELECT private_column FROM internal_role_table; driver=/private/database.sock' }))
+    vi.spyOn(iam.authz, 'createRole').mockResolvedValueOnce(core.err({ code: 'db.failed', httpStatus: 500, message: 'SELECT private_column FROM internal_role_table; driver=/private/database.sock' }))
     const result = await createAdminRole({ code: 'outage-role', name: 'Outage role' })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -50,13 +50,13 @@ describe('admin read failures', () => {
 
   it('rejects the entire list when a later page fails', async () => {
     const pages = vi.spyOn(iam.authz, 'getAllRoles')
-      .mockResolvedValueOnce(ok({
+      .mockResolvedValueOnce(core.ok({
         items: [],
         total: 201,
         page: 1,
         pageSize: 200,
       }))
-      .mockResolvedValueOnce(err({ code: 'test.read_failed', message: 'injected failure' }))
+      .mockResolvedValueOnce(core.err({ code: 'test.read_failed', message: 'injected failure' }))
     await expect(listAdminRoles()).rejects.toMatchObject({ status: 503 })
     expect(pages).toHaveBeenCalledTimes(2)
   })

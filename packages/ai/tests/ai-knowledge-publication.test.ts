@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -173,7 +173,7 @@ describe('knowledge publication actual SQLite and Qdrant', { concurrent: false }
 
   it('发布成功但旧向量删除失败明确返回cleanupPending，repair恢复后真实计数一致', async () => {
     await a.replaceDocument(revision(collection, 10, 'old'))
-    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(err(HaiVecdbError.DELETE_FAILED, 'Injected cleanup failure'))
+    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(core.err(HaiVecdbError.DELETE_FAILED, 'Injected cleanup failure'))
     expect(await a.replaceDocument(revision(collection, 2, 'new'))).toEqual({ cleanupPending: true })
     expect(await contents()).toEqual(['new-0', 'new-1'])
     vi.restoreAllMocks()
@@ -186,9 +186,9 @@ describe('knowledge publication actual SQLite and Qdrant', { concurrent: false }
     const upsert = vecdb.vector.upsert.bind(vecdb.vector)
     vi.spyOn(vecdb.vector, 'upsert').mockImplementationOnce(async (name, chunks) => {
       expect((await upsert(name, chunks.slice(0, 1))).success).toBe(true)
-      return err(HaiVecdbError.UPDATE_FAILED, 'Injected partial vector failure')
+      return core.err(HaiVecdbError.UPDATE_FAILED, 'Injected partial vector failure')
     })
-    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(err(HaiVecdbError.DELETE_FAILED, 'Injected delete failure'))
+    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(core.err(HaiVecdbError.DELETE_FAILED, 'Injected delete failure'))
     await expect(a.replaceDocument(revision(collection, 2, 'partial'))).rejects.toThrow('durable cleanup is pending')
     expect(await contents()).toHaveLength(10)
     expect(await b.findByEntityName('partial', { collection })).toEqual([])
@@ -269,7 +269,7 @@ describe('knowledge publication actual SQLite and Qdrant', { concurrent: false }
 
   it('删除先撤销可见版本，清理失败报告；集合新代不会恢复旧内容', async () => {
     await a.replaceDocument(revision(collection, 10, 'old'))
-    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(err(HaiVecdbError.DELETE_FAILED, 'Injected removal failure'))
+    vi.spyOn(vecdb.vector, 'delete').mockResolvedValue(core.err(HaiVecdbError.DELETE_FAILED, 'Injected removal failure'))
     await expect(a.removeDocument('guide', collection)).rejects.toThrow('Injected removal failure')
     expect(await contents()).toEqual([])
     expect(await b.findByEntityName('old', { collection })).toEqual([])

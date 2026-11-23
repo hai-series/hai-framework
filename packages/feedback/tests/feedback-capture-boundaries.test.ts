@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
@@ -117,7 +117,7 @@ describe('服务端现场有界采集', { concurrent: false }, () => {
     logger('read-failed').error('Correlated error remains available locally')
     const query = reldb.sql.query
     vi.spyOn(reldb.sql, 'query').mockImplementation(<T = QueryRow>(sql: string, parameters?: unknown[]) => sql.startsWith('SELECT payload FROM hai_feedback_evidence') && sql.includes('report_id IS NULL')
-      ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'fixture-internal-database-details'))
+      ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'fixture-internal-database-details'))
       : query<T>(sql, parameters))
     await expectMissing(await collect('temporary-read-failed'), 'server_temporary_evidence_read_failed')
   })
@@ -125,7 +125,7 @@ describe('服务端现场有界采集', { concurrent: false }, () => {
   it('错误窗口暂存失败仍有缺失说明，不把可恢复的内存现场当作已完整持久化', async () => {
     const execute = reldb.sql.execute
     vi.spyOn(reldb.sql, 'execute').mockImplementation((sql, parameters) => sql.startsWith('INSERT INTO hai_feedback_evidence') && parameters?.[1] === null
-      ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'fixture-internal-database-details'))
+      ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'fixture-internal-database-details'))
       : execute(sql, parameters))
     logger('write-failed').error('Unsaved error window')
     await expectMissing(await collect('temporary-write-failed'), 'server_temporary_evidence_write_failed')

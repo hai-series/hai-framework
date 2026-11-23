@@ -92,7 +92,7 @@ export interface ValidationFormError {
  * 共享 Zod 错误映射契约；业务自定义消息保持原文。
  * @example
  * ```ts
- * import { core, type ZodValidationFn } from '@h-ai/core'
+ * import { type ZodValidationFn, core } from '@h-ai/core'
  * import { z } from 'zod'
  * const validator: ZodValidationFn = core.zodValidation
  * const input = z.object({ email: z.email() }).safeParse({ email: 'invalid' })
@@ -123,8 +123,8 @@ const UnknownErrorDef: HaiErrorDef = {
  * 业务操作的成功数据或标准失败；访问 data/error 前必须按 success 收窄。
  * @example
  * ```ts
- * import { ok, type HaiResult } from '@h-ai/core'
- * const result: HaiResult<{ id: string }> = ok({ id: 'order-1' })
+ * import { type HaiResult, core } from '@h-ai/core'
+ * const result: HaiResult<{ id: string }> = core.ok({ id: 'order-1' })
  * const label = result.success ? result.data.id : result.error.message
  * ```
  */
@@ -138,8 +138,8 @@ export type HaiResult<T>
  * @returns success 为 true、data 为输入值的结果。
  * @example
  * ```ts
- * import { ok } from '@h-ai/core'
- * const result = ok({ id: 'order-1' })
+ * import { core } from '@h-ai/core'
+ * const result = core.ok({ id: 'order-1' })
  * if (result.success) result.data.id.toUpperCase()
  * ```
  */
@@ -156,8 +156,8 @@ export function ok<T>(data: T): HaiResult<T> {
  * @returns success 为 false、error 为标准业务错误的结果。
  * @example
  * ```ts
- * import { err, HaiCommonError } from '@h-ai/core'
- * const result = err(HaiCommonError.NOT_FOUND, 'Order not found')
+ * import { HaiCommonError, core } from '@h-ai/core'
+ * const result = core.err(HaiCommonError.NOT_FOUND, 'Order not found')
  * if (!result.success) result.error.httpStatus
  * ```
  */
@@ -201,9 +201,9 @@ export function err(
  * @template R2 - err 分支返回类型
  * @example
  * ```ts
- * import { type MatchHandlers, ok } from '@h-ai/core'
+ * import { type MatchHandlers, core } from '@h-ai/core'
  * const handlers: MatchHandlers<number, string, string> = { ok: n => String(n + 1), err: error => error.message }
- * const result = ok(2)
+ * const result = core.ok(2)
  * const label = result.success ? handlers.ok(result.data) : handlers.err(result.error)
  * ```
  */
@@ -314,8 +314,8 @@ const CommonErrorInfo = {
  * 跨模块通用错误定义及 HTTP 状态映射。
  * @example
  * ```ts
- * import { err, HaiCommonError } from '@h-ai/core'
- * const result = err(HaiCommonError.UNAUTHORIZED, 'Authentication required')
+ * import { HaiCommonError, core } from '@h-ai/core'
+ * const result = core.err(HaiCommonError.UNAUTHORIZED, 'Authentication required')
  * if (!result.success) result.error.code
  * ```
  */
@@ -333,8 +333,8 @@ const ConfigErrorInfo = {
  * 文件配置加载、校验、环境缺失及缓存读取的错误定义。
  * @example
  * ```ts
- * import { err, HaiConfigError } from '@h-ai/core'
- * const result = err(HaiConfigError.CONFIG_NOT_LOADED, 'App configuration is unavailable')
+ * import { HaiConfigError, core } from '@h-ai/core'
+ * const result = core.err(HaiConfigError.CONFIG_NOT_LOADED, 'App configuration is unavailable')
  * if (!result.success) result.error.message
  * ```
  */
@@ -448,7 +448,7 @@ export interface LogRecord {
  * 同步日志观察者；只做有界内存收集，I/O 由消费者异步处理。
  * @example
  * ```ts
- * import { core, type LogObserver } from '@h-ai/core'
+ * import { type LogObserver, core } from '@h-ai/core'
  * const observer: LogObserver = record => { const requestId = record.context.requestId }
  * const unsubscribe = core.logger.observe(observer)
  * unsubscribe()
@@ -479,7 +479,7 @@ export interface LoggerOptions {
  * 统一的日志记录接口，具体实现由 Provider 提供。
  * @example
  * ```ts
- * import { core, type Logger } from '@h-ai/core'
+ * import { type Logger, core } from '@h-ai/core'
  * const logger: Logger = core.logger.child({ service: 'orders' })
  * logger.info('Order created', { orderId: 'order-1' })
  * ```
@@ -498,7 +498,7 @@ export interface Logger {
  * Core 公共 Logger — Logger 实例 + 管理方法。
  * @example
  * ```ts
- * import { core, type CoreLogger } from '@h-ai/core'
+ * import { type CoreLogger, core } from '@h-ai/core'
  * const logger: CoreLogger = core.logger
  * logger.configure({ level: 'warn', redact: ['password'] })
  * logger.child({ component: 'worker' }).warn('Retry scheduled')
@@ -533,7 +533,7 @@ export interface CoreLogger extends Logger {
  * 由各平台（Node.js / Browser）提供具体实现，通过 `createCore()` 注入。
  * @example
  * ```ts
- * import { core, type LoggerFunctions } from '@h-ai/core'
+ * import { type LoggerFunctions, core } from '@h-ai/core'
  * const platform: LoggerFunctions = { createLogger: options => core.logger.create(options), getLogger: name => core.logger.create({ name }), configureLogger: config => core.logger.configure(config), setLogLevel: level => core.logger.setLevel(level), getLogLevel: () => core.logger.getLevel() }
  * platform.createLogger({ name: 'worker' }).info('Worker ready')
  * ```
@@ -646,7 +646,7 @@ export type MessageDictionary = Record<string, string>
  * @template K - 消息 key 的联合类型
  * @example
  * ```ts
- * import { core, type LocaleMessages } from '@h-ai/core'
+ * import { type LocaleMessages, core } from '@h-ai/core'
  * const messages: LocaleMessages<'hello'> = { 'en-US': { hello: 'Hello, {name}!' }, 'zh-CN': { hello: '你好，{name}！' } }
  * const message = core.i18n.createMessageGetter(messages)
  * message('hello', { locale: 'en-US', params: { name: 'Alice' } })
@@ -675,12 +675,16 @@ export interface MessageOptions {
  * Core 服务聚合接口（createCore 返回类型）
  * @example
  * ```ts
- * import { core, type CoreFunctions } from '@h-ai/core'
+ * import { type CoreFunctions, core } from '@h-ai/core'
  * function createRequestId(tools: CoreFunctions): string { return tools.id.request() }
  * const requestId = createRequestId(core)
  * ```
  */
 export interface CoreFunctions {
+  /** 构造成功结果；无需初始化。 */
+  ok: typeof ok
+  /** 构造失败结果；参数及诊断语义与领域 API 保持一致，无需初始化。 */
+  err: typeof err
   /**
    * Node 中跨 await 隔离请求关联，浏览器仅同步作用域；不向下游注入任何凭据。
    * @example
@@ -729,7 +733,7 @@ export interface CoreFunctions {
  * Node 专属访问工具，通过 core.access 调用；浏览器不提供该能力。
  * @example
  * ```ts
- * import { core, type AccessFunctions } from '@h-ai/core'
+ * import { type AccessFunctions, core } from '@h-ai/core'
  * const tools: AccessFunctions = core.access
  * const check = tools.createRequestCheck(false)
  * const decision = check('/api/v1/sync', 'POST', '192.0.2.10')
@@ -752,7 +756,7 @@ export interface AccessFunctions {
  * Node 入口的完整 Core 形态；访问检查和文件配置不属于浏览器运行时。
  * @example
  * ```ts
- * import { core, type NodeCoreFunctions } from '@h-ai/core'
+ * import { type NodeCoreFunctions, core } from '@h-ai/core'
  * const tools: NodeCoreFunctions = core
  * tools.init({ logging: { level: 'info' } })
  * ```
@@ -814,7 +818,7 @@ export type LogFormat = z.infer<typeof LogFormatSchema>
  * 经过默认值填充的 Logger 配置；redact 是输出脱敏路径。
  * @example
  * ```ts
- * import { core, type LoggingConfig } from '@h-ai/core'
+ * import { type LoggingConfig, core } from '@h-ai/core'
  * const config: LoggingConfig = { level: 'info', format: 'json', redact: [] }
  * core.init({ logging: config })
  * ```
@@ -825,7 +829,7 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
  * 严格校验后的 Core 配置；业务配置使用独立 Schema。
  * @example
  * ```ts
- * import { core, type CoreConfig } from '@h-ai/core'
+ * import { type CoreConfig, core } from '@h-ai/core'
  * core.init({ configDir: './config' })
  * const config = core.config.getOrThrow<CoreConfig>('core')
  * ```
@@ -846,7 +850,7 @@ export type TrustedProxies = z.infer<typeof TrustedProxiesSchema>
  * 已补齐默认值的 IP/时间条件。
  * @example
  * ```ts
- * import { core, type AccessCondition } from '@h-ai/core'
+ * import { type AccessCondition, core } from '@h-ai/core'
  * const condition: AccessCondition = { allowIps: ['192.0.2.0/24'], denyIps: [], timezone: 'UTC', windows: [] }
  * const check = core.access.createConditionCheck(condition)
  * ```
@@ -857,7 +861,7 @@ export type AccessCondition = z.infer<typeof AccessConditionSchema>
  * 已验证的请求策略。
  * @example
  * ```ts
- * import { core, type RequestAccessPolicy } from '@h-ai/core'
+ * import { type RequestAccessPolicy, core } from '@h-ai/core'
  * const policy: RequestAccessPolicy | false = core.access.loadPolicy({ rules: [] })
  * ```
  */
@@ -887,7 +891,7 @@ export type RequestEncryptionMode = NonNullable<RequestAccessPolicy['rules'][num
  * 启动编译后的请求检查器；加密选择只查路径索引，不重新计算 IP 或时间条件。
  * @example
  * ```ts
- * import { core, type RequestAccessCheck } from '@h-ai/core'
+ * import { type RequestAccessCheck, core } from '@h-ai/core'
  * const check: RequestAccessCheck = core.access.createRequestCheck({ rules: [{ id: 'partner', paths: ['/api/v1/partner/**'], encryption: 'disabled' }] })
  * const mode = check.encryption('/api/v1/partner/sync', 'POST')
  * const decision = check('/api/v1/partner/sync', 'POST', '192.0.2.10')
@@ -915,7 +919,7 @@ export type AccessDecision = Readonly<{ allowed: true } | { allowed: false, reas
  * id 子工具类型
  * @example
  * ```ts
- * import { core, type IdFn } from '@h-ai/core'
+ * import { type IdFn, core } from '@h-ai/core'
  * const tools: IdFn = core.id
  * tools.withPrefix('order_')
  * ```
@@ -953,7 +957,7 @@ export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) =>
  * config 子工具类型
  * @example
  * ```ts
- * import { core, type ConfigFn } from '@h-ai/core'
+ * import { type ConfigFn, core } from '@h-ai/core'
  * const result = core.config.load('app', '/srv/app/config/app.yml')
  * if (!result.success) result.error.message
  * ```
@@ -964,7 +968,7 @@ export type ConfigFn = typeof nodeConfig
  * config 子工具类型
  * @example
  * ```ts
- * import { core, type BrowserConfigFn } from '@h-ai/core'
+ * import { type BrowserConfigFn, core } from '@h-ai/core'
  * const result = core.config.load('app', '/srv/app/config/app.yml')
  * if (!result.success) result.error.message
  * ```
@@ -975,7 +979,7 @@ export type BrowserConfigFn = typeof browserConfig
  * i18n 子工具类型
  * @example
  * ```ts
- * import { core, type I18nFn } from '@h-ai/core'
+ * import { type I18nFn, core } from '@h-ai/core'
  * const tools: I18nFn = core.i18n
  * const message = tools.createMessageGetter({ 'en-US': { hello: 'Hello' }, 'zh-CN': { hello: '你好' } })
  * message('hello', { locale: 'en-US' })
@@ -987,7 +991,7 @@ export type I18nFn = typeof i18n
  * array 子工具类型
  * @example
  * ```ts
- * import { core, type ArrayFn } from '@h-ai/core'
+ * import { type ArrayFn, core } from '@h-ai/core'
  * const tools: ArrayFn = core.array
  * tools.chunk([1, 2, 3], 2)
  * ```
@@ -998,7 +1002,7 @@ export type ArrayFn = typeof array
  * async 子工具类型
  * @example
  * ```ts
- * import { core, type AsyncFn } from '@h-ai/core'
+ * import { type AsyncFn, core } from '@h-ai/core'
  * const tools: AsyncFn = core.async
  * await tools.retry(async () => 'ready', { maxRetries: 2 })
  * ```
@@ -1009,7 +1013,7 @@ export type AsyncFn = typeof async
  * object 子工具类型
  * @example
  * ```ts
- * import { core, type ObjectFn } from '@h-ai/core'
+ * import { type ObjectFn, core } from '@h-ai/core'
  * const tools: ObjectFn = core.object
  * tools.pick({ id: 'order-1', password: 'example-only' }, ['id'])
  * ```
@@ -1020,7 +1024,7 @@ export type ObjectFn = typeof object
  * string 子工具类型
  * @example
  * ```ts
- * import { core, type StringFn } from '@h-ai/core'
+ * import { type StringFn, core } from '@h-ai/core'
  * const tools: StringFn = core.string
  * tools.camelCase('order-created')
  * ```
@@ -1031,7 +1035,7 @@ export type StringFn = typeof string
  * time 子工具类型
  * @example
  * ```ts
- * import { core, type TimeFn } from '@h-ai/core'
+ * import { type TimeFn, core } from '@h-ai/core'
  * const tools: TimeFn = core.time
  * tools.addDays(new Date('2026-01-01T00:00:00Z'), 1)
  * ```
@@ -1042,7 +1046,7 @@ export type TimeFn = typeof time
  * typeUtils 子工具类型
  * @example
  * ```ts
- * import { core, type TypeUtilFn } from '@h-ai/core'
+ * import { type TypeUtilFn, core } from '@h-ai/core'
  * const tools: TypeUtilFn = core.typeUtils
  * const value: unknown = 'order-1'
  * if (tools.isString(value)) value.toUpperCase()
@@ -1061,7 +1065,7 @@ export type TypeUtilFn = typeof typeUtils
  * @template E - 模块错误类型（必须继承 HaiError）
  * @example
  * ```ts
- * import { core, type HaiError, type NotInitializedKit } from '@h-ai/core'
+ * import { type HaiError, type NotInitializedKit, core } from '@h-ai/core'
  * const state: NotInitializedKit<HaiError> = core.module.createNotInitializedKit({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
  * const result = state.result<string>()
  * if (!result.success) result.error.message
@@ -1085,7 +1089,7 @@ export interface NotInitializedKit<E extends HaiError> {
  * 未初始化代理的两个重载：错误定义或具体错误码。
  * @example
  * ```ts
- * import { core, type CreateNotInitializedKitFn } from '@h-ai/core'
+ * import { type CreateNotInitializedKitFn, core } from '@h-ai/core'
  * const create: CreateNotInitializedKitFn = core.module.createNotInitializedKit
  * const state = create({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
  * const result = state.result<string>()
@@ -1116,7 +1120,7 @@ export interface ModuleFn {
  * 敏感字段匹配器
  * @example
  * ```ts
- * import { core, type SensitiveKeyMatcher } from '@h-ai/core'
+ * import { type SensitiveKeyMatcher, core } from '@h-ai/core'
  * const matcher: SensitiveKeyMatcher = ['password', 'credential']
  * const safe = core.sanitize.sanitizeSensitiveFields({ credential: 'example-only', id: 'order-1' }, { matcher })
  * ```
@@ -1127,7 +1131,7 @@ export type SensitiveKeyMatcher = RegExp | string[] | ((key: string) => boolean)
  * 敏感字段脱敏选项
  * @example
  * ```ts
- * import { core, type SanitizeSensitiveFieldsOptions } from '@h-ai/core'
+ * import { type SanitizeSensitiveFieldsOptions, core } from '@h-ai/core'
  * const options: SanitizeSensitiveFieldsOptions = { matcher: ['credential'], replacement: '[HIDDEN]' }
  * const safe = core.sanitize.sanitizeSensitiveFields({ credential: 'example-only' }, options)
  * ```
@@ -1143,7 +1147,7 @@ export interface SanitizeSensitiveFieldsOptions {
  * sanitize 子工具类型
  * @example
  * ```ts
- * import { core, type SanitizeFn } from '@h-ai/core'
+ * import { type SanitizeFn, core } from '@h-ai/core'
  * const tools: SanitizeFn = core.sanitize
  * tools.sanitizeSensitiveFields({ apiKey: 'example-only', id: 'order-1' })
  * ```
@@ -1168,7 +1172,7 @@ export interface RuntimeStep {
  * 初始化和关闭合并并发调用；失败关闭保留自身及尚未关闭的依赖，供下次重试。
  * @example
  * ```ts
- * import { core, type ModuleRuntime } from '@h-ai/core'
+ * import { type ModuleRuntime, core } from '@h-ai/core'
  * const runtime: ModuleRuntime = core.module.createRuntime([])
  * await runtime.close()
  * ```

@@ -11,7 +11,7 @@ import type { DeployResult } from '../deploy-types.js'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -140,17 +140,17 @@ export function createVercelProvider(): DeployProvider {
         token = apiToken
         const username = user.user.username || user.user.email
         logger.info('Vercel authenticated')
-        return ok(username)
+        return core.ok(username)
       }
       catch (error) {
         logger.error('Vercel authentication failed', { error })
-        return err(toDeployError(HaiDeployError.AUTH_FAILED, 'deploy_authFailed', error))
+        return core.err(toDeployError(HaiDeployError.AUTH_FAILED, 'deploy_authFailed', error))
       }
     },
 
     async createProject(projectName: string): Promise<HaiResult<string>> {
       if (!token) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -162,7 +162,7 @@ export function createVercelProvider(): DeployProvider {
         const existingId = await findExistingProject(token, projectName)
         if (existingId !== null) {
           logger.info('Vercel project found', { projectName, projectId: existingId })
-          return ok(existingId)
+          return core.ok(existingId)
         }
 
         try {
@@ -178,7 +178,7 @@ export function createVercelProvider(): DeployProvider {
             },
           )
           logger.info('Vercel project created', { projectName, projectId: project.id })
-          return ok(project.id)
+          return core.ok(project.id)
         }
         catch (error) {
           // 官方文档说明同名项目创建会返回 409；遇到并发竞争时回查现有项目即可实现幂等。
@@ -189,7 +189,7 @@ export function createVercelProvider(): DeployProvider {
                 projectName,
                 projectId: concurrentProjectId,
               })
-              return ok(concurrentProjectId)
+              return core.ok(concurrentProjectId)
             }
           }
           throw error
@@ -197,13 +197,13 @@ export function createVercelProvider(): DeployProvider {
       }
       catch (error) {
         logger.error('Vercel project creation failed', { projectName, error })
-        return err(toDeployError(HaiDeployError.PROJECT_CREATE_FAILED, 'deploy_projectCreateFailed', error))
+        return core.err(toDeployError(HaiDeployError.PROJECT_CREATE_FAILED, 'deploy_projectCreateFailed', error))
       }
     },
 
     async setEnvVars(projectId: string, envVars: Record<string, string>): Promise<HaiResult<void>> {
       if (!token) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -228,17 +228,17 @@ export function createVercelProvider(): DeployProvider {
           },
         )
         logger.info('Vercel env vars set', { projectId, count: envEntries.length })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Vercel env vars setup failed', { projectId, error })
-        return err(toDeployError(HaiDeployError.ENV_VAR_FAILED, 'deploy_envVarFailed', error))
+        return core.err(toDeployError(HaiDeployError.ENV_VAR_FAILED, 'deploy_envVarFailed', error))
       }
     },
 
     async deploy(projectId: string, outputDir: string): Promise<HaiResult<DeployResult>> {
       if (!token) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -249,7 +249,7 @@ export function createVercelProvider(): DeployProvider {
         // 只接受 Build Output API v3；不把普通源码交给平台重新构建。
         const outputConfig = JSON.parse(readFileSync(join(outputDir, 'config.json'), 'utf8')) as { version?: unknown }
         if (outputConfig.version !== 3)
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
         // 收集所有文件
         const filePaths = collectFiles(outputDir, outputDir)
         const files: Array<{ file: string, sha: string, size: number }> = []
@@ -299,11 +299,11 @@ export function createVercelProvider(): DeployProvider {
           status: finalStatus,
         })
 
-        return ok(result)
+        return core.ok(result)
       }
       catch (error) {
         logger.error('Vercel deployment failed', { projectId, error })
-        return err(toDeployError(HaiDeployError.UPLOAD_FAILED, 'deploy_uploadFailed', error))
+        return core.err(toDeployError(HaiDeployError.UPLOAD_FAILED, 'deploy_uploadFailed', error))
       }
     },
   }

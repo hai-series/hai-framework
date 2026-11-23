@@ -44,7 +44,7 @@ const CryptoErrorInfo = {
  *
  * @example
  * ```ts
- * import { crypto, HaiCryptoError } from '@h-ai/crypto'
+ * import { HaiCryptoError, crypto } from '@h-ai/crypto'
  * const result = crypto.hash.hash('hello')
  * if (!result.success && result.error.code === HaiCryptoError.NOT_INITIALIZED.code) {
  *   // 尚未初始化时按生命周期处理，不忽略错误继续加密。
@@ -61,7 +61,7 @@ export const HaiCryptoError = core.error.buildHaiErrorsDef('crypto', CryptoError
  *
  * @example
  * ```ts
- * import { crypto, type CipherMode } from '@h-ai/crypto'
+ * import { type CipherMode, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -84,7 +84,7 @@ export type CipherMode = 0 | 1
  *
  * @example
  * ```ts
- * import { crypto, type KeyPair } from '@h-ai/crypto'
+ * import { type KeyPair, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -109,7 +109,7 @@ export interface KeyPair {
  *
  * @example
  * ```ts
- * import { crypto, type AsymmetricEncryptOptions } from '@h-ai/crypto'
+ * import { type AsymmetricEncryptOptions, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -137,7 +137,7 @@ export interface AsymmetricEncryptOptions {
  *
  * @example
  * ```ts
- * import { crypto, type SignOptions } from '@h-ai/crypto'
+ * import { type SignOptions, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -168,7 +168,7 @@ export interface SignOptions {
  *
  * @example
  * ```ts
- * import { crypto, type HashOptions } from '@h-ai/crypto'
+ * import { type HashOptions, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -191,7 +191,7 @@ export interface HashOptions {
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricMode } from '@h-ai/crypto'
+ * import { type SymmetricMode, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -210,7 +210,7 @@ export type SymmetricMode = 'ecb' | 'cbc'
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricCiphertextEncoding } from '@h-ai/crypto'
+ * import { type SymmetricCiphertextEncoding, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -231,7 +231,7 @@ export type SymmetricCiphertextEncoding = 'hex' | 'base64'
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricEncryptOptions } from '@h-ai/crypto'
+ * import { type SymmetricEncryptOptions, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -257,7 +257,7 @@ export interface SymmetricEncryptOptions {
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricEncryptedPayload } from '@h-ai/crypto'
+ * import { type SymmetricEncryptedPayload, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -287,7 +287,7 @@ export interface SymmetricEncryptedPayload {
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricCbcEncryptedPayload } from '@h-ai/crypto'
+ * import { type SymmetricCbcEncryptedPayload, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -311,7 +311,7 @@ export interface SymmetricCbcEncryptedPayload extends SymmetricEncryptedPayload 
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricDecryptInput } from '@h-ai/crypto'
+ * import { type SymmetricDecryptInput, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -332,7 +332,7 @@ export type SymmetricDecryptInput = SymmetricEncryptedPayload
  *
  * @example
  * ```ts
- * import { crypto, type EncryptWithIVResult } from '@h-ai/crypto'
+ * import { type EncryptWithIVResult, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -355,7 +355,7 @@ export type EncryptWithIVResult = SymmetricCbcEncryptedPayload
  *
  * @example
  * ```ts
- * import { crypto, type PasswordConfig } from '@h-ai/crypto'
+ * import { type PasswordConfig, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -383,7 +383,7 @@ export interface PasswordConfig {
  *
  * @example
  * ```ts
- * import { crypto, type AsymmetricOperations } from '@h-ai/crypto'
+ * import { type AsymmetricOperations, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -572,7 +572,7 @@ export interface AsymmetricOperations {
  *
  * @example
  * ```ts
- * import { crypto, type HashOperations } from '@h-ai/crypto'
+ * import { type HashOperations, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -662,7 +662,7 @@ export interface HashOperations {
  *
  * @example
  * ```ts
- * import { crypto, type SymmetricOperations } from '@h-ai/crypto'
+ * import { type SymmetricOperations, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -851,7 +851,7 @@ export interface SymmetricOperations {
  *
  * @example
  * ```ts
- * import { crypto, type PasswordOperations } from '@h-ai/crypto'
+ * import { type PasswordOperations, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -919,7 +919,7 @@ export interface PasswordOperations {
  * Node.js 密码操作。异步方法将完整 SM3 密码计算交给有界线程池，并沿用同步方法的记录格式。
  * @example
  * ```ts
- * import { crypto, type AsyncPasswordOperations } from '@h-ai/crypto'
+ * import { type AsyncPasswordOperations, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {

@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { storage as localStorage } from '@h-ai/storage'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
@@ -40,8 +40,8 @@ function createStorage(
 ) {
   return {
     file: {
-      head: overrides.head ?? vi.fn().mockResolvedValue(ok(METADATA)),
-      getStreamWithMetadata: overrides.getStreamWithMetadata ?? vi.fn().mockResolvedValue(ok(createRead())),
+      head: overrides.head ?? vi.fn().mockResolvedValue(core.ok(METADATA)),
+      getStreamWithMetadata: overrides.getStreamWithMetadata ?? vi.fn().mockResolvedValue(core.ok(createRead())),
     },
   }
 }
@@ -98,7 +98,7 @@ describe('serv.storageAssets', () => {
       metadata: { ...METADATA, size: 0 },
     })
     const storage = createStorage({
-      getStreamWithMetadata: vi.fn().mockResolvedValue(ok(read)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
     })
     const app = createApp(storage)
 
@@ -123,15 +123,15 @@ describe('serv.storageAssets', () => {
   it('同键被覆盖时，GET 响应头和正文均取自本次读取', async () => {
     const read = createRead()
     const storage = createStorage({
-      head: vi.fn().mockResolvedValue(ok({
+      head: vi.fn().mockResolvedValue(core.ok({
         ...METADATA,
         size: 100,
         contentType: 'image/webp',
         etag: '"previous"',
       })),
-      getStreamWithMetadata: vi.fn().mockResolvedValue(ok(read)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
     })
-    const oldGet = vi.fn().mockResolvedValue(ok(CONTENT))
+    const oldGet = vi.fn().mockResolvedValue(core.ok(CONTENT))
     const previousReader = {
       file: { ...storage.file, get: oldGet },
     }
@@ -164,7 +164,7 @@ describe('serv.storageAssets', () => {
   it('匹配弱 ETag 时返回 304 且不下载文件内容', async () => {
     const read = createRead()
     const storage = createStorage({
-      getStreamWithMetadata: vi.fn().mockResolvedValue(ok(read)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
     })
     const app = createApp(storage)
 
@@ -199,10 +199,10 @@ describe('serv.storageAssets', () => {
       metadata: { ...METADATA, contentType: 'application/octet-stream' },
     })
     const wrongMimeStorage = createStorage({
-      getStreamWithMetadata: vi.fn().mockResolvedValue(ok(read)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
     })
     const missingStorage = createStorage({
-      getStreamWithMetadata: vi.fn().mockResolvedValue(err(HaiCommonError.NOT_FOUND, 'Missing resource')),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.err(HaiCommonError.NOT_FOUND, 'Missing resource')),
     })
 
     expect((await createApp(wrongMimeStorage).request('/api/v1/avatar-assets/avatars/persona-1/avatar-1.png')).status).toBe(404)
@@ -215,7 +215,7 @@ describe('serv.storageAssets', () => {
     const controller = new AbortController()
     const read = createRead()
     const getStreamWithMetadata = vi.fn<StorageFunctions['file']['getStreamWithMetadata']>()
-      .mockImplementation(async (_key, options) => ok({
+      .mockImplementation(async (_key, options) => core.ok({
         ...read,
         stream: {
           async* [Symbol.asyncIterator]() {
@@ -240,7 +240,7 @@ describe('serv.storageAssets', () => {
       close: vi.fn().mockRejectedValue(new Error('Failed to release resource')),
     })
     const storage = createStorage({
-      getStreamWithMetadata: vi.fn().mockResolvedValue(ok(read)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
     })
     const response = await createApp(storage).request('/api/v1/avatar-assets/avatars/persona-1/avatar-1.png')
 

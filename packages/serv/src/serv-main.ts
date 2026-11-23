@@ -11,6 +11,10 @@
 import type { ServFunctions } from './serv-types.js'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
+import { createAiProcedures } from './features/serv-feature-ai.js'
+import { createFeedbackProcedures } from './features/serv-feature-feedback.js'
+import { createIamProcedures } from './features/serv-feature-iam.js'
+import { createStorageProcedures } from './features/serv-feature-storage.js'
 import {
   WILDCARD_PERMISSION,
   WILDCARD_ROLE,
@@ -43,9 +47,9 @@ export type {
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { serv } from '@h-ai/serv'
+ * import { type ServContext, serv } from '@h-ai/serv'
  *
  * const contract = apiContract.create({})
  * const procedures = serv.implement(contract).context<ServContext>().build()
@@ -56,6 +60,10 @@ export type {
  * ```
  */
 export const serv: ServFunctions = {
+  createAiProcedures,
+  createFeedbackProcedures,
+  createIamProcedures,
+  createStorageProcedures,
   // 应用与上下文
   createApp,
   parseRequestContext,

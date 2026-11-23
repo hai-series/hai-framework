@@ -9,7 +9,7 @@
 
 import type { AuthResult } from '@h-ai/iam'
 import type { AuthOperations } from '../src/kit-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureAuth, login, loginWithApiKey, loginWithLdap, loginWithOtp, logout, registerAndLogin } from '../src/kit-auth.js'
 
@@ -42,12 +42,12 @@ function createAuthOperations() {
     permissions: [],
   }
   return {
-    login: vi.fn<AuthOperations['login']>().mockResolvedValue(ok(result)),
-    loginWithOtp: vi.fn<AuthOperations['loginWithOtp']>().mockResolvedValue(ok(result)),
-    loginWithLdap: vi.fn<AuthOperations['loginWithLdap']>().mockResolvedValue(ok(result)),
-    loginWithApiKey: vi.fn<AuthOperations['loginWithApiKey']>().mockResolvedValue(ok(result)),
-    registerAndLogin: vi.fn<AuthOperations['registerAndLogin']>().mockResolvedValue(ok(result)),
-    logout: vi.fn<AuthOperations['logout']>().mockResolvedValue(ok(undefined)),
+    login: vi.fn<AuthOperations['login']>().mockResolvedValue(core.ok(result)),
+    loginWithOtp: vi.fn<AuthOperations['loginWithOtp']>().mockResolvedValue(core.ok(result)),
+    loginWithLdap: vi.fn<AuthOperations['loginWithLdap']>().mockResolvedValue(core.ok(result)),
+    loginWithApiKey: vi.fn<AuthOperations['loginWithApiKey']>().mockResolvedValue(core.ok(result)),
+    registerAndLogin: vi.fn<AuthOperations['registerAndLogin']>().mockResolvedValue(core.ok(result)),
+    logout: vi.fn<AuthOperations['logout']>().mockResolvedValue(core.ok(undefined)),
   } satisfies AuthOperations
 }
 
@@ -117,7 +117,7 @@ describe('kit.auth 未配置时返回 HaiResult 错误', () => {
 
   it('logout 在 accessToken 缺失时也只清 Cookie', async () => {
     const cookies = createCookies()
-    await expect(logout(cookies, null)).resolves.toEqual(ok(undefined))
+    await expect(logout(cookies, null)).resolves.toEqual(core.ok(undefined))
     expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
   })
 })
@@ -125,7 +125,7 @@ describe('kit.auth 未配置时返回 HaiResult 错误', () => {
 describe('kit.auth 已配置时正常委托给 operations', () => {
   it('logout 保留服务端失败结果，同时清理当前Cookie', async () => {
     const operations = createAuthOperations()
-    const failure = err({ code: 'STATE_UNAVAILABLE', message: 'Session state unavailable' })
+    const failure = core.err({ code: 'STATE_UNAVAILABLE', message: 'Session state unavailable' })
     operations.logout.mockResolvedValueOnce(failure)
     configureAuth({ operations })
     const cookies = createCookies()
@@ -138,7 +138,7 @@ describe('kit.auth 已配置时正常委托给 operations', () => {
     const operations = createAuthOperations()
     configureAuth({ operations })
     const cookies = createCookies()
-    expect(await logout(cookies, 'held-token')).toEqual(ok(undefined))
+    expect(await logout(cookies, 'held-token')).toEqual(core.ok(undefined))
     operations.logout.mockRejectedValueOnce(new Error('Injected control-flow failure'))
     await expect(logout(cookies, 'held-token')).rejects.toThrow('Injected control-flow failure')
     expect(cookies.delete).toHaveBeenCalledTimes(2)

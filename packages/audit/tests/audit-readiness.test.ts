@@ -1,5 +1,5 @@
 /** 慢DDL、失败DDL与close竞态必须经过同一仓库就绪屏障。 */
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuditLogRepository } from '../src/audit-repository-log.js'
@@ -111,7 +111,7 @@ it('自定义查询全部等待基类DDL，失败不会提前执行SQL', async (
 })
 
 it('建表失败init明确失败且可重试，失败候选不变成已初始化', async () => {
-  const spy = vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(err(HaiReldbError.DDL_FAILED, 'Injected DDL failure'))
+  const spy = vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(core.err(HaiReldbError.DDL_FAILED, 'Injected DDL failure'))
   expect((await audit.init()).success).toBe(false)
   expect(audit.isInitialized).toBe(false)
   spy.mockRestore()

@@ -17,7 +17,7 @@ import type { Citation } from '../retrieval/ai-retrieval-types.js'
  *
  * @example
  * ```ts
- * import { ai, type RagOptions } from '@h-ai/ai'
+ * import { type RagOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: RagOptions) {
  *   const result = await ai.rag.query('如何部署？', options)
@@ -139,7 +139,7 @@ export type RagStreamEvent
  *
  * @example
  * ```ts
- * import { ai, type RagOperations } from '@h-ai/ai'
+ * import { type RagOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，并注册 docs 检索源。
  * const operations: RagOperations = ai.rag
  * const result = await operations.query('如何部署？', { objectId: 'user-1', sources: ['docs'], topK: 3 })

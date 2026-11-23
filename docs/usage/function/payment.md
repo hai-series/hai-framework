@@ -4,7 +4,7 @@
 
 在服务端用 `payment` 创建订单、接收支付平台发来的通知、查单和退款。浏览器接收后端返回的支付参数，再用对应平台的页面或原生界面发起付款。
 
-服务端以 `payment` 对象调用支付业务。浏览器需要引入 `@h-ai/payment/client` 的 `invokePayment()`，它使用服务端已经创建的订单参数打开支付流程。
+服务端以 `payment` 对象调用支付业务。浏览器需要引入 `@h-ai/payment/client` 的 `payment.client.invoke()`，它使用服务端已经创建的订单参数打开支付流程。
 
 [模块 README](../../../packages/payment/README.md) · [配置清单](../configuration/payment.md) · [数据结构](../data/payment.md) · [业务集成](../development/integrations.md)
 
@@ -22,8 +22,8 @@
 #### Node.js 服务端
 
 ```typescript
-import type { PaymentConfigInput } from '@h-ai/payment'
-import { payment } from '@h-ai/payment'
+
+import { type PaymentConfigInput, payment } from '@h-ai/payment'
 
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
@@ -63,12 +63,12 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
 
 ```typescript
 import type { PaymentOrder } from '@h-ai/payment'
-import { invokePayment } from '@h-ai/payment/client'
+import { payment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
   // 用服务端成功创建的订单与渠道参数调起支付。成功 data.invoked 表示已调起，未调起要看 message，成交由服务端确认。
-  const invoked = await invokePayment(orderData)
+  const invoked = await payment.client.invoke(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
   if (!invoked.data.invoked)
@@ -347,7 +347,7 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 <a id="browser-payment"></a>
 
-### 在浏览器发起付款：`invokePayment`
+### 在浏览器发起付款：`payment.client.invoke`
 
 使用最小接入中 startPayment 的完整示例；输入只能来自服务端成功创建的订单。
 
@@ -355,7 +355,7 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `invokePayment(order)` | 打开渠道付款界面 | 必填 `order: PaymentOrder`，来自服务端创建订单的成功结果 | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `payment.client.invoke(order)` | 打开渠道付款界面 | 必填 `order: PaymentOrder`，来自服务端创建订单的成功结果 | `Promise<HaiResult<InvokePaymentResult>>` | `await payment.client.invoke(orderData)` |
 
 #### 场景：处理调起结果
 

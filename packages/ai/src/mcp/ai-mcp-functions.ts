@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type { JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 
 import type {
@@ -18,8 +19,7 @@ import type {
   MCPToolDefinition,
   MCPToolHandler,
 } from './ai-mcp-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BlobResourceContentsSchema, PromptMessageSchema, TextResourceContentsSchema } from '@modelcontextprotocol/sdk/types.js'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 
@@ -122,10 +122,10 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const validate = validator.getValidator(definition.inputSchema)
         tools.set(definition.name, { definition, handler: handler as MCPToolHandler, validate })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolSchema', {
+        return core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolSchema', {
           params: { name: definition.name },
         }), error)
       }
@@ -137,7 +137,7 @@ export function createAIMCPFunctions(): MCPOperations {
       handler: () => Promise<MCPResourceContent>,
     ): HaiResult<void> {
       resources.set(resource.uri, { resource, handler })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /** 注册 MCP 提示词模板（同名覆盖） */
@@ -146,7 +146,7 @@ export function createAIMCPFunctions(): MCPOperations {
       handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
     ): HaiResult<void> {
       prompts.set(prompt.name, { prompt, handler })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /**
@@ -165,22 +165,22 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = tools.get(name)
         if (!registration) {
-          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', {
+          return core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', {
             params: { name },
           }))
         }
         const validation = registration.validate(args)
         if (!validation.valid) {
-          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolInput', {
+          return core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolInput', {
             params: { name },
           }))
         }
         const ctx: MCPContext = { ...context, requestId: context?.requestId ?? crypto.randomUUID() }
         const result = await registration.handler(args, ctx)
-        return ok(result)
+        return core.ok(result)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiAIError.MCP_TOOL_ERROR,
           aiM('ai_mcpToolFailed', {
             params: {
@@ -205,7 +205,7 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = resources.get(uri)
         if (!registration) {
-          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', {
+          return core.err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', {
             params: { uri },
           }))
         }
@@ -216,14 +216,14 @@ export function createAIMCPFunctions(): MCPOperations {
         if (text.success === blob.success
           || (text.success && Object.hasOwn(content, 'blob'))
           || (blob.success && Object.hasOwn(content, 'text'))) {
-          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', {
+          return core.err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', {
             params: { uri },
           }))
         }
-        return ok(content)
+        return core.ok(content)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiAIError.MCP_RESOURCE_ERROR,
           aiM('ai_mcpResourceFailed', {
             params: {
@@ -254,7 +254,7 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = prompts.get(name)
         if (!registration) {
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptNotFound', {
+          return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptNotFound', {
             params: { name },
           }))
         }
@@ -262,12 +262,12 @@ export function createAIMCPFunctions(): MCPOperations {
         // 验证必需参数
         for (const arg of registration.prompt.arguments || []) {
           if (arg.required && !Object.hasOwn(args, arg.name)) {
-            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', {
+            return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', {
               params: { name, arg: arg.name },
             }))
           }
           if (Object.hasOwn(args, arg.name) && typeof args[arg.name] !== 'string') {
-            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
+            return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
               params: { name },
             }))
           }
@@ -275,14 +275,14 @@ export function createAIMCPFunctions(): MCPOperations {
 
         const messages = await registration.handler(args)
         if (!Array.isArray(messages) || messages.some(message => !PromptMessageSchema.safeParse(message).success)) {
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
+          return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
             params: { name },
           }))
         }
-        return ok(messages)
+        return core.ok(messages)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiAIError.MCP_PROTOCOL_ERROR,
           aiM('ai_mcpPromptFailed', {
             params: {

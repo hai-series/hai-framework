@@ -1,5 +1,6 @@
 /** SQLite/PG/MySQL 独立 Node：真实提交后丢回执、双节点补写、重启、大载荷与失租隔离。 */
 import type { HaiResult } from '@h-ai/core'
+
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { ChildProcess } from 'node:child_process'
 import type { TaskExecutionLog } from '../src/index.js'

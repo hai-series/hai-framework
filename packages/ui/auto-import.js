@@ -416,4 +416,5 @@ function autoImportHaiUi() {
   }
 }
 
-export { autoImportHaiUi }
+/** Svelte 预处理器的统一创建入口。 */
+export const ui = { autoImport: autoImportHaiUi }

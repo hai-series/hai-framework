@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { PasswordConfig } from '../iam-config.js'
 import type { StoredUser, User } from './iam-user-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 
@@ -21,11 +21,11 @@ import { HaiIamError } from '../iam-types.js'
  */
 export function checkPasswordState(user: Pick<StoredUser, 'mustChangePassword' | 'passwordHash' | 'passwordUpdatedAt'>, policy?: PasswordConfig): HaiResult<void> {
   if (policy?.requireInitialChange && user.mustChangePassword)
-    return err(HaiIamError.PASSWORD_CHANGE_REQUIRED, iamM('iam_passwordChangeRequired'))
+    return core.err(HaiIamError.PASSWORD_CHANGE_REQUIRED, iamM('iam_passwordChangeRequired'))
   const days = policy?.expirationDays ?? 0
   if (days > 0 && user.passwordHash && (!user.passwordUpdatedAt || user.passwordUpdatedAt.getTime() + days * 86400_000 <= Date.now()))
-    return err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
-  return ok(undefined)
+    return core.err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
+  return core.ok(undefined)
 }
 
 /**
@@ -53,9 +53,9 @@ export function validateAccountPolicy(user: Partial<Pick<User, 'accountType' | '
     || (user.accountStatus !== undefined && !['active', 'dormant', 'closed'].includes(user.accountStatus))
     || (user.accountExpiresAt != null && (!(user.accountExpiresAt instanceof Date) || !Number.isFinite(user.accountExpiresAt.getTime())))
     || (user.accountType === 'temporary' && !user.accountExpiresAt)) {
-    return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_accountPolicyInvalid'))
+    return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_accountPolicyInvalid'))
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**

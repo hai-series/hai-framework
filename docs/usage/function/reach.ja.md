@@ -163,8 +163,8 @@ const sent = sentResult.data
 `gatewayHooks` はプロバイダー名とコールバックの対応表です。対象には `gateway` が設定された `aliyun-sms` プロバイダーを指定します。引数には `method: POST`、ゲートウェイの `url`、現在の本文 `body: string | undefined` と期限を伝える `signal: AbortSignal` が入ります。`{ headers?, body? }` を同期または非同期で返し、上書きする項目だけを指定できます。`undefined` を返すと設定済みの値を使います。処理はサーバーで実行し、署名付き URL はログに出さないでください。
 
 ```ts
-import type { ReachConfigInput } from '@h-ai/reach'
-import { reach } from '@h-ai/reach'
+
+import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
   // sms ゲートウェイが設定済みの構成を渡します。初期化に成功すると、次のゲートウェイリクエストでコールバックが X-Client を追加します。

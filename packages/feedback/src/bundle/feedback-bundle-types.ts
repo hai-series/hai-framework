@@ -96,10 +96,10 @@ export interface FeedbackBundleManifest {
  * 校验后的离线包；files 中的内容仍是待显示的非可信输入。
  * @example
  * ```ts
- * import type { FeedbackBundle } from '@h-ai/feedback/bundle'
- * import { readFeedbackBundle } from '@h-ai/feedback/bundle'
+ *
+ * import { type FeedbackBundle, feedback } from '@h-ai/feedback/bundle'
  * async function parse(bytes: Uint8Array): Promise<FeedbackBundle | undefined> {
- *   const result = await readFeedbackBundle(bytes)
+ *   const result = await feedback.readBundle(bytes)
  *   return result.success ? result.data : undefined
  * }
  * ```

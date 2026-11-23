@@ -4,7 +4,7 @@
 <script lang='ts'>
   import type { PageData } from './$types'
   import { resolve } from '$app/paths'
-  import { Badge, PageHeader, usePermission } from '@h-ai/ui'
+  import { Badge, PageHeader, ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale } from '#lib/paraglide/runtime.js'
 
@@ -13,7 +13,7 @@
   }
 
   const { data }: Props = $props()
-  const { hasPerm } = usePermission()
+  const { hasPerm } = ui.usePermission()
 
   const logsPath = resolve('admin/logs')
 

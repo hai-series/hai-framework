@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { deploy, getDeployRecovery } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const fetchMock = vi.fn()
 let directory: string
@@ -58,7 +58,7 @@ describe('deployment recovery', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(getDeployRecovery(result.error)).toMatchObject({
+    expect(deploy.getDeployRecovery(result.error)).toMatchObject({
       projectName: 'same-project',
       stage: 'provision:cache',
       resources: [
@@ -81,7 +81,7 @@ describe('deployment recovery', () => {
     const result = await deploy.provisionAll('same-project')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(getDeployRecovery(result.error)?.resources).toEqual([
+      expect(deploy.getDeployRecovery(result.error)?.resources).toEqual([
         {
           serviceType: 'db',
           provisionerName: 'neon',
@@ -105,7 +105,7 @@ describe('deployment recovery', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(getDeployRecovery(result.error)).toMatchObject({
+    expect(deploy.getDeployRecovery(result.error)).toMatchObject({
       stage: 'deploy',
       platformProjectId: 'platform-existing',
       resources: [

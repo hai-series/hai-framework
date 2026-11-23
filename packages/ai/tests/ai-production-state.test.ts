@@ -1,4 +1,5 @@
 /** 自定义AI Store必须如实声明共享能力；生产拒绝本机临时Provider。 */
+
 import type { VecdbConfigInput } from '@h-ai/vecdb'
 import { reldb } from '@h-ai/reldb'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'

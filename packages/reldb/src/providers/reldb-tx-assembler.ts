@@ -7,6 +7,7 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
+
 import type {
   CrudManager,
   DmlOperations,
@@ -16,8 +17,7 @@ import type {
   TxManager,
   TxWrapCallback,
 } from '../reldb-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { HaiReldbError } from '../reldb-types.js'
@@ -72,9 +72,9 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
 
   const ensureActive = (): HaiResult<void> => {
     if (!active) {
-      return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage('transaction finished'))
+      return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage('transaction finished'))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   const guardedOps: DmlOperations = {
@@ -126,10 +126,10 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       active = false
       try {
         await callbacks.commit()
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
+        return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
         callbacks.release()
@@ -143,10 +143,10 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       active = false
       try {
         await callbacks.rollback()
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
+        return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
         callbacks.release()
@@ -158,7 +158,7 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
 // ─── tx.wrap 语法糖 ───
 
 function callbackFailure(error: unknown) {
-  return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', {
+  return core.err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', {
     params: {
       error: String(error),
     },
@@ -193,7 +193,7 @@ export function createTxWrap(
       if (!commitResult.success) {
         return commitResult as HaiResult<T>
       }
-      return ok(result)
+      return core.ok(result)
     }
     catch (error) {
       await txResult.data.rollback()

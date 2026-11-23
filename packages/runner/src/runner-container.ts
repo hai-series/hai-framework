@@ -10,7 +10,7 @@ import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile }
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, posix } from 'node:path'
 import { promisify } from 'node:util'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { runnerM } from './runner-i18n.js'
 import { HaiRunnerError } from './runner-types.js'
@@ -68,15 +68,15 @@ async function cli(engine: RunnerConfig['engine'], args: string[]) {
 }
 
 function invalid() {
-  return err(HaiRunnerError.INVALID, runnerM('runner_invalid'))
+  return core.err(HaiRunnerError.INVALID, runnerM('runner_invalid'))
 }
 
 function unavailable() {
-  return err(HaiRunnerError.UNAVAILABLE, runnerM('runner_unavailable'))
+  return core.err(HaiRunnerError.UNAVAILABLE, runnerM('runner_unavailable'))
 }
 
 function uncertain() {
-  return err(HaiRunnerError.CLEANUP_UNCONFIRMED, runnerM('runner_cleanupUnconfirmed'))
+  return core.err(HaiRunnerError.CLEANUP_UNCONFIRMED, runnerM('runner_cleanupUnconfirmed'))
 }
 
 /**
@@ -188,7 +188,7 @@ export async function confirmContainerReleased(record: RunnerContainerIdentity):
       await rm(path, { recursive: true, force: true })
     }
     return record.engineKey === await engineKey(record.engine) && await containerAbsent(record.engine, record.id)
-      ? ok(undefined)
+      ? core.ok(undefined)
       : uncertain()
   }
   catch {
@@ -243,7 +243,7 @@ function decodeInputs(inputs: Record<string, string>, resources: RunnerResources
  * @example 模块内部上下文
  * ```ts
  * async function shell(config: RunnerConfig, environment: RunnerEnvironment) {
- *   return startContainer(config.engine, environment, environment.resources, { command: 'true' }, new AbortController().signal, async () => ok(undefined))
+ *   return startContainer(config.engine, environment, environment.resources, { command: 'true' }, new AbortController().signal, async () => core.ok(undefined))
  * }
  * ```
  */
@@ -492,7 +492,7 @@ export async function startContainer(
         child.kill()
         try {
           await removeFiles()
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch {
           return uncertain()
@@ -536,7 +536,7 @@ export async function startContainer(
               ? reject(error)
               : resolve())
           })
-          return ok(process)
+          return core.ok(process)
         }
         catch {
           return unavailable()
@@ -570,11 +570,11 @@ export async function startContainer(
           if (stdout.length > maxBytes)
             return invalid()
           if (stdout.length < workerThreshold)
-            return ok(stdout.toString('base64'))
+            return core.ok(stdout.toString('base64'))
           const bytes = new Uint8Array(stdout)
           const encoded = await serializationPool.run({ type: 'artifact', bytes }, [bytes.buffer])
           return encoded.success && typeof encoded.data === 'string' && !closing && !signal.aborted
-            ? ok(encoded.data)
+            ? core.ok(encoded.data)
             : invalid()
         }
         catch {
@@ -607,12 +607,12 @@ export async function startContainer(
           if (stdout.length < workerThreshold) {
             const files = parseWorkspaceSnapshot(stdout, maxBytes)
             return files
-              ? ok(files)
+              ? core.ok(files)
               : invalid()
           }
           const files = await serializationPool.run({ type: 'snapshot', content: stdout, budget: maxBytes })
           return files.success && files.data && typeof files.data !== 'string' && !closing && !signal.aborted
-            ? ok(files.data)
+            ? core.ok(files.data)
             : invalid()
         }
         catch {
@@ -638,7 +638,7 @@ export async function startContainer(
           : uncertain()
       }
     }
-    return ok(process)
+    return core.ok(process)
   }
   catch {
     if (envFile) {
@@ -670,7 +670,7 @@ export async function startContainer(
  * @example 模块内部上下文
  * ```ts
  * function prepare(settings: RunnerConfig, environment: RunnerEnvironment) {
- *   return prepareWarmContainer(settings.engine, environment, new AbortController().signal, async () => ok(undefined))
+ *   return prepareWarmContainer(settings.engine, environment, new AbortController().signal, async () => core.ok(undefined))
  * }
  * ```
  */

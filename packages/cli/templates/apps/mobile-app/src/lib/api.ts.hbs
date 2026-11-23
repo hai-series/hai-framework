@@ -4,7 +4,7 @@
  * 原生存储失败会拒绝 Promise；登录/退出调用方须处理 auth.setTokens/clear 失败并释放界面 loading。
  */
 import { apiClient } from '@h-ai/api-client'
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
 {{/if}}
@@ -62,7 +62,7 @@ export function resolveApiBase(): string {
  * @example 模块内部上下文
  * ```ts
  * if (await usesNativeTokenStorage()) {
- *   const storage = createCapacitorTokenStorage()
+ *   const storage = capacitor.createTokenStorage()
  *   const accessToken = await storage.getAccessToken() // 只用于认证，不输出令牌。
  * }
  * ```
@@ -84,7 +84,7 @@ export async function usesNativeTokenStorage(): Promise<boolean> {
  */
 async function createTokenStorage() {
   if (await usesNativeTokenStorage())
-    return createCapacitorTokenStorage()
+    return capacitor.createTokenStorage()
 
   return apiClient.tokenStorage.httpOnlyCookie()
 }

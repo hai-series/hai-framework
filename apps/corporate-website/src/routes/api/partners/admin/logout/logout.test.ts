@@ -1,5 +1,5 @@
 import { cache } from '@h-ai/cache'
-import { err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getPartnerAdminSessionByToken } from '#lib/server/partner-service.js'
 import { POST } from './+server.js'
@@ -30,7 +30,7 @@ it('a failed revocation is reported and the cookie remains available for retry',
       parse: () => { throw new Error('Cookie parsing is not configured by this fixture') },
     },
   }
-  vi.spyOn(cache.kv, 'del').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'))
+  vi.spyOn(cache.kv, 'del').mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'))
   expect((await POST(event as RequestEvent)).status).toBe(500)
   expect(removeCookie).not.toHaveBeenCalled()
   expect(await getPartnerAdminSessionByToken(token)).not.toBeNull()

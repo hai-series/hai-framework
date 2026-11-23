@@ -11,8 +11,8 @@
 注文作成前に Payment を初期化します。金額の検証と操作の認可はアプリ側で行います。決済サービスの通知と照会結果はアプリ独自の注文状態の入力として扱います。
 
 ```typescript
-import type { PaymentConfigInput } from '@h-ai/payment'
-import { payment } from '@h-ai/payment'
+
+import { type PaymentConfigInput, payment } from '@h-ai/payment'
 
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
@@ -48,12 +48,12 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
 
 ```typescript
 import type { PaymentOrder } from '@h-ai/payment'
-import { invokePayment } from '@h-ai/payment/client'
+import { payment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
   // サーバーが作った注文とチャネルの値で決済を起動する。起動可否は data.invoked、不可時は message、成立はサーバーで確認する。
-  const invoked = await invokePayment(orderData)
+  const invoked = await payment.client.invoke(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
   if (!invoked.data.invoked)
@@ -231,7 +231,7 @@ async function verifyNotification(providerName: string, request: Request) {
 
 <a id="browser-payment"></a>
 
-### ブラウザーで支払いを開始：`invokePayment`
+### ブラウザーで支払いを開始：`payment.client.invoke`
 
 最小例の startPayment を使い、サーバーで作成済みの注文を渡します。
 
@@ -239,7 +239,7 @@ async function verifyNotification(providerName: string, request: Request) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `invokePayment(order)` | 決済画面を開く | サーバー側で注文の作成に成功したときの `order: PaymentOrder` が必須 | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `payment.client.invoke(order)` | 決済画面を開く | サーバー側で注文の作成に成功したときの `order: PaymentOrder` が必須 | `Promise<HaiResult<InvokePaymentResult>>` | `await payment.client.invoke(orderData)` |
 
 #### 利用例：呼び出し結果を確認
 

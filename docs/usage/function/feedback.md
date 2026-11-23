@@ -15,8 +15,8 @@
 示例在应用启动时初始化模块。提交函数接收可信服务端生成的 `context` 和客户端为本次提交生成的 `submissionId`。
 
 ```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
+
+import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
 // 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 // 用 orders 1.0.0、控制台通知和下方管理页地址启动服务。成功无数据，初始化出错时不受理报告。
@@ -96,9 +96,9 @@ input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context �
 下例运行在依赖已初始化的服务端；`config` 是应用从服务端配置中读出的 `FeedbackConfigInput`，业务预先生成并脱敏 `diagnostics/sanitized-logs.zip`，生产中可在回调内等待自己的日志收集服务：
 
 ```ts
-import type { FeedbackConfigInput } from '@h-ai/feedback'
+
 import { readFile } from 'node:fs/promises'
-import { feedback } from '@h-ai/feedback'
+import { type FeedbackConfigInput, feedback } from '@h-ai/feedback'
 
 async function startFeedback(config: FeedbackConfigInput) {
   // 传入宿主配置和下方诊断采集回调。成功启动反馈服务；回调按报告和取消信号采集业务材料，初始化不预先读取日志。
@@ -147,7 +147,7 @@ webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
 
 前后端分别传入其实际产物的 `appVersion/buildId/commit`；前端不能使用后端返回的版本替代自身版本。同一 SSR 构建的浏览器与服务产物复用 buildId。管理台与 CLI 生成的 base/API/fullstack 项目已接入编译期标识；`hai build` 内部生成标识，Docker 经构建参数传递。各目标从自己的 package.json 读取版本，没有所属 Git 提交时记录 `unknown`。模板的 `build-metadata.json` 仅含这三个非敏感字段，与运行代码内联值保持一致。
 
-默认 HTTP 接入来自 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures({ feedback, resolveContext })`。配合 `apiContract.feedback` 挂载；`resolveContext` 提供服务端确定的 `scopeId/userId/permissions`。普通提交用户只能补充自己的材料；管理权限分别为 `feedback:read/process/reopen/export`，客户端的租户 ID、requestId、附件名称不能作为授权。
+默认 HTTP 接入来自 `@h-ai/serv/features/feedback` 的 `serv.createFeedbackProcedures({ feedback, resolveContext })`。配合 `apiContract.feedback` 挂载；`resolveContext` 提供服务端确定的 `scopeId/userId/permissions`。普通提交用户只能补充自己的材料；管理权限分别为 `feedback:read/process/reopen/export`，客户端的租户 ID、requestId、附件名称不能作为授权。
 
 范围、用户、应用及证据关联标识按精确字符串匹配，MySQL 的大小写、重音及尾空格排序规则不会放宽隔离。附件 ID 保留原值并区分大小写，接受 1–128 字符的有效 Unicode；ZIP 文件路径使用摘要生成，不能从附件 ID 或显示名称推导。非成对代理字符在受理前拒绝。
 
@@ -166,7 +166,7 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 服务端从 `@h-ai/feedback` 导入 `feedback`。`maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量；
 
-普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明容量。启动时用 `@h-ai/api-contract/feedback` 的 `resolveFeedbackBudget(已校验的反馈配置).maxTransportBytes` 预计算，避免可选反馈故障/重试期间缓存模块默认预算。路径中的 `*` 仅匹配一个完整路径段；优先使用应用为该路由明确设置的值。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明容量。启动时用 `@h-ai/api-contract/feedback` 的 `apiContract.resolveFeedbackBudget(已校验的反馈配置).maxTransportBytes` 预计算，避免可选反馈故障/重试期间缓存模块默认预算。路径中的 `*` 仅匹配一个完整路径段；优先使用应用为该路由明确设置的值。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
 服务端错误窗口待写材料同时限制 3000 条、8 MiB 和 5 分钟；按最多 32 条/256 KiB 批量幂等写入，数据库失败指数退避到 30 秒，丢失保留 missing 原因。worker 空闲指数退避到 30 秒，本节点提交/重试/导出会唤醒；`workerIntervalMs:0` 由专用 worker 驱动。临时证据按 appId 每批最多 100 条清理，使用复合过期索引。
 
@@ -178,7 +178,7 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 `consoleContent` 默认为 `metadata`，只打印反馈编号、应用、版本、构建标识和采集状态。设置 `summary` 会额外打印经过通用脱敏的摘要。确认摘要不会包含应用自己的敏感数据后再启用。这个选项仅影响 `console` 通知方式，无需初始化 Reach。
 
-服务端环境证据与反馈受理共同提交；环境写入失败不留下已受理但缺失环境的半成品，相同 submissionId 可安全重试。管理界面用 `createFeedbackReview(...).retryReport(id)` 重试可恢复材料与失败通知/Webhook，控制器去重目标并传播失败，退出调用 close 阻止迟到请求继续编排。
+服务端环境证据与反馈受理共同提交；环境写入失败不留下已受理但缺失环境的半成品，相同 submissionId 可安全重试。管理界面用 `feedback.createReview(...).retryReport(id)` 重试可恢复材料与失败通知/Webhook，控制器去重目标并传播失败，退出调用 close 阻止迟到请求继续编排。
 
 <a id="reports"></a>
 
@@ -240,8 +240,8 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 服务端从已认证会话与已核验空间构造 context。本人列表按应用、空间、作者和有效期过滤。类别区分大小写，旧报告的类别直接从原报告读取。管理端继续使用需要 `feedback:read` 的列表。
 
 ```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
+
+import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
 async function listOwnReports(context: FeedbackContext) {
   // 同一应用和空间里读取作者自己的 bug 报告，每页最多 20 条；无匹配时返回空页。
@@ -417,31 +417,31 @@ hai feedback evidence feedback-FB-1.zip --request-id req-1 --page 1 --page-size 
 hai feedback view feedback-FB-1.zip
 ```
 
-`view` 只监听本机 loopback，使用随机路径和内置查看器，Ctrl+C 关闭；无需生产网络。程序也可从 `@h-ai/feedback/bundle` 使用 `createFeedbackBundle`、`readFeedbackBundle`、`summarizeFeedbackBundle`、`queryFeedbackBundle`，无需初始化反馈服务。
+`view` 只监听本机 loopback，使用随机路径和内置查看器，Ctrl+C 关闭；无需生产网络。程序也可从 `@h-ai/feedback/bundle` 使用 `feedback.createBundle`、`feedback.readBundle`、`feedback.summarizeBundle`、`feedback.queryBundle`，无需初始化反馈服务。
 
 #### 场景：解码附件并交给平台保存
 
-从 `@h-ai/feedback/client` 导入 `createFeedbackClient()`。以下 `feedbackClient` 是返回的独立实例，`actions` 是应用提供的 typed HTTP 适配器。返回 `HaiResult` 的步骤须检查 `success`。
+从 `@h-ai/feedback/client` 导入 `feedback.createClient()`。以下 `feedbackClient` 是返回的独立实例，`actions` 是应用提供的 typed HTTP 适配器。返回 `HaiResult` 的步骤须检查 `success`。
 
 ```ts
 // import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
-import { getFeedbackBundleViewerFiles } from '@h-ai/feedback/bundle'
-import { feedbackDataBytes, saveFeedbackFile } from '@h-ai/feedback/client'
+
+import { feedback } from '@h-ai/feedback/client'
 
 // 将 sample.txt DTO 的 Base64 内容解码成单字节 a，返回 Uint8Array。
-const bytes = feedbackDataBytes({ name: 'sample.txt', contentType: 'text/plain', dataBase64: 'YQ==' }) // 将附件 DTO 中的 Base64 解码成正文 Uint8Array。
+const bytes = feedback.dataBytes({ name: 'sample.txt', contentType: 'text/plain', dataBase64: 'YQ==' }) // 将附件 DTO 中的 Base64 解码成正文 Uint8Array。
 // 用当前平台保存刚解码的文本，saved 和 cancelled 分别表示已交付保存和用户取消；平台出错时返回原失败结果。
-const savedResult = await saveFeedbackFile(bytes, 'sample.txt', 'text/plain')
+const savedResult = await feedback.saveFile(bytes, 'sample.txt', 'text/plain')
 if (!savedResult.success)
   return savedResult
 const saved = savedResult.data // 交给当前平台的保存工具。读取 HaiResult<FeedbackSaveResult>。
 // 无参取得离线查看器文件映射，再取 HTML 入口的字节，不执行查看器。
-const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输入，取得离线包内置查看器入口的字节。
+const viewer = feedback.getBundleViewerFiles()['viewer/index.html'] // 无需输入，取得离线包内置查看器入口的字节。
 ```
 
 <a id="browser-capture"></a>
 
-### 采集浏览器现场与草稿：`createFeedbackClient`
+### 采集浏览器现场与草稿：`feedback.createClient`
 
 每个产品会话创建独立客户端；打开反馈面板前固定现场，发送或导出后按身份和预览生命周期清理。
 
@@ -449,21 +449,21 @@ const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedbackClient.init(config)` | 启动浏览器现场采集 | 必填 `config: FeedbackClientConfig`。见[应用身份和采集设置](#feedback-client-config)。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedbackClient.prepare()` | 为本次反馈准备现场材料 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedbackClient.captureScreenshot(attachmentId?)` | 采集当前页面截图 | `attachmentId?: string` 省略时新增截图，传草稿附件 ID 时替换该项 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedbackClient.getDraft()` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
-| `feedbackClient.getView()` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
-| `feedbackClient.releasePreviews()` | 释放临时预览资源 | `—` | `void` | `feedbackClient.releasePreviews()` |
-| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新选文件和可选的待移除草稿附件 ID。同一批执行 | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedbackClient.annotate(id, annotation)` | 把标注与遮挡写入图片 | 必填 `id: string`（草稿附件 ID）与 `annotation: FeedbackImageAnnotation`（标注与遮挡数据） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedbackClient.record(event)` | 记录一条应用现场事实 | 必填事件对象 `event`，包含证据类别 `kind` 和字段对象 `data`。可选 `requestId`、`errorId` 用于关联已有请求或错误 | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedbackClient.submit(input?)` | 提交当前反馈草稿 | 可省略 `input: FeedbackClientSubmitInput`。见[浏览器提交字段](#feedback-client-submit-input)。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedbackClient.flush()` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedbackClient.exportDraft(input?)` | 生成本地诊断包 | `input?: FeedbackClientSubmitInput`，指定离线包的补充文字和附件，省略时导出当前草稿 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedbackClient.saveDraft(input?)` | 保存本地草稿 | `input?: FeedbackClientSubmitInput`，同 `exportDraft`，随后调用宿主保存入口 | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedbackClient.pause()` | 暂停现场采集 | `—` | `void` | `feedbackClient.pause()` |
-| `feedbackClient.close(options?)` | 停止采集并释放资源 | `options?: { discard?: boolean }` 默认 false，等待有界收尾并清理。true 请求丢弃本机草稿 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedback.client.init(config)` | 启动浏览器现场采集 | 必填 `config: FeedbackClientConfig`。见[应用身份和采集设置](#feedback-client-config)。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedback.client.prepare()` | 为本次反馈准备现场材料 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedback.client.captureScreenshot(attachmentId?)` | 采集当前页面截图 | `attachmentId?: string` 省略时新增截图，传草稿附件 ID 时替换该项 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedback.client.getDraft()` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedback.client.getDraft()` |
+| `feedback.client.getView()` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedback.client.getView()` |
+| `feedback.client.releasePreviews()` | 释放临时预览资源 | `—` | `void` | `feedback.client.releasePreviews()` |
+| `feedback.client.addFiles(files, removedAttachmentIds?)` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新选文件和可选的待移除草稿附件 ID。同一批执行 | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedback.client.annotate(id, annotation)` | 把标注与遮挡写入图片 | 必填 `id: string`（草稿附件 ID）与 `annotation: FeedbackImageAnnotation`（标注与遮挡数据） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedback.client.record(event)` | 记录一条应用现场事实 | 必填事件对象 `event`，包含证据类别 `kind` 和字段对象 `data`。可选 `requestId`、`errorId` 用于关联已有请求或错误 | `void` | `feedback.client.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedback.client.submit(input?)` | 提交当前反馈草稿 | 可省略 `input: FeedbackClientSubmitInput`。见[浏览器提交字段](#feedback-client-submit-input)。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedback.client.flush()` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedback.client.exportDraft(input?)` | 生成本地诊断包 | `input?: FeedbackClientSubmitInput`，指定离线包的补充文字和附件，省略时导出当前草稿 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedback.client.saveDraft(input?)` | 保存本地草稿 | `input?: FeedbackClientSubmitInput`，同 `exportDraft`，随后调用宿主保存入口 | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedback.client.pause()` | 暂停现场采集 | `—` | `void` | `feedback.client.pause()` |
+| `feedback.client.close(options?)` | 停止采集并释放资源 | `options?: { discard?: boolean }` 默认 false，等待有界收尾并清理。true 请求丢弃本机草稿 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
 
 <a id="feedback-client-config"></a>
 
@@ -510,11 +510,11 @@ prepare 固定现场供用户检查，submit 才可靠提交。受理之后，�
 首次发送后包络冻结，重试沿用同一提交编号及内容，不能悄悄换一份输入。受理回执不等于附件、业务证据或通知全部完成；详情以采集状态为准。服务端 Webhook 等待采集 complete/partial/failed 后独立执行，采集失败也会回调。关闭客户端要释放录制、轮询与预览。
 
 ```ts
-import type { FeedbackClientConfig } from '@h-ai/feedback/client'
-import { createFeedbackClient } from '@h-ai/feedback/client'
+
+import { type FeedbackClientConfig, feedback } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
   // 无参创建独立采集会话，配置和采集在调用 init 后生效。
-  const feedbackClient = createFeedbackClient()
+  const feedbackClient = feedback.createClient()
   // 用宿主传入的客户端配置启动本会话，成功无数据；无效配置或并发初始化失败时返回原失败结果。
   const initResult = await feedbackClient.init(config)
   if (!initResult.success)
@@ -583,13 +583,13 @@ config.actions 由应用 typed HTTP 适配器提供，不是占位的网络实�
 
 自动截图使用 html2canvas 渲染经遮挡的克隆 DOM。跨域图片、iframe、video 和尚未就绪的网络字体可能缺失；浏览器或 CSP 限制导致失败时明确标记 missing，用户仍可手动添加附件。
 
-`saveDraft(input?)` 统一本地导出与保存：Web 下载、Tauri 原生保存对话框、Capacitor 缓存文件原生分享。取消返回 `status: 'cancelled'`；错误仍返回失败。生成的移动端和桌面端模板已声明插件与对应的 Tauri 权限。手工接入的应用要按目标平台安装对应插件。`createFeedbackReview(typedClient.feedback.reports)` 提供 `loadReplay(id)` 与可取消的 `exportReport(id)`，不再由应用分页和轮询。退出身份调用 `review.close()` 与 `client.close({ discard: true })`，停止采集、轮询，清理预览和持久草稿。
+`saveDraft(input?)` 统一本地导出与保存：Web 下载、Tauri 原生保存对话框、Capacitor 缓存文件原生分享。取消返回 `status: 'cancelled'`；错误仍返回失败。生成的移动端和桌面端模板已声明插件与对应的 Tauri 权限。手工接入的应用要按目标平台安装对应插件。`feedback.createReview(typedClient.feedback.reports)` 提供 `loadReplay(id)` 与可取消的 `exportReport(id)`，不再由应用分页和轮询。退出身份调用 `review.close()` 与 `client.close({ discard: true })`，停止采集、轮询，清理预览和持久草稿。
 
-Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@h-ai/feedback/tauri` 导入 `saveTauriFeedbackFile`，Capacitor 应用从 `@h-ai/feedback/capacitor` 导入 `saveCapacitorFeedbackFile`，并在启动时调用 configureFeedbackSaving(saver)；生成工程已接入，业务无需处理原生文件生命周期。
+Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@h-ai/feedback/tauri` 导入 `feedback.saveTauriFile`，Capacitor 应用从 `@h-ai/feedback/capacitor` 导入 `feedback.saveCapacitorFile`，并在启动时调用 feedback.configureSaving(saver)；生成工程已接入，业务无需处理原生文件生命周期。
 
 浏览器从 `@h-ai/feedback/client` 创建自己的客户端实例，离线查看工具从 `@h-ai/feedback/bundle` 导入。
 
-浏览器从 `@h-ai/feedback/client` 导入 `createFeedbackClient()`，通过 `init({ appId, actions })` 注入 typed API 的 submit、appendEvidence、completeCollection、upload。先调用 `prepare()` 固定现场，成功后再显示 `FeedbackModal`；`submit()` 返回受理回执，后台 `flush()` 续传。`close()` 释放监听器和记录器。Cookie 白名单、持久草稿与回放均由产品显式启用，凭证类值始终排除。
+浏览器从 `@h-ai/feedback/client` 导入 `feedback.createClient()`，通过 `init({ appId, actions })` 注入 typed API 的 submit、appendEvidence、completeCollection、upload。先调用 `prepare()` 固定现场，成功后再显示 `FeedbackModal`；`submit()` 返回受理回执，后台 `flush()` 续传。`close()` 释放监听器和记录器。Cookie 白名单、持久草稿与回放均由产品显式启用，凭证类值始终排除。
 
 浏览器和服务端共用文本脱敏规则，覆盖常见凭据键、JSON/转义 JSON、Bearer/Basic 授权值；写入数据库、接口和离线包使用同样的脱敏规则。应用仍需标出页面上的敏感区域，并明确哪些字段允许采集。
 

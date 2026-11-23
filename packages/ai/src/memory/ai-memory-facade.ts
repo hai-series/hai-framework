@@ -9,8 +9,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { ChatMessage } from '../llm/ai-llm-types.js'
+
 import type {
   MemoryClearAllOptions,
   MemoryClearOptions,
@@ -20,8 +20,7 @@ import type {
   ScopedMemoryBinding,
   ScopedMemoryOperations,
 } from './ai-memory-types.js'
-
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -29,7 +28,7 @@ import { HaiAIError } from '../ai-types.js'
 /**
  * 创建绑定作用域的记忆实例：所有操作自动携带 objectId / scope，get/update/remove 自动归属校验。
  */
-function createScopedMemory(core: MemoryCoreOperations, binding: ScopedMemoryBinding): ScopedMemoryOperations {
+function createScopedMemory(memoryCore: MemoryCoreOperations, binding: ScopedMemoryBinding): ScopedMemoryOperations {
   if (typeof binding.objectId !== 'string' || !binding.objectId.trim())
     throw new TypeError(aiM('ai_memoryScopeInvalid'))
   const { objectId, scope } = binding
@@ -37,45 +36,45 @@ function createScopedMemory(core: MemoryCoreOperations, binding: ScopedMemoryBin
 
   return {
     extract: (messages: ChatMessage[], options) =>
-      core.extract(messages, { ...options, objectId, scope }),
+      memoryCore.extract(messages, { ...options, objectId, scope }),
     recall: (query: string, options) =>
-      core.recall(query, { ...options, objectId, scope }),
+      memoryCore.recall(query, { ...options, objectId, scope }),
     injectMemories: (messages: ChatMessage[], options) =>
-      core.injectMemories(messages, { ...options, objectId, scope }),
+      memoryCore.injectMemories(messages, { ...options, objectId, scope }),
     add: (entry: Omit<MemoryEntryInput, 'objectId' | 'scope'>) =>
-      core.add({ ...entry, objectId, scope }),
-    update: (memoryId: string, updates) => core.update(memoryId, updates, accessScope),
-    get: (memoryId: string) => core.get(memoryId, accessScope),
-    remove: (memoryId: string) => core.remove(memoryId, accessScope),
+      memoryCore.add({ ...entry, objectId, scope }),
+    update: (memoryId: string, updates) => memoryCore.update(memoryId, updates, accessScope),
+    get: (memoryId: string) => memoryCore.get(memoryId, accessScope),
+    remove: (memoryId: string) => memoryCore.remove(memoryId, accessScope),
     list: options =>
-      core.list({ ...options, objectId, scope }),
+      memoryCore.list({ ...options, objectId, scope }),
     listPage: options =>
-      core.listPage({ ...options, objectId, scope }),
+      memoryCore.listPage({ ...options, objectId, scope }),
     clear: options =>
-      core.clear({ ...options, objectId, scope }),
+      memoryCore.clear({ ...options, objectId, scope }),
   }
 }
 
 /**
  * 将 Provider 核心操作封装为对外的公共记忆操作接口。
  *
- * @param core - Provider 实现的核心操作
+ * @param memoryCore - Provider 实现的核心操作
  * @returns 增加 scoped / admin 且对 clear 施加空过滤保护的公共接口
  *
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * async function scoped(core: MemoryCoreOperations) {
- *   const memory = createMemoryOperations(core).scoped({ objectId: 'user-1', scope: { tenant: 'tenant-1' } })
+ * async function scoped(memoryCore: MemoryCoreOperations) {
+ *   const memory = createMemoryOperations(memoryCore).scoped({ objectId: 'user-1', scope: { tenant: 'tenant-1' } })
  *   const result = await memory.add({ content: '用户喜欢绿茶', type: 'preference' })
  *   if (!result.success) return result
  *   return result.data.id
  * }
  * ```
  */
-export function createMemoryOperations(core: MemoryCoreOperations): MemoryOperations {
+export function createMemoryOperations(memoryCore: MemoryCoreOperations): MemoryOperations {
   return {
-    ...core,
+    ...memoryCore,
 
     /**
      * 清空记忆（空过滤保护）。
@@ -85,22 +84,22 @@ export function createMemoryOperations(core: MemoryCoreOperations): MemoryOperat
      */
     async clear(options?: MemoryClearOptions): Promise<HaiResult<void>> {
       if (options?.objectId !== undefined && (typeof options.objectId !== 'string' || !options.objectId.trim()))
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryScopeInvalid'))
+        return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryScopeInvalid'))
       const hasFilter = Boolean(options?.objectId?.trim()) || Boolean(options?.types?.length) || Boolean(options?.scope && Object.keys(options.scope).length)
       if (!hasFilter) {
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryClearRequiresFilter'))
+        return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryClearRequiresFilter'))
       }
-      return core.clear(options)
+      return memoryCore.clear(options)
     },
 
-    scoped: (binding: ScopedMemoryBinding) => createScopedMemory(core, binding),
+    scoped: (binding: ScopedMemoryBinding) => createScopedMemory(memoryCore, binding),
 
     admin: {
       async clearAll(options: MemoryClearAllOptions): Promise<HaiResult<void>> {
         if (options?.confirm !== true) {
-          return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryClearAllUnconfirmed'))
+          return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryClearAllUnconfirmed'))
         }
-        return core.clear()
+        return memoryCore.clear()
       },
     },
   }

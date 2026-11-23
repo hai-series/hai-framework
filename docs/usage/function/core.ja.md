@@ -14,8 +14,8 @@ defaultLocale: ja-JP
 ```
 
 ```ts
-import type { CoreConfig } from '@h-ai/core'
-import { core } from '@h-ai/core'
+
+import { type CoreConfig, core } from '@h-ai/core'
 
 // ./config 直下の設定を読み、成功したものを名前で登録します。初期化自体に戻り値はありません。
 core.init({ configDir: './config' })
@@ -231,11 +231,11 @@ core.context.run({ requestId: 'request-2' }, () => {
 | `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 失敗にメッセージを付加 | エラー定義 `def` と公開する `message` が必須。内部原因 `cause` と対処の提案 `suggestion` は省略可。 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
 | `core.error.toPublic(error, traceId?, locale?)` | クライアントに返すエラーを整形 | `error` は必須。`traceId` は関連 ID を上書きし、`locale` は 5xx の共通メッセージに使う言語を指定。 | 公開用エラー | `core.error.toPublic(error, 'req-1')` |
 | `core.error.formatMessage(error)` | 表示メッセージを整形 | 文字列メッセージと任意の `traceId` を持つ `error` が必須。 | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`、`err(errorOrDef, message?, cause?, suggestion?)` | 業務処理の結果を構築 | `ok` には成功時の `data` を渡す。`err` にはエラー定義、`HaiError`、標準エラーのいずれかの `errorOrDef` が必須。`message`、`cause`、`suggestion` は省略可。 | `HaiResult` | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
+| `core.ok(data)`、`core.err(errorOrDef, message?, cause?, suggestion?)` | 業務処理の結果を構築 | `core.ok` には成功時の `data` を渡す。`core.err` にはエラー定義、`HaiError`、標準エラーのいずれかの `errorOrDef` が必須。`message`、`cause`、`suggestion` は省略可。 | `HaiResult` | `core.ok({ id: 'order-1' })`、`core.err(errors.NOT_FOUND, 'Order not found')` |
 
 #### 利用例：業務の失敗と安全な公開文言
 
-業務処理の呼び出し元は、`data` や `error` を読む前に `result.success` を確認します。エラーコードは共通の定義にまとめ、発生時にメッセージを翻訳します。HTTP で返す前に `core.error.toPublic()` で内部の原因情報を除去します。公開可能なエラーを返し、追跡 ID を使ってサーバーログと照合できます。`ok` と `err` は `@h-ai/core` から直接インポートします。
+業務処理の呼び出し元は、`data` や `error` を読む前に `result.success` を確認します。エラーコードは共通の定義にまとめ、発生時にメッセージを翻訳します。HTTP で返す前に `core.error.toPublic()` で内部の原因情報を除去します。公開可能なエラーを返し、追跡 ID を使ってサーバーログと照合できます。`core.ok` と `core.err` は `@h-ai/core` から直接インポートします。
 
 <a id="i18n-api"></a>
 
@@ -308,8 +308,8 @@ Zod v3/v4 の検証結果をフィールドごとのメッセージに変換し�
 注文照会モジュールが注文の有無を判断できるのは、状態一覧を読み込んだ後です。起動が完了する前に呼び出された場合は未初期化エラーを返し、呼び出し側が「その注文は存在しない」と誤解しないようにします。ここでは読み込み済みの一覧をメモリ上の `Map` で表します。`@h-ai/core` だけで動作し、データベースは不要です。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
-import { core, HaiCommonError, ok } from '@h-ai/core'
+
+import { type HaiResult, HaiCommonError, core } from '@h-ai/core'
 
 interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
@@ -336,11 +336,11 @@ const orderLookup = {
     activeQueries = {
       async getStatus(orderId) {
         // 渡された ID の状態または null を成功 data に包みます。
-        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+        return core.ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
     // この例の初期化成功を返します。data は undefined です。
-    return ok(undefined)
+    return core.ok(undefined)
   },
   get orders(): OrderQueries {
     return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。

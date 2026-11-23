@@ -10,7 +10,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { StripeConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import { createHash, createHmac } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 import { paymentM } from '../../payment-i18n.js'
@@ -323,7 +323,7 @@ export function createStripeProvider(
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       if (input.tradeType !== 'h5')
-        return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
+        return core.err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
       try {
         z.string().min(1).regex(/\S/).parse(input.orderNo)
         if (input.metadata && Object.hasOwn(input.metadata, 'orderNo'))
@@ -363,7 +363,7 @@ export function createStripeProvider(
           paymentIntent: result => result.session.payment_intent,
         })
 
-        return ok({
+        return core.ok({
           provider: 'stripe',
           tradeType: input.tradeType,
           clientParams: {
@@ -373,7 +373,7 @@ export function createStripeProvider(
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.CREATE_ORDER_FAILED,
           paymentM('payment_createOrderFailed'),
           cause,
@@ -388,7 +388,7 @@ export function createStripeProvider(
         // 验签
         const valid = verifyWebhookSignature(request.body, signature)
         if (!valid) {
-          return err(
+          return core.err(
             HaiPaymentError.NOTIFY_VERIFY_FAILED,
             paymentM('payment_notifyVerifyFailed'),
           )
@@ -400,7 +400,7 @@ export function createStripeProvider(
         const event = parsed.data
         if (event.livemode !== /^(?:sk|rk)_live_/.test(config.secretKey)
           || event.created > Math.floor(Date.now() / 1000) + TIMESTAMP_TOLERANCE) {
-          return err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
+          return core.err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
         }
         const obj = event.data.object
         // completed 只表示 Checkout 已完成；延迟付款仍可能处于 unpaid。
@@ -412,7 +412,7 @@ export function createStripeProvider(
               ? 'pending'
               : 'paid'
 
-        return ok({
+        return core.ok({
           orderNo: obj.metadata.orderNo,
           transactionId: obj.id,
           eventId: event.id,
@@ -427,7 +427,7 @@ export function createStripeProvider(
         })
       }
       catch {
-        return err(
+        return core.err(
           HaiPaymentError.NOTIFY_PARSE_FAILED,
           paymentM('payment_notifyParseFailed'),
           new Error('Invalid Stripe payment notification'),
@@ -445,7 +445,7 @@ export function createStripeProvider(
           no_payment_required: 'paid',
         }
 
-        return ok({
+        return core.ok({
           orderNo,
           transactionId: session.id,
           status: session.status === 'expired'
@@ -455,7 +455,7 @@ export function createStripeProvider(
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.QUERY_ORDER_FAILED,
           paymentM('payment_queryOrderFailed'),
           cause,
@@ -468,7 +468,7 @@ export function createStripeProvider(
         z.string().min(1).regex(/\S/).parse(input.refundNo)
         const session = await retrieveOrder(input.orderNo)
         if (!session.payment_intent || session.payment_status !== 'paid') {
-          return err(
+          return core.err(
             HaiPaymentError.REFUND_FAILED,
             paymentM('payment_refundFailed'),
           )
@@ -491,7 +491,7 @@ export function createStripeProvider(
           execute: raw => StripeRefundSchema.parse(raw),
         })
 
-        return ok({
+        return core.ok({
           refundNo: input.refundNo,
           refundId: refund.id,
           status: refund.status === 'succeeded'
@@ -502,7 +502,7 @@ export function createStripeProvider(
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.REFUND_FAILED,
           paymentM('payment_refundFailed'),
           cause,
@@ -516,7 +516,7 @@ export function createStripeProvider(
         if (session.payment_status !== 'unpaid' || session.status === 'complete')
           throw new Error('A completed or paid Stripe Session cannot be closed')
         if (session.status === 'expired')
-          return ok(undefined)
+          return core.ok(undefined)
 
         try {
           const expired = z.object({
@@ -537,10 +537,10 @@ export function createStripeProvider(
           if (confirmed.status !== 'expired' || confirmed.payment_status !== 'unpaid')
             throw cause
         }
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (cause) {
-        return err(HaiPaymentError.CLOSE_ORDER_FAILED, paymentM('payment_closeOrderFailed'), cause)
+        return core.err(HaiPaymentError.CLOSE_ORDER_FAILED, paymentM('payment_closeOrderFailed'), cause)
       }
     },
   }

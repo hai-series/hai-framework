@@ -8,7 +8,7 @@
 
 import type { ServProcedureHandler } from './serv-pipeline-types.js'
 import { audit } from '@h-ai/audit'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 
 /**
@@ -133,7 +133,7 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
       }, options.context.requestId, options.context.locale)
       options.context.logger.error('Procedure threw an exception', { traceId: safe.traceId, error })
       await capture(500, HaiCommonError.INTERNAL_ERROR.code)
-      return err(safe)
+      return core.err(safe)
     }
   })
 }

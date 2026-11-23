@@ -13,8 +13,8 @@ import process from 'node:process'
  *
  * @example
  * ```ts
- * import type { ServRuntimeSecurityPolicyInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServRuntimeSecurityPolicyInput, serv } from '@h-ai/serv'
  *
  * const input: ServRuntimeSecurityPolicyInput = { environment: 'production', corsOrigin: 'https://app.example.com' }
  * const policy = serv.createRuntimeSecurityPolicy(input)
@@ -31,8 +31,8 @@ export interface ServRuntimeSecurityPolicyInput {
  *
  * @example
  * ```ts
- * import type { ServRuntimeSecurityPolicy } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServRuntimeSecurityPolicy, serv } from '@h-ai/serv'
  *
  * const policy: ServRuntimeSecurityPolicy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
  * const allowed = policy.allowOrigin('https://app.example.com')

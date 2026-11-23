@@ -51,9 +51,9 @@ function resolveOptions(options: CrudFieldOptions | undefined): Array<{ label: s
  * @returns CRUD 操作对象
  * @example
  * ```ts
- * import { kit } from '@h-ai/kit'
+ * import { type CrudApiDef, kit } from '@h-ai/kit'
  *
- * import type { CrudApiDef } from '@h-ai/kit'
+ *
  *
  * function articleResource(api: CrudApiDef<{ id: string, title: string }>) {
  *   return kit.crud.define({ name: 'article', label: 'Articles', fields: [{ id: 'title', label: 'Title', type: 'string' }], api })

@@ -13,7 +13,7 @@ import { z } from 'zod'
  * 检查 `_core.yml` 的 `env` 字段，用来区分开发、生产、测试和预发布设置。
  * @example
  * ```ts
- * import { core, type CoreConfig } from '@h-ai/core'
+ * import { type CoreConfig, core } from '@h-ai/core'
  * core.init({ configDir: './config' })
  * const env = core.config.getOrThrow<CoreConfig>('core').env
  * ```
@@ -84,7 +84,7 @@ export const LoggingConfigSchema = z.object({
  * ID 长度与前缀随每次 `core.id` 调用传入。
  * @example
  * ```ts
- * import { core, type CoreConfig } from '@h-ai/core'
+ * import { type CoreConfig, core } from '@h-ai/core'
  * core.init({ configDir: './config' })
  * const config = core.config.getOrThrow<CoreConfig>('core')
  * ```

@@ -9,7 +9,6 @@ import { core, HaiCommonError } from '@h-ai/core'
 import { storage } from '@h-ai/storage'
 import { STORAGE_DELETE_MAX_KEYS } from '@h-ai/storage/schemas'
 import { expect, it, vi } from 'vitest'
-import { createStorageProcedures } from '../src/features/serv-feature-storage.js'
 import { serv } from '../src/serv-main.js'
 
 it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除完成，跨用户仍拒绝', async () => {
@@ -23,7 +22,7 @@ it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除
     const app = serv.createApp({
       contract,
       procedures: {
-        storage: createStorageProcedures({ storage, authorize }),
+        storage: serv.createStorageProcedures({ storage, authorize }),
       },
       createContext: ({ request }) => ({
         request,

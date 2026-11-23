@@ -16,8 +16,8 @@ let stopActiveGuide: (() => void) | undefined
  *
  * @example
  * ```ts
- * import { resolveGuideText } from '@h-ai/ui'
- * const title = resolveGuideText(() => '操作说明')
+ * import { ui } from '@h-ai/ui'
+ * const title = ui.resolveGuideText(() => '操作说明')
  * ```
  */
 export function resolveGuideText(text?: GuideText): string {
@@ -116,8 +116,8 @@ function waitForTarget(step: GuideStep, signal: AbortSignal, timeout: number, re
  *
  * @example
  * ```ts
- * import { createGuide } from '@h-ai/ui'
- * const guide = createGuide({ tours: [{ id: 'intro', title: '入门', steps: [{ target: 'save', title: '保存', description: '提交当前资料' }] }], persistence: 'memory' })
+ * import { ui } from '@h-ai/ui'
+ * const guide = ui.createGuide({ tours: [{ id: 'intro', title: '入门', steps: [{ target: 'save', title: '保存', description: '提交当前资料' }] }], persistence: 'memory' })
  * const offered = guide.startIfNeeded('intro')
  * if (offered) guide.openHelp()
  * guide.stop()

@@ -1,15 +1,13 @@
+import type { RequestEvent } from '@sveltejs/kit'
 /**
  * Kit A2A API Key 认证器测试
  *
  * 覆盖 createA2AApiKeyAuthenticator 和 resolveA2AConfig 的 'apiKey' 快捷方式。
  */
 
-import type { RequestEvent } from '@sveltejs/kit'
-import { describe, expect, it, vi } from 'vitest'
+import { kit } from '@h-ai/kit'
 
-import { createA2AApiKeyAuthenticator } from '../src/modules/a2a/kit-a2a-auth.js'
-import { handleA2ARequest, resolveA2AConfig } from '../src/modules/a2a/kit-a2a-handle.js'
-import { createA2AHandler } from '../src/modules/a2a/kit-a2a-helpers.js'
+import { describe, expect, it, vi } from 'vitest'
 
 // ─── mock IAM ───
 
@@ -58,7 +56,7 @@ describe('a2A HTTP 协议边界', () => {
 
   it('已配置认证但返回 null 时拒绝执行', async () => {
     const handleRequest = vi.fn()
-    const handler = createA2AHandler(handleRequest, {
+    const handler = kit.a2a.createHandler(handleRequest, {
       authenticate: async () => null,
     })
     const response = await handler(requestEvent('{}'))
@@ -68,7 +66,7 @@ describe('a2A HTTP 协议边界', () => {
 
   it('非法 JSON 返回 JSON-RPC Parse error', async () => {
     const handleRequest = vi.fn()
-    const response = await createA2AHandler(handleRequest)(requestEvent('{'))
+    const response = await kit.a2a.createHandler(handleRequest)(requestEvent('{'))
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
       jsonrpc: '2.0',
@@ -83,12 +81,12 @@ describe('a2A HTTP 协议边界', () => {
       getAgentCard: () => ({ success: true, data: {} }),
       handleRequest: vi.fn(),
     }
-    const config = resolveA2AConfig({
+    const config = kit.a2a.resolveConfig({
       operations,
       authenticate: async () => null,
     })!
     expect(config.cardPath).toBe('/.well-known/agent-card.json')
-    const response = await handleA2ARequest(requestEvent('{}'), 'req-1', config)
+    const response = await kit.a2a.handleRequest(requestEvent('{}'), 'req-1', config)
     expect(response?.status).toBe(401)
     expect(response?.headers.get('X-Request-Id')).toBe('req-1')
     expect(operations.handleRequest).not.toHaveBeenCalled()
@@ -102,7 +100,7 @@ describe('a2A HTTP 协议边界', () => {
       }
       finally { finished() }
     }
-    const response = await createA2AHandler(async () => ({
+    const response = await kit.a2a.createHandler(async () => ({
       streaming: true,
       stream: stream(),
     }))(requestEvent('{}'))
@@ -118,7 +116,7 @@ describe('a2A HTTP 协议边界', () => {
       success: true,
       data: { id: 'key', userId: 'user', scopes: [] },
     })
-    const config = resolveA2AConfig({
+    const config = kit.a2a.resolveConfig({
       operations: {
         getAgentCard: () => ({
           success: true,
@@ -153,7 +151,7 @@ describe('createA2AApiKeyAuthenticator', () => {
       },
     })
 
-    const auth = createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+    const auth = kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
     const result = await auth(createMockEvent({
       headers: { 'x-api-key': 'hai_abc123' },
     }))
@@ -173,7 +171,7 @@ describe('createA2AApiKeyAuthenticator', () => {
       data: { id: 'key-2', userId: 'user-2', scopes: [] },
     })
 
-    const auth = createA2AApiKeyAuthenticator({ in: 'query', name: 'api_key' })
+    const auth = kit.a2a.createApiKeyAuthenticator({ in: 'query', name: 'api_key' })
     const result = await auth(createMockEvent({
       searchParams: { api_key: 'hai_xyz789' },
     }))
@@ -186,7 +184,7 @@ describe('createA2AApiKeyAuthenticator', () => {
   })
 
   it('无 API Key 时返回 null（匿名请求）', async () => {
-    const auth = createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+    const auth = kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
     const result = await auth(createMockEvent())
 
     expect(result).toBeNull()
@@ -199,7 +197,7 @@ describe('createA2AApiKeyAuthenticator', () => {
       error: { code: 5301, message: 'Invalid API Key' },
     })
 
-    const auth = createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+    const auth = kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
     const result = await auth(createMockEvent({
       headers: { 'x-api-key': 'hai_invalid' },
     }))
@@ -228,7 +226,7 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       handleRequest: vi.fn(),
     }
 
-    const resolved = resolveA2AConfig({
+    const resolved = kit.a2a.resolveConfig({
       operations,
       authenticate: 'apiKey',
     })
@@ -247,7 +245,7 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       handleRequest: vi.fn(),
     }
 
-    const resolved = resolveA2AConfig({
+    const resolved = kit.a2a.resolveConfig({
       operations,
       authenticate: customAuth,
     })
@@ -264,7 +262,7 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       handleRequest: vi.fn(),
     }
 
-    const resolved = resolveA2AConfig({ operations })
+    const resolved = kit.a2a.resolveConfig({ operations })
 
     expect(resolved!.authenticate).toBeUndefined()
   })
@@ -284,7 +282,7 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       handleRequest: vi.fn(),
     }
 
-    const resolved = resolveA2AConfig({
+    const resolved = kit.a2a.resolveConfig({
       operations,
       authenticate: 'apiKey',
     })

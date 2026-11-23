@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type { AIConfig, EmbeddingConfig, LLMConfig, ResolvedModelConfig } from '../ai-config.js'
 
 import type {
@@ -13,8 +14,7 @@ import type {
   EmbeddingRequest,
   EmbeddingResponse,
 } from './ai-embedding-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import OpenAI from 'openai'
 
 import { resolveModelEntry } from '../ai-config.js'
@@ -93,7 +93,7 @@ export function createEmbeddingOperations(config: AIConfig, loadModels: (model?:
 
       const response = await client.embeddings.create(params)
 
-      return ok({
+      return core.ok({
         model: response.model,
         data: response.data.map(item => ({
           index: item.index,
@@ -107,7 +107,7 @@ export function createEmbeddingOperations(config: AIConfig, loadModels: (model?:
     }
     catch (error) {
       logger.error('Embedding API call failed', { error })
-      return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
+      return core.err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
         params: {
           error: String(error),
         },
@@ -161,7 +161,7 @@ export function createEmbeddingOperations(config: AIConfig, loadModels: (model?:
       }
     }
 
-    return ok({
+    return core.ok({
       model: resultModel,
       data: allData,
       usage: { prompt_tokens: totalPromptTokens, total_tokens: totalTokens },
@@ -179,11 +179,11 @@ export function createEmbeddingOperations(config: AIConfig, loadModels: (model?:
         return result
       const first = result.data.data.find(item => item.index === 0)
       if (!first) {
-        return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
+        return core.err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
           params: { error: 'Embedding result is empty' },
         }))
       }
-      return ok(first.embedding)
+      return core.ok(first.embedding)
     },
 
     async embedBatch(texts: string[]): Promise<HaiResult<number[][]>> {
@@ -191,7 +191,7 @@ export function createEmbeddingOperations(config: AIConfig, loadModels: (model?:
       if (!result.success)
         return result
       const sorted = [...result.data.data].sort((a, b) => a.index - b.index)
-      return ok(sorted.map(item => item.embedding))
+      return core.ok(sorted.map(item => item.embedding))
     },
   }
 }

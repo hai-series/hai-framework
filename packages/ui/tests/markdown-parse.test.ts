@@ -11,8 +11,8 @@
  * =============================================================================
  */
 
+import { ui } from '@h-ai/ui'
 import { describe, expect, it } from 'vitest'
-import { parseMarkdown } from '../src/lib/components/scenes/ai/markdown-parse.js'
 
 // =============================================================================
 // 基础渲染
@@ -20,7 +20,7 @@ import { parseMarkdown } from '../src/lib/components/scenes/ai/markdown-parse.js
 
 describe('parseMarkdown - 基础渲染', () => {
   it('安全 HTML 保留文本实体的一层含义，配置代码可读且编码标签不会变成活动内容', () => {
-    const html = parseMarkdown('<p><code>start: &#39;22:00&#39;; &lt;img src=x onerror=evil()&gt;; &amp;; &amp;lt;; &#x1f4c4;; A & B</code></p>', { allowHtmlTags: true })
+    const html = ui.parseMarkdown('<p><code>start: &#39;22:00&#39;; &lt;img src=x onerror=evil()&gt;; &amp;; &amp;lt;; &#x1f4c4;; A & B</code></p>', { allowHtmlTags: true })
     expect(html).toContain('start: &#39;22:00&#39;')
     expect(html).not.toContain('&amp;#39;')
     expect(html).toContain('&lt;img src=x onerror=evil()&gt;')
@@ -29,49 +29,49 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('应该解析标题', () => {
-    const html = parseMarkdown('# Hello')
+    const html = ui.parseMarkdown('# Hello')
     expect(html).toContain('<h1>')
     expect(html).toContain('Hello')
   })
 
   it('应该解析段落', () => {
-    const html = parseMarkdown('Hello world')
+    const html = ui.parseMarkdown('Hello world')
     expect(html).toContain('<p>')
     expect(html).toContain('Hello world')
   })
 
   it('应该解析加粗与斜体', () => {
-    const html = parseMarkdown('**bold** and *italic*')
+    const html = ui.parseMarkdown('**bold** and *italic*')
     expect(html).toContain('<strong>bold</strong>')
     expect(html).toContain('<em>italic</em>')
   })
 
   it('应该解析无序列表', () => {
-    const html = parseMarkdown('- item1\n- item2')
+    const html = ui.parseMarkdown('- item1\n- item2')
     expect(html).toContain('<li>')
     expect(html).toContain('item1')
     expect(html).toContain('item2')
   })
 
   it('breaks 默认为 true，换行转 <br>', () => {
-    const html = parseMarkdown('line1\nline2')
+    const html = ui.parseMarkdown('line1\nline2')
     expect(html).toContain('<br>')
   })
 
   it('breaks 为 false 时，换行不转 <br>', () => {
-    const html = parseMarkdown('line1\nline2', { breaks: false })
+    const html = ui.parseMarkdown('line1\nline2', { breaks: false })
     expect(html).not.toContain('<br>')
   })
 
   it('应该解析编辑器扩展的下划线和高亮语法', () => {
-    const html = parseMarkdown('++underline++ and ==highlight==')
+    const html = ui.parseMarkdown('++underline++ and ==highlight==')
     expect(html).toContain('<u>underline</u>')
     expect(html).toContain('<mark>highlight</mark>')
   })
 
   it.each(['++', '=='])('未闭合 %s 和长反斜线按普通内容处理', (marker) => {
     const start = performance.now()
-    const html = parseMarkdown(`${marker}${'\\'.repeat(4096)}`)
+    const html = ui.parseMarkdown(`${marker}${'\\'.repeat(4096)}`)
     expect(html).not.toContain('<u>')
     expect(html).not.toContain('<mark>')
     expect(html).toContain(marker)
@@ -79,13 +79,13 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('有效格式内容中的转义符仍按 Markdown 解析', () => {
-    const html = parseMarkdown('++escaped \\+ plus++ and ==escaped \\= equals==')
+    const html = ui.parseMarkdown('++escaped \\+ plus++ and ==escaped \\= equals==')
     expect(html).toContain('<u>escaped + plus</u>')
     expect(html).toContain('<mark>escaped = equals</mark>')
   })
 
   it('应该解析编辑器扩展的颜色和对齐标签', () => {
-    const html = parseMarkdown(
+    const html = ui.parseMarkdown(
       '<hai-align value="center">\nHello <hai-span color="#2563eb" bg="#dbeafe">world</hai-span>\n</hai-align>',
     )
 
@@ -98,7 +98,7 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('应该在列表项中解析 hai-span 标签', () => {
-    const html = parseMarkdown(
+    const html = ui.parseMarkdown(
       '- JavaScript: <hai-span bg="#ffedd5" color="#15803d">模块化开发</hai-span>',
     )
 
@@ -109,7 +109,7 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('应该解析包裹链接的 hai-span 标签', () => {
-    const html = parseMarkdown(
+    const html = ui.parseMarkdown(
       'Hello <hai-span color="#15803d" bg="#ffedd5">[world](https://example.com)</hai-span>',
     )
 
@@ -120,7 +120,7 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('allowHtmlTags 开启时应该解析安全 HTML 标签并过滤危险属性', () => {
-    const html = parseMarkdown(
+    const html = ui.parseMarkdown(
       '支持 <b onclick="evil()">bold</b> 与 <a href="https://example.com" onclick="evil()">link</a>',
       { allowHtmlTags: true },
     )
@@ -132,7 +132,7 @@ describe('parseMarkdown - 基础渲染', () => {
   })
 
   it('原始图片保留安全尺寸以避免布局跳变，拒绝非法尺寸和脚本属性', () => {
-    const html = parseMarkdown('<img src="/guide.png" width="1280" height="720" onerror="evil()" style="position:fixed">', { allowHtmlTags: true })
+    const html = ui.parseMarkdown('<img src="/guide.png" width="1280" height="720" onerror="evil()" style="position:fixed">', { allowHtmlTags: true })
     expect(html).toContain('width="1280"')
     expect(html).toContain('height="720"')
     expect(html).toContain('loading="lazy"')
@@ -146,7 +146,7 @@ describe('parseMarkdown - 基础渲染', () => {
       '1e3',
       '1 onload=evil()',
     ]) {
-      const rejected = parseMarkdown(`<img src="/guide.png" width="${invalid}" height="${invalid}">`, { allowHtmlTags: true })
+      const rejected = ui.parseMarkdown(`<img src="/guide.png" width="${invalid}" height="${invalid}">`, { allowHtmlTags: true })
       expect(rejected, invalid).not.toMatch(/\b(?:width|height)=/)
     }
   })
@@ -159,7 +159,7 @@ describe('parseMarkdown - 基础渲染', () => {
 describe('parseMarkdown - 代码块', () => {
   it('已转成 HTML 的配置代码仍高亮并能复制，输入样式和事件不会进入页面', () => {
     const source = '<p onclick="evil()">示例</p><pre style="background:url(javascript:evil())"><code class="language-yaml" onclick="evil()">start: &#39;22:00&#39;\ntext: &lt;img src=x onerror=evil()&gt;\nliteral: &amp;lt;</code></pre><script>evil()</script>'
-    const html = parseMarkdown(source, { allowHtmlTags: true })
+    const html = ui.parseMarkdown(source, { allowHtmlTags: true })
     expect(html).toContain('hai-md-code-block')
     expect(html).toContain('data-copy-code')
     expect(html).toContain('language-yaml')
@@ -168,11 +168,11 @@ describe('parseMarkdown - 代码块', () => {
     expect(html).not.toContain('<img')
     expect(html).not.toContain('onclick=')
     expect(html).not.toContain('background:url')
-    const disabled = parseMarkdown(source, { allowHtmlTags: true, enableHighlight: false, showCopyButton: false })
+    const disabled = ui.parseMarkdown(source, { allowHtmlTags: true, enableHighlight: false, showCopyButton: false })
     expect(disabled).toContain('literal: &amp;lt;')
     expect(disabled).not.toContain('data-copy-code')
     expect(disabled).not.toMatch(/<span[^>]*style="[^"]*color:/)
-    expect(parseMarkdown(source)).not.toContain('<pre')
+    expect(ui.parseMarkdown(source)).not.toContain('<pre')
   })
 
   it.each([
@@ -181,45 +181,45 @@ describe('parseMarkdown - 代码块', () => {
     ['nginx', 'location /portal/ { proxy_pass http://backend; }'],
     ['dockerfile', 'FROM node:22-alpine\nWORKDIR /app'],
   ])('部署说明中的 %s 代码有语法颜色且保留复制内容', (language, code) => {
-    const html = parseMarkdown(`\`\`\`${language}\n${code}\n\`\`\``)
+    const html = ui.parseMarkdown(`\`\`\`${language}\n${code}\n\`\`\``)
     expect(html).toContain(`language-${language}`)
     expect(html).toMatch(/<span[^>]*style="[^"]*color:/)
     expect(html).toContain('hai-md-code-block')
   })
 
   it('应该渲染代码块容器', () => {
-    const html = parseMarkdown('```js\nconst x = 1\n```')
+    const html = ui.parseMarkdown('```js\nconst x = 1\n```')
     expect(html).toContain('hai-md-code-block')
     expect(html).toContain('hai-md-code-header')
     expect(html).toContain('<pre><code')
   })
 
   it('应该显示语言标签', () => {
-    const html = parseMarkdown('```typescript\nconst x: number = 1\n```')
+    const html = ui.parseMarkdown('```typescript\nconst x: number = 1\n```')
     expect(html).toContain('hai-md-code-lang')
     expect(html).toContain('typescript')
   })
 
   it('应该显示复制按钮（默认）', () => {
-    const html = parseMarkdown('```js\ncode\n```')
+    const html = ui.parseMarkdown('```js\ncode\n```')
     expect(html).toContain('hai-md-copy-btn')
     expect(html).toContain('data-copy-code')
   })
 
   it('showCopyButton 为 false 时不显示复制按钮', () => {
-    const html = parseMarkdown('```js\ncode\n```', { showCopyButton: false })
+    const html = ui.parseMarkdown('```js\ncode\n```', { showCopyButton: false })
     expect(html).not.toContain('hai-md-copy-btn')
   })
 
   it('enableHighlight 为 false 时不高亮', () => {
-    const html = parseMarkdown('```js\nconst x = 1\n```', { enableHighlight: false })
+    const html = ui.parseMarkdown('```js\nconst x = 1\n```', { enableHighlight: false })
     // 无高亮时代码应被转义，不含 shiki token spans
     expect(html).toContain('const x = 1')
     expect(html).not.toContain('--hai-hl-')
   })
 
   it('无语言标识的代码块也应正常渲染', () => {
-    const html = parseMarkdown('```\nplain code\n```')
+    const html = ui.parseMarkdown('```\nplain code\n```')
     expect(html).toContain('hai-md-code-block')
     expect(html).toContain('<pre><code')
   })
@@ -231,26 +231,26 @@ describe('parseMarkdown - 代码块', () => {
 
 describe('parseMarkdown - XSS 防护', () => {
   it('应该转义原始 HTML 标签', () => {
-    const html = parseMarkdown('<script>alert("xss")</script>')
+    const html = ui.parseMarkdown('<script>alert("xss")</script>')
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
   })
 
   it('应该转义 <img onerror> 攻击', () => {
-    const html = parseMarkdown('<img src=x onerror=alert(1)>')
+    const html = ui.parseMarkdown('<img src=x onerror=alert(1)>')
     // 原始 HTML 已被转义，不会以可执行标签形式存在
     expect(html).not.toContain('<img ')
     expect(html).toContain('&lt;img')
   })
 
   it('应该转义 <iframe> 标签', () => {
-    const html = parseMarkdown('<iframe src="http://evil.com"></iframe>')
+    const html = ui.parseMarkdown('<iframe src="http://evil.com"></iframe>')
     expect(html).not.toContain('<iframe')
     expect(html).toContain('&lt;iframe')
   })
 
   it('allowHtmlTags 开启时仍应转义危险标签', () => {
-    const html = parseMarkdown('<script>alert("xss")</script> <b>safe</b>', {
+    const html = ui.parseMarkdown('<script>alert("xss")</script> <b>safe</b>', {
       allowHtmlTags: true,
     })
 
@@ -259,13 +259,13 @@ describe('parseMarkdown - XSS 防护', () => {
   })
 
   it('应该阻止 javascript: 协议链接', () => {
-    const html = parseMarkdown('[click](javascript:alert(1))')
+    const html = ui.parseMarkdown('[click](javascript:alert(1))')
     expect(html).toContain('href=""')
     expect(html).not.toContain('javascript:')
   })
 
   it('应该允许安全链接协议', () => {
-    const html = parseMarkdown('[http](https://example.com) [mail](mailto:a@b.com) [anchor](#id) [relative](/path)')
+    const html = ui.parseMarkdown('[http](https://example.com) [mail](mailto:a@b.com) [anchor](#id) [relative](/path)')
     expect(html).toContain('href="https://example.com"')
     expect(html).toContain('href="mailto:a@b.com"')
     expect(html).toContain('href="#id"')
@@ -273,39 +273,39 @@ describe('parseMarkdown - XSS 防护', () => {
   })
 
   it('外部链接应添加 target="_blank" 和 noopener', () => {
-    const html = parseMarkdown('[link](https://example.com)')
+    const html = ui.parseMarkdown('[link](https://example.com)')
     expect(html).toContain('target="_blank"')
     expect(html).toContain('rel="noopener noreferrer"')
   })
 
   it('内部链接不应添加 target="_blank"', () => {
-    const html = parseMarkdown('[link](/path)')
+    const html = ui.parseMarkdown('[link](/path)')
     expect(html).not.toContain('target="_blank"')
   })
 
   it('应该阻止危险图片协议', () => {
-    const html = parseMarkdown('![img](javascript:alert(1))')
+    const html = ui.parseMarkdown('![img](javascript:alert(1))')
     expect(html).toContain('src=""')
     expect(html).not.toContain('javascript:')
   })
 
   it('应该允许安全图片协议', () => {
-    const html = parseMarkdown('![img](https://example.com/img.png)')
+    const html = ui.parseMarkdown('![img](https://example.com/img.png)')
     expect(html).toContain('src="https://example.com/img.png"')
   })
 
   it('应该允许 data:image/ 图片', () => {
-    const html = parseMarkdown('![img](data:image/png;base64,abc)')
+    const html = ui.parseMarkdown('![img](data:image/png;base64,abc)')
     expect(html).toContain('src="data:image/png;base64,abc"')
   })
 
   it('图片应添加 loading="lazy"', () => {
-    const html = parseMarkdown('![img](https://example.com/img.png)')
+    const html = ui.parseMarkdown('![img](https://example.com/img.png)')
     expect(html).toContain('loading="lazy"')
   })
 
   it('图片应有 alt 属性', () => {
-    const html = parseMarkdown('![alt text](https://example.com/img.png)')
+    const html = ui.parseMarkdown('![alt text](https://example.com/img.png)')
     expect(html).toContain('alt="alt text"')
   })
 })
@@ -317,7 +317,7 @@ describe('parseMarkdown - XSS 防护', () => {
 describe('parseMarkdown - 表格', () => {
   it('应该渲染表格并包含响应式容器', () => {
     const md = '| A | B |\n| --- | --- |\n| 1 | 2 |'
-    const html = parseMarkdown(md)
+    const html = ui.parseMarkdown(md)
     expect(html).toContain('hai-md-table-wrap')
     expect(html).toContain('<table>')
     expect(html).toContain('<th title="A">')
@@ -326,7 +326,7 @@ describe('parseMarkdown - 表格', () => {
 
   it('adds title attributes to table cells', () => {
     const md = '| A | B |\n| --- | --- |\n| long cell | value "quoted" |'
-    const html = parseMarkdown(md)
+    const html = ui.parseMarkdown(md)
     expect(html).toContain('<th title="A">')
     expect(html).toContain('<td title="long cell">')
     expect(html).toContain('<td title="value &quot;quoted&quot;">')
@@ -339,24 +339,24 @@ describe('parseMarkdown - 表格', () => {
 
 describe('parseMarkdown - 边界处理', () => {
   it('空字符串应返回空字符串', () => {
-    expect(parseMarkdown('')).toBe('')
+    expect(ui.parseMarkdown('')).toBe('')
   })
 
   it('undefined-like 空值应返回空字符串', () => {
     // @ts-expect-error 测试非法输入
-    expect(parseMarkdown(undefined)).toBe('')
+    expect(ui.parseMarkdown(undefined)).toBe('')
     // @ts-expect-error 测试非法输入
-    expect(parseMarkdown(null)).toBe('')
+    expect(ui.parseMarkdown(null)).toBe('')
   })
 
   it('纯空白应正常解析', () => {
-    const html = parseMarkdown('   ')
+    const html = ui.parseMarkdown('   ')
     expect(typeof html).toBe('string')
   })
 
   it('不同 options 应触发实例重建', () => {
-    const html1 = parseMarkdown('```js\ncode\n```', { showCopyButton: true })
-    const html2 = parseMarkdown('```js\ncode\n```', { showCopyButton: false })
+    const html1 = ui.parseMarkdown('```js\ncode\n```', { showCopyButton: true })
+    const html2 = ui.parseMarkdown('```js\ncode\n```', { showCopyButton: false })
     expect(html1).toContain('hai-md-copy-btn')
     expect(html2).not.toContain('hai-md-copy-btn')
   })
@@ -364,10 +364,10 @@ describe('parseMarkdown - 边界处理', () => {
 
 it('applies the opted-in image policy to Markdown and sanitized HTML', () => {
   const source = '![图](https://example.invalid/pic.png) <img src="/guide.png" alt="指南">'
-  expect(parseMarkdown(source, { allowHtmlTags: true })).toContain('src="https://example.invalid/pic.png"')
-  const html = parseMarkdown(source, { allowHtmlTags: true, remoteImages: false })
+  expect(ui.parseMarkdown(source, { allowHtmlTags: true })).toContain('src="https://example.invalid/pic.png"')
+  const html = ui.parseMarkdown(source, { allowHtmlTags: true, remoteImages: false })
   expect(html).toContain('图</span>')
   expect(html).toContain('指南</span>')
   expect(html).not.toContain('<img')
-  expect(parseMarkdown(source, { allowHtmlTags: true })).toContain('src="/guide.png"')
+  expect(ui.parseMarkdown(source, { allowHtmlTags: true })).toContain('src="/guide.png"')
 })

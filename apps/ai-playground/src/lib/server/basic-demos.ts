@@ -3,7 +3,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { BasicDemoId } from '#lib/demo-input.js'
 import { randomUUID } from 'node:crypto'
 import { ai, HaiAIError } from '@h-ai/ai'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 const demoSourceId = 'playground-handbook'
@@ -31,7 +31,7 @@ async function prepareHandbook(): Promise<HaiResult<void>> {
   if (!documents.success)
     return documents
   if (documents.data.some(document => document.documentId === demoDocumentId))
-    return ok(undefined)
+    return core.ok(undefined)
   const ingested = await ai.knowledge.ingest({
     collection,
     documentId: demoDocumentId,
@@ -40,7 +40,7 @@ async function prepareHandbook(): Promise<HaiResult<void>> {
     enableEntityExtraction: false,
   })
   return ingested.success
-    ? ok(undefined)
+    ? core.ok(undefined)
     : ingested
 }
 
@@ -87,7 +87,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
         })
         chunks++
       }
-      return ok({ chunks, text: processor.getResult().content })
+      return core.ok({ chunks, text: processor.getResult().content })
     }
     case 'structured':
       return ai.llm.generateObject({
@@ -99,7 +99,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
         signal,
       })
     case 'token':
-      return ok({
+      return core.ok({
         textTokens: ai.token.estimateText(input),
         messageTokens: ai.token.estimateMessages(messages),
       })
@@ -117,7 +117,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
     case 'embedding': {
       const vector = await ai.embedding.embedText(input)
       return vector.success
-        ? ok({
+        ? core.ok({
             dimensions: vector.data.length,
             preview: vector.data.slice(0, 12),
           })
@@ -140,7 +140,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
         return result
       }, () => {
         handbookPreparation = undefined
-        return err(HaiAIError.RESOURCE_OPERATION_FAILED, 'Playground handbook preparation failed')
+        return core.err(HaiAIError.RESOURCE_OPERATION_FAILED, 'Playground handbook preparation failed')
       })
       const ready = await handbookPreparation
       if (!ready.success)
@@ -152,7 +152,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
           return documents
         const retrieval = await ai.knowledge.retrieve(input, { collection: demoCollection, topK: 3, enableEntityBoost: false })
         return retrieval.success
-          ? ok({ documents: documents.data, matches: retrieval.data })
+          ? core.ok({ documents: documents.data, matches: retrieval.data })
           : retrieval
       }
       const options = {
@@ -181,7 +181,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
           core.logger.warn('AI Playground persona cleanup failed', { code: removed.error.code })
       })
       return composed.success
-        ? ok({ systemPrompt: composed.data, traits: saved.data.traits })
+        ? core.ok({ systemPrompt: composed.data, traits: saved.data.traits })
         : composed
     }
     case 'context': {
@@ -198,7 +198,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
         return usage
       const current = manager.data.getMessages()
       return current.success
-        ? ok({ usage: usage.data, messages: current.data })
+        ? core.ok({ usage: usage.data, messages: current.data })
         : current
     }
     case 'reasoning': {
@@ -211,7 +211,7 @@ export async function runBasicDemo(id: BasicDemoId, input: string, signal: Abort
       })
       // 只返回公开答案和运行信息，排除供应商内部推理与完整消息。
       return result.success
-        ? ok({ answer: result.data.answer, strategy: result.data.strategy, rounds: result.data.rounds })
+        ? core.ok({ answer: result.data.answer, strategy: result.data.strategy, rounds: result.data.rounds })
         : result
     }
     case 'file':

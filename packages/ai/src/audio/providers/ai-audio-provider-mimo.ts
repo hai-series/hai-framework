@@ -10,8 +10,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { AudioContent, AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -20,8 +20,7 @@ import type {
   ProviderTranscriptionStreamRequest,
   SynthesisOutputMeta,
 } from './ai-audio-provider.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { readSSEStream } from '../../llm/ai-llm-stream.js'
@@ -100,7 +99,7 @@ export function createMimoAudioProvider(): AudioProvider {
     const { model, audio, language, signal } = request
     const mime = MIMO_ASR_MIME[audio.format]
     if (!mime) {
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+      return core.err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
         params: { provider: 'mimo', reason: `format ${audio.format} (only wav/mp3)` },
       }))
     }
@@ -123,14 +122,14 @@ export function createMimoAudioProvider(): AudioProvider {
         asr_options: { language: language ?? 'auto' },
       }, requestSignal)
       if (!response.ok) {
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+        return core.err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
           params: { error: await describeHttpError(response) },
         }))
       }
 
       const body = await response.json() as MimoChunk
       const text = body.choices?.[0]?.message?.content ?? ''
-      return ok({ text })
+      return core.ok({ text })
     }
     catch (error) {
       logger.debug('MiMo transcribe failed', {
@@ -206,7 +205,7 @@ export function createMimoAudioProvider(): AudioProvider {
         },
       }, requestSignal)
       if (!response.ok) {
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+        return core.err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
           params: { error: await describeHttpError(response) },
         }))
       }
@@ -214,12 +213,12 @@ export function createMimoAudioProvider(): AudioProvider {
       const body = await response.json() as MimoChunk
       const base64 = body.choices?.[0]?.message?.audio?.data
       if (!base64) {
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+        return core.err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
           params: { error: 'missing audio data' },
         }))
       }
 
-      return ok({
+      return core.ok({
         data: fromBase64(base64),
         format: out.format,
         sampleRate: out.sampleRate,

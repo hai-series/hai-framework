@@ -2,7 +2,7 @@
 import type { StartedTestContainer } from 'testcontainers'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -148,7 +148,7 @@ describe.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨库读取契
 
   if (backend === 'sqlite') {
     it('拒绝驱动返回的超出安全整数范围的统计值', async () => {
-      const query = vi.spyOn(reldb.sql, 'query').mockResolvedValueOnce(ok([
+      const query = vi.spyOn(reldb.sql, 'query').mockResolvedValueOnce(core.ok([
         { action: 'delete', count: '9007199254740993' },
       ]))
       try {

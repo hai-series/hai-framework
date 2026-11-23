@@ -2,7 +2,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { PasswordJob } from './crypto-password-worker.js'
 import type { AsyncPasswordOperations } from './crypto-types.js'
 import { availableParallelism } from 'node:os'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { cryptoM } from './crypto-i18n.js'
 import { HaiCryptoError } from './crypto-types.js'
 
@@ -13,7 +13,7 @@ function workerFailed(job: PasswordJob): HaiResult<never> {
   const hashing = job.operation === 'hash'
   const definition = hashing ? HaiCryptoError.HASH_FAILED : HaiCryptoError.VERIFY_FAILED
   logger.error('Password worker task failed', { operation: job.operation, code: definition.code })
-  return err(definition, cryptoM(hashing ? 'crypto_passwordHashFailed' : 'crypto_passwordVerifyFailed', { locale: job.locale }))
+  return core.err(definition, cryptoM(hashing ? 'crypto_passwordHashFailed' : 'crypto_passwordVerifyFailed', { locale: job.locale }))
 }
 
 /**
@@ -40,9 +40,9 @@ export function createPasswordWorkerPool(): Pick<AsyncPasswordOperations, 'hashA
     if (result.success)
       return result.data
     if (result.error.code === HaiCommonError.NOT_INITIALIZED.code)
-      return err(HaiCryptoError.NOT_INITIALIZED, cryptoM('crypto_notInitialized', { locale: input.locale }))
+      return core.err(HaiCryptoError.NOT_INITIALIZED, cryptoM('crypto_notInitialized', { locale: input.locale }))
     if (result.error.code === HaiCommonError.RATE_LIMIT_EXCEEDED.code)
-      return err(HaiCryptoError.PASSWORD_BUSY, cryptoM('crypto_passwordBusy', { locale: input.locale }))
+      return core.err(HaiCryptoError.PASSWORD_BUSY, cryptoM('crypto_passwordBusy', { locale: input.locale }))
     return workerFailed(input)
   }
 
@@ -58,7 +58,7 @@ export function createPasswordWorkerPool(): Pick<AsyncPasswordOperations, 'hashA
       if (!result.success)
         return result
       return typeof result.data === 'string'
-        ? ok(result.data)
+        ? core.ok(result.data)
         : workerFailed(input)
     },
     async verifyAsync(password, hash) {
@@ -72,7 +72,7 @@ export function createPasswordWorkerPool(): Pick<AsyncPasswordOperations, 'hashA
       if (!result.success)
         return result
       return typeof result.data === 'boolean'
-        ? ok(result.data)
+        ? core.ok(result.data)
         : workerFailed(input)
     },
     close: pool.close,

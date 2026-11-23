@@ -1,5 +1,5 @@
 import type { ToolArtifactAccess } from '../src/server/tools-service-resources.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { tools } from '../src/server/index.js'
 
@@ -7,21 +7,21 @@ const context = {
   scope: { tenantId: 'team', userId: 'alice' },
 }
 const files: ToolArtifactAccess = {
-  read: vi.fn(async () => ok({
+  read: vi.fn(async () => core.ok({
     id: 'report',
     name: 'report.md',
     mediaType: 'text/markdown',
     data: new TextEncoder().encode('# Report'),
     version: 1,
   })),
-  publish: vi.fn(async (_context, input) => ok({
+  publish: vi.fn(async (_context, input) => core.ok({
     id: 'report',
     title: input.name,
     kind: input.kind,
     version: 1,
     mediaType: input.mediaType,
   })),
-  save: vi.fn(async () => ok({
+  save: vi.fn(async () => core.ok({
     id: 'report',
     title: 'report.md',
     kind: 'markdown',
@@ -113,7 +113,7 @@ it('uses stable, distinct output identifiers for retries of the same managed exe
     scope: context.scope,
     owner: { nodeId: 'node', generation: 'one' },
     signal: new AbortController().signal,
-    emit: vi.fn(async () => ok(undefined)),
+    emit: vi.fn(async () => core.ok(undefined)),
     start: vi.fn(async () => { throw new Error('Unused process') }),
   }
   const make = () => tools.createArtifactTools({

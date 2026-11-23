@@ -105,10 +105,10 @@ class ToastState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.add({ message: '保存完成', variant: 'success', duration: 3000 })
-   * toast.remove(id)
+   * const id = ui.toast.add({ message: '保存完成', variant: 'success', duration: 3000 })
+   * ui.toast.remove(id)
    * ```
    */
   add(props: Omit<ToastProps, 'onclose'>): string {
@@ -136,10 +136,10 @@ class ToastState {
    * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.info('同步中', 0)
-   * toast.remove(id)
+   * const id = ui.toast.info('同步中', 0)
+   * ui.toast.remove(id)
    * ```
    */
   remove(id: string): void {
@@ -159,10 +159,10 @@ class ToastState {
    * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * toast.info('同步中', 0)
-   * toast.clear()
+   * ui.toast.info('同步中', 0)
+   * ui.toast.clear()
    * ```
    */
   clear(): void {
@@ -179,10 +179,10 @@ class ToastState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.success('操作结果', 3000)
-   * toast.remove(id)
+   * const id = ui.toast.success('操作结果', 3000)
+   * ui.toast.remove(id)
    * ```
    */
   success(message: string, duration?: number): string {
@@ -196,10 +196,10 @@ class ToastState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.error('操作结果', 3000)
-   * toast.remove(id)
+   * const id = ui.toast.error('操作结果', 3000)
+   * ui.toast.remove(id)
    * ```
    */
   error(message: string, duration?: number): string {
@@ -213,10 +213,10 @@ class ToastState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.warning('操作结果', 3000)
-   * toast.remove(id)
+   * const id = ui.toast.warning('操作结果', 3000)
+   * ui.toast.remove(id)
    * ```
    */
   warning(message: string, duration?: number): string {
@@ -230,10 +230,10 @@ class ToastState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { toast } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 ToastContainer。
-   * const id = toast.info('操作结果', 3000)
-   * toast.remove(id)
+   * const id = ui.toast.info('操作结果', 3000)
+   * ui.toast.remove(id)
    * ```
    */
   info(message: string, duration?: number): string {
@@ -246,11 +246,11 @@ class ToastState {
  *
  * @example
  * ```ts
- * import { toast } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * // 页面布局需挂载 ToastContainer。
- * const id = toast.success('保存完成', 3000)
- * toast.remove(id)
- * toast.clear()
+ * const id = ui.toast.success('保存完成', 3000)
+ * ui.toast.remove(id)
+ * ui.toast.clear()
  * ```
  */
 export const toast = new ToastState()
@@ -265,9 +265,9 @@ export const toast = new ToastState()
  * @example
  * ```svelte
  * <script lang="ts">
- *   import { useToastFeedback } from '@h-ai/ui/toast'
+ *   import { ui } from '@h-ai/ui/toast'
  *   let error = $state('')
- *   useToastFeedback(() => error)
+ *   ui.useToastFeedback(() => error)
  * </script>
  * ```
  */
@@ -304,9 +304,9 @@ const ERROR_DURATION = 5000
  *
  * @example
  * ```ts
- * import { notifySuccess, toast } from '@h-ai/ui'
- * const id = notifySuccess('保存完成', 3000)
- * toast.remove(id)
+ * import { ui } from '@h-ai/ui'
+ * const id = ui.notifySuccess('保存完成', 3000)
+ * ui.toast.remove(id)
  * ```
  */
 export function notifySuccess(message: string, duration: number = SUCCESS_DURATION): string {
@@ -326,9 +326,9 @@ export function notifySuccess(message: string, duration: number = SUCCESS_DURATI
  *
  * @example
  * ```ts
- * import { notifyError, toast } from '@h-ai/ui'
- * const id = notifyError(new Error('提交失败'), '请稍后重试', 5000)
- * toast.remove(id)
+ * import { ui } from '@h-ai/ui'
+ * const id = ui.notifyError(new Error('提交失败'), '请稍后重试', 5000)
+ * ui.toast.remove(id)
  * ```
  */
 export function notifyError(error: unknown, fallback = '', duration: number = ERROR_DURATION): string {
@@ -339,8 +339,8 @@ export function notifyError(error: unknown, fallback = '', duration: number = ER
  * 生成安全错误提示；日志保留脱敏原因，字符串携带追踪编号供 ToastContainer 分离展示。
  * @example
  * ```ts
- * import { errorMessage } from '@h-ai/ui'
- * const text = errorMessage(new Error('Internal detail'), '保存失败')
+ * import { ui } from '@h-ai/ui'
+ * const text = ui.errorMessage(new Error('Internal detail'), '保存失败')
  * ```
  */
 export function errorMessage(error: unknown, fallback = ''): string {
@@ -393,9 +393,9 @@ export function errorMessage(error: unknown, fallback = ''): string {
  *
  * @example
  * ```ts
- * import { notifyInfo, toast } from '@h-ai/ui'
- * const id = notifyInfo('正在同步', 3000)
- * toast.remove(id)
+ * import { ui } from '@h-ai/ui'
+ * const id = ui.notifyInfo('正在同步', 3000)
+ * ui.toast.remove(id)
  * ```
  */
 export function notifyInfo(message: string, duration: number = SUCCESS_DURATION): string {
@@ -411,9 +411,9 @@ export function notifyInfo(message: string, duration: number = SUCCESS_DURATION)
  *
  * @example
  * ```ts
- * import { notifyWarning, toast } from '@h-ai/ui'
- * const id = notifyWarning('请先保存修改', 5000)
- * toast.remove(id)
+ * import { ui } from '@h-ai/ui'
+ * const id = ui.notifyWarning('请先保存修改', 5000)
+ * ui.toast.remove(id)
  * ```
  */
 export function notifyWarning(message: string, duration: number = ERROR_DURATION): string {

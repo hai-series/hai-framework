@@ -3,7 +3,7 @@ import type { FeedbackContext, FeedbackFunctions } from '@h-ai/feedback'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 
@@ -26,8 +26,8 @@ export interface FeedbackProcedureDeps {
  * @example
  * ```ts
  * import { feedback } from '@h-ai/feedback'
- * import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
- * const procedures = createFeedbackProcedures({ feedback, resolveContext: ({ session }) => ({ scopeId: 'trusted-tenant', userId: session.userId, permissions: session.permissions }) })
+ * import { serv } from '@h-ai/serv'
+ * const procedures = serv.createFeedbackProcedures({ feedback, resolveContext: ({ session }) => ({ scopeId: 'trusted-tenant', userId: session.userId, permissions: session.permissions }) })
  * ```
  */
 export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
@@ -35,11 +35,11 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
     try {
       const actor = await deps.resolveContext(context)
       if (!actor?.scopeId || actor.userId !== context.session.userId)
-        return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
+        return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
       return { success: true as const, data: actor }
     }
     catch {
-      return err(HaiCommonError.INTERNAL_ERROR, servM('serv_errorInternal', { locale: context.locale }))
+      return core.err(HaiCommonError.INTERNAL_ERROR, servM('serv_errorInternal', { locale: context.locale }))
     }
   }
   const router = implement(apiContract.feedback).context<ServContext>()
@@ -51,8 +51,8 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
       if (!actor.success)
         return actor
       return deps.feedback.isInitialized === false
-        ? err(HaiCommonError.SERVICE_UNAVAILABLE, servM('serv_feedbackUnavailable'))
-        : ok(deps.feedback.budget)
+        ? core.err(HaiCommonError.SERVICE_UNAVAILABLE, servM('serv_feedbackUnavailable'))
+        : core.ok(deps.feedback.budget)
     })
     .route('reports.submit')
     .auth()

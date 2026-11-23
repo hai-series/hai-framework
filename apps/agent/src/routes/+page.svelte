@@ -1,4 +1,5 @@
 <script lang='ts'>
+
   import type { CodeWorkspaceSource, WorkspaceLeaveGuard } from '@h-ai/ui'
   import type { HomeView, KnowledgeView, TaskView } from '#lib/client.js'
   import type { AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry } from '#lib/workspace.js'
@@ -6,8 +7,8 @@
   import { enhance } from '$app/forms'
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeSelector, WorkspaceLayout } from '@h-ai/ui'
-  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
+  import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeSelector, ui, WorkspaceLayout } from '@h-ai/ui'
+
   import { onDestroy, onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { AgentClientError, mergePageItems, read, readTaskPage, record, send, speak, transcribe, upload } from '#lib/client.js'
@@ -24,7 +25,7 @@
 
   function changeTheme(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 
   type Pane = 'workspace' | 'personal' | 'memory' | 'knowledge' | 'files' | 'permissions' | 'settings' | 'artifacts' | 'tools'
@@ -425,7 +426,7 @@
   }
 
   onMount(() => {
-    currentTheme = getSavedTheme()
+    currentTheme = ui.getSavedTheme()
     if (!data.user)
       return
     void bootstrap().then(async () => {

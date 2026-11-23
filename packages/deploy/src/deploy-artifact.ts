@@ -65,10 +65,10 @@ export const DeploymentArtifactSchema = z.object({
  * 构建器与部署器共享的镜像交付结构；参见 DeploymentArtifactSchema 示例。
  * @example
  * ```ts
- * import type { DeploymentArtifact } from '@h-ai/deploy'
- * import { readDeploymentArtifact } from '@h-ai/deploy'
+ *
+ * import { type DeploymentArtifact, deploy } from '@h-ai/deploy'
  * const directory = '.hai/build/docker/build-id'
- * const artifact = await readDeploymentArtifact(directory)
+ * const artifact = await deploy.readDeploymentArtifact(directory)
  * const verified: DeploymentArtifact = artifact
  * const references = verified.images.map(image => image.imageRef)
  * ```
@@ -82,8 +82,8 @@ export type DeploymentArtifact = z.infer<typeof DeploymentArtifactSchema>
  * @returns 文件内容的 SHA-256 十六进制摘要。
  * @example
  * ```ts
- * import { artifactChecksum } from '@h-ai/deploy'
- * const digest = await artifactChecksum('.hai/build/docker/build-id/serv-1.0.0.tar')
+ * import { deploy } from '@h-ai/deploy'
+ * const digest = await deploy.artifactChecksum('.hai/build/docker/build-id/serv-1.0.0.tar')
  * ```
  */
 export async function artifactChecksum(file: string, signal?: AbortSignal): Promise<string> {
@@ -100,9 +100,9 @@ export async function artifactChecksum(file: string, signal?: AbortSignal): Prom
  * @returns 已经验证的构建制品清单。
  * @example
  * ```ts
- * import { readDeploymentArtifact } from '@h-ai/deploy'
+ * import { deploy } from '@h-ai/deploy'
  * const directory = '.hai/build/docker/build-id'
- * const artifact = await readDeploymentArtifact(directory)
+ * const artifact = await deploy.readDeploymentArtifact(directory)
  * const images = artifact.images.map(image => ({ name: image.name, imageRef: image.imageRef }))
  * ```
  */

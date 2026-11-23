@@ -16,10 +16,9 @@ import type {
   TicketGrant,
   TicketOperations,
 } from './iam-ticket-types.js'
-
 import { createHash } from 'node:crypto'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -92,16 +91,16 @@ export function createTicketOperations(): TicketOperations {
       const saved = await cache.kv.set(buildTicketKey(ticket), record, { px: ttlMs, nx: true })
       if (!saved.success || !saved.data) {
         logger.warn('Failed to issue ticket', { purpose: options.purpose })
-        return err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
+        return core.err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
       }
 
-      return ok({ ticket, expiresAt })
+      return core.ok({ ticket, expiresAt })
     },
 
     async consume(ticket: string, options?: ConsumeTicketOptions): Promise<HaiResult<ConsumedTicket>> {
       // 老键兼容只接受曾签发的格式，不能以新键的 sha256:... 后缀绕过摘要。
       if (!TICKET_FORMAT.test(ticket)) {
-        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
+        return core.err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
       let key = buildTicketKey(ticket)
       let found = await cache.kv.get<StoredTicket>(key)
@@ -111,30 +110,30 @@ export function createTicketOperations(): TicketOperations {
         found = await cache.kv.get<StoredTicket>(key)
       }
       if (!found.success) {
-        return err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
+        return core.err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
       }
       const record = found.data
       if (!record) {
-        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
+        return core.err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
 
       // TTL 到期兜底（cache 已按 TTL 过期，此处防御时钟/后端差异）
       if (record.expiresAt <= Date.now()) {
-        return err(HaiIamError.TICKET_EXPIRED, iamM('iam_ticketExpired'))
+        return core.err(HaiIamError.TICKET_EXPIRED, iamM('iam_ticketExpired'))
       }
 
       // 用途不符时保留票据，避免其它业务入口撤销本次操作。
       if (options?.purpose !== undefined && options.purpose !== record.purpose) {
-        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
+        return core.err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
 
       // 仅删除本次读到的记录。并发或过期导致比较失败时，本次消费无效。
       const removed = await cache.kv.compareAndSwap(key, record, undefined)
       if (!removed.success || !removed.data) {
-        return err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
+        return core.err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
 
-      return ok({
+      return core.ok({
         subjectId: record.subjectId,
         purpose: record.purpose,
         grant: record.grant,

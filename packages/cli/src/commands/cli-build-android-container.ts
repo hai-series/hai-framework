@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statS
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { resolveImageReference } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { cliM } from '../cli-i18n.js'
 import { buildProxyArguments } from './cli-build-downloads.js'
 import { isNativeZip, nativeFiles, nativeProjectDirectory } from './cli-build-native.js'
@@ -192,7 +192,7 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
   const base = /^ARG HAI_ANDROID_IMAGE=(\S+)$/m.exec(source)?.[1]
   if (!base)
     throw new Error(cliM('cli_build_android_dockerfile'))
-  const image = resolveImageReference(base, downloads.imageSource)
+  const image = deploy.resolveImageReference(base, downloads.imageSource)
   const fingerprint = createHash('sha256').update(source).update(JSON.stringify([image, downloads.npmRegistry])).digest('hex').slice(0, 24)
   const builder = `localhost/hai-capacitor-android:${fingerprint}`
   const proxyArgs = buildProxyArguments(downloads.proxy, runtime, network)

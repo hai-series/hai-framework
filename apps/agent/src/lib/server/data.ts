@@ -1,7 +1,7 @@
 import type { DmlOperations } from '@h-ai/reldb'
 import type { AgentPreferences, AgentResource, AgentSettings, AgentTask, AgentTurn, SendTurn, WorkspacePage } from '#lib/workspace.js'
 import { createHash, randomUUID } from 'node:crypto'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { id, prefsSchema } from '#lib/workspace.js'
 
@@ -159,7 +159,7 @@ export function initWorkspace() {
       columns: ['owner', 'acp_id'],
     })
     return sessionIndex.success
-      ? ok(undefined)
+      ? core.ok(undefined)
       : sessionIndex
   })
 }

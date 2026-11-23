@@ -2,8 +2,9 @@
   ProfileView — 当前用户信息展示 + 修改用户名/邮箱。使用 @h-ai/ui 的 UserProfile 场景组件 + Toast 提示。
 -->
 <script lang='ts'>
+
   import type { UserProfileSubmitData } from '@h-ai/ui'
-  import { PageHeader, toast, UserProfile } from '@h-ai/ui'
+  import { PageHeader, ui, UserProfile } from '@h-ai/ui'
   import { desktopApiClient } from '../lib/api.js'
   import { currentUser, refreshCurrentUser } from '../lib/auth-store.svelte.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
@@ -22,7 +23,7 @@
         email: data.email,
       })
       if (result.success) {
-        toast.success(m('profile_updated'))
+        ui.toast.success(m('profile_updated'))
         await refreshCurrentUser()
       }
       else {

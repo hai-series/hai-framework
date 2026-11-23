@@ -1,10 +1,10 @@
-import type { User } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - 单个用户管理 API
  * =============================================================================
  */
 
+import type { User } from '@h-ai/iam'
 import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'

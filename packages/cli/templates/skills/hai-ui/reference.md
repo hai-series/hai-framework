@@ -32,7 +32,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 - **优先复用 `@h-ai/ui` 现有组件**，不要在 app 中重复实现同类按钮、表格、表单、弹层或场景页面。
 - **页面级文案与业务逻辑放在应用层**；`@h-ai/ui` 负责展示与交互，不承接业务服务、数据库访问或页面级 i18n 管理。
 - **场景组件自带内置中英日文文案**（如 IAM / CRUD / AI / Storage 场景），除非组件显式提供覆盖 prop，否则不要把页面翻译样板再传进去。
-- **自动导入不是全能魔法**：`toast`、类型导入和 `Range` 仍需显式 `import`；其它公开 Svelte 组件可交给 `autoImportHaiUi()`。
+- **自动导入不是全能魔法**：`toast`、类型导入和 `Range` 仍需显式 `import`；其它公开 Svelte 组件可交给 `ui.autoImport()`。
 - **移动端组件不是样式糖**：使用 `SafeArea` / `BottomNav` / `PullRefresh` / `ActionSheet` 时，务必同步引入 `design-tokens.css` 与 `mobile.css`。
 
 ## AI 使用顺序（先判断，再落地）
@@ -41,7 +41,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 至少检查以下四项：
 
-- SvelteKit 3 在 `vite.config.*` 的 `sveltekit({...})` 中设置预处理；纯 Svelte/Vite 使用 `svelte.config.*`。两者都先执行 `vitePreprocess()` 或其他样式/模板语言转换，再执行 `autoImportHaiUi()`；后者按整份 Svelte AST 定位实例脚本，不直接接受转换前的 SCSS/Pug，直接 markup 调用保持同步。
+- SvelteKit 3 在 `vite.config.*` 的 `sveltekit({...})` 中设置预处理；纯 Svelte/Vite 使用 `svelte.config.*`。两者都先执行 `vitePreprocess()` 或其他样式/模板语言转换，再执行 `ui.autoImport()`；后者按整份 Svelte AST 定位实例脚本，不直接接受转换前的 SCSS/Pug，直接 markup 调用保持同步。
 - 自动导入只补模板中实际使用且未被脚本或模板局部作用域绑定的组件；注释、textarea 与脚本字符串里的组件示例不触发导入。
 - `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/ui` 和 `@h-ai/kit`，`optimizeDeps.exclude` 包含 `bits-ui`。
 - `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
@@ -117,7 +117,7 @@ Node adapter 使用 Crypto、Kit 或 IAM 时，还需将 `sm-crypto@0.5.8` 作�
 SvelteKit 3 的预处理、编译器和适配器统一配置在 Vite 插件；纯 Svelte/Vite 工程保留自己的 svelte.config.js。
 
 ```ts
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
@@ -129,7 +129,7 @@ export default defineConfig({
   plugins: [
     sveltekit({
       // 在构建时安装 UI 自动导入预处理器，为模板中使用的 Hai 组件补 import。
-      preprocess: [vitePreprocess(), autoImportHaiUi()],
+      preprocess: [vitePreprocess(), ui.autoImport()],
       compilerOptions: { runes: true },
       adapter: adapter(),
       paths: { relative: false },
@@ -206,19 +206,19 @@ export default defineConfig({
 ### 6. 平台检测
 
 ```typescript
-import { detectPlatform, isMobile, isNativeApp, usePlatform } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
 // 一次性检测
 // 根据当前环境检测运行平台，返回 ios、android 或 web。
-const platform = detectPlatform() // 'ios' | 'android' | 'web'
+const platform = ui.detectPlatform() // 'ios' | 'android' | 'web'
 // 判断当前设备是否为移动设备，返回布尔值。
-const mobile = isMobile() // boolean
+const mobile = ui.isMobile() // boolean
 // 判断是否运行在原生 App 宿主中，返回布尔值。
-const native = isNativeApp() // boolean（Capacitor 环境）
+const native = ui.isNativeApp() // boolean（Capacitor 环境）
 
 // Svelte 5 响应式（组件中使用）
 // 返回可在 Svelte 中响应式读取的平台、移动端和原生宿主状态。
-const p = usePlatform()
+const p = ui.usePlatform()
 // p.platform / p.isMobile / p.isNative
 ```
 
@@ -269,7 +269,7 @@ const p = usePlatform()
 | `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
 | `Empty`      | `title`, `description`, `icon`                                     | 空状态        |
 
-从 `@h-ai/ui` 接入 `ScheduleInput`，将 `x-hai-input` 经 `normalizeScheduleInputConfig` 后用于 `config`。默认北京时间，明确指定其他 IANA 时区可得到对应日期的 UTC 偏移。通过 `name` 提交 ISO 或五段 Cron 字符串。纯 Node schema 处理可导入 `@h-ai/ui/components/compounds/schedule-input`。
+从 `@h-ai/ui` 接入 `ScheduleInput`，将 `x-hai-input` 经 `ui.normalizeScheduleInputConfig` 后用于 `config`。默认北京时间，明确指定其他 IANA 时区可得到对应日期的 UTC 偏移。通过 `name` 提交 ISO 或五段 Cron 字符串。纯 Node schema 处理可导入 `@h-ai/ui/components/compounds/schedule-input`。
 
 滚动或裁剪容器中的 `Dropdown` 使用默认 `click` 或 `hover` 触发，菜单挂载到 `body`。由调用方控制开关时，使用 `trigger='manual'`，通过 `class` 切换 `dropdown-open` 显示内联菜单。`Popover` 默认挂载到 `body`，`click` 模式下键盘打开后焦点进入面板，Escape 关闭并返回触发控件。
 
@@ -445,7 +445,8 @@ const p = usePlatform()
 
 ```svelte
 <!-- 以指定字号渲染传入的 Markdown，允许经过消毒的 HTML。 -->
-<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
+<MarkdownRenderer content={
+;(markdown} fontSize='1.125rem' allowHtmlTags />
 
 <!-- 以 18px 编辑传入的方案文档，显示工具栏，隐藏大纲。 -->
 <AiDocumentEditor
@@ -466,7 +467,8 @@ const p = usePlatform()
 <!-- 按 label 绘制传入的限流和熔断数据，指针选取最近分段点并显示十字线。 -->
 <Chart
   type='line'
-  data={trendData}
+  data={
+;(trendData}
   x='label'
   y={['rateLimit', 'circuitBreak']}
   series={trendSeries}
@@ -518,7 +520,8 @@ const p = usePlatform()
 ```svelte
 <!-- 展示传入的角色记录，启用增删改和弹窗表单，按指定设置分页与排序。 -->
 <CrudPage
-  crud={roleCrud}
+  crud={
+;(roleCrud}
   {data}
   permissions={{ create: true, update: true, delete: true }}
   form={{ variant: 'modal', modalSize: 'lg' }}
@@ -533,19 +536,20 @@ const p = usePlatform()
 如果想维持侧边编辑体验，可改成：
 
 ```svelte
-form={{ variant: 'drawer', drawerWidth: '40rem' }}
+form={
+;({ variant: 'drawer', drawerWidth: '40rem' }}
 ```
 
 抽屉默认可拖动左侧边缘调整宽度，并按 `crud.resource.name` 记忆；传 `drawerResizable: false` 可关闭。
 
 ### 纯客户端控制器与惰性页签
 
-- 无 SvelteKit SSR 时用 `defineCrud` + `createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
-- `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`。
+- 无 SvelteKit SSR 时用 `kit.crud.define` + `ui.createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
+- `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `ui.createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`。
 - Toast 默认右下角浮动，由 UI 模块统一用主题语义色区分提示、成功、警告、错误，使用浅色底、细色边及类型图标，不占布局且可关闭，FIFO 队列逐条展示并从展示时计时；根布局只挂载一次 ToastContainer。六方位通过 toast.add 的 position 指定；登录、改密、保存、删除和上传等成功或失败结果均不使用行内 Alert。
 - 状态层从轻量 @h-ai/ui/toast 入口导入 toast/notify*/errorMessage/useToastFeedback，不加载组件及引导 CSS；ToastContainer 在根布局单次挂载。
-- Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
-- `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件使用 `useToastFeedback`，同类型、同内容、同编号合并；更新/清空时替换/移除该来源旧通知。所有警告和错误均交给 ToastContainer，字段只保留错误标记、读屏关联与恢复操作。默认隐藏 traceId，排查图标展开后显示编号、复制和联系支持的说明；悬停、聚焦或展开时暂停计时。普通 Error 即使自带 traceId 也使用兜底文案，编号不能证明原文可公开。
+- Toast 已内置 `ui.notifySuccess` / `ui.notifyError(err, fallback?)` / `ui.notifyInfo` / `ui.notifyWarning`，业务应用无需自建 toast 工具文件。
+- `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件使用 `ui.useToastFeedback`，同类型、同内容、同编号合并；更新/清空时替换/移除该来源旧通知。所有警告和错误均交给 ToastContainer，字段只保留错误标记、读屏关联与恢复操作。默认隐藏 traceId，排查图标展开后显示编号、复制和联系支持的说明；悬停、聚焦或展开时暂停计时。普通 Error 即使自带 traceId 也使用兜底文案，编号不能证明原文可公开。
 
 ## Design Token 系统
 
@@ -592,16 +596,16 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 共享 `@h-ai/ui/styles/theme.css` 提供 `high-contrast` 高对比、`formal` 直角商务、`eye-care` 暖绿护眼和 `liquid-glass` 液态玻璃主题。fullstack 生成应用默认可选择液态玻璃。应用显式设置 `fullstack.theme.themes` 时，可在该名单添加 `liquid-glass`。`ThemeSelector` 的可选属性 `themeIds` 将选项限制在已注册且列入名单的主题，省略时显示已注册的所有主题。验收液态玻璃时，在同一控件内移动鼠标检查高光位置。检查叠层后的前景文字与折光，以及后景柔化、密集表格的可读性、键盘焦点、减少动态效果和减少透明度偏好。
 
 ```typescript
-import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'
+import { THEMES, THEME_GROUPS, ui } from '@h-ai/ui/theme'
 
 // 把当前文档切换为 dark，并在浏览器支持时保存偏好。
-applyTheme('dark')      // 应用主题（自动持久化 localStorage）
+ui.applyTheme('dark')      // 应用主题（自动持久化 localStorage）
 // 读取当前文档主题，示例返回 dark。
-getCurrentTheme()        // 获取当前主题名
+ui.getCurrentTheme()        // 获取当前主题名
 // 读取已保存主题，未保存时返回传入的 corporate。
-getSavedTheme('corporate') // 存储为空或不可用时使用应用默认主题
+ui.getSavedTheme('corporate') // 存储为空或不可用时使用应用默认主题
 // 判断 dracula 是否属于暗色主题，返回 true。
-isDarkTheme('dracula')   // 检查是否暗色主题
+ui.isDarkTheme('dracula')   // 检查是否暗色主题
 ```
 
 ## 代码高亮（Shiki）
@@ -671,7 +675,8 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 ```svelte
 <!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
 <!-- 用应用提供的 IAM 配置和认证动作展示表单，登录和注册插槽在对应界面可见。 -->
-<AuthPanel {config} {actions}>
+<AuthPanel config={
+;(config} {actions}>
   {#snippet loginHeader()}
     <p>{m.loginHelp()}</p>
   {/snippet}
@@ -698,7 +703,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 ## 导出路径
 
-新手引导与帮助中心使用公开 `@h-ai/ui/guide` 入口；`createGuide` 控制器、`GuideHost` 和独立 `HelpCenter` 的接入、首次偏好和导航契约见 [guide.md](guide.md)。
+新手引导与帮助中心使用公开 `@h-ai/ui/guide` 入口；`ui.createGuide` 控制器、`GuideHost` 和独立 `HelpCenter` 的接入、首次偏好和导航契约见 [guide.md](guide.md)。
 
 | 路径                        | 用途                                   |
 | --------------------------- | -------------------------------------- |
@@ -725,7 +730,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 数据新增/修改统一使用 `Form`（托管提交）或原生 `<form>` + `FormLayout`，不要在应用复制字段 grid。两者支持 `columns={1 | 2}`、`labelPosition='top' | 'left'`、`labelWidth`；默认单列/标签在上，窄容器自动收拢。`FormField.colSpan='auto'` 自动让多行文本、上传和多选占两列，`1` / `2` 可覆盖；自定义宽控件标注 `data-form-wide`。已有控件 ID 或原生控件给 FormField 配 `for`，避免重复或失效的标签。
 
-IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。FormField 或控件发送含字段名的 Toast，避免父子重复；修正后移除旧通知，关联说明以读屏可读文本保留。
+IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `ui.setGlobalLocale` / `ui.createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。FormField 或控件发送含字段名的 Toast，避免父子重复；修正后移除旧通知，关联说明以读屏可读文本保留。
 
 验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。
 
@@ -733,7 +738,8 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
 ```svelte
 <!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
 <!-- 布局为两列，左侧标签宽 6rem。有效提交将字段交给 save，必填失败阻止提交。 -->
-<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+<Form columns={
+;(2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
   <!-- 以应用翻译展示必填姓名字段。 -->
   <FormField label={() => m.name()} required>
     <!-- 将姓名输入与 name 状态同步，提交字段名为 name。 -->
@@ -751,7 +757,7 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
 
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
 
-`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
+`@h-ai/ui/i18n` 的 `ui.createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
 
 ## 设计、实现与审查交接
 

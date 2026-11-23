@@ -65,11 +65,11 @@ finally {
 | `ai.close()` | 反序释放服务 | 引数なし | `Promise<void>; wait for cleanup` | `ai.close()` |
 | `ai.config` | 诊断当前配置 | `none` | `redacted AIConfig or null` | `ai.config` |
 | `ai.isInitialized` | 检查生命周期状态 | `none` | `boolean` | `ai.isInitialized` |
-| `resolveModelEntry(llmConfig, scenario, explicit?, options?)` | 識別名でモデル情報を解決 | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `resolveModelEntry(llmConfig, 'summary')` |
-| `resolveModelApi(llmConfig, explicitModel?, tempApi?)` | モデル API の能力を取得 | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `resolveModelApi(llmConfig, 'claude')` |
-| `resolveImageModel(imageConfig, explicit?)` | 画像モデルを選択 | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `resolveImageModel(imageConfig)` |
-| `resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | 音声モデルを選択 | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `resolveAudioModel(audioConfig, 'transcribe')` |
-| `ensureAudioCredential(model)` | 音声モデルの資格情報を確認 | `model: ResolvedAudioModel` | `HaiError or null` | `ensureAudioCredential(model)` |
+| `ai.resolveModelEntry(llmConfig, scenario, explicit?, options?)` | 識別名でモデル情報を解決 | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `ai.resolveModelEntry(llmConfig, 'summary')` |
+| `ai.resolveModelApi(llmConfig, explicitModel?, tempApi?)` | モデル API の能力を取得 | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `ai.resolveModelApi(llmConfig, 'claude')` |
+| `ai.resolveImageModel(imageConfig, explicit?)` | 画像モデルを選択 | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `ai.resolveImageModel(imageConfig)` |
+| `ai.resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | 音声モデルを選択 | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `ai.resolveAudioModel(audioConfig, 'transcribe')` |
+| `ai.ensureAudioCredential(model)` | 音声モデルの資格情報を確認 | `model: ResolvedAudioModel` | `HaiError or null` | `ai.ensureAudioCredential(model)` |
 
 #### 初期化依存とモデル選択の引数
 
@@ -77,11 +77,11 @@ finally {
 | --- | --- | --- |
 | `init`、`AIInitOptions` | `config`、`runner`、`storeProvider` | 設定とオプションは任意。モデルなどの項目は [AI の設定](../configuration/ai.ja.md)を参照。Runner の初期化と終了はホストが担当。明示したストアを優先し、省略時は初期化済み RelDB + VecDB または許可された一時ストアを使う |
 | `AIInitOptions` | `acpPolicy`、`acpAdapters`、`mcpJobFiles` | 任意のホストポリシー、アダプター名から実装への対応、MCP ジョブの読み取り・一時公開コールバック。必要な管理機能で渡す。[ACP](#acp) と [MCP](#mcp) を参照 |
-| `resolveModelEntry`、`resolveModelApi` | `llmConfig`、`scenario`、`explicit/explicitModel`、`options.missingApiKeyMessage`、`tempApi` | 検証済み LLM 設定を渡す。モデル選択にはシナリオが必須で、明示モデル、シナリオ、既定シナリオ、グローバルの順。認証情報がない場合のメッセージを指定でき、プロトコル照会は `tempApi` で上書きできる |
-| `resolveImageModel` | `imageConfig`、`explicit` | 検証済みの画像設定と任意のモデルを渡す。省略時は設定済み生成モデル |
-| `resolveAudioModel`、`ensureAudioCredential` | `audioConfig`、`operation`、`explicit`、`llmApiKey`、`model` | 検証済み音声設定と認識・合成の操作を渡す。省略時は操作の既定モデル。LLM 認証情報は継承を有効にした場合のみ使う。別途、解決済みモデルを認証情報の検証に渡すとエラーまたは `null` が返る |
+| `ai.resolveModelEntry`、`ai.resolveModelApi` | `llmConfig`、`scenario`、`explicit/explicitModel`、`options.missingApiKeyMessage`、`tempApi` | 検証済み LLM 設定を渡す。モデル選択にはシナリオが必須で、明示モデル、シナリオ、既定シナリオ、グローバルの順。認証情報がない場合のメッセージを指定でき、プロトコル照会は `tempApi` で上書きできる |
+| `ai.resolveImageModel` | `imageConfig`、`explicit` | 検証済みの画像設定と任意のモデルを渡す。省略時は設定済み生成モデル |
+| `ai.resolveAudioModel`、`ai.ensureAudioCredential` | `audioConfig`、`operation`、`explicit`、`llmApiKey`、`model` | 検証済み音声設定と認識・合成の操作を渡す。省略時は操作の既定モデル。LLM 認証情報は継承を有効にした場合のみ使う。別途、解決済みモデルを認証情報の検証に渡すとエラーまたは `null` が返る |
 
-`scenarios: { summary: 'brief' }` の場合、`resolveModelEntry(config, 'summary')` は brief のモデルを選びます。有効な認証情報があれば、モデルのプロトコルと実行設定が返ります。
+`scenarios: { summary: 'brief' }` の場合、`ai.resolveModelEntry(config, 'summary')` は brief のモデルを選びます。有効な認証情報があれば、モデルのプロトコルと実行設定が返ります。
 
 #### 利用例：モデルと保存先の準備
 
@@ -1135,8 +1135,8 @@ run は問題と設定から結果、runStream はイベントを返します。
 | 一括合成のみ | `targetDurationMs`、`durationToleranceMs` | 目標時間は正の整数ミリ秒。許容差は非負の整数ミリ秒で目標時間が必要。目標時間と `speed` は同時指定不可で、モデルの対応が必要 |
 | 認識・合成オプション | `model`、`strictCapabilities`、`signal` | モデルの省略時は操作別の設定を使う。厳格モードは既定で無効。有効時は非対応の高度な機能を要求すると送信前に失敗する。信号で取消可能 |
 | `AudioCapabilitiesRequest` と `models` リソース | `operation`、`model`、定義と版 | 照会では `transcribe` または `synthesize` を選び、モデルを指定できる。登録・更新項目は [AI の設定](../configuration/ai.ja.md)を参照。版はモデル一覧から取得した値 |
-| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
-| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
+| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 準備済みの音声で `{ timestampGranularities: ['word'], strictCapabilities: true }` を指定します。対応モデルでは単語の開始・終了時刻をミリ秒で取得でき、非対応モデルでは送信前に機能エラーが返ります。
 
@@ -1154,17 +1154,17 @@ ASR は実音声、TTS は本文から文字起こし・形式付き音声を得
 ユーザー操作からマイクへのアクセスを要求します。録音中の `snapshot()` で文字起こしするか、`onStop` に完全な録音が届いてから処理できます。取り消しや画面の破棄時は `close()` でトラックを解放し、録音を破棄します。
 
 ```ts
-import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
+import { ai } from '@h-ai/ai/client'
 
 function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
   // 30 秒と 1 MiB の制限付きで録音セッションを作ります。開始時にマイクへアクセスします。
-  const recorder = createAudioRecorder({
+  const recorder = ai.createAudioRecorder({
     maxDurationSeconds: 30,
     maxInputBytes: 1_048_576,
     onError,
     onStop(recorded) {
       // 録音全体をモノラル PCM16 に変換します。最後のデータが遅れた場合は 30 秒に切り詰めます。
-      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+      void ai.blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
         .then(onReady, onError)
     },
   })
@@ -1179,7 +1179,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-Blob のサイズはデコード前に、時間はデコード後に確認します。`blobToWav(recorded, 16000)` の数値引数は引き続き使えます。時間を超えた場合の既定値はエラーです。`overflow: "truncate"` を指定すると先頭部分を保持します。サーバーでもアップロード済み音声を検証します。
+Blob のサイズはデコード前に、時間はデコード後に確認します。`ai.blobToWav(recorded, 16000)` の数値引数は引き続き使えます。時間を超えた場合の既定値はエラーです。`overflow: "truncate"` を指定すると先頭部分を保持します。サーバーでもアップロード済み音声を検証します。
 
 #### 利用例：保存済み定義を管理
 
@@ -1378,8 +1378,8 @@ submit は再読込可能な受付情報、run は今回の結果を待ちます
 Node.js で、認可済みリポジトリの絶対パスとリビジョンを入力します。この例のコミットには `notes.txt` がありません。スナップショットの取得と比較では元のリポジトリを変更せず、push もしません。
 
 ```ts
-import type { ACPPublishSnapshot } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
+
+import { type ACPPublishSnapshot, ai } from '@h-ai/ai'
 
 async function previewChange(directory: string, revision: string) {
   // 渡されたディレクトリと Git 版からファイルの写しと解決済みの版を読む。読み取り失敗はエラー。

@@ -20,9 +20,10 @@
 
 ## 模块功能入口
 
-- 框架运行时功能默认统一通过 `<模块名>.操作()` 或 `<模块名>.<子功能>.操作()` 使用，例如 `storage.init()`、`core.id.uuid()`。扁平 API 是模块对象上的方法，不是包级独立函数；方法少或实现为纯函数不构成散列导出的理由。
+- 框架运行时功能统一通过 `<模块名>.操作()` 或 `<模块名>.<子功能>.操作()` 使用，例如 `storage.init()`、`core.id.uuid()`。扁平 API 是模块对象上的方法，不是包级独立函数；纯函数、工厂、多实例创建及公开子路径均遵守同一规则。
 - 内部 helper/工厂不能顺带成为公共入口；不为同一功能保留模块对象和包级函数两套并行入口。由模块方法创建的 Logger、Client、事务或运行对象，后续通过返回的实例调用属于正常用法。
-- 例外须有实际公共契约或宿主约束并写明原因，例如类型/Schema/错误常量、组件与样式、框架要求的适配入口、需支持多实例且已有公开契约的独立 Client 工厂，以及 Core 跨模块共用的 `ok`/`err` 结果构造器。不能仅因已有 export 就把普通运行功能列为例外，也不能臆造当前版本不存在的模块方法。
+- 同一环境的运行能力由根模块对象聚合，已有根对象时不再从多个子路径引入同名对象并制造 `serv2`、`ui3` 等数字别名。浏览器、宿主框架、构建工具与原生平台确需隔离时保留对应入口；同一文件选择覆盖所需能力的入口并合并 import。真实名称冲突使用有含义的局部名称，框架对象优先保留模块名。
+- 类型、Schema、错误定义、组件、样式和供继承的扩展基类按实际契约导出。普通运行函数和对象不得以“独立 Client 工厂”“兼容旧调用”或“纯工具”为由保留第二入口；Core 结果构造器也使用 `core.ok()` / `core.err()`。宿主有强制入口要求时须记录实际依据，不把普通适配工厂当作宿主例外。
 - 变更既有入口需要说明迁移影响，按变更确认流程同步调用方；创建、审查和文档示例都核对同一入口约定。README 提供入门，功能参考页逐项介绍公开 API，见[模块文档规范](module-documentation.md)。
 
 ## 导出规则
@@ -53,16 +54,17 @@
 ### HaiResult 使用模式
 
 ```ts
+import { core } from '@h-ai/core'
 // ✅ 返回 HaiResult
 async function create(input: Input): Promise<HaiResult<Item>> {
   try {
     const item = await doCreate(input)
     // 用已创建的 item 构造成功结果，调用者从 data 读取。
-    return ok(item)
+    return core.ok(item)
   }
   catch (error) {
     // 将领域错误码、本地化文本和捕获的错误封装为失败结果。
-    return err(HaiXxError.CREATE_FAILED, xxM('xx_createFailed'), error)
+    return core.err(HaiXxError.CREATE_FAILED, xxM('xx_createFailed'), error)
   }
 }
 
@@ -72,7 +74,7 @@ function register(tool: Tool): HaiResult<void> {
     // 用模块的未初始化错误工厂返回失败结果。
     return notInitialized.result()
   // 注册成功时返回 success=true，data 为 undefined。
-  return ok(undefined)
+  return core.ok(undefined)
 }
 ```
 
@@ -241,10 +243,10 @@ function register(tool: Tool): HaiResult<void> {
 每个声明至少有一个 fenced `ts` / `svelte` 的 `@example`。公开用法从真实 package exports 导入并包含所需数据；业务操作先检查 `HaiResult.success`。示例不能靠 `any`、空对象断言、虚构 API 或未声明的业务变量通过。类型示例应展示有含义的数据或消费方式。
 
 ```ts
-import { ok, type HaiResult } from '@h-ai/core'
+import { type HaiResult, core } from '@h-ai/core'
 
 // 用示例订单对象创建成功结果，data.id 为 order-1。
-const result: HaiResult<{ id: string }> = ok({ id: 'order-1' })
+const result: HaiResult<{ id: string }> = core.ok({ id: 'order-1' })
 const label = result.success ? result.data.id : result.error.message
 ```
 

@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto'
 import { cache } from '@h-ai/cache'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
 import { defineIamTestEnv } from './helpers/iam-test-env.js'
@@ -17,7 +17,7 @@ describe('iam ticket', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('nX 未实际写入时不签发票据', async () => {
-    const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(ok(false))
+    const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(core.ok(false))
     expect(await iam.ticket.issue({ subjectId: 'collision-user', purpose: 'test' })).toMatchObject({
       success: false,
       error: { code: HaiIamError.TICKET_ISSUE_FAILED.code },
@@ -39,7 +39,7 @@ describe('iam ticket', () => {
     expect(issued.data.expiresAt).toBeGreaterThan(Date.now())
 
     const digest = createHash('sha256').update(issued.data.ticket).digest('hex')
-    expect(await cache.kv.get(`hai:iam:ticket:${issued.data.ticket}`)).toEqual(ok(null))
+    expect(await cache.kv.get(`hai:iam:ticket:${issued.data.ticket}`)).toEqual(core.ok(null))
     expect(await cache.kv.get(`hai:iam:ticket:sha256:${digest}`)).toMatchObject({
       success: true,
       data: { subjectId: 'user-1', purpose: 'ai-audio' },
@@ -109,14 +109,14 @@ describe('iam ticket', () => {
       grant: { operation: 'test' },
       expiresAt: Date.now() + 30_000,
     }
-    expect(await cache.kv.set(`hai:iam:ticket:${ticket}`, legacy, { px: 30_000 })).toEqual(ok(true))
+    expect(await cache.kv.set(`hai:iam:ticket:${ticket}`, legacy, { px: 30_000 })).toEqual(core.ok(true))
     expect((await iam.ticket.consume(ticket, { purpose: 'other-purpose' })).success).toBe(false)
     const requests = await Promise.all([
       iam.ticket.consume(ticket, { purpose: legacy.purpose }),
       iam.ticket.consume(ticket, { purpose: legacy.purpose }),
     ])
     expect(requests.filter(result => result.success)).toEqual([
-      ok({
+      core.ok({
         subjectId: legacy.subjectId,
         purpose: legacy.purpose,
         grant: legacy.grant,

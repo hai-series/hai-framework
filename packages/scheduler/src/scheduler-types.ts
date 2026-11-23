@@ -189,8 +189,8 @@ export type TaskHandlerConfig = ApiTaskConfig | JsTaskConfig
  *
  * @example
  * ```ts
- * import type { TaskDefinition } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type TaskDefinition, scheduler } from '@h-ai/scheduler'
  *
  * // 宿主已成功初始化共享 reldb 与 scheduler。
  * const definition: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'api', url: 'https://example.com/health', maxResponseBytes: 4096 } }
@@ -492,8 +492,8 @@ export interface TaskExecutionLog {
  *
  * @example
  * ```ts
- * import type { LogQueryOptions } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type LogQueryOptions, scheduler } from '@h-ai/scheduler'
  *
  * const options: LogQueryOptions = { taskId: 'daily-report', status: 'success', pagination: { page: 1, pageSize: 20 } }
  * const logs = await scheduler.getLogs(options)
@@ -546,8 +546,8 @@ export interface SchedulerLogCleanupPolicy {
  *
  * @example
  * ```ts
- * import type { TaskUpdateInput } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type TaskUpdateInput, scheduler } from '@h-ai/scheduler'
  *
  * const updates: TaskUpdateInput = { enabled: false, timezone: null }
  * const changed = await scheduler.updateTask('daily-report', updates)
@@ -583,8 +583,8 @@ export interface TaskUpdateInput {
  *
  * @example
  * ```ts
- * import type { TriggerTaskInput } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type TriggerTaskInput, scheduler } from '@h-ai/scheduler'
  *
  * const options: TriggerTaskInput = { source: 'billing-console', idempotencyKey: 'billing-2026-10' }
  * const result = await scheduler.trigger('daily-report', options)
@@ -683,8 +683,8 @@ export interface SchedulerExecutionOperations {
  *
  * @example
  * ```ts
- * import type { SchedulerInitInput } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type SchedulerInitInput, scheduler } from '@h-ai/scheduler'
  *
  * // 宿主已成功初始化共享 reldb。
  * const input: SchedulerInitInput = { leaseMs: 60000, tasks: [{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }], hooks: { onTaskExecute: ({ context }) => ({ taskId: context.taskId }) } }

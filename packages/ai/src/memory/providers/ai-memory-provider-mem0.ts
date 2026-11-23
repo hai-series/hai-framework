@@ -11,8 +11,8 @@
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 import type { MemoryConfig } from '../../ai-config.js'
 import type { EmbeddingOperations } from '../../embedding/ai-embedding-types.js'
-import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 
+import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIVectorBackend } from '../../store/ai-store-types.js'
 import type {
   MemoryAccessScope,
@@ -24,9 +24,9 @@ import type {
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
 import type { Mem0Item as Mem0MemoryItem, Mem0Store } from './ai-memory-mem0-store.js'
-import process from 'node:process'
 
-import { core, err, ok } from '@h-ai/core'
+import process from 'node:process'
+import { core } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 
 import { HaiAIError } from '../../ai-types.js'
@@ -51,7 +51,7 @@ class Mem0ListIncompleteError extends Error {}
 
 /** 写后读或回执失败不证明未写入；保留可核对的 ID，调用方不得盲目重做 add/extract。 */
 function memoryWriteFailure(definition: HaiErrorDef, message: string, memoryIds: string[]): HaiResult<never> {
-  const failure = err(definition, message)
+  const failure = core.err(definition, message)
   if (!failure.success) {
     failure.error.ext = {
       requiresEffectReconciliation: true,
@@ -255,11 +255,11 @@ function buildVectorStoreConfig(deps: Mem0Deps): HaiResult<Mem0VectorStoreResolu
     }
     catch {}
     if (!validConnection) {
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendConnectionRequired', {
+      return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendConnectionRequired', {
         params: { backend: backend.type },
       }))
     }
-    return ok({
+    return core.ok({
       provider: 'qdrant',
       persistent: true,
       backend: { url: backend.url!, apiKey: backend.apiKey },
@@ -268,12 +268,12 @@ function buildVectorStoreConfig(deps: Mem0Deps): HaiResult<Mem0VectorStoreResolu
 
   // Mem0 数据格式适配仅实现 Qdrant；其它持久化后端使用 native Provider。
   if (backend?.type === 'pgvector')
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendUnsupported'))
+    return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendUnsupported'))
 
   // 配置了持久化后端但 mem0 无法映射（lancedb / chroma / 未知）：默认 fail-fast，
   // 避免服务重启后记忆静默丢失；仅当 memory.allowEphemeralFallback=true 时退回内存存储。
   if (backend && !deps.config.allowEphemeralFallback) {
-    return err(
+    return core.err(
       HaiAIError.CONFIGURATION_ERROR,
       aiM('ai_memoryEphemeralFallbackDenied', {
         params: { backend: backend.type },
@@ -282,7 +282,7 @@ function buildVectorStoreConfig(deps: Mem0Deps): HaiResult<Mem0VectorStoreResolu
   }
   if (backend)
     logger.warn('Mem0 format falls back to in-memory vector store (allowEphemeralFallback=true); data will not survive restart', { backend: backend.type })
-  return ok({
+  return core.ok({
     provider: 'memory',
     persistent: false,
 
@@ -307,7 +307,7 @@ async function extractMemories(context: Mem0Context, messages: ChatMessage[], op
   if (!extracted.success)
     return extracted
   if (extracted.data.length === 0)
-    return ok([])
+    return core.ok([])
 
   try {
     // 批量并发写入，避免 await-in-loop（N+1）
@@ -329,7 +329,7 @@ async function extractMemories(context: Mem0Context, messages: ChatMessage[], op
     const failed = stored.find(result => result.status === 'rejected')
     if (failed?.status === 'rejected')
       throw failed.reason
-    return ok(stored.flatMap(result => result.status === 'fulfilled'
+    return core.ok(stored.flatMap(result => result.status === 'fulfilled'
       ? [result.value]
       : []))
   }
@@ -376,13 +376,13 @@ async function recallMemories(context: Mem0Context, query: string, options?: { t
         .map(ranked => ranked.entry)
     }
 
-    return ok(entries.slice(0, topK))
+    return core.ok(entries.slice(0, topK))
   }
   catch (error) {
     logger.error('Mem0 format recall failed', {
       error: core.sanitize.sanitizeSensitiveFields(error),
     })
-    return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
+    return core.err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
   }
 }
 
@@ -395,7 +395,7 @@ async function addMemory(context: Mem0Context, entry: MemoryEntryInput): Promise
     const persisted = await context.memory.get(id)
     if (!persisted)
       throw new Error('Mem0 format stored memory could not be read back')
-    return ok(toMemoryEntry(persisted, objectId))
+    return core.ok(toMemoryEntry(persisted, objectId))
   }
   catch (error) {
     logger.error('Mem0 format add failed', {
@@ -410,14 +410,14 @@ async function updateMemory(context: Mem0Context, memoryId: string, updates: Mem
   try {
     const item = await context.memory.get(memoryId)
     if (!item) {
-      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+      return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
         params: { id: memoryId },
       }))
     }
 
     const existing = toMemoryEntry(item, context.defaultObjectId)
     if (isMemoryAccessDenied(existing, accessScope)) {
-      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+      return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
         params: { id: memoryId },
       }))
     }
@@ -434,11 +434,11 @@ async function updateMemory(context: Mem0Context, memoryId: string, updates: Mem
     await context.memory.update(memoryId, updates.content, buildMetadata(merged, objectId), objectId)
     const refreshed = await context.memory.get(memoryId)
     if (!refreshed) {
-      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+      return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
         params: { id: memoryId },
       }))
     }
-    return ok(toMemoryEntry(refreshed, objectId))
+    return core.ok(toMemoryEntry(refreshed, objectId))
   }
   catch (error) {
     logger.error('Mem0 format update failed', {
@@ -453,23 +453,23 @@ async function getMemory(context: Mem0Context, memoryId: string, accessScope?: M
   try {
     const item = await context.memory.get(memoryId)
     if (!item) {
-      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+      return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
         params: { id: memoryId },
       }))
     }
     const entry = toMemoryEntry(item, context.defaultObjectId)
     if (isMemoryAccessDenied(entry, accessScope)) {
-      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+      return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
         params: { id: memoryId },
       }))
     }
-    return ok(entry)
+    return core.ok(entry)
   }
   catch (error) {
     logger.error('Mem0 format read failed', {
       error: core.sanitize.sanitizeSensitiveFields(error),
     })
-    return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
+    return core.err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
   }
 }
 
@@ -478,19 +478,19 @@ async function removeMemory(context: Mem0Context, memoryId: string, accessScope?
     if (accessScope) {
       const item = await context.memory.get(memoryId)
       if (!item || isMemoryAccessDenied(toMemoryEntry(item, context.defaultObjectId), accessScope)) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+        return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
     }
     await context.memory.remove(memoryId)
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Mem0 format delete failed', {
       error: core.sanitize.sanitizeSensitiveFields(error),
     })
-    return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+    return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
   }
 }
 
@@ -557,7 +557,7 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
   if (!configResult.success)
     throw configResult.error
   if (core.module.requiresSharedState(process.env) && !configResult.data.persistent) {
-    const failure = err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memorySharedBackendRequired'))
+    const failure = core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memorySharedBackendRequired'))
     if (!failure.success)
       throw failure.error
   }
@@ -574,7 +574,7 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
     logger.error('Mem0 data storage initialization failed', {
       error: core.sanitize.sanitizeSensitiveFields(error),
     })
-    const failure = err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryOperationFailed'))
+    const failure = core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryOperationFailed'))
     if (!failure.success)
       throw failure.error
     throw new Error('Unreachable memory initialization state')
@@ -615,7 +615,7 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
     remove: (memoryId, accessScope) => removeMemory(context, memoryId, accessScope),
     async list(options) {
       try {
-        return ok(await listMemories(context, options))
+        return core.ok(await listMemories(context, options))
       }
       catch (error) {
         logger.error('Mem0 data list failed', {
@@ -624,8 +624,8 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
         if (error instanceof Mem0ListIncompleteError)
-          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
-        return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
+          return core.err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
+        return core.err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
       }
     },
     async listPage(options) {
@@ -634,7 +634,7 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
         const limit = options?.limit ?? 20
         // 有界候选集核对完整性后再应用过滤和分页。
         const all = await listMemories(context, { objectId: options?.objectId, types: options?.types, scope: options?.scope })
-        return ok({
+        return core.ok({
           items: all.slice(offset, offset + limit),
           total: all.length,
         })
@@ -646,8 +646,8 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
         if (error instanceof Mem0ListIncompleteError)
-          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
-        return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
+          return core.err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
+        return core.err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
       }
     },
     /**
@@ -663,12 +663,12 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
 
         if (!options?.objectId && !hasTypeOrScope) {
           await context.memory.clear()
-          return ok(undefined)
+          return core.ok(undefined)
         }
 
         if (options?.objectId && !hasTypeOrScope) {
           await context.memory.removeObject(options.objectId)
-          return ok(undefined)
+          return core.ok(undefined)
         }
 
         // 存在 types / scope：精确匹配后逐条删除
@@ -681,7 +681,7 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
           types: options?.types,
           scoped: Boolean(options?.scope),
         })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Mem0 data clear failed', {
@@ -690,8 +690,8 @@ export async function createMem0MemoryOperations(deps: Mem0Deps): Promise<Memory
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
         if (error instanceof Mem0ListIncompleteError)
-          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+          return core.err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
+        return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
       }
     },
   }

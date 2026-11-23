@@ -14,7 +14,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createJsonOps, parseJsonPath, reldb } from '../src/index.js'
+import { reldb } from '../src/index.js'
 
 function checkedData<T>(result: HaiResult<T>): T {
   if (!result.success)
@@ -28,39 +28,39 @@ function checkedData<T>(result: HaiResult<T>): T {
 
 describe('parseJsonPath', () => {
   it('解析单层对象字段', () => {
-    expect(parseJsonPath('$.status')).toEqual(['status'])
+    expect(reldb.parseJsonPath('$.status')).toEqual(['status'])
   })
 
   it('解析多层对象字段', () => {
-    expect(parseJsonPath('$.user.name')).toEqual(['user', 'name'])
+    expect(reldb.parseJsonPath('$.user.name')).toEqual(['user', 'name'])
   })
 
   it('解析三层对象字段', () => {
-    expect(parseJsonPath('$.a.b.c')).toEqual(['a', 'b', 'c'])
+    expect(reldb.parseJsonPath('$.a.b.c')).toEqual(['a', 'b', 'c'])
   })
 
   it('解析数组索引', () => {
-    expect(parseJsonPath('$[0]')).toEqual(['0'])
+    expect(reldb.parseJsonPath('$[0]')).toEqual(['0'])
   })
 
   it('解析对象字段后跟数组索引', () => {
-    expect(parseJsonPath('$.items[0]')).toEqual(['items', '0'])
+    expect(reldb.parseJsonPath('$.items[0]')).toEqual(['items', '0'])
   })
 
   it('解析混合路径', () => {
-    expect(parseJsonPath('$.items[1].name')).toEqual(['items', '1', 'name'])
+    expect(reldb.parseJsonPath('$.items[1].name')).toEqual(['items', '1', 'name'])
   })
 
   it('解析双引号数组键', () => {
-    expect(parseJsonPath('$["key"]')).toEqual(['key'])
+    expect(reldb.parseJsonPath('$["key"]')).toEqual(['key'])
   })
 
   it('路径不含 $ 前缀时也能解析', () => {
-    expect(parseJsonPath('.status')).toEqual(['status'])
+    expect(reldb.parseJsonPath('.status')).toEqual(['status'])
   })
 
   it('路径为 $ 时返回空数组', () => {
-    expect(parseJsonPath('$')).toEqual([])
+    expect(reldb.parseJsonPath('$')).toEqual([])
   })
 })
 
@@ -69,7 +69,7 @@ describe('parseJsonPath', () => {
 // =============================================================================
 
 describe('createJsonOps(sqlite)', () => {
-  const json = createJsonOps('sqlite')
+  const json = reldb.createJsonOps('sqlite')
 
   describe('extract', () => {
     it('生成 json_extract 表达式', () => {
@@ -165,7 +165,7 @@ describe('createJsonOps(sqlite)', () => {
 // =============================================================================
 
 describe('createJsonOps(postgresql)', () => {
-  const json = createJsonOps('postgresql')
+  const json = reldb.createJsonOps('postgresql')
 
   describe('extract', () => {
     it('生成 #> 表达式（单层路径）', () => {
@@ -267,7 +267,7 @@ describe('createJsonOps(postgresql)', () => {
 // =============================================================================
 
 describe('createJsonOps(mysql)', () => {
-  const json = createJsonOps('mysql')
+  const json = reldb.createJsonOps('mysql')
 
   describe('extract', () => {
     it('生成 JSON_EXTRACT 表达式', () => {

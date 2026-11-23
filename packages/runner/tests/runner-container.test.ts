@@ -6,7 +6,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createRunner, runner } from '../src/index.js'
+import { runner } from '../src/index.js'
 
 const cli = promisify(execFile)
 const configuredEngine = process.env.HAI_ACP_E2E_ENGINE ?? process.env.HAI_TEST_CONTAINER_ENGINE
@@ -159,7 +159,7 @@ describe('managed engine isolation', () => {
   }, 45_000)
 
   it('releases a lost reservation only after the original engine has removed its recorded container', async () => {
-    const other = createRunner()
+    const other = runner.create()
     const review = { operatorId: 'operator', reason: 'INC-47: verified engine cleanup' }
     try {
       expect((await other.init({ engine, nodeId: 'another-engine-node' })).success).toBe(true)
@@ -345,7 +345,7 @@ describe('isolated artifact export', () => {
 
   it.runIf(!!artifactImage)('consumes each ready container once after claim without carrying files between principals', async () => {
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-    const peer = createRunner()
+    const peer = runner.create()
     const entered = Promise.withResolvers<string>()
     const release = Promise.withResolvers<void>()
     try {

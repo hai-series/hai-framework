@@ -31,8 +31,8 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
  *
  * @example
  * ```ts
- * import type { ServServerConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServServerConfig, serv } from '@h-ai/serv'
  *
  * const config: ServServerConfig = { host: '127.0.0.1', port: 3000 }
  * const bindAddress = config.host
@@ -48,8 +48,8 @@ export interface ServServerConfig {
  *
  * @example
  * ```ts
- * import type { ServServerConfigInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServServerConfigInput, serv } from '@h-ai/serv'
  *
  * const input: ServServerConfigInput = { port: 3000 }
  * // HOST/PORT 的环境覆盖由配置解析完成后传给 listen。
@@ -62,8 +62,8 @@ export type ServServerConfigInput = Partial<ServServerConfig>
  *
  * @example
  * ```ts
- * import type { ServOpenAPIHttpConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServOpenAPIHttpConfig, serv } from '@h-ai/serv'
  *
  * const openapi: ServOpenAPIHttpConfig = { path: '/openapi.json' }
  * // 文档仅在 createApp.http 显式启用时挂载。
@@ -78,8 +78,8 @@ export interface ServOpenAPIHttpConfig {
  *
  * @example
  * ```ts
- * import type { ServDocsHttpConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServDocsHttpConfig, serv } from '@h-ai/serv'
  *
  * const docs: ServDocsHttpConfig = { path: '/docs', requireAuth: true }
  *```
@@ -94,8 +94,8 @@ export interface ServDocsHttpConfig {
  *
  * @example
  * ```ts
- * import type { ServHealthHttpConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServHealthHttpConfig, serv } from '@h-ai/serv'
  *
  * const health: ServHealthHttpConfig = { path: '/health', readyPath: '/ready' }
  *```
@@ -110,8 +110,8 @@ export interface ServHealthHttpConfig {
  *
  * @example
  * ```ts
- * import type { ServTransportRuntimeConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServTransportRuntimeConfig, serv } from '@h-ai/serv'
  *
  * const transport: ServTransportRuntimeConfig = { keyExchangePath: '/_hai/key-exchange', excludePaths: ['/health'] }
  * // 仅路径配置；真正启用还需私有 keyring 与共享 keyStore。
@@ -135,8 +135,8 @@ export interface ServTransportRuntimeConfig {
  *
  * @example
  * ```ts
- * import type { ServCorsRuntimeConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServCorsRuntimeConfig, serv } from '@h-ai/serv'
  *
  * const cors: ServCorsRuntimeConfig = { origin: 'https://app.example.com', allowedHeaders: ['Authorization', 'Content-Type'], exposedHeaders: [], credentials: true }
  *```
@@ -154,8 +154,8 @@ export interface ServCorsRuntimeConfig {
  *
  * @example
  * ```ts
- * import type { ServHttpConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServHttpConfig, serv } from '@h-ai/serv'
  *
  * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' } }
  *```
@@ -176,10 +176,10 @@ export interface ServHttpConfig {
  *
  * @example
  * ```ts
- * import type { ServConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
  *
- * import { ServConfigSchema } from '@h-ai/serv'
+ * import { type ServConfig, ServConfigSchema, serv } from '@h-ai/serv'
+ *
+ *
  *
  * const config: ServConfig = ServConfigSchema.parse({ server: { host: '127.0.0.1', port: 3000 } })
  * const port = config.server.port
@@ -197,8 +197,8 @@ export interface ServConfig {
  *
  * @example
  * ```ts
- * import type { ServCorsRuntimeConfigInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServCorsRuntimeConfigInput, serv } from '@h-ai/serv'
  *
  * const input: ServCorsRuntimeConfigInput = { origin: 'https://app.example.com', credentials: true }
  *```
@@ -210,8 +210,8 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  *
  * @example
  * ```ts
- * import type { ServTransportRuntimeConfigInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServTransportRuntimeConfigInput, serv } from '@h-ai/serv'
  *
  * const input: ServTransportRuntimeConfigInput = { keyExchangePath: '/_hai/key-exchange' }
  * // 此输入不包含私钥；私有 Secret 仅在服务端运行时装配。
@@ -231,8 +231,8 @@ export type ServTransportRuntimeConfigInput = Partial<{
  *
  * @example
  * ```ts
- * import type { ServHttpConfigInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServHttpConfigInput, serv } from '@h-ai/serv'
  *
  * const http: ServHttpConfigInput = { apiPrefix: '/api/v2', trustedProxies: ['192.0.2.0/24'], docs: false }
  *```
@@ -251,10 +251,10 @@ export type ServHttpConfigInput = Partial<{
  *
  * @example
  * ```ts
- * import type { ServConfigInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
  *
- * import { ServConfigSchema } from '@h-ai/serv'
+ * import { type ServConfigInput, ServConfigSchema, serv } from '@h-ai/serv'
+ *
+ *
  *
  * const input: ServConfigInput = { http: { apiPrefix: '/api/v2' }, transport: false }
  * const parsed = ServConfigSchema.safeParse(input)

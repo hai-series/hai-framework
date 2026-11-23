@@ -1,8 +1,9 @@
 /** 安装当前审计保留策略、数据库写保护和通知领取表。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations } from '@h-ai/reldb'
 import type { AuditInitConfig } from './audit-config.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { auditM } from './audit-i18n.js'
 import { HaiAuditError } from './audit-types.js'
@@ -27,7 +28,7 @@ async function installTriggers(sql: DmlOperations): Promise<HaiResult<void>> {
   const names = new Set(existing.data.map(row => row.name))
   const missing = triggerOperations.filter(([name]) => !names.has(name))
   if (!missing.length)
-    return ok(undefined)
+    return core.ok(undefined)
 
   const enabled = 'COALESCE((SELECT enabled FROM hai_audit_policy WHERE id=1),1)=1'
   const days = 'COALESCE((SELECT min_days FROM hai_audit_policy WHERE id=1),90)'
@@ -60,7 +61,7 @@ async function installTriggers(sql: DmlOperations): Promise<HaiResult<void>> {
     if (!created.success)
       return created
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 async function installTimeIndex(sql: DmlOperations): Promise<HaiResult<unknown>> {
@@ -70,7 +71,7 @@ async function installTimeIndex(sql: DmlOperations): Promise<HaiResult<unknown>>
   if (!index.success)
     return index
   return index.data
-    ? ok(undefined)
+    ? core.ok(undefined)
     : sql.execute('CREATE INDEX hai_audit_event_time_idx ON hai_audit_logs (created_at)')
 }
 
@@ -87,7 +88,7 @@ async function prepareAuditTables(sql: DmlOperations, mysql: boolean): Promise<H
   if (!seeded.success)
     return seeded
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -132,7 +133,7 @@ export async function initializeAuditStorage(): Promise<HaiResult<void>> {
       if (!lock.success)
         return lock
       if (Number(lock.data?.acquired) !== 1)
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_retentionPolicyFailed'))
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_retentionPolicyFailed'))
       namedLock = true
     }
     else {
@@ -174,14 +175,14 @@ export async function initializeAuditStorage(): Promise<HaiResult<void>> {
  */
 export async function configureAuditRetention(policy: AuditInitConfig['retention']): Promise<HaiResult<void>> {
   if (!policy)
-    return ok(undefined)
+    return core.ok(undefined)
   const result = await reldb.sql.execute('UPDATE hai_audit_policy SET enabled=?, min_days=? WHERE id=1', [
     Number(policy.enabled),
     policy.minDays,
   ])
   return result.success && result.data.changes === 1
-    ? ok(undefined)
-    : err(HaiAuditError.CONFIG_ERROR, auditM('audit_retentionPolicyFailed'), result.success ? undefined : result.error)
+    ? core.ok(undefined)
+    : core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_retentionPolicyFailed'), result.success ? undefined : result.error)
 }
 
 /**
@@ -195,8 +196,8 @@ export async function configureAuditRetention(policy: AuditInitConfig['retention
 export async function auditRetentionDays(sql: DmlOperations = reldb.sql): Promise<HaiResult<number>> {
   const result = await sql.get<{ enabled: number, min_days: number }>('SELECT enabled, min_days FROM hai_audit_policy WHERE id=1')
   if (!result.success || !result.data || ![0, 1].includes(Number(result.data.enabled)) || !Number.isInteger(Number(result.data.min_days)) || Number(result.data.min_days) < 1)
-    return err(HaiAuditError.CLEANUP_FAILED, auditM('audit_retentionPolicyFailed'), result.success ? undefined : result.error)
-  return ok(Number(result.data.enabled) === 1
+    return core.err(HaiAuditError.CLEANUP_FAILED, auditM('audit_retentionPolicyFailed'), result.success ? undefined : result.error)
+  return core.ok(Number(result.data.enabled) === 1
     ? Number(result.data.min_days)
     : 0)
 }

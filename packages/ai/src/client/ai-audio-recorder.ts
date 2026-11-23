@@ -27,8 +27,8 @@ export interface AudioRecorderOptions {
  * 浏览器麦克风会话。
  * @example
  * ```ts
- * import { createAudioRecorder } from '@h-ai/ai/client'
- * const recorder = createAudioRecorder({ onStop: blob => void blob.size })
+ * import { ai } from '@h-ai/ai/client'
+ * const recorder = ai.createAudioRecorder({ onStop: blob => void blob.size })
  * recorder.close()
  * ```
  */
@@ -50,9 +50,9 @@ export interface AudioRecorder {
  * @throws 上限或分段间隔无效时抛出 RangeError
  * @example
  * ```ts
- * import { createAudioRecorder } from '@h-ai/ai/client'
+ * import { ai } from '@h-ai/ai/client'
  * async function record() {
- *   const recorder = createAudioRecorder({ onStop: blob => void blob.size })
+ *   const recorder = ai.createAudioRecorder({ onStop: blob => void blob.size })
  *   await recorder.start()
  *   return recorder
  * }

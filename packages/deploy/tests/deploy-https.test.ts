@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createDeploymentPlan, deploy, DeployConfigSchema } from '../src/index.js'
+import { deploy, DeployConfigSchema } from '../src/index.js'
 
 const commands = vi.hoisted(() => [] as string[][])
 const imageState = vi.hoisted(() => ({ version: 0, sameIdentity: false }))
@@ -199,7 +199,7 @@ it.each([false, true])('普通 HTTP SSR 使用私有 gateway，计划和发布�
         : undefined,
     },
   }
-  expect(await createDeploymentPlan(root, config, { environment: 'test', artifactDir: artifacts })).toMatchObject({
+  expect(await deploy.createDeploymentPlan(root, config, { environment: 'test', artifactDir: artifacts })).toMatchObject({
     success: true,
     data: {
       selected: ['web', 'gateway'],
@@ -292,7 +292,7 @@ it('let’s Encrypt 交付官方 Certbot 镜像与申请、续期脚本，打包
   expect(guide).toContain('/https/acme/live/app.example.test')
   expect(read('.hai/proxy-start.sh')).toContain('nginx -t && nginx -s reload')
   expect(commands.some(command => command[1] === 'run')).toBe(false)
-  const planned = await createDeploymentPlan(root, {
+  const planned = await deploy.createDeploymentPlan(root, {
     provider: {
       type: 'docker-ssh',
       expose: {

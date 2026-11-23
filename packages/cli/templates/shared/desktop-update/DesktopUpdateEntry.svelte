@@ -8,9 +8,7 @@
 </script>
 
 <script lang='ts'>
-  import { Modal } from '@h-ai/ui/components/compounds/index'
-  import { Button } from '@h-ai/ui/components/primitives/index'
-  import { notifyError, notifyInfo } from '@h-ai/ui/toast'
+  import { Button, Modal, ui } from '@h-ai/ui'
   import { onMount, tick } from 'svelte'
   import { DesktopUpdate } from './desktop-update.svelte.js'
 
@@ -28,7 +26,7 @@
     if (updater.enabled) {
       await updater.check()
       if (updater.status === 'available' && !open)
-        notifyInfo(message('desktop_update_reminder'))
+        ui.notifyInfo(message('desktop_update_reminder'))
     }
   }
 
@@ -40,7 +38,7 @@
   async function checkForUpdate(): Promise<void> {
     await updater.check()
     if (updater.status === 'check-failed')
-      notifyError(message('desktop_update_check_failed'))
+      ui.notifyError(message('desktop_update_check_failed'))
   }
 
   async function confirmInstall(): Promise<void> {
@@ -53,12 +51,12 @@
     confirming = false
     await updater.install()
     if (updater.status === 'install-failed')
-      notifyError(message('desktop_update_install_failed'))
+      ui.notifyError(message('desktop_update_install_failed'))
   }
 
   async function restart(): Promise<void> {
     if (!await updater.restart())
-      notifyError(message('desktop_update_restart_failed'))
+      ui.notifyError(message('desktop_update_restart_failed'))
   }
 </script>
 

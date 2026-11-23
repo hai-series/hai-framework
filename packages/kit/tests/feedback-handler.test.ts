@@ -1,21 +1,21 @@
 import type { FeedbackFunctions } from '@h-ai/feedback'
 import type { RequestEvent } from '@sveltejs/kit'
-import { resolveFeedbackBudget } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { apiContract } from '@h-ai/api-contract'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/index.js'
 
 function fixture() {
-  const unused = async () => err(HaiCommonError.NOT_FOUND, 'Missing')
-  const appendEvidence = vi.fn<FeedbackFunctions['appendEvidence']>(async input => ok({
+  const unused = async () => core.err(HaiCommonError.NOT_FOUND, 'Missing')
+  const appendEvidence = vi.fn<FeedbackFunctions['appendEvidence']>(async input => core.ok({
     acknowledged: input.evidence.map(item => item.id),
     evidenceRevision: 2,
   }))
   const feedback: FeedbackFunctions = {
-    init: async () => ok(undefined),
-    close: async () => ok(undefined),
+    init: async () => core.ok(undefined),
+    close: async () => core.ok(undefined),
     config: null,
-    budget: resolveFeedbackBudget(),
+    budget: apiContract.resolveFeedbackBudget(),
     isInitialized: true,
     submit: unused,
     list: unused,

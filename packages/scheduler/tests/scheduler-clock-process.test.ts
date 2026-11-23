@@ -1,5 +1,6 @@
 /** 三库双独立 Node：本机钟 ±2h 不参与租约，真实行锁等待也不能延长旧授权。 */
 import type { HaiResult } from '@h-ai/core'
+
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { ChildProcess } from 'node:child_process'
 import type { StoredExecution } from '../src/repositories/scheduler-repository-execution.js'

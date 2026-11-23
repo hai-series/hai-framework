@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
-import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const roots: string[] = []
 afterEach(() => {
@@ -20,14 +20,14 @@ function fixture(): string {
 
 it('拒绝通过既有硬链接把私密部署值写入其他文件', () => {
   const root = fixture()
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root, requireFile: false })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root, requireFile: false })
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     return
   const outside = join(fixture(), 'public.env')
   writeFileSync(outside, 'PUBLIC_VALUE=unchanged\n')
   linkSync(outside, join(root, '.env.test.local'))
-  const saved = saveDeploymentEnvironment(loaded.data, { HAI_DB_PASSWORD: 'synthetic-private-value' }, { private: true })
+  const saved = deploy.saveDeploymentEnvironment(loaded.data, { HAI_DB_PASSWORD: 'synthetic-private-value' }, { private: true })
   expect(saved.success).toBe(false)
   expect(readFileSync(outside, 'utf8')).toBe('PUBLIC_VALUE=unchanged\n')
 })
@@ -48,7 +48,7 @@ it('loads only the named hai.json section and preserves deployment environment o
       container: { s3Engine: 'rustfs' },
     },
   }))
-  expect(loadDeploymentConfig('deploy', file, { APP_PORT: '8088', HAI_DEPLOY_CONTAINER_S3ENGINE: 'minio' })).toEqual({
+  expect(deploy.loadDeploymentConfig('deploy', file, { APP_PORT: '8088', HAI_DEPLOY_CONTAINER_S3ENGINE: 'minio' })).toEqual({
     success: true,
     data: {
       provider: {
@@ -58,13 +58,13 @@ it('loads only the named hai.json section and preserves deployment environment o
       container: { s3Engine: 'minio' },
     },
   })
-  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"vercel","token":"test: key#value$&"}' })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"vercel","token":"test: key#value$&"}' })).toMatchObject({
     success: true,
     data: {
       provider: { type: 'vercel', token: 'test: key#value$&' },
     },
   })
-  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY: '{"provider":{"type":"vercel","token":"test"}}' })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', file, { HAI_DEPLOY: '{"provider":{"type":"vercel","token":"test"}}' })).toMatchObject({
     success: true,
     data: {
       provider: { type: 'vercel', token: 'test' },
@@ -94,7 +94,7 @@ it('resolves extra_hosts interpolation and replaces the selected service mapping
       },
     },
   }))
-  const load = (overrides: Record<string, string> = {}) => loadDeploymentConfig('deploy', file, { PRIVATE_DB_IP: '192.0.2.1', ...overrides })
+  const load = (overrides: Record<string, string> = {}) => deploy.loadDeploymentConfig('deploy', file, { PRIVATE_DB_IP: '192.0.2.1', ...overrides })
   expect(load()).toMatchObject({
     success: true,
     data: {
@@ -140,7 +140,7 @@ it('rejects malformed JSON and missing or scalar project sections', () => {
     '{"deploy":"invalid"}',
   ]) {
     writeFileSync(file, content)
-    expect(loadDeploymentConfig('deploy', file, {}).success).toBe(false)
+    expect(deploy.loadDeploymentConfig('deploy', file, {}).success).toBe(false)
   }
 })
 
@@ -154,14 +154,14 @@ it('requires the selected mode file and rejects path traversal/reserved private 
     'Example',
     'prod',
   ])
-    expect(loadDeploymentEnvironment({ environment, envDir }).success).toBe(false)
+    expect(deploy.loadDeploymentEnvironment({ environment, envDir }).success).toBe(false)
 })
 
 it('reports malformed YAML with its file and line and rejects non-object configuration', () => {
   const file = join(fixture(), '_deploy.yml')
   for (const content of ['provider:\n  type: [docker-ssh\n', '- provider\n', 'invalid\n']) {
     writeFileSync(file, content)
-    const result = loadDeploymentConfig('deploy', file, {})
+    const result = deploy.loadDeploymentConfig('deploy', file, {})
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.message).toContain(file)
@@ -174,7 +174,7 @@ it('reports the file and invalid indexed variable when resolving deployment conf
   const file = join(fixture(), '_reach.yml')
   writeFileSync(file, 'providers: []\n')
   const invalidKey = 'HAI_REACH_PROVIDERS_1_HEADERS'
-  const result = loadDeploymentConfig('reach', file, { [invalidKey]: '{"Authorization":"fixture-secret"}' })
+  const result = deploy.loadDeploymentConfig('reach', file, { [invalidKey]: '{"Authorization":"fixture-secret"}' })
   expect(result.success).toBe(false)
   if (!result.success) {
     expect(result.error.message).toContain(file)
@@ -188,13 +188,13 @@ it('resolves object overrides and special characters without interpolating raw Y
   const file = join(root, '_deploy.yml')
   writeFileSync(file, `provider:\n  type: vercel\n  token: \${HAI_DEPLOY_PROVIDER_TOKEN}\n`)
   const token = 'test: key#value$&'
-  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER_TOKEN: token })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER_TOKEN: token })).toMatchObject({
     success: true,
     data: {
       provider: { type: 'vercel', token },
     },
   })
-  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"docker-ssh","ssh":{"host":"host"}}' })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"docker-ssh","ssh":{"host":"host"}}' })).toMatchObject({
     success: true,
     data: {
       provider: {
@@ -208,14 +208,14 @@ it('resolves object overrides and special characters without interpolating raw Y
 it('loads a wildcard CORS fallback as a literal string while retaining numeric and boolean types', () => {
   const file = join(fixture(), '_serv.yml')
   writeFileSync(file, `cors:\n  origin: \${HAI_SERV_CORS_ORIGIN:*}\n  credentials: \${HAI_SERV_CORS_CREDENTIALS:true}\nserver:\n  port: \${HAI_SERV_SERVER_PORT:3000}\n`)
-  expect(loadDeploymentConfig('serv', file, {})).toMatchObject({
+  expect(deploy.loadDeploymentConfig('serv', file, {})).toMatchObject({
     success: true,
     data: {
       cors: { origin: '*', credentials: true },
       server: { port: 3000 },
     },
   })
-  expect(loadDeploymentConfig('serv', file, { HAI_SERV_CORS_ORIGIN: '*' })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('serv', file, { HAI_SERV_CORS_ORIGIN: '*' })).toMatchObject({
     success: true,
     data: {
       cors: { origin: '*' },
@@ -229,7 +229,7 @@ it('uses process > local > selected environment > base, with an explicit deploym
   writeFileSync(join(envDir, '.env.test'), 'HAI_DB_TYPE=mysql\nHAI_CORE_ENV=production\n')
   writeFileSync(join(envDir, '.env.local'), 'HAI_DB_TYPE=postgresql\n')
   vi.stubEnv('HAI_CACHE_TYPE', 'redis')
-  const result = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const result = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(result.success).toBe(true)
   if (!result.success)
     return
@@ -245,7 +245,7 @@ it('uses process > local > selected environment > base, with an explicit deploym
 it('keeps secrets private, round-trips complex JSON values and preserves unrelated mode entries', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.prod'), '# Production\nPUBLIC_API_BASE=https://api.example.test\n')
-  const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir })
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     return
@@ -256,7 +256,7 @@ it('keeps secrets private, round-trips complex JSON values and preserves unrelat
     host: 'db',
     password,
   })
-  const result = saveDeploymentEnvironment(loaded.data, { HAI_DB: db, HAI_DEPLOY_PROVIDER_TOKEN: 'test-token', HAI_STORAGE: '{"type":"s3","bucket":"files","secretAccessKey":"test-storage-secret"}' })
+  const result = deploy.saveDeploymentEnvironment(loaded.data, { HAI_DB: db, HAI_DEPLOY_PROVIDER_TOKEN: 'test-token', HAI_STORAGE: '{"type":"s3","bucket":"files","secretAccessKey":"test-storage-secret"}' })
   expect(result.success).toBe(true)
   const publicFile = readFileSync(join(envDir, '.env.prod'), 'utf8')
   expect(publicFile).toContain('# Production')
@@ -264,7 +264,7 @@ it('keeps secrets private, round-trips complex JSON values and preserves unrelat
   expect(publicFile).not.toContain('test-token')
   expect(publicFile).not.toContain('test-storage-secret')
   expect(publicFile).toContain('PUBLIC_API_BASE=https://api.example.test')
-  const merged = loadDeploymentEnvironment({ environment: 'prod', envDir })
+  const merged = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir })
   expect(merged.success).toBe(true)
   if (merged.success) {
     expect(merged.data.values).toMatchObject({
@@ -280,10 +280,10 @@ it('keeps secrets private, round-trips complex JSON values and preserves unrelat
 it('生成先合并模块再展开，子对象替换不残留旧字段，更细字段可以覆盖 false', () => {
   const root = fixture()
   writeFileSync(join(root, '.env.test'), '# Test\n')
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!loaded.success)
     throw new Error('Missing fixture')
-  expect(saveDeploymentEnvironment(loaded.data, {
+  expect(deploy.saveDeploymentEnvironment(loaded.data, {
     HAI_SERV: {
       http: {
         docs: { path: '/old', requireAuth: true },
@@ -303,7 +303,7 @@ it('生成先合并模块再展开，子对象替换不残留旧字段，更细�
   expect(Object.keys(generated).some(name => name.startsWith('HAI_SERV_HTTP_DOCS'))).toBe(false)
   const file = join(root, '_serv.yml')
   writeFileSync(file, 'http:\n  docs:\n    path: /yaml-docs\n    requireAuth: true\ntransport:\n  enabled: true\n')
-  expect(loadDeploymentConfig('serv', file, generated)).toEqual({
+  expect(deploy.loadDeploymentConfig('serv', file, generated)).toEqual({
     success: true,
     data: {
       http: {
@@ -316,7 +316,7 @@ it('生成先合并模块再展开，子对象替换不残留旧字段，更细�
 it('数组公共结构与私有索引凭据分别保存，不复制完整私有数组', () => {
   const root = fixture()
   writeFileSync(join(root, '.env.test'), '# Test\n')
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!loaded.success)
     throw new Error('Missing fixture')
   const providers = [
@@ -330,7 +330,7 @@ it('数组公共结构与私有索引凭据分别保存，不复制完整私有�
       pass: 'private-array-credential',
     },
   ]
-  expect(saveDeploymentEnvironment(loaded.data, { HAI_REACH_PROVIDERS: providers }).success).toBe(true)
+  expect(deploy.saveDeploymentEnvironment(loaded.data, { HAI_REACH_PROVIDERS: providers }).success).toBe(true)
   const publicValues = core.config.parseEnv(readFileSync(join(root, '.env.test'), 'utf8'))
   const privateValues = core.config.parseEnv(readFileSync(join(root, '.env.test.local'), 'utf8'))
   expect(JSON.parse(publicValues.HAI_REACH_PROVIDERS!)[0]).not.toHaveProperty('pass')
@@ -341,7 +341,7 @@ it('数组公共结构与私有索引凭据分别保存，不复制完整私有�
 it('keeps nested SMTP pass values out of the public environment file', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.test'), '# Test\n')
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   if (!snapshot.success)
     throw new Error('Missing fixture')
   const connection = {
@@ -350,7 +350,7 @@ it('keeps nested SMTP pass values out of the public environment file', () => {
     host: 'smtp.example.test',
     pass: 'test-smtp-private',
   }
-  expect(saveDeploymentEnvironment(snapshot.data, {
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, {
     HAI_REACH_PROVIDERS_0: JSON.stringify(connection),
   }).success).toBe(true)
   expect(readFileSync(join(envDir, '.env.test'), 'utf8')).not.toContain('test-smtp-private')
@@ -360,7 +360,7 @@ it('keeps nested SMTP pass values out of the public environment file', () => {
 it('keeps HTTP API headers and access key identifiers private', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.test'), '# Test\n')
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   if (!snapshot.success)
     throw new Error('Missing fixture')
   const config = {
@@ -369,7 +369,7 @@ it('keeps HTTP API headers and access key identifiers private', () => {
     url: 'https://notify.example.test',
     headers: { 'X-API-Key': 'test-private-header' },
   }
-  expect(saveDeploymentEnvironment(snapshot.data, {
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, {
     HAI_REACH_PROVIDERS_0: JSON.stringify(config),
     HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID: 'test-private-access-id',
   }).success).toBe(true)
@@ -382,7 +382,7 @@ it('keeps HTTP API headers and access key identifiers private', () => {
 it.each(['fields', 'provider', 'providers'] as const)('keeps arbitrary HTTP API authentication headers private for %s overrides', (source) => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.test'), '')
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(snapshot.success).toBe(true)
   if (!snapshot.success)
     return
@@ -400,7 +400,7 @@ it.each(['fields', 'provider', 'providers'] as const)('keeps arbitrary HTTP API 
       : {
           HAI_REACH_PROVIDERS: [provider],
         }
-  expect(saveDeploymentEnvironment(snapshot.data, values).success).toBe(true)
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, values).success).toBe(true)
   expect(readFileSync(join(envDir, '.env.test'), 'utf8')).not.toContain('fixture-private-custom-header')
   expect(readFileSync(join(envDir, '.env.test.local'), 'utf8')).toContain('fixture-private-custom-header')
 })
@@ -409,11 +409,11 @@ it.each(['  ', '\t', '  export '])('moves indented dotenv secrets to the private
   const envDir = fixture()
   const name = 'HAI_REACH_PROVIDERS_0_GATEWAY_HEADERS'
   writeFileSync(join(envDir, '.env.test'), `${prefix}${name}='{\n"X-Custom":"fixture-old-private-header"\n}' # old value\nHAI_CORE_NAME=Preserved\n`)
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(snapshot.success).toBe(true)
   if (!snapshot.success)
     return
-  expect(saveDeploymentEnvironment(snapshot.data, {
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, {
     [name]: { 'X-Custom': 'fixture-new-private-header' },
   }).success).toBe(true)
   const publicFile = readFileSync(join(envDir, '.env.test'), 'utf8')
@@ -447,7 +447,7 @@ it.each([
   const file = join(envDir, '_reach.yml')
   writeFileSync(join(envDir, '.env.test'), '# Test\n')
   writeFileSync(file, 'providers: [{ name: sms, type: aliyun-sms }]\n')
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   if (!snapshot.success)
     throw new Error('Missing fixture')
   const gateway = {
@@ -463,17 +463,17 @@ it.each([
       : {
           HAI_REACH_PROVIDERS: [provider],
         }
-  expect(saveDeploymentEnvironment(snapshot.data, values).success).toBe(true)
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, values).success).toBe(true)
   const publicFile = readFileSync(join(envDir, '.env.test'), 'utf8')
   const privateFile = readFileSync(join(envDir, '.env.test.local'), 'utf8')
   for (const value of ['fixture-private-gateway-header', gatewayPayload]) {
     expect(publicFile).not.toContain(value)
     expect(privateFile).toContain(value)
   }
-  const saved = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const saved = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(saved.success).toBe(true)
   if (saved.success) {
-    expect(loadDeploymentConfig('reach', file, saved.data.values)).toMatchObject({
+    expect(deploy.loadDeploymentConfig('reach', file, saved.data.values)).toMatchObject({
       success: true,
       data: {
         providers: [provider],
@@ -485,7 +485,7 @@ it.each([
 it('stores machine-specific host, port and key paths privately and reloads them', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.prod'), '# Production\nHAI_DEPLOY_PROVIDER_TYPE=vercel\n')
-  const snapshot = loadDeploymentEnvironment({ environment: 'prod', envDir })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir })
   if (!snapshot.success)
     throw new Error('Missing fixture')
   const provider = {
@@ -498,11 +498,11 @@ it('stores machine-specific host, port and key paths privately and reloads them'
     },
     expose: { hostPort: 8080 },
   }
-  expect(saveDeploymentEnvironment(snapshot.data, {
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, {
     HAI_DEPLOY_PROVIDER: JSON.stringify(provider),
   }, { private: true }).success).toBe(true)
   expect(readFileSync(join(envDir, '.env.prod'), 'utf8')).not.toContain('deploy.internal')
-  const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir })
   if (!loaded.success)
     throw new Error('Missing fixture')
   expect(loaded.data.values).toMatchObject({
@@ -512,7 +512,7 @@ it('stores machine-specific host, port and key paths privately and reloads them'
   })
   const file = join(envDir, '_deploy.yml')
   writeFileSync(file, 'provider:\n  type: vercel\n  token: placeholder\n')
-  expect(loadDeploymentConfig('deploy', file, loaded.data.values)).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', file, loaded.data.values)).toMatchObject({
     success: true,
     data: { provider },
   })
@@ -522,14 +522,14 @@ it('shadows an old shared private object only in the selected mode without delet
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.test'), 'HAI_DB_TYPE=postgresql\n')
   writeFileSync(join(envDir, '.env.local'), 'HAI_DB=\'{"type":"postgresql","database":"old","password":"old-password"}\'\nHAI_AI_LLM_APIKEY=test-key\n')
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   if (!loaded.success)
     throw new Error('Missing fixture')
-  expect(saveDeploymentEnvironment(loaded.data, { HAI_DB: '{"type":"sqlite","database":"./data/new.db"}' }).success).toBe(true)
+  expect(deploy.saveDeploymentEnvironment(loaded.data, { HAI_DB: '{"type":"sqlite","database":"./data/new.db"}' }).success).toBe(true)
   const local = parseEnv(readFileSync(join(envDir, '.env.local'), 'utf8'))
   expect(local.HAI_DB).toBe('{"type":"postgresql","database":"old","password":"old-password"}')
   expect(local.HAI_AI_LLM_APIKEY).toBe('test-key')
-  const selected = loadDeploymentEnvironment({ environment: 'test', envDir })
+  const selected = deploy.loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(selected.success).toBe(true)
   if (selected.success)
     expect(selected.data.values).toMatchObject({ HAI_DB_TYPE: 'sqlite', HAI_DB_DATABASE: './data/new.db' })

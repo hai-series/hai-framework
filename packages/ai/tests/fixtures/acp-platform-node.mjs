@@ -1,11 +1,11 @@
 import process from 'node:process'
 import { ai } from '@h-ai/ai'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { vecdb } from '@h-ai/vecdb'
 
-const runner = createRunner()
+const runner = frameworkRunner.create()
 const sessions = new Map()
 let shutdown
 const alice = () => ai.acp.scoped({ tenantId: 'studio', userId: 'alice' })
@@ -100,7 +100,7 @@ const methods = {
     const execute = reldb.sql.execute
     try {
       reldb.sql.execute = (sql, params) => sql.startsWith('INSERT INTO hai_ai_acp_managed_receipts ')
-        ? Promise.resolve(err('fixture:receipt-unavailable', 'Fixture receipt storage unavailable'))
+        ? Promise.resolve(core.err('fixture:receipt-unavailable', 'Fixture receipt storage unavailable'))
         : execute(sql, params)
       return await session.submit({ prompt: 'recover this result', idempotencyKey })
     }

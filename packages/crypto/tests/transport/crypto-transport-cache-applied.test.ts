@@ -1,5 +1,5 @@
 import { cache } from '@h-ai/cache'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { crypto } from '../../src/index.js'
 
@@ -15,7 +15,7 @@ it('不为未实际保存的公钥签发 clientId', async () => {
   const keyPair = crypto.asymmetric.generateKeyPair()
   if (!keyPair.success)
     throw new Error('Test key generation failed')
-  const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(ok(false))
+  const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(core.ok(false))
   const store = crypto.transport.createKeyStore({ cache })
   await expect(store.register(keyPair.data.publicKey)).rejects.toThrow()
   expect(write).toHaveBeenCalledWith(expect.any(String), keyPair.data.publicKey, { ex: 3600, nx: true })

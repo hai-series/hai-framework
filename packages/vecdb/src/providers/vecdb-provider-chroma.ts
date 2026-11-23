@@ -18,11 +18,11 @@ import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
   VectorSearchResult,
 } from '../vecdb-types.js'
-import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 import { spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
@@ -133,11 +133,11 @@ export function createChromaProvider(): VecdbProvider {
       if (!isChromaModule(mod)) {
         const error = new Error('chromadb driver module does not export ChromaClient')
         logger.error('Failed to load Chroma driver', { error: error.message })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+        return core.err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
           params: { driver: 'chromadb' },
         }), error)
       }
-      return ok(mod)
+      return core.ok(mod)
     }
     catch (error) {
       if (isMissingModuleError(error)) {
@@ -146,7 +146,7 @@ export function createChromaProvider(): VecdbProvider {
             ? error.message
             : String(error),
         })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+        return core.err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
           params: { driver: 'chromadb' },
         }), error)
       }
@@ -248,10 +248,10 @@ export function createChromaProvider(): VecdbProvider {
         try {
           await stopEmbeddedServer()
           logger.info('Chroma connection closed')
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (cause) {
-          return err({
+          return core.err({
             ...HaiVecdbError.CONNECTION_FAILED,
             message: vecdbM('vecdb_closeFailed', {
               params: {
@@ -304,7 +304,7 @@ export function createChromaProvider(): VecdbProvider {
   function validateDimension<T>(expected: number, actual: number): HaiResult<T> | null {
     if (expected === 0 || expected === actual)
       return null
-    return err(
+    return core.err(
       HaiVecdbError.DIMENSION_MISMATCH,
       vecdbM('vecdb_dimensionMismatch', {
         params: {
@@ -330,7 +330,7 @@ export function createChromaProvider(): VecdbProvider {
       const existing = await client!.listCollections()
       const exists = existing.some(item => item.name === name)
       if (exists) {
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+        return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
           params: { name },
         }))
       }
@@ -346,7 +346,7 @@ export function createChromaProvider(): VecdbProvider {
       })
 
       logger.info('Collection created', { name, dimension: options.dimension, metric })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async drop(name) {
@@ -354,34 +354,34 @@ export function createChromaProvider(): VecdbProvider {
       const existing = await client!.listCollections()
       const exists = existing.some(item => item.name === name)
       if (!exists) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
           params: { name },
         }))
       }
 
       await client!.deleteCollection({ name })
       logger.info('Collection dropped', { name })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async exists(name) {
       logger.debug('Checking collection exists', { name })
       const existing = await client!.listCollections()
-      return ok(existing.some(item => item.name === name))
+      return core.ok(existing.some(item => item.name === name))
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
       const existing = await client!.listCollections()
       if (!existing.some(item => item.name === name)) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
           params: { name },
         }))
       }
 
       const collection = await getCollection(name)
       const count = await collection.count()
-      return ok({
+      return core.ok({
         name,
         dimension: readDimension(collection),
         metric: fromChromaSpace(collection.metadata?.[SPACE_METADATA_KEY]),
@@ -392,7 +392,7 @@ export function createChromaProvider(): VecdbProvider {
     async list() {
       logger.debug('Listing collections')
       const existing = await client!.listCollections()
-      return ok(existing.map(item => item.name))
+      return core.ok(existing.map(item => item.name))
     },
   }
 
@@ -421,7 +421,7 @@ export function createChromaProvider(): VecdbProvider {
       }
       await target.add(toWriteParams(documents))
       logger.info('Vectors inserted', { collection, count: documents.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async upsert(collection, documents) {
@@ -435,7 +435,7 @@ export function createChromaProvider(): VecdbProvider {
       }
       await target.upsert(toWriteParams(documents))
       logger.info('Vectors upserted', { collection, count: documents.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async delete(collection, ids) {
@@ -443,7 +443,7 @@ export function createChromaProvider(): VecdbProvider {
       const target = await getCollection(collection)
       await target.delete({ ids })
       logger.info('Vectors deleted', { collection, count: ids.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async search(collection, vector, options) {
@@ -486,13 +486,13 @@ export function createChromaProvider(): VecdbProvider {
             : undefined,
         })
       }
-      return ok(results)
+      return core.ok(results)
     },
 
     async count(collection) {
       logger.debug('Counting vectors', { collection })
       const target = await getCollection(collection)
-      return ok(await target.count())
+      return core.ok(await target.count())
     },
 
     async scan(collection, limit, cursor) {
@@ -500,11 +500,11 @@ export function createChromaProvider(): VecdbProvider {
         ? 0
         : Number(cursor)
       if (!Number.isSafeInteger(offset) || offset < 0 || (cursor !== undefined && String(offset) !== cursor))
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
       try {
         const target = await getCollection(collection)
         const { ids } = await target.get({ offset, limit: limit + 1, include: [] })
-        return ok({
+        return core.ok({
           items: ids.slice(0, limit).map(id => ({ id })),
           nextCursor: ids.length > limit
             ? String(offset + limit)
@@ -513,7 +513,7 @@ export function createChromaProvider(): VecdbProvider {
       }
       catch (error) {
         if (error instanceof Error && ['ChromaNotFoundError', 'InvalidCollectionError'].includes(error.name)) {
-          return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
             params: { name: collection },
           }))
         }
@@ -529,7 +529,7 @@ export function createChromaProvider(): VecdbProvider {
 
     async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'chroma') {
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+        return core.err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
           params: { type: cfg.type },
         }))
       }
@@ -586,7 +586,7 @@ export function createChromaProvider(): VecdbProvider {
           port: clientParams.port,
           ssl: clientParams.ssl,
         })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         startupAbort.abort()
@@ -596,13 +596,13 @@ export function createChromaProvider(): VecdbProvider {
             ? error.message
             : String(error),
         })
-        const failure = err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+        const failure = core.err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
           params: {
             error: String(error),
           },
         }), error)
         return !failure.success && !cleanup.success
-          ? err({
+          ? core.err({
               ...failure.error,
               ext: { cleanupPending: true, cleanupError: cleanup.error },
             })

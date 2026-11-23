@@ -8,8 +8,8 @@
   import type { PageData } from './$types'
   import { browser } from '$app/env'
   import { refreshAll } from '$app/navigation'
-  import { setGlobalLocale } from '@h-ai/ui'
-  import { errorMessage as formatOperationError, toast, useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui'
+
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import { saveBusinessNotice } from '#lib/services/business-settings.js'
@@ -27,10 +27,10 @@
     try {
       const result = await saveBusinessNotice(notice)
       if (!result.success) {
-        errorMessage = formatOperationError(result.error, m.common_error())
+        errorMessage = ui.errorMessage(result.error, m.common_error())
       }
       else {
-        toast.success(m.common_success())
+        ui.toast.success(m.common_success())
         await refreshAll()
       }
     }
@@ -55,12 +55,12 @@
     if (lang === getLocale())
       return
     // 同步到全局 locale（经 @h-ai/ui 转发，影响核心模块错误消息等）
-    setGlobalLocale(lang)
+    ui.setGlobalLocale(lang)
     // setLocale 会设置 cookie 并触发页面语言切换（Paraglide UI 翻译）
     setLocale(lang as 'zh-CN' | 'en-US' | 'ja-JP')
   }
 
-  useToastFeedback(() => errorMessage)
+  ui.useToastFeedback(() => errorMessage)
 </script>
 
 <svelte:head>

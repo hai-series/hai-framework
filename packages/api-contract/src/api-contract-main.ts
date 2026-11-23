@@ -1,3 +1,4 @@
+import { aiContract } from './ai/ai-contract.js'
 /**
  * @h-ai/api-contract — 统一命名空间入口
  *
@@ -19,11 +20,11 @@
  * ```
  */
 
-import { aiContract } from './ai/ai-contract.js'
 import { paginatedSchema } from './common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from './common/result-schemas.js'
 import { pathOf, route } from './common/route.js'
 import { createApiContract } from './composition/create-api-contract.js'
+import { resolveFeedbackBudget } from './feedback/feedback-budget.js'
 import { feedbackContract } from './feedback/feedback-contract.js'
 import { iamContract } from './iam/iam-contract.js'
 import { paymentContract } from './payment/payment-contract.js'
@@ -41,6 +42,8 @@ import { storageContract } from './storage/storage-contract.js'
  * ```
  */
 export const apiContract = {
+  /** 根据已校验反馈配置计算材料与传输容量。 */
+  resolveFeedbackBudget,
   /** 组合任意领域 contract，过滤掉 `false` / `undefined`，输出可被 serv 挂载的 router。 */
   create: createApiContract,
 

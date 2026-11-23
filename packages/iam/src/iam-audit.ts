@@ -1,4 +1,5 @@
 /** 关键 IAM 变更的显式审计装配；不代理对象或复制凭据输入。 */
+
 import type { CreateAuditLogInput } from '@h-ai/audit'
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'

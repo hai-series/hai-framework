@@ -3,11 +3,11 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
 import * as ssh from '../src/container/deploy-ssh.js'
-import { createDeploymentPlan } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 let root: string | undefined
 
@@ -36,7 +36,7 @@ it.each(['vite', 'sveltekit'])('平台浏览器计划从根 build.images 读取 
     snapshots: {},
   }))
   await writeFile(join(root, '.env.prod'), 'HAI_CORE_ENV=production\n')
-  expect(await createDeploymentPlan(root, {
+  expect(await deploy.createDeploymentPlan(root, {
     provider: { type: 'vercel', token: 'plan-test-token' },
   }, { environment: 'prod' })).toMatchObject({
     success: true,
@@ -92,7 +92,7 @@ it('只读计划使用工程身份、校验制品、报告保留服务与未知�
   await writeFile(join(root, '.hai/build/docker/latest'), 'build-1')
   const before = await readdir(root, { recursive: true })
   const envBefore = await readFile(join(root, '.env.prod'), 'utf8')
-  const result = await createDeploymentPlan(root, {
+  const result = await deploy.createDeploymentPlan(root, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },
@@ -117,7 +117,7 @@ it('只读计划使用工程身份、校验制品、报告保留服务与未知�
   expect(JSON.stringify(result)).not.toMatch(/DEPLOY_PLAN_SENTINEL|SSH_PLAN_SENTINEL/)
   expect(await readdir(root, { recursive: true })).toEqual(before)
   expect(await readFile(join(root, '.env.prod'), 'utf8')).toBe(envBefore)
-  const execute = vi.fn(async (_command: string) => ok({
+  const execute = vi.fn(async (_command: string) => core.ok({
     stdout: 'release-verified-1',
     stderr: '',
     stdoutTruncated: false,
@@ -125,10 +125,10 @@ it('只读计划使用工程身份、校验制品、报告保留服务与未知�
   }))
   vi.spyOn(ssh, 'createSshExecutor').mockReturnValue({
     exec: execute,
-    ping: async () => ok(undefined),
-    upload: async () => ok(undefined),
+    ping: async () => core.ok(undefined),
+    upload: async () => core.ok(undefined),
   })
-  const inspected = await createDeploymentPlan(root, {
+  const inspected = await deploy.createDeploymentPlan(root, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },
@@ -211,7 +211,7 @@ it('实际 LDAP 和 SMTP 沿用 Compose 服务命名，逻辑卷不冒充引擎�
   await mkdir(join(directory, '.hai/deploy/runtime'), { recursive: true })
   await writeFile(join(directory, '.hai/deploy/runtime/shop-prod.secrets.json'), 'INVALID_PLAN_CREDENTIAL_CACHE')
   const before = await readdir(directory, { recursive: true })
-  const result = await createDeploymentPlan(directory, {
+  const result = await deploy.createDeploymentPlan(directory, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },
@@ -275,7 +275,7 @@ it.each<{ name: string, host: string, options: DeployAppOptions, hosted: boolean
     db: { type: 'postgresql', url: `postgresql://hai:PLAN_DB_SECRET@${host}:5432/hai`, database: 'hai' },
   })
   const before = await readdir(directory, { recursive: true })
-  const result = await createDeploymentPlan(directory, {
+  const result = await deploy.createDeploymentPlan(directory, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },
@@ -315,7 +315,7 @@ it('云开通配置不伪报本地数据库容器，也不发网络请求', asyn
     db: { type: 'postgresql' },
   })
   const network = vi.spyOn(globalThis, 'fetch')
-  const result = await createDeploymentPlan(directory, {
+  const result = await deploy.createDeploymentPlan(directory, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },
@@ -350,7 +350,7 @@ it('文件后端共享实际 app 数据卷，应用增量仍挂载同一数据�
       expose: { hostPort: 8080 },
     },
   }
-  expect(await createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({
+  expect(await deploy.createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({
     success: true,
     data: {
       containers: ['hai-shop-prod-serv'],
@@ -362,7 +362,7 @@ it('文件后端共享实际 app 数据卷，应用增量仍挂载同一数据�
     ...JSON.parse(await readFile(manifest, 'utf8')),
     partial: true,
   }))
-  expect(await createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({
+  expect(await deploy.createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({
     success: true,
     data: {
       selected: ['serv'],
@@ -383,7 +383,7 @@ it.each([false, true])('自建 Storage 只读计划与实际 gateway 拓扑一�
     },
   }, partial)
   const before = await readdir(directory, { recursive: true })
-  const result = await createDeploymentPlan(directory, {
+  const result = await deploy.createDeploymentPlan(directory, {
     provider: {
       type: 'docker-ssh',
       expose: { hostPort: 8080 },

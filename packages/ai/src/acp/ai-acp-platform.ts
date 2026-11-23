@@ -1,4 +1,5 @@
 import type { ContentBlock, McpServer, RequestPermissionRequest, RequestPermissionResponse, SessionNotification } from '@agentclientprotocol/sdk'
+
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerContext, RunnerExecution, RunnerFunctions, RunnerJson, RunnerProcess, RunnerScope, RunnerSubmit } from '@h-ai/runner'
 import type { AIConfig } from '../ai-config.js'
@@ -10,7 +11,7 @@ import type { ACPAgentAdapter } from './ai-acp-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
 import { nativeAdapterCapabilities, resolveAgentModels, resolveEnvironment } from './ai-acp-adapters.js'
@@ -1257,7 +1258,7 @@ export function createACPPlatform(deps: {
 
   async function protectedCall<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
     try {
-      return ok(await operation())
+      return core.ok(await operation())
     }
     catch (error) {
       return acpError(error)

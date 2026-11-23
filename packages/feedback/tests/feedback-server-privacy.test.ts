@@ -8,7 +8,6 @@ import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback } from '../src/index.js'
 
 const actor = {
@@ -154,7 +153,7 @@ describe('服务端自由文本隐私边界', () => {
     expect(archive.success).toBe(true)
     if (!archive.success)
       return
-    const bundle = await readFeedbackBundle(Buffer.from(archive.data.dataBase64, 'base64'))
+    const bundle = await feedback.readBundle(Buffer.from(archive.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return

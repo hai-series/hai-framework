@@ -1,5 +1,5 @@
 <script lang='ts'>
-  import { toast, useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui/toast'
   import { onDestroy, onMount } from 'svelte'
   import * as m from '#lib/paraglide/messages.js'
 
@@ -67,7 +67,7 @@
 
   async function analyze() {
     if (!file) {
-      toast.error(m.discover_error_no_file())
+      ui.toast.error(m.discover_error_no_file())
       return
     }
 
@@ -101,7 +101,7 @@
     }
   }
 
-  useToastFeedback(() => errorMessage)
+  ui.useToastFeedback(() => errorMessage)
 </script>
 
 <svelte:head>

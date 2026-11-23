@@ -1,5 +1,5 @@
+import { ai, AudioConfigSchema, ImageConfigSchema, LLMConfigSchema } from '@h-ai/ai'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AudioConfigSchema, ImageConfigSchema, LLMConfigSchema, resolveAudioModel, resolveImageModel, resolveModelEntry } from '../src/ai-config.js'
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -25,20 +25,20 @@ it('公共环境文件中的空凭据不屏蔽厂商回退，本机标准变量�
       { id: 'image', provider: 'openai', model: 'gpt-image-1' },
     ],
   })
-  expect(resolveModelEntry(LLMConfigSchema.parse({}), 'chat')).toMatchObject({
+  expect(ai.resolveModelEntry(LLMConfigSchema.parse({}), 'chat')).toMatchObject({
     success: true,
     data: { apiKey: 'vendor-test-key' },
   })
-  expect(resolveAudioModel(audio, 'transcribe')).toMatchObject({
+  expect(ai.resolveAudioModel(audio, 'transcribe')).toMatchObject({
     success: true,
     data: { apiKey: 'vendor-test-key' },
   })
-  expect(resolveImageModel(image)).toMatchObject({
+  expect(ai.resolveImageModel(image)).toMatchObject({
     success: true,
     data: { apiKey: 'vendor-test-key' },
   })
   vi.stubEnv('HAI_AI_LLM_APIKEY', 'machine-test-key')
-  expect(resolveModelEntry(LLMConfigSchema.parse({}), 'chat')).toMatchObject({
+  expect(ai.resolveModelEntry(LLMConfigSchema.parse({}), 'chat')).toMatchObject({
     success: true,
     data: { apiKey: 'machine-test-key' },
   })

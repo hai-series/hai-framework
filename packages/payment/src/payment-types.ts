@@ -32,7 +32,7 @@ const PaymentErrorInfo = {
  * 支付错误码定义；调用方先判断 HaiResult.success，再按 code 分类处理。
  * @example
  * ```ts
- * import { payment, HaiPaymentError } from '@h-ai/payment'
+ * import { HaiPaymentError, payment } from '@h-ai/payment'
  * const result = await payment.queryOrder('stripe', 'ORDER_1')
  * if (!result.success && result.error.code === HaiPaymentError.NOT_INITIALIZED.code) {
  *   // 应用启动流程应检查 init 结果，不能把未就绪查询当成未付款。
@@ -104,7 +104,7 @@ export interface CreateOrderInput {
  * 支付订单（返回给客户端调起支付）
  * @example
  * ```ts
- * import { payment, type PaymentOrder } from '@h-ai/payment'
+ * import { type PaymentOrder, payment } from '@h-ai/payment'
  * // 应用已初始化 Stripe 与其共享 reldb；订单号由业务持久化生成。
  * const created = await payment.createOrder('stripe', {
  *   orderNo: 'ORDER_1', amount: 100, currency: 'CNY', description: '测试商品',
@@ -152,7 +152,7 @@ export interface PaymentNotifyRequest {
  * 宿主需用共享持久存储核对订单、金额、币种并去重，阻止乱序事件倒退已完成状态。
  * @example
  * ```ts
- * import { payment, type PaymentNotifyRequest } from '@h-ai/payment'
+ * import { type PaymentNotifyRequest, payment } from '@h-ai/payment'
  * async function verifyNotification(request: PaymentNotifyRequest) {
  *   const result = await payment.handleNotify('stripe', request)
  *   if (!result.success) return result
@@ -188,7 +188,7 @@ export interface PaymentNotifyResult {
  * 订单状态查询结果
  * @example
  * ```ts
- * import { payment, type OrderStatus } from '@h-ai/payment'
+ * import { type OrderStatus, payment } from '@h-ai/payment'
  * const result = await payment.queryOrder('stripe', 'ORDER_1')
  * if (!result.success) throw new Error(result.error.message)
  * const status: OrderStatus = result.data
@@ -238,7 +238,7 @@ export interface RefundInput {
  * 退款结果
  * @example
  * ```ts
- * import { payment, type RefundResult } from '@h-ai/payment'
+ * import { type RefundResult, payment } from '@h-ai/payment'
  * const result = await payment.refund('stripe', { orderNo: 'ORDER_1', refundNo: 'REFUND_1', amount: 50 })
  * if (!result.success) throw new Error(result.error.message)
  * const refund: RefundResult = result.data
@@ -263,7 +263,7 @@ export interface RefundResult {
  * 由 payment 模块统一调度。
  * @example
  * ```ts
- * import { payment, type PaymentProvider } from '@h-ai/payment'
+ * import { type PaymentProvider, payment } from '@h-ai/payment'
  * function registerPartner(provider: PaymentProvider) {
  *   // 实现方负责完整的创建、验签解析、查单、退款和关单契约，并返回 HaiResult。
  *   payment.registerProvider(provider)
@@ -297,7 +297,7 @@ export interface PaymentProvider {
  * 支付模块函数接口
  * @example
  * ```ts
- * import { payment, type PaymentFunctions } from '@h-ai/payment'
+ * import { type PaymentFunctions, payment } from '@h-ai/payment'
  * const service: PaymentFunctions = payment
  * if (!service.isInitialized) throw new Error('Payment is not initialized')
  * const result = await service.queryOrder('stripe', 'ORDER_1')

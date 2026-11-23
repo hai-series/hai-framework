@@ -64,7 +64,7 @@ operationLog:
 
 ```typescript
 import { core } from '@h-ai/core'
-import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+import { VecdbConfigSchema, vecdb } from '@h-ai/vecdb'
 
 // 用 VecdbConfigSchema 校验已装入的向量库配置。成功 data 是已校验设置，失败读取 error。
 const config = core.config.validate('vecdb', VecdbConfigSchema)

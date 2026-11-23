@@ -14,8 +14,8 @@ import type { ServContext } from '../serv-context.js'
 import type { ServMessageKey } from '../serv-i18n.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract, StorageDeleteSummarySchema } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
-import { getStorageKeyIssue, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema } from '@h-ai/storage/schemas'
+import { core, HaiCommonError } from '@h-ai/core'
+import { storage, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema } from '@h-ai/storage/schemas'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 import { validateInputOrFail } from '../serv-validation.js'
@@ -30,7 +30,7 @@ function buildStorageKeyValidationFailure(
   params?: Record<string, string | number>,
 ): HaiResult<never> {
   const message = servM(messageKey, { locale, params })
-  return err(
+  return core.err(
     HaiCommonError.VALIDATION_ERROR,
     servM('serv_validationFailed', { locale }),
     [
@@ -45,7 +45,7 @@ function buildStorageKeyValidationFailure(
  * 与公开 Schema 共用规则，保留业务入口防线；后续仍必须执行授权和 Provider 防逃逸。
  */
 function validateStorageKeyOrFail(key: string, locale: string, field: string = 'key'): HaiResult<string> {
-  const issue = getStorageKeyIssue(key)
+  const issue = storage.getKeyIssue(key)
   if (issue === 'empty')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyRequired')
   if (issue === 'tooLong') {
@@ -57,7 +57,7 @@ function validateStorageKeyOrFail(key: string, locale: string, field: string = '
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyIllegalChars')
   if (issue === 'segments')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyDotSegments')
-  return ok(key)
+  return core.ok(key)
 }
 
 function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<string[]> {
@@ -69,7 +69,7 @@ function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<st
     if (!keyResult.success)
       return keyResult
   }
-  return ok(keys)
+  return core.ok(keys)
 }
 
 /**
@@ -78,10 +78,10 @@ function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<st
  * @example
  * ```ts
  * import { storage } from '@h-ai/storage'
- * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
- * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ * const procedures = serv.createStorageProcedures({ storage, authorize: ({ context, keys }) => {
  *   const root = `users/${encodeURIComponent(context.session.userId)}/`
  *   return keys.length > 0 && keys.every(key => key.startsWith(root))
  * } })
@@ -103,10 +103,10 @@ export interface StorageAccessRequest {
  * @example
  * ```ts
  * import { storage } from '@h-ai/storage'
- * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
- * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ * const procedures = serv.createStorageProcedures({ storage, authorize: ({ context, keys }) => {
  *   const root = `users/${encodeURIComponent(context.session.userId)}/`
  *   return keys.length > 0 && keys.every(key => key.startsWith(root))
  * } })
@@ -146,10 +146,10 @@ interface PresignedResponse {
  * @example
  * ```ts
  * import { storage } from '@h-ai/storage'
- * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
- * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ * const procedures = serv.createStorageProcedures({ storage, authorize: ({ context, keys }) => {
  *   const root = `users/${encodeURIComponent(context.session.userId)}/`
  *   return keys.length > 0 && keys.every(key => key.startsWith(root))
  * } })
@@ -161,8 +161,8 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
 
   async function authorize(request: StorageAccessRequest): Promise<HaiResult<void>> {
     if (typeof deps.authorize !== 'function' || await deps.authorize(request) !== true)
-      return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: request.context.locale }))
-    return ok(undefined)
+      return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: request.context.locale }))
+    return core.ok(undefined)
   }
 
   return implement(storageContract)
@@ -276,7 +276,7 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       if (result.success)
         return result
       const progress = StorageDeleteSummarySchema.safeParse(result.error.ext?.deleteMany)
-      return err({
+      return core.err({
         ...result.error,
         publicExt: progress.success
           ? { deleteMany: progress.data }

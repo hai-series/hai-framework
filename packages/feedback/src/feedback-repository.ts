@@ -1,7 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations, DmlWithTxOperations, ReldbTableDef } from '@h-ai/reldb'
 import { FeedbackReportSchema } from '@h-ai/api-contract/feedback'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { feedbackM } from './feedback-i18n.js'
 import { HaiFeedbackError } from './feedback-types.js'
@@ -382,11 +382,11 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
           if (!found.success)
             return found
           if (!found.data.length)
-            return ok(false)
+            return core.ok(false)
           const matches = found.data.length === index.columns.length && found.data.every((column, position) => column.column_name === index.columns[position] && Number(column.non_unique) === 1)
           return matches
-            ? ok(true)
-            : err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+            ? core.ok(true)
+            : core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
         }
         if (reldb.config?.type === 'mysql') {
           const existing = await inspect()
@@ -406,7 +406,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
           return result
         }
       }
-      return ok(undefined)
+      return core.ok(undefined)
     })
   }
 
@@ -418,7 +418,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
     const condition = `${feedbackTextEquals('id', id, params)} AND ${feedbackTextEquals('scope_id', scope, params)}`
     const result = await sql.get<FeedbackReportRow>(`SELECT * FROM ${REPORTS} WHERE ${condition}${lock}`, params)
     return result.success && result.data && (result.data.id !== id || result.data.scope_id !== scope)
-      ? ok(null)
+      ? core.ok(null)
       : result
   }
 
@@ -450,7 +450,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
     }
     catch {
       await begun.data.rollback()
-      return err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+      return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
     }
   }
 }

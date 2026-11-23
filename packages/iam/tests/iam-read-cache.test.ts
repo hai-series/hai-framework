@@ -1,7 +1,7 @@
 import type { IamFunctions } from '../src/index.js'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
@@ -149,7 +149,7 @@ function tests(getIam: () => IamFunctions) {
     await iam.authz.getUserAuthorization(user.data.user.id)
     const swap = cache.kv.compareAndSwap
     const fault = vi.spyOn(cache.kv, 'compareAndSwap').mockImplementation((key, previous, next, options) => key === 'hai:iam:read_cache:revision' && next && typeof next === 'object' && 'writers' in next && next.writers === 0
-      ? Promise.resolve(err(HaiIamError.REPOSITORY_ERROR, 'Injected invalidation failure'))
+      ? Promise.resolve(core.err(HaiIamError.REPOSITORY_ERROR, 'Injected invalidation failure'))
       : swap(key, previous, next, options))
     try {
       expect((await iam.authz.updateRole(role.data.id, { code: `${name}-updated` })).success).toBe(true)

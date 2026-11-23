@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createFeedbackClient } from '../src/client/index.js'
+import { feedback } from '../src/client/index.js'
 
 const recorder = vi.hoisted(() => vi.fn((_options: { emit: (event: unknown) => void }) => vi.fn()))
 vi.mock('@rrweb/record', () => ({ record: recorder }))
-const clients: ReturnType<typeof createFeedbackClient>[] = []
+const clients: ReturnType<typeof feedback.createClient>[] = []
 const actions = {
-  submit: async () => err(HaiCommonError.INTERNAL_ERROR),
-  upload: async () => ok(undefined),
-  appendEvidence: async () => ok({ acknowledged: [], evidenceRevision: 1 }),
-  completeCollection: async () => err(HaiCommonError.INTERNAL_ERROR),
+  submit: async () => core.err(HaiCommonError.INTERNAL_ERROR),
+  upload: async () => core.ok(undefined),
+  appendEvidence: async () => core.ok({ acknowledged: [], evidenceRevision: 1 }),
+  completeCollection: async () => core.err(HaiCommonError.INTERNAL_ERROR),
 }
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto)
@@ -23,7 +23,7 @@ afterEach(async () => {
 })
 
 it('回放默认在用户准备反馈时启动，普通业务操作不安装DOM记录器', async () => {
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
   expect((await client.init({
     appId: 'lightweight',
@@ -42,7 +42,7 @@ it('回放默认在用户准备反馈时启动，普通业务操作不安装DOM�
 })
 
 it('未显式启用关键截图时，普通错误不会启动DOM截图', async () => {
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
   const captureScreenshot = vi.fn(async () => new Uint8Array([1]))
   expect((await client.init({
@@ -60,7 +60,7 @@ it('未显式启用关键截图时，普通错误不会启动DOM截图', async (
 })
 
 it('错误后采窗口已结束时，按需准备仍保留当前页面的初始回放快照', async () => {
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
   const now = Date.now()
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -95,7 +95,7 @@ it('错误后采窗口已结束时，按需准备仍保留当前页面的初始�
 })
 
 it('截图超时发送取消信号，但实际任务退出之前不启动重叠截图', async () => {
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
   const completions: Array<(value: Uint8Array) => void> = []
   const signals: Array<AbortSignal | undefined> = []

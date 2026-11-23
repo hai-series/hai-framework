@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { runner } from '@h-ai/runner'
 import { storage } from '@h-ai/storage'
@@ -45,7 +45,7 @@ afterEach(async () => {
 
 /** 隔离 Runner 已有的查询契约，验证真实宿主投影与成果归属存储。 */
 async function inspect(output: RunnerJson) {
-  vi.spyOn(toolHost.service(), 'inspect').mockResolvedValueOnce(ok({
+  vi.spyOn(toolHost.service(), 'inspect').mockResolvedValueOnce(core.ok({
     receipt,
     status: 'succeeded',
     output,

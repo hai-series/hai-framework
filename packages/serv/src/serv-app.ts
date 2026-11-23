@@ -70,8 +70,8 @@ const API_METHODS = [
  *
  * @example
  * ```ts
- * import type { ServMiddlewareMount } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServMiddlewareMount, serv } from '@h-ai/serv'
  *
  * const mount: ServMiddlewareMount = { path: '/api/v1/*', middleware: serv.cors({ origin: 'https://app.example.com' }) }
  * // 内置 CORS 在外层补充响应头；预检仍执行访问策略。
@@ -91,8 +91,8 @@ export interface ServMiddlewareMount {
  *
  * @example
  * ```ts
- * import type { ServHttpApp } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServHttpApp, serv } from '@h-ai/serv'
  *
  * async function health(app: ServHttpApp): Promise<boolean> {
  *   const response = await app.request('/health')
@@ -124,8 +124,8 @@ export interface ServHttpApp {
  *
  * @example
  * ```ts
- * import type { CreateServAppOptions } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type CreateServAppOptions, serv } from '@h-ai/serv'
  *
  * function mount<TContract extends Parameters<typeof serv.createApp>[0]['contract'], TProcedures extends Parameters<typeof serv.createApp>[0]['procedures']>(options: CreateServAppOptions<TContract, TProcedures>) {
  *   return serv.createApp(options)
@@ -195,8 +195,8 @@ export interface CreateServAppOptions<
  *
  * @example
  * ```ts
- * import type { ServAudioConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServAudioConfig, serv } from '@h-ai/serv'
  *
  * import { ai } from '@h-ai/ai'
  *
@@ -250,8 +250,8 @@ export interface ServAudioConfig {
  *
  * @example
  * ```ts
- * import type { AudioTicketGrant } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type AudioTicketGrant, serv } from '@h-ai/serv'
  *
  * const grant: AudioTicketGrant = { operation: 'synthesize', model: 'speech-model', sessionId: 'session-1' }
  * // 签发时绑定；start 帧不能覆盖服务端核准的模型与操作。
@@ -273,8 +273,8 @@ export interface AudioTicketGrant {
  *
  * @example
  * ```ts
- * import type { AudioTicketVerification } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type AudioTicketVerification, serv } from '@h-ai/serv'
  *
  * function verified(session: AudioTicketVerification['session']): AudioTicketVerification {
  *   return { session, grant: { operation: 'transcribe' } }
@@ -294,8 +294,8 @@ export interface AudioTicketVerification {
  *
  * @example
  * ```ts
- * import type { AuthorizedAudioRequest } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type AuthorizedAudioRequest, serv } from '@h-ai/serv'
  *
  * const request: AuthorizedAudioRequest = { operation: 'synthesize', format: 'mp3' }
  * // model/voice/instruction 只有经应用 authorize 确认后才生效。
@@ -337,9 +337,9 @@ export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { serv } from '@h-ai/serv'
+ * import { type ServContext, serv } from '@h-ai/serv'
  *
  * const contract = apiContract.create({})
  * const procedures = serv.implement(contract).context<ServContext>().build()

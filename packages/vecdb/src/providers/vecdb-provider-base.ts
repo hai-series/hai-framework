@@ -10,6 +10,7 @@
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 import type { DistanceMetric, VecdbConfig, VecdbOperationLogConfig } from '../vecdb-config.js'
+
 import type {
   CollectionCreateOptions,
   CollectionInfo,
@@ -20,8 +21,7 @@ import type {
   VectorSearchOptions,
   VectorSearchResult,
 } from '../vecdb-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
@@ -242,7 +242,7 @@ async function wrapOp<T>(
   errorLabel: string,
 ): Promise<HaiResult<T>> {
   if (!ctx.isConnected()) {
-    return err(HaiVecdbError.NOT_INITIALIZED, vecdbM('vecdb_notInitialized'))
+    return core.err(HaiVecdbError.NOT_INITIALIZED, vecdbM('vecdb_notInitialized'))
   }
   try {
     return await fn()
@@ -254,7 +254,7 @@ async function wrapOp<T>(
         ? error.name
         : undefined,
     })
-    return err(errorDef, errorMsgFromCode(errorDef, String(error)), error)
+    return core.err(errorDef, errorMsgFromCode(errorDef, String(error)), error)
   }
 }
 
@@ -279,7 +279,7 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
     create: async (name, options) => {
       // 参数校验：dimension 必须为正整数（防止 pgvector SQL 插值注入）
       if (!Number.isInteger(options.dimension) || options.dimension <= 0) {
-        return err(
+        return core.err(
           HaiVecdbError.DIMENSION_MISMATCH,
           vecdbM('vecdb_invalidDimension', {
             params: {
@@ -357,7 +357,7 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       return wrapOp(
         ctx,
         () => documents.length === 0
-          ? Promise.resolve(ok(undefined))
+          ? Promise.resolve(core.ok(undefined))
           : driver.insert(collection, documents),
         HaiVecdbError.INSERT_FAILED,
         'Failed to insert vectors',
@@ -368,7 +368,7 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       return wrapOp(
         ctx,
         () => documents.length === 0
-          ? Promise.resolve(ok(undefined))
+          ? Promise.resolve(core.ok(undefined))
           : driver.upsert(collection, documents),
         HaiVecdbError.UPDATE_FAILED,
         'Failed to upsert vectors',
@@ -379,7 +379,7 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       return wrapOp(
         ctx,
         () => ids.length === 0
-          ? Promise.resolve(ok(undefined))
+          ? Promise.resolve(core.ok(undefined))
           : driver.delete(collection, ids),
         HaiVecdbError.DELETE_FAILED,
         'Failed to delete vectors',
@@ -413,9 +413,9 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       logVecdbOperation(ctx, 'read', 'vector.scan', { limit, hasCursor: cursor !== undefined })
       return wrapOp(ctx, async () => {
         if (!Number.isInteger(limit) || limit < 1 || limit > 128)
-          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanLimit'))
+          return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanLimit'))
         if (cursor !== undefined && typeof cursor !== 'string')
-          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+          return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
         return driver.scan(collection, limit, cursor)
       }, HaiVecdbError.QUERY_FAILED, 'Failed to scan vector IDs')
     },

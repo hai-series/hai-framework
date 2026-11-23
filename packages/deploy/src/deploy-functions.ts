@@ -17,8 +17,8 @@ import { deployM } from './deploy-i18n.js'
  * @returns 可用于 OCI 镜像和 Compose 资源的工程名。
  * @example
  * ```ts
- * import { normalizeProjectName } from '@h-ai/deploy'
- * const name = normalizeProjectName('@shop/orders')
+ * import { deploy } from '@h-ai/deploy'
+ * const name = deploy.normalizeProjectName('@shop/orders')
  * ```
  */
 export function normalizeProjectName(name: string): string {

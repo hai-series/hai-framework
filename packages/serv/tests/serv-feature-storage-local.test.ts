@@ -8,7 +8,6 @@ import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { HaiStorageError, storage } from '@h-ai/storage'
 import { expect, it } from 'vitest'
-import { createStorageProcedures } from '../src/features/serv-feature-storage.js'
 import { serv } from '../src/serv-main.js'
 
 /** 只删除本测试创建的直接临时目录；必须先关闭所有文件与 HTTP 句柄。 */
@@ -31,7 +30,7 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
     const app = serv.createApp({
       contract,
       procedures: {
-        storage: createStorageProcedures({
+        storage: serv.createStorageProcedures({
           storage,
           authorize: ({ keys }) => keys.every(key => key.startsWith('users/user-1/')),
         }),

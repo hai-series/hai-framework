@@ -1,7 +1,8 @@
 /** Web 下载、Tauri 保存对话框、Capacitor 原生分享的统一入口。原生插件按平台懒加载。 */
 import type { FeedbackAttachmentData } from '@h-ai/api-contract/feedback'
+
 import type { HaiResult } from '@h-ai/core'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
 
@@ -31,8 +32,8 @@ let nativeSaver: FeedbackFileSaver | undefined
  * 原生入口一次性配置；生成工程自动调用。传 undefined 可解除自定义平台适配。
  * @example
  * ```ts
- * import { configureFeedbackSaving } from '@h-ai/feedback/client'
- * configureFeedbackSaving(undefined)
+ * import { feedback } from '@h-ai/feedback/client'
+ * feedback.configureSaving(undefined)
  * ```
  */
 export function configureFeedbackSaving(saver: FeedbackFileSaver | undefined): void {
@@ -43,8 +44,8 @@ export function configureFeedbackSaving(saver: FeedbackFileSaver | undefined): v
  * 解码受权附件或导出结果，网络与权限仍由 typed API 负责。
  * @example
  * ```ts
- * import { feedbackDataBytes } from '@h-ai/feedback/client'
- * const bytes = feedbackDataBytes({ name: 'data.txt', contentType: 'text/plain', dataBase64: 'YQ==' })
+ * import { feedback } from '@h-ai/feedback/client'
+ * const bytes = feedback.dataBytes({ name: 'data.txt', contentType: 'text/plain', dataBase64: 'YQ==' })
  * ```
  */
 export function feedbackDataBytes(data: FeedbackAttachmentData): Uint8Array {
@@ -55,8 +56,8 @@ export function feedbackDataBytes(data: FeedbackAttachmentData): Uint8Array {
  * 保存反馈文件。Tauri 只写用户选择的路径；Capacitor 只写临时缓存，分享结束后删除。
  * @example
  * ```ts
- * import { saveFeedbackFile } from '@h-ai/feedback/client'
- * const result = await saveFeedbackFile(new Uint8Array([1]), 'feedback.zip')
+ * import { feedback } from '@h-ai/feedback/client'
+ * const result = await feedback.saveFile(new Uint8Array([1]), 'feedback.zip')
  * ```
  */
 export async function saveFeedbackFile(bytes: Uint8Array, filename: string, contentType = 'application/zip', signal?: AbortSignal): Promise<HaiResult<FeedbackSaveResult>> {
@@ -65,7 +66,7 @@ export async function saveFeedbackFile(bytes: Uint8Array, filename: string, cont
     : character).join('').slice(0, 200) || 'feedback.zip'
   try {
     if (signal?.aborted)
-      return ok({ status: 'cancelled' })
+      return core.ok({ status: 'cancelled' })
     if (typeof window === 'undefined')
       throw new Error('Browser required')
     const capacitor: unknown = Reflect.get(window, 'Capacitor')
@@ -73,7 +74,7 @@ export async function saveFeedbackFile(bytes: Uint8Array, filename: string, cont
     if (isNative) {
       if (!nativeSaver)
         throw new Error('Feedback platform saving adapter is not configured')
-      return ok(await nativeSaver(bytes, name, contentType, signal))
+      return core.ok(await nativeSaver(bytes, name, contentType, signal))
     }
     const url = URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer], { type: contentType }))
     const link = document.createElement('a')
@@ -87,7 +88,7 @@ export async function saveFeedbackFile(bytes: Uint8Array, filename: string, cont
       link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 60000)
     }
-    return ok({ status: 'saved' })
+    return core.ok({ status: 'saved' })
   }
   catch (cause) {
     const error = core.error.toPublic({
@@ -95,6 +96,6 @@ export async function saveFeedbackFile(bytes: Uint8Array, filename: string, cont
       message: feedbackM('feedback_operationFailed'),
     })
     core.logger.error('Feedback file save failed', { traceId: error.traceId, error: cause })
-    return err(error)
+    return core.err(error)
   }
 }

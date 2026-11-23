@@ -1,6 +1,6 @@
 import { TransportTimeError } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createKitAuthActions } from '../src/client/kit-client-auth.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -9,7 +9,7 @@ describe('standard Cookie login actions', () => {
     const serverTime = Date.UTC(2026, 10, 6, 7, 30)
     const error = new TransportTimeError(undefined, serverTime)
     const apiFetch = vi.fn().mockRejectedValueOnce(error).mockRejectedValueOnce(new TypeError('Network failed'))
-    const actions = createKitAuthActions({ apiFetch })
+    const actions = kit.client.createAuthActions({ apiFetch })
     const input = { identifier: 'alice', password: 'ExamplePassword123' }
     expect(await actions.login(input)).toMatchObject({
       success: false,
@@ -46,7 +46,7 @@ describe('standard Cookie login actions', () => {
     },
   ] as const)('$method 仅发送该认证方式的有效字段', async ({ method, path, body }) => {
     const requests: Request[] = []
-    const actions = createKitAuthActions({
+    const actions = kit.client.createAuthActions({
       apiFetch: async (input, init) => {
         requests.push(new Request(new URL(String(input), 'https://app.test'), init))
         return Response.json({ success: true })
@@ -78,7 +78,7 @@ it.each([false, true])('cookie 页面离开开关=%s；保留既有fetch管线�
   const target = new EventTarget()
   vi.stubGlobal('window', target)
   const requests: { url: string, init?: RequestInit }[] = []
-  const actions = createKitAuthActions({
+  const actions = kit.client.createAuthActions({
     apiFetch: async (url, init) => {
       requests.push({
         url: String(url),

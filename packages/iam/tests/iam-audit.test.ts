@@ -1,6 +1,6 @@
 /** IAM 直接调用也记录关键成功、失败及拒绝，不记录凭据或敏感业务字段。 */
 import { audit } from '@h-ai/audit'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
@@ -161,7 +161,7 @@ function tests() {
     const observations: unknown[] = []
     const stop = core.logger.observe(record => observations.push(record))
     vi.spyOn(reldb.sql, 'execute').mockImplementation((sql, params) => sql.startsWith('INSERT INTO hai_audit_logs')
-      ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'Injected audit write failure'))
+      ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'Injected audit write failure'))
       : execute(sql, params))
     try {
       expect((await iam.user.updateUser(created.data.user.id, { displayName: 'Updated name' })).success).toBe(true)
@@ -175,7 +175,7 @@ function tests() {
         throw new Error(opened.error.message)
       const transactionExecute = opened.data.execute.bind(opened.data)
       vi.spyOn(opened.data, 'execute').mockImplementation((sql, params) => sql.startsWith('INSERT INTO hai_audit_logs')
-        ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'Injected transactional audit write failure'))
+        ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'Injected transactional audit write failure'))
         : transactionExecute(sql, params))
       const code = `audit-failure-role-${crypto.randomUUID()}`
       try {

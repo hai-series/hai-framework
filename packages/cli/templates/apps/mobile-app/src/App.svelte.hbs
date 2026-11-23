@@ -6,12 +6,7 @@
 {{#if features.iam}}
   import { apiClient } from '@h-ai/api-client'
 {{/if}}
-  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
-{{#if features.iam}}
-  import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
-{{/if}}
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { {{#if features.iam}}AuthPanel, {{/if}}LanguageSwitch, ui } from '@h-ai/ui'
   import { onMount } from 'svelte'
 
   import { closeApi, initApi, usesNativeTokenStorage } from './lib/api.js'
@@ -70,15 +65,15 @@
     try {
       initClientCore()
       document.title = appConfig.name
-      applyTheme(getSavedTheme(), false)
-      setGlobalLocale(getLocale())
+      ui.applyTheme(ui.getSavedTheme(), false)
+      ui.setGlobalLocale(getLocale())
       document.documentElement.lang = getLocale()
       await initCapacitor()
       await initApi()
 {{#if features.iam}}
       const config = await authActions.publicConfig()
       if (!config.success) {
-        bootError = authErrorMessage(config.error)
+        bootError = ui.authErrorMessage(config.error)
         return
       }
       authConfig = config.data
@@ -91,7 +86,7 @@
       nativeTokenStorage = await usesNativeTokenStorage()
     }
     catch (error) {
-      bootError = errorMessage(error, m.boot_failed_title())
+      bootError = ui.errorMessage(error, m.boot_failed_title())
     }
     finally {
       booting = false
@@ -99,7 +94,7 @@
   }
 
   function handleLanguageChange(language: string): void {
-    setGlobalLocale(language)
+    ui.setGlobalLocale(language)
     setLocale(language as Parameters<typeof setLocale>[0])
   }
 
@@ -120,7 +115,7 @@
       void closeApi()
     }
   })
-  useToastFeedback(() => bootError)
+  ui.useToastFeedback(() => bootError)
 </script>
 
 <div class='hai-mobile-viewport'>

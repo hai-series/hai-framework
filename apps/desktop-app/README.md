@@ -91,7 +91,7 @@ apps/desktop-app/
 ├── src-tauri/                 # Tauri Rust 端（v2）
 ├── tests/                     # vitest（jsdom）
 ├── vite.config.ts             # vite + tailwind + svelte
-├── svelte.config.js           # vitePreprocess → autoImportHaiUi
+├── svelte.config.js           # vitePreprocess → ui.autoImport
 └── package.json
 ```
 
@@ -107,7 +107,7 @@ apps/desktop-app/
 - **权限感知导航**：`/users` 仅在当前会话拥有 `user:list` 权限时显示；普通注册用户会自动保留在 `/dashboard`。
 - **路由 = hash**：file:// 协议不支持 history API，全部走 `#/path`。
 - **CSP**：`tauri.conf.json` 的 `app.security.csp` 已放行 `connect-src http://localhost:3000`。生产部署需根据实际域名调整。
-- **`@h-ai/ui` 完全解耦**：`@h-ai/ui` 不再包含任何 SvelteKit 依赖；SvelteKit 适配器迁至 `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()`（本应用未使用）。
+- **`@h-ai/ui` 完全解耦**：`@h-ai/ui` 不再包含任何 SvelteKit 依赖；SvelteKit 适配器迁至 `@h-ai/kit/client` 的 `kit.client.createSvelteKitNavAdapter()`（本应用未使用）。
 
 ### API 调用与加密配置
 
@@ -132,7 +132,7 @@ transport:
 
 #### 认证页面
 
-登录、注册及公开认证配置失败统一使用 `@h-ai/ui/i18n` 的 `authErrorMessage`；未知服务端或网络异常不显示原文，保留有效追踪编号。AuthPanel 的首次改密、密码复用和凭据错误提示与 fullstack 模板保持一致。
+登录、注册及公开认证配置失败统一使用 `@h-ai/ui/i18n` 的 `ui.authErrorMessage`；未知服务端或网络异常不显示原文，保留有效追踪编号。AuthPanel 的首次改密、密码复用和凭据错误提示与 fullstack 模板保持一致。
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

@@ -54,7 +54,7 @@ export interface IssueTicketOptions {
  * 签发结果
  * @example
  * ```ts
- * import { iam, type IssuedTicket } from '@h-ai/iam'
+ * import { type IssuedTicket, iam } from '@h-ai/iam'
  * const issued = await iam.ticket.issue({ subjectId: 'user-1', purpose: 'ai-audio' })
  * if (issued.success) {
  *   const value: IssuedTicket = issued.data
@@ -86,7 +86,7 @@ export interface ConsumeTicketOptions {
  * 消费结果（校验通过并原子消费后返回）
  * @example
  * ```ts
- * import { iam, type ConsumedTicket } from '@h-ai/iam'
+ * import { type ConsumedTicket, iam } from '@h-ai/iam'
  * const consumed = await iam.ticket.consume('ticket-from-upgrade-request', { purpose: 'ai-audio' })
  * if (consumed.success) {
  *   const authorization: ConsumedTicket = consumed.data
@@ -109,7 +109,7 @@ export interface ConsumedTicket {
  * 提供密码学安全、带 TTL、原子单次消费的能力票据签发与消费。
  * @example
  * ```ts
- * import { iam, type TicketOperations } from '@h-ai/iam'
+ * import { type TicketOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
  * const operations: TicketOperations = iam.ticket
  * const result = await operations.issue({ subjectId: 'user-1', purpose: 'ai-audio', ttlMs: 30000 })

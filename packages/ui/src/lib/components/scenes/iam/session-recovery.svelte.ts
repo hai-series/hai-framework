@@ -6,8 +6,8 @@ import { untrack } from 'svelte'
  * 页面级会话恢复控制器；同一时刻多个请求共享一次确认。
  * @example
  * ```ts
- * import { createSessionRecovery, type SessionRecovery } from '@h-ai/ui'
- * const recovery: SessionRecovery = createSessionRecovery()
+ * import { type SessionRecovery, ui } from '@h-ai/ui'
+ * const recovery: SessionRecovery = ui.createSessionRecovery()
  * recovery.configure(null)
  * const restored = await recovery.recover()
  * ```
@@ -32,8 +32,8 @@ export interface SessionRecovery {
  * @returns 只保留公开配置、原主体及单个等待Promise的控制器。
  * @example
  * ```ts
- * import { createSessionRecovery } from '@h-ai/ui'
- * const recovery = createSessionRecovery()
+ * import { ui } from '@h-ai/ui'
+ * const recovery = ui.createSessionRecovery()
  * // 布局以 configure(publicConfig, currentUser) 装配；销毁时 cancel()。
  * recovery.cancel()
  * ```

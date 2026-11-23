@@ -2,9 +2,9 @@
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EncryptedInput } from '../src/lib/components/scenes/crypto/index.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 
-afterEach(() => toast.clear())
+afterEach(() => ui.toast.clear())
 
 describe('encryptedInput', () => {
   it('乱序、清空和卸载后不接受旧结果，失败可见', async () => {
@@ -43,7 +43,7 @@ describe('encryptedInput', () => {
       expect(target.querySelector('code')).toBeNull()
       await input('reject')
       pending[3]!.reject(new Error('failure'))
-      await vi.waitFor(() => expect(toast.items.at(-1)?.variant).toBe('error'))
+      await vi.waitFor(() => expect(ui.toast.items.at(-1)?.variant).toBe('error'))
       expect(target.querySelector('[role="alert"]')).toBeNull()
       expect(target.querySelector('code')).toBeNull()
       await input('unmount')
@@ -73,7 +73,7 @@ describe('encryptedInput', () => {
       input.value = '中文 🔐'
       input.dispatchEvent(new Event('input', { bubbles: true }))
       flushSync()
-      expect(toast.items.at(-1)?.variant).toBe('warning')
+      expect(ui.toast.items.at(-1)?.variant).toBe('warning')
       expect(target.querySelector('code')).toBeNull()
     }
     finally {

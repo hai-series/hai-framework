@@ -1,7 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { cache } from '@h-ai/cache'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { z } from 'zod'
@@ -273,8 +273,8 @@ export async function createPartnerAdminSession(username: string): Promise<HaiRe
   })
 
   if (!saved.success || !saved.data)
-    return err(HaiCommonError.INTERNAL_ERROR, m.admin_login_failed())
-  return ok(token)
+    return core.err(HaiCommonError.INTERNAL_ERROR, m.admin_login_failed())
+  return core.ok(token)
 }
 
 export async function getPartnerAdminSessionByToken(token: string) {

@@ -9,13 +9,12 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { CompressConfig } from '../ai-config.js'
-
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { SummaryOperations } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
-import type { CompressOperations, CompressOptions, CompressResult } from './ai-compress-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { CompressOperations, CompressOptions, CompressResult } from './ai-compress-types.js'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -40,7 +39,7 @@ type MessageProtocolUnit = ChatMessage[]
 /** 确保压缩操作只在结果确实满足调用方预算时返回成功。 */
 function completeCompression(result: CompressResult, maxTokens: number): HaiResult<CompressResult> {
   if (result.compressedTokens > maxTokens) {
-    return err(
+    return core.err(
       HaiAIError.CONTEXT_BUDGET_EXCEEDED,
       aiM('ai_contextBudgetExceeded', {
         params: {
@@ -51,7 +50,7 @@ function completeCompression(result: CompressResult, maxTokens: number): HaiResu
     )
   }
 
-  return ok(result)
+  return core.ok(result)
 }
 
 /** 识别框架生成的可替换摘要，避免后续压缩把它当成永久 system 指令累积。 */
@@ -304,7 +303,7 @@ export function createCompressOperations(
 
       // 不需要压缩
       if (originalTokens <= maxTokens) {
-        return ok({
+        return core.ok({
           messages: [...messages],
           originalTokens,
           compressedTokens: originalTokens,
@@ -435,7 +434,7 @@ export function createCompressOperations(
     }
     catch (error) {
       logger.error('Context compression failed', { error })
-      return err(HaiAIError.CONTEXT_COMPRESS_FAILED, aiM('ai_contextCompressFailed', {
+      return core.err(HaiAIError.CONTEXT_COMPRESS_FAILED, aiM('ai_contextCompressFailed', {
         params: {
           error: String(error),
         },

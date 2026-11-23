@@ -5,7 +5,7 @@
  */
 
 import type { PaymentProvider } from '../src/payment-types'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearProviders,
@@ -41,13 +41,13 @@ vi.mock('@h-ai/audit', () => ({
 function createMockProvider(name: string): PaymentProvider {
   return {
     name,
-    createOrder: async input => ok({
+    createOrder: async input => core.ok({
       provider: name,
       tradeType: input.tradeType,
       clientParams: { mockKey: 'mockValue' },
       prepayId: 'mock-prepay-id',
     }),
-    handleNotify: async () => ok({
+    handleNotify: async () => core.ok({
       orderNo: 'ORD001',
       transactionId: 'TXN001',
       eventId: 'evt_mock_001',
@@ -55,24 +55,24 @@ function createMockProvider(name: string): PaymentProvider {
       amount: 100,
       status: 'paid' as const,
     }),
-    queryOrder: async orderNo => ok({
+    queryOrder: async orderNo => core.ok({
       orderNo,
       status: 'paid' as const,
       amount: 100,
     }),
-    refund: async input => ok({
+    refund: async input => core.ok({
       refundNo: input.refundNo,
       refundId: 'REF001',
       status: 'success' as const,
     }),
-    closeOrder: async () => ok(undefined),
+    closeOrder: async () => core.ok(undefined),
   }
 }
 
 describe('payment-functions', () => {
   it('记录支付渠道失败的错误码并原样返回业务错误', async () => {
     const provider = createMockProvider('mock')
-    const failure = err(HaiPaymentError.QUERY_ORDER_FAILED, 'private provider detail', new Error('private gateway body'))
+    const failure = core.err(HaiPaymentError.QUERY_ORDER_FAILED, 'private provider detail', new Error('private gateway body'))
     provider.queryOrder = async () => failure
     registerProvider(provider)
     const observations: unknown[] = []
@@ -307,14 +307,14 @@ describe('payment-functions — Provider 返回错误的透传', () => {
   it('provider createOrder 返回 err 时原样透传', async () => {
     const failingProvider: PaymentProvider = {
       name: 'fail',
-      createOrder: async () => err(
+      createOrder: async () => core.err(
         HaiPaymentError.INVALID_AMOUNT,
         '金额无效',
       ),
-      handleNotify: async () => err(HaiPaymentError.NOTIFY_PARSE_FAILED, ''),
-      queryOrder: async () => err(HaiPaymentError.QUERY_ORDER_FAILED, ''),
-      refund: async () => err(HaiPaymentError.REFUND_FAILED, ''),
-      closeOrder: async () => err(HaiPaymentError.CLOSE_ORDER_FAILED, ''),
+      handleNotify: async () => core.err(HaiPaymentError.NOTIFY_PARSE_FAILED, ''),
+      queryOrder: async () => core.err(HaiPaymentError.QUERY_ORDER_FAILED, ''),
+      refund: async () => core.err(HaiPaymentError.REFUND_FAILED, ''),
+      closeOrder: async () => core.err(HaiPaymentError.CLOSE_ORDER_FAILED, ''),
     }
     registerProvider(failingProvider)
 
@@ -472,7 +472,7 @@ describe('payment-functions — 审计日志', () => {
 
   it('审计日志写入失败不影响支付操作结果', async () => {
     registerProvider(createMockProvider('mock'))
-    mockAuditLog.mockResolvedValueOnce(err({ code: 10000, message: 'audit write failed' }) as never)
+    mockAuditLog.mockResolvedValueOnce(core.err({ code: 10000, message: 'audit write failed' }) as never)
 
     const result = await createOrder('mock', {
       orderNo: 'ORD001',

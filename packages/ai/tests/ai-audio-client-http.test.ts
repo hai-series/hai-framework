@@ -2,10 +2,10 @@
 import type { WebSocket as ServerWebSocket } from 'ws'
 import { Buffer } from 'node:buffer'
 import { once } from 'node:events'
+import { ai as audioAi } from '@h-ai/ai/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { HaiAIError } from '../src/ai-types.js'
-import { createAudioClient } from '../src/client/ai-audio-client.js'
 
 describe('standalone AudioClient actual WebSocket', () => {
   let server: WebSocketServer
@@ -64,7 +64,7 @@ describe('standalone AudioClient actual WebSocket', () => {
       socket.send(JSON.stringify({ type: 'end' }))
     }
     const getTicket = vi.fn(async () => 'test-only-ticket + 中文')
-    const client = createAudioClient({ url, getTicket })
+    const client = audioAi.createAudioClient({ url, getTicket })
     const output = await client.synthesize({ text: '中文', model: 'test-voice', format: 'wav' })
     expect(output.format).toBe('mp3')
     expect(Array.from(output.data)).toEqual([1, 2, 3, 4])
@@ -76,7 +76,7 @@ describe('standalone AudioClient actual WebSocket', () => {
     onDone = segment
     const closed = new Promise<void>(resolve => server.once('connection', socket => socket.once('close', () => resolve())))
     const controller = new AbortController()
-    const client = createAudioClient({
+    const client = audioAi.createAudioClient({
       url,
       getTicket: () => 'test-only-ticket',
     })
@@ -104,7 +104,7 @@ describe('standalone AudioClient actual WebSocket', () => {
       socket.send(Buffer.from([1, 2]))
       socket.close()
     }
-    const client = createAudioClient({
+    const client = audioAi.createAudioClient({
       url,
       getTicket: () => 'test-only-ticket',
     })

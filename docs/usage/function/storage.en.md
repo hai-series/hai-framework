@@ -9,12 +9,11 @@
 Initialize Storage and use the file API for object operations. Authorize the object key before issuing a signed URL. Use streaming for large downloads.
 
 ```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
+
 import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
+import { type FileMetadata, type StorageConfigInput, storage } from '@h-ai/storage'
 
 export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
-  // 选择一个后端，检查初始化结果。
   // Use the caller's backend settings. Success opens the connection with no data. Read error on failure.
   const initialized = await storage.init(config)
   if (!initialized.success)
@@ -24,13 +23,11 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   let closed
   try {
     const key = 'uploads/image.png'
-    // 用对象 key 写入 PNG 字节，成功时返回对象元数据。
     // Write the caller's PNG bytes at this key. Success returns metadata. Read error on failure.
     const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
     if (!uploaded.success)
       throw new Error(uploaded.error.message)
 
-    // 用同一 key 读取对象内容，成功时返回 Buffer。
     // Read the PNG at the same key. Success returns a Buffer; a missing object or read failure is an error.
     const downloaded = await storage.file.get(key)
     if (!downloaded.success)
@@ -38,7 +35,6 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
 
     result = { metadata: uploaded.data, bytes: downloaded.data }
     if (config.type === 's3') {
-      // S3 可签发有效期为 3600 秒的下载 URL。
       // Sign a 3,600-second download URL for this S3 key. Success returns the URL string. Read error on failure.
       const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
       if (!signed.success)
@@ -47,7 +43,6 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     }
   }
   finally {
-    // 释放本次连接，失败时交由调用方处理。
     // Release this connection without arguments. Success has no data. The check below handles failure.
     closed = await storage.close()
   }
@@ -258,6 +253,41 @@ To abandon a download, abort its signal or call `return()` on its iterator to re
 With Local storage, `file.head()` and `file.copy()` require the metadata record tied to the file's identity. When moving objects, export their bytes and metadata and write them to the destination with `file.put()`. [Local backup and recovery](../data/storage.en.md)
 
 [Detailed parameters and workflows](storage.md#files)
+
+<a id="key-validation"></a>
+
+### Validate object keys and prefixes: `storage.getKeyIssue`
+
+Import `storage` from `@h-ai/storage/schemas` and call `storage.getKeyIssue()` on the original input. This entry also provides key and prefix schemas, loads no provider, and requires no initialization. The Node root, browser entry and `/client` expose the same method.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `storage.getKeyIssue(key, allowEmpty?)` | Check an object key or listing prefix | Required `key: string` is the original input. `allowEmpty: boolean` defaults to `false`; `true` permits an empty string as a listing prefix, while whitespace-only input remains invalid. | Returns `undefined` when valid, otherwise `empty`, `tooLong`, `characters` or `segments`. Does not throw business errors. | `storage.getKeyIssue('../private.txt')` |
+| `StorageKeySchema.safeParse(key)` | Validate a nonempty object key | Required `key: string`, at most 1024 UTF-8 bytes. Rejects absolute paths, backslashes, control characters and dot path segments. | Zod result: success preserves the original key in `data`; read `error` on failure. | `StorageKeySchema.safeParse('reports/february.pdf')` |
+| `StoragePrefixSchema.safeParse(prefix)` | Validate a listing prefix | Required `prefix: string` follows the same syntax and allows an empty string or a partial filename. | Zod result; the prefix is not normalized. | `StoragePrefixSchema.safeParse('reports/fe')` |
+
+#### Scenario: Check object keys and directory prefixes
+
+These inputs represent an unsafe path, an empty object key, an all-objects listing prefix, and a valid report path.
+
+```ts
+import { StorageKeySchema, StoragePrefixSchema, storage } from '@h-ai/storage/schemas'
+
+// A dot path segment is invalid: returns 'segments'. Reject this object key.
+const invalid = storage.getKeyIssue('../private.txt')
+// An object key must be nonempty: returns 'empty'.
+const empty = storage.getKeyIssue('')
+// true permits an empty listing prefix: returns undefined, without granting list access.
+const prefixIssue = storage.getKeyIssue('', true)
+// Valid report path: success is true and data preserves the original key.
+const key = StorageKeySchema.safeParse('reports/february.pdf')
+// Valid partial prefix: success is true and data is 'reports/fe'.
+const prefix = StoragePrefixSchema.safeParse('reports/fe')
+```
+
+`undefined` means that shared syntax validation passed. The application must still check permissions and directory boundaries; LocalProvider additionally rejects reserved internal names. Schema results are Zod results, rather than `HaiResult`.
 
 <a id="directories"></a>
 

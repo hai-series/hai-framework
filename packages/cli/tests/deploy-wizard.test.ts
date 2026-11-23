@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { core } from '@h-ai/core'
-import { deploy, loadDeploymentEnvironment } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import * as deployModule from '@h-ai/deploy'
 import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -35,7 +35,7 @@ function setDeployment(app: string, content: string): void {
 it('asks once per email and SMS provider and reports saved services without environment variables', async () => {
   const { app, service } = await fullstackFixture()
   const scan = await deploy.scan(service, { environment: 'test', envDir: app })
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(scan.success && environment.success).toBe(true)
   if (!scan.success || !environment.success)
     return
@@ -68,10 +68,10 @@ it('asks once per email and SMS provider and reports saved services without envi
     HAI_REACH_PROVIDERS_0: 'default',
     HAI_REACH_PROVIDERS_1: 'default',
   })
-  const saved = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const saved = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(saved.success).toBe(true)
   if (saved.success) {
-    expect(deployModule.loadDeploymentConfig('reach', join(service, 'config/_reach.yml'), saved.data.values)).toMatchObject({
+    expect(deployModule.deploy.loadDeploymentConfig('reach', join(service, 'config/_reach.yml'), saved.data.values)).toMatchObject({
       success: true,
       data: {
         providers: [
@@ -100,7 +100,7 @@ it('preserves the production Reach guard and diagnoses old indexed overrides', a
     .toBe(readFileSync(new URL('../templates/skills/hai-deploy/middleware.md', import.meta.url), 'utf8'))
 
   const scan = await deploy.scan(service, { environment: 'prod', envDir: app })
-  const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: app })
   if (!scan.success || !environment.success)
     throw new Error('Could not load generated production fixture')
   const middlewares = scan.data.middlewares?.filter(item => item.configName === 'reach')
@@ -135,7 +135,7 @@ it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles 
   writeFileSync(join(service, 'config/_storage.yml'), 'type: s3\n')
   writeFileSync(join(app, '.env.test'), 'HAI_STORAGE=\'{"type":"s3"}\'\n')
   const scan = await deploy.scan(service, { environment: 'test', envDir: app })
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(scan.success && environment.success).toBe(true)
   if (!scan.success || !environment.success)
     return
@@ -323,7 +323,7 @@ it('infers Web selection from a partial artifact before configuring middleware',
         name: 'web',
         file,
         imageRef: 'localhost/test-web:1.2.3',
-        sha256: await deployModule.artifactChecksum(join(artifacts, file)),
+        sha256: await deployModule.deploy.artifactChecksum(join(artifacts, file)),
       },
     ],
   }))
@@ -570,7 +570,7 @@ it.each([
         name: 'serv',
         file: 'serv-1.2.3.tar',
         imageRef: 'localhost/wizard:1.2.3',
-        sha256: await deployModule.artifactChecksum(join(artifacts, 'serv-1.2.3.tar')),
+        sha256: await deployModule.deploy.artifactChecksum(join(artifacts, 'serv-1.2.3.tar')),
       },
     ],
   }))
@@ -611,11 +611,11 @@ it.each([
     skipMiddleware: true,
   })
   expect(mocked.prompt.mock.calls[0]?.[0].type).toBe('confirm')
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(environment.success).toBe(true)
   if (!environment.success)
     return
-  const configuration = deployModule.loadDeploymentConfig('deploy', join(app, 'hai.json'), environment.data.values)
+  const configuration = deployModule.deploy.loadDeploymentConfig('deploy', join(app, 'hai.json'), environment.data.values)
   expect(configuration).toMatchObject({
     success: true,
     data: {
@@ -965,7 +965,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   expect(readFileSync(join(app, '.env.test.local'), 'utf8')).toContain('test-private-client-key')
   expect(mode).toContain('mysql.internal')
   expect(mode).toContain('HAI_CACHE=\'{"type":"memory"}\'')
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     return
@@ -1000,7 +1000,7 @@ it.each([
 ])('rejects invalid MySQL TLS %s before changing YAML or either environment file', async (ssl) => {
   const { app, service } = await fullstackFixture()
   writeFileSync(join(service, 'config/_db.yml'), 'type: mysql\ndatabase: business\nhost: mysql.internal\nssl: false\n')
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
   expect(environment.success && scanned.success).toBe(true)
   if (!environment.success || !scanned.success)
@@ -1041,7 +1041,7 @@ it('rejects invalid noninteractive MySQL TLS before persistence', async () => {
   const { app, service } = await fullstackFixture()
   writeFileSync(join(app, '.env.test'), 'HAI_CORE_ENV=test\nHAI_DB_TYPE=mysql\nHAI_DB_SSL=true\n')
   writeFileSync(join(service, 'config/_db.yml'), 'type: mysql\ndatabase: business\nhost: mysql.internal\nssl: true\n')
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
   expect(environment.success && scanned.success).toBe(true)
   if (!environment.success || !scanned.success)
@@ -1077,7 +1077,7 @@ it.each([
 ] as const)('round trips %s TLS %s through the wizard and actual Core schema loader', async (backend, ssl, expected) => {
   const { app, service } = await fullstackFixture()
   writeFileSync(join(service, 'config/_db.yml'), `type: ${backend}\ndatabase: business\nhost: db.internal\nssl: false\n`)
-  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
   expect(environment.success && scanned.success).toBe(true)
   if (!environment.success || !scanned.success)
@@ -1107,7 +1107,7 @@ it.each([
   }, environment.data, {
     provider: { type: 'docker-ssh' },
   })
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     return

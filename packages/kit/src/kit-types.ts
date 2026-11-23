@@ -27,8 +27,8 @@ import type { MemoryRateLimitStore, RateLimitCache, RateLimitStore } from './mid
  * 当前请求的认证 Cookie 写入契约；不持有跨请求状态。
  * @example
  * ```ts
- * import type { AuthCookieWriter } from '@h-ai/kit'
- * import { kit } from '@h-ai/kit'
+ *
+ * import { type AuthCookieWriter, kit } from '@h-ai/kit'
  *
  * async function signOut(cookies: AuthCookieWriter) {
  *   const result = await kit.auth.logout(cookies)
@@ -51,8 +51,8 @@ export interface AuthCookieWriter {
  * Kit 服务端公开命名空间；消费者声明只引用公开类型，不暴露内部函数入口。
  * @example
  * ```ts
- * import type { KitFunctions } from '@h-ai/kit'
- * import { kit } from '@h-ai/kit'
+ *
+ * import { type KitFunctions, kit } from '@h-ai/kit'
  *
  * const runtime: KitFunctions = kit
  * const response = runtime.response.ok({ ready: true })
@@ -60,6 +60,28 @@ export interface AuthCookieWriter {
  * ```
  */
 export interface KitFunctions {
+  /** 服务端 A2A 集成；浏览器入口不提供此操作组。 */
+  a2a: {
+    createApiKeyAuthenticator: typeof import('./modules/a2a/kit-a2a-auth.js').createA2AApiKeyAuthenticator
+    createHandler: typeof import('./modules/a2a/kit-a2a-helpers.js').createA2AHandler
+    createAgentCardHandler: typeof import('./modules/a2a/kit-a2a-helpers.js').createAgentCardHandler
+    handleRequest: typeof import('./modules/a2a/kit-a2a-handle.js').handleA2ARequest
+    resolveConfig: typeof import('./modules/a2a/kit-a2a-handle.js').resolveA2AConfig
+  }
+  /** 服务端传输加密中间件；浏览器安装入口仍使用 client。 */
+  crypto: {
+    transportEncryptionMiddleware: typeof import('./modules/crypto/kit-transport-middleware.js').transportEncryptionMiddleware
+  }
+  /** 通用权限匹配。 */
+  matchPermission: typeof import('./guards/kit-permission.js').matchPermission
+  /** 按既有规则解析资源选项。 */
+  resolveOptions: typeof import('./crud/kit-crud.js').resolveOptions
+  /** 按当前语言解析资源文案。 */
+  resolveText: typeof import('./crud/kit-crud.js').resolveText
+  /** 校验并应用 Kit 配置默认值。 */
+  resolveConfig: typeof import('./kit-config.js').resolveKitConfig
+  /** 解析公开传输配置。 */
+  resolveTransportConfig: typeof import('./kit-config.js').resolveKitTransportConfig
   createFeedbackHandler: typeof createFeedbackHandler
   middleware: {
     rateLimit: (config: RateLimitConfig) => Middleware
@@ -128,14 +150,24 @@ export interface KitFunctions {
  * 浏览器实际可用的 Kit 命名空间；不含服务端认证、Hook 或中间件。
  * @example
  * ```ts
- * import type { BrowserKitFunctions } from '@h-ai/kit'
- * import { kit } from '@h-ai/kit'
+ *
+ * import { type BrowserKitFunctions, kit } from '@h-ai/kit'
  *
  * const browser: BrowserKitFunctions = kit
  * browser.auth.clearBrowserToken()
  * ```
  */
 export interface BrowserKitFunctions {
+  /** 通用权限匹配。 */
+  matchPermission: typeof import('./guards/kit-permission.js').matchPermission
+  /** 按既有规则解析资源选项。 */
+  resolveOptions: typeof import('./crud/kit-crud.js').resolveOptions
+  /** 按当前语言解析资源文案。 */
+  resolveText: typeof import('./crud/kit-crud.js').resolveText
+  /** 校验并应用 Kit 配置默认值。 */
+  resolveConfig: typeof import('./kit-config.js').resolveKitConfig
+  /** 解析公开传输配置。 */
+  resolveTransportConfig: typeof import('./kit-config.js').resolveKitTransportConfig
   client: {
     create: typeof createKitClient
     createAuthActions: typeof createKitAuthActions
@@ -793,8 +825,8 @@ export interface FormValidationResult<T> {
  * 必须显式传入 store；生产使用共享计数器，故障返回503。
  * @example
  * ```ts
- * import type { RateLimitConfig } from '@h-ai/kit'
- * import { kit } from '@h-ai/kit'
+ *
+ * import { type RateLimitConfig, kit } from '@h-ai/kit'
  * import { cache } from '@h-ai/cache'
  *
  * const config: RateLimitConfig = { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }) }

@@ -3,7 +3,7 @@ import type { DeploymentArtifact } from './deploy-artifact.js'
 import { lstat, realpath } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { DeploymentArtifactSchema, readDeploymentArtifact } from './deploy-artifact.js'
 import { normalizeProjectName } from './deploy-functions.js'
@@ -54,7 +54,7 @@ export interface BuildReceiptExpectation {
   onIdentified?: (receipt: BuildReceipt) => boolean | void | Promise<boolean | void>
 }
 
-const invalidReceipt = () => err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+const invalidReceipt = () => core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
 
 /**
  * 根据工程根和已构建清单产生 CLI v1 回执及目标路径。
@@ -77,7 +77,7 @@ export function buildReceipt(projectDir: string, projectName: string, manifest: 
       manifest,
     })
     return parsed.success
-      ? ok(parsed.data)
+      ? core.ok(parsed.data)
       : invalidReceipt()
   }
   catch {
@@ -129,7 +129,7 @@ export async function verifyBuildReceipt(stdout: string, expected: BuildReceiptE
       return invalidReceipt()
     const saved = await readDeploymentArtifact(artifactDir, expected.signal)
     return isDeepStrictEqual(saved, manifest)
-      ? ok(receipt)
+      ? core.ok(receipt)
       : invalidReceipt()
   }
   catch {

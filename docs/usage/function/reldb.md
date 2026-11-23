@@ -316,23 +316,23 @@ getResult.data // null
 动态值优先通过 SQL 参数绑定。表名和列名由调用方从已授权集合中选择，使用标识符工具校验。
 
 ```ts
-import { createJsonOps, escapeSqlString, parseJsonPath, quoteIdentifier, validateIdentifier, validateIdentifiers } from '@h-ai/reldb'
+import { reldb } from '@h-ai/reldb'
 
 // 校验可信列名 order_total，成功 data 为原串，非法标识符返回失败。
-const column = validateIdentifier('order_total') // 成功的 data 为 'order_total'。
+const column = reldb.validateIdentifier('order_total') // 成功的 data 为 'order_total'。
 // 一次校验两个可信列名，全部合法时无 data，任一非法则失败。
-const columns = validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
+const columns = reldb.validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
 // 按当前示例所用双引号规则包裹 order_total，返回引用后的标识符。
-const quoted = quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
+const quoted = reldb.quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
 // 将示例 O'Reilly 的单引号加倍，返回用于可信 SQL 拼装的字符串。
-const escaped = escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
+const escaped = reldb.escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
 // 将 $.profile.name 分解为 ['profile', 'name']，不支持的路径语法抛错。
-const segments = parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
+const segments = reldb.parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
 // 按 PostgreSQL 方言创建 JSON 表达式构造器，返回相应的操作对象。
-const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
+const ops = reldb.createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
 ```
 
-`parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `createJsonOps()`。
+`reldb.parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `reldb.createJsonOps()`。
 
 <a id="transactions"></a>
 
@@ -666,8 +666,8 @@ Unix 毫秒字段使用 `BIGINT`（SQLite 为 64 位 INTEGER，PostgreSQL/MySQL 
 
 ```ts
 // import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
-import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
+
+import { type DmlWithTxOperations, type ReldbCrudFieldDefinition, BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 
 interface UserRow {
   id: number

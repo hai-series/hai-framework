@@ -1,4 +1,5 @@
 /** 两个独立生产模式 Node 共享真实 PG/Redis，覆盖新增策略和故障恢复。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { AuthResult, IamConfigInput, IamPublicConfig } from '../src/index.js'
 import { fork } from 'node:child_process'

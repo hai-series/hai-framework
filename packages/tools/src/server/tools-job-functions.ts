@@ -6,7 +6,7 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { isIPv4 } from 'node:net'
 import { extname } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { toolsM } from '../tools-i18n.js'
 import { tools } from '../tools-main.js'
@@ -134,13 +134,13 @@ export function createJobTools({ context, files, runner, environments, browserPr
       parameters,
       timeoutMs: 300_000,
       resultHandler: async (input, { signal }) => {
-        const fail = () => err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'))
+        const fail = () => core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'))
         const environment = runner.environment(environmentId)
         if (!context.execution || !environment.success || !environment.data.capabilities.includes(operation)
           || environment.data.networkPolicy !== (group === 'web' || group === 'browser'
             ? 'internal'
             : 'offline')) {
-          return err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'))
+          return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'))
         }
         const spec = prepare(input)
         const inputs: Record<string, string> = {}
@@ -208,15 +208,15 @@ export function createJobTools({ context, files, runner, environments, browserPr
             const diagnostic = { operation, toolCode, executionId: context.execution!.id }
             logger.warn('Tool job operation rejected', diagnostic)
             if (toolCode === 'SANDBOX_UNAVAILABLE')
-              return err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_sandboxUnavailable'), diagnostic)
+              return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_sandboxUnavailable'), diagnostic)
             if (toolCode === 'UNSUPPORTED_PROJECT')
-              return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_previewUnsupported'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_previewUnsupported'), diagnostic)
             if (toolCode === 'OUTPUT_LIMIT')
-              return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_outputLimit'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_outputLimit'), diagnostic)
             if (toolCode === 'UNSAFE_DOCUMENT')
-              return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_unsafeDocument'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_unsafeDocument'), diagnostic)
             if (toolCode === 'TIMEOUT')
-              return err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), diagnostic)
+              return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), diagnostic)
             // 只把已知输入拒绝归为校验错误，输出损坏和未知工作进程故障仍属服务故障。
             const invalidInput = [
               'INVALID_REQUEST',
@@ -224,7 +224,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
               'INVALID_PROJECT',
               'UNSAFE_PROJECT',
             ].includes(toolCode)
-            return err(invalidInput
+            return core.err(invalidInput
               ? HaiToolsError.VALIDATION_FAILED
               : HaiToolsError.EXECUTION_FAILED, invalidInput
               ? toolsM('tools_validationFailed')
@@ -232,7 +232,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
           }
           const result = parsed.data.data
           if (result.text !== undefined && !spec.output)
-            return ok({ text: result.text })
+            return core.ok({ text: result.text })
           if (!result.artifact || result.artifact.name !== spec.output)
             return fail()
           const bytes = await process.artifact(spec.output, result.artifact.bytes)
@@ -254,7 +254,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
           })
           if (!published.success)
             return published
-          return ok({
+          return core.ok({
             artifacts: [published.data],
             ...(result.summary
               ? { sourceUrl: result.summary.sourceUrl, title: result.summary.title, text: result.summary.text }
@@ -262,7 +262,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
           })
         })().catch((cause: unknown) => {
           logger.warn('Tool job response failed', { operation })
-          return err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
+          return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
         })
         const closed = await process.close()
         if (closed.success)
@@ -270,7 +270,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
         // 清理不明保持主错误，同时保留安全的首次失败；工作进程原文和私有上下文不进入扩展字段。
         return outcome.success
           ? closed
-          : err({
+          : core.err({
               ...closed.error,
               ext: {
                 ...closed.error.ext,

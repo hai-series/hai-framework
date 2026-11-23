@@ -19,8 +19,8 @@ import type {
  *
  * @example
  * ```ts
- * import type { ZodMessageGetter } from '@h-ai/core'
- * import { core } from '@h-ai/core'
+ *
+ * import { type ZodMessageGetter, core } from '@h-ai/core'
  * import { z } from 'zod'
  *
  * const LoginSchema = z.object({

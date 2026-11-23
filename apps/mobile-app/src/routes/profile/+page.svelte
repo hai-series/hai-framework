@@ -1,8 +1,9 @@
 <script lang='ts'>
+
   import type { UserProfileSubmitData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { applyTheme, getSavedTheme, toast } from '@h-ai/ui'
+  import { ui } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import * as m from '#lib/paraglide/messages.js'
   import {
@@ -22,7 +23,7 @@
   let errors = $state<Record<string, string>>({})
 
   onMount(() => {
-    currentTheme = getSavedTheme()
+    currentTheme = ui.getSavedTheme()
   })
 
   async function handleRefresh(): Promise<void> {
@@ -30,7 +31,7 @@
   }
 
   function handleThemeChange(theme: string): void {
-    applyTheme(theme)
+    ui.applyTheme(theme)
     currentTheme = theme
   }
 
@@ -52,7 +53,7 @@
       return false
     }
 
-    toast.success(m.profile_update_success())
+    ui.toast.success(m.profile_update_success())
     return true
   }
 
@@ -61,7 +62,7 @@
       await logout()
     }
     catch {
-      toast.error(m.profile_logout_failed())
+      ui.toast.error(m.profile_logout_failed())
     }
     finally {
       await goto(resolve('auth/login'))

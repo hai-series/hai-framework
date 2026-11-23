@@ -1,6 +1,6 @@
 /** 示例应用职责配置；可按项目需求调整，不改变框架 IAM 的通用规则。 */
 import type { HaiResult } from '@h-ai/core'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { serverM } from './messages.js'
 
@@ -20,7 +20,7 @@ export const APP_DUTIES = {
 
 export async function seedAppDuties(): Promise<HaiResult<void>> {
   if (iam.config?.rbac.superAdminRole && iam.config.rbac.superAdminRole in APP_DUTIES)
-    return err(HaiCommonError.VALIDATION_ERROR)
+    return core.err(HaiCommonError.VALIDATION_ERROR)
   for (const code of [
     'admin',
     'audit_admin',
@@ -39,7 +39,7 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
           permission = await iam.authz.getPermissionByCode(permissionCode)
           if (!permission.success || !permission.data) {
             return permission.success
-              ? err(HaiCommonError.INTERNAL_ERROR)
+              ? core.err(HaiCommonError.INTERNAL_ERROR)
               : permission
           }
         }
@@ -60,13 +60,13 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
         role = await iam.authz.getRoleByCode(code)
         if (!role.success || !role.data) {
           return role.success
-            ? err(HaiCommonError.INTERNAL_ERROR)
+            ? core.err(HaiCommonError.INTERNAL_ERROR)
             : role
         }
       }
     }
     if (!role.data)
-      return err(HaiCommonError.INTERNAL_ERROR)
+      return core.err(HaiCommonError.INTERNAL_ERROR)
     const updated = await iam.authz.updateRole(role.data.id, {
       name: serverM(code),
       permissionIds,
@@ -74,24 +74,24 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
     if (!updated.success)
       return updated
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /** 部署者独立设置初始凭据；不重设已有账号；后续账号管理由系统管理员统一负责。 */
 export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_admin' | 'business_operator', providedPassword?: string): Promise<HaiResult<void>> {
   const password = providedPassword?.trim()
   if (!password)
-    return ok(undefined)
+    return core.ok(undefined)
   const created = await iam.user.createUser({ username, password })
   if (!created.success) {
     return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code
-      ? ok(undefined)
+      ? core.ok(undefined)
       : created
   }
   const role = await iam.authz.getRoleByCode(username)
   if (!role.success || !role.data) {
     return role.success
-      ? err(HaiCommonError.INTERNAL_ERROR)
+      ? core.err(HaiCommonError.INTERNAL_ERROR)
       : role
   }
   const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])

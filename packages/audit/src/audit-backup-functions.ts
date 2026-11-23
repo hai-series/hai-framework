@@ -1,4 +1,5 @@
 /** 归档编排复用 Storage 的流式条件写；不拥有存储或调度器的生命周期。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { SchedulerInitInput } from '@h-ai/scheduler'
 import type { StorageFunctions } from '@h-ai/storage'
@@ -6,7 +7,7 @@ import type { AuditInitConfig } from './audit-config.js'
 import type { AuditLogRepository } from './audit-repository-log.js'
 import type { AuditBackupInfo, AuditBackupOperations, AuditFunctions } from './audit-types.js'
 import { createHash } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 import { archiveLine, backupIdSchema, verifyArchive } from './audit-backup-format.js'
@@ -42,7 +43,7 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
 
   function track(operation: (signal: AbortSignal) => Promise<HaiResult<AuditBackupInfo>>, event: { action: string, resourceId?: string, read?: boolean }, parent?: AbortSignal): Promise<HaiResult<AuditBackupInfo>> {
     if (!active)
-      return Promise.resolve(err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized')))
+      return Promise.resolve(core.err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized')))
     const controller = new AbortController()
     const signal = parent
       ? AbortSignal.any([parent, controller.signal])
@@ -50,12 +51,12 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
     controllers.add(controller)
     const promise = Promise.resolve().then(async () => {
       if (!input.config.enabled || !input.storage?.isInitialized)
-        return err(HaiAuditError.BACKUP_DISABLED, auditM('audit_backupDisabled'))
+        return core.err(HaiAuditError.BACKUP_DISABLED, auditM('audit_backupDisabled'))
       signal.throwIfAborted()
       return operation(signal)
     }).catch((error: unknown) => {
       logger.error('Audit backup operation failed', { error })
-      return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), error)
+      return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), error)
     }).then(async (result) => {
       const recorded = await input.capture({
         action: event.action,
@@ -85,13 +86,13 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
   async function read(key: string, signal: AbortSignal) {
     const opened = await input.storage!.file.getStream(key, { signal })
     if (!opened.success)
-      return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), opened.error)
+      return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), opened.error)
     try {
-      return ok(await verifyArchive(opened.data, { key, maxRecordBytes: input.config.maxRecordBytes, signal }))
+      return core.ok(await verifyArchive(opened.data, { key, maxRecordBytes: input.config.maxRecordBytes, signal }))
     }
     catch (error) {
       logger.error('Audit archive verification failed', { error })
-      return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupVerificationFailed'), error)
+      return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupVerificationFailed'), error)
     }
   }
 
@@ -100,15 +101,15 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
     if (!previous.success)
       return previous
     return previous.data.requestHash === requestHash
-      ? ok(previous.data.info)
-      : err(HaiAuditError.BACKUP_CONFLICT, auditM('audit_backupConflict'))
+      ? core.ok(previous.data.info)
+      : core.err(HaiAuditError.BACKUP_CONFLICT, auditM('audit_backupConflict'))
   }
 
   const operations: AuditBackupOperations = {
     run(options) {
       const parsed = optionsSchema.safeParse(options ?? {})
       if (!parsed.success)
-        return Promise.resolve(err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
+        return Promise.resolve(core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
       const values = parsed.data
       const id = values.id ?? core.id.uuid()
       const from = values.from
@@ -132,10 +133,10 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
         const createdAt = time.data
         const cutoff = new Date(values.to?.getTime() ?? createdAt.getTime())
         if (cutoff > createdAt || (from && from > cutoff))
-          return err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid'))
+          return core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid'))
         const exists = await input.storage!.file.exists(key)
         if (!exists.success)
-          return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), exists.error)
+          return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), exists.error)
         if (exists.data)
           return reuse(key, requestHash, signal)
         let completed: AuditBackupInfo | undefined
@@ -206,23 +207,23 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
           const stored = await input.storage!.file.exists(key)
           if (stored.success && stored.data)
             return reuse(key, requestHash, signal)
-          return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), uploaded.error)
+          return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), uploaded.error)
         }
         if (!completed)
-          return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'))
-        return ok(completed)
+          return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'))
+        return core.ok(completed)
       }, { action: 'audit.backup', resourceId: id }, values.signal)
     },
     verify(key, options) {
       if (typeof key !== 'string' || !key.startsWith(AUDIT_BACKUP_PREFIX) || !key.endsWith('.jsonl') || !backupIdSchema.safeParse(key.slice(AUDIT_BACKUP_PREFIX.length, -6)).success)
-        return Promise.resolve(err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
+        return Promise.resolve(core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
       const parsed = optionsSchema.pick({ signal: true }).safeParse(options ?? {})
       if (!parsed.success)
-        return Promise.resolve(err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
+        return Promise.resolve(core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
       return track(async (signal) => {
         const result = await read(key, signal)
         return result.success
-          ? ok(result.data.info)
+          ? core.ok(result.data.info)
           : result
       }, { action: 'audit.backup.verify', read: true }, parsed.data.signal)
     },

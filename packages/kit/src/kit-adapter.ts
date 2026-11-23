@@ -7,12 +7,12 @@
  * @example
  * ```js
  * // vite.config.ts
- * import { createAdapter } from '@h-ai/kit/adapter'
+ * import { kit } from '@h-ai/kit/adapter'
  * import { sveltekit } from '@sveltejs/kit/vite'
  * import { defineConfig } from 'vite'
  *
  * export default defineConfig({
- *   plugins: [sveltekit({ adapter: await createAdapter() })],
+ *   plugins: [sveltekit({ adapter: await kit.adapter.create() })],
  * })
  * ```
  *
@@ -23,10 +23,11 @@ import process from 'node:process'
 
 /**
  * 双构建适配器配置
- * @example 模块内部上下文
+ * @example
  * ```ts
+ * import { type AdapterOptions, kit } from '@h-ai/kit/adapter'
  * const options: AdapterOptions = {}
- * const adapter = await createAdapter(options)
+ * const adapter = await kit.adapter.create(options)
  * void adapter
  * ```
  */
@@ -50,9 +51,10 @@ export interface AdapterOptions {
  * 本函数只做动态 import + 统一配置。
  * @param options - Node/static 输出目录和 SPA fallback；应用仍需安装对应适配器。
  * @returns 按 VITE_ADAPTER 选择的 SvelteKit adapter；缺失依赖时拒绝 Promise。
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const adapter = await createAdapter({})
+ * import { kit } from '@h-ai/kit/adapter'
+ * const adapter = await kit.adapter.create({})
  * void adapter
  * ```
  */

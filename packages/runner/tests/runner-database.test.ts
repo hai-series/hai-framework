@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlEnv, postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { createRunner } from '../src/index.js'
+import { runner } from '../src/index.js'
 
 const warmImage = process.env.HAI_TEST_RUNNER_ARTIFACT_IMAGE
 const engine = (process.env.HAI_ACP_E2E_ENGINE ?? process.env.HAI_TEST_CONTAINER_ENGINE) === 'podman'
@@ -20,8 +20,8 @@ for (const [backend, setup] of [
   describe(`${backend} execution ownership`, () => {
     let release: (() => Promise<void>) | undefined
     let fixtureDatabase: Awaited<ReturnType<typeof setup>>['config']
-    const first = createRunner()
-    const second = createRunner()
+    const first = runner.create()
+    const second = runner.create()
     const scope = { tenantId: 'shared-test', userId: 'worker-owner' }
 
     beforeAll(async () => {
@@ -283,7 +283,7 @@ for (const [backend, setup] of [
         },
       })
       const exit = once(child, 'exit')
-      const replacement = createRunner()
+      const replacement = runner.create()
       const request = { scope, kind: 'owner.v1', input: null }
       const hold = Promise.withResolvers<void>()
       try {

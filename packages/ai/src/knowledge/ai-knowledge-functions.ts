@@ -8,12 +8,13 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, CleanOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
-import type { KnowledgeConfig } from '../ai-config.js'
 
+import type { KnowledgeConfig } from '../ai-config.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
 import type { KnowledgeDocumentRevision, KnowledgeStore } from '../store/ai-store-types.js'
+
 import type {
   EntityDocumentResult,
   EntityListOptions,
@@ -37,8 +38,7 @@ import type {
   KnowledgeRetrieveResult,
   KnowledgeSetupOptions,
 } from './ai-knowledge-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { nanoid } from 'nanoid'
 
 import { aiM } from '../ai-i18n.js'
@@ -113,7 +113,7 @@ export function createKnowledgeOperations(
      */
     async setup(options?: KnowledgeSetupOptions): Promise<HaiResult<void>> {
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
           params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' },
         }))
       }
@@ -129,11 +129,11 @@ export function createKnowledgeOperations(
         await store.repair(collection)
 
         logger.debug('Knowledge base setup completed', { collection })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Knowledge base setup failed', { error })
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
           params: {
             error: String(error),
           },
@@ -181,10 +181,10 @@ export function createKnowledgeOperations(
 
       try {
         if (!await isCollectionReady(collection))
-          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+          return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         const chunkResult = await datapipe.pipeline().clean(cleanOptions).chunk(chunkOptions).run(input.content)
         if (!chunkResult.success) {
-          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
             params: { error: chunkResult.error.message },
           }), chunkResult.error)
         }
@@ -194,7 +194,7 @@ export function createKnowledgeOperations(
         const texts = chunks.map(c => c.content)
         const embedResult = await embedding.embedBatch(texts)
         if (!embedResult.success) {
-          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
             params: { error: 'Embedding failed' },
           }), embedResult.error)
         }
@@ -255,7 +255,7 @@ export function createKnowledgeOperations(
           }
           else {
             // 显式要求的实体提取失败不能发布不完整的新版本。
-            return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+            return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
               params: { error: entityResult.error.message },
             }), entityResult.error)
           }
@@ -282,7 +282,7 @@ export function createKnowledgeOperations(
           duration,
         })
 
-        return ok({
+        return core.ok({
           documentId: input.documentId,
           revision,
           cleanupPending: published.cleanupPending,
@@ -293,7 +293,7 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Document ingestion failed', { documentId: input.documentId, error })
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
           params: {
             error: String(error),
           },
@@ -326,11 +326,11 @@ export function createKnowledgeOperations(
 
       try {
         if (!await isCollectionReady(collection))
-          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+          return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         // ① 向量化查询
         const embedResult = await embedding.embedText(query)
         if (!embedResult.success) {
-          return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+          return core.err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
             params: { error: 'Query embedding failed' },
           }), embedResult.error)
         }
@@ -428,7 +428,7 @@ export function createKnowledgeOperations(
         const duration = Date.now() - startTime
         logger.trace('Knowledge retrieval completed', { resultCount: items.length, duration })
 
-        return ok({
+        return core.ok({
           items,
           citations: Array.from(citationMap.values()),
           query,
@@ -437,7 +437,7 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge retrieval failed', { error })
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
           params: {
             error: String(error),
           },
@@ -459,7 +459,7 @@ export function createKnowledgeOperations(
       // 先检索
       const retrieveResult = await this.retrieve(query, options)
       if (!retrieveResult.success) {
-        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
+        return core.err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
           params: { error: retrieveResult.error.message },
         }), retrieveResult.error)
       }
@@ -497,7 +497,7 @@ export function createKnowledgeOperations(
       })
 
       if (!chatResult.success) {
-        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
+        return core.err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
           params: { error: chatResult.error.message },
         }), chatResult.error)
       }
@@ -510,7 +510,7 @@ export function createKnowledgeOperations(
         model: chatResult.data.model,
       })
 
-      return ok({
+      return core.ok({
         answer,
         context: items,
         citations,
@@ -530,18 +530,18 @@ export function createKnowledgeOperations(
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<HaiResult<EntityDocumentResult[]>> {
       const collection = options?.collection ?? config.collection
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
         if (!await isCollectionReady(collection))
-          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+          return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         const results = await store.findByEntityName(entityName, {
           collection,
           type: options?.type,
         })
 
-        return ok(results.map(item => ({
+        return core.ok(results.map(item => ({
           entity: {
             id: item.entity.id,
             name: item.entity.name,
@@ -559,7 +559,7 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
           params: {
             error: String(error),
           },
@@ -570,7 +570,7 @@ export function createKnowledgeOperations(
     // ─── listEntities ───
     async listEntities(options?: EntityListOptions): Promise<HaiResult<KnowledgeEntity[]>> {
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
@@ -581,7 +581,7 @@ export function createKnowledgeOperations(
           limit: options?.limit,
         })
 
-        return ok(rows.map(row => ({
+        return core.ok(rows.map(row => ({
           id: row.id,
           name: row.name,
           type: row.type as KnowledgeEntity['type'],
@@ -592,7 +592,7 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
           params: {
             error: String(error),
           },
@@ -604,12 +604,12 @@ export function createKnowledgeOperations(
     async listDocuments(options?: KnowledgeDocumentListOptions): Promise<HaiResult<KnowledgeDocumentInfo[]>> {
       const collection = options?.collection ?? config.collection
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
         if (!await isCollectionReady(collection))
-          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+          return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         const docs = await store.listDocuments(collection, {
           offset: options?.offset,
           limit: options?.limit,
@@ -625,10 +625,10 @@ export function createKnowledgeOperations(
           createdAt: d.createdAt,
         }))
 
-        return ok(result)
+        return core.ok(result)
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
           params: {
             error: String(error),
           },
@@ -640,20 +640,20 @@ export function createKnowledgeOperations(
     async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<HaiResult<void>> {
       const collection = options?.collection ?? config.collection
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
         if (!await isCollectionReady(collection))
-          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+          return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         // 先原子撤销完整版本，再按持久清单清理；删除失败必须报告并可用 repair 重试。
         await store.removeDocument(documentId, collection)
 
         logger.debug('Document removed', { documentId, collection })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
           params: {
             error: String(error),
           },
@@ -666,18 +666,18 @@ export function createKnowledgeOperations(
      */
     async repair(options?: KnowledgeRepairOptions): Promise<HaiResult<KnowledgeRepairResult>> {
       if (!store)
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        return core.err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       if (!Number.isSafeInteger(options?.offset ?? 0) || (options?.offset ?? 0) < 0
         || !Number.isSafeInteger(options?.limit ?? 100) || (options?.limit ?? 100) < 1 || (options?.limit ?? 100) > 1000) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
           params: { error: 'Repair offset must be nonnegative and limit must be between 1 and 1000' },
         }))
       }
       try {
-        return ok(await store.repair(options?.collection ?? config.collection, options))
+        return core.ok(await store.repair(options?.collection ?? config.collection, options))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
           params: {
             error: String(error),
           },
@@ -709,7 +709,7 @@ export function createKnowledgeOperations(
         })
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
           params: {
             error: String(error),
           },
@@ -756,7 +756,7 @@ export function createKnowledgeOperations(
         }
       }
 
-      return ok({
+      return core.ok({
         successCount,
         failureCount,
         results,
@@ -767,7 +767,7 @@ export function createKnowledgeOperations(
     // ─── deleteCollection ───
     async deleteCollection(collection?: string): Promise<HaiResult<void>> {
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
           params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' },
         }))
       }
@@ -778,11 +778,11 @@ export function createKnowledgeOperations(
       try {
         await store.deleteCollection(col)
         logger.debug('Knowledge collection deleted', { collection: col })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Knowledge collection deletion failed', { collection: col, error })
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+        return core.err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
           params: {
             error: String(error),
           },

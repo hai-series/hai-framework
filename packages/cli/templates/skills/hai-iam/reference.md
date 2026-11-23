@@ -70,10 +70,10 @@ rbac:
 ### 2. 初始化
 
 ```typescript
-import type { IamConfigSettingsInput } from '@h-ai/iam'
+
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { iam, IamConfigSchema } from '@h-ai/iam'
+import { type IamConfigSettingsInput, IamConfigSchema, iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
 // 位于应用启动函数内；依赖初始化失败时立即返回，不能继续启动 IAM。
@@ -269,7 +269,7 @@ apikey:
 以下为创建 → Key 登录 → Bearer 会话验证与操作授权 → 列表 → 撤销的服务端示例。先检查所有 HaiResult；每个管理入口还要校验本人归属或管理员权限，IAM 不知道业务的调用者身份。
 
 ```ts
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { HaiCommonError, core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
 async function createReadKey(userId: string) {
@@ -304,10 +304,10 @@ async function requireRecordRead(accessToken: string, deniedMessage: string) {
   )
   if (!allowed)
     // 用领域拒绝码和应用提供的本地化消息构造失败结果。
-    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+    return core.err(HaiCommonError.FORBIDDEN, deniedMessage)
   // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
   // 返回成功的 HaiResult，data.userId 取自已验证且具备权限的会话。
-  return ok({ userId: verified.data.userId })
+  return core.ok({ userId: verified.data.userId })
 }
 
 async function listMyKeys(userId: string) {

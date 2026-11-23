@@ -3,7 +3,7 @@ import type { StorageProvider } from './providers/storage-provider-types.js'
 import type { StorageOperationLogConfig } from './storage-config.js'
 import { Buffer } from 'node:buffer'
 import { getSystemErrorMessage } from 'node:util'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { uploadWithSource } from './storage-stream.js'
 import { HaiStorageError } from './storage-types.js'
@@ -152,12 +152,12 @@ function warnFailure(operation: string, failure: Pick<HaiError, 'code' | 'cause'
  * 在调用方边界记录失败一次，保留原始结果及其诊断。
  * @example 模块内部上下文
  * ```ts
- * const result = await logStorageResult('file.exists', Promise.resolve(ok(false)))
+ * const result = await logStorageResult('file.exists', Promise.resolve(core.ok(false)))
  * if (result.success) void result.data
  * ```
  */
 export async function logStorageResult<Value>(operation: string, pending: Promise<HaiResult<Value>>, signal?: AbortSignal): Promise<HaiResult<Value>> {
-  const result = await pending.catch((cause: unknown) => err(HaiStorageError.OPERATION_FAILED, storageM('storage_operationFailed', {
+  const result = await pending.catch((cause: unknown) => core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_operationFailed', {
     params: {
       error: cause instanceof Error
         ? cause.message
@@ -234,14 +234,14 @@ export function withStorageOperationLogs(provider: StorageOperations, config?: S
       async getStream(key, options) {
         const result = await run('read', 'file.getStream', () => file.getStream(key, options))
         return result.success
-          ? ok(logReadStream('file.getStream', result.data))
+          ? core.ok(logReadStream('file.getStream', result.data))
           : result
       },
       async getStreamWithMetadata(key, options) {
         const operation = 'file.getStreamWithMetadata'
         const result = await run('read', operation, () => file.getStreamWithMetadata(key, options))
         return result.success
-          ? ok({
+          ? core.ok({
               ...result.data,
               stream: logReadStream(operation, result.data.stream),
             })

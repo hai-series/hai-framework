@@ -244,7 +244,7 @@ const preservedCases: Array<{ service: MiddlewareRequirement['service'], configN
 it.each(preservedCases)('默认模式完整保留 $service/$config.type 的既有非表单配置', async ({ service, configName, config, retained }) => {
   fixture(config, service, configName)
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(scanned.success && environment.success).toBe(true)
   if (!scanned.success || !environment.success)
     return
@@ -255,7 +255,7 @@ it.each(preservedCases)('默认模式完整保留 $service/$config.type 的既�
   expect(saved.success).toBe(true)
   if (saved.success)
     expect(saved.data.middlewares?.[0]?.config).toMatchObject(retained)
-  const loaded = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(loaded.success).toBe(true)
   if (loaded.success) {
     const before = [
@@ -305,7 +305,7 @@ it.each(['yaml', 'leaf-env', 'parent-env'])('默认 S3 保留 %s 中的公开端
   if (source === 'parent-env')
     writeFileSync(join(root, '.env.test'), `HAI_STORAGE='${JSON.stringify(config)}'\n`)
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(scanned.success && environment.success).toBe(true)
   if (!scanned.success || !environment.success)
     return
@@ -317,11 +317,11 @@ it.each(['yaml', 'leaf-env', 'parent-env'])('默认 S3 保留 %s 中的公开端
   await configureDeployMiddleware(deployModule, scanned.data, environment.data, {
     provider: { type: 'docker-ssh' },
   })
-  const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const saved = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(saved.success).toBe(true)
   if (!saved.success)
     return
-  const resolved = deployModule.loadDeploymentConfig('storage', join(root, 'config/_storage.yml'), saved.data.values)
+  const resolved = deployModule.deploy.loadDeploymentConfig('storage', join(root, 'config/_storage.yml'), saved.data.values)
   expect(resolved.success).toBe(true)
   if (!resolved.success)
     return
@@ -354,7 +354,7 @@ it.each(['email', 'sms'] as const)('自定义 $service HTTP Provider 保留安�
   }
   fixture(config, service, 'reach')
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(scanned.success && environment.success).toBe(true)
   if (!scanned.success || !environment.success)
     return
@@ -372,7 +372,7 @@ it.each(['email', 'sms'] as const)('自定义 $service HTTP Provider 保留安�
   if (saved.success)
     expect(saved.data.middlewares?.[0]?.config).toMatchObject(config)
   expect(readFileSync(join(root, '.env.test'), 'utf8')).not.toContain('fixture-private')
-  const loaded = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(loaded.success).toBe(true)
   if (saved.success && loaded.success) {
     const files = ['.env.test', '.env.test.local', 'config/_reach.yml'].map(file => join(root, file))
@@ -394,7 +394,7 @@ it('切换数据库后端不迁移不兼容的旧字段', async () => {
     operationLog: { write: true },
   }, 'db')
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(scanned.success && environment.success).toBe(true)
   if (!scanned.success || !environment.success)
     return
@@ -405,10 +405,10 @@ it('切换数据库后端不迁移不兼容的旧字段', async () => {
   await configureDeployMiddleware(deployModule, scanned.data, environment.data, {
     provider: { type: 'docker-ssh' },
   })
-  const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const saved = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(saved.success).toBe(true)
   if (saved.success) {
-    const resolved = deployModule.loadDeploymentConfig('db', join(root, 'config/_db.yml'), saved.data.values)
+    const resolved = deployModule.deploy.loadDeploymentConfig('db', join(root, 'config/_db.yml'), saved.data.values)
     expect(resolved).toMatchObject({
       success: true,
       data: { type: 'mysql' },
@@ -428,7 +428,7 @@ it('重新配置私有 Reach 列表的一项后，保留其他项并使新值生
     HAI_REACH_PROVIDERS: JSON.stringify([email, sms]),
   }))
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!scanned.success || !environment.success)
     throw new Error('Could not load private Reach fixture')
   const url = 'https://new-mail.example.test/send'
@@ -468,7 +468,7 @@ it('explains the S3 API endpoint separately from the bucket and shows field erro
     secretAccessKey: 'fixture-secret',
   })
   const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!scanned.success || !environment.success)
     throw new Error('Could not load S3 fixture')
   mocked.prompt.mockImplementation(async (question) => {
@@ -551,7 +551,7 @@ it.each([
   writeFileSync(legacyFile, legacy)
 
   const scan = await deployModule.deploy.scan(root, { environment: 'test' })
-  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!scan.success || !environment.success)
     throw new Error('Could not load legacy middleware fixture')
   const provider = {
@@ -572,10 +572,10 @@ it.each([
     return { value: question.initial }
   })
   await expect(configureDeployMiddleware(deployModule, scan.data, environment.data, provider)).resolves.toMatchObject({ [service]: 'custom' })
-  const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const saved = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!saved.success)
     throw new Error('Could not load URL configuration')
-  const config = deployModule.loadDeploymentConfig(service, configFile, saved.data.values)
+  const config = deployModule.deploy.loadDeploymentConfig(service, configFile, saved.data.values)
   expect(config).toMatchObject({
     success: true,
     data: {
@@ -614,7 +614,7 @@ it.each([
     return { value: question.initial }
   })
   await configureDeployMiddleware(deployModule, rescanned.data, saved.data, provider)
-  const fields = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const fields = deployModule.deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   if (!fields.success)
     throw new Error('Could not load field configuration')
   expect(fields.data.values).not.toHaveProperty(`${envPrefix}_URL`)

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -16,7 +16,7 @@ const contract = {
     ip: z.string().optional(),
   }))),
 }
-const procedures = serv.implement(contract).context<ServContext>().route('external').handle(({ context }) => ok({ ip: context.ip })).build()
+const procedures = serv.implement(contract).context<ServContext>().route('external').handle(({ context }) => core.ok({ ip: context.ip })).build()
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -246,7 +246,7 @@ it('路径可关闭或强制加密，明文仍受 IP/时间约束，配置冲突
 })
 
 it('关闭加密的路径仍执行认证，宿主未启用加密时也拒绝伪装成密文的请求', async () => {
-  const readPrivate = vi.fn(() => ok({ ip: 'private' }))
+  const readPrivate = vi.fn(() => core.ok({ ip: 'private' }))
   const guarded = serv.implement(contract).context<ServContext>().route('external').auth().handle(readPrivate).build()
   const app = serv.createApp({
     contract,

@@ -4,14 +4,14 @@
  * 应用入口：初始化 api 客户端 → 挂载 App.svelte。
  */
 
-import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
+import { ui } from '@h-ai/ui/theme'
 import { mount } from 'svelte'
 import App from './App.svelte'
 import { initApi } from './lib/api.js'
 import './app.css'
 
 async function bootstrap() {
-  applyTheme(getSavedTheme(), false)
+  ui.applyTheme(ui.getSavedTheme(), false)
   await initApi()
   const target = document.getElementById('app')
   if (!target) {

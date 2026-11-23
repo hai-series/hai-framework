@@ -1,4 +1,5 @@
 /** 真 PG/Redis/S3 + HTTP 认证，验证进程崩溃接管与 Webhook 持久幂等。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { FeedbackWebhookEvent } from '@h-ai/feedback'
 import type { DbTestEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
@@ -24,7 +25,6 @@ import { expect, it, vi } from 'vitest'
 import { acquireRedisContainer } from '../../iam/tests/helpers/redis-container.js'
 import { postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { s3Env } from '../../storage/tests/helpers/storage-test-suite.js'
-import { createFeedbackProcedures } from '../src/features/serv-feature-feedback.js'
 import { serv } from '../src/serv-main.js'
 
 async function deadline<T>(promise: Promise<T>, ms = 30000): Promise<T> {
@@ -185,7 +185,7 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
     const app = serv.createApp({
       contract,
       procedures: {
-        feedback: createFeedbackProcedures({
+        feedback: serv.createFeedbackProcedures({
           feedback,
           resolveContext: ({ session }) => ({ scopeId: 'production-scope', userId: session.userId, permissions: session.permissions }),
         }),

@@ -69,11 +69,11 @@ finally {
 | `ai.close()` | 反序释放服务 | 无参数 | `Promise<void>; wait for cleanup` | `ai.close()` |
 | `ai.config` | 诊断当前配置 | `none` | `redacted AIConfig or null` | `ai.config` |
 | `ai.isInitialized` | 检查生命周期状态 | `none` | `boolean` | `ai.isInitialized` |
-| `resolveModelEntry(llmConfig, scenario, explicit?, options?)` | 按标识解析模型条目 | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `resolveModelEntry(llmConfig, 'summary')` |
-| `resolveModelApi(llmConfig, explicitModel?, tempApi?)` | 读取模型 API 能力 | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `resolveModelApi(llmConfig, 'claude')` |
-| `resolveImageModel(imageConfig, explicit?)` | 选择图片模型 | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `resolveImageModel(imageConfig)` |
-| `resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | 选择语音模型 | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `resolveAudioModel(audioConfig, 'transcribe')` |
-| `ensureAudioCredential(model)` | 检查语音模型凭据 | `model: ResolvedAudioModel` | `HaiError or null` | `ensureAudioCredential(model)` |
+| `ai.resolveModelEntry(llmConfig, scenario, explicit?, options?)` | 按标识解析模型条目 | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `ai.resolveModelEntry(llmConfig, 'summary')` |
+| `ai.resolveModelApi(llmConfig, explicitModel?, tempApi?)` | 读取模型 API 能力 | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `ai.resolveModelApi(llmConfig, 'claude')` |
+| `ai.resolveImageModel(imageConfig, explicit?)` | 选择图片模型 | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `ai.resolveImageModel(imageConfig)` |
+| `ai.resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | 选择语音模型 | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `ai.resolveAudioModel(audioConfig, 'transcribe')` |
+| `ai.ensureAudioCredential(model)` | 检查语音模型凭据 | `model: ResolvedAudioModel` | `HaiError or null` | `ai.ensureAudioCredential(model)` |
 
 #### 初始化依赖和模型选择参数
 
@@ -81,11 +81,11 @@ finally {
 | --- | --- | --- |
 | `init`、`AIInitOptions` | `config`、`runner`、`storeProvider` | 可省略配置和选项，模型等字段见 [AI 配置](../configuration/ai.md)。`runner` 由宿主初始化和关闭。显式 `storeProvider` 优先，省略时使用初始化后的 RelDB + VecDB 或允许的临时存储 |
 | `AIInitOptions` | `acpPolicy`、`acpAdapters`、`mcpJobFiles` | 可选宿主授权策略、适配器名称到实现的映射、MCP 作业读取和发布暂存的回调；使用相应的受管能力时提供。见 [ACP](#acp) 与 [MCP](#mcp) |
-| `resolveModelEntry`、`resolveModelApi` | `llmConfig`、`scenario`、`explicit/explicitModel`、`options.missingApiKeyMessage`、`tempApi` | 传校验后的 LLM 配置。选择条目时场景必填，显式模型优先，之后按场景、默认场景和全局模型选择。可指定缺密钥提示。查询协议可由 `tempApi` 覆盖 |
-| `resolveImageModel` | `imageConfig`、`explicit` | 传校验后的图像配置。可覆盖模型，省略使用已配置的生成模型 |
-| `resolveAudioModel`、`ensureAudioCredential` | `audioConfig`、`operation`、`explicit`、`llmApiKey`、`model` | 传校验后的音频配置与识别或合成操作。省略模型使用该操作的默认项。只有显式开启继承时才用 LLM 凭据。凭据检查另接收解析结果，按平台返回错误或 `null` |
+| `ai.resolveModelEntry`、`ai.resolveModelApi` | `llmConfig`、`scenario`、`explicit/explicitModel`、`options.missingApiKeyMessage`、`tempApi` | 传校验后的 LLM 配置。选择条目时场景必填，显式模型优先，之后按场景、默认场景和全局模型选择。可指定缺密钥提示。查询协议可由 `tempApi` 覆盖 |
+| `ai.resolveImageModel` | `imageConfig`、`explicit` | 传校验后的图像配置。可覆盖模型，省略使用已配置的生成模型 |
+| `ai.resolveAudioModel`、`ai.ensureAudioCredential` | `audioConfig`、`operation`、`explicit`、`llmApiKey`、`model` | 传校验后的音频配置与识别或合成操作。省略模型使用该操作的默认项。只有显式开启继承时才用 LLM 凭据。凭据检查另接收解析结果，按平台返回错误或 `null` |
 
-例如配置 `scenarios: { summary: 'brief' }` 时，`resolveModelEntry(config, 'summary')` 会选 brief 对应的模型条目，有有效凭据时成功返回其协议及运行参数。
+例如配置 `scenarios: { summary: 'brief' }` 时，`ai.resolveModelEntry(config, 'summary')` 会选 brief 对应的模型条目，有有效凭据时成功返回其协议及运行参数。
 
 #### 场景：准备模型与存储
 
@@ -98,7 +98,7 @@ finally {
 - `ai.tools.adapt`：将 Tools 注册器转换为模型工具定义与消息；定义和业务执行使用 [Tools](tools.md)。无需初始化。
 - `ai.stream`：ChatCompletion 流式 chunk 处理；无需初始化。
 - `ai.llm`：非流式/流式对话、模型列表、历史记录。
-- `ai.mcp` / `createMcpServer`：内置 MCP 注册表与独立 MCP Server。
+- `ai.mcp` / `ai.createMcpServer`：内置 MCP 注册表与独立 MCP Server。
 - `ai.embedding`：单条/批量文本向量化。
 - `ai.memory`：记忆提取、存储、召回、注入。
 - `ai.persona`：AI 角色人格档案（系统提示词 + 特征）与系统提示词组合。
@@ -111,7 +111,7 @@ finally {
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：独立浏览器 Audio WebSocket 客户端。
 
-`@h-ai/ai/client` 仅提供 `createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。浏览器不导出 Node 单例 `ai`。
+`@h-ai/ai/client` 仅提供 `ai.createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。浏览器不导出 Node 单例 `ai`。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -201,8 +201,8 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 如果应用已经有自己的状态存储，可以把实现了 `AIStoreProvider` 的对象交给启动函数。生产环境的实现必须报告 `stateScope: 'shared'` 并提供约定的原子操作。检查初始化结果成功后才调用 AI；应用退出时调用 `ai.close()`，它会等待自定义存储的关闭。
 
 ```ts
-import type { AIStoreProvider } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
+
+import { type AIStoreProvider, ai } from '@h-ai/ai'
 
 export function startWithStore(storeProvider: AIStoreProvider) {
   // 用环境密钥和 gpt-4o-mini 初始化，并使用调用方注入的 Store；成功无数据，配置或依赖失败返回错误。
@@ -215,7 +215,7 @@ export function startWithStore(storeProvider: AIStoreProvider) {
 
 #### 返回结果与运行环境
 
-- 对外只通过 `ai` 服务对象和少量独立工厂（如 `createMcpServer`）访问。
+- 运行能力统一通过 `ai` 对象访问，工厂也使用 `ai.createMcpServer()` 等方法；类型、Schema 与协议枚举按实际契约导出。
 - 生命周期为 `await ai.init(config, options?)` / `await ai.close()`；关闭会等待自定义 `AIStoreProvider.close()`。
 - 领域方法返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`；业务失败通过 `result.success === false` 和 `result.error.code` 表达。流式 `AsyncIterable`、客户端传输和第三方回调在建立或迭代期间可能抛异常。
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
@@ -656,14 +656,14 @@ const detailed = detailedResult.data // model, data, usage
 
 #### 场景：建立独立 MCP 服务
 
-`ai.mcp` 是进程内注册表，独立 `createMcpServer` 使用 SDK transport，两者不会自动互相注册。`ai.mcp` 在注册时编译工具 JSON Schema，调用时校验输入；资源输出必须恰好含 `text` / `blob` 之一；提示词参数与 SDK 消息输出均校验，支持图片和音频内容。HTTP 示例只展示 transport 连接，应用仍须挂载请求处理与认证，并在退出时关闭 server。
+`ai.mcp` 是进程内注册表，独立 `ai.createMcpServer` 使用 SDK transport，两者不会自动互相注册。`ai.mcp` 在注册时编译工具 JSON Schema，调用时校验输入；资源输出必须恰好含 `text` / `blob` 之一；提示词参数与 SDK 消息输出均校验，支持图片和音频内容。HTTP 示例只展示 transport 连接，应用仍须挂载请求处理与认证，并在退出时关闭 server。
 
 ```ts
-import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 用 my-server/1.0.0 创建独立 MCP Server 供登记工具，尚未连接传输。
-const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+const server = ai.createMcpServer({ name: 'my-server', version: '1.0.0' })
 // 为 MCP 登记接收字符串 query 的 search，处理器返回含该查询的文本块；重复名称等无效登记会抛错。
 server.registerTool('search', {
   description: '搜索',
@@ -676,29 +676,29 @@ server.registerTool('search', {
   ],
 }))
 // 用下方随机会话 ID 生成器创建 HTTP 传输并连接 MCP Server；成功后可接收请求，连接失败拒绝 Promise。
-await server.connect(new StreamableHTTPServerTransport({
+await server.connect(new ai.StreamableHTTPServerTransport({
   sessionIdGenerator: () => globalThis.crypto.randomUUID()
 }))
 ```
 
-独立 MCP Server 也可连接 `StdioServerTransport`（进程 stdin/stdout）或 `SSEServerTransport`（已有 Node HTTP 响应及接收消息地址）。每种 transport 对应独立的服务实例和退出清理。
+独立 MCP Server 也可连接 `ai.StdioServerTransport`（进程 stdin/stdout）或 `ai.SSEServerTransport`（已有 Node HTTP 响应及接收消息地址）。每种 transport 对应独立的服务实例和退出清理。
 
 ```ts
-import { createMcpServer, StdioServerTransport } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
-const stdio = createMcpServer({ name: 'reports', version: '1.0.0' }) // 以服务名和版本创建独立 MCP Server。
-await stdio.connect(new StdioServerTransport()) // 无额外参数，连接标准输入输出；连接故障拒绝 Promise。
+const stdio = ai.createMcpServer({ name: 'reports', version: '1.0.0' }) // 以服务名和版本创建独立 MCP Server。
+await stdio.connect(new ai.StdioServerTransport()) // 无额外参数，连接标准输入输出；连接故障拒绝 Promise。
 ```
 
-`new SSEServerTransport('/mcp/messages', response)` 使用 POST 消息地址与当前 Node `ServerResponse` 创建传输对象，然后调用 `server.connect(transport)`。应用要为新建 SSE 会话及后续 POST 消息各注册一条 HTTP 路由。
+`new ai.SSEServerTransport('/mcp/messages', response)` 使用 POST 消息地址与当前 Node `ServerResponse` 创建传输对象，然后调用 `server.connect(transport)`。应用要为新建 SSE 会话及后续 POST 消息各注册一条 HTTP 路由。
 
 #### 场景：调用已授权的远程工具
 
 在 `mcp.servers` 的 `transport: http` 条目中登记第三方 Streamable HTTP 地址和 `allowedTools`。需要认证时用 `headerEnv` 引用服务器环境变量。`transport: job` 可用同一套调用接口运行离线文档、Office 和 OCR 工具。为作业配置 `environmentId`、允许操作和可选 `pool`，将 Runner 与 `mcpJobFiles` 传给 `ai.init`。作业请求只传已授权的 `fileId`，执行节点再次检查文件权限，产物以对象 ID 返回。浏览器镜像由部署方单独运行。详见 [MCP 配置](../configuration/ai.md#mcp和a2a) 与 [工具镜像](../../../packages/tools/jobs/README.md)。
 
 ```ts
-import type { MCPServiceAuthorization } from '@h-ai/ai' // 应用从 IAM 构造主体和按实际参数复核权限的回调。
-import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 与 office 服务。
+ // 应用从 IAM 构造主体和按实际参数复核权限的回调。
+import { type MCPServiceAuthorization, ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 与 office 服务。
 
 async function searchManual(access: MCPServiceAuthorization, query: string) {
   // 按宿主 access 运行下方目录中已登记的工具，成功返回 MCP 工具结果；授权或上游失败时保留错误。
@@ -726,9 +726,9 @@ async function convertDocument(access: MCPServiceAuthorization, fileId: string) 
 ```
 
 ```ts
-import type { MCPServiceAuthorization, MCPServiceBrokerOptions } from '@h-ai/ai' // url 由部署方指定，authorize 每次检查当前主体、任务和参数。
+ // url 由部署方指定，authorize 每次检查当前主体、任务和参数。
 import { createServer } from 'node:http' // 提供示例 HTTP 请求入口。
-import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 服务。
+import { type MCPServiceAuthorization, type MCPServiceBrokerOptions, ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 服务。
 
 function mountTools(options: MCPServiceBrokerOptions) {
   // 传入部署地址和可信权限复核策略创建 Broker，成功得到 bind、handleRequest 与 close，配置错误阻止挂载。
@@ -1677,8 +1677,8 @@ run 输入问题和选项输出推理结果，runStream 对同类请求输出事
 | 仅完整合成 | `targetDurationMs`、`durationToleranceMs` | 目标时长是正整数毫秒。容差为非负整数毫秒，提供时要求目标时长。目标时长与 `speed` 互斥，模型须支持目标时长 |
 | 识别和合成选项 | `model`、`strictCapabilities`、`signal` | 模型省略按识别或合成场景选择。严格模式默认关闭；开启时，不支持请求的高级能力会提前失败。信号可取消调用 |
 | `AudioCapabilitiesRequest`、`models` 资源方法 | `operation`、`model`、模型定义及版本 | 能力查询必须传 `transcribe` 或 `synthesize`，可指定模型。模型注册、更新字段见 [AI 配置](../configuration/ai.md)，版本使用模型目录读回的值 |
-| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
-| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
+| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 例如用 `{ timestampGranularities: ['word'], strictCapabilities: true }` 识别已准备好的音频。支持词级时间轴时，可读取词的起止毫秒；所选模型不支持时，会在发请求前返回能力错误。
 
@@ -1804,10 +1804,10 @@ async function streamSpeech(onEvent: (event: SynthesisEvent) => Promise<void>, s
 
 识别事件包括 `speech_started`、`transcript`、`speech_stopped`，以模型能力为准。合成按 `segment_started → audio* → segment_done` 输出；第一种事件提供真实编码、采样率和声道数，audio 携带字节。`segment_done` 仅表示该段合成完毕，实际播放完毕必须由播放器确认。流迭代的异常应由调用方捕获并结束本次会话。
 
-`ai.audio.synthesize` 返回统一的 `AudioContent` 字节。需要通过 API 返回浏览器可播放的 Base64 负载时，使用 `serializePlayableAudio(result.data)`；该函数会将 `pcm16` 补齐为 WAV 容器，并透传 WAV/MP3：
+`ai.audio.synthesize` 返回统一的 `AudioContent` 字节。需要通过 API 返回浏览器可播放的 Base64 负载时，使用 `ai.serializePlayableAudio(result.data)`；该函数会将 `pcm16` 补齐为 WAV 容器，并透传 WAV/MP3：
 
 ```ts
-import { ai, serializePlayableAudio } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
 export async function createPreviewAudio(text: string) {
   // 用默认合成模型和 Cherry 音色合成调用方传入的文本，成功得到音频字节与格式；上游失败直接返回。
@@ -1815,7 +1815,7 @@ export async function createPreviewAudio(text: string) {
   if (!synthesized.success)
     return synthesized
   // 把合成成功的字节编码成可通过 JSON 传输的音频 DTO；格式或内容不合法时返回失败。
-  return serializePlayableAudio(synthesized.data)
+  return ai.serializePlayableAudio(synthesized.data)
 }
 ```
 
@@ -1840,17 +1840,17 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent 与 multipart �
 在按钮交互中请求麦克风。应用可在录制期间调用 `snapshot()` 做快照转写，或等 `onStop` 收到完整录音后提交。取消或离开页面时调用 `close()`，释放轨道并放弃该次录音。
 
 ```ts
-import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
+import { ai } from '@h-ai/ai/client'
 
 function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
   // 创建最长 30 秒且编码上限为 1 MiB 的录音会话。调用 start() 时才申请麦克风。
-  const recorder = createAudioRecorder({
+  const recorder = ai.createAudioRecorder({
     maxDurationSeconds: 30,
     maxInputBytes: 1_048_576,
     onError,
     onStop(recorded) {
       // 将完整录音转换为单声道 PCM16。最后的分片延迟时只保留前 30 秒。
-      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+      void ai.blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
         .then(onReady, onError)
     },
   })
@@ -1865,7 +1865,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-浏览器先检查 Blob 大小、再解码并检查时长。`blobToWav(recorded, 16000)` 仍接受数值采样率。设置 `maxDurationSeconds` 时超过上限默认拒绝，显式使用 `overflow: "truncate"` 才保留开头。服务端仍须校验上传数据。
+浏览器先检查 Blob 大小、再解码并检查时长。`ai.blobToWav(recorded, 16000)` 仍接受数值采样率。设置 `maxDurationSeconds` 时超过上限默认拒绝，显式使用 `overflow: "truncate"` 才保留开头。服务端仍须校验上传数据。
 
 #### 场景：维护数据库中的定义
 
@@ -2193,8 +2193,8 @@ async function continueWork(identity: RunnerScope) {
 以下 ACP 调用运行在 Node.js。`directory` 是应用已授权的仓库绝对路径，`revision` 是完整提交 ID 或 `refs/heads/main` 等完整引用；示例假定该提交没有 `notes.txt`。读取快照取得提交 ID 和“相对路径 → Base64 内容”的文件表，再将 `hello` 加入测试文件，生成补丁供用户检查。这一步不会修改原仓库或推送。
 
 ```ts
-import type { ACPPublishSnapshot } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
+
+import { type ACPPublishSnapshot, ai } from '@h-ai/ai'
 
 async function previewChange(directory: string, revision: string) {
   // 用宿主提供的目录及 Git 版本读取文件快照和解析后的 revision；无法读取时返回错误。
@@ -2292,10 +2292,10 @@ getAgentCard 输出公开能力文档，handleRequest 输入协议请求输出 J
 实现自定义 A2A 执行器时，根入口再导出 SDK 的 `Message`、`Part`、`SendMessageRequest`、`Task`、`TaskStatus`、`TaskArtifactUpdateEvent`、`TaskStatusUpdateEvent`。这些协议构建器提供 `.fromJSON(input)` 解析协议对象及 `.toJSON(value)` 生成 JSON 表示。事件工厂 `AgentEvent.message(message)`、`AgentEvent.task(task)`、`AgentEvent.statusUpdate(event)`、`AgentEvent.artifactUpdate(event)` 接收同类 SDK 对象并生成对应执行事件。Agent Card 和请求上下文等类型通过 `import type` 使用。
 
 ```ts
-import { AgentEvent, Message } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
 // 把含消息 ID m1、角色 Agent 和文本 Done 的 ProtoJSON 转为 SDK 消息对象。
-const message = Message.fromJSON({
+const message = ai.Message.fromJSON({
   messageId: 'm1',
   role: 'ROLE_AGENT',
   parts: [
@@ -2303,9 +2303,9 @@ const message = Message.fromJSON({
   ]
 }) // 将一条 ProtoJSON 消息转换为 SDK 消息。
 // 将刚构造的协议消息转换回可序列化 JSON，保留其 ID、角色和文本。
-const json = Message.toJSON(message) // 把 SDK 对象转回可序列化的协议表示。
+const json = ai.Message.toJSON(message) // 把 SDK 对象转回可序列化的协议表示。
 // 用上述消息创建 A2A 消息事件对象，供调用方交给事件总线，不在此调用发布。
-const event = AgentEvent.message(message) // 包装成可交给执行器事件总线的 A2A 消息事件。
+const event = ai.AgentEvent.message(message) // 包装成可交给执行器事件总线的 A2A 消息事件。
 ```
 
 <a id="a2a-协议边界"></a>

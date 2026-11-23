@@ -12,7 +12,7 @@ import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-
 import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
 import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
 import { createHash, randomBytes } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
 
 import { readIamCache } from '../../iam-cache.js'
@@ -152,12 +152,12 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
       // 检查是否启用
       if (!candidate.enabled) {
-        return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
+        return core.err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
       }
 
       // 检查是否过期
       if (candidate.expiresAt && new Date() >= candidate.expiresAt) {
-        return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
+        return core.err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
       }
 
       // 更新最后使用时间（异步，不阻塞认证）
@@ -167,10 +167,10 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
         logger.warn('Failed to update API Key lastUsedAt', { keyId: candidate.id })
       })
 
-      return ok(toApiKey(candidate))
+      return core.ok(toApiKey(candidate))
     }
 
-    return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+    return core.err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
   }
 
   async function verifyRawKey(rawKey: string): Promise<HaiResult<ApiKey>> {
@@ -178,7 +178,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     const result = await readIamCache(`verified_apikey:${fingerprint}`, async () => {
       const verified = await loadRawKey(rawKey)
       return verified.success
-        ? ok({
+        ? core.ok({
             ...verified.data,
             expiresAt: verified.data.expiresAt?.getTime() ?? null,
             createdAt: verified.data.createdAt.getTime(),
@@ -189,10 +189,10 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     if (!result.success)
       return result
     if (!result.data.enabled)
-      return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
+      return core.err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
     if (result.data.expiresAt !== null && result.data.expiresAt <= Date.now())
-      return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
-    return ok({
+      return core.err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
+    return core.ok({
       ...result.data,
       expiresAt: result.data.expiresAt === null
         ? null
@@ -229,17 +229,17 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       // 通过用户 ID 查找关联用户
       const userResult = await userRepository.findById(apiKey.userId)
       if (!userResult.success) {
-        return err(HaiIamError.REPOSITORY_ERROR, userResult.error.message, userResult.error)
+        return core.err(HaiIamError.REPOSITORY_ERROR, userResult.error.message, userResult.error)
       }
       if (!userResult.data) {
-        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
       if (!isUserActive(userResult.data)) {
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       }
 
       logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
-      return ok({
+      return core.ok({
         user: {
           ...toUser(userResult.data),
           credentialVersion: userResult.data.credentialVersion ?? '',
@@ -260,7 +260,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           return countResult as HaiResult<CreateApiKeyResult>
 
         if (countResult.data >= apikeyConfig.maxKeysPerUser) {
-          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', {
+          return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', {
             params: { max: apikeyConfig.maxKeysPerUser },
           }))
         }
@@ -299,13 +299,13 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           return insertResult as HaiResult<CreateApiKeyResult>
 
         logger.info('API Key created', { userId, keyId: id, name: options.name })
-        return ok({
+        return core.ok({
           apiKey: toApiKey(storedApiKey),
           rawKey,
         })
       }
       catch (error) {
-        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_apikeyCreateFailed', {
+        return core.err(HaiIamError.INTERNAL_ERROR, iamM('iam_apikeyCreateFailed', {
           params: {
             message: String(error),
           },
@@ -317,7 +317,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       const result = await apiKeyRepository.findPageByUserId(userId, options ?? {})
       if (!result.success)
         return result as HaiResult<PaginatedResult<ApiKey>>
-      return ok({
+      return core.ok({
         ...result.data,
         items: result.data.items.map(toApiKey),
       })
@@ -327,7 +327,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       const result = await apiKeyRepository.findOneById(keyId)
       if (!result.success)
         return result as HaiResult<ApiKey | null>
-      return ok(result.data
+      return core.ok(result.data
         ? toApiKey(result.data)
         : null)
     },
@@ -337,7 +337,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       if (!result.success)
         return result
       logger.info('API Key revoked', { keyId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async verifyApiKey(rawKey: string): Promise<HaiResult<ApiKey>> {

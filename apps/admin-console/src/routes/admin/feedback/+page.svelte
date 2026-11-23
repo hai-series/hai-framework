@@ -5,8 +5,8 @@
   import type { PageData } from './$types'
   import { goto, refreshAll } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { FeedbackDetail, FeedbackList, usePermission } from '@h-ai/ui'
-  import { errorMessage } from '@h-ai/ui/toast'
+  import { FeedbackDetail, FeedbackList, ui } from '@h-ai/ui'
+
   import { onDestroy, untrack } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import * as m from '#lib/paraglide/messages.js'
@@ -14,7 +14,7 @@
   import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '#lib/utils/feedback-browser.js'
 
   const { data }: { data: PageData } = $props()
-  const { hasPerm } = usePermission()
+  const { hasPerm } = ui.usePermission()
   const permissions = $derived({
     read: hasPerm('feedback:read'),
     process: hasPerm('feedback:process'),
@@ -97,7 +97,7 @@
     }
     catch (cause) {
       if (generation === detailGeneration)
-        actionError = errorMessage(cause, m.feedback_request_failed())
+        actionError = ui.errorMessage(cause, m.feedback_request_failed())
     }
     finally {
       if (generation === detailGeneration)
@@ -180,7 +180,7 @@
         await changeQuery(query)
       }
       catch (cause) {
-        actionError = errorMessage(cause, m.feedback_request_failed())
+        actionError = ui.errorMessage(cause, m.feedback_request_failed())
       }
     }
   }

@@ -9,12 +9,12 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
-
 import type {
   AIRelStore,
   InteractionScope,
   SessionInfo,
 } from '../store/ai-store-types.js'
+
 import type {
   AskOptions,
   ChatCompletionChunk,
@@ -29,8 +29,7 @@ import type {
   TokenUsage,
   ToolsOperations,
 } from './ai-llm-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
@@ -205,7 +204,7 @@ export function createAILLMFunctions(
       result = await (await currentProvider()).chat(request)
     }
     catch {
-      return err(
+      return core.err(
         HaiAIError.RESOURCE_OPERATION_FAILED,
         aiM('ai_resourceOperationFailed'),
       )
@@ -401,7 +400,7 @@ export function createAILLMFunctions(
     options?: ChatHistoryOptions,
   ): Promise<HaiResult<ChatRecord[]>> {
     if (!recordStore) {
-      return ok([])
+      return core.ok([])
     }
     try {
       const records = await recordStore.query({
@@ -410,10 +409,10 @@ export function createAILLMFunctions(
         orderBy: { field: 'createdAt', direction: options?.order ?? 'desc' },
         limit: options?.limit,
       })
-      return ok(records)
+      return core.ok(records)
     }
     catch (error) {
-      return err(
+      return core.err(
         HaiAIError.LLM_HISTORY_FAILED,
         aiM('ai_llmHistoryFailed', {
           params: {
@@ -434,17 +433,17 @@ export function createAILLMFunctions(
     objectId: string,
   ): Promise<HaiResult<SessionInfo[]>> {
     if (!sessionStore) {
-      return ok([])
+      return core.ok([])
     }
     try {
       const sessions = await sessionStore.query({
         objectId,
         orderBy: { field: 'updatedAt', direction: 'desc' },
       })
-      return ok(sessions.filter(item => !item.deleted))
+      return core.ok(sessions.filter(item => !item.deleted))
     }
     catch (error) {
-      return err(
+      return core.err(
         HaiAIError.LLM_HISTORY_FAILED,
         aiM('ai_llmHistoryFailed', {
           params: {
@@ -466,7 +465,7 @@ export function createAILLMFunctions(
         return await (await currentProvider()).listModels()
       }
       catch {
-        return err(
+        return core.err(
           HaiAIError.RESOURCE_OPERATION_FAILED,
           aiM('ai_resourceOperationFailed'),
         )
@@ -496,7 +495,7 @@ export function createAILLMFunctions(
       })
       if (!result.success)
         return result as HaiResult<never>
-      return ok(result.data.choices[0]?.message?.content ?? '')
+      return core.ok(result.data.choices[0]?.message?.content ?? '')
     },
 
     async* askStream(
@@ -537,7 +536,7 @@ export function createAILLMFunctions(
         jsonSchema = z.toJSONSchema(request.schema)
       }
       catch {
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_generateObjectFailed', {
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_generateObjectFailed', {
           params: { error: 'schema cannot be represented as JSON Schema' },
         }))
       }
@@ -620,7 +619,7 @@ export function createAILLMFunctions(
           }
           catch {
             await clearPreview()
-            return err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
+            return core.err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
           }
           if (request.signal?.aborted || finishReason !== 'stop') {
             await clearPreview()
@@ -651,12 +650,12 @@ export function createAILLMFunctions(
         }
         const validated = request.schema.safeParse(parsed)
         if (validated.success)
-          return ok(validated.data)
+          return core.ok(validated.data)
         await clearPreview()
         lastError = validated.error.message
       }
 
-      return err(
+      return core.err(
         HaiAIError.INVALID_REQUEST,
         aiM('ai_generateObjectFailed', {
           params: { error: lastError || 'unknown' },

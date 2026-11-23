@@ -11,7 +11,6 @@ import { storage } from '@h-ai/storage'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { s3Env } from '../../storage/tests/helpers/storage-test-suite.js'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 /** 本机 SMTP 协议接收器，实际使用 Nodemailer/TCP，禁止向真实管理员地址投递。 */
@@ -326,7 +325,7 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
         const zip = await feedback.getExport({ id: submitted.data.id, jobId: exported.data.id }, actor)
         expect(zip.success, JSON.stringify(zip)).toBe(true)
         if (zip.success)
-          expect((await readFeedbackBundle(Buffer.from(zip.data.dataBase64, 'base64'))).success).toBe(true)
+          expect((await feedback.readBundle(Buffer.from(zip.data.dataBase64, 'base64'))).success).toBe(true)
       }
       finally {
         await feedback.close()

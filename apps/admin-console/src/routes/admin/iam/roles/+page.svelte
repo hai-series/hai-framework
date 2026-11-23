@@ -4,8 +4,8 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { CrudPage, usePermission } from '@h-ai/ui'
+  import { kit } from '@h-ai/kit/client'
+  import { CrudPage, ui } from '@h-ai/ui'
   import { createRoleCrud } from '#lib/crud/admin-crud.js'
   import * as m from '#lib/paraglide/messages.js'
 
@@ -38,7 +38,7 @@
 
   const { data }: Props = $props()
 
-  const { hasPerm } = usePermission()
+  const { hasPerm } = ui.usePermission()
   const canCreate = $derived(hasPerm('role:create') && hasPerm('role:api:create'))
   const canUpdate = $derived(hasPerm('role:update') && hasPerm('role:api:update'))
   const canDelete = $derived(hasPerm('role:delete') && hasPerm('role:api:delete'))
@@ -62,7 +62,7 @@
     return true
   }
 
-  const nav = createSvelteKitNavAdapter()
+  const nav = kit.client.createSvelteKitNavAdapter()
 </script>
 
 <svelte:head>

@@ -76,10 +76,10 @@ class MessageBoxState {
    * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * import { messageBox, message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageBoxContainer。
-   * const accepted = await messageBox.confirm({ title: '确认', message: '提交资料？', closeOnClickModal: false })
-   * if (accepted) message.success('已确认')
+   * const accepted = await ui.messageBox.confirm({ title: '确认', message: '提交资料？', closeOnClickModal: false })
+   * if (accepted) ui.message.success('已确认')
    * ```
    */
   confirm(options: MessageBoxOptions | string): Promise<boolean> {
@@ -95,9 +95,9 @@ class MessageBoxState {
    * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * import { messageBox } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageBoxContainer。
-   * const acknowledged = await messageBox.alert({ title: '提示', message: '资料已保存' })
+   * const acknowledged = await ui.messageBox.alert({ title: '提示', message: '资料已保存' })
    * ```
    */
   alert(options: MessageBoxOptions | string): Promise<boolean> {
@@ -113,12 +113,12 @@ class MessageBoxState {
    * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * import { messageBox } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageBoxContainer。
-   * const response = messageBox.confirm({ message: '提交资料？' })
-   * const item = messageBox.items[0]
+   * const response = ui.messageBox.confirm({ message: '提交资料？' })
+   * const item = ui.messageBox.items[0]
    * if (!item) throw new Error('Dialog unavailable')
-   * await messageBox.handleConfirm(item)
+   * await ui.messageBox.handleConfirm(item)
    * const accepted = await response
    * ```
    */
@@ -143,12 +143,12 @@ class MessageBoxState {
    * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * import { messageBox } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageBoxContainer。
-   * const response = messageBox.confirm({ message: '提交资料？' })
-   * const item = messageBox.items[0]
+   * const response = ui.messageBox.confirm({ message: '提交资料？' })
+   * const item = ui.messageBox.items[0]
    * if (!item) throw new Error('Dialog unavailable')
-   * await messageBox.handleCancel(item)
+   * await ui.messageBox.handleCancel(item)
    * const accepted = await response
    * ```
    */
@@ -173,12 +173,12 @@ class MessageBoxState {
    * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * import { messageBox } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageBoxContainer。
-   * const response = messageBox.confirm({ message: '提交资料？' })
-   * const item = messageBox.items[0]
+   * const response = ui.messageBox.confirm({ message: '提交资料？' })
+   * const item = ui.messageBox.items[0]
    * if (!item) throw new Error('Dialog unavailable')
-   * await messageBox.handleClose(item)
+   * await ui.messageBox.handleClose(item)
    * const accepted = await response
    * ```
    */
@@ -207,10 +207,10 @@ class MessageBoxState {
  *
  * @example
  * ```ts
- * import { messageBox, message } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * // 页面布局需挂载 MessageBoxContainer。
- * const accepted = await messageBox.confirm({ title: '确认', message: '提交这份资料？', closeOnClickModal: false })
- * if (accepted) message.success('已确认')
+ * const accepted = await ui.messageBox.confirm({ title: '确认', message: '提交这份资料？', closeOnClickModal: false })
+ * if (accepted) ui.message.success('已确认')
  * ```
  */
 export const messageBox = new MessageBoxState()

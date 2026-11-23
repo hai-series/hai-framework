@@ -5,9 +5,9 @@
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
   import { refreshAll } from '$app/navigation'
-  import { err, HaiCommonError, ok } from '@h-ai/core'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { Button, CrudPage, Modal, SensitiveOperationsForm, usePermission } from '@h-ai/ui'
+  import { core, HaiCommonError } from '@h-ai/core'
+  import { kit } from '@h-ai/kit/client'
+  import { Button, CrudPage, Modal, SensitiveOperationsForm, ui } from '@h-ai/ui'
   import { createPermissionCrud } from '#lib/crud/admin-crud.js'
   import * as m from '#lib/paraglide/messages.js'
   import { sensitiveFetch } from '#lib/services/sensitive-actions.svelte.js'
@@ -40,7 +40,7 @@
 
   const { data }: Props = $props()
 
-  const { hasPerm } = usePermission()
+  const { hasPerm } = ui.usePermission()
   const canCreate = $derived(hasPerm('permission:create') && hasPerm('permission:api:create'))
   const canDelete = $derived(hasPerm('permission:delete') && hasPerm('permission:api:delete'))
 
@@ -64,21 +64,21 @@
     return true
   }
 
-  const nav = createSvelteKitNavAdapter()
+  const nav = kit.client.createSvelteKitNavAdapter()
   let editing = $state<PermissionItem | null>(null)
 
   async function saveOperations(operations: string[]) {
     if (!editing)
-      return err(HaiCommonError.VALIDATION_ERROR)
+      return core.err(HaiCommonError.VALIDATION_ERROR)
     const response = await sensitiveFetch('iam.permissions.sensitiveOperations', `/api/iam/permissions/${encodeURIComponent(editing.id)}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sensitiveOperations: operations }),
     })
     if (!response.ok)
-      return err(HaiCommonError.INTERNAL_ERROR)
+      return core.err(HaiCommonError.INTERNAL_ERROR)
     await refreshAll()
-    return ok(undefined)
+    return core.ok(undefined)
   }
 </script>
 

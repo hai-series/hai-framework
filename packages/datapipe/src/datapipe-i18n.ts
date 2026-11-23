@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ZodError } from 'zod'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
@@ -49,7 +49,7 @@ export const datapipeM = core.i18n.createMessageGetter<DatapipeMessageKey>({
  * ```
  */
 export function datapipeConfigError(error: ZodError): HaiResult<never> {
-  return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+  return core.err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
     params: { error: error.message },
   }), error)
 }

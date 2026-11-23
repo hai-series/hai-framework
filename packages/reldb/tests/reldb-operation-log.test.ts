@@ -1,5 +1,5 @@
 import type { ReldbOpsContext } from '../src/providers/reldb-provider-base.js'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createBaseDdlOps, createBaseDmlOps, createBaseTxManager, logReldbOperation } from '../src/providers/reldb-provider-base.js'
 
@@ -82,10 +82,10 @@ describe('reldb operation log', () => {
     rawError.stack = `Error: Driver rejected ${secret}\n    at execute (database.ts:25:50)`
     const dml = createBaseDmlOps(ctx, {
       query: vi.fn(async () => { throw rawError }),
-      get: vi.fn(async () => ok(null)),
-      execute: vi.fn(async () => ok({ changes: 1 })),
-      batch: vi.fn(async () => ok(undefined)),
-      queryPage: vi.fn(async () => ok({
+      get: vi.fn(async () => core.ok(null)),
+      execute: vi.fn(async () => core.ok({ changes: 1 })),
+      batch: vi.fn(async () => core.ok(undefined)),
+      queryPage: vi.fn(async () => core.ok({
         items: [],
         total: 0,
         page: 1,
@@ -119,15 +119,15 @@ describe('reldb operation log', () => {
 
   it('logs from base DML operations before delegating to raw operations', async () => {
     const ctx = createContext()
-    const rawQuery = vi.fn(async () => ok([
+    const rawQuery = vi.fn(async () => core.ok([
       { id: 1 },
     ]))
     const dml = createBaseDmlOps(ctx, {
       query: rawQuery,
-      get: vi.fn(async () => ok(null)),
-      execute: vi.fn(async () => ok({ changes: 1 })),
-      batch: vi.fn(async () => ok(undefined)),
-      queryPage: vi.fn(async () => ok({
+      get: vi.fn(async () => core.ok(null)),
+      execute: vi.fn(async () => core.ok({ changes: 1 })),
+      batch: vi.fn(async () => core.ok(undefined)),
+      queryPage: vi.fn(async () => core.ok({
         items: [],
         total: 0,
         page: 1,
@@ -153,16 +153,16 @@ describe('reldb operation log', () => {
       maxLength: 1000,
       level: 'debug',
     })
-    const rawCreateTable = vi.fn(async () => ok(undefined))
+    const rawCreateTable = vi.fn(async () => core.ok(undefined))
     const ddl = createBaseDdlOps(ctx, {
       createTable: rawCreateTable,
-      dropTable: vi.fn(async () => ok(undefined)),
-      addColumn: vi.fn(async () => ok(undefined)),
-      dropColumn: vi.fn(async () => ok(undefined)),
-      renameTable: vi.fn(async () => ok(undefined)),
-      createIndex: vi.fn(async () => ok(undefined)),
-      dropIndex: vi.fn(async () => ok(undefined)),
-      raw: vi.fn(async () => ok(undefined)),
+      dropTable: vi.fn(async () => core.ok(undefined)),
+      addColumn: vi.fn(async () => core.ok(undefined)),
+      dropColumn: vi.fn(async () => core.ok(undefined)),
+      renameTable: vi.fn(async () => core.ok(undefined)),
+      createIndex: vi.fn(async () => core.ok(undefined)),
+      dropIndex: vi.fn(async () => core.ok(undefined)),
+      raw: vi.fn(async () => core.ok(undefined)),
     })
 
     const result = await ddl.createTable('users', {
@@ -187,14 +187,14 @@ describe('reldb operation log', () => {
       maxLength: 1000,
       level: 'debug',
     })
-    const commit = vi.fn(async () => ok(undefined))
-    const rollback = vi.fn(async () => ok(undefined))
-    const txManager = createBaseTxManager(ctx, async () => ok({
-      query: vi.fn(async () => ok([])),
-      get: vi.fn(async () => ok(null)),
-      execute: vi.fn(async () => ok({ changes: 1 })),
-      batch: vi.fn(async () => ok(undefined)),
-      queryPage: vi.fn(async () => ok({
+    const commit = vi.fn(async () => core.ok(undefined))
+    const rollback = vi.fn(async () => core.ok(undefined))
+    const txManager = createBaseTxManager(ctx, async () => core.ok({
+      query: vi.fn(async () => core.ok([])),
+      get: vi.fn(async () => core.ok(null)),
+      execute: vi.fn(async () => core.ok({ changes: 1 })),
+      batch: vi.fn(async () => core.ok(undefined)),
+      queryPage: vi.fn(async () => core.ok({
         items: [],
         total: 0,
         page: 1,

@@ -81,13 +81,13 @@ CLI website模板默认Node SSR，只安装Core/Kit/UI；注释配置和环境�
 
 ```typescript
 // vite.config.ts — SvelteKit 3 的配置在 Vite 插件中
-import { createAdapter } from '@h-ai/kit/adapter'
+import { kit } from '@h-ai/kit/adapter'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   // 无参读取项目交付配置并返回对应的 SvelteKit adapter，供 Vite 插件使用。
-  plugins: [sveltekit({ adapter: await createAdapter(), paths: { relative: false } })],
+  plugins: [sveltekit({ adapter: await kit.adapter.create(), paths: { relative: false } })],
 })
 ```
 
@@ -157,9 +157,9 @@ core（基础能力：配置、日志、i18n、HaiResult）
 
 ```typescript
 import { core } from '@h-ai/core'
-import { cache, CacheConfigSchema } from '@h-ai/cache'
-import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
-import { iam, IamConfigSchema } from '@h-ai/iam'
+import { CacheConfigSchema, cache } from '@h-ai/cache'
+import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
+import { IamConfigSchema, iam } from '@h-ai/iam'
 
 // 放入应用已有的启动函数；并发防护和关闭钩子复用当前模板。
 // 从 ./config 加载配置，注册 db、cache 和 iam 的 Schema，返回 void。

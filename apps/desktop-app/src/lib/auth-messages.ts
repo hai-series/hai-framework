@@ -1,6 +1,6 @@
 /** 桌面认证错误文案；沿用 UI 的当前语言，不把未知服务端撤销状态展示为成功。 */
 import { core } from '@h-ai/core'
-import { getGlobalLocale } from '@h-ai/ui/i18n'
+import { ui } from '@h-ai/ui/i18n'
 import messagesEnUS from '../../messages/en-US.json'
 import messagesJaJP from '../../messages/ja-JP.json'
 import messagesZhCN from '../../messages/zh-CN.json'
@@ -24,6 +24,6 @@ const getMessage = core.i18n.createMessageGetter(messages)
  */
 export function authMessage(key: keyof typeof messages['en-US']): string {
   return getMessage(key, {
-    locale: getGlobalLocale(),
+    locale: ui.getGlobalLocale(),
   })
 }

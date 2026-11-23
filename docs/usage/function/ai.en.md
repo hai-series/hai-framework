@@ -63,11 +63,11 @@ Choose models and state storage before starting in dependency order. Temporary d
 | `ai.close()` | 反序释放服务 | No arguments | `Promise<void>; wait for cleanup` | `ai.close()` |
 | `ai.config` | 诊断当前配置 | `none` | `redacted AIConfig or null` | `ai.config` |
 | `ai.isInitialized` | 检查生命周期状态 | `none` | `boolean` | `ai.isInitialized` |
-| `resolveModelEntry(llmConfig, scenario, explicit?, options?)` | Resolve a model entry by identifier | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `resolveModelEntry(llmConfig, 'summary')` |
-| `resolveModelApi(llmConfig, explicitModel?, tempApi?)` | Resolve model API capabilities | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `resolveModelApi(llmConfig, 'claude')` |
-| `resolveImageModel(imageConfig, explicit?)` | Resolve an image model | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `resolveImageModel(imageConfig)` |
-| `resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | Resolve an audio model | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `resolveAudioModel(audioConfig, 'transcribe')` |
-| `ensureAudioCredential(model)` | Check audio model credentials | `model: ResolvedAudioModel` | `HaiError or null` | `ensureAudioCredential(model)` |
+| `ai.resolveModelEntry(llmConfig, scenario, explicit?, options?)` | Resolve a model entry by identifier | `llmConfig: LLMConfig, scenario: ModelScenario, explicit?: string, options?: ResolveRequiredModelEntryOptions` | `HaiResult<ResolvedModelEntry>` | `ai.resolveModelEntry(llmConfig, 'summary')` |
+| `ai.resolveModelApi(llmConfig, explicitModel?, tempApi?)` | Resolve model API capabilities | `llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType` | `ApiType` (`'chat'`, `'responses'`, `'anthropic'`) | `ai.resolveModelApi(llmConfig, 'claude')` |
+| `ai.resolveImageModel(imageConfig, explicit?)` | Resolve an image model | `imageConfig: ImageConfig, explicit?: string` | `HaiResult<ResolvedImageModel>` | `ai.resolveImageModel(imageConfig)` |
+| `ai.resolveAudioModel(audioConfig, operation, explicit?, llmApiKey?)` | Resolve an audio model | `audioConfig: AudioConfig, operation: 'transcribe' \| 'synthesize', explicit?: string, llmApiKey?: string` | `HaiResult<ResolvedAudioModel>` | `ai.resolveAudioModel(audioConfig, 'transcribe')` |
+| `ai.ensureAudioCredential(model)` | Check audio model credentials | `model: ResolvedAudioModel` | `HaiError or null` | `ai.ensureAudioCredential(model)` |
 
 #### Initialization dependencies and model selection arguments
 
@@ -75,11 +75,11 @@ Choose models and state storage before starting in dependency order. Temporary d
 | --- | --- | --- |
 | `init`, `AIInitOptions` | `config`, `runner`, `storeProvider` | Config and options are optional. See [AI settings](../configuration/ai.en.md) for model and file fields. The host owns Runner initialization and shutdown. An explicit store provider takes precedence. Omission uses initialized RelDB + VecDB or permitted ephemeral storage |
 | `AIInitOptions` | `acpPolicy`, `acpAdapters`, `mcpJobFiles` | Optional host policy, adapter name-to-implementation map, and callbacks for MCP job reads and staged publication. Supply these for the managed features that need them. See [ACP](#acp) and [MCP](#mcp) |
-| `resolveModelEntry`, `resolveModelApi` | `llmConfig`, `scenario`, `explicit/explicitModel`, `options.missingApiKeyMessage`, `tempApi` | Pass validated LLM settings. Entry resolution requires the scenario and prefers an explicit model, then the scenario, default scenario, and global model settings. Optionally supply a missing-key message. Protocol resolution can use a temporary API override |
-| `resolveImageModel` | `imageConfig`, `explicit` | Pass validated image settings with optional model override. Omission uses the configured generation model |
-| `resolveAudioModel`, `ensureAudioCredential` | `audioConfig`, `operation`, `explicit`, `llmApiKey`, `model` | Pass validated audio settings and transcription or synthesis. Omission uses the operation’s configured model. An LLM credential applies only when inheritance is enabled. Credential validation separately takes the resolved model and returns a provider error or `null` |
+| `ai.resolveModelEntry`, `ai.resolveModelApi` | `llmConfig`, `scenario`, `explicit/explicitModel`, `options.missingApiKeyMessage`, `tempApi` | Pass validated LLM settings. Entry resolution requires the scenario and prefers an explicit model, then the scenario, default scenario, and global model settings. Optionally supply a missing-key message. Protocol resolution can use a temporary API override |
+| `ai.resolveImageModel` | `imageConfig`, `explicit` | Pass validated image settings with optional model override. Omission uses the configured generation model |
+| `ai.resolveAudioModel`, `ai.ensureAudioCredential` | `audioConfig`, `operation`, `explicit`, `llmApiKey`, `model` | Pass validated audio settings and transcription or synthesis. Omission uses the operation’s configured model. An LLM credential applies only when inheritance is enabled. Credential validation separately takes the resolved model and returns a provider error or `null` |
 
-With `scenarios: { summary: 'brief' }`, `resolveModelEntry(config, 'summary')` selects the brief entry. With valid credentials it returns that model’s protocol and runtime settings.
+With `scenarios: { summary: 'brief' }`, `ai.resolveModelEntry(config, 'summary')` selects the brief entry. With valid credentials it returns that model’s protocol and runtime settings.
 
 #### Scenario: Prepare models and stores
 
@@ -1131,8 +1131,8 @@ Inspect model capabilities before choosing complete or streaming audio. Browser 
 | Full synthesis only | `targetDurationMs`, `durationToleranceMs` | Target is a positive integer in ms. Tolerance is a nonnegative integer in ms and requires a target. Target is mutually exclusive with `speed` and requires model support |
 | Transcription and synthesis options | `model`, `strictCapabilities`, `signal` | Omitted model uses the operation’s configuration. Strict mode is off by default. With it on, unsupported advanced capabilities fail before the request. Pass a signal to cancel |
 | `AudioCapabilitiesRequest` and `models` resources | `operation`, `model`, definition, and version | Choose `transcribe` or `synthesize` for capability queries, with optional model. See [AI settings](../configuration/ai.en.md) for model definition fields. Use the version read from the model registry |
-| `blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `blobToWav(blob, { maxDurationSeconds: 30 })` |
-| `createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `createAudioRecorder({ onStop })` |
+| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 For example, transcribe prepared audio with `{ timestampGranularities: ['word'], strictCapabilities: true }`. A supporting model can return word times in milliseconds. An unsupported model returns a capability error before dispatch.
 
@@ -1150,17 +1150,17 @@ ASR takes real audio bytes and TTS text, returning transcription or formatted au
 Request microphone access from a user action. The application can transcribe snapshots during recording or wait for the final Blob from `onStop`. Call `close()` on cancellation or unmount to release tracks and discard the session.
 
 ```ts
-import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
+import { ai } from '@h-ai/ai/client'
 
 function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) => void) {
   // Create a session with a 30-second stop and a 1 MiB encoded-size limit. No tracks are opened until start().
-  const recorder = createAudioRecorder({
+  const recorder = ai.createAudioRecorder({
     maxDurationSeconds: 30,
     maxInputBytes: 1_048_576,
     onError,
     onStop(recorded) {
       // Convert the complete Blob to mono PCM16. A delayed final chunk is trimmed to 30 seconds.
-      void blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
+      void ai.blobToWav(recorded, { maxInputBytes: 1_048_576, maxDurationSeconds: 30, overflow: 'truncate' })
         .then(onReady, onError)
     },
   })
@@ -1175,7 +1175,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-The browser checks Blob size before decoding and duration after decoding. The numeric sample-rate argument to `blobToWav(recorded, 16000)` remains supported. A duration limit rejects by default. Set `overflow: "truncate"` to keep the beginning. Validate uploaded audio on the server.
+The browser checks Blob size before decoding and duration after decoding. The numeric sample-rate argument to `ai.blobToWav(recorded, 16000)` remains supported. A duration limit rejects by default. Set `overflow: "truncate"` to keep the beginning. Validate uploaded audio on the server.
 
 #### Scenario: Maintain a stored definition
 
@@ -1374,8 +1374,8 @@ Use `ai.acp.sessions.resume(id)` to recover the original native history. Agent d
 Run this on Node.js after authorizing the absolute repository directory and revision. The sample revision has no `notes.txt`. Reading and comparing snapshots produces a patch without changing or pushing the source repository.
 
 ```ts
-import type { ACPPublishSnapshot } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
+
+import { type ACPPublishSnapshot, ai } from '@h-ai/ai'
 
 async function previewChange(directory: string, revision: string) {
   // Read a snapshot for the supplied directory and Git revision, including the resolved revision. A read failure returns an error.

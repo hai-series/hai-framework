@@ -17,7 +17,7 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 
 普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明由已校验反馈配置派生的 `maxTransportBytes`，不依赖反馈初始化/重试状态。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
-宿主启动时用 `@h-ai/api-contract/feedback` 的 `resolveFeedbackBudget(已校验反馈配置)` 预计算材料路由容量，不读取未就绪反馈模块的默认 `budget`；可选反馈失败/重试不改变普通业务上限或已配置材料容量。
+宿主启动时用 `@h-ai/api-contract/feedback` 的 `apiContract.resolveFeedbackBudget(已校验反馈配置)` 预计算材料路由容量，不读取未就绪反馈模块的默认 `budget`；可选反馈失败/重试不改变普通业务上限或已配置材料容量。
 
 ## 使用路径
 
@@ -61,7 +61,7 @@ captureConsole/persistDraft/keyScreenshots 默认 false；持久化启用时由�
 - 署名头 X-Hai-Feedback-Signature = sha256=HMAC-SHA256(secret, X-Hai-Feedback-Timestamp + '.' + 原始正文)，时间戳为 Unix 秒；接收方验证原始字节、恒定时间比较、时间偏差并防重放。get().jobs 提供 webhook 状态/attempts/安全 lastError；FeedbackDetail.webhook 传对应任务，管理员 retry target: webhook，需要 feedback:process 权限。
 - YAML/环境映射同步 HAI_FEEDBACK_BUSINESSCOLLECTIONTIMEOUTMS、HAI_FEEDBACK_WEBHOOKURL、HAI_FEEDBACK_WEBHOOKSECRET、HAI_FEEDBACK_WEBHOOKTIMEOUTMS。函数不放 YAML 或 PUBLIC_；示例见已安装模块 README 的业务证据与 Webhook 章节。
 
-Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capacitor，启动时 configureFeedbackSaving(saveTauriFeedbackFile/saveCapacitorFeedbackFile)，生成工程自动配置。平台适配拥有保存对话框、缓存与取消清理；业务仅调用 SDK。
+Web 使用 `@h-ai/feedback/client`。桌面端从 `@h-ai/feedback/tauri` 导入 `feedback`，启动时调用 `feedback.configureSaving(feedback.saveTauriFile)`。移动端从 `@h-ai/feedback/capacitor` 导入 `feedback`，调用 `feedback.configureSaving(feedback.saveCapacitorFile)`。生成工程会自动配置。保存对话框、缓存与取消清理由对应平台处理。
 
 ## 资源与可用性约束
 
@@ -80,7 +80,7 @@ Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capa
 
 参考管理台和 feedback fullstack 模板显式 replay:true；SDK 缺省仍为 false。FeedbackDetail.onreplay 必须按需取得 kind:replay 的全部分页，详情“页面回放”提供播放/定位与无记录提示；原始录屏在操作现场播放。保存反馈到本地后用 hai feedback view <zip> 查看；本地包标记尚未取得的服务端证据。环境只展示实际构建/页面与服务端 envAllowlist 非凭据键，不能臆造全量环境已采集。
 
-保存与退出：saveDraft 及 saveFeedbackFile 选择 Web 下载、Tauri 原生保存、Capacitor 缓存分享，取消返回 cancelled；生成原生工程配置 optional peer 插件及最小权限。createFeedbackReview(typedClient.feedback.reports) 负责全部回放分页、导出轮询及 retryReport(id) 失败任务重试；退出身份调用 review.close()、client.close({ discard: true }) 清理采集、草稿、预览和旧轮询。服务端环境只采实际 envAllowlist 非敏感值；verificationCode/otpCode 等默认脱敏，不把数目当材料正文。
+保存与退出：saveDraft 及 saveFeedbackFile 选择 Web 下载、Tauri 原生保存、Capacitor 缓存分享，取消返回 cancelled；生成原生工程配置 optional peer 插件及最小权限。feedback.createReview(typedClient.feedback.reports) 负责全部回放分页、导出轮询及 retryReport(id) 失败任务重试；退出身份调用 review.close()、client.close({ discard: true }) 清理采集、草稿、预览和旧轮询。服务端环境只采实际 envAllowlist 非敏感值；verificationCode/otpCode 等默认脱敏，不把数目当材料正文。
 
 服务策略不可用时仍可本地准备/保存，明确 server-policy-unavailable；在线提交重新校验，不能以本地预算伪装服务端受理成功。onfileschange 的第二参数 removedAttachmentIds 透传 addFiles，删除与新增原子合并且按有效容量检查。
 

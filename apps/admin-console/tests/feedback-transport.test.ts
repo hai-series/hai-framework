@@ -1,4 +1,4 @@
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ vi.mock('@h-ai/core', async (importOriginal) => {
         get: (name: string) => name === 'feedback'
           ? state.settings
           : undefined,
-        load: (_name: string, _filename: string, schema: { parse: (value: unknown) => unknown }) => original.ok(schema.parse({
+        load: (_name: string, _filename: string, schema: { parse: (value: unknown) => unknown }) => original.core.ok(schema.parse({
           transport: { maxPlaintextBytes: 256 * 1024, routePlaintextBytes: state.routes },
         })),
       },
@@ -37,7 +37,7 @@ it.each([4, 40])('反馈未就绪时仍按配置保留 %s MiB 路由预算', asy
   expect(result.transport).not.toBe(false)
   if (!result.transport || !result.transport.routePlaintextBytes)
     throw new Error('Transport disabled')
-  expect(result.transport.routePlaintextBytes['/api/feedback/reports']).toBe(resolveFeedbackBudget({ maxTotalBytes: mib * 1024 * 1024 }).maxTransportBytes)
+  expect(result.transport.routePlaintextBytes['/api/feedback/reports']).toBe(apiContract.resolveFeedbackBudget({ maxTotalBytes: mib * 1024 * 1024 }).maxTransportBytes)
   expect(result.transport.maxPlaintextBytes).toBe(256 * 1024)
 })
 

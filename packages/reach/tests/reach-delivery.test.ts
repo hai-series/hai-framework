@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { createServer as createSmtpServer } from 'node:net'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProviderConfigSchema, HaiReachError, reach, SmtpProviderConfigSchema } from '../src/index.js'
@@ -237,7 +237,7 @@ describe('delivery ownership and external effects', { concurrent: false }, () =>
       send: async () => {
         started.resolve()
         await completed.promise
-        return ok({ success: true })
+        return core.ok({ success: true })
       },
     }
     const renew = vi.spyOn(repository, 'renewClaim')
@@ -373,7 +373,7 @@ describe('delivery ownership and external effects', { concurrent: false }, () =>
         effects += 1
         started.resolve()
         await completed.promise
-        return ok({ success: true })
+        return core.ok({ success: true })
       },
     }
     const row = await queued('old')

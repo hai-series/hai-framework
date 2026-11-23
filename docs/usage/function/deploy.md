@@ -66,8 +66,8 @@ pnpm run deploy --env prod --build
 输入是已构建工程目录和初始化使用的真实部署配置；scan 先读取需求，provisionAll 会开通所选服务，必须在审查计划后使用，不能把它当只读探测。最小接入的 --plan 不执行开通。
 
 ```ts
-import type { DeployConfigInput } from '@h-ai/deploy'
-import { deploy } from '@h-ai/deploy'
+
+import { type DeployConfigInput, deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
   // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. Return the failed result on failure.
@@ -116,7 +116,7 @@ pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
-自动化可使用 `hai build --target image --json` 的 `artifactDir` 指定本次构建。`readDeploymentArtifact` 校验归档路径及 SHA-256，并返回清单中的来源提交、工作区状态和镜像平台；历史清单可以省略这些字段。
+自动化可使用 `hai build --target image --json` 的 `artifactDir` 指定本次构建。`deploy.readDeploymentArtifact` 校验归档路径及 SHA-256，并返回清单中的来源提交、工作区状态和镜像平台；历史清单可以省略这些字段。
 
 源码编译、镜像构建、桌面打包分别对应 compile/image/desktop。构建不选择部署环境、不注入运行期密钥。原生安装包在对应操作系统准备 SDK 与 Rust 工具链后构建。
 
@@ -137,7 +137,7 @@ SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额
 
 `--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源与平台范围见[下载源和代理](../configuration/delivery.md#下载源和代理).
 
-SDK 的 `DeployAppOptions.imageSource` 为 `{ type: 'cn' }` 或 `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`，`proxy` 为 `{ mode: 'inherit' }` 或 `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`。缺省为官方源、继承进程代理。`resolveImageReference()` / `resolveDownloadProxy()` 是无需 init 的解析工具，不修改引擎设置。中间件归档保留原始引用，服务器继续离线导入。
+SDK 的 `DeployAppOptions.imageSource` 为 `{ type: 'cn' }` 或 `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`，`proxy` 为 `{ mode: 'inherit' }` 或 `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`。缺省为官方源、继承进程代理。`deploy.resolveImageReference()` / `deploy.resolveDownloadProxy()` 是无需 init 的解析工具，不修改引擎设置。中间件归档保留原始引用，服务器继续离线导入。
 
 ```sh
 # Build with the China image and npm sources and create a prod offline bundle. Build or packaging failure exits nonzero.
@@ -388,13 +388,13 @@ Vercel API 与文件上传固定请求官方入口，拒绝重定向，每次请
 
 命令 deadline 包含 helper 启动和输出处理；超时、输入/输出或回调异常会终止受管理进程。POSIX 使用独立进程组，Windows 通过内嵌 PowerShell/.NET Job Object 先挂起创建、成功分配后恢复，禁止 breakaway；helper、编译或分配失败不会降级为裸进程。Windows 需要系统 PowerShell 和 Add-Type，调用隐藏窗口且不加载用户 profile，参数、环境与 UTF-8 管道保持原样。POSIX 命令须让后代继承进程组；已脱离组的系统守护进程及远端服务不在本地终止确认范围。
 
-`terminationTimeoutMs` 是异常后的独立核验等待，默认 10000、最大 60000 毫秒。发送 kill 不等于确认；结果在受管理 Job/进程组归零后记录 `localTermination: 'confirmed'`，核验超时或失败为 `unknown`，尚未启动为 `not-started`。在 `if (!result.success)` 分支调用公开 `getDeployCommandState(result.error)` 读取原因和状态；不含原始异常或命令参数。已经进入的异步输出回调不能撤销，异常后不再交付新输出。
+`terminationTimeoutMs` 是异常后的独立核验等待，默认 10000、最大 60000 毫秒。发送 kill 不等于确认；结果在受管理 Job/进程组归零后记录 `localTermination: 'confirmed'`，核验超时或失败为 `unknown`，尚未启动为 `not-started`。在 `if (!result.success)` 分支调用公开 `deploy.getDeployCommandState(result.error)` 读取原因和状态；不含原始异常或命令参数。已经进入的异步输出回调不能撤销，异常后不再交付新输出。
 
 SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
 #### 只读部署计划
 
-`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
+`deploy.createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
 
 需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
 
@@ -455,11 +455,11 @@ save/saveAll 输入从安全通道取得的真实值，成功无业务数据；l
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `loadDeploymentEnvironment(options)` | 读取部署环境层 | 必填 `options` 指定目标环境和目录。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
-| `mergeEnvironmentLayers(layers, prefix?)` | 按优先级合并环境变量 | 必填 `layers`，按优先级从低到高排列的变量映射。`prefix` 省略时合并全部名称，指定时只合并同名及其下划线子项。 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
-| `loadDeploymentConfig(name, path, values)` | 读取目标环境的部署配置 | 必填模块名 `name`、YAML 或工程 JSON 路径 `path`、解析覆盖变量 `values`。 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
-| `saveDeploymentEnvironment(environment, values, options?)` | 保存部署环境变量 | 必填已读取的目标 `environment` 与待写变量映射 `values`。可选 `options` 控制私有保存和替换。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<string[]>`，成功数据是写入的键 | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
-| `saveMiddlewareEnvironment(environment, options)` | 保存中间件环境变量 | 必填目标 `environment` 和选择连接所需的 `options`。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<string[]>`，成功数据是写入的键 | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+| `deploy.loadDeploymentEnvironment(options)` | 读取部署环境层 | 必填 `options` 指定目标环境和目录。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<DeploymentEnvironment>` | `deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `deploy.mergeEnvironmentLayers(layers, prefix?)` | 按优先级合并环境变量 | 必填 `layers`，按优先级从低到高排列的变量映射。`prefix` 省略时合并全部名称，指定时只合并同名及其下划线子项。 | 扁平变量映射 | `deploy.mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `deploy.loadDeploymentConfig(name, path, values)` | 读取目标环境的部署配置 | 必填模块名 `name`、YAML 或工程 JSON 路径 `path`、解析覆盖变量 `values`。 | `HaiResult<Record<string, unknown>>` | `deploy.loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `deploy.saveDeploymentEnvironment(environment, values, options?)` | 保存部署环境变量 | 必填已读取的目标 `environment` 与待写变量映射 `values`。可选 `options` 控制私有保存和替换。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<string[]>`，成功数据是写入的键 | `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `deploy.saveMiddlewareEnvironment(environment, options)` | 保存中间件环境变量 | 必填目标 `environment` 和选择连接所需的 `options`。见[部署环境参数](#deployment-environment-options)。 | `HaiResult<string[]>`，成功数据是写入的键 | `deploy.saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
 
 <a id="deployment-environment-options"></a>
 
@@ -467,43 +467,43 @@ save/saveAll 输入从安全通道取得的真实值，成功无业务数据；l
 
 | 字段 | 默认与条件 | 用途 |
 | --- | --- | --- |
-| `loadDeploymentEnvironment.options.environment` / `envDir` | 均必填 | 指定环境名和 dotenv 目录，如 `prod` 与 `./deployment`。 |
-| `loadDeploymentEnvironment.options.requireFile` | 默认 `true` | 设为 `false` 时允许目标环境文件缺失，继续读取已有文件。 |
-| `saveDeploymentEnvironment.options.private` | 默认 `false` | 设为 `true` 时将本次变量全部写到 `.env.<environment>.local`。默认行为会把识别出的密钥移入同一私有文件。 |
-| `saveDeploymentEnvironment.options.replace` | 默认空列表 | 保存前只从目标环境的公共和私有文件清理同名键与下划线子项。用于提交完整替换。 |
-| `saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | 均必填 | 指定包含 config 目录的应用根、扫描得到的配置路径、所选后端名称。 |
-| `saveMiddlewareEnvironment.options.configuration` / `updates` | 可省略。云开通前可省略连接。 | 提供时组合所选后端的完整连接与本次其他变量更新。 |
+| `deploy.loadDeploymentEnvironment.options.environment` / `envDir` | 均必填 | 指定环境名和 dotenv 目录，如 `prod` 与 `./deployment`。 |
+| `deploy.loadDeploymentEnvironment.options.requireFile` | 默认 `true` | 设为 `false` 时允许目标环境文件缺失，继续读取已有文件。 |
+| `deploy.saveDeploymentEnvironment.options.private` | 默认 `false` | 设为 `true` 时将本次变量全部写到 `.env.<environment>.local`。默认行为会把识别出的密钥移入同一私有文件。 |
+| `deploy.saveDeploymentEnvironment.options.replace` | 默认空列表 | 保存前只从目标环境的公共和私有文件清理同名键与下划线子项。用于提交完整替换。 |
+| `deploy.saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | 均必填 | 指定包含 config 目录的应用根、扫描得到的配置路径、所选后端名称。 |
+| `deploy.saveMiddlewareEnvironment.options.configuration` / `updates` | 可省略。云开通前可省略连接。 | 提供时组合所选后端的完整连接与本次其他变量更新。 |
 
-例如对 `prod` 调用 `saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })`，成功数据为 `["HAI_DB_HOST"]`，公共变量写入目标目录的 `.env.prod`。
+例如对 `prod` 调用 `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })`，成功数据为 `["HAI_DB_HOST"]`，公共变量写入目标目录的 `.env.prod`。
 
 #### 场景：读取、合并与保存部署变量
 
 输入目录由操作者选择，示例写入所选 prod 环境，只有在确认目录后调用。load/merge 读取变量，save 返回实际写入的键名；下面不会展示秘密值。
 
 ```ts
-import type { MiddlewareRequirement } from '@h-ai/deploy'
-import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+
+import { type MiddlewareRequirement, deploy } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
   // Load the required prod environment from envDir. Success contains the merged values and file information. Return the failed result if loading fails.
-  const environmentResult = loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
+  const environmentResult = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
   if (!environmentResult.success)
     return environmentResult
   const environment = environmentResult.data
   // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
-  const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
+  const values = deploy.mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
   // Resolve this app's _cache.yml with those environment values. Success is a cache config object. Return the failed result on load or expansion failure.
-  const configResult = loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
+  const configResult = deploy.loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
   if (!configResult.success)
     return configResult
   const config = configResult.data
   // Write the memory override to the private production environment. Success lists written variable names. Return the failed result on failure.
-  const writtenResult = saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
+  const writtenResult = deploy.saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
   if (!writtenResult.success)
     return writtenResult
   const written = writtenResult.data
   // Save the given cache requirement as the memory backend for this app. Success lists updated names. Return the failed result if configuration cannot be written.
-  const middlewareResult = saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
+  const middlewareResult = deploy.saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
   if (!middlewareResult.success)
     return middlewareResult
   const middleware = middlewareResult.data
@@ -577,10 +577,10 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `canKeepMiddleware(requirement, backend, environment)` | 检查是否可保留现有中间件 | 必填 `requirement` 为扫描到的依赖，`backend` 为目录中的选定后端，`environment` 为目标环境快照。 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
-| `describeMiddlewareBackend(backend)` | 取得中间件后端说明 | 必填 `backend`，可传含 `purpose` 的完整目录条目或仅含该字段的对象。 | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
-| `validateMiddlewareField(options)` | 检查中间件表单字段 | 必填 `options` 包含表单值、字段定义与实际后端。见[中间件字段参数](#middleware-field-options)。 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
-| `parseMiddlewareField(options)` | 解析中间件表单字段 | 必填 `options` 包含表单值、字段定义和后端，可开启托管模式。见[中间件字段参数](#middleware-field-options)。 | `HaiResult<unknown>`，数据按字段类型转换 | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+| `deploy.canKeepMiddleware(requirement, backend, environment)` | 检查是否可保留现有中间件 | 必填 `requirement` 为扫描到的依赖，`backend` 为目录中的选定后端，`environment` 为目标环境快照。 | 能否保留该中间件的 boolean | `deploy.canKeepMiddleware(requirement, backend, environment)` |
+| `deploy.describeMiddlewareBackend(backend)` | 取得中间件后端说明 | 必填 `backend`，可传含 `purpose` 的完整目录条目或仅含该字段的对象。 | 本地化的功能说明 | `deploy.describeMiddlewareBackend(backend)` |
+| `deploy.validateMiddlewareField(options)` | 检查中间件表单字段 | 必填 `options` 包含表单值、字段定义与实际后端。见[中间件字段参数](#middleware-field-options)。 | 校验是否通过的 boolean | `deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `deploy.parseMiddlewareField(options)` | 解析中间件表单字段 | 必填 `options` 包含表单值、字段定义和后端，可开启托管模式。见[中间件字段参数](#middleware-field-options)。 | `HaiResult<unknown>`，数据按字段类型转换 | `deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
 
 <a id="middleware-field-options"></a>
 
@@ -589,19 +589,19 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 | 字段 | 默认与条件 | 用途 |
 | --- | --- | --- |
 | `options.value` / `field` / `backend` | 均必填 | 分别给出原始表单字符串、目录字段定义及实际后端。字段类型和后端共同决定校验。 |
-| `options.managed` | 默认关闭，仅 `parseMiddlewareField` 支持 | 设为 `true` 时，声明为 `secret` 或 `managed` 的字段可留空，返回 `undefined`。 |
+| `options.managed` | 默认关闭，仅 `deploy.parseMiddlewareField` 支持 | 设为 `true` 时，声明为 `secret` 或 `managed` 的字段可留空，返回 `undefined`。 |
 
-例如 `parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` 成功返回布尔值 `false`。
+例如 `deploy.parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` 成功返回布尔值 `false`。
 
 #### 场景：核对中间件表单
 
 ```ts
 // import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
-import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 // Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
-validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
+deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
 // Parse SMTP secure from the string false. The result is the boolean false. Return the failed result if parsing fails.
-const parseMiddlewareFieldResult = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+const parseMiddlewareFieldResult = deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
 if (!parseMiddlewareFieldResult.success)
   return parseMiddlewareFieldResult
 parseMiddlewareFieldResult.data // false
@@ -619,27 +619,27 @@ parseMiddlewareFieldResult.data // false
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `normalizeProjectName(name)` | 规范化项目标识 | 必填 `name` 为应用名称，可以带 npm scope。 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
-| `artifactChecksum(file)` | 计算交付产物校验和 | 必填 `file` 是现有本地镜像或交付产物的文件路径。 | `Promise<string>`，文件 SHA-256，读取失败拒绝 Promise | `await artifactChecksum('./serv.tar')` |
-| `getDeployRecovery(error)` | 读取本次部署恢复信息 | 必填 `error` 是部署失败的 `HaiError`，从中读取恢复信息。 | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+| `deploy.normalizeProjectName(name)` | 规范化项目标识 | 必填 `name` 为应用名称，可以带 npm scope。 | 规范化的部署项目名 | `deploy.normalizeProjectName('@shop/orders')` |
+| `deploy.artifactChecksum(file)` | 计算交付产物校验和 | 必填 `file` 是现有本地镜像或交付产物的文件路径。 | `Promise<string>`，文件 SHA-256，读取失败拒绝 Promise | `await deploy.artifactChecksum('./serv.tar')` |
+| `deploy.getDeployRecovery(error)` | 读取本次部署恢复信息 | 必填 `error` 是部署失败的 `HaiError`，从中读取恢复信息。 | `DeployRecoveryInfo \| undefined` | `deploy.getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
 
 #### 场景：核对产物身份与恢复信息
 
 先构建出本次产物；digest 是该文件的 SHA-256。传入失败回执才能读取恢复信息，getDeployRecovery 不执行恢复，也不把未知远端结果改为成功。
 
 ```ts
-import { artifactChecksum, getDeployRecovery, normalizeProjectName } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
 async function inspectDelivery(appDir: string, artifactFile: string) {
   // Normalize the supplied scoped name to the deploy project identifier orders.
-  const project = normalizeProjectName('@shop/orders') // 'orders'
+  const project = deploy.normalizeProjectName('@shop/orders') // 'orders'
   // Hash the existing artifact at the supplied path. Success is its SHA-256 digest. An unreadable path rejects.
-  const digest = await artifactChecksum(artifactFile) // existing artifact; failures reject
+  const digest = await deploy.artifactChecksum(artifactFile) // existing artifact; failures reject
   // Package the supplied app for prod without publishing. Success contains bundle details. On failure inspect recovery below.
   const delivered = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
   if (!delivered.success)
     // Extract the recovery information attached to this deploy failure, when available.
-    return { project, digest, error: delivered.error, recovery: getDeployRecovery(delivered.error) }
+    return { project, digest, error: delivered.error, recovery: deploy.getDeployRecovery(delivered.error) }
   return { project, digest, delivery: delivered.data }
 }
 ```
@@ -662,7 +662,7 @@ async function inspectDelivery(appDir: string, artifactFile: string) {
 #### 启动后按同一个 ID 核对的场景
 
 ```ts
-import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+import { type DeployBundleExecution, type DeployReleaseVerification, deploy } from '@h-ai/deploy'
 
 export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
   // 传入 CLI 的标准输出和工程目录，核对构建来自指定的干净提交。失败时终止当前交付。

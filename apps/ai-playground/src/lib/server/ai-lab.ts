@@ -10,7 +10,7 @@ import type { ChatCompletionChunk, ChatMessage, MemoryEntry, MemoryType, Referen
 import type { HaiResult } from '@h-ai/core'
 import type { ChatReply, LabMessage, LabStatus, RememberResult } from '#lib/ai-lab-types.js'
 import { ai } from '@h-ai/ai'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { getAIPlaygroundMetadata } from './init.js'
 
 /** 对话系统提示：通用助手 + 记忆上下文安全约束（记忆视为不可信用户上下文，防提示注入） */
@@ -47,7 +47,7 @@ async function prepareChatMessages(input: ChatInput): Promise<HaiResult<ChatMess
   ]
 
   if (!input.useMemory)
-    return ok(conversation)
+    return core.ok(conversation)
 
   return scopedMemory(input.profileId).injectMemories(conversation, {
     topK: 6,
@@ -107,7 +107,7 @@ export async function chatWithMemory(input: ChatInput, signal?: AbortSignal): Pr
   const reply = typeof content === 'string'
     ? content.trim()
     : ''
-  return ok({ reply })
+  return core.ok({ reply })
 }
 
 /** 多轮对话流：先完成可选记忆注入，再逐块返回 LLM 输出。 */
@@ -119,7 +119,7 @@ export async function streamChatWithMemory(
   if (!prepared.success)
     return prepared
 
-  return ok(ai.llm.chatStream({
+  return core.ok(ai.llm.chatStream({
     messages: prepared.data,
     objectId: input.profileId,
     sessionId: input.sessionId,
@@ -161,7 +161,7 @@ export async function rememberExchange(input: {
         core.logger.warn('AI memory extraction failed', { code: extracted.error.code })
       return extracted
     }
-    return ok({ remembered: extracted.data.length })
+    return core.ok({ remembered: extracted.data.length })
   }
   finally {
     clearTimeout(timeout)

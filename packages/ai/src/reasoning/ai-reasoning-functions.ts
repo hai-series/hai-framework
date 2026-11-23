@@ -6,9 +6,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AIConfig, ModelScenario } from '../ai-config.js'
 
+import type { AIConfig, ModelScenario } from '../ai-config.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+
 import type {
   ReasoningOperations,
   ReasoningOptions,
@@ -16,8 +17,7 @@ import type {
   ReasoningStep,
   ReasoningStreamEvent,
 } from './ai-reasoning-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -111,7 +111,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       const choice = chatResult.data.choices[0]
       if (!choice) {
-        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
           params: { error: 'No response from LLM' },
         }))
       }
@@ -181,7 +181,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
 
-        return ok({
+        return core.ok({
           answer,
           steps,
           strategy: 'react',
@@ -192,7 +192,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     }
 
     // 达到最大轮次
-    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
+    return core.err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
       params: { error: `Max rounds (${maxRounds}) reached` },
     }))
   }
@@ -249,7 +249,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
     messages.push({ role: 'assistant', content: answer })
 
-    return ok({
+    return core.ok({
       answer,
       steps,
       strategy: 'cot',
@@ -370,7 +370,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           ? msg.content
           : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
-        return ok({
+        return core.ok({
           answer,
           steps,
           strategy: 'plan-execute',
@@ -380,7 +380,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       }
     }
 
-    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
+    return core.err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
       params: { error: `Max rounds (${maxRounds}) reached` },
     }))
   }
@@ -399,14 +399,14 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           case 'plan-execute':
             return await runPlanExecute(query, options ?? {})
           default:
-            return err(HaiAIError.REASONING_STRATEGY_NOT_FOUND, aiM('ai_internalError', {
+            return core.err(HaiAIError.REASONING_STRATEGY_NOT_FOUND, aiM('ai_internalError', {
               params: { error: `Unknown strategy: ${strategy}` },
             }))
         }
       }
       catch (error) {
         logger.error('Reasoning failed', { error })
-        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
           params: {
             error: String(error),
           },

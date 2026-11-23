@@ -8,7 +8,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DeviceInfo } from './capacitor-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
@@ -39,7 +39,7 @@ export async function getDeviceInfo(): Promise<HaiResult<DeviceInfo>> {
     const { Device } = await import('@capacitor/device')
     const info = await Device.getInfo()
 
-    return ok({
+    return core.ok({
       platform: info.platform as DeviceInfo['platform'],
       osVersion: info.osVersion,
       model: info.model,
@@ -48,7 +48,7 @@ export async function getDeviceInfo(): Promise<HaiResult<DeviceInfo>> {
     })
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.DEVICE_INFO_FAILED,
       capacitorM('capacitor_deviceInfoFailed'),
       cause,
@@ -81,13 +81,13 @@ export async function getAppVersion(): Promise<HaiResult<{ version: string, buil
     const { App } = await import('@capacitor/app')
     const info = await App.getInfo()
 
-    return ok({
+    return core.ok({
       version: info.version,
       build: info.build,
     })
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.APP_VERSION_FAILED,
       capacitorM('capacitor_appVersionFailed'),
       cause,

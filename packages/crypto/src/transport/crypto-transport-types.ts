@@ -60,7 +60,7 @@ export const TRANSPORT_TIME_LIMITS = Object.freeze({
  *
  * @example
  * ```ts
- * import { crypto, type KeyExchangeRequest } from '@h-ai/crypto'
+ * import { type KeyExchangeRequest, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -113,7 +113,7 @@ export interface KeyExchangeResponse {
  *
  * @example
  * ```ts
- * import { crypto, type TransportKeyPair } from '@h-ai/crypto'
+ * import { type TransportKeyPair, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -267,7 +267,7 @@ export interface TransportServerKeyRing {
  *
  * @example
  * ```ts
- * import { crypto, type TransportCryptoServiceLike } from '@h-ai/crypto'
+ * import { type TransportCryptoServiceLike, crypto } from '@h-ai/crypto'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {

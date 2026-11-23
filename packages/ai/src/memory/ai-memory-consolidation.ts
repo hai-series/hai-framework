@@ -7,8 +7,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+
 import type {
   MemoryEntry,
   MemoryEntryInput,
@@ -16,8 +16,7 @@ import type {
   MemoryOperations,
   MemoryType,
 } from './ai-memory-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -141,7 +140,7 @@ async function collectRelated(
     for (const entry of result.data)
       related.set(entry.id, entry)
   }
-  return ok([
+  return core.ok([
     ...related.values(),
   ])
 }
@@ -292,7 +291,7 @@ async function applyConsolidationOps(
     entries.push(addResult.data)
   }
 
-  return ok(entries)
+  return core.ok(entries)
 }
 
 /**
@@ -336,7 +335,7 @@ export async function extractAndConsolidate(
 
   const candidates = extractResult.data
   if (candidates.length === 0)
-    return ok([])
+    return core.ok([])
 
   const relatedResult = await collectRelated(deps, candidates, options)
   if (!relatedResult.success)
@@ -372,7 +371,7 @@ export async function extractAndConsolidate(
     signal: options?.signal,
   })
   if (!consolidationResult.success) {
-    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', {
+    return core.err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', {
       params: {
         error: String(consolidationResult.error.message),
       },
@@ -408,5 +407,5 @@ export async function extractAndConsolidate(
     ops: ops.length,
     written: applyResult.data.length,
   })
-  return ok(applyResult.data)
+  return core.ok(applyResult.data)
 }

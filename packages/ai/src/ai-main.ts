@@ -1,5 +1,9 @@
 import type { HaiResult } from '@h-ai/core'
 import type { A2ADeps, A2AImplementation } from './a2a/ai-a2a-functions.js'
+import type { A2AOperations } from './a2a/ai-a2a-types.js'
+import type { ACPOperations } from './acp/ai-acp-types.js'
+import type { AIConfig, AIConfigInput } from './ai-config.js'
+import type { AIFunctions, AIInitOptions } from './ai-types.js'
 /**
  * @h-ai/ai — AI 服务主入口
  *
@@ -7,12 +11,8 @@ import type { A2ADeps, A2AImplementation } from './a2a/ai-a2a-functions.js'
  * @module ai-main
  */
 
-import type { A2AOperations } from './a2a/ai-a2a-types.js'
-
-import type { ACPOperations } from './acp/ai-acp-types.js'
-import type { AIConfig, AIConfigInput } from './ai-config.js'
-import type { AIFunctions, AIInitOptions } from './ai-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
+
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
@@ -27,20 +27,25 @@ import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
-
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
-
 import { createA2ALazyProxy } from './a2a/ai-a2a-functions.js'
-import { AIConfigSchema } from './ai-config.js'
+import { AgentEvent, Message, Part, SendMessageRequest, Task, TaskArtifactUpdateEvent, TaskStatus, TaskStatusUpdateEvent } from './a2a/ai-a2a-types.js'
+
+import { AIConfigSchema, ensureAudioCredential, resolveAudioModel, resolveImageModel, resolveModelApi, resolveModelEntry } from './ai-config.js'
+
 import { createAISubsystems } from './ai-functions.js'
+
 import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
+import { serializePlayableAudio } from './audio/ai-audio-serialization.js'
 import { parseBoundedLocalFile } from './file/ai-file-functions.js'
 import { createJsonFieldPreview } from './llm/ai-llm-json-preview.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { adaptToolRegistry } from './llm/ai-llm-tool.js'
+import { createMcpServer, McpServer, SSEServerTransport, StdioServerTransport, StreamableHTTPServerTransport } from './mcp/ai-mcp-server.js'
+
 import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
 import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
 import { createBuiltinToolBroker } from './tools/ai-tools-broker.js'
@@ -342,8 +347,8 @@ const streamOperations: StreamOperations = {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AIConfigInput, AIInitOptions } from '@h-ai/ai'
+ * import { type AIConfigInput, type AIInitOptions, ai } from '@h-ai/ai'
+ *
  * async function run(config: AIConfigInput, options: AIInitOptions) {
  *   // 默认 Store 所需 reldb/vecdb 已由应用初始化；显式测试 Store 通过 options 注入。
  *   const initialized = await ai.init(config, options)
@@ -358,11 +363,31 @@ const streamOperations: StreamOperations = {
  * ```
  */
 export const ai: AIFunctions = {
+  AgentEvent,
+  Message,
+  Part,
+  SendMessageRequest,
+  Task,
+  TaskArtifactUpdateEvent,
+  TaskStatus,
+  TaskStatusUpdateEvent,
+  McpServer,
+  SSEServerTransport,
+  StdioServerTransport,
+  StreamableHTTPServerTransport,
+  // 独立工具保持原有调用契约，不依赖模块初始化状态。
+  createMcpServer,
+  ensureAudioCredential,
+  resolveAudioModel,
+  resolveImageModel,
+  resolveModelApi,
+  resolveModelEntry,
+  serializePlayableAudio,
   async init(config?: AIConfigInput, options?: AIInitOptions): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress || closingPromise) {
       logger.warn('AI init already in progress, skipping concurrent call')
-      return err(HaiAIError.INIT_IN_PROGRESS, aiM('ai_initInProgress'))
+      return core.err(HaiAIError.INIT_IN_PROGRESS, aiM('ai_initInProgress'))
     }
     initInProgress = true
     let resolveInit!: () => void
@@ -385,7 +410,7 @@ export const ai: AIFunctions = {
       const parseResult = AIConfigSchema.safeParse(config ?? {})
       if (!parseResult.success) {
         logger.error('AI config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiAIError.CONFIGURATION_ERROR,
           aiM('ai_configError', {
             params: { error: parseResult.error.message },
@@ -409,7 +434,7 @@ export const ai: AIFunctions = {
         logger.warn('AI is using the ephemeral in-memory store; initialize reldb and vecdb before ai.init() for persistent data')
       }
       if (core.module.requiresSharedState(process.env) && storeProvider.stateScope !== 'shared')
-        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_sharedBackendRequired'))
+        return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_sharedBackendRequired'))
       currentStoreProvider = storeProvider
 
       // 委托 ai-functions 组装所有子功能（含建表）
@@ -448,7 +473,7 @@ export const ai: AIFunctions = {
 
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       // 旧实例清理失败时保留资源与占用供显式重试；部分初始化清理也不能突破 HaiResult 边界。
@@ -461,7 +486,7 @@ export const ai: AIFunctions = {
         }
       }
       logger.error('AI module initialization failed', { error })
-      return err(
+      return core.err(
         HaiAIError.CONFIGURATION_ERROR,
         aiM('ai_initFailed', {
           params: {

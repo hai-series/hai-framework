@@ -9,8 +9,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { AudioContent, AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -19,9 +19,8 @@ import type {
   ProviderTranscriptionStreamRequest,
   SynthesisOutputMeta,
 } from './ai-audio-provider.js'
-
 import { Buffer } from 'node:buffer'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import OpenAI, { toFile } from 'openai'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
@@ -73,7 +72,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     const { model, audio, language, contextHints, signal } = request
     if (!model.apiKey) {
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+      return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
         params: { provider: 'openai' },
       }))
     }
@@ -91,7 +90,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
             }
           : {}),
       }, { signal })
-      return ok({ text: result.text })
+      return core.ok({ text: result.text })
     }
     catch (error) {
       logger.debug('OpenAI transcribe failed', {
@@ -148,7 +147,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     const { model, text, voice, instruction, format, sampleRate, signal } = request
     if (!model.apiKey) {
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+      return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
         params: { provider: 'openai' },
       }))
     }
@@ -166,7 +165,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
           : {}),
       }, { signal })
       const data = new Uint8Array(await response.arrayBuffer())
-      return ok({
+      return core.ok({
         data,
         format: out.format,
         sampleRate: out.sampleRate,

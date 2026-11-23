@@ -2,11 +2,12 @@
  * 跨节点执行日志与任务串行槽；唯一约束和 owner 条件是调度正确性的依据。
  * @module scheduler-repository-execution
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ExecuteResult, ReldbFunctions } from '@h-ai/reldb'
 import type { SchedulerExecutionEntry, SchedulerExecutionState, TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from '../scheduler-types.js'
 import { createHash, randomUUID } from 'node:crypto'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { schedulerM } from '../scheduler-i18n.js'
 import { HaiSchedulerError } from '../scheduler-types.js'
@@ -105,7 +106,7 @@ export function executionEntry(row: StoredExecution): SchedulerExecutionEntry {
 
 /** 统一持久状态失败；不回退为本地执行。 */
 function failed(cause?: unknown) {
-  return err(HaiSchedulerError.DB_SAVE_FAILED, schedulerM('scheduler_executionStateFailed'), cause)
+  return core.err(HaiSchedulerError.DB_SAVE_FAILED, schedulerM('scheduler_executionStateFailed'), cause)
 }
 
 /**
@@ -254,7 +255,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return failed(result.error)
     const now = Number(result.data?.now)
     return Number.isSafeInteger(now) && now >= 0
-      ? ok(now)
+      ? core.ok(now)
       : failed()
   }
 
@@ -284,7 +285,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         return failed()
       value[field] = number
     }
-    return ok(value)
+    return core.ok(value)
   }
 
   /** 按稳定回执读取。@example await repository.byOccurrence(id) */
@@ -298,7 +299,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return failed(rows.error)
     return rows.data[0]
       ? this.normalize(rows.data[0])
-      : ok(null)
+      : core.ok(null)
   }
 
   /** 有界读取过期执行，跨分钟恢复原 occurrence，而不是创建新的副作用身份。@example await repository.expired() */
@@ -320,7 +321,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : failed()
   }
 
@@ -359,10 +360,10 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       ],
     )
     if (result.success && result.data.changes === 1)
-      return ok(undefined)
+      return core.ok(undefined)
     const current = await this.byOccurrence(row.occurrenceId)
     return current.success && current.data?.logPersistence === 'persisted' && current.data.logsJson === row.logsJson
-      ? ok(undefined)
+      ? core.ok(undefined)
       : failed()
   }
 
@@ -383,7 +384,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         return normalized
       rows.push(normalized.data)
     }
-    return ok(rows)
+    return core.ok(rows)
   }
 
   /**
@@ -438,7 +439,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         limit: 1,
       })
       return active.success && active.data.length > 0
-        ? ok(null)
+        ? core.ok(null)
         : failed(created.success ? undefined : created.error)
     }
     const row = existing.data
@@ -448,10 +449,10 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       'interrupted',
       'discarded',
     ].includes(row.status)) {
-      return ok(row)
+      return core.ok(row)
     }
     if (row.status === 'unknown')
-      return ok(null)
+      return core.ok(null)
     // 是否过期只在下方写语句里判断，不能先用某个节点的墙钟决定接管或隔离。
     if (row.status === 'running' && (!row.idempotent || row.attemptCount >= row.maxAttempts)) {
       const isolated = await this.db.sql.execute(
@@ -460,7 +461,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         ['unknown', id, row.owner, 'running'],
       )
       return isolated.success
-        ? ok(null)
+        ? core.ok(null)
         : failed(isolated.error)
     }
     const recovered = await this.db.sql.execute(
@@ -480,7 +481,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return failed(recovered.error)
     return recovered.data.changes === 1
       ? this.byOccurrence(id)
-      : ok(null)
+      : core.ok(null)
   }
 
   /** 外部副作用前的条件门闩，并原子递增持久尝试次数。@example await repository.begin(row, leaseMs) */
@@ -502,7 +503,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return failed(result.success ? undefined : result.error)
     row.status = 'running'
     row.attemptCount += 1
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 只续租仍然有效的 owner；过期凭据不能复活。@example await repository.renew(row, leaseMs) */
@@ -519,7 +520,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : failed()
   }
 
@@ -544,7 +545,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : failed()
   }
 
@@ -560,7 +561,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : failed()
   }
 }

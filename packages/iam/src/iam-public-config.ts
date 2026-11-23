@@ -7,7 +7,7 @@ import { AuthUiConfigSchema, OtpConfigSchema, PasswordConfigSchema, SessionConfi
  * 认证页面可读取的白名单配置；能力开关同时考虑实际运行时依赖，不能用于服务端授权。
  * @example
  * ```ts
- * import { iam, type IamPublicConfig } from '@h-ai/iam'
+ * import { type IamPublicConfig, iam } from '@h-ai/iam'
  * const config: IamPublicConfig | null = iam.publicConfig
  * if (config) {
  *   const canOfferEmailOtp = config.login.email

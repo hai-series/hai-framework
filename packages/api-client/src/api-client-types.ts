@@ -35,7 +35,7 @@ const ApiClientErrorInfo = {
  *
  * @example
  * ```ts
- * import { apiClient, HaiApiClientError } from '@h-ai/api-client'
+ * import { HaiApiClientError, apiClient } from '@h-ai/api-client'
  * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -87,7 +87,7 @@ export interface TokenPair {
  *
  * @example
  * ```ts
- * import { apiClient, type TokenStorage } from '@h-ai/api-client'
+ * import { type TokenStorage, apiClient } from '@h-ai/api-client'
  * const storage: TokenStorage = apiClient.tokenStorage.memory()
  * await storage.setAccessToken('test-access')
  * const accessToken = await storage.getAccessToken()
@@ -171,7 +171,7 @@ export interface TokenStorage {
  *
  * @example
  * ```ts
- * import { apiClient, type AuthConfig } from '@h-ai/api-client'
+ * import { type AuthConfig, apiClient } from '@h-ai/api-client'
  * const auth: AuthConfig = { storage: apiClient.tokenStorage.memory(), refreshPath: '/auth/refresh', refreshTimeoutMs: 5000, onTokenRefreshed: tokens => { const lifetime = tokens.expiresIn } }
  * // Node/SSR 选择独立内存存储；浏览器通常直接配置 auth: {}。
  * ```
@@ -210,7 +210,7 @@ export interface AuthConfig {
  *
  * @example
  * ```ts
- * import { apiClient, type ApiClientConfig } from '@h-ai/api-client'
+ * import { type ApiClientConfig, apiClient } from '@h-ai/api-client'
  * const config: ApiClientConfig = { baseUrl: 'https://api.example.com/api/v1', auth: { storage: apiClient.tokenStorage.memory() }, timeout: 15000, clientName: 'orders-web', headers: () => ({ 'x-app-channel': 'web' }) }
  * const initialized = await apiClient.init(config)
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -265,7 +265,7 @@ export interface ApiClientConfig {
  *
  * @example
  * ```ts
- * import { apiClient, type ApiClientTransportConfig } from '@h-ai/api-client'
+ * import { type ApiClientTransportConfig, apiClient } from '@h-ai/api-client'
  * import { crypto } from '@h-ai/crypto'
  * const cryptography = await crypto.init()
  * if (!cryptography.success) throw new Error(cryptography.error.message)
@@ -303,7 +303,7 @@ export interface ApiClientTransportConfig {
  *
  * @example
  * ```ts
- * import { apiClient, type ApiClientAuth } from '@h-ai/api-client'
+ * import { type ApiClientAuth, apiClient } from '@h-ai/api-client'
  * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
@@ -388,7 +388,7 @@ export interface ApiClientAuth {
  *
  * @example
  * ```ts
- * import { apiClient, type ApiClientLifecycle } from '@h-ai/api-client'
+ * import { type ApiClientLifecycle, apiClient } from '@h-ai/api-client'
  * const client: ApiClientLifecycle = apiClient
  * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1' })
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -477,7 +477,7 @@ export interface ApiRequestRecord {
  * 同步观察者，只做有界收集。
  * @example
  * ```ts
- * import { apiClient, type ApiRequestObserver } from '@h-ai/api-client'
+ * import { type ApiRequestObserver, apiClient } from '@h-ai/api-client'
  * const observer: ApiRequestObserver = record => { const failed = !record.success }
  * const unsubscribe = apiClient.observeRequests(observer)
  * unsubscribe()
@@ -491,7 +491,7 @@ export type ApiRequestObserver = (record: ApiRequestRecord) => void
  *
  * @example
  * ```ts
- * import { apiClient, type ApiClient } from '@h-ai/api-client'
+ * import { type ApiClient, apiClient } from '@h-ai/api-client'
  * import { apiContract } from '@h-ai/api-contract'
  * const contract = apiContract.create({ iam: apiContract.iam })
  * const client: ApiClient<typeof contract> = apiClient.create(contract)

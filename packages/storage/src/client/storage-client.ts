@@ -1,3 +1,4 @@
+import type { ClientDownloadOptions, ClientOperations, ClientUploadOptions } from '../storage-types.js'
 /**
  * @h-ai/storage — 前端存储客户端
  *
@@ -5,11 +6,11 @@
  * @module storage-client
  */
 
-import type { ClientDownloadOptions, ClientOperations, ClientUploadOptions } from '../storage-types.js'
 import { core } from '@h-ai/core'
 import { storageM } from '../storage-i18n.js'
-
 import { getMimeType } from '../storage-mime.js'
+
+import { getStorageKeyIssue } from '../storage-schemas.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'client' })
 
@@ -391,4 +392,4 @@ export const client: ClientOperations = {
  * void mime
  * ```
  */
-export const storage: { readonly client: ClientOperations } = { client }
+export const storage: { readonly client: ClientOperations, getKeyIssue: typeof getStorageKeyIssue } = { client, getKeyIssue: getStorageKeyIssue }

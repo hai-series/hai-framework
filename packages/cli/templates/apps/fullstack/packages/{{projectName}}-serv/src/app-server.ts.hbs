@@ -2,7 +2,7 @@ import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
 {{#if features.feedback}}
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract'
 {{/if}}
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -30,7 +30,7 @@ export function createServerApp(): ServHttpApp {
 {{#if features.feedback}}
   // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-  const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success
+  const feedbackBudget = apiContract.resolveFeedbackBudget(feedbackSettings.success
     ? feedbackSettings.data
     : {})
 {{/if}}

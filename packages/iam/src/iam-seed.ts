@@ -11,8 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { PermissionType } from './authz/iam-authz-types.js'
 
 import type { AuthzOperations } from './iam-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { iamM } from './iam-i18n.js'
 import { HaiIamError } from './iam-types.js'
@@ -391,11 +390,11 @@ export async function seedIamData(
     // 访客（guest）不分配任何权限
 
     logger.info('IAM seed data initialized')
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Failed to seed IAM data', { error })
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM('iam_initSeedDataFailed'),
       error,

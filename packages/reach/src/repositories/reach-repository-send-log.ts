@@ -8,7 +8,7 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { CrudPageOptions, CrudQueryOptions, DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { ReachQueueFailure, ReachQueueStatus, ReachUnknownResolution } from '../reach-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { reachM } from '../reach-i18n.js'
@@ -361,7 +361,7 @@ function claimableParams(eligibleBefore: number): unknown[] {
 }
 
 function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
-  return err(
+  return core.err(
     HaiReachError.SEND_FAILED,
     reachM('reach_sendFailed', {
       params: { error: detail },
@@ -412,7 +412,7 @@ function normalizeSendLog(row: StoredSendLog): HaiResult<StoredSendLog> {
     }
     Object.assign(normalized, { [field]: integer })
   }
-  return ok(normalized)
+  return core.ok(normalized)
 }
 
 /**
@@ -437,7 +437,7 @@ function normalizeSendLogs(rows: StoredSendLog[]): HaiResult<StoredSendLog[]> {
       return result
     normalized.push(result.data)
   }
-  return ok(normalized)
+  return core.ok(normalized)
 }
 
 /** 字段定义 */
@@ -637,12 +637,12 @@ export function resetSendLogRepoSingleton(): void {
  */
 export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiResult<SendLogRepository>> {
   if (sendLogRepoInstance && sendLogRepoSqlOps === db.sql)
-    return ok(sendLogRepoInstance)
+    return core.ok(sendLogRepoInstance)
 
   const repo = new DbSendLogRepository(db)
   const initResult = await repo.ready()
   if (!initResult.success) {
-    return err(
+    return core.err(
       HaiReachError.SEND_FAILED,
       reachM('reach_sendFailed', {
         params: { error: initResult.error.message },
@@ -652,7 +652,7 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
   }
   sendLogRepoInstance = repo
   sendLogRepoSqlOps = db.sql
-  return ok(repo)
+  return core.ok(repo)
 }
 
 /**
@@ -673,8 +673,8 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (!index.success)
       return index
     return index.data
-      ? ok(undefined)
-      : err(HaiReachError.SEND_FAILED, reachM('reach_sendLogIndexRequired'))
+      ? core.ok(undefined)
+      : core.err(HaiReachError.SEND_FAILED, reachM('reach_sendLogIndexRequired'))
   }
 
   /** 共享后端取真正执行时钟；本地 SQLite 保留可控的单进程测试时钟。 */
@@ -689,7 +689,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   async currentTime(): Promise<HaiResult<number>> {
     const time = await this.sql().get<{ now: number | string }>(`SELECT ${this.clockSql()} AS now`)
     return time.success && time.data && Number.isSafeInteger(Number(time.data.now))
-      ? ok(Number(time.data.now))
+      ? core.ok(Number(time.data.now))
       : buildSendLogError(reachM('reach_claimLost'))
   }
 
@@ -706,7 +706,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (!settled.success)
       return settled
     return settled.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_sensitiveDeliveryUnconfirmed'))
   }
 
@@ -751,7 +751,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       return result
     const rows = normalizeSendLogs(result.data.items)
     return rows.success
-      ? ok({ ...result.data, items: rows.data })
+      ? core.ok({ ...result.data, items: rows.data })
       : rows
   }
 
@@ -765,7 +765,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (!result.success) {
       return result
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   /**
@@ -952,7 +952,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
         if (!commitResult.success) {
           return buildSendLogError(commitResult.error.message, commitResult.error)
         }
-        return ok([])
+        return core.ok([])
       }
 
       const claimedRows = await this.loadClaimedRows(claimedIds, tx)
@@ -962,7 +962,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
         return buildSendLogError(commitResult.error.message, commitResult.error)
       }
 
-      return ok(claimedRows)
+      return core.ok(claimedRows)
     }
     catch (error) {
       await tx.rollback()
@@ -1011,7 +1011,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (result.data.changes === 0) {
       return buildSendLogError(reachM('reach_claimLost'))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 仅当前 dead 版本可以恢复；保留 queueId，迟到的幂等 API 请求仍使用同一键。 */
@@ -1028,7 +1028,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_deadRequeueFailed'))
   }
 
@@ -1051,7 +1051,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_claimLost'))
   }
 
@@ -1070,7 +1070,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_claimLost'))
   }
 
@@ -1088,7 +1088,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_claimLost'))
   }
 
@@ -1104,7 +1104,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       ],
     )
     return result.success && result.data.changes === 1
-      ? ok(undefined)
+      ? core.ok(undefined)
       : buildSendLogError(reachM('reach_unknownResolutionFailed'))
   }
 
@@ -1129,6 +1129,6 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (result.data.changes === 0) {
       return buildSendLogError(reachM('reach_claimLost'))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 }

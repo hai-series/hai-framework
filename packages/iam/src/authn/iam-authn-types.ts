@@ -28,7 +28,7 @@ export type CaptchaOperation = 'login' | 'register' | 'sendOtp' | 'passwordReset
  * 可公开的 ALTCHA 挑战；签名秘密仅存共享缓存，不包含在返回值中。
  * @example
  * ```ts
- * import { iam, type IamCaptchaChallenge } from '@h-ai/iam'
+ * import { type IamCaptchaChallenge, iam } from '@h-ai/iam'
  * const result = await iam.auth.createCaptcha({ operation: 'login' })
  * if (result.success) { const challenge: IamCaptchaChallenge = result.data; void challenge.id }
  * ```
@@ -113,7 +113,7 @@ export interface LdapCredentials {
  * API Key 凭证（用于 API Key 认证）
  * @example
  * ```ts
- * import { iam, type ApiKeyCredentials } from '@h-ai/iam'
+ * import { type ApiKeyCredentials, iam } from '@h-ai/iam'
  * const created = await iam.apiKey.createApiKey('user-1', { name: 'report-reader', scopes: ['report:read'] })
  * if (created.success) {
  *   const credentials: ApiKeyCredentials = { key: created.data.rawKey }
@@ -195,7 +195,7 @@ export interface AuthStrategy {
  * 认证子功能接口
  * @example
  * ```ts
- * import { iam, type AuthnOperations } from '@h-ai/iam'
+ * import { type AuthnOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
  * const operations: AuthnOperations = iam.auth
  * const result = await operations.verifyToken('token-from-authorization-header')

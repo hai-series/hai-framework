@@ -20,8 +20,8 @@
   import type { LayoutProps } from './$types'
   import { afterNavigate, goto, preloadData } from '$app/navigation'
   import { page } from '$app/state'
-  import { LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
-  import { applyTheme, getCurrentTheme, getThemeInfo } from '@h-ai/ui/theme'
+  import { LanguageSwitch, ThemeSelector, ToastContainer, ui } from '@h-ai/ui'
+
   import { onMount } from 'svelte'
   import SearchDialog from '#lib/components/SearchDialog.svelte'
   import { localizedDocSlug } from '#lib/doc-links.js'
@@ -41,7 +41,7 @@
     if (locale !== next)
       searchOpen = false
     locale = next
-    setGlobalLocale(next)
+    ui.setGlobalLocale(next)
     document.documentElement.lang = next
   }
 
@@ -75,11 +75,11 @@
   }
   function changeTheme(next: string) {
     theme = next
-    applyTheme(next)
+    ui.applyTheme(next)
   }
   onMount(() => {
-    theme = getCurrentTheme()
-    applyTheme(theme, false)
+    theme = ui.getCurrentTheme()
+    ui.applyTheme(theme, false)
     interactive = true
   })
   afterNavigate(() => applyLanguage(getLocale()))
@@ -87,7 +87,7 @@
 </script>
 
 <svelte:head>
-  <meta name='theme-color' content={getThemeInfo(theme)?.bgColor ?? '#ffffff'} />
+  <meta name='theme-color' content={ui.getThemeInfo(theme)?.bgColor ?? '#ffffff'} />
 </svelte:head>
 
 {#key locale}

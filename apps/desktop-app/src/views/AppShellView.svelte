@@ -5,8 +5,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, LanguageSwitch, ThemeSelector, toast, WorkspaceLayout } from '@h-ai/ui'
-  import { applyTheme, getCurrentTheme } from '@h-ai/ui/theme'
+  import { AppBar, Button, LanguageSwitch, ThemeSelector, ui, WorkspaceLayout } from '@h-ai/ui'
+
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { localeStore, desktopM as m } from '../lib/messages.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
@@ -22,11 +22,11 @@
     'eye-care',
     'liquid-glass',
   ]
-  let currentTheme = $state(getCurrentTheme())
+  let currentTheme = $state(ui.getCurrentTheme())
 
   function changeTheme(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 
   const navItems = $derived.by(() => {
@@ -54,7 +54,7 @@
   async function handleLogout(): Promise<void> {
     const error = await logout()
     if (error)
-      toast.error(error)
+      ui.toast.error(error)
     navigate('/login')
   }
 </script>

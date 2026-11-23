@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it } from 'vitest'
-import { applyTheme, getSavedTheme, THEME_STORAGE_KEY, THEMES } from '../src/lib/theme-config.js'
+import { THEME_STORAGE_KEY, THEMES, ui } from '../src/lib/ui-theme.js'
 
 const originalTheme = document.documentElement.getAttribute('data-theme')
 const originalStyle = document.documentElement.getAttribute('style')
@@ -19,7 +19,7 @@ afterEach(() => {
 it('切换内置主题时原生表单控件的配色同步更新，覆盖首屏初始化值', () => {
   document.documentElement.style.colorScheme = 'light'
   for (const theme of [...THEMES].reverse()) {
-    applyTheme(theme.id, false)
+    ui.applyTheme(theme.id, false)
     expect(document.documentElement.getAttribute('data-theme')).toBe(theme.id)
     expect(document.documentElement.style.colorScheme).toBe(theme.dark ? 'dark' : 'light')
   }
@@ -28,10 +28,10 @@ it('切换内置主题时原生表单控件的配色同步更新，覆盖首屏�
 it('从已保存的偏好恢复液态玻璃主题时使用亮色原生控件', () => {
   const previousTheme = localStorage.getItem(THEME_STORAGE_KEY)
   try {
-    applyTheme('liquid-glass')
-    applyTheme('dark', false)
+    ui.applyTheme('liquid-glass')
+    ui.applyTheme('dark', false)
 
-    applyTheme(getSavedTheme(), false)
+    ui.applyTheme(ui.getSavedTheme(), false)
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('liquid-glass')
     expect(document.documentElement.style.colorScheme).toBe('light')
@@ -46,7 +46,7 @@ it('从已保存的偏好恢复液态玻璃主题时使用亮色原生控件', (
 
 it('自定义主题移除旧的内联配色，由宿主样式决定原生控件配色', () => {
   document.documentElement.style.colorScheme = 'dark'
-  applyTheme('host-theme', false)
+  ui.applyTheme('host-theme', false)
   expect(document.documentElement.getAttribute('data-theme')).toBe('host-theme')
   expect(document.documentElement.style.colorScheme).toBe('')
 })

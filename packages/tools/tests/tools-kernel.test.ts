@@ -1,12 +1,12 @@
 /** 通用工具的真实业务输入、执行隔离和失败边界。 */
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { HaiToolsError, tools } from '../src/index.js'
 
 describe('tools 中立执行内核', () => {
   it('显式 resultHandler 透传业务失败，普通结果中的 success 字段仍只是数据', async () => {
-    const denied = err(HaiToolsError.FORBIDDEN, 'Domain operation is forbidden')
+    const denied = core.err(HaiToolsError.FORBIDDEN, 'Domain operation is forbidden')
     const operation = tools.define({
       name: 'domain_operation',
       description: '业务结果',
@@ -37,7 +37,7 @@ describe('tools 中立执行内核', () => {
       toDefinition: () => ({ name: 'unsafe', description: '', inputSchema: {} }),
       execute: async () => {
         executed = true
-        return ok('bypassed')
+        return core.ok('bypassed')
       },
     })
     expect(registered.success).toBe(false)

@@ -1,4 +1,3 @@
-import type { HaiResult } from '@h-ai/core'
 /**
  * @h-ai/ai — Retrieval 子功能实现
  *
@@ -6,11 +5,13 @@ import type { HaiResult } from '@h-ai/core'
  * @module ai-retrieval-functions
  */
 
-import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
+import type { HaiResult } from '@h-ai/core'
 
+import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { AIResourceRegistry } from '../registry/ai-registry-types.js'
 import type { RerankOperations } from '../rerank/ai-rerank-types.js'
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
+
 import type {
   Citation,
   RetrievalOperations,
@@ -19,8 +20,7 @@ import type {
   RetrievalResultItem,
   RetrievalSource,
 } from './ai-retrieval-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -78,18 +78,18 @@ export function createRetrievalOperations(
       if (registry) {
         const result = await registry.operations.register(source)
         return result.success
-          ? ok(undefined)
+          ? core.ok(undefined)
           : result
       }
       const existing = await sourceStore.get(source.id)
       if (existing) {
-        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
           params: { error: `Source '${source.id}' already exists` },
         }))
       }
       await sourceStore.save(source.id, source)
       logger.debug('Retrieval source added', { sourceId: source.id, collection: source.collection })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /**
@@ -105,13 +105,13 @@ export function createRetrievalOperations(
         return registry.operations.remove(sourceId)
       const existing = await sourceStore.get(sourceId)
       if (!existing) {
-        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
+        return core.err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
           params: { error: `Source '${sourceId}' not found` },
         }))
       }
       await sourceStore.remove(sourceId)
       logger.debug('Retrieval source removed', { sourceId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /**
@@ -153,7 +153,7 @@ export function createRetrievalOperations(
                 : {},
             )
         if (targetSources.length === 0) {
-          return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
+          return core.err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
             params: { error: 'No retrieval sources configured' },
           }))
         }
@@ -161,7 +161,7 @@ export function createRetrievalOperations(
         // 向量化查询文本
         const embedResult = await embeddingOps.embedText(request.query)
         if (!embedResult.success) {
-          return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+          return core.err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
             params: { error: 'Failed to embed query' },
           }), embedResult.error)
         }
@@ -236,7 +236,7 @@ export function createRetrievalOperations(
         const duration = Date.now() - startTime
         logger.trace('Retrieval completed', { queryLength: request.query.length, resultCount: limitedItems.length, duration })
 
-        return ok({
+        return core.ok({
           items: limitedItems,
           query: request.query,
           duration,
@@ -244,7 +244,7 @@ export function createRetrievalOperations(
       }
       catch (error) {
         logger.error('Retrieval failed', { error })
-        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
           params: {
             error: String(error),
           },

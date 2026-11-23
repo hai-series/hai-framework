@@ -12,8 +12,8 @@ import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
  *
  * @example
  * ```ts
- * import type { ServCorsConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServCorsConfig, serv } from '@h-ai/serv'
  *
  * const config: ServCorsConfig = { origin: 'https://app.example.com', credentials: true, exposedHeaders: ['X-Request-Id'] }
  * const middleware = serv.cors(config)

@@ -4,7 +4,7 @@ import type {
   AIResourceEntry,
   AIResourceRegistry,
 } from './ai-registry-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
@@ -92,12 +92,12 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
   }
   async function protect<R>(operation: () => Promise<R>) {
     if (!isOpen())
-      return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+      return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
     try {
-      return ok(await operation())
+      return core.ok(await operation())
     }
     catch {
-      return err(
+      return core.err(
         HaiAIError.RESOURCE_OPERATION_FAILED,
         aiM('ai_resourceOperationFailed'),
       )
@@ -109,38 +109,38 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
     expectedVersion?: string,
   ) {
     if (!isOpen())
-      return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+      return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
     const parsed = schema.safeParse(input)
     if (!parsed.success || !parsed.data.id)
-      return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+      return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
     const value = parsed.data
     if (config.has(value.id))
-      return err(HaiAIError.RESOURCE_READ_ONLY, aiM('ai_resourceReadOnly'))
+      return core.err(HaiAIError.RESOURCE_READ_ONLY, aiM('ai_resourceReadOnly'))
     try {
       const previous = await store.readVersioned(value.id)
       const exists = previous && !previous.data.__deleted
       if (update && !exists)
-        return err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
+        return core.err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
       if (
         (!update && exists)
         || (expectedVersion !== undefined && expectedVersion !== previous?.version)
       ) {
-        return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+        return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
       }
       const version = await store.compareAndSwap(value.id, {
         expectedVersion: previous?.version,
         data: value,
       })
       if (!version)
-        return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
-      return ok({
+        return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+      return core.ok({
         value: structuredClone(value),
         source: 'database' as const,
         version,
       })
     }
     catch {
-      return err(
+      return core.err(
         HaiAIError.RESOURCE_OPERATION_FAILED,
         aiM('ai_resourceOperationFailed'),
       )
@@ -153,25 +153,25 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
       if (!result.success)
         return result
       return result.data
-        ? ok(result.data)
-        : err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
+        ? core.ok(result.data)
+        : core.err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
     },
     register: input => write(input, false),
     update: (input, version) => write(input, true, version),
     remove: async (id, expectedVersion) => {
       if (!isOpen())
-        return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+        return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
       if (config.has(id))
-        return err(HaiAIError.RESOURCE_READ_ONLY, aiM('ai_resourceReadOnly'))
+        return core.err(HaiAIError.RESOURCE_READ_ONLY, aiM('ai_resourceReadOnly'))
       try {
         const previous = await store.readVersioned(id)
         if (!previous || previous.data.__deleted)
-          return err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
+          return core.err(HaiAIError.RESOURCE_NOT_FOUND, aiM('ai_resourceNotFound'))
         if (
           expectedVersion !== undefined
           && expectedVersion !== previous.version
         ) {
-          return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+          return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
         }
         if (
           !(await store.compareAndSwap(id, {
@@ -179,12 +179,12 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
             data: { ...previous.data, __deleted: true },
           }))
         ) {
-          return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+          return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
         }
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch {
-        return err(
+        return core.err(
           HaiAIError.RESOURCE_OPERATION_FAILED,
           aiM('ai_resourceOperationFailed'),
         )

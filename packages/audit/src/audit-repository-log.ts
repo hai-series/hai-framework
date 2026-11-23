@@ -8,7 +8,7 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { AuditActorSnapshot, AuditLog, AuditLogWithUser, AuditOutcomeCounts, AuditStatItem, CreateAuditLogInput, ListAuditLogsOptions } from './audit-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { readAuditTime } from './audit-database-time.js'
 import { auditM } from './audit-i18n.js'
@@ -278,8 +278,8 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     if (!column.success)
       return column
     return Number(column.data?.digits) >= 3
-      ? ok(undefined)
-      : err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
+      ? core.ok(undefined)
+      : core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
   }
 
   /**
@@ -393,7 +393,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       const createResult = await this.create(data, tx)
       if (!createResult.success) {
         logger.error('Failed to record audit log', { action: input.action, errorCode: createResult.error.code, traceId: createResult.error.traceId })
-        return err(
+        return core.err(
           HaiAuditError.LOG_FAILED,
           auditM('audit_logFailed', {
             params: { error: createResult.error.message },
@@ -418,11 +418,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       }
 
       logger.trace('Audit log recorded', { id, action: input.action, resource: input.resource })
-      return ok(auditLog)
+      return core.ok(auditLog)
     }
     catch (error) {
       logger.error('Failed to record audit log', { action: input.action, error })
-      return err(
+      return core.err(
         HaiAuditError.LOG_FAILED,
         auditM('audit_logFailed', {
           params: {
@@ -466,7 +466,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const sortBy = options.sortBy ?? 'createdAt'
     const direction = options.sortDirection ?? 'desc'
     if (!Object.hasOwn(sortColumns, sortBy) || !['asc', 'desc'].includes(direction)) {
-      return err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
+      return core.err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
         params: {
           field: 'sort',
           reason: auditM('audit_sortInvalid'),
@@ -493,7 +493,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to query audit logs', { errorCode: result.error.code, traceId: result.error.traceId })
-        return err(
+        return core.err(
           HaiAuditError.QUERY_FAILED,
           auditM('audit_queryFailed', {
             params: { error: result.error.message },
@@ -502,7 +502,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok({
+      return core.ok({
         ...result.data,
         items: result.data.items.map((row) => {
           const record = normalizeAuditLog(row)
@@ -512,7 +512,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     }
     catch (error) {
       logger.error('Failed to query audit logs', { error })
-      return err(
+      return core.err(
         HaiAuditError.QUERY_FAILED,
         auditM('audit_queryFailed', {
           params: {
@@ -569,10 +569,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     if (!result.success)
       return result
     try {
-      return ok(result.data.map(normalizeAuditLog))
+      return core.ok(result.data.map(normalizeAuditLog))
     }
     catch (error) {
-      return err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), error)
+      return core.err(HaiAuditError.BACKUP_FAILED, auditM('audit_backupFailed'), error)
     }
   }
 
@@ -595,7 +595,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       })
 
       if (!result.success) {
-        return err(
+        return core.err(
           HaiAuditError.QUERY_FAILED,
           auditM('audit_queryFailed', {
             params: { error: result.error.message },
@@ -604,10 +604,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok(result.data.map(normalizeAuditLog))
+      return core.ok(result.data.map(normalizeAuditLog))
     }
     catch (error) {
-      return err(
+      return core.err(
         HaiAuditError.QUERY_FAILED,
         auditM('audit_queryFailed', {
           params: {
@@ -650,7 +650,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to cleanup audit logs', { errorCode: result.error.code, traceId: result.error.traceId })
-        return err(
+        return core.err(
           HaiAuditError.CLEANUP_FAILED,
           auditM('audit_cleanupFailed', {
             params: { error: result.error.message },
@@ -664,11 +664,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         logger.info('Audit logs cleaned up', { olderThanDays, deleted })
       else
         logger.trace('Audit cleanup found no expired records', { olderThanDays, deleted })
-      return ok(deleted)
+      return core.ok(deleted)
     }
     catch (error) {
       logger.error('Failed to cleanup audit logs', { error })
-      return err(
+      return core.err(
         HaiAuditError.CLEANUP_FAILED,
         auditM('audit_cleanupFailed', {
           params: {
@@ -697,7 +697,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     )
     if (!grouped.success) {
       logger.error('Failed to query audit outcome counts', { errorCode: grouped.error.code, traceId: grouped.error.traceId })
-      return err(HaiAuditError.STATS_FAILED, auditM('audit_statsFailed', {
+      return core.err(HaiAuditError.STATS_FAILED, auditM('audit_statsFailed', {
         params: { error: grouped.error.message },
       }), grouped.error)
     }
@@ -711,14 +711,14 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     for (const { outcome, count: rawCount } of grouped.data) {
       const count = Number(rawCount)
       if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(counts.total + count))
-        return err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
+        return core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
       const bucket = outcome === 'success' || outcome === 'failure' || outcome === 'denied'
         ? outcome
         : 'unclassified'
       counts[bucket] += count
       counts.total += count
     }
-    return ok(counts)
+    return core.ok(counts)
   }
 
   /**
@@ -749,7 +749,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to query audit statistics', { errorCode: result.error.code, traceId: result.error.traceId })
-        return err(
+        return core.err(
           HaiAuditError.STATS_FAILED,
           auditM('audit_statsFailed', {
             params: { error: result.error.message },
@@ -763,12 +763,12 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         count: Number(item.count),
       }))
       if (statistics.some(item => !Number.isSafeInteger(item.count) || item.count < 0))
-        return err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
-      return ok(statistics)
+        return core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
+      return core.ok(statistics)
     }
     catch (error) {
       logger.error('Failed to query audit statistics', { error })
-      return err(
+      return core.err(
         HaiAuditError.STATS_FAILED,
         auditM('audit_statsFailed', {
           params: {

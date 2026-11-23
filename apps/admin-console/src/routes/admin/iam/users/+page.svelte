@@ -5,8 +5,8 @@
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
   import { refreshAll } from '$app/navigation'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { Button, CrudPage, usePermission } from '@h-ai/ui'
+  import { kit } from '@h-ai/kit/client'
+  import { Button, CrudPage, ui } from '@h-ai/ui'
   import InviteUserDialog from '#lib/components/InviteUserDialog.svelte'
   import { createUserCrud } from '#lib/crud/admin-crud.js'
   import * as m from '#lib/paraglide/messages.js'
@@ -49,7 +49,7 @@
   let inviteOpen = $state(false)
 
   // 权限
-  const { hasPerm } = usePermission()
+  const { hasPerm } = ui.usePermission()
   const canCreate = $derived(hasPerm('user:create') && hasPerm('user:api:create'))
   const canUpdate = $derived(hasPerm('user:update') && hasPerm('user:api:update'))
   const canDelete = $derived(hasPerm('user:delete') && hasPerm('user:api:delete'))
@@ -101,7 +101,7 @@
     await refreshAll()
   }
 
-  const nav = createSvelteKitNavAdapter()
+  const nav = kit.client.createSvelteKitNavAdapter()
 </script>
 
 <svelte:head>

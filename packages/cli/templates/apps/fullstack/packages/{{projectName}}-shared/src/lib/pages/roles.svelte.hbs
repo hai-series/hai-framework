@@ -1,10 +1,8 @@
 <script lang="ts">
   import type { AdminPermissionPolicy, AdminRole } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { err, HaiCommonError } from '@h-ai/core'
-  import { SensitiveOperationsForm } from '@h-ai/ui/components/scenes/iam/index'
-  import { Card, Modal, PageHeader, Pagination } from '@h-ai/ui/components/compounds/index'
-  import { Badge, Button, Textarea } from '@h-ai/ui/components/primitives/index'
+  import { core, HaiCommonError } from '@h-ai/core'
+  import { Badge, Button, Card, Modal, PageHeader, Pagination, SensitiveOperationsForm, Textarea } from '@h-ai/ui'
   import { roleCapabilities, roleLabel } from '../security/role-label.js'
   import * as m from '../paraglide/messages.js'
 
@@ -16,7 +14,7 @@
   async function savePolicy(operations: string[]) {
     return permission
       ? store.savePermissionPolicy(permission.id, operations)
-      : err(HaiCommonError.CONFLICT, m.home_error())
+      : core.err(HaiCommonError.CONFLICT, m.home_error())
   }
   function edit(role: AdminRole) {
     editing = role

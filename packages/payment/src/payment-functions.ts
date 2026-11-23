@@ -9,7 +9,7 @@ import type { CreateAuditLogInput } from '@h-ai/audit'
 import type { HaiResult } from '@h-ai/core'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from './payment-types.js'
 import { audit } from '@h-ai/audit'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { paymentM } from './payment-i18n.js'
 import { HaiPaymentError } from './payment-types.js'
 
@@ -48,18 +48,18 @@ function isValidAmount(amount: number): boolean {
 
 function validateCreateOrderInput(input: CreateOrderInput): HaiResult<void> {
   if (!isValidAmount(input.amount)) {
-    return err(
+    return core.err(
       HaiPaymentError.INVALID_AMOUNT,
       paymentM('payment_invalidAmount'),
     )
   }
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 function validateRefundInput(input: RefundInput): HaiResult<void> {
   if (!isValidAmount(input.amount)) {
-    return err(
+    return core.err(
       HaiPaymentError.INVALID_AMOUNT,
       paymentM('payment_invalidAmount'),
     )
@@ -67,14 +67,14 @@ function validateRefundInput(input: RefundInput): HaiResult<void> {
 
   if (input.totalAmount !== undefined) {
     if (!isValidAmount(input.totalAmount) || input.totalAmount < input.amount) {
-      return err(
+      return core.err(
         HaiPaymentError.INVALID_AMOUNT,
         paymentM('payment_invalidAmount'),
       )
     }
   }
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -119,12 +119,12 @@ export function getProvider(name: string): PaymentProvider | undefined {
 function requireProvider(name: string): HaiResult<PaymentProvider> {
   const provider = providers.get(name)
   if (!provider) {
-    return err(
+    return core.err(
       HaiPaymentError.PROVIDER_NOT_FOUND,
       paymentM('payment_providerNotFound'),
     )
   }
-  return ok(provider)
+  return core.ok(provider)
 }
 
 /**

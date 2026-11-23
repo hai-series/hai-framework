@@ -9,40 +9,32 @@
 ## クイックスタート
 
 Serv は型付き HTTP 契約を独立した Node サーバーに配置します。待ち受けを始める前に、認証、通信暗号化、信頼できるリクエスト情報の取得を設定します。
+ルートから読み込んだ `serv` で IAM、Storage、AI、Feedback の標準ハンドラーを作成できます。
 
 ```ts
-import type { ServConfig } from '@h-ai/serv'
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
+import { type ServConfig, serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 
 export function startApi(closeApp: () => Promise<void>) {
-  // 用三个模块的契约生成 HTTP 路由契约。
-  // Compose the supplied IAM, storage, and AI contracts. Returns a single route contract without starting a server.
+  // IAM、Storage、AI のルート契約をまとめます。
   const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
-  // 将已初始化的业务模块绑定为实现；存储检查所有 key 的归属。
+  // 初期化済みのサービスをルートに結び付け、Storage のキーごとに権限を確認します。
   const procedures = {
-    // Bind the initialized IAM instance to procedures for the IAM routes. The procedures surface authentication and permission failures.
-    iam: createIamProcedures({ iam }),
-    // Bind storage routes to the initialized storage service. The supplied authorization check rejects keys outside the session user's prefix.
-    storage: createStorageProcedures({
+    iam: serv.createIamProcedures({ iam }),
+    storage: serv.createStorageProcedures({
       storage,
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
-    // Bind the initialized AI service to the AI request procedures. Calls return results from that service.
-    ai: createAiProcedures({ ai }),
+    ai: serv.createAiProcedures({ ai }),
   }
 
-  // 使用契约、实现和 HTTP 设置构建 App。
-  // Build an HTTP app from the contract and its procedures. The supplied HTTP paths register the API, OpenAPI JSON, and documentation.
+  // HTTP アプリを組み立て、API とドキュメントのパスを設定します。
   const app = serv.createApp({
     contract,
     procedures,
@@ -54,14 +46,11 @@ export function startApi(closeApp: () => Promise<void>) {
     },
   })
 
-  // 读取已加载的监听配置，返回包含地址和 close() 的句柄。
-  // Read validated serving settings from the loaded serv config. Missing settings throw before opening a listener.
+  // 検証済みの待ち受け設定を使い、アドレスと close() を持つハンドルを返します。
   const { server } = core.config.getOrThrow<ServConfig>('serv')
-  // Listen for this HTTP app on the configured host and port. Returns a handle with the bound address and cleanup. Bind errors reject.
   return serv.listen(app, {
     host: server.host,
     port: server.port,
-    // When listening succeeds, log the port reported by the listener.
     onListening: info => core.logger.info('API service listening', { port: info.port }),
     onClose: closeApp,
   })

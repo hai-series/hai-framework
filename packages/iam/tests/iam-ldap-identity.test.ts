@@ -1,7 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { LdapClientFactory } from '../src/index.js'
 import { cache } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
@@ -29,18 +29,18 @@ function data<T>(result: HaiResult<T>): T {
 }
 
 function directory(username: string, entryId: string, search = vi.fn()) {
-  const factory: LdapClientFactory = async () => ok({
-    bind: async () => ok(undefined),
+  const factory: LdapClientFactory = async () => core.ok({
+    bind: async () => core.ok(undefined),
     search: async (...args) => {
       search(...args)
-      return ok([
+      return core.ok([
         {
           dn: `uid=${username},dc=fixture`,
           attributes: { uid: username, entryUUID: entryId },
         },
       ])
     },
-    unbind: async () => ok(undefined),
+    unbind: async () => core.ok(undefined),
   })
   return factory
 }
@@ -168,7 +168,7 @@ for (const [backend, environment] of [
         if (result.success) {
           const execute = result.data.execute
           result.data.execute = (sql, params) => sql.startsWith(`INSERT INTO ${table}`)
-            ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'Fixture write unavailable'))
+            ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'Fixture write unavailable'))
             : execute(sql, params)
         }
         return result

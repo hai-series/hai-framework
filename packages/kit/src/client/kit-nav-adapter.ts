@@ -10,9 +10,9 @@
  * ```svelte
  * <script lang='ts'>
  *   import { CrudPage } from '@h-ai/ui'
- *   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
+ *   import { kit } from '@h-ai/kit/client'
  *
- *   const nav = createSvelteKitNavAdapter()
+ *   const nav = kit.client.createSvelteKitNavAdapter()
  * </script>
  *
  * <CrudPage {crud} {data} {nav} />
@@ -32,9 +32,10 @@ import { page } from '$app/state'
  *   触发 `+page.server.ts` 的 `load` 重新执行。
  * - `refresh` 调用 `refreshAll()`，常用于写操作后刷新列表数据。
  * @returns 读取当前 pathname 并调用 SvelteKit navigate/refresh 的适配器。
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const nav = createSvelteKitNavAdapter()
+ * import { kit } from '@h-ai/kit/client'
+ * const nav = kit.client.createSvelteKitNavAdapter()
  * // 仅客户端交互中调用导航；URL 由应用路由提供。
  * await nav.navigate('/articles')
  * ```

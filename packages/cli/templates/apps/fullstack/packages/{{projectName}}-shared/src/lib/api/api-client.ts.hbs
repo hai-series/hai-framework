@@ -1,7 +1,7 @@
 import type { TokenStorage } from '@h-ai/api-client'
 import type { AppInfoOutputData } from '{{fullstack.contractPackageName}}'
 import { apiClient, HaiApiClientError } from '@h-ai/api-client'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 
@@ -26,7 +26,7 @@ export interface ManagementApiOptions {
 /** 所有业务请求由 api-client 统一完成 Token 注入、刷新和双向加密。 */
 export async function initializeManagementApi(options: ManagementApiOptions = {}) {
   if (options.requireApiBase && !options.baseUrl && !resolveRuntimeApiOrigin() && !import.meta.env.PUBLIC_API_BASE)
-    return err(HaiApiClientError.CONFIG_ERROR, 'Native applications require a configured API origin')
+    return core.err(HaiApiClientError.CONFIG_ERROR, 'Native applications require a configured API origin')
   if (managementApi.isInitialized)
     await managementApi.close()
   if (!crypto.isInitialized) {

@@ -58,4 +58,4 @@ orders 表示下次打开时优先展示订单标签页。这个键由示例业�
 | `hai_refresh_token`         | 原生安全存储中的 refresh token 字符串 | 缺失时读取为空，由 token 适配器写入或清除 |
 | 调用方提供的 Preferences 键 | 应用自行解释的普通字符串              | 缺失时读取为空，按键覆盖或删除，无 TTL    |
 
-`createCapacitorTokenStorage()` 在 Android 使用由系统密钥库保护的加密存储，在 iOS 使用 Keychain。该入口用于原生应用，浏览器使用适合 Web 的客户端存储。创建多个原生存储对象时，它们仍读写这两个相同的设备键。令牌对应的服务端会话由 [IAM](iam.md) 管理。
+`capacitor.createTokenStorage()` 在 Android 使用由系统密钥库保护的加密存储，在 iOS 使用 Keychain。该入口用于原生应用，浏览器使用适合 Web 的客户端存储。创建多个原生存储对象时，它们仍读写这两个相同的设备键。令牌对应的服务端会话由 [IAM](iam.md) 管理。

@@ -1,5 +1,5 @@
+import { ui } from '@h-ai/ui'
 import { describe, expect, it } from 'vitest'
-import { fromMindElixirData, toMindElixirData } from '../src/lib/components/scenes/ai/mind/mind-adapter.js'
 
 describe('mind Elixir adapter', () => {
   it('round trips only stable project fields and preserves order', () => {
@@ -14,7 +14,7 @@ describe('mind Elixir adapter', () => {
         ],
       },
     }
-    const engineData = toMindElixirData(original)
+    const engineData = ui.toMindElixirData(original)
     expect(engineData.nodeData).toEqual({
       id: 'root',
       topic: 'Plan',
@@ -22,13 +22,13 @@ describe('mind Elixir adapter', () => {
         { id: 'child', topic: 'Build', children: [] },
       ],
     })
-    expect(fromMindElixirData({
+    expect(ui.fromMindElixirData({
       nodeData: { ...engineData.nodeData, expanded: false },
     }, 'right')).toEqual(original)
   })
 
   it('rejects engine nodes without stable ids', () => {
-    expect(() => fromMindElixirData({
+    expect(() => ui.fromMindElixirData({
       nodeData: { topic: 'No id' },
     }, 'right')).toThrow(TypeError)
   })
@@ -43,6 +43,6 @@ describe('mind Elixir adapter', () => {
       layout,
       root: { id: 'r', text: 'Plan', children: [] },
     }
-    expect(toMindElixirData(data).direction).toBe(direction)
+    expect(ui.toMindElixirData(data).direction).toBe(direction)
   })
 })

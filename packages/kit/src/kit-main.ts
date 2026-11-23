@@ -1,3 +1,5 @@
+import type { KitFunctions } from './kit-types.js'
+import { core } from '@h-ai/core'
 /**
  * @h-ai/kit — 服务对象主入口
  *
@@ -5,12 +7,12 @@
  * @module kit-main
  */
 
-import type { KitFunctions } from './kit-types.js'
-import { core } from '@h-ai/core'
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
-import { defineCrud } from './crud/kit-crud.js'
-import { hasPermission, requirePermission } from './guards/kit-permission.js'
+import { defineCrud, resolveOptions, resolveText } from './crud/kit-crud.js'
+
+import { hasPermission, matchPermission, requirePermission } from './guards/kit-permission.js'
+
 import { requireSensitiveOperation } from './guards/kit-sensitive.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
 import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
@@ -31,6 +33,10 @@ import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
 import { createCacheRateLimitStore, createMemoryRateLimitStore, rateLimitMiddleware } from './middleware/kit-ratelimit.js'
+import { createA2AApiKeyAuthenticator } from './modules/a2a/kit-a2a-auth.js'
+import { handleA2ARequest, resolveA2AConfig } from './modules/a2a/kit-a2a-handle.js'
+import { createA2AHandler, createAgentCardHandler } from './modules/a2a/kit-a2a-helpers.js'
+import { transportEncryptionMiddleware } from './modules/crypto/kit-transport-middleware.js'
 
 export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
 
@@ -48,6 +54,19 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * ```
  */
 export const kit: KitFunctions = {
+  a2a: {
+    createApiKeyAuthenticator: createA2AApiKeyAuthenticator,
+    createHandler: createA2AHandler,
+    createAgentCardHandler,
+    handleRequest: handleA2ARequest,
+    resolveConfig: resolveA2AConfig,
+  },
+  crypto: { transportEncryptionMiddleware },
+  matchPermission,
+  resolveOptions,
+  resolveText,
+  resolveConfig: resolveKitConfig,
+  resolveTransportConfig: resolveKitTransportConfig,
   /** 创建反馈的受控 catch-all HTTP handler，身份范围由宿主解析。 */
   createFeedbackHandler,
   /** 原子限流工厂；共享store生命周期由应用管理。 */

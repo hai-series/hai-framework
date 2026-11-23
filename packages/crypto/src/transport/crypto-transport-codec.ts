@@ -3,10 +3,11 @@
  * 独立随机密钥执行 SM4-CBC Encrypt-then-HMAC-SM3，SM2 签名证明发送方持有私钥。
  * @module crypto-transport-codec
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type { EncryptedPayload, TransportCryptoServiceLike, TransportMessageContext } from './crypto-transport-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
@@ -57,7 +58,7 @@ function authenticatedText(payload: Omit<EncryptedPayload, 'tag' | 'signature'>)
  * ```
  */
 export function transportAuthenticationFailure(): HaiResult<never> {
-  return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportAuthenticationFailed'))
+  return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportAuthenticationFailed'))
 }
 
 /**
@@ -136,7 +137,7 @@ export function sealTransportPayload(
   try {
     const bytes = new TextEncoder().encode(plaintext).byteLength
     if (bytes > limits.plaintextBytes)
-      return err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction }))
+      return core.err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction }))
     const encryptionKey = service.symmetric.generateKey()
     // MAC 使用独立的 256 位随机密钥，禁止直接复用 SM4 密钥。
     const authenticationKey = service.symmetric.generateKey() + service.symmetric.generateKey()
@@ -161,7 +162,7 @@ export function sealTransportPayload(
       return transportAuthenticationFailure()
     const authenticated = { ...payload, tag: tag.data, signature: signature.data }
     return isValidEncryptedPayload(authenticated, limits)
-      ? ok(authenticated)
+      ? core.ok(authenticated)
       : transportAuthenticationFailure()
   }
   catch {
@@ -228,7 +229,7 @@ export function openTransportPayload(
       return transportAuthenticationFailure()
     const bytes = new TextEncoder().encode(plaintext.data).byteLength
     if (bytes > limits.plaintextBytes)
-      return err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction: payload.direction }))
+      return core.err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction: payload.direction }))
     return plaintext
   }
   catch {

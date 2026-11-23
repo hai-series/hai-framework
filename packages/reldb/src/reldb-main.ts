@@ -1,3 +1,4 @@
+import type { HaiResult } from '@h-ai/core'
 /**
  * @h-ai/reldb — 数据库服务主入口
  *
@@ -5,7 +6,6 @@
  * @module reldb-main
  */
 
-import type { HaiResult } from '@h-ai/core'
 import type { ReldbProvider } from './providers/reldb-provider-types.js'
 import type { ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type {
@@ -16,20 +16,22 @@ import type {
   ReldbJsonOps,
   TxManager,
 } from './reldb-types.js'
-
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { createBaseCrudManager } from './providers/reldb-provider-base.js'
 import { createMysqlProvider } from './providers/reldb-provider-mysql.js'
+
 import { createPostgresProvider } from './providers/reldb-provider-postgres.js'
 import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
-
 import { ReldbConfigSchema } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
-import { createJsonOps } from './reldb-json.js'
+
+import { createJsonOps, parseJsonPath } from './reldb-json.js'
+
 import { pagination } from './reldb-pagination.js'
 import { schemaColumns } from './reldb-schema.js'
+import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from './reldb-security.js'
 import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
@@ -64,21 +66,21 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
   currentConfig = null
   currentJsonOps = null
   if (!pendingProvider)
-    return ok(undefined)
+    return core.ok(undefined)
   try {
     const result = await pendingProvider.close()
     if (!result.success) {
-      return err({
+      return core.err({
         ...result.error,
         ext: { ...result.error.ext, cleanupPending: true },
       })
     }
     pendingProvider = null
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Provider cleanup failed; retaining resource for retry', { error })
-    return err({
+    return core.err({
       ...HaiReldbError.CONNECTION_FAILED,
       message: reldbM('reldb_closeFailed', {
         params: {
@@ -102,14 +104,14 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
     const ext = { ...result.error.ext }
     delete ext.cleanupPending
     delete ext.cleanupError
-    return err({
+    return core.err({
       ...result.error,
       ext: Object.keys(ext).length > 0
         ? ext
         : undefined,
     })
   }
-  return err({
+  return core.err({
     ...result.error,
     ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
   })
@@ -193,6 +195,13 @@ const notInitializedTx: TxManager = {
  * ```
  */
 export const reldb: ReldbFunctions = {
+  // 独立工具保持原有调用契约，不依赖模块初始化状态。
+  createJsonOps,
+  escapeSqlString,
+  parseJsonPath,
+  quoteIdentifier,
+  validateIdentifier,
+  validateIdentifiers,
   /**
    * 初始化数据库连接
    *
@@ -210,7 +219,7 @@ export const reldb: ReldbFunctions = {
   async init(config: ReldbConfigInput): Promise<HaiResult<void>> {
     if (initInProgress || closingPromise) {
       logger.warn('RelDB module init is already in progress, skipping concurrent call')
-      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', {
+      return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', {
         params: { error: 'init already in progress' },
       }))
     }
@@ -230,13 +239,13 @@ export const reldb: ReldbFunctions = {
       const parseResult = ReldbConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('RelDB config validation failed', { error: parseResult.error.message })
-        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', {
+        return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', {
           params: { error: parseResult.error.message },
         }), parseResult.error)
       }
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'sqlite'))
-        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sharedBackendRequired'))
+        return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sharedBackendRequired'))
 
       try {
         const provider = createProvider(parsed)
@@ -254,11 +263,11 @@ export const reldb: ReldbFunctions = {
         currentConfig = parsed
         currentJsonOps = createJsonOps(parsed.type)
         logger.info('RelDB module initialized', { type: parsed.type })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('RelDB module initialization failed', { error })
-        return await failInitialization(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_initFailed', {
+        return await failInitialization(core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_initFailed', {
           params: {
             error: error instanceof Error
               ? error.message
@@ -324,7 +333,7 @@ export const reldb: ReldbFunctions = {
       return await prepare({ ddl: provider.ddl, sql: provider.sql })
     }
     catch (error) {
-      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
+      return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
     }
   },
 

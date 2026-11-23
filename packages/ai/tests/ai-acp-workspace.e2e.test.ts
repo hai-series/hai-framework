@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
@@ -31,7 +31,7 @@ describe.skipIf(!image)('managed ACP workspace snapshot', () => {
       image!,
     ])
     const fixture = await readFile(new URL('./fixtures/acp-workspace.mjs', import.meta.url), 'utf8')
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     value(await runner.init({
       engine,
       nodeId: 'acp-workspace-test',

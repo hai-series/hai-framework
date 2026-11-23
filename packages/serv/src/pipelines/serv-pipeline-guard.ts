@@ -11,7 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ErrorMap, Meta, ProcedureHandler } from '@orpc/server'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
-import { err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 
 /**
@@ -88,7 +88,7 @@ export function applyServGuards<
   return async (options) => {
     try {
       if (!hasAuthenticatedSession(options.context)) {
-        return err(
+        return core.err(
           HaiCommonError.UNAUTHORIZED,
           servM('serv_errorUnauthorized', { locale: options.context.locale }),
         )
@@ -102,7 +102,7 @@ export function applyServGuards<
               || (granted.endsWith(':*') && permission.startsWith(granted.slice(0, -1)))),
           )
         if (!allowed) {
-          return err(
+          return core.err(
             HaiCommonError.FORBIDDEN,
             servM('serv_errorForbidden', { locale: options.context.locale }),
           )
@@ -115,7 +115,7 @@ export function applyServGuards<
             role => session.roles.includes(role),
           )
         if (!allowed) {
-          return err(
+          return core.err(
             HaiCommonError.FORBIDDEN,
             servM('serv_errorForbidden', { locale: options.context.locale }),
           )
@@ -128,7 +128,7 @@ export function applyServGuards<
       })
     }
     catch (error) {
-      return err(
+      return core.err(
         HaiCommonError.INTERNAL_ERROR,
         servM('serv_errorInternal', { locale: options.context.locale }),
         error,

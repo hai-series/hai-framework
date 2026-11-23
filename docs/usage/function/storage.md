@@ -17,9 +17,9 @@ Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.s
 将已校验的 S3 或 local 配置和 PNG 字节传给 `storeImage`。本例管理一次完整的连接生命周期。常驻服务应在应用启动时初始化，并在停机时关闭。
 
 ```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
+
 import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
+import { type FileMetadata, type StorageConfigInput, storage } from '@h-ai/storage'
 
 export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
   // 选择一个后端，检查初始化结果。
@@ -313,7 +313,7 @@ if (!result.success) {
 
 #### 场景：通过已授权的 HTTP 接口申请上传地址
 
-公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `createStorageProcedures({ storage, authorize })` 绑定到本模块能力。
+公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `serv.createStorageProcedures({ storage, authorize })` 绑定到本模块能力。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -375,6 +375,41 @@ if (key.success) {
 | `presign.publicUrl`                                | 无默认端点                              | 应用按公开资源策略使用                                | 仅配置公开 S3 地址时有 URL；不是鉴权链接，Local 为 null                                       |
 
 `FileUpload` / `ImageUpload` / `AvatarUpload` 的 `uploadHandler` 由应用实现。组件的 `maxSize`、`accept` 只负责前端选择体验，不能约束拿到签名后绕过组件的上传；服务端应在对象落库/回调或独立代理上传处验证实际大小、类型、内容和归属，再发布业务记录。不要把 Node `UploadOptions` 当成签名选项，也不要给组件编造不存在的框架上传端点。
+
+<a id="key-validation"></a>
+
+### 校验对象键与前缀：`storage.getKeyIssue`
+
+从 `@h-ai/storage/schemas` 导入 `storage`，通过 `storage.getKeyIssue()` 检查原始键。该入口也提供键与前缀的 Schema；不加载 Provider，无需初始化存储。Node 根入口、浏览器入口和 `/client` 同样提供此方法。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `storage.getKeyIssue(key, allowEmpty?)` | 检查对象键或列表前缀 | `key: string` 是待检查的原始输入；`allowEmpty: boolean` 默认 `false`，传 `true` 只允许空字符串作为列表前缀，纯空白仍无效。 | 合法返回 `undefined`；非法返回 `empty`、`tooLong`、`characters` 或 `segments`。不抛业务异常。 | `storage.getKeyIssue('../private.txt')` |
+| `StorageKeySchema.safeParse(key)` | 校验非空对象键 | 必填 `key: string`，UTF-8 最多 1024 字节；拒绝绝对路径、反斜线、控制符及点路径段。 | Zod 校验结果；成功 `data` 为原始键，失败读取 `error`。 | `StorageKeySchema.safeParse('reports/february.pdf')` |
+| `StoragePrefixSchema.safeParse(prefix)` | 校验列表前缀 | 必填 `prefix: string`，遵守同一语法，允许空字符串和部分文件名。 | Zod 校验结果；不归一化前缀。 | `StoragePrefixSchema.safeParse('reports/fe')` |
+
+#### 场景：校验对象键与目录前缀
+
+以下输入分别表示越界路径、空对象键、全量列表前缀和合法报告路径。
+
+```ts
+import { StorageKeySchema, StoragePrefixSchema, storage } from '@h-ai/storage/schemas'
+
+// 点路径段无效，返回 'segments'，应用不应接受这个对象键。
+const invalid = storage.getKeyIssue('../private.txt')
+// 对象键必须非空，返回 'empty'。
+const empty = storage.getKeyIssue('')
+// true 允许以空前缀列出对象，返回 undefined；不授予列表权限。
+const prefixIssue = storage.getKeyIssue('', true)
+// 合法报告路径，success 为 true，data 保留原始键。
+const key = StorageKeySchema.safeParse('reports/february.pdf')
+// 合法的部分前缀，success 为 true，data 为 'reports/fe'。
+const prefix = StoragePrefixSchema.safeParse('reports/fe')
+```
+
+`undefined` 表示通过共享语法校验。应用仍需核对操作权限和目录边界；LocalProvider 还会拒绝内部保留名称。Schema 结果属于 Zod，不是 `HaiResult`。
 
 <a id="directories"></a>
 
@@ -533,22 +568,6 @@ export async function uploadFile(
 ```
 
 上传中点击取消后，Promise 返回 `success: false`，`error` 为当前语言的取消提示；正常上传完成返回 `success: true`。网络故障也返回失败，因此先检查 `success`，再展示 `error`，不要把所有失败都当成取消。无论结果如何，示例都会解除按钮监听。取消后仍需向业务服务核对对象是否已经写入。
-
-#### 场景：校验对象键与目录前缀
-
-从 `@h-ai/storage/schemas` 导入 `getStorageKeyIssue` 检查一个原始键，或使用两个 Schema 直接校验并得到 Zod 结果。
-
-```ts
-import { getStorageKeyIssue, StorageKeySchema, StoragePrefixSchema } from '@h-ai/storage/schemas'
-
-const invalid = getStorageKeyIssue('../private.txt') // 点路径段，返回 'segments'。
-const empty = getStorageKeyIssue('') // 空对象键，返回 'empty'。
-const prefixIssue = getStorageKeyIssue('', true) // 允许用空前缀列出对象，返回 undefined。
-const key = StorageKeySchema.safeParse('reports/february.pdf') // success 为 true，data 为原始键。
-const prefix = StoragePrefixSchema.safeParse('reports/fe') // success 为 true，data 为部分前缀。
-```
-
-`undefined` 表示通过共享语法校验。应用仍需确认操作权限和目录边界，LocalProvider 还会拒绝内部保留名称。
 
 <a id="download-authorization"></a>
 

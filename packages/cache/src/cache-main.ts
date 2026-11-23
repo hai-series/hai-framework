@@ -10,7 +10,7 @@ import type { CacheConfig, CacheConfigInput } from './cache-config.js'
 import type { CacheCompositeOperations, CacheFunctions, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
 import type { CacheProvider } from './providers/cache-provider-types.js'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { CacheConfigSchema } from './cache-config.js'
 import { cacheM } from './cache-i18n.js'
 import { HaiCacheError } from './cache-types.js'
@@ -51,15 +51,15 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
     currentCache = null
   }
   if (!pendingProvider)
-    return ok(undefined)
+    return core.ok(undefined)
   try {
     await pendingProvider.close()
     pendingProvider = null
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Provider cleanup failed; retaining resource for retry', { error })
-    return err({
+    return core.err({
       ...HaiCacheError.CONNECTION_FAILED,
       message: cacheM('cache_operationFailed', {
         params: {
@@ -83,14 +83,14 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
     const ext = { ...result.error.ext }
     delete ext.cleanupPending
     delete ext.cleanupError
-    return err({
+    return core.err({
       ...result.error,
       ext: Object.keys(ext).length > 0
         ? ext
         : undefined,
     })
   }
-  return err({
+  return core.err({
     ...result.error,
     ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
   })
@@ -107,11 +107,11 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
 function createProvider(config: CacheConfig): HaiResult<CacheProvider> {
   switch (config.type) {
     case 'memory':
-      return ok(createMemoryProvider())
+      return core.ok(createMemoryProvider())
     case 'redis':
-      return ok(createRedisProvider())
+      return core.ok(createRedisProvider())
     default:
-      return err(
+      return core.err(
         HaiCacheError.UNSUPPORTED_TYPE,
         cacheM('cache_unsupportedType', {
           params: { type: (config as { type: string }).type },
@@ -199,7 +199,7 @@ export const cache: CacheFunctions = {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
     if (initInProgress || closingPromise) {
       logger.warn('Cache init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiCacheError.OPERATION_FAILED,
         cacheM('cache_operationFailed', {
           params: { error: 'Concurrent initialization detected' },
@@ -222,7 +222,7 @@ export const cache: CacheFunctions = {
       const parseResult = CacheConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Cache config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiCacheError.CONFIG_ERROR,
           cacheM('cache_configError', {
             params: { error: parseResult.error.message },
@@ -232,12 +232,12 @@ export const cache: CacheFunctions = {
       }
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'memory'))
-        return err(HaiCacheError.CONFIG_ERROR, cacheM('cache_sharedBackendRequired'))
+        return core.err(HaiCacheError.CONFIG_ERROR, cacheM('cache_sharedBackendRequired'))
 
       try {
         const providerResult = createProvider(parsed)
         if (!providerResult.success)
-          return err(providerResult.error)
+          return core.err(providerResult.error)
 
         const provider = providerResult.data
         pendingProvider = provider
@@ -260,11 +260,11 @@ export const cache: CacheFunctions = {
         }
         pendingProvider = null
         logger.info('Cache module initialized', { type: parsed.type })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Cache module initialization failed', { error })
-        return await failInitialization(err(
+        return await failInitialization(core.err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_initFailed', {
             params: {

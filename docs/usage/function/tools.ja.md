@@ -289,8 +289,8 @@ service を作り、catalog から選択して同じキーで submit/find、完�
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
-import type { ToolArtifactAccess } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
   // 初期化済み Runner を借りて documents サービスを作り、documents と analysis を有効にする。成功時はサービス、設定や登録の失敗はエラー。
@@ -407,8 +407,8 @@ async function followJob(service: ToolService, context: ToolServiceContext, requ
 認証済み context、認可付き files、初期化済み Runner、信頼済み環境対応表を渡します。返った ToolSet を createService.createTools で返します。工場自体はジョブを送らず、終了処理も持ちません。
 
 ```ts
-import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type JobToolOptions, type ToolSet, tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
   // ホストの主体とファイル権限で成果物ツールとグループを作る。保存ツールは save がある場合だけ追加される。

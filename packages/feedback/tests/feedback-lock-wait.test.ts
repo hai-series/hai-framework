@@ -1,11 +1,12 @@
 /** 真实 PostgreSQL/MySQL 锁等待；不使用工作节点墙钟作为租约接受依据。 */
+
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { DbTestEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
@@ -89,7 +90,7 @@ for (const [label, setup] of [
       const send = vi.spyOn(reach, 'send').mockImplementation(async () => {
         smtpEntered.resolve()
         await releaseSmtp.promise
-        return ok({ success: true, messageId: 'accepted-before-lock-wait' })
+        return core.ok({ success: true, messageId: 'accepted-before-lock-wait' })
       })
       const report = await feedback.submit({ submissionId: 'lease-crosses-db-lock', appId: config.appId }, actor)
       expect(report.success).toBe(true)

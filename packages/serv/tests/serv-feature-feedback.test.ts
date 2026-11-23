@@ -1,8 +1,7 @@
 import type { FeedbackFunctions } from '@h-ai/feedback'
-import { apiContract, FeedbackReportSchema, resolveFeedbackBudget } from '@h-ai/api-contract'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { apiContract, FeedbackReportSchema } from '@h-ai/api-contract'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
-import { createFeedbackProcedures } from '../src/features/serv-feature-feedback.js'
 import { serv } from '../src/serv-main.js'
 
 function fixture() {
@@ -20,28 +19,28 @@ function fixture() {
     version: 1,
     evidenceRevision: 1,
   })
-  const unused = async () => err(HaiCommonError.NOT_FOUND, 'Missing')
+  const unused = async () => core.err(HaiCommonError.NOT_FOUND, 'Missing')
   const submit = vi.fn<FeedbackFunctions['submit']>(async () => {
     await Promise.resolve()
     expect(core.context.get()).toMatchObject({ scopeId: 'trusted-scope', userId: 'user-1', requestId: 'request-1' })
-    return ok(report)
+    return core.ok(report)
   })
-  const appendEvidence = vi.fn<FeedbackFunctions['appendEvidence']>(async input => ok({
+  const appendEvidence = vi.fn<FeedbackFunctions['appendEvidence']>(async input => core.ok({
     acknowledged: input.evidence.map(item => item.id),
     evidenceRevision: 2,
   }))
-  const listMine = vi.fn<FeedbackFunctions['listMine']>(async () => ok({
+  const listMine = vi.fn<FeedbackFunctions['listMine']>(async () => core.ok({
     items: [report],
     page: 1,
     pageSize: 20,
     total: 1,
   }))
   const feedback: FeedbackFunctions = {
-    init: async () => ok(undefined),
-    close: async () => ok(undefined),
+    init: async () => core.ok(undefined),
+    close: async () => core.ok(undefined),
     config: null,
     isInitialized: true,
-    budget: resolveFeedbackBudget(),
+    budget: apiContract.resolveFeedbackBudget(),
     submit,
     list: unused,
     listMine,
@@ -64,8 +63,8 @@ function fixture() {
   }))
   const app = serv.createApp({
     contract: apiContract.feedback,
-    procedures: createFeedbackProcedures({ feedback, resolveContext }),
-    verifyToken: async () => ok({ userId: 'user-1', roles: [], permissions: [] }),
+    procedures: serv.createFeedbackProcedures({ feedback, resolveContext }),
+    verifyToken: async () => core.ok({ userId: 'user-1', roles: [], permissions: [] }),
   })
   const request = (path: string, body: object, authenticated = true) => app.request(`/api/v1/feedback${path}`, {
     method: 'POST',

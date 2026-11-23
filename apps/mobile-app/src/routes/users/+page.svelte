@@ -1,5 +1,5 @@
 <script lang='ts'>
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import * as m from '#lib/paraglide/messages.js'
   import {
@@ -15,7 +15,7 @@
   onMount(() => {
     void refreshUsers()
   })
-  useToastFeedback(() => currentUsersError())
+  ui.useToastFeedback(() => currentUsersError())
 </script>
 
 <svelte:head>

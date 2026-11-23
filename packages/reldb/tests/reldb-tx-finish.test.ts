@@ -1,6 +1,6 @@
 /** 三个公开 Provider 共用的事务结束权组装器；控制驱动返回时机核验并发资源归属。 */
 import type { DmlOperations } from '../src/reldb-types.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { HaiReldbError } from '../src/index.js'
 import { createTxHandle } from '../src/providers/reldb-tx-assembler.js'
@@ -14,13 +14,13 @@ it.each(['commit', 'rollback'] as const)('%s 一旦开始即拒绝并发结束�
     await gate
   })
   const released = vi.fn()
-  const query = vi.fn(async () => ok([]))
+  const query = vi.fn(async () => core.ok([]))
   const operations: DmlOperations = {
     query,
-    get: async () => ok(null),
-    execute: async () => ok({ changes: 0 }),
-    batch: async () => ok(undefined),
-    queryPage: async () => ok({
+    get: async () => core.ok(null),
+    execute: async () => core.ok({ changes: 0 }),
+    batch: async () => core.ok(undefined),
+    queryPage: async () => core.ok({
       items: [],
       total: 0,
       page: 1,

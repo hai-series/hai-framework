@@ -1,4 +1,3 @@
-import type { HaiError, HaiResult } from '@h-ai/core'
 /**
  * @h-ai/ai — 错误码 + 配置 Schema
  *
@@ -6,8 +5,9 @@ import type { HaiError, HaiResult } from '@h-ai/core'
  * @module ai-config
  */
 
+import type { HaiError, HaiResult } from '@h-ai/core'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { ChunkOptionsSchema, CleanOptionsSchema } from '@h-ai/datapipe'
 import { z } from 'zod'
 import { ACPConfigSchema } from './acp/ai-acp-config.js'
@@ -348,10 +348,10 @@ export interface ResolveRequiredModelEntryOptions {
  *
  * @example
  * ```ts
- * import { LLMConfigSchema, resolveModelEntry } from '@h-ai/ai'
+ * import { LLMConfigSchema, ai } from '@h-ai/ai'
  *
  * const config = LLMConfigSchema.parse({ apiKey: process.env.HAI_AI_LLM_APIKEY, models: [{ id: 'fast', model: 'gpt-4o-mini' }], scenarios: { summary: 'fast' } })
- * const result = resolveModelEntry(config, 'summary')
+ * const result = ai.resolveModelEntry(config, 'summary')
  * if (result.success) {
  *   const modelName = result.data.model
  * }
@@ -395,12 +395,12 @@ export function resolveModelEntry(
   }
 
   if (!resolved.apiKey) {
-    return err(HaiAIError.CONFIGURATION_ERROR, options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', {
+    return core.err(HaiAIError.CONFIGURATION_ERROR, options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', {
       params: { scenario },
     }))
   }
 
-  return ok(resolved)
+  return core.ok(resolved)
 }
 
 /**
@@ -416,10 +416,10 @@ export function resolveModelEntry(
  *
  * @example
  * ```ts
- * import { LLMConfigSchema, resolveModelApi } from '@h-ai/ai'
+ * import { LLMConfigSchema, ai } from '@h-ai/ai'
  *
  * const config = LLMConfigSchema.parse({ models: [{ id: 'claude', model: 'claude-sonnet-4', protocol: 'anthropic' }] })
- * const protocol = resolveModelApi(config, 'claude')
+ * const protocol = ai.resolveModelApi(config, 'claude')
  * ```
  */
 export function resolveModelApi(llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType): ApiType {
@@ -1459,10 +1459,10 @@ function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined
  *
  * @example
  * ```ts
- * import { AudioConfigSchema, resolveAudioModel } from '@h-ai/ai'
+ * import { AudioConfigSchema, ai } from '@h-ai/ai'
  *
  * const config = AudioConfigSchema.parse({ models: [{ id: 'tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' }], synthesizeModel: 'tts' })
- * const result = resolveAudioModel(config, 'synthesize')
+ * const result = ai.resolveAudioModel(config, 'synthesize')
  * if (result.success) {
  *   const endpoint = result.data.baseUrl
  * }
@@ -1478,21 +1478,21 @@ export function resolveAudioModel(
     ? audioConfig.transcribeModel
     : audioConfig.synthesizeModel)
   if (!targetId) {
-    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
+    return core.err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
       params: { model: `<${operation}>` },
     }))
   }
 
   const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
   if (!entry) {
-    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
+    return core.err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
       params: { model: targetId },
     }))
   }
 
   const operations: readonly string[] = entry.operations
   if (!operations.includes(operation)) {
-    return err(
+    return core.err(
       HaiAIError.AUDIO_UNSUPPORTED_INPUT,
       aiM('ai_audioUnsupportedInput', {
         params: { provider: entry.provider, reason: `model ${entry.id} does not support ${operation}` },
@@ -1507,12 +1507,12 @@ export function resolveAudioModel(
   // 端点：模型条目优先，其次平台 canonical 默认；无 canonical 的自托管平台必须显式配置
   const baseUrl = entry.baseUrl ?? AUDIO_PROVIDER_DEFAULT_BASE_URL[entry.provider]
   if (!baseUrl) {
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingBaseUrl', {
+    return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingBaseUrl', {
       params: { provider: entry.provider },
     }))
   }
 
-  return ok({
+  return core.ok({
     id: entry.id,
     provider: entry.provider,
     model: entry.model,
@@ -1540,12 +1540,12 @@ export function resolveAudioModel(
  *
  * @example
  * ```ts
- * import { AudioConfigSchema, ensureAudioCredential, resolveAudioModel } from '@h-ai/ai'
+ * import { AudioConfigSchema, ai } from '@h-ai/ai'
  *
  * const config = AudioConfigSchema.parse({ models: [{ id: 'asr', provider: 'openai', model: 'whisper-1', operations: ['transcribe'] }], transcribeModel: 'asr' })
- * const result = resolveAudioModel(config, 'transcribe')
+ * const result = ai.resolveAudioModel(config, 'transcribe')
  * if (result.success) {
- *   const missingCredential = ensureAudioCredential(result.data)
+ *   const missingCredential = ai.ensureAudioCredential(result.data)
  *   if (missingCredential) {
  *     const code = missingCredential.code
  *   }
@@ -1748,10 +1748,10 @@ function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined
  *
  * @example
  * ```ts
- * import { ImageConfigSchema, resolveImageModel } from '@h-ai/ai'
+ * import { ImageConfigSchema, ai } from '@h-ai/ai'
  *
  * const config = ImageConfigSchema.parse({ models: [{ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY }], generateModel: 'image' })
- * const result = resolveImageModel(config)
+ * const result = ai.resolveImageModel(config)
  * if (result.success) {
  *   const modelName = result.data.model
  * }
@@ -1760,19 +1760,19 @@ function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined
 export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): HaiResult<ResolvedImageModel> {
   const target = explicit ?? imageConfig.generateModel
   if (!target) {
-    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
+    return core.err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
       params: { model: '<generate>' },
     }))
   }
   const entry = imageConfig.models?.find(model => model.id === target || model.model === target)
   if (!entry) {
-    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
+    return core.err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
       params: { model: target },
     }))
   }
   const apiKey = entry.apiKey ?? imageProviderEnvApiKey(entry.provider)
   if (!apiKey) {
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_imageMissingApiKey', {
+    return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_imageMissingApiKey', {
       params: { provider: entry.provider },
     }))
   }
@@ -1780,7 +1780,7 @@ export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): 
   let urlEnd = configuredUrl.length
   while (urlEnd > 0 && configuredUrl[urlEnd - 1] === '/')
     urlEnd--
-  return ok({
+  return core.ok({
     id: entry.id,
     provider: entry.provider,
     model: entry.model,

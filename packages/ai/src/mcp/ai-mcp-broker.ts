@@ -5,7 +5,7 @@ import type { MCPServiceBindingRequest, MCPServiceBroker, MCPServiceBrokerOption
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
 import { addAbortListener } from 'node:events'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, ToolSchema } from '@modelcontextprotocol/sdk/types.js'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
@@ -71,7 +71,7 @@ export function createMCPServiceBroker(
 ) {
   const endpoint = URL.parse(options?.url)
   if (!endpoint || !['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash || endpoint.search || typeof options.authorize !== 'function')
-    return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+    return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
 
   const grants = new Map<string, NonNullable<ReturnType<typeof createGrant>>>()
   let closed = false
@@ -115,13 +115,13 @@ export function createMCPServiceBroker(
   const broker: MCPServiceBroker = {
     async bind(request: MCPServiceBindingRequest) {
       if (closed || lifecycle.aborted)
-        return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+        return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
       try {
         const parsed = bindingSchema.safeParse(request)
         if (!parsed.success || new Set(parsed.data.tools.map(tool => tool.id)).size !== parsed.data.tools.length)
-          return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+          return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
         if (Buffer.byteLength(JSON.stringify(parsed.data.tools)) > maxRequestBytes)
-          return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+          return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
         const input = {
           ...parsed.data,
           tools: structuredClone(parsed.data.tools),
@@ -135,29 +135,29 @@ export function createMCPServiceBroker(
               ? catalog.data.find(item => item.name === tool.tool)
               : undefined
             if (!actual || actual.description !== tool.description || JSON.stringify(actual.inputSchema) !== JSON.stringify(tool.inputSchema))
-              return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+              return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
           }
           else {
             if (!services.has(tool.serviceId))
               services.set(tool.serviceId, await read(tool.serviceId))
             const service = services.get(tool.serviceId)
             if (!service || !['http', 'job'].includes(service.transport) || !service.allowedTools?.includes(tool.tool))
-              return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+              return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
           }
           // 每个工具独占编译命名空间，允许不同 Schema 使用同一个 $id。
           validators.set(tool.id, new AjvJsonSchemaValidator().getValidator(tool.inputSchema))
         }
         if (closed || lifecycle.aborted)
-          return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+          return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
         if (grants.size >= 1024)
-          return err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
+          return core.err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
         const token = randomBytes(32).toString('base64url')
         const key = digest(token)
         const grant = createGrant(input, validators, key)
         if (!grant)
-          return err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
+          return core.err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
         grants.set(key, grant)
-        return ok({
+        return core.ok({
           servers: [
             {
               type: 'http' as const,
@@ -173,7 +173,7 @@ export function createMCPServiceBroker(
         })
       }
       catch {
-        return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+        return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
       }
     },
     async handleRequest(request, response) {
@@ -290,5 +290,5 @@ export function createMCPServiceBroker(
       grants.clear()
     },
   }
-  return ok(broker)
+  return core.ok(broker)
 }

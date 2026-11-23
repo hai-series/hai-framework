@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ExecuteResult, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { Role } from './iam-authz-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -179,7 +179,7 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
   }
 
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM('iam_queryRoleFailed', {
         params: { message: error.message },
@@ -193,6 +193,6 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }
-    return ok(result.data[0] ?? null)
+    return core.ok(result.data[0] ?? null)
   }
 }

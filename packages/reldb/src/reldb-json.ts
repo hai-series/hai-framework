@@ -28,9 +28,9 @@ import { reldbM } from './reldb-i18n.js'
  * 参数占位符统一使用 `?`，各 Provider 会在执行前自动转换。
  * @example
  * ```ts
- * import { createJsonOps, type JsonSqlExpr } from '@h-ai/reldb'
+ * import { type JsonSqlExpr, reldb } from '@h-ai/reldb'
  *
- * const expression: JsonSqlExpr = createJsonOps('postgresql').set('settings', '$.theme', 'dark')
+ * const expression: JsonSqlExpr = reldb.createJsonOps('postgresql').set('settings', '$.theme', 'dark')
  * void [expression.sql, expression.params]
  * ```
  */
@@ -52,9 +52,9 @@ export interface JsonSqlExpr {
  * - 数组元素：`$[0]`、`$.items[1]`
  * @example
  * ```ts
- * import { createJsonOps, type ReldbJsonOps } from '@h-ai/reldb'
+ * import { type ReldbJsonOps, reldb } from '@h-ai/reldb'
  *
- * const json: ReldbJsonOps = createJsonOps('postgresql')
+ * const json: ReldbJsonOps = reldb.createJsonOps('postgresql')
  * const patch = json.merge('settings', { theme: 'dark', obsolete: null })
  * void patch // 作为同一次 UPDATE 的 SQL 表达式执行，值在 params。
  * ```
@@ -179,9 +179,9 @@ const JSON_PATH_OBJECT_SEGMENT_REGEX = /^([^.[]+)/
  * @returns 路径段数组
  * @example
  * ```ts
- * import { parseJsonPath } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * void parseJsonPath('$.items[0].name') // ['items', '0', 'name']
+ * void reldb.parseJsonPath('$.items[0].name') // ['items', '0', 'name']
  * ```
  */
 export function parseJsonPath(path: string): string[] {
@@ -471,9 +471,9 @@ function createMysqlJsonOps(): ReldbJsonOps {
  * @returns JSON 操作实例
  * @example
  * ```ts
- * import { createJsonOps } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * const sqlite = createJsonOps('sqlite')
+ * const sqlite = reldb.createJsonOps('sqlite')
  * const expression = sqlite.extract('settings', '$.theme')
  * void expression
  * ```

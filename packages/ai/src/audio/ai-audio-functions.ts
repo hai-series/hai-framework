@@ -7,8 +7,8 @@
  */
 
 import type { HaiError, HaiResult } from '@h-ai/core'
-import type { AIConfig, AudioConfig, AudioProviderName } from '../ai-config.js'
 
+import type { AIConfig, AudioConfig, AudioProviderName } from '../ai-config.js'
 import type {
   AudioCapabilitiesRequest,
   AudioContent,
@@ -26,9 +26,9 @@ import type {
   TranscriptionResult,
   TranscriptionStreamRequest,
 } from './ai-audio-types.js'
-import type { AudioProvider, AudioSynthesisProvider, AudioTranscriptionProvider, ProviderSynthesisStreamRequest, ProviderTranscriptionStreamRequest } from './providers/ai-audio-provider.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { AudioProvider, AudioSynthesisProvider, AudioTranscriptionProvider, ProviderSynthesisStreamRequest, ProviderTranscriptionStreamRequest } from './providers/ai-audio-provider.js'
+import { core } from '@h-ai/core'
 import { AudioConfigSchema, ensureAudioCredential, resolveAudioModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -108,7 +108,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
 
   async function transcribe(request: TranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     if (!request.audio?.data?.length) {
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+      return core.err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
         params: { reason: 'empty audio' },
       }))
     }
@@ -122,7 +122,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const provider = getProvider(resolved.data.provider)
     const transcription = provider.transcription
     if (!transcription) {
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+      return core.err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
         params: { provider: resolved.data.provider, reason: 'transcription' },
       }))
     }
@@ -216,7 +216,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
 
   async function synthesize(request: SynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     if (!request.text) {
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+      return core.err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
         params: { reason: 'empty text' },
       }))
     }
@@ -233,7 +233,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const provider = getProvider(resolved.data.provider)
     const synthesis = provider.synthesis
     if (!synthesis) {
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+      return core.err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
         params: { provider: resolved.data.provider, reason: 'synthesis' },
       }))
     }
@@ -373,7 +373,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!resolved.success)
       return resolved
     const capabilities = getProvider(resolved.data.provider).getCapabilities(resolved.data)
-    return ok(request.operation === 'transcribe'
+    return core.ok(request.operation === 'transcribe'
       ? { transcribe: capabilities.transcribe }
       : { synthesize: capabilities.synthesize })
   }

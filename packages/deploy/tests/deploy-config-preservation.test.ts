@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
-import { deploy, loadDeploymentConfig, loadDeploymentEnvironment } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 let root: string | undefined
 afterEach(async () => {
@@ -185,13 +185,13 @@ it('云开通保留同后端业务配置，以新连接替换旧认证并完整�
     },
   })
   expect(result.success).toBe(true)
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     return
   for (const values of [loaded.data.values, deployed]) {
     const resolved = (name: string) => {
-      const result = loadDeploymentConfig(name, join(root!, 'config', `_${name}.yml`), values)
+      const result = deploy.loadDeploymentConfig(name, join(root!, 'config', `_${name}.yml`), values)
       expect(result.success).toBe(true)
       if (!result.success)
         throw new Error(result.error.message)

@@ -5,17 +5,12 @@
  * @module features/serv-feature-iam
  */
 
-import type {
-  IamAdminCreateUserInput,
-  IamAdminUpdateUserInput,
-  IamCurrentUser,
-  IamInviteUserInput,
-} from '@h-ai/api-contract'
+import type { IamAdminCreateUserInput, IamAdminUpdateUserInput, IamCurrentUser, IamInviteUserInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { IamFunctions, TokenPair, User } from '@h-ai/iam'
 import type { ServContext } from '../serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
@@ -30,10 +25,10 @@ const iamFeatureLogger = core.logger.child({ module: 'serv', scope: 'feature-iam
  * @example
  * ```ts
  * import { iam } from '@h-ai/iam'
- * import { createIamProcedures } from '@h-ai/serv/features/iam'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 IAM 及共享依赖。
- * const procedures = createIamProcedures({ iam })
+ * const procedures = serv.createIamProcedures({ iam })
  * // logout 撤销请求持有的 opaque access token；过期 access 也可撤销 refresh，
  * // 不接收 userId，不要求有效 access 的 auth guard，失败仍检查 HaiResult。
  * ```
@@ -48,10 +43,10 @@ export interface IamProcedureDeps {
  * @example
  * ```ts
  * import { iam } from '@h-ai/iam'
- * import { createIamProcedures } from '@h-ai/serv/features/iam'
+ * import { serv } from '@h-ai/serv'
  *
  * // 宿主已初始化 IAM 及共享依赖。
- * const procedures = createIamProcedures({ iam })
+ * const procedures = serv.createIamProcedures({ iam })
  * // logout 撤销请求持有的 opaque access token；过期 access 也可撤销 refresh，
  * // 不接收 userId，不要求有效 access 的 auth guard，失败仍检查 HaiResult。
  * ```
@@ -90,7 +85,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       // 仅撤销调用方持有的完整随机令牌；不要求 access 仍有效，也不接受 userId 撤销。
       const token = input.accessToken ?? context.accessToken
       if (!token)
-        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+        return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
       return iam.auth.logout(token)
     })
 
@@ -98,7 +93,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       // 页面离开只撤销持有的会话，不清 Cookie，避免迟到响应覆盖下一文档的新登录。
       const token = input.accessToken ?? context.accessToken
       if (!token)
-        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+        return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
       return iam.auth.logout(token)
     })
 
@@ -107,7 +102,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .handle(async ({ context }) => {
       const token = context.accessToken
       if (!token)
-        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+        return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
 
       return mapHaiResult<User, IamCurrentUser>(
         await iam.user.getCurrentUser(token),
@@ -130,7 +125,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .handle(({ input, context }) => {
       const token = context.accessToken
       if (!token)
-        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+        return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
       return iam.user.changeCurrentUserPassword(token, input.oldPassword, input.newPassword)
     })
 
@@ -139,7 +134,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .handle(async ({ input, context }) => {
       const token = context.accessToken
       if (!token)
-        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+        return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
       const policy = await iam.getPublicConfig()
       if (!policy.success)
         return policy
@@ -183,7 +178,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .handle(({ input, context }) => {
       // 防止自删：避免管理员误删自己的账号导致授权锁死。
       if (context.session.userId === input.id)
-        return err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale }))
+        return core.err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale }))
       return sensitive(context, 'iam.users.delete', () => iam.user.deleteUser(input.id))
     })
 
@@ -267,7 +262,7 @@ async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | Ia
     }
   }
 
-  return ok(registerResult.data.user)
+  return core.ok(registerResult.data.user)
 }
 
 async function updateUser(iam: IamFunctions, input: IamAdminUpdateUserInput): Promise<HaiResult<User>> {

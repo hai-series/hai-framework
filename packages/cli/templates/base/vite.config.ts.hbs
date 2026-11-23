@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
 {{#if hasUi}}
 {{#unless isSvelteOnlyApp}}
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 {{/unless}}
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 {{/if}}
@@ -127,7 +127,7 @@ export default defineConfig(({ mode, command }) => {
         preprocess: [
           vitePreprocess(),
 {{#if hasUi}}
-          autoImportHaiUi(),
+          ui.autoImport(),
 {{/if}}
         ],
         compilerOptions: { runes: true },

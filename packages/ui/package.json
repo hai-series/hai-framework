@@ -20,18 +20,18 @@
       "import": "./vite.js"
     },
     "./i18n": {
-      "types": "./dist/i18n.svelte.d.ts",
-      "svelte": "./dist/i18n.svelte.js",
-      "import": "./dist/i18n.svelte.js"
+      "types": "./dist/ui-i18n.d.ts",
+      "svelte": "./dist/ui-i18n.js",
+      "import": "./dist/ui-i18n.js"
     },
     "./toast": {
-      "types": "./dist/toast.svelte.d.ts",
-      "svelte": "./dist/toast.svelte.js",
-      "import": "./dist/toast.svelte.js"
+      "types": "./dist/ui-toast.d.ts",
+      "svelte": "./dist/ui-toast.js",
+      "import": "./dist/ui-toast.js"
     },
     "./theme": {
-      "types": "./dist/theme-config.d.ts",
-      "import": "./dist/theme-config.js"
+      "types": "./dist/ui-theme.d.ts",
+      "import": "./dist/ui-theme.js"
     },
     "./guide": {
       "types": "./dist/guide.d.ts",

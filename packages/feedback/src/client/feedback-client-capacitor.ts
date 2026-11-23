@@ -7,9 +7,9 @@ import { Share } from '@capacitor/share'
  * 以原生分享保存临时诊断包；分享结束、失败或退出会话均清理缓存。
  * @example
  * ```ts
- * import { configureFeedbackSaving } from '@h-ai/feedback/client'
- * import { saveCapacitorFeedbackFile } from '@h-ai/feedback/capacitor'
- * configureFeedbackSaving(saveCapacitorFeedbackFile)
+ *
+ * import { feedback } from '@h-ai/feedback/capacitor'
+ * feedback.configureSaving(feedback.saveCapacitorFile)
  * ```
  */
 export const saveCapacitorFeedbackFile: FeedbackFileSaver = async (bytes, filename, _contentType, signal) => {

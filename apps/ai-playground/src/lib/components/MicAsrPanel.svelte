@@ -1,9 +1,10 @@
 <script lang='ts'>
   // 麦克风实时转写面板：录音期间周期转写当前快照，停止时仅补齐最后一段
+
   import type { AudioRecorder } from '@h-ai/ai/client'
-  import { blobToWav, createAudioRecorder } from '@h-ai/ai/client'
-  import { Button, Card } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { ai } from '@h-ai/ai/client'
+  import { Button, Card, ui } from '@h-ai/ui'
+
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { transcribe } from '#lib/services/ai-lab.js'
@@ -42,7 +43,7 @@
   async function transcribeSnapshot(recorded: Blob, currentRecordingId: number): Promise<void> {
     liveTranscribing = true
     try {
-      const wav = await blobToWav(recorded)
+      const wav = await ai.blobToWav(recorded)
       const file = new File([wav], 'mic.wav', { type: 'audio/wav' })
       const result = await transcribe(file, language)
       if (currentRecordingId !== recordingId)
@@ -54,7 +55,7 @@
     catch (cause) {
       if (currentRecordingId !== recordingId)
         return
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -91,7 +92,7 @@
     requestingPermission = true
     const current = ++recordingId
     lastTranscribedBytes = 0
-    recorder = createAudioRecorder({
+    recorder = ai.createAudioRecorder({
       timesliceMs: 500,
       onStop: recorded => void finalizeRecording(recorded, current),
       onError: (cause) => {
@@ -103,7 +104,7 @@
         liveTranscribing = false
         phase = 'idle'
         error = m.error_request({
-          detail: errorMessage(cause, m.error_unknown()),
+          detail: ui.errorMessage(cause, m.error_unknown()),
         })
       },
     })
@@ -164,7 +165,7 @@
     stopTimer()
     recorder?.close()
   })
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>

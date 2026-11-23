@@ -1,9 +1,9 @@
 import type { LogRecord } from '@h-ai/core'
 import type { RunnerFunctions } from '@h-ai/runner'
 import process from 'node:process'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { HaiToolsError } from '../src/index.js'
@@ -15,7 +15,7 @@ let closed: (() => void)[] = []
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  runner = createRunner()
+  runner = frameworkRunner.create()
   expect((await runner.init({ nodeId: 'tool-tests', pollMs: 10 })).success).toBe(true)
 })
 
@@ -169,7 +169,7 @@ describe('tools.createService', () => {
             name: 'denied',
             description: 'Denied',
             parameters: z.object({}),
-            resultHandler: () => err(HaiToolsError.FORBIDDEN, 'Denied'),
+            resultHandler: () => core.err(HaiToolsError.FORBIDDEN, 'Denied'),
           }),
         ],
       }),
@@ -273,7 +273,7 @@ describe('tools.createService', () => {
   it('aPI和执行节点分离，执行节点复核最新启用策略', async () => {
     await runner.close()
     expect((await runner.init({ nodeId: 'api', executor: false })).success).toBe(true)
-    const worker = createRunner()
+    const worker = frameworkRunner.create()
     let enabled = true
     let invoked = false
     const options = {
@@ -454,7 +454,7 @@ describe('tools.createService', () => {
               parameters: z.object({
                 value: z.string(),
               }),
-              resultHandler: () => err({
+              resultHandler: () => core.err({
                 code: 'fixture:provider-failed',
                 httpStatus,
                 message: httpStatus >= 500

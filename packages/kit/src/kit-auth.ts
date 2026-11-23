@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { AuthCookieWriter, AuthOperations, AuthOperationsProvider } from './kit-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /** 默认 Token Cookie 名 */
@@ -196,7 +196,7 @@ function getAuthOperations(): AuthOperations | null {
  * 避免向调用方抛出未捕获异常。
  */
 function authNotConfiguredError(): HaiResult<never> {
-  return err({
+  return core.err({
     code: 'KIT_AUTH_NOT_CONFIGURED',
     message: kitM('kit_authNotConfigured'),
   })
@@ -367,7 +367,7 @@ export async function logout(
 ): Promise<HaiResult<void>> {
   try {
     if (!accessToken)
-      return ok(undefined)
+      return core.ok(undefined)
     const ops = getAuthOperations()
     if (!ops)
       return authNotConfiguredError()

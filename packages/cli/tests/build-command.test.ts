@@ -6,7 +6,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { readDeploymentArtifact } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildCommand } from '../src/commands/cli-build.js'
 
@@ -219,7 +219,7 @@ it('jSON 返回各次独立构建的真实来源、平台和归档校验值', as
         },
       })
       expect(result.manifestPath).toBe(join(result.artifactDir, 'manifest.json'))
-      expect(await readDeploymentArtifact(result.artifactDir)).toEqual(result.manifest)
+      expect(await deploy.readDeploymentArtifact(result.artifactDir)).toEqual(result.manifest)
     }
     writeFileSync(join(root, 'draft.txt'), 'untracked input')
     await buildCommand({
@@ -476,7 +476,7 @@ it('构建批次使用工程标识、可读本地时间和末尾版本，清单�
   const manifest = JSON.parse(readFileSync(join(parent, directory, 'manifest.json'), 'utf8'))
   expect(manifest.buildId).toMatch(/^20261105-171924-[a-f0-9]{6}-1\.2\.3$/)
   expect(directory).toBe(`build-sample-app-image-${manifest.buildId}`)
-  expect((await readDeploymentArtifact(join(parent, directory))).buildId).toBe(manifest.buildId)
+  expect((await deploy.readDeploymentArtifact(join(parent, directory))).buildId).toBe(manifest.buildId)
 })
 
 it.each([

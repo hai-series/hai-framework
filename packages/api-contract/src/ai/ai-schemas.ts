@@ -758,9 +758,9 @@ export type AiChatCompletionData = z.infer<typeof AiChatCompletionDataSchema>
  * ```ts
  * import type { AiChatCompletionOutput } from '@h-ai/api-contract'
  * import { AiChatCompletionDataSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: AiChatCompletionOutput = ok(AiChatCompletionDataSchema.parse({
+ * const response: AiChatCompletionOutput = core.ok(AiChatCompletionDataSchema.parse({
  *   id: 'example-1',
  *   object: 'chat.completion',
  *   created: 0,
@@ -820,9 +820,9 @@ export type AiSendMessageData = z.infer<typeof AiSendMessageDataSchema>
  * ```ts
  * import type { AiSendMessageOutput } from '@h-ai/api-contract'
  * import { AiSendMessageDataSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: AiSendMessageOutput = ok(AiSendMessageDataSchema.parse({
+ * const response: AiSendMessageOutput = core.ok(AiSendMessageDataSchema.parse({
  *   content: 'Hello',
  *   model: 'example'
  * }))

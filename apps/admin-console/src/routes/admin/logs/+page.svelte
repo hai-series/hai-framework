@@ -4,9 +4,9 @@
 <script lang='ts'>
   import type { AuditBackupReceipt } from '#lib/services/audit-backup.js'
   import type { PageData } from './$types'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { Badge, Button, CrudPage } from '@h-ai/ui'
-  import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
+  import { kit } from '@h-ai/kit/client'
+  import { Badge, Button, CrudPage, ui } from '@h-ai/ui'
+
   import { auditLogCrud } from '#lib/crud/admin-crud.js'
   import * as m from '#lib/paraglide/messages.js'
   import { newAuditBackupId, runAuditBackup } from '#lib/services/audit-backup.js'
@@ -16,7 +16,7 @@
   }
 
   const { data }: Props = $props()
-  const nav = createSvelteKitNavAdapter()
+  const nav = kit.client.createSvelteKitNavAdapter()
   let backupId = $state('')
   let backingUp = $state(false)
   let backupError = $state('')
@@ -30,7 +30,7 @@
     try {
       const result = await runAuditBackup(backupId)
       if (!result.success) {
-        backupError = `${formatOperationError(result.error, m.common_error())} ${m.audit_backup_retry_hint()}`
+        backupError = `${ui.errorMessage(result.error, m.common_error())} ${m.audit_backup_retry_hint()}`
         return
       }
       receipt = result.data
@@ -48,8 +48,8 @@
     pageSize: data.pagination.pageSize,
     filters: data.filters,
   })
-  useToastFeedback(() => backupError)
-  useToastFeedback(() => receipt
+  ui.useToastFeedback(() => backupError)
+  ui.useToastFeedback(() => receipt
     ? m.audit_backup_private_hint()
     : '', 'success')
 </script>

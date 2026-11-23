@@ -19,8 +19,8 @@ import type {
   CreateAuditLogInput,
   ListAuditLogsOptions,
 } from './audit-types.js'
-import { core, err, ok } from '@h-ai/core'
-import { validateIdentifiers } from '@h-ai/reldb'
+import { core } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { createAuditAlerts } from './audit-alert-functions.js'
 import { createAuditBackup } from './audit-backup-functions.js'
 import { AuditInitConfigSchema } from './audit-config.js'
@@ -106,7 +106,7 @@ const notInitializedBackup = notInitialized.proxy<AuditBackupOperations>()
  * ```ts
  * import { audit } from '@h-ai/audit'
  * import { core } from '@h-ai/core'
- * import { reldb, type ReldbConfigInput } from '@h-ai/reldb'
+ * import { type ReldbConfigInput, reldb } from '@h-ai/reldb'
  * async function recordCreation(config: ReldbConfigInput) {
  *   const database = await reldb.init(config)
  *   if (!database.success) return database
@@ -149,7 +149,7 @@ export const audit: AuditFunctions = {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Audit init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiAuditError.INIT_IN_PROGRESS,
         auditM('audit_initInProgress'),
       )
@@ -178,7 +178,7 @@ export const audit: AuditFunctions = {
       const parseResult = AuditInitConfigSchema.safeParse(config ?? {})
       if (!parseResult.success) {
         logger.error('Audit config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiAuditError.CONFIG_ERROR,
           auditM('audit_configError', {
             params: { error: parseResult.error.message },
@@ -188,16 +188,16 @@ export const audit: AuditFunctions = {
       }
       const parsed = parseResult.data
       if (parsed.alerts.enabled && (!config?.reach?.isInitialized || parsed.alerts.rules.some(rule => rule.targets.some(target => !config.reach?.config?.providers.some(provider => provider.name === target.provider)))))
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_alertReachRequired'))
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_alertReachRequired'))
       if (parsed.backup.enabled && !config?.storage?.isInitialized)
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupStorageRequired'))
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupStorageRequired'))
       if (parsed.backup.enabled && config?.storage?.config?.type === 's3' && config.storage.config.publicUrl)
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupPrivateStorageRequired'))
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupPrivateStorageRequired'))
 
-      const identifierResult = validateIdentifiers([parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
+      const identifierResult = reldb.validateIdentifiers([parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
       if (!identifierResult.success) {
         logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
-        return err(
+        return core.err(
           HaiAuditError.CONFIG_ERROR,
           auditM('audit_configError', {
             params: { error: identifierResult.error.message },
@@ -213,7 +213,7 @@ export const audit: AuditFunctions = {
       })
       const ready = await candidate.ready()
       if (!ready.success) {
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', {
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', {
           params: { error: ready.error.message },
         }), ready.error)
       }
@@ -224,7 +224,7 @@ export const audit: AuditFunctions = {
       if (!configured.success)
         return configured
       if (generation !== lifecycleGeneration)
-        return err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized'))
+        return core.err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized'))
       // 候选仓库只拥有schema就绪Promise，不拥有共享reldb连接；成功屏障后才发布。
       currentRepo = candidate
       currentWriter = createAuditWriter(candidate, parsed)
@@ -239,11 +239,11 @@ export const audit: AuditFunctions = {
       currentAlerts = createAuditAlerts({ config: parsed.alerts, reach: config?.reach, log: currentWriter })
 
       logger.info('Audit module initialized')
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       logger.error('Audit module initialization failed', { error })
-      return err(
+      return core.err(
         HaiAuditError.CONFIG_ERROR,
         auditM('audit_initFailed', {
           params: {
@@ -286,10 +286,10 @@ export const audit: AuditFunctions = {
     if (!currentRepo)
       return notInitialized.result()
     if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
-      return ok(undefined)
+      return core.ok(undefined)
     const written = await audit.log(input, options?.tx)
     return written.success
-      ? ok(undefined)
+      ? core.ok(undefined)
       : written
   },
 
@@ -304,7 +304,7 @@ export const audit: AuditFunctions = {
       return Promise.resolve(notInitialized.result())
     }
     if (!validAuditQuery(options)) {
-      return Promise.resolve(err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
+      return Promise.resolve(core.err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
         params: {
           field: 'query',
           reason: auditM('audit_queryInvalid'),
@@ -313,7 +313,7 @@ export const audit: AuditFunctions = {
     }
 
     if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
-      return Promise.resolve(err(
+      return Promise.resolve(core.err(
         HaiAuditError.QUERY_FAILED,
         auditM('audit_invalidInput', {
           params: { field: 'dateRange', reason: 'startDate must be before endDate' },
@@ -328,7 +328,7 @@ export const audit: AuditFunctions = {
     if (!currentRepo)
       return Promise.resolve(notInitialized.result())
     if (!validAuditQuery(options) || (options?.startDate && options.endDate && options.startDate > options.endDate)) {
-      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+      return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
         params: {
           field: 'query',
           reason: auditM('audit_queryInvalid'),
@@ -351,7 +351,7 @@ export const audit: AuditFunctions = {
     }
 
     if (!isNonEmptyString(userId)) {
-      return Promise.resolve(err(
+      return Promise.resolve(core.err(
         HaiAuditError.QUERY_FAILED,
         auditM('audit_invalidInput', {
           params: { field: 'userId', reason: 'must be non-empty string' },
@@ -360,7 +360,7 @@ export const audit: AuditFunctions = {
     }
 
     if (typeof limit === 'number' && (!Number.isInteger(limit) || limit <= 0)) {
-      return Promise.resolve(err(
+      return Promise.resolve(core.err(
         HaiAuditError.QUERY_FAILED,
         auditM('audit_invalidInput', {
           params: { field: 'limit', reason: 'must be a positive integer' },
@@ -383,7 +383,7 @@ export const audit: AuditFunctions = {
     }
 
     if (typeof olderThanDays === 'number' && (!Number.isInteger(olderThanDays) || olderThanDays < 0)) {
-      return Promise.resolve(err(
+      return Promise.resolve(core.err(
         HaiAuditError.CLEANUP_FAILED,
         auditM('audit_invalidInput', {
           params: { field: 'olderThanDays', reason: 'must be a non-negative integer' },
@@ -405,7 +405,7 @@ export const audit: AuditFunctions = {
       return Promise.resolve(notInitialized.result())
     }
     if (!validAuditQuery(filters)) {
-      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+      return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
         params: {
           field: 'query',
           reason: auditM('audit_queryInvalid'),
@@ -414,7 +414,7 @@ export const audit: AuditFunctions = {
     }
 
     if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
-      return Promise.resolve(err(
+      return Promise.resolve(core.err(
         HaiAuditError.STATS_FAILED,
         auditM('audit_invalidInput', {
           params: { field: 'days', reason: 'must be a non-negative integer' },
@@ -487,6 +487,6 @@ export const audit: AuditFunctions = {
     await closingBackup?.close()
     await Promise.allSettled([...inFlightWrites])
     logger.info('Audit module closed')
-    return ok(undefined)
+    return core.ok(undefined)
   },
 }

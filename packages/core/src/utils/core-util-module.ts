@@ -21,8 +21,8 @@ import { error as errorUtils } from '../functions/core-function-error.js'
  * @returns 未初始化工具集
  * @example
  * ```ts
- * import { core } from '@h-ai/core'
- * import { HaiCommonError, type HaiResult } from '@h-ai/core'
+ * import { HaiCommonError, type HaiResult, core } from '@h-ai/core'
+ *
  * const state = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Not initialized')
  * const operations = state.proxy<{ read: () => Promise<HaiResult<string>> }>()
  * const result = await operations.read()
@@ -37,8 +37,8 @@ export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () =>
  * @returns 包含 error、result 和同步/异步 proxy 的占位工具集。
  * @example
  * ```ts
- * import { core } from '@h-ai/core'
- * import { HaiCommonError, type HaiResult } from '@h-ai/core'
+ * import { HaiCommonError, type HaiResult, core } from '@h-ai/core'
+ *
  * const state = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Not initialized')
  * const operations = state.proxy<{ read: () => Promise<HaiResult<string>> }>()
  * const result = await operations.read()

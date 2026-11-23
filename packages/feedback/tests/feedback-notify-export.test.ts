@@ -4,12 +4,11 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { HaiStorageError, storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const actor = {
@@ -116,7 +115,7 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
       if (mode === 'deleting')
         expect((await reldb.sql.execute('UPDATE hai_feedback_reports SET deleting = 1 WHERE id = ?', [report.data.id])).success).toBe(true)
       if (mode === 'database')
-        vi.spyOn(reldb.tx, 'begin').mockResolvedValue(err(HaiReldbError.QUERY_FAILED, 'Database unavailable at pre-send checkpoint'))
+        vi.spyOn(reldb.tx, 'begin').mockResolvedValue(core.err(HaiReldbError.QUERY_FAILED, 'Database unavailable at pre-send checkpoint'))
     }
     finally { release.resolve() }
     expect((await worker).success).toBe(true)
@@ -155,7 +154,7 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    const put = vi.spyOn(storage.file, 'put').mockResolvedValue(err(HaiStorageError.UPLOAD_FAILED, 'Attachment fixture unavailable'))
+    const put = vi.spyOn(storage.file, 'put').mockResolvedValue(core.err(HaiStorageError.UPLOAD_FAILED, 'Attachment fixture unavailable'))
     expect((await feedback.uploadAttachment({
       id: report.data.id,
       attachmentId: 'failed-file',
@@ -178,7 +177,7 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
     expect(archive.success).toBe(true)
     if (!archive.success)
       return
-    const bundle = await readFeedbackBundle(Buffer.from(archive.data.dataBase64, 'base64'))
+    const bundle = await feedback.readBundle(Buffer.from(archive.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (bundle.success) {
       expect(bundle.data.manifest.missing).toEqual(['attachment:failed-file:failed', 'attachment:pending-file:pending'])
@@ -239,7 +238,7 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
     expect(archive.success).toBe(true)
     if (!archive.success)
       return
-    const bundle = await readFeedbackBundle(Buffer.from(archive.data.dataBase64, 'base64'))
+    const bundle = await feedback.readBundle(Buffer.from(archive.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return
@@ -318,8 +317,8 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
     if (!exported.success)
       return
     const get = vi.spyOn(storage.file, 'get').mockResolvedValue(mode === 'read'
-      ? err(HaiStorageError.NOT_FOUND, 'Object temporarily unavailable')
-      : ok(Buffer.from('tampered object')))
+      ? core.err(HaiStorageError.NOT_FOUND, 'Object temporarily unavailable')
+      : core.ok(Buffer.from('tampered object')))
     expect((await feedback.runJobs()).success).toBe(true)
     get.mockRestore()
     const detail = await feedback.get(report.data.id, actor)

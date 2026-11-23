@@ -3,8 +3,8 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { applyTheme, getSavedTheme } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui'
+
   import { onMount } from 'svelte'
   import { closeApi, initApi } from '#lib/api.js'
   import { initCapacitor } from '#lib/capacitor.js'
@@ -80,8 +80,8 @@
 
   async function bootstrap(): Promise<void> {
     try {
-      const theme = getSavedTheme()
-      applyTheme(theme, false)
+      const theme = ui.getSavedTheme()
+      ui.applyTheme(theme, false)
       changeLocale(localeStore.current)
 
       await initCapacitor()
@@ -89,7 +89,7 @@
       await refreshCurrentUser()
     }
     catch (error) {
-      bootError = errorMessage(error, m.common_unknown_error())
+      bootError = ui.errorMessage(error, m.common_unknown_error())
     }
     finally {
       booting = false
@@ -128,7 +128,7 @@
       void goto(resolve('/'))
     }
   })
-  useToastFeedback(() => bootError)
+  ui.useToastFeedback(() => bootError)
 </script>
 
 {#key localeStore.current}

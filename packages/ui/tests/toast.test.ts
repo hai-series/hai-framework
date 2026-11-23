@@ -9,18 +9,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // 由于 toast 使用 Svelte 5 Runes，需要模拟环境
 // 这里测试 toast 的核心逻辑
 
-/** Toast 模块类型 */
-type ToastModule = typeof import('../src/lib/toast.svelte.js')
+/** Toast 入口的公开运行能力。 */
+type ToastUi = typeof import('../src/lib/ui-toast.js')['ui']
 
 describe('toastState', () => {
-  let toast: ToastModule['toast']
+  let toast: ToastUi['toast']
 
   beforeEach(async () => {
     // 动态导入以确保每次测试获得新实例
     // 注意：必须先完成模块导入，再启用 fake timers，避免导入流程被假时钟阻塞
     vi.resetModules()
-    const module = await import('../src/lib/toast.svelte.js') as ToastModule
-    toast = module.toast
+    const { ui } = await import('../src/lib/ui-toast.js')
+    toast = ui.toast
     vi.useFakeTimers()
   })
 
@@ -181,11 +181,12 @@ describe('toastState', () => {
 })
 
 describe('toast notify helpers', () => {
-  let mod: typeof import('../src/lib/toast.svelte.js')
+  let mod: ToastUi
 
   beforeEach(async () => {
     vi.resetModules()
-    mod = await import('../src/lib/toast.svelte.js')
+    const { ui } = await import('../src/lib/ui-toast.js')
+    mod = ui
     vi.useFakeTimers()
   })
 

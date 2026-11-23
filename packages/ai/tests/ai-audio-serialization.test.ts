@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 
-import { serializePlayableAudio } from '../src/index.js'
+import { ai } from '../src/index.js'
 
 describe('serializePlayableAudio', () => {
   it('透传 WAV 和 MP3 为 Base64 播放负载', () => {
-    const wav = serializePlayableAudio({
+    const wav = ai.serializePlayableAudio({
       data: new Uint8Array([1, 2]),
       format: 'wav',
     })
@@ -13,7 +13,7 @@ describe('serializePlayableAudio', () => {
     if (wav.success)
       expect(wav.data).toEqual({ audioBase64: 'AQI=', format: 'wav', mimeType: 'audio/wav' })
 
-    const mp3 = serializePlayableAudio({
+    const mp3 = ai.serializePlayableAudio({
       data: new Uint8Array([3, 4]),
       format: 'mp3',
     })
@@ -23,7 +23,7 @@ describe('serializePlayableAudio', () => {
   })
 
   it('为 PCM16 添加合法 WAV 头', () => {
-    const result = serializePlayableAudio({
+    const result = ai.serializePlayableAudio({
       data: new Uint8Array([1, 0, 2, 0]),
       format: 'pcm16',
       sampleRate: 24_000,
@@ -38,13 +38,13 @@ describe('serializePlayableAudio', () => {
   })
 
   it('拒绝缺少采样率或不完整采样帧的 PCM16', () => {
-    const missingRate = serializePlayableAudio({
+    const missingRate = ai.serializePlayableAudio({
       data: new Uint8Array([1, 0]),
       format: 'pcm16',
     })
     expect(missingRate.success).toBe(false)
 
-    const incompleteFrame = serializePlayableAudio({
+    const incompleteFrame = ai.serializePlayableAudio({
       data: new Uint8Array([1, 0, 2]),
       format: 'pcm16',
       sampleRate: 24_000,

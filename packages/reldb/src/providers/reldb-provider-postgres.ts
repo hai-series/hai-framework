@@ -18,11 +18,11 @@ import type {
   ReldbFunctions,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
-import type { ReldbProvider } from './reldb-provider-types.js'
 
+import type { ReldbProvider } from './reldb-provider-types.js'
 import { createRequire } from 'node:module'
 import { setTimeout as delay } from 'node:timers/promises'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
 import { HaiReldbError } from '../reldb-types.js'
@@ -118,16 +118,16 @@ export function createPostgresProvider(): ReldbProvider {
       return closing
     const owned = pool
     if (!owned)
-      return Promise.resolve(ok(undefined))
+      return Promise.resolve(core.ok(undefined))
     closing = (async (): Promise<HaiResult<void>> => {
       try {
         await transactionsDrained
         await owned.end()
         pool = null
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
+        return core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
           params: {
             error: String(error),
           },
@@ -356,35 +356,35 @@ export function createPostgresProvider(): ReldbProvider {
         if (scoped && ifNotExists) {
           const found = await execute('SELECT 1 FROM pg_catalog.pg_class WHERE oid = pg_catalog.to_regclass($1) AND relkind IN (\'r\', \'p\')', [quotedTable])
           if (found.rows.length)
-            return ok(undefined)
+            return core.ok(undefined)
         }
         await execute(buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists && !scoped))
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async dropTable(name, ifExists) {
         const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
         await execute(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async addColumn(table, column, def) {
         const colSql = pgBuildColumnSql(column, def)
         await execute(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async dropColumn(table, column) {
         await execute(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async renameTable(oldName, newName) {
         await execute(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async createIndex(table, index, def) {
         const quotedTable = quoteIdentifier(table)
         const statement = buildDefaultCreateIndexSql(quoteIdentifier, quotedTable, quoteIdentifier(index), def)
         if (!scoped) {
           await execute(statement)
-          return ok(undefined)
+          return core.ok(undefined)
         }
         // 已有可用索引避免重复加表锁。同名其它对象由实际 CREATE INDEX 报错。
         const existing = await execute(`
@@ -404,18 +404,18 @@ export function createPostgresProvider(): ReldbProvider {
           def.columns,
         ])
         if ((existing.rows[0] as { usable?: boolean } | undefined)?.usable)
-          return ok(undefined)
+          return core.ok(undefined)
         await execute(statement.replace('INDEX IF NOT EXISTS ', 'INDEX '))
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async dropIndex(index, ifExists = true) {
         const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
         await execute(sql)
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async raw(sql) {
         await execute(sql)
-        return ok(undefined)
+        return core.ok(undefined)
       },
     }
   }
@@ -425,15 +425,15 @@ export function createPostgresProvider(): ReldbProvider {
   const rawDml: DmlOperations = {
     async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
-      return ok(rows as T[])
+      return core.ok(rows as T[])
     },
     async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
-      return ok((rows[0] as T) ?? null)
+      return core.ok((rows[0] as T) ?? null)
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const result = await executeStatement(convertPlaceholders(sql), params)
-      return ok({ changes: result.rowCount ?? 0 })
+      return core.ok({ changes: result.rowCount ?? 0 })
     },
     async batch(statements) {
       let client: PgClient | null = null
@@ -444,13 +444,13 @@ export function createPostgresProvider(): ReldbProvider {
           await client.query(convertPlaceholders(s), params)
         }
         await client.query('COMMIT')
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         if (client) {
           await client.query('ROLLBACK').catch(() => { })
         }
-        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
+        return core.err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
           params: {
             error: String(error),
           },
@@ -470,7 +470,7 @@ export function createPostgresProvider(): ReldbProvider {
         },
         options,
       )
-      return ok(result)
+      return core.ok(result)
     },
   }
 
@@ -482,21 +482,21 @@ export function createPostgresProvider(): ReldbProvider {
     return {
       async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
         const rows = await pgQueryRows(queryFn, sql, params)
-        return ok(rows as T[])
+        return core.ok(rows as T[])
       },
       async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
         const rows = await pgQueryRows(queryFn, sql, params)
-        return ok((rows[0] as T) ?? null)
+        return core.ok((rows[0] as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
         const result = await queryFn(convertPlaceholders(sql), params)
-        return ok({ changes: result.rowCount ?? 0 })
+        return core.ok({ changes: result.rowCount ?? 0 })
       },
       async batch(statements) {
         for (const { sql: s, params } of statements) {
           await queryFn(convertPlaceholders(s), params)
         }
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
@@ -506,7 +506,7 @@ export function createPostgresProvider(): ReldbProvider {
           },
           options,
         )
-        return ok(result)
+        return core.ok(result)
       },
     }
   }
@@ -524,7 +524,7 @@ export function createPostgresProvider(): ReldbProvider {
         client?.release()
       }
       finally { releaseOwnership() }
-      return err(HaiReldbError.TRANSACTION_FAILED, pgTxErrorMessage(String(error)), error)
+      return core.err(HaiReldbError.TRANSACTION_FAILED, pgTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createPgTxDmlOps(client)
@@ -532,7 +532,7 @@ export function createPostgresProvider(): ReldbProvider {
       ...ctx,
       isConnected: () => client !== null,
     }, txDmlOps)
-    return ok(createTxHandle(guardedTxDmlOps, {
+    return core.ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await client!.query('COMMIT') },
       rollback: async () => { await client!.query('ROLLBACK') },
       release: () => {
@@ -570,12 +570,12 @@ export function createPostgresProvider(): ReldbProvider {
       }
       const committed = await connection.query('COMMIT')
       if (committed.command === 'ROLLBACK')
-        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'))
+        return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'))
       return result
     }
     catch (error) {
       await client?.query('ROLLBACK').catch(() => {})
-      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
+      return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
     }
     finally {
       try {
@@ -595,7 +595,7 @@ export function createPostgresProvider(): ReldbProvider {
   return {
     async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'postgresql') {
-        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
+        return core.err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
       }
       const previousCleanup = await closeResource()
       if (!previousCleanup.success)
@@ -649,18 +649,18 @@ export function createPostgresProvider(): ReldbProvider {
         ready = true
         currentConfig = config
         logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
+        const result = core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
           params: {
             error: String(error),
           },
         }), error)
         return cleanup.success || result.success
           ? result
-          : err({
+          : core.err({
               ...result.error,
               ext: { cleanupPending: true, cleanupError: cleanup.error },
             })

@@ -7,10 +7,10 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import type { LogQueryOptions, SchedulerLogCleanupPolicy, TaskExecutionLog } from '../scheduler-types.js'
 
+import type { LogQueryOptions, SchedulerLogCleanupPolicy, TaskExecutionLog } from '../scheduler-types.js'
 import { isDeepStrictEqual } from 'node:util'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { schedulerM } from '../scheduler-i18n.js'
@@ -195,7 +195,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         duration: log.duration,
       })
       if (created.success)
-        return ok(undefined)
+        return core.ok(undefined)
     }
     catch {
       // 驱动可能在提交后丢失回执；下方真实读取确认，不依据重复错误文案猜测。
@@ -203,10 +203,10 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     try {
       const existing = await this.findById(log.id)
       if (existing.success && existing.data && isDeepStrictEqual(existing.data.payload, payload))
-        return ok(undefined)
+        return core.ok(undefined)
     }
     catch {}
-    return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+    return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
   }
 
   async queryLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
@@ -254,7 +254,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       })
 
       if (!pageResult.success) {
-        return err(
+        return core.err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
             params: { error: pageResult.error.message },
@@ -263,7 +263,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         )
       }
 
-      return ok({
+      return core.ok({
         ...pageResult.data,
         items: pageResult.data.items.map(row => ({
           ...row.payload,
@@ -273,7 +273,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     }
     catch (error) {
       logger.error('Failed to query execution logs', { error })
-      return err(
+      return core.err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
           params: {
@@ -290,7 +290,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
   async cleanupLogs(policy: SchedulerLogCleanupPolicy): Promise<HaiResult<void>> {
     const { maxLogs, retentionDays } = policy
     if (!maxLogs && !retentionDays)
-      return ok(undefined)
+      return core.ok(undefined)
 
     try {
       if (retentionDays) {
@@ -301,7 +301,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         )
 
         if (!retentionResult.success) {
-          return err(
+          return core.err(
             HaiSchedulerError.DB_SAVE_FAILED,
             schedulerM('scheduler_dbSaveFailed', {
               params: { error: retentionResult.error.message },
@@ -326,7 +326,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         )
 
         if (!maxLogsResult.success) {
-          return err(
+          return core.err(
             HaiSchedulerError.DB_SAVE_FAILED,
             schedulerM('scheduler_dbSaveFailed', {
               params: { error: maxLogsResult.error.message },
@@ -336,11 +336,11 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         }
       }
 
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       logger.error('Failed to cleanup execution logs', { error, maxLogs, retentionDays })
-      return err(
+      return core.err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
           params: {

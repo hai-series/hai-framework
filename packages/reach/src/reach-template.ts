@@ -7,10 +7,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ReachTemplate, ReachTemplateRegistry, RenderedTemplate } from './reach-types.js'
 
+import type { ReachTemplate, ReachTemplateRegistry, RenderedTemplate } from './reach-types.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { reachM } from './reach-i18n.js'
 import { HaiReachError } from './reach-types.js'
@@ -56,10 +56,10 @@ export function renderTemplate(template: ReachTemplate, vars: Record<string, str
         : undefined,
       body: renderString(template.body, vars),
     }
-    return ok(rendered)
+    return core.ok(rendered)
   }
   catch (error) {
-    return err(
+    return core.err(
       HaiReachError.TEMPLATE_RENDER_FAILED,
       reachM('reach_templateRenderFailed', {
         params: {
@@ -76,7 +76,7 @@ export function renderTemplate(template: ReachTemplate, vars: Record<string, str
 // ─── 无数据库时的错误 ───
 
 function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFailed'): HaiResult<never> {
-  return err(
+  return core.err(
     HaiReachError.SEND_FAILED,
     reachM(msgKey, {
       params: { error: 'database not available' },
@@ -103,7 +103,7 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
   return {
     async resolve(name: string): Promise<HaiResult<ReachTemplate>> {
       if (!repo) {
-        return err(
+        return core.err(
           HaiReachError.TEMPLATE_NOT_FOUND,
           reachM('reach_templateNotFound', {
             params: { template: name },
@@ -116,7 +116,7 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
         return dbResult
       }
       if (dbResult.data) {
-        return ok({
+        return core.ok({
           name: dbResult.data.name,
           provider: dbResult.data.provider,
           subject: dbResult.data.subject ?? undefined,
@@ -124,7 +124,7 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
         })
       }
 
-      return err(
+      return core.err(
         HaiReachError.TEMPLATE_NOT_FOUND,
         reachM('reach_templateNotFound', {
           params: { template: name },
@@ -148,7 +148,7 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
       if (failed) {
         return failed
       }
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async remove(name: string): Promise<HaiResult<void>> {
@@ -160,7 +160,7 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
 
     async list(): Promise<HaiResult<ReachTemplate[]>> {
       if (!repo) {
-        return ok([])
+        return core.ok([])
       }
       return repo.listTemplates()
     },

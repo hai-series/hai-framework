@@ -3,7 +3,7 @@ import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import TableToolbar from '../src/lib/components/compounds/TableToolbar.svelte'
 import FeedbackList from '../src/lib/components/scenes/app/FeedbackList.svelte'
-import { CrudPage, defineCrud } from '../src/lib/components/scenes/crud/index.js'
+import { CrudPage, ui } from '../src/lib/components/scenes/crud/index.js'
 
 const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 beforeEach(() => {
@@ -130,7 +130,7 @@ it('反馈查询原子提交搜索与筛选，翻页和排序不带入未提交�
 it('cRUD 默认复用卡片内查询栏，服务端排序与翻页只使用已提交条件', async () => {
   const target = document.body.appendChild(document.createElement('div'))
   const navigate = vi.fn()
-  const crud = defineCrud({
+  const crud = ui.defineCrud({
     name: 'records',
     label: 'Records',
     fields: [

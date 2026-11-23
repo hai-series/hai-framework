@@ -2,8 +2,8 @@
   import type { DocLocale } from '#lib/doc-links.js'
   import type { SearchEntry } from '#lib/docs-types.js'
   import { resolve } from '$app/paths'
-  import { Input, Modal } from '@h-ai/ui'
-  import { notifyError } from '@h-ai/ui/toast'
+  import { Input, Modal, ui } from '@h-ai/ui'
+
   import { untrack } from 'svelte'
   import { searchIndexLink } from '#lib/doc-links.js'
   import * as m from '#lib/paraglide/messages.js'
@@ -30,7 +30,7 @@
     }
     catch (error) {
       failed = true
-      notifyError(error, m.site_search_failed())
+      ui.notifyError(error, m.site_search_failed())
     }
     finally {
       loading = false

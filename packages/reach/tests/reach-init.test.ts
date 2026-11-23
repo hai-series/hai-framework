@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
@@ -127,7 +127,7 @@ describe('reach.init', { concurrent: false }, () => {
     expect(repository.success).toBe(true)
     if (!repository.success)
       return
-    vi.spyOn(repository.data, 'upsert').mockResolvedValueOnce(err(HaiReachError.SEND_FAILED, 'Fixture persistence failure'))
+    vi.spyOn(repository.data, 'upsert').mockResolvedValueOnce(core.err(HaiReachError.SEND_FAILED, 'Fixture persistence failure'))
     const provider = consoleProviders.createConsoleProvider()
     const closed = vi.spyOn(provider, 'close')
     vi.spyOn(consoleProviders, 'createConsoleProvider').mockReturnValueOnce(provider)

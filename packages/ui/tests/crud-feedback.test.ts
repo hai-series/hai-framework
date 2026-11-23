@@ -1,9 +1,8 @@
+import { CrudEditPanel, CrudPage, ui } from '@h-ai/ui'
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { CrudEditPanel, CrudPage, defineCrud } from '../src/lib/components/scenes/crud/index.js'
 import { uiM } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
 
 const dialogMethods = new Map(['close', 'showModal'].map(name => [
   name,
@@ -25,7 +24,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   vi.unstubAllGlobals()
   for (const [name, descriptor] of dialogMethods) {
     if (descriptor)
@@ -110,7 +109,7 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
   const target = document.body.appendChild(document.createElement('div'))
   const remove = vi.fn().mockRejectedValueOnce(new Error('Private SQL details (traceId: delete-request)')).mockResolvedValueOnce(undefined)
   const item = { id: 'record', name: 'Original record' }
-  const crud = defineCrud({
+  const crud = ui.defineCrud({
     name: 'records',
     label: 'Records',
     fields: [
@@ -151,7 +150,7 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
       ...document.querySelectorAll<HTMLButtonElement>('dialog button'),
     ].find(button => button.textContent?.trim() === uiM('crud_delete'))!
     confirm.click()
-    await vi.waitFor(() => expect(toast.items.at(-1)).toMatchObject({
+    await vi.waitFor(() => expect(ui.toast.items.at(-1)).toMatchObject({
       message: uiM('crud_delete_failed'),
       traceId: 'delete-request',
     }))
@@ -159,9 +158,9 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
     expect(document.body.textContent).not.toContain('Private SQL')
     expect(confirm.isConnected).toBe(true)
     expect(confirm.disabled).toBe(false)
-    toast.clear()
+    ui.toast.clear()
     confirm.click()
-    await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe(uiM('crud_delete_success')))
+    await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe(uiM('crud_delete_success')))
     expect(remove).toHaveBeenCalledTimes(2)
   }
   finally {

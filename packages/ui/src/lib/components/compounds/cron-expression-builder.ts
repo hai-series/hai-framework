@@ -30,8 +30,8 @@ export const CRON_BUILDER_WEEKDAY_ORDER: readonly CronWeekdayValue[] = ['1', '2'
  *
  * @example
  * ```ts
- * import { createDefaultCronBuilderState } from '@h-ai/ui'
- * const state = createDefaultCronBuilderState()
+ * import { ui } from '@h-ai/ui'
+ * const state = ui.createDefaultCronBuilderState()
  * ```
  */
 export function createDefaultCronBuilderState(): CronBuilderState {
@@ -55,8 +55,8 @@ export function createDefaultCronBuilderState(): CronBuilderState {
  *
  * @example
  * ```ts
- * import { cronExpressionToBuilderState } from '@h-ai/ui'
- * const state = cronExpressionToBuilderState('0 10 * * *')
+ * import { ui } from '@h-ai/ui'
+ * const state = ui.cronExpressionToBuilderState('0 10 * * *')
  * ```
  */
 export function cronExpressionToBuilderState(expression: string): CronBuilderState {
@@ -162,8 +162,8 @@ export function cronExpressionToBuilderState(expression: string): CronBuilderSta
  *
  * @example
  * ```ts
- * import { createDefaultCronBuilderState, cronBuilderStateToExpression } from '@h-ai/ui'
- * const expression = cronBuilderStateToExpression({ ...createDefaultCronBuilderState(), mode: 'day' })
+ * import { ui } from '@h-ai/ui'
+ * const expression = ui.cronBuilderStateToExpression({ ...ui.createDefaultCronBuilderState(), mode: 'day' })
  * ```
  */
 export function cronBuilderStateToExpression(state: CronBuilderState): string {
@@ -198,8 +198,8 @@ export function cronBuilderStateToExpression(state: CronBuilderState): string {
  *
  * @example
  * ```ts
- * import { isCronExpressionValid } from '@h-ai/ui'
- * const valid = isCronExpressionValid('0 10 * * *')
+ * import { ui } from '@h-ai/ui'
+ * const valid = ui.isCronExpressionValid('0 10 * * *')
  * ```
  */
 export function isCronExpressionValid(expression: string): boolean {

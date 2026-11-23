@@ -8,12 +8,12 @@ import type { HaiResult } from '@h-ai/core'
 import type { LookupFunction } from 'node:net'
 import type { Response as UndiciResponse } from 'undici'
 import type { ResolvedImageModel } from '../../ai-config.js'
-import type { GeneratedImage, ImageSize, ReferenceImage } from '../ai-image-types.js'
 
+import type { GeneratedImage, ImageSize, ReferenceImage } from '../ai-image-types.js'
 import { Buffer } from 'node:buffer'
 import dns from 'node:dns'
 import { BlockList, isIP } from 'node:net'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { Agent, fetch as fetchImage } from 'undici'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
@@ -218,7 +218,7 @@ async function readImageBody(response: ImageHttpResponse, maxBytes: number, sign
  */
 export function validateImageOutput(image: GeneratedImage, maxBytes: number): HaiResult<GeneratedImage> {
   if (image.data.byteLength > maxBytes)
-    return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
+    return core.err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
   const bytes = image.data
   const mime = image.mimeType.toLowerCase() === 'image/jpg'
     ? 'image/jpeg'
@@ -232,7 +232,7 @@ export function validateImageOutput(image: GeneratedImage, maxBytes: number): Ha
         ? ['GIF87a', 'GIF89a'].includes(Buffer.from(bytes.subarray(0, 6)).toString('ascii'))
         : mime === 'image/webp' && Buffer.from(bytes.subarray(0, 4)).toString('ascii') === 'RIFF' && Buffer.from(bytes.subarray(8, 12)).toString('ascii') === 'WEBP'
   return valid
-    ? ok({ ...image, mimeType: mime })
+    ? core.ok({ ...image, mimeType: mime })
     : imageProtocolError()
 }
 
@@ -323,12 +323,12 @@ export async function readJson(response: ImageHttpResponse, request: Pick<Provid
   if (!response.ok)
     return imageUpstreamError(response, request.signal)
   try {
-    return ok(JSON.parse(new TextDecoder().decode(await readImageBody(response, Math.max(64 * 1024, request.maxImageBytes * 2), request.signal))))
+    return core.ok(JSON.parse(new TextDecoder().decode(await readImageBody(response, Math.max(64 * 1024, request.maxImageBytes * 2), request.signal))))
   }
   catch (error) {
     if (error instanceof RangeError || request.signal?.aborted)
       return imageProviderFailure(error)
-    return err(HaiAIError.IMAGE_PROTOCOL_ERROR, aiM('ai_imageProtocolError'), error)
+    return core.err(HaiAIError.IMAGE_PROTOCOL_ERROR, aiM('ai_imageProtocolError'), error)
   }
 }
 
@@ -388,7 +388,7 @@ export async function downloadImage(url: string, request: ProviderGenerateImageR
  */
 export async function downloadImages(urls: string[], request: ProviderGenerateImageRequest): Promise<HaiResult<GeneratedImage[]>> {
   if (urls.length > request.maxImages)
-    return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
+    return core.err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
   const images: GeneratedImage[] = []
   for (const url of urls) {
     const downloaded = await downloadImage(url, request)
@@ -396,7 +396,7 @@ export async function downloadImages(urls: string[], request: ProviderGenerateIm
       return downloaded
     images.push(downloaded.data)
   }
-  return ok(images)
+  return core.ok(images)
 }
 
 /**
@@ -450,15 +450,15 @@ export function imageProviderFailure(error: unknown): HaiResult<never> {
   let cause = error
   for (let depth = 0; depth < 4 && cause instanceof Error; depth++, cause = cause.cause) {
     if (cause instanceof ImageDownloadBlockedError)
-      return err(HaiAIError.IMAGE_DOWNLOAD_BLOCKED, aiM('ai_imageDownloadBlocked'))
+      return core.err(HaiAIError.IMAGE_DOWNLOAD_BLOCKED, aiM('ai_imageDownloadBlocked'))
   }
   if (error instanceof RangeError)
-    return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
+    return core.err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
   if (error instanceof DOMException && error.name === 'TimeoutError')
-    return err(HaiAIError.IMAGE_TIMEOUT, aiM('ai_imageTimeout'))
+    return core.err(HaiAIError.IMAGE_TIMEOUT, aiM('ai_imageTimeout'))
   if (error instanceof DOMException && error.name === 'AbortError')
-    return err(HaiAIError.IMAGE_CANCELLED, aiM('ai_imageCancelled'), error)
-  return err(HaiAIError.IMAGE_UPSTREAM_ERROR, aiM('ai_imageRequestFailed'), error)
+    return core.err(HaiAIError.IMAGE_CANCELLED, aiM('ai_imageCancelled'), error)
+  return core.err(HaiAIError.IMAGE_UPSTREAM_ERROR, aiM('ai_imageRequestFailed'), error)
 }
 
 /**
@@ -474,7 +474,7 @@ export function imageProviderFailure(error: unknown): HaiResult<never> {
  * ```
  */
 export function imageProtocolError(): HaiResult<never> {
-  return err(HaiAIError.IMAGE_PROTOCOL_ERROR, aiM('ai_imageProtocolError'))
+  return core.err(HaiAIError.IMAGE_PROTOCOL_ERROR, aiM('ai_imageProtocolError'))
 }
 
 /** 提取安全、有限的上游错误摘要，供调用日志定位问题。 */
@@ -517,5 +517,5 @@ async function imageUpstreamError(response: ImageHttpResponse, signal?: AbortSig
         : aiM('ai_imageUpstreamError', {
             params: { status: response.status },
           })
-  return err(HaiAIError.IMAGE_UPSTREAM_ERROR, message, details)
+  return core.err(HaiAIError.IMAGE_UPSTREAM_ERROR, message, details)
 }

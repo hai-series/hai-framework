@@ -1,4 +1,4 @@
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { list, checkPermission, getContext } = vi.hoisted(() => ({
@@ -34,7 +34,7 @@ beforeEach(() => {
     userId: 'admin',
     permissions: ['feedback:read'],
   })
-  list.mockResolvedValue(ok({
+  list.mockResolvedValue(core.ok({
     items: [],
     total: 0,
     page: 1,

@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import type { MarkdownRewriteRequest, MarkdownSelectionSnapshot } from '../src/lib/components/scenes/ai/document-types.js'
+import { ui } from '@h-ai/ui'
 import { flushSync, mount, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
 import AiDocumentEditor from '../src/lib/components/scenes/ai/AiDocumentEditor.svelte'
-import { renderMarkdownDocument } from '../src/lib/components/scenes/ai/document-parse.js'
 import { readMarkdownSelection } from '../src/lib/components/scenes/tools/artifact-markdown.js'
 
 function render(content: string) {
   const host = document.createElement('article')
-  host.innerHTML = renderMarkdownDocument(content, { enableHighlight: false, showCopyButton: false }).blocks.map(block => block.kind === 'html'
+  host.innerHTML = ui.renderMarkdownDocument(content, { enableHighlight: false, showCopyButton: false }).blocks.map(block => block.kind === 'html'
     ? block.html
     : '<div class="hai-md-mermaid"></div>').join('')
   return host

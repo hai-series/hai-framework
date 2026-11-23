@@ -110,7 +110,9 @@ function evaluateVite(source: string, configPath: string, directory: string, env
     resolveBuildMetadata: () => ({ appVersion: '1', buildId: 'test', commit: 'unknown' }),
     resolvePublicBasePath: () => '',
     sveltekit: () => ({}),
-    autoImportHaiUi: () => ({}),
+    ui: {
+      autoImport: () => ({}),
+    },
     vitePreprocess: () => ({}),
     adapter: () => ({}),
     svelte: () => ({}),

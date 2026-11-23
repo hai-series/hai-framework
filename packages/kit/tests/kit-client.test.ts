@@ -1,9 +1,8 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
-import { kit } from '../src/kit-main.js'
 
 const KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -132,7 +131,7 @@ function stubBrowserFetch(fetchImpl: typeof fetch) {
 
 describe('createKitClient - 仅 CSRF', () => {
   it('get 请求不附加 CSRF Token', async () => {
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
 
     await apiFetch('/api/users')
 
@@ -144,7 +143,7 @@ describe('createKitClient - 仅 CSRF', () => {
   it('post 请求自动附加 CSRF Token', async () => {
     setDocumentCookie('hai_csrf=abc123')
 
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
 
     await apiFetch('/api/users', { method: 'POST', body: '{}' })
 
@@ -160,7 +159,7 @@ describe('createKitClient - 仅 CSRF', () => {
       headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'logical-request-1' },
       body: '{"description":"request input"}',
     })
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
     await apiFetch(request)
 
     const [input, init] = fetchSpy.mock.calls[0]!
@@ -175,7 +174,7 @@ describe('createKitClient - 仅 CSRF', () => {
   it('delete 请求自动附加 CSRF Token', async () => {
     setDocumentCookie('hai_csrf=token456')
 
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
 
     await apiFetch('/api/users/1', { method: 'DELETE' })
 
@@ -185,7 +184,7 @@ describe('createKitClient - 仅 CSRF', () => {
   })
 
   it('无 CSRF Cookie 时不设置 Header', async () => {
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
 
     await apiFetch('/api/users', { method: 'POST', body: '{}' })
 
@@ -197,7 +196,7 @@ describe('createKitClient - 仅 CSRF', () => {
   it('自定义 CSRF Cookie/Header 名称', async () => {
     setDocumentCookie('my_csrf=custom_token')
 
-    const { apiFetch } = createKitClient({
+    const { apiFetch } = kit.client.create({
       csrfCookieName: 'my_csrf',
       csrfHeaderName: 'X-My-CSRF',
     })
@@ -210,7 +209,7 @@ describe('createKitClient - 仅 CSRF', () => {
   })
 
   it('ready 在无 transport 时始终为 true', () => {
-    const client = createKitClient()
+    const client = kit.client.create()
     expect(client.ready).toBe(true)
   })
 })
@@ -219,7 +218,7 @@ describe('createKitClient - 传输加密', () => {
   it('init 触发统一密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -234,7 +233,7 @@ describe('createKitClient - 传输加密', () => {
   it('自定义密钥交换端点', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto, keyExchangeUrl: '/my/exchange' },
     })
 
@@ -246,7 +245,7 @@ describe('createKitClient - 传输加密', () => {
   it('写请求自动加密 body 并附加协议头', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -286,7 +285,7 @@ describe('createKitClient - 传输加密', () => {
     const formData = new FormData()
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
 
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -314,7 +313,7 @@ describe('createKitClient - 传输加密', () => {
     })
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
     expect((await client.apiFetch(request)).ok).toBe(true)
@@ -330,7 +329,7 @@ describe('createKitClient - 传输加密', () => {
     const formData = new FormData()
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
     const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData })
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
     await client.apiFetch(request)
@@ -348,7 +347,7 @@ describe('createKitClient - 传输加密', () => {
   it('excludePaths 命中时跳过 transport', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: {
         crypto,
         excludePaths: ['/api/public'],
@@ -372,7 +371,7 @@ describe('createKitClient - 传输加密', () => {
     })
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalData })
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -385,7 +384,7 @@ describe('createKitClient - 传输加密', () => {
   it('destroy 重置所有状态', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -399,7 +398,7 @@ describe('createKitClient - 传输加密', () => {
   it('lazy init：首次写请求自动触发密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -413,7 +412,7 @@ describe('createKitClient - 传输加密', () => {
   it('并发请求共用同一次密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({
+    const client = kit.client.create({
       transport: { crypto },
     })
 
@@ -441,7 +440,7 @@ describe('createKitClient - auth', () => {
     })
     kit.auth.setBrowserToken('memory_token_123')
 
-    const { apiFetch } = createKitClient({ auth: true })
+    const { apiFetch } = kit.client.create({ auth: true })
     await apiFetch('/api/users')
 
     const [, init] = fetchSpy.mock.calls[0]!
@@ -452,7 +451,7 @@ describe('createKitClient - auth', () => {
   })
 
   it('auth: true 但默认内存中无 token 时不注入', async () => {
-    const { apiFetch } = createKitClient({ auth: true })
+    const { apiFetch } = kit.client.create({ auth: true })
     await apiFetch('/api/users')
 
     const [, init] = fetchSpy.mock.calls[0]!
@@ -461,7 +460,7 @@ describe('createKitClient - auth', () => {
   })
 
   it('auth: false / 未配置时不注入', async () => {
-    const { apiFetch } = createKitClient()
+    const { apiFetch } = kit.client.create()
     await apiFetch('/api/users')
 
     const [, init] = fetchSpy.mock.calls[0]!
@@ -476,7 +475,7 @@ describe('createKitClient - auth', () => {
       clear: vi.fn(),
     }
 
-    const { apiFetch } = createKitClient({ auth: customStore })
+    const { apiFetch } = kit.client.create({ auth: customStore })
     await apiFetch('/api/users')
 
     const [, init] = fetchSpy.mock.calls[0]!
@@ -504,7 +503,7 @@ describe('installBrowserTransportFetch', () => {
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalPayload })
     stubBrowserFetch(fetchSpy)
 
-    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
 
     const response = await fetch('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011')
 
@@ -540,7 +539,7 @@ describe('installBrowserTransportFetch', () => {
     }))
     stubBrowserFetch(fetchSpy)
 
-    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
 
     const response = await fetch('http://localhost/admin/iam/roles')
 
@@ -555,7 +554,7 @@ describe('installBrowserTransportFetch', () => {
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
     stubBrowserFetch(fetchSpy)
 
-    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
 
     await fetch('http://localhost/api/auth/profile/avatar', {
       method: 'POST',
@@ -572,8 +571,8 @@ describe('installBrowserTransportFetch', () => {
     fetchSpy = createTransportFetch()
     stubBrowserFetch(fetchSpy)
 
-    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
-    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
 
     await fetch('http://localhost/api/users')
 

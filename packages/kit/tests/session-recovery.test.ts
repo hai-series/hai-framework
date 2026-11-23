@@ -1,6 +1,6 @@
+import { kit } from '@h-ai/kit'
 /** Kit 只续接明确被认证拒绝的同源请求，认证本身和未知写入结果不递归重试。 */
 import { afterEach, expect, it, vi } from 'vitest'
-import { createKitClient } from '../src/client/kit-client.js'
 
 afterEach(() => vi.unstubAllGlobals())
 function denied(code = 'hai:iam:105') {
@@ -18,7 +18,7 @@ it.each([true, undefined])('成功或无有效失败包络时不因额外错误�
   }))
   vi.stubGlobal('fetch', fetch)
   const reauthorize = vi.fn(async () => 'unused-proof')
-  const client = createKitClient({
+  const client = kit.client.create({
     recoverSession: async () => true,
   })
   try {
@@ -41,7 +41,7 @@ it.each(['expired-session', 'rotated-proof'])('敏感请求 %s 只在重新确�
   }))
   const recoverSession = vi.fn(async () => true)
   const reauthorize = vi.fn(async () => 'new-proof')
-  const client = createKitClient({ recoverSession })
+  const client = kit.client.create({ recoverSession })
   try {
     expect((await client.apiFetch('/api/save', {
       method: 'POST',
@@ -60,7 +60,7 @@ it.each(['expired-session', 'rotated-proof'])('敏感请求 %s 只在重新确�
 it('敏感请求没有重新授权回调时不把旧证明重放到新会话', async () => {
   const fetch = vi.fn(async () => denied())
   vi.stubGlobal('fetch', fetch)
-  const client = createKitClient({
+  const client = kit.client.create({
     recoverSession: async () => true,
   })
   try {
@@ -76,7 +76,7 @@ it('敏感请求没有重新授权回调时不把旧证明重放到新会话', a
 it('恢复后取消用途确认不再发送写入', async () => {
   const fetch = vi.fn(async () => denied())
   vi.stubGlobal('fetch', fetch)
-  const client = createKitClient({
+  const client = kit.client.create({
     recoverSession: async () => true,
   })
   const reauthorize = vi.fn(async () => null)
@@ -104,7 +104,7 @@ it('恢复后保留POST正文与终端，只续接一次', async () => {
   })
   vi.stubGlobal('fetch', fetch)
   const recoverSession = vi.fn(async () => true)
-  const client = createKitClient({ recoverSession, terminalType: 'desktop' })
+  const client = kit.client.create({ recoverSession, terminalType: 'desktop' })
   try {
     expect((await client.apiFetch('/api/save', {
       method: 'POST',
@@ -121,7 +121,7 @@ it.each(['hai:iam:002', 'hai:iam:027'])('二次认证错误 %s 不打开重新�
   const fetch = vi.fn(async () => denied(code))
   vi.stubGlobal('fetch', fetch)
   const recoverSession = vi.fn(async () => true)
-  const client = createKitClient({ recoverSession })
+  const client = kit.client.create({ recoverSession })
   try {
     await client.apiFetch('/api/reauthenticate', { method: 'POST' })
     expect(fetch).toHaveBeenCalledTimes(1)
@@ -134,7 +134,7 @@ it('取消、跨源、认证端点及网络异常不续接请求', async () => {
   const fetch = vi.fn(async () => denied())
   vi.stubGlobal('fetch', fetch)
   const recoverSession = vi.fn(async () => false)
-  const client = createKitClient({ recoverSession })
+  const client = kit.client.create({ recoverSession })
   try {
     await client.apiFetch('/api/save', { method: 'POST' })
     expect(recoverSession).toHaveBeenCalledTimes(1)

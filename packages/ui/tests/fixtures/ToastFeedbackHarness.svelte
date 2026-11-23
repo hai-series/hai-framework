@@ -1,10 +1,10 @@
 <script lang='ts'>
   import ChangePasswordForm from '../../src/lib/components/scenes/iam/ChangePasswordForm.svelte'
-  import { useToastFeedback } from '../../src/lib/toast.svelte.js'
+  import { ui } from '../../src/lib/ui-toast.js'
 
   let message = $state('')
   let count = $state(0)
-  useToastFeedback(() => message)
+  ui.useToastFeedback(() => message)
 </script>
 
 <button onclick={() => message = '安全操作失败'} data-testid='fail'>失败</button>

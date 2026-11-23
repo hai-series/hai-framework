@@ -2,7 +2,7 @@
 {{#if isSvelteOnlyApp}}
 /** Svelte + Vite 客户端的预处理配置；SvelteKit 配置统一在 vite.config.ts。 */
 {{#if hasUi}}
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 {{/if}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
@@ -11,7 +11,7 @@ export default {
   preprocess: [
     vitePreprocess(),
 {{#if hasUi}}
-    autoImportHaiUi(),
+    ui.autoImport(),
 {{/if}}
   ],
   compilerOptions: { runes: true },

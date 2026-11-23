@@ -1,6 +1,6 @@
 /** 临时缓存故障不可变成会话不存在或破坏批量撤销范围。 */
 import { cache, HaiCacheError } from '@h-ai/cache'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
@@ -40,7 +40,7 @@ it.each(['read', 'commit'] as const)('真实Redis的%s故障保留完整用户�
       throw new Error('Missing partition')
     const key = keys.data[0]!
     const before = await cache.kv.get(key)
-    const failure = err(HaiCacheError.OPERATION_FAILED, 'Injected transport outage')
+    const failure = core.err(HaiCacheError.OPERATION_FAILED, 'Injected transport outage')
     const spy = mode === 'read'
       ? vi.spyOn(cache.kv, 'get').mockResolvedValueOnce(failure)
       : vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(failure)
@@ -74,7 +74,7 @@ it('读取失败不能伪装成不存在；损坏的分区保留并失败关闭�
   const issued = await ops.create({ userId: 'corrupted-partition' })
   if (!issued.success)
     throw new Error(issued.error.message)
-  const failure = vi.spyOn(cache.kv, 'get').mockResolvedValueOnce(err(HaiCacheError.OPERATION_FAILED, 'Injected read failure'))
+  const failure = vi.spyOn(cache.kv, 'get').mockResolvedValueOnce(core.err(HaiCacheError.OPERATION_FAILED, 'Injected read failure'))
   expect((await ops.get(issued.data.accessToken)).success).toBe(false)
   failure.mockRestore()
   const keys = await cache.kv.keys('hai:iam:sessions:*')

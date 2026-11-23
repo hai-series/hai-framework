@@ -1,5 +1,5 @@
 /** 账号类型、状态与闲置扫描覆盖已有会话，不能只检查登录表单。 */
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -99,7 +99,7 @@ function tests() {
     const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
     const before = await query()
     expect(before.success).toBe(true)
-    const verify = vi.spyOn(haiCrypto.password, 'verifyAsync').mockResolvedValueOnce(err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
+    const verify = vi.spyOn(haiCrypto.password, 'verifyAsync').mockResolvedValueOnce(core.err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
     const changed = await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })
     expect(verify).toHaveBeenCalledOnce()
     expect(changed).toMatchObject({

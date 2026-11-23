@@ -39,9 +39,9 @@ const VecdbErrorInfo = {
  * @example
  * ```ts
  * import { HaiVecdbError } from '@h-ai/vecdb'
- * import { err } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const result = err(HaiVecdbError.COLLECTION_NOT_FOUND, 'Collection missing')
+ * const result = core.err(HaiVecdbError.COLLECTION_NOT_FOUND, 'Collection missing')
  * if (!result.success) void result.error.code
  * ```
  */

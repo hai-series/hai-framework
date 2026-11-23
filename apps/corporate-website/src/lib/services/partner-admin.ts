@@ -1,7 +1,7 @@
-import { createKitClient } from '@h-ai/kit/client'
+import { kit } from '@h-ai/kit/client'
 import { z } from 'zod'
 
-const client = createKitClient()
+const client = kit.client.create()
 const LogoutResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({

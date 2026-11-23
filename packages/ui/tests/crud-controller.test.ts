@@ -8,8 +8,8 @@
  */
 
 import type { PaginatedResult } from '@h-ai/core'
+import { ui } from '@h-ai/ui'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createCrudController, defineCrud, mapPaginated } from '../src/lib/components/scenes/crud/crud-controller.svelte.js'
 
 // defineCrud 约束 T extends Record<string, unknown>；interface 无隐式索引签名不满足约束，故用 type。
 // eslint-disable-next-line ts/consistent-type-definitions
@@ -55,7 +55,7 @@ describe('createCrudController', () => {
 
   /** 构造一个由测试手动结算的 CRUD 定义。 */
   function makeCrud() {
-    return defineCrud<Row>({
+    return ui.defineCrud<Row>({
       name: 'row',
       label: 'Row',
       defaultPageSize: 10,
@@ -78,7 +78,7 @@ describe('createCrudController', () => {
   }
 
   it('首次加载展示查询中，成功后写回数据', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     expect(controller.loading).toBe(false)
     expect(controller.loaded).toBe(false)
 
@@ -102,7 +102,7 @@ describe('createCrudController', () => {
   })
 
   it('空结果：loaded 为真且 total 为 0', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     const p = controller.load()
     calls[0].deferred.resolve(page([], 0))
     await p
@@ -114,7 +114,7 @@ describe('createCrudController', () => {
   })
 
   it('首次失败：暴露错误且不标记为已加载', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     const p = controller.load()
     calls[0].deferred.reject(new Error('nope'))
     await p
@@ -128,7 +128,7 @@ describe('createCrudController', () => {
   })
 
   it('重试：失败后 reload 应恢复数据并清除错误', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     let p = controller.load()
     calls[0].deferred.reject(new Error('nope'))
     await p
@@ -148,7 +148,7 @@ describe('createCrudController', () => {
   })
 
   it('失败保留旧数据：已有数据时刷新失败不清空列表', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     let p = controller.load()
     calls[0].deferred.resolve(page([
       { id: '1', name: 'A' },
@@ -168,7 +168,7 @@ describe('createCrudController', () => {
   })
 
   it('旧请求晚返回被丢弃（latest-wins 且旧请求被 abort）', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
 
     controller.nav.navigate('?search=a')
     const p1 = controller.nav.refresh!()
@@ -200,7 +200,7 @@ describe('createCrudController', () => {
   })
 
   it('惰性加载：autoLoad=false 时不预取，直到 load()', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     expect(calls.length).toBe(0)
     expect(controller.loaded).toBe(false)
     expect(controller.loading).toBe(false)
@@ -216,7 +216,7 @@ describe('createCrudController', () => {
   })
 
   it('并发相同参数去重：只发起一次请求', async () => {
-    const controller = createCrudController(makeCrud(), { autoLoad: false })
+    const controller = ui.createCrudController(makeCrud(), { autoLoad: false })
     const p1 = controller.load()
     const p2 = controller.load()
     expect(calls.length).toBe(1)
@@ -231,7 +231,7 @@ describe('createCrudController', () => {
   })
 
   it('autoLoad 默认立即加载', async () => {
-    const controller = createCrudController(makeCrud())
+    const controller = ui.createCrudController(makeCrud())
     expect(controller.loading).toBe(true)
     expect(calls.length).toBe(1)
     calls[0].deferred.resolve(page([
@@ -247,7 +247,7 @@ describe('createCrudController', () => {
 
 describe('mapPaginated', () => {
   it('映射条目并保留分页元数据', () => {
-    const result = mapPaginated(
+    const result = ui.mapPaginated(
       {
         items: [
           { id: '1', name: 'A' },

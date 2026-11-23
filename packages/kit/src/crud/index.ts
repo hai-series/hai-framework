@@ -5,4 +5,3 @@
  */
 
 export * from './kit-crud-types.js'
-export * from './kit-crud.js'

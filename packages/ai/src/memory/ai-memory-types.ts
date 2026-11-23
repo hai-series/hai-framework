@@ -60,7 +60,7 @@ export type MemoryType = z.infer<typeof MemoryTypeSchema>
  *
  * @example
  * ```ts
- * import { ai, type MemoryEntryInput } from '@h-ai/ai'
+ * import { type MemoryEntryInput, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryEntryInput) {
  *   const result = await ai.memory.add(options)
@@ -126,7 +126,7 @@ export interface MemoryEntry {
  *
  * @example
  * ```ts
- * import { ai, type MemoryExtractOptions } from '@h-ai/ai'
+ * import { type MemoryExtractOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryExtractOptions) {
  *   const result = await ai.memory.extract([{ role: 'user', content: '以后请用中文' }], options)
@@ -166,7 +166,7 @@ export interface MemoryExtractOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryRecallOptions } from '@h-ai/ai'
+ * import { type MemoryRecallOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryRecallOptions) {
  *   const result = await ai.memory.recall('语言偏好', options)
@@ -206,7 +206,7 @@ export interface MemoryRecallOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryInjectionOptions } from '@h-ai/ai'
+ * import { type MemoryInjectionOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryInjectionOptions) {
  *   const result = await ai.memory.injectMemories([{ role: 'user', content: '你好' }], options)
@@ -245,7 +245,7 @@ export interface MemoryInjectionOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryListOptions } from '@h-ai/ai'
+ * import { type MemoryListOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryListOptions) {
  *   const result = await ai.memory.list(options)
@@ -270,7 +270,7 @@ export interface MemoryListOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryListPageOptions } from '@h-ai/ai'
+ * import { type MemoryListPageOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryListPageOptions) {
  *   const result = await ai.memory.listPage(options)
@@ -300,7 +300,7 @@ export interface MemoryListPageOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryClearOptions } from '@h-ai/ai'
+ * import { type MemoryClearOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: MemoryClearOptions) {
  *   const result = await ai.memory.clear(options)
@@ -325,7 +325,7 @@ export interface MemoryClearOptions {
  *
  * @example
  * ```ts
- * import { ai, type MemoryUpdateInput } from '@h-ai/ai'
+ * import { type MemoryUpdateInput, ai } from '@h-ai/ai'
  * async function updateOwnedMemory(memoryId: string, userId: string) {
  *   const input: MemoryUpdateInput = { importance: 0.9, metadata: { source: 'confirmed' } }
  *   const result = await ai.memory.update(memoryId, input, { objectId: userId })
@@ -356,7 +356,7 @@ export interface MemoryUpdateInput {
  *
  * @example
  * ```ts
- * import { ai, type MemoryAccessScope } from '@h-ai/ai'
+ * import { type MemoryAccessScope, ai } from '@h-ai/ai'
  * async function readOwnedMemory(memoryId: string, trustedUserId: string) {
  *   const scope: MemoryAccessScope = { objectId: trustedUserId, scope: { topicId: 'profile' } }
  *   const result = await ai.memory.get(memoryId, scope)
@@ -380,7 +380,7 @@ export interface MemoryAccessScope {
  *
  * @example
  * ```ts
- * import { ai, type ScopedMemoryBinding } from '@h-ai/ai'
+ * import { type ScopedMemoryBinding, ai } from '@h-ai/ai'
  * const binding: ScopedMemoryBinding = { objectId: 'user-1', scope: { topicId: 'profile' } }
  * const memory = ai.memory.scoped(binding)
  * const result = await memory.list({ limit: 10 })
@@ -574,7 +574,7 @@ export interface MemoryCoreOperations {
  *
  * @example
  * ```ts
- * import { ai, type ScopedMemoryOperations } from '@h-ai/ai'
+ * import { type ScopedMemoryOperations, ai } from '@h-ai/ai'
  * const memory: ScopedMemoryOperations = ai.memory.scoped({ objectId: 'user-1', scope: { topicId: 'profile' } })
  * const result = await memory.add({ content: '偏好中文', type: 'preference' })
  * if (!result.success) throw new Error(result.error.message)
@@ -613,7 +613,7 @@ export interface ScopedMemoryOperations {
  *
  * @example
  * ```ts
- * import { ai, type MemoryOperations } from '@h-ai/ai'
+ * import { type MemoryOperations, ai } from '@h-ai/ai'
  * const operations: MemoryOperations = ai.memory
  * const result = await operations.scoped({ objectId: 'user-1' }).recall('语言偏好', { topK: 3 })
  * if (!result.success) throw new Error(result.error.message)

@@ -1,7 +1,7 @@
 <script lang='ts'>
   // 全局布局：主题（深/浅）与语言（中/英/日）切换，并在挂载时恢复用户偏好
   import { browser } from '$app/env'
-  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
+  import { LanguageSwitch, ThemeSelector, ToastContainer, ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import '../app.css'
@@ -15,12 +15,12 @@
   let currentLanguage = $state('zh-CN')
 
   function handleThemeChange(theme: string) {
-    applyTheme(theme)
+    ui.applyTheme(theme)
     currentTheme = theme
   }
 
   function handleLanguageChange(language: string) {
-    setGlobalLocale(language)
+    ui.setGlobalLocale(language)
     setLocale(language as 'zh-CN' | 'en-US' | 'ja-JP')
     currentLanguage = language
   }
@@ -28,10 +28,10 @@
   $effect(() => {
     if (!browser)
       return
-    currentTheme = getSavedTheme()
-    applyTheme(currentTheme, false)
+    currentTheme = ui.getSavedTheme()
+    ui.applyTheme(currentTheme, false)
     currentLanguage = getLocale()
-    setGlobalLocale(currentLanguage)
+    ui.setGlobalLocale(currentLanguage)
   })
 </script>
 

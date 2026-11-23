@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
-import { core{{#if features.feedback}}, err{{/if}}, HaiConfigError } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { feedback, HaiFeedbackError } from '@h-ai/feedback'
@@ -83,7 +83,7 @@ it.each(['', '   '])('startup identifies an unset administrator password without
 {{#if features.feedback}}
 it('optional feedback failure does not roll back authentication and business modules', async () => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', 'Bootstrap-retry-Admin123!')
-  const unavailable = vi.spyOn(feedback, 'init').mockResolvedValue(err(HaiFeedbackError.CONFIG_ERROR, 'Feedback fixture unavailable'))
+  const unavailable = vi.spyOn(feedback, 'init').mockResolvedValue(core.err(HaiFeedbackError.CONFIG_ERROR, 'Feedback fixture unavailable'))
   try {
     await initializeModules()
     expect(iam.isInitialized && reldb.isInitialized && cache.isInitialized).toBe(true)

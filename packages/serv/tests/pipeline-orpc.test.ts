@@ -1,7 +1,7 @@
 import type { ServProcedureHandler } from '../src/pipelines/serv-pipeline-types.js'
 import type { ServContext } from '../src/serv-context.js'
 import { audit } from '@h-ai/audit'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { mapHaiError } from '../src/pipelines/serv-pipeline-helper.js'
 
@@ -46,7 +46,7 @@ describe('pipeline.orpc', () => {
     500,
   ])('审计使用归一化的失败状态 %s', async (httpStatus) => {
     const initialized = vi.spyOn(audit, 'isInitialized', 'get').mockReturnValue(true)
-    const capture = vi.spyOn(audit, 'capture').mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR))
+    const capture = vi.spyOn(audit, 'capture').mockResolvedValue(core.err(HaiCommonError.INTERNAL_ERROR))
     const log = vi.spyOn(logger, 'error').mockImplementation(() => {})
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {})
     try {
@@ -89,7 +89,7 @@ describe('pipeline.orpc', () => {
     expect(audit.isInitialized).toBe(false)
     const capture = vi.spyOn(audit, 'capture')
     try {
-      expect(await callHandler(mapHaiError(async () => ok('business')), undefined)).toEqual(ok('business'))
+      expect(await callHandler(mapHaiError(async () => core.ok('business')), undefined)).toEqual(core.ok('business'))
       expect(capture).not.toHaveBeenCalled()
     }
     finally { capture.mockRestore() }

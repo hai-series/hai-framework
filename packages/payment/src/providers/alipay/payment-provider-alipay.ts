@@ -10,7 +10,7 @@ import type { ZodType } from 'zod'
 import type { AlipayConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import type { AlipayNotifyParams } from './payment-alipay-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
@@ -174,9 +174,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       if (input.tradeType !== 'h5')
-        return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
+        return core.err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
       if (input.currency !== undefined && input.currency !== 'CNY')
-        return err(HaiPaymentError.INVALID_INPUT, paymentM('payment_invalidCreateOrderInput'))
+        return core.err(HaiPaymentError.INVALID_INPUT, paymentM('payment_invalidCreateOrderInput'))
       try {
         // WAP 是页面支付 API：离线签名后由浏览器 POST，不能当作服务端 JSON 请求。
         const fields = {
@@ -192,7 +192,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
               : undefined,
           }),
         }
-        return ok({
+        return core.ok({
           provider: 'alipay',
           tradeType: 'h5',
           clientParams: {
@@ -205,7 +205,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.CREATE_ORDER_FAILED,
           paymentM('payment_createOrderFailed'),
           cause,
@@ -220,13 +220,13 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         // 验签
         const valid = params.sign_type === signType && verifyAlipayNotify(params, config.alipayPublicKey)
         if (!valid) {
-          return err(
+          return core.err(
             HaiPaymentError.NOTIFY_VERIFY_FAILED,
             paymentM('payment_notifyVerifyFailed'),
           )
         }
         if (params.app_id !== config.appId || params.seller_id !== config.sellerId) {
-          return err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
+          return core.err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
         }
         // 允许渠道跨日重试；重放靠持久 eventId 和订单状态 CAS，不套用微信的五分钟窗口。
         const notifiedAt = parseAlipayTime(params.notify_time)!
@@ -245,7 +245,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           WAIT_BUYER_PAY: 'pending',
         }
 
-        return ok({
+        return core.ok({
           orderNo: params.out_trade_no,
           transactionId: params.trade_no,
           eventId: params.notify_id,
@@ -259,7 +259,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.NOTIFY_PARSE_FAILED,
           paymentM('payment_notifyParseFailed'),
           cause,
@@ -287,7 +287,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           WAIT_BUYER_PAY: 'pending',
         }
 
-        return ok({
+        return core.ok({
           orderNo,
           transactionId: data.trade_no,
           status: statusMap[data.trade_status],
@@ -299,7 +299,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.QUERY_ORDER_FAILED,
           paymentM('payment_queryOrderFailed'),
           cause,
@@ -327,7 +327,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         // refund_fee 是累计退款额，只校验安全整数，不与本次退款额直接比较。
         parseAlipayAmount(data.refund_fee)
 
-        return ok({
+        return core.ok({
           refundNo: input.refundNo,
           refundId: data.trade_no,
           status: data.fund_change === 'Y'
@@ -336,7 +336,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.REFUND_FAILED,
           paymentM('payment_refundFailed'),
           cause,
@@ -356,10 +356,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         if (data.out_trade_no !== orderNo) {
           throw new Error('Alipay response order mismatch')
         }
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (cause) {
-        return err(
+        return core.err(
           HaiPaymentError.CLOSE_ORDER_FAILED,
           paymentM('payment_closeOrderFailed'),
           cause,

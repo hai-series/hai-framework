@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { reldb } from '@h-ai/reldb'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { createRunner } from '../src/index.js'
+import { runner } from '../src/index.js'
 
 let database: Awaited<ReturnType<typeof postgresEnv>>
 const scope = { tenantId: 'runner-schema-test', userId: 'owner' }
@@ -77,7 +77,7 @@ function startNode(nodeId: string) {
 }
 
 it.each(['empty', 'upgrade'] as const)('coordinates independent nodes on %s PostgreSQL', async (stage) => {
-  const seed = createRunner()
+  const seed = runner.create()
   let oldId: string | undefined
   if (stage === 'upgrade') {
     expect((await seed.init({ nodeId: 'seed', executor: false })).success).toBe(true)
@@ -141,7 +141,7 @@ it.each(['empty', 'upgrade'] as const)('coordinates independent nodes on %s Post
 }, 20_000)
 
 it('rolls back incomplete initialization and retries on the same instance', async () => {
-  const node = createRunner()
+  const node = runner.create()
   try {
     expect((await reldb.sql.execute('CREATE TABLE hai_runner_event_cursor_idx (unrelated TEXT)')).success).toBe(true)
     expect((await node.init({ nodeId: 'retry', executor: false })).success).toBe(false)

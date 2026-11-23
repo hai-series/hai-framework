@@ -1,7 +1,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import { browser } from '$app/env'
-  import { applyTheme, getSavedTheme, setGlobalLocale, ToastContainer } from '@h-ai/ui'
+  import { ToastContainer, ui } from '@h-ai/ui'
   import { getLocale } from '#lib/paraglide/runtime.js'
   import '../app.css'
 
@@ -9,8 +9,8 @@
 
   $effect(() => {
     if (browser) {
-      applyTheme(getSavedTheme(), false)
-      setGlobalLocale(getLocale())
+      ui.applyTheme(ui.getSavedTheme(), false)
+      ui.setGlobalLocale(getLocale())
     }
   })
 </script>

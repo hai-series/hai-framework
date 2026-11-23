@@ -276,7 +276,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   const validated = module.ProviderConfigSchema.safeParse(provider)
   if (!validated.success)
     throw new Error(cliM('cli_deploy_invalid_value'))
-  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: validated.data }, { private: true })
+  const saved = module.deploy.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: validated.data }, { private: true })
   if (!saved.success)
     throw new Error(saved.error.message)
   config.provider = validated.data
@@ -370,7 +370,7 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
   })
   if (!parsed.success)
     throw new Error(cliM('cli_deploy_invalid_value'))
-  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: parsed.data }, { private: true })
+  const saved = module.deploy.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: parsed.data }, { private: true })
   if (!saved.success)
     throw new Error(saved.error.message)
   config.provider = parsed.data
@@ -518,13 +518,13 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         },
       }))
     }
-    const environment = deployModule.loadDeploymentEnvironment({ environment: environmentName, envDir: scan.envDir ?? appDir })
+    const environment = deployModule.deploy.loadDeploymentEnvironment({ environment: environmentName, envDir: scan.envDir ?? appDir })
     if (!environment.success)
       throw new Error(environment.error.message)
     if (options.plan) {
       if (options.build || options.bundleOnly || options.output || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined || options.httpProxy === false)
         throw new Error(cliM('cli_deploy_plan_options'))
-      const loaded = deployModule.loadDeploymentConfig('deploy', buildFile, {
+      const loaded = deployModule.deploy.loadDeploymentConfig('deploy', buildFile, {
         ...process.env,
         ...environment.data.values,
       })
@@ -539,7 +539,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
           },
         }))
       }
-      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, {
+      const plan = await deployModule.deploy.createDeploymentPlan(appDir, validated.data, {
         inspectRemote: options.inspectRemote,
         environment: environmentName,
         envDir: environment.data.envDir,
@@ -589,7 +589,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       }))
     }
 
-    const loadedConfig = deployModule.loadDeploymentConfig('deploy', configPath, process.env)
+    const loadedConfig = deployModule.deploy.loadDeploymentConfig('deploy', configPath, process.env)
     if (!loadedConfig.success)
       throw new Error(loadedConfig.error.message)
     const deployConfig = loadedConfig.data
@@ -606,7 +606,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       }
       if (existsSync(resolve(artifactDirectory, 'manifest.json'))) {
         try {
-          const artifact = await deployModule.readDeploymentArtifact(artifactDirectory)
+          const artifact = await deployModule.deploy.readDeploymentArtifact(artifactDirectory)
           if (artifact.partial)
             selectedServices = artifact.images.map(image => image.name)
         }
@@ -743,7 +743,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         delete process.env[key]
     }
     Object.assign(process.env, originalEnv)
-    const refreshed = deployModule.loadDeploymentEnvironment({ environment: environment.data.environment, envDir: environment.data.envDir })
+    const refreshed = deployModule.deploy.loadDeploymentEnvironment({ environment: environment.data.environment, envDir: environment.data.envDir })
     if (!refreshed.success)
       throw new Error(refreshed.error.message)
     Object.assign(process.env, refreshed.data.values)
@@ -797,7 +797,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     })
 
     if (!deployResult.success) {
-      const execution = deployModule.getDeployCommandState(deployResult.error)
+      const execution = deployModule.deploy.getDeployCommandState(deployResult.error)
       if (execution) {
         const localKey = execution.localTermination === 'not-started'
           ? 'cli_deploy_local_not_started'

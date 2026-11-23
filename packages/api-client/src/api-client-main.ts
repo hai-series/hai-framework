@@ -65,7 +65,7 @@ import type {
   ApiRequestRecord,
 } from './api-client-types.js'
 import { apiContract, HaiErrorSchema, IamSessionErrorCodeSchema } from '@h-ai/api-contract'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
@@ -171,7 +171,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
         return initPromise
       // 已初始化后必须先 close() 再重新 init，避免旧 transport 会话被新状态覆盖后无法 destroy。
       if (state.rawClient || closePromise) {
-        return err(
+        return core.err(
           HaiApiClientError.CONFIG_ERROR,
           apiClientM('apiClient_alreadyInitialized'),
         )
@@ -181,7 +181,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
         try {
           const baseUrl = normalizeBaseUrl(config.baseUrl)
           if (baseUrl === undefined)
-            return err(HaiApiClientError.CONFIG_ERROR, apiClientM('apiClient_invalidBaseUrl'))
+            return core.err(HaiApiClientError.CONFIG_ERROR, apiClientM('apiClient_invalidBaseUrl'))
           const effectiveConfig = { ...config, baseUrl }
           nextTransport = buildTransportSession(effectiveConfig)
           const nextTokenManager = buildTokenManager(effectiveConfig, nextTransport)
@@ -192,7 +192,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           state.transport = nextTransport
           state.tokenManager = nextTokenManager
           state.rawClient = nextRawClient
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) {
           // 构建过程中如果 transport 已创建但后续失败，必须主动释放，避免会话/定时器泄漏。
@@ -201,7 +201,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           state.rawClient = null
           state.tokenManager = undefined
           state.transport = undefined
-          return err(
+          return core.err(
             HaiApiClientError.CONFIG_ERROR,
             apiClientM('apiClient_configError', {
               params: {
@@ -318,7 +318,7 @@ const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: a
  *
  * @example
  * ```ts
- * import { apiClient, type DefaultApiClient } from '@h-ai/api-client'
+ * import { type DefaultApiClient, apiClient } from '@h-ai/api-client'
  * const client: DefaultApiClient = apiClient
  * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -516,19 +516,19 @@ async function callProcedure(
   args: unknown[],
 ): Promise<unknown> {
   if (!rawClient) {
-    return err(HaiApiClientError.NOT_INITIALIZED, apiClientM('apiClient_notInitialized'))
+    return core.err(HaiApiClientError.NOT_INITIALIZED, apiClientM('apiClient_notInitialized'))
   }
 
   // 沿 path 解析 rawClient[a][b][c]...
   let target: unknown = rawClient
   for (const segment of path) {
     if ((typeof target !== 'object' || target === null) && typeof target !== 'function') {
-      return err(HaiApiClientError.UNKNOWN, apiClientM('apiClient_unknown'))
+      return core.err(HaiApiClientError.UNKNOWN, apiClientM('apiClient_unknown'))
     }
     target = Reflect.get(target as object, segment)
   }
   if (typeof target !== 'function') {
-    return err(HaiApiClientError.UNKNOWN, apiClientM('apiClient_unknown'))
+    return core.err(HaiApiClientError.UNKNOWN, apiClientM('apiClient_unknown'))
   }
 
   try {
@@ -938,14 +938,14 @@ function mapClientError(error: unknown) {
       ? error.cause
       : undefined
   if (time)
-    return err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code, serverTime: time.serverTime })
+    return core.err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code, serverTime: time.serverTime })
   const capacity = error instanceof TransportBodyTooLargeError
     ? error
     : error instanceof Error && error.cause instanceof TransportBodyTooLargeError
       ? error.cause
       : undefined
   if (capacity) {
-    return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, {
+    return core.err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, {
       direction: capacity.direction,
       stage: capacity.stage,
       limitBytes: capacity.limitBytes,
@@ -961,24 +961,24 @@ function mapClientError(error: unknown) {
     if (body && typeof body === 'object' && 'success' in body && body.success === false && 'error' in body) {
       const parsed = HaiErrorSchema.safeParse(body.error)
       if (parsed.success)
-        return err({ ...parsed.data, httpStatus: error.status })
+        return core.err({ ...parsed.data, httpStatus: error.status })
     }
     // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
     const detail = { orpcCode: error.code, status: error.status, data: error.data }
     if (error.status === 413)
-      return err(HaiApiClientError.PAYLOAD_TOO_LARGE, error.message, detail)
+      return core.err(HaiApiClientError.PAYLOAD_TOO_LARGE, error.message, detail)
     if (error.status === 400 || error.status === 422)
-      return err(HaiApiClientError.VALIDATION_FAILED, error.message, detail)
+      return core.err(HaiApiClientError.VALIDATION_FAILED, error.message, detail)
     if (error.status === 401)
-      return err(HaiApiClientError.UNAUTHORIZED, error.message, detail)
+      return core.err(HaiApiClientError.UNAUTHORIZED, error.message, detail)
     if (error.status === 403)
-      return err(HaiApiClientError.FORBIDDEN, error.message, detail)
+      return core.err(HaiApiClientError.FORBIDDEN, error.message, detail)
     if (error.status === 404)
-      return err(HaiApiClientError.NOT_FOUND, error.message, detail)
-    return err(HaiApiClientError.SERVER_ERROR, error.message, detail)
+      return core.err(HaiApiClientError.NOT_FOUND, error.message, detail)
+    return core.err(HaiApiClientError.SERVER_ERROR, error.message, detail)
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
-    return err(HaiApiClientError.TIMEOUT, apiClientM('apiClient_timeout'), error)
+    return core.err(HaiApiClientError.TIMEOUT, apiClientM('apiClient_timeout'), error)
   }
-  return err(HaiApiClientError.NETWORK_ERROR, apiClientM('apiClient_networkError'), error)
+  return core.err(HaiApiClientError.NETWORK_ERROR, apiClientM('apiClient_networkError'), error)
 }

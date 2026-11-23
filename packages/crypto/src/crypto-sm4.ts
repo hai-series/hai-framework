@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type {
   EncryptWithIVResult,
   SymmetricCiphertextEncoding,
@@ -14,8 +15,7 @@ import type {
   SymmetricEncryptOptions,
   SymmetricOperations,
 } from './crypto-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
@@ -78,7 +78,7 @@ export function createSM4(): SymmetricOperations {
       options: SymmetricEncryptOptions = {},
     ): HaiResult<SymmetricEncryptedPayload> {
       if (!this.isValidKey(key)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm4KeyInvalid'),
         )
@@ -88,13 +88,13 @@ export function createSM4(): SymmetricOperations {
         const { mode = 'cbc', iv, outputFormat = 'hex' } = options
         if (typeof data !== 'string' || (mode !== 'cbc' && mode !== 'ecb')
           || (outputFormat !== 'hex' && outputFormat !== 'base64')) {
-          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+          return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
         }
         const actualIv = mode === 'cbc'
           ? iv ?? this.generateIV()
           : undefined
         if (mode === 'cbc' && (!actualIv || !this.isValidIV(actualIv)))
-          return err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
+          return core.err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
         const sm4Options: Record<string, unknown> = {
           mode,
           padding: 'pkcs#7',
@@ -107,13 +107,13 @@ export function createSM4(): SymmetricOperations {
         const encrypted = sm4.encrypt(data, key, sm4Options)
 
         if (!encrypted) {
-          return err(
+          return core.err(
             HaiCryptoError.ENCRYPTION_FAILED,
             cryptoM('crypto_sm4EncryptEmpty'),
           )
         }
 
-        return ok({
+        return core.ok({
           mode,
           ciphertext: encodeCiphertext(encrypted, outputFormat),
           ...(actualIv
@@ -123,7 +123,7 @@ export function createSM4(): SymmetricOperations {
         })
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.ENCRYPTION_FAILED,
           cryptoM('crypto_sm4EncryptFailed', {
             params: {
@@ -151,7 +151,7 @@ export function createSM4(): SymmetricOperations {
       key: string,
     ): HaiResult<string> {
       if (!this.isValidKey(key)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm4KeyInvalid'),
         )
@@ -162,14 +162,14 @@ export function createSM4(): SymmetricOperations {
           || (payload.mode !== 'cbc' && payload.mode !== 'ecb')
           || (payload.encoding !== 'hex' && payload.encoding !== 'base64')
           || typeof payload.ciphertext !== 'string') {
-          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
+          return core.err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
         }
         const { mode, iv } = payload
         if (mode === 'cbc' && (!iv || !this.isValidIV(iv)))
-          return err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
+          return core.err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
         const input = decodeCiphertext(payload)
         if (input.length === 0 || input.length % 32 !== 0 || /[^a-f0-9]/i.test(input))
-          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
+          return core.err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
 
         const sm4Options: Record<string, unknown> = {
           mode,
@@ -186,17 +186,17 @@ export function createSM4(): SymmetricOperations {
         const padding = decrypted[decrypted.length - 1]
         if (padding < 1 || padding > 16
           || !decrypted.slice(-padding).every(byte => byte === padding)) {
-          return err(
+          return core.err(
             HaiCryptoError.DECRYPTION_FAILED,
             cryptoM('crypto_sm4DecryptFailed'),
           )
         }
 
         // 加密入口只接受文本，解密也须拒绝非法 UTF-8，不能静默替换损坏字节。
-        return ok(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(new Uint8Array(decrypted.slice(0, -padding))))
+        return core.ok(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(new Uint8Array(decrypted.slice(0, -padding))))
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.DECRYPTION_FAILED,
           cryptoM('crypto_sm4DecryptFailedWithError', {
             params: {
@@ -228,9 +228,9 @@ export function createSM4(): SymmetricOperations {
         return result
       }
       if (!result.data.iv)
-        return err(HaiCryptoError.ENCRYPTION_FAILED, cryptoM('crypto_sm4EncryptEmpty'))
+        return core.err(HaiCryptoError.ENCRYPTION_FAILED, cryptoM('crypto_sm4EncryptEmpty'))
 
-      return ok({
+      return core.ok({
         mode: 'cbc',
         ciphertext: result.data.ciphertext,
         iv: result.data.iv,

@@ -5,8 +5,8 @@
   @example
   ```ts
   import { mount, unmount } from 'svelte'
-  import { GuideHost, createGuide } from '@h-ai/ui'
-  const guide = createGuide({ tours: [], persistence: 'memory' })
+  import { GuideHost, ui } from '@h-ai/ui'
+  const guide = ui.createGuide({ tours: [], persistence: 'memory' })
   const host = mount(GuideHost, { target: document.body, props: { guide, locale: 'zh-CN', scope: 'demo' } })
   await unmount(host)
   guide.stop()

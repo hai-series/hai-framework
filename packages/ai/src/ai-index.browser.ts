@@ -9,13 +9,16 @@ export type { ACPConfig, ACPConfigInput } from './acp/ai-acp-config.js'
 
 export { ACPAgentSchema, ACPConfigSchema, ACPPublishSchema, ACPRepositorySchema, ACPWorkspaceSchema } from './acp/ai-acp-config.js'
 export type { ACPAgentAdapter, ACPAgentAdapterInput, ACPAgentLaunch, ACPClientOptions, ACPCreateSessionOptions, ACPGitReport, ACPOperations, ACPSessionInfo, ACPTransport } from './acp/ai-acp-types.js'
-export * from './ai-config.js'
+export { A2AConfigSchema, A2ASkillConfigSchema, AIConfigSchema, ApiTypeSchema, AudioConfigSchema, AudioModelEntrySchema, AudioOperationSchema, AudioOperationsSchema, AudioProviderSchema, CompressConfigSchema, CompressionStrategySchema, EmbeddingConfigSchema, EntityTypeSchema, FileConfigSchema, ImageConfigSchema, ImageModelEntrySchema, ImageProviderSchema, KnowledgeConfigSchema, LLMConfigSchema, MCPConfigSchema, MCPExternalServerSchema, MCPServerCapabilitiesSchema, MCPServerConfigSchema, MemoryConfigSchema, MemoryTypeSchema, ModelCapabilitiesSchema, ModelEntrySchema, ModelScenarioSchema, OptionalSecretSchema, RetrievalConfigSchema, RetrievalSourceSchema, SummaryConfigSchema, TokenConfigSchema } from './ai-config.js'
+export type { A2AConfig, AIConfig, AIConfigInput, ApiType, AudioConfig, AudioModelEntry, AudioOperation, AudioProviderName, CompressConfig, CompressionStrategy, EmbeddingConfig, EntityType, FileConfig, ImageConfig, ImageModelEntry, ImageProviderName, KnowledgeConfig, LLMConfig, MCPConfig, MCPExternalServer, MCPServerCapabilities, MCPServerConfig, MemoryConfig, MemoryType, ModelEntry, ModelScenario, ResolvedAudioModel, ResolvedImageModel, ResolvedModelConfig, ResolveRequiredModelEntryOptions, RetrievalConfig, RetrievalSourceConfig, SummaryConfig, TokenConfig } from './ai-config.js'
+export { ai } from './ai-main.browser.js'
+
 export * from './ai-types.js'
-export * from './audio/ai-audio-serialization.js'
 export * from './audio/ai-audio-types.js'
 export * from './audio/ai-audio-ws-protocol.js'
-export * from './client/index.js'
+export type { AudioClientConfig, AudioClientOperations, AudioRecorder, AudioRecorderOptions, AudioTicketRequest, AudioWavOptions } from './client/index.js'
 export * from './image/ai-image-types.js'
+
 // 领域类型在两端共用；服务端实例、构造器和工厂不转发，避免声明打包器把 type-only 值提升为运行时 API。
 export type {
   A2AAgentCardConfig,

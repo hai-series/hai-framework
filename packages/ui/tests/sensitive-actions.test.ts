@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
+
 import type { HaiResult } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { flushSync, mount, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
-import { createSensitiveActions } from '../src/lib/components/scenes/iam/index.js'
+import { ui } from '../src/lib/components/scenes/iam/index.js'
 import { uiM } from '../src/lib/messages.js'
 import SensitiveActionsHarness from './fixtures/SensitiveActionsHarness.svelte'
 
 function setup() {
-  const reauthenticate = vi.fn<(password: string, operation: string) => Promise<HaiResult<{ ticket: string }>>>(async () => ok({ ticket: 'proof' }))
-  const actions = createSensitiveActions({ reauthenticate })
+  const reauthenticate = vi.fn<(password: string, operation: string) => Promise<HaiResult<{ ticket: string }>>>(async () => core.ok({ ticket: 'proof' }))
+  const actions = ui.createSensitiveActions({ reauthenticate })
   actions.configure({
     enabled: true,
     operations: ['orders.approve'],
@@ -19,7 +20,7 @@ function setup() {
 
 describe('通用敏感操作确认', () => {
   it('宿主effect更新策略不会因弹窗状态变化而取消确认，真实对话框可完成提交', async () => {
-    const reauthenticate = vi.fn(async () => ok({ ticket: 'one-action-proof' }))
+    const reauthenticate = vi.fn(async () => core.ok({ ticket: 'one-action-proof' }))
     const target = document.createElement('div')
     document.body.append(target)
     const component = mount(SensitiveActionsHarness, {
@@ -64,7 +65,7 @@ describe('通用敏感操作确认', () => {
 
   it('密码错误可在同一弹窗重试，成功证明只返回给原动作', async () => {
     const { actions, reauthenticate } = setup()
-    reauthenticate.mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Private original-password detail', traceId: 'reauth-failed' }))
+    reauthenticate.mockResolvedValueOnce(core.err({ code: 'hai:iam:002', message: 'Private original-password detail', traceId: 'reauth-failed' }))
     const pending = actions.authorize('orders.approve')
     expect(actions.open).toBe(true)
     expect(await actions.authorize('orders.approve')).toBeNull()
@@ -101,7 +102,7 @@ describe('通用敏感操作确认', () => {
     actions.cancel()
     expect(await first).toBeNull()
     const second = actions.authorize('orders.approve')
-    complete(ok({ ticket: 'stale-proof' }))
+    complete(core.ok({ ticket: 'stale-proof' }))
     await submitting
     expect(actions.open).toBe(true)
     expect(actions.loading).toBe(false)
@@ -119,7 +120,7 @@ describe('通用敏感操作确认', () => {
     const submitting = actions.submit('current-password')
     await actions.submit('duplicate')
     expect(reauthenticate).toHaveBeenCalledTimes(1)
-    complete(ok({ ticket: 'only-proof' }))
+    complete(core.ok({ ticket: 'only-proof' }))
     await submitting
     expect(await pending).toBe('only-proof')
   })
@@ -146,20 +147,20 @@ describe('通用敏感操作确认', () => {
   })
 
   it('数据库新增的规则由标准公开配置实时同步，失败不会静默放行', async () => {
-    const reauthenticate = vi.fn(async () => ok({ ticket: 'db-proof' }))
-    const publicConfig = vi.fn(async () => ok({
+    const reauthenticate = vi.fn(async () => core.ok({ ticket: 'db-proof' }))
+    const publicConfig = vi.fn(async () => core.ok({
       reauthentication: {
         enabled: true,
         operations: ['db.operation'],
       },
     }))
-    const actions = createSensitiveActions({ reauthenticate, publicConfig })
+    const actions = ui.createSensitiveActions({ reauthenticate, publicConfig })
     actions.configure({ enabled: true, operations: [] })
     const pending = actions.authorize('db.operation')
     await vi.waitFor(() => expect(actions.open).toBe(true))
     await actions.submit('password')
     expect(await pending).toBe('db-proof')
-    publicConfig.mockResolvedValueOnce(err({ code: 'database-unavailable', message: 'Unavailable', httpStatus: 500 }))
+    publicConfig.mockResolvedValueOnce(core.err({ code: 'database-unavailable', message: 'Unavailable', httpStatus: 500 }))
     expect(await actions.authorize('db.operation')).toBeNull()
   })
 })

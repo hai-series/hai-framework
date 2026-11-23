@@ -302,8 +302,8 @@ const SUPPORTED_THEME_ID_SET = new Set(SUPPORTED_THEME_IDS)
  *
  * @example
  * ```ts
- * import { DEFAULT_THEME, applyTheme } from '@h-ai/ui'
- * applyTheme(DEFAULT_THEME, false)
+ * import { DEFAULT_THEME, ui } from '@h-ai/ui'
+ * ui.applyTheme(DEFAULT_THEME, false)
  * ```
  */
 export const DEFAULT_THEME = 'light'
@@ -313,8 +313,8 @@ export const DEFAULT_THEME = 'light'
  *
  * @example
  * ```ts
- * import { THEME_STORAGE_KEY, getSavedTheme } from '@h-ai/ui'
- * const preference = { key: THEME_STORAGE_KEY, value: getSavedTheme('light') }
+ * import { THEME_STORAGE_KEY, ui } from '@h-ai/ui'
+ * const preference = { key: THEME_STORAGE_KEY, value: ui.getSavedTheme('light') }
  * // 通过公开安全读取函数消费偏好，不直接访问受限存储。
  * ```
  */
@@ -327,8 +327,8 @@ export const THEME_STORAGE_KEY = 'theme'
  *
  * @example
  * ```ts
- * import { getThemeInfo } from '@h-ai/ui'
- * const theme = getThemeInfo('light')
+ * import { ui } from '@h-ai/ui'
+ * const theme = ui.getThemeInfo('light')
  * const background = theme?.bgColor
  * ```
  */
@@ -343,8 +343,8 @@ export function getThemeInfo(themeId: string): ThemeInfo | undefined {
  *
  * @example
  * ```ts
- * import { isDarkTheme } from '@h-ai/ui'
- * const dark = isDarkTheme('dark')
+ * import { ui } from '@h-ai/ui'
+ * const dark = ui.isDarkTheme('dark')
  * ```
  */
 export function isDarkTheme(themeId: string): boolean {
@@ -359,8 +359,8 @@ export function isDarkTheme(themeId: string): boolean {
  *
  * @example
  * ```ts
- * import { normalizeThemeId } from '@h-ai/ui'
- * const theme = normalizeThemeId('unknown-theme', 'light')
+ * import { ui } from '@h-ai/ui'
+ * const theme = ui.normalizeThemeId('unknown-theme', 'light')
  * ```
  */
 export function normalizeThemeId(
@@ -383,8 +383,8 @@ export function normalizeThemeId(
  *
  * @example
  * ```ts
- * import { normalizeHexColor } from '@h-ai/ui'
- * const color = normalizeHexColor('#abc')
+ * import { ui } from '@h-ai/ui'
+ * const color = ui.normalizeHexColor('#abc')
  * ```
  */
 export function normalizeHexColor(value: string | null | undefined): string | null {
@@ -408,8 +408,8 @@ export function normalizeHexColor(value: string | null | undefined): string | nu
  *
  * @example
  * ```ts
- * import { resolveThemeTone } from '@h-ai/ui'
- * const tone = resolveThemeTone('dark')
+ * import { ui } from '@h-ai/ui'
+ * const tone = ui.resolveThemeTone('dark')
  * ```
  */
 export function resolveThemeTone(themeId: string): 'light' | 'dark' {
@@ -483,8 +483,8 @@ function escapeJsonForScript(value: unknown): string {
  *
  * @example
  * ```ts
- * import { createThemeBootstrapScript } from '@h-ai/ui'
- * const script = createThemeBootstrapScript({ storageKey: 'demo-theme', defaultThemeId: 'light' })
+ * import { ui } from '@h-ai/ui'
+ * const script = ui.createThemeBootstrapScript({ storageKey: 'demo-theme', defaultThemeId: 'light' })
  * // 在应用 HTML shell 中作为受控脚本使用，避免首屏主题闪烁。
  * ```
  */
@@ -524,8 +524,8 @@ export function createThemeBootstrapScript(options: ThemeBootstrapScriptOptions)
  *
  * @example
  * ```ts
- * import { getThemeInitScript } from '@h-ai/ui'
- * const script = getThemeInitScript()
+ * import { ui } from '@h-ai/ui'
+ * const script = ui.getThemeInitScript()
  * ```
  */
 export function getThemeInitScript(): string {
@@ -543,8 +543,8 @@ export function getThemeInitScript(): string {
  *
  * @example
  * ```ts
- * import { applyTheme } from '@h-ai/ui'
- * applyTheme('dark', false)
+ * import { ui } from '@h-ai/ui'
+ * ui.applyTheme('dark', false)
  * // false 仅更新当前 DOM，不写入持久化偏好。
  * ```
  */
@@ -568,8 +568,8 @@ export function applyTheme(theme: string, persist = true): void {
  *
  * @example
  * ```ts
- * import { getCurrentTheme } from '@h-ai/ui'
- * const theme = getCurrentTheme()
+ * import { ui } from '@h-ai/ui'
+ * const theme = ui.getCurrentTheme()
  * ```
  */
 export function getCurrentTheme(): string {
@@ -586,8 +586,8 @@ export function getCurrentTheme(): string {
  *
  * @example
  * ```ts
- * import { getSavedTheme } from '@h-ai/ui'
- * const theme = getSavedTheme('light')
+ * import { ui } from '@h-ai/ui'
+ * const theme = ui.getSavedTheme('light')
  * ```
  */
 export function getSavedTheme(fallbackTheme = DEFAULT_THEME): string {

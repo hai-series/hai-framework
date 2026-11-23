@@ -2,7 +2,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { TransportCodec } from './crypto-transport-server.js'
 import type { TransportJob, TransportReply } from './crypto-transport-worker.js'
 import { availableParallelism } from 'node:os'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { TransportBodyTooLargeError } from './crypto-transport-body.js'
@@ -43,8 +43,8 @@ export function createTransportWorkerPool(): TransportCodec & { close: () => Pro
       if (result.success && result.data.type === 'seal')
         return restoreError(result.data.result, result.data.oversized)
       if (!result.success && result.error.code === HaiCommonError.RATE_LIMIT_EXCEEDED.code)
-        return err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'))
+        return core.err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
+      return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'))
     },
     async open(_service, ...args) {
       const result = await pool.run({
@@ -55,7 +55,7 @@ export function createTransportWorkerPool(): TransportCodec & { close: () => Pro
       if (result.success && result.data.type === 'open')
         return restoreError(result.data.result, result.data.oversized)
       if (!result.success && result.error.code === HaiCommonError.RATE_LIMIT_EXCEEDED.code)
-        return err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
+        return core.err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
       return transportAuthenticationFailure()
     },
     close: pool.close,

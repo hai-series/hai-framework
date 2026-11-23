@@ -129,11 +129,11 @@ finally {
 
 默认 PostgreSQL Store 可由多个节点同时初始化。空库创建表、旧库补列与索引、初始化门闩在同一事务中完成；失败回滚，修正权限或结构冲突后可在同一实例重试 `init`。
 
-每个应用进程通常直接使用 `runner`。API 节点只负责提交和查询，执行节点负责领取和执行，两者都连接同一 PostgreSQL 或 MySQL 数据库，并使用相同的环境定义和并发上限。每台执行节点使用不同且重启后不变的 ID。以下示例假定 RelDB 已启动，`imageId` 是每台执行节点上已经准备好的 OCI 镜像 ID 或带摘要的镜像引用。若测试时需要在同一进程比较多个节点，可用包级工厂 `createRunner()` 创建彼此独立的实例，再分别调用各自的 `init()` 和 `close()`。
+每个应用进程通常直接使用 `runner`。API 节点只负责提交和查询，执行节点负责领取和执行，两者都连接同一 PostgreSQL 或 MySQL 数据库，并使用相同的环境定义和并发上限。每台执行节点使用不同且重启后不变的 ID。以下示例假定 RelDB 已启动，`imageId` 是每台执行节点上已经准备好的 OCI 镜像 ID 或带摘要的镜像引用。若测试时需要在同一进程比较多个节点，可用 `runner.create()` 方法 创建彼此独立的实例，再分别调用各自的 `init()` 和 `close()`。
 
 ```ts
-import type { RunnerConfigInput } from '@h-ai/runner' // 用公开类型检查两类节点共用的设置。
-import { runner } from '@h-ai/runner' // 在 API 进程中使用默认实例。
+ // 用公开类型检查两类节点共用的设置。
+import { type RunnerConfigInput, runner } from '@h-ai/runner' // 在 API 进程中使用默认实例。
 
 async function startApi(imageId: string) {
   const settings: RunnerConfigInput = {
@@ -244,8 +244,8 @@ const cancelling = cancellingResult.data // 取消请求受理后的实际状态
 同一主体、任务类型和幂等键重试相同的提交会取得原回执。改变原提交的内容会得到 `CONFLICT`。`reuseKey` 可让可信服务复用已有活跃执行，如同一用户的 Worker。幂等键可用于 `find`，复用键由服务端维护。以下函数接收已认证主体和已存在的 `report.v1` 回执对应的幂等键。
 
 ```ts
-import type { RunnerScope } from '@h-ai/runner' // 主体包括 tenantId 和 userId。
-import { runner } from '@h-ai/runner' // 此实例须已启动，并连接任务所在数据库。
+ // 主体包括 tenantId 和 userId。
+import { type RunnerScope, runner } from '@h-ai/runner' // 此实例须已启动，并连接任务所在数据库。
 
 async function cancelReport(scope: RunnerScope, key: string) {
   const found = await runner.find(scope, 'report.v1', key) // 命中返回原回执，未找到时成功且 data 为 undefined。
@@ -381,8 +381,8 @@ async function readWorkspace(context: RunnerContext) {
 同一主体的运行中父任务可通过 `parentId` 接收子任务。子任务在同一节点及执行代次领取，适合转交已有连接的控制操作，使用 `maxControlRunning` 控制并发。`capacityClass: 'tool'` 使用独立工具资源。`concurrency: { key, limit }` 对相同任务类型和服务键设置跨节点活动上限。
 
 ```ts
-import type { RunnerScope } from '@h-ai/runner' // 由服务端认证或可信父处理器提供。
-import { runner } from '@h-ai/runner' // 连接共用数据库的实例。
+ // 由服务端认证或可信父处理器提供。
+import { type RunnerScope, runner } from '@h-ai/runner' // 连接共用数据库的实例。
 
 async function sendControl(scope: RunnerScope, parentId: string) {
   // 用可信主体和父任务 ID 提交 worker.control 状态查询；成功返回 queued 回执。
@@ -458,8 +458,8 @@ async function queuePrewarmedCopy(scope: RunnerScope) {
 如果任务不使用容器，先由运维确认应用启动的所有资源都已停止，再传 `hostResourcesStopped: true`。Runner 还会核对是否在原执行进程所在的 Linux 主机、同一次系统启动和同一个 PID 命名空间，并确认旧进程已经停止。控制子任务还要求父任务已结束或已核实停止。旧记录无法证明进程身份，或原任务应在容器中却找不到容器记录时，容量不会释放。
 
 ```ts
-import type { RunnerScope } from '@h-ai/runner' // 从任务归属和可信管理会话取得。
-import { runner } from '@h-ai/runner' // 此处必须是原执行节点上的实例。
+ // 从任务归属和可信管理会话取得。
+import { type RunnerScope, runner } from '@h-ai/runner' // 此处必须是原执行节点上的实例。
 
 async function reconcile(scope: RunnerScope, id: string) {
   const checked = await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: 'INC-47: container cleanup verified' }) // 核验成功返回 unknown 回执和 reconciledAt。

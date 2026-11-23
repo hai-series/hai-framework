@@ -9,7 +9,7 @@ import type { RequestAccessCheck } from '@h-ai/core'
 import type { KeyExchangeResponse, TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto, HaiCryptoError, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
@@ -23,12 +23,13 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  * @param encryption - 已编译的路径/方法选择器；省略时沿用宿主默认范围。
  * @returns SvelteKit 中间件
  * @throws 显式启用但管理器初始化失败时抛出配置错误，调用方须停止宿主装配。
- * @example 模块内部上下文
+ * @example
  * ```ts
+ * import { type TransportEncryptionConfig, kit } from '@h-ai/kit'
  * function install(config: TransportEncryptionConfig) {
- *   return transportEncryptionMiddleware(config) // 受管密钥环、共享 keyStore 与 crypto 生命周期由应用管理。
+ *   return kit.crypto.transportEncryptionMiddleware(config) // 受管密钥环、共享 keyStore 与 crypto 生命周期由应用管理。
  * }
- *```
+ * ```
  */
 export function transportEncryptionMiddleware(config: TransportEncryptionConfig, encryption?: RequestAccessCheck['encryption']): Middleware {
   // 未启用时直接透传
@@ -72,7 +73,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     const mode = encryption?.(pathname, event.request.method)
     if (mode === 'disabled') {
       if (event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {
-        return Response.json(err({
+        return Response.json(core.err({
           ...HaiCommonError.VALIDATION_ERROR,
           message: kitM('kit_transportPlaintextRequired'),
           traceId: context.requestId,

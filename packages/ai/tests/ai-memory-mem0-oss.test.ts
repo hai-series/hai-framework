@@ -1,8 +1,9 @@
 /** Mem0 数据格式 Provider：公开功能、主体隔离、受限回退与安全失败。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryConfigSchema } from '../src/ai-config.js'
 import { HaiAIError } from '../src/ai-types.js'
@@ -16,8 +17,8 @@ function value<T>(result: HaiResult<T>): T {
 }
 
 const embedding: EmbeddingOperations = {
-  embedText: async () => ok([0.1, 0.2, 0.3]),
-  embedBatch: async texts => ok(texts.map(() => [0.1, 0.2, 0.3])),
+  embedText: async () => core.ok([0.1, 0.2, 0.3]),
+  embedBatch: async texts => core.ok(texts.map(() => [0.1, 0.2, 0.3])),
   embed: async () => { throw new Error('Unused low-level operation') },
 }
 
@@ -42,12 +43,12 @@ function createLlmMock(content: string): LLMOperations {
       },
     })),
     async* chatStream() {},
-    listModels: async () => ok([]),
-    getHistory: async () => ok([]),
-    listSessions: async () => ok([]),
-    ask: async () => ok(content),
+    listModels: async () => core.ok([]),
+    getHistory: async () => core.ok([]),
+    listSessions: async () => core.ok([]),
+    ask: async () => core.ok(content),
     async* askStream() {},
-    generateObject: async () => err(HaiAIError.INVALID_REQUEST, 'Unsupported in extraction fixture'),
+    generateObject: async () => core.err(HaiAIError.INVALID_REQUEST, 'Unsupported in extraction fixture'),
   }
 }
 
@@ -256,7 +257,7 @@ describe('mem0 format provider', () => {
             entered()
             await gate
           }
-          return ok([0.1, 0.2, 0.3])
+          return core.ok([0.1, 0.2, 0.3])
         },
       },
     })

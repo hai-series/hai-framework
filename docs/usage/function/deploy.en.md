@@ -64,8 +64,8 @@ Review applications, middleware, variables and capacity before delivering verifi
 Supply a built project and its real deployment config. scan reads requirements; provisionAll provisions selected services and belongs after plan review. The quick-start --plan is read-only.
 
 ```ts
-import type { DeployConfigInput } from '@h-ai/deploy'
-import { deploy } from '@h-ai/deploy'
+
+import { type DeployConfigInput, deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
   // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. Return the failed result on failure.
@@ -150,11 +150,11 @@ Read deployment and runtime files separately, merge by explicit precedence and s
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `loadDeploymentEnvironment(options)` | Read deployment environment layers | Required `options` selects the target environment and directory. See [environment arguments](#deployment-environment-options). | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
-| `mergeEnvironmentLayers(layers, prefix?)` | Merge environment layers by priority | Required variable maps `layers`, ordered from lowest to highest precedence. Omit `prefix` to include every name, or supply it to include just that name and its underscore-prefixed descendants. | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
-| `loadDeploymentConfig(name, path, values)` | Read target deployment configuration | Required module `name`, YAML or project JSON `path`, and `values` for environment overrides. | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
-| `saveDeploymentEnvironment(environment, values, options?)` | Save deployment environment variables | Required loaded target `environment` and variable map `values`. Optional `options` controls private writes and replacement. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
-| `saveMiddlewareEnvironment(environment, options)` | Save middleware environment variables | Required target `environment` and connection-selection `options`. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+| `deploy.loadDeploymentEnvironment(options)` | Read deployment environment layers | Required `options` selects the target environment and directory. See [environment arguments](#deployment-environment-options). | `HaiResult<DeploymentEnvironment>` | `deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `deploy.mergeEnvironmentLayers(layers, prefix?)` | Merge environment layers by priority | Required variable maps `layers`, ordered from lowest to highest precedence. Omit `prefix` to include every name, or supply it to include just that name and its underscore-prefixed descendants. | 扁平变量映射 | `deploy.mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `deploy.loadDeploymentConfig(name, path, values)` | Read target deployment configuration | Required module `name`, YAML or project JSON `path`, and `values` for environment overrides. | `HaiResult<Record<string, unknown>>` | `deploy.loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `deploy.saveDeploymentEnvironment(environment, values, options?)` | Save deployment environment variables | Required loaded target `environment` and variable map `values`. Optional `options` controls private writes and replacement. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `deploy.saveMiddlewareEnvironment(environment, options)` | Save middleware environment variables | Required target `environment` and connection-selection `options`. See [environment arguments](#deployment-environment-options). | `HaiResult<string[]>` | `deploy.saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
 
 <a id="deployment-environment-options"></a>
 
@@ -162,43 +162,43 @@ Read deployment and runtime files separately, merge by explicit precedence and s
 
 | Field | Default and conditions | Purpose |
 | --- | --- | --- |
-| `loadDeploymentEnvironment.options.environment` / `envDir` | Both required | Selects the environment name and dotenv directory, such as `prod` and `./deployment`. |
-| `loadDeploymentEnvironment.options.requireFile` | Default `true` | Set to `false` to continue with existing layers when the target file is absent. |
-| `saveDeploymentEnvironment.options.private` | Default `false` | Set to `true` to write all supplied variables to `.env.<environment>.local`. The default still routes recognized secrets to that private file. |
-| `saveDeploymentEnvironment.options.replace` | Default empty list | Before saving, clears the matching keys and their underscore-prefixed descendants from the target public and private files. Use with a complete replacement. |
-| `saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | All required | Supplies the application root containing config, the scanned config path, and the chosen backend name. |
-| `saveMiddlewareEnvironment.options.configuration` / `updates` | Optional. The connection can be omitted before cloud provisioning. | When supplied, combines the selected backend’s complete connection and other variable updates. |
+| `deploy.loadDeploymentEnvironment.options.environment` / `envDir` | Both required | Selects the environment name and dotenv directory, such as `prod` and `./deployment`. |
+| `deploy.loadDeploymentEnvironment.options.requireFile` | Default `true` | Set to `false` to continue with existing layers when the target file is absent. |
+| `deploy.saveDeploymentEnvironment.options.private` | Default `false` | Set to `true` to write all supplied variables to `.env.<environment>.local`. The default still routes recognized secrets to that private file. |
+| `deploy.saveDeploymentEnvironment.options.replace` | Default empty list | Before saving, clears the matching keys and their underscore-prefixed descendants from the target public and private files. Use with a complete replacement. |
+| `deploy.saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | All required | Supplies the application root containing config, the scanned config path, and the chosen backend name. |
+| `deploy.saveMiddlewareEnvironment.options.configuration` / `updates` | Optional. The connection can be omitted before cloud provisioning. | When supplied, combines the selected backend’s complete connection and other variable updates. |
 
-For example, `saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` for `prod` returns `["HAI_DB_HOST"]` on success and writes the public value to the target `.env.prod`.
+For example, `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` for `prod` returns `["HAI_DB_HOST"]` on success and writes the public value to the target `.env.prod`.
 
 #### Scenario: Read, merge and save deployment variables: environment helpers
 
 The operator selects the prod directory. Only run this after confirming it: load/merge read values and save returns written key names, without displaying secrets.
 
 ```ts
-import type { MiddlewareRequirement } from '@h-ai/deploy'
-import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+
+import { type MiddlewareRequirement, deploy } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
   // Load the required prod environment from envDir. Success contains the merged values and file information. Return the failed result if loading fails.
-  const environmentResult = loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
+  const environmentResult = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
   if (!environmentResult.success)
     return environmentResult
   const environment = environmentResult.data
   // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
-  const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
+  const values = deploy.mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
   // Resolve this app's _cache.yml with those environment values. Success is a cache config object. Return the failed result on load or expansion failure.
-  const configResult = loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
+  const configResult = deploy.loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
   if (!configResult.success)
     return configResult
   const config = configResult.data
   // Write the memory override to the private production environment. Success lists written variable names. Return the failed result on failure.
-  const writtenResult = saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
+  const writtenResult = deploy.saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
   if (!writtenResult.success)
     return writtenResult
   const written = writtenResult.data
   // Save the given cache requirement as the memory backend for this app. Success lists updated names. Return the failed result if configuration cannot be written.
-  const middlewareResult = saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
+  const middlewareResult = deploy.saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
   if (!middlewareResult.success)
     return middlewareResult
   const middleware = middlewareResult.data
@@ -216,10 +216,10 @@ Check backend suitability, then convert form strings into actual booleans, ports
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `canKeepMiddleware(requirement, backend, environment)` | Check whether middleware can be retained | Required scanned `requirement`, selected catalog `backend`, and target `environment` snapshot. | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
-| `describeMiddlewareBackend(backend)` | Describe a middleware backend | Required `backend`, either a full catalog entry or an object containing its `purpose`. | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
-| `validateMiddlewareField(options)` | Validate a middleware form field | Required `options` contains the form value, field definition, and actual backend. See [middleware field arguments](#middleware-field-options). | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
-| `parseMiddlewareField(options)` | Parse a middleware form field | Required `options` contains the form value, field definition, and backend. It can enable managed provisioning. See [middleware field arguments](#middleware-field-options). | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+| `deploy.canKeepMiddleware(requirement, backend, environment)` | Check whether middleware can be retained | Required scanned `requirement`, selected catalog `backend`, and target `environment` snapshot. | 能否保留该中间件的 boolean | `deploy.canKeepMiddleware(requirement, backend, environment)` |
+| `deploy.describeMiddlewareBackend(backend)` | Describe a middleware backend | Required `backend`, either a full catalog entry or an object containing its `purpose`. | 本地化的功能说明 | `deploy.describeMiddlewareBackend(backend)` |
+| `deploy.validateMiddlewareField(options)` | Validate a middleware form field | Required `options` contains the form value, field definition, and actual backend. See [middleware field arguments](#middleware-field-options). | 校验是否通过的 boolean | `deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `deploy.parseMiddlewareField(options)` | Parse a middleware form field | Required `options` contains the form value, field definition, and backend. It can enable managed provisioning. See [middleware field arguments](#middleware-field-options). | `HaiResult<unknown>` | `deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
 
 <a id="middleware-field-options"></a>
 
@@ -228,19 +228,19 @@ Check backend suitability, then convert form strings into actual booleans, ports
 | Field | Default and conditions | Purpose |
 | --- | --- | --- |
 | `options.value` / `field` / `backend` | All required | Supplies the raw form string, catalog field descriptor, and actual backend. The field and backend jointly determine validation. |
-| `options.managed` | Off by default and available in `parseMiddlewareField` only | Set to `true` to accept an empty value for fields declared `secret` or `managed`, returning `undefined`. |
+| `options.managed` | Off by default and available in `deploy.parseMiddlewareField` only | Set to `true` to accept an empty value for fields declared `secret` or `managed`, returning `undefined`. |
 
-For example, `parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` returns boolean `false` on success.
+For example, `deploy.parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` returns boolean `false` on success.
 
 #### Scenario: Validate middleware forms: deployment helpers
 
 ```ts
 // Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
-import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 // Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
-validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
+deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
 // Parse SMTP secure from the string false. The result is the boolean false. Return the failed result if parsing fails.
-const parseMiddlewareFieldResult = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+const parseMiddlewareFieldResult = deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
 if (!parseMiddlewareFieldResult.success)
   return parseMiddlewareFieldResult
 parseMiddlewareFieldResult.data // false
@@ -260,27 +260,27 @@ Use a stable project identity and verify artifact digests. Inspect structured re
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `normalizeProjectName(name)` | Normalize a project identifier | Required application `name`, optionally with an npm scope. | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
-| `artifactChecksum(file)` | Compute a delivery artifact checksum | Required `file` is the path to an existing local image or delivery artifact. | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
-| `getDeployRecovery(error)` | Read deployment recovery information | Required deployment `error` is a `HaiError` from which to read recovery information. | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+| `deploy.normalizeProjectName(name)` | Normalize a project identifier | Required application `name`, optionally with an npm scope. | 规范化的部署项目名 | `deploy.normalizeProjectName('@shop/orders')` |
+| `deploy.artifactChecksum(file)` | Compute a delivery artifact checksum | Required `file` is the path to an existing local image or delivery artifact. | `Promise<string>` | `await deploy.artifactChecksum('./serv.tar')` |
+| `deploy.getDeployRecovery(error)` | Read deployment recovery information | Required deployment `error` is a `HaiError` from which to read recovery information. | `DeployRecoveryInfo \| undefined` | `deploy.getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
 
 #### Scenario: Check artifact identity and recovery: deployment helpers
 
 Build this run’s artifact first; digest is its SHA-256. A failed receipt can contain recovery details; reading them neither performs recovery nor confirms unknown remote effects.
 
 ```ts
-import { artifactChecksum, getDeployRecovery, normalizeProjectName } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
 async function inspectDelivery(appDir: string, artifactFile: string) {
   // Normalize the supplied scoped name to the deploy project identifier orders.
-  const project = normalizeProjectName('@shop/orders') // 'orders'
+  const project = deploy.normalizeProjectName('@shop/orders') // 'orders'
   // Hash the existing artifact at the supplied path. Success is its SHA-256 digest. An unreadable path rejects.
-  const digest = await artifactChecksum(artifactFile) // existing artifact; failures reject
+  const digest = await deploy.artifactChecksum(artifactFile) // existing artifact; failures reject
   // Package the supplied app for prod without publishing. Success contains bundle details. On failure inspect recovery below.
   const delivered = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
   if (!delivered.success)
     // Extract the recovery information attached to this deploy failure, when available.
-    return { project, digest, error: delivered.error, recovery: getDeployRecovery(delivered.error) }
+    return { project, digest, error: delivered.error, recovery: deploy.getDeployRecovery(delivered.error) }
   return { project, digest, delivery: delivered.data }
 }
 ```
@@ -303,7 +303,7 @@ A platform can read the CLI build receipt through the SDK and persist the deploy
 #### Verify the same ID after launching
 
 ```ts
-import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+import { type DeployBundleExecution, type DeployReleaseVerification, deploy } from '@h-ai/deploy'
 
 export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
   // Check the CLI stdout and archives against the expected clean Git commit before preparing the deployment package.

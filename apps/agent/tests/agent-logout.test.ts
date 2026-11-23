@@ -1,4 +1,4 @@
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiIamError } from '@h-ai/iam'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { actions } from '../src/routes/+page.server.js'
@@ -29,8 +29,8 @@ beforeEach(() => revoke.mockReset())
 
 it('撤销未确认时保留当前 Cookie，恢复后可以按同一凭据重试', async () => {
   revoke
-    .mockResolvedValueOnce(err(HaiIamError.REPOSITORY_ERROR, 'Storage unavailable'))
-    .mockResolvedValueOnce(ok(undefined))
+    .mockResolvedValueOnce(core.err(HaiIamError.REPOSITORY_ERROR, 'Storage unavailable'))
+    .mockResolvedValueOnce(core.ok(undefined))
   const request = event('held-session')
 
   expect(await actions.logout(request)).toMatchObject({

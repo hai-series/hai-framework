@@ -5,10 +5,10 @@ export default defineConfig({
   ...baseConfig,
   entry: {
     'index': 'src/index.ts',
-    'features/iam': 'src/features/serv-feature-iam.ts',
-    'features/storage': 'src/features/serv-feature-storage.ts',
-    'features/ai': 'src/features/serv-feature-ai.ts',
-    'features/feedback': 'src/features/serv-feature-feedback.ts',
+    'features/iam': 'src/features/serv-feature-iam-entry.ts',
+    'features/storage': 'src/features/serv-feature-storage-entry.ts',
+    'features/ai': 'src/features/serv-feature-ai-entry.ts',
+    'features/feedback': 'src/features/serv-feature-feedback-entry.ts',
   },
   external: [
     '@h-ai/ai',

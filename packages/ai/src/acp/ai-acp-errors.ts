@@ -1,4 +1,4 @@
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { ZodError } from 'zod'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -90,5 +90,5 @@ export function acpError(error: unknown) {
           ? 'invalid'
           : 'failed')
   const [code, message] = mappings[failure.kind]
-  return err(HaiAIError[code], aiM(message), failure.details)
+  return core.err(HaiAIError[code], aiM(message), failure.details)
 }

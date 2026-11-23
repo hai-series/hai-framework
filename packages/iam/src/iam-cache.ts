@@ -1,9 +1,10 @@
 /** IAM 热路径共享缓存；写入栅栏覆盖数据库提交和外部事务完成。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import { randomUUID } from 'node:crypto'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iamM } from './iam-i18n.js'
 import { HaiIamError } from './iam-types.js'
 
@@ -21,7 +22,7 @@ const transactions = new WeakMap<DmlWithTxOperations, Promise<HaiResult<void>>>(
 const logger = core.logger.child({ module: 'iam', scope: 'read-cache' })
 let degraded = false
 function failure() {
-  return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
+  return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
 }
 
 async function revision(): Promise<HaiResult<Revision>> {
@@ -29,7 +30,7 @@ async function revision(): Promise<HaiResult<Revision>> {
   if (!current.success)
     return current
   if (current.data)
-    return ok(current.data)
+    return core.ok(current.data)
   const created = await cache.kv.set(revisionKey, {
     epoch: randomUUID(),
     writers: 0,
@@ -38,7 +39,7 @@ async function revision(): Promise<HaiResult<Revision>> {
     return created
   const loaded = await cache.kv.get<Revision>(revisionKey)
   return loaded.success && loaded.data
-    ? ok(loaded.data)
+    ? core.ok(loaded.data)
     : failure()
 }
 
@@ -54,7 +55,7 @@ async function change(delta: number): Promise<HaiResult<void>> {
     if (!written.success)
       return written
     if (written.data)
-      return ok(undefined)
+      return core.ok(undefined)
   }
   return failure()
 }
@@ -64,7 +65,7 @@ async function change(delta: number): Promise<HaiResult<void>> {
  * @example 模块内部上下文
  * ```ts
  * async function readExample() {
- *   const result = await readIamCache('example', async () => ok({ enabled: true }))
+ *   const result = await readIamCache('example', async () => core.ok({ enabled: true }))
  *   if (!result.success) return result
  *   return result.data.enabled
  * }
@@ -79,7 +80,7 @@ export async function readIamCache<T>(key: string, load: () => Promise<HaiResult
   if (cached.success && cached.data) {
     const after = await revision()
     if (after.success && !after.data.writers && after.data.epoch === before.data.epoch)
-      return ok(cached.data.value)
+      return core.ok(cached.data.value)
     return load()
   }
   const result = await load()
@@ -126,7 +127,7 @@ async function enroll(tx: DmlWithTxOperations): Promise<HaiResult<void>> {
         await finish()
       return result
     }
-    return ok(undefined)
+    return core.ok(undefined)
   })()
   transactions.set(tx, pending)
   return pending
@@ -137,7 +138,7 @@ async function enroll(tx: DmlWithTxOperations): Promise<HaiResult<void>> {
  * @example 模块内部上下文
  * ```ts
  * async function writeExample() {
- *   const operation = guardIamMutation(async () => ok(undefined))
+ *   const operation = guardIamMutation(async () => core.ok(undefined))
  *   const result = await operation()
  *   if (!result.success) return result
  *   return result.data

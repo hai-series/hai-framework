@@ -32,13 +32,13 @@ let clipboardHostWriter: ClipboardHostWriter | null = null
  *
  * @example
  * ```ts
- * import { registerClipboardHostWriter } from '@h-ai/ui'
- * registerClipboardHostWriter(async text => {
+ * import { ui } from '@h-ai/ui'
+ * ui.registerClipboardHostWriter(async text => {
  *   try { await navigator.clipboard.writeText(text); return true }
  *   catch { return false }
  * })
  * // 宿主销毁时注销，避免保留过期窗口闭包。
- * registerClipboardHostWriter(null)
+ * ui.registerClipboardHostWriter(null)
  * ```
  */
 export function registerClipboardHostWriter(
@@ -112,8 +112,8 @@ export function writeStoredValue(key: string, value: string): boolean {
  *
  * @example
  * ```ts
- * import { writeTextToClipboard } from '@h-ai/ui'
- * const copied = await writeTextToClipboard('https://example.com/help')
+ * import { ui } from '@h-ai/ui'
+ * const copied = await ui.writeTextToClipboard('https://example.com/help')
  * if (!copied) throw new Error('Clipboard is unavailable')
  * ```
  */

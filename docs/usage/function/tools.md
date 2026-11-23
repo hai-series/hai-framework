@@ -283,8 +283,8 @@ Tools 无全局启用开关；应用将自己的配置转换为工厂与 `enable
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
-import type { ToolArtifactAccess } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
   // 借用已初始化的 Runner 创建 documents 服务，启用 documents 与 analysis；成功返回服务对象，服务参数或处理器登记错误则失败。
@@ -409,8 +409,8 @@ async function followJob(service: ToolService, context: ToolServiceContext, requ
 宿主将认证后的 context、受授权约束的文件访问 files、已初始化的 Runner 及可信环境映射作为输入。下面返回 ToolSet，可由 createService.createTools 返回；工厂本身不提交任务，也没有关闭方法。
 
 ```ts
-import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type JobToolOptions, type ToolSet, tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
   // 用宿主上下文及文件权限构建产物工具和组；有 save 能力时才加入保存工具。

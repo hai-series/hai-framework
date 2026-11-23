@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { artifactChecksum, deploy } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const version = '1.0.0'
 const buildId = `20261122-101010-a1b2c3-${version}`
@@ -36,7 +36,7 @@ async function create(partial = false) {
         name: 'serv',
         file,
         imageRef: `localhost/hai-shop-serv:${buildId}`,
-        sha256: await artifactChecksum(input),
+        sha256: await deploy.artifactChecksum(input),
         platform: 'linux/amd64',
       },
     ],

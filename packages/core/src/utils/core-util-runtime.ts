@@ -83,9 +83,9 @@ function failure(module: string, phase: 'start' | 'close', detail?: unknown): { 
  * @returns 不抛业务异常的生命周期控制器；仅报告安全诊断，配置失败附带原因和处理建议。
  * @example
  * ```ts
- * import { core, ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  * const runtime = core.module.createRuntime([
- *   { name: 'application', start: () => ok(undefined), close: () => ok(undefined) },
+ *   { name: 'application', start: () => core.ok(undefined), close: () => core.ok(undefined) },
  * ])
  * const started = await runtime.start()
  * if (started.success) await runtime.close()

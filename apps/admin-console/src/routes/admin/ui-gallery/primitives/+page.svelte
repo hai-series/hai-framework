@@ -7,7 +7,7 @@
   采用分类（DemoSection）+ 可折叠示例卡片（DemoCard，含效果与可复制源码）。
 -->
 <script lang='ts'>
-  import { Range, toast } from '@h-ai/ui'
+  import { Range, ui } from '@h-ai/ui'
   // Range 与 DOM 全局类型同名，必须显式导入
   import DemoCard from '#lib/components/gallery/DemoCard.svelte'
   import DemoSection from '#lib/components/gallery/DemoSection.svelte'
@@ -139,7 +139,7 @@
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_variants()}</p>
           <div class='flex flex-wrap items-center gap-3'>
-            <Button variant='primary' onclick={() => toast.success('primary')}>primary</Button>
+            <Button variant='primary' onclick={() => ui.toast.success('primary')}>primary</Button>
             <Button variant='secondary'>secondary</Button>
             <Button variant='info'>info</Button>
             <Button variant='success'>success</Button>
@@ -187,7 +187,7 @@
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_barebutton_unstyled()}</p>
           <div class='flex items-center gap-4'>
-            <BareButton onclick={() => toast.info(m.gallery_demo_bare_button_clicked())}>
+            <BareButton onclick={() => ui.toast.info(m.gallery_demo_bare_button_clicked())}>
               <span class='text-primary underline cursor-pointer'>{m.gallery_demo_clickable_text()}</span>
             </BareButton>
             <BareButton disabled>
@@ -198,7 +198,7 @@
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_iconbutton_variants()}</p>
           <div class='flex items-center gap-4'>
-            <IconButton variant='primary' tooltip={m.gallery_demo_settings()} label={m.gallery_demo_settings()} onclick={() => toast.info(m.gallery_demo_settings())}>
+            <IconButton variant='primary' tooltip={m.gallery_demo_settings()} label={m.gallery_demo_settings()} onclick={() => ui.toast.info(m.gallery_demo_settings())}>
               {#snippet icon()}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
                   <circle cx='12' cy='12' r='3' />
@@ -604,7 +604,7 @@
             <Tag variant='error'>{m.gallery_toast_type_error()}</Tag>
             <Tag variant='info'>{m.audit_info()}</Tag>
             <Tag variant='primary' outline>{m.gallery_demo_outline()}</Tag>
-            <Tag closable onclose={() => toast.info(m.gallery_demo_tag_dismissed())}>{m.gallery_demo_dismissible()}</Tag>
+            <Tag closable onclose={() => ui.toast.info(m.gallery_demo_tag_dismissed())}>{m.gallery_demo_dismissible()}</Tag>
           </div>
         </div>
         <div>

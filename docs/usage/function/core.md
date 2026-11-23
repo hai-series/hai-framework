@@ -14,7 +14,7 @@
 pnpm add @h-ai/core
 ```
 
-从 `@h-ai/core` 导入 `core` 后，就可以记录日志、读取消息或使用通用工具。`ok`、`err`、类型、Schema 和错误常量也从同一入口导入。运行自定义配置和表单校验示例前，请安装 Zod（`pnpm add zod`）。
+从 `@h-ai/core` 导入 `core` 后，就可以记录日志、读取消息或使用通用工具。`core.ok`、`core.err`、类型、Schema 和错误常量也从同一入口导入。运行自定义配置和表单校验示例前，请安装 Zod（`pnpm add zod`）。
 
 ### 初始化：`core.init`
 
@@ -35,8 +35,8 @@ logging:
 ```
 
 ```ts
-import type { CoreConfig } from '@h-ai/core'
-import { core } from '@h-ai/core'
+
+import { type CoreConfig, core } from '@h-ai/core'
 
 // 读取 config 目录。_core.yml 校验成功后以 core 为名存入缓存。
 // 读取当前项目 ./config 直属配置文件，加载成功后可按名称读取。初始化本身无返回值。
@@ -591,7 +591,7 @@ core.sanitize.sanitizeText('Request failed with a known private value', ['privat
 | `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 给本次失败附上消息和诊断信息 | 必填错误定义 `def` 与公开提示 `message`。可选内部 `cause` 与处理建议 `suggestion`。 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
 | `core.error.toPublic(error, traceId?, locale?)` | 准备可返回浏览器的错误 | `error` 必填。`traceId` 覆盖当前关联编号，`locale` 覆盖 5xx 通用提示使用的语言。 | 删除内部诊断字段的错误 | `core.error.toPublic(error, 'req-1')` |
 | `core.error.formatMessage(error)` | 生成带追踪编号的文案 | 必填 `error`，含消息字符串及可省略的 `traceId`。 | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`、`err(errorOrDef, message?, cause?, suggestion?)` | 构造成功或失败结果 | `ok` 传成功 `data`。`err` 的 `errorOrDef` 必填，可为错误定义、完整 `HaiError` 或原生错误，可传 `message`、`cause`、`suggestion`。 | `HaiResult` 的对应分支 | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
+| `core.ok(data)`、`core.err(errorOrDef, message?, cause?, suggestion?)` | 构造成功或失败结果 | `core.ok` 传成功 `data`。`core.err` 的 `errorOrDef` 必填，可为错误定义、完整 `HaiError` 或原生错误，可传 `message`、`cause`、`suggestion`。 | `HaiResult` 的对应分支 | `core.ok({ id: 'order-1' })`、`core.err(errors.NOT_FOUND, 'Order not found')` |
 
 #### 场景：构造领域失败并返回安全提示
 
@@ -616,18 +616,18 @@ core.logger.warn('Order unavailable', { error: failure, publicMessage: message }
 
 #### 场景：共用结果类型与独立构造器
 
-`HaiResult<T>` 用 success 区分 data 和 error。单独导入 `ok` / `err` 可构造成功或失败的结果。调用业务 API 后先检查 success；getter、工具与工厂按各自签名返回直接值或抛错。
+`HaiResult<T>` 用 success 区分 data 和 error。单独导入 `core.ok` / `core.err` 可构造成功或失败的结果。调用业务 API 后先检查 success；getter、工具与工厂按各自签名返回直接值或抛错。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+
+import { type HaiResult, HaiCommonError, core } from '@h-ai/core'
 
 // 业务失败返回 err，成功返回 ok；共用构造器保持独立导入。
 function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
     // 分母为 0 时，由 coreM 获取中文验证消息，err 返回含稳定错误定义与消息的失败结果。
-    return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
-  return ok(a / b) // 如 ok(5) 返回 { success: true, data: 5 }。
+    return core.err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
+  return core.ok(a / b) // 如 core.ok(5) 返回 { success: true, data: 5 }。
 }
 
 // 先检查 success，再读取 data 或 error。
@@ -861,8 +861,8 @@ finally {
 一个订单查询模块只有加载完状态索引才知道订单是否存在。应用启动时如果有调用提前到达，模块应该返回「未初始化」的失败结果，避免调用方把它当成「订单不存在」。下面用内存 `Map` 模拟已加载好的索引，只需要安装 `@h-ai/core`，不需要连接数据库。
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
-import { core, HaiCommonError, ok } from '@h-ai/core'
+
+import { type HaiResult, HaiCommonError, core } from '@h-ai/core'
 
 interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
@@ -889,11 +889,11 @@ const orderLookup = {
     activeQueries = {
       async getStatus(orderId) {
         // 用传入 ID 查内存索引，ok 将状态或 null 包装为成功 data。
-        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+        return core.ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
     // 完成当前示例初始化后返回成功，data 为 undefined。
-    return ok(undefined)
+    return core.ok(undefined)
   },
   get orders(): OrderQueries {
     return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。

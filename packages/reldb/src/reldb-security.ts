@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { } from './reldb-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldbM } from './reldb-i18n.js'
 import { HaiReldbError } from './reldb-types.js'
 
@@ -31,18 +31,18 @@ const VALID_IDENTIFIER_RE = /^[a-z_]\w{0,127}$/i
  * @returns 校验通过时返回 ok(name)；不合法时返回错误 HaiResult
  * @example
  * ```ts
- * import { validateIdentifier } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * const checked = validateIdentifier('users')
+ * const checked = reldb.validateIdentifier('users')
  * if (!checked.success) throw new Error(checked.error.message)
  * void checked.data
  * ```
  */
 export function validateIdentifier(name: string): HaiResult<string> {
   if (VALID_IDENTIFIER_RE.test(name)) {
-    return ok(name)
+    return core.ok(name)
   }
-  return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_invalidIdentifier', {
+  return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_invalidIdentifier', {
     params: { name },
   }))
 }
@@ -56,9 +56,9 @@ export function validateIdentifier(name: string): HaiResult<string> {
  * @returns 全部合法时返回 ok(undefined)；否则返回第一个不合法项的错误
  * @example
  * ```ts
- * import { validateIdentifiers } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * const checked = validateIdentifiers(['users', 'id'])
+ * const checked = reldb.validateIdentifiers(['users', 'id'])
  * if (!checked.success) throw new Error(checked.error.message)
  * ```
  */
@@ -66,10 +66,10 @@ export function validateIdentifiers(names: string[]): HaiResult<void> {
   for (const name of names) {
     const result = validateIdentifier(name)
     if (!result.success) {
-      return err(result.error)
+      return core.err(result.error)
     }
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 // ─── 字符串值转义 ───
@@ -85,11 +85,11 @@ export function validateIdentifiers(names: string[]): HaiResult<void> {
  * @returns 双引号包裹的安全标识符
  * @example
  * ```ts
- * import { quoteIdentifier, validateIdentifier } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * const checked = validateIdentifier('order')
+ * const checked = reldb.validateIdentifier('order')
  * if (!checked.success) throw new Error(checked.error.message)
- * void quoteIdentifier(checked.data)
+ * void reldb.quoteIdentifier(checked.data)
  * ```
  */
 export function quoteIdentifier(name: string): string {
@@ -106,9 +106,9 @@ export function quoteIdentifier(name: string): string {
  * @returns 转义后的安全字符串
  * @example
  * ```ts
- * import { escapeSqlString } from '@h-ai/reldb'
+ * import { reldb } from '@h-ai/reldb'
  *
- * void escapeSqlString("it's") // it''s；仅用于可信 DDL 字面量，业务值使用占位符。
+ * void reldb.escapeSqlString("it's") // it''s；仅用于可信 DDL 字面量，业务值使用占位符。
  * ```
  */
 export function escapeSqlString(value: string): string {

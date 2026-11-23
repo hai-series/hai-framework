@@ -1,6 +1,6 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DataChunk, PipelineStep } from './datapipe-types.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { chunkText } from './datapipe-chunk.js'
 import { cleanText } from './datapipe-clean.js'
 import { ChunkOptionsSchema, CleanOptionsSchema } from './datapipe-config.js'
@@ -27,12 +27,12 @@ export function normalizeBuiltinStep(step: BuiltinStep): HaiResult<BuiltinStep> 
   if (step.type === 'clean') {
     const parsed = CleanOptionsSchema.safeParse(step.options ?? {})
     return parsed.success
-      ? ok({ type: 'clean', options: parsed.data })
+      ? core.ok({ type: 'clean', options: parsed.data })
       : datapipeConfigError(parsed.error)
   }
   const parsed = ChunkOptionsSchema.safeParse(step.options)
   return parsed.success
-    ? ok({ type: 'chunk', options: parsed.data })
+    ? core.ok({ type: 'chunk', options: parsed.data })
     : datapipeConfigError(parsed.error)
 }
 
@@ -60,5 +60,5 @@ export function runBuiltinSteps(steps: BuiltinStep[], text: string): HaiResult<{
       chunks = result.data
     }
   }
-  return ok({ text, chunks })
+  return core.ok({ text, chunks })
 }

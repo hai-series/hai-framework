@@ -1,7 +1,8 @@
 /** 示例应用的职责配置；框架 IAM 不绑定这些业务角色名。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { SessionLike } from '@h-ai/kit'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
@@ -69,7 +70,7 @@ export function requirePagePermission(session: SessionLike | null | undefined, p
 /** 启动时同步示例职责；原 admin 的审计/基础配置权限会移交独立角色。 */
 export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, string>): Promise<HaiResult<void>> {
   if (iam.config?.rbac.superAdminRole && iam.config.rbac.superAdminRole in ADMIN_DUTIES)
-    return err(HaiCommonError.VALIDATION_ERROR)
+    return core.err(HaiCommonError.VALIDATION_ERROR)
   for (const [code, codes] of Object.entries(ADMIN_DUTIES)) {
     const permissionIds: string[] = []
     for (const permissionCode of codes) {
@@ -82,7 +83,7 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
           permission = await iam.authz.getPermissionByCode(permissionCode)
           if (!permission.success || !permission.data) {
             return permission.success
-              ? err(HaiCommonError.INTERNAL_ERROR)
+              ? core.err(HaiCommonError.INTERNAL_ERROR)
               : permission
           }
         }
@@ -99,18 +100,18 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
         role = await iam.authz.getRoleByCode(code)
         if (!role.success || !role.data) {
           return role.success
-            ? err(HaiCommonError.INTERNAL_ERROR)
+            ? core.err(HaiCommonError.INTERNAL_ERROR)
             : role
         }
       }
     }
     if (!role.data)
-      return err(HaiCommonError.INTERNAL_ERROR)
+      return core.err(HaiCommonError.INTERNAL_ERROR)
     const updated = await iam.authz.updateRole(role.data.id, { name: names[code as keyof typeof ADMIN_DUTIES], permissionIds })
     if (!updated.success)
       return updated
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /** 权限定义和 API Key 的委托范围不能超出操作者已有权限。 */
@@ -198,17 +199,17 @@ export async function requireManageablePermission(actor: SessionLike | null | un
 export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_admin' | 'business_operator', providedPassword?: string): Promise<HaiResult<void>> {
   const password = providedPassword?.trim()
   if (!password)
-    return ok(undefined)
+    return core.ok(undefined)
   const created = await iam.user.createUser({ username, password })
   if (!created.success) {
     return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code
-      ? ok(undefined)
+      ? core.ok(undefined)
       : created
   }
   const role = await iam.authz.getRoleByCode(username)
   if (!role.success || !role.data) {
     return role.success
-      ? err(HaiCommonError.INTERNAL_ERROR)
+      ? core.err(HaiCommonError.INTERNAL_ERROR)
       : role
   }
   const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])

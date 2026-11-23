@@ -1,7 +1,7 @@
 import type { CreateAppProceduresOptions } from './app-procedures.js'
 {{#if features.feedback}}
 import { feedback } from '@h-ai/feedback'
-import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+import { serv } from '@h-ai/serv'
 {{/if}}
 import { createAdminProcedures, createAuthProcedures, createProfileProcedures } from './admin-procedures.js'
 import { createAppProcedures } from './app-procedures.js'
@@ -23,7 +23,7 @@ export function createServerProcedures(options: CreateServerProceduresOptions) {
     admin: createAdminProcedures(),
     profile: createProfileProcedures(),
 {{#if features.feedback}}
-    feedback: createFeedbackProcedures({
+    feedback: serv.createFeedbackProcedures({
       feedback,
       resolveContext: ({ session }) => ({
         scopeId: '{{projectName}}',

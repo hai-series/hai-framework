@@ -6,13 +6,13 @@
  */
 
 import type { HaiError, HaiResult } from '@h-ai/core'
-import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
 
+import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
 import type { ReachGatewayHook, ReachMessage, SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
 import { createHmac, randomUUID } from 'node:crypto'
 import { addAbortListener } from 'node:events'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { ReachGatewayFieldsSchema } from '../reach-gateway-config.js'
 import { reachM } from '../reach-i18n.js'
@@ -138,14 +138,14 @@ async function readGatewayResponse(response: Response): Promise<HaiResult<SendRe
         ? body.BizId
         : undefined
       if (messageId === undefined || (typeof messageId === 'string' && messageId.length <= 255))
-        return ok({ success: true, messageId })
+        return core.ok({ success: true, messageId })
     }
   }
   else {
     await response.body?.cancel()
   }
   logger.warn('SMS gateway returned an unsuccessful receipt', { status: response.status })
-  return err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
+  return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
 }
 
 /**
@@ -174,7 +174,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'aliyun-sms') {
-        return err(
+        return core.err(
           HaiReachError.CONFIG_ERROR,
           reachM('reach_unsupportedType', {
             params: { type: config.type },
@@ -186,7 +186,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
       logger.info('Aliyun SMS provider connected', config.gateway
         ? { gateway: true }
         : { endpoint: config.endpoint })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async close(): Promise<void> {
@@ -201,7 +201,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
     async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       const config = smsConfig
       if (!config) {
-        return err(
+        return core.err(
           HaiReachError.NOT_INITIALIZED,
           reachM('reach_notInitialized'),
         )
@@ -243,9 +243,9 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           const request = await prepareGatewayRequest(config.gateway, url, signal, gatewayHook)
           signal.throwIfAborted()
           if (smsConfig !== config || performance.now() >= deadline)
-            return err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
+            return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
           if (message.sensitive && message.expiresAt !== undefined && Date.now() >= message.expiresAt)
-            return err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
+            return core.err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
           return await readGatewayResponse(await fetch(url, request))
         }
 
@@ -256,14 +256,14 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
         if (body.Code !== 'OK') {
           // 阿里云签名错误的描述可能回显包含短信变量的原始签名参数。
           logger.warn('SMS send returned non-OK status', { code: body.Code })
-          return err(
+          return core.err(
             HaiReachError.SEND_FAILED,
             reachM('reach_smsSendFailed'),
           )
         }
 
         logger.info('SMS sent', { bizId: body.BizId })
-        return ok({ success: true, messageId: body.BizId })
+        return core.ok({ success: true, messageId: body.BizId })
       }
       catch (error) {
         if (config.gateway) {
@@ -272,14 +272,14 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
               ? error.name
               : undefined,
           })
-          return err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
+          return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
         }
         logger.warn('SMS send failed', {
           causeName: error instanceof Error
             ? error.name
             : undefined,
         })
-        return err(toReachError())
+        return core.err(toReachError())
       }
     },
   }

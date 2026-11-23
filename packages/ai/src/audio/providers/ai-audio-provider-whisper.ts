@@ -9,11 +9,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { AudioModelCapabilities, TranscriptionResult, TranscriptionSegment, TranscriptionWord } from '../ai-audio-types.js'
-import type { AudioProvider, ProviderTranscriptionRequest } from './ai-audio-provider.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { AudioProvider, ProviderTranscriptionRequest } from './ai-audio-provider.js'
+import { core } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { combineSignal, describeHttpError, errorMessage, toAudioBlob, toAudioErrorResult, toAudioUploadPart } from './ai-audio-provider.js'
@@ -135,13 +134,13 @@ export function createWhisperAudioProvider(): AudioProvider {
         signal: combineSignal(signal, model.timeout),
       })
       if (!response.ok) {
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+        return core.err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
           params: { error: await describeHttpError(response) },
         }))
       }
 
       const body = await response.json() as WhisperResponse
-      return ok(mapWhisperResponse(body))
+      return core.ok(mapWhisperResponse(body))
     }
     catch (error) {
       logger.debug('Whisper transcribe failed', {

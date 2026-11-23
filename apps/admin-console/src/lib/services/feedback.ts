@@ -3,17 +3,17 @@ import type { FeedbackEvidence, FeedbackListInput } from '@h-ai/api-contract/fee
 import type { FeedbackAnnotation, FeedbackFormData, FeedbackListQuery } from '@h-ai/ui/components/scenes/app/index'
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
-import { createFeedbackClient, createFeedbackReview } from '@h-ai/feedback/client'
+import { feedback } from '@h-ai/feedback/client'
 import { adminBuildMetadata } from '#lib/build-metadata.js'
 import * as m from '#lib/paraglide/messages.js'
 import { apiFetch, observeAdminRequests } from '#lib/utils/api.js'
 import { feedbackApiBaseUrl } from '#lib/utils/feedback-browser.js'
 
 const http = apiClient.create(apiContract.create({ feedback: apiContract.feedback }))
-const capture = createFeedbackClient()
+const capture = feedback.createClient()
 let initialize: Promise<void> | undefined
 let stopRequests: (() => void) | undefined
-const review = createFeedbackReview(http.feedback.reports)
+const review = feedback.createReview(http.feedback.reports)
 
 export async function initFeedbackBrowser(): Promise<void> {
   initialize ??= (async () => {

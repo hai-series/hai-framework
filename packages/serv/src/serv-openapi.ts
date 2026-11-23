@@ -34,8 +34,8 @@ let scalarScriptCache: string | undefined
  *
  * @example
  * ```ts
- * import type { GenerateOpenAPISpecOptions } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type GenerateOpenAPISpecOptions, serv } from '@h-ai/serv'
  *
  * const options: GenerateOpenAPISpecOptions = { title: 'Reports API', version: '1.0.0', apiPrefix: '/api/v1' }
  * ```

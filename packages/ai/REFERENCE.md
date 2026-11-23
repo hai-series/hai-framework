@@ -59,7 +59,7 @@ if (result.success) {
 
 ## MCP
 
-独立服务器：`createMcpServer({ name, version })`，配合 `StreamableHTTPServerTransport`、`SSEServerTransport` 或 `StdioServerTransport`。
+独立服务器：`ai.createMcpServer({ name, version })`，配合 `ai.StreamableHTTPServerTransport`、`ai.SSEServerTransport` 或 `ai.StdioServerTransport`。
 
 `ai.mcp` 方法：`registerTool`、`callTool`、`registerResource`、`readResource`、`registerPrompt`、`getPrompt`。
 
@@ -244,7 +244,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 
 ## 浏览器端
 
-浏览器 HTTP 通过 `@h-ai/api-client` 的真实 typed contract 访问 AI；默认聊天补全非流式。A2A 与应用自定义流须绑定应用 contract。`@h-ai/ai/client` 只导出独立的 `createAudioClient`；不存在字符串路径 HTTP 客户端或重复 SSE parser。浏览器不导出 Node 服务单例 `ai`。
+浏览器 HTTP 通过 `@h-ai/api-client` 的真实 typed contract 访问 AI；默认聊天补全非流式。A2A 与应用自定义流须绑定应用 contract。`@h-ai/ai/client` 只导出独立的 `ai.createAudioClient`；不存在字符串路径 HTTP 客户端或重复 SSE parser。浏览器不导出 Node 服务单例 `ai`。
 
 ```ts
 // 将上游 messages 交给会话补全接口，成功返回生成的补全。

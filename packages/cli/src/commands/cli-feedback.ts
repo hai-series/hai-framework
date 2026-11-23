@@ -6,7 +6,7 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from '
 import { createServer } from 'node:http'
 import path from 'node:path'
 import process from 'node:process'
-import { getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '@h-ai/feedback/bundle'
+import { feedback } from '@h-ai/feedback/bundle'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 
@@ -47,11 +47,11 @@ export interface FeedbackViewer {
  * @throws Error - 端口或本机监听失败。
  * @example
  * ```ts
- * import { createFeedbackBundle, readFeedbackBundle } from '@h-ai/feedback/bundle'
+ * import { feedback } from '@h-ai/feedback/bundle'
  * import { startFeedbackViewer } from './cli-feedback.js'
- * const created = await createFeedbackBundle({ report: { id: 'report-1' }, evidence: [] })
+ * const created = await feedback.createBundle({ report: { id: 'report-1' }, evidence: [] })
  * if (created.success) {
- *   const parsed = await readFeedbackBundle(created.data)
+ *   const parsed = await feedback.readBundle(created.data)
  *   if (parsed.success) {
  *     const viewer = await startFeedbackViewer(parsed.data)
  *     try { await fetch(viewer.url) } finally { await viewer.close() }
@@ -64,7 +64,7 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
   if (!Number.isSafeInteger(port) || port < 0 || port > 65535)
     throw new Error(cliM('cli_feedback_invalidOptions'))
   const prefix = `/${randomBytes(18).toString('hex')}/`
-  const trustedViewer = getFeedbackBundleViewerFiles()
+  const trustedViewer = feedback.getBundleViewerFiles()
   const server = createServer((request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff')
     response.setHeader('Cache-Control', 'no-store')
@@ -193,12 +193,12 @@ export async function feedbackCommand(action: string, bundlePath: string, option
     throw new Error(cliM('cli_feedback_invalidAction'))
   }
   const filePath = path.resolve(options.cwd ?? process.cwd(), bundlePath)
-  const result = await readFeedbackBundle(readBundleFile(filePath))
+  const result = await feedback.readBundle(readBundleFile(filePath))
   if (!result.success)
     throw new Error(result.error.message)
   const bundle = result.data
   if (action === 'summary') {
-    writeCliMessage(summarizeFeedbackBundle(bundle))
+    writeCliMessage(feedback.summarizeBundle(bundle))
     return
   }
   if (action === 'inspect') {
@@ -216,7 +216,7 @@ export async function feedbackCommand(action: string, bundlePath: string, option
     }
     if (options.from !== undefined && options.to !== undefined && options.from > options.to)
       throw new Error(cliM('cli_feedback_invalidOptions'))
-    writeCliMessage(JSON.stringify(queryFeedbackBundle(bundle, options), null, 2))
+    writeCliMessage(JSON.stringify(feedback.queryBundle(bundle, options), null, 2))
     return
   }
   const viewer = await startFeedbackViewer(bundle, options)

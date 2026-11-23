@@ -189,7 +189,7 @@ CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_C
 
 已有能力满足需求时使用它；已导入模块但仍手写其已有认证、缓存、上传、分页或 UI 功能，需要修正。确有缺口时记录缺失的具体能力、当前版本和最小补充方案，按需求增加依赖或应用代码；不为凑模块覆盖率增加服务和抽象。
 
-独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；有业务缺口时覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`applyTheme` / `getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换；实际权限、资源范围和写入一致性按目标业务落实。
+独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；有业务缺口时覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`ui.applyTheme` / `ui.getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换；实际权限、资源范围和写入一致性按目标业务落实。
 
 Fullstack 创建时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，文件不提交 Git，克隆后通过受保护配置共享，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把环境凭据复制到前端配置、日志、源码或镜像。
 
@@ -209,6 +209,8 @@ Fullstack 创建时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分�
 | 初始化与清理 | 只对有生命周期的模块按依赖 init → use → close；检查每次结果，关键依赖失败停止启动，清理已创建资源，关闭反序 | 初始化失败不能继续执行业务；关闭/取消后连接、监听器与任务退出 |
 | 写入与重试 | 多步一致性用事务或明确补偿；重试/回调/任务定义幂等；跨节点业务状态使用共享存储 | 中途失败无不一致写入；重复请求/回调不产生重复副作用 |
 | 风格与可维护性 | 禁止 `any`、无说明的 `as unknown as T`、`console.log`、硬编码密钥；注释中文、日志英文且脱敏；文案使用现有 i18n 并同步中英日文；遵循项目实际 lint 配置 | typecheck/lint 通过；人工核对脱敏、文本、分层与不受 lint 覆盖的规则 |
+
+运行功能统一从模块对象进入，工厂、多实例创建、纯工具和公开子路径也遵守此规则；例如 `capacitor.createTokenStorage()`、`runner.create()`、`core.ok()`，UI 组件仍按组件名导入。不保留旧包级函数或运行对象别名。返回实例后按实例契约使用和释放。
 
 不把所有函数改成 HaiResult：纯工具、getter、工厂、客户端/流及控制流按实际签名。不把所有模块加上 init/close。应用服务根据已有业务契约返回 HaiResult，HTTP/UI 层做适当转换。
 

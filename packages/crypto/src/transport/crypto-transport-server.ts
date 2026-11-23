@@ -13,7 +13,7 @@ import type {
   TransportEncryptionManager,
   TransportKeyPair,
 } from './crypto-transport-types.js'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
@@ -79,7 +79,7 @@ export function createTransportEncryption(
   } = options ?? {}
   if (!Number.isInteger(maxFutureSkewSeconds) || maxFutureSkewSeconds < 0 || maxFutureSkewSeconds > TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds
     || !Number.isInteger(maxRequestAgeSeconds) || maxRequestAgeSeconds < TRANSPORT_TIME_LIMITS.minRequestAgeSeconds || maxRequestAgeSeconds > TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds) {
-    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportTimeConfigInvalid'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportTimeConfigInvalid'))
   }
   const futureSkewMs = maxFutureSkewSeconds * 1000
   const requestAgeMs = maxRequestAgeSeconds * 1000
@@ -90,30 +90,30 @@ export function createTransportEncryption(
     bodyLimits = resolveTransportBodyLimits(options?.maxPlaintextBytes)
   }
   catch {
-    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportBodyLimitInvalid'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportBodyLimitInvalid'))
   }
   const ring = parseTransportServerKeyRing(options?.serverKeyRing)
   if (!ring.success)
     return ring
   if (!options.keyStore || typeof options.keyStore.register !== 'function' || typeof options.keyStore.get !== 'function'
     || typeof options.keyStore.claimRequest !== 'function') {
-    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
   }
   // eslint-disable-next-line node/prefer-global/process -- 此文件也随客户端打包，避免静态引入Node内建模块。
   if (core.module.requiresSharedState(globalThis.process?.env ?? {}) && options.keyStore.stateScope !== 'shared')
-    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
   const { clientKeyTtlSeconds } = options.keyStore
   if (clientKeyTtlSeconds !== undefined && !isValidTransportKeyTtlSeconds(clientKeyTtlSeconds))
-    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreTtlInvalid'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreTtlInvalid'))
   const serverKeys = new Map<string, TransportKeyPair>()
   for (const [id, key] of Object.entries(ring.data.keys)) {
     // 同时验证密钥格式和公私钥配对；只返回无敏感上下文的配置错误。
     const probe = cryptoService.asymmetric.encrypt('hai-transport-key-check', key.publicKey)
     if (!probe.success)
-      return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
+      return core.err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
     const checked = cryptoService.asymmetric.decrypt(probe.data, key.privateKey)
     if (!checked.success || checked.data !== 'hai-transport-key-check')
-      return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
+      return core.err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
     serverKeys.set(id, { publicKey: key.publicKey, privateKey: key.privateKey })
   }
   // 捕获不可变快照；调用方修改原对象不能悄悄轮换或更换同一 ID 对应的私钥。
@@ -146,7 +146,7 @@ export function createTransportEncryption(
         const context = { ...request }
         const clientPublicKey = await keyStore.get(context.clientId)
         if (!clientPublicKey)
-          return err(HaiCommonError.NOT_FOUND, cryptoM('crypto_transportClientNotRegistered'))
+          return core.err(HaiCommonError.NOT_FOUND, cryptoM('crypto_transportClientNotRegistered'))
         const key = serverKeys.get(context.serverKeyId)
         if (!key)
           return transportAuthenticationFailure()
@@ -154,7 +154,7 @@ export function createTransportEncryption(
       }
       catch {
         // registry/注入实现故障仍按 HaiResult 返回，不携带可能包含连接凭据的原始异常。
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'))
       }
     },
 
@@ -181,7 +181,7 @@ export function createTransportEncryption(
           return plaintext
         const timeFailure = (serverTime: number) => {
           const error = new TransportTimeError(c, serverTime)
-          return err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, error)
+          return core.err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, error)
         }
         // 只有请求绑定、签名和 MAC 可信后才区分时间错误，不能把篡改报文误报为时钟问题。
         const now = Date.now()
@@ -199,7 +199,7 @@ export function createTransportEncryption(
       }
       catch (error) {
         if (error instanceof Error && 'code' in error && error.code === HaiCryptoError.TRANSPORT_BUSY.code)
-          return err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
+          return core.err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
         return transportAuthenticationFailure()
       }
     },
@@ -209,5 +209,5 @@ export function createTransportEncryption(
     },
   }
 
-  return ok(manager)
+  return core.ok(manager)
 }

@@ -63,7 +63,7 @@ PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换
 
 ```typescript
 import { core } from '@h-ai/core'
-import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
 
 // 按 ReldbConfigSchema 校验已加载的 db 配置，成功 data 是通过校验并补齐默认值的配置。
 const config = core.config.validate('db', ReldbConfigSchema)
@@ -444,7 +444,7 @@ interface PaginatedResult<T> {
 `merge` 的补丁根限于可 JSON 序列化对象：三种后端均按 RFC 7396 递归保留未变键、用 null 删除指定键、整体替换数组；PostgreSQL 使用参数化递归 CTE，在同一次 SQL 内更新当前行，不做应用先读再写。路径和值全部参数化，column 只能由开发者静态编写。路径解析只支持简单点号/方括号形式，不是完整 SQL/JSON Path 校验器；PostgreSQL set 要求父路径存在，insert 对已有对象键报错且数组按原生位置插入，不应把不同后端的原生路径行为视为完全相同。
 
 ```typescript
-import { reldb, type ReldbFunctions } from '@h-ai/reldb'
+import { type ReldbFunctions, reldb } from '@h-ai/reldb'
 
 // db 已初始化，users 表已有 settings/profile JSON 列。
 async function updateSettings(db: ReldbFunctions, userId: string) {
@@ -502,7 +502,7 @@ if (!result.success) throw new Error(result.error.message)
 ### API 端点中使用
 
 ```typescript
-import { reldb, HaiReldbError } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { kit } from '@h-ai/kit'
 
 // 包装列表回调为 GET 请求处理器，捕获校验响应并转成 HTTP 响应。

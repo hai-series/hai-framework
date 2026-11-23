@@ -5,11 +5,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { err, HaiCommonError, ok } from '../src/index.js'
+import { core, HaiCommonError } from '../src/index.js'
 
 describe('core.result', () => {
   it('ok 应该返回 success true', () => {
-    const result = ok(123)
+    const result = core.ok(123)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe(123)
@@ -17,11 +17,11 @@ describe('core.result', () => {
   })
 
   it('ok 应该支持各种值类型', () => {
-    expect(ok(null).success).toBe(true)
-    expect(ok(undefined).success).toBe(true)
-    expect(ok('str').success).toBe(true)
-    expect(ok({ key: 'value' }).success).toBe(true)
-    expect(ok([1, 2, 3]).success).toBe(true)
+    expect(core.ok(null).success).toBe(true)
+    expect(core.ok(undefined).success).toBe(true)
+    expect(core.ok('str').success).toBe(true)
+    expect(core.ok({ key: 'value' }).success).toBe(true)
+    expect(core.ok([1, 2, 3]).success).toBe(true)
   })
 
   it('ok 数据应该能正确读取', () => {
@@ -29,7 +29,7 @@ describe('core.result', () => {
       name: 'test',
       items: [1, 2],
     }
-    const result = ok(obj)
+    const result = core.ok(obj)
     if (result.success) {
       expect(result.data).toBe(obj) // 同引用
       expect(result.data.name).toBe('test')
@@ -37,7 +37,7 @@ describe('core.result', () => {
   })
 
   it('err 应该返回 success false', () => {
-    const result = err(HaiCommonError.UNKNOWN_ERROR, 'oops')
+    const result = core.err(HaiCommonError.UNKNOWN_ERROR, 'oops')
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.message).toBe('oops')
@@ -49,7 +49,7 @@ describe('core.result', () => {
       ...HaiCommonError.INTERNAL_ERROR,
       message: 'Unknown error',
     }
-    const result = err(errorInst)
+    const result = core.err(errorInst)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe('hai:common:500')
@@ -58,8 +58,8 @@ describe('core.result', () => {
   })
 
   it('ok 和 err 应该通过 success 字段区分', () => {
-    const success = ok('data')
-    const failure = err(HaiCommonError.UNKNOWN_ERROR, 'error')
+    const success = core.ok('data')
+    const failure = core.err(HaiCommonError.UNKNOWN_ERROR, 'error')
 
     // 类型窄化验证
     if (success.success) {

@@ -6,11 +6,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { ChatMessage } from '../llm/ai-llm-types.js'
-import type { MemoryAccessScope, MemoryEntry, MemoryInjectionOptions, MemoryRecallOptions } from './ai-memory-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { MemoryAccessScope, MemoryEntry, MemoryInjectionOptions, MemoryRecallOptions } from './ai-memory-types.js'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -95,7 +94,7 @@ export async function injectRelevantMemories(
   try {
     const query = extractQueryFromMessages(messages)
     if (!query)
-      return ok([...messages])
+      return core.ok([...messages])
 
     const recallResult = await recall(query, {
       topK,
@@ -106,13 +105,13 @@ export async function injectRelevantMemories(
       minImportance: options?.minImportance,
     })
     if (!recallResult.success) {
-      return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
+      return core.err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
         params: { error: recallResult.error.message },
       }), recallResult.error)
     }
 
     if (recallResult.data.length === 0)
-      return ok([...messages])
+      return core.ok([...messages])
 
     let memoryText = recallResult.data
       .map((memory, index) => `[${index + 1}] (${memory.type}) ${memory.content}`)
@@ -162,11 +161,11 @@ export async function injectRelevantMemories(
     }
 
     logger.trace('Memories enriched', { count: recallResult.data.length, position })
-    return ok(result)
+    return core.ok(result)
   }
   catch (error) {
     logger.error('Memory enrichment failed', { error })
-    return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
+    return core.err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
       params: {
         error: String(error),
       },

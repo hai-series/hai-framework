@@ -6,9 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { Citation, RetrievalOperations } from '../retrieval/ai-retrieval-types.js'
+
 import type {
   RagContextItem,
   RagOperations,
@@ -16,8 +16,7 @@ import type {
   RagResult,
   RagStreamEvent,
 } from './ai-rag-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -97,7 +96,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!retrieveResult.success) {
-          return err(HaiAIError.RAG_CONTEXT_BUILD_FAILED, aiM('ai_internalError', {
+          return core.err(HaiAIError.RAG_CONTEXT_BUILD_FAILED, aiM('ai_internalError', {
             params: { error: 'Failed to retrieve context' },
           }), retrieveResult.error)
         }
@@ -143,7 +142,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!chatResult.success) {
-          return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
+          return core.err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
             params: { error: 'LLM generation failed' },
           }), chatResult.error)
         }
@@ -168,7 +167,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         }
         const citations = Array.from(citationMap.values())
 
-        return ok({
+        return core.ok({
           answer,
           context: contextItems,
           citations,
@@ -185,7 +184,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
       }
       catch (error) {
         logger.error('RAG query failed', { code: HaiAIError.RAG_FAILED.code, queryLength: query.length })
-        return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
           params: {
             error: String(error),
           },

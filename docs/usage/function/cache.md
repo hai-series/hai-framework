@@ -192,9 +192,10 @@ core.logger.info('Revision update', { created: created.data, replaced: replaced.
 
 #### 场景：在 Redis Cluster 扫描和批量操作
 
-使用已初始化的 Redis Cluster。以 `demo:user:*` 匹配用户键，`count: 100` 向后端提示每次扫描的工作量。每次调用成功返回 `[nextCursor, batch]`，下一次传回 `nextCursor`。例如只存有 `demo:user:1` 和 `demo:user:2` 两个匹配键时，完整扫描后的日志包含这两个逻辑键，顺序取决于扫描结果。示例另从 `@h-ai/core` 导入 `ok`。
+使用已初始化的 Redis Cluster。以 `demo:user:*` 匹配用户键，`count: 100` 向后端提示每次扫描的工作量。每次调用成功返回 `[nextCursor, batch]`，下一次传回 `nextCursor`。例如只存有 `demo:user:1` 和 `demo:user:2` 两个匹配键时，完整扫描后的日志包含这两个逻辑键，顺序取决于扫描结果。示例从 `@h-ai/core` 导入 `core`，并用 `core.ok()` 构造成功结果。
 
 ```ts
+import { core } from '@h-ai/core'
 async function scanUserKeys() {
   const keys = new Set<string>()
   let cursor = '0'
@@ -210,7 +211,7 @@ async function scanUserKeys() {
     cursor = next
   } while (cursor !== '0')
   // 将扫完后去重的逻辑键包装为成功结果，data 是键数组，未匹配时为 []。
-  return ok([...keys])
+  return core.ok([...keys])
 }
 const users = await scanUserKeys()
 if (users.success)

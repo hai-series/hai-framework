@@ -39,7 +39,7 @@ type: memory # memory | redis
 
 ```typescript
 import { core } from '@h-ai/core'
-import { cache, CacheConfigSchema } from '@h-ai/cache'
+import { CacheConfigSchema, cache } from '@h-ai/cache'
 
 // 从已加载的 cache 配置按 CacheConfigSchema 校验并补齐默认值。成功 data 是配置，失败包含配置错误。
 const config = core.config.validate('cache', CacheConfigSchema)

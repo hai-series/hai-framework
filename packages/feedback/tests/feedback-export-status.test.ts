@@ -3,12 +3,11 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { HaiStorageError, storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const actor = {
@@ -162,7 +161,7 @@ describe('导出下载的状态与受权边界', { concurrent: false }, () => {
     expect(archive.success).toBe(true)
     if (archive.success) {
       expect(archive.data.contentType).toBe('application/zip')
-      const bundle = await readFeedbackBundle(Buffer.from(archive.data.dataBase64, 'base64'))
+      const bundle = await feedback.readBundle(Buffer.from(archive.data.dataBase64, 'base64'))
       expect(bundle.success).toBe(true)
       if (bundle.success)
         expect(bundle.data.report.id).toBe(report.id)
@@ -171,7 +170,7 @@ describe('导出下载的状态与受权边界', { concurrent: false }, () => {
 
   it('真实存储失败耗尽重试后返回500，不把终态失败当等待或找不到', async () => {
     const { report, job } = await startExport('failed-export')
-    vi.spyOn(storage.file, 'put').mockResolvedValue(err(HaiStorageError.UPLOAD_FAILED, 'Private storage fixture detail'))
+    vi.spyOn(storage.file, 'put').mockResolvedValue(core.err(HaiStorageError.UPLOAD_FAILED, 'Private storage fixture detail'))
     expect((await feedback.runJobs()).success).toBe(true)
     const detail = await feedback.get(report.id, actor)
     expect(detail.success).toBe(true)
@@ -269,7 +268,7 @@ describe('导出下载的状态与受权边界', { concurrent: false }, () => {
     const { report, job } = await startExport('database-export-query')
     const get = reldb.sql.get
     vi.spyOn(reldb.sql, 'get').mockImplementation(async <T = QueryRow>(sql: string, parameters?: unknown[]) => sql.includes('FROM hai_feedback_jobs')
-      ? err(HaiReldbError.QUERY_FAILED, 'Export database unavailable')
+      ? core.err(HaiReldbError.QUERY_FAILED, 'Export database unavailable')
       : get<T>(sql, parameters))
     const result = await feedback.getExport({ id: report.id, jobId: job.id }, actor)
     expect(result.success).toBe(false)
@@ -280,7 +279,7 @@ describe('导出下载的状态与受权边界', { concurrent: false }, () => {
   it('已完成导出的对象损坏仍返回checksum错误，不伪装成功', async () => {
     const { report, job } = await startExport('corrupt-completed-export')
     expect((await feedback.runJobs()).success).toBe(true)
-    vi.spyOn(storage.file, 'get').mockResolvedValue(ok(Buffer.from('corrupted exported zip')))
+    vi.spyOn(storage.file, 'get').mockResolvedValue(core.ok(Buffer.from('corrupted exported zip')))
     const result = await feedback.getExport({ id: report.id, jobId: job.id }, actor)
     expect(result.success).toBe(false)
     if (!result.success) {

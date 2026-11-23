@@ -1,7 +1,7 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { currentUser, hasPermission } from '#lib/stores/auth-store.svelte.js'
@@ -34,8 +34,8 @@
 
     await sendEcho(trimmed)
   }
-  useToastFeedback(() => currentServiceInfoError())
-  useToastFeedback(() => currentEchoError())
+  ui.useToastFeedback(() => currentServiceInfoError())
+  ui.useToastFeedback(() => currentEchoError())
 </script>
 
 <svelte:head>

@@ -23,7 +23,7 @@ import type {
   UserOperations,
   UserSortField,
 } from './iam-user-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto, HaiCryptoError } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
@@ -114,11 +114,11 @@ export async function createUserOperations(deps: UserOperationsDeps): Promise<Ha
     })
 
     logger.info('User sub-feature initialized')
-    return ok(functions)
+    return core.ok(functions)
   }
   catch (error) {
     logger.error('User sub-feature initialization failed', { error })
-    return err(
+    return core.err(
       HaiIamError.CONFIG_ERROR,
       iamM('iam_initComponentFailed'),
       error,
@@ -146,7 +146,7 @@ function hasUpdateFields(data: Partial<User>): boolean {
  * @returns 包含 REPOSITORY_ERROR 码的错误 HaiResult
  */
 function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
-  return err(
+  return core.err(
     HaiIamError.REPOSITORY_ERROR,
     iamM(messageKey, {
       params: { message },
@@ -162,7 +162,7 @@ function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: str
  */
 function mapUpdateErrorAsDomainError(error: HaiError): HaiResult<never> {
   if (error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
-    return err(
+    return core.err(
       HaiIamError.USER_ALREADY_EXISTS,
       iamM('iam_userAlreadyExist'),
     )
@@ -191,7 +191,7 @@ async function validateUniqueFieldsForUpdate(
     return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<void>
   }
   if (!currentResult.data) {
-    return err(
+    return core.err(
       HaiIamError.USER_NOT_FOUND,
       iamM('iam_userNotExist'),
     )
@@ -203,7 +203,7 @@ async function validateUniqueFieldsForUpdate(
       return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as HaiResult<void>
     }
     if (usernameExistsResult.data) {
-      return err(
+      return core.err(
         HaiIamError.USER_ALREADY_EXISTS,
         iamM('iam_usernameAlreadyExist'),
       )
@@ -216,14 +216,14 @@ async function validateUniqueFieldsForUpdate(
       return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as HaiResult<void>
     }
     if (emailExistsResult.data) {
-      return err(
+      return core.err(
         HaiIamError.USER_ALREADY_EXISTS,
         iamM('iam_emailAlreadyUsed'),
       )
     }
   }
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 function checkAccountUpdate(current: StoredUser, data: Partial<User>) {
@@ -252,9 +252,9 @@ async function updateUserRow(repository: UserRepository, current: StoredUser, da
   if (!updated.success)
     return mapUpdateErrorAsDomainError(updated.error)
   if (updated.data.changes === 0)
-    return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+    return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
   if (!tx || !changesAccountSecurity(current, data))
-    return ok(undefined)
+    return core.ok(undefined)
 
   // 账号生命周期与凭据代际在同一事务中推进，旧会话和旧重置令牌均不可复用。
   const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [
@@ -266,8 +266,8 @@ async function updateUserRow(repository: UserRepository, current: StoredUser, da
   if (!advanced.success)
     return advanced
   return advanced.data.changes === 1
-    ? ok(undefined)
-    : err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+    ? core.ok(undefined)
+    : core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
 }
 
 // ─── 内部实现 ───
@@ -312,9 +312,9 @@ async function validatePasswordReplacement(ctx: UserFnContext, user: StoredUser,
         : same
     }
     if (same.data)
-      return err(HaiIamError.PASSWORD_REUSE_NOT_ALLOWED, iamM('iam_passwordMustDiffer'))
+      return core.err(HaiIamError.PASSWORD_REUSE_NOT_ALLOWED, iamM('iam_passwordMustDiffer'))
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 // ─── 注册操作 ───
@@ -341,7 +341,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     if (!existsResult.success)
       return existsResult
     if (existsResult.success && existsResult.data) {
-      return err(
+      return core.err(
         HaiIamError.USER_ALREADY_EXISTS,
         iamM('iam_usernameAlreadyExist'),
       )
@@ -352,14 +352,14 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       if (!emailExistsResult.success)
         return emailExistsResult
       if (emailExistsResult.success && emailExistsResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_ALREADY_EXISTS,
           iamM('iam_emailAlreadyUsed'),
         )
       }
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /**
@@ -367,12 +367,12 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
    */
   async function assignDefaultRole(userId: string): Promise<HaiResult<void>> {
     if (!config.rbac?.enabled || !config.rbac.defaultRole)
-      return ok(undefined)
+      return core.ok(undefined)
     const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
     if (!roleResult.success)
       return roleResult
     if (!roleResult.data)
-      return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+      return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
     return authzFunctions.assignRole(userId, roleResult.data.id)
   }
 
@@ -418,7 +418,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     const createdUserResult = await userRepository.findByUsername(options.username, tx)
     if (!createdUserResult.success || !createdUserResult.data) {
       await tx.rollback()
-      return err(
+      return core.err(
         HaiIamError.USER_NOT_FOUND,
         iamM('iam_userNotExist'),
       )
@@ -440,7 +440,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     }
 
     logger.info('User registered', { userId: createdUser.id })
-    return ok({
+    return core.ok({
       user: toUser(createdUser),
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
     })
@@ -453,7 +453,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       if (!captcha.success)
         return captcha
       if (!registerConfig.enabled)
-        return Promise.resolve(err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
+        return Promise.resolve(core.err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
       return createUser({ ...options, accountStatus: registerConfig.defaultAccountStatus })
     },
     validatePassword(password: string): HaiResult<void> {
@@ -473,7 +473,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
   return {
     async getUsers(userIds, options) {
       if (userIds.length > 1000 || userIds.some(id => typeof id !== 'string' || !id.trim()))
-        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_batchUserIdsInvalid'))
+        return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_batchUserIdsInvalid'))
       const ids = [
         ...new Set(userIds),
       ]
@@ -499,7 +499,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         for (const user of items)
           user.roles = roles.data.get(user.id) ?? []
       }
-      return ok(items)
+      return core.ok(items)
     },
 
     async getCurrentUser(accessToken: string): Promise<HaiResult<User>> {
@@ -514,13 +514,13 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       }
 
       if (!userResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
       }
 
-      return ok(toUser(userResult.data))
+      return core.ok(toUser(userResult.data))
     },
 
     async getUser(userId: string, options?: { include?: ('roles')[] }): Promise<HaiResult<User | null>> {
@@ -530,7 +530,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       }
 
       if (!userResult.data) {
-        return ok(null)
+        return core.ok(null)
       }
 
       const user = toUser(userResult.data)
@@ -542,7 +542,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         user.roles = rolesResult.data
       }
 
-      return ok(user)
+      return core.ok(user)
     },
 
     async listUsers(options?: ListUsersOptions): Promise<HaiResult<PaginatedResult<User>>> {
@@ -559,7 +559,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
 
       if (options?.accountStatus !== undefined) {
         if (!['active', 'dormant', 'closed'].includes(options.accountStatus))
-          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_accountPolicyInvalid'))
+          return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_accountPolicyInvalid'))
         conditions.push('account_status = ?')
         params.push(options.accountStatus)
       }
@@ -605,7 +605,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
           user.roles = rolesMapResult.data.get(user.id) ?? []
       }
 
-      return ok({
+      return core.ok({
         items,
         total: usersResult.data.total,
         page: usersResult.data.page,
@@ -659,12 +659,12 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
           return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
         }
         if (!currentResult.data) {
-          return err(
+          return core.err(
             HaiIamError.USER_NOT_FOUND,
             iamM('iam_userNotExist'),
           )
         }
-        return ok(toUser(currentResult.data))
+        return core.ok(toUser(currentResult.data))
       }
 
       const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, safeData)
@@ -678,7 +678,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       }
 
       if (updateResult.data.changes === 0) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
@@ -688,13 +688,13 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
       }
       if (!updatedResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
       }
 
-      return ok(toUser(updatedResult.data))
+      return core.ok(toUser(updatedResult.data))
     },
 
     async updateUser(userId: string, data: Partial<User>): Promise<HaiResult<User>> {
@@ -702,7 +702,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       if (!currentAccount.success)
         return currentAccount
       if (!currentAccount.data)
-        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       const accountPolicy = checkAccountUpdate(currentAccount.data, data)
       if (!accountPolicy.success)
         return accountPolicy
@@ -712,12 +712,12 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
           return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
         }
         if (!currentResult.data) {
-          return err(
+          return core.err(
             HaiIamError.USER_NOT_FOUND,
             iamM('iam_userNotExist'),
           )
         }
-        return ok(toUser(currentResult.data))
+        return core.ok(toUser(currentResult.data))
       }
 
       const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, data)
@@ -746,7 +746,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         }
       }
       catch (cause) {
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_accountUpdateFailed'), cause)
+        return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_accountUpdateFailed'), cause)
       }
       finally {
         // 包括 SDK/编程异常，均释放未提交的事务，防止后续 SQLite 操作等待自身锁。
@@ -761,13 +761,13 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
       }
       if (!updatedResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
       }
 
-      return ok(toUser(updatedResult.data))
+      return core.ok(toUser(updatedResult.data))
     },
 
     async updateUserWithRoles(userId, { profile = {}, roleIds }) {
@@ -779,7 +779,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         if (!current.success)
           return current
         if (!current.data)
-          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+          return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
         const accountPolicy = checkAccountUpdate(current.data, profile)
         if (!accountPolicy.success)
           return accountPolicy
@@ -802,8 +802,8 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         if (!updated.success)
           return updated
         if (!updated.data)
-          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-        return ok({
+          return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        return core.ok({
           user: toUser(updated.data),
           revokeSessions: changesAccountSecurity(current.data, profile),
         })
@@ -822,7 +822,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         if (!refreshed.success)
           logger.warn('User roles committed; session authorization refresh failed', { userId, code: refreshed.error.code })
       }
-      return ok(committed.data.user)
+      return core.ok(committed.data.user)
     },
 
     async deleteUser(userId: string): Promise<HaiResult<void>> {
@@ -833,7 +833,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
@@ -867,7 +867,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       }
       catch (error) {
         await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_deleteUserFailed', {
             params: {
@@ -882,7 +882,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       await sessionFunctions.deleteByUserId(userId)
 
       logger.info('User deleted', { userId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
   }
 }
@@ -905,7 +905,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
@@ -928,7 +928,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!updateResult.success)
         return updateResult
       if (!updateResult.data)
-        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
+        return core.err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
       // 密码重置后注销该用户所有活跃会话
       const revoked = await sessionFunctions.deleteByUserId(userId)
@@ -936,7 +936,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return revoked
 
       logger.info('Admin reset password', { userId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<HaiResult<void>> {
@@ -946,7 +946,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
-        return err(
+        return core.err(
           HaiIamError.USER_NOT_FOUND,
           iamM('iam_userNotExist'),
         )
@@ -958,9 +958,9 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       const locked = isAccountLocked(user, ctx.loginConfig)
       // 受限期间不比较口令；公开 renewPassword 会掩码，已有会话的操作保留具体错误。
       if (!active)
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if (locked)
-        return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+        return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
 
       // 验证旧密码
       if (!user.passwordHash)
@@ -974,7 +974,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         const failureResult = await recordLoginFailure(userRepository, user, ctx.loginConfig)
         if (!failureResult.success)
           return failureResult
-        return err(
+        return core.err(
           HaiIamError.INVALID_CREDENTIALS,
           iamM('iam_originalPasswordWrong'),
         )
@@ -1000,7 +1000,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!updateResult.success)
         return updateResult
       if (!updateResult.data)
-        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
+        return core.err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
       // 密码修改后注销该用户所有活跃会话
       const revoked = await sessionFunctions.deleteByUserId(userId)
@@ -1008,7 +1008,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return revoked
 
       logger.info('Password changed', { userId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /**
@@ -1036,7 +1036,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 async function issuePasswordReset(ctx: UserFnContext, stored: StoredUser): Promise<HaiResult<void>> {
   const { userRepository, onPasswordResetRequest, resetConfig } = ctx
   if (!onPasswordResetRequest)
-    return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
+    return core.err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
   const user = toUser(stored)
   // 生成 256-bit 加密安全令牌（与 session token 强度一致）
   const token = generateToken()
@@ -1050,7 +1050,7 @@ async function issuePasswordReset(ctx: UserFnContext, stored: StoredUser): Promi
   if (!saveResult.success)
     return saveResult
   if (!saveResult.data)
-    return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
+    return core.err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
   // 通过回调通知业务层（如发送邮件）
   try {
@@ -1058,11 +1058,11 @@ async function issuePasswordReset(ctx: UserFnContext, stored: StoredUser): Promi
   }
   catch {
     logger.error('Password reset callback failed', { userId: user.id })
-    return err(HaiIamError.INTERNAL_ERROR, iamM('iam_notificationDeliveryUnknown'))
+    return core.err(HaiIamError.INTERNAL_ERROR, iamM('iam_notificationDeliveryUnknown'))
   }
 
   logger.info('Password reset token generated', { userId: user.id })
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -1081,24 +1081,24 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
 
       const resetConfig = ctx.resetConfig
       if (!resetConfig.enabled || !onPasswordResetRequest)
-        return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
+        return core.err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
 
       // 根据标识符查找用户
       const userResult = await userRepository.findByIdentifier(identifier)
       if (!userResult.success) {
         // 防止用户枚举：无论是否查找失败都返回 ok
         logger.warn('Failed to look up user for password reset', { reasonCode: userResult.error.code })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       if (!userResult.data) {
         // 防止用户枚举：用户不存在也返回 ok
         logger.debug('User not found for password reset')
-        return ok(undefined)
+        return core.ok(undefined)
       }
 
       const user = toUser(userResult.data)
       if (!isUserActive(user))
-        return ok(undefined)
+        return core.ok(undefined)
 
       return issuePasswordReset(ctx, userResult.data)
     },
@@ -1108,7 +1108,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
 
       const resetConfig = ctx.resetConfig
       if (!resetConfig.enabled)
-        return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
+        return core.err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
 
       const tokenHash = crypto.hash.hash(token)
       if (!tokenHash.success)
@@ -1127,13 +1127,13 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       if (!committed.success)
         return committed
       if (!committed.data)
-        return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+        return core.err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
       // 凭据代际已在数据库推进；缓存清理失败不能重新授权旧会话。
       const revoked = await sessionFunctions.deleteByUserId(claimed.data.id)
       if (!revoked.success)
         return revoked
       logger.info('Password reset confirmed', { userId: claimed.data.id })
-      return ok(undefined)
+      return core.ok(undefined)
     },
   }
 }
@@ -1171,7 +1171,7 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         ? options.phone
         : options.email
       if (!deps.config.initialCredentials?.enabled || !ctx.resetConfig.enabled || !ctx.onPasswordResetRequest || !destination)
-        return err(HaiIamError.INVITATION_DISABLED, iamM('iam_invitationDisabled'))
+        return core.err(HaiIamError.INVITATION_DISABLED, iamM('iam_invitationDisabled'))
       const policy = deps.passwordStrategyResult.passwordConfig
       const length = Math.min(policy.maxLength, Math.max(32, policy.minLength))
       // 初始秘密只用于内部独立散列，从不返回、投递或写入业务元数据。
@@ -1183,10 +1183,10 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return created
       const stored = await deps.userRepository.findById(created.data.user.id)
       if (!stored.success || !stored.data)
-        return err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'))
+        return core.err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'))
       const delivered = await issuePasswordReset(ctx, stored.data)
       if (!delivered.success)
-        return err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'), delivered.error)
+        return core.err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'), delivered.error)
       return created
     },
     async renewPassword(input) {
@@ -1204,14 +1204,14 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         if ([HaiIamError.ACCOUNT_UNAVAILABLE.code, HaiIamError.USER_LOCKED.code, HaiIamError.USER_NOT_FOUND.code].includes(changed.error.code))
           return rejectMissingPasswordCredentials()
         if (changed.error.code === HaiIamError.INVALID_CREDENTIALS.code)
-          return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+          return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
       }
       return changed
     },
     async scanInactiveAccounts() {
       const days = deps.config.accounts?.dormantAfterDays ?? 0
       if (days === 0)
-        return ok(0)
+        return core.ok(0)
       return deps.userRepository.suspendInactive(new Date(Date.now() - days * 86400_000))
     },
   }

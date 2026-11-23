@@ -6,7 +6,7 @@ import type { AgentResource } from '#lib/workspace.js'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { ai } from '@h-ai/ai'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { runner } from '@h-ai/runner'
 import { tools } from '@h-ai/tools/server'
@@ -69,11 +69,11 @@ function reference(ref: AgentResource): ToolArtifactReference {
 
 async function resourceOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
   try {
-    return ok(await operation())
+    return core.ok(await operation())
   }
   catch (cause) {
     if (cause instanceof WorkspaceError)
-      return err({ code: cause.code, message: cause.code, httpStatus: cause.status })
+      return core.err({ code: cause.code, message: cause.code, httpStatus: cause.status })
     throw cause
   }
 }
@@ -246,7 +246,7 @@ export const toolHost = {
                     ? {
                         executeJob: (request, binding) => ['web_capture', 'video_render'].includes(request.name)
                           ? current().invoke(request, binding)
-                          : Promise.resolve(err({ code: 'forbidden', message: 'forbidden', httpStatus: 403 })),
+                          : Promise.resolve(core.err({ code: 'forbidden', message: 'forbidden', httpStatus: 403 })),
                       }
                     : {}),
                 }),
@@ -305,7 +305,7 @@ export const toolHost = {
     if (!created.success)
       return created
     service = created.data
-    return ok(undefined)
+    return core.ok(undefined)
   },
   close() {
     service?.close()

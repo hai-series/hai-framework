@@ -98,9 +98,9 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
  * @returns 是否匹配
  * @example
  * ```ts
- * import { matchPermission } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
  *
- * const allowed = matchPermission('article:read', ['article:*'])
+ * const allowed = kit.matchPermission('article:read', ['article:*'])
  * void allowed
  * ```
  */

@@ -6,19 +6,21 @@
  * @module index
  */
 
+import { downloadAiDocument, resolveDocumentDownloadActions, resolveDocumentMarkdownContent } from './document-download.js'
+import { renderMarkdownDocument } from './document-parse.js'
+import { highlightCode, isLanguageSupported } from './highlight.js'
+import { parseMarkdown } from './markdown-parse.js'
+import { fromMindElixirData, toMindElixirData } from './mind/mind-adapter.js'
+
 export { default as AiDocumentDownloadMenu } from './AiDocumentDownloadMenu.svelte'
 export { default as AiDocumentEditor } from './AiDocumentEditor.svelte'
-export {
-  downloadAiDocument,
-  resolveDocumentDownloadActions,
-  resolveDocumentMarkdownContent,
-} from './document-download.js'
+
 export type {
   AiDocumentDownloadFormat,
   AiDocumentDownloadRequest,
   AiDocumentResolvedDownloadAction,
 } from './document-download.js'
-export { renderMarkdownDocument } from './document-parse.js'
+
 export type {
   MarkdownDocumentBlock,
   MarkdownDocumentHtmlBlock,
@@ -42,12 +44,11 @@ export type {
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
 // Shiki 同步语法高亮（CSS Variables 主题，DaisyUI 自适应）
-export { highlightCode, isLanguageSupported } from './highlight.js'
-export { parseMarkdown } from './markdown-parse.js'
+
 export type { MarkdownParseOptions } from './markdown-parse.js'
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte'
 export { default as AiMindMapEditor } from './mind/AiMindMapEditor.svelte'
-export { fromMindElixirData, toMindElixirData } from './mind/mind-adapter.js'
+
 export type { AiMindMapChangePayload, AiMindMapData, AiMindMapEditorProps, AiMindMapExportFormat, AiMindMapNode, AiMindMapSelection } from './mind/mind-types.js'
 export { default as AiTableEditor } from './table/AiTableEditor.svelte'
 export type {
@@ -61,3 +62,26 @@ export type {
   AiTableEditorProps,
   AiTableRow,
 } from './table/table-types.js'
+
+/**
+ * 此组件子路径提供的运行工具。
+ * @example
+ * ```ts
+ * import { ui } from '@h-ai/ui/components/scenes/ai/index'
+ *
+ * // 将已提供的 Markdown 转为渲染结果。
+ * const rendered = ui.parseMarkdown('## 示例')
+ * void rendered
+ * ```
+ */
+export const ui = {
+  downloadAiDocument,
+  resolveDocumentDownloadActions,
+  resolveDocumentMarkdownContent,
+  renderMarkdownDocument,
+  highlightCode,
+  isLanguageSupported,
+  parseMarkdown,
+  fromMindElixirData,
+  toMindElixirData,
+}

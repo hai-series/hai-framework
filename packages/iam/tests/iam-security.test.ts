@@ -1,6 +1,6 @@
 /** 密码、OTP、重置的并发与配置回归，覆盖共享数据库/Redis。 */
 import { cache } from '@h-ai/cache'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto, HaiCryptoError } from '@h-ai/crypto'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
@@ -13,7 +13,7 @@ function tests() {
     const iam = await initIam()
     const identifier = 'password-work-busy'
     expect((await iam.user.register({ username: identifier, password: TEST_PASSWORD })).success).toBe(true)
-    const failure = err(HaiCryptoError.PASSWORD_BUSY, 'Password processing is busy')
+    const failure = core.err(HaiCryptoError.PASSWORD_BUSY, 'Password processing is busy')
     const hash = vi.spyOn(crypto.password, 'hashAsync').mockResolvedValue(failure)
     const verify = vi.spyOn(crypto.password, 'verifyAsync').mockResolvedValue(failure)
     try {

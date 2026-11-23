@@ -259,8 +259,8 @@ function getOptionsKey(options: Required<MarkdownParseOptions>): string {
  *
  * @example
  * ```ts
- * import { parseMarkdown } from '@h-ai/ui'
- * const html = parseMarkdown('# 简介\n**重点**', { allowHtmlTags: false })
+ * import { ui } from '@h-ai/ui'
+ * const html = ui.parseMarkdown('# 简介\n**重点**', { allowHtmlTags: false })
  * ```
  */
 export function parseMarkdown(content: string, options?: MarkdownParseOptions): string {

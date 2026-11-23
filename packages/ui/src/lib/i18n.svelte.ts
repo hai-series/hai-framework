@@ -11,7 +11,6 @@ import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
 import { changeUILocale as setGlobalLocale } from './internal/locale.js'
 
 // 状态层可格式化安全认证提示，无需加载场景组件。
-export { authErrorMessage } from './components/scenes/iam/auth-error-message.js'
 
 // 从 core.i18n 解构常用函数
 const {
@@ -45,8 +44,8 @@ function matchSupportedLocale(locale: Locale, supportedLocales: LocaleInfo[]): L
  * @returns 是否存在真实支持项。
  * @example
  * ```ts
- * import { isLocaleSupported } from '@h-ai/ui/i18n'
- * const supported = isLocaleSupported('en-GB')
+ * import { ui } from '@h-ai/ui/i18n'
+ * const supported = ui.isLocaleSupported('en-GB')
  * ```
  */
 function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
@@ -61,8 +60,8 @@ function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFA
  * @returns 归一化后的文本。
  * @example
  * ```ts
- * import { resolveLocale } from '@h-ai/ui/i18n'
- * const locale = resolveLocale('unsupported', undefined, 'zh-CN')
+ * import { ui } from '@h-ai/ui/i18n'
+ * const locale = ui.resolveLocale('unsupported', undefined, 'zh-CN')
  * ```
  */
 function resolveLocale(
@@ -82,8 +81,8 @@ function resolveLocale(
  * @returns 规范的语言代码或 null。
  * @example
  * ```ts
- * import { detectBrowserLocale } from '@h-ai/ui/i18n'
- * const locale = detectBrowserLocale()
+ * import { ui } from '@h-ai/ui/i18n'
+ * const locale = ui.detectBrowserLocale()
  * ```
  */
 function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | null {
@@ -113,8 +112,8 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
  * @returns 归一化后的文本。
  * @example
  * ```ts
- * import { interpolate } from '@h-ai/ui/i18n'
- * const message = interpolate('你好，{name}', { name: 'Ada' })
+ * import { ui } from '@h-ai/ui/i18n'
+ * const message = ui.interpolate('你好，{name}', { name: 'Ada' })
  * ```
  */
 function interpolate(template: string, params: Record<string, string | number | boolean> = {}): string {
@@ -144,8 +143,8 @@ const LOCALE_STORAGE_KEY = 'hai-locale'
  *
  * @example
  * ```ts
- * import { createLocaleStore } from '@h-ai/ui'
- * const locale = createLocaleStore({ defaultLocale: 'zh-CN', detectBrowser: false, persistKey: 'demo-locale' })
+ * import { ui } from '@h-ai/ui'
+ * const locale = ui.createLocaleStore({ defaultLocale: 'zh-CN', detectBrowser: false, persistKey: 'demo-locale' })
  * locale.set('en-US')
  * const selected = locale.current
  * ```
@@ -249,8 +248,8 @@ export {
  *
  * @example
  * ```ts
- * import { getGlobalLocale } from '@h-ai/ui'
- * const currentLocale = getGlobalLocale()
+ * import { ui } from '@h-ai/ui'
+ * const currentLocale = ui.getGlobalLocale()
  * ```
  */
 export const getGlobalLocale = core.i18n.getGlobalLocale

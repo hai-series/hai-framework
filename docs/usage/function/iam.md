@@ -275,9 +275,9 @@ ldap:
 IAM 以目录标识和不可变条目标识确定本地用户。已绑定的条目重命名后仍使用原本地用户 ID。默认允许首次登录创建本地用户并分配默认角色，遇到已占用的本地用户名或不唯一的目录条目会拒绝。`ldapSyncUser: false` 仅接受已有且可登录的绑定用户。已有目录账号升级见[迁移身份绑定](#ldap-identity-migration)。
 
 ```ts
-import type { IamConfigSettingsInput } from '@h-ai/iam'
+
 import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
+import { type IamConfigSettingsInput, iam } from '@h-ai/iam'
 
 // 启动时调用一次。Core 已读取 config/，数据库和缓存已成功初始化。
 export function startDirectoryLogin() {
@@ -357,10 +357,10 @@ templates:
 标准模板及变量：`otp_email / otp_sms` 使用 `{code}`；`password_reset / password_reset_sms` 使用 `{token}`、`{expiresAt}`、`{resetUrl}`。`passwordReset.mode: phone` 选择短信重置。必须在 `iam.init()` 前配置模板；缺少通道时公开配置隐藏对应入口。
 
 ```ts
-import type { ReachConfigInput } from '@h-ai/reach'
+
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
-import { reach } from '@h-ai/reach'
+import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 // 服务启动时调用。Core、RelDB 与 Cache 已就绪。
 export async function startNotifications() {
@@ -385,8 +385,8 @@ export async function startNotifications() {
 注入 `onOtpSendEmail`、`onOtpSendSms` 和 `onPasswordResetRequest` 即可接入现有发送服务；可只实现需要的回调，也可与 Reach 混用，显式回调优先。以下服务为应用实现，示例假定其 Promise 仅在投递成功时完成；若服务返回 HaiResult，须检查 `success`，失败时在回调内抛错。IAM 捕获回调异常并返回业务错误，不将验证码、令牌或内部投递详情写入用户提示。回调收到的 `context.idempotencyKey` 可交给应用的发件系统用于去重。密码重置回调使用收到的 token 生成面向该用户的链接，避免记录 token。
 
 ```ts
-import type { IamConfigInput } from '@h-ai/iam'
-import { iam } from '@h-ai/iam'
+
+import { type IamConfigInput, iam } from '@h-ai/iam'
 
 type Delivery = Pick<IamConfigInput, 'onOtpSendEmail' | 'onOtpSendSms' | 'onPasswordResetRequest'>
 
@@ -711,7 +711,7 @@ async function makeUserDormant(userId: string) {
 
 - **`toUser()` 字段脱敏**：所有对外返回的用户对象均剥离 `passwordHash`、`loginFailedCount` 等敏感字段
 - **会话联动**：`deleteUser` / `updateUser({ accountStatus: 'dormant' })` / `changePassword` / `confirmPasswordReset` 自动清除受影响用户的所有活跃会话
-- **防枚举攻击**：`requestPasswordReset` 对不存在的邮箱返回 `ok(undefined)` 而非错误
+- **防枚举攻击**：`requestPasswordReset` 对不存在的邮箱返回 `core.ok(undefined)` 而非错误
 - **validatePassword 是同步方法**：这是 `UserOperations` 中唯一的同步方法，其余均为异步
 - **搜索模糊匹配**：`listUsers` 支持按用户名、邮箱、手机号、显示名称模糊搜索，LIKE 通配符已转义
 - **服务端排序**：`listUsers` 仅允许 `username`、`email`、`displayName`、`accountStatus`、`createdAt` 排序；字段经白名单映射，未指定时默认按创建时间倒序
@@ -1348,7 +1348,7 @@ apikey:
 以下为创建 → Key 登录 → Bearer 会话验证与操作授权 → 列表 → 撤销的服务端示例。先检查所有 HaiResult；每个管理入口还要校验本人归属或管理员权限，IAM 不知道业务的调用者身份。
 
 ```ts
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { HaiCommonError, core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
 async function createReadKey(userId: string) {
@@ -1383,10 +1383,10 @@ async function requireRecordRead(accessToken: string, deniedMessage: string) {
   )
   if (!allowed)
     // 用统一拒绝码和应用本地化文案构造失败 HaiResult，当前请求不继续。
-    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+    return core.err(HaiCommonError.FORBIDDEN, deniedMessage)
   // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
   // 把已验证会话中的用户 ID 包为成功数据，供后续检查具体资源归属。
-  return ok({ userId: verified.data.userId })
+  return core.ok({ userId: verified.data.userId })
 }
 
 async function listMyKeys(userId: string) {
@@ -1462,8 +1462,8 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 短期、一次性能力票据。用于无法携带 Bearer Token 的通道（如 WebSocket URL）：由已认证的 HTTP 请求签发一个绑定主体、用途与操作的票据，服务端在首次校验时**原子消费**（单次有效）。
 
 ```ts
-import type { Session } from '@h-ai/iam'
-import { iam } from '@h-ai/iam'
+
+import { type Session, iam } from '@h-ai/iam'
 
 async function issueAudioTicket(session: Session) {
   // session 已通过当前授权校验，签发前还须验证该操作及资源范围。

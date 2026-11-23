@@ -45,7 +45,7 @@ With the auto-import plugin configured, a component used in a template can be im
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'
 import { Button } from '@h-ai/ui/components/primitives/index'
-import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
+import { THEMES, ui } from '@h-ai/ui/theme'
 ```
 
 <a id="api-reference"></a>
@@ -56,7 +56,7 @@ UI has no init/close lifecycle. Svelte owns component mounting. Each task lists 
 
 <a id="styles"></a>
 
-### Integrate styles and imports: `autoImportHaiUi`
+### Integrate styles and imports: `ui.autoImport`
 
 Load styles during the app build; the preprocessor imports actual template components.
 
@@ -64,7 +64,7 @@ Load styles during the app build; the preprocessor imports actual template compo
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `autoImportHaiUi()` | Add imports for components used in Svelte templates | No arguments. Register the returned preprocessor with Svelte to handle markup and file names. | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
+| `ui.autoImport()` | Add imports for components used in Svelte templates | No arguments. Register the returned preprocessor with Svelte to handle markup and file names. | `PreprocessorGroup; synchronous { code }` | `ui.autoImport()` |
 
 #### Scenario: Configure styles and component imports
 
@@ -72,11 +72,11 @@ Enable component imports in the Svelte build and load shared styles in applicati
 
 ```js
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 
 export default {
   // Install the Hai UI preprocessor before Vite's Svelte preprocessor. It supplies imports for Hai components in templates.
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
+  preprocess: [ui.autoImport(), vitePreprocess()],
 }
 ```
 
@@ -119,11 +119,11 @@ Keep field values in page state and update them through bindings. The applicatio
 | `<DatePicker>` | Calendar popup updates date | `value` supplies the current value and can be bound when supported. `minValue` sets the earliest selectable date. `maxValue` sets the latest selectable date. `error` supplies an error message or state. `size` sets the component size. `ariaLabel` supplies an accessible name for the date control. | Calendar popup updates date | `<DatePicker bind:value={date} />` |
 | `<ScheduleInput>` | Edit a scheduled time | `config` supplies the time zone, precision, and cron flag. Bind `value` and `valid` for the current result and validation. `name` sets the submitted field. `id` links the visible control. `required` and `disabled` control form behavior. | ISO string with a UTC offset or five-field cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
 | `<CronExpressionBuilder>` | Edit five-field cron and manual expressions | `value` binds the expression. `presets` lists common expressions. `labels` and `weekdayOptions` set display text. `error` and `describedBy` connect host validation. | Retains expressions that need manual editing | `<CronExpressionBuilder bind:value={cron} />` |
-| `normalizeScheduleInputConfig(value)` | Recognize schedule schema metadata | `value` is the `x-hai-input` value. It needs `kind: 'schedule'`, a valid IANA `timezone`, and `precision: 'minute'`. `allowCron` is optional. | Normalized `ScheduleInputConfig` or `undefined` for invalid input | `normalizeScheduleInputConfig(rawMetadata)` |
-| `createDefaultCronBuilderState()` | Create the default editor state | No arguments. | `CronBuilderState` for 10:00 daily | `createDefaultCronBuilderState()` |
-| `cronExpressionToBuilderState(expression)` | Parse an expression into editor state | `expression` supplies the cron string. | `CronBuilderState`, retaining complex or invalid entries in manual mode | `cronExpressionToBuilderState('0 10 * * *')` |
-| `cronBuilderStateToExpression(state)` | Serialize the editor state | `state` supplies the current `CronBuilderState`. | Five cron fields in visual mode, entered text in manual mode | `cronBuilderStateToExpression(state)` |
-| `isCronExpressionValid(expression)` | Check cron syntax | `expression` supplies the string to validate. The host can also require five fields. | `boolean` | `isCronExpressionValid('0 10 * * *')` |
+| `ui.normalizeScheduleInputConfig(value)` | Recognize schedule schema metadata | `value` is the `x-hai-input` value. It needs `kind: 'schedule'`, a valid IANA `timezone`, and `precision: 'minute'`. `allowCron` is optional. | Normalized `ScheduleInputConfig` or `undefined` for invalid input | `ui.normalizeScheduleInputConfig(rawMetadata)` |
+| `ui.createDefaultCronBuilderState()` | Create the default editor state | No arguments. | `CronBuilderState` for 10:00 daily | `ui.createDefaultCronBuilderState()` |
+| `ui.cronExpressionToBuilderState(expression)` | Parse an expression into editor state | `expression` supplies the cron string. | `CronBuilderState`, retaining complex or invalid entries in manual mode | `ui.cronExpressionToBuilderState('0 10 * * *')` |
+| `ui.cronBuilderStateToExpression(state)` | Serialize the editor state | `state` supplies the current `CronBuilderState`. | Five cron fields in visual mode, entered text in manual mode | `ui.cronBuilderStateToExpression(state)` |
+| `ui.isCronExpressionValid(expression)` | Check cron syntax | `expression` supplies the string to validate. The host can also require five fields. | `boolean` | `ui.isCronExpressionValid('0 10 * * *')` |
 | `CRON_BUILDER_WEEKDAY_ORDER` | Read the editor weekday order | No arguments. | Numeric strings in Monday-to-Sunday order, with `'0'` for Sunday | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
 
 <a id="choice-options"></a>
@@ -178,7 +178,7 @@ Read the `x-hai-input` metadata from the host schema and normalize it before pas
 
 ```svelte
 <script lang='ts'>
-  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
+  import { Form, FormField, ScheduleInput, ui } from '@h-ai/ui'
 
   let schedule = $state('')
   let result = $state('')
@@ -186,7 +186,7 @@ Read the `x-hai-input` metadata from the host schema and normalize it before pas
     kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
   }
   // Parse the schema metadata. Invalid zones or precision return undefined.
-  const config = normalizeScheduleInputConfig(rawMetadata)
+  const config = ui.normalizeScheduleInputConfig(rawMetadata)
 </script>
 {#if config}
   <!-- Use the named form field to receive the selected schedule string. -->
@@ -219,9 +219,9 @@ Control dialogs, drawers and confirmation with open state; attach menus and hint
 | `<Modal>` | Open and close update open | `open` controls whether it is open. `title` sets the title. `size` sets the component size. `radius` sets the corner radius. `bodyOverflow` controls how overflowing content is handled. `showClose` toggles the close button. | Open and close update open | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
 | `<Drawer>` | Drawer with bound open state | `open` controls whether it is open. `position` sets placement. `title` sets the title. `size` sets the component size. `width` sets the displayed width. `resizable` allows resizing the drawer by dragging. `widthStorageKey` sets the storage key for remembering drawer width. | Drawer with bound open state | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
 | `<Confirm>` | Confirmation calls confirm | `open` controls whether it is open. `title` sets the title. `message` supplies the message body. `variant` selects the visual style or state. `onconfirm` runs when the user confirms. | Confirmation calls confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
-| `<Popover>` | Click opens; Escape closes | `open` controls whether it is open. `position` sets placement. `trigger` chooses the trigger content or interaction. `offset` sets the gap between the overlay and its trigger. `portal` moves the overlay outside clipping containers. | Click opens; Escape closes | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
+| `<Popover>` | Click opens; Escape closes | `open` controls whether it is open. `position` sets placement. `trigger` chooses the trigger content or interaction. `offset` sets the gap between the overlay and its trigger. `ui.portal` moves the overlay outside clipping containers. | Click opens; Escape closes | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
 | `<Dropdown>` | Action menu | `items` supplies the items in display order. `trigger` chooses the trigger content or interaction. `triggerClass` adds CSS classes to the trigger. `position` sets placement. | Action menu | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
-| `<Tooltip>` | Help on hover or focus | `content` supplies the body or snippet to render. `position` sets placement. `delay` sets the delay before the hint appears. `portal` moves the overlay outside clipping containers. | Help on hover or focus | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
+| `<Tooltip>` | Help on hover or focus | `content` supplies the body or snippet to render. `position` sets placement. `delay` sets the delay before the hint appears. `ui.portal` moves the overlay outside clipping containers. | Help on hover or focus | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
 
 #### Scenario: Open and close order details
 
@@ -401,30 +401,30 @@ Send results, errors and confirmation to shared hosts; use returned IDs to remov
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `useToastFeedback(message, variant?)` | Show a reactive error or status in the shared toast host | `message` provides a localized message or no value. Optional `variant` defaults to `error`. | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
-| `notifySuccess(message, duration?)` | Report a successful operation | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `toast ID string` | `notifySuccess(m.saved())` |
-| `notifyInfo(message, duration?)` | Show an informational result | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `toast ID string` | `notifyInfo(m.loading())` |
-| `notifyWarning(message, duration?)` | Show a warning the user can act on | `message` is the localized warning. `duration` is the time before dismissal in milliseconds. It defaults to 5000. Use 0 to keep it visible. | `toast ID string` | `notifyWarning(m.warning())` |
-| `notifyError(error, fallback?, duration?)` | Show a safe error message | `error` supplies the failure from which to extract a safe message and trace ID. `fallback` is localized text for failures without a displayable message. `duration` defaults to 5000 ms. Use 0 to keep it visible. | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
-| `errorMessage(error, fallback?)` | Extract a message safe to show to the user | `error` is the failure to read for a safe display message. `fallback` is localized text to use when no displayable message is available. | `safe localized string` | `errorMessage(error, m.retry())` |
-| `toast.add(props)` | Add a notification | `props` sets the text, style, duration, position and dismiss controls. See [notification fields](#toast-options). | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
-| `toast.success(message, duration?)` | Report success | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `toast.success(m.result())` |
-| `toast.info(message, duration?)` | Show information | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `toast.info(m.result())` |
-| `toast.warning(message, duration?)` | Show a warning | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `toast.warning(m.result())` |
-| `toast.error(message, duration?)` | Show a safe error | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `toast.error(m.result())` |
-| `toast.remove(id)` | Remove one notification by ID | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `toast.remove(id)` |
-| `toast.clear()` | Clear all notifications | No arguments. | `void` | `toast.clear()` |
-| `message.add(options)` | Add a notification | `options` is localized text or an object specifying text, style, duration and dismiss controls. See [message fields](#message-options). | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
-| `message.success(message, duration?)` | Report success | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `message.success(m.result())` |
-| `message.info(message, duration?)` | Show information | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `message.info(m.result())` |
-| `message.warning(message, duration?)` | Show a warning | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `message.warning(m.result())` |
-| `message.error(message, duration?)` | Show a safe error | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `message.error(m.result())` |
-| `message.remove(id)` | Remove one notification by ID | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `message.remove(id)` |
-| `message.clear()` | Clear all notifications | No arguments. | `void` | `message.clear()` |
-| `toast.pause(id)` | Pause automatic dismissal | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `toast.pause(id)` |
-| `toast.resume(id)` | Resume automatic dismissal | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `toast.resume(id)` |
-| `messageBox.confirm(options)` | Wait for confirmation or cancellation | `options` is localized text or an object configuring the title, buttons and closing behavior. See [dialog fields](#message-box-options). | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
-| `messageBox.alert(options)` | Wait for acknowledgement | `options` is localized text or an object configuring the title, buttons and closing behavior. See [dialog fields](#message-box-options). | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
+| `ui.useToastFeedback(message, variant?)` | Show a reactive error or status in the shared toast host | `message` provides a localized message or no value. Optional `variant` defaults to `error`. | `void; source-owned toast lifecycle` | `ui.useToastFeedback(() => ui.errorMessage(error))` |
+| `ui.notifySuccess(message, duration?)` | Report a successful operation | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `toast ID string` | `ui.notifySuccess(m.saved())` |
+| `ui.notifyInfo(message, duration?)` | Show an informational result | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `toast ID string` | `ui.notifyInfo(m.loading())` |
+| `ui.notifyWarning(message, duration?)` | Show a warning the user can act on | `message` is the localized warning. `duration` is the time before dismissal in milliseconds. It defaults to 5000. Use 0 to keep it visible. | `toast ID string` | `ui.notifyWarning(m.warning())` |
+| `ui.notifyError(error, fallback?, duration?)` | Show a safe error message | `error` supplies the failure from which to extract a safe message and trace ID. `fallback` is localized text for failures without a displayable message. `duration` defaults to 5000 ms. Use 0 to keep it visible. | `toast ID string; internal exception text hidden` | `ui.notifyError(error, m.retry())` |
+| `ui.errorMessage(error, fallback?)` | Extract a message safe to show to the user | `error` is the failure to read for a safe display message. `fallback` is localized text to use when no displayable message is available. | `safe localized string` | `ui.errorMessage(error, m.retry())` |
+| `ui.toast.add(props)` | Add a notification | `props` sets the text, style, duration, position and dismiss controls. See [notification fields](#toast-options). | `string item ID` | `ui.toast.add({ message: m.saved(), variant: "success" })` |
+| `ui.toast.success(message, duration?)` | Report success | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.toast.success(m.result())` |
+| `ui.toast.info(message, duration?)` | Show information | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.toast.info(m.result())` |
+| `ui.toast.warning(message, duration?)` | Show a warning | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.toast.warning(m.result())` |
+| `ui.toast.error(message, duration?)` | Show a safe error | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.toast.error(m.result())` |
+| `ui.toast.remove(id)` | Remove one notification by ID | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `ui.toast.remove(id)` |
+| `ui.toast.clear()` | Clear all notifications | No arguments. | `void` | `ui.toast.clear()` |
+| `ui.message.add(options)` | Add a notification | `options` is localized text or an object specifying text, style, duration and dismiss controls. See [message fields](#message-options). | `string item ID` | `ui.message.add({ message: m.saved(), type: "success" })` |
+| `ui.message.success(message, duration?)` | Report success | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.message.success(m.result())` |
+| `ui.message.info(message, duration?)` | Show information | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.message.info(m.result())` |
+| `ui.message.warning(message, duration?)` | Show a warning | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.message.warning(m.result())` |
+| `ui.message.error(message, duration?)` | Show a safe error | `message` is the localized text to display. `duration` is the time before automatic dismissal in milliseconds. It defaults to 3000. Use 0 to keep it visible. | `string item ID` | `ui.message.error(m.result())` |
+| `ui.message.remove(id)` | Remove one notification by ID | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `ui.message.remove(id)` |
+| `ui.message.clear()` | Clear all notifications | No arguments. | `void` | `ui.message.clear()` |
+| `ui.toast.pause(id)` | Pause automatic dismissal | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `ui.toast.pause(id)` |
+| `ui.toast.resume(id)` | Resume automatic dismissal | `id` is the identifier returned when the notification was created. It selects the notification to act on. | `void` | `ui.toast.resume(id)` |
+| `ui.messageBox.confirm(options)` | Wait for confirmation or cancellation | `options` is localized text or an object configuring the title, buttons and closing behavior. See [dialog fields](#message-box-options). | `Promise<boolean>; host handles confirmation/cancellation` | `ui.messageBox.confirm({ message: m.confirm() })` |
+| `ui.messageBox.alert(options)` | Wait for acknowledgement | `options` is localized text or an object configuring the title, buttons and closing behavior. See [dialog fields](#message-box-options). | `Promise<boolean>; host handles confirmation/cancellation` | `ui.messageBox.alert({ message: m.confirm() })` |
 | `<Alert>` | Persistent informational state | `variant` selects the visual style or state. `title` sets the title. `dismissible` controls whether a dismiss button appears. | Persistent informational state | `<Alert variant='info' title='Saved' />` |
 | `<ToastContainer>` | Global toast queue | Mount once in the root layout. `toast` and `message` push into its shared queue. | Global toast queue | `<ToastContainer />` |
 | `<ErrorPage>` | 503 state and home navigation | `status` selects the outcome or status to display. `code` sets the error or tracking code to display. `title` sets the title. `description` supplies explanatory text. `homeUrl` sets the home link destination. `onhome` handles the home action. `onback` handles the back action. | 503 state and home navigation | `<ErrorPage status={503} homeUrl='/' />` |
@@ -435,17 +435,17 @@ Send results, errors and confirmation to shared hosts; use returned IDs to remov
 
 ```svelte
 <script>
-  import { toast, ToastContainer } from '@h-ai/ui'
+  import { ToastContainer, ui } from '@h-ai/ui'
 
   function notify() {
     // Queue the supplied message as a success toast.
-    toast.success('操作成功')
+    ui.toast.success('操作成功')
     // Queue the supplied message using the error style.
-    toast.error('操作失败')
+    ui.toast.error('操作失败')
     // Queue the supplied caution message as a warning.
-    toast.warning('请注意')
+    ui.toast.warning('请注意')
     // Queue the info message with a 5,000 ms lifetime.
-    toast.info('提示信息', 5000) // 自定义持续时间
+    ui.toast.info('提示信息', 5000) // 自定义持续时间
   }
 </script>
 
@@ -464,11 +464,11 @@ Forms collect credentials and call host authentication actions. Public policy co
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `matchPermission(required, userPermissions)` | Check permission for frontend presentation | `required` is the permission the UI action needs. `userPermissions` lists the permission keys granted to the current user. | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
-| `setPermissionContext(getPermissions)` | Provide current permissions to descendant components | `getPermissions` returns the current permission keys. Register it during component initialization. | `void` | `setPermissionContext(() => user.permissions)` |
-| `usePermission()` | Read the current permission context | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
-| `createSensitiveActions(options)` | Request proof for one sensitive operation | `options` provides the `reauthenticate` callback for step-up verification and an optional `publicConfig` callback for reading public policy. | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
-| `createSessionRecovery()` | Coordinate signing the same user back in | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
+| `ui.matchPermission(required, userPermissions)` | Check permission for frontend presentation | `required` is the permission the UI action needs. `userPermissions` lists the permission keys granted to the current user. | `boolean; not server authorization` | `ui.matchPermission("orders:read", ["orders:*"])` |
+| `ui.setPermissionContext(getPermissions)` | Provide current permissions to descendant components | `getPermissions` returns the current permission keys. Register it during component initialization. | `void` | `ui.setPermissionContext(() => user.permissions)` |
+| `ui.usePermission()` | Read the current permission context | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `ui.usePermission()` |
+| `ui.createSensitiveActions(options)` | Request proof for one sensitive operation | `options` provides the `reauthenticate` callback for step-up verification and an optional `publicConfig` callback for reading public policy. | `SensitiveActions: configure/authorize/submit/cancel` | `ui.createSensitiveActions(actions)` |
+| `ui.createSessionRecovery()` | Coordinate signing the same user back in | `none; configure public config and current user afterward` | `SessionRecovery controller` | `ui.createSessionRecovery()` |
 | `<AuthPanel>` | Policy-driven authentication actions | `config` sets public policy for sign-in methods and entry points. `actions` implements sign-in, registration, recovery and other authentication requests. `loginHeader` customizes the top of the sign-in form. `registerHeader` customizes the top of the registration form. `loginFields` inserts extra sign-in fields. `loginFooter` customizes the sign-in form footer. `registerFields` inserts extra registration fields. `registerFooter` customizes the registration form footer. | Policy-driven authentication actions | `<AuthPanel {config} {actions} />` |
 | `<AuthShell>` | Authentication layout | `variant` selects the visual style or state. `title` sets the title. `subtitle` sets the subtitle. `brandTitle` sets the brand heading. `brandText` sets the brand description. `illustration` supplies the illustration. `description` supplies explanatory text. `highlights` supplies the highlighted points. | Authentication layout | `<AuthShell title='Sign in'>Account form</AuthShell>` |
 | `<LoginForm>` | Login fields passed to login | `loading` shows a pending state. `errors` supplies server validation errors by field. `showForgotPassword` toggles the forgot-password entry. `onsubmit` runs on form submission. | Login fields passed to login | `<LoginForm onsubmit={login} />` |
@@ -490,12 +490,11 @@ Forms collect credentials and call host authentication actions. Public policy co
 ```svelte
 <!-- actions 为 Kit/API client 的标准认证动作；policy 为 IAM 公开再认证策略。 -->
 <script lang='ts'>
-  import type { SensitiveActionsOptions } from '@h-ai/ui'
-  import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
+  import { type SensitiveActionsOptions, ReauthenticationDialog, ui } from '@h-ai/ui'
 
   const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
   // Create a reauthentication controller using the application's auth actions. It tracks the pending challenge and result.
-  const confirmation = createSensitiveActions(actions)
+  const confirmation = ui.createSensitiveActions(actions)
   $effect(() => {
     // Configure which operations require confirmation using the supplied IAM policy.
     confirmation.configure(policy)
@@ -563,13 +562,13 @@ Pass text, Markdown, tables or document data to viewers and connect editing, dow
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `parseMarkdown(content, options?)` | Convert Markdown to safe display HTML | `content: string` is the Markdown source. See [parse options](#markdown-parse-options) for optional `options: MarkdownParseOptions`. | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
-| `renderMarkdownDocument(content, options?)` | Parse content with outline and code-block metadata | `content: string` is the Markdown source. See [parse options](#markdown-parse-options) for optional `options: MarkdownDocumentParseOptions`. | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
-| `isLanguageSupported(lang)` | Check whether syntax highlighting supports a language | `lang` is the language identifier to check, such as `typescript`. | `boolean` | `isLanguageSupported("typescript")` |
-| `highlightCode(text, lang)` | Escape and highlight source code for display | `text` is the original code. `lang` selects its highlighting rules. | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
-| `resolveDocumentMarkdownContent(value, kind?, language?)` | Prepare document content as Markdown | `value` is the source content. `kind` defaults to `markdown`; `code` wraps the source in a fence. `language` labels that fence in code mode. | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
-| `resolveDocumentDownloadActions(actions?)` | Resolve configured document download choices | `actions` selects the download menu entries. Omit it or pass an empty array for Word, PDF and Markdown. See [download fields](#document-download-options). | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
-| `downloadAiDocument(request)` | Download a document using the selected action | `request` specifies the download action, content, file name and source format. See [download fields](#document-download-options). | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
+| `ui.parseMarkdown(content, options?)` | Convert Markdown to safe display HTML | `content: string` is the Markdown source. See [parse options](#markdown-parse-options) for optional `options: MarkdownParseOptions`. | `HTML string; raw HTML escaped or allowlisted` | `ui.parseMarkdown("# Hello", { allowHtmlTags: false })` |
+| `ui.renderMarkdownDocument(content, options?)` | Parse content with outline and code-block metadata | `content: string` is the Markdown source. See [parse options](#markdown-parse-options) for optional `options: MarkdownDocumentParseOptions`. | `MarkdownRenderResult with outline/codeBlocks/blocks` | `ui.renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
+| `ui.isLanguageSupported(lang)` | Check whether syntax highlighting supports a language | `lang` is the language identifier to check, such as `typescript`. | `boolean` | `ui.isLanguageSupported("typescript")` |
+| `ui.highlightCode(text, lang)` | Escape and highlight source code for display | `text` is the original code. `lang` selects its highlighting rules. | `escaped/highlighted HTML string` | `ui.highlightCode("const total = 1", "typescript")` |
+| `ui.resolveDocumentMarkdownContent(value, kind?, language?)` | Prepare document content as Markdown | `value` is the source content. `kind` defaults to `markdown`; `code` wraps the source in a fence. `language` labels that fence in code mode. | `Markdown string with a safe fence length` | `ui.resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
+| `ui.resolveDocumentDownloadActions(actions?)` | Resolve configured document download choices | `actions` selects the download menu entries. Omit it or pass an empty array for Word, PDF and Markdown. See [download fields](#document-download-options). | `AiDocumentResolvedDownloadAction[]` | `ui.resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
+| `ui.downloadAiDocument(request)` | Download a document using the selected action | `request` specifies the download action, content, file name and source format. See [download fields](#document-download-options). | `Promise<void>; browser failure rejects, SSR does nothing` | `ui.downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
 | `<MarkdownRenderer>` | Safe Markdown rendering | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showCopyButton` toggles the copy control. `enableHighlight` toggles syntax highlighting. | Safe Markdown rendering | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | Selection invokes download action | `actions` supplies available actions or action content. `ondownload` handles the requested download. [download fields](#document-download-options). | Selection invokes download action | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
 | `<AiDocumentEditor>` | Editing updates markdown | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showRunButton` toggles the Run button. `showCodePreviewToggle` shows the control for switching code and preview. `allowUnsafeCodePreview` explicitly enables code preview for trusted content. `remoteImages` controls network image requests. `onrewrite` can receive a verified source range. | Editing updates markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
@@ -592,12 +591,12 @@ Pass text, Markdown, tables or document data to viewers and connect editing, dow
 | `request.codeLanguage` | `string` | Unset | Labels the fence when `sourceKind: "code"`. |
 
 ```ts
-import { resolveDocumentDownloadActions, resolveDocumentMarkdownContent } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const menu = resolveDocumentDownloadActions([{ id: 'raw', label: 'Source' }])
+const menu = ui.resolveDocumentDownloadActions([{ id: 'raw', label: 'Source' }])
 // [{ id: 'raw', label: 'Source', badgeLabel: 'RAW' }]
 
-const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
+const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
 // '```typescript\nconst count = 42\n```'
 ```
 
@@ -608,21 +607,21 @@ The custom action creates one menu entry with a `RAW` badge. Raw code becomes a 
 Pass text, Markdown, tables or document data to viewers and connect editing, downloads and citation actions. For extended examples, see the [Chinese walkthrough](ui.md#documents).
 
 ```ts
-import { parseMarkdown, renderMarkdownDocument, isLanguageSupported, highlightCode, resolveDocumentMarkdownContent, resolveDocumentDownloadActions, downloadAiDocument } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 // Parse the supplied heading as HTML. Raw HTML input is escaped with this option.
-const html = parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
+const html = ui.parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
 // Parse the heading into a Markdown document result with an outline and blocks.
-const document = renderMarkdownDocument('# Hello') // outline and parsed blocks
+const document = ui.renderMarkdownDocument('# Hello') // outline and parsed blocks
 // Check support for the TypeScript grammar. It returns true here.
-isLanguageSupported('typescript') // true
+ui.isLanguageSupported('typescript') // true
 // Highlight the supplied TypeScript statement and return its safe HTML.
-highlightCode('const total = 1', 'typescript') // highlighted HTML
+ui.highlightCode('const total = 1', 'typescript') // highlighted HTML
 // Convert the supplied code to a TypeScript fenced Markdown block.
-resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
+ui.resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
 // Resolve the supplied Markdown option into the enabled download actions.
-const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
+const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
 // Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
-await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
+await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
 <a id="markdown-parse-options"></a>
@@ -650,7 +649,8 @@ Set `remoteImages={false}` on private documents to keep the rich text layout and
 
 ```svelte
 <!-- Keep formatting for private Markdown. A remote image is replaced by its alternative text. -->
-<AiDocumentEditor content={markdown} remoteImages={false} onrewrite={handleRewrite} />
+<AiDocumentEditor content={
+;(markdown} remoteImages={false} onrewrite={handleRewrite} />
 ```
 
 The rewrite callback receives a `sourceRange` when the selection can be verified against the current `content` prop. Its offsets are half-open UTF-16 positions. The second word in `**repeat** / **repeat**` maps to `[15, 21)` with text `repeat`. Recheck the current revision and source slice before editing.
@@ -744,11 +744,11 @@ Resource definitions connect list, create, update and delete callbacks; controll
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `defineCrud(resource)` | Connect fields and CRUD callbacks in one resource | `resource` defines the resource name, fields and callbacks for page queries and writes. [field table](#crud-resource-options) | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
-| `createCrudController(crud, options?)` | Manage record loading, navigation and query state | `crud` is the definition returned by `defineCrud`. `options` configures initial loading, retention of old data and URL syncing. See [controller fields](#crud-controller-options). | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
-| `mapPaginated(result, map)` | Map page items while retaining pagination metadata | `result` is the original page. `map` receives each item and its index and transforms only `items`. | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
-| `createBrowserNavAdapter()` | Connect CRUD state to browser navigation | No arguments. | `NavAdapter` | `createBrowserNavAdapter()` |
-| `<CrudPage>` | List, forms and resource callbacks | `crud` passes the resource definition from `defineCrud`. `data` provides the data to display. `permissions` supplies permission information used by the UI. `form` configures the container and size for create/edit forms. `pagination` configures controls and information in the pager. `density` sets the density of rows and controls. `detailColumns` limits which columns open details when clicked. `showHeader` toggles the page header. `toolbarLeading` supplies leading toolbar content. `toolbarActions` supplies additional toolbar actions. `card` configures the card list layout. `tableCell` customizes a cell using its row and column key. `onrowclick` receives the row the user clicked. `sortableColumns` selects the sortable columns. `nav` supplies the list navigation adapter. `loading` shows a pending state. `loaded` distinguishes an initial load from a completed load. `error` supplies an error message or state. `onRetry` handles retry after a failed load. `keepPreviousData` controls whether old data stays visible during refresh. | List, forms and resource callbacks | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
+| `ui.defineCrud(resource)` | Connect fields and CRUD callbacks in one resource | `resource` defines the resource name, fields and callbacks for page queries and writes. [field table](#crud-resource-options) | `CrudDef for CrudPage` | `ui.defineCrud(resourceDefinition)` |
+| `ui.createCrudController(crud, options?)` | Manage record loading, navigation and query state | `crud` is the definition returned by `ui.defineCrud`. `options` configures initial loading, retention of old data and URL syncing. See [controller fields](#crud-controller-options). | `controller data/nav/loading/loaded/error/load/reload` | `ui.createCrudController(crud, { autoLoad: false })` |
+| `ui.mapPaginated(result, map)` | Map page items while retaining pagination metadata | `result` is the original page. `map` receives each item and its index and transforms only `items`. | `PaginatedResult<R> retaining total/page/pageSize` | `ui.mapPaginated(page, item => ({ ...item, selected: false }))` |
+| `ui.createBrowserNavAdapter()` | Connect CRUD state to browser navigation | No arguments. | `NavAdapter` | `ui.createBrowserNavAdapter()` |
+| `<CrudPage>` | List, forms and resource callbacks | `crud` passes the resource definition from `ui.defineCrud`. `data` provides the data to display. `permissions` supplies permission information used by the UI. `form` configures the container and size for create/edit forms. `pagination` configures controls and information in the pager. `density` sets the density of rows and controls. `detailColumns` limits which columns open details when clicked. `showHeader` toggles the page header. `toolbarLeading` supplies leading toolbar content. `toolbarActions` supplies additional toolbar actions. `card` configures the card list layout. `tableCell` customizes a cell using its row and column key. `onrowclick` receives the row the user clicked. `sortableColumns` selects the sortable columns. `nav` supplies the list navigation adapter. `loading` shows a pending state. `loaded` distinguishes an initial load from a completed load. `error` supplies an error message or state. `onRetry` handles retry after a failed load. `keepPreviousData` controls whether old data stays visible during refresh. | List, forms and resource callbacks | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
 | `<CrudFilterBar>` | Submits query criteria | `filterFields` sets which fields can be filtered. `searchValue` sets the current search text. `onsearch` receives search input or the submitted query. `onfilterchange` receives filter changes. `onreset` handles reset. | Submits query criteria | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
 | `<CrudDetailPanel>` | Displays selected record | `open` controls whether it is open. `item` supplies the record to display. `fields` selects the fields to display or collect. `variant` selects the visual style or state. `drawerWidth` sets the width in drawer mode. `modalSize` sets the size in modal mode. | Displays selected record | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
 | `<CrudEditPanel>` | Submits declared writable fields | `open` controls whether it is open. `fields` selects the fields to display or collect. `variant` selects the visual style or state. `drawerWidth` sets the width in drawer mode. `modalSize` sets the size in modal mode. `onsubmit` runs on form submission. | Submits declared writable fields | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
@@ -782,9 +782,9 @@ The controller example below uses `name: "jobs"` and an `api.list` that returns 
 | `syncUrl` | `boolean` | `true` | Syncs the controller’s query parameters to the browser address bar and preserves the path and fragment. |
 
 ```ts
-import { createCrudController, defineCrud } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const crud = defineCrud<{ id: string }>({
+const crud = ui.defineCrud<{ id: string }>({
   name: 'jobs',
   label: 'Jobs',
   fields: [{ id: 'id', label: 'ID', type: 'text' }],
@@ -792,7 +792,7 @@ const crud = defineCrud<{ id: string }>({
     list: async () => ({ items: [{ id: 'j1' }], total: 1, page: 1, pageSize: 20 }),
   },
 })
-const controller = createCrudController(crud, { autoLoad: false, syncUrl: false })
+const controller = ui.createCrudController(crud, { autoLoad: false, syncUrl: false })
 await controller.load()
 ```
 
@@ -810,10 +810,10 @@ Resource definitions connect list, create, update and delete callbacks; controll
 
 ```svelte
 <script lang='ts'>
-  import { createCrudController, CrudPage, defineCrud } from '@h-ai/ui'
+  import { CrudPage, ui } from '@h-ai/ui'
 
   // Define the users CRUD resource and its name field. The example list callback supplies one Ada record.
-  const crud = defineCrud({
+  const crud = ui.defineCrud({
     name: 'users', label: 'Users',
     fields: [{ id: 'name', label: 'Name', type: 'text' }],
     api: {
@@ -821,7 +821,7 @@ Resource definitions connect list, create, update and delete callbacks; controll
     },
   })
   // Create the controller for that resource without synchronizing filters to the URL. It exposes data, loading and error state, and reload.
-  const controller = createCrudController(crud, { syncUrl: false })
+  const controller = ui.createCrudController(crud, { syncUrl: false })
 </script>
 <!-- Show the users resource and the controller's current results. A load error is shown with the supplied retry action. -->
 <CrudPage
@@ -868,7 +868,7 @@ Display source with a file list and lazy read callback. The host controls file a
 
 <a id="guide"></a>
 
-### Provide tours and help: `createGuide`
+### Provide tours and help: `ui.createGuide`
 
 Define tour steps, targets and articles; the controller starts, advances and ends tours and records completion.
 
@@ -876,8 +876,8 @@ Define tour steps, targets and articles; the controller starts, advances and end
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `createGuide(options)` | Create a tour and help controller | Required `options: GuideOptions` configures tours, navigation and progress storage. See [call arguments](#call-options). | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
-| `resolveGuideText(text?)` | Resolve static or deferred guide text | Optional `text` is display text or a callback that reads the translation for the current locale. | `string` | `resolveGuideText(() => m.help())` |
+| `ui.createGuide(options)` | Create a tour and help controller | Required `options: GuideOptions` configures tours, navigation and progress storage. See [call arguments](#call-options). | `GuideController; no init/close` | `ui.createGuide({ tours: [], persistence: "memory" })` |
+| `ui.resolveGuideText(text?)` | Resolve static or deferred guide text | Optional `text` is display text or a callback that reads the translation for the current locale. | `string` | `ui.resolveGuideText(() => m.help())` |
 | `<GuideHost>` | Tour and help UI | `guide` supplies the guide controller. `locale` sets the displayed language. `scope` sets the page or workspace in which tours are eligible. `autoStart` lets eligible tours start automatically. | Tour and help UI | `<GuideHost {guide} locale='en-US' scope='demo-user' />` |
 | `<HelpCenter>` | Search and read help | `articles` supplies the help articles. `tours` supplies the available tours. `locale` sets the displayed language. `selectedId` selects the current help entry. `onstart` handles starting a tour. | Search and read help | `<HelpCenter articles={articles} tours={tours} locale='en-US' />` |
 
@@ -887,10 +887,10 @@ Define tour steps, targets and articles; the controller starts, advances and end
 
 ```svelte
 <script lang='ts'>
-  import { createGuide, GuideHost } from '@h-ai/ui/guide'
+  import { GuideHost, ui } from '@h-ai/ui/guide'
 
   // Create a guide for the users route with a named anchor and help article, using the supplied navigation adapter and persistence key.
-  const guide = createGuide({
+  const guide = ui.createGuide({
     nav,
     persistKey: 'my-app-guide',
     tours: [
@@ -938,16 +938,16 @@ Apply a trusted default before first paint, then let theme controls read and upd
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `getThemeInfo(themeId)` | Find metadata for a supported theme | `themeId` selects the theme whose properties or light/dark classification are queried. | `ThemeInfo or undefined` | `getThemeInfo("light")` |
-| `isDarkTheme(themeId)` | Check whether a theme uses dark colors | `themeId` selects the theme whose properties or light/dark classification are queried. | `boolean` | `isDarkTheme("dark")` |
-| `normalizeThemeId(themeId, fallbackThemeId?)` | Select a supported theme or the fallback | `themeId` is the candidate from settings or external input. `fallbackThemeId` is used for an invalid candidate and defaults to `light`. | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
-| `normalizeHexColor(value)` | Normalize a supported hex color | `value` is the candidate hex color from theme settings. It may be null or undefined. | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
-| `resolveThemeTone(themeId)` | Read a theme’s light or dark tone | `themeId` selects the theme whose properties or light/dark classification are queried. | `light or dark` | `resolveThemeTone("light")` |
-| `createThemeBootstrapScript(options)` | Apply the trusted theme before first paint | Pass required `options: ThemeBootstrapScriptOptions` from the trusted host configuration. See [call arguments](#call-options). | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
-| `getThemeInitScript()` | Get the default initial theme script | No arguments. | `script string` | `getThemeInitScript()` |
-| `applyTheme(theme, persist?)` | Apply a theme and optionally save the preference | `theme` selects the theme applied to the page. `persist` defaults to `true` and saves the choice for later visits. | `void; updates DOM/browser preference` | `applyTheme("dark")` |
-| `getCurrentTheme()` | Read the theme currently applied to the page | No arguments. | `theme ID string` | `getCurrentTheme()` |
-| `getSavedTheme(fallbackTheme?)` | Read the saved theme preference | `fallbackTheme` is the theme returned when no valid preference can be read. It defaults to `light`. | `theme ID string` | `getSavedTheme("light")` |
+| `ui.getThemeInfo(themeId)` | Find metadata for a supported theme | `themeId` selects the theme whose properties or light/dark classification are queried. | `ThemeInfo or undefined` | `ui.getThemeInfo("light")` |
+| `ui.isDarkTheme(themeId)` | Check whether a theme uses dark colors | `themeId` selects the theme whose properties or light/dark classification are queried. | `boolean` | `ui.isDarkTheme("dark")` |
+| `ui.normalizeThemeId(themeId, fallbackThemeId?)` | Select a supported theme or the fallback | `themeId` is the candidate from settings or external input. `fallbackThemeId` is used for an invalid candidate and defaults to `light`. | `supported theme ID` | `ui.normalizeThemeId("unknown", "light")` |
+| `ui.normalizeHexColor(value)` | Normalize a supported hex color | `value` is the candidate hex color from theme settings. It may be null or undefined. | `six-digit lowercase hex string or null` | `ui.normalizeHexColor("#5765F0")` |
+| `ui.resolveThemeTone(themeId)` | Read a theme’s light or dark tone | `themeId` selects the theme whose properties or light/dark classification are queried. | `light or dark` | `ui.resolveThemeTone("light")` |
+| `ui.createThemeBootstrapScript(options)` | Apply the trusted theme before first paint | Pass required `options: ThemeBootstrapScriptOptions` from the trusted host configuration. See [call arguments](#call-options). | `script string for the application HTML shell` | `ui.createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
+| `ui.getThemeInitScript()` | Get the default initial theme script | No arguments. | `script string` | `ui.getThemeInitScript()` |
+| `ui.applyTheme(theme, persist?)` | Apply a theme and optionally save the preference | `theme` selects the theme applied to the page. `persist` defaults to `true` and saves the choice for later visits. | `void; updates DOM/browser preference` | `ui.applyTheme("dark")` |
+| `ui.getCurrentTheme()` | Read the theme currently applied to the page | No arguments. | `theme ID string` | `ui.getCurrentTheme()` |
+| `ui.getSavedTheme(fallbackTheme?)` | Read the saved theme preference | `fallbackTheme` is the theme returned when no valid preference can be read. It defaults to `light`. | `theme ID string` | `ui.getSavedTheme("light")` |
 | `<ThemeColorPicker>` | Updates chosen color | `value` supplies the current value and can be bound when supported. `presets` supplies color choices the user can pick. `onchange` runs when the value changes. | Updates chosen color | `<ThemeColorPicker bind:value={color} />` |
 | `<ThemeSelector>` | Selects a theme | `themeIds` restricts the displayed theme IDs. | Optionally limits the built-in choices | `<ThemeSelector />` |
 | `<ThemeToggle>` | Toggles light/dark theme | No props | Toggles light/dark theme | `<ThemeToggle />` |
@@ -959,18 +959,7 @@ Apply a trusted default before first paint, then let theme controls read and upd
 The shared `@h-ai/ui/styles/theme.css` includes `liquid-glass`, a light theme with translucent surfaces. Dialogs and drawers soften the layer beneath them, and menus soften the area they cover. Foreground content stays sharp, with refraction at the edges. Highlights follow the mouse over controls and stay still with reduced motion enabled. Choose “Liquid glass” in the theme selector to keep using it after a reload. CLI projects with a UI offer Liquid glass by default. If a Fullstack project explicitly sets `fullstack.theme.themes`, include `liquid-glass` in that list to make it selectable. Pass `themeIds` to `ThemeSelector` to limit the built-in choices. Omit the prop to show every built-in theme.
 
 ```ts
-import {
-  applyTheme, // 应用主题（自动持久化到 localStorage）
-  createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
-  getCurrentTheme, // 获取当前主题
-  getSavedTheme, // 读取安全缓存，可传入应用配置的默认主题
-  getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
-  isDarkTheme, // 检查是否暗色主题
-  normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
-  normalizeThemeId, // 校验主题 ID 并自动回退
-  THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // Metadata for 19 themes, typed as ThemeInfo[]
-} from '@h-ai/ui/theme'
+import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 ```
 
 <a id="locale"></a>
@@ -983,13 +972,13 @@ Keep browser locale in page state and select server locale per request to preven
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `createLocaleStore(options?)` | Manage the browser page’s current language | Optional `options` chooses the default locale, supported locales, browser detection and storage key. See [call arguments](#call-options). | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
-| `getGlobalLocale()` | Read the locale for the current context | No arguments. | `locale string from current context` | `getGlobalLocale()` |
-| `setGlobalLocale(locale)` | Set the current request or page locale | `locale` is the language tag to apply to global translation functions. | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
-| `detectBrowserLocale(supportedLocales?)` | Choose a supported browser language | `supportedLocales` limits acceptable browser languages. It defaults to the framework list. | `supported locale or null` | `detectBrowserLocale()` |
-| `isLocaleSupported(locale, supportedLocales?)` | Check whether a locale is enabled | `locale` is the language to check. `supportedLocales` restricts matching and defaults to the framework list. | `boolean` | `isLocaleSupported("ja-JP")` |
-| `resolveLocale(locale, supportedLocales?, defaultLocale?)` | Resolve a supported locale or fallback | `locale` is the candidate. `supportedLocales` lists allowed languages. `defaultLocale` is tried when the candidate fails to match and defaults to the framework locale. | `supported locale` | `resolveLocale("en")` |
-| `interpolate(template, params?)` | Insert named values into a message template | `template` contains the placeholders. `params` supplies the replacements by key. Omit it to keep the original template. | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
+| `ui.createLocaleStore(options?)` | Manage the browser page’s current language | Optional `options` chooses the default locale, supported locales, browser detection and storage key. See [call arguments](#call-options). | `locale store with current/set/isSupported` | `ui.createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
+| `ui.getGlobalLocale()` | Read the locale for the current context | No arguments. | `locale string from current context` | `ui.getGlobalLocale()` |
+| `ui.setGlobalLocale(locale)` | Set the current request or page locale | `locale` is the language tag to apply to global translation functions. | `void; use request context for SSR` | `ui.setGlobalLocale("en-US")` |
+| `ui.detectBrowserLocale(supportedLocales?)` | Choose a supported browser language | `supportedLocales` limits acceptable browser languages. It defaults to the framework list. | `supported locale or null` | `ui.detectBrowserLocale()` |
+| `ui.isLocaleSupported(locale, supportedLocales?)` | Check whether a locale is enabled | `locale` is the language to check. `supportedLocales` restricts matching and defaults to the framework list. | `boolean` | `ui.isLocaleSupported("ja-JP")` |
+| `ui.resolveLocale(locale, supportedLocales?, defaultLocale?)` | Resolve a supported locale or fallback | `locale` is the candidate. `supportedLocales` lists allowed languages. `defaultLocale` is tried when the candidate fails to match and defaults to the framework locale. | `supported locale` | `ui.resolveLocale("en")` |
+| `ui.interpolate(template, params?)` | Insert named values into a message template | `template` contains the placeholders. `params` supplies the replacements by key. Omit it to keep the original template. | `string` | `ui.interpolate("Hello {name}", { name: "Ada" })` |
 | `<LanguageSwitch>` | Changes global UI locale | No props | Changes global UI locale | `<LanguageSwitch />` |
 
 #### Scenario: Choose a page language and interpolate text
@@ -998,11 +987,11 @@ Keep browser locale in page state and select server locale per request to preven
 
 ```svelte
 <script>
-  import { createLocaleStore } from '@h-ai/ui/i18n'
+  import { ui } from '@h-ai/ui/i18n'
   import { setLocale } from '#lib/paraglide/runtime.js'
 
   // Create a reactive language store with browser and framework defaults.
-  const localeStore = createLocaleStore()
+  const localeStore = ui.createLocaleStore()
 
   function changeLocale(code) {
     // Update the UI store and the framework locale with the chosen supported code.
@@ -1049,40 +1038,40 @@ Compose class names, create UI IDs and select platform styles. Clipboard and por
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `registerClipboardHostWriter(writer)` | Connect or remove a WebView clipboard writer | `writer` receives text and asynchronously reports whether the host wrote it. Pass `null` to unregister it. | `void` | `registerClipboardHostWriter(null)` |
-| `writeTextToClipboard(text)` | Copy text and report whether writing succeeded | `text` is the literal string to copy to the clipboard. | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
-| `cn(...classes)` | Combine conditional class names | `classes` is the list of class names to join in order. Falsy values are skipped. | `string` | `cn("flex", active && "text-primary")` |
-| `getDataAttributes(props)` | Forward only data-* attributes | `props` is the component property record to extract `data-*` attributes from. | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
-| `generateId(prefix?)` | Create an identifier for a UI element | `prefix` labels the generated DOM ID. Omitting it uses the UI library’s default prefix. | `string` | `generateId("field")` |
-| `portal(node, target?)` | Move a mounted node to its target container | `node` is the DOM element to move. `target` is a destination element or selector and defaults to `document.body`. | `Svelte action result with cleanup` | `portal(node, document.body)` |
-| `detectPlatform()` | Detect the current platform | No arguments. | `Platform` | `detectPlatform()` |
-| `isMobile()` | Check whether the platform is mobile | No arguments. | `boolean` | `isMobile()` |
-| `isNativeApp()` | Check whether the page runs in a native shell | No arguments. | `boolean` | `isNativeApp()` |
-| `usePlatform()` | Read reactive platform information | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
-| `getVariantClass(variant, prefix?)` | Map a variant to a component class | `variant` chooses the style. `prefix` selects the class prefix and defaults to `btn`. | `string class name` | `getVariantClass("primary", "btn")` |
-| `getSizeClass(size, prefix?)` | Map a size to a component class | `size` chooses the component size. `prefix` selects the class prefix and defaults to `btn`. | `string class name` | `getSizeClass("sm", "btn")` |
-| `getInputSizeClass(size)` | Get input size classes | `size` is the component size to turn into a CSS class. | `string class name` | `getInputSizeClass("sm")` |
-| `getBadgeVariantClass(variant)` | Get badge color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `getBadgeVariantClass("info")` |
-| `getBadgeSizeClass(size)` | Get badge size classes | `size` is the component size to turn into a CSS class. | `string class name` | `getBadgeSizeClass("sm")` |
-| `getAlertVariantClass(variant)` | Get alert color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `getAlertVariantClass("info")` |
-| `getProgressVariantClass(variant)` | Get progress color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `getProgressVariantClass("primary")` |
+| `ui.registerClipboardHostWriter(writer)` | Connect or remove a WebView clipboard writer | `writer` receives text and asynchronously reports whether the host wrote it. Pass `null` to unregister it. | `void` | `ui.registerClipboardHostWriter(null)` |
+| `ui.writeTextToClipboard(text)` | Copy text and report whether writing succeeded | `text` is the literal string to copy to the clipboard. | `Promise<boolean>; true only when write succeeds` | `ui.writeTextToClipboard("trace-001")` |
+| `ui.cn(...classes)` | Combine conditional class names | `classes` is the list of class names to join in order. Falsy values are skipped. | `string` | `ui.cn("flex", active && "text-primary")` |
+| `ui.getDataAttributes(props)` | Forward only data-* attributes | `props` is the component property record to extract `data-*` attributes from. | `ForwardedDataAttributes` | `ui.getDataAttributes({ "data-testid": "save" })` |
+| `ui.generateId(prefix?)` | Create an identifier for a UI element | `prefix` labels the generated DOM ID. Omitting it uses the UI library’s default prefix. | `string` | `ui.generateId("field")` |
+| `ui.portal(node, target?)` | Move a mounted node to its target container | `node` is the DOM element to move. `target` is a destination element or selector and defaults to `document.body`. | `Svelte action result with cleanup` | `ui.portal(node, document.body)` |
+| `ui.detectPlatform()` | Detect the current platform | No arguments. | `Platform` | `ui.detectPlatform()` |
+| `ui.isMobile()` | Check whether the platform is mobile | No arguments. | `boolean` | `ui.isMobile()` |
+| `ui.isNativeApp()` | Check whether the page runs in a native shell | No arguments. | `boolean` | `ui.isNativeApp()` |
+| `ui.usePlatform()` | Read reactive platform information | `none; component initialization` | `{ current, isMobile, isApp }` | `ui.usePlatform()` |
+| `ui.getVariantClass(variant, prefix?)` | Map a variant to a component class | `variant` chooses the style. `prefix` selects the class prefix and defaults to `btn`. | `string class name` | `ui.getVariantClass("primary", "btn")` |
+| `ui.getSizeClass(size, prefix?)` | Map a size to a component class | `size` chooses the component size. `prefix` selects the class prefix and defaults to `btn`. | `string class name` | `ui.getSizeClass("sm", "btn")` |
+| `ui.getInputSizeClass(size)` | Get input size classes | `size` is the component size to turn into a CSS class. | `string class name` | `ui.getInputSizeClass("sm")` |
+| `ui.getBadgeVariantClass(variant)` | Get badge color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `ui.getBadgeVariantClass("info")` |
+| `ui.getBadgeSizeClass(size)` | Get badge size classes | `size` is the component size to turn into a CSS class. | `string class name` | `ui.getBadgeSizeClass("sm")` |
+| `ui.getAlertVariantClass(variant)` | Get alert color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `ui.getAlertVariantClass("info")` |
+| `ui.getProgressVariantClass(variant)` | Get progress color classes | `variant` is the visual state to turn into a CSS class. | `string class name` | `ui.getProgressVariantClass("primary")` |
 
 #### Scenario: Compose styles and copy a diagnostic ID
 
 Compose class names, create UI IDs and select platform styles. Clipboard and portal operations require browser capabilities. For extended examples, see the [Chinese walkthrough](ui.md#utilities).
 
 ```ts
-import { cn, generateId, getDataAttributes, getVariantClass, writeTextToClipboard } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 // Combine the given class with the falsy conditional. The result is flex.
-cn('flex', false && 'hidden') // 'flex'
+ui.cn('flex', false && 'hidden') // 'flex'
 // Keep the data-testid attribute from this object and discard the unrelated property.
-getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
+ui.getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
 // Combine the primary variant and btn prefix into btn-primary.
-getVariantClass('primary', 'btn') // 'btn-primary'
+ui.getVariantClass('primary', 'btn') // 'btn-primary'
 // Generate a unique field identifier with the requested prefix.
-const id = generateId('field') // generated field identifier
+const id = ui.generateId('field') // generated field identifier
 // Copy the supplied trace ID. true means the browser copied it and false means it could not.
-const copied = await writeTextToClipboard('trace-001') // true if copied; false on failure
+const copied = await ui.writeTextToClipboard('trace-001') // true if copied; false on failure
 ```
 
 <a id="call-options"></a>
@@ -1118,9 +1107,9 @@ Details remain in the [Chinese guide](ui.md#form-layout-guide).
 | `traceId` | `string` | Unset | A valid public trace ID enables the disclosure that shows it on demand. |
 
 ```ts
-import { toast } from '@h-ai/ui/toast'
+import { ui } from '@h-ai/ui/toast'
 
-toast.add({ message: '2 items still need review', variant: 'warning', duration: 0, position: 'top-right' })
+ui.toast.add({ message: '2 items still need review', variant: 'warning', duration: 0, position: 'top-right' })
 ```
 
 The warning appears in the top right and stays until dismissed.
@@ -1137,9 +1126,9 @@ The warning appears in the top right and stays until dismissed.
 | `closable` | `boolean` | `true` | Shows or hides the manual dismiss button. |
 
 ```ts
-import { message } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const id = message.add({ message: 'Saved 2 records', type: 'success', duration: 2000 })
+const id = ui.message.add({ message: 'Saved 2 records', type: 'success', duration: 2000 })
 ```
 
 The call returns a notification ID. The success message disappears after two seconds.
@@ -1165,9 +1154,9 @@ The call returns a notification ID. The success message disappears after two sec
 Mount `MessageBoxContainer` in the root layout before running this example.
 
 ```ts
-import { messageBox } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const accepted = await messageBox.confirm({
+const accepted = await ui.messageBox.confirm({
   message: 'Submit 2 drafts?',
   closeOnClickModal: false,
 })

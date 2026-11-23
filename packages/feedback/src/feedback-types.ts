@@ -17,6 +17,7 @@ import type {
   FeedbackSubmitInput,
   FeedbackUploadInput,
 } from '@h-ai/api-contract/feedback'
+
 import type { ErrorInfo, HaiResult, PaginatedResult } from '@h-ai/core'
 import type { FeedbackConfig, FeedbackConfigInput } from './feedback-config.js'
 import { core } from '@h-ai/core'
@@ -136,6 +137,16 @@ export interface FeedbackWebhookEvent {
  * ```
  */
 export interface FeedbackFunctions {
+  /** 离线包工具无需初始化服务，按原有输入输出契约执行。 */
+  createBundle: typeof import('./bundle/feedback-bundle-functions.js').createFeedbackBundle
+  /** 获取离线查看器静态文件，无需初始化。 */
+  getBundleViewerFiles: typeof import('./bundle/feedback-bundle-functions.js').getFeedbackBundleViewerFiles
+  /** 查询离线包，无需初始化。 */
+  queryBundle: typeof import('./bundle/feedback-bundle-functions.js').queryFeedbackBundle
+  /** 读取离线包，无需初始化。 */
+  readBundle: typeof import('./bundle/feedback-bundle-functions.js').readFeedbackBundle
+  /** 汇总离线包，无需初始化。 */
+  summarizeBundle: typeof import('./bundle/feedback-bundle-functions.js').summarizeFeedbackBundle
   init: (config: FeedbackConfigInput, options?: FeedbackInitOptions) => Promise<HaiResult<void>>
   close: () => Promise<HaiResult<void>>
   readonly isInitialized: boolean

@@ -4,7 +4,7 @@ import type { ImageOperations } from '../image/ai-image-types.js'
 import type { LLMOperations } from '../llm/ai-llm-types.js'
 import type { BuiltinArtifactReference, BuiltinToolOptions } from './ai-tools-types.js'
 import { Buffer } from 'node:buffer'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
@@ -78,7 +78,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
         if (!read.success)
           return read
         if (!read.data.mediaType.startsWith('image/'))
-          return err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
+          return core.err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
         referenceImages.push({ data: read.data.data, mimeType: read.data.mediaType })
       }
       const generated = await dependencies.image().generate({
@@ -95,7 +95,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
         execution.signal.throwIfAborted()
         const extension = imageExtensions[image.mimeType]
         if (!extension)
-          return err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
+          return core.err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
         const published = await options.files.publish(context, {
           name: `generated-${index + 1}.${extension}`,
           kind: 'image',
@@ -106,7 +106,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
           return published
         artifacts.push(published.data)
       }
-      return ok({ artifacts })
+      return core.ok({ artifacts })
     },
   })
   const synthesize = tools.define({
@@ -148,7 +148,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
       })
       if (!published.success)
         return published
-      return ok({
+      return core.ok({
         artifacts: [published.data],
         ...(result.data.durationMs === undefined
           ? {}
@@ -174,7 +174,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
         return read
       const format = audioFormat(read.data.name, read.data.mediaType)
       if (!format)
-        return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_toolInvalidMedia'))
+        return core.err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_toolInvalidMedia'))
       const transcribed = await dependencies.audio().transcribe({
         audio: { data: read.data.data, format },
         model: input.model,
@@ -192,7 +192,7 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
       })
       if (!published.success)
         return published
-      return ok({
+      return core.ok({
         text: transcribed.data.text,
         ...(transcribed.data.language
           ? { language: transcribed.data.language }
@@ -223,21 +223,21 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
         return read
       const baseVersion = input.baseVersion ?? read.data.version
       if (baseVersion === undefined || read.data.version !== baseVersion)
-        return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_toolRewriteConflict'))
+        return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_toolRewriteConflict'))
       if (!['text/markdown', 'text/plain'].includes(read.data.mediaType))
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
       let draft: string
       try {
         draft = input.content ?? new TextDecoder('utf-8', { fatal: true }).decode(read.data.data)
       }
       catch {
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_toolInvalidMedia'))
       }
       const start = input.selectedText === undefined
         ? 0
         : draft.indexOf(input.selectedText)
       if (start < 0 || (input.selectedText !== undefined && draft.lastIndexOf(input.selectedText) !== start))
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolRewriteSelection'))
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_toolRewriteSelection'))
       const target = input.selectedText ?? draft
       const result = await dependencies.llm().chat({
         model: input.model,
@@ -255,11 +255,11 @@ export function createBuiltinTools(options: BuiltinToolOptions, dependencies: Bu
         return result
       const replacement = result.data.choices[0]?.message.content
       if (typeof replacement !== 'string' || !replacement.trim())
-        return err(HaiAIError.TOOL_RESULT_ERROR, aiM('ai_toolInvalidResult'))
+        return core.err(HaiAIError.TOOL_RESULT_ERROR, aiM('ai_toolInvalidResult'))
       const content = input.selectedText === undefined
         ? replacement
         : `${draft.slice(0, start)}${replacement}${draft.slice(start + target.length)}`
-      return ok({
+      return core.ok({
         id: input.id,
         content,
         baseVersion,

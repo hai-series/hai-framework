@@ -7,7 +7,7 @@
 
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 import { HaiErrorSchema } from '@h-ai/api-contract'
-import { authErrorMessage } from '@h-ai/ui/i18n'
+import { ui } from '@h-ai/ui/i18n'
 import { desktopApiClient } from './api.js'
 import { authMessage } from './auth-messages.js'
 
@@ -54,7 +54,7 @@ function resolveHaiResultFailure(
   return {
     success: false,
     message: error.success
-      ? authErrorMessage(error.data)
+      ? ui.authErrorMessage(error.data)
       : fallback,
   }
 }

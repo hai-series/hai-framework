@@ -5,11 +5,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import ArtifactWorkspace from '../src/lib/components/scenes/tools/ArtifactWorkspace.svelte'
 import ToolWorkspace from '../src/lib/components/scenes/tools/ToolWorkspace.svelte'
 import { setUILocale, uiM } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 import ArtifactCreationHost from './fixtures/ArtifactCreationHost.svelte'
 
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   setUILocale('zh-CN')
   vi.unstubAllGlobals()
 })

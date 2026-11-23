@@ -1,6 +1,6 @@
 <script lang='ts'>
-  import { Button, FormField, FormLayout, Input, Modal, Select } from '@h-ai/ui'
-  import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, FormField, FormLayout, Input, Modal, Select, ui } from '@h-ai/ui'
+
   import * as m from '#lib/paraglide/messages.js'
   import { inviteUser } from '#lib/services/invitation.js'
 
@@ -42,7 +42,7 @@
       })
       await onrefresh()
       if (!result.success) {
-        error = `${formatOperationError(result.error, m.common_error())} ${m.invitation_check_existing()}`
+        error = `${ui.errorMessage(result.error, m.common_error())} ${m.invitation_check_existing()}`
         return
       }
       username = ''
@@ -54,7 +54,7 @@
     catch { error = `${m.common_network_error()} ${m.invitation_check_existing()}` }
     finally { loading = false }
   }
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Modal {open} title={m.invitation_title()} onclose={onclose} closeOnBackdrop={!loading} closeOnEscape={!loading} showClose={!loading}>

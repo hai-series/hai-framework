@@ -7,28 +7,11 @@ import type { FeedbackAttachmentRow, FeedbackEvidenceRow, FeedbackJobRow, Feedba
 import type { FeedbackCollectedEvidence, FeedbackContext, FeedbackFunctions, FeedbackInitOptions, FeedbackWebhookEvent } from './feedback-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, createHmac, randomUUID } from 'node:crypto'
-import {
-  FeedbackAppendEvidenceInputSchema,
-  FeedbackAttachmentInputSchema,
-  FeedbackAttachmentSchema,
-  FeedbackCompleteInputSchema,
-  FeedbackEvidenceInputSchema,
-  FeedbackEvidenceQuerySchema,
-  FeedbackEvidenceSchema,
-  FeedbackExportInputSchema,
-  FeedbackHistorySchema,
-  FeedbackJobSchema,
-  FeedbackListInputSchema,
-  FeedbackRetryInputSchema,
-  FeedbackSetStatusInputSchema,
-  FeedbackSubmitInputSchema,
-  FeedbackUploadInputSchema,
-  resolveFeedbackBudget,
-} from '@h-ai/api-contract/feedback'
-import { core, err, ok } from '@h-ai/core'
+import { apiContract, FeedbackAppendEvidenceInputSchema, FeedbackAttachmentInputSchema, FeedbackAttachmentSchema, FeedbackCompleteInputSchema, FeedbackEvidenceInputSchema, FeedbackEvidenceQuerySchema, FeedbackEvidenceSchema, FeedbackExportInputSchema, FeedbackHistorySchema, FeedbackJobSchema, FeedbackListInputSchema, FeedbackRetryInputSchema, FeedbackSetStatusInputSchema, FeedbackSubmitInputSchema, FeedbackUploadInputSchema } from '@h-ai/api-contract/feedback'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
-import { createFeedbackBundle } from './bundle/index.js'
+import { feedback } from './bundle/index.js'
 import { feedbackClockSql } from './feedback-clock.js'
 import { feedbackM } from './feedback-i18n.js'
 import { feedbackTextEquals, readFeedbackJson } from './feedback-repository.js'
@@ -43,26 +26,27 @@ import { HaiFeedbackError } from './feedback-types.js'
  * void drain
  * ```
  */
-export type FeedbackRuntime = Omit<FeedbackFunctions, 'init' | 'close' | 'config' | 'budget' | 'isInitialized'> & { start: () => void, close: () => Promise<void> }
+export type FeedbackRuntime = Omit<FeedbackFunctions, 'init' | 'close' | 'config' | 'budget' | 'isInitialized'
+  | 'createBundle' | 'getBundleViewerFiles' | 'queryBundle' | 'readBundle' | 'summarizeBundle'> & { start: () => void, close: () => Promise<void> }
 
 /** 将异常留在公共 HaiResult 边界之内；不向用户返回 SDK/SQL/凭据原文。 */
 function failed() {
-  return err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+  return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
 }
 function invalid() {
-  return err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
+  return core.err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
 }
 function conflict() {
-  return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+  return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
 }
 function forbidden() {
-  return err(HaiFeedbackError.FORBIDDEN, feedbackM('feedback_forbidden'))
+  return core.err(HaiFeedbackError.FORBIDDEN, feedbackM('feedback_forbidden'))
 }
 function missing() {
-  return err(HaiFeedbackError.NOT_FOUND, feedbackM('feedback_notFound'))
+  return core.err(HaiFeedbackError.NOT_FOUND, feedbackM('feedback_notFound'))
 }
 function limited() {
-  return err(HaiFeedbackError.LIMIT_EXCEEDED, feedbackM('feedback_limitExceeded'))
+  return core.err(HaiFeedbackError.LIMIT_EXCEEDED, feedbackM('feedback_limitExceeded'))
 }
 function hash(value: string | Uint8Array) {
   return createHash('sha256').update(value).digest('hex')
@@ -94,7 +78,7 @@ function escapeHtml(value: string) {
  * ```
  */
 export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture, options: FeedbackInitOptions = {}): FeedbackRuntime {
-  const budget = resolveFeedbackBudget(config)
+  const budget = apiContract.resolveFeedbackBudget(config)
   const table = repo.tables
   const clock = feedbackClockSql()
   let stopped = false
@@ -137,7 +121,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   const collectEvidence = options.collectEvidence
 
   function quotaExceeded() {
-    return err(HaiFeedbackError.QUOTA_EXCEEDED, feedbackM('feedback_quotaExceeded'))
+    return core.err(HaiFeedbackError.QUOTA_EXCEEDED, feedbackM('feedback_quotaExceeded'))
   }
   function scopeQuotaId(scopeId: string) {
     return hash(JSON.stringify([config.appId, scopeId, 'storage']))
@@ -225,7 +209,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       : (result.data.user_id !== actor.userId && !permitted(actor, 'feedback:read'))) {
       return forbidden()
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   async function accessWrite(id: string, actor: FeedbackContext, sql: DmlOperations = reldb.sql) {
@@ -245,7 +229,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (!previous.success)
       return previous
     if (previous.data)
-      return ok(id)
+      return core.ok(id)
     const now = Date.now()
     const inserted = await tx.execute(`INSERT INTO ${table.jobs} (id, app_id, snapshot_revision, snapshot_version, report_id, scope_id, kind, status, token, lease_until, attempts, next_run_at, created_at, updated_at, last_error, payload, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${clock} + ?, ?, ?, ?, ?, ?)`, [
       id,
@@ -271,7 +255,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       null,
     ])
     return inserted.success
-      ? ok(id)
+      ? core.ok(id)
       : inserted
   }
 
@@ -328,7 +312,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       acknowledged.push(event.id)
     }
     if (!additions.length) {
-      return ok({
+      return core.ok({
         acknowledged,
         evidenceRevision: Number(row.revision),
       })
@@ -372,7 +356,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!inserted.success)
         return inserted
     }
-    return ok({ acknowledged, evidenceRevision: revision })
+    return core.ok({ acknowledged, evidenceRevision: revision })
   }
 
   async function appendInternal(id: string, actor: FeedbackContext, events: FeedbackEvidenceInput[]) {
@@ -420,13 +404,13 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   async function history(id: string, sql: DmlOperations = reldb.sql) {
     const result = await sql.query<{ payload: unknown }>(`SELECT payload FROM ${table.history} WHERE report_id = ? ORDER BY id`, [id])
     return result.success
-      ? ok(result.data.map(row => FeedbackHistorySchema.parse(readFeedbackJson(row.payload))))
+      ? core.ok(result.data.map(row => FeedbackHistorySchema.parse(readFeedbackJson(row.payload))))
       : result
   }
   async function evidence(id: string, revision: number, sql: DmlOperations = reldb.sql) {
     const result = await sql.query<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE report_id = ? AND revision <= ? ORDER BY timestamp, source, sequence`, [id, revision])
     return result.success
-      ? ok(result.data.map(row => FeedbackEvidenceSchema.parse({
+      ? core.ok(result.data.map(row => FeedbackEvidenceSchema.parse({
           ...FeedbackEvidenceInputSchema.parse(readFeedbackJson(row.payload)),
           feedbackId: id,
           revision: Number(row.revision),
@@ -436,7 +420,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
 
   async function runJobs(): Promise<HaiResult<{ processed: number }>> {
     if (stopped)
-      return err(HaiFeedbackError.NOT_INITIALIZED, feedbackM('feedback_notInitialized'))
+      return core.err(HaiFeedbackError.NOT_INITIALIZED, feedbackM('feedback_notInitialized'))
     if (running)
       return running
     running = core.context.run({ suppressLogObservers: true }, processJobs).catch(failed).finally(() => {
@@ -517,7 +501,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       pagination: { page: query.page, pageSize: query.pageSize },
     })
     return page.success
-      ? ok({
+      ? core.ok({
           ...page.data,
           items: page.data.items.map(row => repo.report(row)),
         })
@@ -565,7 +549,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return missing()
       if (existing.data) {
         return existing.data.submission_hash === digest
-          ? ok(repo.report(existing.data))
+          ? core.ok(repo.report(existing.data))
           : conflict()
       }
       const now = Date.now()
@@ -674,7 +658,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const cleanup = await insertJob(tx, report, 'cleanup', 'expiry', {}, row.expires_at)
         if (!cleanup.success)
           return cleanup
-        return ok({ ...report, evidenceRevision: initial.data.evidenceRevision })
+        return core.ok({ ...report, evidenceRevision: initial.data.evidenceRevision })
       })
       if (!result.success) {
         const duplicate = await reldb.sql.get<FeedbackReportRow>(`SELECT * FROM ${table.reports} WHERE submission_key = ?`, [submissionKey])
@@ -685,13 +669,13 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (Number(duplicate.data.deleting))
           return missing()
         return duplicate.data.submission_hash === digest
-          ? ok(repo.report(duplicate.data))
+          ? core.ok(repo.report(duplicate.data))
           : conflict()
       }
       wakeWorker()
       const current = await repo.find(id, actor.scopeId)
       return current.success && current.data
-        ? ok(repo.report(current.data))
+        ? core.ok(repo.report(current.data))
         : result
     },
 
@@ -710,7 +694,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return changes
       const jobs = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE report_id = ? ORDER BY created_at, id`, [id])
       return jobs.success
-        ? ok({
+        ? core.ok({
             report: repo.report(report.data),
             attachments: files.data.map(attachmentData),
             history: changes.data,
@@ -754,7 +738,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!anchor.success)
           return anchor
         if (!anchor.data) {
-          return ok({
+          return core.ok({
             items: [],
             total: 0,
             page: query.page ?? 1,
@@ -793,7 +777,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         pagination: { page: query.page, pageSize: query.pageSize },
       })
       return page.success
-        ? ok({
+        ? core.ok({
             ...page.data,
             items: page.data.items.map(row => FeedbackEvidenceSchema.parse({
               ...FeedbackEvidenceInputSchema.parse(readFeedbackJson(row.payload)),
@@ -817,7 +801,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (Number(row.data.version) !== parsed.data.expectedVersion)
           return conflict()
         if (row.data.status === parsed.data.status)
-          return ok(repo.report(row.data))
+          return core.ok(repo.report(row.data))
         const now = Date.now()
         const params: unknown[] = [parsed.data.status, now]
         const identity = `${feedbackTextEquals('id', input.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
@@ -849,7 +833,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           JSON.stringify(change),
         ])
         return saved.success
-          ? ok({
+          ? core.ok({
               ...repo.report(row.data),
               status: parsed.data.status,
               version: parsed.data.expectedVersion + 1,
@@ -897,7 +881,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       }
       const next = await reldb.sql.execute(`UPDATE ${table.jobs} SET next_run_at = ${clock}, updated_at = ${clock} WHERE report_id = ? AND kind IN ('collect', 'notify', 'webhook') AND status = 'pending'`, [input.id])
       return next.success
-        ? ok(repo.report(row.data))
+        ? core.ok(repo.report(row.data))
         : next
     },
 
@@ -919,9 +903,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!bytes.success)
         return bytes
       if (hash(bytes.data) !== found.data.checksum)
-        return err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
+        return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
       const metadata = attachmentData(found.data)
-      return ok({
+      return core.ok({
         name: metadata.name,
         contentType: metadata.contentType,
         dataBase64: bytes.data.toString('base64'),
@@ -945,7 +929,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.targetId ?? '', params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
         const updated = await reldb.sql.execute(`UPDATE ${table.attachments} SET status = 'pending', updated_at = ? WHERE ${identity} AND status = 'failed'`, params)
         return updated.success
-          ? ok(undefined)
+          ? core.ok(undefined)
           : updated
       }
       const updated = await reldb.sql.execute(`UPDATE ${table.jobs} SET status = 'pending', attempts = 0, next_run_at = ${clock}, last_error = NULL WHERE report_id = ? AND kind = ? AND status IN ('failed', 'pending')`, [input.id, input.target])
@@ -957,7 +941,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (updated.success)
         wakeWorker()
       return updated.success
-        ? ok(undefined)
+        ? core.ok(undefined)
         : updated
     },
 
@@ -988,7 +972,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           const snapshot = readFeedbackJson(previous.data.payload)
           const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > Date.now()
           if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.exportRetentionHours * 3600000 > Date.now()) || (previous.data.status !== 'succeeded' && live))
-            return ok(jobData(previous.data))
+            return core.ok(jobData(previous.data))
         }
         if (revision < Number(row.data.revision)) {
           return missing()
@@ -1025,7 +1009,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return added
         const job = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [added.data])
         return job.success && job.data
-          ? ok(jobData(job.data))
+          ? core.ok(jobData(job.data))
           : missing()
       })
       if (result.success)
@@ -1050,7 +1034,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return failed()
         if (snapshot.snapshotExpiresAt < Date.now())
           return missing()
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
       }
       if (Number(job.data.created_at) + config.exportRetentionHours * 3600000 <= Date.now())
         return missing()
@@ -1063,8 +1047,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!bytes.success)
         return bytes
       if (!('checksum' in data) || typeof data.checksum !== 'string' || hash(bytes.data) !== data.checksum)
-        return err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
-      return ok({
+        return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
+      return core.ok({
         name: `${repo.report(row.data).number}.zip`,
         contentType: 'application/zip',
         dataBase64: bytes.data.toString('base64'),
@@ -1095,7 +1079,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (bytes.length !== Number(attachment.size) || bytes.length > budget.maxAttachmentBytes || !matchesContentType(bytes, metadata.contentType))
       return invalid()
     if (hash(bytes) !== attachment.checksum)
-      return err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
+      return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
     const stored = await storage.file.put(attachment.object_key, bytes, {
       contentType: metadata.contentType,
       ifNoneMatch: '*',
@@ -1123,7 +1107,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!currentFile.data || currentFile.data.id !== attachment.id || currentFile.data.report_id !== input.id || currentFile.data.scope_id !== actor.scopeId || currentFile.data.client_id !== input.attachmentId)
         return missing()
       if (currentFile.data.status === 'available')
-        return ok(undefined)
+        return core.ok(undefined)
       const confirmed = await tx.execute(`UPDATE ${table.attachments} SET status = 'available', updated_at = ${clock} WHERE ${currentIdentity}`, currentParams)
       if (!confirmed.success)
         return confirmed
@@ -1131,7 +1115,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return conflict()
       const revised = await tx.execute(`UPDATE ${table.reports} SET revision = revision + 1, updated_at = ${clock} WHERE id = ? AND deleting = 0`, [input.id])
       return revised.success && revised.data.changes
-        ? ok(undefined)
+        ? core.ok(undefined)
         : conflict()
     })
     if (!updated.success) {
@@ -1139,7 +1123,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         await storage.file.delete(attachment.object_key)
       return updated
     }
-    return ok({ ...metadata, status: 'available' })
+    return core.ok({ ...metadata, status: 'available' })
   }
 
   /** 上传与最终关联分开；只有持有租约的事务能发布材料，孤立对象由反馈到期清理回收。 */
@@ -1149,9 +1133,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (!previous.success)
       return previous
     if (previous.data)
-      return ok(undefined)
+      return core.ok(undefined)
     if (!collectEvidence)
-      return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+      return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
     const controller = new AbortController()
     const signal = AbortSignal.any([controller.signal, shutdown.signal])
     const timeout = setTimeout(() => controller.abort(), config.businessCollectionTimeoutMs)
@@ -1242,7 +1226,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return existing
       if (existing.data.length + files.length > budget.maxAttachmentCount || existing.data.reduce((total, item) => total + Number(item.size), 0) + files.reduce((total, file) => total + file.bytes.length, 0) > budget.maxAttachmentsBytes)
         return limited()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     // 首次上传前冻结业务文件清单；失败重试不能通过变化 ID/内容制造无限孤立对象。
     const frozenFiles = files.map(file => ({ id: file.rowId, size: file.bytes.length, checksum: file.metadata.checksum })).sort((left, right) => left.id.localeCompare(right.id))
@@ -1255,7 +1239,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return invalid()
       if ('businessFiles' in payload) {
         return canonicalFeedbackJson(payload.businessFiles) === canonicalFeedbackJson(frozenFiles)
-          ? ok(undefined)
+          ? core.ok(undefined)
           : conflict()
       }
       const updated = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [
@@ -1264,7 +1248,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         job.token,
       ])
       return updated.success
-        ? ok(undefined)
+        ? core.ok(undefined)
         : updated
     })
     if (!frozen.success)
@@ -1295,7 +1279,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!completed.success)
         return completed
       if (completed.data)
-        return ok(undefined)
+        return core.ok(undefined)
       const capacity = await checkCapacity(tx)
       if (!capacity.success)
         return capacity
@@ -1318,7 +1302,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!saved.success)
           return saved
       }
-      return ok(undefined)
+      return core.ok(undefined)
     })
   }
 
@@ -1452,7 +1436,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         ? 0
         : Date.now() + 30000
     }
-    return ok({ processed })
+    return core.ok({ processed })
   }
 
   async function executeJob(job: FeedbackJobRow): Promise<HaiResult<unknown>> {
@@ -1473,8 +1457,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!cleared.success)
         return cleared
       return 'until' in payload && typeof payload.until === 'number' && payload.until <= Date.now()
-        ? ok({ purged: true })
-        : ok({ pending: true })
+        ? core.ok({ purged: true })
+        : core.ok({ pending: true })
     }
     const row = await repo.find(job.report_id, job.scope_id)
     if (!row.success)
@@ -1531,15 +1515,15 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         report.id,
       ]))
       return updated.success
-        ? ok({ collected: captured.length })
+        ? core.ok({ collected: captured.length })
         : updated
     }
     if (job.kind === 'webhook') {
       if (!('url' in payload) || payload.url !== config.webhookUrl || !config.webhookUrl)
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+        return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
       // 材料仍在采集中时等待，不消耗发送尝试次数；终态失败也应通知接收方。
       if (report.collectionStatus === 'collecting')
-        return ok({ pending: true })
+        return core.ok({ pending: true })
       const frozen = await withLease(job, async (tx) => {
         const live = await access(report.id, actor, undefined, tx)
         if (!live.success)
@@ -1551,7 +1535,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return missing()
         const snapshot = readFeedbackJson(stored.data.payload)
         if (snapshot && typeof snapshot === 'object' && 'body' in snapshot && typeof snapshot.body === 'string')
-          return ok(snapshot.body)
+          return core.ok(snapshot.body)
         const files = await attachments(report.id, tx)
         if (!files.success)
           return files
@@ -1585,7 +1569,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           job.token,
         ])
         return saved.success
-          ? ok(body)
+          ? core.ok(body)
           : saved
       })
       if (!frozen.success)
@@ -1612,7 +1596,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         })
         await response.body?.cancel()
         return response.ok
-          ? ok({ status: response.status })
+          ? core.ok({ status: response.status })
           : failed()
       }
       catch {
@@ -1621,7 +1605,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     }
     if (job.kind === 'notify') {
       if (config.notificationMode === 'disabled')
-        return ok({ disabled: true })
+        return core.ok({ disabled: true })
       const recipient = 'recipient' in payload && typeof payload.recipient === 'string'
         ? payload.recipient
         : ''
@@ -1645,7 +1629,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
             ? { summary: current.summary }
             : {}),
         })
-        return ok({ channel: 'console' })
+        return core.ok({ channel: 'console' })
       }
       const { HaiReachError, reach } = await import('@h-ai/reach')
       const materialStatus = {
@@ -1681,15 +1665,15 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         deferPolicy: 'reject',
       })
       if (!sent.success && sent.error.code === HaiReachError.DND_BLOCKED.code)
-        return ok({ pending: true, deferred: true })
+        return core.ok({ pending: true, deferred: true })
       if (!sent.success)
         return sent
       if (!sent.data.success)
         return failed()
       if (sent.data.deferred) {
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+        return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
       }
-      return ok({ messageId: sent.data.messageId ?? '' })
+      return core.ok({ messageId: sent.data.messageId ?? '' })
     }
     if (job.kind === 'export') {
       if (!('report' in payload) || !('evidence' in payload) || !('attachments' in payload))
@@ -1709,7 +1693,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!stored.success)
           return stored
         if (hash(stored.data) !== file.checksum)
-          return err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
+          return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
         total += stored.data.length
         if (total > 64 * 1024 * 1024)
           return limited()
@@ -1722,7 +1706,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           bytes: stored.data,
         })
       }
-      const bundle = await createFeedbackBundle({
+      const bundle = await feedback.createBundle({
         maxBytes: fixed.maxBytes,
         createdAt: Number(job.created_at),
         report: fixed.report,
@@ -1740,7 +1724,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!existing.success || hash(existing.data) !== hash(bundle.data))
           return stored
       }
-      return ok({
+      return core.ok({
         key,
         checksum: hash(bundle.data),
         size: bundle.data.length,
@@ -1761,7 +1745,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!updated.success)
         return updated
       return updated.data.changes || Number(locked.data.deleting)
-        ? ok(undefined)
+        ? core.ok(undefined)
         : conflict()
     })
     if (!marked.success)
@@ -1808,7 +1792,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const identity = `${feedbackTextEquals('id', report.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
       const removed = await tx.execute(`DELETE FROM ${table.reports} WHERE ${identity} AND expires_at <= ${clock}`, params)
       return removed.success
-        ? ok({ pending: true })
+        ? core.ok({ pending: true })
         : removed
     })
     return deleted

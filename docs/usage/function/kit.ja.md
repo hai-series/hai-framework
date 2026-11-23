@@ -127,7 +127,7 @@ createHandle と sequence から始め、初期化済み Cache を制限の保�
 #### 利用例：入力検証と応答
 
 ```ts
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 const schema = z.object({ title: z.string().min(1) })
 const request = new Request('https://app.example.com/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Order' }) })
@@ -166,7 +166,7 @@ kit.response.redirect('/auth/login').headers.get('location') // '/auth/login'
 // Return the supplied app error code and message with HTTP 400.
 kit.response.error('app:orders:001', 'Invalid request', 400).status // 400
 // Wrap { id: 'o1' } in a successful HaiResult and convert it to HTTP 200. Failed results use their recorded error status.
-kit.response.fromResult(ok({ id: 'o1' })).status // 200
+kit.response.fromResult(core.ok({ id: 'o1' })).status // 200
 ```
 
 JSON・検索・パスの入力から各値と HTTP 状態を得ます。不正な validate は Response を投げるため handler の境界内で使います。fromError に失敗 HaiResult.error を渡し、内部例外を公開しません。
@@ -196,7 +196,7 @@ JSON・検索・パスの入力から各値と HTTP 状態を得ます。不正�
 | `kit.auth.logout(cookies, accessToken?)` | 显式退出 | 現在の SvelteKit Cookie ライター `cookies` が必須。`accessToken` を渡すとサーバーで無効化し、省略時も Cookie は削除。 | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
 | `kit.auth.setBrowserToken(token)` | 页面内存凭据 | 必須の `token` はページメモリーに保持するアクセストークン文字列。 | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
 | `kit.auth.clearBrowserToken()` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
-| `@h-ai/kit` 的 `matchPermission(required, userPermissions)` | 表示用の権限をパターン照合 | 権限コード `required` と信頼済みセッションの `userPermissions` 配列が必須。 | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+| `@h-ai/kit` 的 `kit.matchPermission(required, userPermissions)` | 表示用の権限をパターン照合 | 権限コード `required` と信頼済みセッションの `userPermissions` 配列が必須。 | `boolean` | `kit.matchPermission('reports:read', ['reports:read'])` |
 
 <a id="kit-auth-context"></a>
 
@@ -231,9 +231,9 @@ JSON・検索・パスの入力から各値と HTTP 状態を得ます。不正�
 | `kit.client.createAuthActions(options?)` | 標準の認証操作を作成 | `options` は省略可。`apiFetch` は新規の既定クライアント、`basePath` は `/api/auth` が既定。 | AuthPanel と互換性のある操作 | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
 | `kit.client.installBrowserTransport(config, deps)` | 按公共配置安装加密 | 公開 `config` と `deps.crypto` が必須。任意の `deps.basePath` の既定はルートを示す空文字列。 | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
 | `kit.client.installBrowserTransportFetch(transportConfig?)` | 自定义传输安装 | ブラウザーでは下表の `transport` と同じ `transportConfig` を指定。省略時やサーバーからの呼び出しでは Fetch を置き換えない。 | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
-| `@h-ai/kit/client` の `createKitClient(config?)` | 同一オリジンのクライアントを作成 | `config` は省略可。項目は `kit.client.create()` と同じ。 | `KitClient` | `createKitClient({})` |
-| `@h-ai/kit/client` の `createKitAuthActions(options?)` | 同一オリジンの認証操作を作成 | `options` は省略可。`kit.client.createAuthActions()` と同じ `apiFetch`、`basePath`。 | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
-| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()` | SvelteKit の移動を CRUD に接続 | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
+| `@h-ai/kit/client` の `kit.client.create(config?)` | 同一オリジンのクライアントを作成 | `config` は省略可。項目は `kit.client.create()` と同じ。 | `KitClient` | `kit.client.create({})` |
+| `@h-ai/kit/client` の `kit.client.createAuthActions(options?)` | 同一オリジンの認証操作を作成 | `options` は省略可。`kit.client.createAuthActions()` と同じ `apiFetch`、`basePath`。 | `AuthActions` | `kit.client.createAuthActions({ apiFetch: client.apiFetch })` |
+| `@h-ai/kit/client` 的 `kit.client.createSvelteKitNavAdapter()` | SvelteKit の移動を CRUD に接続 | `kit.client.createSvelteKitNavAdapter()` | `CrudNavAdapter` | `kit.client.createSvelteKitNavAdapter()` |
 
 #### 利用例：同一オリジンのブラウザ接続
 
@@ -250,14 +250,14 @@ JSON・検索・パスの入力から各値と HTTP 状態を得ます。不正�
 `client.apiFetch(input, init?, options?)` にリクエスト、URL、パスのいずれかを渡します。`init` は `method`、`body`、`signal` などの標準 Fetch 設定です。第 3 引数に `recoverSession: false` を指定すると、その呼び出しの通常のセッション復旧を無効にします。たとえば復旧処理自身が認証 API を呼ぶ場合に使います。`reauthorize` は再試行前に新しい操作証明を取得する任意の関数です。証明文字列は古いヘッダーを置換し、`null` は再試行を取り消し、`undefined` は証明なしで続行します。
 
 ```ts
-import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
+import { kit } from '@h-ai/kit/client'
 
 // Create a browser client with defaults. The returned object has its own request and transport methods.
-const client = createKitClient({}) // same factory as kit.client.create
+const client = kit.client.create({}) // same factory as kit.client.create
 // このクライアントの apiFetch で /api/auth 配下を呼び出すフォーム操作を返します。
-const actions = createKitAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
+const actions = kit.client.createAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
 // Create a navigation adapter for the current SvelteKit runtime.
-const nav = createSvelteKitNavAdapter()
+const nav = kit.client.createSvelteKitNavAdapter()
 // Initialize this client's transport if enabled. A failed enabled handshake rejects.
 await client.init()
 try {
@@ -287,26 +287,26 @@ finally {
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `kit.crud.define(resource)` | 声明 CRUD 资源 | 操作、ルート、フィールドを含む CRUD の `resource` 定義が必須。 | `resource operation object` | `kit.crud.define(resourceDefinition)` |
-| `@h-ai/kit` 的 `defineCrud(resource)` | リソースとフォーム項目を定義 | `kit.crud.define()` と同じ。`resource` 定義が必須。 | `CrudOperations<T>` | `defineCrud(resource)` |
-| `@h-ai/kit` 的 `resolveText(text)` | 静的・遅延翻訳テキストを取得 | 文字列または文字列を返す引数なしの関数 `text` が必須。 | `string` | `resolveText('Name')` |
-| `@h-ai/kit` 的 `resolveOptions(options)` | 静的・遅延生成した選択肢を取得 | `options` 配列またはその配列を返す引数なしの関数が必須。各要素には `label` と `value`。 | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
+| `@h-ai/kit` 的 `kit.crud.define(resource)` | リソースとフォーム項目を定義 | `kit.crud.define()` と同じ。`resource` 定義が必須。 | `CrudOperations<T>` | `kit.crud.define(resource)` |
+| `@h-ai/kit` 的 `kit.resolveText(text)` | 静的・遅延翻訳テキストを取得 | 文字列または文字列を返す引数なしの関数 `text` が必須。 | `string` | `kit.resolveText('Name')` |
+| `@h-ai/kit` 的 `kit.resolveOptions(options)` | 静的・遅延生成した選択肢を取得 | `options` 配列またはその配列を返す引数なしの関数が必須。各要素には `label` と `value`。 | `CrudOption[]` | `kit.resolveOptions([{ label: 'Active', value: true }])` |
 
 #### 利用例：資源とフォーム項目の定義
 
 resource は CrudResource 型のフィールドと認可済みコールバックです。両入口は書き込みをせず操作オブジェクトを返します。true は選択肢の値です。
 
 ```ts
-import { defineCrud, kit, resolveOptions, resolveText } from '@h-ai/kit'
+import { kit } from '@h-ai/kit'
 
-function buildResource(resource: Parameters<typeof defineCrud>[0]) {
+function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
   // Build the operations for the supplied resource declaration.
-  const operations = defineCrud(resource)
+  const operations = kit.crud.define(resource)
   // Build the equivalent operations through kit.crud using the same declaration.
   const equivalent = kit.crud.define(resource)
   // Evaluate the supplied label function. The resolved label is Name.
-  const label = resolveText(() => 'Name') // 'Name'
+  const label = kit.resolveText(() => 'Name') // 'Name'
   // Resolve the supplied Active option with boolean true. This array is returned as the available choices.
-  const choices = resolveOptions([{ label: 'Active', value: true }]) // same option array
+  const choices = kit.resolveOptions([{ label: 'Active', value: true }]) // same option array
   return { operations, equivalent, label, choices }
 }
 ```
@@ -325,8 +325,8 @@ Crypto と共有 Cache を準備し、公開方針をクライアント、信頼
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `@h-ai/kit` 的 `resolveKitTransportConfig(input?)` | Kit の転送引数を統合 | `input` は `false` またはデプロイの通信設定。[通信の引数](#kit-transport-arguments)を参照。 | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
-| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware(config, encryption?)` | 転送認証ミドルウェアを作成 | 実行時 `config` が必須。任意の `encryption(pathname, method)` でパスとメソッドの暗号化方針を取得。[通信の引数](#kit-transport-arguments)を参照。 | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
+| `@h-ai/kit` 的 `kit.resolveTransportConfig(input?)` | Kit の転送引数を統合 | `input` は `false` またはデプロイの通信設定。[通信の引数](#kit-transport-arguments)を参照。 | `false \| KitTransportConfig` | `kit.resolveTransportConfig(false)` |
+| `@h-ai/kit/crypto` 的 `kit.crypto.transportEncryptionMiddleware(config, encryption?)` | 転送認証ミドルウェアを作成 | 実行時 `config` が必須。任意の `encryption(pathname, method)` でパスとメソッドの暗号化方針を取得。[通信の引数](#kit-transport-arguments)を参照。 | `Middleware` | `kit.crypto.transportEncryptionMiddleware(transportConfig)` |
 
 <a id="kit-transport-arguments"></a>
 
@@ -334,13 +334,13 @@ Crypto と共有 Cache を準備し、公開方針をクライアント、信頼
 
 | 項目 | 既定値と条件 | 用途と結果 |
 | --- | --- | --- |
-| `input` | 省略または `false` で無効 | `resolveKitTransportConfig` は公開設定を解析する。オブジェクトに鍵交換パスと除外リストの既定値を補い、容量と時間の既定値は実行時に適用する。 |
+| `input` | 省略または `false` で無効 | `kit.resolveTransportConfig` は公開設定を解析する。オブジェクトに鍵交換パスと除外リストの既定値を補い、容量と時間の既定値は実行時に適用する。 |
 | `enabled` / `crypto` / `serverKeyRing` / `keyStore` | 直接ミドルウェアを作る場合は必須 | 有効フラグ、初期化済み Crypto、サーバー鍵リング、登録ストアをホストから渡す。本番では共有ストアを使う。 |
 | `keyExchangePath` / `excludePaths` / `basePath` | 既定は `/api/_hai/key-exchange`、`[]`、空文字列 | 鍵交換ルート、除外する要求パス、ビルドのマウント先。 `basePath` は実行時にのみ渡す。 |
 | `maxPlaintextBytes` / `routePlaintextBytes` | 既定は 1 MiB、ルートの上書きなし。上限は 1 KiB～64 MiB の整数。 | 平文の UTF-8 バイト数を制限。経路の `*` は完全な 1 セグメントに一致。公開設定は `"auto"` を許可し、ミドルウェアには数値を渡す。 |
 | `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 既定は 30 秒（0–300）と 300 秒（1–600） | クライアント時計の進みの許容秒数と、発行からの要求の有効秒数。 |
 
-`resolveKitTransportConfig({ excludePaths: ["/api/health"] })` は指定の除外リストと既定の `keyExchangePath` を返します。
+`kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` は指定の除外リストと既定の `keyExchangePath` を返します。
 
 #### 利用例：通信暗号化の組み立て
 
@@ -365,11 +365,11 @@ resolveKitTransportConfig は false か完全な設定、中間層は SvelteKit 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `kit.createFeedbackHandler(options)` | 受控反馈入口 | 初期化済み `options.feedback` と、信頼済みセッションから主体を取得する `options.resolveContext(event)` が必須。`null` は拒否。`options.basePath` の既定は `/api/feedback`。 | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
-| `createA2AApiKeyAuthenticator(config)` | A2A の API キー検証を作成 | `config.in`（`header` または `query`）とパラメータ名 `config.name` が必須。 | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
-| `createAgentCardHandler(getAgentCard)` | エージェントカードの処理を作成 | 現在の Agent Card またはその Promise を返す `getAgentCard()` が必須。 | `RequestHandler` | `createAgentCardHandler(() => card)` |
-| `createA2AHandler(handleRequest, config?)` | A2A リクエスト処理を作成 | JSON-RPC の `handleRequest` が必須。任意の `config.authenticate` に `apiKey` または独自コールバックを設定。`null`、`undefined` を返すと拒否。 | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
-| `resolveA2AConfig(input)` | A2A の引数を解決 | `input` は操作オブジェクトまたは `{ operations, cardPath?, rpcPath?, authenticate? }`。`undefined` は `null` を返す。 | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
-| `handleA2ARequest(event, requestId, config)` | 構成済み A2A リクエストを処理 | 現在の `event`、追跡 `requestId`、解決済み A2A `config` が必須。 | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
+| `kit.a2a.createApiKeyAuthenticator(config)` | A2A の API キー検証を作成 | `config.in`（`header` または `query`）とパラメータ名 `config.name` が必須。 | `A2AAuthenticator` | `kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
+| `kit.a2a.createAgentCardHandler(getAgentCard)` | エージェントカードの処理を作成 | 現在の Agent Card またはその Promise を返す `getAgentCard()` が必須。 | `RequestHandler` | `kit.a2a.createAgentCardHandler(() => card)` |
+| `kit.a2a.createHandler(handleRequest, config?)` | A2A リクエスト処理を作成 | JSON-RPC の `handleRequest` が必須。任意の `config.authenticate` に `apiKey` または独自コールバックを設定。`null`、`undefined` を返すと拒否。 | `RequestHandler` | `kit.a2a.createHandler(handleRequest, { authenticate })` |
+| `kit.a2a.resolveConfig(input)` | A2A の引数を解決 | `input` は操作オブジェクトまたは `{ operations, cardPath?, rpcPath?, authenticate? }`。`undefined` は `null` を返す。 | `ResolvedA2AConfig \| null` | `kit.a2a.resolveConfig({ operations, rpcPath: '/a2a' })` |
+| `kit.a2a.handleRequest(event, requestId, config)` | 構成済み A2A リクエストを処理 | 現在の `event`、追跡 `requestId`、解決済み A2A `config` が必須。 | `Promise<Response \| null>` | `await kit.a2a.handleRequest(event, requestId, config)` |
 
 #### 利用例：フィードバックと A2A のルート
 

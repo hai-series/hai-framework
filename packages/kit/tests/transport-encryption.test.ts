@@ -2,7 +2,7 @@ import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, KeyExc
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
@@ -117,8 +117,8 @@ function createFailingEncryptManager(): TransportEncryptionManager {
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
     getClientPublicKey: async () => 'client-public-key',
-    encryptResponse: async () => err(new Error('encrypt failed')),
-    decryptRequest: async () => ok(''),
+    encryptResponse: async () => core.err(new Error('encrypt failed')),
+    decryptRequest: async () => core.ok(''),
     close: async () => {},
   }
 }
@@ -256,7 +256,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const decrypt = vi.spyOn(manager, 'decryptRequest')
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -308,7 +308,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -328,7 +328,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -362,7 +362,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -382,7 +382,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const encrypt = vi.spyOn(manager, 'encryptResponse')
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -417,10 +417,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
-    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -442,11 +442,11 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('解密后明文超限时不进入业务，正常请求会重建可读取的 Request', async () => {
     const manager = createFailingEncryptManager()
-    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('你'.repeat(400_000)))
-    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(core.ok('你'.repeat(400_000)))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const handle = kit.createHandle({
       crypto: {
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
         transport: {
           keyStore: crypto.transport.createKeyStore({ cache }),
           serverKeyRing,
@@ -464,7 +464,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     })
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(413)
     expect(resolve).not.toHaveBeenCalled()
-    decrypt.mockResolvedValue(ok('{"ok":true}'))
+    decrypt.mockResolvedValue(core.ok('{"ok":true}'))
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(204)
     expect(resolve).toHaveBeenCalledOnce()
   })
@@ -527,7 +527,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('transport 管理器初始化失败即拒绝创建 Handle，不产生部分可用的宿主', () => {
-    const failingCrypto = createCryptoWithTransportServer(() => err(new Error('server unavailable')))
+    const failingCrypto = createCryptoWithTransportServer(() => core.err(new Error('server unavailable')))
     expect(() => kit.createHandle({
       crypto: {
         crypto: failingCrypto,

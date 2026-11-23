@@ -3,7 +3,7 @@ import type { DeployConfigInput } from './deploy-config.js'
 import type { DeployAppOptions } from './deploy-types.js'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { planSidecars, resolveSidecarOptions } from './container/deploy-container-compose.js'
 import { shellArgument } from './container/deploy-scripts.js'
@@ -21,14 +21,14 @@ import { HaiDeployError } from './deploy-types.js'
  * 输出 root 是工程根，serviceDir 是读取运行配置、扫描依赖的部署服务目录。
  * @example
  * ```ts
- * import { createDeploymentPlan } from '@h-ai/deploy'
- * const plan = await createDeploymentPlan('/workspace/shop', { provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } }, { environment: 'prod' })
+ * import { deploy } from '@h-ai/deploy'
+ * const plan = await deploy.createDeploymentPlan('/workspace/shop', { provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } }, { environment: 'prod' })
  * ```
  */
 export async function createDeploymentPlan(appDir: string, input: DeployConfigInput, options: DeployAppOptions & { inspectRemote?: boolean } = {}) {
   const parsed = DeployConfigSchema.safeParse(input)
   if (!parsed.success) {
-    return err({
+    return core.err({
       ...HaiDeployError.CONFIG_ERROR,
       message: deployM('deploy_artifactInvalid'),
       ext: {
@@ -109,9 +109,9 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
         : available)),
     ]
     if (!selected.length || new Set(selected).size !== selected.length || selected.some(name => !available.includes(name)))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
     if (artifact && selected.some(name => images.includes(name) && !artifact.images.some(image => image.name === name)))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
     const remoteDirectory = provider.type === 'docker-ssh'
       ? `${provider.remote.baseDir}/${projectName}`
       : undefined
@@ -125,7 +125,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     }
     if (options.inspectRemote) {
       if (provider.type !== 'docker-ssh' || !provider.ssh || !remoteDirectory)
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
       // 仅读取 current 和成功发布目录；不能创建目录、锁、凭据或触发恢复。
       const command = `root=${shellArgument(remoteDirectory)}; if [ -f "$root/current" ]; then id=$(head -c 129 "$root/current"); case "$id" in ''|*[!a-zA-Z0-9._-]*) exit 2;; esac; test -f "$root/releases/$id/.hai/compose.json" || exit 3; printf '%s' "$id"; fi`
       const result = await createSshExecutor(provider.ssh).exec(command, { timeoutMs: 15000, maxCaptureChars: 1024 })
@@ -135,7 +135,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       else {
         const release = result.data.stdout.trim()
         if (release && !/^[\w.-]{1,128}$/.test(release))
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
         baseline.state = release ? 'verified' : 'missing'
         baseline.release = release || undefined
       }
@@ -182,7 +182,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     const gateway = !!artifact && !(artifact.primaryService === 'serv' && artifact.hasWeb)
       && (app.isSvelteKit || sidecar?.services.includes('storage') || (!!https && artifact.primaryService === 'serv'))
     if (gateway && artifact.primaryService === 'web' && !app.isSvelteKit)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     if (gateway) {
       available.push('gateway')
       if (!baseline.required)
@@ -194,7 +194,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
         selected.push('certbot')
     }
     const services = Object.entries(sidecar?.composeServices ?? {}).filter(([name]) => selected.includes(name))
-    return ok({
+    return core.ok({
       projectName,
       root,
       serviceDir: directory,
@@ -266,6 +266,6 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     })
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
   }
 }

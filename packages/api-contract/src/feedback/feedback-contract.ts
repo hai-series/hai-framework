@@ -172,8 +172,8 @@ export const feedbackContract = {
  * 反馈 typed client 的契约类型。
  * @example
  * ```ts
- * import type { FeedbackContract } from '@h-ai/api-contract'
- * import { apiContract } from '@h-ai/api-contract'
+ *
+ * import { type FeedbackContract, apiContract } from '@h-ai/api-contract'
  * const contract: FeedbackContract = apiContract.feedback
  * ```
  */

@@ -47,9 +47,6 @@ import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
 import { storage } from '@h-ai/storage'
 
 // 组合三个内置领域，返回 HTTP 路由契约。
@@ -58,15 +55,15 @@ const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract
 // 装配 procedures（每个 feature 对应 contract 中的一个领域）
 const procedures = {
   // 将已初始化 IAM 绑定到认证和管理过程，无权限的请求由过程拒绝。
-  iam: createIamProcedures({ iam }),
+  iam: serv.createIamProcedures({ iam }),
   // 将已初始化 storage 绑定到存储过程，拒绝任何不在当前用户键前缀下的请求。
-  storage: createStorageProcedures({
+  storage: serv.createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
       key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
   }),
   // 将已初始化 AI 服务绑定到匹配的 API 过程。
-  ai: createAiProcedures({ ai }),
+  ai: serv.createAiProcedures({ ai }),
 }
 
 // 创建 HTTP App 抽象；不要在应用导出类型里暴露 Hono
@@ -189,10 +186,10 @@ export const appContract = {
 
 ```typescript
 // src/server/procedures/app-procedures.ts
-import type { ServContext } from '@h-ai/serv'
+
 import { appContract } from '@h-ai/api-service-contract'
-import { ok } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
 
 export function createAppProcedures(deps: { name: string, version: string }) {
   return serv
@@ -202,14 +199,14 @@ export function createAppProcedures(deps: { name: string, version: string }) {
     .context<ServContext>()
     // 公开 procedure：route 名只出现一次，handler 直接返回 HaiResult。
     // 将 info 绑定到成功结果，数据取应用提供的名称和版本。
-    .route('info', () => ok({ name: deps.name, version: deps.version }))
+    .route('info', () => core.ok({ name: deps.name, version: deps.version }))
     // 鉴权 procedure：guard 通过后 context.session 自动收窄为非空。
     // 选中 echo 过程以绑定后面的守卫和回调。
     .route('echo')
     // 要求会话存在，认证失败时不运行回显回调。
     .auth()
     // 为当前请求回显已校验的消息，并将会话用户 ID 写入成功结果。
-    .handle(({ input, context }) => ok({
+    .handle(({ input, context }) => core.ok({
       message: input.message,
       userId: context.session.userId,
     }))
@@ -231,15 +228,15 @@ const contract = apiContract.create({
 
 const procedures = {
   // 用已初始化的 IAM 创建对应的过程实现。
-  iam: createIamProcedures({ iam }),
+  iam: serv.createIamProcedures({ iam }),
   // 用已初始化的存储创建过程实现，传入的授权回调拒绝跨用户键。
-  storage: createStorageProcedures({
+  storage: serv.createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
       key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
   }),
   // 用已初始化的 AI 服务创建请求处理器。
-  ai: createAiProcedures({ ai }),
+  ai: serv.createAiProcedures({ ai }),
   app: createAppProcedures({ name: 'demo', version: '1.0.0' }),
 }
 
@@ -273,7 +270,7 @@ export default { fetch: handler }
 
 ```typescript
 import { core } from '@h-ai/core'
-import { serv, ServConfigSchema } from '@h-ai/serv'
+import { ServConfigSchema, serv } from '@h-ai/serv'
 
 // 启动时读取 ./config，并按 ServConfigSchema 注册和校验 serv 配置。
 core.init({ configDir: './config', configSchemas: { serv: ServConfigSchema } })
@@ -342,9 +339,9 @@ transport:
 ### `serv.createApp(options)` — 创建 HTTP App 抽象
 
 ```ts
-import type { CreateServAppOptions, ServContext } from '@h-ai/serv'
+
 import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
+import { type CreateServAppOptions, type ServContext, serv } from '@h-ai/serv'
 
 // 最小服务使用默认健康检查；业务路由由真实 contract/procedures 扩展。
 // 创建空的业务契约，用于只验证服务的基础入口。
@@ -506,8 +503,8 @@ const procedures = serv
 适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑，也可挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
 ```typescript
-import type { ServMiddleware } from '@h-ai/serv'
-import { serv } from '@h-ai/serv'
+
+import { type ServMiddleware, serv } from '@h-ai/serv'
 
 const requestMetrics: ServMiddleware = async (c, next) => {
   const startedAt = Date.now()
@@ -626,7 +623,7 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 | 失败来源                                           | HTTP 响应 | 结果判定                                                                  |
 | -------------------------------------------------- | --------- | ------------------------------------------------------------------------- |
 | procedure `.auth()` / `.permission()` / `.role()`  | 200       | `success=false`；`error.httpStatus` 为 401 / 403                          |
-| handler 返回 `err(...)` 或下游模块失败 HaiResult   | 200       | 检查 `success`、`error.code`，例如数据库查询错误的 `error.httpStatus=500` |
+| handler 返回 `core.err(...)` 或下游模块失败 HaiResult   | 200       | 检查 `success`、`error.code`，例如数据库查询错误的 `error.httpStatus=500` |
 | handler 未处理异常被 route 实现器捕获              | 200       | INTERNAL_ERROR 失败 HaiResult，`error.httpStatus=500`                     |
 | oRPC contract 输入 schema 校验失败（handler 之前） | 400       | 本地化失败体，`error.httpStatus=400` 与字段错误                           |
 | handler 内 `serv.validateInputOrFail(...)` 失败    | 200       | 失败 HaiResult，`error.httpStatus=400` 与字段错误                         |
@@ -638,8 +635,8 @@ SvelteKit 的 `kit.response.fromError` 根据归一化后的 `error.httpStatus` 
 按三层处理：
 
 1. **oRPC contract 输入校验**：进入 handler 前自动发生；`serv.createApp()` 会把默认英文 Zod 错误改写为本地化 `errors[]`。
-2. **handler 内二次校验**：对跨字段规则、数据库回读对象等适合 Zod 表达的场景，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `err(...)` 即可。
-3. **业务/领域错误**：不要 throw 预期失败；直接返回 `err(...)`，并在**创建错误消息的那一层**用对应模块的 i18n getter 按 `context.locale` 出消息。
+2. **handler 内二次校验**：对跨字段规则、数据库回读对象等适合 Zod 表达的场景，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `core.err(...)` 即可。
+3. **业务/领域错误**：不要 throw 预期失败；直接返回 `core.err(...)`，并在**创建错误消息的那一层**用对应模块的 i18n getter 按 `context.locale` 出消息。
 
 ```typescript
 import { serv } from '@h-ai/serv'
@@ -721,15 +718,16 @@ const http: ServHttpConfigInput = {
 
 ## Feature Procedures（默认实现）
 
-`serv.implement(...).context().route(...).build()` 同步返回普通 router，可直接按嵌套属性选取 `@h-ai/serv/features/iam` 等默认 procedures。挂载 contract 只包含实际选用的路由；不要为复用当前用户或刷新功能而同时开放注册、OTP 或通用管理入口。
+`serv.implement(...).context().route(...).build()` 同步返回普通 router。预置工厂返回的 procedures 也可按嵌套属性选取。挂载 contract 只包含实际选用的路由；不要为复用当前用户或刷新功能而同时开放注册、OTP 或通用管理入口。
 
-`@h-ai/serv` 内置了三个 feature 模块，开箱即用：
+从 `@h-ai/serv` 导入一次 `serv`，按需调用以下工厂。
 
-| 导入路径                      | 工厂函数                                          | 所需依赖                       |
-| ----------------------------- | ------------------------------------------------- | ------------------------------ |
-| `@h-ai/serv/features/iam`     | `createIamProcedures({ iam })`                    | `@h-ai/iam`                    |
-| `@h-ai/serv/features/storage` | `createStorageProcedures({ storage, authorize })` | `@h-ai/storage` + 资源授权策略 |
-| `@h-ai/serv/features/ai`      | `createAiProcedures({ ai })`                      | `@h-ai/ai`                     |
+| 工厂函数 | 所需依赖 |
+| --- | --- |
+| `serv.createIamProcedures({ iam })` | 已初始化的 `iam` |
+| `serv.createStorageProcedures({ storage, authorize })` | 已初始化的 `storage` 和资源授权策略 |
+| `serv.createAiProcedures({ ai })` | 已初始化的 `ai` |
+| `serv.createFeedbackProcedures({ feedback, resolveContext })` | 已初始化的 `feedback` 和可信范围解析函数 |
 
 `authorize` 从可信 `context.session` 校验资源所有者/租户，不能只信任客户端前缀；缺失策略时默认拒绝。列表会把 prefix 交给策略，空 prefix 不应获准全桶列举；批量全部授权后才执行。示例用户根为 `users/<编码后的 userId>/`，管理员跨用户访问必须显式授权。
 
@@ -739,7 +737,7 @@ AI 默认 feature 把 objectId 绑定到可信 `context.session.userId`，客户
 
 ```typescript
 // 用初始化后的 AI 实例创建处理器。对象级操作还须通过本例中的 ai.manage 授权。
-const aiProcedures = createAiProcedures({
+const aiProcedures = serv.createAiProcedures({
   ai,
   authorizeObject: ({ context }) => context.session.permissions.includes('ai.manage'),
 })
@@ -750,8 +748,8 @@ const aiProcedures = createAiProcedures({
 ### 自定义领域 procedure
 
 ```typescript
-import type { ServContext } from '@h-ai/serv'
-import { serv } from '@h-ai/serv'
+
+import { type ServContext, serv } from '@h-ai/serv'
 import { myContract } from './my-contract.js'
 
 export function createMyProcedures() {
@@ -794,7 +792,7 @@ const app = serv.createApp({
   contract: myAppContract,
   procedures: {
     // 用已初始化的 IAM 服务组装域过程。
-    iam: createIamProcedures({ iam }),
+    iam: serv.createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
   http: { apiPrefix: '/api/v1' },

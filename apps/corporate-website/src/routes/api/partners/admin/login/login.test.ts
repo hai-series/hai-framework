@@ -1,12 +1,12 @@
 import { cache } from '@h-ai/cache'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPartnerAdminSessionByToken } from '#lib/server/partner-service.js'
 import { POST } from './+server.js'
 
 beforeEach(async () => {
   await cache.init({ type: 'memory' })
-  vi.spyOn(core.config, 'validate').mockReturnValue(ok(undefined))
+  vi.spyOn(core.config, 'validate').mockReturnValue(core.ok(undefined))
   vi.spyOn(core.config, 'getOrThrow').mockReturnValue({ username: 'partner-admin', password: 'ValidPassword1!', sessionTtlSeconds: 3600 })
 })
 
@@ -36,8 +36,8 @@ function loginEvent(): { event: Parameters<typeof POST>[0], setCookie: ReturnTyp
 
 describe('partner admin session persistence', () => {
   it.each([
-    ok(false),
-    err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'),
+    core.ok(false),
+    core.err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'),
   ])('写入未生效或失败时返回 503 且不设置 cookie', async (failure) => {
     vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(failure)
     const { event, setCookie } = loginEvent()

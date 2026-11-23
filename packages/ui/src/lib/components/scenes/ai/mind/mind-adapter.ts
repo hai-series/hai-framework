@@ -19,8 +19,8 @@ interface EngineNode {
  *
  * @example
  * ```ts
- * import { toMindElixirData } from '@h-ai/ui'
- * const map = toMindElixirData({ kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } })
+ * import { ui } from '@h-ai/ui'
+ * const map = ui.toMindElixirData({ kind: 'mind/v1', layout: 'right', root: { id: 'root', text: '中心主题', children: [] } })
  * ```
  */
 export function toMindElixirData(data: AiMindMapData): { nodeData: EngineNode, direction: 0 | 1 | 2 } {
@@ -39,8 +39,8 @@ export function toMindElixirData(data: AiMindMapData): { nodeData: EngineNode, d
  *
  * @example
  * ```ts
- * import { fromMindElixirData } from '@h-ai/ui'
- * const data = fromMindElixirData({ nodeData: { id: 'root', topic: '中心主题' } }, 'right')
+ * import { ui } from '@h-ai/ui'
+ * const data = ui.fromMindElixirData({ nodeData: { id: 'root', topic: '中心主题' } }, 'right')
  * ```
  */
 export function fromMindElixirData(value: unknown, layout: AiMindMapData['layout']): AiMindMapData {

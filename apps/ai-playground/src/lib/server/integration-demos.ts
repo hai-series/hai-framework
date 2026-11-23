@@ -2,8 +2,8 @@ import type { ACPRunRequest, MCPJobFiles } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
 import type { IntegrationDemoId } from '#lib/demo-input.js'
 import { randomUUID } from 'node:crypto'
-import { AgentEvent, ai, HaiAIError, Message } from '@h-ai/ai'
-import { err, ok } from '@h-ai/core'
+import { ai, HaiAIError } from '@h-ai/ai'
+import { core } from '@h-ai/core'
 import { runner } from '@h-ai/runner'
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
@@ -22,11 +22,11 @@ const sampleFile = 'playground-handbook.txt'
 export const playgroundJobFiles: MCPJobFiles = {
   async read({ principal, fileId, signal }) {
     if (principal.tenantId !== 'ai-playground' || fileId !== sampleFile || signal.aborted)
-      return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document is unavailable')
-    return ok({ name: sampleFile, base64: 'SGFpIFBsYXlncm91bmQgaGFuZGJvb2sK' })
+      return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document is unavailable')
+    return core.ok({ name: sampleFile, base64: 'SGFpIFBsYXlncm91bmQgaGFuZGJvb2sK' })
   },
   async publish() {
-    return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document extraction does not publish artifacts')
+    return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document extraction does not publish artifacts')
   },
 }
 
@@ -74,7 +74,7 @@ export function registerPlaygroundIntegrations(): HaiResult<void> {
             { text: part.content.value },
           ]
         : [])
-      bus.publish(AgentEvent.message(Message.fromJSON({
+      bus.publish(ai.AgentEvent.message(ai.Message.fromJSON({
         role: 'ROLE_AGENT',
         messageId: randomUUID(),
         parts,
@@ -154,7 +154,7 @@ async function runTools(input: string, signal: AbortSignal) {
     },
   }, { signal })
   return executed.success
-    ? ok({
+    ? core.ok({
         definitions: modelTools.getDefinitions(),
         toolResult: executed.data,
       })
@@ -173,7 +173,7 @@ async function runMcp(input: string) {
     return resource
   if (!prompt.success)
     return prompt
-  return ok({ tool: tool.data, resource: resource.data, prompt: prompt.data })
+  return core.ok({ tool: tool.data, resource: resource.data, prompt: prompt.data })
 }
 
 async function runA2A(input: string, userId: string) {
@@ -196,8 +196,8 @@ async function runA2A(input: string, userId: string) {
     },
   }, { agentId: userId })
   if (response.streaming || !response.body || typeof response.body !== 'object' || !('result' in response.body))
-    return err(HaiAIError.A2A_HANDLE_FAILED, 'A2A example failed')
-  return ok({
+    return core.err(HaiAIError.A2A_HANDLE_FAILED, 'A2A example failed')
+  return core.ok({
     card: { name: card.data.name, capabilities: card.data.capabilities },
     response: response.body,
   })
@@ -205,7 +205,7 @@ async function runA2A(input: string, userId: string) {
 
 async function runAcp(prompt: string, signal: AbortSignal, userId: string) {
   if (!await configuredAgent())
-    return err(HaiAIError.ACP_UNSUPPORTED, 'Playground ACP agent is unavailable')
+    return core.err(HaiAIError.ACP_UNSUPPORTED, 'Playground ACP agent is unavailable')
   const scoped = ai.acp.scoped({ tenantId: 'ai-playground', userId })
   const request = {
     agentId,
@@ -225,7 +225,7 @@ async function runAcp(prompt: string, signal: AbortSignal, userId: string) {
     return plan
   const result = await scoped.run({ ...request, prompt }, { signal })
   return result.success
-    ? ok({ plan: plan.data, taskId: result.data.taskId, output: result.data.output })
+    ? core.ok({ plan: plan.data, taskId: result.data.taskId, output: result.data.output })
     : result
 }
 
@@ -235,7 +235,7 @@ function audioCapabilities() {
     return asr
   const tts = ai.audio.getCapabilities({ operation: 'synthesize' })
   return tts.success
-    ? ok({ transcription: asr.data, synthesis: tts.data })
+    ? core.ok({ transcription: asr.data, synthesis: tts.data })
     : tts
 }
 
@@ -261,7 +261,7 @@ async function streamSynthesis(input: string, signal: AbortSignal) {
       completed = true
     }
   }
-  return ok({
+  return core.ok({
     started,
     audioChunks,
     bytes,
@@ -279,7 +279,7 @@ export async function runIntegrationDemo(id: IntegrationDemoId, input: string, s
     case 'acp': return runAcp(input, signal, browserId)
     case 'mcp-job':
       if (input !== sampleFile || !await configuredDocumentJob())
-        return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document job is unavailable')
+        return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground document job is unavailable')
       return ai.mcp.services.invoke({
         serviceId: documentService,
         tool: documentTool,
@@ -291,7 +291,7 @@ export async function runIntegrationDemo(id: IntegrationDemoId, input: string, s
       })
     case 'mcp-remote':
       if (!await configuredRemote())
-        return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground MCP service is unavailable')
+        return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Playground MCP service is unavailable')
       return ai.mcp.services.invoke({
         serviceId: manualService,
         tool: manualTool,

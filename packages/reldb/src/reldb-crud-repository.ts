@@ -7,6 +7,7 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbConfig } from './reldb-config.js'
+
 import type {
   BaseReldbCrudRepositoryConfig,
   CrudPageOptions,
@@ -21,8 +22,7 @@ import type {
   ReldbFunctions,
   ReldbTableDef,
 } from './reldb-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldbM } from './reldb-i18n.js'
 import { HaiReldbError } from './reldb-types.js'
 
@@ -108,7 +108,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     const tableDef = this.buildReldbTableDef(config.fields)
     const createTable = config.createTableIfNotExists !== false
       ? this.db.ddl.createTable(config.table, tableDef, true)
-      : Promise.resolve(ok(undefined))
+      : Promise.resolve(core.ok(undefined))
 
     this.initPromise = createTable
 
@@ -464,7 +464,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       // 透传初始化失败结果
       return result
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 验证框架仓库使用当前字段定义，结构不符时停止发布仓库。 */
@@ -477,11 +477,11 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       return columns
     const names = new Set(columns.data)
     if (names.size !== this.fields.length || this.fields.some(field => !names.has(field.columnName))) {
-      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_schemaMismatch', {
+      return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_schemaMismatch', {
         params: { table: this.table },
       }))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /**
@@ -512,7 +512,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     const payload = this.buildCreatePayload(data)
     if (Object.keys(payload).length === 0) {
       // 无可写入字段时返回配置错误
-      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
+      return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
     return this.crud.create(payload, tx)
   }
@@ -604,7 +604,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     }
 
     if (Object.keys(createPayload).length === 0) {
-      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
+      return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
 
     const insertColumns = Object.keys(createPayload)
@@ -778,7 +778,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     const payload = this.buildUpdatePayload(data)
     if (!payload) {
       // 无可更新字段时返回配置错误
-      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
+      return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
     return this.crud.updateById(id, payload, tx)
   }

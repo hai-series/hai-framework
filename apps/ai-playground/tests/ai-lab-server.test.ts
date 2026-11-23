@@ -35,11 +35,11 @@ vi.mock('@h-ai/ai', () => ({
 
 vi.mock('@h-ai/core', () => ({
   core: {
+    ok: (data: unknown) => ({ success: true as const, data }),
     logger: {
       warn: vi.fn(),
     },
   },
-  ok: (data: unknown) => ({ success: true as const, data }),
 }))
 
 vi.mock('../src/lib/server/init.js', () => ({

@@ -1,8 +1,8 @@
 <script lang='ts'>
   // LLM 对话面板：发送对话、按需注入记忆，并在展示回复后后台提取记忆（避免二次 LLM 调用阻塞回复）
   import type { LabMessage } from '#lib/ai-lab-types.js'
-  import { Button, Card, toast, ToggleInput } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, Card, ToggleInput, ui } from '@h-ai/ui'
+
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { rememberExchange, sendChat } from '#lib/services/ai-lab.js'
@@ -85,7 +85,7 @@
     catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError')
         return
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -105,7 +105,7 @@
       if (!result || memoryAbortController !== controller)
         return
       if (result.remembered > 0) {
-        toast.success(m.chat_remembered({ count: result.remembered }))
+        ui.toast.success(m.chat_remembered({ count: result.remembered }))
         onmemorychange()
       }
     }
@@ -135,7 +135,7 @@
     chatAbortController?.abort()
     memoryAbortController?.abort()
   })
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Card class='flex min-h-[42rem] flex-col border border-base-content/8 bg-base-100/88 shadow-xl shadow-base-content/5' padding='none'>

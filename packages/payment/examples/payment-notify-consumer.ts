@@ -5,10 +5,11 @@
  * 数据库内事务保证订单、事件记录和 outbox 原子提交。外部发货/短信等不能纳入此事务，
  * outbox 投递者应携带稳定 outbox id 作为业务幂等键，不能宣称跨系统恰好一次。
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { PaymentNotifyResult } from '@h-ai/payment'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 /**
  * 初始化示例应用的订单、通知去重和待履约事件表，生产应用应使用自己的迁移机制。
@@ -89,7 +90,7 @@ export async function consumePaymentNotification(
   notify: PaymentNotifyResult,
 ): Promise<HaiResult<'applied' | 'duplicate' | 'ignored'>> {
   if (notify.status !== 'paid')
-    return ok('ignored')
+    return core.ok('ignored')
   return db.tx.wrap(async (tx) => {
     // 先执行带完整业务条件的 CAS，避免读后写竞态；订单和金额来自共享业务库。
     const updated = await tx.execute(

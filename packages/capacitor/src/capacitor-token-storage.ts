@@ -9,9 +9,10 @@
 
 import type { SecureStoragePlugin } from '@aparajita/capacitor-secure-storage'
 import type { TokenStorage } from '@h-ai/api-client'
+
 import type { HaiResult } from '@h-ai/core'
 import { Preferences } from '@capacitor/preferences'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
@@ -52,9 +53,9 @@ async function loadSecureStoragePlugin(): Promise<SecureStoragePlugin> {
  * @throws 返回适配器的方法在插件不可用或原生存储失败时拒绝 Promise。
  * @example
  * ```ts
- * import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+ * import { capacitor } from '@h-ai/capacitor'
  *
- * const storage = createCapacitorTokenStorage()
+ * const storage = capacitor.createTokenStorage()
  * try {
  *   const token = await storage.getAccessToken()
  *   void token // 仅原生安全存储；平台或存储失败会拒绝 Promise。
@@ -172,10 +173,10 @@ export function createCapacitorTokenStorage(): TokenStorage {
 export async function safeGetPreference(key: string): Promise<HaiResult<string | null>> {
   try {
     const { value } = await Preferences.get({ key })
-    return ok(value)
+    return core.ok(value)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.PREFERENCES_GET_FAILED,
       capacitorM('capacitor_preferencesGetFailed'),
       cause,
@@ -208,10 +209,10 @@ export async function safeGetPreference(key: string): Promise<HaiResult<string |
 export async function safeSetPreference(key: string, value: string): Promise<HaiResult<void>> {
   try {
     await Preferences.set({ key, value })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.PREFERENCES_SET_FAILED,
       capacitorM('capacitor_preferencesSetFailed'),
       cause,
@@ -243,10 +244,10 @@ export async function safeSetPreference(key: string, value: string): Promise<Hai
 export async function safeRemovePreference(key: string): Promise<HaiResult<void>> {
   try {
     await Preferences.remove({ key })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.PREFERENCES_REMOVE_FAILED,
       capacitorM('capacitor_preferencesRemoveFailed'),
       cause,

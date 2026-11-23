@@ -1,6 +1,6 @@
 /** 会话提交失败与并发轮换的定向回归，不依赖账号数据库。 */
 import { cache, HaiCacheError } from '@h-ai/cache'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
@@ -64,7 +64,7 @@ it('轮换发布失败保留旧会话，不撤销后再制造半成品', async (
   if (!created.success)
     throw new Error(created.error.message)
   const refresh = created.data.data!._tokenPair!.refreshToken
-  vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(err(HaiCacheError.OPERATION_FAILED, 'Test connection failure'))
+  vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(core.err(HaiCacheError.OPERATION_FAILED, 'Test connection failure'))
   expect((await ops.refresh(refresh)).success).toBe(false)
   expect((await ops.verifyToken(created.data.accessToken)).success).toBe(true)
   expect((await ops.refresh(refresh)).success).toBe(true)
@@ -75,7 +75,7 @@ it('单设备候选提交失败不踢掉已有会话，失败候选不进入索�
   const created = await ops.create({ userId: 'failure-single' })
   if (!created.success)
     throw new Error(created.error.message)
-  vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(err(HaiCacheError.OPERATION_FAILED, 'Test connection failure'))
+  vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(core.err(HaiCacheError.OPERATION_FAILED, 'Test connection failure'))
   expect((await ops.create({ userId: 'failure-single' })).success).toBe(false)
   expect((await ops.verifyToken(created.data.accessToken)).success).toBe(true)
   expect(await ops.deleteByUserId('failure-single')).toEqual({ success: true, data: 1 })

@@ -45,17 +45,17 @@ await apiClient.init({
 App/Capacitor 场景传入自定义 TokenStorage：
 
 ```ts
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 // 用 HTTPS 地址和原生认证存储初始化客户端。失败返回错误。
 await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   // 创建原生安全令牌适配器供认证模块读写。原生存储不可用时，后续读写会失败。
-  auth: { storage: createCapacitorTokenStorage() },
+  auth: { storage: capacitor.createTokenStorage() },
 })
 ```
 
-> `createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境 + `@aparajita/capacitor-secure-storage` 已安装时持久化 token；纯 Web 不会回退到 `localStorage`。
+> `capacitor.createTokenStorage()` 仅在 Android/iOS 原生环境 + `@aparajita/capacitor-secure-storage` 已安装时持久化 token；纯 Web 不会回退到 `localStorage`。
 
 SSR / Node.js 测试场景请显式传入内存存储：
 

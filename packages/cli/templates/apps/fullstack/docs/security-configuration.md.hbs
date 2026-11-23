@@ -105,7 +105,7 @@ password:
 
 `requireInitialChange` 作用于管理员创建/重置的初始密码，自助注册自行设密不重复强改；开启它不等于给所有存量账号补上初始密码标记。首次/到期用户在登录页完成原密码验证和新密码设置，再重新登录。未完成时服务端不授权普通业务会话，前端隐藏提示不能绕过。
 
-改密提示区分确认不一致、复杂度不足和新旧密码相同（`hai:iam:034`），凭据验证失败统一提示“用户名或密码不正确”。前端确认密码与服务端逐字符比较，保留空白和 Unicode 原文；本地校验失败不发送请求并给出具体填写提示。认证失败共用 UI 的 `authErrorMessage` 和统一 Toast，隐藏未知异常原文、保留追踪编号。修改当前密码失败不会被误判为会话过期；成功后清理本地凭据并重新登录。
+改密提示区分确认不一致、复杂度不足和新旧密码相同（`hai:iam:034`），凭据验证失败统一提示“用户名或密码不正确”。前端确认密码与服务端逐字符比较，保留空白和 Unicode 原文；本地校验失败不发送请求并给出具体填写提示。认证失败共用 UI 的 `ui.authErrorMessage` 和统一 Toast，隐藏未知异常原文、保留追踪编号。修改当前密码失败不会被误判为会话过期；成功后清理本地凭据并重新登录。
 
 ## 轻量验证码与失败锁定
 
@@ -169,7 +169,7 @@ reauthentication:
 
 模板已接入的标识包括：`iam.users.create`、`iam.users.invite`、`iam.users.update`、`iam.users.delete`、`iam.users.avatar`、`iam.roles.update`、`iam.profile.update`、`iam.profile.avatar`、`business.settings.update`、`audit.backup`。标准界面会按公开配置弹出再认证对话框。
 
-通用界面及交互由 `@h-ai/ui` 的 `ReauthenticationDialog` 和 `createSensitiveActions(actions)` 提供。模板的 shared 仅保留具体请求与凭据传递；其他模板/项目可传入 Kit 或 API client 的标准认证动作复用同一工厂，不需复制状态机。每个根布局创建一份，接公开策略，卸载时取消待确认动作。
+通用界面及交互由 `@h-ai/ui` 的 `ReauthenticationDialog` 和 `ui.createSensitiveActions(actions)` 提供。模板的 shared 仅保留具体请求与凭据传递；其他模板/项目可传入 Kit 或 API client 的标准认证动作复用同一工厂，不需复制状态机。每个根布局创建一份，接公开策略，卸载时取消待确认动作。
 
 自定义业务不能只往清单里加一个名字：服务端在完成授权/资源校验后调用 `iam.auth.checkSensitiveOperation()`，客户端通过 shared 的 `requestSensitive()` 取得并传递凭据。操作名两端一致；无票据、过期、重复使用或用途不符都应拒绝。敏感操作标识不等于审计 action 名称，不能想当然地互换。
 
@@ -338,7 +338,7 @@ alerts:
 | ---- | ------------------ |
 | 账号状态、密码、挑战、再认证、登录限制、会话 | `@h-ai/iam` 按同一配置执行服务端策略，不依赖 fullstack 页面或具体业务角色名 |
 | 登录/注册/找回/初始或过期改密、挑战交互 | `@h-ai/ui` 的 `AuthPanel`；传 IAM 公开配置及标准认证动作，无需业务复制表单流程 |
-| 已登录敏感动作确认 | `@h-ai/ui` 的 `createSensitiveActions(actions)` + `ReauthenticationDialog`，应用只写操作名、业务请求和本次证明传递 |
+| 已登录敏感动作确认 | `@h-ai/ui` 的 `ui.createSensitiveActions(actions)` + `ReauthenticationDialog`，应用只写操作名、业务请求和本次证明传递 |
 | Cookie / typed client 传输及页面离开通知 | Kit / API client 的 `createAuthActions`；服务端仍用 IAM 或 `kit.guard.requireSensitive` 校验 |
 | 审计、脱敏、保留保护、备份和告警 | `@h-ai/audit`；复用 Scheduler、Storage、Reach，宿主装配已有模块及自己的业务事件 |
 | 四类职责与示例管理页面 | 留在应用中维护；角色、权限、业务资源与具体流程不能写死进 UI 或 IAM |

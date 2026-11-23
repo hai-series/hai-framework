@@ -16,8 +16,8 @@ import { twMerge } from 'tailwind-merge'
  *
  * @example
  * ```ts
- * import { cn } from '@h-ai/ui'
- * const classes = cn('px-2', 'px-4', false, 'font-medium')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.cn('px-2', 'px-4', false, 'font-medium')
  * // classes 为冲突合并后的类名，可直接用于元素 class。
  * ```
  */
@@ -43,8 +43,8 @@ export type ForwardedDataAttributes = Record<`data-${string}`, string | number |
  *
  * @example
  * ```ts
- * import { getDataAttributes } from '@h-ai/ui'
- * const attributes = getDataAttributes({ 'data-testid': 'save', 'data-loading': false, onclick: 'ignored' })
+ * import { ui } from '@h-ai/ui'
+ * const attributes = ui.getDataAttributes({ 'data-testid': 'save', 'data-loading': false, onclick: 'ignored' })
  * // 仅保留安全类型的 data-* 字段。
  * ```
  */
@@ -142,8 +142,8 @@ const SIZE_MAPS: Record<string, Record<Size, string>> = {
  *
  * @example
  * ```ts
- * import { getVariantClass } from '@h-ai/ui'
- * const classes = getVariantClass('primary', 'btn')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getVariantClass('primary', 'btn')
  * ```
  */
 export function getVariantClass(variant: Variant, prefix = 'btn'): string {
@@ -164,8 +164,8 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
  *
  * @example
  * ```ts
- * import { getSizeClass } from '@h-ai/ui'
- * const classes = getSizeClass('lg', 'btn')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getSizeClass('lg', 'btn')
  * ```
  */
 export function getSizeClass(size: Size, prefix = 'btn'): string {
@@ -184,8 +184,8 @@ export function getSizeClass(size: Size, prefix = 'btn'): string {
  *
  * @example
  * ```ts
- * import { getInputSizeClass } from '@h-ai/ui'
- * const classes = getInputSizeClass('sm')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getInputSizeClass('sm')
  * ```
  */
 export function getInputSizeClass(size: Size): string {
@@ -209,8 +209,8 @@ export function getInputSizeClass(size: Size): string {
  *
  * @example
  * ```ts
- * import { getBadgeVariantClass } from '@h-ai/ui'
- * const classes = getBadgeVariantClass('success')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getBadgeVariantClass('success')
  * ```
  */
 export function getBadgeVariantClass(variant: Variant): string {
@@ -224,8 +224,8 @@ export function getBadgeVariantClass(variant: Variant): string {
  *
  * @example
  * ```ts
- * import { getBadgeSizeClass } from '@h-ai/ui'
- * const classes = getBadgeSizeClass('sm')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getBadgeSizeClass('sm')
  * ```
  */
 export function getBadgeSizeClass(size: Size): string {
@@ -239,8 +239,8 @@ export function getBadgeSizeClass(size: Size): string {
  *
  * @example
  * ```ts
- * import { getAlertVariantClass } from '@h-ai/ui'
- * const classes = getAlertVariantClass('warning')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getAlertVariantClass('warning')
  * ```
  */
 export function getAlertVariantClass(variant: Variant): string {
@@ -266,8 +266,8 @@ export function getAlertVariantClass(variant: Variant): string {
  *
  * @example
  * ```ts
- * import { getProgressVariantClass } from '@h-ai/ui'
- * const classes = getProgressVariantClass('success')
+ * import { ui } from '@h-ai/ui'
+ * const classes = ui.getProgressVariantClass('success')
  * ```
  */
 export function getProgressVariantClass(variant: Variant): string {
@@ -281,8 +281,8 @@ export function getProgressVariantClass(variant: Variant): string {
  *
  * @example
  * ```ts
- * import { generateId } from '@h-ai/ui'
- * const inputId = generateId('profile-email')
+ * import { ui } from '@h-ai/ui'
+ * const inputId = ui.generateId('profile-email')
  * // 仅用于界面节点关联，不用作安全令牌或分布式业务主键。
  * ```
  */
@@ -302,9 +302,9 @@ export function generateId(prefix = 'hai'): string {
  *
  * @example
  * ```ts
- * import { portal } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * const popup = document.createElement('div')
- * const action = portal(popup, document.body)
+ * const action = ui.portal(popup, document.body)
  * action.update(document.body)
  * action.destroy()
  * ```

@@ -22,9 +22,9 @@
 {{/if}}
 {{/if}}
 {{#if hasI18n}}
-  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector } from '@h-ai/ui'
+  import { LanguageSwitch, ThemeSelector, ui } from '@h-ai/ui'
 {{else}}
-  import { applyTheme, getSavedTheme, ThemeSelector } from '@h-ai/ui'
+  import { ThemeSelector, ui } from '@h-ai/ui'
 {{/if}}
 {{#if features.crypto}}
   import { untrack } from 'svelte'
@@ -48,14 +48,14 @@
   }
 {{/if}}
   const initialTheme = browser
-    ? getSavedTheme()
+    ? ui.getSavedTheme()
     : 'light'
   let currentTheme = $state(initialTheme)
   if (browser)
-    applyTheme(initialTheme, false)
+    ui.applyTheme(initialTheme, false)
   function handleThemeChange(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 {{#if features.iam}}
   const authActions = kit.client.createAuthActions({ basePath: `${resolve('/').replace(/\/$/, '')}/api/auth` })
@@ -64,13 +64,13 @@
 {{#if hasI18n}}
 
   function handleLanguageChange(language: string) {
-    setGlobalLocale(language)
+    ui.setGlobalLocale(language)
     setLocale(language as Parameters<typeof setLocale>[0])
   }
 
   if (browser) {
     const paraglideLocale = getLocale()
-    setGlobalLocale(paraglideLocale)
+    ui.setGlobalLocale(paraglideLocale)
   }
 {{/if}}
 </script>

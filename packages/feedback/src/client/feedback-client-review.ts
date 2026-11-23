@@ -1,7 +1,8 @@
 /** 详情接入统一处理导出轮询、回放分页和取消，不依赖 UI 或平台 SDK。 */
 import type { FeedbackAttachmentData, FeedbackDetail, FeedbackEvidence, FeedbackEvidenceQuery, FeedbackExportInput, FeedbackJob, FeedbackRetryInput } from '@h-ai/api-contract/feedback'
+
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
 import { feedbackDataBytes, saveFeedbackFile } from './feedback-client-files.js'
@@ -26,9 +27,9 @@ export interface FeedbackReviewActions {
  * 创建可取消的详情动作；退出账号调用 close，旧轮询不能继续下载到新会话。
  * @example
  * ```ts
- * import { createFeedbackReview, type FeedbackReviewActions } from '@h-ai/feedback/client'
+ * import { type FeedbackReviewActions, feedback } from '@h-ai/feedback/client'
  * async function exportReport(actions: FeedbackReviewActions) {
- *   const review = createFeedbackReview(actions)
+ *   const review = feedback.createReview(actions)
  *   const result = await review.exportReport('report-id')
  *   review.close()
  *   return result
@@ -37,7 +38,7 @@ export interface FeedbackReviewActions {
  */
 export function createFeedbackReview(actions: FeedbackReviewActions) {
   let controller = new AbortController()
-  const failed = () => err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+  const failed = () => core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
   return {
     close() {
       controller.abort()
@@ -67,7 +68,7 @@ export function createFeedbackReview(actions: FeedbackReviewActions) {
           if (!retried.success)
             return retried
         }
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch {
         return failed()
@@ -90,7 +91,7 @@ export function createFeedbackReview(actions: FeedbackReviewActions) {
             return result
           events.push(...result.data.items)
           if (events.length >= result.data.total || !result.data.items.length)
-            return ok(events)
+            return core.ok(events)
         }
       }
       catch {

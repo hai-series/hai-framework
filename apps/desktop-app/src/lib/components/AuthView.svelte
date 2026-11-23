@@ -1,8 +1,7 @@
 <script lang='ts'>
   import type { IamPublicConfig } from '@h-ai/api-contract'
-  import { LanguageSwitch } from '@h-ai/ui'
-  import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
+  import { AuthPanel, LanguageSwitch, ui } from '@h-ai/ui'
+
   import { onMount } from 'svelte'
   import { refreshCurrentUser } from '../auth-store.svelte.js'
   import { localeStore } from '../messages.svelte.js'
@@ -18,7 +17,7 @@
     if (result.success)
       config = result.data
     else
-      error = authErrorMessage(result.error)
+      error = ui.authErrorMessage(result.error)
   }
   onMount(() => {
     void loadConfig()

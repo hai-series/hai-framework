@@ -7,10 +7,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { ReachTemplate } from '../reach-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { reachM } from '../reach-i18n.js'
@@ -258,13 +258,13 @@ export function resetTemplateRepoSingleton(): void {
  */
 export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiResult<TemplateRepository>> {
   if (templateRepoInstance && templateRepoSqlOps === db.sql)
-    return ok(templateRepoInstance)
+    return core.ok(templateRepoInstance)
 
   const repo = new DbTemplateRepository(db)
   // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
   const initResult = await repo.count()
   if (!initResult.success) {
-    return err(
+    return core.err(
       HaiReachError.SEND_FAILED,
       reachM('reach_templateDbInitFailed', {
         params: { error: initResult.error.message },
@@ -274,7 +274,7 @@ export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiR
   }
   templateRepoInstance = repo
   templateRepoSqlOps = db.sql
-  return ok(repo)
+  return core.ok(repo)
 }
 
 /**
@@ -313,7 +313,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
     if (!result.success) {
       return result
     }
-    return ok(result.data[0])
+    return core.ok(result.data[0])
   }
 
   /** 保存模板（存在则更新，不存在则插入） */
@@ -358,7 +358,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
         return createResult
       }
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 按名称删除模板 */
@@ -368,13 +368,13 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
       return existing
     }
     if (!existing.data) {
-      return ok(undefined)
+      return core.ok(undefined)
     }
     const result = await this.deleteById(existing.data.id, tx)
     if (!result.success) {
       return result
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 获取所有模板（转换为 ReachTemplate 格式） */
@@ -383,6 +383,6 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
     if (!result.success) {
       return result
     }
-    return ok(result.data.map(toReachTemplate))
+    return core.ok(result.data.map(toReachTemplate))
   }
 }

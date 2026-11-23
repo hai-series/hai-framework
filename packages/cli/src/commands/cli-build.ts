@@ -9,7 +9,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { appendFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { deploy, normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { nativeNameEnvironment } from '../../templates/shared/native-name.mjs'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
@@ -353,7 +353,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const config = (project.build ?? {}) as BuildConfig
   if (typeof metadata.name !== 'string' || !metadata.name.trim())
     throw new Error(cliM('cli_build_project_name_required'))
-  const projectName = normalizeProjectName(metadata.name)
+  const projectName = deploy.normalizeProjectName(metadata.name)
   const debug = options.debug === true
   const identity = {
     buildId: createBuildId(appVersion),
@@ -544,7 +544,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       args.push('--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', `HAI_BUILD_COMMIT=${commit}`)
       const dockerfile = readFileSync(resolve(cwd, image.dockerfile), 'utf8')
       for (const match of dockerfile.matchAll(/^ARG (HAI_(?:NODE|NGINX)_IMAGE)=(\S+)\s*$/gm))
-        args.push('--build-arg', `${match[1]}=${resolveImageReference(match[2], downloads.imageSource)}`)
+        args.push('--build-arg', `${match[1]}=${deploy.resolveImageReference(match[2], downloads.imageSource)}`)
       args.push('--build-arg', `HAI_NPM_REGISTRY=${downloads.npmRegistry}`, ...buildProxyArguments(downloads.proxy, runtime, options.network))
       if (runtime === 'docker' && process.platform === 'linux' && options.network !== 'host')
         args.push('--add-host', 'host.docker.internal:host-gateway')

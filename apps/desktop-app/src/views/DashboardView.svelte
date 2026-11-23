@@ -3,8 +3,8 @@
   通过 @h-ai/ui 的 PageHeader / Card / Button / Alert 组装。
 -->
 <script lang='ts'>
-  import { Alert, Button, Card, PageHeader } from '@h-ai/ui'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { Alert, Button, Card, PageHeader, ui } from '@h-ai/ui'
+
   import { onMount } from 'svelte'
   import { currentUser, hasPermission } from '../lib/auth-store.svelte.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
@@ -33,8 +33,8 @@
       return
     await sendEcho(trimmed)
   }
-  useToastFeedback(() => currentServiceInfoError())
-  useToastFeedback(() => currentEchoError())
+  ui.useToastFeedback(() => currentServiceInfoError())
+  ui.useToastFeedback(() => currentEchoError())
 </script>
 
 <div class='flex flex-col gap-4'>

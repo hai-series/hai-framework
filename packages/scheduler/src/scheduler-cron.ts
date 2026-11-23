@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { Cron } from 'croner'
 
 import { schedulerM } from './scheduler-i18n.js'
@@ -33,10 +33,10 @@ import { HaiSchedulerError } from './scheduler-types.js'
 export function parseCronExpression(expression: string, timezone?: string): HaiResult<Cron> {
   try {
     const cron = new Cron(expression, { legacyMode: false, timezone: timezone ?? 'UTC' })
-    return ok(cron)
+    return core.ok(cron)
   }
   catch {
-    return err(
+    return core.err(
       HaiSchedulerError.INVALID_CRON,
       schedulerM('scheduler_invalidCron', {
         params: { expression },

@@ -1,6 +1,6 @@
 import type { VecdbOpsContext } from '../src/providers/vecdb-provider-base.js'
 import type { VecdbOperationLogConfig } from '../src/vecdb-config.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createBaseVectorOps } from '../src/providers/vecdb-provider-base.js'
 
@@ -22,12 +22,12 @@ function setup(config: Partial<VecdbOperationLogConfig> = {}) {
     },
   }
   const ops = createBaseVectorOps(ctx, {
-    insert: async () => ok(undefined),
-    upsert: async () => ok(undefined),
-    delete: async () => ok(undefined),
-    search: async () => ok([]),
-    count: async () => ok(0),
-    scan: async () => ok({ items: [] }),
+    insert: async () => core.ok(undefined),
+    upsert: async () => core.ok(undefined),
+    delete: async () => core.ok(undefined),
+    search: async () => core.ok([]),
+    count: async () => core.ok(0),
+    scan: async () => core.ok({ items: [] }),
   })
   return { ops, logger: ctx.logger }
 }

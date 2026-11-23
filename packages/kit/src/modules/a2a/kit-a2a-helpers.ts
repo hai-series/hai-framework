@@ -18,9 +18,10 @@ import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
  *
  * @param getAgentCard - 返回标准 ProtoJSON Agent Card 文档的回调（成功时取 `ai.a2a.getAgentCard().data`）
  * @returns SvelteKit GET 处理器
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const handler = createAgentCardHandler(() => ({ name: 'Example agent', supportedInterfaces: [{ url: 'https://agent.example.com/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }] }))
+ * import { kit } from '@h-ai/kit'
+ * const handler = kit.a2a.createAgentCardHandler(() => ({ name: 'Example agent', supportedInterfaces: [{ url: 'https://agent.example.com/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }] }))
  * void handler
  * ```
  */

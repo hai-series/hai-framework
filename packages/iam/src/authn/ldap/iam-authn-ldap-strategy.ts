@@ -11,7 +11,7 @@ import type { LdapConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser } from '../../user/iam-user-types.js'
 import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { iamM } from '../../iam-i18n.js'
@@ -198,7 +198,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   }
 
   function rejected() {
-    return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+    return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
   }
 
   async function boundUser(entryId: string): Promise<HaiResult<StoredUser | null>> {
@@ -207,7 +207,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       return linked
     return linked.data
       ? userRepository.findById(linked.data)
-      : ok(null)
+      : core.ok(null)
   }
 
   async function provision(entryId: string, username: string, email: string | undefined, displayName: string | undefined, dn: string): Promise<HaiResult<StoredUser>> {
@@ -247,7 +247,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       const finished = await tx.commit()
       committed = finished.success
       return finished.success
-        ? ok(user)
+        ? core.ok(user)
         : finished
     }
     finally {
@@ -272,12 +272,12 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
       const { username, password } = credentialResult.data
       if (!username.trim() || !password)
-        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+        return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
 
       // 创建 LDAP 客户端
       const clientResult = await ldapClientFactory(ldapConfig)
       if (!clientResult.success) {
-        return err(
+        return core.err(
           HaiIamError.LDAP_CONNECTION_FAILED,
           iamM('iam_ldapConnectionFailed'),
           clientResult.error,
@@ -290,7 +290,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         // 先用管理员账号绑定
         const adminBindResult = await client.bind(ldapConfig.bindDn, ldapConfig.bindPassword)
         if (!adminBindResult.success) {
-          return err(
+          return core.err(
             HaiIamError.LDAP_BIND_FAILED,
             iamM('iam_ldapAdminBindFailed'),
             adminBindResult.error,
@@ -313,7 +313,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         )
 
         if (!searchResult.success) {
-          return err(
+          return core.err(
             HaiIamError.LDAP_SEARCH_FAILED,
             iamM('iam_ldapSearchFailed'),
             searchResult.error,
@@ -363,14 +363,14 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
         if (storedUser) {
           if (!isUserActive(storedUser)) {
-            return err(
+            return core.err(
               HaiIamError.ACCOUNT_UNAVAILABLE,
               iamM('iam_accountUnavailable'),
             )
           }
 
           if (isAccountLocked(storedUser, failurePolicy)) {
-            return err(
+            return core.err(
               HaiIamError.USER_LOCKED,
               iamM('iam_accountLocked'),
             )
@@ -402,7 +402,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             storedUser = linked.data
           }
           else {
-            return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), created.error)
+            return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), created.error)
           }
         }
         else if (syncUser) {
@@ -432,7 +432,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           return resetResult
         logger.debug('LDAP authentication succeeded', { userId: storedUser.id })
 
-        return ok({
+        return core.ok({
           ...toUser(storedUser),
           credentialVersion: storedUser.credentialVersion ?? '',
         })

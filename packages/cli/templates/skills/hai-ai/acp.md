@@ -66,7 +66,7 @@ WebSocket 改为 `transport: 'ws'` 和 `ws://` 地址。`cwd` 是远端可见路
 
 ```ts
 import { createServer } from 'node:http'
-import { ai, type ACPPlatformPolicy, type MCPServiceBroker, type MCPServiceBrokerOptions } from '@h-ai/ai'
+import { type ACPPlatformPolicy, type MCPServiceBroker, type MCPServiceBrokerOptions, ai } from '@h-ai/ai'
 
 // 应用传入真实 IAM 检查。该函数复核任务归属、权限及实际工具参数。
 function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize']) {

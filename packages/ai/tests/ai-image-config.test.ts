@@ -1,5 +1,5 @@
+import { ai, ImageConfigSchema } from '@h-ai/ai'
 import { expect, it } from 'vitest'
-import { ImageConfigSchema, resolveImageModel } from '../src/ai-config.js'
 
 it('图像厂商地址只裁去尾部斜杠，不反复扫描合法长路径', () => {
   const baseUrl = `https://provider.example/${'/'.repeat(120_000)}v1`
@@ -16,7 +16,7 @@ it('图像厂商地址只裁去尾部斜杠，不反复扫描合法长路径', (
     ],
   })
   const started = performance.now()
-  expect(resolveImageModel(config)).toMatchObject({
+  expect(ai.resolveImageModel(config)).toMatchObject({
     success: true,
     data: { baseUrl },
   })

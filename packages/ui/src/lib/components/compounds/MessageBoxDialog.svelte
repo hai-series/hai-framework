@@ -9,12 +9,12 @@
   @example
   ```ts
   import { mount, unmount } from 'svelte'
-  import { MessageBoxDialog, messageBox } from '@h-ai/ui'
-  const response = messageBox.confirm({ title: '确认', message: '提交资料？' })
-  const item = messageBox.items[0]
+  import { MessageBoxDialog, ui } from '@h-ai/ui'
+  const response = ui.messageBox.confirm({ title: '确认', message: '提交资料？' })
+  const item = ui.messageBox.items[0]
   if (!item) throw new Error('Dialog state unavailable')
   const dialog = mount(MessageBoxDialog, { target: document.body, props: { item } })
-  messageBox.handleCancel(item)
+  ui.messageBox.handleCancel(item)
   const accepted = await response
   await unmount(dialog)
   ```

@@ -6,7 +6,7 @@
 
 本页截图来自当前管理台的真实组件演示和设置页面。表单与列表演示用于观察公共组件行为；示例数据不代表后台业务已经保存。真实反馈处理流程见[运行维护](../operations/feedback.md)。
 
-组件自动导入按[UI 接入配置](../../../packages/ui/README.md)启用：先执行 `vitePreprocess()` 或自定义语言转换，再执行 `autoImportHaiUi()`。输入是转换后的 Svelte 源码，输出只为模板实际使用且未绑定的组件补充 import；注释、textarea 和脚本字符串中的示例不会触发导入，脚本声明及 each、await、snippet 的局部组件仍使用自己的绑定。
+组件自动导入按[UI 接入配置](../../../packages/ui/README.md)启用：先执行 `vitePreprocess()` 或自定义语言转换，再执行 `ui.autoImport()`。输入是转换后的 Svelte 源码，输出只为模板实际使用且未绑定的组件补充 import；注释、textarea 和脚本字符串中的示例不会触发导入，脚本声明及 each、await、snippet 的局部组件仍使用自己的绑定。
 
 ## 页面骨架与列表
 
@@ -53,7 +53,8 @@
 
 ```svelte
 <!-- 传入 source，显示文件和编辑区，向插槽传递当前文件与选区操作。 -->
-<CodeWorkspace {source}>
+<CodeWorkspace source={
+;(source}>
   <!-- 接收当前文件、选区和定位函数；下方按钮用标注的 range 滚动到对应位置。 -->
   {#snippet inspector({ file, selection, reveal })}
     <p>{file.node.name}</p>
@@ -168,11 +169,8 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 ```svelte
 <script lang="ts">
-  import { ToastContainer } from '@h-ai/ui'
-  import { notifyError, notifySuccess } from '@h-ai/ui/toast'
-  // 保存成功：notifySuccess(m.saved())
-  // 保存失败：notifyError(result.error, m.saveFailed())
-</script>
+  import { ToastContainer, ui } from '@h-ai/ui'
+  </script>
 
 <!-- 挂载提示容器，显示上方通知函数发布的反馈。 -->
 <ToastContainer />
@@ -184,7 +182,7 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 | `duration` | 3000 毫秒 | `0` 表示保留到手动关闭；不要让永久消息阻塞后续消息 |
 | `dismissible` | `true` | 设为 `false` 后不显示关闭按钮 |
 | `traceId` | 无 | 有合法编号时出现“查看排查信息”图标；正文不显示编号 |
-| `notifyError` / `notifyWarning` 的时长 | 5000 毫秒 | 比成功提示留出更多阅读时间 |
+| `ui.notifyError` / `ui.notifyWarning` 的时长 | 5000 毫秒 | 比成功提示留出更多阅读时间 |
 
 所有位置共用一个队列，按顺序逐条显示；计时从实际展示开始，悬停、聚焦或展开排查信息时暂停，交互结束后从剩余时间继续。错误使用 `alert/assertive`，其他消息使用 `status/polite`，文字、图标和颜色共同说明状态。
 
@@ -198,11 +196,11 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 复制成功显示“编号已复制”；浏览器拒绝剪贴板访问时，提示选中编号手动复制。窄屏会折行，展开期间不会自动消失：
 
-已有 `errorMessage` / `authErrorMessage` 返回的 `(traceId: …)` 会由 Toast 自动分离；新代码也可直接传 `toast.add({ message: m.retry(), variant: 'warning', traceId })`。`m.retry()` 为应用翻译函数，`traceId` 使用本次请求的公开标识，不能填入凭据或业务隐私。
+已有 `ui.errorMessage` / `ui.authErrorMessage` 返回的 `(traceId: …)` 会由 Toast 自动分离；新代码也可直接传 `ui.toast.add({ message: m.retry(), variant: 'warning', traceId })`。`m.retry()` 为应用翻译函数，`traceId` 使用本次请求的公开标识，不能填入凭据或业务隐私。
 
-操作警告用 `toast.warning`，业务错误用 `notifyError`；需要跟随响应式错误状态时，在组件初始化时注册 `useToastFeedback(() => error)`。状态更新或清空会替换或移除该来源的待显示通知，同类、同文案、同编号的待显示通知合并；组件卸载不会撤销已经发出的通知。
+操作警告用 `ui.toast.warning`，业务错误用 `ui.notifyError`；需要跟随响应式错误状态时，在组件初始化时注册 `ui.useToastFeedback(() => error)`。状态更新或清空会替换或移除该来源的待显示通知，同类、同文案、同编号的待显示通知合并；组件卸载不会撤销已经发出的通知。
 
-直接传入完整 `HaiError`，可以保留安全的业务原因和 `traceId`。需要向组件抛出异常时，使用 `new Error(result.error.message, { cause: result.error })`。`errorMessage` / `notifyError` 能读取这条来源链；未知异常和 5xx 仍显示安全兜底，不能把数据库或密钥细节展示给用户。
+直接传入完整 `HaiError`，可以保留安全的业务原因和 `traceId`。需要向组件抛出异常时，使用 `new Error(result.error.message, { cause: result.error })`。`ui.errorMessage` / `ui.notifyError` 能读取这条来源链；未知异常和 5xx 仍显示安全兜底，不能把数据库或密钥细节展示给用户。
 
 ![弹窗内通过键盘访问提示](../images/toast-modal-keyboard.png)
 
@@ -210,7 +208,7 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 ## 主题、语言与可访问性
 
-主题来自已编译的主题 CSS 与 design tokens；默认主题由宿主选择。`@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme` 管理应用与持久化。可选主题必须在应用 CSS 中存在。使用 `ThemeSelector` 时可通过 `themeIds` 只显示应用支持的内置主题。
+主题来自已编译的主题 CSS 与 design tokens；默认主题由宿主选择。`@h-ai/ui/theme` 的 `ui.applyTheme` / `ui.getSavedTheme` 管理应用与持久化。可选主题必须在应用 CSS 中存在。使用 `ThemeSelector` 时可通过 `themeIds` 只显示应用支持的内置主题。
 
 共享 theme.css 内置 `eye-care` 护眼主题，使用暖绿色背景和深色正文，次要文字、占位符与焦点保持清晰。管理台、H5、企业站、移动/桌面示例和默认生成模板可从现有主题入口选择“护眼”，刷新后保留。fullstack 显式设置 `fullstack.theme.themes` 时，可按需加入 `eye-care`。
 

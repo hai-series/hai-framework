@@ -88,7 +88,9 @@ function instantiate(options: { encrypted?: boolean, transport?: string, native?
         return { crypto }
       if (name === '@h-ai/capacitor') {
         return {
-          createCapacitorTokenStorage: () => ({ kind: 'native' }),
+          capacitor: {
+            createTokenStorage: () => ({ kind: 'native' }),
+          },
         }
       }
       if (name === '@capacitor/core') {

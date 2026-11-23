@@ -37,9 +37,9 @@ export type XxConfigInput = z.input<typeof XxConfigSchema>
 
 ```ts
 // xx-types.ts ——示例
-import type { ErrorInfo, HaiResult } from '@h-ai/core'
+
 import type { XxConfig, XxConfigInput } from './xx-config.js'
-import { core } from '@h-ai/core'
+import { type ErrorInfo, type HaiResult, core } from '@h-ai/core'
 
 const XxErrorInfo = {
   CONNECTION_FAILED: '001:500',
@@ -120,7 +120,7 @@ export interface XxProvider {
 ```ts
 // xx-yy-functions.ts ——示例
 import type { CreateYyInput, XxYyFunctions, XxYyFunctionsDeps } from './xx-yy-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiXxError } from '../xx-types.js'
 import { xxM } from '../xx-i18n.js'
 
@@ -135,12 +135,12 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
       logger.debug('Creating yy item', { operation: 'yy.create' })
       if (!input.name) {
         // 用必填名称的本地化文本构造校验失败结果。
-        return err(HaiXxError.VALIDATION_ERROR, xxM('xx_yy_nameRequired'))
+        return core.err(HaiXxError.VALIDATION_ERROR, xxM('xx_yy_nameRequired'))
       }
       try {
         const item = await doCreate(input)
         // 将新建的 item 封装为成功结果。
-        return ok(item)
+        return core.ok(item)
       }
       catch (error) {
         // 记录 yy.create 失败的操作名、错误码和错误类名，返回 void。
@@ -150,7 +150,7 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
           causeName: error instanceof Error ? error.name : undefined,
         })
         // 封装领域错误码、本地化的创建失败消息和内部原因。
-        return err(HaiXxError.OPERATION_FAILED, xxM('xx_yy_createFailed'), error)
+        return core.err(HaiXxError.OPERATION_FAILED, xxM('xx_yy_createFailed'), error)
       }
     },
   }

@@ -11,8 +11,8 @@
 Serv や Kit と同じ契約から型付きクライアントを作成します。リクエストの前に初期化し、各 `HaiResult` を確認し、所有元の終了時に閉じます。
 
 ```ts
-import type { IamAuthLoginInput } from '@h-ai/api-client'
-import { apiClient } from '@h-ai/api-client'
+
+import { type IamAuthLoginInput, apiClient } from '@h-ai/api-client'
 
 async function loginAndLoadProfile(input: IamAuthLoginInput) {
   // Start the default client at /api/v1 with default authentication storage. Return initialization errors before using the client.

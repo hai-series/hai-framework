@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { core, err, HaiCommonError, HaiConfigError, ok } from '../src/index.js'
+import { core, HaiCommonError, HaiConfigError } from '../src/index.js'
 
 describe('core.module.createRuntime', () => {
   it('并发启动只执行一次，关闭等待启动并按相反顺序释放', async () => {
@@ -11,7 +11,7 @@ describe('core.module.createRuntime', () => {
         start: async () => {
           calls.push('start db')
           await new Promise<void>(resolve => finish = resolve)
-          return ok(undefined)
+          return core.ok(undefined)
         },
         close: () => {
           calls.push('close db')
@@ -50,14 +50,14 @@ describe('core.module.createRuntime', () => {
     const runtime = core.module.createRuntime([
       {
         name: 'db',
-        start: () => ok(undefined),
+        start: () => core.ok(undefined),
         close: () => {
           calls.push('db')
         },
       },
       {
         name: 'feedback',
-        start: () => err(HaiCommonError.INTERNAL_ERROR, 'PRIVATE_CONFIG_SENTINEL'),
+        start: () => core.err(HaiCommonError.INTERNAL_ERROR, 'PRIVATE_CONFIG_SENTINEL'),
         close: () => {
           calls.push('feedback')
         },
@@ -82,16 +82,16 @@ describe('core.module.createRuntime', () => {
 
   it('关闭失败保留依赖和清理义务，后续重试成功后才能重新启动', async () => {
     const closeDb = vi.fn()
-    const closeApp = vi.fn().mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'close failed')).mockResolvedValue(ok(undefined))
+    const closeApp = vi.fn().mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'close failed')).mockResolvedValue(core.ok(undefined))
     const runtime = core.module.createRuntime([
       {
         name: 'db',
-        start: () => ok(undefined),
+        start: () => core.ok(undefined),
         close: closeDb,
       },
       {
         name: 'app',
-        start: () => ok(undefined),
+        start: () => core.ok(undefined),
         close: closeApp,
       },
     ])
@@ -233,7 +233,7 @@ describe('core.module.createRuntime', () => {
 
   it('返回的配置失败和抛出的 Schema 错误均显示校验原因', async () => {
     for (const start of [
-      () => err({
+      () => core.err({
         ...HaiConfigError.CONFIG_VALIDATION_ERROR,
         message: 'PRIVATE_SENTINEL',
         ext: {

@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { setTimeout as delay } from 'node:timers/promises'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createRunner, runner } from '../src/index.js'
+import { runner } from '../src/index.js'
 
 const scope = { tenantId: 'studio', userId: 'alice' }
 const other = { ...scope, userId: 'bob' }
@@ -59,7 +59,7 @@ describe('managed execution', () => {
   })
 
   it('does not take the write gate when registered handlers have no eligible work', async () => {
-    const second = createRunner()
+    const second = runner.create()
     try {
       expect((await runner.init({ nodeId: 'first', pollMs: 20 })).success).toBe(true)
       expect((await second.init({ nodeId: 'second', pollMs: 20 })).success).toBe(true)
@@ -80,7 +80,7 @@ describe('managed execution', () => {
   })
 
   it('reserves separate tool resources and applies the smallest active service cap across nodes', async () => {
-    const otherNode = createRunner()
+    const otherNode = runner.create()
     const unblock = Promise.withResolvers<void>()
     try {
       expect((await runner.init({
@@ -207,7 +207,7 @@ describe('managed execution', () => {
   })
 
   it('counts resources through cleanup, routes pinned work, and waits for cancellation', async () => {
-    const follower = createRunner()
+    const follower = runner.create()
     const jobResources = { ...capacity }
     const started = Promise.withResolvers<void>()
     const cleanupStarted = Promise.withResolvers<void>()

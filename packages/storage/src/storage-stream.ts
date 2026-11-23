@@ -3,11 +3,12 @@
  *
  * 供存储 Provider 与 checksum 共用，保持消费有界且支持取消。
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { FileMetadata, StorageData, StorageFileRead } from './storage-types.js'
 import { Buffer } from 'node:buffer'
 import { addAbortSignal, finished, Readable } from 'node:stream'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { HaiStorageError } from './storage-types.js'
 
@@ -119,14 +120,14 @@ export async function uploadWithSource(
     const failedInput = readFailure !== undefined && cause === readFailure
     const originalCause = failedInput ? readFailure.cause : cause
     if (signal?.aborted && (Object.is(originalCause, signal.reason) || (originalCause instanceof Error && originalCause.name === 'AbortError'))) {
-      return err({
+      return core.err({
         ...result.error,
         message: storageM('storage_uploadCanceled'),
         cause: signal.reason,
       })
     }
     if (failedInput || (readable?.errored && readable.errored === cause)) {
-      return err({
+      return core.err({
         ...HaiStorageError.UPLOAD_FAILED,
         message: storageM('storage_uploadSourceReadFailed'),
         cause: originalCause,

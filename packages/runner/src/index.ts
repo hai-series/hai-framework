@@ -1,6 +1,6 @@
 export { RunnerConfigSchema } from './runner-config.js'
 export type { RunnerConfigInput, RunnerEnvironment, RunnerResources } from './runner-config.js'
-export { createRunner, runner } from './runner-main.js'
+export { runner } from './runner-main.js'
 export { HaiRunnerError } from './runner-types.js'
 export type {
   RunnerContext,

@@ -88,7 +88,7 @@ if (result.success) process.stdout.write(result.data.title) // 例如：发布�
 使用已登记的第三方 MCP 工具时，先从 IAM 取得当前主体，再在授权函数里检查工具用途和实际参数。框架读取最新目录并为每次调用创建独立的上游 MCP 会话。网络中断后先核对远端操作结果，再决定是否重试。
 
 ```ts
-import { ai, type MCPServiceAuthorization } from '@h-ai/ai'
+import { type MCPServiceAuthorization, ai } from '@h-ai/ai'
 
 // 应用已成功初始化 ai，authorization 来自可信服务端。
 async function searchManual(query: string, authorization: MCPServiceAuthorization) {

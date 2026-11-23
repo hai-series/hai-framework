@@ -99,8 +99,8 @@ export type SchedulerConfig = z.infer<typeof SchedulerConfigSchema>
  *
  * @example
  * ```ts
- * import type { SchedulerConfigInput } from '@h-ai/scheduler'
- * import { scheduler } from '@h-ai/scheduler'
+ *
+ * import { type SchedulerConfigInput, scheduler } from '@h-ai/scheduler'
  *
  * // 宿主已成功初始化共享 reldb。
  * const config: SchedulerConfigInput = { leaseMs: 60000, retentionDays: 30 }

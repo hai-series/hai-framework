@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import type { AuthPanelActions, AuthPanelConfig, LoginFormData, LoginFormProps } from '../src/lib/components/scenes/types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { AuthPanel, ChangePasswordForm, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
+import { AuthPanel, ChangePasswordForm, LoginForm, RegisterForm, ui } from '../src/lib/index.js'
 import { setUILocale } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
 
-afterEach(() => toast.clear())
+afterEach(() => ui.toast.clear())
 
 const config: AuthPanelConfig = {
   login: {
@@ -78,15 +77,15 @@ describe('authentication form extensions and agreements', () => {
   it('首次改密失败使用柔和错误样式和安全原因，保留追踪编号且成功前不授权', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const renewPassword = vi.fn<NonNullable<AuthPanelActions['renewPassword']>>(action)
-      .mockResolvedValueOnce(err({
+      .mockResolvedValueOnce(core.err({
         code: 'hai:iam:034',
         message: 'Private policy detail',
         httpStatus: 400,
         traceId: 'renew-same',
       }))
-      .mockResolvedValueOnce(err({
+      .mockResolvedValueOnce(core.err({
         code: 'hai:iam:002',
         message: 'Original password wrong',
         httpStatus: 401,
@@ -101,7 +100,7 @@ describe('authentication form extensions and agreements', () => {
           agreements: { showOnLogin: false, showOnRegister: false },
         },
         actions: {
-          login: async () => err({ code: 'hai:iam:025', message: 'Private initial detail', httpStatus: 401 }),
+          login: async () => core.err({ code: 'hai:iam:025', message: 'Private initial detail', httpStatus: 401 }),
           register: action,
           sendOtp: action,
           requestPasswordReset: action,
@@ -123,13 +122,13 @@ describe('authentication form extensions and agreements', () => {
       input('input[type="password"]', 'InitialPassword123!')
       target.querySelector('form')!.requestSubmit()
       await vi.waitFor(() => expect(target.querySelector('.change-password-form')).not.toBeNull())
-      expect(toast.items.some(item => item.message.includes('修改初始密码'))).toBe(true)
+      expect(ui.toast.items.some(item => item.message.includes('修改初始密码'))).toBe(true)
       input('#old-password', 'InitialPassword123!')
       input('#new-password', 'InitialPassword123!')
       input('#confirm-password', 'InitialPassword123!')
       target.querySelector('form')!.requestSubmit()
-      await vi.waitFor(() => expect(toast.items.some(item => item.message.includes('新密码不能与当前密码相同'))).toBe(true))
-      expect(toast.items.at(-1)?.traceId).toBe('renew-same')
+      await vi.waitFor(() => expect(ui.toast.items.some(item => item.message.includes('新密码不能与当前密码相同'))).toBe(true))
+      expect(ui.toast.items.at(-1)?.traceId).toBe('renew-same')
       expect(target.querySelector('.alert-error')).toBeNull()
       expect(target.textContent).not.toContain('Private')
       expect(onauthenticated).not.toHaveBeenCalled()
@@ -137,7 +136,7 @@ describe('authentication form extensions and agreements', () => {
       input('#new-password', 'NextPassword123!')
       input('#confirm-password', 'NextPassword123!')
       target.querySelector('form')!.requestSubmit()
-      await vi.waitFor(() => expect(toast.items.some(item => item.message.includes('用户名或密码不正确'))).toBe(true))
+      await vi.waitFor(() => expect(ui.toast.items.some(item => item.message.includes('用户名或密码不正确'))).toBe(true))
       expect(target.textContent).not.toContain('Original password wrong')
       input('#old-password', 'InitialPassword123!')
       target.querySelector('form')!.requestSubmit()
@@ -154,7 +153,7 @@ describe('authentication form extensions and agreements', () => {
   it.each(['hai:iam:007', 'hai:iam:025'])('首次/过期先验证旧密码并完成改密，不提前授权：%s', async (code) => {
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const renewPassword = vi.fn(action)
     const onauthenticated = vi.fn()
     const component = mount(AuthPanel, {
@@ -165,7 +164,7 @@ describe('authentication form extensions and agreements', () => {
           agreements: { showOnLogin: false, showOnRegister: false },
         },
         actions: {
-          login: async () => err({ code, message: 'Update password', httpStatus: 401 }),
+          login: async () => core.err({ code, message: 'Update password', httpStatus: 401 }),
           register: action,
           sendOtp: action,
           requestPasswordReset: action,
@@ -259,7 +258,7 @@ describe('authentication form extensions and agreements', () => {
     setUILocale('zh-CN')
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const component = mount(AuthPanel, {
       target,
       props: {
@@ -280,7 +279,7 @@ describe('authentication form extensions and agreements', () => {
     try {
       flushSync()
       target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-      await vi.waitFor(() => expect(toast.items[0]?.message).toContain('重置通知已发送'))
+      await vi.waitFor(() => expect(ui.toast.items[0]?.message).toContain('重置通知已发送'))
       expect(target.querySelector('.alert-success')).toBeNull()
       expect(target.querySelector('.forgot-password-form')).not.toBeNull()
       setUILocale('en-US')
@@ -294,7 +293,7 @@ describe('authentication form extensions and agreements', () => {
       expect(target.querySelector('.reset-password-form')).not.toBeNull()
     }
     finally {
-      toast.clear()
+      ui.toast.clear()
       setUILocale('zh-CN')
       await unmount(component)
       target.remove()
@@ -334,7 +333,7 @@ describe('authentication form extensions and agreements', () => {
     setUILocale('en-US')
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => err({
+    const action = async () => core.err({
       code: 'hai:iam:001',
       httpStatus: 401,
       system: 'hai',
@@ -358,12 +357,12 @@ describe('authentication form extensions and agreements', () => {
     try {
       flushSync()
       target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-      await vi.waitFor(() => expect(toast.items.some(item => item.message.includes('Username or password is incorrect.'))).toBe(true))
+      await vi.waitFor(() => expect(ui.toast.items.some(item => item.message.includes('Username or password is incorrect.'))).toBe(true))
       expect(target.querySelector('.hai-form-grid')?.getAttribute('data-columns')).toBe('2')
       expect(target.querySelector('.hai-form-field')?.getAttribute('data-label-position')).toBe('left')
       setUILocale('zh-CN')
       flushSync()
-      expect(toast.items.some(item => item.message.includes('用户名或密码不正确'))).toBe(true)
+      expect(ui.toast.items.some(item => item.message.includes('用户名或密码不正确'))).toBe(true)
       expect(target.textContent).not.toContain('Server language')
     }
     finally {
@@ -376,7 +375,7 @@ describe('authentication form extensions and agreements', () => {
   it.each(['login', 'register', 'forgot', 'reset'] as const)('客户端接管完成前禁止输入，完成后恢复交互：%s', async (initialMode) => {
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const component = mount(AuthPanel, {
       target,
       props: {
@@ -431,7 +430,7 @@ describe('authentication form extensions and agreements', () => {
     window.history.replaceState(null, '', pathname)
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const component = mount(AuthPanel, {
       target,
       props: {
@@ -560,7 +559,7 @@ describe('authentication form extensions and agreements', () => {
   it('authPanel 透传登录和注册扩展，并保留内置导航', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => ok(undefined)
+    const action = async () => core.ok(undefined)
     const component = mount(AuthPanel, {
       target,
       props: {

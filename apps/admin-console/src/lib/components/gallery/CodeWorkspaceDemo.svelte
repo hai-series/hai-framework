@@ -1,7 +1,6 @@
 <script lang='ts'>
   import type { CodeWorkspaceRange } from '@h-ai/ui/components/scenes/code/index'
-  import { Button } from '@h-ai/ui'
-  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+  import { Button, CodeWorkspace } from '@h-ai/ui'
   import { createCodeWorkspaceDemoSource, reviewAncestors, reviewFindingRange, reviewRules } from '#lib/components/gallery/code-workspace-demo.js'
   import * as m from '#lib/paraglide/messages.js'
 

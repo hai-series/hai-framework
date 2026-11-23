@@ -8,14 +8,14 @@
 import type { HaiResult } from '@h-ai/core'
 import type { BuiltinVectorOperations, VecdbProvider } from './providers/vecdb-provider-base.js'
 import type { VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
+
 import type {
   CollectionOperations,
   VecdbConnection,
   VecdbFunctions,
 } from './vecdb-types.js'
-
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { createChromaProvider } from './providers/vecdb-provider-chroma.js'
 import { createLancedbProvider } from './providers/vecdb-provider-lancedb.js'
@@ -63,11 +63,11 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
   }
   currentConfig = null
   if (!pendingProvider)
-    return ok(undefined)
+    return core.ok(undefined)
   try {
     const result = await pendingProvider.close()
     if (!result.success) {
-      return err({
+      return core.err({
         ...result.error,
         ext: { ...result.error.ext, cleanupPending: true },
       })
@@ -76,7 +76,7 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
     return result
   }
   catch (cause) {
-    return err({
+    return core.err({
       ...HaiVecdbError.CONNECTION_FAILED,
       message: vecdbM('vecdb_closeFailed', {
         params: {
@@ -97,7 +97,8 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
  * @returns 原始失败；清理已确认时移除过期 cleanup 标记。
  * @example 模块内部上下文
  * ```ts
- * const failure = err(HaiVecdbError.CONNECTION_FAILED, 'Controlled startup failure')
+ * import { core } from '@h-ai/core'
+ * const failure = core.err(HaiVecdbError.CONNECTION_FAILED, 'Controlled startup failure')
  * const result = await failInitialization(failure)
  * if (!result.success) void result.error.ext?.cleanupPending
  * ```
@@ -107,7 +108,7 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
   if (result.success)
     return result
   if (!cleanup.success) {
-    return err({
+    return core.err({
       ...result.error,
       ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
     })
@@ -115,7 +116,7 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
   const ext = { ...result.error.ext }
   delete ext.cleanupPending
   delete ext.cleanupError
-  return err({
+  return core.err({
     ...result.error,
     ext: Object.keys(ext).length
       ? ext
@@ -236,7 +237,7 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
     // 并发防护：防止多次同时调用导致 Provider/连接泄漏
     if (initInProgress || closingPromise) {
       logger.warn('Vecdb init already in progress, skipping concurrent call')
-      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_initInProgress'))
+      return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_initInProgress'))
     }
     initInProgress = true
     let resolveInit!: () => void
@@ -254,13 +255,13 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
       const parseResult = VecdbConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Vecdb config validation failed', { error: parseResult.error.message })
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', {
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', {
           params: { error: parseResult.error.message },
         }), parseResult.error)
       }
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'lancedb' || (parsed.type === 'chroma' && !!parsed.path && !parsed.url)))
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_sharedBackendRequired'))
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_sharedBackendRequired'))
 
       try {
         const provider = createProvider(parsed)
@@ -277,11 +278,11 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
         currentProvider = provider
         currentConfig = parsed
         logger.info('Vecdb module initialized', { type: parsed.type })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Vecdb module initialization failed', { error })
-        return await failInitialization(err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_initFailed', {
+        return await failInitialization(core.err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_initFailed', {
           params: {
             error: error instanceof Error
               ? error.message

@@ -6,13 +6,9 @@
  * =============================================================================
  */
 
+import { ui } from '@h-ai/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  readStoredValue,
-  registerClipboardHostWriter,
-  writeStoredValue,
-  writeTextToClipboard,
-} from '../src/lib/internal/browser-safety.js'
+import { readStoredValue, writeStoredValue } from '../src/lib/internal/browser-safety.js'
 
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
@@ -33,7 +29,7 @@ afterEach(() => {
   restoreProperty('localStorage', originalLocalStorageDescriptor)
   restoreProperty('navigator', originalNavigatorDescriptor)
   restoreProperty('document', undefined)
-  registerClipboardHostWriter(null)
+  ui.registerClipboardHostWriter(null)
   vi.restoreAllMocks()
 })
 
@@ -61,7 +57,7 @@ describe('browser-safety helpers', () => {
   })
 
   it('公开主题入口在 storage getter 受限时仍可选择应用的回退主题', async () => {
-    const { getSavedTheme } = await import('@h-ai/ui/theme')
+    const { ui: themeUi } = await import('@h-ai/ui/theme')
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       get() {
@@ -69,7 +65,7 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    expect(getSavedTheme('dark')).toBe('dark')
+    expect(themeUi.getSavedTheme('dark')).toBe('dark')
   })
 
   it('读取 localStorage 时若能力缺失应回退为 null', () => {
@@ -109,7 +105,7 @@ describe('browser-safety helpers', () => {
       value: {},
     })
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(false)
   })
 
   it('剪贴板可用时应返回 true', async () => {
@@ -124,7 +120,7 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(true)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(true)
     expect(writeText).toHaveBeenCalledWith('demo')
   })
 
@@ -161,7 +157,7 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(true)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(true)
     expect(mockExecCommand).toHaveBeenCalledWith('copy')
     expect(mockCreateElement).toHaveBeenCalledWith('textarea')
 
@@ -199,7 +195,7 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(false)
 
     Reflect.deleteProperty(globalThis, 'document')
   })
@@ -235,9 +231,9 @@ describe('browser-safety helpers', () => {
         execCommand: vi.fn(() => false),
       },
     })
-    registerClipboardHostWriter(hostWriter)
+    ui.registerClipboardHostWriter(hostWriter)
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(true)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(true)
     expect(hostWriter).toHaveBeenCalledWith('demo')
 
     Reflect.deleteProperty(globalThis, 'document')
@@ -274,9 +270,9 @@ describe('browser-safety helpers', () => {
         execCommand: vi.fn(() => false),
       },
     })
-    registerClipboardHostWriter(hostWriter)
+    ui.registerClipboardHostWriter(hostWriter)
 
-    await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+    await expect(ui.writeTextToClipboard('demo')).resolves.toBe(false)
     expect(hostWriter).toHaveBeenCalledWith('demo')
 
     Reflect.deleteProperty(globalThis, 'document')

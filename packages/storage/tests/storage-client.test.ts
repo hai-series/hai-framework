@@ -6,8 +6,8 @@ import type { LogRecord } from '@h-ai/core'
 import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as storageClientEntry from '../src/client/index.js'
-import { storage } from '../src/index.js'
 import * as storageNode from '../src/index.js'
+import { storage } from '../src/index.js'
 import * as storageBrowser from '../src/storage-index.browser.js'
 
 describe('storage client 工具函数', () => {
@@ -32,7 +32,8 @@ describe('storage client 工具函数', () => {
       expect(entry.storage.client).toHaveProperty(method, expect.any(Function))
     }
     if (name !== 'Node')
-      expect(Object.keys(entry.storage)).toEqual(['client'])
+      expect(Object.keys(entry.storage).sort()).toEqual(['client', 'getKeyIssue'])
+    expect(entry.storage.getKeyIssue('../private.txt')).toBe('segments')
   })
 
   // ─── getMimeType ───

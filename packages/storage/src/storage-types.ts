@@ -47,9 +47,9 @@ const StorageErrorInfo = {
  * @example
  * ```ts
  * import { HaiStorageError } from '@h-ai/storage'
- * import { err } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const result = err(HaiStorageError.NOT_FOUND, 'File missing')
+ * const result = core.err(HaiStorageError.NOT_FOUND, 'File missing')
  * if (!result.success) void result.error.code
  * ```
  */
@@ -97,7 +97,7 @@ export interface StorageDeleteSummary {
  * 批量删除结果；失败仍遵守 HaiResult，部分进度置于 error.ext.deleteMany。
  * @example
  * ```ts
- * import { storage, type StorageDeleteResult } from '@h-ai/storage'
+ * import { type StorageDeleteResult, storage } from '@h-ai/storage'
  *
  * async function remove() {
  *   const result: StorageDeleteResult = await storage.file.deleteMany(['a.txt', 'b.txt'])
@@ -748,6 +748,8 @@ export interface ClientOperations {
  * ```
  */
 export interface StorageFunctions {
+  /** 跨端对象键校验；无需初始化。 */
+  getKeyIssue: typeof import('./storage-schemas.js').getStorageKeyIssue
   /** 无状态客户端操作；Node、Browser 与 /client 入口调用形态一致。 */
   readonly client: ClientOperations
   /** 无状态 checksum 生成与校验，Node 专用，无需初始化。 */

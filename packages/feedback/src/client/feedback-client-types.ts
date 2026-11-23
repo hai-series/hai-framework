@@ -38,9 +38,9 @@ export interface FeedbackClientActions {
  * 浏览器仅保存已脱敏的有界材料；持久化必须由产品显式授权。
  * @example
  * ```ts
- * import type { FeedbackClientConfig } from '@h-ai/feedback/client'
- * import { createFeedbackClient } from '@h-ai/feedback/client'
- * function enable(config: FeedbackClientConfig) { return createFeedbackClient().init(config) }
+ *
+ * import { type FeedbackClientConfig, feedback } from '@h-ai/feedback/client'
+ * function enable(config: FeedbackClientConfig) { return feedback.createClient().init(config) }
  * ```
  */
 export interface FeedbackClientConfig {

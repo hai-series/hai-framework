@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture, testContainerRuntimeCandidates } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createUploadScripts } from '../src/container/deploy-scripts.js'
 import * as sshModule from '../src/container/deploy-ssh.js'
-import { createDeploymentPlan, deploy, getDeployCommandState } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
@@ -407,7 +407,7 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected the real SSH deadline to fail')
-    expect(getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' })
+    expect(deploy.getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' })
     expect(execute('test -f /fixture/password-timeout.pid && echo started')).toBe('started')
     expect(JSON.stringify(result)).not.toContain(sshPassword)
     // 仅停止本用例在私有容器内记录的 PID；远端停止不由 SSH 超时推断。
@@ -557,7 +557,7 @@ fi
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Injected deadline must remain visible')
-    const state = getDeployCommandState(result.error)
+    const state = deploy.getDeployCommandState(result.error)
     expect(state).toMatchObject({
       reason: 'timeout',
       localTermination: 'confirmed',
@@ -580,7 +580,7 @@ fi
       expect(execute(`cat '/fixture/deploy/ssh-completed-test/current'`)).toBe(state?.deploymentId)
       const snapshot = () => execute('find /fixture/deploy/ssh-completed-test -type f -exec sha256sum {} \\; | sort')
       const before = snapshot()
-      const plan = await createDeploymentPlan(app, { provider }, { environment: 'test', skipMiddleware: true, inspectRemote: true })
+      const plan = await deploy.createDeploymentPlan(app, { provider }, { environment: 'test', skipMiddleware: true, inspectRemote: true })
       expect(plan).toMatchObject({
         success: true,
         data: {

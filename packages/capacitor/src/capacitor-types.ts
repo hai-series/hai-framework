@@ -6,6 +6,7 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { createCapacitorTokenStorage } from './capacitor-token-storage.js'
 import { core } from '@h-ai/core'
 
 const CapacitorErrorInfo = {
@@ -30,9 +31,9 @@ const CapacitorErrorInfo = {
  * @example
  * ```ts
  * import { HaiCapacitorError } from '@h-ai/capacitor'
- * import { err } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const result = err(HaiCapacitorError.NOT_AVAILABLE, 'Native bridge required')
+ * const result = core.err(HaiCapacitorError.NOT_AVAILABLE, 'Native bridge required')
  * if (!result.success) void result.error.code
  * ```
  */
@@ -168,6 +169,8 @@ export interface PreferencesOperations {
  * ```
  */
 export interface CapacitorFunctions {
+  /** 创建独立的原生安全令牌存储适配器；无需先 init，实际读写按平台及插件契约失败。 */
+  createTokenStorage: typeof createCapacitorTokenStorage
   /** 初始化模块；期间调用 close 会使本次初始化返回 INIT_FAILED。 */
   init: () => Promise<HaiResult<void>>
   /** 立即停用模块并使进行中的初始化失效；等待已知推送句柄清理，失败句柄保留供重试。 */

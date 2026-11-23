@@ -38,9 +38,9 @@ const ReldbErrorInfo = {
  * @example
  * ```ts
  * import { HaiReldbError } from '@h-ai/reldb'
- * import { err } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const result = err(HaiReldbError.QUERY_FAILED, 'Query failed')
+ * const result = core.err(HaiReldbError.QUERY_FAILED, 'Query failed')
  * if (!result.success) void result.error.code
  * ```
  */
@@ -827,6 +827,18 @@ export interface TxManager {
  * ```
  */
 export interface ReldbFunctions {
+  /** parseJsonPath 的公开工具入口；按原签名执行。 */
+  parseJsonPath: typeof import('./reldb-json.js').parseJsonPath
+  /** createJsonOps 的公开工具入口；按原签名执行。 */
+  createJsonOps: typeof import('./reldb-json.js').createJsonOps
+  /** validateIdentifier 的公开工具入口；按原签名执行。 */
+  validateIdentifier: typeof import('./reldb-security.js').validateIdentifier
+  /** validateIdentifiers 的公开工具入口；按原签名执行。 */
+  validateIdentifiers: typeof import('./reldb-security.js').validateIdentifiers
+  /** quoteIdentifier 的公开工具入口；按原签名执行。 */
+  quoteIdentifier: typeof import('./reldb-security.js').quoteIdentifier
+  /** escapeSqlString 的公开工具入口；按原签名执行。 */
+  escapeSqlString: typeof import('./reldb-security.js').escapeSqlString
   /**
    * 初始化数据库连接
    *

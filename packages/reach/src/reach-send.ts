@@ -8,11 +8,11 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ReachQueueConfig } from './reach-config.js'
-import type { ReachMessage, ReachTemplateRegistry, SendResult } from './reach-types.js'
 
+import type { ReachMessage, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { ReachQueueConfigSchema } from './reach-config.js'
 import { deliverClaimedMessage } from './reach-delivery.js'
@@ -126,7 +126,7 @@ export async function preprocessMessage(
   templateRegistry: ReachTemplateRegistry,
 ): Promise<HaiResult<ReachMessage>> {
   if (!message.template) {
-    return ok(message)
+    return core.ok(message)
   }
 
   // 同一个持久模板快照决定内容和默认渠道，编辑模板不能拼出跨版本消息。
@@ -144,7 +144,7 @@ export async function preprocessMessage(
     subject: message.subject ?? rendered.data.subject,
     body: message.body ?? rendered.data.body,
   }
-  return ok(processed)
+  return core.ok(processed)
 }
 
 // ─── 发送记录持久化（通过 Repository） ───
@@ -201,11 +201,11 @@ async function saveSendRecord(
     if (!inserted.success)
       return inserted
     if (inserted.data.changes !== 1)
-      return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'))
-    return ok(undefined)
+      return core.err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'))
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
   }
 }
 
@@ -474,7 +474,7 @@ export async function executeSend(
   queueConfig: ReachQueueConfig = ReachQueueConfigSchema.parse({}),
 ): Promise<HaiResult<SendResult>> {
   if (!message.to) {
-    return err(
+    return core.err(
       HaiReachError.INVALID_RECIPIENT,
       reachM('reach_invalidRecipient', {
         params: { recipient: '' },
@@ -490,14 +490,14 @@ export async function executeSend(
   // 校验 Provider 存在性（在 DND 检查前，确保 delay 也能正确路由）
   const providerName = preprocessed.data.provider
   if (!providerName) {
-    return err(
+    return core.err(
       HaiReachError.PROVIDER_NOT_FOUND,
       reachM('reach_providerRequired'),
     )
   }
 
   if (!providers.has(providerName)) {
-    return err(
+    return core.err(
       HaiReachError.PROVIDER_NOT_FOUND,
       reachM('reach_providerNotFound', {
         params: { provider: providerName },
@@ -511,31 +511,31 @@ export async function executeSend(
   // DND 检查
   if (isDndBlocked(dndConfig)) {
     if (message.deferPolicy === 'reject')
-      return err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
+      return core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
     const strategy = dndConfig?.strategy ?? 'discard'
 
     if (strategy === 'delay') {
       if (!repo)
-        return err(HaiReachError.SEND_FAILED, reachM('reach_dndPersistenceRequired'))
+        return core.err(HaiReachError.SEND_FAILED, reachM('reach_dndPersistenceRequired'))
 
       // 预先生成并随消息落盘，避免依赖不同数据库的自增 ID 返回约定。
       const queueId = crypto.randomUUID()
       const saved = await saveSendRecord(repo, preprocessed.data, 'pending', providerName, undefined, queueId, queueConfig)
       if (!saved.success) {
         logger.warn('Failed to persist deferred message', { provider: providerName, code: saved.error.code })
-        return err(
+        return core.err(
           HaiReachError.SEND_FAILED,
           reachM('reach_dndEnqueueFailed'),
           saved.error,
         )
       }
       logger.info('Message persisted for DND delivery', { provider: providerName, queueId })
-      return ok({ success: true, deferred: true, queueId })
+      return core.ok({ success: true, deferred: true, queueId })
     }
 
     // discard 策略：直接拒绝
     logger.info('Message blocked by DND (discard strategy)', { provider: providerName })
-    return err(
+    return core.err(
       HaiReachError.DND_BLOCKED,
       reachM('reach_dndBlocked'),
     )

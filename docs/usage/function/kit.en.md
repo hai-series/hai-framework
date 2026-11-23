@@ -123,7 +123,7 @@ Parse endpoint input before constructing success, no-content, validation or doma
 #### Scenario: Validate and respond
 
 ```ts
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 const schema = z.object({ title: z.string().min(1) })
 const request = new Request('https://app.example.com/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Order' }) })
@@ -162,7 +162,7 @@ kit.response.redirect('/auth/login').headers.get('location') // '/auth/login'
 // Return the supplied app error code and message with HTTP 400.
 kit.response.error('app:orders:001', 'Invalid request', 400).status // 400
 // Wrap { id: 'o1' } in a successful HaiResult and convert it to HTTP 200. Failed results use their recorded error status.
-kit.response.fromResult(ok({ id: 'o1' })).status // 200
+kit.response.fromResult(core.ok({ id: 'o1' })).status // 200
 ```
 
 Concrete JSON, query and path inputs produce the values and statuses shown. Invalid validate calls throw Response and belong inside a handler boundary. fromError accepts failed HaiResult.error, never raw private exception text.
@@ -192,7 +192,7 @@ Check permissions against the current session on the server. Auth APIs manage co
 | `kit.auth.logout(cookies, accessToken?)` | 显式退出 | `cookies` is the current SvelteKit cookie writer. Optional `accessToken` revokes that session at the server. Cookies are cleared even when omitted. | `Promise<HaiResult<void>>` | `kit.auth.logout(cookies, accessToken)` |
 | `kit.auth.setBrowserToken(token)` | 页面内存凭据 | Required `token` is the access-token string to keep in page memory. | `void; no Web Storage persistence` | `kit.auth.setBrowserToken(accessToken)` |
 | `kit.auth.clearBrowserToken()` | 清理页面凭据 | `none` | `void` | `kit.auth.clearBrowserToken()` |
-| `@h-ai/kit` 的 `matchPermission(required, userPermissions)` | Match permissions for frontend display | Required `required` permission code and trusted session `userPermissions` array. | `boolean` | `matchPermission('reports:read', ['reports:read'])` |
+| `@h-ai/kit` 的 `kit.matchPermission(required, userPermissions)` | Match permissions for frontend display | Required `required` permission code and trusted session `userPermissions` array. | `boolean` | `kit.matchPermission('reports:read', ['reports:read'])` |
 
 <a id="kit-auth-context"></a>
 
@@ -227,9 +227,9 @@ Use the client for same-origin cookies, CSRF and transport; components consume a
 | `kit.client.createAuthActions(options?)` | Create standard authentication actions | Optional `options`. `apiFetch` defaults to a new default client and `basePath` defaults to `/api/auth`. | AuthPanel-compatible actions | `kit.client.createAuthActions({ basePath: "/api/auth" })` |
 | `kit.client.installBrowserTransport(config, deps)` | 按公共配置安装加密 | Required public `config` and `deps.crypto`. Optional `deps.basePath` defaults to an empty string for a root mount. | `void; installs same-origin global fetch wrapper when enabled` | `kit.client.installBrowserTransport(publicKitConfig, { crypto })` |
 | `kit.client.installBrowserTransportFetch(transportConfig?)` | 自定义传输安装 | In a browser pass `transportConfig` with the fields in the `transport` row below. Omission or a server-side call installs no Fetch wrapper. | `void; installs browser global fetch wrapper` | `kit.client.installBrowserTransportFetch(transportOptions)` |
-| `createKitClient(config?)` from `@h-ai/kit/client` | Create a same-origin client | Optional `config` with the same fields as `kit.client.create()`. | `KitClient` | `createKitClient({})` |
-| `createKitAuthActions(options?)` from `@h-ai/kit/client` | Create same-origin authentication actions | Optional `options` with the same `apiFetch` and `basePath` as `kit.client.createAuthActions()`. | `AuthActions` | `createKitAuthActions({ apiFetch: client.apiFetch })` |
-| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()` | Adapt SvelteKit navigation for CRUD | `createSvelteKitNavAdapter()` | `CrudNavAdapter` | `createSvelteKitNavAdapter()` |
+| `kit.client.create(config?)` from `@h-ai/kit/client` | Create a same-origin client | Optional `config` with the same fields as `kit.client.create()`. | `KitClient` | `kit.client.create({})` |
+| `kit.client.createAuthActions(options?)` from `@h-ai/kit/client` | Create same-origin authentication actions | Optional `options` with the same `apiFetch` and `basePath` as `kit.client.createAuthActions()`. | `AuthActions` | `kit.client.createAuthActions({ apiFetch: client.apiFetch })` |
+| `@h-ai/kit/client` 的 `kit.client.createSvelteKitNavAdapter()` | Adapt SvelteKit navigation for CRUD | `kit.client.createSvelteKitNavAdapter()` | `CrudNavAdapter` | `kit.client.createSvelteKitNavAdapter()` |
 
 #### Scenario: Connect a same-origin browser
 
@@ -246,14 +246,14 @@ Run in a browser module with an existing same-origin /api/ping endpoint. Default
 `client.apiFetch(input, init?, options?)` takes a request, URL, or path and native Fetch options such as `method`, `body`, and `signal`. Set `recoverSession: false` in its third argument to disable normal recovery for that call, for example when calling an authentication endpoint from the recovery flow. Optional `reauthorize` obtains a new operation credential for an eligible retry. Return a credential string to replace the previous header, `null` to cancel, or `undefined` to continue without that credential.
 
 ```ts
-import { createKitAuthActions, createKitClient, createSvelteKitNavAdapter } from '@h-ai/kit/client'
+import { kit } from '@h-ai/kit/client'
 
 // Create a browser client with defaults. The returned object has its own request and transport methods.
-const client = createKitClient({}) // same factory as kit.client.create
+const client = kit.client.create({}) // same factory as kit.client.create
 // Return form actions that call routes under /api/auth through this client's apiFetch.
-const actions = createKitAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
+const actions = kit.client.createAuthActions({ apiFetch: client.apiFetch, basePath: '/api/auth' })
 // Create a navigation adapter for the current SvelteKit runtime.
-const nav = createSvelteKitNavAdapter()
+const nav = kit.client.createSvelteKitNavAdapter()
 // Initialize this client's transport if enabled. A failed enabled handshake rejects.
 await client.init()
 try {
@@ -283,26 +283,26 @@ Declare CRUD fields and operations, and authorize the principal and resource on 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `kit.crud.define(resource)` | 声明 CRUD 资源 | Required CRUD `resource` definition with available actions, routes, and fields. | `resource operation object` | `kit.crud.define(resourceDefinition)` |
-| `@h-ai/kit` 的 `defineCrud(resource)` | Define a resource and form fields | Same as `kit.crud.define()`. The `resource` definition is required. | `CrudOperations<T>` | `defineCrud(resource)` |
-| `@h-ai/kit` 的 `resolveText(text)` | Resolve static or deferred text | Required `text`, a string or zero-argument function returning one. | `string` | `resolveText('Name')` |
-| `@h-ai/kit` 的 `resolveOptions(options)` | Resolve static or deferred options | Required `options` array or zero-argument function returning it, with a `label` and `value` in each item. | `CrudOption[]` | `resolveOptions([{ label: 'Active', value: true }])` |
+| `@h-ai/kit` 的 `kit.crud.define(resource)` | Define a resource and form fields | Same as `kit.crud.define()`. The `resource` definition is required. | `CrudOperations<T>` | `kit.crud.define(resource)` |
+| `@h-ai/kit` 的 `kit.resolveText(text)` | Resolve static or deferred text | Required `text`, a string or zero-argument function returning one. | `string` | `kit.resolveText('Name')` |
+| `@h-ai/kit` 的 `kit.resolveOptions(options)` | Resolve static or deferred options | Required `options` array or zero-argument function returning it, with a `label` and `value` in each item. | `CrudOption[]` | `kit.resolveOptions([{ label: 'Active', value: true }])` |
 
 #### Scenario: Declare resources and form fields
 
 resource contains application-owned fields and authorized callbacks typed by CrudResource. Both factories return resource operations without executing writes. true is an option value.
 
 ```ts
-import { defineCrud, kit, resolveOptions, resolveText } from '@h-ai/kit'
+import { kit } from '@h-ai/kit'
 
-function buildResource(resource: Parameters<typeof defineCrud>[0]) {
+function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
   // Build the operations for the supplied resource declaration.
-  const operations = defineCrud(resource)
+  const operations = kit.crud.define(resource)
   // Build the equivalent operations through kit.crud using the same declaration.
   const equivalent = kit.crud.define(resource)
   // Evaluate the supplied label function. The resolved label is Name.
-  const label = resolveText(() => 'Name') // 'Name'
+  const label = kit.resolveText(() => 'Name') // 'Name'
   // Resolve the supplied Active option with boolean true. This array is returned as the available choices.
-  const choices = resolveOptions([{ label: 'Active', value: true }]) // same option array
+  const choices = kit.resolveOptions([{ label: 'Active', value: true }]) // same option array
   return { operations, equivalent, label, choices }
 }
 ```
@@ -321,8 +321,8 @@ Prepare Crypto and shared Cache, give public policy to the client and a trusted 
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `@h-ai/kit` 的 `resolveKitTransportConfig(input?)` | Resolve Kit transport arguments | `input` is `false` or deployment transport settings. See [transport arguments](#kit-transport-arguments). | `false \| KitTransportConfig` | `resolveKitTransportConfig(false)` |
-| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware(config, encryption?)` | Create transport authentication middleware | Required runtime `config`. Optional `encryption(pathname, method)` supplies per-method path policy. See [transport arguments](#kit-transport-arguments). | `Middleware` | `transportEncryptionMiddleware(transportConfig)` |
+| `@h-ai/kit` 的 `kit.resolveTransportConfig(input?)` | Resolve Kit transport arguments | `input` is `false` or deployment transport settings. See [transport arguments](#kit-transport-arguments). | `false \| KitTransportConfig` | `kit.resolveTransportConfig(false)` |
+| `@h-ai/kit/crypto` 的 `kit.crypto.transportEncryptionMiddleware(config, encryption?)` | Create transport authentication middleware | Required runtime `config`. Optional `encryption(pathname, method)` supplies per-method path policy. See [transport arguments](#kit-transport-arguments). | `Middleware` | `kit.crypto.transportEncryptionMiddleware(transportConfig)` |
 
 <a id="kit-transport-arguments"></a>
 
@@ -330,13 +330,13 @@ Prepare Crypto and shared Cache, give public policy to the client and a trusted 
 
 | Field | Default and conditions | Purpose or concrete result |
 | --- | --- | --- |
-| `input` | Omit or pass `false` to disable it | `resolveKitTransportConfig` parses public settings. An object receives the default exchange path and exclusions. The runtime applies the size and time defaults. |
+| `input` | Omit or pass `false` to disable it | `kit.resolveTransportConfig` parses public settings. An object receives the default exchange path and exclusions. The runtime applies the size and time defaults. |
 | `enabled` / `crypto` / `serverKeyRing` / `keyStore` | Required when constructing middleware directly | Pass the enable flag, initialized Crypto, server key ring, and registration store from the host. Share the store in production. |
 | `keyExchangePath` / `excludePaths` / `basePath` | Defaults to `/api/_hai/key-exchange`, `[]`, and the empty string | Sets the exchange route, excluded request paths, and build mount path. Supply `basePath` only at runtime. |
 | `maxPlaintextBytes` / `routePlaintextBytes` | Defaults to 1 MiB with no route overrides. Limits are integers from 1 KiB to 64 MiB. | Limits plaintext UTF-8 bytes. `*` in a route override matches one complete segment. The public config accepts `"auto"` and the middleware takes a number. |
 | `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | Defaults to 30 seconds (0–300) and 300 seconds (1–600) | Controls the permitted clock lead and the request lifetime from issuance, in seconds. |
 
-`resolveKitTransportConfig({ excludePaths: ["/api/health"] })` returns that exclusion and the default `keyExchangePath`.
+`kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` returns that exclusion and the default `keyExchangePath`.
 
 #### Scenario: Assemble encrypted transport: client and middleware
 
@@ -361,11 +361,11 @@ Mount services at explicit paths with host-resolved trusted contexts and authori
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `kit.createFeedbackHandler(options)` | 受控反馈入口 | Required `options.feedback` initialized service and `options.resolveContext(event)` to derive feedback identity from a trusted session. `null` denies access. `options.basePath` defaults to `/api/feedback`. | `catch-all RequestHandler` | `kit.createFeedbackHandler({ feedback, resolveContext })` |
-| `createA2AApiKeyAuthenticator(config)` | Create an A2A API-key authenticator | Required `config.in` (`header` or `query`) and `config.name` (parameter name). | `A2AAuthenticator` | `createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
-| `createAgentCardHandler(getAgentCard)` | Create an agent-card handler | Required `getAgentCard()` supplying the current Agent Card or its promise. | `RequestHandler` | `createAgentCardHandler(() => card)` |
-| `createA2AHandler(handleRequest, config?)` | Create an A2A request handler | Required JSON-RPC `handleRequest`. Optional `config.authenticate` enables authentication with `apiKey` or a custom callback. A callback returning `null` or `undefined` denies access. | `RequestHandler` | `createA2AHandler(handleRequest, { authenticate })` |
-| `resolveA2AConfig(input)` | Resolve A2A arguments | `input` is an operations object or `{ operations, cardPath?, rpcPath?, authenticate? }`. `undefined` returns `null`. | `ResolvedA2AConfig \| null` | `resolveA2AConfig({ operations, rpcPath: '/a2a' })` |
-| `handleA2ARequest(event, requestId, config)` | Handle an assembled A2A request | Required current `event`, correlation `requestId`, and resolved A2A `config`. | `Promise<Response \| null>` | `await handleA2ARequest(event, requestId, config)` |
+| `kit.a2a.createApiKeyAuthenticator(config)` | Create an A2A API-key authenticator | Required `config.in` (`header` or `query`) and `config.name` (parameter name). | `A2AAuthenticator` | `kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })` |
+| `kit.a2a.createAgentCardHandler(getAgentCard)` | Create an agent-card handler | Required `getAgentCard()` supplying the current Agent Card or its promise. | `RequestHandler` | `kit.a2a.createAgentCardHandler(() => card)` |
+| `kit.a2a.createHandler(handleRequest, config?)` | Create an A2A request handler | Required JSON-RPC `handleRequest`. Optional `config.authenticate` enables authentication with `apiKey` or a custom callback. A callback returning `null` or `undefined` denies access. | `RequestHandler` | `kit.a2a.createHandler(handleRequest, { authenticate })` |
+| `kit.a2a.resolveConfig(input)` | Resolve A2A arguments | `input` is an operations object or `{ operations, cardPath?, rpcPath?, authenticate? }`. `undefined` returns `null`. | `ResolvedA2AConfig \| null` | `kit.a2a.resolveConfig({ operations, rpcPath: '/a2a' })` |
+| `kit.a2a.handleRequest(event, requestId, config)` | Handle an assembled A2A request | Required current `event`, correlation `requestId`, and resolved A2A `config`. | `Promise<Response \| null>` | `await kit.a2a.handleRequest(event, requestId, config)` |
 
 #### Scenario: Mount feedback and A2A routes
 

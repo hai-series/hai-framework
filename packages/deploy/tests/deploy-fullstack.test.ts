@@ -7,7 +7,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
-import { createDeploymentPlan, deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
+import { deploy, DeploymentArtifactSchema, HaiDeployError } from '../src/index.js'
 
 const ssh = vi.hoisted(() => ({
   ping: vi.fn(),
@@ -1432,7 +1432,7 @@ it.each([
   expect(result.success).toBe(false)
   if (result.success)
     throw new Error('Connection failure must remain visible')
-  const state = getDeployCommandState(result.error)
+  const state = deploy.getDeployCommandState(result.error)
   expect(state).toMatchObject({
     reason: 'timeout',
     localTermination: 'confirmed',
@@ -1469,7 +1469,7 @@ it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
     error: { code: HaiDeployError.HEALTH_CHECK_FAILED.code },
   })
   if (!result.success) {
-    expect(getDeployCommandState(result.error)).toMatchObject({
+    expect(deploy.getDeployCommandState(result.error)).toMatchObject({
       remoteExecution: 'finished',
       remoteExitCode: 0,
       remoteStage: 'complete',
@@ -1697,7 +1697,7 @@ it('只读计划与打包均拒绝为项目不存在的镜像配置主机映射'
       message: expect.stringContaining('deploy.container.compose.services.web'),
     },
   }
-  expect(await createDeploymentPlan(root, config, options)).toMatchObject(error)
+  expect(await deploy.createDeploymentPlan(root, config, options)).toMatchObject(error)
   expect(await deploy.deployApp(root, { ...options, bundleOnly: true })).toMatchObject(error)
   expect(existsSync(join(root, '.hai/deploy'))).toBe(false)
 })

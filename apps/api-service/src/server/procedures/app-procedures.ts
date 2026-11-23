@@ -5,9 +5,10 @@
  */
 
 import type { AppEchoOutputData, AppInfoOutputData } from '@h-ai/api-service-contract'
+
 import type { ServContext } from '@h-ai/serv'
 import { appContract } from '@h-ai/api-service-contract'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
 /** App procedures 依赖项。 */
@@ -35,7 +36,7 @@ export function createAppProcedures(deps: AppProcedureDeps) {
         transportEnabled: deps.info.transportEnabled,
         uptimeMs: Math.max(0, Date.now() - deps.startedAt),
       }
-      return ok(data)
+      return core.ok(data)
     })
 
     .route('echo')
@@ -47,7 +48,7 @@ export function createAppProcedures(deps: AppProcedureDeps) {
         requestId: context.requestId,
         timestamp: new Date().toISOString(),
       }
-      return ok(data)
+      return core.ok(data)
     })
 
     .build()

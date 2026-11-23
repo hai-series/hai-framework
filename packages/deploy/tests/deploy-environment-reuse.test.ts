@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const roots: string[] = []
 beforeEach(() => {
@@ -36,11 +36,11 @@ function fixture(): string {
 }
 
 function readDeployment(root: string, mode = 'test'): Record<string, unknown> {
-  const environment = loadDeploymentEnvironment({ environment: mode, envDir: root })
+  const environment = deploy.loadDeploymentEnvironment({ environment: mode, envDir: root })
   expect(environment.success).toBe(true)
   if (!environment.success)
     throw new Error('Deployment environment was not loaded')
-  const config = loadDeploymentConfig('deploy', join(root, 'hai.json'), environment.data.values)
+  const config = deploy.loadDeploymentConfig('deploy', join(root, 'hai.json'), environment.data.values)
   expect(config.success).toBe(true)
   if (!config.success)
     throw new Error('Deployment configuration was not loaded')
@@ -54,7 +54,7 @@ it.each([
   'null',
 ])('creates a missing SSH node from known leaves and preserves textual password %j', (password) => {
   const root = fixture()
-  const result = loadDeploymentConfig('deploy', join(root, 'hai.json'), {
+  const result = deploy.loadDeploymentConfig('deploy', join(root, 'hai.json'), {
     HAI_DEPLOY_PROVIDER_SSH_HOST: '12345',
     HAI_DEPLOY_PROVIDER_SSH_USERNAME: 'deploy',
     HAI_DEPLOY_PROVIDER_SSH_PORT: '2202',
@@ -88,7 +88,7 @@ it.each([
 
 it('does not create an SSH node for unknown environment fields', () => {
   const root = fixture()
-  const result = loadDeploymentConfig('deploy', join(root, 'hai.json'), { HAI_DEPLOY_PROVIDER_SSH_UNKNOWNOPTION: 'ignored' })
+  const result = deploy.loadDeploymentConfig('deploy', join(root, 'hai.json'), { HAI_DEPLOY_PROVIDER_SSH_UNKNOWNOPTION: 'ignored' })
   expect(result.success).toBe(true)
   expect(result).toEqual({
     success: true,
@@ -113,7 +113,7 @@ it('expands declared SSH placeholders as text and does not re-expand environment
       },
     },
   }))
-  expect(loadDeploymentConfig('deploy', join(root, 'hai.json'), { CREDENTIAL: '  0001  ' })).toMatchObject({
+  expect(deploy.loadDeploymentConfig('deploy', join(root, 'hai.json'), { CREDENTIAL: '  0001  ' })).toMatchObject({
     success: true,
     data: {
       provider: {
@@ -122,7 +122,7 @@ it('expands declared SSH placeholders as text and does not re-expand environment
     },
   })
   const password = ` "\${NOT_A_VARIABLE}" # 007 `
-  expect(loadDeploymentConfig('deploy', join(root, 'hai.json'), {
+  expect(deploy.loadDeploymentConfig('deploy', join(root, 'hai.json'), {
     HAI_DEPLOY_PROVIDER_SSH: JSON.stringify({ host: 'host.test', username: 'deploy', password }),
   })).toMatchObject({
     success: true,
@@ -192,14 +192,14 @@ it('preserves legacy middleware secrets above public JSON and adds mode-private 
   writeFileSync(join(root, '.env.test'), 'HAI_DB=\'{"type":"postgresql","host":"public.test","database":"app"}\'\nHAI_CACHE_TYPE=memory\n')
   writeFileSync(join(root, '.env.local'), 'HAI_DB=\'{"type":"postgresql","host":"private.test","database":"app","password":"existing-secret"}\'\nHAI_CACHE_TYPE=redis\n')
   writeFileSync(join(root, '.env.test.local'), 'HAI_CACHE_TYPE=memory\n')
-  const result = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const result = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(result.success).toBe(true)
   if (!result.success)
     return
   expect(JSON.parse(result.data.values.HAI_DB)).toMatchObject({ host: 'private.test', password: 'existing-secret' })
   expect(result.data.values.HAI_CACHE_TYPE).toBe('memory')
   vi.stubEnv('HAI_CACHE_TYPE', 'redis')
-  expect(loadDeploymentEnvironment({ environment: 'test', envDir: root })).toMatchObject({
+  expect(deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })).toMatchObject({
     success: true,
     data: {
       values: { HAI_CACHE_TYPE: 'redis' },
@@ -212,7 +212,7 @@ it('saves separate test/prod private targets and secrets without modifying the s
   const legacy = '# Retained fallback\nHAI_AI_LLM_APIKEY=legacy-key\n'
   writeFileSync(join(root, '.env.local'), legacy)
   for (const mode of ['test', 'prod']) {
-    const snapshot = loadDeploymentEnvironment({ environment: mode, envDir: root })
+    const snapshot = deploy.loadDeploymentEnvironment({ environment: mode, envDir: root })
     expect(snapshot.success).toBe(true)
     if (!snapshot.success)
       return
@@ -226,7 +226,7 @@ it('saves separate test/prod private targets and secrets without modifying the s
         password: `  000-${mode}  `,
       },
     }
-    expect(saveDeploymentEnvironment(snapshot.data, {
+    expect(deploy.saveDeploymentEnvironment(snapshot.data, {
       HAI_DEPLOY_PROVIDER: JSON.stringify(provider),
       HAI_DB_PASSWORD: `${mode}-db-password`,
     }, { private: true }).success).toBe(true)
@@ -253,12 +253,12 @@ it('switches a saved middleware backend without deleting its old shared fallback
   const root = fixture()
   const legacy = 'HAI_DB=\'{"type":"postgresql","database":"old","password":"old-secret"}\'\nHAI_AI_LLM_APIKEY=keep-key\n'
   writeFileSync(join(root, '.env.local'), legacy)
-  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const snapshot = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(snapshot.success).toBe(true)
   if (!snapshot.success)
     return
-  expect(saveDeploymentEnvironment(snapshot.data, { HAI_DB: '{"type":"sqlite","database":"./data/new.db"}' }).success).toBe(true)
-  const selected = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  expect(deploy.saveDeploymentEnvironment(snapshot.data, { HAI_DB: '{"type":"sqlite","database":"./data/new.db"}' }).success).toBe(true)
+  const selected = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(selected.success).toBe(true)
   if (selected.success)
     expect(selected.data.values).toMatchObject({ HAI_DB_TYPE: 'sqlite', HAI_DB_DATABASE: './data/new.db' })

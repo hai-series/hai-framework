@@ -18,12 +18,12 @@ import type {
   ReldbColumnDef,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
-import type { ReldbProvider } from './reldb-provider-types.js'
 
+import type { ReldbProvider } from './reldb-provider-types.js'
 import { createRequire } from 'node:module'
 import { isIP } from 'node:net'
 import { performance } from 'node:perf_hooks'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { MysqlPoolConfigSchema } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
 import { HaiReldbError } from '../reldb-types.js'
@@ -118,15 +118,15 @@ export function createMysqlProvider(): ReldbProvider {
     const owned = pool
     const limits = poolConfig
     if (!ready || !owned || !limits)
-      return Promise.resolve(err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+      return Promise.resolve(core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
     if (activeSlots >= limits.max && waiters.length >= limits.queueLimit)
-      return Promise.resolve(err(HaiReldbError.POOL_EXHAUSTED, reldbM('reldb_mysqlPoolQueueFull')))
+      return Promise.resolve(core.err(HaiReldbError.POOL_EXHAUSTED, reldbM('reldb_mysqlPoolQueueFull')))
 
     const deadline = performance.now() + limits.acquireTimeout
     return new Promise((resolve) => {
       let completed = false
       let timer: ReturnType<typeof setTimeout> | undefined
-      const timeoutResult = () => err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+      const timeoutResult = () => core.err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
       const finish = (result: HaiResult<MysqlConnectionLease>) => {
         if (completed)
           return
@@ -135,12 +135,12 @@ export function createMysqlProvider(): ReldbProvider {
         resolve(result)
       }
       const waiter: MysqlConnectionWaiter = {
-        cancel: () => finish(err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))),
+        cancel: () => finish(core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))),
         start: () => {
           if (!ready || performance.now() >= deadline) {
             finish(ready
               ? timeoutResult()
-              : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+              : core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
             return
           }
           if (activeSlots++ === 0)
@@ -154,11 +154,11 @@ export function createMysqlProvider(): ReldbProvider {
               finally { releaseSlot() }
               finish(ready
                 ? timeoutResult()
-                : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+                : core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
               return
             }
             let released = false
-            finish(ok({
+            finish(core.ok({
               connection,
               deadline,
               release: () => {
@@ -173,7 +173,7 @@ export function createMysqlProvider(): ReldbProvider {
             }))
           }, (error) => {
             releaseSlot()
-            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+            finish(core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
               params: {
                 error: String(error),
               },
@@ -181,7 +181,7 @@ export function createMysqlProvider(): ReldbProvider {
           }).catch((error) => {
             // 迟到连接清理异常时停止新业务，保留池供 close 重试，不泄露驱动错误。
             ready = false
-            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+            finish(core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
               params: {
                 error: reldbM('reldb_mysqlPoolReleaseFailed'),
               },
@@ -210,9 +210,9 @@ export function createMysqlProvider(): ReldbProvider {
       return acquired
     try {
       if (!ready)
-        return err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+        return core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
       if (performance.now() >= acquired.data.deadline)
-        return err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+        return core.err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
       return await fn(acquired.data.connection)
     }
     finally { acquired.data.release() }
@@ -228,17 +228,17 @@ export function createMysqlProvider(): ReldbProvider {
       return closing
     const owned = pool
     if (!owned)
-      return Promise.resolve(ok(undefined))
+      return Promise.resolve(core.ok(undefined))
     closing = (async (): Promise<HaiResult<void>> => {
       try {
         await slotsDrained
         await owned.end()
         pool = null
         poolConfig = null
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+        return core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
           params: {
             error: String(error),
           },
@@ -285,7 +285,7 @@ export function createMysqlProvider(): ReldbProvider {
         [indexName],
       )
       const data = rows as Array<{ name: string }>
-      return ok(data[0]?.name ?? null)
+      return core.ok(data[0]?.name ?? null)
     })
   }
 
@@ -387,7 +387,7 @@ export function createMysqlProvider(): ReldbProvider {
   function executeDdl(sql: string): Promise<HaiResult<void>> {
     return withConnection(async (connection) => {
       await connection.query(sql)
-      return ok(undefined)
+      return core.ok(undefined)
     })
   }
 
@@ -423,8 +423,8 @@ export function createMysqlProvider(): ReldbProvider {
 
       if (!tableResult.data) {
         if (ifExists)
-          return ok(undefined)
-        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', {
+          return core.ok(undefined)
+        return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', {
           params: { error: `index not found: ${index}` },
         }))
       }
@@ -442,19 +442,19 @@ export function createMysqlProvider(): ReldbProvider {
     async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       return withConnection(async (connection) => {
         const [rows]: [unknown, unknown] = await connection.query(sql, params)
-        return ok(rows as T[])
+        return core.ok(rows as T[])
       })
     },
     async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       return withConnection(async (connection) => {
         const [rows]: [unknown, unknown] = await connection.query(sql, params)
-        return ok(((rows as unknown[])[0] as T) ?? null)
+        return core.ok(((rows as unknown[])[0] as T) ?? null)
       })
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       return withConnection(async (connection) => {
         const [result] = await connection.execute<ResultSetHeader>({ sql, values: params })
-        return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+        return core.ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
       })
     },
     async batch(statements) {
@@ -465,11 +465,11 @@ export function createMysqlProvider(): ReldbProvider {
             await connection.execute({ sql: s, values: params })
           }
           await connection.commit()
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) {
           await connection.rollback().catch(() => { })
-          return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
+          return core.err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
             params: {
               error: String(error),
             },
@@ -486,7 +486,7 @@ export function createMysqlProvider(): ReldbProvider {
           },
           options,
         )
-        return ok(result)
+        return core.ok(result)
       })
     },
   }
@@ -498,21 +498,21 @@ export function createMysqlProvider(): ReldbProvider {
     return {
       async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
         const [rows]: [unknown, unknown] = await conn.query(sql, params)
-        return ok(rows as T[])
+        return core.ok(rows as T[])
       },
       async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
         const [rows]: [unknown, unknown] = await conn.query(sql, params)
-        return ok(((rows as unknown[])[0] as T) ?? null)
+        return core.ok(((rows as unknown[])[0] as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
         const [result] = await conn.execute<ResultSetHeader>({ sql, values: params })
-        return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+        return core.ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
       },
       async batch(statements) {
         for (const { sql: s, params } of statements) {
           await conn.execute({ sql: s, values: params })
         }
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
@@ -522,7 +522,7 @@ export function createMysqlProvider(): ReldbProvider {
           },
           options,
         )
-        return ok(result)
+        return core.ok(result)
       },
     }
   }
@@ -536,14 +536,14 @@ export function createMysqlProvider(): ReldbProvider {
       if (!ready || performance.now() >= acquired.data.deadline) {
         acquired.data.release()
         return ready
-          ? err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
-          : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+          ? core.err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+          : core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
       }
       await connection.beginTransaction()
     }
     catch (error) {
       acquired.data.release()
-      return err(HaiReldbError.TRANSACTION_FAILED, mysqlTxErrorMessage(String(error)), error)
+      return core.err(HaiReldbError.TRANSACTION_FAILED, mysqlTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createMysqlTxDmlOps(connection)
@@ -551,7 +551,7 @@ export function createMysqlProvider(): ReldbProvider {
       ...ctx,
       isConnected: () => connection !== null,
     }, txDmlOps)
-    return ok(createTxHandle(guardedTxDmlOps, {
+    return core.ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await connection!.commit() },
       rollback: async () => { await connection!.rollback() },
       release: () => {
@@ -573,7 +573,7 @@ export function createMysqlProvider(): ReldbProvider {
   return {
     async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'mysql') {
-        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_mysqlOnlyMysql'))
+        return core.err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_mysqlOnlyMysql'))
       }
       const previousCleanup = await closeResource()
       if (!previousCleanup.success)
@@ -582,7 +582,7 @@ export function createMysqlProvider(): ReldbProvider {
         ? new URL(config.url).hostname
         : config.host
       if (config.ssl && config.ssl.rejectUnauthorized && config.ssl.verifyIdentity && isIP(host.replace(/^\[|\]$/g, ''))) {
-        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_mysqlTlsDnsRequired'))
+        return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_mysqlTlsDnsRequired'))
       }
       if (config.ssl && (!config.ssl.rejectUnauthorized || !config.ssl.verifyIdentity)) {
         logger.warn('MySQL TLS server verification is explicitly disabled', {
@@ -624,18 +624,18 @@ export function createMysqlProvider(): ReldbProvider {
               target: core.sanitize.sanitizeUrl(config.url),
             }
           : { host: config.host, port: config.port, database: config.database })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+        const result = core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
           params: {
             error: String(error),
           },
         }), error)
         return cleanup.success || result.success
           ? result
-          : err({
+          : core.err({
               ...result.error,
               ext: { cleanupPending: true, cleanupError: cleanup.error },
             })

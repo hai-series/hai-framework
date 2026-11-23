@@ -1,10 +1,11 @@
 /** 打包下载设置：项目保存选源，代理按本机环境解析。 */
+
 import type { DownloadProxyConfig, ImageSourceConfig } from '@h-ai/deploy'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { connect } from 'node:net'
 import process from 'node:process'
-import { resolveDownloadProxy, resolveImageReference } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
@@ -159,7 +160,7 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
   if (imageType === 'custom') {
     if (!mappings || !Object.keys(mappings).length)
       throw new Error(cliM('cli_download_invalid'))
-    for (const key of Object.keys(mappings)) resolveImageReference(`${key}/hai-source-check:1`, imageSource)
+    for (const key of Object.keys(mappings)) deploy.resolveImageReference(`${key}/hai-source-check:1`, imageSource)
   }
   let customRegistry = options.npmRegistry ?? savedNpm.registry
   if (npmType === 'custom' && !customRegistry && interactive) {
@@ -221,7 +222,7 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
       ? { bypass: bypass as string }
       : {}),
   }
-  resolveDownloadProxy(proxy)
+  deploy.resolveDownloadProxy(proxy)
   if (saveImage || saveNpm || saveProxy) {
     project.build = {
       ...build,
@@ -260,7 +261,7 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
  * ```
  */
 export function buildProxyArguments(proxy: DownloadProxyConfig, runtime: string, network?: string): string[] {
-  const environment = resolveDownloadProxy(proxy)
+  const environment = deploy.resolveDownloadProxy(proxy)
   for (const key of [
     'HTTP_PROXY',
     'HTTPS_PROXY',
@@ -295,7 +296,7 @@ export function buildProxyArguments(proxy: DownloadProxyConfig, runtime: string,
  * ```
  */
 export async function preflightDownloadProxy(runtime: string, proxy: DownloadProxyConfig, report: (message: string) => void = writeCliMessage): Promise<void> {
-  const environment = resolveDownloadProxy(proxy)
+  const environment = deploy.resolveDownloadProxy(proxy)
   for (const value of new Set([environment.HTTP_PROXY, environment.HTTPS_PROXY].filter(Boolean))) {
     const url = new URL(value)
     await new Promise<void>((resolve, reject) => {

@@ -843,11 +843,11 @@ export interface AlertProps extends DataAttributes {
  *
  * @example
  * ```ts
- * import { toast } from '@h-ai/ui'
- * import type { ToastProps } from '@h-ai/ui'
+ * import { type ToastProps, ui } from '@h-ai/ui'
+ *
  * const options: ToastProps = { message: '保存完成', variant: 'success', duration: 3000 }
- * const id = toast.add(options)
- * toast.remove(id)
+ * const id = ui.toast.add(options)
+ * ui.toast.remove(id)
  * ```
  */
 export interface ToastProps extends DataAttributes {

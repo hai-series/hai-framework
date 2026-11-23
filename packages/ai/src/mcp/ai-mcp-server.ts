@@ -34,11 +34,11 @@ export { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
  *
  * @example
  * ```ts
- * import { createMcpServer, StdioServerTransport } from '@h-ai/ai'
+ * import { ai } from '@h-ai/ai'
  *
- * const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+ * const server = ai.createMcpServer({ name: 'my-server', version: '1.0.0' })
  * // 注册工具 / 资源 ...
- * const transport = new StdioServerTransport()
+ * const transport = new ai.StdioServerTransport()
  * await server.connect(transport)
  * ```
  */

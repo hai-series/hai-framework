@@ -155,7 +155,7 @@ export interface CommitTurnInput {
  *
  * @example
  * ```ts
- * import { ai, type ContextManagerOptions } from '@h-ai/ai'
+ * import { type ContextManagerOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai；身份来自可信认证会话。
  * const options: ContextManagerOptions = { scope: { objectId: 'user-1', sessionId: 'session-1' }, turnCommit: 'manual', concurrency: 'reject' }
  * const result = ai.context.createManager(options)
@@ -589,7 +589,7 @@ export interface ContextManager {
  *
  * @example
  * ```ts
- * import { ai, type ContextOperations } from '@h-ai/ai'
+ * import { type ContextOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai；跨节点读取使用 restore/reload。
  * const operations: ContextOperations = ai.context
  * const restored = await operations.restoreManager({ objectId: 'user-1', sessionId: 'session-1' })

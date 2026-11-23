@@ -2,10 +2,10 @@
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ToastContainer from '../src/lib/components/compounds/ToastContainer.svelte'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -19,14 +19,14 @@ describe('浮动操作提示', () => {
     const component = mount(ToastContainer, { target })
     try {
       trigger.focus()
-      toast.success('Saved', 0)
+      ui.toast.success('Saved', 0)
       flushSync()
       trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'F8', bubbles: true, cancelable: true }))
       const dismiss = document.querySelector<HTMLButtonElement>('.hai-toast-layer button')!
       expect(document.activeElement).toBe(dismiss)
       dismiss.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
       flushSync()
-      expect(toast.items).toHaveLength(0)
+      expect(ui.toast.items).toHaveLength(0)
       expect(document.activeElement).toBe(trigger)
     }
     finally {
@@ -42,7 +42,7 @@ describe('浮动操作提示', () => {
     const component = mount(ToastContainer, { target })
     try {
       for (const variant of ['info', 'success', 'warning', 'error'] as const) {
-        const id = toast.add({ message: variant, variant, duration: 0 })
+        const id = ui.toast.add({ message: variant, variant, duration: 0 })
         flushSync()
         const notification = document.querySelector<HTMLElement>('.hai-toast-item')!
         expect(notification.dataset.variant).toBe(variant)
@@ -52,7 +52,7 @@ describe('浮动操作提示', () => {
         expect(notification.getAttribute('aria-live')).toBe(variant === 'error'
           ? 'assertive'
           : 'polite')
-        toast.remove(id)
+        ui.toast.remove(id)
         flushSync()
       }
     }
@@ -74,23 +74,23 @@ describe('浮动操作提示', () => {
     }
     try {
       trigger.focus()
-      toast.add({ message: 'Processing', duration: 1000, dismissible: false })
+      ui.toast.add({ message: 'Processing', duration: 1000, dismissible: false })
       flushSync()
       shortcut()
       expect(document.activeElement).toBe(document.querySelector('.hai-toast-item'))
       shortcut()
       expect(document.activeElement).toBe(trigger)
-      expect(toast.items).toHaveLength(1)
+      expect(ui.toast.items).toHaveLength(1)
       shortcut()
       vi.advanceTimersByTime(1000)
       flushSync()
-      expect(toast.items).toHaveLength(1)
+      expect(ui.toast.items).toHaveLength(1)
       shortcut()
       flushSync()
       vi.advanceTimersByTime(1000)
       flushSync()
       expect(document.activeElement).toBe(trigger)
-      expect(toast.items).toHaveLength(0)
+      expect(ui.toast.items).toHaveLength(0)
     }
     finally {
       await unmount(component)
@@ -111,7 +111,7 @@ describe('浮动操作提示', () => {
     const target = document.body.appendChild(document.createElement('div'))
     const component = mount(ToastContainer, { target })
     try {
-      toast.error('请刷新后重试 (traceId: request-conflict-1)', 2000)
+      ui.toast.error('请刷新后重试 (traceId: request-conflict-1)', 2000)
       flushSync()
       const notification = document.querySelector<HTMLElement>('.hai-toast-item')!
       expect(notification.textContent).toContain('请刷新后重试')
@@ -124,7 +124,7 @@ describe('浮动操作提示', () => {
       expect(notification.querySelector('code')?.textContent).toBe('request-conflict-1')
       expect(notification.textContent).toContain('联系客户支持或开发人员')
       vi.advanceTimersByTime(10000)
-      expect(toast.items).toHaveLength(1)
+      expect(ui.toast.items).toHaveLength(1)
       notification.querySelector<HTMLButtonElement>('.hai-toast-details button')!.click()
       await vi.advanceTimersByTimeAsync(0)
       flushSync()
@@ -135,7 +135,7 @@ describe('浮动操作提示', () => {
       flushSync()
       vi.advanceTimersByTime(2000)
       flushSync()
-      expect(toast.items).toHaveLength(0)
+      expect(ui.toast.items).toHaveLength(0)
     }
     finally {
       await unmount(component)
@@ -149,8 +149,8 @@ describe('浮动操作提示', () => {
     document.body.append(target)
     const component = mount(ToastContainer, { target })
     try {
-      toast.success('保存成功', 1000)
-      toast.add({ message: '复制成功', position: 'bottom-center', duration: 2000 })
+      ui.toast.success('保存成功', 1000)
+      ui.toast.add({ message: '复制成功', position: 'bottom-center', duration: 2000 })
       flushSync()
       expect(document.querySelectorAll('[role="status"]')).toHaveLength(1)
       expect(document.querySelector('[role="status"]')?.textContent).toContain('保存成功')
@@ -174,7 +174,7 @@ describe('浮动操作提示', () => {
         'bottom-center',
         'bottom-right',
       ] as const) {
-        const id = toast.add({
+        const id = ui.toast.add({
           'message': '配置提示',
           position,
           'duration': 0,
@@ -185,7 +185,7 @@ describe('浮动操作提示', () => {
         expect(document.querySelector('.hai-toast-position')?.getAttribute('data-position')).toBe(position)
         expect(document.querySelector('[data-testid="configured-toast"]')).not.toBeNull()
         expect(document.querySelector('.hai-toast-layer button')).toBeNull()
-        toast.remove(id)
+        ui.toast.remove(id)
       }
     }
     finally {

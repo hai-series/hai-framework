@@ -1,12 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { ManagementPage, ManagementStore } from '../stores/management-store.svelte.js'
-  import { WorkspaceLayout } from '@h-ai/ui/components/scenes/app/index'
-  import { ReauthenticationDialog, SessionRecoveryDialog } from '@h-ai/ui/components/scenes/iam/index'
+  import { Avatar, Badge, BareButton, Button, ReauthenticationDialog, SessionRecoveryDialog, WorkspaceLayout } from '@h-ai/ui'
   import { sessionRecovery } from '../api/session-recovery.svelte.js'
   import { sensitiveActions } from '../api/sensitive-actions.svelte.js'
   import { managementAuthActions } from '../api/api-client.js'
-  import { Avatar, Badge, BareButton, Button } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
 {{#if features.feedback}}
   import FeedbackEntry from './FeedbackEntry.svelte'

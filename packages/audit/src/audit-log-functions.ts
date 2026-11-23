@@ -2,7 +2,7 @@
 import type { AuditInitConfig } from './audit-config.js'
 import type { AuditLogRepository } from './audit-repository-log.js'
 import type { AuditActorSnapshot, AuditFunctions } from './audit-types.js'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { getAuditContext } from './audit-context.js'
 import { auditM } from './audit-i18n.js'
@@ -106,7 +106,7 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         logger.error('Audit input rejected', {
           issues: parsed.error.issues.map(issue => issue.path.join('.')),
         })
-        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+        return core.err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
           params: {
             field: 'event',
             reason: auditM('audit_eventFieldsInvalid'),
@@ -126,7 +126,7 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         logger.error('Audit actor snapshot rejected', {
           reason: auditM('audit_identityMismatch'),
         })
-        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+        return core.err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
           params: {
             field: 'actorSnapshot',
             reason: auditM('audit_identityMismatch'),
@@ -189,7 +189,7 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
     }
     catch (error) {
       logger.error('Audit event processing failed', { requestId: getAuditContext().requestId, error })
-      return err(HaiAuditError.LOG_FAILED, auditM('audit_logFailed', {
+      return core.err(HaiAuditError.LOG_FAILED, auditM('audit_logFailed', {
         params: {
           error: auditM('audit_eventProcessingFailed'),
         },

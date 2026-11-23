@@ -68,7 +68,7 @@ S3 流式上传用 `error.cause` 获取首次失败，`error.ext?.s3Operation` �
 
 ```typescript
 import { core } from '@h-ai/core'
-import { storage, StorageConfigSchema } from '@h-ai/storage'
+import { StorageConfigSchema, storage } from '@h-ai/storage'
 
 // 用公开 Schema 校验已加载的 storage 配置。成功 data 是校验后的设置，失败读取 error。
 const config = core.config.validate('storage', StorageConfigSchema)
@@ -233,7 +233,7 @@ Fullstack/API 项目先读取本工程已交付的 hai-serv/reference.md 中“�
 
 - 在 `packages/<name>-contract`（API 为 `apps/<name>-contract`）声明应用自己的附件 contract，在 serv 的 procedures 聚合入口挂载。当前生成的 Fullstack 客户端是共享 `managementApi`，需先将新领域纳入工程 contract；不能把文档中的默认 `apiClient.storage` 当作工程已经开放的接口。
 - 自有 procedure 使用 `serv.implement(contract).context<ServContext>().route(...).auth().handle(...)`；owner 来自可信 `context.session.userId`，按 ID 操作还须查验业务记录归属、状态与租户。key 由服务端生成，列表也在服务端限定本人范围。
-- 可复用 `createStorageProcedures({ storage, authorize })` 的已有签名/列表/元数据/删除操作，authorize 必须按可信 session 核对 operation 与全部 keys，拒绝空 prefix 与跨用户请求。只挂载实际需要的子路由，不能绕过应用附件记录、限额或审计；框架没有默认的 `attachments.*` 业务 API。
+- 可复用 `serv.createStorageProcedures({ storage, authorize })` 的已有签名/列表/元数据/删除操作，authorize 必须按可信 session 核对 operation 与全部 keys，拒绝空 prefix 与跨用户请求。只挂载实际需要的子路由，不能绕过应用附件记录、限额或审计；框架没有默认的 `attachments.*` 业务 API。
 - FileUpload 注入应用 uploadHandler；S3 签名 URL 是短期访问凭据，不能当作持续会话授权。上传完成后仍验证大小、实际内容与对象状态；仍有效的 PUT URL 可以重写其目标，严格发布时使用 staging/final 对象隔离。需要 Local 或严格逐次鉴权的二进制流程时，通过 Serv 自有 middleware 接入 `storage.file.put/getStream`，显式认证并精确配置传输策略，不能把公开 `serv.storageAssets` 用于本人私有附件。
 
 ### 与 kit 集成（SvelteKit 文件上传 API）

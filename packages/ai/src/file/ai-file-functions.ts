@@ -6,8 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AIConfig } from '../ai-config.js'
 
+import type { AIConfig } from '../ai-config.js'
 import type { LLMOperations } from '../llm/ai-llm-types.js'
 import type {
   FileOperations,
@@ -16,12 +16,12 @@ import type {
   FileParseResult,
   OutputFormat,
 } from './ai-file-types.js'
+
 import type { FileParseJob, FileParseReply } from './ai-file-worker.js'
-
 import { Buffer } from 'node:buffer'
-import { Worker } from 'node:worker_threads'
 
-import { core, err, ok } from '@h-ai/core'
+import { Worker } from 'node:worker_threads'
+import { core } from '@h-ai/core'
 
 import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -40,7 +40,7 @@ let activeLocalParsers = 0
 async function parseInWorker(job: FileParseJob): Promise<HaiResult<FileParseReply>> {
   const result = await filePool.run(job)
   if (!result.success) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+    return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
       params: { error: result.error.message },
     }), result.error)
   }
@@ -208,10 +208,10 @@ export async function parseBoundedLocalFile(request: FileParseRequest): Promise<
       timeoutMs,
     ].some(limit => !Number.isSafeInteger(limit) || limit < 1)
     || !inputBytes || inputBytes > maxInputBytes) {
-    return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileLocalInvalid'))
+    return core.err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileLocalInvalid'))
   }
   if (signal?.aborted)
-    return err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
+    return core.err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
 
   const mimeType = detectMimeType(content, filename, options.mimeType)
   const parameters = {
@@ -242,13 +242,13 @@ export async function parseBoundedLocalFile(request: FileParseRequest): Promise<
     job = { ...parameters, type: 'docx', content: payload }
   }
   else {
-    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
+    return core.err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
       params: { mimeType },
     }))
   }
 
   if (activeLocalParsers >= 3)
-    return err(HaiAIError.FILE_LOCAL_BUSY, aiM('ai_fileLocalBusy'))
+    return core.err(HaiAIError.FILE_LOCAL_BUSY, aiM('ai_fileLocalBusy'))
   activeLocalParsers++
   let worker: Worker | undefined
   const deadline = AbortSignal.timeout(timeoutMs)
@@ -280,15 +280,15 @@ export async function parseBoundedLocalFile(request: FileParseRequest): Promise<
       }
     })
     if (signal?.aborted)
-      return err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
+      return core.err(HaiAIError.FILE_LOCAL_CANCELLED, aiM('ai_fileLocalCancelled'))
     if (deadline.aborted)
-      return err(HaiAIError.FILE_LOCAL_TIMEOUT, aiM('ai_fileLocalTimeout'))
+      return core.err(HaiAIError.FILE_LOCAL_TIMEOUT, aiM('ai_fileLocalTimeout'))
     if (!parsed)
-      return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
+      return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
     if (!parsed.success)
       return parsed
     const { text, pageCount, truncated } = parsed.data
-    return ok({
+    return core.ok({
       text,
       method: job.type,
       ...(pageCount !== undefined && { pageCount }),
@@ -301,7 +301,7 @@ export async function parseBoundedLocalFile(request: FileParseRequest): Promise<
     })
   }
   catch {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
+    return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileLocalFailed'))
   }
   finally {
     try {
@@ -354,12 +354,12 @@ async function parseImageWithOcr(
   })
 
   if (!result.success) {
-    return err(HaiAIError.FILE_OCR_FAILED, aiM('ai_fileOcrFailed', {
+    return core.err(HaiAIError.FILE_OCR_FAILED, aiM('ai_fileOcrFailed', {
       params: { error: result.error.message },
     }), result.error)
   }
 
-  return ok(result.data.choices[0]?.message?.content ?? '')
+  return core.ok(result.data.choices[0]?.message?.content ?? '')
 }
 
 /**
@@ -413,7 +413,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     if (!ocrResult.success)
       return ocrResult
 
-    return ok({
+    return core.ok({
       text: ocrResult.data,
       method: 'ocr' as FileParseMethod,
       metadata: { filename, mimeType, charCount: ocrResult.data.length },
@@ -441,7 +441,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 强制 OCR 模式
     if (options.useOcr) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+        return core.err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
           params: { reason: 'OCR requires Buffer content' },
         }))
       }
@@ -451,7 +451,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 文本格式：直接解码（markdown 不改变纯文本语义）
     if (TEXT_MIME_TYPES.has(mimeType)) {
       const text = parseTextContent(content)
-      return ok({
+      return core.ok({
         text,
         method: 'text' as FileParseMethod,
         metadata: { filename, mimeType, charCount: text.length },
@@ -477,7 +477,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       else {
         text = parseHtmlFile(parseTextContent(content), outputFormat)
       }
-      return ok({
+      return core.ok({
         text,
         method: 'html' as FileParseMethod,
         metadata: { filename, mimeType, charCount: text.length },
@@ -492,7 +492,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       || mimeType === 'application/zip'
     ) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+        return core.err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
           params: {
             reason: isPdf ? 'PDF parsing requires Buffer content' : 'DOCX parsing requires Buffer content',
           },
@@ -509,7 +509,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
         return result
       if (result.data.success) {
         const { text, pageCount } = result.data.data
-        return ok({
+        return core.ok({
           text,
           method: isPdf ? 'pdf' : 'docx',
           ...(isPdf
@@ -525,7 +525,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 图片格式：OCR
     if (IMAGE_MIME_TYPES.has(mimeType)) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+        return core.err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
           params: { reason: 'Image OCR requires Buffer content' },
         }))
       }
@@ -533,7 +533,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     }
 
     // 其他格式：不支持
-    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
+    return core.err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
       params: { mimeType },
     }))
   }
@@ -545,7 +545,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       }
       catch (error) {
         logger.error('File parse failed unexpectedly', { filename: request.filename, error })
-        return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+        return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
           params: {
             error: String(error),
           },
@@ -557,7 +557,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       const result = await this.parse({ content, filename })
       if (!result.success)
         return result
-      return ok(result.data.text)
+      return core.ok(result.data.text)
     },
   }
 }

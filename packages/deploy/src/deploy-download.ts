@@ -12,8 +12,8 @@ import { deployM } from './deploy-i18n.js'
  * @throws Error - 源、仓库映射或镜像引用不合法。
  * @example
  * ```ts
- * import { resolveImageReference } from '@h-ai/deploy'
- * const image = resolveImageReference('node:24.22.1-bookworm-slim', { type: 'cn' })
+ * import { deploy } from '@h-ai/deploy'
+ * const image = deploy.resolveImageReference('node:24.22.1-bookworm-slim', { type: 'cn' })
  * // docker.1ms.run/library/node:24.22.1-bookworm-slim
  * ```
  */
@@ -103,8 +103,8 @@ function systemProxy(): { http?: string, https?: string, bypass?: string } {
  * @throws Error - 配置非法、系统仅提供 PAC 或平台不支持读取系统代理。
  * @example
  * ```ts
- * import { resolveDownloadProxy } from '@h-ai/deploy'
- * const environment = resolveDownloadProxy({ mode: 'custom', url: 'http://127.0.0.1:10808' })
+ * import { deploy } from '@h-ai/deploy'
+ * const environment = deploy.resolveDownloadProxy({ mode: 'custom', url: 'http://127.0.0.1:10808' })
  * // environment.HTTPS_PROXY 供本次子进程使用，不写进运行镜像。
  * ```
  */

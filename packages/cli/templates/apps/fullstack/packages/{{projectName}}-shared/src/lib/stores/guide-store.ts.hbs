@@ -1,6 +1,6 @@
 import type { NavAdapter } from '@h-ai/ui'
 import type { ManagementStore } from './management-store.svelte.js'
-import { createGuide } from '@h-ai/ui/guide'
+import { ui } from '@h-ai/ui'
 import * as m from '../paraglide/messages.js'
 
 /** Web/App/Desktop 共用内容；宿主只提供当前页面和平台持久化方式。 */
@@ -14,7 +14,7 @@ export function createManagementGuide(store: ManagementStore, platform: 'web' | 
         return store.navigate('settings')
     },
   }
-  return createGuide({
+  return ui.createGuide({
     nav,
     persistKey: '{{projectName}}-guide',
     persistence: platform === 'web'

@@ -159,8 +159,8 @@ Pass the required `config: ReachConfigInput` from the [notification configuratio
 `gatewayHooks` maps provider names to callbacks. Each name must identify an `aliyun-sms` provider with a configured `gateway`. The callback receives `method: POST`, the gateway `url`, the current request `body: string | undefined`, and the deadline signal `signal: AbortSignal`. It can return `{ headers?, body? }` directly or as a promise, setting only fields to override. Return `undefined` to use the static configuration. Run the callback on the server and keep signed URLs out of logs.
 
 ```ts
-import type { ReachConfigInput } from '@h-ai/reach'
-import { reach } from '@h-ai/reach'
+
+import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
   // Pass an existing configuration with an sms gateway. On successful initialization, the callback adds X-Client to the next gateway request.

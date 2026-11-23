@@ -37,9 +37,10 @@ export interface A2AApiKeyAuthConfig {
  *
  * @param config - API Key 提取配置
  * @returns authenticate 函数，可直接赋给 HandleA2AConfig.authenticate
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const authenticate = createA2AApiKeyAuthenticator({ in: 'header', name: 'X-Agent-Key' })
+ * import { kit } from '@h-ai/kit'
+ * const authenticate = kit.a2a.createApiKeyAuthenticator({ in: 'header', name: 'X-Agent-Key' })
  * // 应用先初始化 IAM；拒绝返回 null，交给路由转为 401。
  * void authenticate
  * ```

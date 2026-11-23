@@ -3,6 +3,7 @@ import type {
   McpServer,
   SessionNotification,
 } from '@agentclientprotocol/sdk'
+
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerFunctions } from '@h-ai/runner'
 import type { z } from 'zod'
@@ -25,7 +26,7 @@ import { mkdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { isDeepStrictEqual } from 'node:util'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createResourceRegistry } from '../registry/ai-registry-functions.js'
 import {
   nativeAdapters,
@@ -152,7 +153,7 @@ export function createACPOperations(
     const task = (async () => {
       try {
         ensure()
-        return ok(await operation())
+        return core.ok(await operation())
       }
       catch (error) {
         return acpError(error)
@@ -1053,13 +1054,13 @@ export function createACPOperations(
     workspaces: {
       /** 从受信仓库的一次提交读取有界普通文件快照。 */
       readGitSnapshot: (input: Parameters<typeof readGitSnapshot>[0], signal?: AbortSignal) =>
-        protectResult(async () => ok(await readGitSnapshot(input, signal))),
+        protectResult(async () => core.ok(await readGitSnapshot(input, signal))),
       /** 比较快照并生成可下载的补丁。 */
       diffSnapshot: (before: Record<string, string>, after: Record<string, string>, signal?: AbortSignal) =>
-        protectResult(async () => ok(await diffSnapshot(before, after, signal))),
+        protectResult(async () => core.ok(await diffSnapshot(before, after, signal))),
       /** 应用重新验权后，向独立任务分支提交并普通推送。 */
       publishSnapshot: (input: Parameters<typeof publishSnapshot>[0], signal?: AbortSignal) =>
-        protectResult(async () => ok(await publishSnapshot(input, signal))),
+        protectResult(async () => core.ok(await publishSnapshot(input, signal))),
       /**
        * 新增数据库工作区并归一化存储位置；拒绝目录重叠或同一 volume 重复登记。
        * @param input - 工作区存储位置、显式 Git 主分支和环境变量引用。

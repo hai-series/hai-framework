@@ -60,8 +60,8 @@ const messages: Partial<Record<string, UIMessageKey>> = {
  *
  * @example
  * ```ts
- * import { authErrorMessage } from '@h-ai/ui/components/scenes/iam/index'
- * const message = authErrorMessage({ code: 'hai:iam:020', message: '登录失败' })
+ * import { ui } from '@h-ai/ui/components/scenes/iam/index'
+ * const message = ui.authErrorMessage({ code: 'hai:iam:020', message: '登录失败' })
  * ```
  */
 export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus' | 'cause'>): string {

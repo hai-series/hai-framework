@@ -6,7 +6,7 @@
 
 ## クイックスタート
 
-`capacitor.init()` の後にネイティブ機能を使います。実機が必要な処理の前に環境を確認します。アカウント変更や画面離脱時にはプッシュのリスナーを解除します。
+デバイス、カメラ、プッシュ、ステータスバー、設定値の操作は `capacitor.init()` の成功後に `capacitor` から呼び出します。安全なトークン保存には `capacitor.createTokenStorage()` を使います。アダプターの作成に初期化は不要ですが、読み書きにはネイティブ環境と安全なストレージのプラグインが必要です。アカウント変更や画面離脱時にはプッシュのリスナーを解除します。
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -68,9 +68,9 @@ if (failures.length)
 | `capacitor.close()` | 進行中の初期化を無効にし、取得済みリスナーを解放 | `—` | `Promise<HaiResult<void>>`。解放失敗は再試行可能。 | `await capacitor.close()` |
 | `capacitor.getPlatform()` | Android・iOS・Web を判別 | `—` | `string` | `capacitor.getPlatform()` |
 | `capacitor.isNative()` | ネイティブアプリ内か判定 | `—` | `boolean` | `capacitor.isNative()` |
-| `capacitor.isInitialized` | 检查模块状态 | `—` | `boolean` | `capacitor.isInitialized` |
-| `capacitor.device.getInfo()` | OS と端末情報を取得 | `—` | `DeviceInfo` | `await capacitor.device.getInfo()` |
-| `capacitor.device.getAppVersion()` | インストール済みアプリの版とビルド番号を取得 | `—` | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.isInitialized` | 初期化済みか確認 | `—` | `boolean` | `capacitor.isInitialized` |
+| `capacitor.device.getInfo()` | OS と端末情報を取得 | `—` | `Promise<HaiResult<DeviceInfo>>` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion()` | インストール済みアプリの版とビルド番号を取得 | `—` | `Promise<HaiResult<{ version: string, build: string }>>` | `await capacitor.device.getAppVersion()` |
 
 #### 利用例：ネイティブ環境の準備と端末情報
 
@@ -113,7 +113,7 @@ if (!closeResult.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.camera.takePhoto(options?)` | 画像を撮影または選択 | 任意の `options` で取得元、画質、サイズ、返却形式を指定。[撮影オプション](#camera-options)を参照。 | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.camera.takePhoto(options?)` | 画像を撮影または選択 | 任意の `options` で取得元、画質、サイズ、返却形式を指定。[撮影オプション](#camera-options)を参照。 | `Promise<HaiResult<PhotoResult>>` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
 
 <a id="camera-options"></a>
 
@@ -220,9 +220,9 @@ if (!stopResult2.success)
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `capacitor.statusBar.configure(config)` | 指定したステータスバーの設定だけを適用 | `config` は必須。 `style`、`backgroundColor`、`overlay` は任意。[ステータスバーのオプション](#status-bar-options)を参照。 | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
-| `capacitor.statusBar.show()` | ネイティブのステータスバーを表示 | `—` | `void` | `await capacitor.statusBar.show()` |
-| `capacitor.statusBar.hide()` | ネイティブのステータスバーを非表示 | `—` | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.statusBar.configure(config)` | 指定したステータスバーの設定だけを適用 | `config` は必須。 `style`、`backgroundColor`、`overlay` は任意。[ステータスバーのオプション](#status-bar-options)を参照。 | `Promise<HaiResult<void>>` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show()` | ネイティブのステータスバーを表示 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide()` | ネイティブのステータスバーを非表示 | `—` | `Promise<HaiResult<void>>` | `await capacitor.statusBar.hide()` |
 
 <a id="status-bar-options"></a>
 
@@ -323,17 +323,17 @@ if (failures.length)
 
 <a id="tokens"></a>
 
-### 認証情報の安全な保存：`createCapacitorTokenStorage`
+### 認証情報の安全な保存：`capacitor.createTokenStorage`
 
 ネイティブの安全な保存を api-client に渡し、保存失敗と削除を一元管理します。
 
-以下のインターフェース一覧と例にある `tokens` は、`createCapacitorTokenStorage()` が返す `TokenStorage` オブジェクトです。ファクトリーは `@h-ai/capacitor` のルートからインポートします。アダプターの作成前に `capacitor.init()` を呼ぶ必要はありません。実際の読み書きにはネイティブ環境と安全な保存プラグインが必要で、環境やプラグインの失敗時は対応するメソッドの Promise が拒否されます。
+以下のインターフェース一覧と例にある `tokens` は、`capacitor.createTokenStorage()` が返す `TokenStorage` オブジェクトです。ファクトリーは `@h-ai/capacitor` のルートからインポートします。アダプターの作成前に `capacitor.init()` を呼ぶ必要はありません。実際の読み書きにはネイティブ環境と安全な保存プラグインが必要で、環境やプラグインの失敗時は対応するメソッドの Promise が拒否されます。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage()` | ネイティブの安全な認証情報アダプターを作る | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `capacitor.createTokenStorage()` | ネイティブの安全な認証情報アダプターを作る | `—` | `TokenStorage` | `capacitor.createTokenStorage()` |
 | `tokens.getAccessToken()` | アクセストークンを読む | `—` | `Promise<string or null>` | `await tokens.getAccessToken()` |
 | `tokens.getRefreshToken()` | リフレッシュトークンを読む | `—` | `Promise<string or null>` | `await tokens.getRefreshToken()` |
 | `tokens.setAccessToken(token)` | アクセストークンを保存 | 信頼済みの認証応答から得たアクセストークン文字列 `token` が必須。 | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
@@ -345,11 +345,11 @@ if (failures.length)
 信頼できるログイン応答のトークンをネイティブ端末で入力。保存値を読み戻し finally で削除します。プラグインの失敗は Promise の拒否で通知します。
 
 ```ts
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 async function verifySecureStorage(accessToken: string, refreshToken: string) {
   // 既定のキー名でネイティブの安全なトークン保存アダプターを作成します。各操作は安全な保存プラグインを使います。
-  const tokens = createCapacitorTokenStorage()
+  const tokens = capacitor.createTokenStorage()
   try {
     // 発行されたアクセストークンを保存します。成功時にデータはなく、安全な書込みの失敗時は Promise が拒否されます。
     await tokens.setAccessToken(accessToken)

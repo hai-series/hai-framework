@@ -12,5 +12,6 @@ export * from './core-config.js'
 export * from './core-main.node.js'
 
 // 类型定义（HaiResult, Logger 等）
-export * from './core-types.js'
+export { HaiCommonError, HaiConfigError } from './core-types.js'
+export type { AccessCondition, AccessDecision, AccessFunctions, ArrayFn, AsyncFn, BrowserConfigFn, BrowserCoreFunctions, ConfigFn, CoreConfig, CoreFunctions, CoreLogger, CoreOptions, CreateNotInitializedKitFn, Env, ErrorFn, ErrorInfo, ErrorInfoValue, HaiError, HaiErrorDef, HaiResult, I18nFn, IdFn, InterpolationParams, Locale, LocaleInfo, LocaleMessages, LogContext, LogFormat, Logger, LoggerFunctions, LoggerOptions, LoggingConfig, LogLevel, LogObserver, LogRecord, MatchHandlers, MessageDictionary, MessageOptions, ModuleFn, ModuleRuntime, NodeCoreFunctions, NotInitializedKit, ObjectFn, PaginatedResult, PaginationOptions, PaginationOptionsInput, RequestAccessCheck, RequestAccessConfigInput, RequestAccessPolicy, RequestContext, RequestEncryptionMode, RuntimeStep, SanitizeFn, SanitizeSensitiveFieldsOptions, SensitiveKeyMatcher, StringFn, TimeFn, TrustedProxies, TypeUtilFn, ValidationFormError, WatchCallback, ZodMessageGetter, ZodValidationFn, ZodValidationMessageKey } from './core-types.js'
 export type * from './core-worker-types.js'

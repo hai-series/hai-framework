@@ -3,7 +3,7 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Page, TestInfo } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 import { readFile, writeFile } from 'node:fs/promises'
-import { readFeedbackBundle } from '@h-ai/feedback/bundle'
+import { feedback } from '@h-ai/feedback/bundle'
 import { expect, test } from '@playwright/test'
 import { readAdminBuildFacts } from './build-metadata'
 import { dutyAccounts, loginOnPage, registerViaApi, transportAdmin, uniqueUser, waitForHydration } from './helpers'
@@ -361,7 +361,7 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   const download = await downloading
   const archivePath = testInfo.outputPath('feedback-recording.zip')
   await download.saveAs(archivePath)
-  const bundle = await readFeedbackBundle(await readFile(archivePath))
+  const bundle = await feedback.readBundle(await readFile(archivePath))
   expect(bundle.success).toBe(true)
   if (!bundle.success)
     throw new Error(bundle.error.message)
@@ -580,7 +580,7 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
     await expect(page.locator('.feedback-form')).not.toContainText('已开始下载反馈文件。')
     const output = testInfo.outputPath('feedback-local.zip')
     await download.saveAs(output)
-    const bundle = await readFeedbackBundle(await readFile(output))
+    const bundle = await feedback.readBundle(await readFile(output))
     expect(bundle.success).toBe(true)
     if (bundle.success) {
       expect(bundle.data.report.description).toBe(description)

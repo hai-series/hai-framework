@@ -49,7 +49,7 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 ## 当前传输与安全契约
 
 - JSON 业务请求与响应经 typed api-client 和 serv 的 crypto transport 加解密，包含登录与刷新；健康/就绪检查和公开头像二进制资源使用既有例外。新增 API 沿用当前管道；需求调整传输方案时同步客户端、服务端及测试，不能静默绕过仍生效的安全契约。
-- Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端装配 `createCapacitorTokenStorage`，浏览器预览沿用 Cookie；Desktop 原生端使用内存 TokenStorage，重启后重新登录。原生 body 刷新通道同时验证 `X-HAI-Token-Transport: body`、端对应的 `x-request-client` 与受信完整 Origin，刷新请求沿用这些头。调整会话方案时保持凭据保护和通道校验；敏感 token 不写 localStorage 或普通配置文件。
+- Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端装配 `capacitor.createTokenStorage()`，浏览器预览沿用 Cookie；Desktop 原生端使用内存 TokenStorage，重启后重新登录。原生 body 刷新通道同时验证 `X-HAI-Token-Transport: body`、端对应的 `x-request-client` 与受信完整 Origin，刷新请求沿用这些头。调整会话方案时保持凭据保护和通道校验；敏感 token 不写 localStorage 或普通配置文件。
 - 服务端依据实际权限模型验证每个受保护操作，个人操作绑定当前会话，代他人操作验证对应权限；不能只靠隐藏导航保护资源。SQL 动态值参数化，日志与审计不泄露密码、token 或密钥。
 
 

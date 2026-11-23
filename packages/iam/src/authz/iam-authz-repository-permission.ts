@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { Permission } from './iam-authz-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -186,7 +186,7 @@ export async function createDbPermissionRepository(): Promise<PermissionReposito
 class DbPermissionRepository extends BaseReldbCrudRepository<Permission> implements PermissionRepository {
   async getSensitiveOperations(operation?: string): Promise<HaiResult<string[]>> {
     if (operation !== undefined && (typeof operation !== 'string' || !operation.trim() || operation.length > 128))
-      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+      return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
     const match = reldb.config?.type === 'postgresql'
       ? 'sensitive_operations::jsonb @> CAST(? AS jsonb)'
       : reldb.config?.type === 'mysql'
@@ -211,18 +211,18 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
           ? JSON.parse(row.sensitive_operations)
           : row.sensitive_operations
         if (!Array.isArray(values) || values.length > 1000)
-          return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+          return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
         for (const value of values as unknown[]) {
           if (typeof value !== 'string' || !value.trim() || value.length > 128)
-            return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+            return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
           if (operation === undefined || value.trim() === operation)
             operations.add(value.trim())
         }
       }
-      return ok([...operations].sort())
+      return core.ok([...operations].sort())
     }
     catch {
-      return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+      return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
     }
   }
 
@@ -243,7 +243,7 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
   }
 
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM('iam_queryPermissionFailed', {
         params: { message: error.message },
@@ -257,6 +257,6 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }
-    return ok(result.data[0] ?? null)
+    return core.ok(result.data[0] ?? null)
   }
 }

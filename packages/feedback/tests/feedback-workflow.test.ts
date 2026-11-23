@@ -4,12 +4,11 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReachError, reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const actor: FeedbackContext = { scopeId: 'tenant-a', userId: 'user-a' }
@@ -373,7 +372,7 @@ describe('反馈公开流程', { concurrent: false }, () => {
     expect(archive.success).toBe(true)
     if (!archive.success)
       return
-    const bundle = await readFeedbackBundle(Buffer.from(archive.data.dataBase64, 'base64'))
+    const bundle = await feedback.readBundle(Buffer.from(archive.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (bundle.success)
       expect(bundle.data.manifest.files.some(file => file.attachmentId === 'screen')).toBe(true)
@@ -384,7 +383,7 @@ describe('反馈公开流程', { concurrent: false }, () => {
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    const send = vi.spyOn(reach, 'send').mockResolvedValue(err(HaiReachError.SEND_FAILED, 'SMTP fixture unavailable'))
+    const send = vi.spyOn(reach, 'send').mockResolvedValue(core.err(HaiReachError.SEND_FAILED, 'SMTP fixture unavailable'))
     await feedback.completeCollection({ id: report.data.id }, actor)
     await feedback.runJobs()
     const failed = await feedback.get(report.data.id, admin)

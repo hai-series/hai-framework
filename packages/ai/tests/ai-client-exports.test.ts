@@ -21,8 +21,9 @@ export type NoPlaceholder = typeof import('@h-ai/ai/client').createUnconfiguredA
 
 describe('published client exports', () => {
   it('exports the audio client, recorder and WAV conversion', () => {
-    expect(Object.keys(client)).toEqual(['blobToWav', 'createAudioClient', 'createAudioRecorder'])
-    const operations = client.createAudioClient({
+    expect(Object.keys(client)).toEqual(['ai'])
+    expect(Object.keys(client.ai).sort()).toEqual(['blobToWav', 'createAudioClient', 'createAudioRecorder'])
+    const operations = client.ai.createAudioClient({
       url: 'wss://audio.example.com/api/v1/ai/audio',
       getTicket: () => 'test-only-ticket',
     })

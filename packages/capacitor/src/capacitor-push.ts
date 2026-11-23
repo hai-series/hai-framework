@@ -3,9 +3,10 @@
  * @module capacitor-push
  */
 import type { PluginListenerHandle } from '@capacitor/core'
+
 import type { HaiResult } from '@h-ai/core'
 import type { PushCleanup, PushNotificationCallbacks, PushOptions, PushRegistration } from './capacitor-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
@@ -209,9 +210,9 @@ export async function closePushListeners(): Promise<HaiResult<void>> {
   const failure = results.find(result => result.status === 'rejected')
   if (failure) {
     logCleanupFailure('Push listener cleanup failed during capacitor.close', failure.reason)
-    return err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), failure.reason)
+    return core.err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), failure.reason)
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -272,11 +273,11 @@ export async function registerPush(options?: PushOptions): Promise<HaiResult<Pus
       await scope.dispose()
       return registered
     })
-    return ok({ token })
+    return core.ok({ token })
   }
   catch (cause) {
     void scope.dispose().catch(error => logCleanupFailure('Push registration cleanup failed; retry capacitor.close', error))
-    return err(HaiCapacitorError.PUSH_REGISTER_FAILED, capacitorM('capacitor_pushRegisterFailed'), cause)
+    return core.err(HaiCapacitorError.PUSH_REGISTER_FAILED, capacitorM('capacitor_pushRegisterFailed'), cause)
   }
 }
 
@@ -334,18 +335,18 @@ export async function listenPush(callbacks: PushNotificationCallbacks, options?:
       }
     })
     scope.assertOpen()
-    return ok(async () => {
+    return core.ok(async () => {
       try {
         await scope.dispose()
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (cause) {
-        return err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), cause)
+        return core.err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), cause)
       }
     })
   }
   catch (cause) {
     void scope.dispose().catch(error => logCleanupFailure('Push setup cleanup failed; retry capacitor.close', error))
-    return err(HaiCapacitorError.PUSH_LISTEN_FAILED, capacitorM('capacitor_pushListenFailed'), cause)
+    return core.err(HaiCapacitorError.PUSH_LISTEN_FAILED, capacitorM('capacitor_pushListenFailed'), cause)
   }
 }

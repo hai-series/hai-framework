@@ -12,10 +12,10 @@ import type {
   CollectionInfo,
   VectorSearchResult,
 } from '../vecdb-types.js'
-import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 import { createHash } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
@@ -73,11 +73,11 @@ export function createQdrantProvider(): VecdbProvider {
   /** 获取集合信息；集合不存在时返回 COLLECTION_NOT_FOUND，其余异常继续抛出 */
   async function getCollectionInfo(name: string): Promise<HaiResult<Awaited<ReturnType<QdrantRestClient['getCollection']>>>> {
     try {
-      return ok(await client!.getCollection(name))
+      return core.ok(await client!.getCollection(name))
     }
     catch (error) {
       if (isQdrantNotFoundError(error)) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
           params: { name },
         }))
       }
@@ -113,8 +113,8 @@ export function createQdrantProvider(): VecdbProvider {
 
     const definition = readVectorDefinition(infoResult.data)
     return definition
-      ? ok(definition.dimension)
-      : err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+      ? core.ok(definition.dimension)
+      : core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
           params: { name },
         }))
   }
@@ -125,7 +125,7 @@ export function createQdrantProvider(): VecdbProvider {
       return null
     }
 
-    return err(
+    return core.err(
       HaiVecdbError.DIMENSION_MISMATCH,
       vecdbM('vecdb_dimensionMismatch', {
         params: {
@@ -154,7 +154,7 @@ export function createQdrantProvider(): VecdbProvider {
       const collections = await client!.getCollections()
       const exists = collections.collections.some(c => c.name === name)
       if (exists) {
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+        return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
           params: { name },
         }))
       }
@@ -169,7 +169,7 @@ export function createQdrantProvider(): VecdbProvider {
       })
 
       logger.info('Collection created', { name, dimension: options.dimension, metric })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async drop(name) {
@@ -183,7 +183,7 @@ export function createQdrantProvider(): VecdbProvider {
       await client!.deleteCollection(name)
 
       logger.info('Collection dropped', { name })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async exists(name) {
@@ -191,11 +191,11 @@ export function createQdrantProvider(): VecdbProvider {
 
       try {
         await client!.getCollection(name)
-        return ok(true)
+        return core.ok(true)
       }
       catch (error) {
         if (isQdrantNotFoundError(error)) {
-          return ok(false)
+          return core.ok(false)
         }
         throw error
       }
@@ -213,12 +213,12 @@ export function createQdrantProvider(): VecdbProvider {
 
       const definition = readVectorDefinition(collectionInfo)
       if (!definition) {
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
           params: { name },
         }))
       }
 
-      return ok({
+      return core.ok({
         name,
         ...definition,
         count: collectionInfo.points_count ?? 0,
@@ -230,7 +230,7 @@ export function createQdrantProvider(): VecdbProvider {
 
       const collections = await client!.getCollections()
       const names = collections.collections.map(c => c.name)
-      return ok(names)
+      return core.ok(names)
     },
   }
 
@@ -269,7 +269,7 @@ export function createQdrantProvider(): VecdbProvider {
       await client!.upsert(collection, { points, wait: true })
 
       logger.info('Vectors inserted', { collection, count: documents.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async upsert(collection, documents) {
@@ -301,7 +301,7 @@ export function createQdrantProvider(): VecdbProvider {
       await client!.upsert(collection, { points, wait: true })
 
       logger.info('Vectors upserted', { collection, count: documents.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async delete(collection, ids) {
@@ -311,7 +311,7 @@ export function createQdrantProvider(): VecdbProvider {
       await client!.delete(collection, { points: uuids, wait: true })
 
       logger.info('Vectors deleted', { collection, count: ids.length })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async search(collection, vector, options) {
@@ -325,7 +325,7 @@ export function createQdrantProvider(): VecdbProvider {
         return collectionInfo
       const definition = readVectorDefinition(collectionInfo.data)
       if (!definition) {
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
           params: { name: collection },
         }))
       }
@@ -373,7 +373,7 @@ export function createQdrantProvider(): VecdbProvider {
         }
       }).filter(point => point.score >= minScore)
 
-      return ok(results)
+      return core.ok(results)
     },
 
     async count(collection) {
@@ -381,7 +381,7 @@ export function createQdrantProvider(): VecdbProvider {
 
       // 集合信息中的 points_count 是近似统计，不能用作版本过滤扩大候选数的终止依据。
       const count = await client!.count(collection, { exact: true })
-      return ok(count.count)
+      return core.ok(count.count)
     },
 
     async scan(collection, limit, cursor) {
@@ -392,7 +392,7 @@ export function createQdrantProvider(): VecdbProvider {
         else if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(cursor))
           offset = cursor.toLowerCase()
         else
-          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+          return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
       }
       const page = await client!.scroll(collection, limit, offset).catch((error: unknown) => {
         if (isQdrantNotFoundError(error))
@@ -400,7 +400,7 @@ export function createQdrantProvider(): VecdbProvider {
         throw error
       })
       if (!page) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
           params: { name: collection },
         }))
       }
@@ -416,7 +416,7 @@ export function createQdrantProvider(): VecdbProvider {
       const next = page.next_page_offset ?? undefined
       if (next !== undefined && next === offset)
         throw new Error('Qdrant scroll cursor did not advance')
-      return ok({
+      return core.ok({
         items,
         nextCursor: typeof next === 'bigint'
           ? `n:${next}`
@@ -432,7 +432,7 @@ export function createQdrantProvider(): VecdbProvider {
 
     async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'qdrant') {
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+        return core.err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
           params: { type: cfg.type },
         }))
       }
@@ -451,14 +451,14 @@ export function createQdrantProvider(): VecdbProvider {
         logger.info('Qdrant connected', {
           url: core.sanitize.sanitizeUrl(qdrantConfig.url),
         })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         // 仅提取错误消息，避免 error 对象中的 URL 或连接信息泄漏
         logger.error('Failed to connect to Qdrant', {
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+        return core.err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
           params: { error: 'Qdrant connection failed' },
         }))
       }
@@ -468,7 +468,7 @@ export function createQdrantProvider(): VecdbProvider {
       client = null
       config = null
       logger.info('Qdrant connection closed')
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     isConnected(): boolean {

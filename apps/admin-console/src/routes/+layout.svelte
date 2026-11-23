@@ -9,7 +9,7 @@
   import { resolve } from '$app/paths'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
-  import { setGlobalLocale } from '@h-ai/ui'
+  import { ui } from '@h-ai/ui'
   import { untrack } from 'svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale } from '#lib/paraglide/runtime.js'
@@ -33,7 +33,7 @@
   // 1. 同步 Paraglide locale 到全局 i18n（@h-ai/ui 转发到 core）
   // 2. 按 _kit.yml 启用同源 /api 与 SvelteKit __data.json 的传输加密
   if (browser) {
-    setGlobalLocale(getLocale())
+    ui.setGlobalLocale(getLocale())
     // 服务进程的配置在首次加载时固定，后续页面导航无需重新安装全局 fetch。
     const config = untrack(() => data.kitConfig)
     kit.client.installBrowserTransport(config, { crypto, basePath: base })

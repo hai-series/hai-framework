@@ -160,9 +160,10 @@ function extractCodeInnerHtml(html: string): string {
  * @param lang - 语言标识符（支持别名如 js、ts、py）
  * @returns 是否支持该语言
  *
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const supported = isLanguageSupported('typescript')
+ * import { ui } from '@h-ai/ui'
+ * const supported = ui.isLanguageSupported('typescript')
  * ```
  */
 export function isLanguageSupported(lang: string): boolean {
@@ -179,9 +180,10 @@ export function isLanguageSupported(lang: string): boolean {
  * @param lang - 语言标识符
  * @returns 高亮后的 HTML 片段
  *
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const html = highlightCode('const count = 42', 'typescript')
+ * import { ui } from '@h-ai/ui'
+ * const html = ui.highlightCode('const count = 42', 'typescript')
  * // 返回已转义/高亮后的代码 HTML，未知语言回退安全纯文本。
  * ```
  */

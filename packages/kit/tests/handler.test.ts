@@ -5,7 +5,7 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { error as httpError, redirect } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -37,7 +37,7 @@ describe('handler', () => {
     const debug = vi.spyOn(core.logger, 'debug').mockImplementation(() => {})
     const error = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
     try {
-      const response = await handler(() => kit.response.fromResult(err(HaiCommonError.CONFLICT, 'Already updated')))(createMockEvent())
+      const response = await handler(() => kit.response.fromResult(core.err(HaiCommonError.CONFLICT, 'Already updated')))(createMockEvent())
       expect(response.status).toBe(409)
       expect(error).not.toHaveBeenCalled()
       expect(debug).toHaveBeenCalledWith('API operation failed', {

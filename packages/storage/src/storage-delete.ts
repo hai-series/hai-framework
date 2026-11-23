@@ -1,7 +1,8 @@
 /** Local/S3 共用的批量删除与前缀删除。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DirOperations, FileOperations, StorageDeleteResult, StorageDeleteSummary } from './storage-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { HaiStorageError } from './storage-types.js'
 
@@ -29,7 +30,7 @@ export async function deleteStoragePrefix(prefix: string, list: DirOperations['l
     const next = page.data.nextContinuationToken
     // 截断但没有游标会漏删，重复游标会重放删除。处理本页之前先验证翻页回执。
     if (page.data.isTruncated !== Boolean(next) || (next && visited.has(next)))
-      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_listPageInvalid'))
+      return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_listPageInvalid'))
     if (next)
       visited.add(next)
     if (page.data.files.length) {
@@ -39,7 +40,7 @@ export async function deleteStoragePrefix(prefix: string, list: DirOperations['l
     }
     continuationToken = next
   } while (continuationToken)
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -55,7 +56,7 @@ export async function deleteStoragePrefix(prefix: string, list: DirOperations['l
  */
 export function toStorageDeleteResult(summary: StorageDeleteSummary): StorageDeleteResult {
   if (summary.failures.length === 0)
-    return ok(summary)
+    return core.ok(summary)
   return {
     success: false,
     error: {

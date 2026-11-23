@@ -29,9 +29,9 @@
 Schema 自带本地化 title/description 和示例。`format:'artifact-id'`、`format:'artifact-ids'` 标记资源选择字段，通用 UI 可据此生成表单；选择值仍需服务端授权。
 
 ```ts
-import type { BuiltinToolOptions } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
-import { ok } from '@h-ai/core'
+
+import { type BuiltinToolOptions, ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 
 export function registerBuiltinTools(options: BuiltinToolOptions) {
@@ -44,7 +44,7 @@ export function registerBuiltinTools(options: BuiltinToolOptions) {
   if (!registered.success)
     return registered
   // 将已登记的工具表适配成模型工具接口，并与工具集、注册表一并包装为成功结果。
-  return ok({ set, registry, modelTools: ai.tools.adapt(registry) })
+  return core.ok({ set, registry, modelTools: ai.tools.adapt(registry) })
 }
 ```
 

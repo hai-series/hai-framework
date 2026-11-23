@@ -10,7 +10,7 @@ import type { ApiKeyRepository } from '../authn/apikey/iam-authn-apikey-reposito
 import type { IamConfig } from '../iam-config.js'
 import type { SessionRepository } from './iam-session-repository-cache.js'
 import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from './iam-session-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createDbApiKeyRepository } from '../authn/apikey/iam-authn-apikey-repository.js'
 import { applyApiKeyScopes } from '../authn/apikey/iam-authn-apikey-scope.js'
 import { readIamCache } from '../iam-cache.js'
@@ -98,11 +98,11 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
     })
 
     logger.info('Session sub-feature initialized')
-    return ok(functions)
+    return core.ok(functions)
   }
   catch (error) {
     logger.error('Session sub-feature initialization failed', { error })
-    return err(
+    return core.err(
       HaiIamError.CONFIG_ERROR,
       iamM('iam_initComponentFailed'),
       error,
@@ -149,11 +149,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   /** 只构造候选值；旧凭据撤销与新凭据发布必须由仓库一次原子提交。 */
   function candidate(options: CreateSessionOptions, credentialVersion: string): HaiResult<{ session: Session, tokens: TokenPair }> {
     if (options.terminalType !== undefined && !['web', 'app', 'desktop', 'api'].includes(options.terminalType))
-      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_terminalTypeInvalid'))
+      return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_terminalTypeInvalid'))
     const now = new Date()
     const ttl = options.maxAge ?? maxAge
     if (!Number.isSafeInteger(ttl) || ttl <= 0 || !Number.isFinite(new Date(now.getTime() + ttl * 1000).getTime()))
-      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
+      return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
     const accessToken = generateSessionToken(options.userId)
     const tokens: TokenPair = {
       accessToken,
@@ -163,7 +163,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     }
     const session = buildSession(options, now, ttl, accessToken, credentialVersion)
     session.data = { ...session.data, _tokenPair: tokens }
-    return ok({ session, tokens })
+    return core.ok({ session, tokens })
   }
 
   /**
@@ -176,26 +176,26 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       if (!current.success)
         return current
       if (!current.data || current.data.available !== true)
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if (typeof current.data.version !== 'string' || (expected !== undefined && current.data.version !== expected))
-        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      return ok(current.data)
+        return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+      return core.ok(current.data)
     }
     catch {
-      return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
+      return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
     }
   }
 
   /** 持久化 key 是派生会话的授权上限；撤销、禁用、到期与读取失败均拒绝访问。 */
   async function validateApiKey(session: Session): Promise<HaiResult<Session>> {
     if (!session.apiKeyId)
-      return ok(session)
+      return core.ok(session)
     if (!config.apiKeyRepository)
-      return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+      return core.err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
     const found = await readIamCache(`apikey:${session.apiKeyId}`, async () => {
       const row = await config.apiKeyRepository!.findOneById(session.apiKeyId!)
       return row.success
-        ? ok(row.data
+        ? core.ok(row.data
             ? {
                 userId: row.data.userId,
                 enabled: row.data.enabled,
@@ -209,12 +209,12 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return found
     const key = found.data
     if (!key || key.userId !== session.userId)
-      return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+      return core.err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
     if (!key.enabled)
-      return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
+      return core.err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
     if (key.expiresAt && Date.now() >= key.expiresAt)
-      return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
-    return ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
+      return core.err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
+    return core.ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
   }
 
   return {
@@ -233,10 +233,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         }
 
         logger.debug('Session created', { userId: options.userId })
-        return ok(session)
+        return core.ok(session)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiIamError.SESSION_CREATE_FAILED,
           iamM('iam_createSessionFailed'),
           error,
@@ -252,7 +252,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
       const session = sessionResult.data
       if (!session) {
-        return ok(null)
+        return core.ok(null)
       }
 
       if (new Date() > session.expiresAt) {
@@ -260,11 +260,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         if (!removeResult.success) {
           return removeResult as HaiResult<Session | null>
         }
-        return ok(null)
+        return core.ok(null)
       }
 
       if (typeof session.credentialVersion !== 'string')
-        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+        return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       const bound = await credential(session.userId, session.credentialVersion)
       if (!bound.success)
         return bound
@@ -287,7 +287,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
       // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
       // 防止调用方（包括 event.locals.session 等上下文）意外泄漏刷新令牌。
-      return ok(stripInternalSessionFields(output))
+      return core.ok(stripInternalSessionFields(output))
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
@@ -297,13 +297,13 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       }
 
       if (!sessionResult.data) {
-        return err(
+        return core.err(
           HaiIamError.SESSION_INVALID,
           iamM('iam_sessionExpired'),
         )
       }
 
-      return ok(sessionResult.data)
+      return core.ok(sessionResult.data)
     },
 
     async update(accessToken: string, data: Partial<Session>, expectedVersion: string): Promise<HaiResult<void>> {
@@ -321,7 +321,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       if (!result.success) {
         return result as HaiResult<number>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async refresh(refreshToken: string): Promise<HaiResult<TokenPair>> {
@@ -334,14 +334,14 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
         const oldSession = oldSessionResult.data
         if (!oldSession) {
-          return err(
+          return core.err(
             HaiIamError.TOKEN_EXPIRED,
             iamM('iam_refreshTokenExpired'),
           )
         }
 
         if (typeof oldSession.credentialVersion !== 'string')
-          return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+          return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
         const bound = await credential(oldSession.userId, oldSession.credentialVersion)
         if (!bound.success)
           return bound
@@ -379,10 +379,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         if (!current.success)
           return current
         logger.debug('Token refreshed', { userId: oldSession.userId })
-        return ok(next.data.tokens)
+        return core.ok(next.data.tokens)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiIamError.TOKEN_REFRESH_FAILED,
           iamM('iam_refreshTokenFailed'),
           error,

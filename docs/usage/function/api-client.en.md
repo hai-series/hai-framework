@@ -9,8 +9,8 @@
 Create one typed client from the same contract used by Serv or Kit. Initialize it before requests, handle each `HaiResult`, and close it when the owner releases it.
 
 ```ts
-import type { IamAuthLoginInput } from '@h-ai/api-client'
-import { apiClient } from '@h-ai/api-client'
+
+import { type IamAuthLoginInput, apiClient } from '@h-ai/api-client'
 
 async function loginAndLoadProfile(input: IamAuthLoginInput) {
   // Start the default client at /api/v1 with default authentication storage. Return initialization errors before using the client.

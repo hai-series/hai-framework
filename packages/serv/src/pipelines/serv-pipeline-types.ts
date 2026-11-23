@@ -21,8 +21,8 @@ import type { ServContext } from '../serv-context.js'
  *
  * @example
  * ```ts
- * import type { ServMiddleware } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServMiddleware, serv } from '@h-ai/serv'
  *
  * const middleware: ServMiddleware = async (context, next) => {
  *   context.header('X-App-Version', '1')
@@ -40,8 +40,8 @@ export type ServMiddleware = MiddlewareHandler
  *
  * @example
  * ```ts
- * import type { ServMiddlewareFactory } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServMiddlewareFactory, serv } from '@h-ai/serv'
  *
  * const createTrace: ServMiddlewareFactory<{ header: string }> = config => async (context, next) => {
  *   context.header(config.header, 'enabled')
@@ -61,8 +61,8 @@ export type ServMiddlewareFactory<TConfig = void> = [TConfig] extends [void]
  *
  * @example
  * ```ts
- * import type { ServProcedureOptions } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServProcedureOptions, serv } from '@h-ai/serv'
  *
  * function requestId(options: ServProcedureOptions<{ id: string }>) {
  *   return { id: options.input.id, requestId: options.context.requestId }
@@ -84,8 +84,8 @@ export type ServProcedureOptions<
  *
  * @example
  * ```ts
- * import type { ServProcedureHandler } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServProcedureHandler, serv } from '@h-ai/serv'
  *
  * const handler: ServProcedureHandler<{ id: string }, { id: string }> = async ({ input }) => ({ success: true, data: { id: input.id } })
  * ```

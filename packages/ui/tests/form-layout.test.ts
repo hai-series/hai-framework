@@ -6,14 +6,14 @@ import { Input, Select, Textarea } from '../src/lib/components/primitives/index.
 import { CrudEditPanel } from '../src/lib/components/scenes/crud/index.js'
 import { PasswordInput, UserProfile } from '../src/lib/components/scenes/iam/index.js'
 import { setUILocale } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 import ControlledValidationHarness from './fixtures/ControlledValidationHarness.svelte'
 import FormLayoutHarness from './fixtures/FormLayoutHarness.svelte'
 import FormVisibilityHarness from './fixtures/FormVisibilityHarness.svelte'
 
 afterEach(() => {
   setUILocale('zh-CN')
-  toast.clear()
+  ui.toast.clear()
 })
 
 function target() {
@@ -40,13 +40,13 @@ describe('form layout and accessible errors', () => {
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
       expect(control.checkValidity()).toBe(false)
       flushSync()
-      expect(toast.items).toHaveLength(1)
-      toast.remove(toast.items[0].id)
+      expect(ui.toast.items).toHaveLength(1)
+      ui.toast.remove(ui.toast.items[0].id)
       flushSync()
       expect(control.checkValidity()).toBe(false)
       flushSync()
-      expect(toast.items).toHaveLength(1)
-      expect(toast.items[0].message).toBe('请填写此项。')
+      expect(ui.toast.items).toHaveLength(1)
+      expect(ui.toast.items[0].message).toBe('请填写此项。')
     }
     finally {
       await unmount(component)
@@ -70,18 +70,18 @@ describe('form layout and accessible errors', () => {
       const control = element.querySelector('select')!
       expect(control.checkValidity()).toBe(false)
       flushSync()
-      toast.remove(toast.items[0].id)
+      ui.toast.remove(ui.toast.items[0].id)
       flushSync()
       expect(control.checkValidity()).toBe(false)
       flushSync()
-      expect(toast.items).toHaveLength(1)
-      expect(toast.items[0].message).toBe('请填写此项。')
+      expect(ui.toast.items).toHaveLength(1)
+      expect(ui.toast.items[0].message).toBe('请填写此项。')
       element.querySelector<HTMLInputElement>('input')!.focus()
       flushSync()
       document.querySelector<HTMLElement>('[role="option"]')!.click()
       flushSync()
       expect(control.checkValidity()).toBe(true)
-      expect(toast.items).toHaveLength(0)
+      expect(ui.toast.items).toHaveLength(0)
     }
     finally {
       await unmount(component)
@@ -173,12 +173,12 @@ describe('form layout and accessible errors', () => {
       expect(control.getAttribute('aria-invalid')).toBe('true')
       expect(element.textContent).toContain('This field is required.')
       expect(element.querySelector('.sr-only')?.textContent).toContain('This field is required.')
-      expect(toast.items.at(-1)?.message).toBe('This field is required.')
+      expect(ui.toast.items.at(-1)?.message).toBe('This field is required.')
       input(control, 'Corrected')
       expect(control.hasAttribute('aria-invalid')).toBe(false)
       expect(control.checkValidity()).toBe(true)
       expect(element.textContent).not.toContain('This field is required.')
-      expect(toast.items).toHaveLength(0)
+      expect(ui.toast.items).toHaveLength(0)
     }
     finally {
       await unmount(component)

@@ -2,7 +2,7 @@
 
 [English](serv.en.md) · [日本語](serv.ja.md)
 
-在 Node.js 中用 `serv.createApp()` 把契约和处理函数组成 HTTP 应用。根入口提供监听、认证和中间件接口。各功能子路径提供 IAM、Storage、AI 和 Feedback 接口的处理函数。
+在 Node.js 中用 `serv.createApp()` 把契约和处理函数组成 HTTP 应用。从 `@h-ai/serv` 导入一次 `serv`，即可访问监听、认证、中间件和 IAM、Storage、AI、Feedback 的预置处理函数工厂。
 
 [模块 README](../../../packages/serv/README.md) · [配置清单](../configuration/serv.md) · [数据结构](../data/serv.md) · [前后端接入](../development/frontend-backend.md)
 
@@ -13,38 +13,29 @@
 在应用启动时初始化 `core`、`iam`、`storage` 和 `ai`，加载并校验 `serv` 配置，再调用 `startApi(closeApp)`。`closeApp` 是应用提供的异步回调，负责按初始化的逆序释放业务资源。函数返回 Node 监听句柄。传入回调后，`serv.listen` 会在收到退出信号时先关闭监听，再调用该回调。只提供健康检查时，可以用空契约和空 procedures 创建 App。
 
 ```ts
-import type { ServConfig } from '@h-ai/serv'
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
+import { type ServConfig, serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 
 export function startApi(closeApp: () => Promise<void>) {
   // 用三个模块的契约生成 HTTP 路由契约。
-  // Compose the supplied IAM, storage, and AI contracts. Returns a single route contract without starting a server.
   const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
   // 将已初始化的业务模块绑定为实现；存储检查所有 key 的归属。
   const procedures = {
-    // Bind the initialized IAM instance to procedures for the IAM routes. The procedures surface authentication and permission failures.
-    iam: createIamProcedures({ iam }),
-    // Bind storage routes to the initialized storage service. The supplied authorization check rejects keys outside the session user's prefix.
-    storage: createStorageProcedures({
+    iam: serv.createIamProcedures({ iam }),
+    storage: serv.createStorageProcedures({
       storage,
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
-    // Bind the initialized AI service to the AI request procedures. Calls return results from that service.
-    ai: createAiProcedures({ ai }),
+    ai: serv.createAiProcedures({ ai }),
   }
 
   // 使用契约、实现和 HTTP 设置构建 App。
-  // Build an HTTP app from the contract and its procedures. The supplied HTTP paths register the API, OpenAPI JSON, and documentation.
   const app = serv.createApp({
     contract,
     procedures,
@@ -57,13 +48,10 @@ export function startApi(closeApp: () => Promise<void>) {
   })
 
   // 读取已加载的监听配置，返回包含地址和 close() 的句柄。
-  // Read validated serving settings from the loaded serv config. Missing settings throw before opening a listener.
   const { server } = core.config.getOrThrow<ServConfig>('serv')
-  // Listen for this HTTP app on the configured host and port. Returns a handle with the bound address and cleanup. Bind errors reject.
   return serv.listen(app, {
     host: server.host,
     port: server.port,
-    // When listening succeeds, log the port reported by the listener.
     onListening: info => core.logger.info('API service listening', { port: info.port }),
     onClose: closeApp,
   })
@@ -106,7 +94,7 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 - 链式 procedure：`implement().context().route().auth/permission/role().handle().build()`
 - 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
 - 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
-- 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
+- 默认功能处理函数工厂：`serv.createIamProcedures()`、`serv.createStorageProcedures()`、`serv.createAiProcedures()`、`serv.createFeedbackProcedures()`
 - `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
 - 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页
@@ -190,7 +178,7 @@ toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，R
 import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
+
 
 export function createAuthApp() {
   if (!iam.isInitialized)
@@ -201,7 +189,7 @@ export function createAuthApp() {
   return serv.createApp({
     contract,
     // Bind the initialized IAM service's handlers to the contract. Requests without required authorization fail.
-    procedures: { iam: createIamProcedures({ iam }) },
+    procedures: { iam: serv.createIamProcedures({ iam }) },
     iam,
     http: { apiPrefix: '/api/v1', docs: false, openapi: false },
     refreshCookie: { maxAge: 30 * 24 * 3600 },
@@ -243,10 +231,10 @@ export function createAuthApp() {
 
 ```ts
 import type { HaiResult } from '@h-ai/core'
-import type { ServSession } from '@h-ai/serv'
+import { type ServSession, serv } from '@h-ai/serv'
 import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
+
 
 function createAuthenticationExamples(
   verifyToken: (token: string) => Promise<HaiResult<ServSession>>,
@@ -255,7 +243,7 @@ function createAuthenticationExamples(
   // Compose the built-in IAM routes into the app contract.
   const contract = apiContract.create({ iam: apiContract.iam })
   // Create HTTP procedures backed by the initialized IAM service.
-  const procedures = { iam: createIamProcedures({ iam }) }
+  const procedures = { iam: serv.createIamProcedures({ iam }) }
   // Build the app with IAM's built-in verification and default refresh cookie settings.
   const defaultApp = serv.createApp({ contract, procedures, iam, refreshCookie: {} })
   // Build the app using the caller-supplied token verifier.
@@ -288,9 +276,9 @@ function createAuthenticationExamples(
 #### 场景：实现需要权限的业务路由
 
 ```ts
-import type { ServContext } from '@h-ai/serv'
 import { apiContract } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const contract = {
@@ -313,7 +301,7 @@ const procedures = serv
   // Require users.write before invoking the handler. A caller without permission is rejected.
   .permission('users.write')
   // Bind the handler and wrap its validated input as successful data. It does not persist an update.
-  .handle(({ input }) => ok(input)) // 演示返回已校验输入，实际更新由应用服务执行。
+  .handle(({ input }) => core.ok(input)) // 演示返回已校验输入，实际更新由应用服务执行。
   // Finish the procedure map for registration with the HTTP app.
   .build()
 ```
@@ -334,9 +322,9 @@ const procedures = serv
 `.route(path).auth/permission/role().handle(handler)`：
 
 ```ts
-import type { ServContext } from '@h-ai/serv'
 import { apiContract } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const widget = z.object({ name: z.string(), ownerId: z.string() })
@@ -360,7 +348,7 @@ const procedures = serv
   // Select ServContext as the handler context type.
   .context<ServContext>()
   // Bind widgets.list to a success result with an empty array.
-  .route('widgets.list', () => ok([]))
+  .route('widgets.list', () => core.ok([]))
   // Select widgets.create for the following guards and handler.
   .route('widgets.create')
   // Require widgets.write before running the handler. Missing permission denies access.
@@ -371,7 +359,7 @@ const procedures = serv
   .handle(({ input, context }) => {
     // guard 通过后 session 在类型上已是非空，不需要 `!`。
     // Return success data with the supplied name and actual session user ID.
-    return ok({ name: input.name, ownerId: context.session.userId })
+    return core.ok({ name: input.name, ownerId: context.session.userId })
   })
   // Finish the procedure map for use by createApp.
   .build()
@@ -384,7 +372,7 @@ const procedures = serv
 - `.permission()` 与 `.role()` 自动要求认证；未登录/授权不足返回失败 HaiResult，`error.httpStatus` 分别为 401/403；普通 procedure 的 HTTP 响应默认仍为 200。
 - 同一路由声明多个 permission/role 时必须全部满足；`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` 可放行对应类别。
 - 权限还支持 IAM/Kit 一致的冒号前缀授权：`users:*` 匹配 `users:read`，不匹配 `users2:read` 或点号权限。
-- handler 抛出的未处理异常统一转成 INTERNAL_ERROR HaiResult；预期业务失败仍应直接返回 `err(...)`。
+- handler 抛出的未处理异常统一转成 INTERNAL_ERROR HaiResult；预期业务失败仍应直接返回 `core.err(...)`。
 - 路径、input、output 从 contract 推导；重复或未知路径会被拒绝，未实现完整 contract 时不能调用 `.build()`。
 
 边界约束：
@@ -420,12 +408,12 @@ httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中�
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { serv } from '@h-ai/serv'
 
 // Compose the built-in IAM HTTP contract.
 const contract = apiContract.create({ iam: apiContract.iam })
 // Bind the initialized IAM service to that contract's procedures.
-const procedures = { iam: createIamProcedures({ iam }) }
+const procedures = { iam: serv.createIamProcedures({ iam }) }
 // Resolve the development policy with one allowed web origin and capacitor://localhost as native origin.
 const security = serv.createRuntimeSecurityPolicy({
   environment: 'development', corsOrigin: 'https://app.example.com', nativeOrigins: 'capacitor://localhost',
@@ -475,7 +463,7 @@ await apiClient.init({
 
 服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
 
-`createIamProcedures({ iam })` 直接实现公开配置、密码/LDAP/OTP、注册与密码重置，无需应用复制 procedure。LDAP 登录沿用现有浏览器 httpOnly refresh Cookie 和可信原生 Token 传输。管理端创建调用 iam.user.createUser，自助注册关闭时管理功能仍可用；授权仍由既有 permission guard 执行。
+`serv.createIamProcedures({ iam })` 直接实现公开配置、密码/LDAP/OTP、注册与密码重置，无需应用复制 procedure。LDAP 登录沿用现有浏览器 httpOnly refresh Cookie 和可信原生 Token 传输。管理端创建调用 iam.user.createUser，自助注册关闭时管理功能仍可用；授权仍由既有 permission guard 执行。
 
 [IAM 配置清单](../configuration/iam.md)
 
@@ -487,13 +475,13 @@ await apiClient.init({
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { serv } from '@h-ai/serv'
 
 function createTenantApp(resolveTenant: (userId: string) => Promise<string | null>) {
   // Compose the IAM routes into the app contract.
   const contract = apiContract.create({ iam: apiContract.iam })
   // Bind the supplied ready IAM service to its HTTP procedures.
-  const procedures = { iam: createIamProcedures({ iam }) }
+  const procedures = { iam: serv.createIamProcedures({ iam }) }
   // Build an auth context factory with IAM verification. Valid request tokens supply session claims.
   const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
   // Build the HTTP app with a context factory that also resolves tenant information.
@@ -567,10 +555,10 @@ const cors = serv.cors({ origin: 'https://app.example.com', credentials: true })
 当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑**，或挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`。下例挂载资产路由前，应用需先初始化 Storage 并检查结果；请求会返回耗时响应头。示例的租户请求头检查仅要求存在，不能替代对当前用户的租户归属校验。
 
 ```ts
-import type { ServContext, ServMiddleware } from '@h-ai/serv'
+
 import { apiContract } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
+import { core } from '@h-ai/core'
+import { type ServContext, type ServMiddleware, serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 import { z } from 'zod'
 
@@ -581,7 +569,7 @@ const contract = {
 // Start mapping the ping contract with ServContext for the handler.
 const procedures = serv.implement(contract).context<ServContext>()
   // Bind ping to a handler returning the successful string pong.
-  .route('ping', () => ok('pong'))
+  .route('ping', () => core.ok('pong'))
   // Build the final procedure map for app registration.
   .build()
 
@@ -706,7 +694,7 @@ spec.servers?.[0]?.url // '/api/v1'，此选项只改变描述中的服务地址
 
 多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-设定请求语言后，`setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
+设定请求语言后，`ui.setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 #### 存储 HTTP 输入约束
 
@@ -756,7 +744,7 @@ function createAudioApp(callbacks: Pick<ServAudioConfig, 'verifyTicket' | 'autho
 - 协议边界对每一帧做运行时 Zod 校验并按严格状态机接受（识别只收音频、合成只收文本、`start`/`done` 各一次、`segmentId` 会话内唯一）；输入队列、消息积压与发送缓冲均有上限，超限或取消时以领域错误关闭并级联中止上游。
 - 可调参数：`preAuthTimeoutMs`（默认 5000）、`maxPendingMessages`（默认 256）、`maxSendBufferBytes`（默认 8 MiB）、`maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`。
 - `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
-- 浏览器 `createAudioClient({ url, getTicket })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
+- 浏览器 `ai.createAudioClient({ url, getTicket })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
 
 <a id="detailed-workflow"></a>
 
@@ -771,12 +759,12 @@ Serv 先还原业务正文，再让契约校验和 procedures 处理它；鉴权
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。服务端显式注入顶层 `crypto`、受管密钥环和共享 registry：
 
 ```ts
-import type { ServContext } from '@h-ai/serv'
+
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-import { serv } from '@h-ai/serv'
+import { type ServContext, serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 // Initialize crypto before creating the encrypted transport. An error stops setup.
@@ -799,7 +787,7 @@ const contract = {
 // Start mapping the ping contract using ServContext.
 const procedures = serv.implement(contract).context<ServContext>()
   // Bind ping to the successful pong response.
-  .route('ping', () => ok('pong'))
+  .route('ping', () => core.ok('pong'))
   // Build the procedure map before mounting it.
   .build()
 
@@ -914,7 +902,7 @@ Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请
 
 #### 场景：从已验证会话解析反馈范围
 
-通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。应用启动时先初始化 RelDB 和私有 Storage。使用 Reach 投递通知时，还应在 Feedback 之前初始化 Reach。收到请求后，从已验证会话和部署配置确定该用户可访问的反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
+从 `@h-ai/serv` 导入 `serv`，通过 `serv.createFeedbackProcedures` 挂载 `apiContract.feedback`。工厂接收应用已经初始化的 `feedback`。应用先初始化 RelDB 和私有 Storage，使用 Reach 投递通知时也先初始化 Reach。收到请求后，从已验证会话和部署配置确定用户可访问的反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问，领域模块再次校验范围与权限。
 
 所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
 
@@ -923,29 +911,27 @@ import { apiContract } from '@h-ai/api-contract'
 import { feedback } from '@h-ai/feedback'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
-import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
 
-// Compose the built-in feedback routes into the app contract.
+// 挂载内置反馈路由。
 const contract = apiContract.create({ feedback: apiContract.feedback })
-// Build the request context factory using the initialized IAM token verifier.
+// 复用已初始化 IAM 的令牌校验。
 const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 const procedures = {
-  // Bind the initialized feedback service and scope resolver. A request outside a resolved scope cannot access those reports.
-  feedback: createFeedbackProcedures({
+  // 从可信请求上下文解析反馈范围，无法确定范围时拒绝访问。
+  feedback: serv.createFeedbackProcedures({
     feedback,
     resolveContext: context => context.scopeId
       ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
       : null,
   }),
 }
-// Build the feedback app with the procedure map and a request context carrying a fixed product scope.
+// 组装 API，并把部署配置中的产品范围放入上下文。
 const app = serv.createApp({
   contract,
   procedures,
   createContext: async input => ({
-    // Resolve the authenticated context for the current request before adding the configured scope ID.
     ...await authenticate(input),
-    scopeId: 'configured-product'
+    scopeId: 'configured-product',
   }),
 })
 ```
@@ -1000,14 +986,14 @@ oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地�
 正常业务请求建议按三层处理：
 
 1. **oRPC contract 输入校验**：进入 procedure 前由 oRPC 执行；`serv.createApp()` 内部会自动拦截并把 Zod 默认英文错误重写为本地化 `errors[]`。
-2. **procedure 内二次校验**：对数据库读回对象、跨字段约束等适合 Zod 表达的规则，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `err(...)` 即可，不必为了统一额外造 schema。
-3. **业务/领域错误**：不要 throw 预期业务失败；直接返回 `err(...)`，并在**创建错误消息的那一层**使用对应模块的 i18n getter，例如 `serv.m(..., { locale: context.locale })` 或 `widgetM(..., { locale: context.locale })`。
+2. **procedure 内二次校验**：对数据库读回对象、跨字段约束等适合 Zod 表达的规则，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `core.err(...)` 即可，不必为了统一额外造 schema。
+3. **业务/领域错误**：不要 throw 预期业务失败；直接返回 `core.err(...)`，并在**创建错误消息的那一层**使用对应模块的 i18n getter，例如 `serv.m(..., { locale: context.locale })` 或 `widgetM(..., { locale: context.locale })`。
 
 ```ts
-import type { ServContext } from '@h-ai/serv'
+
 import { apiContract } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
+import { HaiCommonError, core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const CreateWidgetSchema = z.object({
@@ -1038,11 +1024,11 @@ const procedures = serv.implement(contract).context<ServContext>()
       return validated
     if (validated.data.slug === 'admin') {
       // Return a forbidden result for the reserved admin slug. Resolve its message in the request locale.
-      return err(HaiCommonError.FORBIDDEN, serv.m('serv_errorForbidden', { locale: context.locale }))
+      return core.err(HaiCommonError.FORBIDDEN, serv.m('serv_errorForbidden', { locale: context.locale }))
     }
     // 演示返回已验证的数据；真实应用在此调用 Widget 服务写入。
     // Wrap validated data as success without writing a widget.
-    return ok(validated.data)
+    return core.ok(validated.data)
   })
   // Finish the procedure map for mounting in the app.
   .build()

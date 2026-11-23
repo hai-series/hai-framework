@@ -178,8 +178,8 @@ const sent = sentResult.data
 `gatewayHooks` 是按 Provider 名称索引的回调对象，只能绑定配置了 `gateway` 的 `aliyun-sms` Provider。回调获知 `method: POST`、网关 `url`、当前请求体 `body: string | undefined` 和请求期限内有效的 `signal: AbortSignal`。它可同步或异步返回 `{ headers?, body? }`，仅设置需要覆盖的字段，或返回 `undefined` 沿用静态配置。回调在服务端执行，避免将带签名的 URL 写入日志。
 
 ```ts
-import type { ReachConfigInput } from '@h-ai/reach'
-import { reach } from '@h-ai/reach'
+
+import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
   // 传入已配置 sms 网关的启动配置。成功时注册的回调会在下一次网关请求中加入 X-Client 请求头。

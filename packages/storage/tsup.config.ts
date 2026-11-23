@@ -10,7 +10,7 @@ export default defineConfig({
     'node': 'src/index.ts',
     'browser': 'src/storage-index.browser.ts',
     'client/index': 'src/client/index.ts',
-    'schemas': 'src/storage-schemas.ts',
+    'schemas': 'src/storage-schema-entry.ts',
     'storage-checksum-worker': 'src/storage-checksum-worker.ts',
   },
   // 运行时依赖保持 external，避免重复打包

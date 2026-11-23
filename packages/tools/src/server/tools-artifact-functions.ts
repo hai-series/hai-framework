@@ -2,7 +2,7 @@ import type { Tool } from '../tools-types.js'
 import type { ToolArtifactAccess } from './tools-service-resources.js'
 import type { ToolServiceContext, ToolSet } from './tools-service-types.js'
 import { createHash } from 'node:crypto'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { toolsM } from '../tools-i18n.js'
 import { tools } from '../tools-main.js'
@@ -45,7 +45,7 @@ export function createArtifactTools({ context, files }: ArtifactToolOptions): To
     : kind === 'html'
       ? 'text/html'
       : 'application/json'
-  const invalid = () => err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
+  const invalid = () => core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
   const publish = (signal: AbortSignal, name: string, kind: string, text: string, output: string) => files.publish(binding(signal), {
     ...(context.execution
       ? {
@@ -96,7 +96,7 @@ export function createArtifactTools({ context, files }: ArtifactToolOptions): To
         if (file.data.data.byteLength > 1024 * 1024 || !/^(?:text\/(?:markdown|html|plain)|application\/json)$/u.test(file.data.mediaType))
           return invalid()
         try {
-          return ok({
+          return core.ok({
             id: file.data.id,
             ...(file.data.version === undefined
               ? {}
@@ -196,7 +196,7 @@ export function createArtifactTools({ context, files }: ArtifactToolOptions): To
         }), 'data_analyze:chart')
         if (!chart.success)
           return chart
-        return ok({
+        return core.ok({
           statistics: {
             count: numbers.length,
             sum,

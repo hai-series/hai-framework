@@ -1,9 +1,6 @@
 <script lang='ts'>
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, FormField, FormLayout, PageHeader } from '@h-ai/ui/components/compounds/index'
-  import { Badge, Select } from '@h-ai/ui/components/primitives/index'
-  import { ChangePasswordForm, UserProfile } from '@h-ai/ui/components/scenes/iam/index'
-  import { getThemeInfo } from '@h-ai/ui/theme'
+  import { Badge, Card, ChangePasswordForm, FormField, FormLayout, PageHeader, Select, ui, UserProfile } from '@h-ai/ui'
   import { roleLabel } from '../security/role-label.js'
   import * as m from '../paraglide/messages.js'
   import { locales } from '../paraglide/runtime.js'
@@ -27,7 +24,7 @@
   })))
   const themeOptions = $derived(AVAILABLE_THEMES.map(theme => ({
     value: theme,
-    label: themeLabels.get(theme)?.() ?? getThemeInfo(theme)?.name ?? theme,
+    label: themeLabels.get(theme)?.() ?? ui.getThemeInfo(theme)?.name ?? theme,
   })))
 </script>
 

@@ -1,6 +1,6 @@
 import type { ServContext } from '@h-ai/serv'
 import type { AppEchoOutputData, AppFrontendTarget, AppInfoOutputData } from '{{fullstack.contractPackageName}}'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { appContract } from '{{fullstack.contractPackageName}}'
 import { readBusinessSettings } from '../business-settings.js'
@@ -23,7 +23,7 @@ export function createAppProcedures(options: CreateAppProceduresOptions) {
     .route('info', async () => {
       const settings = await readBusinessSettings()
       return settings.success
-        ? ok({
+        ? core.ok({
             ...createAppInfo(options),
             notice: settings.data.notice,
           })
@@ -35,7 +35,7 @@ export function createAppProcedures(options: CreateAppProceduresOptions) {
         echoedAt: new Date().toISOString(),
         requestId: context.requestId,
       }
-      return ok(data)
+      return core.ok(data)
     })
     .build()
 }

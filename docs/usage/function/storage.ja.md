@@ -11,12 +11,11 @@
 Storage を初期化してファイル API でオブジェクトを操作します。署名付き URL の発行前にキーへのアクセスを確認します。大きなダウンロードにはストリームを使います。
 
 ```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
+
 import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
+import { type FileMetadata, type StorageConfigInput, storage } from '@h-ai/storage'
 
 export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
-  // 选择一个后端，检查初始化结果。
   // 呼び出し元の設定で接続します。成功時は data がなく、失敗時は error を確認します。
   const initialized = await storage.init(config)
   if (!initialized.success)
@@ -26,13 +25,11 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
   let closed
   try {
     const key = 'uploads/image.png'
-    // 用对象 key 写入 PNG 字节，成功时返回对象元数据。
     // 指定キーに呼び出し元の PNG バイトを書きます。成功時はメタデータ、失敗時は error です。
     const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
     if (!uploaded.success)
       throw new Error(uploaded.error.message)
 
-    // 用同一 key 读取对象内容，成功时返回 Buffer。
     // 同じキーから PNG を読みます。成功時は Buffer、未検出や読取失敗はエラーです。
     const downloaded = await storage.file.get(key)
     if (!downloaded.success)
@@ -40,7 +37,6 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
 
     result = { metadata: uploaded.data, bytes: downloaded.data }
     if (config.type === 's3') {
-      // S3 可签发有效期为 3600 秒的下载 URL。
       // 同じ S3 キーに 3600 秒のダウンロード URL を発行します。成功時は URL 文字列、失敗時は error です。
       const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
       if (!signed.success)
@@ -49,7 +45,6 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     }
   }
   finally {
-    // 释放本次连接，失败时交由调用方处理。
     // 引数なしで接続を解放します。成功時の data は undefined、失敗は後続で判定します。
     closed = await storage.close()
   }
@@ -262,6 +257,41 @@ S3 の `file.put()` は、その書き込みのバイト数と指定したメタ
 Local ストレージでは、`file.head()` と `file.copy()` がファイルの識別情報に対応するメタデータを必要とします。移行時はファイルの内容とメタデータを取得し、移行先に `file.put()` で書き込みます。[ローカルストレージのバックアップと復元](../data/storage.ja.md)
 
 [引数と手順の詳細](storage.md#files)
+
+<a id="key-validation"></a>
+
+### オブジェクトキーと接頭辞の検証：`storage.getKeyIssue`
+
+`@h-ai/storage/schemas` から `storage` をインポートし、元の入力を `storage.getKeyIssue()` で検証します。この入口はキーと接頭辞の Schema も提供し、Provider の読込や初期化は不要です。Node のルート、ブラウザー入口、`/client` でも同じメソッドを使えます。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値または失敗 | 呼出例 |
+| --- | --- | --- | --- | --- |
+| `storage.getKeyIssue(key, allowEmpty?)` | キーまたは一覧の接頭辞を検証 | 必須の `key: string` は元の入力です。`allowEmpty: boolean` の既定値は `false`。`true` は一覧の接頭辞として空文字列だけを許可し、空白のみの文字列は無効です。 | 有効なら `undefined`、無効なら `empty`、`tooLong`、`characters`、`segments`。業務エラーを throw しません。 | `storage.getKeyIssue('../private.txt')` |
+| `StorageKeySchema.safeParse(key)` | 空でないキーを検証 | 必須の `key: string` は UTF-8 で最大 1024 バイト。絶対パス、バックスラッシュ、制御文字、ドットのパス区間を拒否します。 | Zod の検証結果。成功時の `data` は元のキー、失敗時は `error` を読みます。 | `StorageKeySchema.safeParse('reports/february.pdf')` |
+| `StoragePrefixSchema.safeParse(prefix)` | 一覧の接頭辞を検証 | 必須の `prefix: string` は同じ構文に従い、空文字列やファイル名の一部を許可します。 | Zod の検証結果。接頭辞は正規化しません。 | `StoragePrefixSchema.safeParse('reports/fe')` |
+
+#### 利用例：オブジェクトキーとディレクトリの接頭辞を検証
+
+以下は範囲外のパス、空のキー、全件一覧の接頭辞、有効なレポートのパスを表します。
+
+```ts
+import { StorageKeySchema, StoragePrefixSchema, storage } from '@h-ai/storage/schemas'
+
+// ドットのパス区間は無効です。'segments' を返すため、このキーを受け付けません。
+const invalid = storage.getKeyIssue('../private.txt')
+// オブジェクトキーは空にできません。'empty' を返します。
+const empty = storage.getKeyIssue('')
+// true は一覧用の空の接頭辞を許可し、undefined を返します。一覧権限は付与しません。
+const prefixIssue = storage.getKeyIssue('', true)
+// 有効なレポートのパスです。success は true、data は元のキーです。
+const key = StorageKeySchema.safeParse('reports/february.pdf')
+// 有効な部分接頭辞です。success は true、data は 'reports/fe' です。
+const prefix = StoragePrefixSchema.safeParse('reports/fe')
+```
+
+`undefined` は共有の構文検証を通過したことを示します。アプリは操作権限とディレクトリの境界を引き続き確認し、LocalProvider は内部の予約名も拒否します。Schema の結果は Zod の形式であり、`HaiResult` ではありません。
 
 <a id="directories"></a>
 

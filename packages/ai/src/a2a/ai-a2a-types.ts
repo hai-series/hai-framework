@@ -168,8 +168,8 @@ export interface A2AAuthenticator {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { A2ATaskFilter } from '@h-ai/ai'
+ * import { type A2ATaskFilter, ai } from '@h-ai/ai'
+ *
  * const filter: A2ATaskFilter = { callerId: 'agent-1', contextId: 'context-1', status: 'user', limit: 20 }
  * const result = await ai.a2a.listMessages(filter)
  * if (result.success) {
@@ -201,8 +201,8 @@ export interface A2ATaskFilter {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AgentExecutor } from '@h-ai/ai'
+ * import { type AgentExecutor, ai } from '@h-ai/ai'
+ *
  * function register(executor: AgentExecutor) {
  *   const registered = ai.a2a.registerExecutor(executor)
  *   if (!registered.success) return registered
@@ -360,8 +360,8 @@ export interface A2AHandleResult {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { A2ACallOptions } from '@h-ai/ai'
+ * import { type A2ACallOptions, ai } from '@h-ai/ai'
+ *
  * const options: A2ACallOptions = { timeout: 30_000 }
  * const result = await ai.a2a.callRemoteAgent('https://trusted-agent.example.com/a2a', '项目介绍', options)
  * if (result.success) {

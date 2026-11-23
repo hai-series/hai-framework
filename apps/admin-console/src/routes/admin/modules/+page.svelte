@@ -3,7 +3,7 @@
 -->
 <script lang='ts'>
   import { crypto } from '@h-ai/crypto'
-  import { toast } from '@h-ai/ui'
+  import { ui } from '@h-ai/ui'
   import aiExample from '#lib/examples/modules/ai.ts?raw'
   import cacheExample from '#lib/examples/modules/cache.ts?raw'
   import coreExample from '#lib/examples/modules/core.ts?raw'
@@ -281,7 +281,7 @@
       if (!crypto.isInitialized) {
         const initialized = await crypto.init()
         if (!initialized.success) {
-          toast.error(m.common_error())
+          ui.toast.error(m.common_error())
           return
         }
       }
@@ -291,27 +291,27 @@
       if (operation === 'hash') {
         const result = crypto.hash.hash(input)
         if (!result.success) {
-          toast.error(m.common_error())
+          ui.toast.error(m.common_error())
           return
         }
         hashResult = result.data
-        toast.success(m.modules_crypto_hash_complete())
+        ui.toast.success(m.modules_crypto_hash_complete())
       }
       else {
         const key = crypto.symmetric.generateKey()
         const encrypted = crypto.symmetric.encrypt(input, key)
         if (!encrypted.success) {
-          toast.error(m.common_error())
+          ui.toast.error(m.common_error())
           return
         }
         const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
         if (!decrypted.success || decrypted.data !== input) {
-          toast.error(m.common_error())
+          ui.toast.error(m.common_error())
           return
         }
         encryptResult = JSON.stringify(encrypted.data)
         decryptedResult = decrypted.data
-        toast.success(m.modules_crypto_encrypt_complete())
+        ui.toast.success(m.modules_crypto_encrypt_complete())
       }
     }
     finally {

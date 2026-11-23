@@ -1,5 +1,5 @@
 import { apiContract } from '@h-ai/api-contract'
-import { err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { z } from 'zod'
 /** 个人资料请求复用统一鉴别动作，页面只处理表单与显示。 */
 import { apiFetch } from '#lib/utils/api.js'
@@ -36,5 +36,5 @@ export async function changeProfilePassword(input: { old_password: string, new_p
       return parsed.data
   }
   catch { /* 非 JSON 响应只显示安全通用提示，网络拒绝由调用方处理。 */ }
-  return err(HaiCommonError.INTERNAL_ERROR, '')
+  return core.err(HaiCommonError.INTERNAL_ERROR, '')
 }

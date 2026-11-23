@@ -4,7 +4,7 @@
 
 通过 `capacitor` 在 Capacitor 的 Android/iOS 应用中获取设备信息、注册推送、拍照或读写应用偏好。先安装需要的原生插件并将其同步到 Android/iOS 项目，运行时按需向用户请求权限。认证凭据使用独立的安全存储适配器。
 
-设备相关调用从 `capacitor` 进入。为 API 客户端创建原生安全凭据存储时，使用下面的独立工厂 `createCapacitorTokenStorage()`。
+设备、相机、推送、状态栏和偏好设置操作统一从 `capacitor` 进入，在 `capacitor.init()` 成功后调用。为 API 客户端创建原生安全凭据存储时，调用 `capacitor.createTokenStorage()`；创建适配器无需先初始化，实际读写仍要求原生环境和安全存储插件可用。
 
 [模块 README](../../../packages/capacitor/README.md) · [配置清单](../configuration/capacitor.md) · [数据结构](../data/capacitor.md) · [构建和原生交付](../getting-started/build.md)
 
@@ -341,17 +341,17 @@ if (failures.length)
 
 <a id="tokens"></a>
 
-### 安全保存登录凭据：`createCapacitorTokenStorage`
+### 安全保存登录凭据：`capacitor.createTokenStorage`
 
 原生凭据使用安全存储适配器；把适配器交给 api-client 统一处理保存失败和清理。
 
-以下接口表和示例中的 `tokens` 是 `createCapacitorTokenStorage()` 返回的 `TokenStorage` 对象。工厂从 `@h-ai/capacitor` 根入口导入，创建适配器不要求先调用 `capacitor.init()`；实际读写要求原生环境和安全存储插件可用，平台或插件失败时对应方法的 Promise 会拒绝。
+从 `@h-ai/capacitor` 导入 `capacitor`，调用 `capacitor.createTokenStorage()` 得到下表中的 `tokens` 对象。创建适配器无需先调用 `capacitor.init()`。实际读写要求原生环境和安全存储插件可用，平台或插件失败时对应方法的 Promise 会拒绝。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage()` | 创建原生安全凭据适配器 | `—` | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `capacitor.createTokenStorage()` | 创建原生安全凭据适配器 | `—` | `TokenStorage` | `capacitor.createTokenStorage()` |
 | `tokens.getAccessToken()` | 读取已保存的访问令牌 | `—` | `Promise<string / null>` | `await tokens.getAccessToken()` |
 | `tokens.getRefreshToken()` | 读取已保存的刷新令牌 | `—` | `Promise<string / null>` | `await tokens.getRefreshToken()` |
 | `tokens.setAccessToken(token)` | 保存访问令牌 | 必填 `token`，由可信认证响应提供的访问令牌字符串。 | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
@@ -363,11 +363,11 @@ if (failures.length)
 输入为可信登录响应中的两类令牌，只在原生安全插件可用时运行。下面读回相同值并在 finally 清理，成功 clear 后读为 null；插件错误拒绝 Promise，交给应用错误边界。
 
 ```ts
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 async function verifySecureStorage(accessToken: string, refreshToken: string) {
   // 使用默认键名创建原生安全凭据存储适配器；各项操作通过安全存储插件完成。
-  const tokens = createCapacitorTokenStorage()
+  const tokens = capacitor.createTokenStorage()
   try {
     // 保存签发的访问令牌；成功无返回数据，安全写入失败时 Promise 拒绝。
     await tokens.setAccessToken(accessToken)
@@ -391,14 +391,14 @@ async function verifySecureStorage(accessToken: string, refreshToken: string) {
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 // 使用服务端 URL 和刷新接口配置客户端；初始化失败时停止后续设置。
 const initialized = await apiClient.init({
   baseUrl: 'https://api.example.com/v1',
   auth: {
     // 使用原生安全存储适配器保存签发的凭据；原生插件失败时，读写操作的 Promise 会拒绝。
-    storage: createCapacitorTokenStorage(),
+    storage: capacitor.createTokenStorage(),
     refreshPath: '/auth/refresh',
   },
 })
@@ -406,7 +406,7 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
-`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。适配器的方法直接返回 Promise：Web 调用、插件不可用、读写或删除失败都会拒绝 Promise，不能当作空凭据或保存/退出成功。Web 入口应选择 api-client 的 Cookie/内存存储。
+`capacitor.createTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。适配器的方法直接返回 Promise：Web 调用、插件不可用、读写或删除失败都会拒绝 Promise，不能当作空凭据或保存/退出成功。Web 入口应选择 api-client 的 Cookie/内存存储。
 
 调用 `tokens.clear()` 时，当前实例立即停止返回旧的访问令牌和刷新令牌，再等待原生存储删除它们。删除失败时，当前实例仍不会读出旧凭据。单个键重新写入成功后才能再次读取。
 
@@ -504,7 +504,7 @@ docker build --platform linux/amd64 -t hai-capacitor-android:36 \
 `init/close`、device/camera/push/statusBar/preferences 业务操作返回 `HaiResult<T>`；`getPlatform/isNative/isInitialized` 返回直接值。TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：
 
 ```ts
-import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
+import { HaiCapacitorError, capacitor } from '@h-ai/capacitor'
 
 // 使用默认结果设置打开设备相机；成功返回照片，权限被拒绝或相机不可用时返回结构化失败。
 const result = await capacitor.camera.takePhoto({ source: 'camera' })

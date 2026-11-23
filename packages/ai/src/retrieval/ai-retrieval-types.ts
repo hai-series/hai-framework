@@ -43,7 +43,7 @@ export interface Citation {
  *
  * @example
  * ```ts
- * import { ai, type RetrievalSource } from '@h-ai/ai'
+ * import { type RetrievalSource, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: RetrievalSource) {
  *   const result = await ai.retrieval.addSource(options)
@@ -74,7 +74,7 @@ export interface RetrievalSource {
  *
  * @example
  * ```ts
- * import { ai, type RetrievalRequest } from '@h-ai/ai'
+ * import { type RetrievalRequest, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: RetrievalRequest) {
  *   const result = await ai.retrieval.retrieve(options)
@@ -149,7 +149,7 @@ export interface RetrievalResult {
  *
  * @example
  * ```ts
- * import { ai, type RetrievalOperations } from '@h-ai/ai'
+ * import { type RetrievalOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，docs 为已注册检索源。
  * const operations: RetrievalOperations = ai.retrieval
  * const result = await operations.retrieve({ query: '部署要求', sources: ['docs'], topK: 3 })

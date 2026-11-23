@@ -11,7 +11,7 @@ import type { IamNotificationContext } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { OtpRepository } from './iam-authn-otp-repository-otp.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { OtpConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
@@ -181,7 +181,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       const identifier = normalizeOtpIdentifier(credentialResult.data.identifier)
       const { code } = credentialResult.data
       if (!isChannelEnabled(identifier))
-        return err(HaiIamError.LOGIN_DISABLED, iamM('iam_identifierTypeNotSupported'))
+        return core.err(HaiIamError.LOGIN_DISABLED, iamM('iam_identifierTypeNotSupported'))
 
       // 预先加载用户用于账户状态判断
       const userResult = await config.userRepository.findByIdentifier(identifier)
@@ -193,11 +193,11 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
 
       if (storedUser) {
         if (!isUserActive(storedUser)) {
-          return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+          return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
         }
 
         if (isAccountLocked(storedUser, failurePolicy)) {
-          return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+          return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
         }
       }
 
@@ -228,7 +228,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
           phoneVerified: type === 'phone',
         })
         if (!createResult.success) {
-          return err(
+          return core.err(
             HaiIamError.REPOSITORY_ERROR,
             iamM('iam_createUserFailed', {
               params: { message: createResult.error.message },
@@ -259,18 +259,18 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       }
 
       if (!storedUser) {
-        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
 
       // 登录成功，重置失败计数
       if (!isUserActive(storedUser))
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
       logger.debug('OTP authentication succeeded', { userId: storedUser.id })
 
-      return ok({
+      return core.ok({
         ...toUser(storedUser),
         credentialVersion: storedUser.credentialVersion ?? '',
       })
@@ -288,7 +288,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
   async function challenge(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
     identifier = normalizeOtpIdentifier(identifier)
     if (!isChannelEnabled(identifier))
-      return err(HaiIamError.LOGIN_DISABLED, iamM('iam_identifierTypeNotSupported'))
+      return core.err(HaiIamError.LOGIN_DISABLED, iamM('iam_identifierTypeNotSupported'))
     const code = generateOtpCode(otpConfig.length)
     const saved = await config.otpRepository.issueOtp({
       identifier,
@@ -308,7 +308,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         await config.onOtpSendEmail(identifier, code, context)
       }
       catch {
-        return err(
+        return core.err(
           HaiIamError.INTERNAL_ERROR,
           iamM('iam_notificationDeliveryUnknown'),
         )
@@ -319,14 +319,14 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         await config.onOtpSendSms(identifier, code, context)
       }
       catch {
-        return err(
+        return core.err(
           HaiIamError.INTERNAL_ERROR,
           iamM('iam_notificationDeliveryUnknown'),
         )
       }
     }
     else {
-      return err(
+      return core.err(
         HaiIamError.INTERNAL_ERROR,
         iamM('iam_identifierTypeNotSupported'),
       )
@@ -334,7 +334,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
 
     const result = { expiresAt }
     logger.debug('OTP challenge sent', { identifier, expiresAt })
-    return ok(result)
+    return core.ok(result)
   }
 
   return { strategy, challenge }

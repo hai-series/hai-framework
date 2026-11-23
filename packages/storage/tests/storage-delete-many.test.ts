@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { storage } from '../src/index'
 import * as localProvider from '../src/providers/storage-provider-local.js'
@@ -278,7 +278,7 @@ describe('local deleteMany', () => {
         peak = Math.max(peak, active)
         await new Promise(resolve => setTimeout(resolve, 1))
         active--
-        return ok(undefined)
+        return core.ok(undefined)
       })
       const result = await provider.file.deleteMany([
         'bad',

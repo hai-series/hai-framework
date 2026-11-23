@@ -13,6 +13,7 @@
  */
 
 import type { AIFunctions, AudioWsClientMessage, AudioWsServerMessage, AudioWsStartMessage, SynthesisTextSegment } from '@h-ai/ai'
+
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { Hono } from 'hono'
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
@@ -20,7 +21,7 @@ import type { AudioTicketGrant, AudioTicketVerification, AuthorizedAudioRequest 
 import type { ServSession } from '../serv-context.js'
 import { Buffer } from 'node:buffer'
 import { AudioWsClientMessageSchema } from '@h-ai/api-contract'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 
 const logger = core.logger.child({ module: 'serv', scope: 'audio-ws' })
 
@@ -500,9 +501,9 @@ class AudioConnection {
   private defaultAuthorize(message: AudioWsStartMessage): HaiResult<AuthorizedAudioRequest> {
     // 票据绑定了操作但与请求不符：拒绝（防止越权复用票据）
     if (this.grant?.operation && this.grant.operation !== message.operation) {
-      return err(HaiCommonError.FORBIDDEN, 'operation not permitted by ticket')
+      return core.err(HaiCommonError.FORBIDDEN, 'operation not permitted by ticket')
     }
-    return ok({
+    return core.ok({
       operation: message.operation,
       // 无 authorize 回调时不透传客户端 model/voice/instruction；仅采用票据 grant 绑定的 model
       model: this.grant?.model,

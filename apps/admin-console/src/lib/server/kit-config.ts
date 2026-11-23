@@ -1,6 +1,6 @@
 /** 服务端配置快照；SSR 调用方只投影公开传输参数，不能返回完整对象。 */
 import type { KitConfig } from '@h-ai/kit'
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { FeedbackConfigSchema } from '@h-ai/feedback'
 import { KitConfigSchema } from '@h-ai/kit'
@@ -20,7 +20,7 @@ export function getAdminKitConfig(): KitConfig {
   const prefix = '/api/feedback/reports'
   // 容量来自配置，不依赖可选反馈的初始化/重试结果。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-  const material = resolveFeedbackBudget(feedbackSettings.success
+  const material = apiContract.resolveFeedbackBudget(feedbackSettings.success
     ? feedbackSettings.data
     : {}).maxTransportBytes
   current = {

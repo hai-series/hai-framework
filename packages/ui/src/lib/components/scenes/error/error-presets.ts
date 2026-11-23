@@ -88,9 +88,9 @@ export const ERROR_PRESETS: Record<ErrorPreset, ErrorPresetInfo> = {
  *
  * @example
  * ```ts
- * import { resolveErrorPreset } from '@h-ai/ui'
- * const unavailable = resolveErrorPreset(503)
- * const fallback = resolveErrorPreset(418)
+ * import { ui } from '@h-ai/ui'
+ * const unavailable = ui.resolveErrorPreset(503)
+ * const fallback = ui.resolveErrorPreset(418)
  * ```
  */
 export function resolveErrorPreset(status: number | string | undefined): ErrorPreset {

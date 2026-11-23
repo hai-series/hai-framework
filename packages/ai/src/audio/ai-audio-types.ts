@@ -170,8 +170,8 @@ export interface TranscriptionSegment {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AudioContent, TranscriptionOptions } from '@h-ai/ai'
+ * import { type AudioContent, type TranscriptionOptions, ai } from '@h-ai/ai'
+ *
  * async function transcribe(audio: AudioContent) {
  *   const options: TranscriptionOptions = { language: 'zh', contextHints: ['hai-framework'], timestampGranularities: ['word'], strictCapabilities: true }
  *   const result = await ai.audio.transcribe({ ...options, audio })
@@ -206,8 +206,8 @@ export interface TranscriptionOptions {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AudioContent, TranscriptionRequest } from '@h-ai/ai'
+ * import { type AudioContent, type TranscriptionRequest, ai } from '@h-ai/ai'
+ *
  * async function transcribe(audio: AudioContent) {
  *   const request: TranscriptionRequest = { audio, language: 'zh' }
  *   const result = await ai.audio.transcribe(request)
@@ -226,8 +226,8 @@ export interface TranscriptionRequest extends TranscriptionOptions {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AudioInputStream, TranscriptionStreamRequest } from '@h-ai/ai'
+ * import { type AudioInputStream, type TranscriptionStreamRequest, ai } from '@h-ai/ai'
+ *
  * async function transcribe(audio: AudioInputStream) {
  *   const request: TranscriptionStreamRequest = { audio, language: 'zh' }
  *   // 流式失败通过异步迭代抛出；调用边界应处理异常和取消。
@@ -325,8 +325,8 @@ export interface AudioReference {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { SynthesisOptions } from '@h-ai/ai'
+ * import { type SynthesisOptions, ai } from '@h-ai/ai'
+ *
  * async function speak() {
  *   const options: SynthesisOptions = { language: 'zh', format: 'mp3', speed: 1.1 }
  *   const result = await ai.audio.synthesize({ ...options, text: '欢迎使用' })
@@ -375,8 +375,8 @@ export interface SynthesisOptions {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { SynthesisRequest } from '@h-ai/ai'
+ * import { type SynthesisRequest, ai } from '@h-ai/ai'
+ *
  * async function speak() {
  *   const request: SynthesisRequest = { text: '欢迎使用', format: 'mp3' }
  *   const result = await ai.audio.synthesize(request)
@@ -420,8 +420,8 @@ export interface SynthesisTextSegment {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { SynthesisStreamRequest } from '@h-ai/ai'
+ * import { type SynthesisStreamRequest, ai } from '@h-ai/ai'
+ *
  * const request: SynthesisStreamRequest = { text: { id: 'segment-1', text: '欢迎使用。' }, format: 'mp3' }
  * for await (const event of ai.audio.synthesizeStream(request)) {
  *   if (event.type === 'segment_done') {
@@ -440,10 +440,10 @@ export interface SynthesisStreamRequest extends SynthesisOptions {
  *
  * @example
  * ```ts
- * import { serializePlayableAudio } from '@h-ai/ai'
- * import type { SynthesisResult } from '@h-ai/ai'
+ * import { type SynthesisResult, ai } from '@h-ai/ai'
+ *
  * function playable(result: SynthesisResult) {
- *   const serialized = serializePlayableAudio(result)
+ *   const serialized = ai.serializePlayableAudio(result)
  *   if (!serialized.success) return serialized
  *   return serialized.data.mimeType
  * }
@@ -497,8 +497,8 @@ export type SynthesisEvent
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AudioModelCapabilities } from '@h-ai/ai'
+ * import { type AudioModelCapabilities, ai } from '@h-ai/ai'
+ *
  * function supportsRealtime(capabilities: AudioModelCapabilities) {
  *   return Boolean(capabilities.transcribe?.realtimeAudioInput && capabilities.transcribe.speechBoundaryEvents)
  * }
@@ -568,8 +568,8 @@ export interface AudioModelCapabilities {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- * import type { AudioCapabilitiesRequest } from '@h-ai/ai'
+ * import { type AudioCapabilitiesRequest, ai } from '@h-ai/ai'
+ *
  * const request: AudioCapabilitiesRequest = { operation: 'synthesize' }
  * const result = ai.audio.getCapabilities(request)
  * if (result.success) {
@@ -594,12 +594,12 @@ export interface AudioCapabilitiesRequest {
  *
  * @example
  * ```ts
- * import { ai, serializePlayableAudio } from '@h-ai/ai'
+ * import { ai } from '@h-ai/ai'
  * async function speak() {
  *   // ai 已由应用初始化；非流式方法逐层检查 HaiResult。
  *   const result = await ai.audio.synthesize({ text: '欢迎使用', format: 'mp3' })
  *   if (!result.success) return result
- *   const playable = serializePlayableAudio(result.data)
+ *   const playable = ai.serializePlayableAudio(result.data)
  *   if (!playable.success) return playable
  *   return playable.data
  * }

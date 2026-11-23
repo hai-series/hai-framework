@@ -1,6 +1,6 @@
 import type { HaiResult } from '@h-ai/core'
 import type { FeedbackBundle, FeedbackBundleEvidence, FeedbackBundleEvidencePage, FeedbackBundleFile, FeedbackBundleInput, FeedbackBundleManifest, FeedbackBundleQuery, FeedbackBundleReadOptions } from './feedback-bundle-types.js'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { strFromU8, strToU8 } from 'fflate'
 import { bundleArchive } from './feedback-bundle-archive.js'
 import { feedbackViewerFiles } from './feedback-bundle-viewer.js'
@@ -168,8 +168,8 @@ function parseManifest(value: Record<string, unknown>): FeedbackBundleManifest {
  * 生成含摘要、证据索引、附件与静态查看器的 ZIP；调用前应完成授权与脱敏。
  * @example
  * ```ts
- * import { createFeedbackBundle } from '@h-ai/feedback/bundle'
- * const result = await createFeedbackBundle({ report: { id: 'fb_1' }, evidence: [] })
+ * import { feedback } from '@h-ai/feedback/bundle'
+ * const result = await feedback.createBundle({ report: { id: 'fb_1' }, evidence: [] })
  * if (result.success) { const bytes: Uint8Array = result.data }
  * ```
  */
@@ -275,10 +275,10 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
     const packed = await bundleArchive({ type: 'pack', files })
     if (packed.type !== 'zip')
       throw new Error('Bundle packing failed')
-    return ok(packed.bytes)
+    return core.ok(packed.bytes)
   }
   catch {
-    return err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
+    return core.err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
   }
 }
 
@@ -286,10 +286,10 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
  * 校验 ZIP 路径、容量、协议与所有文件的 SHA-256 后读取；不执行包内代码。
  * @example
  * ```ts
- * import { createFeedbackBundle, readFeedbackBundle } from '@h-ai/feedback/bundle'
- * const created = await createFeedbackBundle({ report: { id: 'fb_1' }, evidence: [] })
+ * import { feedback } from '@h-ai/feedback/bundle'
+ * const created = await feedback.createBundle({ report: { id: 'fb_1' }, evidence: [] })
  * if (created.success) {
- *   const parsed = await readFeedbackBundle(created.data, { maxBytes: 32 * 1024 * 1024 })
+ *   const parsed = await feedback.readBundle(created.data, { maxBytes: 32 * 1024 * 1024 })
  *   if (parsed.success) { const reportId: string = parsed.data.report.id }
  * }
  * ```
@@ -324,7 +324,7 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
     const history: unknown = JSON.parse(strFromU8(files['evidence/history.json'] ?? new Uint8Array()))
     if (!Array.isArray(records) || !Array.isArray(history))
       throw new TypeError('Invalid evidence collection')
-    return ok({
+    return core.ok({
       manifest,
       report: { ...report, id: report.id },
       evidence: records.map(evidenceFrom),
@@ -333,7 +333,7 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
     })
   }
   catch {
-    return err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
+    return core.err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
   }
 }
 
@@ -341,11 +341,11 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
  * 生成人工与 AI 可读摘要，明确用户描述与采集事实。
  * @example
  * ```ts
- * import { createFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '@h-ai/feedback/bundle'
- * const created = await createFeedbackBundle({ report: { id: 'fb_1' }, evidence: [] })
+ * import { feedback } from '@h-ai/feedback/bundle'
+ * const created = await feedback.createBundle({ report: { id: 'fb_1' }, evidence: [] })
  * if (created.success) {
- *   const parsed = await readFeedbackBundle(created.data)
- *   if (parsed.success) { const markdown: string = summarizeFeedbackBundle(parsed.data) }
+ *   const parsed = await feedback.readBundle(created.data)
+ *   if (parsed.success) { const markdown: string = feedback.summarizeBundle(parsed.data) }
  * }
  * ```
  */
@@ -381,11 +381,11 @@ export function summarizeFeedbackBundle(bundle: FeedbackBundle): string {
  * 通过时间、请求、错误与类型筛选离线证据；错误按锚点来源和请求取前后各 100 条，分页最大 100 条。
  * @example
  * ```ts
- * import { createFeedbackBundle, queryFeedbackBundle, readFeedbackBundle } from '@h-ai/feedback/bundle'
- * const created = await createFeedbackBundle({ report: { id: 'fb_1' }, evidence: [] })
+ * import { feedback } from '@h-ai/feedback/bundle'
+ * const created = await feedback.createBundle({ report: { id: 'fb_1' }, evidence: [] })
  * if (created.success) {
- *   const parsed = await readFeedbackBundle(created.data)
- *   if (parsed.success) { const page = queryFeedbackBundle(parsed.data, { requestId: 'req_1', page: 1, pageSize: 20 }) }
+ *   const parsed = await feedback.readBundle(created.data)
+ *   if (parsed.success) { const page = feedback.queryBundle(parsed.data, { requestId: 'req_1', page: 1, pageSize: 20 }) }
  * }
  * ```
  */
@@ -427,8 +427,8 @@ export function queryFeedbackBundle(bundle: FeedbackBundle, query: FeedbackBundl
  * 获取内置可信离线查看器；本地服务必须使用此资源而不是执行导入包中的脚本。
  * @example
  * ```ts
- * import { getFeedbackBundleViewerFiles } from '@h-ai/feedback/bundle'
- * const html: Uint8Array | undefined = getFeedbackBundleViewerFiles()['viewer/index.html']
+ * import { feedback } from '@h-ai/feedback/bundle'
+ * const html: Uint8Array | undefined = feedback.getBundleViewerFiles()['viewer/index.html']
  * ```
  */
 export function getFeedbackBundleViewerFiles(): Readonly<Record<string, Uint8Array>> {

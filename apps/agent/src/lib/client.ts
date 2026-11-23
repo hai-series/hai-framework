@@ -1,6 +1,6 @@
 import type { AgentPreferences, AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry, WorkspacePage } from './workspace.js'
 import { resolve } from '$app/paths'
-import { blobToWav } from '@h-ai/ai/client'
+import { ai } from '@h-ai/ai/client'
 
 export interface HomeView {
   preferences: AgentPreferences
@@ -108,7 +108,7 @@ export async function transcribe(file: Blob) {
   const body = new FormData()
   body.set('audio', ['audio/mpeg', 'audio/wav', 'audio/x-wav'].includes(file.type)
     ? file
-    : await blobToWav(file), 'speech')
+    : await ai.blobToWav(file), 'speech')
   return (await checked(await fetch(resolve('/api/media'), { method: 'POST', body }))).json() as Promise<{ text: string }>
 }
 

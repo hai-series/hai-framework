@@ -2,7 +2,7 @@
   import type { LabStatus } from '#lib/ai-lab-types.js'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui/toast'
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import AsrPanel from '#lib/components/AsrPanel.svelte'
   import ChatPanel from '#lib/components/ChatPanel.svelte'
@@ -56,7 +56,7 @@
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) {
         statusError = m.error_request({
-          detail: errorMessage(cause, m.error_unknown()),
+          detail: ui.errorMessage(cause, m.error_unknown()),
         })
       }
     })
@@ -68,7 +68,7 @@
     })
     return () => controller.abort()
   })
-  useToastFeedback(() => statusError)
+  ui.useToastFeedback(() => statusError)
 </script>
 
 <svelte:head>

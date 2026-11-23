@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
-import { deploy, loadDeploymentEnvironment } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 let root: string | undefined
 afterEach(async () => {
@@ -94,7 +94,7 @@ it('creates the selected cloud database, skips a kept cache and persists actual 
   ]))
   expect(settings?.body).not.toContain('test-platform-token')
   expect(readFileSync(join(root, '.env.test'), 'utf8')).not.toContain('test-secret')
-  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(loaded.success).toBe(true)
   if (loaded.success)
     expect(loaded.data.values).toMatchObject({ HAI_DB_TYPE: 'postgresql', HAI_DB_DATABASE: 'app', HAI_DB_URL: 'postgresql://operator:test-secret@db.example.test/app' })

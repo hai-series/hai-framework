@@ -18,7 +18,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
  *
  * @example
  * ```ts
- * import { ai, type MCPToolDefinition } from '@h-ai/ai'
+ * import { type MCPToolDefinition, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai；echo 为无外部副作用的示例工具。
  * const definition: MCPToolDefinition = { name: 'echo', description: '返回输入', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false } }
  * const registered = ai.mcp.registerTool(definition, (input: { text: string }) => ({ text: input.text }))
@@ -183,9 +183,9 @@ export type MCPPromptContent = PromptMessage['content']
  *
  * @example
  * ```ts
- * import { createMcpServer, type McpServerOptions } from '@h-ai/ai'
+ * import { type McpServerOptions, ai } from '@h-ai/ai'
  * const options: McpServerOptions = { name: 'public-tools', version: '1.0.0' }
- * const server = createMcpServer(options)
+ * const server = ai.createMcpServer(options)
  * // 应用停止接入请求后关闭 SDK server。
  * await server.close()
  * ```
@@ -206,7 +206,7 @@ export interface McpServerOptions {
  *
  * @example
  * ```ts
- * import { ai, type MCPOperations } from '@h-ai/ai'
+ * import { type MCPOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * const mcp: MCPOperations = ai.mcp
  * const registered = mcp.registerTool({ name: 'echo', description: '返回输入', inputSchema: { type: 'string' } }, (input: string) => input)
@@ -294,9 +294,9 @@ export interface MCPJobFileContext {
  * 应用提供对象 ACL 与存储接入。文件内容只在作业节点暂存，队列仅保存对象 ID。
  * @example
  * ```ts
- * import { err, type HaiResult } from '@h-ai/core'
+ * import { type HaiResult, core } from '@h-ai/core'
  * import { HaiAIError, type MCPJobFiles } from '@h-ai/ai'
- * function denied<T>(): HaiResult<T> { return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized') }
+ * function denied<T>(): HaiResult<T> { return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized') }
  * const files: MCPJobFiles = { read: async () => denied(), publish: async () => denied() }
  * ```
  */
@@ -311,7 +311,7 @@ export interface MCPJobFiles {
  * 通过现有合并目录调用受控的第三方 Streamable HTTP 工具。
  * @example
  * ```ts
- * import { ai, type MCPServiceAuthorization } from '@h-ai/ai'
+ * import { type MCPServiceAuthorization, ai } from '@h-ai/ai'
  * async function search(context: MCPServiceAuthorization) {
  *   const result = await ai.mcp.services.invoke({ serviceId: 'docs', tool: 'search', arguments: { query: 'manual' } }, context)
  *   if (!result.success) return result

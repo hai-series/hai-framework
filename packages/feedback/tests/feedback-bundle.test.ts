@@ -1,11 +1,11 @@
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '../src/bundle/index.js'
+import { feedback } from '../src/bundle/index.js'
 
 describe('feedback 离线问题包', () => {
   it('在 ZIP 往返中保留大附件和完整性信息', async () => {
     const evidence = strToU8('Document line for diagnosis.\n'.repeat(40_000))
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-large-attachment' },
       evidence: [],
       attachments: [
@@ -19,7 +19,7 @@ describe('feedback 离线问题包', () => {
     })
     if (!created.success)
       throw new Error(created.error.message)
-    const parsed = await readFeedbackBundle(created.data)
+    const parsed = await feedback.readBundle(created.data)
     if (!parsed.success)
       throw new Error(parsed.error.message)
     const file = parsed.data.manifest.files.find(file => file.attachmentId === 'log')
@@ -33,16 +33,16 @@ describe('feedback 离线问题包', () => {
       evidence: [],
       createdAt: 1000,
     }
-    const first = await createFeedbackBundle(input)
-    const second = await createFeedbackBundle(input)
+    const first = await feedback.createBundle(input)
+    const second = await feedback.createBundle(input)
     expect(first.success && second.success).toBe(true)
     if (first.success && second.success)
       expect(second.data).toEqual(first.data)
-    expect((await createFeedbackBundle({ ...input, createdAt: Number.NaN })).success).toBe(false)
+    expect((await feedback.createBundle({ ...input, createdAt: Number.NaN })).success).toBe(false)
   })
 
   it('构建身份在诊断包中同样限制为 128 字符', async () => {
-    const accepted = await createFeedbackBundle({
+    const accepted = await feedback.createBundle({
       report: {
         id: 'fb-build',
         buildId: 'b'.repeat(128),
@@ -51,9 +51,9 @@ describe('feedback 离线问题包', () => {
     })
     expect(accepted.success).toBe(true)
     if (accepted.success)
-      expect((await readFeedbackBundle(accepted.data)).success).toBe(true)
+      expect((await feedback.readBundle(accepted.data)).success).toBe(true)
     for (const field of ['buildId', 'appVersion', 'commit']) {
-      expect((await createFeedbackBundle({
+      expect((await feedback.createBundle({
         report: {
           id: 'fb-build',
           [field]: 'b'.repeat(129),
@@ -65,7 +65,7 @@ describe('feedback 离线问题包', () => {
 
   it('无生产连接也能归档并读取现场与截图', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: {
         id: 'fb-test',
         number: 'FB-1',
@@ -93,7 +93,7 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return
@@ -108,7 +108,7 @@ describe('feedback 离线问题包', () => {
   })
 
   it('材料篡改或附加未声明文件时拒绝读取', async () => {
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-test' },
       evidence: [],
     })
@@ -117,20 +117,20 @@ describe('feedback 离线问题包', () => {
       return
     const files = unzipSync(created.data)
     files['report.json'] = strToU8('{"id":"changed"}')
-    expect((await readFeedbackBundle(zipSync(files))).success).toBe(false)
+    expect((await feedback.readBundle(zipSync(files))).success).toBe(false)
     files['hidden.html'] = strToU8('<script>throw Error()</script>')
-    expect((await readFeedbackBundle(zipSync(files))).success).toBe(false)
+    expect((await feedback.readBundle(zipSync(files))).success).toBe(false)
   })
 
   it('拒绝路径逃逸、大小写路径碰撞以及解压超限', async () => {
-    expect((await readFeedbackBundle(zipSync({
+    expect((await feedback.readBundle(zipSync({
       '../escape': strToU8('x'),
     }))).success).toBe(false)
-    expect((await readFeedbackBundle(zipSync({
+    expect((await feedback.readBundle(zipSync({
       'file.json': strToU8('x'),
       'FILE.json': strToU8('y'),
     }))).success).toBe(false)
-    expect((await readFeedbackBundle(zipSync({
+    expect((await feedback.readBundle(zipSync({
       'oversized.json': strToU8('x'.repeat(2000)),
     }), { maxFileBytes: 100 })).success).toBe(false)
   })
@@ -142,7 +142,7 @@ describe('feedback 离线问题包', () => {
       contentType: 'image/png',
       bytes: new Uint8Array([1, 2]),
     }
-    expect((await createFeedbackBundle({
+    expect((await feedback.createBundle({
       report: { id: 'fb-test' },
       evidence: [],
       attachments: [
@@ -152,7 +152,7 @@ describe('feedback 离线问题包', () => {
         },
       ],
     })).success).toBe(false)
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-test' },
       evidence: [],
       attachments: [attachment],
@@ -160,7 +160,7 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (read.success) {
       const screenshot = read.data.manifest.files.find(file => file.attachmentId === 'screen-1')
@@ -192,7 +192,7 @@ describe('feedback 离线问题包', () => {
       contentType: 'text/plain',
       bytes: strToU8(`material ${index}`),
     }))
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-opaque' },
       evidence: [],
       attachments,
@@ -200,7 +200,7 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return
@@ -224,7 +224,7 @@ describe('feedback 离线问题包', () => {
       contentType: 'text/plain',
       bytes: strToU8(`material ${id}`),
     }))
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-case' },
       evidence: [],
       attachments,
@@ -232,7 +232,7 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return
@@ -251,7 +251,7 @@ describe('feedback 离线问题包', () => {
       contentType: 'text/plain',
       bytes: strToU8('material'),
     }
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-duplicate' },
       evidence: [],
       attachments: [attachment, attachment],
@@ -262,7 +262,7 @@ describe('feedback 离线问题包', () => {
   })
 
   it('按请求和时间分页读取且摘要区分用户描述与事实', async () => {
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-query', description: '用户的解释', appVersion: '1.2.3' },
       evidence: Array.from({ length: 30 }, (_, index) => ({
         source: 'server',
@@ -278,11 +278,11 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return
-    const page = queryFeedbackBundle(read.data, {
+    const page = feedback.queryBundle(read.data, {
       requestId: 'req-a',
       from: 10,
       page: 2,
@@ -290,12 +290,12 @@ describe('feedback 离线问题包', () => {
     })
     expect(page.total).toBe(10)
     expect(page.items.map(item => item.timestamp)).toEqual([17, 19, 21])
-    expect(summarizeFeedbackBundle(read.data)).toContain('用户的解释')
-    expect(summarizeFeedbackBundle(read.data)).toContain('Screenshot unavailable')
+    expect(feedback.summarizeBundle(read.data)).toContain('用户的解释')
+    expect(feedback.summarizeBundle(read.data)).toContain('Screenshot unavailable')
   })
 
   it('查看器代码内置且无外链、用户内容只用 textContent 显示', () => {
-    const files = getFeedbackBundleViewerFiles()
+    const files = feedback.getBundleViewerFiles()
     const script = new TextDecoder().decode(files['viewer/app.js'])
     const html = new TextDecoder().decode(files['viewer/index.html'])
     expect(script).not.toContain('innerHTML')
@@ -317,7 +317,7 @@ describe('feedback 离线问题包', () => {
         : 'error-first',
       data: { sequence },
     }))
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-overlap' },
       evidence: [
         ...events,
@@ -344,19 +344,19 @@ describe('feedback 离线问题包', () => {
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return
-    const first = queryFeedbackBundle(read.data, { errorId: 'error-first', pageSize: 100 })
-    const second = queryFeedbackBundle(read.data, { errorId: 'error-second', pageSize: 100 })
-    const lastPage = queryFeedbackBundle(read.data, { errorId: 'error-second', pageSize: 100, page: 3 })
+    const first = feedback.queryBundle(read.data, { errorId: 'error-first', pageSize: 100 })
+    const second = feedback.queryBundle(read.data, { errorId: 'error-second', pageSize: 100 })
+    const lastPage = feedback.queryBundle(read.data, { errorId: 'error-second', pageSize: 100, page: 3 })
     expect(first.total).toBe(201)
     expect(second.total).toBe(201)
     expect(second.items[0].sequence).toBe(50)
     expect(second.items.every(event => event.source === 'server-a' && event.requestId === 'req-a')).toBe(true)
     expect(lastPage.items.map(event => event.sequence)).toEqual([250])
-    expect(queryFeedbackBundle(read.data, { errorId: 'error-second', kind: 'log' }).total).toBe(199)
-    expect(queryFeedbackBundle(read.data, { errorId: 'unrecorded' }).total).toBe(0)
+    expect(feedback.queryBundle(read.data, { errorId: 'error-second', kind: 'log' }).total).toBe(199)
+    expect(feedback.queryBundle(read.data, { errorId: 'unrecorded' }).total).toBe(0)
   })
 })

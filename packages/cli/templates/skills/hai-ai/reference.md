@@ -66,13 +66,13 @@ if (result.success) {
 
 ```ts
 // 创建名为 my-server、版本 1.0.0 的 MCP Server，用于登记静态资源。
-const mcp = createMcpServer({ name: 'my-server', version: '1.0.0' })
+const mcp = ai.createMcpServer({ name: 'my-server', version: '1.0.0' })
 // 把应用配置处理器登记到 config://app；查询该 URI 时返回正文，登记错误抛出。
 mcp.registerResource('config', 'config://app', { description: '应用配置' }, async uri => ({
   contents: [{ uri: uri.href, text: '{}' }],
 }))
 // 创建并连接标准输入输出传输，成功后接收协议消息，连接错误拒绝 Promise。
-await mcp.connect(new StdioServerTransport())
+await mcp.connect(new ai.StdioServerTransport())
 ```
 
 ### `ai.mcp`
@@ -227,8 +227,8 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
-- 轻量浏览器录音使用 `@h-ai/ai/client` 的 `createAudioRecorder` 管理轨道、快照和分段，取消或页面卸载时调用 `close()`。把完整 Blob 交给 `blobToWav(blob, { maxInputBytes, maxDurationSeconds, overflow: "truncate" })` 后可送现有转写 API。保留应用的转写触发、原件留存与服务端校验。
-- 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
+- 轻量浏览器录音使用 `@h-ai/ai/client` 的 `ai.createAudioRecorder` 管理轨道、快照和分段，取消或页面卸载时调用 `close()`。把完整 Blob 交给 `ai.blobToWav(blob, { maxInputBytes, maxDurationSeconds, overflow: "truncate" })` 后可送现有转写 API。保留应用的转写触发、原件留存与服务端校验。
+- 播放负载：`ai.serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
 
 能力快照 `getCapabilities` 为同步读取；跨节点更新模型后，先调用异步 `ai.audio.models.get/list` 或音频操作刷新本节点，再据能力决定参数。
 
@@ -316,7 +316,7 @@ const response = await apiClient.ai.chats.createCompletion({ messages })
 const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 })
 ```
 
-语音：`@h-ai/ai/client` 的 `createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
+语音：`@h-ai/ai/client` 的 `ai.createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
 
 JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；应用使用所安装版本的公开类型，并通过本应用已有的类型检查验证使用示例。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
 

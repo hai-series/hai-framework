@@ -34,8 +34,8 @@ const AuditErrorInfo = {
  * @example
  * ```ts
  * import { HaiAuditError } from '@h-ai/audit'
- * import { err } from '@h-ai/core'
- * const failed = err(HaiAuditError.NOT_INITIALIZED, 'Audit is not initialized')
+ * import { core } from '@h-ai/core'
+ * const failed = core.err(HaiAuditError.NOT_INITIALIZED, 'Audit is not initialized')
  * if (!failed.success) failed.error.code
  * ```
  */
@@ -342,7 +342,7 @@ export interface AuditHelper {
  * ```ts
  * import { audit } from '@h-ai/audit'
  * import { core } from '@h-ai/core'
- * import { reldb, type ReldbConfigInput } from '@h-ai/reldb'
+ * import { type ReldbConfigInput, reldb } from '@h-ai/reldb'
  * async function recordCreation(config: ReldbConfigInput) {
  *   const database = await reldb.init(config)
  *   if (!database.success) return database
@@ -483,7 +483,7 @@ export interface AuditBackupOptions {
  * 完整归档回执；SHA-256 校验内容完整性，不能替代独立存储权限或真实性认证。
  * @example
  * ```ts
- * import { audit, type AuditBackupInfo } from '@h-ai/audit'
+ * import { type AuditBackupInfo, audit } from '@h-ai/audit'
  * // 宿主已初始化 RelDB、私有 Storage 和 Audit。
  * const result = await audit.backup.run()
  * if (result.success) { const receipt: AuditBackupInfo = result.data; void receipt.sha256 }
@@ -502,7 +502,7 @@ export interface AuditBackupInfo {
  * 备份不覆盖在线审计。JSONL 归档可核对后用于离线恢复/独立查询存储。
  * @example
  * ```ts
- * import { audit, type AuditBackupOperations } from '@h-ai/audit'
+ * import { type AuditBackupOperations, audit } from '@h-ai/audit'
  * const operations: AuditBackupOperations = audit.backup
  * const result = await operations.run({ id: 'daily-archive' })
  * if (!result.success) result.error.code
@@ -519,7 +519,7 @@ export interface AuditBackupOperations {
  * 本次检查的通知提交回执；submitted 不证明收件人已阅读，queued 仅表示 Reach 持久入队。
  * @example
  * ```ts
- * import { audit, type AuditAlertReport } from '@h-ai/audit'
+ * import { type AuditAlertReport, audit } from '@h-ai/audit'
  * const result = await audit.checkAlerts()
  * if (result.success) { const report: AuditAlertReport = result.data; void report.failed }
  * ```

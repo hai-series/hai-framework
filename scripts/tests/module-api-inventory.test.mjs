@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { expandPackageExports, inspectModuleApi } from '../module-api-inventory.mjs'
+import { expandPackageExports, inspectModuleApi, inspectSourceModuleApi } from '../module-api-inventory.mjs'
 
 function fixture(run) {
   const root = mkdtempSync(join(tmpdir(), 'hai-api-inventory-'))
@@ -23,6 +23,55 @@ function fixture(run) {
 }
 
 describe('published module API inventory', () => {
+  it('拒绝条件入口和子路径中的独立工厂、重导出及运行对象', () => fixture((root, put) => {
+    put('packages/example/package.json', JSON.stringify({
+      name: '@h-ai/example',
+      exports: {
+        '.': { browser: './dist/browser.js', import: './dist/node.js' },
+        './client': './dist/client/index.js',
+      },
+    }))
+    put('packages/example/tsup.config.ts', 'export default { entry: { node: "src/index.ts", browser: "src/browser.ts", "client/index": "src/client/index.ts" } }')
+    put('tsconfig.json', JSON.stringify({
+      compilerOptions: {
+        paths: {
+          '@h-ai/example/client': ['./packages/example/src/client/internal.ts'],
+        },
+      },
+    }))
+    put('packages/example/src/index.ts', 'export const example = { create: () => ({ close() {} }) }; export const ExampleSchema = { parse: (value: unknown) => value }; export type { make } from "./client/internal.js"')
+    put('packages/example/src/browser.ts', 'export const createClient = () => ({}); export const legacyClient = { send() {} }')
+    put('packages/example/src/client/index.ts', 'export { make as leakedFactory } from "./internal.js"')
+    put('packages/example/src/client/internal.ts', 'export function make() { return {} }')
+    const result = inspectSourceModuleApi(root)
+    expect(result.packages).toBe(1)
+    expect(result.entries).toBe(3)
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('createClient: runtime operations must belong to example'),
+      expect.stringContaining('legacyClient: runtime operations must belong to example'),
+      expect.stringContaining('leakedFactory: runtime operations must belong to example'),
+      expect.stringContaining('TypeScript alias must point to a public source entry'),
+    ]))
+    expect(result.errors.some(error => error.includes('ExampleSchema'))).toBe(false)
+    expect(result.errors.some(error => error.includes('make:'))).toBe(false)
+  }))
+
+  it('发布产物也检查声明中的可调用值，而不只检查 function 关键字', () => fixture((root, put) => {
+    put('packages/example/package.json', JSON.stringify({
+      name: '@h-ai/example',
+      exports: {
+        '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+      },
+    }))
+    put('packages/example/dist/index.js', 'export const example = { create: () => ({}) }; export const factory = () => ({}); export const SchemaFactory = () => ({})')
+    put('packages/example/dist/index.d.ts', 'export declare const example: { create(): object }; export declare const factory: () => object; export declare const SchemaFactory: () => object')
+    const result = inspectModuleApi(root)
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('factory: runtime operations must belong to example'),
+      expect.stringContaining('SchemaFactory: runtime operations must belong to example'),
+    ]))
+  }))
+
   it('生成清单拒绝硬链接，不覆盖缓存目录外文件，并保留正常增量生成', () => {
     const root = mkdtempSync(fileURLToPath(new URL('../../tmp/hai-api-snapshot-', import.meta.url)))
     try {

@@ -6,6 +6,9 @@
  */
 
 // 折叠面板
+import { createDefaultCronBuilderState, cronBuilderStateToExpression, cronExpressionToBuilderState, isCronExpressionValid } from './cron-expression-builder.js'
+import { normalizeScheduleInputConfig } from './schedule-input.js'
+
 export type { AccordionItem } from './accordion-types.js'
 export { default as Accordion } from './Accordion.svelte'
 // 移动端操作菜单
@@ -36,13 +39,7 @@ export type {
   CronExpressionBuilderWeekdayOption,
   CronWeekdayValue,
 } from './cron-expression-builder-types.js'
-export {
-  createDefaultCronBuilderState,
-  CRON_BUILDER_WEEKDAY_ORDER,
-  cronBuilderStateToExpression,
-  cronExpressionToBuilderState,
-  isCronExpressionValid,
-} from './cron-expression-builder.js'
+export { CRON_BUILDER_WEEKDAY_ORDER } from './cron-expression-builder.js'
 export { default as CronExpressionBuilder } from './CronExpressionBuilder.svelte'
 export { default as DataTable } from './DataTable.svelte'
 // 日期选择器（Bits UI headless + DaisyUI 样式）
@@ -76,7 +73,7 @@ export { default as PullRefresh } from './PullRefresh.svelte'
 export { default as Result } from './Result.svelte'
 // 安全区域包裹
 export { default as SafeArea } from './SafeArea.svelte'
-export { normalizeScheduleInputConfig } from './schedule-input-config.js'
+
 export type { ScheduleInputConfig } from './schedule-input-config.js'
 // 日期时间与高级 Cron 调度输入
 export { default as ScheduleInput } from './ScheduleInput.svelte'
@@ -95,3 +92,22 @@ export { default as Timeline } from './Timeline.svelte'
 // Toast（统一使用 store 驱动模式）
 export { default as ToastContainer } from './ToastContainer.svelte'
 export { default as Tooltip } from './Tooltip.svelte'
+
+/**
+ * 此组件子路径提供的运行工具。
+ * @example
+ * ```ts
+ * import { ui } from '@h-ai/ui/components/compounds/index'
+ *
+ * // 创建独立的 Cron 编辑状态，后续由当前表单维护。
+ * const state = ui.createDefaultCronBuilderState()
+ * void state
+ * ```
+ */
+export const ui = {
+  createDefaultCronBuilderState,
+  cronBuilderStateToExpression,
+  cronExpressionToBuilderState,
+  isCronExpressionValid,
+  normalizeScheduleInputConfig,
+}

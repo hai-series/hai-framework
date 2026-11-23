@@ -113,7 +113,7 @@ export interface WorkerPoolOptions {
  * Node 侧的线程调度与进程内 CPU 卸载工具。
  * @example
  * ```ts
- * import { core, type NodeWorkerFunctions } from '@h-ai/core'
+ * import { type NodeWorkerFunctions, core } from '@h-ai/core'
  * const workers: NodeWorkerFunctions = core.worker
  * ```
  */

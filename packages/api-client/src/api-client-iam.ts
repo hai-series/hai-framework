@@ -1,5 +1,6 @@
 /** 认证表单动作：统一选择登录方式及安全 Token 存储。 */
 import type { apiContract, IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
+
 import type { HaiResult } from '@h-ai/core'
 import type { ApiClient } from './api-client-types.js'
 import { core } from '@h-ai/core'

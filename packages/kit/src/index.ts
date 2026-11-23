@@ -16,21 +16,19 @@ export type {
   KitClientConfig,
 } from './client/index.js'
 // CRUD 声明式资源定义
-export * from './crud/index.js'
+export type { CrudApiDef, CrudFieldDef, CrudFieldOption, CrudFieldOptions, CrudFieldType, CrudFieldValidation, CrudFilterParams, CrudOperations, CrudPaginatedResult, CrudPaginationParams, CrudResourceDef, CrudTableColumn, CrudText } from './crud/index.js'
 export type {
   AuthGuardConfig,
   PermissionGuardConfig,
   RoleGuardConfig,
   SessionGuardConfig,
 } from './guards/index.js'
-// 运行时导出 — 权限匹配纯函数（客户端/服务端通用）
-export { matchPermission } from './guards/kit-permission.js'
 export type {
   CookieProxyConfig,
 } from './hooks/index.js'
 export type { FeedbackHandlerOptions } from './kit-feedback.js'
 // 运行时导出 — kit 统一命名空间与配置辅助
-export { kit, KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-main.js'
+export { kit, KitConfigSchema } from './kit-main.js'
 export * from './kit-types.js'
 // 运行时导出 — 通用 Schema（支持 import { IdParamSchema } from '@h-ai/kit'）
 export { IdParamSchema, PaginationQuerySchema } from './kit-validation.js'

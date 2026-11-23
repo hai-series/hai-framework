@@ -24,9 +24,9 @@ export interface SensitiveActionsOptions {
  * 绑定 ReauthenticationDialog 的状态与动作；每个应用根布局创建一份。
  * @example
  * ```ts
- * import { createSensitiveActions } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * import { kit } from '@h-ai/kit'
- * const confirmation = createSensitiveActions(kit.client.createAuthActions())
+ * const confirmation = ui.createSensitiveActions(kit.client.createAuthActions())
  * confirmation.configure({ enabled: true, operations: ['orders.approve'] })
  * confirmation.cancel()
  * ```
@@ -52,9 +52,9 @@ export interface SensitiveActions {
  * @returns 页面级确认控制器；业务授权和凭据消费始终由服务端执行。
  * @example
  * ```ts
- * import { createSensitiveActions } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * import { kit } from '@h-ai/kit'
- * const confirmation = createSensitiveActions(kit.client.createAuthActions())
+ * const confirmation = ui.createSensitiveActions(kit.client.createAuthActions())
  * confirmation.configure({ enabled: false, operations: [] })
  * const ticket = await confirmation.authorize('orders.approve')
  * // null 时中止；有 ticket 时仅传给这一笔请求。

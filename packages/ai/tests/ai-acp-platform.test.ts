@@ -1,6 +1,6 @@
 import type { RunnerFunctions } from '@h-ai/runner'
 import type { ACPPlatformPolicy } from '../src/index.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
@@ -21,19 +21,19 @@ const environment = {
 } as const
 
 async function initialize(acpPolicy?: ACPPlatformPolicy) {
-  const unavailable = async () => err('fixture:unavailable', 'fixture')
+  const unavailable = async () => core.err('fixture:unavailable', 'fixture')
   const runner: RunnerFunctions = {
     isExecutor: true,
-    init: async () => ok(undefined),
-    close: vi.fn(async () => ok(undefined)),
+    init: async () => core.ok(undefined),
+    close: vi.fn(async () => core.ok(undefined)),
     environment: id => id === 'isolated'
-      ? ok({
+      ? core.ok({
           ...environment,
           capabilities: [...environment.capabilities],
         })
-      : err('fixture:not-found', 'fixture'),
-    register: () => ok(() => {}),
-    find: async () => ok(undefined),
+      : core.err('fixture:not-found', 'fixture'),
+    register: () => core.ok(() => {}),
+    find: async () => core.ok(undefined),
     submit: vi.fn(unavailable),
     get: unavailable,
     events: unavailable,
@@ -64,7 +64,7 @@ describe('managed ACP planning', () => {
     await initialize()
     const approvals = ai.acp.scoped(scope).approvals
     expect(await approvals.rules()).toEqual({ success: true, data: [] })
-    const failure = err({ code: 'fixture:approval-query', message: 'private database diagnostics' })
+    const failure = core.err({ code: 'fixture:approval-query', message: 'private database diagnostics' })
     const originalGet = reldb.sql.get
     const fault = stage === 'count'
       ? vi.spyOn(reldb.sql, 'get').mockImplementation((sql, params) => sql.includes('COUNT(*)')

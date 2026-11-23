@@ -1,6 +1,6 @@
 import type { ToolArtifact } from '@h-ai/tools/server'
 import type { BuiltinArtifactAccess, BuiltinToolOptions } from '../src/index.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -68,7 +68,7 @@ describe('website_video 固定工作流', () => {
         const found = stored.get(input.id)
         if (!found)
           throw new Error('Unknown test artifact')
-        return ok(found)
+        return core.ok(found)
       },
       publish: async (_context, input) => {
         const id = `artifact-${stored.size}`
@@ -80,7 +80,7 @@ describe('website_video 固定工作流', () => {
           kind: input.kind,
           version: 1,
         })
-        return ok({
+        return core.ok({
           id,
           title: input.name,
           kind: input.kind,
@@ -89,7 +89,7 @@ describe('website_video 固定工作流', () => {
         })
       },
     }
-    const planner = vi.spyOn(ai.llm, 'generateObject').mockResolvedValue(ok({
+    const planner = vi.spyOn(ai.llm, 'generateObject').mockResolvedValue(core.ok({
       title: 'Example',
       scenes: [
         {
@@ -102,12 +102,12 @@ describe('website_video 固定工作流', () => {
         { title: 'Built for teams', body: 'Explore the service', narration: 'Explore the service.' },
       ],
     }))
-    const synthesize = vi.spyOn(ai.audio, 'synthesize').mockResolvedValue(ok({
+    const synthesize = vi.spyOn(ai.audio, 'synthesize').mockResolvedValue(core.ok({
       data: wav(2),
       format: 'wav',
       durationMs: 2000,
     }))
-    const capabilities = vi.spyOn(ai.audio, 'getCapabilities').mockReturnValue(ok({
+    const capabilities = vi.spyOn(ai.audio, 'getCapabilities').mockReturnValue(core.ok({
       synthesize: {
         supported: true,
         incrementalTextInput: false,
@@ -120,7 +120,7 @@ describe('website_video 固定工作流', () => {
     const executeJob: NonNullable<BuiltinToolOptions['executeJob']> = async (request) => {
       stages.push(request.name)
       if (request.name === 'web_capture') {
-        return ok({
+        return core.ok({
           artifacts: [
             {
               id: 'capture',
@@ -142,7 +142,7 @@ describe('website_video 固定工作流', () => {
       expect(html).toContain('assets/voice-1.wav')
       expect(strFromU8(contents['subtitles.srt'])).toContain('Explore the service.')
       expect(contents['DESIGN.md']).toBeDefined()
-      return ok({
+      return core.ok({
         artifacts: [
           {
             id: 'movie',
@@ -214,7 +214,7 @@ describe('website_video 固定工作流', () => {
       expect(revisedAudio[1]).toBe(workflow.audioIds[1])
     }
     const streamed = wav(2)
-    capabilities.mockReturnValue(ok({
+    capabilities.mockReturnValue(core.ok({
       synthesize: {
         supported: true,
         incrementalTextInput: false,
@@ -224,7 +224,7 @@ describe('website_video 固定工作流', () => {
     }))
     new DataView(streamed.buffer).setUint32(4, 0xFFFFFFFF, true)
     new DataView(streamed.buffer).setUint32(40, 0xFFFFFFFF, true)
-    synthesize.mockResolvedValue(ok({ data: streamed, format: 'wav' }))
+    synthesize.mockResolvedValue(core.ok({ data: streamed, format: 'wav' }))
     const streamedResult = await registry.execute('website_video', { url: 'https://example.com/', durationSeconds: 10, captureId: workflow.captureId })
     expect(streamedResult.success).toBe(true)
     expect(synthesize.mock.calls.at(-1)?.[0].targetDurationMs).toBeGreaterThan(0)
@@ -276,7 +276,7 @@ describe('website_video 固定工作流', () => {
       traversal,
     ]) {
       const files: BuiltinArtifactAccess = {
-        read: async () => ok({
+        read: async () => core.ok({
           id: 'capture',
           name: 'capture.zip',
           mediaType: 'application/zip',

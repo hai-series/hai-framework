@@ -14,7 +14,7 @@ import type {
   MemoryEntry,
   MemoryEntryInput,
 } from '../src/memory/ai-memory-types.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryOperations } from '../src/memory/ai-memory-facade.js'
 
@@ -33,25 +33,25 @@ function makeEntry(id: string): MemoryEntry {
 /** 记录参数的 mock 核心操作 */
 function createMockCore() {
   const calls = {
-    add: vi.fn(async (_entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> => ok(makeEntry('m1'))),
-    recall: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => ok([])),
-    extract: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => ok([])),
-    injectMemories: vi.fn(async (messages: ChatMessage[]): Promise<HaiResult<ChatMessage[]>> => ok(messages)),
-    get: vi.fn(async (): Promise<HaiResult<MemoryEntry>> => ok(makeEntry('m1'))),
-    update: vi.fn(async (): Promise<HaiResult<MemoryEntry>> => ok(makeEntry('m1'))),
-    remove: vi.fn(async (): Promise<HaiResult<void>> => ok(undefined)),
-    list: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => ok([])),
-    listPage: vi.fn(async (): Promise<HaiResult<{ items: MemoryEntry[], total: number }>> => ok({ items: [], total: 0 })),
-    clear: vi.fn(async (): Promise<HaiResult<void>> => ok(undefined)),
+    add: vi.fn(async (_entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> => core.ok(makeEntry('m1'))),
+    recall: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => core.ok([])),
+    extract: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => core.ok([])),
+    injectMemories: vi.fn(async (messages: ChatMessage[]): Promise<HaiResult<ChatMessage[]>> => core.ok(messages)),
+    get: vi.fn(async (): Promise<HaiResult<MemoryEntry>> => core.ok(makeEntry('m1'))),
+    update: vi.fn(async (): Promise<HaiResult<MemoryEntry>> => core.ok(makeEntry('m1'))),
+    remove: vi.fn(async (): Promise<HaiResult<void>> => core.ok(undefined)),
+    list: vi.fn(async (): Promise<HaiResult<MemoryEntry[]>> => core.ok([])),
+    listPage: vi.fn(async (): Promise<HaiResult<{ items: MemoryEntry[], total: number }>> => core.ok({ items: [], total: 0 })),
+    clear: vi.fn(async (): Promise<HaiResult<void>> => core.ok(undefined)),
   }
-  const core = calls as unknown as MemoryCoreOperations
-  return { core, calls }
+  const memoryCore: MemoryCoreOperations = calls
+  return { memoryCore, calls }
 }
 
 describe('createMemoryOperations — clear 空过滤保护', () => {
   it('无任何过滤条件的 clear 被拒绝，且不调用核心 clear', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
 
     const result = await memory.clear()
     expect(result.success).toBe(false)
@@ -59,8 +59,8 @@ describe('createMemoryOperations — clear 空过滤保护', () => {
   })
 
   it('带 objectId / types / scope 的 clear 透传给核心', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
 
     const result = await memory.clear({ objectId: 'u-1' })
     expect(result.success).toBe(true)
@@ -70,8 +70,8 @@ describe('createMemoryOperations — clear 空过滤保护', () => {
 
 describe('createMemoryOperations — admin.clearAll', () => {
   it('未确认时拒绝，且不调用核心 clear', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
 
     // @ts-expect-error 故意不传 confirm
     const result = await memory.admin.clearAll({})
@@ -80,8 +80,8 @@ describe('createMemoryOperations — admin.clearAll', () => {
   })
 
   it('confirm:true 时调用核心 clear（无过滤 = 全局清空）', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
 
     const result = await memory.admin.clearAll({ confirm: true })
     expect(result.success).toBe(true)
@@ -91,8 +91,8 @@ describe('createMemoryOperations — admin.clearAll', () => {
 
 describe('createMemoryOperations — scoped 绑定', () => {
   it('scoped 操作自动携带 objectId 与 scope', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
     const scoped = memory.scoped({
       objectId: 'u-9',
       scope: { topicId: 't-1' },
@@ -120,8 +120,8 @@ describe('createMemoryOperations — scoped 绑定', () => {
   })
 
   it('scoped 的 get / update / remove 自动施加归属校验（accessScope）', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
     const scoped = memory.scoped({
       objectId: 'u-9',
       scope: { topicId: 't-1' },
@@ -142,8 +142,8 @@ describe('createMemoryOperations — scoped 绑定', () => {
   })
 
   it('scoped 的 clear 永远携带 objectId（不会误清全局）', async () => {
-    const { core, calls } = createMockCore()
-    const memory = createMemoryOperations(core)
+    const { memoryCore, calls } = createMockCore()
+    const memory = createMemoryOperations(memoryCore)
     const scoped = memory.scoped({ objectId: 'u-9' })
 
     await scoped.clear()

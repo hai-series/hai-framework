@@ -86,8 +86,8 @@ function required(name: string, defaultValue?: string, kind?: MiddlewareField['k
  * 目录同时描述本机、禁用、自建与云后端；存在依赖不等于必须开通新资源。
  * @example
  * ```ts
- * import { DEPLOY_MIDDLEWARE, describeMiddlewareBackend } from '@h-ai/deploy'
- * const choices = DEPLOY_MIDDLEWARE.db.map(backend => ({ value: backend.backend, description: describeMiddlewareBackend(backend) }))
+ * import { DEPLOY_MIDDLEWARE, deploy } from '@h-ai/deploy'
+ * const choices = DEPLOY_MIDDLEWARE.db.map(backend => ({ value: backend.backend, description: deploy.describeMiddlewareBackend(backend) }))
  * ```
  */
 export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
@@ -348,10 +348,10 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
  * @returns 当前 locale 的用途说明。
  * @example
  * ```ts
- * import { DEPLOY_MIDDLEWARE, describeMiddlewareBackend } from '@h-ai/deploy'
+ * import { DEPLOY_MIDDLEWARE, deploy } from '@h-ai/deploy'
  * const backend = DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
  * if (backend) {
- *   const description = describeMiddlewareBackend(backend)
+ *   const description = deploy.describeMiddlewareBackend(backend)
  * }
  * ```
  */

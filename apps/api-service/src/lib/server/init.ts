@@ -19,6 +19,7 @@
  */
 
 import type { AIConfigInput } from '@h-ai/ai'
+
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigInput } from '@h-ai/iam'
 import type { ServConfig } from '@h-ai/serv'

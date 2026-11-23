@@ -5,7 +5,7 @@ import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
  * =============================================================================
  */
 
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchedulerExecutionRepository } from '../src/repositories/scheduler-repository-execution.js'
@@ -56,7 +56,7 @@ describe('scheduler', () => {
     it('共享时间读取失败时不回退本机分钟，恢复后仍能在同一分钟调度', async () => {
       vi.useFakeTimers()
       const clock = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime')
-        .mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Clock unavailable'))
+        .mockResolvedValue(core.err(HaiSchedulerError.DB_SAVE_FAILED, 'Clock unavailable'))
       const onTaskExecute = vi.fn(() => 'done')
       expect((await scheduler.init({
         tickInterval: 100,

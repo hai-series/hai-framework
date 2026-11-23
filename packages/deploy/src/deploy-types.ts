@@ -38,9 +38,9 @@ const DeployErrorInfo = {
  *
  * @example
  * ```ts
- * import { err } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  * import { HaiDeployError } from '@h-ai/deploy'
- * const result = err(HaiDeployError.CONFIG_ERROR, 'Invalid deployment configuration')
+ * const result = core.err(HaiDeployError.CONFIG_ERROR, 'Invalid deployment configuration')
  * if (!result.success && result.error.code === HaiDeployError.CONFIG_ERROR.code) {
  *   process.stderr.write(result.error.message + '\n')
  * }
@@ -140,8 +140,8 @@ export interface MiddlewareRequirement {
  * 扫描是文件系统能力，不依赖 init，也不代表远程服务已经连通。
  * @example
  * ```ts
- * import type { ScanResult } from '@h-ai/deploy'
- * import { deploy } from '@h-ai/deploy'
+ *
+ * import { type ScanResult, deploy } from '@h-ai/deploy'
  * const result = await deploy.scan(process.cwd(), { environment: 'prod' })
  * if (!result.success) throw new Error(result.error.message)
  * const scan: ScanResult = result.data
@@ -351,8 +351,8 @@ export interface DownloadProxyConfig {
  * 这些方法仅操作 `~/.hai/credentials.yml`，不依赖 `deploy.init()`。
  * @example
  * ```ts
- * import type { DeployCredentialOperations } from '@h-ai/deploy'
- * import { deploy } from '@h-ai/deploy'
+ *
+ * import { type DeployCredentialOperations, deploy } from '@h-ai/deploy'
  * const credentials: DeployCredentialOperations = deploy.credentials
  * const path = credentials.getPath() // 无需先 init。
  * ```
@@ -419,8 +419,8 @@ export interface DeployCredentialOperations {
  * scan 与 credentials 不需要 init；部署与开通遵循 init → 检查结果 → use → finally close。close 返回 Promise<void>，不伪造 HaiResult。
  * @example
  * ```ts
- * import type { DeployFunctions } from '@h-ai/deploy'
- * import { deploy } from '@h-ai/deploy'
+ *
+ * import { type DeployFunctions, deploy } from '@h-ai/deploy'
  * const operations: DeployFunctions = deploy
  * const scan = await operations.scan(process.cwd())
  * if (!scan.success) throw new Error(scan.error.message)
@@ -428,13 +428,47 @@ export interface DeployCredentialOperations {
  * ```
  */
 export interface DeployFunctions {
+  /** resolveDownloadProxy 的公开工具入口；按原签名执行。 */
+  resolveDownloadProxy: typeof import('./deploy-download.js').resolveDownloadProxy
+  /** resolveImageReference 的公开工具入口；按原签名执行。 */
+  resolveImageReference: typeof import('./deploy-download.js').resolveImageReference
+  /** loadDeploymentConfig 的公开工具入口；按原签名执行。 */
+  loadDeploymentConfig: typeof import('./deploy-environment.js').loadDeploymentConfig
+  /** loadDeploymentEnvironment 的公开工具入口；按原签名执行。 */
+  loadDeploymentEnvironment: typeof import('./deploy-environment.js').loadDeploymentEnvironment
+  /** mergeEnvironmentLayers 的公开工具入口；按原签名执行。 */
+  mergeEnvironmentLayers: typeof import('./deploy-environment.js').mergeEnvironmentLayers
+  /** saveDeploymentEnvironment 的公开工具入口；按原签名执行。 */
+  saveDeploymentEnvironment: typeof import('./deploy-environment.js').saveDeploymentEnvironment
+  /** normalizeProjectName 的公开工具入口；按原签名执行。 */
+  normalizeProjectName: typeof import('./deploy-functions.js').normalizeProjectName
+  /** canKeepMiddleware 的公开工具入口；按原签名执行。 */
+  canKeepMiddleware: typeof import('./deploy-middleware-environment.js').canKeepMiddleware
+  /** parseMiddlewareField 的公开工具入口；按原签名执行。 */
+  parseMiddlewareField: typeof import('./deploy-middleware-environment.js').parseMiddlewareField
+  /** saveMiddlewareEnvironment 的公开工具入口；按原签名执行。 */
+  saveMiddlewareEnvironment: typeof import('./deploy-middleware-environment.js').saveMiddlewareEnvironment
+  /** validateMiddlewareField 的公开工具入口；按原签名执行。 */
+  validateMiddlewareField: typeof import('./deploy-middleware-environment.js').validateMiddlewareField
+  /** getDeployCommandState 的公开工具入口；按原签名执行。 */
+  getDeployCommandState: typeof import('./deploy-recovery.js').getDeployCommandState
+  /** getDeployRecovery 的公开工具入口；按原签名执行。 */
+  getDeployRecovery: typeof import('./deploy-recovery.js').getDeployRecovery
+  /** artifactChecksum 的公开工具入口；按原签名执行。 */
+  artifactChecksum: typeof import('./deploy-artifact.js').artifactChecksum
+  /** readDeploymentArtifact 的公开工具入口；按原签名执行。 */
+  readDeploymentArtifact: typeof import('./deploy-artifact.js').readDeploymentArtifact
+  /** describeMiddlewareBackend 的公开工具入口；按原签名执行。 */
+  describeMiddlewareBackend: typeof import('./deploy-middleware.js').describeMiddlewareBackend
+  /** createDeploymentPlan 的公开工具入口；按原签名执行。 */
+  createDeploymentPlan: typeof import('./deploy-plan.js').createDeploymentPlan
   /** 全局部署凭证文件操作。 */
   readonly credentials: DeployCredentialOperations
   /**
    * 由工程根和清单生成 CLI v1 回执及目标路径。无需初始化，不读写文件。
    * @example
    * ```ts
-   * import { deploy, type DeploymentArtifact } from '@h-ai/deploy'
+   * import { type DeploymentArtifact, deploy } from '@h-ai/deploy'
    * function buildOutput(manifest: DeploymentArtifact): string {
    *   const receipt = deploy.buildReceipt('/workspace/shop', 'shop', manifest)
    *   if (!receipt.success) throw new Error(receipt.error.message)
@@ -462,7 +496,7 @@ export interface DeployFunctions {
    * 使用本次固定 SSH 目标上传并执行已经打包的私有包。无需初始化，不自动重放；远端不确定时独立核对。
    * @example
    * ```ts
-   * import { deploy, type DeployBundleExecution } from '@h-ai/deploy'
+   * import { type DeployBundleExecution, deploy } from '@h-ai/deploy'
    * async function run(bundle: DeployBundleExecution, signal: AbortSignal): Promise<boolean> {
    *   // 先持久化 bundle 的部署 ID 和摘要，再调用本方法。
    *   const applied = await deploy.executeBundle(bundle, { signal })
@@ -475,7 +509,7 @@ export interface DeployFunctions {
    * 只读核对指定部署 ID 的回执、当前发布、实际容器镜像和健康入口。无需初始化。
    * @example
    * ```ts
-   * import { deploy, type DeployReleaseVerification } from '@h-ai/deploy'
+   * import { type DeployReleaseVerification, deploy } from '@h-ai/deploy'
    * async function reconcile(input: DeployReleaseVerification): Promise<string | undefined> {
    *   const checked = await deploy.verifyDeployment(input)
    *   return checked.success ? checked.data.status : undefined
@@ -543,7 +577,7 @@ export interface DeployFunctions {
    * @returns 所有 Provisioner 的结果列表
    * @example
    * ```ts
-   * import { deploy, getDeployRecovery } from '@h-ai/deploy'
+   * import { deploy } from '@h-ai/deploy'
    * const apiKey = process.env.HAI_DEPLOY_SERVICES_DB_APIKEY
    * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_DB_APIKEY privately')
    * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } }, services: { db: { provisioner: 'neon', apiKey } } })
@@ -552,7 +586,7 @@ export interface DeployFunctions {
    *   // 会访问真实云服务并可能新建资源。
    *   const result = await deploy.provisionAll('shop', ['db'])
    *   if (!result.success) {
-   *     const recovery = getDeployRecovery(result.error)
+   *     const recovery = deploy.getDeployRecovery(result.error)
    *     if (recovery?.resources.some(resource => resource.resourceStatus === 'unknown')) {
    *       process.stderr.write('Verify unknown resources at the provider before retrying\n')
    *     }

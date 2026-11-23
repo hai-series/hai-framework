@@ -212,9 +212,9 @@ export interface CrudTableColumn {
  *
  * @example
  * ```ts
- * import { defineCrud } from '@h-ai/ui'
- * import type { CrudDef } from '@h-ai/ui'
- * const definition: CrudDef<Record<string, unknown>> = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * import { type CrudDef, ui } from '@h-ai/ui'
+ *
+ * const definition: CrudDef<Record<string, unknown>> = ui.defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
  * const columns = definition.toTableColumns()
  * ```
  */
@@ -254,10 +254,10 @@ export interface CrudData<T> {
  *
  * @example
  * ```ts
- * import { defineCrud, createCrudController } from '@h-ai/ui'
- * import type { CrudController } from '@h-ai/ui'
- * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
- * const controller: CrudController<Record<string, unknown>> = createCrudController(crud, { autoLoad: false, syncUrl: false })
+ * import { type CrudController, ui } from '@h-ai/ui'
+ *
+ * const crud = ui.defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const controller: CrudController<Record<string, unknown>> = ui.createCrudController(crud, { autoLoad: false, syncUrl: false })
  * await controller.load()
  * if (controller.error) throw controller.error
  * const users = controller.data.items
@@ -321,8 +321,8 @@ function resolveText(text: CrudText): string {
  *
  * @example
  * ```ts
- * import { mapPaginated } from '@h-ai/ui'
- * const page = mapPaginated({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, user => ({ ...user, label: user.email }))
+ * import { ui } from '@h-ai/ui'
+ * const page = ui.mapPaginated({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, user => ({ ...user, label: user.email }))
  * const email = page.items[0]?.label
  * ```
  */
@@ -349,8 +349,8 @@ export function mapPaginated<T, R>(
  *
  * @example
  * ```ts
- * import { defineCrud } from '@h-ai/ui'
- * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * import { ui } from '@h-ai/ui'
+ * const crud = ui.defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
  * const columns = crud.toTableColumns()
  * ```
  */
@@ -398,9 +398,9 @@ export function defineCrud<T extends Record<string, unknown>>(resource: CrudReso
  *
  * @example
  * ```ts
- * import { defineCrud, createCrudController } from '@h-ai/ui'
- * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
- * const controller = createCrudController(crud, { autoLoad: false, syncUrl: false })
+ * import { ui } from '@h-ai/ui'
+ * const crud = ui.defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const controller = ui.createCrudController(crud, { autoLoad: false, syncUrl: false })
  * await controller.load()
  * if (controller.error) throw controller.error
  * const users = controller.data.items

@@ -4,15 +4,14 @@ import type { HaiResult, LogRecord } from '@h-ai/core'
 import type { FeedbackClientActions } from '../src/client/index.js'
 import { Buffer } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { apiContract } from '@h-ai/api-contract/feedback'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import * as images from '../src/client/feedback-client-image.js'
 import { sanitizeFeedbackReplay } from '../src/client/feedback-client-sanitize.js'
-import { createFeedbackClient } from '../src/client/index.js'
+import { feedback } from '../src/client/index.js'
 
-const clients: ReturnType<typeof createFeedbackClient>[] = []
+const clients: ReturnType<typeof feedback.createClient>[] = []
 const report: FeedbackReport = {
   id: 'report-1',
   number: 'FB-1',
@@ -30,19 +29,19 @@ const report: FeedbackReport = {
 
 function actions(): FeedbackClientActions {
   return {
-    submit: vi.fn(async () => ok(report)),
-    upload: vi.fn(async () => ok(undefined)),
-    appendEvidence: vi.fn(async input => ok({
+    submit: vi.fn(async () => core.ok(report)),
+    upload: vi.fn(async () => core.ok(undefined)),
+    appendEvidence: vi.fn(async input => core.ok({
       acknowledged: input.evidence.map(item => item.id),
       evidenceRevision: 2,
     })),
-    completeCollection: vi.fn(async () => ok({ ...report, collectionStatus: 'complete' })),
+    completeCollection: vi.fn(async () => core.ok({ ...report, collectionStatus: 'complete' })),
   }
 }
 
-async function setup(overrides: Partial<Parameters<ReturnType<typeof createFeedbackClient>['init']>[0]> = {}) {
+async function setup(overrides: Partial<Parameters<ReturnType<typeof feedback.createClient>['init']>[0]> = {}) {
   vi.stubGlobal('crypto', webcrypto)
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
   const transport = actions()
   expect((await client.init({
@@ -64,8 +63,8 @@ function plainTextFile(text: string, name = 'diagnostic.log'): File {
 }
 
 it('服务端策略限制附件总量，失败不留下半批材料，预览在关闭时统一释放', async () => {
-  const budget = resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 })
-  const policy = vi.fn(async () => ok(budget))
+  const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 })
+  const policy = vi.fn(async () => core.ok(budget))
   const transport = actions()
   const { client } = await setup({
     actions: { ...transport, policy },
@@ -315,7 +314,7 @@ describe('feedback browser collection', () => {
     expect(exported.success).toBe(true)
     if (!exported.success)
       return
-    const bundle = await readFeedbackBundle(exported.data)
+    const bundle = await feedback.readBundle(exported.data)
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return
@@ -510,7 +509,7 @@ describe('feedback browser collection', () => {
     expect(exported.success).toBe(true)
     if (!exported.success)
       return
-    const bundle = await readFeedbackBundle(exported.data)
+    const bundle = await feedback.readBundle(exported.data)
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return
@@ -675,7 +674,7 @@ describe('feedback browser collection', () => {
 
   it('受理失败保留现场和稳定提交标识，重试不生成第二份问题', async () => {
     const transport = actions()
-    vi.mocked(transport.submit).mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'Unavailable'))
+    vi.mocked(transport.submit).mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'Unavailable'))
     const { client } = await setup({ actions: transport })
     await client.prepare()
     expect((await client.submit({ description: 'optional' })).success).toBe(false)
@@ -755,7 +754,7 @@ describe('feedback browser collection', () => {
 
   it('截图上传失败保留字节与同一附件标识，确认后才结束采集', async () => {
     const transport = actions()
-    vi.mocked(transport.upload).mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'Storage unavailable'))
+    vi.mocked(transport.upload).mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'Storage unavailable'))
     const { client } = await setup({
       actions: transport,
       screenshot: true,
@@ -784,7 +783,7 @@ describe('feedback browser collection', () => {
   })
 
   it('持久化需要产品提供身份范围，不能把其他用户材料恢复进当前反馈', async () => {
-    const client = createFeedbackClient()
+    const client = feedback.createClient()
     clients.push(client)
     expect((await client.init({
       appId: 'orders',
@@ -801,7 +800,7 @@ describe('feedback browser collection', () => {
       throw new Error('Response lost after commit')
     }).mockImplementationOnce(async (input) => {
       expect(JSON.stringify(input)).toBe(acceptedPayload)
-      return ok(report)
+      return core.ok(report)
     })
     const { client } = await setup({ actions: transport })
     expect((await client.submit({ description: 'original' })).success).toBe(false)
@@ -827,7 +826,7 @@ describe('feedback browser collection', () => {
     await client.flush()
     let release: (() => void) | undefined
     vi.mocked(transport.appendEvidence).mockImplementationOnce(input => new Promise((resolve) => {
-      release = () => resolve(ok({
+      release = () => resolve(core.ok({
         acknowledged: input.evidence.map(item => item.id),
         evidenceRevision: 2,
       }))
@@ -913,7 +912,7 @@ describe('feedback browser collection', () => {
   it.each([401, 403, 404, 409, 413, 422])('后台补传 HTTP %s 后暂停，保留材料供显式重试', async (httpStatus) => {
     vi.useFakeTimers()
     const transport = actions()
-    vi.mocked(transport.upload).mockResolvedValue(err({ code: 'app:rejected', httpStatus, message: 'Upload rejected' }))
+    vi.mocked(transport.upload).mockResolvedValue(core.err({ code: 'app:rejected', httpStatus, message: 'Upload rejected' }))
     const { client } = await setup({
       actions: transport,
       screenshot: true,
@@ -924,7 +923,7 @@ describe('feedback browser collection', () => {
     await vi.advanceTimersByTimeAsync(3_600_000)
     expect(transport.upload).toHaveBeenCalledOnce()
     expect(client.getDraft()!.attachments[0]!.bytes).toEqual(new Uint8Array([1, 2, 3]))
-    vi.mocked(transport.upload).mockResolvedValue(ok(undefined))
+    vi.mocked(transport.upload).mockResolvedValue(core.ok(undefined))
     expect((await client.flush()).success).toBe(true)
     expect(transport.upload).toHaveBeenCalledTimes(2)
     expect(transport.completeCollection).toHaveBeenCalledOnce()
@@ -936,14 +935,14 @@ describe('feedback browser collection', () => {
     const transport = actions()
     vi.mocked(transport.completeCollection).mockImplementation(async () => {
       times.push(Date.now())
-      return err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage')
+      return core.err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage')
     })
     const { client } = await setup({ actions: transport, afterCount: 0 })
     expect((await client.submit()).success).toBe(true)
     await vi.advanceTimersByTimeAsync(3_600_000)
     expect(times).toHaveLength(6)
     expect(times.slice(1).map((time, index) => time - times[index]!)).toEqual([1000, 2000, 4000, 8000, 16000])
-    vi.mocked(transport.completeCollection).mockResolvedValue(ok({ ...report, collectionStatus: 'complete' }))
+    vi.mocked(transport.completeCollection).mockResolvedValue(core.ok({ ...report, collectionStatus: 'complete' }))
     expect((await client.flush()).success).toBe(true)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(transport.completeCollection).toHaveBeenCalledTimes(7)
@@ -951,7 +950,7 @@ describe('feedback browser collection', () => {
 
   it('退出身份丢弃草稿时不发起新的补传请求', async () => {
     const transport = actions()
-    vi.mocked(transport.upload).mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage'))
+    vi.mocked(transport.upload).mockResolvedValue(core.err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage'))
     const { client } = await setup({
       actions: transport,
       screenshot: true,
@@ -969,7 +968,7 @@ describe('feedback browser collection', () => {
   it('退出身份等待在途上传，但完成后不续发证据或采集确认', async () => {
     let finish: (() => void) | undefined
     const transport = actions()
-    vi.mocked(transport.upload).mockImplementation(() => new Promise(resolve => finish = () => resolve(ok(undefined))))
+    vi.mocked(transport.upload).mockImplementation(() => new Promise(resolve => finish = () => resolve(core.ok(undefined))))
     const { client } = await setup({
       actions: transport,
       screenshot: true,
@@ -1038,10 +1037,10 @@ describe('feedback browser collection', () => {
 
 it('退出发生在策略读取期间时，迟到初始化不能复活采集会话', async () => {
   vi.stubGlobal('crypto', webcrypto)
-  const client = createFeedbackClient()
+  const client = feedback.createClient()
   clients.push(client)
-  let release!: (value: HaiResult<ReturnType<typeof resolveFeedbackBudget>>) => void
-  const policy = new Promise<HaiResult<ReturnType<typeof resolveFeedbackBudget>>>((resolve) => {
+  let release!: (value: HaiResult<ReturnType<typeof apiContract.resolveFeedbackBudget>>) => void
+  const policy = new Promise<HaiResult<ReturnType<typeof apiContract.resolveFeedbackBudget>>>((resolve) => {
     release = resolve
   })
   const pending = client.init({
@@ -1052,7 +1051,7 @@ it('退出发生在策略读取期间时，迟到初始化不能复活采集会�
     },
   })
   await client.close({ discard: true })
-  release(ok(resolveFeedbackBudget()))
+  release(core.ok(apiContract.resolveFeedbackBudget()))
   expect((await pending).success).toBe(false)
   expect((await client.prepare()).success).toBe(false)
   expect(client.getDraft()).toBeUndefined()
@@ -1060,7 +1059,7 @@ it('退出发生在策略读取期间时，迟到初始化不能复活采集会�
 
 it('离线策略请求失败仍可保存本地草稿，在线提交重新确认有效预算', async () => {
   const transport = actions()
-  const policy = vi.fn().mockResolvedValueOnce(err(HaiCommonError.NETWORK_ERROR, 'Offline')).mockResolvedValueOnce(ok(resolveFeedbackBudget()))
+  const policy = vi.fn().mockResolvedValueOnce(core.err(HaiCommonError.NETWORK_ERROR, 'Offline')).mockResolvedValueOnce(core.ok(apiContract.resolveFeedbackBudget()))
   const { client } = await setup({
     actions: { ...transport, policy },
   })
@@ -1075,7 +1074,7 @@ it('离线策略请求失败仍可保存本地草稿，在线提交重新确认�
 
 it('删除旧附件后添加新文件按剩余预算原子合并', async () => {
   const { client } = await setup({
-    budget: resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 }),
+    budget: apiContract.resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 }),
   })
   await client.prepare()
   const file = new File([
@@ -1108,7 +1107,7 @@ it('hash 路由换页重开补充当前截图，片段参数不进入诊断包',
     expect(exported.success).toBe(true)
     if (!exported.success)
       return
-    const bundle = await readFeedbackBundle(exported.data)
+    const bundle = await feedback.readBundle(exported.data)
     expect(JSON.stringify(bundle)).not.toContain('HASH_PRIVATE_SENTINEL')
   }
   finally { history.replaceState({}, '', original) }

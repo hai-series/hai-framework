@@ -10,9 +10,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ResolvedAudioModel } from '../../ai-config.js'
 
+import type { ResolvedAudioModel } from '../../ai-config.js'
 import type { AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+
 import type {
   AudioProvider,
   AudioWsConnection,
@@ -22,8 +23,7 @@ import type {
   ProviderTranscriptionStreamRequest,
   SynthesisOutputMeta,
 } from './ai-audio-provider.js'
-
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { nanoid } from 'nanoid'
 import { concatChunks, errorMessage, fromBase64, openAudioWebSocket, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
@@ -114,7 +114,7 @@ export function createQwenAudioProvider(): AudioProvider {
             : event.text
         }
       }
-      return ok({ text: finalText })
+      return core.ok({ text: finalText })
     }
     catch (error) {
       logger.debug('Qwen transcribe failed', {
@@ -233,7 +233,7 @@ export function createQwenAudioProvider(): AudioProvider {
         signal: request.signal,
       }))
         chunks.push(audio)
-      return ok({
+      return core.ok({
         data: concatChunks(chunks),
         format: out.format,
         sampleRate: out.sampleRate,

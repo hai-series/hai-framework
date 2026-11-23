@@ -10,7 +10,6 @@ import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { createIamProcedures } from '../src/features/serv-feature-iam.js'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({ iam: apiContract.iam })
@@ -84,7 +83,7 @@ beforeAll(async () => {
   const app = serv.createApp({
     contract,
     procedures: {
-      iam: createIamProcedures({ iam }),
+      iam: serv.createIamProcedures({ iam }),
     },
     iam,
     refreshCookie: { secure: false },

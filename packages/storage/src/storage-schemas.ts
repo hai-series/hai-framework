@@ -49,10 +49,10 @@ export type StorageKeyIssue = 'empty' | 'tooLong' | 'characters' | 'segments'
  * @returns 首个失败类别；合法时为 undefined。
  * @example
  * ```ts
- * import { getStorageKeyIssue } from '@h-ai/storage/schemas'
+ * import { storage } from '@h-ai/storage/schemas'
  *
- * const unsafe = getStorageKeyIssue('../private.txt') // segments
- * const emptyPrefix = getStorageKeyIssue('', true) // undefined
+ * const unsafe = storage.getKeyIssue('../private.txt') // segments
+ * const emptyPrefix = storage.getKeyIssue('', true) // undefined
  * void [unsafe, emptyPrefix]
  * ```
  */

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { loadDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { IamConfigSchema } from '@h-ai/iam'
 import { AlipayConfigSchema } from '@h-ai/payment'
 import { ReldbConfigSchema } from '@h-ai/reldb'
@@ -34,12 +34,12 @@ describe('environment configuration', () => {
         ? `ldap: ${JSON.stringify(connection)}\n`
         : ''}`)
       writeFileSync(join(directory, '.env.test'), '')
-      const environment = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
+      const environment = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: directory })
       expect(environment.success).toBe(true)
       if (!environment.success)
         throw new Error(environment.error.message)
       if (source === 'environment') {
-        const enabled = saveMiddlewareEnvironment(environment.data, {
+        const enabled = deploy.saveMiddlewareEnvironment(environment.data, {
           appDir: directory,
           requirement: {
             service: 'ldap',
@@ -55,7 +55,7 @@ describe('environment configuration', () => {
         })
         expect(enabled.success).toBe(true)
       }
-      const saved = saveMiddlewareEnvironment(environment.data, {
+      const saved = deploy.saveMiddlewareEnvironment(environment.data, {
         appDir: directory,
         requirement: {
           service: 'ldap',
@@ -72,7 +72,7 @@ describe('environment configuration', () => {
         configuration: {},
       })
       expect(saved.success).toBe(true)
-      const reloaded = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
+      const reloaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: directory })
       expect(reloaded.success).toBe(true)
       if (!reloaded.success)
         throw new Error(reloaded.error.message)

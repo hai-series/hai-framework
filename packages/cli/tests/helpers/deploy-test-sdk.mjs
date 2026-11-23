@@ -1,6 +1,6 @@
 /** 真正调用公开 SDK；独立进程让测试取消可以回收其 SSH/打包命令树。 */
 import process from 'node:process'
-import { deploy, getDeployCommandState } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
 let remoteUnknown = false
 
@@ -11,7 +11,7 @@ try {
     throw new Error(initialized.error.message)
   const result = await deploy.deployApp(service, { environment: 'test', artifactDir, runtime })
   if (!result.success) {
-    remoteUnknown = getDeployCommandState(result.error)?.remoteExecution === 'unknown'
+    remoteUnknown = deploy.getDeployCommandState(result.error)?.remoteExecution === 'unknown'
     throw new Error(result.error.message)
   }
   if (result.data.healthCheck !== 'passed')

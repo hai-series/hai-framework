@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { runInNewContext } from 'node:vm'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { ESLint } from 'eslint'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
@@ -58,7 +58,10 @@ describe('feedback 生成工程', () => {
           : ['@tauri-apps/plugin-dialog', '@tauri-apps/plugin-fs']
         for (const name of ['@h-ai/feedback', ...plugins])
           expect(Boolean(manifest.dependencies[name])).toBe(enabled)
-        expect((await readFile(path.join(root, 'src/main.ts'), 'utf8')).includes('configureFeedbackSaving')).toBe(enabled)
+        const saver = target === 'app'
+          ? 'saveCapacitorFile'
+          : 'saveTauriFile'
+        expect((await readFile(path.join(root, 'src/main.ts'), 'utf8')).includes(`feedback.configureSaving(feedback.${saver})`)).toBe(enabled)
       }
       const native = path.join(directory, 'apps/native-feedback-desktop/src-tauri')
       const capabilities = JSON.parse(await readFile(path.join(native, 'capabilities/default.json'), 'utf8'))
@@ -109,12 +112,12 @@ describe('feedback 生成工程', () => {
       expect(declarations).toHaveLength(2)
       expect(source).toMatch(/\bcreateContext,/)
       const verifyToken = vi.fn(async (token: string) => token === 'trusted-token'
-        ? ok({
+        ? core.ok({
             userId: 'trusted-user',
             roles: ['user'],
             permissions: ['feedback:create'],
           })
-        : err(HaiCommonError.UNAUTHORIZED))
+        : core.err(HaiCommonError.UNAUTHORIZED))
       const code = ts.transpileModule(`${declarations.join('\n')}\ncreateContext`, {
         compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
       }).outputText

@@ -26,8 +26,8 @@ const IOS_UA_REGEX = /iphone|ipad|ipod/
  *
  * @example
  * ```ts
- * import { detectPlatform } from '@h-ai/ui'
- * const platform = detectPlatform()
+ * import { ui } from '@h-ai/ui'
+ * const platform = ui.detectPlatform()
  * ```
  */
 export function detectPlatform(): Platform {
@@ -67,8 +67,8 @@ export function detectPlatform(): Platform {
  *
  * @example
  * ```ts
- * import { isMobile } from '@h-ai/ui'
- * const compactLayout = isMobile()
+ * import { ui } from '@h-ai/ui'
+ * const compactLayout = ui.isMobile()
  * ```
  */
 export function isMobile(): boolean {
@@ -82,8 +82,8 @@ export function isMobile(): boolean {
  *
  * @example
  * ```ts
- * import { isNativeApp } from '@h-ai/ui'
- * const useNativeBridge = isNativeApp()
+ * import { ui } from '@h-ai/ui'
+ * const useNativeBridge = ui.isNativeApp()
  * ```
  */
 export function isNativeApp(): boolean {
@@ -98,8 +98,8 @@ export function isNativeApp(): boolean {
  *
  * @example
  * ```ts
- * import { usePlatform } from '@h-ai/ui'
- * const platform = usePlatform()
+ * import { ui } from '@h-ai/ui'
+ * const platform = ui.usePlatform()
  * const device = platform.current
  * ```
  */

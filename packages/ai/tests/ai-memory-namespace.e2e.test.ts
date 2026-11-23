@@ -1,5 +1,6 @@
 /** 原生记忆向量命名空间回归，使用真实 Qdrant 和独立关系库。 */
 import type { HaiResult } from '@h-ai/core'
+
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { ChildProcess } from 'node:child_process'
 import type { AddressInfo } from 'node:net'

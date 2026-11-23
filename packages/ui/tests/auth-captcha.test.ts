@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { AuthPanelActions, AuthPanelConfig } from '../src/lib/components/scenes/types.js'
 import { randomBytes, webcrypto } from 'node:crypto'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createChallenge, pbkdf2, verifySolution } from 'altcha/lib'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, it, vi } from 'vitest'
@@ -34,8 +34,8 @@ it.each([false, true])('交互挑战开关=%s：真实求解且证明只随本�
     hmacSignatureSecret: secret,
     hmacKeySignatureSecret: keySecret,
   })
-  const createCaptcha = vi.fn(async () => ok({ id: 'fixture-challenge', challenge }))
-  const action = async () => ok(undefined)
+  const createCaptcha = vi.fn(async () => core.ok({ id: 'fixture-challenge', challenge }))
+  const action = async () => core.ok(undefined)
   const login = vi.fn<AuthPanelActions['login']>(action)
   const target = document.createElement('div')
   document.body.append(target)

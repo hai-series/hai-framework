@@ -6,7 +6,7 @@
 
 import process from 'node:process'
 import { core } from '@h-ai/core'
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import adapter from '@sveltejs/adapter-static'
@@ -38,7 +38,7 @@ export default defineConfig(({ mode, command }) => {
       sveltekit({
         preprocess: [
           vitePreprocess(),
-          autoImportHaiUi(),
+          ui.autoImport(),
         ],
         compilerOptions: {
           runes: true,

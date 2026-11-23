@@ -36,10 +36,10 @@ await ai.close()
 需要持久化时先校验三份配置，再按依赖顺序初始化。此片段位于应用启动生命周期；应用统一关闭管理器负责释放已获取的依赖，初始化失败时不接收业务请求。
 
 ```ts
-import { ai, AIConfigSchema } from '@h-ai/ai'
+import { AIConfigSchema, ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
-import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
-import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
+import { VecdbConfigSchema, vecdb } from '@h-ai/vecdb'
 
 // 用 RelDB 的公开 Schema 校验已加载的 db 节点，成功返回可用于 init 的数据库配置。
 const databaseConfig = core.config.validate('db', ReldbConfigSchema)
@@ -148,7 +148,7 @@ memory:
 | 工具定义      | `tools.define(...)`                                                                                         | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文                                                                                          |
 | 工具注册      | `registry.register/replace`                                                                                    | `register` 默认拒绝同名并返回 HaiResult；只有 `replace` 可显式替换                                                                                           |
 | 工具执行      | `ai.tools.adapt(registry).execute(tc, options)` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true`                                                                |
-| MCP 服务      | `createMcpServer(...)`                                                                                         | 按需连接 HTTP/SSE/Stdio transport                                                                                                                            |
+| MCP 服务      | `ai.createMcpServer(...)`                                                                                         | 按需连接 HTTP/SSE/Stdio transport                                                                                                                            |
 | Embedding     | `ai.embedding.embedText(text)`                                                                                 | 批量用 `embedBatch`                                                                                                                                          |
 | 记忆          | `ai.memory.extract/recall/injectMemories`                                                                      | `extract(..., { signal })` 可取消整条提取链；用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回        |
 | 记忆作用域    | `ai.memory.scoped({ objectId, scope })`                                                                        | **多租户推荐入口**：所有操作自动绑定 objectId/scope（含归属校验）；`clear` 仅清作用域内                                                                      |
@@ -160,7 +160,7 @@ memory:
 | Context 并发  | `createManager({ scope, concurrency: 'reject' \| 'queue' })`                                                   | 默认单活动生成防消息乱序；活动生成期间新 chat 返回 `CONTEXT_BUSY`（reject）或排队（queue）                                                                   |
 | Context 重置  | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })`                       | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词                                                                                                   |
 | 语音识别      | `ai.audio.transcribe` / `transcribeStream`                                                                     | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本                                                                                 |
-| 语音合成      | `ai.audio.synthesize` / `synthesizeStream`                                                                     | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `serializePlayableAudio` 转为浏览器播放负载                         |
+| 语音合成      | `ai.audio.synthesize` / `synthesizeStream`                                                                     | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `ai.serializePlayableAudio` 转为浏览器播放负载                         |
 | 图片生成      | `ai.image.generate({ prompt, size?, model?, referenceImages? })`                                               | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理                                                                                        |
 | A2A           | `ai.a2a.registerExecutor/handleRequest`                                                                        | 延迟初始化 SDK handler                                                                                                                                       |
 
@@ -252,11 +252,11 @@ await ai.llm.ask('翻译这段话', { tempModel: { model: 'gpt-4o', apiKey: proc
 ## MCP 服务器
 
 ```ts
-import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 
 // 用名称 my-server 和版本 1.0.0 创建 MCP Server，此时尚未连接传输。
-const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+const server = ai.createMcpServer({ name: 'my-server', version: '1.0.0' })
 // 登记接收字符串 query 的 search 工具，返回调用方传入查询的文本结果；不合法的注册会抛异常。
 server.registerTool('search', {
   description: '搜索',
@@ -266,7 +266,7 @@ server.registerTool('search', {
 }))
 
 // 以 Core UUID 工厂生成会话标识并连接 HTTP 传输，成功后可处理请求，失败拒绝 Promise。
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: core.id.uuid }))
+await server.connect(new ai.StreamableHTTPServerTransport({ sessionIdGenerator: core.id.uuid }))
 ```
 
 ## 记忆、RAG 与知识库
@@ -426,10 +426,10 @@ for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text:
 }
 ```
 
-需要通过 API 返回浏览器可播放的 Base64 音频时，调用 `serializePlayableAudio(result.data)`；该函数会将 `pcm16` 封装为 WAV，并透传 WAV/MP3，`opus` 不支持该转换。
+需要通过 API 返回浏览器可播放的 Base64 音频时，调用 `ai.serializePlayableAudio(result.data)`；该函数会将 `pcm16` 封装为 WAV，并透传 WAV/MP3，`opus` 不支持该转换。
 
 ```ts
-import { serializePlayableAudio } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
 // 将访谈欢迎语交给默认合成配置，成功返回语音字节，服务失败时保留错误。
 const synthesized = await ai.audio.synthesize({ text: '欢迎参加访谈。' })
@@ -437,7 +437,7 @@ if (!synthesized.success)
   return synthesized
 
 // 把刚合成的字节打包成 Base64 播放负载，PCM16 封为 WAV；不支持的音频格式返回失败。
-const playable = serializePlayableAudio(synthesized.data)
+const playable = ai.serializePlayableAudio(synthesized.data)
 if (!playable.success)
   return playable
 ```
@@ -445,7 +445,7 @@ if (!playable.success)
 - 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。
 - `segment_started` 携带服务端解析 Provider 后的真实输出参数（`format` / `sampleRate?` / `channels?`）；播放器据此解码，不按请求参数猜测格式。
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
-- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`createAudioClient({ url, getTicket })` 通过独立配置的 `getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
+- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`ai.createAudioClient({ url, getTicket })` 通过独立配置的 `getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
 ### 本地 CPU 模型服务
 

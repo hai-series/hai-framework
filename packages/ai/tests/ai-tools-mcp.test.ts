@@ -1,4 +1,4 @@
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ai } from '../src/index.js'
 
@@ -9,7 +9,7 @@ afterEach(async () => {
 
 it('wraps a configured search service and validates its friendly form schema before invoking MCP', async () => {
   expect((await ai.init()).success).toBe(true)
-  const invoke = vi.spyOn(ai.mcp.services, 'invoke').mockImplementation(async () => ok({
+  const invoke = vi.spyOn(ai.mcp.services, 'invoke').mockImplementation(async () => core.ok({
     content: [
       { type: 'text' as const, text: 'Source: https://example.com' },
     ],
@@ -99,7 +99,7 @@ it('在初始化前定义的MCP工具按每次执行时的真实生命周期解�
   try {
     for (const text of ['first instance', 'replacement instance']) {
       expect((await ai.init()).success).toBe(true)
-      const invoke = vi.spyOn(ai.mcp.services, 'invoke').mockResolvedValue(ok({
+      const invoke = vi.spyOn(ai.mcp.services, 'invoke').mockResolvedValue(core.ok({
         content: [
           { type: 'text', text },
         ],

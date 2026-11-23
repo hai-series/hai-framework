@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DeploymentArtifactSchema, normalizeProjectName } from '../src/index.js'
+import { deploy, DeploymentArtifactSchema } from '../src/index.js'
 
 describe('交付角色与项目身份', () => {
   it('网站挂载路径保留在制品中，非法路径和没有Web的路径配置拒绝', () => {
@@ -99,9 +99,9 @@ describe('交付角色与项目身份', () => {
   })
 
   it('项目名使用同一规则且不以通用名或目录名代替无效身份', () => {
-    expect(normalizeProjectName('@example/Order_Portal')).toBe('order-portal')
-    expect(normalizeProjectName('orders-serv')).toBe('orders-serv')
+    expect(deploy.normalizeProjectName('@example/Order_Portal')).toBe('order-portal')
+    expect(deploy.normalizeProjectName('orders-serv')).toBe('orders-serv')
     for (const name of ['', ' ', '@@', '@example/'])
-      expect(() => normalizeProjectName(name)).toThrow()
+      expect(() => deploy.normalizeProjectName(name)).toThrow()
   })
 })

@@ -5,13 +5,7 @@
    */
   import { browser } from '$app/env'
   import { resolve } from '$app/paths'
-  import {
-    applyTheme,
-    getSavedTheme,
-    LanguageSwitch,
-    setGlobalLocale,
-    ThemeSelector,
-  } from '@h-ai/ui'
+  import { LanguageSwitch, ThemeSelector, ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import '../app.css'
@@ -58,13 +52,13 @@
     }
 
     currentLocale = lang
-    setGlobalLocale(lang)
+    ui.setGlobalLocale(lang)
     setLocale(lang)
   }
 
   function handleThemeChange(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 
   $effect(() => {
@@ -73,13 +67,13 @@
     }
 
     const savedLocale = getLocale()
-    const savedTheme = getSavedTheme()
+    const savedTheme = ui.getSavedTheme()
 
     currentLocale = savedLocale as 'zh-CN' | 'en-US' | 'ja-JP'
     currentTheme = savedTheme
 
-    setGlobalLocale(savedLocale)
-    applyTheme(savedTheme, false)
+    ui.setGlobalLocale(savedLocale)
+    ui.applyTheme(savedTheme, false)
   })
 </script>
 

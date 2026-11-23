@@ -2,7 +2,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ToolDefinition } from '@h-ai/tools'
 import type { ToolServiceContext, ToolSet } from '@h-ai/tools/server'
 import type { MCPServiceAuthorization, MCPServiceOperations } from '../mcp/ai-mcp-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
@@ -43,7 +43,7 @@ export function createMcpTools(options: McpToolOptions, services: () => MCPServi
         resultHandler: async (input, { signal }) => {
           const args = z.record(z.string(), z.unknown()).safeParse(input)
           if (!args.success)
-            return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+            return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
           const result = await services().invoke({ serviceId: definition.serviceId, tool: definition.tool, arguments: args.data }, {
             principal: options.context.scope,
             taskId: options.context.sessionId,
@@ -53,12 +53,12 @@ export function createMcpTools(options: McpToolOptions, services: () => MCPServi
           if (!result.success)
             return result
           if (result.data.isError)
-            return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
-          return ok(result.data)
+            return core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
+          return core.ok(result.data)
         },
       })
     })
-    return ok({
+    return core.ok({
       tools: definitions,
       groups: [
         {
@@ -70,6 +70,6 @@ export function createMcpTools(options: McpToolOptions, services: () => MCPServi
     })
   }
   catch (cause) {
-    return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'), cause)
+    return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'), cause)
   }
 }

@@ -1,10 +1,11 @@
 /** 自托管 ALTCHA 挑战；共享 Cache 持有签名秘密与单用状态，不提供通用策略层。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { CaptchaOperation, IamCaptchaChallenge } from './iam-authn-types.js'
 import { randomBytes, randomInt } from 'node:crypto'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createChallenge, pbkdf2, verifySolution } from 'altcha/lib'
 import { z } from 'zod'
 import { iamM } from '../iam-i18n.js'
@@ -53,10 +54,10 @@ interface StoredCaptcha {
  */
 export async function createIamCaptcha(config: IamConfig['captcha'], input: { operation: CaptchaOperation }): Promise<HaiResult<IamCaptchaChallenge>> {
   if (!config.enabled)
-    return err(HaiIamError.CAPTCHA_DISABLED, iamM('iam_captchaDisabled'))
+    return core.err(HaiIamError.CAPTCHA_DISABLED, iamM('iam_captchaDisabled'))
   const operation = operationSchema.safeParse(input?.operation)
   if (!operation.success)
-    return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+    return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
   try {
     const id = randomBytes(32).toString('hex')
     const signatureSecret = randomBytes(32).toString('hex')
@@ -79,12 +80,12 @@ export async function createIamCaptcha(config: IamConfig['captcha'], input: { op
     }
     const saved = await cache.kv.set(`${prefix}${id}`, record, { nx: true, ex: config.ttlSeconds })
     if (!saved.success || !saved.data)
-      return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
-    return ok({ id, challenge })
+      return core.err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
+    return core.ok({ id, challenge })
   }
   catch (error) {
     logger.error('Captcha challenge generation failed', { operation: operation.data, error })
-    return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
+    return core.err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
   }
 }
 
@@ -102,28 +103,28 @@ export async function createIamCaptcha(config: IamConfig['captcha'], input: { op
  */
 export async function verifyIamCaptcha(config: IamConfig['captcha'], operation: CaptchaOperation, proof?: string): Promise<HaiResult<void>> {
   if (!config.enabled)
-    return ok(undefined)
+    return core.ok(undefined)
   if (!proof)
-    return err(HaiIamError.CAPTCHA_REQUIRED, iamM('iam_captchaRequired'))
+    return core.err(HaiIamError.CAPTCHA_REQUIRED, iamM('iam_captchaRequired'))
   if (typeof proof !== 'string' || proof.length > 4096)
-    return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+    return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
   let payload: z.output<typeof proofSchema>
   try {
     const parsed = proofSchema.safeParse(JSON.parse(proof))
     if (!parsed.success)
-      return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+      return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
     payload = parsed.data
   }
   catch {
-    return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+    return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
   }
   try {
     const key = `${prefix}${payload.id}`
     const found = await cache.kv.get<StoredCaptcha>(key)
     if (!found.success)
-      return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
+      return core.err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
     if (!found.data || found.data.operation !== operation)
-      return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+      return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
     const record = found.data
     const result = await verifySolution({
       challenge: record.challenge,
@@ -133,16 +134,16 @@ export async function verifyIamCaptcha(config: IamConfig['captcha'], operation: 
       hmacKeySignatureSecret: record.keySecret,
     })
     if (!result.verified)
-      return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+      return core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
     const removed = await cache.kv.del(key)
     if (!removed.success)
-      return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
+      return core.err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
     return removed.data === 1
-      ? ok(undefined)
-      : err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+      ? core.ok(undefined)
+      : core.err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
   }
   catch (error) {
     logger.error('Captcha verification failed', { operation, error })
-    return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
+    return core.err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
   }
 }

@@ -1,8 +1,8 @@
 import type { FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
 import type { FeedbackBrowserClient, FeedbackClientAttachment, FeedbackClientConfig, FeedbackClientSubmitInput, FeedbackDraft } from './feedback-client-types.js'
-import { FeedbackBudgetSchema, FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, err, ok } from '@h-ai/core'
+import { apiContract, FeedbackBudgetSchema, FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema } from '@h-ai/api-contract/feedback'
+import { core } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
 import { saveFeedbackFile } from './feedback-client-files.js'
@@ -52,8 +52,8 @@ function feedbackFileContentType(file: File): string | undefined {
  * 创建独立浏览器采集会话；默认不持久化、不录制页面回放，不采集请求正文。
  * @example
  * ```ts
- * import { createFeedbackClient } from '@h-ai/feedback/client'
- * const client = createFeedbackClient()
+ * import { feedback } from '@h-ai/feedback/client'
+ * const client = feedback.createClient()
  * const draft = client.getDraft()
  * await client.close()
  * ```
@@ -64,7 +64,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let sessionVersion = 0
   let policyVerified = false
   let preparedPage = ''
-  let budget = resolveFeedbackBudget()
+  let budget = apiContract.resolveFeedbackBudget()
   const previews = new Map<string, { checksum: string, url: string }>()
   let discardOnClose = false
   let saveController = new AbortController()
@@ -161,7 +161,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         ? 'warn'
         : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
     }
-    return err({
+    return core.err({
       ...error,
       message: core.error.formatMessage(error),
     })
@@ -274,7 +274,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
 
   async function init(input: FeedbackClientConfig): Promise<HaiResult<void>> {
     if (initializing)
-      return err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
+      return core.err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
     initializing = true
     try {
       if (config || closePromise)
@@ -318,13 +318,13 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       const initVersion = sessionVersion
       const policy = input.actions.policy
         ? await input.actions.policy().catch(() => failure('OPERATION_FAILED'))
-        : ok(input.budget ?? resolveFeedbackBudget())
+        : core.ok(input.budget ?? apiContract.resolveFeedbackBudget())
       if (initVersion !== sessionVersion)
         return failure('NOT_INITIALIZED')
       policyVerified = policy.success
       budget = FeedbackBudgetSchema.parse(policy.success
         ? policy.data
-        : input.budget ?? resolveFeedbackBudget())
+        : input.budget ?? apiContract.resolveFeedbackBudget())
       if (!policy.success)
         missing.add('server-policy-unavailable')
       config = input
@@ -454,7 +454,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (draft?.report && !collectionFinished && Date.now() >= nextBackgroundFlush)
           void runFlush()
       }, 1000)
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       await close()
@@ -619,7 +619,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       replayRequested = true
       if (config.replay && !stopReplay)
         await startReplay(config)
-      return ok(draft)
+      return core.ok(draft)
     }
     collectionFinished = false
     collectionSealed = false
@@ -708,7 +708,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       await startReplay(config)
     schedulePersist()
     preparedPage = pageIdentity()
-    return ok(draft)
+    return core.ok(draft)
   }
 
   function prepare(): Promise<HaiResult<FeedbackDraft>> {
@@ -756,7 +756,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       : undefined
     const previousChecksum = previous?.checksum
     if (current.submission)
-      return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+      return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
     if (attachmentId && (!previous || !previous.contentType.startsWith('image/')))
       return failure('INVALID_INPUT')
     if (!previous && current.attachments.length >= budget.maxAttachmentCount)
@@ -770,7 +770,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         : `${previous.name}.png`)
       const image = await attachment(name ?? previousName ?? `screenshot-${core.id.uuid()}.png`, 'image/png', bytes)
       if (closing || config !== activeConfig || draft !== current || current.submission || (previous && (!current.attachments.includes(previous) || previous.checksum !== previousChecksum)))
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
       if (current.attachments.reduce((total, item) => total + (item === previous
         ? 0
         : item.size), image.size) > budget.maxAttachmentsBytes) {
@@ -791,7 +791,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         recordEnvironment()
       preparedPage = pageIdentity()
       schedulePersist()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       return failure('OPERATION_FAILED', cause)
@@ -805,7 +805,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     const prepared = preparePromise
       ? await preparePromise
       : draft
-        ? ok(draft)
+        ? core.ok(draft)
         : await prepare()
     if (!prepared.success)
       return prepared
@@ -840,7 +840,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
       if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
       if (!current.submission && input.removedAttachmentIds?.length)
         current.attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
       if (!current.submission) {
@@ -889,11 +889,11 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (!config || !draft?.report)
       return failure('NOT_INITIALIZED')
     if (collectionFinished)
-      return ok(undefined)
+      return core.ok(undefined)
     try {
       for (const item of draft.attachments) {
         if (discardOnClose)
-          return ok(undefined)
+          return core.ok(undefined)
         if (uploadedIds.has(item.id))
           continue
         const result = await config.actions.upload({
@@ -908,7 +908,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       let drainPasses = 0
       while (true) {
         if (discardOnClose)
-          return ok(undefined)
+          return core.ok(undefined)
         if (closing || Date.now() >= deadline || afterCount >= limits().after)
           collectionSealed = true
         const pending = draft.evidence.filter(item => !initialIds.has(item.id)).slice(0, 200)
@@ -923,7 +923,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           return failure()
         drainPasses++
         if (drainPasses >= budget.maxAttachmentCount)
-          return ok(undefined)
+          return core.ok(undefined)
       }
       if (collectionSealed && !discardOnClose) {
         const result = await config.actions.completeCollection({
@@ -947,7 +947,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           await deleteFeedbackDraft(storageKey)
       }
       schedulePersist()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       return failure('OPERATION_FAILED', cause)
@@ -1004,10 +1004,10 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       }
       // 渲染/摘要结束后再原子替换；提交、关闭、删除或另一标注不能被旧异步结果覆盖。
       if (closing || draft !== current || current.submission || !current.attachments.includes(item) || item.bytes !== originalBytes)
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
       Object.assign(item, updated, { id })
       schedulePersist()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       return failure('OPERATION_FAILED', cause)
@@ -1018,7 +1018,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (!draft)
       return failure('NOT_INITIALIZED')
     if (draft.submission && (files.length || removedAttachmentIds.length))
-      return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
+      return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
     const current = draft
     const items: FeedbackClientAttachment[] = []
     const newMissing: string[] = []
@@ -1049,9 +1049,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       }
       // 读取/摘要计算期间草稿可能切换或冻结；失败批次不能留下附件或缺失标记。
       if (draft !== current || closing)
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
       if (current.submission && (files.length || removedAttachmentIds.length))
-        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
       // 在最新附件上合并，保留读取期间另一成功批次的新增项；最终校验与提交之间没有 await。
       const merged = current.attachments.filter(file => !removedAttachmentIds.includes(file.id))
       for (const item of items) {
@@ -1063,7 +1063,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       current.attachments = merged
       current.missing.push(...newMissing)
       schedulePersist()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       return failure('INVALID_INPUT', cause)
@@ -1074,7 +1074,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (!draft)
       return failure('NOT_INITIALIZED')
     try {
-      const { createFeedbackBundle } = await import('../bundle/index.js')
+      const { feedback: bundleFeedback } = await import('../bundle/index.js')
       const attachments = [...draft.attachments]
       if (!draft.submission) {
         const added = await addFiles(input.files ?? [])
@@ -1102,7 +1102,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             attachments.push(item)
         }
       }
-      return createFeedbackBundle({
+      return bundleFeedback.createBundle({
         maxBytes: budget.maxTotalBytes,
         report: {
           ...(draft.report ?? {
@@ -1236,8 +1236,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
  * 默认浏览器采集会话。
  * @example
  * ```ts
- * import { feedbackClient } from '@h-ai/feedback/client'
- * const draft = feedbackClient.getDraft()
+ * import { feedback } from '@h-ai/feedback/client'
+ * const draft = feedback.client.getDraft()
  * ```
  */
 export const feedbackClient = createFeedbackClient()

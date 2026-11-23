@@ -55,7 +55,7 @@ it('emits downstream server declarations through serv and kit public namespaces'
 import type { KitFunctions } from '@h-ai/kit'
 import type { ServContext, ServFunctions } from '@h-ai/serv'
 import { apiContract } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { serv } from '@h-ai/serv'
 import { z } from 'zod'
@@ -85,7 +85,7 @@ export const createMemoryRateLimitStore = kit.middleware.createMemoryRateLimitSt
 const contract = apiContract.create({
   ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),
 })
-export const procedures = serv.implement(contract).context<ServContext>().route('ping', () => ok('ready')).build()
+export const procedures = serv.implement(contract).context<ServContext>().route('ping', () => core.ok('ready')).build()
 `)
   const checker = program.getTypeChecker()
   const file = program.getSourceFile(filename)

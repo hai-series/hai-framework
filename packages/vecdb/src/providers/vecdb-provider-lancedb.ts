@@ -13,10 +13,10 @@ import type {
   VectorDocument,
   VectorSearchResult,
 } from '../vecdb-types.js'
-import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 import { createRequire } from 'node:module'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
@@ -47,13 +47,13 @@ function buildMetadataPredicate(filter: Record<string, unknown>): HaiResult<stri
   if (typeof filter !== 'object' || filter === null || Array.isArray(filter)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(filter))
     || Reflect.ownKeys(filter).some(key => typeof key !== 'string')) {
-    return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
+    return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
   }
   const predicates: string[] = []
   for (const [key, value] of Object.entries(filter)) {
     if (value !== null && typeof value !== 'string' && typeof value !== 'boolean'
       && !(typeof value === 'number' && Number.isFinite(value))) {
-      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
+      return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
     }
     // json_get 只接受字面量顶层键（包括空键）；不把用户键解释为 JSONPath。
     const extracted = `json_extract(json_get(metadata, '${escapeLanceSqlValue(key)}'), '$')`
@@ -63,7 +63,7 @@ function buildMetadataPredicate(filter: Record<string, unknown>): HaiResult<stri
       ? `TRY_CAST(${extracted} AS DOUBLE) = CAST(${value} AS DOUBLE)`
       : `${extracted} = '${escapeLanceSqlValue(JSON.stringify(value))}'`)
   }
-  return ok(predicates.join(' AND '))
+  return core.ok(predicates.join(' AND '))
 }
 
 /**
@@ -115,11 +115,11 @@ export function createLancedbProvider(): VecdbProvider {
   function loadLancedb(): HaiResult<typeof import('@lancedb/lancedb')> {
     try {
       const mod = require('@lancedb/lancedb') as typeof import('@lancedb/lancedb')
-      return ok(mod)
+      return core.ok(mod)
     }
     catch (error) {
       logger.error('Failed to load @lancedb/lancedb', { error })
-      return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+      return core.err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
         params: { driver: '@lancedb/lancedb' },
       }), error)
     }
@@ -128,7 +128,7 @@ export function createLancedbProvider(): VecdbProvider {
   /** 每次读取最新表定义；空表、外部重建与其它连接写入都不依赖进程缓存。 */
   async function withCollection<T>(name: string, action: (table: Table, meta: CollectionMeta) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
     if (!(await connection!.tableNames()).includes(name)) {
-      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+      return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
         params: { name },
       }))
     }
@@ -139,7 +139,7 @@ export function createLancedbProvider(): VecdbProvider {
       const metric = DistanceMetricSchema.safeParse(schema.metadata.get(COLLECTION_METRIC_KEY) ?? null)
       if (!vectorType || !('listSize' in vectorType) || typeof vectorType.listSize !== 'number'
         || !Number.isInteger(vectorType.listSize) || vectorType.listSize <= 0 || !metric.success) {
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
           params: { name },
         }))
       }
@@ -173,7 +173,7 @@ export function createLancedbProvider(): VecdbProvider {
 
   /** 创建统一的维度不匹配错误结果 */
   function createDimensionMismatchResult<T>(expected: number, actual: number): HaiResult<T> {
-    return err(
+    return core.err(
       HaiVecdbError.DIMENSION_MISMATCH,
       vecdbM('vecdb_dimensionMismatch', {
         params: {
@@ -207,11 +207,11 @@ export function createLancedbProvider(): VecdbProvider {
   /** 所有新增写入都参与原生主键冲突检测；源批内重复 ID 的 merge 语义未定义，必须先拒绝。 */
   function validateAtomicWrite(meta: CollectionMeta, documents: VectorDocument[]): HaiResult<void> | null {
     if (!meta.inputSchema)
-      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
+      return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
     if (!meta.atomicWrites)
-      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_atomicUpsertUnavailable'))
+      return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_atomicUpsertUnavailable'))
     if (new Set(documents.map(document => document.id)).size !== documents.length)
-      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_duplicateDocumentIds'))
+      return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_duplicateDocumentIds'))
     return null
   }
 
@@ -231,7 +231,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (tableNames.includes(name)) {
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+        return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
           params: { name },
         }))
       }
@@ -239,7 +239,7 @@ export function createLancedbProvider(): VecdbProvider {
       const dimension = options.dimension
       const parsedMetric = DistanceMetricSchema.safeParse(options.metric ?? config?.metric)
       if (!parsedMetric.success) {
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+        return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
           params: { name },
         }))
       }
@@ -275,7 +275,7 @@ export function createLancedbProvider(): VecdbProvider {
       table.close()
 
       logger.info('Collection created', { name, dimension, metric })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async drop(name) {
@@ -283,7 +283,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (!tableNames.includes(name)) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
           params: { name },
         }))
       }
@@ -291,20 +291,20 @@ export function createLancedbProvider(): VecdbProvider {
       await connection!.dropTable(name)
 
       logger.info('Collection dropped', { name })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async exists(name) {
       logger.debug('Checking collection exists', { name })
 
       const tableNames = await connection!.tableNames()
-      return ok(tableNames.includes(name))
+      return core.ok(tableNames.includes(name))
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      return withCollection(name, async (table, meta) => ok({
+      return withCollection(name, async (table, meta) => core.ok({
         name,
         dimension: meta.dimension,
         metric: meta.metric,
@@ -316,7 +316,7 @@ export function createLancedbProvider(): VecdbProvider {
       logger.debug('Listing collections')
 
       const tableNames = await connection!.tableNames()
-      return ok(tableNames)
+      return core.ok(tableNames)
     },
   }
 
@@ -364,7 +364,7 @@ export function createLancedbProvider(): VecdbProvider {
         await table.mergeInsert('id').whenNotMatchedInsertAll().execute(batch)
 
         logger.info('Vectors inserted', { collection, count: documents.length })
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
 
@@ -391,7 +391,7 @@ export function createLancedbProvider(): VecdbProvider {
           .execute(batch)
 
         logger.info('Vectors upserted', { collection, count: documents.length })
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
 
@@ -403,7 +403,7 @@ export function createLancedbProvider(): VecdbProvider {
         await table.delete(`id IN (${idList})`)
 
         logger.info('Vectors deleted', { collection, count: ids.length })
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
 
@@ -425,7 +425,7 @@ export function createLancedbProvider(): VecdbProvider {
 
         if (options?.filter !== undefined) {
           if (!meta.inputSchema)
-            return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
+            return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
           const predicate = buildMetadataPredicate(options.filter)
           if (!predicate.success)
             return predicate
@@ -455,7 +455,7 @@ export function createLancedbProvider(): VecdbProvider {
           })
           .filter((r: VectorSearchResult) => r.score >= minScore)
 
-        return ok(searchResults)
+        return core.ok(searchResults)
       })
     },
 
@@ -464,7 +464,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       return withCollection(collection, async (table) => {
         const count = await table.countRows()
-        return ok(count)
+        return core.ok(count)
       })
     },
 
@@ -475,7 +475,7 @@ export function createLancedbProvider(): VecdbProvider {
           query.where(`id > '${escapeLanceSqlValue(cursor)}'`)
         const rows: Array<{ id: string }> = await query.toArray()
         const items = rows.slice(0, limit).map(row => ({ id: row.id }))
-        return ok({
+        return core.ok({
           items,
           nextCursor: rows.length > limit
             ? items.at(-1)?.id
@@ -492,7 +492,7 @@ export function createLancedbProvider(): VecdbProvider {
 
     async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'lancedb') {
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+        return core.err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
           params: { type: cfg.type },
         }))
       }
@@ -510,14 +510,14 @@ export function createLancedbProvider(): VecdbProvider {
         config = lanceConfig
 
         logger.info('LanceDB connected', { path: lanceConfig.path })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         connection?.close()
         connection = null
         config = null
         logger.error('Failed to connect to LanceDB', { error })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+        return core.err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
           params: {
             error: String(error),
           },
@@ -530,7 +530,7 @@ export function createLancedbProvider(): VecdbProvider {
       connection = null
       config = null
       logger.info('LanceDB connection closed')
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     isConnected(): boolean {

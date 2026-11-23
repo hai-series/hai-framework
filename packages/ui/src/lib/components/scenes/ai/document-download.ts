@@ -95,8 +95,8 @@ export interface AiDocumentDownloadRequest {
  *
  * @example
  * ```ts
- * import { resolveDocumentMarkdownContent } from '@h-ai/ui'
- * const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
+ * import { ui } from '@h-ai/ui'
+ * const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
  * // 裸代码会包装成足够长的 Markdown fence，保留源码中的反引号。
  * ```
  */
@@ -128,8 +128,8 @@ export function resolveDocumentMarkdownContent(
  *
  * @example
  * ```ts
- * import { resolveDocumentDownloadActions } from '@h-ai/ui'
- * const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown', badgeLabel: 'MD' }])
+ * import { ui } from '@h-ai/ui'
+ * const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown', badgeLabel: 'MD' }])
  * ```
  */
 export function resolveDocumentDownloadActions(
@@ -164,8 +164,8 @@ export function resolveDocumentDownloadActions(
  *
  * @example
  * ```ts
- * import { downloadAiDocument } from '@h-ai/ui'
- * await downloadAiDocument({ actionId: 'markdown', content: '# 报告\n正文', title: '报告', filename: 'report.md', sourceKind: 'document' })
+ * import { ui } from '@h-ai/ui'
+ * await ui.downloadAiDocument({ actionId: 'markdown', content: '# 报告\n正文', title: '报告', filename: 'report.md', sourceKind: 'document' })
  * ```
  */
 export async function downloadAiDocument(

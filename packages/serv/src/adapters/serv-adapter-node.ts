@@ -43,8 +43,8 @@ export const DEFAULT_SERV_PORT = 3000
  *
  * @example
  * ```ts
- * import type { ServListenOptions } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServListenOptions, serv } from '@h-ai/serv'
  *
  * const options: ServListenOptions = { host: '127.0.0.1', port: 3000 }
  * // HOST/PORT 与配置文件的解析由应用显式完成后传入。
@@ -85,8 +85,8 @@ export interface ServListenOptions {
  *
  * @example
  * ```ts
- * import type { ServNodeServer } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServNodeServer, serv } from '@h-ai/serv'
  *
  * async function stop(handle: ServNodeServer) {
  *   await handle.close()
@@ -116,9 +116,9 @@ export interface ServNodeServer {
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { serv } from '@h-ai/serv'
+ * import { type ServContext, serv } from '@h-ai/serv'
  *
  * const contract = apiContract.create({})
  * const procedures = serv.implement(contract).context<ServContext>().build()

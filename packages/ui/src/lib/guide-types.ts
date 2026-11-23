@@ -113,9 +113,9 @@ export interface GuideOptions {
  *
  * @example
  * ```ts
- * import { createGuide } from '@h-ai/ui'
- * import type { GuideController } from '@h-ai/ui'
- * const guide: GuideController = createGuide({ tours: [], articles: [{ id: 'start', title: '开始', content: '# 操作说明' }], persistence: 'memory' })
+ * import { type GuideController, ui } from '@h-ai/ui'
+ *
+ * const guide: GuideController = ui.createGuide({ tours: [], articles: [{ id: 'start', title: '开始', content: '# 操作说明' }], persistence: 'memory' })
  * guide.openHelp('start')
  * guide.closeHelp()
  * guide.stop()

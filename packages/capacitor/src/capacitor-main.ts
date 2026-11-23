@@ -9,13 +9,13 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { CameraOperations, CapacitorFunctions, DeviceOperations, PreferencesOperations, PushOperations, StatusBarOperations } from './capacitor-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { takePhoto } from './capacitor-camera.js'
 import { getAppVersion, getDeviceInfo } from './capacitor-device.js'
 import { capacitorM } from './capacitor-i18n.js'
 import { closePushListeners, listenPush, registerPush } from './capacitor-push.js'
 import { configureStatusBar, hideStatusBar, showStatusBar } from './capacitor-status-bar.js'
-import { safeGetPreference, safeRemovePreference, safeSetPreference } from './capacitor-token-storage.js'
+import { createCapacitorTokenStorage, safeGetPreference, safeRemovePreference, safeSetPreference } from './capacitor-token-storage.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'main' })
@@ -107,11 +107,12 @@ function isCapacitorAvailable(): boolean {
  * ```
  */
 export const capacitor: CapacitorFunctions = {
+  createTokenStorage: createCapacitorTokenStorage,
   async init(): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Capacitor init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiCapacitorError.INIT_IN_PROGRESS,
         capacitorM('capacitor_initInProgress'),
       )
@@ -129,7 +130,7 @@ export const capacitor: CapacitorFunctions = {
       // 先重试上次关闭未释放的句柄，不把资源清理失败隐藏成新的初始化成功。
       const cleaned = await closePushListeners()
       if (initGeneration !== lifecycleGeneration)
-        return err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
+        return core.err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
       if (!cleaned.success)
         return cleaned
 
@@ -137,7 +138,7 @@ export const capacitor: CapacitorFunctions = {
 
       if (!isCapacitorAvailable()) {
         logger.error('Capacitor is not available in current environment')
-        return err(
+        return core.err(
           HaiCapacitorError.NOT_AVAILABLE,
           capacitorM('capacitor_notAvailable'),
         )
@@ -147,11 +148,11 @@ export const capacitor: CapacitorFunctions = {
       const platform = Capacitor.getPlatform()
 
       if (initGeneration !== lifecycleGeneration)
-        return err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
+        return core.err(HaiCapacitorError.INIT_FAILED, capacitorM('capacitor_initFailed'))
 
       if (!platform) {
         logger.error('Capacitor initialization failed, platform not detected')
-        return err(
+        return core.err(
           HaiCapacitorError.INIT_FAILED,
           capacitorM('capacitor_initFailed'),
         )
@@ -160,11 +161,11 @@ export const capacitor: CapacitorFunctions = {
       cachedPlatform = platform
       initialized = true
       logger.info('Capacitor module initialized', { platform })
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (cause) {
       logger.error('Capacitor module initialization failed', { error: cause })
-      return err(
+      return core.err(
         HaiCapacitorError.INIT_FAILED,
         capacitorM('capacitor_initFailed'),
         cause,
@@ -184,7 +185,7 @@ export const capacitor: CapacitorFunctions = {
     if (!cleaned.success)
       return cleaned
     logger.info('Capacitor module closed')
-    return ok(undefined)
+    return core.ok(undefined)
   },
 
   getPlatform(): string {

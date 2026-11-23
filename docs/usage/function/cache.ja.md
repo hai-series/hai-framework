@@ -191,9 +191,10 @@ JSON の保存内容を比較し、同じ操作で更新します。2 回目の�
 
 #### 利用例：Redis Cluster の走査と一括操作
 
-初期化済みの Redis Cluster を使います。`demo:user:*` でユーザーのキーを検索し、`count: 100` で各走査の作業量の目安を渡します。各呼び出しは `[nextCursor, batch]` を返し、次回は `nextCursor` を使います。一致するキーが `demo:user:1` と `demo:user:2` だけなら、走査完了時のログに見つかった順で二つの論理キーが出ます。この例では `@h-ai/core` から `ok` もインポートします。
+初期化済みの Redis Cluster を使います。`demo:user:*` でユーザーのキーを検索し、`count: 100` で各走査の作業量の目安を渡します。各呼び出しは `[nextCursor, batch]` を返し、次回は `nextCursor` を使います。一致するキーが `demo:user:1` と `demo:user:2` だけなら、走査完了時のログに見つかった順で二つの論理キーが出ます。この例では `@h-ai/core` から `core.ok` もインポートします。
 
 ```ts
+import { core } from '@h-ai/core'
 async function scanUserKeys() {
   const keys = new Set<string>()
   let cursor = '0'
@@ -209,7 +210,7 @@ async function scanUserKeys() {
     cursor = next
   } while (cursor !== '0')
   // 重複を除いたキーを渡し、success: true と data にキー配列を持つ HaiResult を作る。
-  return ok([...keys])
+  return core.ok([...keys])
 }
 const users = await scanUserKeys()
 if (users.success)

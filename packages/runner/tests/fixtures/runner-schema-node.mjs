@@ -1,11 +1,11 @@
 import { on } from 'node:events'
 import process from 'node:process'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner } from '@h-ai/runner'
 
 async function main() {
   const { database, nodeId } = JSON.parse(process.env.HAI_TEST_RUNNER_SCHEMA)
-  const node = createRunner()
+  const node = runner.create()
   const connected = await reldb.init(database)
   if (!connected.success)
     throw new Error(connected.error.message)

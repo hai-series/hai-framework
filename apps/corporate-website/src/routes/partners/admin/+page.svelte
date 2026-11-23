@@ -2,8 +2,8 @@
   import type { PageData } from './$types'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select } from '@h-ai/ui'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select, ui } from '@h-ai/ui'
+
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import * as m from '#lib/paraglide/messages.js'
   import { logoutPartnerAdmin } from '#lib/services/partner-admin.js'
@@ -146,8 +146,8 @@
     }
   }
 
-  useToastFeedback(() => data.loadError)
-  useToastFeedback(() => logoutError)
+  ui.useToastFeedback(() => data.loadError)
+  ui.useToastFeedback(() => logoutError)
 </script>
 
 <svelte:head>

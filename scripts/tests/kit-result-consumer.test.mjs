@@ -7,13 +7,13 @@ import { typecheckVirtualFiles } from '../check-module-jsdoc.mjs'
 it('typed Core HaiResult success/failure can be passed to the published Kit response API', () => {
   const file = resolve('scripts/tests/__kit_result_consumer.ts')
   const source = `
-import { err, HaiCommonError, ok, type HaiResult } from '@h-ai/core'
+import { core, HaiCommonError, type HaiResult } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 export function reply(result: HaiResult<{ id: string }>): Response {
   return kit.response.fromResult(result)
 }
-const success = ok({ id: 'article-1' })
-const failure = err(HaiCommonError.NOT_FOUND, 'Article missing')
+const success = core.ok({ id: 'article-1' })
+const failure = core.err(HaiCommonError.NOT_FOUND, 'Article missing')
 const responses: Response[] = [reply(success), kit.response.fromResult(failure)]
 void responses
 `

@@ -1,17 +1,17 @@
 /** 再鉴别只保存当前页面待确认动作；密码与单次凭据不进入持久存储。 */
 import type { HaiResult } from '@h-ai/core'
-import { err } from '@h-ai/core'
-import { createSensitiveActions } from '@h-ai/ui/components/scenes/iam/index'
+import { core } from '@h-ai/core'
+import { ui } from '@h-ai/ui/components/scenes/iam/index'
 import * as m from '../paraglide/messages.js'
 import { managementAuthActions as authActions } from './api-client.js'
 
-export const sensitiveActions = createSensitiveActions(authActions)
+export const sensitiveActions = ui.createSensitiveActions(authActions)
 
 /** 用途凭据只传给本次 typed client 调用，不使用共享 header。 */
 export async function requestSensitive<T>(operation: string, run: (options: { context: { reauthentication?: string, reauthorize: () => Promise<string | null | undefined> } }) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
   const ticket = await sensitiveActions.authorize(operation)
   if (ticket === null) {
-    return err({
+    return core.err({
       code: 'app:cancelled',
       httpStatus: 400,
       message: m.security_action_cancelled(),

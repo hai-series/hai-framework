@@ -106,7 +106,9 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
       : input,
     writeFile: async (destination: URL, body: string) => { written.push({ destination, body }) },
     sveltekit: () => ({}),
-    autoImportHaiUi: () => ({}),
+    ui: {
+      autoImport: () => ({}),
+    },
     vitePreprocess: () => ({}),
     adapter: () => ({}),
     svelte: () => ({}),

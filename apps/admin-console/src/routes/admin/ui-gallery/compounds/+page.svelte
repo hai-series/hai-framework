@@ -7,9 +7,10 @@
   Card / PageHeader / ToastContainer
 -->
 <script lang='ts'>
+
   import type { FormLabelPosition } from '@h-ai/ui'
   import type { DateValue } from '@internationalized/date'
-  import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
+  import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, ui } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
   import DemoCard from '#lib/components/gallery/DemoCard.svelte'
   import DemoSection from '#lib/components/gallery/DemoSection.svelte'
@@ -328,7 +329,7 @@
       },
       ...mobileFeedItems.slice(0, 4),
     ]
-    toast.success(m.gallery_demo_mobile_list_refreshed())
+    ui.toast.success(m.gallery_demo_mobile_list_refreshed())
   }
 
   async function loadMoreMobileItems() {
@@ -645,7 +646,7 @@
                 {#each mobileFeedItems as item (item.id)}
                   <SwipeCell
                     actions={swipeActions}
-                    onaction={(id: string) => toast.info(`${item.title}: ${id}`)}
+                    onaction={(id: string) => ui.toast.info(`${item.title}: ${id}`)}
                     class='rounded-xl border border-base-200 bg-base-100'
                   >
                     <div class='p-4'>
@@ -707,7 +708,7 @@
       title={m.gallery_demo_choose_an_action()}
       cancelText={m.action_cancel()}
       items={actionSheetItems}
-      onselect={(id: string) => toast.info(m.gallery_demo_selected_value({ value: id }))}
+      onselect={(id: string) => ui.toast.info(m.gallery_demo_selected_value({ value: id }))}
       onclose={() => actionSheetOpen = false}
     />
   </DemoSection>
@@ -743,8 +744,8 @@
             keyField='id'
           >
             {#snippet actions(item: typeof tableData[0])}
-              <Button size='xs' variant='ghost' onclick={() => toast.info(m.gallery_demo_edit_value({ value: item.name }))}>{m.action_edit()}</Button>
-              <Button size='xs' variant='error' onclick={() => toast.info(m.gallery_demo_delete_value({ value: item.name }))}>{m.modules_vecdb_op_delete()}</Button>
+              <Button size='xs' variant='ghost' onclick={() => ui.toast.info(m.gallery_demo_edit_value({ value: item.name }))}>{m.action_edit()}</Button>
+              <Button size='xs' variant='error' onclick={() => ui.toast.info(m.gallery_demo_delete_value({ value: item.name }))}>{m.modules_vecdb_op_delete()}</Button>
             {/snippet}
           </DataTable>
         </div>
@@ -820,8 +821,8 @@
       <div class='space-y-3'>
         <Alert variant='info'>{m.gallery_demo_scheduled_maintenance_starts_tonight_at_22_00_and()}</Alert>
         <Alert variant='success'>{m.gallery_alert_service_healthy()}</Alert>
-        <Button variant='outline' onclick={() => toast.warning(m.gallery_demo_storage_is_90_full_remove_unneeded_files_to())}>{m.gallery_demo_storage_is_90_full_remove_unneeded_files_to()}</Button>
-        <Button variant='outline' onclick={() => toast.error(m.gallery_demo_the_connection_timed_out_check_your_network_and())}>{m.gallery_demo_the_connection_timed_out_check_your_network_and()}</Button>
+        <Button variant='outline' onclick={() => ui.toast.warning(m.gallery_demo_storage_is_90_full_remove_unneeded_files_to())}>{m.gallery_demo_storage_is_90_full_remove_unneeded_files_to()}</Button>
+        <Button variant='outline' onclick={() => ui.toast.error(m.gallery_demo_the_connection_timed_out_check_your_network_and())}>{m.gallery_demo_the_connection_timed_out_check_your_network_and()}</Button>
         <Alert variant='info' title={m.gallery_demo_alert_with_title()}>{m.gallery_demo_this_alert_has_a_title_shown_in_bold()}</Alert>
       </div>
     </DemoCard>
@@ -939,10 +940,10 @@
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_dropdown_menu()}</p>
           <div class='flex flex-wrap items-center gap-4'>
-            <Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k: string) => toast.info(m.gallery_demo_selected_value({ value: k }))}>
+            <Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k: string) => ui.toast.info(m.gallery_demo_selected_value({ value: k }))}>
               {m.gallery_demo_actions()}
             </Dropdown>
-            <Dropdown items={dropdownItems} triggerClass='btn btn-secondary no-animation' position='right' onselect={(k: string) => toast.info(m.gallery_demo_selected_value({ value: k }))}>
+            <Dropdown items={dropdownItems} triggerClass='btn btn-secondary no-animation' position='right' onselect={(k: string) => ui.toast.info(m.gallery_demo_selected_value({ value: k }))}>
               {m.gallery_demo_open_right()}
             </Dropdown>
           </div>
@@ -974,7 +975,7 @@
           ? 'primary'
           : 'outline'} onclick={() => formLabelPosition = 'left'} data-testid='form-label-left'>{m.gallery_form_label_left()}</Button>
       </div>
-      <Form columns={formColumns} labelPosition={formLabelPosition} labelWidth='6rem' onsubmit={() => { toast.success(m.gallery_form_saved()) }} data-testid='form-layout-demo'>
+      <Form columns={formColumns} labelPosition={formLabelPosition} labelWidth='6rem' onsubmit={() => { ui.toast.success(m.gallery_form_saved()) }} data-testid='form-layout-demo'>
         <FormField label={m.gallery_form_name()} required data-testid='form-name-field'>
           <Input name='name' bind:value={formName} required />
         </FormField>

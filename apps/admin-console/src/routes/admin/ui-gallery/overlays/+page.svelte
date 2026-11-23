@@ -7,8 +7,9 @@
   采用分类（DemoSection）+ 可折叠示例卡片（DemoCard，含效果与可复制源码）。
 -->
 <script lang='ts'>
+
   import type { ToastProps } from '@h-ai/ui'
-  import { messageBox, toast } from '@h-ai/ui'
+  import { ui } from '@h-ai/ui'
   import DemoCard from '#lib/components/gallery/DemoCard.svelte'
   import DemoSection from '#lib/components/gallery/DemoSection.svelte'
   import * as m from '#lib/paraglide/messages.js'
@@ -42,7 +43,7 @@
 
   function showToastQueue() {
     for (let index = 1; index <= 3; index++)
-      toast.info(m.gallery_toast_queue_item({ index }), 1000)
+      ui.toast.info(m.gallery_toast_queue_item({ index }), 1000)
   }
 
   // === 覆盖层状态 ===
@@ -196,7 +197,7 @@ await messageBox.alert('这是一条提示信息')
             <Button
               variant='primary'
               onclick={() => {
-                toast.success(m.gallery_demo_confirmed())
+                ui.toast.success(m.gallery_demo_confirmed())
                 modalOpen = false
               }}
             >
@@ -258,7 +259,7 @@ await messageBox.alert('这是一条提示信息')
             <Button
               variant='primary'
               onclick={() => {
-                toast.success(m.gallery_demo_saved())
+                ui.toast.success(m.gallery_demo_saved())
                 drawerOpen = false
               }}
             >
@@ -281,7 +282,7 @@ await messageBox.alert('这是一条提示信息')
             <button
               class='w-full text-left px-4 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm'
               onclick={() => {
-                toast.info(item)
+                ui.toast.info(item)
                 drawerLeftOpen = false
               }}
             >
@@ -306,7 +307,7 @@ await messageBox.alert('这是一条提示信息')
         cancelText={m.action_cancel()}
         variant='warning'
         onconfirm={async () => {
-          toast.success(m.gallery_demo_action_confirmed())
+          ui.toast.success(m.gallery_demo_action_confirmed())
           confirmOpen = false
         }}
         oncancel={() => confirmOpen = false}
@@ -320,7 +321,7 @@ await messageBox.alert('这是一条提示信息')
         cancelText={m.action_cancel()}
         variant='error'
         onconfirm={async () => {
-          toast.success(m.gallery_demo_permanently_deleted())
+          ui.toast.success(m.gallery_demo_permanently_deleted())
           confirmDeleteOpen = false
         }}
         oncancel={() => confirmDeleteOpen = false}
@@ -332,18 +333,18 @@ await messageBox.alert('这是一条提示信息')
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_basic_notification()}</p>
           <div class='flex flex-wrap gap-3'>
-            <Button variant='info' data-testid='toast-type-info' onclick={() => toast.info(m.gallery_toast_type_info())}>{m.gallery_toast_type_info()}</Button>
-            <Button variant='success' data-testid='toast-type-success' onclick={() => toast.success(m.gallery_toast_type_success())}>{m.gallery_toast_type_success()}</Button>
-            <Button variant='warning' data-testid='toast-type-warning' onclick={() => toast.warning(m.gallery_toast_type_warning())}>{m.gallery_toast_type_warning()}</Button>
-            <Button variant='error' data-testid='toast-type-error' onclick={() => toast.error(m.gallery_toast_type_error())}>{m.gallery_toast_type_error()}</Button>
+            <Button variant='info' data-testid='toast-type-info' onclick={() => ui.toast.info(m.gallery_toast_type_info())}>{m.gallery_toast_type_info()}</Button>
+            <Button variant='success' data-testid='toast-type-success' onclick={() => ui.toast.success(m.gallery_toast_type_success())}>{m.gallery_toast_type_success()}</Button>
+            <Button variant='warning' data-testid='toast-type-warning' onclick={() => ui.toast.warning(m.gallery_toast_type_warning())}>{m.gallery_toast_type_warning()}</Button>
+            <Button variant='error' data-testid='toast-type-error' onclick={() => ui.toast.error(m.gallery_toast_type_error())}>{m.gallery_toast_type_error()}</Button>
           </div>
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_custom_duration()}</p>
           <div class='flex flex-wrap gap-3'>
-            <Button variant='primary' outline onclick={() => toast.info(m.gallery_demo_dismiss_after_1_second(), 1000)}>{m.gallery_demo_1_second()}</Button>
-            <Button variant='primary' outline onclick={() => toast.info(m.gallery_demo_dismiss_after_3_seconds(), 3000)}>{m.gallery_demo_3_seconds()}</Button>
-            <Button variant='primary' outline onclick={() => toast.info(m.gallery_demo_dismiss_after_10_seconds(), 10000)}>{m.gallery_demo_10_seconds()}</Button>
+            <Button variant='primary' outline onclick={() => ui.toast.info(m.gallery_demo_dismiss_after_1_second(), 1000)}>{m.gallery_demo_1_second()}</Button>
+            <Button variant='primary' outline onclick={() => ui.toast.info(m.gallery_demo_dismiss_after_3_seconds(), 3000)}>{m.gallery_demo_3_seconds()}</Button>
+            <Button variant='primary' outline onclick={() => ui.toast.info(m.gallery_demo_dismiss_after_10_seconds(), 10000)}>{m.gallery_demo_10_seconds()}</Button>
           </div>
         </div>
       </div>
@@ -363,9 +364,9 @@ await messageBox.alert('这是一条提示信息')
         <div class='space-y-4'>
           <p class='text-base-content/70'>{m.gallery_demo_use_the_buttons_below_to_display_a_toast()}</p>
           <div class='flex flex-wrap gap-3'>
-            <Button variant='success' onclick={() => toast.success(m.gallery_demo_toast_is_visible_above_the_dialog())}>{m.gallery_demo_success_toast()}</Button>
-            <Button variant='info' onclick={() => toast.info(m.gallery_demo_info_toast_is_also_visible_above_the_dialog())}>{m.gallery_demo_info_toast()}</Button>
-            <Button variant='error' onclick={() => toast.error(m.gallery_demo_error_toast_appears_above_the_dialog())}>{m.gallery_demo_error_toast()}</Button>
+            <Button variant='success' onclick={() => ui.toast.success(m.gallery_demo_toast_is_visible_above_the_dialog())}>{m.gallery_demo_success_toast()}</Button>
+            <Button variant='info' onclick={() => ui.toast.info(m.gallery_demo_info_toast_is_also_visible_above_the_dialog())}>{m.gallery_demo_info_toast()}</Button>
+            <Button variant='error' onclick={() => ui.toast.error(m.gallery_demo_error_toast_appears_above_the_dialog())}>{m.gallery_demo_error_toast()}</Button>
           </div>
         </div>
         {#snippet footer()}
@@ -388,10 +389,10 @@ await messageBox.alert('这是一条提示信息')
     <DemoCard title={m.gallery_toast_positions_title()} description={m.gallery_toast_positions_description()} code={codeMessage}>
       <div class='flex flex-wrap gap-3'>
         {#each toastPositions as position (position.value)}
-          <Button outline data-testid={`toast-position-${position.value}`} onclick={() => toast.add({ message: position.label, position: position.value })}>{position.label}</Button>
+          <Button outline data-testid={`toast-position-${position.value}`} onclick={() => ui.toast.add({ message: position.label, position: position.value })}>{position.label}</Button>
         {/each}
         <Button variant='primary' data-testid='toast-queue' onclick={showToastQueue}>{m.gallery_toast_queue()}</Button>
-        <Button variant='ghost' onclick={() => toast.clear()}>{m.gallery_toast_clear()}</Button>
+        <Button variant='ghost' onclick={() => ui.toast.clear()}>{m.gallery_toast_clear()}</Button>
       </div>
     </DemoCard>
 
@@ -400,12 +401,12 @@ await messageBox.alert('这是一条提示信息')
         <Button
           variant='primary'
           onclick={async () => {
-            const ok = await messageBox.confirm({
+            const ok = await ui.messageBox.confirm({
               title: m.gallery_demo_confirm_action(),
               message: m.gallery_demo_continue(),
               confirmText: m.gallery_demo_ok(),
             })
-            toast[ok ? 'success' : 'info'](ok
+            ui.toast[ok ? 'success' : 'info'](ok
               ? m.gallery_demo_confirmed()
               : m.gallery_demo_canceled())
           }}
@@ -415,14 +416,14 @@ await messageBox.alert('这是一条提示信息')
         <Button
           variant='error'
           onclick={async () => {
-            const ok = await messageBox.confirm({
+            const ok = await ui.messageBox.confirm({
               title: m.gallery_demo_delete_confirmation(),
               message: m.gallery_demo_delete_this_item_this_cannot_be_undone(),
               confirmText: m.modules_vecdb_op_delete(),
               confirmVariant: 'error',
             })
             if (ok)
-              toast.success(m.gallery_demo_deleted())
+              ui.toast.success(m.gallery_demo_deleted())
           }}
         >
           {m.gallery_demo_destructive_action_dialog()}
@@ -431,7 +432,7 @@ await messageBox.alert('这是一条提示信息')
           variant='secondary'
           outline
           onclick={async () => {
-            await messageBox.alert(m.gallery_demo_this_message_dialog_has_only_an_ok_button())
+            await ui.messageBox.alert(m.gallery_demo_this_message_dialog_has_only_an_ok_button())
           }}
         >
           {m.gallery_demo_alert_dialog()}
@@ -457,7 +458,7 @@ await messageBox.alert('这是一条提示信息')
       <FeedbackModal
         bind:open={feedbackOpen}
         onsubmit={async () => {
-          toast.success(m.gallery_demo_feedback_submitted_thank_you_for_your_suggestion())
+          ui.toast.success(m.gallery_demo_feedback_submitted_thank_you_for_your_suggestion())
         }}
       />
       <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />

@@ -1,6 +1,6 @@
+import { ui } from '@h-ai/ui'
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { renderMarkdownDocument } from '../src/lib/components/scenes/ai/document-parse.js'
 import { readArtifactTable } from '../src/lib/components/scenes/tools/artifact-data.js'
 import { captureMarkdownEdit } from '../src/lib/components/scenes/tools/artifact-markdown.js'
 import { prepareHtmlPreview } from '../src/lib/components/scenes/tools/artifact-preview.js'
@@ -10,7 +10,7 @@ describe('产物工作台的内容保留', () => {
   it('编辑普通段落时逐字保留代码、Mermaid、HTML 和未编辑块', () => {
     const content = '# 标题\n\n原来的 **正文**。\n\n```ts\nconst n = 1\n```\n\n```mermaid\ngraph TD; A-->B\n```\n\n<div>原始 HTML</div>\n'
     const host = document.createElement('article')
-    host.innerHTML = renderMarkdownDocument(content).blocks.map(block => block.kind === 'html'
+    host.innerHTML = ui.renderMarkdownDocument(content).blocks.map(block => block.kind === 'html'
       ? block.html
       : '<div class="hai-md-mermaid"></div>').join('')
     const editing = captureMarkdownEdit(content, host)
@@ -25,7 +25,7 @@ describe('产物工作台的内容保留', () => {
   it('保留 CRLF 和未知结构，拒绝会丢失原文的回写', () => {
     const content = '# 标题\r\n\r\n正文。\r\n'
     const host = document.createElement('article')
-    host.innerHTML = renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
+    host.innerHTML = ui.renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
     const editing = captureMarkdownEdit(content, host)
     expect(editing.read()).toEqual({ success: true, content })
     host.querySelector('p')!.textContent = '更新。'
@@ -37,7 +37,7 @@ describe('产物工作台的内容保留', () => {
   it('修改段落时保留链接说明、行内代码空格，并转义新输入的列表标记', () => {
     const content = 'Before [Docs](https://example.invalid/ "Helpful") and `  x  `.\n'
     const host = document.createElement('article')
-    host.innerHTML = renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
+    host.innerHTML = ui.renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
     const editing = captureMarkdownEdit(content, host)
     host.querySelector('p')!.firstChild!.textContent = '- After '
     const result = editing.read()
@@ -46,7 +46,7 @@ describe('产物工作台的内容保留', () => {
       return
     expect(result.content).toMatch(/^\\- After/)
     const parsed = document.createElement('div')
-    parsed.innerHTML = renderMarkdownDocument(result.content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
+    parsed.innerHTML = ui.renderMarkdownDocument(result.content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
     expect(parsed.querySelector('a')?.title).toBe('Helpful')
     expect(parsed.querySelector('p > code')?.textContent).toBe(' x ')
     expect(parsed.querySelector('ul')).toBeNull()
@@ -55,7 +55,7 @@ describe('产物工作台的内容保留', () => {
   it('受保护的原始 HTML 文本被修改时明确失败，不静默还原为原文', () => {
     const content = '正文\n\n<div>不可静默丢失的原始 HTML</div>\n'
     const host = document.createElement('article')
-    host.innerHTML = renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
+    host.innerHTML = ui.renderMarkdownDocument(content).blocks.filter(block => block.kind === 'html').map(block => block.html).join('')
     const editing = captureMarkdownEdit(content, host)
     const raw = [...host.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.includes('不可静默'))!
     raw.textContent = '用户改过的 HTML 文字'

@@ -1,6 +1,6 @@
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { DeployCommandState, DeployRecoveryInfo } from './deploy-types.js'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { deployM } from './deploy-i18n.js'
 
@@ -52,8 +52,8 @@ const CommandStateSchema = z.object({
  * @returns 通过结构校验的命令状态，或 undefined
  * @example
  * ```ts
- * import { getDeployCommandState, HaiDeployError } from '@h-ai/deploy'
- * const state = getDeployCommandState({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: 'SSH connection interrupted', ext: { commandExecution: { reason: 'exit', localTermination: 'confirmed', remoteExecution: 'unknown' } } })
+ * import { HaiDeployError, deploy } from '@h-ai/deploy'
+ * const state = deploy.getDeployCommandState({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: 'SSH connection interrupted', ext: { commandExecution: { reason: 'exit', localTermination: 'confirmed', remoteExecution: 'unknown' } } })
  * if (state?.remoteExecution === 'unknown') process.stderr.write('Remote execution is unknown\n')
  * ```
  */
@@ -68,8 +68,8 @@ export function getDeployCommandState(error: HaiError): DeployCommandState | und
  * @returns 安全恢复清单；结构不满足约定时为 undefined。
  * @example
  * ```ts
- * import { getDeployRecovery, HaiDeployError } from '@h-ai/deploy'
- * const recovery = getDeployRecovery({ ...HaiDeployError.PROVISION_FAILED, message: 'Provisioning failed', ext: { recovery: { projectName: 'shop', stage: 'provision', resources: [] } } })
+ * import { HaiDeployError, deploy } from '@h-ai/deploy'
+ * const recovery = deploy.getDeployRecovery({ ...HaiDeployError.PROVISION_FAILED, message: 'Provisioning failed', ext: { recovery: { projectName: 'shop', stage: 'provision', resources: [] } } })
  * if (recovery) {
  *   const stage = recovery.stage
  * }
@@ -95,7 +95,7 @@ export function getDeployRecovery(error: HaiError): DeployRecoveryInfo | undefin
  * ```
  */
 export function recoveryFailure(error: HaiError, recovery: DeployRecoveryInfo): HaiResult<never> {
-  return err({
+  return core.err({
     code: error.code,
     httpStatus: error.httpStatus,
     system: error.system,

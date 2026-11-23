@@ -1,6 +1,6 @@
 <script lang='ts'>
-  import { Button, Card } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, Card, ui } from '@h-ai/ui'
+
   // 文件语音识别面板：上传 WAV/MP3 一次性转写为文本
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
@@ -38,7 +38,7 @@
     catch (cause) {
       if (request.signal.aborted)
         return
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -47,7 +47,7 @@
     }
   }
   $effect(() => () => controller?.abort())
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>

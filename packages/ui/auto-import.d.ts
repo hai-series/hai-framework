@@ -13,7 +13,7 @@ type AutoImportHaiUiPreprocessor = {
   markup: AutoImportMarkup
 }
 
-export function autoImportHaiUi(): AutoImportHaiUiPreprocessor
+export const ui: { autoImport: () => AutoImportHaiUiPreprocessor }
 
 declare global {
   const Chart: typeof import('@h-ai/ui')['Chart']

@@ -1,10 +1,11 @@
 import type { FeedbackConfigInput } from './feedback-config.js'
 import type { FeedbackRuntime } from './feedback-functions.js'
 import type { FeedbackFunctions, FeedbackInitOptions } from './feedback-types.js'
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, err, ok } from '@h-ai/core'
+import { apiContract } from '@h-ai/api-contract/feedback'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
+import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from './bundle/feedback-bundle-functions.js'
 import { createFeedbackCapture } from './feedback-capture.js'
 import { FeedbackConfigSchema } from './feedback-config.js'
 import { createFeedbackOperations } from './feedback-functions.js'
@@ -39,9 +40,14 @@ const inFlight = new Set<Promise<unknown>>()
  * ```
  */
 export const feedback: FeedbackFunctions = {
+  createBundle: createFeedbackBundle,
+  getBundleViewerFiles: getFeedbackBundleViewerFiles,
+  queryBundle: queryFeedbackBundle,
+  readBundle: readFeedbackBundle,
+  summarizeBundle: summarizeFeedbackBundle,
   async init(config: FeedbackConfigInput, options: FeedbackInitOptions = {}) {
     if (initializing)
-      return err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
+      return core.err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
     initializing = true
     const epoch = ++generation
     let candidateCapture: ReturnType<typeof createFeedbackCapture> | undefined
@@ -92,12 +98,12 @@ export const feedback: FeedbackFunctions = {
       current = { operations, capture: candidateCapture, config: parsed.data }
       operations.start()
       core.logger.info('Feedback module initialized', { module: 'feedback', appId: parsed.data.appId })
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch {
       if (candidateCapture)
         await candidateCapture.close()
-      return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+      return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
     }
     finally {
       initializing = false
@@ -112,10 +118,10 @@ export const feedback: FeedbackFunctions = {
       await Promise.allSettled([...inFlight])
       await closing
       await previous?.capture.close()
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch {
-      return err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+      return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
     }
   },
   get isInitialized() {
@@ -131,7 +137,7 @@ export const feedback: FeedbackFunctions = {
       : null
   },
   get budget() {
-    return resolveFeedbackBudget(current?.config)
+    return apiContract.resolveFeedbackBudget(current?.config)
   },
   submit: (input, actor) => guarded(() => (current?.operations ?? unavailable).submit(input, actor)),
   list: (input, actor) => guarded(() => (current?.operations ?? unavailable).list(input, actor)),
@@ -167,7 +173,7 @@ async function guarded<T>(work: () => Promise<import('@h-ai/core').HaiResult<T>>
     return await promise
   }
   catch {
-    return err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+    return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
   }
   finally {
     inFlight.delete(promise)

@@ -82,10 +82,10 @@ API Provider 只接受 HTTP(S) URL。回调地址若来自不可信输入，业�
 ### 2. 初始化与关闭
 
 ```typescript
-import { cache, CacheConfigSchema } from '@h-ai/cache'
+import { CacheConfigSchema, cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { reach, ReachConfigSchema } from '@h-ai/reach'
-import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { ReachConfigSchema, reach } from '@h-ai/reach'
+import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
 
 // 当前配置启用了 delay：数据库和队列表为必需依赖。
 // 从配置中心校验 db。成功 data 是延迟发送所需的数据库配置。

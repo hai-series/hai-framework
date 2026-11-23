@@ -7,40 +7,32 @@
 ## Quick start
 
 Use Serv to mount a typed HTTP contract in a standalone Node server. Configure authentication, transport encryption and trusted request parsing before listening.
+The root `serv` object includes the built-in procedure factories for IAM, Storage, AI and Feedback.
 
 ```ts
-import type { ServConfig } from '@h-ai/serv'
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
+import { type ServConfig, serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 
 export function startApi(closeApp: () => Promise<void>) {
-  // 用三个模块的契约生成 HTTP 路由契约。
-  // Compose the supplied IAM, storage, and AI contracts. Returns a single route contract without starting a server.
+  // Combine the IAM, Storage and AI route contracts.
   const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
-  // 将已初始化的业务模块绑定为实现；存储检查所有 key 的归属。
+  // Bind initialized services to the routes and authorize each storage key.
   const procedures = {
-    // Bind the initialized IAM instance to procedures for the IAM routes. The procedures surface authentication and permission failures.
-    iam: createIamProcedures({ iam }),
-    // Bind storage routes to the initialized storage service. The supplied authorization check rejects keys outside the session user's prefix.
-    storage: createStorageProcedures({
+    iam: serv.createIamProcedures({ iam }),
+    storage: serv.createStorageProcedures({
       storage,
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
-    // Bind the initialized AI service to the AI request procedures. Calls return results from that service.
-    ai: createAiProcedures({ ai }),
+    ai: serv.createAiProcedures({ ai }),
   }
 
-  // 使用契约、实现和 HTTP 设置构建 App。
-  // Build an HTTP app from the contract and its procedures. The supplied HTTP paths register the API, OpenAPI JSON, and documentation.
+  // Build the HTTP app and set the API and documentation paths.
   const app = serv.createApp({
     contract,
     procedures,
@@ -52,14 +44,11 @@ export function startApi(closeApp: () => Promise<void>) {
     },
   })
 
-  // 读取已加载的监听配置，返回包含地址和 close() 的句柄。
-  // Read validated serving settings from the loaded serv config. Missing settings throw before opening a listener.
+  // Read the validated listener configuration and return a handle with the address and close().
   const { server } = core.config.getOrThrow<ServConfig>('serv')
-  // Listen for this HTTP app on the configured host and port. Returns a handle with the bound address and cleanup. Bind errors reject.
   return serv.listen(app, {
     host: server.host,
     port: server.port,
-    // When listening succeeds, log the port reported by the listener.
     onListening: info => core.logger.info('API service listening', { port: info.port }),
     onClose: closeApp,
   })

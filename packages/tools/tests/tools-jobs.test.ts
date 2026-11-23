@@ -2,20 +2,20 @@ import type { RunnerFunctions } from '@h-ai/runner'
 import type { ToolArtifactAccess } from '../src/server/tools-service-resources.js'
 import { Buffer } from 'node:buffer'
 import { PassThrough, Readable } from 'node:stream'
-import { err, ok } from '@h-ai/core'
-import { createRunner, HaiRunnerError } from '@h-ai/runner'
+import { core } from '@h-ai/core'
+import { runner as frameworkRunner, HaiRunnerError } from '@h-ai/runner'
 import { expect, it, vi } from 'vitest'
 import { HaiToolsError } from '../src/index.js'
 import { tools } from '../src/server/index.js'
 
 const files: ToolArtifactAccess = {
-  read: vi.fn(async () => ok({
+  read: vi.fn(async () => core.ok({
     id: 'file',
     name: 'report.pdf',
     mediaType: 'application/pdf',
     data: new Uint8Array([1]),
   })),
-  publish: vi.fn(async (_context, input) => ok({
+  publish: vi.fn(async (_context, input) => core.ok({
     id: 'artifact',
     title: input.name,
     kind: input.kind,
@@ -41,8 +41,8 @@ it.each([
   ['TOOL_FAILED', HaiToolsError.EXECUTION_FAILED],
   ['NAVIGATION_RETRY_FAILED', HaiToolsError.EXECUTION_FAILED],
 ])('classifies the fixed worker rejection %s without publishing and confirms cleanup', async (code, expected) => {
-  const runner = createRunner()
-  vi.spyOn(runner, 'environment').mockReturnValue(ok({
+  const runner = frameworkRunner.create()
+  vi.spyOn(runner, 'environment').mockReturnValue(core.ok({
     id: 'docs',
     image: `sha256:${'a'.repeat(64)}`,
     backend: 'container',
@@ -55,7 +55,7 @@ it.each([
     },
     networkPolicy: 'offline',
   }))
-  const close = vi.fn(async () => ok(undefined))
+  const close = vi.fn(async () => core.ok(undefined))
   const publish = vi.fn(files.publish)
   const scope = { tenantId: 'team', userId: 'alice' }
   const execution = {
@@ -63,8 +63,8 @@ it.each([
     scope,
     owner: { nodeId: 'node', generation: 'one' },
     signal: new AbortController().signal,
-    emit: vi.fn(async () => ok(undefined)),
-    start: vi.fn(async () => ok({
+    emit: vi.fn(async () => core.ok(undefined)),
+    start: vi.fn(async () => core.ok({
       stdin: new PassThrough(),
       stdout: Readable.from([`${JSON.stringify({
         success: false,
@@ -72,8 +72,8 @@ it.each([
       })}\n`]),
       stderr: Readable.from([]),
       wait: async () => ({ code: 0, signal: null }),
-      artifact: async () => err(HaiToolsError.NOT_FOUND, 'Unused fixture artifact'),
-      snapshot: async () => ok({}),
+      artifact: async () => core.err(HaiToolsError.NOT_FOUND, 'Unused fixture artifact'),
+      snapshot: async () => core.ok({}),
       close,
     })),
   }
@@ -104,8 +104,8 @@ it.each([
   { operationFailure: 'none', cleanupFails: true },
   { operationFailure: 'none', cleanupFails: false },
 ])('preserves safe operation diagnostics with cleanup outcome %j', async ({ operationFailure, cleanupFails }) => {
-  const runner = createRunner()
-  vi.spyOn(runner, 'environment').mockReturnValue(ok({
+  const runner = frameworkRunner.create()
+  vi.spyOn(runner, 'environment').mockReturnValue(core.ok({
     id: 'office',
     image: `sha256:${'a'.repeat(64)}`,
     backend: 'container',
@@ -120,12 +120,12 @@ it.each([
   }))
   const privateDetail = 'private-worker-or-storage-details'
   const close = vi.fn(async () => cleanupFails
-    ? err({
+    ? core.err({
         ...HaiRunnerError.CLEANUP_UNCONFIRMED,
         message: 'Cleanup unconfirmed',
         ext: { cleanupStage: 'remove' },
       })
-    : ok(undefined))
+    : core.ok(undefined))
   const scope = { tenantId: 'team', userId: 'alice' }
   const artifact = Buffer.from('%PDF-fixture')
   const response = operationFailure === 'worker'
@@ -148,21 +148,21 @@ it.each([
         scope,
         owner: { nodeId: 'node', generation: 'one' },
         signal: new AbortController().signal,
-        emit: async () => ok(undefined),
-        start: async () => ok({
+        emit: async () => core.ok(undefined),
+        start: async () => core.ok({
           stdin: new PassThrough(),
           stdout: Readable.from([`${JSON.stringify(response)}\n`]),
           stderr: Readable.from([]),
           wait: async () => ({ code: 0, signal: null }),
           artifact: async () => operationFailure === 'artifact'
-            ? err({
+            ? core.err({
                 ...HaiToolsError.EXECUTION_FAILED,
                 message: privateDetail,
                 cause: { token: privateDetail },
                 ext: { body: privateDetail },
               })
-            : ok(artifact.toString('base64')),
-          snapshot: async () => ok({}),
+            : core.ok(artifact.toString('base64')),
+          snapshot: async () => core.ok({}),
           close,
         }),
       },
@@ -209,7 +209,7 @@ it.each([
 })
 
 it('omits unconfigured jobs and binds each configured job to its trusted environment', async () => {
-  const runner = createRunner()
+  const runner = frameworkRunner.create()
   const set = tools.createJobTools({
     context: {
       scope: { tenantId: 'team', userId: 'alice' },
@@ -226,7 +226,7 @@ it('omits unconfigured jobs and binds each configured job to its trusted environ
 })
 
 it('rejects unsafe browser targets before starting an execution', async () => {
-  const runner: RunnerFunctions = createRunner()
+  const runner: RunnerFunctions = frameworkRunner.create()
   const set = tools.createJobTools({
     context: {
       scope: { tenantId: 'team', userId: 'alice' },
@@ -268,7 +268,7 @@ it('only advertises web jobs with a deployment-controlled valid IPv4 proxy', () 
         scope: { tenantId: 'team', userId: 'alice' },
       },
       files,
-      runner: createRunner(),
+      runner: frameworkRunner.create(),
       environments: { documents: 'docs', web: 'web', browser: 'browser' },
       browserProxy,
     })
@@ -278,8 +278,8 @@ it('only advertises web jobs with a deployment-controlled valid IPv4 proxy', () 
 })
 
 it('injects the trusted browser proxy into the actual launch without accepting input overrides', async () => {
-  const runner = createRunner()
-  vi.spyOn(runner, 'environment').mockReturnValue(ok({
+  const runner = frameworkRunner.create()
+  vi.spyOn(runner, 'environment').mockReturnValue(core.ok({
     id: 'web',
     image: `sha256:${'a'.repeat(64)}`,
     backend: 'container',
@@ -299,8 +299,8 @@ it('injects the trusted browser proxy into the actual launch without accepting i
     scope,
     owner: { nodeId: 'node', generation: 'one' },
     signal: new AbortController().signal,
-    emit: vi.fn(async () => ok(undefined)),
-    start: vi.fn(async () => err({ code: 'not-started', message: 'Fixture' })),
+    emit: vi.fn(async () => core.ok(undefined)),
+    start: vi.fn(async () => core.err({ code: 'not-started', message: 'Fixture' })),
   }
   const set = tools.createJobTools({
     context: { scope, execution },
@@ -321,7 +321,7 @@ it('rejects document specifications outside the real format, layout and UTF-8 by
       scope: { tenantId: 'team', userId: 'alice' },
     },
     files,
-    runner: createRunner(),
+    runner: frameworkRunner.create(),
     environments: { documents: 'docs' },
   })
   const generate = set.tools.find(tool => tool.name === 'documents_generate')!
@@ -407,7 +407,7 @@ it('describes useful form fields and runnable examples without defaulting mutual
       scope: { tenantId: 'team', userId: 'alice' },
     },
     files,
-    runner: createRunner(),
+    runner: frameworkRunner.create(),
     environments: { documents: 'docs' },
   })
   const generate = set.tools.find(tool => tool.name === 'documents_generate')!

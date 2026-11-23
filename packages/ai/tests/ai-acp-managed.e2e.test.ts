@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { describe, expect, it } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
@@ -32,7 +32,7 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
       image!,
     ])
     const fixture = await readFile(new URL('./fixtures/acp-multiplex.mjs', import.meta.url), 'utf8')
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     value(await runner.init({
       engine,
       nodeId: 'idle-node',
@@ -112,7 +112,7 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
       image!,
     ])
     const fixture = await readFile(new URL('./fixtures/acp-multiplex.mjs', import.meta.url), 'utf8')
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     let toolCredential: { signal: AbortSignal, revoke: () => void } | undefined
     value(await runner.init({
       engine,

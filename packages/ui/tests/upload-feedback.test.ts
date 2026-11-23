@@ -5,12 +5,12 @@ import AvatarUpload from '../src/lib/components/scenes/storage/AvatarUpload.svel
 import FileUpload from '../src/lib/components/scenes/storage/FileUpload.svelte'
 import ImageUpload from '../src/lib/components/scenes/storage/ImageUpload.svelte'
 import { uiM } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 
 const originalCreateObjectURL = URL.createObjectURL
 const originalRevokeObjectURL = URL.revokeObjectURL
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   URL.createObjectURL = originalCreateObjectURL
   URL.revokeObjectURL = originalRevokeObjectURL
 })
@@ -38,18 +38,18 @@ it.each(['avatar', 'image', 'file'])('%s 上传失败统一 Toast，隐藏原始
       configurable: true,
     })
     input.dispatchEvent(new Event('change', { bubbles: true }))
-    await vi.waitFor(() => expect(toast.items.at(-1)).toMatchObject({ message: '上传失败', traceId: 'upload-request' }))
-    expect(toast.items).toHaveLength(1)
+    await vi.waitFor(() => expect(ui.toast.items.at(-1)).toMatchObject({ message: '上传失败', traceId: 'upload-request' }))
+    expect(ui.toast.items).toHaveLength(1)
     expect(target.textContent).not.toContain('Private storage')
     expect(onerror).toHaveBeenCalledWith('上传失败 (traceId: upload-request)')
     expect(input.disabled).toBe(false)
-    toast.clear()
+    ui.toast.clear()
     if (kind === 'file')
       target.querySelector<HTMLButtonElement>(`[aria-label="${uiM('file_upload_retry')}"]`)!.click()
     else
       input.dispatchEvent(new Event('change', { bubbles: true }))
     await vi.waitFor(() => expect(onerror).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => expect(toast.items).toHaveLength(1))
+    await vi.waitFor(() => expect(ui.toast.items).toHaveLength(1))
   }
   finally {
     await unmount(component)
@@ -90,7 +90,7 @@ it('移除在途文件后，即使上传器以普通异常结束也不误报失�
     await vi.waitFor(() => expect(settled).toBe(true))
     flushSync()
     expect(onerror).not.toHaveBeenCalled()
-    expect(toast.items).toHaveLength(0)
+    expect(ui.toast.items).toHaveLength(0)
     expect(target.textContent).not.toContain('example.txt')
   }
   finally {

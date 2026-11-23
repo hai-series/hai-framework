@@ -1,9 +1,10 @@
 /** 部署环境的加载和持久化；公开环境文件不保存真实凭据。 */
+
 import type { HaiResult } from '@h-ai/core'
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { deployM } from './deploy-i18n.js'
@@ -50,9 +51,10 @@ function environmentFile(path: string): Record<string, string> {
  * @param layers - 从低到高优先级的环境来源。
  * @param prefix - 可选变量前缀，仅归并该模块。
  * @returns 归并后的字面量环境变量，可能包含秘密。
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const env = mergeEnvironmentLayers([{ HAI_CACHE_TYPE: 'memory' }, { HAI_CACHE: '{"type":"redis"}' }])
+ * import { deploy } from '@h-ai/deploy'
+ * const env = deploy.mergeEnvironmentLayers([{ HAI_CACHE_TYPE: 'memory' }, { HAI_CACHE: '{"type":"redis"}' }])
  * ```
  */
 export function mergeEnvironmentLayers(layers: Array<Record<string, string | undefined>>, prefix?: string): Record<string, string> {
@@ -103,10 +105,10 @@ export function describeDeploymentVariableSources(directory: string, environment
  * @returns 配置对象；解析错误已脱敏
  * @example
  * ```ts
- * import { loadDeploymentConfig, loadDeploymentEnvironment } from '@h-ai/deploy'
- * const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * import { deploy } from '@h-ai/deploy'
+ * const environment = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
  * if (!environment.success) throw new Error(environment.error.message)
- * const config = loadDeploymentConfig('deploy', `${process.cwd()}/hai.json`, environment.data.values)
+ * const config = deploy.loadDeploymentConfig('deploy', `${process.cwd()}/hai.json`, environment.data.values)
  * if (!config.success) throw new Error(config.error.message)
  * // 返回对象仍需经 DeployConfigSchema 或 deploy.init 验证。
  * ```
@@ -123,12 +125,12 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
           : undefined
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
           params: { path, line: '1' },
         }))
       }
       if (!input || typeof input !== 'object' || Array.isArray(input)) {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
           params: { path, line: '1' },
         }))
       }
@@ -137,7 +139,7 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
       const lineCounter = new LineCounter()
       const document = parseDocument(content, { lineCounter, prettyErrors: false })
       if (document.errors.length) {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
           params: {
             path,
             line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line),
@@ -162,14 +164,14 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
         ? fields.filter((field: unknown) => typeof field === 'string' && /^HAI_[A-Z0-9_]+$/.test(field)).join(', ')
         : ''
       if (name === 'reach' && /^HAI_REACH_PROVIDERS_\d+(?:_|$)/.test(safeFields) && /^\s*\[\s*\]\s*$/.test(values.HAI_REACH_PROVIDERS ?? '')) {
-        return err({
+        return core.err({
           ...resolved.error,
           message: deployM('deploy_reachEmptyProviderOverride', {
             params: { path, field: safeFields },
           }),
         })
       }
-      return err({
+      return core.err({
         ...resolved.error,
         message: deployM('deploy_configResolutionFailed', {
           params: { path, fields: safeFields || name },
@@ -178,16 +180,16 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
     }
     const config = resolved.data
     if (config !== null && (typeof config !== 'object' || Array.isArray(config))) {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
         params: { path, line: '1' },
       }))
     }
-    return ok(config && typeof config === 'object' && !Array.isArray(config)
+    return core.ok(config && typeof config === 'object' && !Array.isArray(config)
       ? config as Record<string, unknown>
       : {})
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileUnreadable', {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileUnreadable', {
       params: { path },
     }))
   }
@@ -203,8 +205,8 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
  * @returns 环境快照，可能包含私有值，不得直接输出
  * @example
  * ```ts
- * import { loadDeploymentEnvironment } from '@h-ai/deploy'
- * const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * import { deploy } from '@h-ai/deploy'
+ * const loaded = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
  * if (!loaded.success) throw new Error(loaded.error.message)
  * const explicitlyConfigured = loaded.data.targetValues.HAI_DB_TYPE
  * ```
@@ -216,11 +218,11 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
       ? 'dev'
       : options.environment
   if (!/^[a-z0-9][\w-]*$/i.test(environment) || ['local', 'example'].includes(environment.toLowerCase()))
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_invalidEnvironment'))
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_invalidEnvironment'))
   const envDir = resolve(options.envDir)
   const target = join(envDir, `.env.${environment}`)
   if (options.requireFile !== false && !existsSync(target)) {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentMissing', {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentMissing', {
       params: { path: target },
     }))
   }
@@ -257,7 +259,7 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
         ? settings.env
         : fallback
     }
-    return ok({
+    return core.ok({
       environment,
       envDir,
       values,
@@ -265,7 +267,7 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
     })
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentReadFailed'))
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentReadFailed'))
   }
 }
 
@@ -442,10 +444,10 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
  * @returns 已保存的变量名或脱敏错误
  * @example
  * ```ts
- * import { loadDeploymentEnvironment, saveDeploymentEnvironment } from '@h-ai/deploy'
- * const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * import { deploy } from '@h-ai/deploy'
+ * const loaded = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
  * if (!loaded.success) throw new Error(loaded.error.message)
- * const saved = saveDeploymentEnvironment(loaded.data, { HAI_DB_HOST: 'db' })
+ * const saved = deploy.saveDeploymentEnvironment(loaded.data, { HAI_DB_HOST: 'db' })
  * if (!saved.success) throw new Error(saved.error.message)
  * // 密钥应以 { private: true } 写入被忽略的 .env.prod.local，不能放公共环境文件。
  * ```
@@ -532,9 +534,9 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
       if (missing.length)
         writeLocalFile(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
     }
-    return ok(Object.keys(values))
+    return core.ok(Object.keys(values))
   }
   catch {
-    return err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))
+    return core.err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))
   }
 }

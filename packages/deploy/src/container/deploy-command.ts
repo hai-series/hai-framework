@@ -3,10 +3,11 @@
  * command与args分离，不经过shell；流式回调、捕获结果和错误使用相同秘密脱敏边界。
  * @module deploy-command
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DeployCommandState } from '../deploy-types.js'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 import { spawnCommand } from './deploy-command-process.js'
@@ -107,7 +108,7 @@ export function maskSecrets(text: string, secrets: string[] = []): string {
  */
 export async function runCommand(command: string, args: string[], options: CommandOptions = {}): Promise<HaiResult<CommandResult>> {
   /** 失败状态只包含核验结论，不附加原始异常或可能携密的命令参数。 */
-  const failure = (message: string, state: DeployCommandState): HaiResult<never> => err({
+  const failure = (message: string, state: DeployCommandState): HaiResult<never> => core.err({
     ...HaiDeployError.REMOTE_COMMAND_FAILED,
     message: `${message}\n${deployM(state.localTermination === 'confirmed'
       ? 'deploy_localStopped'
@@ -294,7 +295,7 @@ export async function runCommand(command: string, args: string[], options: Comma
         }
         const exitCode = code ?? -1
         if (exitCode === 0) {
-          finish(ok({
+          finish(core.ok({
             code: exitCode,
             stdout,
             stderr,

@@ -1,4 +1,4 @@
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 import { describe, expect, it, vi } from 'vitest'
 import { POST } from '../templates/features/datapipe/routes/api/datapipe/pipeline/+server.js'
@@ -77,7 +77,7 @@ describe('datapipe 生成路由', () => {
     },
   ])('$title 保留模块错误码和请求编号，并隐藏内部错误详情', async ({ definition, message, status, publicMessage }) => {
     const builder = datapipe.pipeline()
-    vi.spyOn(builder, 'run').mockResolvedValue(err(definition, message, new Error(internalDetails)))
+    vi.spyOn(builder, 'run').mockResolvedValue(core.err(definition, message, new Error(internalDetails)))
     const pipeline = vi.spyOn(datapipe, 'pipeline').mockReturnValue(builder)
 
     try {

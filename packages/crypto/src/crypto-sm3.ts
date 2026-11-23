@@ -6,9 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { HashOperations, HashOptions } from './crypto-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
@@ -54,7 +53,7 @@ export function createSM3(): HashOperations {
         const { inputEncoding = 'utf8' } = options
         if ((inputEncoding !== 'utf8' && inputEncoding !== 'hex')
           || (typeof data !== 'string' && !(data instanceof Uint8Array))) {
-          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+          return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
         }
         let input: string | number[]
 
@@ -64,7 +63,7 @@ export function createSM3(): HashOperations {
         }
         else if (inputEncoding === 'hex') {
           if (data.length % 2 !== 0 || /[^a-f0-9]/i.test(data))
-            return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_sm3HexInvalid'))
+            return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_sm3HexInvalid'))
           // 十六进制字符串转为数字数组
           input = hexToBytes(data)
         }
@@ -76,16 +75,16 @@ export function createSM3(): HashOperations {
         const result = sm3(input)
 
         if (!result) {
-          return err(
+          return core.err(
             HaiCryptoError.HASH_FAILED,
             cryptoM('crypto_sm3HashEmpty'),
           )
         }
 
-        return ok(result)
+        return core.ok(result)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.HASH_FAILED,
           cryptoM('crypto_sm3HashFailed', {
             params: {
@@ -139,10 +138,10 @@ export function createSM3(): HashOperations {
         const outerInput = oKeyPad.concat(hexToBytes(innerHash))
         const result = sm3(outerInput)
 
-        return ok(result)
+        return core.ok(result)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.HMAC_FAILED,
           cryptoM('crypto_sm3HmacFailed', {
             params: {
@@ -168,10 +167,10 @@ export function createSM3(): HashOperations {
     verify(data: string, expectedHash: string): HaiResult<boolean> {
       try {
         const hashResult = sm3(data)
-        return ok(core.string.constantTimeEqual(hashResult.toLowerCase(), expectedHash.toLowerCase()))
+        return core.ok(core.string.constantTimeEqual(hashResult.toLowerCase(), expectedHash.toLowerCase()))
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.HASH_FAILED,
           cryptoM('crypto_sm3VerifyFailed', {
             params: {

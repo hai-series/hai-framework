@@ -6,7 +6,7 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Permission, PermissionQueryOptions, PermissionType, Role, User } from '@h-ai/iam'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { error } from '@sveltejs/kit'
 import * as m from '#lib/paraglide/messages.js'
@@ -145,7 +145,7 @@ export async function createAdminRole(input: CreateRoleInput): Promise<HaiResult
   })
 
   if (!createResult.success) {
-    return err({
+    return core.err({
       code: 'iam.role.create_failed',
       message: m.api_iam_roles_create_failed(),
       httpStatus: createResult.error.httpStatus ?? 500,
@@ -156,7 +156,7 @@ export async function createAdminRole(input: CreateRoleInput): Promise<HaiResult
   const role = await getAdminRole(createResult.data.id)
   if (!role)
     error(503, m.common_network_error())
-  return ok(role)
+  return core.ok(role)
 }
 
 /** 根据 ID 获取带权限 code 的角色。 */
@@ -191,7 +191,7 @@ export async function listAdminRoles(): Promise<RoleWithPermissions[]> {
 export async function updateAdminRole(id: string, input: UpdateRoleInput): Promise<HaiResult<RoleWithPermissions | null>> {
   const existing = await getAdminRole(id)
   if (!existing)
-    return ok(null)
+    return core.ok(null)
 
   const editableInput = existing.isSystem
     ? { description: input.description }
@@ -204,7 +204,7 @@ export async function updateAdminRole(id: string, input: UpdateRoleInput): Promi
 
   const updateResult = await iam.authz.updateRole(id, { ...updateData, permissionIds: editableInput.permissions })
   if (!updateResult.success) {
-    return err({
+    return core.err({
       code: 'iam.role.update_failed',
       message: m.api_iam_roles_update_failed(),
       httpStatus: updateResult.error.httpStatus ?? 500,
@@ -212,16 +212,16 @@ export async function updateAdminRole(id: string, input: UpdateRoleInput): Promi
     })
   }
 
-  return ok(await getAdminRole(id))
+  return core.ok(await getAdminRole(id))
 }
 
 /** 删除非系统角色。 */
 export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
   const existing = await getAdminRole(id)
   if (!existing)
-    return ok(false)
+    return core.ok(false)
   if (existing.isSystem) {
-    return err({
+    return core.err({
       code: 'iam.role.system_cannot_delete',
       message: m.api_iam_roles_system_cannot_delete(),
     })
@@ -229,7 +229,7 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
 
   const deleteResult = await iam.authz.deleteRole(id)
   if (!deleteResult.success) {
-    return err({
+    return core.err({
       code: 'iam.role.delete_failed',
       message: m.api_iam_roles_delete_failed(),
       httpStatus: deleteResult.error.httpStatus ?? 500,
@@ -237,14 +237,14 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
     })
   }
 
-  return ok(true)
+  return core.ok(true)
 }
 
 /** 创建权限。 */
 export async function createAdminPermission(input: CreatePermissionInput): Promise<HaiResult<PermissionWithSystem>> {
   const result = await iam.authz.createPermission(input)
   if (!result.success) {
-    return err({
+    return core.err({
       code: 'iam.permission.create_failed',
       message: m.api_iam_permissions_create_failed(),
       httpStatus: result.error.httpStatus ?? 500,
@@ -252,7 +252,7 @@ export async function createAdminPermission(input: CreatePermissionInput): Promi
     })
   }
 
-  return ok(toPermissionWithSystem(result.data))
+  return core.ok(toPermissionWithSystem(result.data))
 }
 
 /** 根据 ID 获取权限。 */
@@ -309,14 +309,14 @@ export async function listPermissionsGroupedByResource(): Promise<Record<string,
 export async function deleteAdminPermission(id: string): Promise<HaiResult<void>> {
   const result = await iam.authz.deletePermission(id)
   if (!result.success) {
-    return err({
+    return core.err({
       code: 'iam.permission.delete_failed',
       message: m.api_iam_permissions_delete_failed(),
       httpStatus: result.error.httpStatus ?? 500,
       cause: result.error,
     })
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /** 将底层唯一键冲突错误映射为稳定的用户可读提示。 */

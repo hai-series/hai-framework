@@ -10,8 +10,8 @@ export default defineConfig(async () => ({
     'bundle/index': 'src/bundle/index.ts',
     'feedback-bundle-node-worker': 'src/bundle/feedback-bundle-node-worker.ts',
     'feedback-bundle-web-worker': 'src/bundle/feedback-bundle-web-worker.ts',
-    'tauri': 'src/client/feedback-client-tauri.ts',
-    'capacitor': 'src/client/feedback-client-capacitor.ts',
+    'tauri': 'src/client/feedback-client-tauri-entry.ts',
+    'capacitor': 'src/client/feedback-client-capacitor-entry.ts',
   },
   external: [
     '@capacitor/filesystem',

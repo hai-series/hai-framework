@@ -9,10 +9,9 @@
   import { beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, FeedbackModal, getCurrentTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
-  import { GuideHost } from '@h-ai/ui/guide'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { kit } from '@h-ai/kit/client'
+  import { FeedbackModal, GuideHost, ReauthenticationDialog, SessionRecoveryDialog, ui, WorkspaceLayout } from '@h-ai/ui'
+
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { createAdminGuide } from '#lib/guide/admin-guide.js'
@@ -64,15 +63,15 @@
     sensitiveActions.configure(data.iamPublicConfig.reauthentication)
     return () => sensitiveActions.cancel()
   })
-  const guide = createAdminGuide(createSvelteKitNavAdapter())
+  const guide = createAdminGuide(kit.client.createSvelteKitNavAdapter())
 
   const appName = $derived(data.appConfig?.name ?? m.app_title())
   const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
   const userPermissions = $derived(data.user?.permissions ?? [])
 
   // 注入权限上下文，子组件通过 usePermission() 消费
-  setPermissionContext(() => userPermissions)
-  const { hasPerm } = usePermission()
+  ui.setPermissionContext(() => userPermissions)
+  const { hasPerm } = ui.usePermission()
 
   let sidebarCollapsed = $state(false)
   let mobileMenuOpen = $state(false)
@@ -106,7 +105,7 @@
       feedbackOpen = true
     }
     catch (cause) {
-      feedbackError = errorMessage(cause, m.feedback_request_failed())
+      feedbackError = ui.errorMessage(cause, m.feedback_request_failed())
     }
     finally {
       feedbackPreparing = false
@@ -115,11 +114,11 @@
 
   // 读取首屏脚本已恢复的主题，服务端预览沿用管理台默认值。
   let currentTheme = $state(browser
-    ? getCurrentTheme()
+    ? ui.getCurrentTheme()
     : 'liquid-glass')
 
   function handleThemeChange(theme: string) {
-    applyTheme(theme)
+    ui.applyTheme(theme)
     currentTheme = theme
   }
 
@@ -278,7 +277,7 @@
       userMenuOpen = false
     }
   }
-  useToastFeedback(() => feedbackError)
+  ui.useToastFeedback(() => feedbackError)
 </script>
 
 <SessionRecoveryDialog recovery={sessionRecovery} actions={authActions} />

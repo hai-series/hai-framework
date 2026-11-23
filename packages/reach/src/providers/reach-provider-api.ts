@@ -1,4 +1,3 @@
-import type { HaiError, HaiResult } from '@h-ai/core'
 /**
  * @h-ai/reach — API 回调 Provider
  *
@@ -6,12 +5,13 @@ import type { HaiError, HaiResult } from '@h-ai/core'
  * @module reach-provider-api
  */
 
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ApiProviderConfig, ProviderConfig } from '../reach-config.js'
-import type { ReachMessage, SendResult } from '../reach-types.js'
 
+import type { ReachMessage, SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { reachM } from '../reach-i18n.js'
 import { HaiReachError } from '../reach-types.js'
@@ -67,23 +67,23 @@ async function readAcknowledgement(response: Response): Promise<HaiResult<SendRe
           break
         bytes += chunk.value.byteLength
         if (bytes > 65536)
-          return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseTooLarge'))
+          return core.err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseTooLarge'))
         text += decoder.decode(chunk.value, { stream: true })
       }
       text += decoder.decode()
     }
     complete = true
     if (text.length === 0)
-      return ok({ success: true })
+      return core.ok({ success: true })
     const result: unknown = JSON.parse(text)
     if (!result || typeof result !== 'object' || Array.isArray(result))
-      return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+      return core.err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
     const messageId = 'messageId' in result
       ? result.messageId
       : undefined
     if (messageId !== undefined && (typeof messageId !== 'string' || messageId.length > 255))
-      return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
-    return ok({
+      return core.err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+    return core.ok({
       success: true,
       ...(messageId === undefined
         ? {}
@@ -91,7 +91,7 @@ async function readAcknowledgement(response: Response): Promise<HaiResult<SendRe
     })
   }
   catch {
-    return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
   }
   finally {
     if (!complete)
@@ -127,7 +127,7 @@ export function createApiProvider(): ReachProvider {
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'api') {
-        return err(
+        return core.err(
           HaiReachError.CONFIG_ERROR,
           reachM('reach_unsupportedType', {
             params: { type: config.type },
@@ -138,13 +138,13 @@ export function createApiProvider(): ReachProvider {
       apiConfig = config
       if ((config.requireHttps && new URL(config.url).protocol !== 'https:') || (config.requireHttps && config.redirect === 'follow')) {
         apiConfig = null
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
       }
       logger.info('API provider connected', {
         endpoint: getSafeEndpoint(config.url),
         method: config.method,
       })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async close(): Promise<void> {
@@ -158,7 +158,7 @@ export function createApiProvider(): ReachProvider {
 
     async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       if (!apiConfig) {
-        return err(
+        return core.err(
           HaiReachError.NOT_INITIALIZED,
           reachM('reach_notInitialized'),
         )
@@ -170,7 +170,7 @@ export function createApiProvider(): ReachProvider {
 
       const requireHttps = apiConfig.requireHttps ?? (message.sensitive === true && core.module.requiresSharedState(process.env))
       if (requireHttps && new URL(apiConfig.url).protocol !== 'https:')
-        return err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
 
       try {
         const payload = {
@@ -206,7 +206,7 @@ export function createApiProvider(): ReachProvider {
             logger.warn('API callback returned non-OK status', { status: response.status })
             // 明确的客户端拒绝无需自动重试；超时、过早请求及限流仍属于暂时故障。
             const rejected = (response.status >= 300 && response.status < 400) || (response.status >= 400 && response.status < 500 && ![408, 425, 429].includes(response.status))
-            return err(
+            return core.err(
               rejected ? HaiReachError.DELIVERY_REJECTED : HaiReachError.SEND_FAILED,
               reachM('reach_apiSendFailed', {
                 params: { error: `HTTP ${response.status}` },
@@ -225,7 +225,7 @@ export function createApiProvider(): ReachProvider {
       }
       catch {
         logger.error('API callback send failed', { errorCode: HaiReachError.SEND_FAILED.code })
-        return err(toReachError())
+        return core.err(toReachError())
       }
     },
   }

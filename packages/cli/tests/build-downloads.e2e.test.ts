@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { readDeploymentArtifact } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { expect, it } from 'vitest'
 import { testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 import { runDeployTestCommand } from './helpers/deploy-test-command.js'
@@ -124,7 +124,7 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
       schemaVersion: 1,
       artifactDir,
       manifestPath: join(artifactDir, 'manifest.json'),
-      manifest: await readDeploymentArtifact(artifactDir),
+      manifest: await deploy.readDeploymentArtifact(artifactDir),
     })
     const created = await run(runtime, ['create', '--pull=never', imageRef])
     if (!/^[a-f\d]{64}$/.test(created))

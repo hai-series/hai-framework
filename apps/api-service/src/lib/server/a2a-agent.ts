@@ -9,7 +9,7 @@
  */
 
 import type { AgentExecutor } from '@h-ai/ai'
-import { AgentEvent, Message } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
 /** 回声执行器：将用户消息原样返回 */
 export const echoExecutor: AgentExecutor = {
@@ -21,7 +21,7 @@ export const echoExecutor: AgentExecutor = {
         : [])
     const userText = textParts.join(' ') || '(empty message)'
 
-    eventBus.publish(AgentEvent.message(Message.fromJSON({
+    eventBus.publish(ai.AgentEvent.message(ai.Message.fromJSON({
       messageId: `echo_${Date.now()}`,
       role: 'ROLE_AGENT',
       parts: [

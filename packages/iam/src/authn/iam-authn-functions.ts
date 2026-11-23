@@ -6,7 +6,6 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { IamConfigInput } from '../iam-types.js'
@@ -18,9 +17,9 @@ import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.j
 import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthRequestContext, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
-import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
+import { core } from '@h-ai/core'
 
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
@@ -125,13 +124,13 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
      */
     async function getRegistrationRole(): Promise<HaiResult<string | null>> {
       if (!config.rbac?.enabled || !config.rbac.defaultRole)
-        return ok(null)
+        return core.ok(null)
       const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
       if (!roleResult.success)
         return roleResult
       if (!roleResult.data)
-        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      return ok(roleResult.data.id)
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+      return core.ok(roleResult.data.id)
     }
 
     async function onUserAutoRegistered(userId: string): Promise<HaiResult<void>> {
@@ -140,7 +139,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         return role
       return role.data
         ? authzFunctions.assignRole(userId, role.data)
-        : ok(undefined)
+        : core.ok(undefined)
     }
 
     // 密码策略
@@ -180,12 +179,12 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     let ldapStrategy: AuthStrategy | undefined
     if (loginConfig.ldap) {
       if (!config.ldap?.directoryId)
-        return err(HaiIamError.CONFIG_ERROR, iamM('iam_ldapDirectoryRequired'))
+        return core.err(HaiIamError.CONFIG_ERROR, iamM('iam_ldapDirectoryRequired'))
       // 仅在启用目录认证且未注入工厂时加载可选 SDK；缺少 SDK 在 init 时返回配置错误。
       const clientFactory = ldapClientFactory ?? await loadLdapClientFactory()
       const storage = await prepareLdapIdentities()
       if (!storage.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), storage.error)
+        return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), storage.error)
       ldapStrategy = createLdapStrategy({
         ldapConfig: config.ldap,
         directoryId: config.ldap.directoryId,
@@ -233,7 +232,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     })
 
     logger.info('Authn sub-feature initialized')
-    return ok({
+    return core.ok({
       authn: operations.authn,
       loginRegisteredUser: operations.loginRegisteredUser,
       passwordStrategyResult: passwordResult,
@@ -242,7 +241,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })
-    return err(
+    return core.err(
       HaiIamError.CONFIG_ERROR,
       iamM('iam_initComponentFailed'),
       error,
@@ -304,7 +303,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    */
   function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): HaiResult<never> | null {
     if (!loginConfig[type]) {
-      return err(
+      return core.err(
         HaiIamError.LOGIN_DISABLED,
         iamM('iam_loginDisabled', {
           params: { type },
@@ -325,24 +324,24 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    */
   function resolveStrategy(type: 'password' | 'otp' | 'ldap' | 'apikey', strategy?: AuthStrategy): HaiResult<AuthStrategy> {
     if (strategy) {
-      return ok(strategy)
+      return core.ok(strategy)
     }
 
     if (type === 'otp') {
-      return err(
+      return core.err(
         HaiIamError.STRATEGY_NOT_SUPPORTED,
         iamM('iam_otpStrategyRequired'),
       )
     }
 
     if (type === 'ldap') {
-      return err(
+      return core.err(
         HaiIamError.STRATEGY_NOT_SUPPORTED,
         iamM('iam_ldapStrategyRequired'),
       )
     }
 
-    return err(
+    return core.err(
       HaiIamError.STRATEGY_NOT_SUPPORTED,
       iamM('iam_featureNotImplemented'),
     )
@@ -361,12 +360,12 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     if (!permitted.success)
       return permitted
     if (!isUserActive(user))
-      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
       return stored
     if (!stored.data || !isUserActive(stored.data))
-      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     const passwordState = checkPasswordState(stored.data, config.password)
     if (!passwordState.success)
       return passwordState
@@ -398,7 +397,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     // 从 session.data._tokenPair 提取 TokenPair（由 session.create 写入）
     const tokenPair = session.data?._tokenPair
     if (!tokenPair) {
-      return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
+      return core.err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
     // 只有真正签发会话的登录才刷新最近使用时间；配额/重复登录拒绝不能延缓休眠。
@@ -412,7 +411,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
     const { credentialVersion, ...publicUser } = user
     void credentialVersion
-    return ok({
+    return core.ok({
       user: publicUser,
       tokens: tokenPair,
       ...effective,
@@ -464,11 +463,11 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     }
 
     if (credentials.expectedUserId && credentials.expectedUserId !== authResult.data.id)
-      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     const result = await buildAuthResult(authResult.data, undefined, context)
     if (!result.success && (result.error.code === HaiIamError.ACCOUNT_UNAVAILABLE.code || result.error.code === HaiIamError.USER_LOCKED.code)) {
       logger.warn('Account eligibility changed during login', { type, userId: authResult.data.id, reason: result.error.code })
-      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     }
     if (result.success) {
       logger.info('Login succeeded', { type, userId: authResult.data.id })
@@ -487,7 +486,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       ...session.data,
       ...authorization.data,
     }
-    return ok(current.apiKeyId
+    return core.ok(current.apiKeyId
       ? applyApiKeyScopes(current, current.apiKeyScopes ?? [])
       : current)
   }
@@ -496,13 +495,13 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   const sensitive = config.reauthentication
   async function requiresProof(operation: string): Promise<HaiResult<boolean>> {
     if (!sensitive?.enabled)
-      return ok(false)
+      return core.ok(false)
     if (sensitive.operations.includes(operation))
-      return ok(true)
+      return core.ok(true)
     const configured = await authzFunctions.getSensitiveOperations(operation)
     if (!configured.success)
       return configured
-    return ok(sensitive.operations.includes(operation) || configured.data.includes(operation))
+    return core.ok(sensitive.operations.includes(operation) || configured.data.includes(operation))
   }
 
   return {
@@ -511,7 +510,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       if (!stored.success)
         return stored
       if (!stored.data || !isUserActive(stored.data))
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
     },
     authn: {
@@ -521,7 +520,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         if (!required.success)
           return required
         if (!required.data)
-          return err(HaiIamError.PERMISSION_DENIED, iamM('iam_reauthenticationRequired'))
+          return core.err(HaiIamError.PERMISSION_DENIED, iamM('iam_reauthenticationRequired'))
         const current = await verifyCurrentSession(accessToken)
         if (!current.success)
           return current
@@ -529,12 +528,12 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         if (!stored.success)
           return stored
         if (!stored.data)
-          return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+          return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
         const verified = await passwordStrategy.authenticate({ type: 'password', identifier: stored.data.username, password })
         if (!verified.success)
           return verified
         if (verified.data.credentialVersion !== current.data.credentialVersion)
-          return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+          return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
         return tickets.issue({
           subjectId: current.data.userId,
           purpose: `iam:reauth:${operation}`,
@@ -551,15 +550,15 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         if (!required.success)
           return required
         if (!required.data)
-          return ok(undefined)
+          return core.ok(undefined)
         if (!ticket)
-          return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+          return core.err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
         const proof = await tickets.consume(ticket, { purpose: `iam:reauth:${operation}` })
         if (!proof.success)
           return proof
         if (proof.data.subjectId !== current.data.userId || proof.data.grant.operation !== operation || proof.data.grant.sessionVersion !== current.data.version || proof.data.grant.credentialVersion !== current.data.credentialVersion)
-          return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
-        return ok(undefined)
+          return core.err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+        return core.ok(undefined)
       },
 
       async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
@@ -579,7 +578,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         if (disabled)
           return disabled
         if (!apiKeyStrategy)
-          return err(HaiIamError.STRATEGY_NOT_SUPPORTED, iamM('iam_featureNotImplemented'))
+          return core.err(HaiIamError.STRATEGY_NOT_SUPPORTED, iamM('iam_featureNotImplemented'))
         const authenticated = await apiKeyStrategy.authenticate({ type: 'apikey', ...credentials })
         if (!authenticated.success)
           return authenticated
@@ -603,7 +602,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         }
 
         if (!otpChallenge) {
-          return err(
+          return core.err(
             HaiIamError.STRATEGY_NOT_SUPPORTED,
             iamM('iam_otpStrategyRequiredForSend'),
           )

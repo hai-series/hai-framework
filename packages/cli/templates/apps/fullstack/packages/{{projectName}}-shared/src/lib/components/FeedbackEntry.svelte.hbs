@@ -1,11 +1,9 @@
 {{! @skipIfEmpty }}
 {{#if features.feedback}}
 <script lang='ts'>
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import type { FeedbackDraft } from '@h-ai/feedback/client'
   import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackFormData } from '@h-ai/ui'
-  import { FeedbackModal } from '@h-ai/ui/components/scenes/app/index'
-  import { Button } from '@h-ai/ui/components/primitives/index'
+  import { Button, FeedbackModal, ui } from '@h-ai/ui'
   import { onDestroy } from 'svelte'
   import { browserFeedback } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
@@ -34,7 +32,7 @@
       open = true
     }
     catch (cause) {
-      error = errorMessage(cause, m.operation_failed())
+      error = ui.errorMessage(cause, m.operation_failed())
     }
     finally {
       preparing = false
@@ -82,7 +80,7 @@
     return result.data.status !== 'cancelled'
   }
   onDestroy(browserFeedback.releasePreviews)
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>

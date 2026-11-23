@@ -216,7 +216,7 @@ export interface RegisterOptions {
  * 注册结果
  * @example
  * ```ts
- * import { iam, type RegisterResult } from '@h-ai/iam'
+ * import { type RegisterResult, iam } from '@h-ai/iam'
  * const result = await iam.user.register({ username: 'alice', password: 'ExampleOnly123!' })
  * if (result.success) {
  *   const registered: RegisterResult = result.data
@@ -264,7 +264,7 @@ export interface UpdateCurrentUserInput {
  * 用户子功能接口
  * @example
  * ```ts
- * import { iam, type UserOperations } from '@h-ai/iam'
+ * import { type UserOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
  * const operations: UserOperations = iam.user
  * const result = await operations.listUsers({ page: 1, pageSize: 20, include: ['roles'] })

@@ -20,8 +20,8 @@ import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { parseEnv } from 'node:util'
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, CoreConfigSchema, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
+import { apiContract } from '@h-ai/api-contract/feedback'
+import { core, CoreConfigSchema, RequestAccessConfigSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { z } from 'zod'
@@ -56,10 +56,10 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
     ? options.settings.http
     : options.settings
   if (!scope || typeof scope !== 'object' || !('access' in scope))
-    return ok({ settings: options.settings })
+    return core.ok({ settings: options.settings })
   const configured = RequestAccessConfigSchema.safeParse(scope.access)
   if (!configured.success) {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
       params: {
         field: options.module === 'serv'
           ? 'serv.http.access'
@@ -73,7 +73,7 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
     if (check.requiresEncryption && !options.settings.transport)
       throw new Error('Transport encryption is required but not configured')
     if (configured.data === false || !('file' in configured.data))
-      return ok({ settings: options.settings })
+      return core.ok({ settings: options.settings })
     const access = { file: '/run/hai/request-access.yml' }
     const settings = options.module === 'serv'
       ? {
@@ -81,13 +81,13 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
           http: { ...scope, access },
         }
       : { ...options.settings, access }
-    return ok({
+    return core.ok({
       settings,
       snapshot: stringify(policy, { aliasDuplicateObjects: false }),
     })
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
       params: {
         field: options.module === 'serv'
           ? 'serv.http.access'
@@ -174,7 +174,7 @@ export function createDockerSshProvider(
   /** 探测远程容器运行时与 compose 可用性。 */
   async function detectRemoteRuntime(): Promise<HaiResult<ContainerRuntime>> {
     if (!ssh)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
     const candidates: ContainerRuntime[] = config.remote.runtime === 'auto'
       ? ['podman', 'docker']
       : [config.remote.runtime]
@@ -186,10 +186,10 @@ export function createDockerSshProvider(
       const composeResult = await ssh.exec(`${runtime} compose version`, { timeoutMs: 20_000 })
       if (composeResult.success) {
         logger.info('Remote container runtime detected', { runtime })
-        return ok(runtime)
+        return core.ok(runtime)
       }
     }
-    return err(
+    return core.err(
       HaiDeployError.REMOTE_COMMAND_FAILED,
       deployM('deploy_remoteRuntimeMissing', {
         params: {
@@ -260,7 +260,7 @@ export function createDockerSshProvider(
       ]
       const invalid = options.selectedServices.find(name => !available.includes(name))
       if (!options.selectedServices.length || new Set(options.selectedServices).size !== options.selectedServices.length || invalid) {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
           params: { service: invalid ?? options.selectedServices.join(', ') },
         }))
       }
@@ -320,7 +320,7 @@ export function createDockerSshProvider(
         storageBasePath = endpoint.pathname.replace(/\/+$/, '')
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storagePublicEndpointInvalid'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storagePublicEndpointInvalid'))
       }
     }
     // 应用增量继承已安装连接配置；对外地址或桶等配置改变须全量切换，不能静默沿用旧值。
@@ -330,7 +330,7 @@ export function createDockerSshProvider(
     // SSR 始终通过私有网关确定真实协议；API 仅在存储或 HTTPS 需要时追加网关。
     const gateway = !hasWebProxy && (scan.isSvelteKit || !!managedStorage || (!!https && !standaloneWebConfig))
     if (gateway && primaryService === 'web' && !scan.isSvelteKit)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     const proxyService = gateway ? 'gateway' : 'web'
     if (gateway)
       healthPaths.push('/_hai/gateway-health')
@@ -339,7 +339,7 @@ export function createDockerSshProvider(
       : !!app
     const cookieSecure = env.HAI_SERV_REFRESH_COOKIE_SECURE
     if (updatesApp && cookieSecure && cookieSecure !== 'true' && cookieSecure !== 'false')
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_refreshCookieSecureInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_refreshCookieSecureInvalid'))
     if (updatesApp && !sidecar.services.includes('db') && !provisionEnv.HAI_DB) {
       const database = scan.middlewares?.find(item => item.service === 'db' && item.backend === 'postgresql')?.config
       if (typeof database?.url === 'string' && database.url && typeof database.password === 'string' && database.password) {
@@ -347,7 +347,7 @@ export function createDockerSshProvider(
           const url = new URL(database.url)
           const urlPassword = url.searchParams.getAll('password').at(-1) || decodeURIComponent(url.password)
           if (urlPassword !== database.password)
-            return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_postgresPasswordConflict'))
+            return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_postgresPasswordConflict'))
         }
         catch {
           // 非法连接串交由 PostgreSQL 驱动报告，避免错误中泄漏连接值。
@@ -357,7 +357,7 @@ export function createDockerSshProvider(
     const serverPath = join(appDir, 'config', '_serv.yml')
     const server = existsSync(serverPath) || hasWebProxy
       ? loadDeploymentConfig('serv', serverPath, env)
-      : ok<Record<string, unknown>>({})
+      : core.ok<Record<string, unknown>>({})
     if (!server.success)
       return server
     const backendPaths: string[] = []
@@ -374,14 +374,14 @@ export function createDockerSshProvider(
         const corePath = join(appDir, 'config', '_core.yml')
         const settings = existsSync(corePath)
           ? loadDeploymentConfig('core', corePath, env)
-          : ok(env.HAI_CORE
+          : core.ok(env.HAI_CORE
               ? JSON.parse(env.HAI_CORE)
               : { env: env.HAI_CORE_ENV })
         if (!settings.success)
           return settings
         const application = CoreConfigSchema.safeParse(settings.data)
         if (!application.success)
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
         if (application.data.env !== 'production') {
           if (http.openapi !== undefined && http.openapi !== false)
             backendPaths.push(servicePath(endpointSettings(http.openapi).path, '/openapi.json'))
@@ -393,7 +393,7 @@ export function createDockerSshProvider(
       }
     }
     catch {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
     }
     let requestAccessSnapshot: string | undefined
     if (updatesApp && primaryService === 'serv') {
@@ -417,10 +417,10 @@ export function createDockerSshProvider(
       if (!policy.success)
         return policy
       try {
-        feedbackTransportBytes = resolveFeedbackBudget(policy.data).maxTransportBytes
+        feedbackTransportBytes = apiContract.resolveFeedbackBudget(policy.data).maxTransportBytes
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
       }
     }
     let protectedTransport = !!server.data.transport
@@ -429,7 +429,7 @@ export function createDockerSshProvider(
       const kitPath = join(appDir, 'config', '_kit.yml')
       const kit = existsSync(kitPath)
         ? loadDeploymentConfig('kit', kitPath, env)
-        : ok({})
+        : core.ok({})
       if (!kit.success)
         return kit
       if (updatesApp) {
@@ -461,14 +461,14 @@ export function createDockerSshProvider(
           applicationPlaintextBytes = limits.plaintextBytes
         }
         catch (error) {
-          return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
+          return core.err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
             ? error.message
             : deployM('deploy_transportBodyLimitInvalid'))
         }
       }
     }
     if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !crypto.transport.parseServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success) {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', {
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', {
         params: {
           path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`),
         },
@@ -481,10 +481,10 @@ export function createDockerSshProvider(
       const cors = server.data.cors as { origin?: string } | undefined
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..')) {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       }
       if (webBasePath && ([...backendPaths, '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
@@ -502,7 +502,7 @@ export function createDockerSshProvider(
         })
       }
       catch (error) {
-        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
+        return core.err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
           ? error.message
           : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
@@ -547,12 +547,12 @@ export function createDockerSshProvider(
         })
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
       }
     }
     else if (standaloneWebConfig) {
       if (['/health', '/_hai/web-health'].includes(webBasePath))
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       webProxy = generateStaticWebConfig(containerPort, webBasePath)
     }
     if (https && webProxy) {
@@ -586,10 +586,10 @@ export function createDockerSshProvider(
       ? stem
       : `${stem}${suffix}`
     if (!/^[\w.+-]+$/.test(name))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleNameInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleNameInvalid'))
     const artifactDir = resolve(dirname(requestedOutput), name)
     if (existsSync(artifactDir)) {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleDirectoryExists', {
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleDirectoryExists', {
         params: { path: artifactDir },
       }))
     }
@@ -689,7 +689,7 @@ export function createDockerSshProvider(
     if (https?.type === 'letsencrypt' && !partial)
       selected.push('certbot')
     if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length) {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
         params: {
           service: selected.join(', '),
         },
@@ -697,7 +697,7 @@ export function createDockerSshProvider(
     }
     for (const name of selected) {
       if (['serv', 'web'].includes(name) && !images.some(image => image.name === name)) {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
           params: { service: name },
         }))
       }
@@ -734,7 +734,7 @@ export function createDockerSshProvider(
       cacheDirectory: join(resolveProjectDirectory(appDir), '.hai', 'cache', 'images'),
     })
     if (options?.bundleOnly) {
-      return ok({
+      return core.ok({
         url: '',
         deploymentId,
         status: 'packaged',
@@ -745,7 +745,7 @@ export function createDockerSshProvider(
       })
     }
     if (!ssh)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
     const ping = await ssh.ping()
     if (!ping.success)
       return ping
@@ -795,7 +795,7 @@ export function createDockerSshProvider(
           // 缺失、损坏、超限或不匹配的记录都不能证明远端已停止。
         }
       }
-      return err({
+      return core.err({
         ...started.error,
         message: `${started.error.message}\n${terminal
           ? deployM('deploy_remoteFinished', {
@@ -840,7 +840,7 @@ export function createDockerSshProvider(
       }
     }
     if (!healthy) {
-      return err(
+      return core.err(
         {
           ...HaiDeployError.HEALTH_CHECK_FAILED,
           message: deployM('deploy_healthCheckFailed', {
@@ -872,7 +872,7 @@ export function createDockerSshProvider(
       bundlePath: bundle.bundlePath,
     }
     logger.info('docker-ssh deployment complete', { url: applicationUrl, deploymentId })
-    return ok(result)
+    return core.ok(result)
   }
 
   const deploySafely: ContainerDeployProvider['deploy'] = async (context) => {
@@ -894,7 +894,7 @@ export function createDockerSshProvider(
         // 脱敏配置无效时保留固定诊断，不重新暴露原异常。
       }
       logger.error('Deployment bundle failed', { reason: safeReason })
-      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', {
+      return core.err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', {
         params: { reason: safeReason },
       }))
     }

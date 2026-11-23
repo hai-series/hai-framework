@@ -1,13 +1,13 @@
+import { ui } from '@h-ai/ui'
 import { describe, expect, it } from 'vitest'
-import { renderMarkdownDocument } from '../src/lib/components/scenes/ai/document-parse.js'
 
 function getHtmlOutput(markdown: string): string {
-  return renderMarkdownDocument(markdown).blocks.filter(block => block.kind === 'html').map(block => block.html).join('\n')
+  return ui.renderMarkdownDocument(markdown).blocks.filter(block => block.kind === 'html').map(block => block.html).join('\n')
 }
 
 describe('renderMarkdownDocument', () => {
   it('keeps outline extraction working when headings are wrapped by align and color extensions', () => {
-    const result = renderMarkdownDocument(
+    const result = ui.renderMarkdownDocument(
       '<hai-align value="center">\n## <hai-span color="#2563eb">标题</hai-span>\n</hai-align>\n\n正文',
     )
     const html = getHtmlOutput(
@@ -28,7 +28,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('阅读态把 mermaid 代码块渲染为自动渲染占位，并保留源码到 codeBlocks', () => {
-    const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```')
+    const result = ui.renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```')
 
     expect(result.blocks).toEqual([
       expect.objectContaining({
@@ -46,7 +46,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('阅读态把已闭合 mermaid fence 拆成稳定 block，避免流式更新销毁图表 DOM', () => {
-    const result = renderMarkdownDocument([
+    const result = ui.renderMarkdownDocument([
       '# 标题',
       '',
       '正文',
@@ -80,7 +80,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('阅读态 Mermaid block 导出源码而不是旧的 host HTML', () => {
-    const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```')
+    const result = ui.renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```')
 
     expect(result.blocks).toEqual([
       {
@@ -95,7 +95,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('流式输出未闭合 mermaid fence 时不提前渲染图表', () => {
-    const result = renderMarkdownDocument('```mermaid\nmindmap\n  root((A))')
+    const result = ui.renderMarkdownDocument('```mermaid\nmindmap\n  root((A))')
     const html = result.blocks
       .filter(block => block.kind === 'html')
       .map(block => block.html)
@@ -119,7 +119,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('稳定 block 渲染保持 Mermaid 前后代码块 id 连续', () => {
-    const result = renderMarkdownDocument([
+    const result = ui.renderMarkdownDocument([
       '```ts',
       'const before = 1',
       '```',
@@ -156,7 +156,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('code/preview 切换模式下 mermaid 仍走代码块渲染以保留源码视图', () => {
-    const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```', {
+    const result = ui.renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```', {
       showCodePreviewToggle: true,
     })
     const html = result.blocks
@@ -169,7 +169,7 @@ describe('renderMarkdownDocument', () => {
   })
 
   it('allowHtmlTags 开启时应该解析安全 HTML，并继续转义危险标签', () => {
-    const result = renderMarkdownDocument('# 标题\n\n支持 <b>重点</b> 与 <script>alert(1)</script>', {
+    const result = ui.renderMarkdownDocument('# 标题\n\n支持 <b>重点</b> 与 <script>alert(1)</script>', {
       allowHtmlTags: true,
     })
     const html = result.blocks
@@ -185,7 +185,7 @@ describe('renderMarkdownDocument', () => {
 
 it('keeps document text and replacement labels without creating network images', () => {
   const markdown = '# 标题\n\n![远程](https://example.invalid/a.png) ![相对](/asset.png)\n\n<img src="https://example.invalid/b.png" alt="内联 HTML" srcset="/second.png 2x">\n\n![数据](data:image/png;base64,AAA=)'
-  const result = renderMarkdownDocument(markdown, { allowHtmlTags: true, remoteImages: false })
+  const result = ui.renderMarkdownDocument(markdown, { allowHtmlTags: true, remoteImages: false })
   const html = result.blocks.flatMap(block => block.kind === 'html'
     ? [block.html]
     : []).join('')

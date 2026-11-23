@@ -97,7 +97,12 @@ const hidden = new Map([
   ],
   [
     'capacitor',
-    ['safeGetPreference', 'safeSetPreference', 'safeRemovePreference'],
+    [
+      'createCapacitorTokenStorage',
+      'safeGetPreference',
+      'safeSetPreference',
+      'safeRemovePreference',
+    ],
   ],
   [
     'storage',
@@ -135,7 +140,24 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
     if (directory === 'ai')
       source.push('import type { AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord } from \'@h-ai/ai\'', 'export type Extensions = [AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord]')
     if (directory === 'ai') {
-      source.push('import { createAudioClient } from \'@h-ai/ai/client\'', 'export type AudioFactory = typeof createAudioClient')
+      for (const name of [
+        'AgentEvent',
+        'Message',
+        'Part',
+        'SendMessageRequest',
+        'Task',
+        'TaskArtifactUpdateEvent',
+        'TaskStatus',
+        'TaskStatusUpdateEvent',
+        'McpServer',
+        'SSEServerTransport',
+        'StdioServerTransport',
+        'StreamableHTTPServerTransport',
+      ])
+        source.push('// @ts-expect-error SDK 运行值只通过 ai 暴露', `api.${name}`)
+      if (!browser)
+        source.push('export const message: api.Message = api.ai.Message.fromJSON({ role: "ROLE_USER", messageId: "example", parts: [{ text: "Hello" }] })')
+      source.push('import { ai as audioAi } from \'@h-ai/ai/client\'', 'export type AudioFactory = typeof audioAi.createAudioClient')
       for (const name of [
         'AIClient',
         'AIClientConfig',
@@ -157,8 +179,10 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
+    if (directory === 'serv')
+      source.push('export const procedureFactories = [api.serv.createAiProcedures, api.serv.createIamProcedures, api.serv.createStorageProcedures, api.serv.createFeedbackProcedures]')
     if (directory === 'capacitor')
-      source.push('export const nativeTokens: import("@h-ai/api-client").TokenStorage = api.createCapacitorTokenStorage()', 'export const preferences: api.PreferencesOperations = api.capacitor.preferences')
+      source.push('export const nativeTokens: import("@h-ai/api-client").TokenStorage = api.capacitor.createTokenStorage()', 'export const preferences: api.PreferencesOperations = api.capacitor.preferences')
     if (directory === 'crypto') {
       source.push('export const limits = api.crypto.transport.resolveBodyLimits(2048)', 'export const protocol = api.crypto.transport.protocol', 'export const invalidRing = api.crypto.transport.parseServerKeyRing(null)', 'export function publicKeyLength(input: unknown) { return api.crypto.asymmetric.isValidPublicKey(input) ? input.length : 0 }')
       for (const removed of [
@@ -194,22 +218,27 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
         source.push('export const access: api.AccessFunctions = api.core.access', 'export const decision = access.createRequestCheck(policy)(\'/api/example\', \'GET\')')
     }
     if (directory === 'feedback') {
-      source.push('import { createFeedbackClient } from \'@h-ai/feedback/client\'', 'import { createFeedbackBundle, readFeedbackBundle } from \'@h-ai/feedback/bundle\'', 'export const factories = [createFeedbackClient, createFeedbackBundle, readFeedbackBundle]')
-      source.push('// @ts-expect-error Browser collector does not export the Node singleton', 'import { feedback } from \'@h-ai/feedback/client\'')
-      source.push('// @ts-expect-error Offline bundles do not export the Node singleton', 'import { feedback as bundleService } from \'@h-ai/feedback/bundle\'')
+      source.push('import { feedback as clientFeedback } from \'@h-ai/feedback/client\'', 'import { feedback as bundleFeedback } from \'@h-ai/feedback/bundle\'', 'export const factories = [clientFeedback.createClient, bundleFeedback.createBundle, bundleFeedback.readBundle]')
+      source.push('// @ts-expect-error Browser collector does not provide the Node lifecycle', 'clientFeedback.init({})')
+      source.push('// @ts-expect-error Offline bundles do not provide the Node lifecycle', 'bundleFeedback.init({})')
     }
     if (directory === 'kit') {
       source.push('export const publicKit: api.KitPublicConfig = { transport: false }')
       source.push('export function readonlyClientPaths(crypto: api.ClientTransportConfig["crypto"]) { return api.kit.client.create({ transport: { crypto, excludePaths: ["/api/public"] as const } }) }')
       if (!browser)
-        source.push('export function configuredHost(crypto: api.HookCryptoConfig["crypto"], serverKeyRing: api.TransportEncryptionOptions["serverKeyRing"], keyStore: api.TransportEncryptionOptions["keyStore"]) { const config = api.resolveKitConfig({ transport: {} }); if (config.transport !== false) return api.kit.createHandle({ crypto: { crypto, transport: { ...config.transport, serverKeyRing, keyStore } } }) }')
+        source.push('export function configuredHost(crypto: api.HookCryptoConfig["crypto"], serverKeyRing: api.TransportEncryptionOptions["serverKeyRing"], keyStore: api.TransportEncryptionOptions["keyStore"]) { const config = api.kit.resolveConfig({ transport: {} }); if (config.transport !== false) return api.kit.createHandle({ crypto: { crypto, transport: { ...config.transport, serverKeyRing, keyStore } } }) }')
       source.push('// @ts-expect-error No implementation exists for this subpath', 'import * as absent from \'@h-ai/kit/vite\'')
       source.push('// @ts-expect-error Runtime helpers belong to the kit namespace or client subpath', 'api.createHandle({})')
       if (browser)
         source.push('// @ts-expect-error Server handle is unavailable in browser', 'api.kit.createHandle({})')
     }
-    if (directory === 'ui')
+    if (directory === 'ui') {
       source.push('// @ts-expect-error Only explicit component barrels are public', 'import * as internal from \'@h-ai/ui/components/scenes/ai/highlight\'')
+      source.push('import { ui as toastUi } from \'@h-ai/ui/toast\'')
+      source.push('api.ui.toast.remove(api.ui.notifySuccess("Saved", 0))', 'toastUi.toast.remove(toastUi.notifySuccess("Saved", 0))')
+      source.push('// @ts-expect-error 内部 Toast 计时器不属于公开契约', 'toastUi.toast.deadline')
+      source.push('// @ts-expect-error 通知方法只通过 ui 暴露', 'api.notifySuccess("Saved")')
+    }
     if (directory === 'storage') {
       source.push('const storageClient: import("@h-ai/storage/client").ClientOperations = api.storage.client', 'const mime: string = storageClient.getMimeType("report.txt")')
       for (const name of [
@@ -237,10 +266,10 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
           source.push(`export const serverStorage_${name} = api.storage.${name}`)
       }
     }
-    if (browser && ['ai', 'iam'].includes(directory))
+    if (browser && directory === 'iam')
       source.push('// @ts-expect-error Server singleton is unavailable in browser', `api.${directory}`)
     if (browser && directory === 'ai')
-      source.push('// @ts-expect-error Server constructors are unavailable in browser', 'api.McpServer', '// @ts-expect-error Server factories are unavailable in browser', 'api.createMcpServer')
+      source.push('// @ts-expect-error Server lifecycle is unavailable in browser', 'api.ai.init({})', '// @ts-expect-error Server constructors are unavailable in browser', 'api.ai.McpServer', '// @ts-expect-error Server factories are unavailable in browser', 'api.ai.createMcpServer')
     const file = join(base, `${suffix}-${browser ? 'browser' : 'node'}.ts`)
     // 写入失败也可能已经产生部分文件，先登记再落盘。
     generated.push(file)
@@ -326,7 +355,7 @@ async function capacitorConsumerSmoke(base, manifest, temporary) {
   writeFileSync(join(copiedPackage, 'package.json'), JSON.stringify(manifest))
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({ type: 'module', private: true }))
   writeFileSync(join(consumer, 'index.html'), '<script type="module" src="/main.js"></script>')
-  writeFileSync(join(consumer, 'main.js'), 'import { capacitor, createCapacitorTokenStorage } from "@h-ai/capacitor"; globalThis.nativeBridge = { capacitor, createCapacitorTokenStorage }')
+  writeFileSync(join(consumer, 'main.js'), 'import { capacitor } from "@h-ai/capacitor"; globalThis.nativeBridge = { capacitor, tokens: capacitor.createTokenStorage() }')
   for (const name of ['@h-ai/core', '@capacitor/core', '@capacitor/preferences']) {
     const destination = join(consumer, 'node_modules', name)
     mkdirSync(dirname(destination), { recursive: true })
@@ -426,7 +455,17 @@ try {
         if (directory === 'core')
           child(base, ['--input-type=module', '--eval', 'const api = await import(\'@h-ai/core\'); if (\'createRequestCheck\' in api || !api.core.access.createRequestCheck(false)(\'/api/example\', \'GET\').allowed) throw new Error(\'Core access registration mismatch\')'])
         if (directory === 'capacitor')
-          child(base, ['--input-type=module', '--eval', 'const api = await import("@h-ai/capacitor"); if (typeof api.createCapacitorTokenStorage !== "function" || ["safeGetPreference", "safeSetPreference", "safeRemovePreference"].some(name => name in api)) throw new Error("Capacitor public exports mismatch")'])
+          child(base, ['--input-type=module', '--eval', 'const api = await import("@h-ai/capacitor"); if (typeof api.capacitor.createTokenStorage !== "function" || ["createCapacitorTokenStorage", "safeGetPreference", "safeSetPreference", "safeRemovePreference"].some(name => name in api)) throw new Error("Capacitor public exports mismatch")'])
+        if (directory === 'serv') {
+          child(base, ['--input-type=module', '--eval', `
+            const { serv } = await import('@h-ai/serv')
+            for (const [feature, factory] of Object.entries({ ai: 'createAiProcedures', iam: 'createIamProcedures', storage: 'createStorageProcedures', feedback: 'createFeedbackProcedures' })) {
+              const entry = await import('@h-ai/serv/features/' + feature)
+              if (entry.serv !== serv || typeof serv[factory] !== 'function' || factory in entry)
+                throw new Error('Serv feature entry mismatch: ' + feature)
+            }
+          `])
+        }
       }
       imports++
     }

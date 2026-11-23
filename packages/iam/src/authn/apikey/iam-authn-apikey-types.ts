@@ -15,7 +15,7 @@ import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/c
  * 不含密钥哈希等敏感信息。
  * @example
  * ```ts
- * import { iam, type ApiKey } from '@h-ai/iam'
+ * import { type ApiKey, iam } from '@h-ai/iam'
  * // 已初始化依赖和 IAM，并启用 login.apikey。
  * const result = await iam.apiKey.getApiKey('key-1')
  * if (result.success && result.data) {
@@ -69,7 +69,7 @@ export interface StoredApiKey extends ApiKey {
  * 仅在创建时返回明文密钥，之后无法再获取。
  * @example
  * ```ts
- * import { iam, type CreateApiKeyResult } from '@h-ai/iam'
+ * import { type CreateApiKeyResult, iam } from '@h-ai/iam'
  * // 已初始化依赖和 IAM、启用 login.apikey；user-1 为已存在的用户。
  * const created = await iam.apiKey.createApiKey('user-1', { name: 'report-reader', scopes: ['report:read'] })
  * if (created.success) {
@@ -151,7 +151,7 @@ export interface ListApiKeysOptions extends PaginationOptionsInput {
  * API Key 管理操作接口
  * @example
  * ```ts
- * import { iam, type ApiKeyOperations } from '@h-ai/iam'
+ * import { type ApiKeyOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化，并启用 login.apikey。
  * const operations: ApiKeyOperations = iam.apiKey
  * const result = await operations.listApiKeys('user-1', { page: 1, pageSize: 20 })

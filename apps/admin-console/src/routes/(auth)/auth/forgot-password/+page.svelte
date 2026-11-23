@@ -9,7 +9,7 @@
   import type { ForgotPasswordFormData } from '@h-ai/ui'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
+  import { ui } from '@h-ai/ui/i18n'
   import * as m from '#lib/paraglide/messages.js'
   import { authActions as actions } from '#lib/services/auth.js'
 
@@ -31,7 +31,7 @@
       }
       else {
         errors = {
-          general: authErrorMessage(result.error),
+          general: ui.authErrorMessage(result.error),
         }
       }
     }

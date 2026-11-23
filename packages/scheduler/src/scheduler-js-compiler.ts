@@ -7,11 +7,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { JsTaskConfig, JsTaskHandler } from './scheduler-types.js'
 import { createHash } from 'node:crypto'
 import { Script } from 'node:vm'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { schedulerM } from './scheduler-i18n.js'
 import { HaiSchedulerError } from './scheduler-types.js'
@@ -56,7 +55,7 @@ export function clearJsTaskHandlerCache(): void {
  *   return await compiled.data({ task, taskId: task.id, params: {}, trigger: { type: 'manual', source: null } }, controller.signal)
  * } catch (error) {
  *   // 返回的 handler 可 reject；此调用边界转换为领域结果。
- *   return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_executionStateFailed'), error)
+ *   return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_executionStateFailed'), error)
  * }
  * ```
  */
@@ -64,7 +63,7 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
   const cacheKey = createCacheKey(config)
   const cachedHandler = compiledHandlerCache.get(cacheKey)
   if (cachedHandler)
-    return ok(cachedHandler)
+    return core.ok(cachedHandler)
 
   try {
     // 主线程仅解析语法，不执行表达式或任务函数。
@@ -112,10 +111,10 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
     }
 
     compiledHandlerCache.set(cacheKey, handler)
-    return ok(handler)
+    return core.ok(handler)
   }
   catch (error) {
-    return err(
+    return core.err(
       HaiSchedulerError.JS_COMPILE_FAILED,
       schedulerM('scheduler_jsCompileFailed', {
         params: {

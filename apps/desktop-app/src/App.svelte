@@ -5,7 +5,7 @@
   - 已登录 → AppShell 内嵌当前视图；未登录 → 强制跳 /login 或 /register。
 -->
 <script lang='ts'>
-  import { Button, ToastContainer, useToastFeedback } from '@h-ai/ui'
+  import { Button, ToastContainer, ui } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import DesktopUpdateEntry from '../../../packages/cli/templates/shared/desktop-update/DesktopUpdateEntry.svelte'
   import {
@@ -23,7 +23,7 @@
   import RegisterView from './views/RegisterView.svelte'
   import UsersView from './views/UsersView.svelte'
 
-  useToastFeedback(() => isInitialized() && isAuthenticated() && ![
+  ui.useToastFeedback(() => isInitialized() && isAuthenticated() && ![
     '/',
     '/login',
     '/register',

@@ -2,7 +2,7 @@ import type { ToolService } from '@h-ai/tools/server'
 import type { BuiltinToolBroker } from '../src/index.js'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { tools } from '@h-ai/tools/server'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -13,7 +13,7 @@ import { ai } from '../src/index.js'
 const scope = { tenantId: 'team', userId: 'alice' }
 
 async function fixture(run: (input: { service: ToolService, broker: BuiltinToolBroker, setEnabled: (value: boolean) => void }) => Promise<void>, network = true) {
-  const runner = createRunner()
+  const runner = frameworkRunner.create()
   let broker: BuiltinToolBroker | undefined
   let service: ToolService | undefined
   let enabled = true

@@ -1,4 +1,5 @@
 /** 用真实 Node HTTP 与 typed client 验证安全策略不能只停留在 IAM 内部。 */
+
 import type { User } from '@h-ai/iam'
 import { once } from 'node:events'
 import { apiClient } from '@h-ai/api-client'
@@ -10,7 +11,6 @@ import { HaiIamError, iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { pbkdf2, solveChallenge } from 'altcha/lib'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { createIamProcedures } from '../src/features/serv-feature-iam.js'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({ iam: apiContract.iam })
@@ -40,7 +40,7 @@ beforeAll(async () => {
   const app = serv.createApp({
     contract,
     procedures: {
-      iam: createIamProcedures({ iam }),
+      iam: serv.createIamProcedures({ iam }),
     },
     iam,
   })

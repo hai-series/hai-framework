@@ -2,9 +2,8 @@ import type { ChatRecord, MemoryEntry } from '@h-ai/ai'
 import type { AiProcedureDeps } from '../src/features/serv-feature-ai.js'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
-import { createAiProcedures } from '../src/features/serv-feature-ai.js'
 import { serv } from '../src/serv-main.js'
 
 function createAiMock(): AiProcedureDeps['ai'] {
@@ -44,7 +43,7 @@ function createAiMock(): AiProcedureDeps['ai'] {
     llm: {
       chat: vi.fn<AiProcedureDeps['ai']['llm']['chat']>(async (request) => {
         record(request.objectId, request.sessionId)
-        return ok({
+        return core.ok({
           id: 'completion',
           object: 'chat.completion',
           created: 1,
@@ -61,10 +60,10 @@ function createAiMock(): AiProcedureDeps['ai'] {
       }),
       ask: vi.fn<AiProcedureDeps['ai']['llm']['ask']>(async (_message, options) => {
         record(options?.objectId, options?.sessionId)
-        return ok('reply')
+        return core.ok('reply')
       }),
-      getHistory: vi.fn<AiProcedureDeps['ai']['llm']['getHistory']>(async scope => ok(records.filter(row => row.objectId === scope.objectId && row.sessionId === scope.sessionId))),
-      listSessions: vi.fn<AiProcedureDeps['ai']['llm']['listSessions']>(async objectId => ok(records.filter(row => row.objectId === objectId).map(row => ({
+      getHistory: vi.fn<AiProcedureDeps['ai']['llm']['getHistory']>(async scope => core.ok(records.filter(row => row.objectId === scope.objectId && row.sessionId === scope.sessionId))),
+      listSessions: vi.fn<AiProcedureDeps['ai']['llm']['listSessions']>(async objectId => core.ok(records.filter(row => row.objectId === objectId).map(row => ({
         objectId,
         sessionId: row.sessionId,
         createdAt: 1,
@@ -72,10 +71,10 @@ function createAiMock(): AiProcedureDeps['ai'] {
       })))),
     },
     memory: {
-      recall: vi.fn<AiProcedureDeps['ai']['memory']['recall']>(async (_query, options) => ok(memories.filter(row => !options?.objectId || row.objectId === options.objectId))),
+      recall: vi.fn<AiProcedureDeps['ai']['memory']['recall']>(async (_query, options) => core.ok(memories.filter(row => !options?.objectId || row.objectId === options.objectId))),
       listPage: vi.fn<AiProcedureDeps['ai']['memory']['listPage']>(async (options) => {
         const items = memories.filter(row => !options?.objectId || row.objectId === options.objectId)
-        return ok({ items, total: items.length })
+        return core.ok({ items, total: items.length })
       }),
     },
   }
@@ -84,7 +83,7 @@ function createAiMock(): AiProcedureDeps['ai'] {
 function createApp(ai: AiProcedureDeps['ai'], userId = 'user-a', authorizeObject?: AiProcedureDeps['authorizeObject']) {
   return serv.createApp({
     contract: apiContract.ai,
-    procedures: createAiProcedures({ ai, authorizeObject }),
+    procedures: serv.createAiProcedures({ ai, authorizeObject }),
     createContext: ({ request }): ServContext => ({
       requestId: 'ai-scope-test',
       locale: 'en-US',

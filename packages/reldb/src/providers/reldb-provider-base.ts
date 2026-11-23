@@ -9,8 +9,8 @@
  */
 
 import type { HaiError, HaiErrorDef, HaiResult, PaginatedResult } from '@h-ai/core'
-
 import type { ReldbOperationLogConfig } from '../reldb-config.js'
+
 import type {
   CrudManager,
   DdlOperations,
@@ -18,8 +18,7 @@ import type {
   PaginationQueryOptions,
   TxManager,
 } from '../reldb-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
@@ -144,7 +143,7 @@ async function wrapOp<T>(
   errorMeta?: Record<string, unknown>,
 ): Promise<HaiResult<T>> {
   if (!ctx.isConnected()) {
-    return err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+    return core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
   }
   const failed = (error: unknown, original?: HaiError): HaiResult<T> => {
     let definition = original ?? errorDef
@@ -257,7 +256,7 @@ async function wrapOp<T>(
       : definition.code === HaiReldbError.TRANSACTION_FAILED.code
         ? 'reldb_txFailed'
         : 'reldb_queryFailed'
-    return err({
+    return core.err({
       ...definition,
       traceId,
       message: definition.code === HaiReldbError.DUPLICATE_ENTRY.code
@@ -444,7 +443,7 @@ export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['be
     }
 
     const tx = result.data
-    return ok({
+    return core.ok({
       ...tx,
       commit: async () => {
         logReldbOperation(ctx, 'write', 'tx.commit', {})

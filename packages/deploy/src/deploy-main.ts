@@ -1,10 +1,3 @@
-/**
- * @h-ai/deploy — 模块主入口
- *
- * 提供 deploy 单例对象，暴露完整的自动化部署 API。
- * @module deploy-main
- */
-
 import type { HaiResult } from '@h-ai/core'
 import type { ContainerDeployProvider } from './container/deploy-container-types.js'
 import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
@@ -21,9 +14,17 @@ import type {
   ServiceType,
 } from './deploy-types.js'
 import { existsSync, readFileSync } from 'node:fs'
+/**
+ * @h-ai/deploy — 模块主入口
+ *
+ * 提供 deploy 单例对象，暴露完整的自动化部署 API。
+ * @module deploy-main
+ */
+
 import { join } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
-import { readDeploymentArtifact } from './deploy-artifact.js'
+import { core } from '@h-ai/core'
+import { artifactChecksum, readDeploymentArtifact } from './deploy-artifact.js'
+
 import { buildReceipt, verifyBuildReceipt } from './deploy-build-receipt.js'
 import { DeployConfigSchema, validateComposeServices } from './deploy-config.js'
 import {
@@ -32,11 +33,17 @@ import {
   saveCredential,
   saveCredentials,
 } from './deploy-credentials.js'
-import { generatedVariables, loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
+import { resolveDownloadProxy, resolveImageReference } from './deploy-download.js'
+import { generatedVariables, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from './deploy-environment.js'
+
 import { normalizeProjectName, resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { mergeManagedMiddlewareConfig } from './deploy-middleware-config.js'
-import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
+import { canKeepMiddleware, parseMiddlewareField, saveMiddlewareEnvironment, validateMiddlewareField } from './deploy-middleware-environment.js'
+import { describeMiddlewareBackend } from './deploy-middleware.js'
+import { createDeploymentPlan } from './deploy-plan.js'
+import { getDeployCommandState, getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
+
 import { executeBundle, verifyDeployment } from './deploy-release.js'
 import { scanApp } from './deploy-scanner.js'
 import { HaiDeployError } from './deploy-types.js'
@@ -189,14 +196,14 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
  * 每次 init 检查 HaiResult；只打包不会连接 SSH，成功打包也不代表服务器已部署。远端 unknown 必须先核对匹配部署 ID 的结果，不能盲目重试。
  * @example
  * ```ts
- * import { deploy, getDeployCommandState } from '@h-ai/deploy'
+ * import { deploy } from '@h-ai/deploy'
  * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })
  * if (!initialized.success) throw new Error(initialized.error.message)
  * try {
  *   // 当前项目已有镜像产物与部署环境；只打包，不连接服务器。
  *   const result = await deploy.deployApp(process.cwd(), { environment: 'prod', bundleOnly: true })
  *   if (!result.success) {
- *     const state = getDeployCommandState(result.error)
+ *     const state = deploy.getDeployCommandState(result.error)
  *     if (state?.remoteExecution === 'unknown') {
  *       process.stderr.write('Inspect the matching server result before retrying\n')
  *     }
@@ -212,6 +219,24 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
  * ```
  */
 export const deploy: DeployFunctions = {
+  // 独立工具保持原有调用契约，不依赖模块初始化状态。
+  artifactChecksum,
+  canKeepMiddleware,
+  createDeploymentPlan,
+  describeMiddlewareBackend,
+  getDeployCommandState,
+  getDeployRecovery,
+  loadDeploymentConfig,
+  loadDeploymentEnvironment,
+  mergeEnvironmentLayers,
+  normalizeProjectName,
+  parseMiddlewareField,
+  readDeploymentArtifact,
+  resolveDownloadProxy,
+  resolveImageReference,
+  saveDeploymentEnvironment,
+  saveMiddlewareEnvironment,
+  validateMiddlewareField,
   credentials: deployCredentials,
   buildReceipt,
   verifyBuildReceipt,
@@ -222,7 +247,7 @@ export const deploy: DeployFunctions = {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Deploy init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiDeployError.CONFIG_ERROR,
         deployM('deploy_configError', {
           params: { error: 'init already in progress' },
@@ -242,7 +267,7 @@ export const deploy: DeployFunctions = {
       const parseResult = DeployConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Deploy config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiDeployError.CONFIG_ERROR,
           deployM('deploy_configError', {
             params: { error: parseResult.error.message },
@@ -264,7 +289,7 @@ export const deploy: DeployFunctions = {
           provider = createProviderByType(parsed.provider.type)
           const authResult = await provider.authenticate(parsed.provider.token)
           if (!authResult.success)
-            return err(authResult.error)
+            return core.err(authResult.error)
         }
 
         // 创建 Provisioners（两类 Provider 均可复用云资源开通）
@@ -286,7 +311,7 @@ export const deploy: DeployFunctions = {
                 traceId: provAuthResult.error.traceId,
               })
               currentProvisioners.clear()
-              return err(provAuthResult.error)
+              return core.err(provAuthResult.error)
             }
             logger.info('Provisioner authenticated', {
               service: serviceType,
@@ -305,7 +330,7 @@ export const deploy: DeployFunctions = {
             ...currentProvisioners.keys(),
           ],
         })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         // 清理部分赋值的状态
@@ -314,7 +339,7 @@ export const deploy: DeployFunctions = {
         currentConfig = null
         currentProvisioners.clear()
         logger.error('Deploy module initialization failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.CONFIG_ERROR,
           deployM('deploy_configError', {
             params: {
@@ -399,7 +424,7 @@ export const deploy: DeployFunctions = {
       logger.info('Service provisioned', { serviceType, provisioner: provisioner.name })
     }
 
-    return ok(results)
+    return core.ok(results)
   },
 
   async deployApp(
@@ -416,7 +441,7 @@ export const deploy: DeployFunctions = {
     const scanOptions = { ...options, environment: options?.environment ?? currentConfig?.environment }
     const scanResult = await scanApp(appDir, scanOptions)
     if (!scanResult.success) {
-      return err(scanResult.error)
+      return core.err(scanResult.error)
     }
     const scan = scanResult.data
     appDir = scan.appDir ?? appDir
@@ -436,7 +461,7 @@ export const deploy: DeployFunctions = {
         }
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
           params: { path: projectFile, line: '1' },
         }))
       }
@@ -469,9 +494,9 @@ export const deploy: DeployFunctions = {
     }
 
     if (options?.bundleOnly)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleOnlyContainer'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleOnlyContainer'))
     if (options.selectedServices)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectedContainerOnly'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectedContainerOnly'))
 
     // 到此必为平台 Provider（vercel）
     if (!currentProvider) {
@@ -480,7 +505,7 @@ export const deploy: DeployFunctions = {
 
     // 2. 检查 adapter
     if (scan.isSvelteKit && !scan.adapterInstalled) {
-      return err(
+      return core.err(
         HaiDeployError.ADAPTER_MISSING,
         deployM('deploy_adapterMissing', {
           params: { adapter: '@sveltejs/adapter-vercel' },
@@ -489,7 +514,7 @@ export const deploy: DeployFunctions = {
     }
 
     if (!existsSync(resolveOutputDir(appDir, 'vercel')))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
 
     // 3. 开通基础设施
     let allEnvVars: Record<string, string> = appEnv
@@ -499,7 +524,7 @@ export const deploy: DeployFunctions = {
         ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options))
         : undefined)
       if (!provResults.success) {
-        return err(provResults.error)
+        return core.err(provResults.error)
       }
       recovery.resources = provResults.data.map(({ envVars: _envVars, ...resource }) => resource)
       allEnvVars = {
@@ -550,7 +575,7 @@ export const deploy: DeployFunctions = {
       status: result.status,
     })
 
-    return ok(result)
+    return core.ok(result)
   },
 }
 
@@ -588,7 +613,7 @@ async function deployContainerApp(
     artifact = await readDeploymentArtifact(artifactDir)
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
   }
   const compose = validateComposeServices(currentConfig?.container, artifact)
   if (!compose.success)
@@ -605,7 +630,7 @@ async function deployContainerApp(
     }
   }
   if (!options?.bundleOnly && currentConfig?.provider.type === 'docker-ssh' && !currentConfig.provider.ssh)
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
 
   let provisionEnv: Record<string, string> = {}
   if (!options?.skipMiddleware) {
@@ -613,7 +638,7 @@ async function deployContainerApp(
       ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options))
       : undefined)
     if (!provResults.success) {
-      return err(provResults.error)
+      return core.err(provResults.error)
     }
     provisionEnv = mergeProvisionEnv(provResults.data, scan, options)
   }

@@ -5,7 +5,7 @@ import type { RunnerClaim, RunnerStore } from './runner-store.js'
 import type { RunnerContext, RunnerFunctions, RunnerHandler, RunnerJson, RunnerLaunch, RunnerOwner, RunnerProcess, RunnerScope, RunnerSubmit, RunnerWarmPool } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { json, RunnerConfigSchema, runnerKind, submitSchema, warmPoolSchema } from './runner-config.js'
 import { confirmContainerReleased, prepareWarmContainer, startContainer } from './runner-container.js'
 import { runnerM } from './runner-i18n.js'
@@ -32,15 +32,15 @@ interface LocalExecution {
 const MAX_PAYLOAD_BYTES = 512 * 1024
 
 function invalid() {
-  return err(HaiRunnerError.INVALID, runnerM('runner_invalid'))
+  return core.err(HaiRunnerError.INVALID, runnerM('runner_invalid'))
 }
 
 function cleanupUnconfirmed() {
-  return err(HaiRunnerError.CLEANUP_UNCONFIRMED, runnerM('runner_cleanupUnconfirmed'))
+  return core.err(HaiRunnerError.CLEANUP_UNCONFIRMED, runnerM('runner_cleanupUnconfirmed'))
 }
 
 function notFound() {
-  return err(HaiRunnerError.NOT_FOUND, runnerM('runner_notFound'))
+  return core.err(HaiRunnerError.NOT_FOUND, runnerM('runner_notFound'))
 }
 
 function validAddress(scope: RunnerScope, id: string) {
@@ -63,10 +63,10 @@ function bounded(input: unknown) {
  * @example
  * ```ts
  * import { reldb } from '@h-ai/reldb'
- * import { createRunner } from '@h-ai/runner'
+ * import { runner as frameworkRunner } from '@h-ai/runner'
  * const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
  * if (!database.success) throw new Error(database.error.message)
- * const runner = createRunner()
+ * const runner = frameworkRunner.create()
  * const initialized = await runner.init({ nodeId: 'tools' })
  * if (!initialized.success) throw new Error(initialized.error.message)
  * await runner.close()
@@ -172,7 +172,7 @@ export function createRunner(): RunnerFunctions {
         if (!renewed.success)
           return renewed
         if (renewed.data !== 'running' || abort.signal.aborted)
-          return err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
+          return core.err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
         const started = warmed
           ? await warmed.activate(options, abort.signal, async () => {
               const lease = await current.renew(claim.id)
@@ -331,7 +331,7 @@ export function createRunner(): RunnerFunctions {
 
   async function init(input: RunnerConfigInput): Promise<HaiResult<void>> {
     if (initializing || config || closing)
-      return err(HaiRunnerError.ALREADY_INITIALIZED, runnerM('runner_alreadyInitialized'))
+      return core.err(HaiRunnerError.ALREADY_INITIALIZED, runnerM('runner_alreadyInitialized'))
     const parsed = RunnerConfigSchema.safeParse(input)
     if (!parsed.success)
       return invalid()
@@ -356,7 +356,7 @@ export function createRunner(): RunnerFunctions {
         timer = setInterval(poll, config.pollMs)
         timer.unref()
       }
-      return ok(undefined)
+      return core.ok(undefined)
     }
     finally {
       initializing = false
@@ -367,9 +367,9 @@ export function createRunner(): RunnerFunctions {
     if (closing)
       return closing
     if (initializing)
-      return Promise.resolve(err(HaiRunnerError.ALREADY_INITIALIZED, runnerM('runner_alreadyInitialized')))
+      return Promise.resolve(core.err(HaiRunnerError.ALREADY_INITIALIZED, runnerM('runner_alreadyInitialized')))
     if (!config)
-      return Promise.resolve(ok(undefined))
+      return Promise.resolve(core.ok(undefined))
     closingRequested = true
     closing = (async () => {
       await tick
@@ -398,7 +398,7 @@ export function createRunner(): RunnerFunctions {
         closingRequested = false
         return unconfirmedCleanup
           ? cleanupUnconfirmed()
-          : ok(undefined)
+          : core.ok(undefined)
       }
       finally {
         clearTimeout(deadline)
@@ -418,7 +418,7 @@ export function createRunner(): RunnerFunctions {
         return inactive()
       const found = config.environments.find(item => item.id === id)
       return found
-        ? ok(structuredClone(found))
+        ? core.ok(structuredClone(found))
         : notFound()
     },
     register(kind, handler) {
@@ -427,11 +427,11 @@ export function createRunner(): RunnerFunctions {
       if (!runnerKind.safeParse(kind).success || typeof handler !== 'function')
         return invalid()
       if (!config.executor)
-        return ok(() => {})
+        return core.ok(() => {})
       if (handlers.has(kind) || handlers.size >= 100)
-        return err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
+        return core.err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
       handlers.set(kind, handler)
-      return ok(() => {
+      return core.ok(() => {
         if (handlers.get(kind) === handler)
           handlers.delete(kind)
       })
@@ -448,9 +448,9 @@ export function createRunner(): RunnerFunctions {
         return invalid()
       const key = poolKey(pool.kind, pool.key)
       if (pools.has(key) || pools.size >= 100)
-        return err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
+        return core.err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
       pools.set(key, pool)
-      return ok(() => {
+      return core.ok(() => {
         if (pools.get(key) !== pool)
           return
         pools.delete(key)
@@ -557,4 +557,4 @@ export function createRunner(): RunnerFunctions {
  * if (!status.success) throw new Error(status.error.message)
  * ```
  */
-export const runner: RunnerFunctions = createRunner()
+export const runner: RunnerFunctions & { create: typeof createRunner } = Object.assign(createRunner(), { create: createRunner })

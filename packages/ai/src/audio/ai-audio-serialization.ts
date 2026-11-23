@@ -3,8 +3,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { AudioContent, PlayableAudio } from './ai-audio-types.js'
-
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiAIError } from '../ai-types.js'
 
 /**
@@ -15,8 +14,8 @@ import { HaiAIError } from '../ai-types.js'
  *
  * @example
  * ```ts
- * import { serializePlayableAudio } from '@h-ai/ai'
- * const result = serializePlayableAudio({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000, channels: 1 })
+ * import { ai } from '@h-ai/ai'
+ * const result = ai.serializePlayableAudio({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000, channels: 1 })
  * if (result.success) {
  *   const source = 'data:' + result.data.mimeType + ';base64,' + result.data.audioBase64
  * }
@@ -24,26 +23,26 @@ import { HaiAIError } from '../ai-types.js'
  */
 export function serializePlayableAudio(audio: AudioContent): HaiResult<PlayableAudio> {
   if (audio.format === 'wav') {
-    return ok({
+    return core.ok({
       audioBase64: toBase64(audio.data),
       format: 'wav',
       mimeType: 'audio/wav',
     })
   }
   if (audio.format === 'mp3') {
-    return ok({
+    return core.ok({
       audioBase64: toBase64(audio.data),
       format: 'mp3',
       mimeType: 'audio/mpeg',
     })
   }
   if (audio.format !== 'pcm16')
-    return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, `Unsupported playable audio format: ${audio.format}`)
+    return core.err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, `Unsupported playable audio format: ${audio.format}`)
 
   const sampleRate = audio.sampleRate
   const channels = audio.channels ?? 1
   if (sampleRate === undefined || !Number.isInteger(sampleRate) || sampleRate <= 0 || (channels !== 1 && channels !== 2) || audio.data.byteLength % (channels * 2) !== 0)
-    return err(HaiAIError.AUDIO_INVALID_REQUEST, 'PCM16 audio metadata is invalid')
+    return core.err(HaiAIError.AUDIO_INVALID_REQUEST, 'PCM16 audio metadata is invalid')
 
   const wav = new Uint8Array(44 + audio.data.byteLength)
   const view = new DataView(wav.buffer)
@@ -61,7 +60,7 @@ export function serializePlayableAudio(audio: AudioContent): HaiResult<PlayableA
   writeAscii(wav, 36, 'data')
   view.setUint32(40, audio.data.byteLength, true)
   wav.set(audio.data, 44)
-  return ok({
+  return core.ok({
     audioBase64: toBase64(wav),
     format: 'wav',
     mimeType: 'audio/wav',

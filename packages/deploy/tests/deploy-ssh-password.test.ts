@@ -3,7 +3,7 @@ import type { SshConfig } from '../src/deploy-config.js'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildScpUploadArgs, buildSshExecArgs, createSshExecutor } from '../src/container/deploy-ssh.js'
 import { ProviderConfigSchema } from '../src/deploy-config.js'
@@ -29,7 +29,7 @@ vi.mock('../src/container/deploy-command.js', async (original) => {
         ? readdirSync(dirname(helper)).map(file => readFileSync(join(dirname(helper), file), 'utf8'))
         : []
       calls.push({ command, args, options, helperFiles })
-      return ok({
+      return core.ok({
         code: 0,
         stdout: command === 'ssh'
           ? 'connected'

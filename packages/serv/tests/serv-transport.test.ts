@@ -2,7 +2,7 @@ import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, Transp
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto, TransportTimeError } from '@h-ai/crypto'
 import { Hono } from 'hono'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,8 +75,8 @@ function createFailingEncryptManager(): TransportEncryptionManager {
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
     getClientPublicKey: async () => 'client-public-key',
-    encryptResponse: async () => err(new Error('encrypt failed')),
-    decryptRequest: async () => ok(''),
+    encryptResponse: async () => core.err(new Error('encrypt failed')),
+    decryptRequest: async () => core.ok(''),
     close: async () => {},
   }
 }
@@ -519,7 +519,7 @@ describe('serv.createApp({ transport })', () => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
     const decrypt = vi.spyOn(manager, 'decryptRequest')
-    const transportCrypto = createCryptoWithTransportServer(() => ok(manager))
+    const transportCrypto = createCryptoWithTransportServer(() => core.ok(manager))
     const app = serv.createApp({
       contract,
       procedures,
@@ -576,7 +576,7 @@ describe('serv.createApp({ transport })', () => {
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
     })
     const response = await app.request('/api/v1/_hai/key-exchange', {
@@ -596,7 +596,7 @@ describe('serv.createApp({ transport })', () => {
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
     })
     const controller = new AbortController()
@@ -628,7 +628,7 @@ describe('serv.createApp({ transport })', () => {
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
     })
     const response = await app.request('/api/v1/_hai/key-exchange', {
@@ -648,7 +648,7 @@ describe('serv.createApp({ transport })', () => {
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
     })
     const cancel = vi.fn()
@@ -680,14 +680,14 @@ describe('serv.createApp({ transport })', () => {
 
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
-    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const app = serv.createApp({
       contract,
       procedures,
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
     })
     const payloadSize = crypto.transport.bodyLimits.plaintextBytes - 8
@@ -706,8 +706,8 @@ describe('serv.createApp({ transport })', () => {
 
   it('解密后明文超限时不进入业务中间件和 handler，正常请求可读取明文', async () => {
     const manager = createFailingEncryptManager()
-    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('你'.repeat(400_000)))
-    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(core.ok('你'.repeat(400_000)))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const middleware = vi.fn(async (c: Parameters<ReturnType<typeof createTransportMiddleware>>[0]) => {
       expect(c.req.bodyCache).toEqual({})
       expect(await c.req.json()).toEqual({ ok: true })
@@ -718,7 +718,7 @@ describe('serv.createApp({ transport })', () => {
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
-        crypto: createCryptoWithTransportServer(() => ok(manager)),
+        crypto: createCryptoWithTransportServer(() => core.ok(manager)),
       },
       middlewares: [
         {
@@ -743,7 +743,7 @@ describe('serv.createApp({ transport })', () => {
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(413)
     expect(handler).not.toHaveBeenCalled()
     expect(middleware).not.toHaveBeenCalled()
-    decrypt.mockResolvedValue(ok('{"ok":true}'))
+    decrypt.mockResolvedValue(core.ok('{"ok":true}'))
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(200)
     expect(handler).toHaveBeenCalledOnce()
     expect(middleware).toHaveBeenCalledOnce()
@@ -751,8 +751,8 @@ describe('serv.createApp({ transport })', () => {
 
   it('传输中间件替换正文时清除宿主已缓存的密文', async () => {
     const manager = createFailingEncryptManager()
-    vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('{"ok":true}'))
-    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    vi.spyOn(manager, 'decryptRequest').mockResolvedValue(core.ok('{"ok":true}'))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const app = new Hono()
     // 真实 Hono 宿主可在安装传输层前缓存正文；解密后不得复用该密文缓存。
     app.use(async (c, next) => {

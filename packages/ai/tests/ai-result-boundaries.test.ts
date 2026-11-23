@@ -1,8 +1,9 @@
 /** 通过公开入口验证后台 HaiResult 与存储异常不会冒充成功或逸出业务 API。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ContextManager } from '../src/context/ai-context-types.js'
 import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
@@ -12,7 +13,7 @@ beforeEach(async () => {
     llm: { apiKey: 'test', model: 'controlled' },
   })
   expect(initialized.success).toBe(true)
-  vi.spyOn(ai.llm, 'chat').mockResolvedValue(ok({
+  vi.spyOn(ai.llm, 'chat').mockResolvedValue(core.ok({
     id: 'response',
     object: 'chat.completion',
     model: 'controlled',
@@ -50,7 +51,7 @@ describe('background memory results', () => {
   it.each(['result', 'throw', 'reject'] as const)('%s 失败即使任务已结束也由 flush 报告，报告后不自动重放', async (failure) => {
     const extract = vi.spyOn(ai.memory, 'extract')
     if (failure === 'result')
-      extract.mockResolvedValue(err(HaiAIError.MEMORY_EXTRACT_FAILED, 'private-db-password'))
+      extract.mockResolvedValue(core.err(HaiAIError.MEMORY_EXTRACT_FAILED, 'private-db-password'))
     else if (failure === 'throw')
       extract.mockImplementation(() => { throw new Error('private-db-password') })
     else
@@ -86,7 +87,7 @@ describe('background memory results', () => {
       context.reset({ waitForMemoryTasks: true }),
       context.consolidate(),
     ]
-    complete(err(HaiAIError.MEMORY_EXTRACT_FAILED, 'failed'))
+    complete(core.err(HaiAIError.MEMORY_EXTRACT_FAILED, 'failed'))
     for (const result of await Promise.all(observing)) {
       expect(result.success).toBe(false)
       if (!result.success)
@@ -105,7 +106,7 @@ describe('background memory results', () => {
   })
 
   it('一次报告覆盖所有失败数量，新一批失败仍单独报告', async () => {
-    const extract = vi.spyOn(ai.memory, 'extract').mockResolvedValue(err(HaiAIError.MEMORY_EXTRACT_FAILED, 'failed'))
+    const extract = vi.spyOn(ai.memory, 'extract').mockResolvedValue(core.err(HaiAIError.MEMORY_EXTRACT_FAILED, 'failed'))
     const context = manager()
     expect((await context.chat('one')).success).toBe(true)
     expect((await context.chat('two')).success).toBe(true)
@@ -145,7 +146,7 @@ describe('background memory results', () => {
 
 describe('store HaiResult boundaries', () => {
   it('restoreManager 的实际 SQL 失败转换为 HaiResult', async () => {
-    vi.spyOn(reldb.sql, 'get').mockResolvedValueOnce(err(HaiAIError.STORE_FAILED, 'database unavailable'))
+    vi.spyOn(reldb.sql, 'get').mockResolvedValueOnce(core.err(HaiAIError.STORE_FAILED, 'database unavailable'))
     await expect(ai.context.restoreManager({ objectId: 'user', sessionId: 'restore' })).resolves.toMatchObject({
       success: false,
       error: { code: HaiAIError.STORE_FAILED.code },
@@ -153,7 +154,7 @@ describe('store HaiResult boundaries', () => {
   })
 
   it('knowledge 就绪查询的实际 SQL 失败由每个非流式入口转换', async () => {
-    vi.spyOn(reldb.sql, 'get').mockResolvedValue(err(HaiAIError.STORE_FAILED, 'database unavailable'))
+    vi.spyOn(reldb.sql, 'get').mockResolvedValue(core.err(HaiAIError.STORE_FAILED, 'database unavailable'))
     for (const operation of [
       () => ai.knowledge.ingest({ documentId: 'one', content: 'document' }),
       () => ai.knowledge.retrieve('question'),
@@ -177,7 +178,7 @@ describe('store HaiResult boundaries', () => {
       execute: async () => {},
       cancelTask: async () => {},
     }).success).toBe(true)
-    vi.spyOn(reldb.sql, 'get').mockResolvedValue(err(HaiAIError.STORE_FAILED, 'postgres://user:private-db-password@internal/db'))
+    vi.spyOn(reldb.sql, 'get').mockResolvedValue(core.err(HaiAIError.STORE_FAILED, 'postgres://user:private-db-password@internal/db'))
     const result = await ai.a2a.listMessages({ callerId: 'owner' })
     expect(result.success).toBe(false)
     if (!result.success)

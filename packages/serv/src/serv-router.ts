@@ -47,7 +47,7 @@ type EmptyContext = Record<never, never>
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const path: StringKey<typeof contract> = 'ping'
  * const procedure = contract[path]
@@ -62,10 +62,10 @@ type StringKey<T> = Extract<keyof T, string>
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const checked = contract satisfies ServContract
- * const procedures = implement(checked).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * const procedures = implement(checked).context<ServContext>().route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 type ServContract = ContractRouter<Meta>
@@ -75,16 +75,16 @@ type ServContract = ContractRouter<Meta>
  *
  * @example
  * ```ts
- * import type { ServRoutePath } from '@h-ai/serv'
- * import type { ServContext } from '@h-ai/serv'
+ *
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
- * import { serv } from '@h-ai/serv'
+ * import { core } from '@h-ai/core'
+ * import { type ServRoutePath, type ServContext, serv } from '@h-ai/serv'
  * import { z } from 'zod'
  *
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const path: ServRoutePath<typeof contract> = 'ping'
- * const procedures = serv.implement(contract).context<ServContext>().route(path, () => ok({ ready: true })).build()
+ * const procedures = serv.implement(contract).context<ServContext>().route(path, () => core.ok({ ready: true })).build()
  * ```
  */
 export type ServRoutePath<TContract extends ServContract>
@@ -118,10 +118,10 @@ export type ServRoutePath<TContract extends ServContract>
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const procedure: ContractAtPath<typeof contract, 'ping'> = contract.ping
- * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 type ContractAtPath<TContract, TPath extends string>
@@ -141,10 +141,10 @@ type ContractAtPath<TContract, TPath extends string>
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const procedure: RouteContract<typeof contract, 'ping'> = contract.ping
- * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 type RouteContract<
@@ -178,9 +178,9 @@ export type AuthenticatedServContext<TContext extends ServContext = ServContext>
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const handler: RouteHandler<typeof contract.ping, ServContext> = () => ok({ ready: true })
+ * const handler: RouteHandler<typeof contract.ping, ServContext> = () => core.ok({ ready: true })
  * const procedures = implement(contract).context<ServContext>().route('ping', handler).build()
  * ```
  */
@@ -209,15 +209,15 @@ type RouteHandler<
  *
  * @example
  * ```ts
- * import type { ServRouteHandler } from '@h-ai/serv'
- * import type { ServContext } from '@h-ai/serv'
+ *
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
- * import { serv } from '@h-ai/serv'
+ * import { core } from '@h-ai/core'
+ * import { type ServRouteHandler, type ServContext, serv } from '@h-ai/serv'
  * import { z } from 'zod'
  *
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const handler: ServRouteHandler<typeof contract, 'ping', ServContext> = () => ok({ ready: true })
+ * const handler: ServRouteHandler<typeof contract, 'ping', ServContext> = () => core.ok({ ready: true })
  * const procedures = serv.implement(contract).context<ServContext>().route('ping', handler).build()
  * ```
  */
@@ -235,9 +235,9 @@ export type ServRouteHandler<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const handler: ServGuardedRouteHandler<typeof contract, 'ping', ServContext> = ({ context }) => ok({ ready: context.session.userId.length > 0 })
+ * const handler: ServGuardedRouteHandler<typeof contract, 'ping', ServContext> = ({ context }) => core.ok({ ready: context.session.userId.length > 0 })
  * const procedures = implement(contract).context<ServContext>().route('ping').auth().handle(handler).build()
  * ```
  */
@@ -255,9 +255,9 @@ type ServGuardedRouteHandler<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const next: NextBuilder<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping', () => ok({ ready: true }))
+ * const next: NextBuilder<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping', () => core.ok({ ready: true }))
  * const procedures = next.build()
  * ```
  */
@@ -282,10 +282,10 @@ type NextBuilder<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const route: ServRouteRegistration<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping')
- * const procedures = route.auth().handle(() => ok({ ready: true })).build()
+ * const procedures = route.auth().handle(() => core.ok({ ready: true })).build()
  * ```
  */
 export interface ServRouteRegistration<
@@ -326,10 +326,10 @@ export interface ServRouteRegistration<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const guarded: ServGuardedRouteRegistration<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping').permission('reports.read')
- * const procedures = guarded.handle(() => ok({ ready: true })).build()
+ * const procedures = guarded.handle(() => core.ok({ ready: true })).build()
  * ```
  */
 export interface ServGuardedRouteRegistration<
@@ -373,10 +373,10 @@ export interface ServGuardedRouteRegistration<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const route: ServRouteMethod<typeof contract, ServContext, ServContext, 'ping'> = implement(contract).context<ServContext>().route
- * const procedures = route('ping', () => ok({ ready: true })).build()
+ * const procedures = route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 interface ServRouteMethod<
@@ -408,9 +408,9 @@ interface ServRouteMethod<
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const { apiContract } = await import('@h-ai/api-contract')
  * const { z } = await import('zod')
- * const { ok } = await import('@h-ai/core')
+ * const { core } = await import('@h-ai/core')
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const complete: ServRouterBuilderBuild<typeof contract, ServContext, never> = implement(contract).context<ServContext>().route('ping', () => ok({ ready: true }))
+ * const complete: ServRouterBuilderBuild<typeof contract, ServContext, never> = implement(contract).context<ServContext>().route('ping', () => core.ok({ ready: true }))
  * const procedures = complete.build()
  * ```
  */
@@ -435,16 +435,16 @@ type ServRouterBuilderBuild<
  *
  * @example
  * ```ts
- * import type { ServRouterBuilder } from '@h-ai/serv'
- * import type { ServContext } from '@h-ai/serv'
+ *
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
- * import { serv } from '@h-ai/serv'
+ * import { core } from '@h-ai/core'
+ * import { type ServRouterBuilder, type ServContext, serv } from '@h-ai/serv'
  * import { z } from 'zod'
  *
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const builder: ServRouterBuilder<typeof contract, ServContext, ServContext> = serv.implement(contract).context<ServContext>()
- * const procedures = builder.route('ping', () => ok({ ready: true })).build()
+ * const procedures = builder.route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 export type ServRouterBuilder<
@@ -466,16 +466,16 @@ export type ServRouterBuilder<
  *
  * @example
  * ```ts
- * import type { ServImplementer } from '@h-ai/serv'
- * import type { ServContext } from '@h-ai/serv'
+ *
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
- * import { serv } from '@h-ai/serv'
+ * import { core } from '@h-ai/core'
+ * import { type ServImplementer, type ServContext, serv } from '@h-ai/serv'
  * import { z } from 'zod'
  *
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
  * const implementer: ServImplementer<typeof contract> = serv.implement(contract)
- * const procedures = implementer.context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * const procedures = implementer.context<ServContext>().route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 export interface ServImplementer<TContract extends ServContract> {
@@ -491,14 +491,14 @@ export interface ServImplementer<TContract extends ServContract> {
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
- * import { serv } from '@h-ai/serv'
+ * import { core } from '@h-ai/core'
+ * import { type ServContext, serv } from '@h-ai/serv'
  * import { z } from 'zod'
  *
  * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
- * const procedures = serv.implement(contract).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * const procedures = serv.implement(contract).context<ServContext>().route('ping', () => core.ok({ ready: true })).build()
  * ```
  */
 export function implement<TContract extends ServContract>(
@@ -537,8 +537,8 @@ function createServRouterBuilder<
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const { ok } = await import('@h-ai/core')
- * const handler: RuntimeProcedureHandler = ({ input }) => ok(input)
+ * const { core } = await import('@h-ai/core')
+ * const handler: RuntimeProcedureHandler = ({ input }) => core.ok(input)
  * // 动态装配边界仍由相同 contract 校验路径与 options，不提升未知输入类型。
  * ```
  */
@@ -555,8 +555,8 @@ type RuntimeProcedureHandler = ProcedureHandler<
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const { ok } = await import('@h-ai/core')
- * const handler: AuthenticatedRuntimeProcedureHandler = ({ context }) => ok({ userId: context.session.userId })
+ * const { core } = await import('@h-ai/core')
+ * const handler: AuthenticatedRuntimeProcedureHandler = ({ context }) => core.ok({ userId: context.session.userId })
  * const guarded = applyServGuards({ auth: true }, handler)
  * ```
  */

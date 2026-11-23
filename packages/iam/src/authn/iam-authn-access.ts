@@ -1,8 +1,9 @@
 /** 登录许可只依赖配置、服务端时间和宿主可信地址；规则在初始化时编译。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { AuthRequestContext } from './iam-authn-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 
@@ -19,10 +20,10 @@ import { HaiIamError } from '../iam-types.js'
  */
 export function createLoginAccessCheck(policy: IamConfig['loginAccess']): (context?: AuthRequestContext) => HaiResult<void> {
   if (!policy?.enabled)
-    return () => ok(undefined)
+    return () => core.ok(undefined)
   const { enabled: _enabled, ...condition } = policy
   const check = core.access.createConditionCheck(condition)
   return context => check(context?.ip).allowed
-    ? ok(undefined)
-    : err(HaiIamError.LOGIN_ACCESS_DENIED, iamM('iam_loginAccessDenied'))
+    ? core.ok(undefined)
+    : core.err(HaiIamError.LOGIN_ACCESS_DENIED, iamM('iam_loginAccessDenied'))
 }

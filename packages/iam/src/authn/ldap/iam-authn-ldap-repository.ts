@@ -1,6 +1,6 @@
 import type { DmlOperations } from '@h-ai/reldb'
 import type { LdapConfig } from '../../iam-config.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 import { LdapConfigSchema } from '../../iam-config.js'
@@ -56,7 +56,7 @@ export function prepareLdapIdentities() {
         FOREIGN KEY (user_id) REFERENCES hai_iam_users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`)
       return result.success
-        ? ok(undefined)
+        ? core.ok(undefined)
         : result
     }
     const created = await ddl.createTable(table, {
@@ -81,7 +81,7 @@ export function prepareLdapIdentities() {
       unique: true,
     })
     return users.success
-      ? ok(undefined)
+      ? core.ok(undefined)
       : users
   })
 }
@@ -100,8 +100,8 @@ export async function getLdapUserId(directoryId: string, entryId: string, sql = 
     [directoryId, entryId],
   )
   return result.success
-    ? ok(result.data?.user_id ?? null)
-    : err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), result.error)
+    ? core.ok(result.data?.user_id ?? null)
+    : core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_ldapRepositoryFailed'), result.error)
 }
 
 /**
@@ -132,14 +132,14 @@ export function insertLdapIdentity(directoryId: string, entryId: string, userId:
 export async function migrateLdapIdentities(input: unknown, apply: boolean) {
   const manifest = manifestSchema.safeParse(input)
   if (!manifest.success)
-    return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_ldapManifestInvalid'))
+    return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_ldapManifestInvalid'))
   const { directoryId, identityAttribute, bindings } = manifest.data
   const entries = new Map<string, string>()
   const users = new Set<string>()
   for (const [index, item] of bindings.entries()) {
     const entryId = ldapEntryId(identityAttribute, item.entryId)
     if (!entryId || entries.has(entryId) || users.has(item.userId)) {
-      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_ldapManifestRowInvalid', {
+      return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_ldapManifestRowInvalid', {
         params: { row: index + 1 },
       }))
     }
@@ -156,7 +156,7 @@ export async function migrateLdapIdentities(input: unknown, apply: boolean) {
       if (!user.success)
         return user
       if (user.data?.id !== userId) {
-        return err(HaiIamError.NOT_FOUND, iamM('iam_ldapManifestRowInvalid', {
+        return core.err(HaiIamError.NOT_FOUND, iamM('iam_ldapManifestRowInvalid', {
           params: { row },
         }))
       }
@@ -169,7 +169,7 @@ export async function migrateLdapIdentities(input: unknown, apply: boolean) {
           return current
         if (current.data.length) {
           if (current.data.length !== 1 || current.data[0].entry_id !== entryId || current.data[0].user_id !== userId) {
-            return err(HaiIamError.CONFLICT, iamM('iam_ldapManifestRowInvalid', {
+            return core.err(HaiIamError.CONFLICT, iamM('iam_ldapManifestRowInvalid', {
               params: { row },
             }))
           }
@@ -178,7 +178,7 @@ export async function migrateLdapIdentities(input: unknown, apply: boolean) {
       }
       insert.set(entryId, userId)
     }
-    return ok(insert)
+    return core.ok(insert)
   }
 
   if (!apply) {
@@ -187,7 +187,7 @@ export async function migrateLdapIdentities(input: unknown, apply: boolean) {
       return columns
     const preview = await inspect(reldb.sql, columns.data.length > 0)
     return preview.success
-      ? ok({ apply, newBindings: preview.data.size, existingBindings: entries.size - preview.data.size })
+      ? core.ok({ apply, newBindings: preview.data.size, existingBindings: entries.size - preview.data.size })
       : preview
   }
 
@@ -211,7 +211,7 @@ export async function migrateLdapIdentities(input: unknown, apply: boolean) {
     const ended = await tx.commit()
     committed = ended.success
     return ended.success
-      ? ok({ apply, newBindings: result.data.size, existingBindings: entries.size - result.data.size })
+      ? core.ok({ apply, newBindings: result.data.size, existingBindings: entries.size - result.data.size })
       : ended
   }
   finally {

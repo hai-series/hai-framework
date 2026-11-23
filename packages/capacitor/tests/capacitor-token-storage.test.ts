@@ -59,12 +59,12 @@ beforeEach(async () => {
   })
 })
 
-describe('createCapacitorTokenStorage', () => {
+describe('capacitor.createTokenStorage', () => {
   it('原生环境使用 secure storage 设置和读取 access token', async () => {
     const { Preferences } = await import('@capacitor/preferences')
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     await storage.setAccessToken('test-access')
     const token = await storage.getAccessToken()
@@ -76,8 +76,8 @@ describe('createCapacitorTokenStorage', () => {
   it('原生环境使用 secure storage 设置和读取 refresh token', async () => {
     const { Preferences } = await import('@capacitor/preferences')
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     await storage.setRefreshToken('test-refresh')
     const token = await storage.getRefreshToken()
@@ -88,8 +88,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('clear 仅清除 secure storage 中的 token', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     await storage.setAccessToken('a')
     await storage.setRefreshToken('r')
@@ -108,8 +108,8 @@ describe('createCapacitorTokenStorage', () => {
 
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false)
 
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     await expect(storage.setAccessToken('web-access')).rejects.toThrow()
     await expect(storage.getAccessToken()).rejects.toThrow()
@@ -124,8 +124,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('secure storage 读取异常向调用方传播，不能伪装成没有凭据', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     vi.mocked(SecureStorage.getItem).mockRejectedValueOnce(new Error('native error'))
     await expect(storage.getAccessToken()).rejects.toThrow('native error')
@@ -133,8 +133,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('secure storage 写入异常向调用方传播', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     vi.mocked(SecureStorage.setItem).mockRejectedValueOnce(new Error('native error'))
     await expect(storage.setAccessToken('x')).rejects.toThrow('native error')
@@ -143,8 +143,8 @@ describe('createCapacitorTokenStorage', () => {
   it('真实 TokenManager 部分写入失败后屏蔽整对凭据，删除失败仍不恢复访问', async () => {
     const { apiClient } = await import('@h-ai/api-client')
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
     const client = apiClient.create({})
     const initialized = await client.init({
       baseUrl: 'https://api.test.invalid',
@@ -181,8 +181,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('clear 删除失败时传播错误并屏蔽当前实例的旧凭据', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
 
     await storage.setAccessToken('old-access')
     await storage.setRefreshToken('old-refresh')
@@ -202,7 +202,7 @@ describe('createCapacitorTokenStorage', () => {
 
   it('clear 等待全部原生删除结束后才返回失败', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
+    const { capacitor } = await import('../src/index.js')
     let completeRemove: () => void = () => {}
     const delayedRemove = new Promise<void>((resolve) => {
       completeRemove = resolve
@@ -211,7 +211,7 @@ describe('createCapacitorTokenStorage', () => {
       ? Promise.reject(new Error('native error'))
       : delayedRemove)
     let settled = false
-    const pending = createCapacitorTokenStorage().clear().catch((error: unknown) => {
+    const pending = capacitor.createTokenStorage().clear().catch((error: unknown) => {
       settled = true
       return error
     })
@@ -224,8 +224,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('平台插件首次失败后同一实例可重试恢复', async () => {
     const { Capacitor } = await import('@capacitor/core')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
     vi.mocked(Capacitor.isNativePlatform).mockImplementationOnce(() => {
       throw new Error('bridge unavailable')
     })
@@ -236,8 +236,8 @@ describe('createCapacitorTokenStorage', () => {
 
   it('clear 开始后屏蔽已经在途的旧凭据读取', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const storage = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const storage = capacitor.createTokenStorage()
     let finishRead: (value: string) => void = () => {}
     const delayedRead = new Promise<string>((resolve) => {
       finishRead = resolve
@@ -252,10 +252,10 @@ describe('createCapacitorTokenStorage', () => {
 
   it.each([false, true])('clear 等待此前原生写入并删除迟到凭据（跨实例=%s）', async (separateInstance) => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-    const { createCapacitorTokenStorage } = await import('../src/index.js')
-    const writer = createCapacitorTokenStorage()
+    const { capacitor } = await import('../src/index.js')
+    const writer = capacitor.createTokenStorage()
     const clearer = separateInstance
-      ? createCapacitorTokenStorage()
+      ? capacitor.createTokenStorage()
       : writer
     let releaseWrite: () => void = () => {}
     const delayed = new Promise<void>((resolve) => {
@@ -280,7 +280,7 @@ describe('createCapacitorTokenStorage', () => {
       releaseWrite()
       await Promise.all([writing, clearing])
     }
-    expect(await createCapacitorTokenStorage().getAccessToken()).toBeNull()
+    expect(await capacitor.createTokenStorage().getAccessToken()).toBeNull()
     expect(secureStore.size).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
@@ -9,6 +9,23 @@ const contract = apiContract.create({})
 const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
+  it('根入口聚合预置工厂，feature 子路径转发同一服务对象', async () => {
+    const entries = await Promise.all([
+      import('../src/features/serv-feature-ai-entry.js'),
+      import('../src/features/serv-feature-iam-entry.js'),
+      import('../src/features/serv-feature-storage-entry.js'),
+      import('../src/features/serv-feature-feedback-entry.js'),
+    ])
+    for (const entry of entries)
+      expect(entry.serv).toBe(serv)
+    for (const factory of [
+      serv.createAiProcedures,
+      serv.createIamProcedures,
+      serv.createStorageProcedures,
+      serv.createFeedbackProcedures,
+    ])
+      expect(typeof factory).toBe('function')
+  })
   it('未启用审计时 HTTP 拒绝保留正常响应且不调用采集器', async () => {
     expect(audit.isInitialized).toBe(false)
     const capture = vi.spyOn(audit, 'capture')
@@ -262,8 +279,8 @@ describe('@h-ai/serv', () => {
       contract,
       procedures,
       verifyToken: async token => token === 'valid-token'
-        ? ok({ userId: 'user-1', roles: [], permissions: [] })
-        : err(HaiCommonError.UNAUTHORIZED, 'invalid token'),
+        ? core.ok({ userId: 'user-1', roles: [], permissions: [] })
+        : core.err(HaiCommonError.UNAUTHORIZED, 'invalid token'),
       http: {
         docs: { path: '/docs', requireAuth: true },
         openapi: { path: '/openapi.json' },

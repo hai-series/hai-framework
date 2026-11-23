@@ -83,7 +83,7 @@ function createNodeCore(): NodeCoreFunctions {
  * Core 服务对象 - 聚合常用功能（Node.js）。
  * @example
  * ```ts
- * import { core, CoreConfigSchema } from '@h-ai/core'
+ * import { CoreConfigSchema, core } from '@h-ai/core'
  * core.init({ configDir: './config' }) // 单项加载失败记录日志并继续。
  * const required = core.config.validate('core', CoreConfigSchema)
  * if (!required.success) core.logger.error('Required config unavailable', { code: required.error.code })

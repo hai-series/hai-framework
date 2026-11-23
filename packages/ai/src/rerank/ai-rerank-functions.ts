@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type { AIConfig, LLMConfig } from '../ai-config.js'
 
 import type {
@@ -15,8 +16,7 @@ import type {
   RerankRequest,
   RerankResponse,
 } from './ai-rerank-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -116,7 +116,7 @@ export function createRerankOperations(config: AIConfig, loadModels: (model?: st
 
     const { texts, ids } = normalizeDocuments(request.documents)
     if (texts.length === 0) {
-      return err(HaiAIError.RERANK_INVALID_REQUEST, aiM('ai_rerankInvalidRequest', {
+      return core.err(HaiAIError.RERANK_INVALID_REQUEST, aiM('ai_rerankInvalidRequest', {
         params: { reason: 'documents cannot be empty' },
       }))
     }
@@ -155,7 +155,7 @@ export function createRerankOperations(config: AIConfig, loadModels: (model?: st
             ? requestId
             : undefined,
         })
-        return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
+        return core.err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
           params: { error: `HTTP ${response.status}` },
         }))
       }
@@ -171,14 +171,14 @@ export function createRerankOperations(config: AIConfig, loadModels: (model?: st
 
       logger.trace('Rerank completed', { resultCount: results.length })
 
-      return ok({ model: resolved.model, results })
+      return core.ok({ model: resolved.model, results })
     }
     catch (error) {
       const causeName = error instanceof Error
         ? error.name
         : undefined
       logger.error('Rerank API call failed', { causeName })
-      return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
+      return core.err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
         params: {
           error: causeName ?? core.i18n.coreM('core_errorInternal'),
         },
@@ -211,7 +211,7 @@ export function createRerankOperations(config: AIConfig, loadModels: (model?: st
       const result = await callRerankAPI({ query, documents: texts, topN })
       if (!result.success)
         return result
-      return ok(result.data.results)
+      return core.ok(result.data.results)
     },
   }
 }

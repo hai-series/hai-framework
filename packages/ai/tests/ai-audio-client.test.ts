@@ -8,9 +8,9 @@
  * WebSocket 传输通过替换 `globalThis.WebSocket` 的可脚本化 mock 隔离，不访问真实服务端。
  */
 
+import { ai as audioAi } from '@h-ai/ai/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
-import { createAudioClient } from '../src/client/ai-audio-client.js'
 
 /** 可脚本化的浏览器 WebSocket mock（模拟 DOM WebSocket 行为） */
 class MockDomWebSocket {
@@ -78,7 +78,7 @@ describe('createAudioClient 浏览器语音客户端', () => {
   })
 
   function createClient() {
-    return createAudioClient({
+    return audioAi.createAudioClient({
       url: 'wss://host/ai/audio',
       getTicket: () => 'ticket-1',
     })

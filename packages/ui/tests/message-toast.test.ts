@@ -3,10 +3,10 @@ import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, expect, it, vi } from 'vitest'
 import MessageContainer from '../src/lib/components/compounds/MessageContainer.svelte'
 import { message } from '../src/lib/message.svelte.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   vi.useRealTimers()
 })
 
@@ -16,7 +16,7 @@ it('消息入口和 Toast 共用队列、语义样式、关闭及展示开始计
   const component = mount(MessageContainer, { target })
   try {
     const first = message.error('操作失败', 0)
-    toast.success('操作成功', 1000)
+    ui.toast.success('操作成功', 1000)
     flushSync()
     expect(message.items).toHaveLength(2)
     expect(message.items[0]).toMatchObject({ id: first, type: 'error', closable: true })

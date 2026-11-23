@@ -6,7 +6,7 @@
  */
 
 // A2A
-export * from './a2a/index.js'
+export type { A2AApiKeyAuthConfig, KitA2AHandlerConfig, ResolvedA2AConfig } from './a2a/index.js'
 
 // Crypto
-export * from './crypto/index.js'
+export type { EncryptedPayload, TransportEncryptionConfig, TransportEncryptionManager, TransportKeyPair } from './crypto/index.js'

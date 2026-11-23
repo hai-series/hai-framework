@@ -7,9 +7,9 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { AsymmetricOperations, CryptoFunctions, HashOperations, PasswordOperations, SymmetricOperations, TransportOperations } from './crypto-types.js'
-import type { TransportCodec } from './transport/crypto-transport-server.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { TransportCodec } from './transport/crypto-transport-server.js'
+import { core } from '@h-ai/core'
 
 import { cryptoM } from './crypto-i18n.js'
 import { isValidSM2PublicKey } from './crypto-public-key.js'
@@ -152,7 +152,7 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
       // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
       if (initInProgress) {
         logger.warn('Crypto init already in progress, skipping concurrent call')
-        return err(
+        return core.err(
           HaiCryptoError.INIT_FAILED,
           cryptoM('crypto_initFailed', {
             params: { error: 'Concurrent initialization detected' },
@@ -185,12 +185,12 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
         currentTransportCodec = runtime.createTransportCodec?.()
         initialized = true
         logger.info('Crypto module initialized')
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         await clearOperations()
         logger.error('Crypto module initialization failed', { error })
-        return err(
+        return core.err(
           HaiCryptoError.INIT_FAILED,
           cryptoM('crypto_initFailed', {
             params: {

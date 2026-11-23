@@ -235,9 +235,9 @@ export type PaymentCreateOrderInput = z.infer<typeof PaymentCreateOrderInputSche
  * ```ts
  * import type { PaymentCreateOrderOutput } from '@h-ai/api-contract'
  * import { PaymentCreateOrderDataSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: PaymentCreateOrderOutput = ok(PaymentCreateOrderDataSchema.parse({
+ * const response: PaymentCreateOrderOutput = core.ok(PaymentCreateOrderDataSchema.parse({
  *   provider: 'wechat',
  *   tradeType: 'jsapi',
  *   prepayId: 'example-prepay',

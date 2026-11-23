@@ -5,7 +5,7 @@ import type { AdminCreateUser, AdminInviteUser, AdminRole, AdminRoleCode, AdminU
 import { Buffer } from 'node:buffer'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { storage } from '@h-ai/storage'
 import { SUPPORTED_LOCALES } from '{{fullstack.contractPackageName}}'
@@ -29,7 +29,7 @@ let adminMutationActive = false
 export async function withAdminMutation<T>(context: ServContext, operation: string, work: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
   // mini 的管理写入仅支持单写实例；进程内保护无租期，慢请求不会在 TTL 到期后被并发穿透。
   if (adminMutationActive)
-    return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
+    return core.err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
   adminMutationActive = true
   let owner = ''
   const key = 'hai:app:admin-mutation'
@@ -42,7 +42,7 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
     if (!locked.success)
       return locked
     if (!locked.data)
-      return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
+      return core.err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
     owner = locked.data
     acquired = true
     renewalTimer = setInterval(() => {
@@ -74,9 +74,9 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
     if (!permitted.success)
       return permitted
     if (actor.data.accountStatus !== 'active' || (actor.data.accountType === 'temporary' && (!actor.data.accountExpiresAt || new Date(actor.data.accountExpiresAt).getTime() <= Date.now())) || !permitted.data)
-      return err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
+      return core.err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
     if (leaseLost)
-      return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
+      return core.err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
     const sensitive = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
     if (!sensitive.success)
       return sensitive
@@ -108,11 +108,11 @@ export async function getAdminUser(id: string): Promise<HaiResult<AdminUser>> {
   if (!user.success)
     return user
   if (!user.data)
-    return err(HaiCommonError.NOT_FOUND, serverM('notFound'))
+    return core.err(HaiCommonError.NOT_FOUND, serverM('notFound'))
   const roles = await iam.authz.getUserRoles(id)
   if (!roles.success)
     return roles
-  return ok(toAdminUser(user.data, roles.data))
+  return core.ok(toAdminUser(user.data, roles.data))
 }
 
 export function toAdminUser(user: User, roles: Role[]): AdminUser {
@@ -141,7 +141,7 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
   if (!role.success)
     return role
   if (!role.data)
-    return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+    return core.err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
   const registered = await iam.user.createUser({
     ...input,
     accountExpiresAt: input.accountExpiresAt
@@ -165,7 +165,7 @@ export async function inviteAdminUser(input: AdminInviteUser, context: ServConte
   const role = await iam.authz.getRoleByCode(input.role)
   if (!role.success || !role.data) {
     return role.success
-      ? err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+      ? core.err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
       : role
   }
   const created = await iam.user.inviteUser({
@@ -191,19 +191,19 @@ async function rollbackCreatedUser(id: string): Promise<void> {
 
 export async function updateAdminUser(input: AdminUpdateUser, context: ServContext): Promise<HaiResult<AdminUser>> {
   if (input.id === context.session?.userId && ((input.role && input.role !== 'admin') || (input.accountStatus && input.accountStatus !== 'active') || input.accountType === 'temporary' || input.accountExpiresAt != null))
-    return err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
+    return core.err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
   const existing = await iam.user.getUser(input.id)
   if (!existing.success)
     return existing
   if (!existing.data)
-    return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+    return core.err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
   const role = input.role
     ? await iam.authz.getRoleByCode(input.role)
     : undefined
   if (role && !role.success)
     return role
   if (role?.success && !role.data)
-    return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+    return core.err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
   const { id, role: _role, ...profile } = input
   const updated = await iam.user.updateUserWithRoles(id, {
     profile: {
@@ -235,7 +235,7 @@ export async function getAdminRoles(): Promise<HaiResult<{ items: AdminRole[] }>
   const counts = await iam.authz.getRoleUserCounts(items.map(role => role.id))
   if (!counts.success)
     return counts
-  return ok({
+  return core.ok({
     items: items.map(role => ({
       id: role.id,
       code: role.code as AdminRoleCode,
@@ -252,7 +252,7 @@ export async function updateProfile(input: ProfileUpdate, context: ServContext):
   if (!current.success)
     return current
   if ((input.locale && !(SUPPORTED_LOCALES as readonly string[]).includes(input.locale)) || (input.theme && !SUPPORTED_THEMES.includes(input.theme)))
-    return err(HaiCommonError.VALIDATION_ERROR, serverM('unsupportedPreference', { locale: context.locale }))
+    return core.err(HaiCommonError.VALIDATION_ERROR, serverM('unsupportedPreference', { locale: context.locale }))
   const metadata = { ...current.data.metadata }
   if (input.locale)
     metadata.locale = input.locale
@@ -273,10 +273,10 @@ export async function uploadAvatar(userId: string, input: AvatarUpload, context:
   if (!current.success)
     return current
   if (!current.data)
-    return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+    return core.err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
   const bytes = Buffer.from(input.base64, 'base64')
   if (bytes.length === 0 || bytes.length > 512 * 1024 || bytes.toString('base64') !== input.base64 || !matchesImage(bytes, input.contentType))
-    return err(HaiCommonError.VALIDATION_ERROR, serverM('invalidAvatar', { locale: context.locale }))
+    return core.err(HaiCommonError.VALIDATION_ERROR, serverM('invalidAvatar', { locale: context.locale }))
   const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[input.contentType]
   const key = `avatars/${userId}/${core.id.uuid()}.${extension}`
   const stored = await storage.file.put(key, bytes, { contentType: input.contentType })
@@ -300,7 +300,7 @@ export async function uploadAvatar(userId: string, input: AvatarUpload, context:
       core.logger.warn('Failed to clean up previous avatar', { error: cleaned.error.code })
   }
   await recordAudit(context, 'update', 'avatars', userId)
-  return ok({ avatarUrl })
+  return core.ok({ avatarUrl })
 }
 
 function matchesImage(bytes: Buffer, contentType: AvatarUpload['contentType']): boolean {

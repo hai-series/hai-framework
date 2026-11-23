@@ -54,7 +54,7 @@
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'
 import { Button } from '@h-ai/ui/components/primitives/index'
-import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
+import { THEMES, ui } from '@h-ai/ui/theme'
 ```
 
 <a id="api-reference"></a>
@@ -65,7 +65,7 @@ UI 没有 init/close。组件由 Svelte 管理挂载和销毁；函数与控制�
 
 <a id="styles"></a>
 
-### 接入样式与自动导入：`autoImportHaiUi`
+### 接入样式与自动导入：`ui.autoImport`
 
 样式在应用构建时引入，自动导入器只处理实际模板组件。
 
@@ -73,7 +73,7 @@ UI 没有 init/close。组件由 Svelte 管理挂载和销毁；函数与控制�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `autoImportHaiUi()` | 自动导入 | 无参数。向 Svelte 预处理器注册后处理模板源码及文件名。 | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
+| `ui.autoImport()` | 自动导入 | 无参数。向 Svelte 预处理器注册后处理模板源码及文件名。 | `PreprocessorGroup; synchronous { code }` | `ui.autoImport()` |
 
 #### 场景：在构建时自动导入组件
 
@@ -81,11 +81,11 @@ UI 没有 init/close。组件由 Svelte 管理挂载和销毁；函数与控制�
 
 ```js
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { ui } from '@h-ai/ui/auto-import'
 
 export default {
   // Install the Hai UI preprocessor before Vite's Svelte preprocessor. It supplies imports for Hai components in templates.
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
+  preprocess: [ui.autoImport(), vitePreprocess()],
 }
 ```
 
@@ -130,7 +130,8 @@ export default {
 <div class='hai-mobile-viewport'>
   <div class='hai-mobile-shell max-w-lg'>
     <!-- Render the Home bar inline and include the top safe-area inset. -->
-    <AppBar title='Home' fixed={false} safeArea />
+    <AppBar title='Home' fixed={
+;(false} safeArea />
     <main class='hai-mobile-main'>...</main>
     <!-- Render the provided destinations and mark home as active. The centered bottom bar includes the bottom safe area. -->
     <BottomNav items={items} active='home' centered maxWidth='lg' safeArea />
@@ -196,11 +197,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 | `<DatePicker>` | 日期输入+弹出 | `value` 传入当前值，支持的场合可双向绑定；`minValue` 指定最早可选日期；`maxValue` 指定最晚可选日期；`error` 设置错误信息或错误样式；`size` 设置组件尺寸。 `ariaLabel` 为日期输入指定无障碍名称。 | 弹出日历并写回日期 | `<DatePicker bind:value={date} />` |
 | `<ScheduleInput>` | 编辑调度时间 | `config` 传入时区、精度和 Cron 开关；`value` 双向绑定值，`valid` 双向绑定校验状态；`name` 用于提交字段，`id` 关联可见控件；`required`、`disabled` 控制必填和禁用。 | 带 UTC 偏移的 ISO 字符串或五段 Cron | `<ScheduleInput name='scheduled_at' bind:value={schedule} required />` |
 | `<CronExpressionBuilder>` | 编辑五段 Cron 和手工表达式 | `value` 绑定表达式，`presets` 提供常用表达式，`labels` 和 `weekdayOptions` 自定义显示，`error` 和 `describedBy` 关联宿主校验。 | 保留不能映射到可视化模式的手工表达式 | `<CronExpressionBuilder bind:value={cron} />` |
-| `normalizeScheduleInputConfig(value)` | 识别调度 schema | `value` 是 `x-hai-input` 的值。需要 `kind: 'schedule'`、有效的 IANA `timezone`、`precision: 'minute'`，`allowCron` 可省略。 | 归一化的 `ScheduleInputConfig`，无效值返回 `undefined` | `normalizeScheduleInputConfig(rawMetadata)` |
-| `createDefaultCronBuilderState()` | 创建默认编辑状态 | 无参数。 | `CronBuilderState`，默认每天 10:00 | `createDefaultCronBuilderState()` |
-| `cronExpressionToBuilderState(expression)` | 解析为可编辑状态 | `expression` 为字符串。 | `CronBuilderState`，复杂或无效表达式保留在手工模式 | `cronExpressionToBuilderState('0 10 * * *')` |
-| `cronBuilderStateToExpression(state)` | 序列化编辑状态 | `state` 为当前 `CronBuilderState`。 | 可视模式返回五段 Cron，手工模式返回输入文本 | `cronBuilderStateToExpression(state)` |
-| `isCronExpressionValid(expression)` | 检查 Cron 语法 | `expression` 为待校验字符串。 | `boolean`，业务字段可另外约束为五段 | `isCronExpressionValid('0 10 * * *')` |
+| `ui.normalizeScheduleInputConfig(value)` | 识别调度 schema | `value` 是 `x-hai-input` 的值。需要 `kind: 'schedule'`、有效的 IANA `timezone`、`precision: 'minute'`，`allowCron` 可省略。 | 归一化的 `ScheduleInputConfig`，无效值返回 `undefined` | `ui.normalizeScheduleInputConfig(rawMetadata)` |
+| `ui.createDefaultCronBuilderState()` | 创建默认编辑状态 | 无参数。 | `CronBuilderState`，默认每天 10:00 | `ui.createDefaultCronBuilderState()` |
+| `ui.cronExpressionToBuilderState(expression)` | 解析为可编辑状态 | `expression` 为字符串。 | `CronBuilderState`，复杂或无效表达式保留在手工模式 | `ui.cronExpressionToBuilderState('0 10 * * *')` |
+| `ui.cronBuilderStateToExpression(state)` | 序列化编辑状态 | `state` 为当前 `CronBuilderState`。 | 可视模式返回五段 Cron，手工模式返回输入文本 | `ui.cronBuilderStateToExpression(state)` |
+| `ui.isCronExpressionValid(expression)` | 检查 Cron 语法 | `expression` 为待校验字符串。 | `boolean`，业务字段可另外约束为五段 | `ui.isCronExpressionValid('0 10 * * *')` |
 | `CRON_BUILDER_WEEKDAY_ORDER` | 读取编辑器的星期顺序 | 无参数。 | 周一到周日的数字字符串列表，周日为 `'0'` | `[...CRON_BUILDER_WEEKDAY_ORDER]` |
 
 <a id="choice-options"></a>
@@ -257,7 +258,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 标签自动关联内部 UI 控件；已有控件 ID 或原生控件使用 `<FormField for="control-id">`。错误/提示通过 `aria-describedby` 关联，错误控件带 `aria-invalid`，只显示一份字段提示。`label` / `error` / `hint` 支持字符串或延迟翻译函数。
 
-`Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英日文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
+`Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英日文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `ui.setGlobalLocale` / `ui.createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
 
 字段错误统一通过 Toast 展示。即使上一条提示已关闭或自动消失，再次提交相同的无效输入仍会重新提示；修正输入后清除过期通知。控件保留错误边框、`aria-invalid` 和读屏关联说明。
 
@@ -341,7 +342,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 ```svelte
 <script lang='ts'>
-  import { Form, FormField, normalizeScheduleInputConfig, ScheduleInput } from '@h-ai/ui'
+  import { Form, FormField, ScheduleInput, ui } from '@h-ai/ui'
 
   let schedule = $state('')
   let result = $state('')
@@ -349,7 +350,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
     kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute', allowCron: true,
   }
   // Parse the schema metadata. Invalid zones or precision return undefined.
-  const config = normalizeScheduleInputConfig(rawMetadata)
+  const config = ui.normalizeScheduleInputConfig(rawMetadata)
 </script>
 {#if config}
   <!-- Use the named form field to receive the selected schedule string. -->
@@ -382,9 +383,9 @@ Node 端可通过 `@h-ai/ui/components/compounds/schedule-input` 导入归一化
 | `<Modal>` | 模态框（语义标签、焦点约束与恢复） | `open` 控制组件是否打开；`title` 设置标题；`size` 设置组件尺寸；`radius` 设置圆角；`bodyOverflow` 控制内容超过可用空间时的行为；`showClose` 切换关闭按钮。 | 打开/关闭同步 open | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
 | `<Drawer>` | 抽屉 | `open` 控制组件是否打开；`position` 设置显示位置；`title` 设置标题；`size` 设置组件尺寸；`width` 设置显示宽度；`resizable` 允许拖动调整抽屉宽度；`widthStorageKey` 设置记忆抽屉宽度的存储键。 | 显示抽屉并同步 open | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
 | `<Confirm>` | 确认框 | `open` 控制组件是否打开；`title` 设置标题；`message` 提供显示给用户的正文；`variant` 选择视觉样式或状态；`onconfirm` 在用户确认时调用。 | 用户确认时调用 confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
-| `<Popover>` | 弹出层 | `open` 控制组件是否打开；`position` 设置显示位置；`trigger` 指定触发内容或触发方式；`offset` 控制弹层与触发元素间距；`portal` 将弹层放在裁剪容器之外。 | 点击打开面板，Escape 关闭 | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
+| `<Popover>` | 弹出层 | `open` 控制组件是否打开；`position` 设置显示位置；`trigger` 指定触发内容或触发方式；`offset` 控制弹层与触发元素间距；`ui.portal` 将弹层放在裁剪容器之外。 | 点击打开面板，Escape 关闭 | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
 | `<Dropdown>` | 下拉菜单 | `items` 提供依次渲染的项目；`trigger` 指定触发内容或触发方式；`triggerClass` 为触发控件添加 CSS 类；`position` 设置显示位置。 | 显示可操作菜单 | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
-| `<Tooltip>` | 提示 | `content` 提供要渲染的正文或内容片段；`position` 设置显示位置；`delay` 控制提示出现前等待的时间；`portal` 将弹层放在裁剪容器之外。 | 悬停/聚焦显示说明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
+| `<Tooltip>` | 提示 | `content` 提供要渲染的正文或内容片段；`position` 设置显示位置；`delay` 控制提示出现前等待的时间；`ui.portal` 将弹层放在裁剪容器之外。 | 悬停/聚焦显示说明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
 
 #### 场景：打开订单详情并关闭弹窗
 
@@ -585,30 +586,30 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `useToastFeedback(message, variant?)` | 操作结果提示 | `message` 是返回本地化消息或空值的函数，`variant` 可省略，默认 `error`。 | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
-| `notifySuccess(message, duration?)` | 操作结果提示 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `toast ID string` | `notifySuccess(m.saved())` |
-| `notifyInfo(message, duration?)` | 操作结果提示 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `toast ID string` | `notifyInfo(m.loading())` |
-| `notifyWarning(message, duration?)` | 操作结果提示 | `message` 是要显示的本地化警告；`duration` 是关闭前的毫秒数，默认 5000，0 表示持续显示。 | `toast ID string` | `notifyWarning(m.warning())` |
-| `notifyError(error, fallback?, duration?)` | 操作结果提示 | `error` 是用于提取安全文案及追踪编号的错误；`fallback` 是无法提取文案时显示的本地化文字；`duration` 默认 5000 毫秒，0 表示持续显示。 | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
-| `errorMessage(error, fallback?)` | 操作结果提示 | `error` 是待提取安全文案的错误；`fallback` 是无法提取时使用的本地化文字。 | `safe localized string` | `errorMessage(error, m.retry())` |
-| `toast.add(props)` | 共享提示队列 | `props` 指定正文、类型、显示时长、位置及关闭方式。见[通知字段表](#toast-options)。 | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
-| `toast.success(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `toast.success(m.result())` |
-| `toast.info(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `toast.info(m.result())` |
-| `toast.warning(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `toast.warning(m.result())` |
-| `toast.error(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `toast.error(m.result())` |
-| `toast.remove(id)` | 共享提示队列 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `toast.remove(id)` |
-| `toast.clear()` | 共享提示队列 | 无参数。 | `void` | `toast.clear()` |
-| `message.add(options)` | 共享提示队列 | `options` 可传本地化正文或包含正文、类型、时长和关闭方式的对象。见[消息字段表](#message-options)。 | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
-| `message.success(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `message.success(m.result())` |
-| `message.info(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `message.info(m.result())` |
-| `message.warning(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `message.warning(m.result())` |
-| `message.error(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `message.error(m.result())` |
-| `message.remove(id)` | 共享提示队列 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `message.remove(id)` |
-| `message.clear()` | 共享提示队列 | 无参数。 | `void` | `message.clear()` |
-| `toast.pause(id)` | 提示计时 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `toast.pause(id)` |
-| `toast.resume(id)` | 提示计时 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `toast.resume(id)` |
-| `messageBox.confirm(options)` | 异步确认弹窗 | `options` 可传本地化正文或配置标题、按钮和关闭行为的对象。见[弹窗字段表](#message-box-options)。 | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
-| `messageBox.alert(options)` | 异步确认弹窗 | `options` 可传本地化正文或配置标题、按钮和关闭行为的对象。见[弹窗字段表](#message-box-options)。 | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
+| `ui.useToastFeedback(message, variant?)` | 操作结果提示 | `message` 是返回本地化消息或空值的函数，`variant` 可省略，默认 `error`。 | `void; source-owned toast lifecycle` | `ui.useToastFeedback(() => ui.errorMessage(error))` |
+| `ui.notifySuccess(message, duration?)` | 操作结果提示 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `toast ID string` | `ui.notifySuccess(m.saved())` |
+| `ui.notifyInfo(message, duration?)` | 操作结果提示 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `toast ID string` | `ui.notifyInfo(m.loading())` |
+| `ui.notifyWarning(message, duration?)` | 操作结果提示 | `message` 是要显示的本地化警告；`duration` 是关闭前的毫秒数，默认 5000，0 表示持续显示。 | `toast ID string` | `ui.notifyWarning(m.warning())` |
+| `ui.notifyError(error, fallback?, duration?)` | 操作结果提示 | `error` 是用于提取安全文案及追踪编号的错误；`fallback` 是无法提取文案时显示的本地化文字；`duration` 默认 5000 毫秒，0 表示持续显示。 | `toast ID string; internal exception text hidden` | `ui.notifyError(error, m.retry())` |
+| `ui.errorMessage(error, fallback?)` | 操作结果提示 | `error` 是待提取安全文案的错误；`fallback` 是无法提取时使用的本地化文字。 | `safe localized string` | `ui.errorMessage(error, m.retry())` |
+| `ui.toast.add(props)` | 共享提示队列 | `props` 指定正文、类型、显示时长、位置及关闭方式。见[通知字段表](#toast-options)。 | `string item ID` | `ui.toast.add({ message: m.saved(), variant: "success" })` |
+| `ui.toast.success(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.toast.success(m.result())` |
+| `ui.toast.info(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.toast.info(m.result())` |
+| `ui.toast.warning(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.toast.warning(m.result())` |
+| `ui.toast.error(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.toast.error(m.result())` |
+| `ui.toast.remove(id)` | 共享提示队列 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `ui.toast.remove(id)` |
+| `ui.toast.clear()` | 共享提示队列 | 无参数。 | `void` | `ui.toast.clear()` |
+| `ui.message.add(options)` | 共享提示队列 | `options` 可传本地化正文或包含正文、类型、时长和关闭方式的对象。见[消息字段表](#message-options)。 | `string item ID` | `ui.message.add({ message: m.saved(), type: "success" })` |
+| `ui.message.success(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.message.success(m.result())` |
+| `ui.message.info(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.message.info(m.result())` |
+| `ui.message.warning(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.message.warning(m.result())` |
+| `ui.message.error(message, duration?)` | 共享提示队列 | `message` 是显示的本地化正文；`duration` 是自动关闭前的毫秒数，默认 3000，设为 0 时持续显示。 | `string item ID` | `ui.message.error(m.result())` |
+| `ui.message.remove(id)` | 共享提示队列 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `ui.message.remove(id)` |
+| `ui.message.clear()` | 共享提示队列 | 无参数。 | `void` | `ui.message.clear()` |
+| `ui.toast.pause(id)` | 提示计时 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `ui.toast.pause(id)` |
+| `ui.toast.resume(id)` | 提示计时 | `id` 是创建提示时返回的编号，用于定位要操作的提示。 | `void` | `ui.toast.resume(id)` |
+| `ui.messageBox.confirm(options)` | 异步确认弹窗 | `options` 可传本地化正文或配置标题、按钮和关闭行为的对象。见[弹窗字段表](#message-box-options)。 | `Promise<boolean>; host handles confirmation/cancellation` | `ui.messageBox.confirm({ message: m.confirm() })` |
+| `ui.messageBox.alert(options)` | 异步确认弹窗 | `options` 可传本地化正文或配置标题、按钮和关闭行为的对象。见[弹窗字段表](#message-box-options)。 | `Promise<boolean>; host handles confirmation/cancellation` | `ui.messageBox.alert({ message: m.confirm() })` |
 | `<Alert>` | 警告框 | `variant` 选择视觉样式或状态；`title` 设置标题；`dismissible` 控制是否提供关闭按钮。 | 显示持续信息 | `<Alert variant='info' title='Saved' />` |
 | `<ToastContainer>` | 通知容器 | 根布局挂载一次，由 `toast` 或 `message` 向同一个提示队列推送消息。 | 显示全局通知队列 | `<ToastContainer />` |
 | `<ErrorPage>` | 通用错误页（内置 401/403/404/500/503 预设） | `status` 选择要表达的结果或状态；`code` 设置显示的错误或跟踪代码；`title` 设置标题；`description` 提供补充说明；`homeUrl` 指定回到首页的链接；`onhome` 接管返回首页操作；`onback` 接管返回操作。 | 显示503预设与返回入口 | `<ErrorPage status={503} homeUrl='/' />` |
@@ -617,17 +618,17 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 
 ```svelte
 <script>
-  import { toast, ToastContainer } from '@h-ai/ui'
+  import { ToastContainer, ui } from '@h-ai/ui'
 
   function notify() {
     // Queue the supplied message as a success toast.
-    toast.success('操作成功')
+    ui.toast.success('操作成功')
     // Queue the supplied message using the error style.
-    toast.error('操作失败')
+    ui.toast.error('操作失败')
     // Queue the supplied caution message as a warning.
-    toast.warning('请注意')
+    ui.toast.warning('请注意')
     // Queue the info message with a 5,000 ms lifetime.
-    toast.info('提示信息', 5000) // 自定义持续时间
+    ui.toast.info('提示信息', 5000) // 自定义持续时间
   }
 </script>
 
@@ -636,50 +637,50 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 <ToastContainer />
 ```
 
-默认在右下角浮动显示，不占页面布局；由 UI 模块统一使用提示蓝、成功绿、警告黄、错误红等主题语义色，以浅色底、细色边和对应图标区分，并保留轻阴影，支持手工关闭。多个提示进入同一 FIFO 队列，逐条展示，每条从展示时开始计时（默认 3 秒，`duration: 0` 等待手工关闭）。根布局只挂载一次 `<ToastContainer />`。用 `toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` 指定方位；`m.saved()` 是应用自身的翻译函数。可选 `bottom-right`（默认）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。登录、改密、保存、删除、上传等操作成功或失败均使用 Toast；所有警告和错误（包括字段校验）统一由 ToastContainer 展示。字段保留错误标记与读屏关联，持续业务状态和恢复操作留在原位；`Alert` 只支持 info/success。
+默认在右下角浮动显示，不占页面布局；由 UI 模块统一使用提示蓝、成功绿、警告黄、错误红等主题语义色，以浅色底、细色边和对应图标区分，并保留轻阴影，支持手工关闭。多个提示进入同一 FIFO 队列，逐条展示，每条从展示时开始计时（默认 3 秒，`duration: 0` 等待手工关闭）。根布局只挂载一次 `<ToastContainer />`。用 `ui.toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` 指定方位；`m.saved()` 是应用自身的翻译函数。可选 `bottom-right`（默认）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。登录、改密、保存、删除、上传等操作成功或失败均使用 Toast；所有警告和错误（包括字段校验）统一由 ToastContainer 展示。字段保留错误标记与读屏关联，持续业务状态和恢复操作留在原位；`Alert` 只支持 info/success。
 
 按 F8 聚焦当前提示，再按 F8 返回原控件；提示获得焦点后，Escape 关闭可关闭的提示并恢复焦点，Enter 激活关闭按钮。Modal 内同样可用，关闭提示不会关闭弹窗。不可关闭的提示仍可聚焦阅读并返回；自动消失也会恢复焦点。
 
-> 已内置 `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning`，无需应用自建工具：`notifyError(err, fallback?)` 隐藏普通 `Error` 的内部原文，显示兜底文案并保留 traceId；字符串参数必须是已本地化的安全文案，不能传入未知 `err.message`。默认成功 3s / 失败 5s。
+> 已内置 `ui.notifySuccess` / `ui.notifyError` / `ui.notifyInfo` / `ui.notifyWarning`，无需应用自建工具：`ui.notifyError(err, fallback?)` 隐藏普通 `Error` 的内部原文，显示兜底文案并保留 traceId；字符串参数必须是已本地化的安全文案，不能传入未知 `core.err.message`。默认成功 3s / 失败 5s。
 
-需要把 HaiResult 失败交给使用 Promise 的组件时，使用 `throw new Error(result.error.message, { cause: result.error })` 保留完整错误。`errorMessage` / `notifyError` 会从 Error.cause 链读取安全的业务原因和 traceId；5xx 和未知异常仍使用安全兜底。异常链有深度限制并防止循环，不能直接显示底层异常文本。
+需要把 HaiResult 失败交给使用 Promise 的组件时，使用 `throw new Error(result.error.message, { cause: result.error })` 保留完整错误。`ui.errorMessage` / `ui.notifyError` 会从 Error.cause 链读取安全的业务原因和 traceId；5xx 和未知异常仍使用安全兜底。异常链有深度限制并防止循环，不能直接显示底层异常文本。
 
-响应式组件可在初始化时调用 `useToastFeedback(() => error)`，传入已完成安全映射和本地化的操作消息；队列中相同类型、相同消息合并，通知独立于来源组件生命周期。来源消息更新或清空时替换或移除该来源的旧通知；重复比较同时包含 traceId。`message` 入口也共用此队列、样式和关闭行为；`MessageContainer` 复用 `ToastContainer`，根布局只选择一个容器。
+响应式组件可在初始化时调用 `ui.useToastFeedback(() => error)`，传入已完成安全映射和本地化的操作消息；队列中相同类型、相同消息合并，通知独立于来源组件生命周期。来源消息更新或清空时替换或移除该来源的旧通知；重复比较同时包含 traceId。`message` 入口也共用此队列、样式和关闭行为；`MessageContainer` 复用 `ToastContainer`，根布局只选择一个容器。
 
-状态层可从轻量入口 `@h-ai/ui/toast` 导入 `toast`、`useToastFeedback`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` 和 `errorMessage`，不会连带加载组件及引导 CSS；`ToastContainer` 仍从组件入口导入并在根布局挂载。
+状态层可从轻量入口 `@h-ai/ui/toast` 导入 `toast`、`ui.useToastFeedback`、`ui.notifySuccess` / `ui.notifyError` / `ui.notifyInfo` / `ui.notifyWarning` 和 `ui.errorMessage`，不会连带加载组件及引导 CSS；`ToastContainer` 仍从组件入口导入并在根布局挂载。
 
-默认不显示 traceId。可以传 `toast.add({ message: m.retry(), variant: 'warning', traceId })`；已有安全文案中的 `(traceId: …)` 也会自动分离。小图标展开“问题追踪编号”、复制按钮及联系客户支持或开发人员时提供编号的说明。复制失败时可手动选择编号。悬停、聚焦或展开时暂停计时，结束后继续剩余时间；也可调用 `toast.pause(id)` / `toast.resume(id)`。warning/error 使用 Toast；字段的可见错误文案也由 Toast 统一展示，保留 aria-invalid、读屏描述和原位恢复操作。
+默认不显示 traceId。可以传 `ui.toast.add({ message: m.retry(), variant: 'warning', traceId })`；已有安全文案中的 `(traceId: …)` 也会自动分离。小图标展开“问题追踪编号”、复制按钮及联系客户支持或开发人员时提供编号的说明。复制失败时可手动选择编号。悬停、聚焦或展开时暂停计时，结束后继续剩余时间；也可调用 `ui.toast.pause(id)` / `ui.toast.resume(id)`。warning/error 使用 Toast；字段的可见错误文案也由 Toast 统一展示，保留 aria-invalid、读屏描述和原位恢复操作。
 
 #### 场景：指定提示方位
 
 应用先取得翻译文案，再调用 `showSaved(m.saved())`。成功提示显示在右上角，普通提示显示在底部中央。两者共用一个队列，按顺序展示。
 
 ```ts
-import { toast } from '@h-ai/ui/toast'
+import { ui } from '@h-ai/ui/toast'
 
 export function showSaved(message: string) {
   // Queue the caller's success message at the top right. Returns the toast ID.
-  return toast.add({ message, variant: 'success', position: 'top-right' })
+  return ui.toast.add({ message, variant: 'success', position: 'top-right' })
 }
 
 export function showNotice(message: string) {
   // Queue the caller's message at the bottom center using the default variant. Returns the toast ID.
-  return toast.add({ message, position: 'bottom-center' })
+  return ui.toast.add({ message, position: 'bottom-center' })
 }
 ```
 
 #### 场景：全局消息框与错误页预设
 
-在全局布局挂载一次 `MessageBoxContainer` 即可显示队列中的 `MessageBoxDialog`。从业务事件处理函数调用 `messageBox.confirm`，等待用户选择。
+在全局布局挂载一次 `MessageBoxContainer` 即可显示队列中的 `MessageBoxDialog`。从业务事件处理函数调用 `ui.messageBox.confirm`，等待用户选择。
 
 ```svelte
 <script lang='ts'>
-  import { Button, messageBox, MessageBoxContainer } from '@h-ai/ui'
+  import { Button, MessageBoxContainer, ui } from '@h-ai/ui'
 
   let accepted = $state<boolean | undefined>(undefined) // 保存尚未选择、确认或取消状态。
 
   async function ask() {
-    accepted = await messageBox.confirm({ message: '保存这份资料？' }) // 输入文案，得到确认 true 或取消 false。
+    accepted = await ui.messageBox.confirm({ message: '保存这份资料？' }) // 输入文案，得到确认 true 或取消 false。
   }
 </script>
 
@@ -693,10 +694,10 @@ export function showNotice(message: string) {
 自定义队列渲染器时，将队列项 `item` 分别传给 `await messageBox.handleConfirm(item)`、`await messageBox.handleCancel(item)` 或 `await messageBox.handleClose(item)`。三者返回 `Promise<void>`，在允许关闭时解决原来的交互 Promise。使用默认容器时由组件自动调用。
 
 ```ts
-import { resolveErrorPreset } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const preset = resolveErrorPreset(503) // 输入 HTTP 状态，返回对应预设的 code、文案键和图标。
-const fallback = resolveErrorPreset(undefined) // 输入缺省状态，返回通用错误预设。
+const preset = ui.resolveErrorPreset(503) // 输入 HTTP 状态，返回对应预设的 code、文案键和图标。
+const fallback = ui.resolveErrorPreset(undefined) // 输入缺省状态，返回通用错误预设。
 ```
 
 <a id="toast-options"></a>
@@ -715,9 +716,9 @@ const fallback = resolveErrorPreset(undefined) // 输入缺省状态，返回通
 | `traceId` | `string` | 未设置 | 有可公开的追踪编号时显示排查入口，展开后才显示编号。 |
 
 ```ts
-import { toast } from '@h-ai/ui/toast'
+import { ui } from '@h-ai/ui/toast'
 
-toast.add({ message: '还有 2 项未审核', variant: 'warning', duration: 0, position: 'top-right' })
+ui.toast.add({ message: '还有 2 项未审核', variant: 'warning', duration: 0, position: 'top-right' })
 ```
 
 页面右上角显示警告，并一直保留到用户手动关闭。
@@ -740,9 +741,9 @@ toast.add({ message: '还有 2 项未审核', variant: 'warning', duration: 0, p
 | `closable` | `boolean` | `true` | 是否显示手动关闭按钮。 |
 
 ```ts
-import { message } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const id = message.add({ message: '已保存 2 条记录', type: 'success', duration: 2000 })
+const id = ui.message.add({ message: '已保存 2 条记录', type: 'success', duration: 2000 })
 ```
 
 返回提示 ID。页面显示成功消息，2 秒后自动关闭。
@@ -768,9 +769,9 @@ const id = message.add({ message: '已保存 2 条记录', type: 'success', dura
 示例要求根布局已挂载 `MessageBoxContainer`。
 
 ```ts
-import { messageBox } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const accepted = await messageBox.confirm({
+const accepted = await ui.messageBox.confirm({
   message: '提交 2 条草稿？',
   closeOnClickModal: false,
 })
@@ -788,11 +789,11 @@ const accepted = await messageBox.confirm({
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `matchPermission(required, userPermissions)` | 前端权限显示 | `required` 是界面动作所需的权限；`userPermissions` 是当前用户已获授的权限键列表。 | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
-| `setPermissionContext(getPermissions)` | 提供组件权限上下文 | `getPermissions` 是返回当前权限键列表的函数；在组件初始化时注册。 | `void` | `setPermissionContext(() => user.permissions)` |
-| `usePermission()` | 消费组件权限 | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
-| `createSensitiveActions(options)` | 敏感操作确认 | `options` 提供处理二次验证的 `reauthenticate` 和可选的 `publicConfig`，后者读取公开安全策略。 | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
-| `createSessionRecovery()` | 原地恢复会话 | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
+| `ui.matchPermission(required, userPermissions)` | 前端权限显示 | `required` 是界面动作所需的权限；`userPermissions` 是当前用户已获授的权限键列表。 | `boolean; not server authorization` | `ui.matchPermission("orders:read", ["orders:*"])` |
+| `ui.setPermissionContext(getPermissions)` | 提供组件权限上下文 | `getPermissions` 是返回当前权限键列表的函数；在组件初始化时注册。 | `void` | `ui.setPermissionContext(() => user.permissions)` |
+| `ui.usePermission()` | 消费组件权限 | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `ui.usePermission()` |
+| `ui.createSensitiveActions(options)` | 敏感操作确认 | `options` 提供处理二次验证的 `reauthenticate` 和可选的 `publicConfig`，后者读取公开安全策略。 | `SensitiveActions: configure/authorize/submit/cancel` | `ui.createSensitiveActions(actions)` |
+| `ui.createSessionRecovery()` | 原地恢复会话 | `none; configure public config and current user afterward` | `SessionRecovery controller` | `ui.createSessionRecovery()` |
 | `<AuthPanel>` | 配置驱动认证页 | `config` 设置认证方式和入口的公开策略；`actions` 由宿主实现登录、注册、找回和其他认证请求；`loginHeader` 自定义登录表单顶部；`registerHeader` 自定义注册表单顶部；`loginFields` 在登录表单中插入额外字段；`loginFooter` 自定义登录表单底部；`registerFields` 在注册表单中插入额外字段；`registerFooter` 自定义注册表单底部。 | 显示策略允许的认证方式并调用 actions | `<AuthPanel {config} {actions} />` |
 | `<AuthShell>` | 认证页布局（居中卡片 / 左右分栏） | `variant` 选择视觉样式或状态；`title` 设置标题；`subtitle` 设置副标题；`brandTitle` 设置品牌标题；`brandText` 设置品牌说明；`illustration` 提供插图内容；`description` 提供补充说明；`highlights` 提供要强调的卖点或信息。 | 显示认证布局 | `<AuthShell title='Sign in'>Account form</AuthShell>` |
 | `<LoginForm>` | 登录表单 | `loading` 显示等待状态；`errors` 提供按字段标记的服务端校验错误；`showForgotPassword` 切换忘记密码入口；`onsubmit` 收到表单提交时调用。 | 提交登录字段给 login | `<LoginForm onsubmit={login} />` |
@@ -815,7 +816,7 @@ const accepted = await messageBox.confirm({
 
 #### 场景：配置驱动认证页面
 
-状态层通过轻量入口 `@h-ai/ui/i18n` 导入 `authErrorMessage`，复用相同映射且无需加载场景组件。管理台个人改密、移动/桌面示例与生成模板均沿用此提示规则。
+状态层通过轻量入口 `@h-ai/ui/i18n` 导入 `ui.authErrorMessage`，复用相同映射且无需加载场景组件。管理台个人改密、移动/桌面示例与生成模板均沿用此提示规则。
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
@@ -842,27 +843,26 @@ agreements:
 
 AuthPanel 直接接收 IAM 白名单配置和 actions，内置登录（密码/LDAP/邮件/短信）、注册、找回、重置及协议展示。使用 `config.ui` 配置卡片/分栏、标题、品牌、Logo 和配图。`LoginForm` 提供 methods、onsendotp、otpLength、resendInterval；密码表单接受 passwordPolicy。组件只渲染与交互，网络和 Token 存储通过 actions 注入。
 
-认证错误统一使用 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：按公开错误码显示当前 UI 语言，凭据错误统一为“用户名或密码不正确”，未知错误及服务异常不显示原文，保留有效 `traceId`。AuthPanel、验证码发送、敏感操作确认与 fullstack 改密共用此映射。首次改密、密码过期、当前密码复用（`hai:iam:034`）和会话上限各有操作指引；操作成功和错误均使用统一 Toast。确认密码与服务端一样逐字符比较，不归一化 Unicode 或裁剪空白，输入不一致时由 Toast 提示，并保留字段关联。Kit 和 API Client 确认的时间窗口错误会在认证提示中显示服务器 UTC 时间及校时建议。
+认证错误统一使用 `ui.authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：按公开错误码显示当前 UI 语言，凭据错误统一为“用户名或密码不正确”，未知错误及服务异常不显示原文，保留有效 `traceId`。AuthPanel、验证码发送、敏感操作确认与 fullstack 改密共用此映射。首次改密、密码过期、当前密码复用（`hai:iam:034`）和会话上限各有操作指引；操作成功和错误均使用统一 Toast。确认密码与服务端一样逐字符比较，不归一化 Unicode 或裁剪空白，输入不一致时由 Toast 提示，并保留字段关联。Kit 和 API Client 确认的时间窗口错误会在认证提示中显示服务器 UTC 时间及校时建议。
 
 AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事件后自动开放输入，避免接管时丢失早到的输入。应用无需额外的就绪适配；E2E 等待控件可编辑，并覆盖客户端脚本延迟加载的场景。
 
 认证链接指向当前完整 URL 时，AuthPanel 只切换场景并阻止重复导航，返回登录后可立即输入。路径、查询串或 hash 不同时交给应用路由处理；Ctrl/Cmd 等修改键点击保留浏览器行为。
 
-`createSensitiveActions` 可利用标准 actions 的 `publicConfig()` 在操作前更新数据库规则。`SensitiveOperationsForm` 复用逐行输入、去重、校验与错误状态；传入 `operations`、异步 `onsubmit(operations)`（返回 HaiResult），`ondone` 只在保存成功后调用。数据库规则与文件规则取并集，表单清空不能取消文件规则。
+`ui.createSensitiveActions` 可利用标准 actions 的 `publicConfig()` 在操作前更新数据库规则。`SensitiveOperationsForm` 复用逐行输入、去重、校验与错误状态；传入 `operations`、异步 `onsubmit(operations)`（返回 HaiResult），`ondone` 只在保存成功后调用。数据库规则与文件规则取并集，表单清空不能取消文件规则。
 
-会话过期后的重新登录使用 `createSessionRecovery()` + `SessionRecoveryDialog`。根布局通过 `configure(publicConfig, { id, username })` 绑定原用户，把 `recovery.recover` 传给 Kit/API client 的 `recoverSession`；弹窗传入同一份 controller 和标准 actions，布局卸载时 `cancel()`。UI 不保存密码或业务请求，不切换页面。登录携带 `expectedUserId`，服务端在发会话前限制原主体；验证码、锁定、登录限制和改密流程仍按正常登录执行。取消保留当前输入并结束本次续接；真实网络失败不重放写入。整页刷新/关闭后的内存输入无法恢复。
+会话过期后的重新登录使用 `ui.createSessionRecovery()` + `SessionRecoveryDialog`。根布局通过 `configure(publicConfig, { id, username })` 绑定原用户，把 `recovery.recover` 传给 Kit/API client 的 `recoverSession`；弹窗传入同一份 controller 和标准 actions，布局卸载时 `cancel()`。UI 不保存密码或业务请求，不切换页面。登录携带 `expectedUserId`，服务端在发会话前限制原主体；验证码、锁定、登录限制和改密流程仍按正常登录执行。取消保留当前输入并结束本次续接；真实网络失败不重放写入。整页刷新/关闭后的内存输入无法恢复。
 
-`createSensitiveActions(actions)` 复用 Kit/API client 的认证动作，统一管理已登录用户的二次确认、取消、错误重试、重复提交与迟到响应。每个应用根布局创建一份，用 `configure(公开策略)` 更新清单；布局卸载时 `cancel()`。`authorize(operation)` 返回 undefined 表示不需确认、null 表示取消/忙、字符串为本次操作凭据；取消时不要发业务请求。有凭据时只传给本次请求，不放全局 header 或持久存储。`ReauthenticationDialog` 绑定控制器的 `open/loading/error/submit/cancel`，不会增加权限。`Input` 支持 `datetime-local`，其值为浏览器本地时间，服务层转换为明确时间戳后提交。
+`ui.createSensitiveActions(actions)` 复用 Kit/API client 的认证动作，统一管理已登录用户的二次确认、取消、错误重试、重复提交与迟到响应。每个应用根布局创建一份，用 `configure(公开策略)` 更新清单；布局卸载时 `cancel()`。`authorize(operation)` 返回 undefined 表示不需确认、null 表示取消/忙、字符串为本次操作凭据；取消时不要发业务请求。有凭据时只传给本次请求，不放全局 header 或持久存储。`ReauthenticationDialog` 绑定控制器的 `open/loading/error/submit/cancel`，不会增加权限。`Input` 支持 `datetime-local`，其值为浏览器本地时间，服务层转换为明确时间戳后提交。
 
 ```svelte
 <!-- actions 为 Kit/API client 的标准认证动作；policy 为 IAM 公开再认证策略。 -->
 <script lang='ts'>
-  import type { SensitiveActionsOptions } from '@h-ai/ui'
-  import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
+  import { type SensitiveActionsOptions, ReauthenticationDialog, ui } from '@h-ai/ui'
 
   const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
   // Create a reauthentication controller using the application's auth actions. It tracks the pending challenge and result.
-  const confirmation = createSensitiveActions(actions)
+  const confirmation = ui.createSensitiveActions(actions)
   $effect(() => {
     // Configure which operations require confirmation using the supplied IAM policy.
     confirmation.configure(policy)
@@ -999,13 +999,13 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `parseMarkdown(content, options?)` | 安全 Markdown | `content: string` 是原始 Markdown，可省略 `options: MarkdownParseOptions`。见[解析选项](#markdown-parse-options)。 | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
-| `renderMarkdownDocument(content, options?)` | 编辑器文档模型 | `content: string` 是原始 Markdown，可省略 `options: MarkdownDocumentParseOptions`。见[解析选项](#markdown-parse-options)。 | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
-| `isLanguageSupported(lang)` | 检查高亮语言 | `lang` 是要检查的语言标识，如 `typescript`。 | `boolean` | `isLanguageSupported("typescript")` |
-| `highlightCode(text, lang)` | 同步代码高亮 | `text` 是代码原文；`lang` 选择高亮使用的语言规则。 | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
-| `resolveDocumentMarkdownContent(value, kind?, language?)` | 代码内容加围栏 | `value` 是源内容；`kind` 默认 `markdown`，仅 `code` 会添加围栏；`language` 只用于 `code` 的围栏标记。 | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
-| `resolveDocumentDownloadActions(actions?)` | 下载动作菜单 | `actions` 选择要显示的下载菜单项；省略或传空数组时显示 Word、PDF 和 Markdown。见[下载字段表](#document-download-options)。 | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
-| `downloadAiDocument(request)` | 下载已选格式 | `request` 指定下载动作、正文、文件名和源内容格式。见[下载字段表](#document-download-options)。 | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
+| `ui.parseMarkdown(content, options?)` | 安全 Markdown | `content: string` 是原始 Markdown，可省略 `options: MarkdownParseOptions`。见[解析选项](#markdown-parse-options)。 | `HTML string; raw HTML escaped or allowlisted` | `ui.parseMarkdown("# Hello", { allowHtmlTags: false })` |
+| `ui.renderMarkdownDocument(content, options?)` | 编辑器文档模型 | `content: string` 是原始 Markdown，可省略 `options: MarkdownDocumentParseOptions`。见[解析选项](#markdown-parse-options)。 | `MarkdownRenderResult with outline/codeBlocks/blocks` | `ui.renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
+| `ui.isLanguageSupported(lang)` | 检查高亮语言 | `lang` 是要检查的语言标识，如 `typescript`。 | `boolean` | `ui.isLanguageSupported("typescript")` |
+| `ui.highlightCode(text, lang)` | 同步代码高亮 | `text` 是代码原文；`lang` 选择高亮使用的语言规则。 | `escaped/highlighted HTML string` | `ui.highlightCode("const total = 1", "typescript")` |
+| `ui.resolveDocumentMarkdownContent(value, kind?, language?)` | 代码内容加围栏 | `value` 是源内容；`kind` 默认 `markdown`，仅 `code` 会添加围栏；`language` 只用于 `code` 的围栏标记。 | `Markdown string with a safe fence length` | `ui.resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
+| `ui.resolveDocumentDownloadActions(actions?)` | 下载动作菜单 | `actions` 选择要显示的下载菜单项；省略或传空数组时显示 Word、PDF 和 Markdown。见[下载字段表](#document-download-options)。 | `AiDocumentResolvedDownloadAction[]` | `ui.resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
+| `ui.downloadAiDocument(request)` | 下载已选格式 | `request` 指定下载动作、正文、文件名和源内容格式。见[下载字段表](#document-download-options)。 | `Promise<void>; browser failure rejects, SSR does nothing` | `ui.downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
 | `<MarkdownRenderer>` | Markdown 渲染器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showCopyButton` 控制复制控件是否出现；`enableHighlight` 控制是否按语言高亮代码。 | 渲染安全 Markdown | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | 文档下载菜单 | `actions` 提供可用动作或操作区内容；`ondownload` 处理用户选择的下载；[下载字段表](#document-download-options)。 | 选择后调用下载动作 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
 | `<AiDocumentEditor>` | AI 文档编辑器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showRunButton` 切换运行按钮；`showCodePreviewToggle` 切换代码与预览的控件；`allowUnsafeCodePreview` 允许受信任内容显式启用代码预览。 `remoteImages` 控制是否请求外部图片，`onrewrite` 可接收已核对的源码区间。 | 编辑后写回 markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
@@ -1028,12 +1028,12 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 | `request.codeLanguage` | `string` | 未设置 | 仅在 `sourceKind: "code"` 时写为代码围栏的语言标记。 |
 
 ```ts
-import { resolveDocumentDownloadActions, resolveDocumentMarkdownContent } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const menu = resolveDocumentDownloadActions([{ id: 'raw', label: 'Source' }])
+const menu = ui.resolveDocumentDownloadActions([{ id: 'raw', label: 'Source' }])
 // [{ id: 'raw', label: 'Source', badgeLabel: 'RAW' }]
 
-const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
+const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
 // '```typescript\nconst count = 42\n```'
 ```
 
@@ -1044,21 +1044,21 @@ const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typ
 输入 Markdown '# Hello'，输出安全 HTML 和文档模型。markdown 是页面 $state 字符串；表格 columns/rows 采用 AiTableEditor 的公开类型。下载动作由 actions 和 download 宿主回调提供，拒绝 Promise 时交给页面错误边界。
 
 ```ts
-import { parseMarkdown, renderMarkdownDocument, isLanguageSupported, highlightCode, resolveDocumentMarkdownContent, resolveDocumentDownloadActions, downloadAiDocument } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 // Parse the supplied heading as HTML. Raw HTML input is escaped with this option.
-const html = parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
+const html = ui.parseMarkdown('# Hello', { allowHtmlTags: false }) // heading HTML
 // Parse the heading into a Markdown document result with an outline and blocks.
-const document = renderMarkdownDocument('# Hello') // outline and parsed blocks
+const document = ui.renderMarkdownDocument('# Hello') // outline and parsed blocks
 // Check support for the TypeScript grammar. It returns true here.
-isLanguageSupported('typescript') // true
+ui.isLanguageSupported('typescript') // true
 // Highlight the supplied TypeScript statement and return its safe HTML.
-highlightCode('const total = 1', 'typescript') // highlighted HTML
+ui.highlightCode('const total = 1', 'typescript') // highlighted HTML
 // Convert the supplied code to a TypeScript fenced Markdown block.
-resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
+ui.resolveDocumentMarkdownContent('const total = 1', 'code', 'typescript') // fenced Markdown
 // Resolve the supplied Markdown option into the enabled download actions.
-const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
+const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown' }])
 // Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
-await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
+await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
 #### 场景：AI 文档与表格
@@ -1078,7 +1078,8 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 ```svelte
 <!-- Render the supplied Markdown at 1.125rem. Supported raw HTML still goes through sanitization. -->
-<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
+<MarkdownRenderer content={
+;(markdown} fontSize='1.125rem' allowHtmlTags />
 
 <!-- Render the editable proposal Markdown with tool controls and an 18px font. The outline pane is hidden. -->
 <AiDocumentEditor
@@ -1116,7 +1117,8 @@ await downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: '
 
 ```svelte
 <!-- 私有 Markdown 保留正文排版，网络图片显示其替代文字。 -->
-<AiDocumentEditor content={markdown} remoteImages={false} onrewrite={handleRewrite} />
+<AiDocumentEditor content={
+;(markdown} remoteImages={false} onrewrite={handleRewrite} />
 ```
 
 改写回调的 `sourceRange` 包含当前 `content` 的 UTF-16 半开区间与原文。对 `**重复** / **重复**` 选中第二处时，区间为 `[11, 13)`，原文为 `重复`。无法核对的位置不携带 `sourceRange`。提交前应用重新比对版本及当前原文片段。
@@ -1274,7 +1276,8 @@ const acceptedSubmission: ToolRun = {
 <!-- Plot the supplied rate-limit and circuit-break series by label. The pointer selects the nearest segmented point and shows a crosshair. -->
 <Chart
   type='line'
-  data={trendData}
+  data={
+;(trendData}
   x='label'
   y={['rateLimit', 'circuitBreak']}
   series={trendSeries}
@@ -1296,11 +1299,11 @@ const acceptedSubmission: ToolRun = {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `defineCrud(resource)` | 声明列表表单 | `resource` 定义资源名称、字段及页面查询和写入用的 API 回调。 [字段表](#crud-resource-options) | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
-| `createCrudController(crud, options?)` | 托管列表状态 | `crud` 是 `defineCrud` 的资源定义；`options` 配置启动加载、旧数据及 URL 同步。见[列表控制器字段表](#crud-controller-options)。 | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
-| `mapPaginated(result, map)` | 映射分页条目 | `result` 是原始分页结果；`map` 接收每条数据和下标，仅转换 `items`。 | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
-| `createBrowserNavAdapter()` | 接入普通浏览器导航 | 无参数。 | `NavAdapter` | `createBrowserNavAdapter()` |
-| `<CrudPage>` | CRUD 主页面 | `crud` 传入 `defineCrud` 生成的资源定义；`data` 传入组件要显示的数据；`permissions` 提供界面判断操作权限用的信息；`form` 设置新建与编辑表单的容器和尺寸；`pagination` 配置分页栏的可用操作和信息；`density` 调整列表行和操作区的紧凑程度；`detailColumns` 限定点击哪几列可打开详情；`showHeader` 控制是否显示页面标题区；`toolbarLeading` 提供工具栏前置内容；`toolbarActions` 提供额外工具栏动作；`card` 配置卡片式列表的呈现；`tableCell` 自定义表格单元格，接收行和列键；`onrowclick` 接收用户点击的行；`sortableColumns` 指定支持排序的列；`nav` 提供列表的导航状态和处理方式；`loading` 显示等待状态；`loaded` 区分首次加载与已完成加载；`error` 设置错误信息或错误样式；`onRetry` 处理加载失败后的重试；`keepPreviousData` 决定刷新时是否继续显示旧数据。 | 列表、表单与资源回调 | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
+| `ui.defineCrud(resource)` | 声明列表表单 | `resource` 定义资源名称、字段及页面查询和写入用的 API 回调。 [字段表](#crud-resource-options) | `CrudDef for CrudPage` | `ui.defineCrud(resourceDefinition)` |
+| `ui.createCrudController(crud, options?)` | 托管列表状态 | `crud` 是 `ui.defineCrud` 的资源定义；`options` 配置启动加载、旧数据及 URL 同步。见[列表控制器字段表](#crud-controller-options)。 | `controller data/nav/loading/loaded/error/load/reload` | `ui.createCrudController(crud, { autoLoad: false })` |
+| `ui.mapPaginated(result, map)` | 映射分页条目 | `result` 是原始分页结果；`map` 接收每条数据和下标，仅转换 `items`。 | `PaginatedResult<R> retaining total/page/pageSize` | `ui.mapPaginated(page, item => ({ ...item, selected: false }))` |
+| `ui.createBrowserNavAdapter()` | 接入普通浏览器导航 | 无参数。 | `NavAdapter` | `ui.createBrowserNavAdapter()` |
+| `<CrudPage>` | CRUD 主页面 | `crud` 传入 `ui.defineCrud` 生成的资源定义；`data` 传入组件要显示的数据；`permissions` 提供界面判断操作权限用的信息；`form` 设置新建与编辑表单的容器和尺寸；`pagination` 配置分页栏的可用操作和信息；`density` 调整列表行和操作区的紧凑程度；`detailColumns` 限定点击哪几列可打开详情；`showHeader` 控制是否显示页面标题区；`toolbarLeading` 提供工具栏前置内容；`toolbarActions` 提供额外工具栏动作；`card` 配置卡片式列表的呈现；`tableCell` 自定义表格单元格，接收行和列键；`onrowclick` 接收用户点击的行；`sortableColumns` 指定支持排序的列；`nav` 提供列表的导航状态和处理方式；`loading` 显示等待状态；`loaded` 区分首次加载与已完成加载；`error` 设置错误信息或错误样式；`onRetry` 处理加载失败后的重试；`keepPreviousData` 决定刷新时是否继续显示旧数据。 | 列表、表单与资源回调 | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
 | `<CrudFilterBar>` | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields` 指定可筛选的字段；`searchValue` 设置当前搜索词；`onsearch` 接收搜索输入或发起的查询；`onfilterchange` 接收筛选条件的变更；`onreset` 处理清空条件。 | 提交查询条件 | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
 | `<CrudDetailPanel>` | 详情面板（抽屉/弹窗） | `open` 控制组件是否打开；`item` 传入要显示详情的记录；`fields` 指定显示或收集的字段；`variant` 选择视觉样式或状态；`drawerWidth` 抽屉模式下指定宽度；`modalSize` 弹窗模式下指定尺寸。 | 显示指定记录详情 | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
 | `<CrudEditPanel>` | 编辑面板（抽屉/弹窗） | `open` 控制组件是否打开；`fields` 指定显示或收集的字段；`variant` 选择视觉样式或状态；`drawerWidth` 抽屉模式下指定宽度；`modalSize` 弹窗模式下指定尺寸；`onsubmit` 收到表单提交时调用。 | 提交声明的可写字段 | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
@@ -1334,9 +1337,9 @@ const acceptedSubmission: ToolRun = {
 | `syncUrl` | `boolean` | `true` | 浏览器中把控制器的查询参数同步到地址栏，并保留路径和锚点。 |
 
 ```ts
-import { createCrudController, defineCrud } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 
-const crud = defineCrud<{ id: string }>({
+const crud = ui.defineCrud<{ id: string }>({
   name: 'jobs',
   label: 'Jobs',
   fields: [{ id: 'id', label: 'ID', type: 'text' }],
@@ -1344,7 +1347,7 @@ const crud = defineCrud<{ id: string }>({
     list: async () => ({ items: [{ id: 'j1' }], total: 1, page: 1, pageSize: 20 }),
   },
 })
-const controller = createCrudController(crud, { autoLoad: false, syncUrl: false })
+const controller = ui.createCrudController(crud, { autoLoad: false, syncUrl: false })
 await controller.load()
 ```
 
@@ -1377,14 +1380,14 @@ await controller.load()
 >
 > `CrudPage` 受控加载态：`loading` / `loaded` / `error` / `onRetry` / `keepPreviousData`。仅当 `loaded && total === 0` 时才展示空状态（避免首次请求未回时误显“暂无数据”）；首次查询展示“查询中”；失败且无可用数据时展示错误与重试（`onRetry`）；`keepPreviousData`（默认 true）在刷新/失败时保留旧数据。
 >
-> 纯客户端（无 SvelteKit SSR）可用框架级 `defineCrud` + `createCrudController` 托管 `data` 与 `nav`，自带 latest-wins（seq + AbortSignal）、失败保留旧数据、惰性加载与并发去重：
+> 纯客户端（无 SvelteKit SSR）可用框架级 `ui.defineCrud` + `ui.createCrudController` 托管 `data` 与 `nav`，自带 latest-wins（seq + AbortSignal）、失败保留旧数据、惰性加载与并发去重：
 >
 ```svelte
 <script lang='ts'>
-  import { createCrudController, CrudPage, defineCrud } from '@h-ai/ui'
+  import { CrudPage, ui } from '@h-ai/ui'
 
   // Define the users CRUD resource and its name field. The example list callback supplies one Ada record.
-  const crud = defineCrud({
+  const crud = ui.defineCrud({
     name: 'users', label: 'Users',
     fields: [{ id: 'name', label: 'Name', type: 'text' }],
     api: {
@@ -1392,7 +1395,7 @@ await controller.load()
     },
   })
   // Create the controller for that resource without synchronizing filters to the URL. It exposes data, loading and error state, and reload.
-  const controller = createCrudController(crud, { syncUrl: false })
+  const controller = ui.createCrudController(crud, { syncUrl: false })
 </script>
 <!-- Show the users resource and the controller's current results. A load error is shown with the supplied retry action. -->
 <CrudPage
@@ -1402,18 +1405,18 @@ await controller.load()
 />
 ```
 >
-> `Tabs` 支持惰性页签：`lazy` 开启后未激活过的页签内容不渲染（`children` 提供 `isActivated(key)` 判断），`onactivate(key)` 在页签首次激活时触发一次，适合配合 `createCrudController(crud, { autoLoad: false })` 在首次可见时才加载。
+> `Tabs` 支持惰性页签：`lazy` 开启后未激活过的页签内容不渲染（`children` 提供 `isActivated(key)` 判断），`onactivate(key)` 在页签首次激活时触发一次，适合配合 `ui.createCrudController(crud, { autoLoad: false })` 在首次可见时才加载。
 
 #### 场景：声明式 CRUD 页面（CrudPage）
 
 ```svelte
 <script lang='ts'>
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
+  import { kit } from '@h-ai/kit/client'
   import { CrudPage } from '@h-ai/ui'
 
   const { data } = $props()
   // Create the navigation adapter for the current SvelteKit page.
-  const nav = createSvelteKitNavAdapter()
+  const nav = kit.client.createSvelteKitNavAdapter()
 </script>
 
 <!-- Render the supplied role CRUD data with create, update, and delete enabled. The requested modal, sorting, and page controls use the supplied adapter. -->
@@ -1490,7 +1493,7 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 
 <a id="guide"></a>
 
-### 提供导览与帮助：`createGuide`
+### 提供导览与帮助：`ui.createGuide`
 
 应用定义导览步骤、定位目标和帮助文章，控制器负责开始、前进、结束与完成记录。
 
@@ -1498,25 +1501,25 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `createGuide(options)` | 引导控制器 | `options: GuideOptions` 必填，含导览列表、导航和进度保存。见[调用参数](#call-options)。 | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
-| `resolveGuideText(text?)` | 延迟翻译引导文案 | `text` 是直接显示的文字或读取当前语言文案的函数；可省略。 | `string` | `resolveGuideText(() => m.help())` |
+| `ui.createGuide(options)` | 引导控制器 | `options: GuideOptions` 必填，含导览列表、导航和进度保存。见[调用参数](#call-options)。 | `GuideController; no init/close` | `ui.createGuide({ tours: [], persistence: "memory" })` |
+| `ui.resolveGuideText(text?)` | 延迟翻译引导文案 | `text` 是直接显示的文字或读取当前语言文案的函数；可省略。 | `string` | `ui.resolveGuideText(() => m.help())` |
 | `<GuideHost>` | 显示首次邀请、页面导览与帮助弹窗 | `guide` 提供引导流程控制器；`locale` 决定当前显示的语言；`scope` 限定引导匹配的页面或工作区；`autoStart` 允许满足条件的引导自动开始。 | 显示导览与帮助界面 | `<GuideHost {guide} locale='en-US' scope='demo-user' />` |
 | `<HelpCenter>` | 可独立使用的帮助中心 | `articles` 提供帮助文章列表；`tours` 提供可用引导列表；`locale` 决定当前显示的语言；`selectedId` 指定当前显示的帮助条目；`onstart` 处理启动某个引导的操作。 | 检索和阅读帮助内容 | `<HelpCenter articles={articles} tours={tours} locale='en-US' />` |
 
 #### 场景：新手引导与帮助中心
 
-`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英日文按钮、进度和错误提示，业务内容使用应用 i18n。
+`@h-ai/ui/guide` 提供 `ui.createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英日文按钮、进度和错误提示，业务内容使用应用 i18n。
 
-同一入口的 `resolveGuideText(text?)` 可解析字符串或 i18n 回调；`GuideHost` 会自动解析文案。
+同一入口的 `ui.resolveGuideText(text?)` 可解析字符串或 i18n 回调；`GuideHost` 会自动解析文案。
 
 下例放在应用布局中；`nav` 是应用现有 NavAdapter，`locale`、`user` 与翻译函数 `m` 来自应用，翻译 key 需在应用消息中定义。目标按钮放在 `/users` 页面。
 
 ```svelte
 <script lang='ts'>
-  import { createGuide, GuideHost } from '@h-ai/ui/guide'
+  import { GuideHost, ui } from '@h-ai/ui/guide'
 
   // Create a guide for the users route with a named anchor and help article, using the supplied navigation adapter and persistence key.
-  const guide = createGuide({
+  const guide = ui.createGuide({
     nav,
     persistKey: 'my-app-guide',
     tours: [
@@ -1575,16 +1578,16 @@ admin-console 示例和 CLI fullstack Web/App/Desktop 默认包含帮助入口�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `getThemeInfo(themeId)` | 主题元数据 | `themeId` 选择要读取属性或明暗分类的主题。 | `ThemeInfo or undefined` | `getThemeInfo("light")` |
-| `isDarkTheme(themeId)` | 识别暗色主题 | `themeId` 选择要读取属性或明暗分类的主题。 | `boolean` | `isDarkTheme("dark")` |
-| `normalizeThemeId(themeId, fallbackThemeId?)` | 归一化主题 | `themeId` 是从设置或外部输入读取的候选主题；无效时用 `fallbackThemeId`（默认 `light`）。 | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
-| `normalizeHexColor(value)` | 归一化颜色 | `value` 是从主题设置读取的十六进制颜色候选值，可传空值。 | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
-| `resolveThemeTone(themeId)` | 主题亮暗语义 | `themeId` 选择要读取属性或明暗分类的主题。 | `light or dark` | `resolveThemeTone("light")` |
-| `createThemeBootstrapScript(options)` | 防首屏主题闪烁 | 必须从可信的宿主配置传入 `options: ThemeBootstrapScriptOptions`。见[调用参数](#call-options)。 | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
-| `getThemeInitScript()` | 默认主题启动脚本 | 无参数。 | `script string` | `getThemeInitScript()` |
-| `applyTheme(theme, persist?)` | 切换页面主题 | `theme` 选择应用到页面的主题；`persist` 默认 `true`，决定是否保存供下次打开时使用。 | `void; updates DOM/browser preference` | `applyTheme("dark")` |
-| `getCurrentTheme()` | 读取页面主题 | 无参数。 | `theme ID string` | `getCurrentTheme()` |
-| `getSavedTheme(fallbackTheme?)` | 读取主题偏好 | `fallbackTheme` 是读不到有效偏好时返回的主题，默认 `light`。 | `theme ID string` | `getSavedTheme("light")` |
+| `ui.getThemeInfo(themeId)` | 主题元数据 | `themeId` 选择要读取属性或明暗分类的主题。 | `ThemeInfo or undefined` | `ui.getThemeInfo("light")` |
+| `ui.isDarkTheme(themeId)` | 识别暗色主题 | `themeId` 选择要读取属性或明暗分类的主题。 | `boolean` | `ui.isDarkTheme("dark")` |
+| `ui.normalizeThemeId(themeId, fallbackThemeId?)` | 归一化主题 | `themeId` 是从设置或外部输入读取的候选主题；无效时用 `fallbackThemeId`（默认 `light`）。 | `supported theme ID` | `ui.normalizeThemeId("unknown", "light")` |
+| `ui.normalizeHexColor(value)` | 归一化颜色 | `value` 是从主题设置读取的十六进制颜色候选值，可传空值。 | `six-digit lowercase hex string or null` | `ui.normalizeHexColor("#5765F0")` |
+| `ui.resolveThemeTone(themeId)` | 主题亮暗语义 | `themeId` 选择要读取属性或明暗分类的主题。 | `light or dark` | `ui.resolveThemeTone("light")` |
+| `ui.createThemeBootstrapScript(options)` | 防首屏主题闪烁 | 必须从可信的宿主配置传入 `options: ThemeBootstrapScriptOptions`。见[调用参数](#call-options)。 | `script string for the application HTML shell` | `ui.createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
+| `ui.getThemeInitScript()` | 默认主题启动脚本 | 无参数。 | `script string` | `ui.getThemeInitScript()` |
+| `ui.applyTheme(theme, persist?)` | 切换页面主题 | `theme` 选择应用到页面的主题；`persist` 默认 `true`，决定是否保存供下次打开时使用。 | `void; updates DOM/browser preference` | `ui.applyTheme("dark")` |
+| `ui.getCurrentTheme()` | 读取页面主题 | 无参数。 | `theme ID string` | `ui.getCurrentTheme()` |
+| `ui.getSavedTheme(fallbackTheme?)` | 读取主题偏好 | `fallbackTheme` 是读不到有效偏好时返回的主题，默认 `light`。 | `theme ID string` | `ui.getSavedTheme("light")` |
 | `<ThemeColorPicker>` | 主题色选择器 | `value` 传入当前值，支持的场合可双向绑定；`presets` 提供用户可直接选用的颜色；`onchange` 在值改变时调用。 | 更新主题色选择值 | `<ThemeColorPicker bind:value={color} />` |
 | `<ThemeSelector>` | 主题选择面板 | `themeIds` 限制显示的主题 ID。 | 选择内置主题，可限制候选项 | `<ThemeSelector />` |
 | `<ThemeToggle>` | 明/暗主题切换 | No props | 切换亮暗主题 | `<ThemeToggle />` |
@@ -1602,21 +1605,10 @@ admin-console 示例和 CLI fullstack Web/App/Desktop 默认包含帮助入口�
 `formal` 提供直角的商务外观，按钮、输入框、卡片与弹窗不使用装饰性圆角；主题选择器提供三语名称，示例和默认模板可选择。Button 的 submitHint 仅在 type=submit 时显示原生 Enter 提示，不绑定全局快捷键；LoginForm 默认在桌面首次就绪且页面无焦点时聚焦标识，autoFocus=false 可关闭。筛选 Enter 即时查询且忽略输入法确认；主题菜单支持方向键/Home/End、Enter/Space 及 Esc 恢复焦点；确认框默认聚焦取消，Esc 同步取消状态。
 
 ```ts
-import {
-  applyTheme, // 应用主题（自动持久化到 localStorage）
-  createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
-  getCurrentTheme, // 获取当前主题
-  getSavedTheme, // 读取安全缓存，可传入应用配置的默认主题
-  getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
-  isDarkTheme, // 检查是否暗色主题
-  normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
-  normalizeThemeId, // 校验主题 ID 并自动回退
-  THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // 19 个主题的元数据，类型为 ThemeInfo[]
-} from '@h-ai/ui/theme'
+import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 ```
 
-简单场景可以直接使用 `getThemeInitScript()`；如果应用有自定义存储 key、主题色 CSS 变量或语言偏好，推荐在服务端通过 `createThemeBootstrapScript()` 生成脚本后再注入 `app.html`。
+简单场景可以直接使用 `ui.getThemeInitScript()`；如果应用有自定义存储 key、主题色 CSS 变量或语言偏好，推荐在服务端通过 `ui.createThemeBootstrapScript()` 生成脚本后再注入 `app.html`。
 
 在 SvelteKit 的 `app.html` 中，可以先放一个占位符：
 
@@ -1632,10 +1624,10 @@ import {
 
 ```ts
 import type { Handle } from '@sveltejs/kit/hooks'
-import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
+import { DEFAULT_THEME_COLOR_CSS_VAR, ui } from '@h-ai/ui/theme'
 
 // Generate a first-paint theme script using the supplied preference key and fallback color. The returned text replaces the page placeholder below.
-const themeBootstrapScript = createThemeBootstrapScript({
+const themeBootstrapScript = ui.createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',
   defaultThemeColor: '#5765f0',
   colorCssVar: DEFAULT_THEME_COLOR_CSS_VAR,
@@ -1652,7 +1644,7 @@ export const handle: Handle = ({ event, resolve }) => resolve(event, {
 
 主题偏好和语言初始化及其默认值见 [UI 调用参数](ui.md#call-options)。
 
-每个应用在根布局选择默认主题。浏览器调用 `applyTheme()` 更换主题，用 `getSavedTheme()` 读出之前保存的主题。要能显示某个主题，构建产物中必须有相应 CSS。切换深色后检查长文、图表文字和错误状态是否仍清晰可读。
+每个应用在根布局选择默认主题。浏览器调用 `ui.applyTheme()` 更换主题，用 `ui.getSavedTheme()` 读出之前保存的主题。要能显示某个主题，构建产物中必须有相应 CSS。切换深色后检查长文、图表文字和错误状态是否仍清晰可读。
 
 ![浅色设置页](../images/settings-light.png)
 
@@ -1678,13 +1670,13 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `createLocaleStore(options?)` | 组件树语言状态 | `options` 可省略，可选默认语言、支持列表、浏览器检测和存储键。见[调用参数](#call-options)。 | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
-| `getGlobalLocale()` | 读取当前语言 | 无参数。 | `locale string from current context` | `getGlobalLocale()` |
-| `setGlobalLocale(locale)` | 设置浏览器或启动语言 | `locale` 是要应用到全局翻译函数的语言标识。 | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
-| `detectBrowserLocale(supportedLocales?)` | 识别浏览器语言 | `supportedLocales` 限定可接受的浏览器语言；省略时用框架支持列表。 | `supported locale or null` | `detectBrowserLocale()` |
-| `isLocaleSupported(locale, supportedLocales?)` | 校验支持语言 | `locale` 是待检查的语言；`supportedLocales` 限定匹配范围，默认用框架支持列表。 | `boolean` | `isLocaleSupported("ja-JP")` |
-| `resolveLocale(locale, supportedLocales?, defaultLocale?)` | 归一化语言 | `locale` 是候选语言；`supportedLocales` 是允许的语言列表；`defaultLocale` 是候选不匹配时优先尝试的语言，省略时用框架默认语言。 | `supported locale` | `resolveLocale("en")` |
-| `interpolate(template, params?)` | 替换文案参数 | `template` 是包含占位符的模板；`params` 按键提供替换内容，省略时返回原模板。 | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
+| `ui.createLocaleStore(options?)` | 组件树语言状态 | `options` 可省略，可选默认语言、支持列表、浏览器检测和存储键。见[调用参数](#call-options)。 | `locale store with current/set/isSupported` | `ui.createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
+| `ui.getGlobalLocale()` | 读取当前语言 | 无参数。 | `locale string from current context` | `ui.getGlobalLocale()` |
+| `ui.setGlobalLocale(locale)` | 设置浏览器或启动语言 | `locale` 是要应用到全局翻译函数的语言标识。 | `void; use request context for SSR` | `ui.setGlobalLocale("en-US")` |
+| `ui.detectBrowserLocale(supportedLocales?)` | 识别浏览器语言 | `supportedLocales` 限定可接受的浏览器语言；省略时用框架支持列表。 | `supported locale or null` | `ui.detectBrowserLocale()` |
+| `ui.isLocaleSupported(locale, supportedLocales?)` | 校验支持语言 | `locale` 是待检查的语言；`supportedLocales` 限定匹配范围，默认用框架支持列表。 | `boolean` | `ui.isLocaleSupported("ja-JP")` |
+| `ui.resolveLocale(locale, supportedLocales?, defaultLocale?)` | 归一化语言 | `locale` 是候选语言；`supportedLocales` 是允许的语言列表；`defaultLocale` 是候选不匹配时优先尝试的语言，省略时用框架默认语言。 | `supported locale` | `ui.resolveLocale("en")` |
+| `ui.interpolate(template, params?)` | 替换文案参数 | `template` 是包含占位符的模板；`params` 按键提供替换内容，省略时返回原模板。 | `string` | `ui.interpolate("Hello {name}", { name: "Ada" })` |
 | `<LanguageSwitch>` | 语言切换 | No props | 更换全局 UI 语言 | `<LanguageSwitch />` |
 
 #### 场景：国际化 (i18n)
@@ -1702,11 +1694,11 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 
 ```svelte
 <script>
-  import { createLocaleStore } from '@h-ai/ui/i18n'
+  import { ui } from '@h-ai/ui/i18n'
   import { setLocale } from '#lib/paraglide/runtime.js'
 
   // Create a reactive language store with browser and framework defaults.
-  const localeStore = createLocaleStore()
+  const localeStore = ui.createLocaleStore()
 
   function changeLocale(code) {
     // Update the UI store and the framework locale with the chosen supported code.
@@ -1723,29 +1715,19 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 </select>
 ```
 
-`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
+`@h-ai/ui/i18n` 的 `ui.createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
 
 #### 场景：导出的 i18n 工具
 
 ```ts
-import {
-  createLocaleStore, // Svelte 响应式 locale store
-  DEFAULT_LOCALE, // 默认 locale: 'zh-CN'
-  DEFAULT_LOCALES, // 支持的 locale 列表
-  detectBrowserLocale, // 检测浏览器语言
-  getGlobalLocale, // 获取当前全局 locale
-  interpolate, // 字符串插值（如 "Hello {name}"）
-  isLocaleSupported, // 检查 locale 是否支持
-  resolveLocale, // 解析 locale（支持回退）
-  setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
-} from '@h-ai/ui/i18n'
+import { DEFAULT_LOCALE, DEFAULT_LOCALES, ui } from '@h-ai/ui/i18n'
 ```
 
 #### 场景：请求语言隔离
 
 多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-设定请求语言后，`setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
+设定请求语言后，`ui.setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 <a id="feedback"></a>
 
@@ -1779,40 +1761,40 @@ import {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `registerClipboardHostWriter(writer)` | 注册 WebView 剪贴板 | `writer` 接收文字并异步返回宿主写入是否成功；传 `null` 取消注册。 | `void` | `registerClipboardHostWriter(null)` |
-| `writeTextToClipboard(text)` | 复制并核对结果 | `text` 是要写入剪贴板的原始字符串。 | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
-| `cn(...classes)` | 合并类名 | `classes` 是依次拼接的可变数量类名，假值会被忽略。 | `string` | `cn("flex", active && "text-primary")` |
-| `getDataAttributes(props)` | 只透传 data 属性 | `props` 是要从中选出 `data-*` 属性的组件属性集合。 | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
-| `generateId(prefix?)` | 生成 UI 标识 | `prefix` 是生成的 DOM ID 前缀，省略时使用组件库的默认前缀。 | `string` | `generateId("field")` |
-| `portal(node, target?)` | 把节点移到目标容器 | `node` 是要移动的 DOM 元素；`target` 是目标元素或选择器，默认 `document.body`。 | `Svelte action result with cleanup` | `portal(node, document.body)` |
-| `detectPlatform()` | 检测终端类型 | 无参数。 | `Platform` | `detectPlatform()` |
-| `isMobile()` | 检查移动端 | 无参数。 | `boolean` | `isMobile()` |
-| `isNativeApp()` | 检查原生壳 | 无参数。 | `boolean` | `isNativeApp()` |
-| `usePlatform()` | 响应式终端视图 | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
-| `getVariantClass(variant, prefix?)` | 映射主题样式 | `variant` 选择样式变体；`prefix` 选择类名前缀，默认 `btn`。 | `string class name` | `getVariantClass("primary", "btn")` |
-| `getSizeClass(size, prefix?)` | 映射主题样式 | `size` 选择组件尺寸；`prefix` 选择类名前缀，默认 `btn`。 | `string class name` | `getSizeClass("sm", "btn")` |
-| `getInputSizeClass(size)` | 映射主题样式 | `size` 选择要转换为 CSS 类的组件尺寸。 | `string class name` | `getInputSizeClass("sm")` |
-| `getBadgeVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `getBadgeVariantClass("info")` |
-| `getBadgeSizeClass(size)` | 映射主题样式 | `size` 选择要转换为 CSS 类的组件尺寸。 | `string class name` | `getBadgeSizeClass("sm")` |
-| `getAlertVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `getAlertVariantClass("info")` |
-| `getProgressVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `getProgressVariantClass("primary")` |
+| `ui.registerClipboardHostWriter(writer)` | 注册 WebView 剪贴板 | `writer` 接收文字并异步返回宿主写入是否成功；传 `null` 取消注册。 | `void` | `ui.registerClipboardHostWriter(null)` |
+| `ui.writeTextToClipboard(text)` | 复制并核对结果 | `text` 是要写入剪贴板的原始字符串。 | `Promise<boolean>; true only when write succeeds` | `ui.writeTextToClipboard("trace-001")` |
+| `ui.cn(...classes)` | 合并类名 | `classes` 是依次拼接的可变数量类名，假值会被忽略。 | `string` | `ui.cn("flex", active && "text-primary")` |
+| `ui.getDataAttributes(props)` | 只透传 data 属性 | `props` 是要从中选出 `data-*` 属性的组件属性集合。 | `ForwardedDataAttributes` | `ui.getDataAttributes({ "data-testid": "save" })` |
+| `ui.generateId(prefix?)` | 生成 UI 标识 | `prefix` 是生成的 DOM ID 前缀，省略时使用组件库的默认前缀。 | `string` | `ui.generateId("field")` |
+| `ui.portal(node, target?)` | 把节点移到目标容器 | `node` 是要移动的 DOM 元素；`target` 是目标元素或选择器，默认 `document.body`。 | `Svelte action result with cleanup` | `ui.portal(node, document.body)` |
+| `ui.detectPlatform()` | 检测终端类型 | 无参数。 | `Platform` | `ui.detectPlatform()` |
+| `ui.isMobile()` | 检查移动端 | 无参数。 | `boolean` | `ui.isMobile()` |
+| `ui.isNativeApp()` | 检查原生壳 | 无参数。 | `boolean` | `ui.isNativeApp()` |
+| `ui.usePlatform()` | 响应式终端视图 | `none; component initialization` | `{ current, isMobile, isApp }` | `ui.usePlatform()` |
+| `ui.getVariantClass(variant, prefix?)` | 映射主题样式 | `variant` 选择样式变体；`prefix` 选择类名前缀，默认 `btn`。 | `string class name` | `ui.getVariantClass("primary", "btn")` |
+| `ui.getSizeClass(size, prefix?)` | 映射主题样式 | `size` 选择组件尺寸；`prefix` 选择类名前缀，默认 `btn`。 | `string class name` | `ui.getSizeClass("sm", "btn")` |
+| `ui.getInputSizeClass(size)` | 映射主题样式 | `size` 选择要转换为 CSS 类的组件尺寸。 | `string class name` | `ui.getInputSizeClass("sm")` |
+| `ui.getBadgeVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `ui.getBadgeVariantClass("info")` |
+| `ui.getBadgeSizeClass(size)` | 映射主题样式 | `size` 选择要转换为 CSS 类的组件尺寸。 | `string class name` | `ui.getBadgeSizeClass("sm")` |
+| `ui.getAlertVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `ui.getAlertVariantClass("info")` |
+| `ui.getProgressVariantClass(variant)` | 映射主题样式 | `variant` 选择要转换为 CSS 类的视觉状态。 | `string class name` | `ui.getProgressVariantClass("primary")` |
 
 #### 场景：合并样式并复制诊断编号
 
 输入类名和不敏感的演示文本；cn 合并条件类名，generateId 返回 UI 标识而不是认证令牌，writeTextToClipboard 返回是否真实写入成功。portal 只能在浏览器挂载节点后使用，销毁时调用返回的 destroy。
 
 ```ts
-import { cn, generateId, getDataAttributes, getVariantClass, writeTextToClipboard } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 // Combine the given class with the falsy conditional. The result is flex.
-cn('flex', false && 'hidden') // 'flex'
+ui.cn('flex', false && 'hidden') // 'flex'
 // Keep the data-testid attribute from this object and discard the unrelated property.
-getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
+ui.getDataAttributes({ 'data-testid': 'save', secret: 'ignored' }) // only data-testid
 // Combine the primary variant and btn prefix into btn-primary.
-getVariantClass('primary', 'btn') // 'btn-primary'
+ui.getVariantClass('primary', 'btn') // 'btn-primary'
 // Generate a unique field identifier with the requested prefix.
-const id = generateId('field') // generated field identifier
+const id = ui.generateId('field') // generated field identifier
 // Copy the supplied trace ID. true means the browser copied it and false means it could not.
-const copied = await writeTextToClipboard('trace-001') // true if copied; false on failure
+const copied = await ui.writeTextToClipboard('trace-001') // true if copied; false on failure
 ```
 
 #### 场景：其他导出
@@ -1824,15 +1806,15 @@ import type { ButtonProps, InputProps, ModalProps } from '@h-ai/ui'
 
 ```ts
 // 样式工具
-import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 ```
 
 ```ts
 // Toast 单例
-import { toast } from '@h-ai/ui'
+import { ui } from '@h-ai/ui'
 ```
 
-组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。原生外壳可以调用 `registerClipboardHostWriter()` 提供自己的剪贴板写入方法。
+组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。原生外壳可以调用 `ui.registerClipboardHostWriter()` 提供自己的剪贴板写入方法。
 
 <a id="call-options"></a>
 
@@ -1845,41 +1827,41 @@ import { toast } from '@h-ai/ui'
 ### 场景：在根布局共享主题、语言和导览
 
 ```ts
-import { createGuide } from '@h-ai/ui/guide'
-import { createLocaleStore } from '@h-ai/ui/i18n'
-import { applyTheme } from '@h-ai/ui/theme'
+import { ui } from '@h-ai/ui'
+
+
 
 // Apply the light theme to the current document and persist the preference when browser storage is available.
-applyTheme('light')
+ui.applyTheme('light')
 // Create a locale store that falls back to zh-CN and uses orders-locale for persistence.
-const locale = createLocaleStore({ defaultLocale: 'zh-CN', persistKey: 'orders-locale' })
+const locale = ui.createLocaleStore({ defaultLocale: 'zh-CN', persistKey: 'orders-locale' })
 // Create a guide with no tours and memory-only state.
-const guide = createGuide({ tours: [], persistence: 'memory' })
+const guide = ui.createGuide({ tours: [], persistence: 'memory' })
 ```
 
-在浏览器中调用 `applyTheme('light')` 后，页面切换为浅色主题。`createLocaleStore()` 返回给组件树共享的语言状态，示例使用 `orders-locale` 保存语言偏好。`createGuide()` 返回导览控制器。示例没有设置具体步骤，刷新页面后内存中的导览进度会丢失。可按功能使用以上三个公开导入路径。
+在浏览器中调用 `ui.applyTheme('light')` 后，页面切换为浅色主题。`ui.createLocaleStore()` 返回给组件树共享的语言状态，示例使用 `orders-locale` 保存语言偏好。`ui.createGuide()` 返回导览控制器。示例没有设置具体步骤，刷新页面后内存中的导览进度会丢失。可按功能使用以上三个公开导入路径。
 
 ### 参数清单
 
 | 参数                                                     | 默认值/必填                         | 说明                                                                                                                         |
 | ---------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `applyTheme(theme, persist)`                               | `theme` 必填，`persist` 默认 `true` | 从支持的主题 ID 中选择。被持久化的主题写入浏览器的 `theme` 键                                                                |
+| `ui.applyTheme(theme, persist)`                               | `theme` 必填，`persist` 默认 `true` | 从支持的主题 ID 中选择。被持久化的主题写入浏览器的 `theme` 键                                                                |
 | 主题色 `DEFAULT_THEME_COLOR`                               | `#5765f0`                           | 内建主题色，应用可用 CSS 自定义属性替换                                                                                      |
-| `createThemeBootstrapScript.storageKey`                    | 必填                                | 首屏脚本读取的浏览器偏好存储键                                                                                               |
-| `createThemeBootstrapScript.defaultThemeId`                | `light`                             | 浏览器还没有有效偏好时使用的主题                                                                                             |
-| `createThemeBootstrapScript.defaultThemeColor`             | 可省略                              | 指定时使用十六进制颜色；空值跳过默认颜色设置                                                                                 |
-| `createThemeBootstrapScript.colorCssVar`、`toneDatasetKey` | 可省略                              | 指定后写入主题颜色 CSS 变量、亮暗色数据属性                                                                                  |
-| `createThemeBootstrapScript.locale`                        | 可省略                              | 同时规范化首屏语言信息，提供 `key`、`defaultValue`、`supportedValues`                                                        |
-| `createLocaleStore.defaultLocale`                          | `zh-CN`                             | 没有有效候选语言时的默认值                                                                                                   |
-| `createLocaleStore.supportedLocales`                       | 框架内建语言列表                    | 填应用实际支持的语言，每项有 `code` 和显示名称 `label`，例如 `{ code: 'en-US', label: 'English' }`                           |
-| `createLocaleStore.detectBrowser`                          | `true`                              | 浏览器有多项语言偏好时依序匹配                                                                                               |
-| `createLocaleStore.persistKey`                             | `hai-locale`                        | 用于保存浏览器语言偏好的键                                                                                                   |
-| `createGuide.tours`                                        | 必填，可为 `[]`                     | 可执行的导览与步骤                                                                                                           |
-| `createGuide.articles`                                     | 可省略                              | 帮助中心文章                                                                                                                 |
-| `createGuide.persistence`                                  | `cookie`                            | 也可选 `localStorage` 或 `memory`，用于存放导览进度                                                                          |
-| `createGuide.persistKey`                                   | `hai-guide`                         | 导览进度键前缀。同源部署多个应用时分别配置                                                                                   |
-| `createGuide.nav`                                          | 可省略                              | 应用自带的路由导航适配器                                                                                                     |
-| `createGuide.waitTimeout`                                  | `3000`                              | 等待每个导览目标 DOM 元素的毫秒数                                                                                            |
+| `ui.createThemeBootstrapScript.storageKey`                    | 必填                                | 首屏脚本读取的浏览器偏好存储键                                                                                               |
+| `ui.createThemeBootstrapScript.defaultThemeId`                | `light`                             | 浏览器还没有有效偏好时使用的主题                                                                                             |
+| `ui.createThemeBootstrapScript.defaultThemeColor`             | 可省略                              | 指定时使用十六进制颜色；空值跳过默认颜色设置                                                                                 |
+| `ui.createThemeBootstrapScript.colorCssVar`、`toneDatasetKey` | 可省略                              | 指定后写入主题颜色 CSS 变量、亮暗色数据属性                                                                                  |
+| `ui.createThemeBootstrapScript.locale`                        | 可省略                              | 同时规范化首屏语言信息，提供 `key`、`defaultValue`、`supportedValues`                                                        |
+| `ui.createLocaleStore.defaultLocale`                          | `zh-CN`                             | 没有有效候选语言时的默认值                                                                                                   |
+| `ui.createLocaleStore.supportedLocales`                       | 框架内建语言列表                    | 填应用实际支持的语言，每项有 `code` 和显示名称 `label`，例如 `{ code: 'en-US', label: 'English' }`                           |
+| `ui.createLocaleStore.detectBrowser`                          | `true`                              | 浏览器有多项语言偏好时依序匹配                                                                                               |
+| `ui.createLocaleStore.persistKey`                             | `hai-locale`                        | 用于保存浏览器语言偏好的键                                                                                                   |
+| `ui.createGuide.tours`                                        | 必填，可为 `[]`                     | 可执行的导览与步骤                                                                                                           |
+| `ui.createGuide.articles`                                     | 可省略                              | 帮助中心文章                                                                                                                 |
+| `ui.createGuide.persistence`                                  | `cookie`                            | 也可选 `localStorage` 或 `memory`，用于存放导览进度                                                                          |
+| `ui.createGuide.persistKey`                                   | `hai-guide`                         | 导览进度键前缀。同源部署多个应用时分别配置                                                                                   |
+| `ui.createGuide.nav`                                          | 可省略                              | 应用自带的路由导航适配器                                                                                                     |
+| `ui.createGuide.waitTimeout`                                  | `3000`                              | 等待每个导览目标 DOM 元素的毫秒数                                                                                            |
 | `AuthPanel.config`、`actions`                              | 由应用传入                          | `config` 决定页面显示哪些选项，可用 [IAM 接口返回的设置](../data/api-contract.md#public-settings)。`actions` 接收点击登录或注册时调用的函数 |
 | CRUD `resource`、`controller options`                      | 资源和 API 回调由应用提供           | 配置字段展示、表单、分页和加载行为，例如 `autoLoad: false` 关闭自动加载                                                      |
 | 表单、Toast、其他组件 Props                                | 由组件指定                          | 通过组件入参配置布局、回调或时长等控件表现。[页面体验配置](../configuration/experience.md)                                                    |

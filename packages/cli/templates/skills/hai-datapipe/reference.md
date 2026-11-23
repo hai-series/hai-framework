@@ -223,7 +223,7 @@ const result = await datapipe.pipeline()
 ### 错误分支处理
 
 ```typescript
-import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
+import { HaiDatapipeError, datapipe } from '@h-ai/datapipe'
 
 // 对 text 请求 custom 分块却省略 separator，返回 MISSING_SEPARATOR，可用 error.code 分支。
 const result = datapipe.chunk(text, { mode: 'custom' })

@@ -7,9 +7,9 @@
  * @example
  * ```svelte
  * <script lang="ts">
- *   import { setPermissionContext, PermGuard } from '@h-ai/ui'
+ *   import { PermGuard, ui } from '@h-ai/ui'
  *   const permissions = ['user:create']
- *   setPermissionContext(() => permissions)
+ *   ui.setPermissionContext(() => permissions)
  * </script>
  * <PermGuard permission="user:create"><button type="button">新建用户</button></PermGuard>
  * ```
@@ -39,9 +39,9 @@ const PERMISSION_CONTEXT_KEY = Symbol('hai-permission-context')
  *
  * @example
  * ```ts
- * import { matchPermission } from '@h-ai/ui'
- * const canRead = matchPermission('user:read', ['user:*'])
- * const canDelete = matchPermission('user:delete', ['user:read'])
+ * import { ui } from '@h-ai/ui'
+ * const canRead = ui.matchPermission('user:read', ['user:*'])
+ * const canDelete = ui.matchPermission('user:delete', ['user:read'])
  * ```
  */
 export function matchPermission(required: string, userPermissions: string[]): boolean {
@@ -75,9 +75,9 @@ interface PermissionContextValue {
  * @example
  * ```svelte
  * <script lang="ts">
- *   import { usePermission } from '@h-ai/ui'
- *   import type { PermissionContext } from '@h-ai/ui'
- *   const permission: PermissionContext = usePermission()
+ *   import { type PermissionContext, ui } from '@h-ai/ui'
+ *
+ *   const permission: PermissionContext = ui.usePermission()
  * </script>
  * {#if permission.hasPerm('user:read')}<span>用户列表</span>{/if}
  * ```
@@ -108,9 +108,9 @@ export interface PermissionContext {
  * @example
  * ```svelte
  * <script lang="ts">
- *   import { setPermissionContext } from '@h-ai/ui'
+ *   import { ui } from '@h-ai/ui'
  *   let permissions = $state(['user:read'])
- *   setPermissionContext(() => permissions)
+ *   ui.setPermissionContext(() => permissions)
  * </script>
  * <main>在此渲染需要权限上下文的子组件。</main>
  * ```
@@ -130,8 +130,8 @@ export function setPermissionContext(getPermissions: () => string[]): void {
  * @example
  * ```svelte
  * <script lang="ts">
- *   import { usePermission } from '@h-ai/ui'
- *   const permission = usePermission()
+ *   import { ui } from '@h-ai/ui'
+ *   const permission = ui.usePermission()
  * </script>
  * {#if permission.hasAnyPerm('user:read', 'user:update')}<span>用户管理</span>{/if}
  * ```

@@ -6,9 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AsymmetricEncryptOptions, AsymmetricOperations, KeyPair, SignOptions } from './crypto-types.js'
 
-import { err, ok } from '@h-ai/core'
+import type { AsymmetricEncryptOptions, AsymmetricOperations, KeyPair, SignOptions } from './crypto-types.js'
+import { core } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
@@ -54,13 +54,13 @@ export function createSM2(): AsymmetricOperations {
     generateKeyPair(): HaiResult<KeyPair> {
       try {
         const keyPair = sm2.generateKeyPairHex()
-        return ok({
+        return core.ok({
           publicKey: keyPair.publicKey,
           privateKey: keyPair.privateKey,
         })
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.KEY_GENERATION_FAILED,
           cryptoM('crypto_sm2KeyPairGenerateFailed', {
             params: {
@@ -90,7 +90,7 @@ export function createSM2(): AsymmetricOperations {
       options: AsymmetricEncryptOptions = {},
     ): HaiResult<string> {
       if (!this.isValidPublicKey(publicKey)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm2PublicKeyInvalid'),
         )
@@ -101,7 +101,7 @@ export function createSM2(): AsymmetricOperations {
         // 底层将认证失败与合法空明文都表示为空串，原语拒绝空输入以保持失败可判定。
         if (typeof data !== 'string' || data.length === 0
           || (cipherMode !== 0 && cipherMode !== 1) || (outputFormat !== 'hex' && outputFormat !== 'base64')) {
-          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+          return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
         }
         // 确保公钥带 04 前缀
         const key = publicKey.length === 130
@@ -110,20 +110,20 @@ export function createSM2(): AsymmetricOperations {
         const encrypted = sm2.doEncrypt(data, key, cipherMode)
 
         if (!encrypted) {
-          return err(
+          return core.err(
             HaiCryptoError.ENCRYPTION_FAILED,
             cryptoM('crypto_sm2EncryptEmpty'),
           )
         }
 
         if (outputFormat === 'base64') {
-          return ok(hexToBase64(encrypted))
+          return core.ok(hexToBase64(encrypted))
         }
 
-        return ok(encrypted)
+        return core.ok(encrypted)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.ENCRYPTION_FAILED,
           cryptoM('crypto_sm2EncryptFailed', {
             params: {
@@ -153,7 +153,7 @@ export function createSM2(): AsymmetricOperations {
       options: AsymmetricEncryptOptions = {},
     ): HaiResult<string> {
       if (!this.isValidPrivateKey(privateKey)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm2PrivateKeyInvalid'),
         )
@@ -163,7 +163,7 @@ export function createSM2(): AsymmetricOperations {
         const { cipherMode = 1, outputFormat } = options
         if ((cipherMode !== 0 && cipherMode !== 1)
           || (outputFormat !== undefined && outputFormat !== 'hex' && outputFormat !== 'base64')) {
-          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+          return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
         }
         // 显式 Base64 或非 Hex 输入走完整解码，不依赖 +、/、= 的启发式。
         const input = outputFormat === 'base64' || /[^a-f0-9]/i.test(ciphertext)
@@ -171,21 +171,21 @@ export function createSM2(): AsymmetricOperations {
           : ciphertext
         // C1 64 字节、C3 32 字节，C2 至少包含一个字节；拒绝不完整和畸形编码。
         if (input.length <= 192 || input.length % 2 !== 0 || /[^a-f0-9]/i.test(input))
-          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm2DecryptFailed'))
+          return core.err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm2DecryptFailed'))
 
         const decrypted = sm2.doDecrypt(input, privateKey, cipherMode)
 
         if (typeof decrypted !== 'string' || decrypted.length === 0) {
-          return err(
+          return core.err(
             HaiCryptoError.DECRYPTION_FAILED,
             cryptoM('crypto_sm2DecryptFailed'),
           )
         }
 
-        return ok(decrypted)
+        return core.ok(decrypted)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.DECRYPTION_FAILED,
           cryptoM('crypto_sm2DecryptFailedWithError', {
             params: {
@@ -215,7 +215,7 @@ export function createSM2(): AsymmetricOperations {
       options: SignOptions = {},
     ): HaiResult<string> {
       if (!this.isValidPrivateKey(privateKey)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm2PrivateKeyInvalid'),
         )
@@ -226,16 +226,16 @@ export function createSM2(): AsymmetricOperations {
         const signature = sm2.doSignature(data, privateKey, { hash, userId })
 
         if (!signature) {
-          return err(
+          return core.err(
             HaiCryptoError.SIGN_FAILED,
             cryptoM('crypto_sm2SignEmpty'),
           )
         }
 
-        return ok(signature)
+        return core.ok(signature)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.SIGN_FAILED,
           cryptoM('crypto_sm2SignFailed', {
             params: {
@@ -267,7 +267,7 @@ export function createSM2(): AsymmetricOperations {
       options: SignOptions = {},
     ): HaiResult<boolean> {
       if (!this.isValidPublicKey(publicKey)) {
-        return err(
+        return core.err(
           HaiCryptoError.INVALID_KEY,
           cryptoM('crypto_sm2PublicKeyInvalid'),
         )
@@ -277,16 +277,16 @@ export function createSM2(): AsymmetricOperations {
         const { hash = true, userId = '1234567812345678' } = options
         // 依赖按整数解析 r/s，必须先拒绝超长、前导填充和非 Hex 的非规范签名。
         if (typeof signature !== 'string' || signature.length !== 128 || !/^[a-f0-9]{128}$/i.test(signature))
-          return ok(false)
+          return core.ok(false)
         // 确保公钥带 04 前缀
         const key = publicKey.length === 130
           ? publicKey
           : `04${publicKey}`
         const isValid = sm2.doVerifySignature(data, signature, key, { hash, userId })
-        return ok(!!isValid)
+        return core.ok(!!isValid)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.VERIFY_FAILED,
           cryptoM('crypto_sm2VerifyFailed', {
             params: {

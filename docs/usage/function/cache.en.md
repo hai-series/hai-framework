@@ -182,9 +182,10 @@ Choose one expiry option from `ex` (relative seconds), `px` (relative millisecon
 
 #### Scenario: Scan and batch operations in Redis Cluster
 
-Use an initialized Redis Cluster cache. The pattern `demo:user:*` matches user keys and `count: 100` hints how much work to do per scan. Each successful call returns `[nextCursor, batch]`, and the next call takes `nextCursor`. If only `demo:user:1` and `demo:user:2` match, the completed scan logs both logical keys in the order found. This example also imports `ok` from `@h-ai/core`.
+Use an initialized Redis Cluster cache. The pattern `demo:user:*` matches user keys and `count: 100` hints how much work to do per scan. Each successful call returns `[nextCursor, batch]`, and the next call takes `nextCursor`. If only `demo:user:1` and `demo:user:2` match, the completed scan logs both logical keys in the order found. This example also imports `core.ok` from `@h-ai/core`.
 
 ```ts
+import { core } from '@h-ai/core'
 async function scanUserKeys() {
   const keys = new Set<string>()
   let cursor = '0'
@@ -200,7 +201,7 @@ async function scanUserKeys() {
     cursor = next
   } while (cursor !== '0')
   // Build a successful HaiResult from the deduplicated keys. Data=[] means none matched.
-  return ok([...keys])
+  return core.ok([...keys])
 }
 const users = await scanUserKeys()
 if (users.success)

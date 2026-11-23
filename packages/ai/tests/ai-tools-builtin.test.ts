@@ -1,5 +1,5 @@
 import type { BuiltinArtifactAccess } from '../src/index.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
@@ -10,14 +10,14 @@ const context = {
 }
 function artifacts(): BuiltinArtifactAccess {
   return {
-    read: vi.fn(async (_context, { id }) => ok({
+    read: vi.fn(async (_context, { id }) => core.ok({
       id,
       name: 'draft.md',
       mediaType: 'text/markdown',
       data: new TextEncoder().encode('First paragraph.\nSecond paragraph.'),
       version: 2,
     })),
-    publish: vi.fn(async (_context, input) => ok({
+    publish: vi.fn(async (_context, input) => core.ok({
       id: 'artifact-1',
       title: input.name,
       mediaType: input.mediaType,
@@ -31,7 +31,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('ai.tools.createBuiltinTools', () => {
   it('图片生成保存授权产物并只返回引用', async () => {
     const files = artifacts()
-    const generate = vi.spyOn(ai.image, 'generate').mockResolvedValue(ok({
+    const generate = vi.spyOn(ai.image, 'generate').mockResolvedValue(core.ok({
       images: [
         {
           data: new Uint8Array([1, 2, 3]),
@@ -62,7 +62,7 @@ describe('ai.tools.createBuiltinTools', () => {
 
   it('模型业务失败完整透传，不发布产物或嵌套成功', async () => {
     const files = artifacts()
-    const failure = err(HaiAIError.IMAGE_TIMEOUT, 'Timed out')
+    const failure = core.err(HaiAIError.IMAGE_TIMEOUT, 'Timed out')
     vi.spyOn(ai.image, 'generate').mockResolvedValue(failure)
     const registry = tools.createRegistry()
     expect(registry.registerMany(ai.tools.createBuiltinTools({ context, files }).tools).success).toBe(true)
@@ -73,7 +73,7 @@ describe('ai.tools.createBuiltinTools', () => {
 
   it('选区改写保留其他内容并返回版本化提议，不自动保存', async () => {
     const files = artifacts()
-    vi.spyOn(ai.llm, 'chat').mockResolvedValue(ok({
+    vi.spyOn(ai.llm, 'chat').mockResolvedValue(core.ok({
       id: 'reply',
       object: 'chat.completion',
       created: 0,
@@ -104,13 +104,13 @@ describe('ai.tools.createBuiltinTools', () => {
 
   it('音频转写读取已授权文件，并保存可引用文字', async () => {
     const files = artifacts()
-    files.read = vi.fn(async () => ok({
+    files.read = vi.fn(async () => core.ok({
       id: 'audio',
       name: 'recording.wav',
       mediaType: 'audio/wav',
       data: new Uint8Array([1, 2]),
     }))
-    const transcribe = vi.spyOn(ai.audio, 'transcribe').mockResolvedValue(ok({ text: 'A transcript.', language: 'en', durationMs: 1000 }))
+    const transcribe = vi.spyOn(ai.audio, 'transcribe').mockResolvedValue(core.ok({ text: 'A transcript.', language: 'en', durationMs: 1000 }))
     const registry = tools.createRegistry()
     expect(registry.registerMany(ai.tools.createBuiltinTools({ context, files }).tools).success).toBe(true)
     const result = await registry.execute('audio_transcribe', { fileId: 'audio' })

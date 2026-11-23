@@ -136,10 +136,10 @@ myContract.ai.chats.createCompletion
 服务端为每个公开路由实现处理函数，再将契约和实现一起交给 `@h-ai/serv`。下面不启动监听，用 `app.request()` 请求本地应用验证结果：
 
 ```ts
-import type { ServContext } from '@h-ai/serv'
+
 import { apiContract } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const contract = {
@@ -151,7 +151,7 @@ const contract = {
 // Start mapping the local contract and type each handler's context as ServContext.
 const procedures = serv.implement(contract).context<ServContext>()
   // Map ping to a handler that returns success data { ready: true }.
-  .route('ping', () => ok({ ready: true }))
+  .route('ping', () => core.ok({ ready: true }))
   // Finish the procedure map so createApp can bind it to the contract.
   .build()
 // Assemble contract and procedures under /api/v1. Incompatible app setup can fail.
@@ -252,7 +252,7 @@ const standard = apiContract.create({
 追加证据返回 acknowledged/evidenceRevision，客户端只释放已确认的块。setStatus 需要 expectedVersion；export 固定证据修订，getExport 读取已完成问题包。附件 base64 输入限制原始 5 MiB，服务端仍须验证实际字节、类型与 SHA-256。Report.appVersion 是应用版本，Report.version 是乐观锁计数。
 
 ```ts
-import { apiContract, FeedbackSubmitInputSchema } from '@h-ai/api-contract'
+import { FeedbackSubmitInputSchema, apiContract } from '@h-ai/api-contract'
 
 // Validate the submission ID and orders app ID. Invalid input throws a Zod error.
 const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
@@ -278,13 +278,13 @@ IamCreateCaptchaInputSchema / IamCaptchaChallengeSchema 定义 POST /auth/captch
 
 #### 场景：计算反馈路由的传输预算
 
-`apiContract.feedback` 声明反馈路由的请求和响应格式。要计算单个附件、证据、ZIP 和全量 HTTP 请求能容纳的字节数，可在服务端或浏览器单独从 `@h-ai/api-contract/feedback` 导入 `resolveFeedbackBudget()`，按同一组上限计算。
+`apiContract.feedback` 声明反馈路由的请求和响应格式。要计算单个附件、证据、ZIP 和全量 HTTP 请求能容纳的字节数，可在服务端或浏览器单独从 `@h-ai/api-contract/feedback` 导入 `apiContract.resolveFeedbackBudget()`，按同一组上限计算。
 
 ```ts
-import { FeedbackBudgetSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+import { FeedbackBudgetSchema, apiContract } from '@h-ai/api-contract/feedback'
 
 // Use the 16 MiB total limit to derive the effective feedback budgets, including transport overhead.
-const effective = resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 }) // 输入 16 MiB 总量，返回派生的 FeedbackBudget。
+const effective = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 }) // 输入 16 MiB 总量，返回派生的 FeedbackBudget。
 // Validate the effective budget object. An inconsistent shape yields schema issues.
 const validated = FeedbackBudgetSchema.safeParse(effective) // 校验结果结构，成功时 data 为预算对象。
 const maxRouteBytes = effective.maxTransportBytes // 读取反馈路由的明文预算，用于配置单独的上传/导出路由。

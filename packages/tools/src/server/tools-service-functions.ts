@@ -3,7 +3,7 @@ import type { RunnerContext, RunnerExecution, RunnerJson } from '@h-ai/runner'
 import type { ToolRegistryOperations } from '../tools-types.js'
 import type { ToolCatalog, ToolReceipt, ToolRun, ToolService, ToolServiceContext, ToolServiceOptions } from './tools-service-types.js'
 import { setTimeout as delay } from 'node:timers/promises'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { toolsM } from '../tools-i18n.js'
 import { tools } from '../tools-main.js'
@@ -38,16 +38,16 @@ const errorEvent = z.object({
 })
 
 function invalid(cause?: unknown) {
-  return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), cause)
+  return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), cause)
 }
 function forbidden(cause?: unknown) {
-  return err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'), cause)
+  return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'), cause)
 }
 function failed(cause?: unknown) {
-  return err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
+  return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
 }
 function cancelled(cause?: unknown) {
-  return err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
+  return core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
 }
 
 /** 异步策略与 Schema 也受同一请求信号约束，不取消借入的模块。 */
@@ -116,7 +116,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       if (input.signal?.aborted)
         return cancelled(cause)
       if (cause instanceof Error && cause.name === 'TimeoutError')
-        return err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
+        return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
       if (cause instanceof z.ZodError)
         return invalid(cause)
       const failure = failed(cause)
@@ -155,7 +155,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       return registered
     const definitions = registry.getDefinitions()
     const names = new Set(definitions.map(tool => tool.name))
-    return ok({
+    return core.ok({
       registry,
       environments: new Map(Object.entries(set.environments ?? {})),
       catalog: {
@@ -245,15 +245,15 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
     if (!found.success)
       return found
     return found.data?.id === receipt.id
-      ? ok(found.data)
-      : err(HaiToolsError.NOT_FOUND, toolsM('tools_notFound'))
+      ? core.ok(found.data)
+      : core.err(HaiToolsError.NOT_FOUND, toolsM('tools_notFound'))
   }
 
   async function project(execution: RunnerExecution, receipt: ToolReceipt, current: ToolServiceContext, after = 0): Promise<HaiResult<ToolRun>> {
     const events = await options.runner.events(current.scope, execution.id, after, 100)
     if (!events.success)
       return events
-    return ok({
+    return core.ok({
       receipt,
       status: execution.status,
       ...(execution.output === undefined
@@ -277,12 +277,12 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
         return found
       return found.data
         ? project(found.data, { id: found.data.id, key: key.data }, current)
-        : ok(undefined)
+        : core.ok(undefined)
     }),
     catalog: input => guarded(input, async (current) => {
       const resolved = await resolve(current)
       return resolved.success
-        ? ok(resolved.data.catalog)
+        ? core.ok(resolved.data.catalog)
         : resolved
     }),
     submit: (request, input) => guarded(input, async (current) => {
@@ -338,7 +338,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       })
       if (!accepted.success)
         return accepted
-      return ok({
+      return core.ok({
         receipt: { id: accepted.data.id, key: key.data },
         status: accepted.data.status,
         ...(accepted.data.output === undefined
@@ -392,7 +392,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
           }
         }
         if (current.status === 'succeeded')
-          return ok(current.output ?? null)
+          return core.ok(current.output ?? null)
         // 幂等提交可能直接返回终态，失败事件仍从唯一的 Runner 事件流恢复。
         while (!lastError && (current.events.length === 100 || current.next === 0)) {
           const inspected = await service.inspect(current.receipt, { ...input, signal }, { after: current.next })
@@ -408,17 +408,17 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
             break
         }
         if (lastError)
-          return err(lastError)
+          return core.err(lastError)
         if (current.status === 'cancelled')
           return cancelled()
         if (current.failure === 'run-timeout' || current.failure === 'queue-timeout')
-          return err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
+          return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
         return failed()
       }
       catch (cause) {
         if (input.signal?.aborted)
           return cancelled(cause)
-        return err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
+        return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
       }
       finally {
         if (signal.aborted && live.has(current.status)) {
@@ -435,5 +435,5 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       registration.data()
     },
   }
-  return ok(service)
+  return core.ok(service)
 }

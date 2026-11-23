@@ -5,7 +5,7 @@ import type { HaiResult } from '@h-ai/core'
  */
 import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportMessageContext } from './crypto-transport-types.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { readTransportBody, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { isValidEncryptedPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
@@ -80,5 +80,5 @@ export async function authenticateTransportRequest(
     throw new TransportBodyTooLargeError(limits.plaintextBytes, new TextEncoder().encode(decrypted.data).byteLength)
   if (bodyless && decrypted.data !== '')
     return transportAuthenticationFailure()
-  return ok({ plaintext: decrypted.data, context: payload.context })
+  return core.ok({ plaintext: decrypted.data, context: payload.context })
 }

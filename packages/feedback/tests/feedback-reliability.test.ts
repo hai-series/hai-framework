@@ -3,7 +3,7 @@ import type { FeedbackContext } from '../src/index.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReachError, reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
@@ -130,7 +130,7 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
         return started
       const execute = started.data.execute
       started.data.execute = async (sql, params) => sql.startsWith('INSERT INTO hai_feedback_evidence') && params?.includes('environment')
-        ? err(HaiFeedbackError.OPERATION_FAILED, 'Environment fixture write unavailable')
+        ? core.err(HaiFeedbackError.OPERATION_FAILED, 'Environment fixture write unavailable')
         : execute(sql, params)
       return started
     })
@@ -233,7 +233,7 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     const send = vi.spyOn(reach, 'send').mockImplementation(async () => {
       entered.resolve()
       await release.promise
-      return ok({ success: true, messageId: 'accepted-after-claim-loss' })
+      return core.ok({ success: true, messageId: 'accepted-after-claim-loss' })
     })
     const report = await feedback.submit({ submissionId: 'lost-notify-owner', appId: config.appId }, actor)
     expect(report.success).toBe(true)
@@ -267,8 +267,8 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     const send = vi.spyOn(reach, 'send').mockImplementation(async () => {
       calls++
       return calls === 1
-        ? err(HaiReachError.SEND_FAILED, 'SMTP fixture unavailable')
-        : ok({ success: true, messageId: 'second-recipient-accepted' })
+        ? core.err(HaiReachError.SEND_FAILED, 'SMTP fixture unavailable')
+        : core.ok({ success: true, messageId: 'second-recipient-accepted' })
     })
     const report = await feedback.submit({ submissionId: 'partial-notification', appId: config.appId }, actor)
     expect(report.success).toBe(true)

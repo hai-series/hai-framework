@@ -1,5 +1,5 @@
 import type { UserRepository } from './user/iam-user-repository-user.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { readIamCache } from './iam-cache.js'
 
 /**
@@ -20,7 +20,7 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
     if (!row.success)
       return row
     const user = row.data
-    return ok(user
+    return core.ok(user
       ? {
           username: user.username,
           displayName: user.displayName,
@@ -38,7 +38,7 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
       : null)
   })
   return found.success
-    ? ok(found.data
+    ? core.ok(found.data
         ? {
             ...found.data,
             accountExpiresAt: found.data.accountExpiresAt === null

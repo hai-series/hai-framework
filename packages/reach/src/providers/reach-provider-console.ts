@@ -6,11 +6,11 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ProviderConfig } from '../reach-config.js'
 
+import type { ProviderConfig } from '../reach-config.js'
 import type { ReachMessage, SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-console' })
 
@@ -38,7 +38,7 @@ export function createConsoleProvider(): ReachProvider {
     async connect(_config: ProviderConfig): Promise<HaiResult<void>> {
       connected = true
       logger.info('Console provider connected')
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async close(): Promise<void> {
@@ -60,7 +60,7 @@ export function createConsoleProvider(): ReachProvider {
       })
 
       const messageId = `console-${Date.now()}`
-      return ok({ success: true, messageId })
+      return core.ok({ success: true, messageId })
     },
   }
 }

@@ -8,13 +8,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { HaiStorageError, storage } from '@h-ai/storage'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mysqlEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const owner: FeedbackContext = {
@@ -264,7 +263,7 @@ describe('mysql反馈身份字节精确隔离', { concurrent: false }, () => {
       attachmentId: 'A',
       dataBase64: upper.toString('base64'),
     }, owner)).success).toBe(true)
-    const put = vi.spyOn(storage.file, 'put').mockResolvedValueOnce(err(HaiStorageError.OPERATION_FAILED, 'Fixture unavailable'))
+    const put = vi.spyOn(storage.file, 'put').mockResolvedValueOnce(core.err(HaiStorageError.OPERATION_FAILED, 'Fixture unavailable'))
     const failed = await feedback.uploadAttachment({
       id: report.data.id,
       attachmentId: 'a',
@@ -303,7 +302,7 @@ describe('mysql反馈身份字节精确隔离', { concurrent: false }, () => {
     expect(downloaded.success).toBe(true)
     if (!downloaded.success)
       return
-    const bundle = await readFeedbackBundle(Buffer.from(downloaded.data.dataBase64, 'base64'))
+    const bundle = await feedback.readBundle(Buffer.from(downloaded.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (bundle.success) {
       for (const [id, bytes] of [

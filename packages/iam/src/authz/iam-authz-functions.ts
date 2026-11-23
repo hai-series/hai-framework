@@ -7,11 +7,11 @@
 
 import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
-
 import type { IamConfig, RbacConfig } from '../iam-config.js'
 import type { SessionFieldUpdates, SessionOperations } from '../session/iam-session-types.js'
 import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-repository-relation.js'
+
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type {
   AuthzOperations,
@@ -19,8 +19,7 @@ import type {
   PermissionQueryOptions,
   Role,
 } from './iam-authz-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { guardIamMutation, readIamCache } from '../iam-cache.js'
@@ -96,7 +95,7 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
     })
 
     logger.info('Authz sub-feature initialized')
-    return ok({
+    return core.ok({
       ...manager,
       assignRole: guardIamMutation(manager.assignRole, 2),
       removeRole: guardIamMutation(manager.removeRole, 2),
@@ -113,7 +112,7 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
   }
   catch (error) {
     logger.error('Authz sub-feature initialization failed', { error })
-    return err(
+    return core.err(
       HaiIamError.CONFIG_ERROR,
       iamM('iam_initComponentFailed'),
       error,
@@ -174,7 +173,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
    * @param message - 原始错误消息
    */
   function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM(messageKey, {
         params: { message },
@@ -212,7 +211,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     if (!roleIdsResult.success)
       return roleIdsResult as HaiResult<Permission[]>
     if (roleIdsResult.data.length === 0)
-      return ok([])
+      return core.ok([])
 
     const permMapResult = await rolePermissionRepository.getPermissionsForRoles(roleIdsResult.data)
     if (!permMapResult.success)
@@ -229,7 +228,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
     }
 
-    return ok(permissions)
+    return core.ok(permissions)
   }
 
   /**
@@ -243,7 +242,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       return roleIdsResult as HaiResult<string[]>
     }
     if (roleIdsResult.data.length === 0) {
-      return ok([])
+      return core.ok([])
     }
 
     return rolePermissionRepository.getPermissionCodesForRoles(roleIdsResult.data)
@@ -259,7 +258,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     if (!rolesResult.success) {
       return rolesResult as HaiResult<string[]>
     }
-    return ok(rolesResult.data.map(r => r.code))
+    return core.ok(rolesResult.data.map(r => r.code))
   }
 
   /**
@@ -339,7 +338,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!permission.success)
         return permission
       if (!permission.data)
-        return err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+        return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
     }
     const removed = await rolePermissionRepository.removeByRoleId(roleId, tx)
     if (!removed.success)
@@ -349,14 +348,14 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!assigned.success)
         return assigned
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   async function getUserAuthorization(userId: string): ReturnType<AuthzOperations['getUserAuthorization']> {
     return readIamCache(`authorization:${userId}`, async () => {
       const rows = await reldb.sql.query<{ role_code: string, permission_code: string | null }>('SELECT r.code AS role_code, p.code AS permission_code FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id LEFT JOIN hai_iam_role_permissions rp ON rp.role_id = r.id LEFT JOIN hai_iam_permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?', [userId])
       return rows.success
-        ? ok({
+        ? core.ok({
             roles: [
               ...new Set(rows.data.map(row => row.role_code)),
             ],
@@ -373,10 +372,10 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
   return {
     getSensitiveOperations: operation => rbacConfig.enabled
       ? readIamCache(`sensitive:${operation ?? '*'}`, () => permissionRepository.getSensitiveOperations(operation))
-      : Promise.resolve(ok([])),
+      : Promise.resolve(core.ok([])),
     async setPermissionSensitiveOperations(permissionId, operations) {
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
-        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+        return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
       const updated = await permissionRepository.updateById(permissionId, {
         sensitiveOperations: [
           ...new Set(operations.map(value => value.trim())),
@@ -390,19 +389,19 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!existing.success)
           return existing
         if (!existing.data)
-          return err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+          return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
       }
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async checkPermission(userId: string, permission: string): Promise<HaiResult<boolean>> {
       // RBAC 未启用时，所有权限检查直接放行
       if (!rbacConfig.enabled) {
-        return ok(true)
+        return core.ok(true)
       }
       const authorization = await getUserAuthorization(userId)
       if (!authorization.success)
         return authorization
-      return ok(authorization.data.roles.includes(rbacConfig.superAdminRole) || authorization.data.permissions.some(code => matchesPermission(permission, code)))
+      return core.ok(authorization.data.roles.includes(rbacConfig.superAdminRole) || authorization.data.permissions.some(code => matchesPermission(permission, code)))
     },
 
     async getUserPermissions(userId: string): Promise<HaiResult<Permission[]>> {
@@ -421,7 +420,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         return mapRepositoryError('iam_queryRoleFailed', roleExistsResult.error.message) as HaiResult<void>
       }
       if (!roleExistsResult.data) {
-        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
       }
 
       const result = await userRoleRepository.assign(userId, roleId, tx)
@@ -462,14 +461,14 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         const toRemove = [...currentIds].filter(id => !targetIds.has(id))
         const toAdd = [...targetIds].filter(id => !currentIds.has(id))
         if (toRemove.length === 0 && toAdd.length === 0)
-          return ok(false)
+          return core.ok(false)
 
         for (const roleId of toAdd) {
           const exists = await roleRepository.existsById(roleId, transaction)
           if (!exists.success)
             return mapRepositoryError('iam_queryRoleFailed', exists.error.message)
           if (!exists.data)
-            return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+            return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
         }
 
         for (const roleId of toRemove) {
@@ -482,7 +481,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           if (!result.success)
             return result
         }
-        return ok(true)
+        return core.ok(true)
       }
       const changed = tx
         ? await write(tx)
@@ -496,7 +495,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         logger.info('Roles synced for user', { userId })
         await syncUserSessionAfterRoleChange(userId)
       }
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     // ─── 角色管理 ───
@@ -519,7 +518,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           if (ownTx)
             await tx.rollback()
           if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
-            return err(HaiIamError.ROLE_ALREADY_EXISTS, iamM('iam_roleAlreadyExist'))
+            return core.err(HaiIamError.ROLE_ALREADY_EXISTS, iamM('iam_roleAlreadyExist'))
           }
           return mapRepositoryError('iam_createRoleFailed', createResult.error.message) as HaiResult<Role>
         }
@@ -533,7 +532,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!createdResult.data) {
           if (ownTx)
             await tx.rollback()
-          return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+          return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
         }
 
         if (permissionIds !== undefined) {
@@ -554,12 +553,12 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
         logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
 
-        return ok(createdResult.data)
+        return core.ok(createdResult.data)
       }
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createRoleFailed', {
             params: {
@@ -576,7 +575,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryRoleFailed', result.error.message) as HaiResult<Role | null>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async getRoleByCode(code): Promise<HaiResult<Role | null>> {
@@ -584,7 +583,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryRoleFailed', result.error.message) as HaiResult<Role | null>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async getAllRoles(options?: PaginationOptionsInput): Promise<HaiResult<PaginatedResult<Role>>> {
@@ -595,7 +594,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryRoleListFailed', result.error.message) as HaiResult<PaginatedResult<Role>>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     getRoleUserCounts(roleIds): Promise<HaiResult<Map<string, number>>> {
@@ -626,7 +625,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (updateResult.data.changes === 0) {
           if (ownTx)
             await tx.rollback()
-          return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+          return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
         }
 
         if (permissionIds !== undefined) {
@@ -647,7 +646,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!updatedResult.data) {
           if (ownTx)
             await tx.rollback()
-          return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+          return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
         }
 
         if (ownTx) {
@@ -670,12 +669,12 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           }
         }
 
-        return ok(updatedResult.data)
+        return core.ok(updatedResult.data)
       }
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_updateRoleFailed', {
             params: {
@@ -694,10 +693,10 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
       }
       if (!roleResult.data) {
-        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
       }
       if (roleResult.data.isSystem) {
-        return err(HaiIamError.PERMISSION_DENIED, iamM('iam_cannotDeleteSystemRole'))
+        return core.err(HaiIamError.PERMISSION_DENIED, iamM('iam_cannotDeleteSystemRole'))
       }
 
       // 使用调用方事务或创建新事务，保证级联删除原子执行
@@ -747,7 +746,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_deleteRoleFailed', {
             params: {
@@ -766,7 +765,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       logger.info('Role deleted', { roleId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     // ─── 权限管理 ───
@@ -774,7 +773,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     async createPermission(permission, tx?: DmlWithTxOperations): Promise<HaiResult<Permission>> {
       const operations = permission.sensitiveOperations ?? []
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
-        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+        return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
       permission = {
         ...permission,
         sensitiveOperations: [
@@ -797,7 +796,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           if (ownTx)
             await tx.rollback()
           if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
-            return err(HaiIamError.PERMISSION_ALREADY_EXISTS, iamM('iam_permissionAlreadyExist'))
+            return core.err(HaiIamError.PERMISSION_ALREADY_EXISTS, iamM('iam_permissionAlreadyExist'))
           }
           return mapRepositoryError('iam_createPermissionFailed', createResult.error.message) as HaiResult<Permission>
         }
@@ -811,7 +810,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!createdResult.data) {
           if (ownTx)
             await tx.rollback()
-          return err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+          return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
         }
 
         if (ownTx) {
@@ -822,12 +821,12 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         }
 
         logger.info('Permission created', { permissionId: createdResult.data.id, code: permission.code })
-        return ok(createdResult.data)
+        return core.ok(createdResult.data)
       }
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createPermissionFailed', {
             params: {
@@ -844,7 +843,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryPermissionFailed', result.error.message) as HaiResult<Permission | null>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async getPermissionByCode(code): Promise<HaiResult<Permission | null>> {
@@ -852,7 +851,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryPermissionFailed', result.error.message) as HaiResult<Permission | null>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async getAllPermissions(options?: PermissionQueryOptions): Promise<HaiResult<PaginatedResult<Permission>>> {
@@ -884,7 +883,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!result.success) {
         return mapRepositoryError('iam_queryPermissionListFailed', result.error.message) as HaiResult<PaginatedResult<Permission>>
       }
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async deletePermission(permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -893,7 +892,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         return mapRepositoryError('iam_queryPermissionFailed', permissionResult.error.message) as HaiResult<void>
       }
       if (!permissionResult.data) {
-        return err(
+        return core.err(
           HaiIamError.PERMISSION_NOT_FOUND,
           iamM('iam_permissionNotExist'),
         )
@@ -942,7 +941,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_deletePermissionFailed', {
             params: {
@@ -961,7 +960,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       logger.info('Permission deleted', { permissionId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async assignPermissionToRole(roleId, permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -975,14 +974,14 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
       }
       if (!roleResult.data) {
-        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
       }
 
       if (!permResult.success) {
         return mapRepositoryError('iam_queryPermissionFailed', permResult.error.message) as HaiResult<void>
       }
       if (!permResult.data) {
-        return err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+        return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
       }
 
       const assignResult = await rolePermissionRepository.assign(roleId, permissionId, tx)
@@ -1007,14 +1006,14 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
       }
       if (!roleResult.data) {
-        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
       }
 
       if (!permResult.success) {
         return mapRepositoryError('iam_queryPermissionFailed', permResult.error.message) as HaiResult<void>
       }
       if (!permResult.data) {
-        return err(
+        return core.err(
           HaiIamError.PERMISSION_NOT_FOUND,
           iamM('iam_permissionNotExist'),
         )

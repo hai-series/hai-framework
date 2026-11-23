@@ -15,10 +15,10 @@ import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import process from 'node:process'
-import { Readable } from 'node:stream'
 
+import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
@@ -346,7 +346,7 @@ export function createLocalProvider(): StorageProvider {
   /** 读取指定代际的元数据。旧代际已被并发发布回收时返回 undefined，调用方可重新取得对象。 */
   async function readMetadata(key: string, filePath: string, stat: fs.BigIntStats): Promise<HaiResult<FileMetadata> | undefined> {
     if (stat.isDirectory()) {
-      return err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
+      return core.err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
         params: { key },
       }))
     }
@@ -362,7 +362,7 @@ export function createLocalProvider(): StorageProvider {
       // 身份不变却缺少记录时，明确要求迁移或重新上传。
       if (metadataGeneration(await fsp.stat(filePath, { bigint: true })) !== metadataGeneration(stat))
         return undefined
-      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataRequired'))
+      return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataRequired'))
     }
 
     let customMetadata: unknown
@@ -370,12 +370,12 @@ export function createLocalProvider(): StorageProvider {
       customMetadata = JSON.parse(serializedMetadata)
     }
     catch {
-      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
+      return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
     }
     if (!isMetadataRecord(customMetadata))
-      return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
+      return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
 
-    return ok({
+    return core.ok({
       key,
       size: Number(stat.size),
       contentType: customMetadata.contentType || getMimeType(key),
@@ -392,7 +392,7 @@ export function createLocalProvider(): StorageProvider {
   const file: FileOperations = {
     async put(key, data, options = {}): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(key)) {
-        return err(
+        return core.err(
           HaiStorageError.INVALID_PATH,
           storageM('storage_metaFileAccess', {
             params: { key },
@@ -474,10 +474,10 @@ export function createLocalProvider(): StorageProvider {
           }
         }
 
-        return ok(metadata)
+        return core.ok(metadata)
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
       finally {
         if (temporaryPath)
@@ -495,16 +495,16 @@ export function createLocalProvider(): StorageProvider {
         const chunks: Uint8Array[] = []
         for await (const chunk of streamed.data)
           chunks.push(chunk)
-        return ok(Buffer.concat(chunks))
+        return core.ok(Buffer.concat(chunks))
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async getStream(key, options = {}) {
       if (isMetaFile(key)) {
-        return err(
+        return core.err(
           HaiStorageError.INVALID_PATH,
           storageM('storage_metaFileAccess', {
             params: { key },
@@ -516,7 +516,7 @@ export function createLocalProvider(): StorageProvider {
         options.signal?.throwIfAborted()
         const stat = await fsp.stat(filePath)
         if (stat.isDirectory()) {
-          return err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
+          return core.err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', {
             params: { key },
           }))
         }
@@ -533,16 +533,16 @@ export function createLocalProvider(): StorageProvider {
             await handle.close().catch(error => logger.warn('Local file read cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
           }
         }
-        return ok(read())
+        return core.ok(read())
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async getStreamWithMetadata(key, { signal } = {}) {
       if (isMetaFile(key)) {
-        return err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
+        return core.err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
           params: { key },
         }))
       }
@@ -568,23 +568,23 @@ export function createLocalProvider(): StorageProvider {
             const body = handle.createReadStream()
             const read = createStorageReadStream(body, signal)
             transferred = true
-            return ok({ metadata: metadata.data, ...read })
+            return core.ok({ metadata: metadata.data, ...read })
           }
           finally {
             if (!transferred)
               await handle.close().catch(error => logger.warn('Local file read cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
           }
         }
-        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
+        return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async head(key): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(key)) {
-        return err(
+        return core.err(
           HaiStorageError.INVALID_PATH,
           storageM('storage_metaFileAccess', {
             params: { key },
@@ -598,16 +598,16 @@ export function createLocalProvider(): StorageProvider {
           if (metadata)
             return metadata
         }
-        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
+        return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_fileChanged'))
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async exists(key): Promise<HaiResult<boolean>> {
       if (isMetaFile(key)) {
-        return err(
+        return core.err(
           HaiStorageError.INVALID_PATH,
           storageM('storage_metaFileAccess', {
             params: { key },
@@ -616,19 +616,19 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        return ok((await fsp.lstat(filePath)).isFile())
+        return core.ok((await fsp.lstat(filePath)).isFile())
       }
       catch (error) {
         if (isMissingPath(error)) {
-          return ok(false)
+          return core.ok(false)
         }
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async delete(key): Promise<HaiResult<void>> {
       if (isMetaFile(key)) {
-        return err(
+        return core.err(
           HaiStorageError.INVALID_PATH,
           storageM('storage_metaFileAccess', {
             params: { key },
@@ -649,14 +649,14 @@ export function createLocalProvider(): StorageProvider {
             logger.warn('Deleted object metadata cleanup failed')
         }
 
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         // 如果文件不存在，视为删除成功
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          return ok(undefined)
+          return core.ok(undefined)
         }
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
@@ -706,7 +706,7 @@ export function createLocalProvider(): StorageProvider {
         })
       }
       catch (error) {
-        return err(toStorageError(error, sourceKey))
+        return core.err(toStorageError(error, sourceKey))
       }
       finally {
         await source.data.close().catch(error => logger.warn('Local copy source cleanup failed', storageErrorContext(HaiStorageError.IO_ERROR.code, error)))
@@ -733,7 +733,7 @@ export function createLocalProvider(): StorageProvider {
           : options.maxKeys
         if (typeof prefix !== 'string' || typeof delimiter !== 'string' || !Number.isInteger(maxKeys) || maxKeys < 1 || maxKeys > 1000
           || Buffer.from(prefix).toString('utf8') !== prefix || Buffer.from(delimiter).toString('utf8') !== delimiter) {
-          return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listOptionsInvalid'))
+          return core.err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listOptionsInvalid'))
         }
 
         // 前缀只是 key 字符串，不能当作目录打开；从规范根目录遍历，子目录符号链接不会被跟随。
@@ -757,7 +757,7 @@ export function createLocalProvider(): StorageProvider {
             after = decoded[2]
           }
           catch {
-            return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listCursorInvalid'))
+            return core.err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listCursorInvalid'))
           }
         }
         const files: FileMetadata[] = []
@@ -825,7 +825,7 @@ export function createLocalProvider(): StorageProvider {
           count++
           last = logicalKey
         }
-        return ok({
+        return core.ok({
           files,
           commonPrefixes,
           isTruncated,
@@ -837,13 +837,13 @@ export function createLocalProvider(): StorageProvider {
         })
       }
       catch (error) {
-        return err(toStorageError(error))
+        return core.err(toStorageError(error))
       }
     },
 
     async delete(prefix): Promise<HaiResult<void>> {
       if (isMetaFile(prefix)) {
-        return err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
+        return core.err(HaiStorageError.INVALID_PATH, storageM('storage_metaFileAccess', {
           params: { key: prefix },
         }))
       }
@@ -853,7 +853,7 @@ export function createLocalProvider(): StorageProvider {
         return await deleteStoragePrefix(prefix, dir.list, file.deleteMany)
       }
       catch (error) {
-        return err(toStorageError(error, prefix))
+        return core.err(toStorageError(error, prefix))
       }
     },
   }
@@ -864,11 +864,11 @@ export function createLocalProvider(): StorageProvider {
 
   const presign: PresignOperations = {
     async getUrl(): Promise<HaiResult<string>> {
-      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
+      return core.err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     async putUrl(): Promise<HaiResult<string>> {
-      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
+      return core.err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     publicUrl(): string | null {
@@ -890,7 +890,7 @@ export function createLocalProvider(): StorageProvider {
 
     async connect(cfg: StorageConfig): Promise<HaiResult<void>> {
       if (cfg.type !== 'local') {
-        return err(
+        return core.err(
           HaiStorageError.CONFIG_ERROR,
           storageM('storage_localConfigTypeError'),
         )
@@ -906,11 +906,11 @@ export function createLocalProvider(): StorageProvider {
         config = { ...cfg, root: await fsp.realpath(cfg.root) }
         connected = true
         logger.debug('Local provider connected')
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         config = null
-        return err(toStorageError(error))
+        return core.err(toStorageError(error))
       }
     },
 

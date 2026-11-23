@@ -4,7 +4,7 @@
 
 ## Quick start
 
-Use the native module after `capacitor.init()`. Detect the runtime before doing work that needs a device. Remove push listeners when changing accounts or leaving a screen.
+Call device, camera, push, status bar, and preferences operations through `capacitor` after `capacitor.init()` succeeds. Create secure token storage with `capacitor.createTokenStorage()`; creating the adapter requires no initialization, while reads and writes require a native runtime and the secure storage plugin. Remove push listeners when changing accounts or leaving a screen.
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -66,9 +66,9 @@ Calling `close()` makes the module unavailable and invalidates any `init()` alre
 | `capacitor.close()` | Invalidate pending initialization and release active native listeners | None | `Promise<HaiResult<void>>`; failed cleanup can be retried. | `await capacitor.close()` |
 | `capacitor.getPlatform()` | Identify Android, iOS or web | None | `string` | `capacitor.getPlatform()` |
 | `capacitor.isNative()` | Check whether code runs in a native app | None | `boolean` | `capacitor.isNative()` |
-| `capacitor.isInitialized` | 检查模块状态 | `—` | `boolean` | `capacitor.isInitialized` |
-| `capacitor.device.getInfo()` | Read OS and hardware information | None | `DeviceInfo` | `await capacitor.device.getInfo()` |
-| `capacitor.device.getAppVersion()` | Read the installed app version and build | None | `{ version, build }` | `await capacitor.device.getAppVersion()` |
+| `capacitor.isInitialized` | Check whether initialization succeeded | None | `boolean` | `capacitor.isInitialized` |
+| `capacitor.device.getInfo()` | Read OS and hardware information | None | `Promise<HaiResult<DeviceInfo>>` | `await capacitor.device.getInfo()` |
+| `capacitor.device.getAppVersion()` | Read the installed app version and build | None | `Promise<HaiResult<{ version: string, build: string }>>` | `await capacitor.device.getAppVersion()` |
 
 #### Scenario: Prepare native access and read device data
 
@@ -111,7 +111,7 @@ Let the user choose a camera or photo source and choose uri, base64 or dataUrl f
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.camera.takePhoto(options?)` | Capture or select an image | Optional `options` selects the source, quality, dimensions, and output format. See [photo options](#camera-options). | `PhotoResult` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
+| `capacitor.camera.takePhoto(options?)` | Capture or select an image | Optional `options` selects the source, quality, dimensions, and output format. See [photo options](#camera-options). | `Promise<HaiResult<PhotoResult>>` | `await capacitor.camera.takePhoto({ source: 'camera' })` |
 
 <a id="camera-options"></a>
 
@@ -218,9 +218,9 @@ Use the native status-bar plugin to configure style and overlay, then show or hi
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `capacitor.statusBar.configure(config)` | Apply only the supplied native status bar settings | Required `config` object with optional `style`, `backgroundColor`, and `overlay`. See [status bar options](#status-bar-options). | `void` | `await capacitor.statusBar.configure({ style: 'dark' })` |
-| `capacitor.statusBar.show()` | Show the native status bar | None | `void` | `await capacitor.statusBar.show()` |
-| `capacitor.statusBar.hide()` | Hide the native status bar | None | `void` | `await capacitor.statusBar.hide()` |
+| `capacitor.statusBar.configure(config)` | Apply only the supplied native status bar settings | Required `config` object with optional `style`, `backgroundColor`, and `overlay`. See [status bar options](#status-bar-options). | `Promise<HaiResult<void>>` | `await capacitor.statusBar.configure({ style: 'dark' })` |
+| `capacitor.statusBar.show()` | Show the native status bar | None | `Promise<HaiResult<void>>` | `await capacitor.statusBar.show()` |
+| `capacitor.statusBar.hide()` | Hide the native status bar | None | `Promise<HaiResult<void>>` | `await capacitor.statusBar.hide()` |
 
 <a id="status-bar-options"></a>
 
@@ -321,17 +321,17 @@ Values are strings. set/remove have no business data; get returns a string or nu
 
 <a id="tokens"></a>
 
-### Store credentials securely: `createCapacitorTokenStorage`
+### Store credentials securely: `capacitor.createTokenStorage`
 
 Use the native secure-storage adapter and give it to api-client to coordinate persistence failures and cleanup.
 
-In the interface table and examples below, `tokens` is the `TokenStorage` object returned by `createCapacitorTokenStorage()`. Import the factory from the `@h-ai/capacitor` root entry. Creating the adapter does not require `capacitor.init()`; actual reads and writes require a native environment and the secure-storage plugin. Platform or plugin failures reject the corresponding method's Promise.
+In the interface table and examples below, `tokens` is the `TokenStorage` object returned by `capacitor.createTokenStorage()`. Import the factory from the `@h-ai/capacitor` root entry. Creating the adapter does not require `capacitor.init()`; actual reads and writes require a native environment and the secure-storage plugin. Platform or plugin failures reject the corresponding method's Promise.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `createCapacitorTokenStorage()` | Create a native secure credential adapter | None | `TokenStorage` | `createCapacitorTokenStorage()` |
+| `capacitor.createTokenStorage()` | Create a native secure credential adapter | None | `TokenStorage` | `capacitor.createTokenStorage()` |
 | `tokens.getAccessToken()` | Read the access credential | None | `Promise<string or null>` | `await tokens.getAccessToken()` |
 | `tokens.getRefreshToken()` | Read the refresh credential | None | `Promise<string or null>` | `await tokens.getRefreshToken()` |
 | `tokens.setAccessToken(token)` | Save the access credential | Required `token`, the access token string from a trusted authentication response. | `Promise<void>` | `await tokens.setAccessToken(accessToken)` |
@@ -343,11 +343,11 @@ In the interface table and examples below, `tokens` is the `TokenStorage` object
 Supply tokens from a trusted login response on a native device with the secure plugin. Reads return the stored strings; finally clears them. Plugin failures reject the Promise.
 
 ```ts
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 async function verifySecureStorage(accessToken: string, refreshToken: string) {
   // Create a native secure token storage adapter with default key names. Its operations use the secure plugin.
-  const tokens = createCapacitorTokenStorage()
+  const tokens = capacitor.createTokenStorage()
   try {
     // Store the issued access token. This resolves without data or rejects if the secure write fails.
     await tokens.setAccessToken(accessToken)

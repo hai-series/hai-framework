@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -189,7 +189,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
   const initResult = await reldb.prepareSchema('hai:iam:role-permissions:schema', async ({ ddl }) => {
     const result = await ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_createRolePermissionTableFailed', {
           params: { message: result.error.message },
@@ -209,7 +209,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createRolePermissionIndexFailed', {
             params: { message: indexResult.error.message },
@@ -219,10 +219,10 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   })
   if (!initResult.success) {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       initResult.error.message,
       initResult.error,
@@ -244,7 +244,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
     )
 
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_queryPermissionFailed', {
           params: { message: result.error.message },
@@ -253,10 +253,10 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       )
     }
 
-    return ok(result.data.map(r => r.permission_id))
+    return core.ok(result.data.map(r => r.permission_id))
   }
 
-  return ok({
+  return core.ok({
     async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
@@ -265,7 +265,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       )
 
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_assignPermissionFailed', {
             params: { message: result.error.message },
@@ -274,7 +274,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async remove(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -285,7 +285,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       )
 
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_removePermissionFailed', {
             params: { message: result.error.message },
@@ -294,7 +294,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async getPermissions(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<Permission[]>> {
@@ -303,7 +303,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         return idsResult
 
       if (idsResult.data.length === 0) {
-        return ok([])
+        return core.ok([])
       }
 
       const placeholders = idsResult.data.map(() => '?').join(', ')
@@ -312,7 +312,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         idsResult.data,
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryPermissionFailed', {
             params: { message: result.error.message },
@@ -321,12 +321,12 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
-      return ok(result.data)
+      return core.ok(result.data)
     },
 
     async getPermissionCodesForRoles(roleIds: string[]): Promise<HaiResult<string[]>> {
       if (roleIds.length === 0) {
-        return ok([])
+        return core.ok([])
       }
 
       const placeholders = roleIds.map(() => '?').join(', ')
@@ -335,7 +335,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         roleIds,
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryPermissionFailed', {
             params: { message: result.error.message },
@@ -344,7 +344,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
-      return ok(result.data.map(r => r.code))
+      return core.ok(result.data.map(r => r.code))
     },
 
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -354,7 +354,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         [roleId],
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_removePermissionFailed', {
             params: { message: result.error.message },
@@ -362,7 +362,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
           result.error,
         )
       }
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async removeByPermissionId(permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -372,7 +372,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         [permissionId],
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_removePermissionFailed', {
             params: { message: result.error.message },
@@ -380,7 +380,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
           result.error,
         )
       }
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async getRoleIdsByPermissionId(permissionId: string): Promise<HaiResult<string[]>> {
@@ -389,7 +389,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         [permissionId],
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryPermissionFailed', {
             params: { message: result.error.message },
@@ -397,13 +397,13 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
           result.error,
         )
       }
-      return ok(result.data.map(r => r.role_id))
+      return core.ok(result.data.map(r => r.role_id))
     },
 
     async getPermissionsForRoles(roleIds: string[]): Promise<HaiResult<Map<string, Permission[]>>> {
       const result = new Map<string, Permission[]>()
       if (roleIds.length === 0) {
-        return ok(result)
+        return core.ok(result)
       }
 
       const placeholders = roleIds.map(() => '?').join(', ')
@@ -412,7 +412,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         roleIds,
       )
       if (!relationsResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryPermissionFailed', {
             params: { message: relationsResult.error.message },
@@ -426,7 +426,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
 
       if (relationsResult.data.length === 0) {
-        return ok(result)
+        return core.ok(result)
       }
 
       const uniquePermIds = [
@@ -438,7 +438,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         uniquePermIds,
       )
       if (!permsResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryPermissionFailed', {
             params: { message: permsResult.error.message },
@@ -459,7 +459,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         }
       }
 
-      return ok(result)
+      return core.ok(result)
     },
   })
 }
@@ -506,7 +506,7 @@ export async function createDbUserRoleRepository(
   const initResult = await reldb.prepareSchema('hai:iam:user-roles:schema', async ({ ddl }) => {
     const result = await ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_createUserRoleTableFailed', {
           params: { message: result.error.message },
@@ -526,7 +526,7 @@ export async function createDbUserRoleRepository(
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createUserRoleIndexFailed', {
             params: { message: indexResult.error.message },
@@ -536,10 +536,10 @@ export async function createDbUserRoleRepository(
       }
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   })
   if (!initResult.success) {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       initResult.error.message,
       initResult.error,
@@ -561,7 +561,7 @@ export async function createDbUserRoleRepository(
     )
 
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_queryRoleFailed', {
           params: { message: result.error.message },
@@ -570,10 +570,10 @@ export async function createDbUserRoleRepository(
       )
     }
 
-    return ok(result.data.map(r => r.role_id))
+    return core.ok(result.data.map(r => r.role_id))
   }
 
-  return ok({
+  return core.ok({
     async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const onDuplicate = reldb.config?.type === 'mysql'
@@ -585,7 +585,7 @@ export async function createDbUserRoleRepository(
       )
 
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_assignRoleFailed', {
             params: { message: result.error.message },
@@ -594,7 +594,7 @@ export async function createDbUserRoleRepository(
         )
       }
 
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async remove(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
@@ -605,7 +605,7 @@ export async function createDbUserRoleRepository(
       )
 
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_removeRoleFailed', {
             params: { message: result.error.message },
@@ -614,7 +614,7 @@ export async function createDbUserRoleRepository(
         )
       }
 
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async getRoleIds(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
@@ -634,7 +634,7 @@ export async function createDbUserRoleRepository(
         return idsResult
 
       if (idsResult.data.length === 0) {
-        return ok([])
+        return core.ok([])
       }
       const placeholders = idsResult.data.map(() => '?').join(', ')
       const roleResult = await roleRepository.findAll({
@@ -642,7 +642,7 @@ export async function createDbUserRoleRepository(
         params: idsResult.data,
       }, tx)
       if (!roleResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryRoleFailed', {
             params: { message: roleResult.error.message },
@@ -651,7 +651,7 @@ export async function createDbUserRoleRepository(
         )
       }
 
-      return ok(roleResult.data)
+      return core.ok(roleResult.data)
     },
 
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
@@ -663,7 +663,7 @@ export async function createDbUserRoleRepository(
         [roleId],
       )
       if (!usersResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryRoleFailed', {
             params: { message: usersResult.error.message },
@@ -678,7 +678,7 @@ export async function createDbUserRoleRepository(
         [roleId],
       )
       if (!deleteResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_removeRoleFailed', {
             params: { message: deleteResult.error.message },
@@ -687,7 +687,7 @@ export async function createDbUserRoleRepository(
         )
       }
 
-      return ok(usersResult.data.map(r => r.user_id))
+      return core.ok(usersResult.data.map(r => r.user_id))
     },
 
     async getUserIdsByRoleId(roleId: string): Promise<HaiResult<string[]>> {
@@ -696,7 +696,7 @@ export async function createDbUserRoleRepository(
         [roleId],
       )
       if (!result.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryRoleFailed', {
             params: { message: result.error.message },
@@ -704,7 +704,7 @@ export async function createDbUserRoleRepository(
           result.error,
         )
       }
-      return ok(result.data.map(r => r.user_id))
+      return core.ok(result.data.map(r => r.user_id))
     },
 
     async getUserCounts(roleIds: string[]): Promise<HaiResult<Map<string, number>>> {
@@ -713,26 +713,26 @@ export async function createDbUserRoleRepository(
       ]
       const counts = new Map(ids.map(id => [id, 0]))
       if (ids.length === 0)
-        return ok(counts)
+        return core.ok(counts)
       const result = await reldb.sql.query<{ role_id: string, user_count: number | string }>(
         `SELECT role_id, COUNT(DISTINCT user_id) AS user_count FROM ${USER_ROLE_TABLE} WHERE role_id IN (${ids.map(() => '?').join(', ')}) GROUP BY role_id`,
         ids,
       )
       if (!result.success) {
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_queryRoleFailed', {
+        return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_queryRoleFailed', {
           params: { message: result.error.message },
         }), result.error)
       }
       for (const row of result.data)
         counts.set(row.role_id, Number(row.user_count))
-      return ok(counts)
+      return core.ok(counts)
     },
 
     async getRolesForUsers(userIds: string[]): Promise<HaiResult<Map<string, Role[]>>> {
       const result = new Map<string, Role[]>()
       // 空列表直接返回空 Map
       if (userIds.length === 0) {
-        return ok(result)
+        return core.ok(result)
       }
 
       // 批量查询所有用户的角色关联
@@ -742,7 +742,7 @@ export async function createDbUserRoleRepository(
         userIds,
       )
       if (!relationsResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryRoleFailed', {
             params: { message: relationsResult.error.message },
@@ -757,7 +757,7 @@ export async function createDbUserRoleRepository(
       }
 
       if (relationsResult.data.length === 0) {
-        return ok(result)
+        return core.ok(result)
       }
 
       // 收集去重的 roleId，批量查询角色详情
@@ -770,7 +770,7 @@ export async function createDbUserRoleRepository(
         params: uniqueRoleIds,
       })
       if (!rolesResult.success) {
-        return err(
+        return core.err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_queryRoleFailed', {
             params: { message: rolesResult.error.message },
@@ -793,7 +793,7 @@ export async function createDbUserRoleRepository(
         }
       }
 
-      return ok(result)
+      return core.ok(result)
     },
   })
 }

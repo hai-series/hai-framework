@@ -508,7 +508,7 @@ export const config = {
    *
    * @example
    * ```ts
-   * import { core, CoreConfigSchema } from '@h-ai/core'
+   * import { CoreConfigSchema, core } from '@h-ai/core'
    * const result = core.config.load('core', './config/_core.yml', CoreConfigSchema)
    * if (!result.success) throw new Error(result.error.message, { cause: result.error })
    * core.i18n.setGlobalLocale(result.data.defaultLocale)

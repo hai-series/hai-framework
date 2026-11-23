@@ -2,11 +2,12 @@
  * 单条队列投递：发送前持久化门闩、在途续租及未知结果隔离。
  * @module reach-delivery
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { ReachMessage, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
-import { core, err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reachM } from './reach-i18n.js'
 import { HaiReachError } from './reach-types.js'
 
@@ -47,11 +48,11 @@ export async function deliverClaimedMessage(
   const retrySafe = provider.supportsIdempotency
   if (!row.queueId || (row.retrySafe && !retrySafe)) {
     await repo.markUnknown(row.id, owner)
-    return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'))
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'))
   }
   if (!provider.isConnected()) {
     await repo.failClaim(row, owner, 'provider_unavailable')
-    return err(HaiReachError.NOT_INITIALIZED, reachM('reach_notInitialized'))
+    return core.err(HaiReachError.NOT_INITIALIZED, reachM('reach_notInitialized'))
   }
 
   let message: ReachMessage
@@ -74,7 +75,7 @@ export async function deliverClaimedMessage(
   catch (cause) {
     // 坏持久化载荷不会随重试改善；尚未调用外部服务，直接进入死信。
     await repo.failClaim(row, owner, 'invalid_message', true)
-    return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
   }
 
   const started = await repo.beginDelivery(row.id, owner, retrySafe, leaseMs)
@@ -108,7 +109,7 @@ export async function deliverClaimedMessage(
     outcome = await provider.send(message)
   }
   catch (cause) {
-    outcome = err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), cause)
+    outcome = core.err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), cause)
   }
   finally {
     stopped = true
@@ -119,7 +120,7 @@ export async function deliverClaimedMessage(
   if (lost) {
     if (!retrySafe)
       await repo.markUnknown(row.id, owner)
-    return err(HaiReachError.SEND_FAILED, reachM('reach_claimLost'))
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_claimLost'))
   }
   if (outcome.success && outcome.data.success) {
     const marked = await repo.markSent(row.id, owner, outcome.data.messageId)
@@ -130,12 +131,12 @@ export async function deliverClaimedMessage(
   if (!retrySafe) {
     await repo.markUnknown(row.id, owner)
     logger.warn('Delivery outcome is unknown; automatic redelivery stopped', { queueId: row.queueId, provider: row.provider })
-    return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
+    return core.err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
   }
   // 接收端持久去重时，响应丢失也可以在之后使用同一个 queueId 重试。
   const permanent = !outcome.success && [HaiReachError.DELIVERY_REJECTED.code, HaiReachError.INVALID_RECIPIENT.code].includes(outcome.error.code)
   const released = await repo.failClaim(row, owner, permanent ? 'permanent_rejection' : 'transient_failure', permanent)
   if (!released.success)
     return released
-  return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
+  return core.err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
 }

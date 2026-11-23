@@ -6,7 +6,6 @@
  */
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
-
 import type {
   ChatCompletionChunk,
   ChatCompletionRequest,
@@ -14,10 +13,10 @@ import type {
   ChatMessage,
   TempModelConfig,
 } from '../ai-llm-types.js'
-import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 
+import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import OpenAI from 'openai'
 
 import { resolveModelEntry } from '../../ai-config.js'
@@ -222,7 +221,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const resolvedApi = api === 'responses'
       ? 'responses'
       : 'chat'
-    return ok({
+    return core.ok({
       client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout),
       model,
       protocol: resolvedApi,
@@ -238,7 +237,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   function resolveTempClient(tempModel: TempModelConfig): HaiResult<ResolvedClient> {
     const apiKey = tempModel.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY)
     if (!apiKey) {
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
+      return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
         params: { error: 'API Key is required for temp model' },
       }))
     }
@@ -247,7 +246,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const api = (tempModel.protocol ?? config.llm.protocol) === 'responses'
       ? 'responses'
       : 'chat'
-    return ok({
+    return core.ok({
       client: getTempClient(apiKey, baseUrl, timeout),
       model: tempModel.model,
       protocol: api,
@@ -271,7 +270,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     if (responseFormat?.type === 'json_schema') {
       const { json_schema: jsonSchema } = responseFormat
       if (!jsonSchema?.schema)
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_llmResponsesSchemaRequired'))
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_llmResponsesSchemaRequired'))
       const { name, schema, description, strict } = jsonSchema
       format = {
         type: 'json_schema',
@@ -290,7 +289,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const toolChoice = typeof request.tool_choice === 'string'
       ? request.tool_choice
       : undefined
-    return ok({
+    return core.ok({
       model: resolved.model,
       input: toResponsesInput(request.messages),
       ...(format
@@ -334,7 +333,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
           if (!params.success)
             return params
           const response = await client.responses.create(params.data, { signal })
-          return ok(responsesToChatResponse(response, model))
+          return core.ok(responsesToChatResponse(response, model))
         }
 
         const openaiMessages = request.messages.map(toOpenAIMessage)
@@ -354,11 +353,11 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         const response = signal
           ? await client.chat.completions.create(params, { signal })
           : await client.chat.completions.create(params)
-        return ok(response)
+        return core.ok(response)
       }
       catch (error) {
         const mapped = toAIError(error)
-        return err(mapped.def, mapped.message, mapped.cause)
+        return core.err(mapped.def, mapped.message, mapped.cause)
       }
     },
 
@@ -419,11 +418,11 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       try {
         const response = await client.models.list()
         const models = response.data.map((m: { id: string }) => m.id)
-        return ok(models)
+        return core.ok(models)
       }
       catch (error) {
         const mapped = toAIError(error)
-        return err(mapped.def, mapped.message, mapped.cause)
+        return core.err(mapped.def, mapped.message, mapped.cause)
       }
     },
   }

@@ -1,15 +1,7 @@
 <script lang='ts'>
-{{#if features.feedback}}
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
-{{else}}
-  import { useToastFeedback } from '@h-ai/ui/toast'
-{{/if}}
   import type { Component } from 'svelte'
   import type { ManagementApiOptions } from '../api/api-client.js'
-  import { Skeleton, ToastContainer } from '@h-ai/ui/components/compounds/index'
-  import { Button } from '@h-ai/ui/components/primitives/index'
-  import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
-  import { GuideHost } from '@h-ai/ui/guide'
+  import { AuthPanel, Button, GuideHost, Skeleton, ToastContainer, ui } from '@h-ai/ui'
   import { onMount, untrack } from 'svelte'
   import { managementAuthActions } from '../api/api-client.js'
   import { HashRouter } from '../navigation/hash-router.svelte.js'
@@ -68,7 +60,7 @@
     const userId = feedbackUserId
     if (userId) {
       void initializeBrowserFeedback(buildMetadata).catch((cause) => {
-        store.error = errorMessage(cause, m.operation_failed())
+        store.error = ui.errorMessage(cause, m.operation_failed())
       })
     }
     else {
@@ -85,7 +77,7 @@
     if (store.info)
       document.title = store.info.name
   })
-  useToastFeedback(() => store.error)
+  ui.useToastFeedback(() => store.error)
 </script>
 
 {#key store.locale}

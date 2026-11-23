@@ -1,6 +1,6 @@
 import type { HaiResult } from '@h-ai/core'
 import type { BuiltinToolBroker, BuiltinToolBrokerOptions } from './ai-tools-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { createMCPServiceBroker } from '../mcp/ai-mcp-broker.js'
@@ -15,7 +15,7 @@ import { createMCPServiceBroker } from '../mcp/ai-mcp-broker.js'
 export function createBuiltinToolBroker(options: BuiltinToolBrokerOptions): HaiResult<BuiltinToolBroker> {
   const lifecycle = new AbortController()
   const serviceId = 'hai-local-tools'
-  const forbidden = () => err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+  const forbidden = () => core.err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
   const created = createMCPServiceBroker(async () => undefined, async () => forbidden(), {
     url: options.url,
     authorize: () => true,
@@ -24,7 +24,7 @@ export function createBuiltinToolBroker(options: BuiltinToolBrokerOptions): HaiR
     async catalog(scope, sessionId, signal) {
       const result = await options.service.catalog({ scope, sessionId, signal })
       return result.success
-        ? ok(result.data.tools)
+        ? core.ok(result.data.tools)
         : result
     },
     async invoke(request, authorization, idempotencyKey) {
@@ -32,8 +32,8 @@ export function createBuiltinToolBroker(options: BuiltinToolBrokerOptions): HaiR
         return forbidden()
       const result = await options.service.invoke({ name: request.tool, input: request.arguments ?? {}, idempotencyKey }, { scope: authorization.principal, sessionId: authorization.taskId, signal: authorization.signal })
       if (!result.success)
-        return err(core.error.toPublic(result.error))
-      return ok({
+        return core.err(core.error.toPublic(result.error))
+      return core.ok({
         content: [
           {
             type: 'text',
@@ -47,7 +47,7 @@ export function createBuiltinToolBroker(options: BuiltinToolBrokerOptions): HaiR
   if (!created.success)
     return created
   const broker = created.data
-  return ok({
+  return core.ok({
     async bind(input) {
       const catalog = await options.service.catalog({ scope: input.scope, sessionId: input.sessionId, signal: input.signal })
       if (!catalog.success)

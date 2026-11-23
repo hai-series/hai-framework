@@ -6,14 +6,14 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type {
   AuditHelper,
   AuditLog,
   CreateAuditLogInput,
   CrudAuditInput,
 } from './audit-types.js'
-
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 /**
  * 将 log 结果映射为 void 返回
@@ -25,7 +25,7 @@ function toVoid(result: HaiResult<AuditLog>): HaiResult<void> {
   if (!result.success) {
     return result
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { Router, UnlaziedRouter } from '@orpc/server'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import { serv } from '../src/serv-main.js'
@@ -91,13 +91,13 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
       .handle(({ input, context }) => {
         expectTypeOf(input.message).toEqualTypeOf<string>()
         expectTypeOf(context.session.userId).toEqualTypeOf<string>()
-        return ok({ message: input.message, userId: context.session.userId })
+        return core.ok({ message: input.message, userId: context.session.userId })
       })
       .build()
 
@@ -109,7 +109,7 @@ describe('serv chain router', () => {
     const incomplete = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
 
     if (false) {
       // @ts-expect-error contract 仍缺少 nested.echo
@@ -122,15 +122,15 @@ describe('serv chain router', () => {
     const incomplete = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
 
     if (false) {
       // @ts-expect-error publicInfo 已实现，不能重复注册
-      incomplete.route('publicInfo', () => ok({ name: 'again' }))
+      incomplete.route('publicInfo', () => core.ok({ name: 'again' }))
       // @ts-expect-error missing 不属于 contract
-      incomplete.route('missing', () => ok({ name: 'missing' }))
+      incomplete.route('missing', () => core.ok({ name: 'missing' }))
       // @ts-expect-error 单参数 route 必须先声明 guard，公开 route 使用双参数形式
-      incomplete.route('nested.echo').handle(({ input }) => ok({
+      incomplete.route('nested.echo').handle(({ input }) => core.ok({
         message: input.message,
         userId: 'unguarded',
       }))
@@ -148,7 +148,7 @@ describe('serv chain router', () => {
     const incomplete = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
     const build = Reflect.get(incomplete, 'build')
 
     expect(typeof build).toBe('function')
@@ -163,7 +163,7 @@ describe('serv chain router', () => {
       .route('publicInfo', () => {
         throw new Error('boom')
       })
-      .route('nested.echo', ({ input }) => ok({
+      .route('nested.echo', ({ input }) => core.ok({
         message: input.message,
         userId: 'public',
       }))
@@ -182,12 +182,12 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
       .handle(({ input, context }) => {
         invoked = true
-        return ok({ message: input.message, userId: context.session.userId })
+        return core.ok({ message: input.message, userId: context.session.userId })
       })
       .build()
 
@@ -213,10 +213,10 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
-      .handle(({ input, context }) => ok({
+      .handle(({ input, context }) => core.ok({
         message: input.message,
         userId: context.session.userId,
       }))
@@ -237,12 +237,12 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
       .handle((options) => {
         received = options
-        return ok({
+        return core.ok({
           message: options.input.message,
           userId: options.context.session.userId,
         })
@@ -270,11 +270,11 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .permission('app.echo')
       .permission('app.audit')
-      .handle(({ input, context }) => ok({
+      .handle(({ input, context }) => core.ok({
         message: input.message,
         userId: context.session.userId,
       }))
@@ -297,18 +297,18 @@ describe('serv chain router', () => {
       roles: [],
       permissions: [serv.WILDCARD_PERMISSION],
     }), { message: 'hello' }))
-    expect(allowed).toEqual(ok({ message: 'hello', userId: 'u1' }))
+    expect(allowed).toEqual(core.ok({ message: 'hello', userId: 'u1' }))
   })
 
   it('permission and role guards imply authentication', async () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .permission('app.echo')
       .role('member')
-      .handle(({ input, context }) => ok({
+      .handle(({ input, context }) => core.ok({
         message: input.message,
         userId: context.session.userId,
       }))
@@ -332,7 +332,7 @@ describe('serv chain router', () => {
     ['record:r*', false],
     ['record:read', true],
   ])('权限范围 %s 与 IAM、Kit 保持相同冒号通配语义', async (grant, expected) => {
-    const procedures = serv.implement(testContract).context<ServContext>().route('publicInfo', () => ok({ name: 'hai' })).route('nested.echo').permission('record:read').handle(({ input, context }) => ok({ message: input.message, userId: context.session.userId })).build()
+    const procedures = serv.implement(testContract).context<ServContext>().route('publicInfo', () => core.ok({ name: 'hai' })).route('nested.echo').permission('record:read').handle(({ input, context }) => core.ok({ message: input.message, userId: context.session.userId })).build()
     const handler = procedureHandler(procedures.nested.echo)
     const result = await handler(handlerOptions(handler, createContext({
       userId: 'u1',
@@ -348,11 +348,11 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .role('admin')
       .role('auditor')
-      .handle(({ input, context }) => ok({
+      .handle(({ input, context }) => core.ok({
         message: input.message,
         userId: context.session.userId,
       }))
@@ -373,11 +373,11 @@ describe('serv chain router', () => {
       roles: [serv.WILDCARD_ROLE],
       permissions: [],
     }), { message: 'hello' }))
-    expect(allowed).toEqual(ok({ message: 'hello', userId: 'u1' }))
+    expect(allowed).toEqual(core.ok({ message: 'hello', userId: 'u1' }))
   })
 
   it('preserves handler HaiResult failures', async () => {
-    const expected = err(
+    const expected = core.err(
       {
         code: 'router:test',
         httpStatus: 418,
@@ -389,7 +389,7 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
       .handle(() => expected)
@@ -416,7 +416,7 @@ describe('serv chain router', () => {
     const procedures = serv
       .implement(testContract)
       .context<ServContext>()
-      .route('publicInfo', () => ok({ name: 'hai' }))
+      .route('publicInfo', () => core.ok({ name: 'hai' }))
       .route('nested.echo')
       .auth()
       .handle(async () => {
@@ -449,15 +449,15 @@ describe('serv chain router', () => {
 
     Reflect.apply(route, builder, [
       'publicInfo',
-      () => ok({ name: 'hai' }),
+      () => core.ok({ name: 'hai' }),
     ])
     expect(() => Reflect.apply(route, builder, [
       'publicInfo',
-      () => ok({ name: 'again' }),
+      () => core.ok({ name: 'again' }),
     ])).toThrow('Duplicate procedure implementation: publicInfo')
     expect(() => Reflect.apply(route, builder, [
       'missing',
-      () => ok({ name: 'missing' }),
+      () => core.ok({ name: 'missing' }),
     ])).toThrow('Contract path is not implementable: missing')
   })
 

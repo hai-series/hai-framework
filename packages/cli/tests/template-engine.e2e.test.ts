@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { core } from '@h-ai/core'
-import { loadDeploymentConfig } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -140,7 +140,7 @@ it.each([
     features: [],
     packageManager: 'pnpm',
   }))
-  const loaded = loadDeploymentConfig('deploy', path.join(project, 'hai.json'), {})
+  const loaded = deploy.loadDeploymentConfig('deploy', path.join(project, 'hai.json'), {})
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     throw new Error(loaded.error.message)
@@ -170,7 +170,7 @@ it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中
   const content = await fse.readFile(file, 'utf8')
   for (const variable of ['HAI_SERV_HTTP_ACCESS_GLOBAL_TIMEZONE', 'HAI_SERV_HTTP_DOCS', 'HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES'])
     expect(content).toContain(variable)
-  const loaded = loadDeploymentConfig('serv', file, {
+  const loaded = deploy.loadDeploymentConfig('serv', file, {
     HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608',
     HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES: '{"/api/v1/uploads/*":16777216}',
     HAI_SERV_HTTP_DOCS: 'false',
@@ -588,7 +588,7 @@ describe('admin 应用类型生成', () => {
 
     it('vite 插件包含完整的 SvelteKit 预处理及安全配置', async () => {
       const content = await readGenerated(projectPath, 'vite.config.ts')
-      expect(content).toContain('autoImportHaiUi')
+      expect(content).toContain('ui.autoImport()')
       expect(content).toContain('runes: true')
       expect(content).not.toContain('trustedOrigins')
       expect(content).toContain('relative: false')
@@ -945,7 +945,7 @@ describe('api 应用类型生成', () => {
 
     it('contract 包应组合 app contract', async () => {
       const content = await readGenerated(projectPath, 'apps/test-api-contract/src/test-api-contract.ts')
-      expect(content).toContain('apiContract.create')
+      expect(content).toContain('frameworkApiContract.create')
       expect(content).toContain('app: appContract')
     })
 

@@ -1,10 +1,11 @@
 /** 凭据仅驻留当前调用；持久回执占用幂等键，发送不明也不自动重投旧凭据。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { ReachMessage, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import { createHash } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reachM } from './reach-i18n.js'
 import { HaiReachError } from './reach-types.js'
 
@@ -19,7 +20,7 @@ import { HaiReachError } from './reach-types.js'
  */
 function previousResult(row: StoredSendLog): HaiResult<SendResult> {
   return row.status === 'sent'
-    ? ok({ success: true, receiptId: row.queueId ?? undefined })
+    ? core.ok({ success: true, receiptId: row.queueId ?? undefined })
     : unconfirmed(row.queueId!)
 }
 
@@ -47,7 +48,7 @@ function unconfirmed(receiptId: string): HaiResult<SendResult> {
  */
 export async function sendSensitive(message: ReachMessage, provider: ReachProvider, repo: SendLogRepository | null | undefined, blocked: boolean): Promise<HaiResult<SendResult>> {
   if (!repo || !message.idempotencyKey?.trim() || message.idempotencyKey.length > 255 || !Number.isSafeInteger(message.expiresAt))
-    return err(HaiReachError.CONFIG_ERROR, reachM('reach_sensitivePolicyRequired'))
+    return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_sensitivePolicyRequired'))
   const hash = createHash('sha256').update(JSON.stringify([message.provider, message.to, message.idempotencyKey])).digest('hex')
   // 固定 UUID 保持既有回执查询契约；只散列随机操作键与路由，不散列低熵密码或验证码。
   const queueId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`
@@ -63,7 +64,7 @@ export async function sendSensitive(message: ReachMessage, provider: ReachProvid
     return previousResult(existing.data[0])
   const now = Date.now()
   if (message.expiresAt! <= now)
-    return err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
+    return core.err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
   const created = await repo.create({
     queueId,
     provider: message.provider,
@@ -87,10 +88,10 @@ export async function sendSensitive(message: ReachMessage, provider: ReachProvid
     return unconfirmed(queueId)
   }
   if (blocked)
-    return err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
+    return core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
   if (Date.now() >= message.expiresAt!) {
     await repo.settleSensitive(queueId, 'discarded')
-    return err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
+    return core.err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
   }
   let delivered: HaiResult<SendResult>
   try {
@@ -98,11 +99,11 @@ export async function sendSensitive(message: ReachMessage, provider: ReachProvid
     delivered = await core.context.run({ suppressLogObservers: true }, () => provider.send(message))
   }
   catch {
-    delivered = err(HaiReachError.SEND_FAILED, reachM('reach_sensitiveDeliveryUnconfirmed'))
+    delivered = core.err(HaiReachError.SEND_FAILED, reachM('reach_sensitiveDeliveryUnconfirmed'))
   }
   const success = delivered.success && delivered.data.success && !delivered.data.deferred
   const settled = await repo.settleSensitive(queueId, success ? 'sent' : 'unknown')
   if (!settled.success || !success)
     return unconfirmed(queueId)
-  return ok({ success: true, receiptId: queueId })
+  return core.ok({ success: true, receiptId: queueId })
 }

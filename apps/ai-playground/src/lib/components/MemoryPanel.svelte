@@ -1,8 +1,8 @@
 <script lang='ts'>
   // 记忆管理面板：按测试主体添加、检索、删除与清空长期记忆
   import type { LabStatus, MemoryView } from '#lib/ai-lab-types.js'
-  import { Button, Card } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, Card, ui } from '@h-ai/ui'
+
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { clearMemories, createMemory, deleteMemory, loadMemories } from '#lib/services/ai-lab.js'
@@ -37,7 +37,7 @@
       items = await loadMemories(targetProfileId, query.trim())
     }
     catch (cause) {
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -61,7 +61,7 @@
       await refresh()
     }
     catch (cause) {
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
       busy = false
     }
@@ -75,7 +75,7 @@
       await refresh()
     }
     catch (cause) {
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
       busy = false
     }
@@ -89,7 +89,7 @@
       items = []
     }
     catch (cause) {
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -105,7 +105,7 @@
   $effect(() => {
     void refresh(profileId, refreshToken)
   })
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>

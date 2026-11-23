@@ -118,7 +118,7 @@ async function ask(question: prompts.PromptObject): Promise<unknown> {
  * const module: DeployModule = await import('@h-ai/deploy')
  * const result = await module.deploy.scan(process.cwd(), { environment: 'prod' })
  * if (!result.success) throw new Error(result.error.message)
- * const environment = module.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * const environment = module.deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
  * if (!environment.success) throw new Error(environment.error.message)
  * const modes = await configureDeployMiddleware(module, result.data, environment.data, {}, true)
  * ```
@@ -142,11 +142,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       params: {
         service: requirement.service,
         backend: current.label,
-        purpose: module.describeMiddlewareBackend(current),
+        purpose: module.deploy.describeMiddlewareBackend(current),
         source: requirement.source,
       },
     }))
-    const canKeep = module.canKeepMiddleware(requirement, current, environment)
+    const canKeep = module.deploy.canKeepMiddleware(requirement, current, environment)
     const mode = yes
       ? canKeep ? 'keep' : 'default'
       : await ask({
@@ -199,7 +199,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
             params: { service: requirement.service },
           }),
           initial: choices.indexOf(current),
-          choices: choices.map(item => ({ title: `${item.label} — ${module.describeMiddlewareBackend(item)}`, value: item.backend })),
+          choices: choices.map(item => ({ title: `${item.label} — ${module.deploy.describeMiddlewareBackend(item)}`, value: item.backend })),
         }))
     const backend = choices.find(item => item.backend === backendName)
     if (!backend)
@@ -220,7 +220,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         : String(await ask({
             type: 'select',
             name: 'value',
-            message: module.describeMiddlewareBackend(option),
+            message: module.deploy.describeMiddlewareBackend(option),
             initial: Math.max(0, option.choices.findIndex(item => item.value === currentValue)),
             choices: option.choices.map(item => ({ title: item.label, value: item.value })),
           }))
@@ -376,7 +376,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
               message,
               initial,
               validate: (input) => {
-                const result = module.parseMiddlewareField({
+                const result = module.deploy.parseMiddlewareField({
                   value: String(input),
                   field,
                   backend: backendName,
@@ -387,7 +387,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
               },
             }))
           : initial
-        const parsed = module.parseMiddlewareField({
+        const parsed = module.deploy.parseMiddlewareField({
           value,
           field,
           backend: backendName,
@@ -404,7 +404,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       }
       configuration = connection
     }
-    const saved = module.saveMiddlewareEnvironment(environment, {
+    const saved = module.deploy.saveMiddlewareEnvironment(environment, {
       appDir: scan.appDir ?? '.',
       requirement,
       backend: backendName,

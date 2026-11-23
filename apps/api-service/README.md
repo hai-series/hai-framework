@@ -76,7 +76,7 @@ export const appContract = {
 ```ts
 import type { ServContext } from '@h-ai/serv'
 import { appContract } from '@h-ai/api-service-contract'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
 export const router = serv
@@ -85,13 +85,13 @@ export const router = serv
   // 声明处理器使用的服务端上下文类型，返回同一构建流程。
   .context<ServContext>()
   // 为 info 注册处理器，调用时将服务元信息包装为成功结果。
-  .route('info', () => ok({ /* 服务元信息 */ }))
+  .route('info', () => core.ok({ /* 服务元信息 */ }))
   // 选中 echo 路由，下一步为它设置鉴权和处理器。
   .route('echo')
   // 启用当前路由的会话鉴权，未认证请求在进入处理器前被拒绝。
   .auth()
   // 处理器接收经过校验的输入和请求上下文，返回回显、用户、请求号与时间。
-  .handle(({ input, context }) => ok({
+  .handle(({ input, context }) => core.ok({
     message: input.message,
     userId: context.session.userId,
     requestId: context.requestId,

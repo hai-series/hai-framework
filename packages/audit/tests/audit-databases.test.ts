@@ -1,4 +1,5 @@
 /** 三种真实数据库中两个独立进程同时首次建表，成功init后立即访问。 */
+
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'

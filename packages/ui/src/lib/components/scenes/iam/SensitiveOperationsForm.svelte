@@ -3,9 +3,9 @@
   @example
   ```ts
   import { mount, unmount } from 'svelte'
-  import { ok } from '@h-ai/core'
+  import { core } from '@h-ai/core'
   import { SensitiveOperationsForm } from '@h-ai/ui'
-  const component = mount(SensitiveOperationsForm, { target: document.body, props: { operations: ['orders.approve'], onsubmit: async () => ok(undefined) } })
+  const component = mount(SensitiveOperationsForm, { target: document.body, props: { operations: ['orders.approve'], onsubmit: async () => core.ok(undefined) } })
   await unmount(component)
   ```
 -->

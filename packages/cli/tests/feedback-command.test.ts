@@ -2,7 +2,7 @@ import { link, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { createFeedbackBundle, readFeedbackBundle } from '@h-ai/feedback/bundle'
+import { feedback } from '@h-ai/feedback/bundle'
 import { describe, expect, it, vi } from 'vitest'
 import { feedbackCommand, startFeedbackViewer } from '../src/commands/cli-feedback.js'
 
@@ -11,7 +11,7 @@ describe('feedback 离线 CLI', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-cli-link-'))
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     try {
-      const created = await createFeedbackBundle({
+      const created = await feedback.createBundle({
         report: { id: 'linked-fixture' },
         evidence: [],
       })
@@ -33,7 +33,7 @@ describe('feedback 离线 CLI', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-cli-'))
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     try {
-      const created = await createFeedbackBundle({
+      const created = await feedback.createBundle({
         report: { id: 'fb-cli', description: '用户描述' },
         evidence: [
           {
@@ -64,14 +64,14 @@ describe('feedback 离线 CLI', () => {
   })
 
   it('本机查看器隔离路径，不执行包内替换脚本，也不对外监听', async () => {
-    const created = await createFeedbackBundle({
+    const created = await feedback.createBundle({
       report: { id: 'fb-view' },
       evidence: [],
     })
     expect(created.success).toBe(true)
     if (!created.success)
       return
-    const read = await readFeedbackBundle(created.data)
+    const read = await feedback.readBundle(created.data)
     expect(read.success).toBe(true)
     if (!read.success)
       return

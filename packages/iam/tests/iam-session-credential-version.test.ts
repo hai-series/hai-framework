@@ -1,6 +1,6 @@
 /** 凭据代与会话绑定：持久改密不依赖成功删除缓存，旧策略/refresh不能取得新代。 */
 import { cache, HaiCacheError } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { IamConfigSchema } from '../src/iam-config.js'
@@ -42,7 +42,7 @@ it('密码SQL提交后缓存清除失败，旧access/refresh仍即时拒绝；�
   const changed = await users.setPassword({ userId, expectedVersion: snapshot.data.credentialVersion ?? '', passwordHash: snapshot.data.passwordHash! })
   expect(changed.success && changed.data).toBe(true)
   // 保留真实旧缓存，主动注入删除失败，证明安全边界来自DB代而非清理成功。
-  const remove = vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(err(HaiCacheError.OPERATION_FAILED, 'Injected cache failure'))
+  const remove = vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(core.err(HaiCacheError.OPERATION_FAILED, 'Injected cache failure'))
   expect((await iam.session.deleteByUserId(userId)).success).toBe(false)
   remove.mockRestore()
   expect((await cache.kv.get(`hai:iam:sessions:{${getUserSessionScope(userId)}}`)).success).toBe(true)
@@ -94,7 +94,7 @@ it('旧密码已验证但尚未创建会话时改密，迟到策略不能用当�
 
 it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新绝不升级旧代', async () => {
   let current: { version: string, available: boolean } | null = { version: 'v1', available: true }
-  const read = vi.fn(async () => ok(current))
+  const read = vi.fn(async () => core.ok(current))
   const built = await createSessionOperations({
     config: IamConfigSchema.parse({
       session: { sliding: false },
@@ -126,7 +126,7 @@ it('refresh提交窗口发生改密，返回失败且后继仍带旧代而不可
     config: IamConfigSchema.parse({
       session: { sliding: false },
     }),
-    readCredential: async () => ok({ version, available: true }),
+    readCredential: async () => core.ok({ version, available: true }),
   })
   if (!built.success)
     throw new Error(built.error.message)

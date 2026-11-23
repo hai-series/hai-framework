@@ -24,10 +24,11 @@
   ```
 -->
 <script lang='ts'>
+
   import type { HaiError, HaiResult } from '@h-ai/core'
   import type { UIMessageKey } from '../../../messages.js'
   import type { AuthLoginMethod, AuthPanelActions, AuthPanelMode, AuthPanelProps } from '../types.js'
-  import { err, HaiCommonError } from '@h-ai/core'
+  import { core, HaiCommonError } from '@h-ai/core'
   import { onMount, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { toast, useToastFeedback } from '../../../toast.svelte.js'
@@ -100,7 +101,7 @@
     if (!config?.captcha?.enabled)
       return request()
     if (!actions.createCaptcha)
-      return err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
+      return core.err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
     captchaController?.abort()
     const controller = new AbortController()
     captchaController = controller
@@ -113,11 +114,11 @@
       const proof = await solveAuthCaptcha(challenge.data, controller)
       controller.signal.throwIfAborted()
       if (!proof)
-        return err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
+        return core.err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
       return request(proof)
     }
     catch {
-      return err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
+      return core.err(HaiCommonError.SERVICE_UNAVAILABLE, uiM('auth_captcha_error'))
     }
     finally {
       if (captchaController === controller) {

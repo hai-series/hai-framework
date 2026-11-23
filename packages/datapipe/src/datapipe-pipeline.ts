@@ -9,6 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config.js'
 import type { BuiltinStep } from './datapipe-pipeline-builtins.js'
 import type { PipelineJob } from './datapipe-pipeline-worker.js'
+
 import type {
   ChunkTransformFn,
   DataChunk,
@@ -17,8 +18,7 @@ import type {
   PipelineStep,
   TransformFn,
 } from './datapipe-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { datapipeM } from './datapipe-i18n.js'
 import { normalizeBuiltinStep, runBuiltinSteps } from './datapipe-pipeline-builtins.js'
 import { HaiDatapipeError } from './datapipe-types.js'
@@ -99,7 +99,7 @@ async function runInWorker(batch: BuiltinStep[], text: string): Promise<ReturnTy
     locale: core.i18n.getGlobalLocale(),
   })
   if (!computed.success)
-    return err(HaiDatapipeError.PIPELINE_FAILED, computed.error.message, computed.error)
+    return core.err(HaiDatapipeError.PIPELINE_FAILED, computed.error.message, computed.error)
   // 配置错误前的步骤仍可产生更早的业务错误。
   return computed.data.success && invalid
     ? invalid
@@ -145,7 +145,7 @@ async function runPipeline(
           currentText = await step.fn(currentText)
         }
         catch (error) {
-          return err(HaiDatapipeError.TRANSFORM_FAILED, datapipeM('datapipe_transformFailed', {
+          return core.err(HaiDatapipeError.TRANSFORM_FAILED, datapipeM('datapipe_transformFailed', {
             params: {
               error: String(error),
             },
@@ -160,7 +160,7 @@ async function runPipeline(
             chunks = await step.fn(chunks)
           }
           catch (error) {
-            return err(HaiDatapipeError.PIPELINE_FAILED, datapipeM('datapipe_pipelineFailed', {
+            return core.err(HaiDatapipeError.PIPELINE_FAILED, datapipeM('datapipe_pipelineFailed', {
               params: {
                 error: String(error),
               },
@@ -172,5 +172,5 @@ async function runPipeline(
     }
   }
 
-  return ok({ text: currentText, chunks })
+  return core.ok({ text: currentText, chunks })
 }

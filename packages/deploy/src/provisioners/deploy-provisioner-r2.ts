@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ServiceProvisioner } from '../deploy-internal-types.js'
 import type { ProvisionResult } from '../deploy-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -77,11 +77,11 @@ export function createR2Provisioner(): ServiceProvisioner {
         accessKey = credentials.accessKeyId
         secretKey = credentials.secretAccessKey
         logger.info('Cloudflare R2 authenticated')
-        return ok(acctId)
+        return core.ok(acctId)
       }
       catch (error) {
         logger.error('Cloudflare R2 authentication failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
             params: {
@@ -97,7 +97,7 @@ export function createR2Provisioner(): ServiceProvisioner {
 
     async provision(appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!token || !accountId) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -132,7 +132,7 @@ export function createR2Provisioner(): ServiceProvisioner {
 
         logger.info('R2 bucket provisioned', { bucketName })
 
-        return ok({
+        return core.ok({
           serviceType: 'storage',
           provisionerName: 'r2',
           resourceStatus: createRes.status === 409
@@ -153,7 +153,7 @@ export function createR2Provisioner(): ServiceProvisioner {
       }
       catch (error) {
         logger.error('R2 provisioning failed', { appName, error })
-        return err(
+        return core.err(
           HaiDeployError.PROVISION_FAILED,
           deployM('deploy_provisionFailed', {
             params: {

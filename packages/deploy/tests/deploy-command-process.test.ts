@@ -7,7 +7,7 @@ import { setTimeout } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readWindowsFixtureProcesses, windowsFixtureProcessesStopped, windowsTreeFixture } from '../../../scripts/test-process-identity.js'
 import { runCommand } from '../src/container/deploy-command.js'
-import { getDeployCommandState } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 let root: string
 const pids = new Set<number>()
@@ -122,7 +122,7 @@ describe('managed local command trees', () => {
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected a timeout')
-    expect(getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed' })
+    expect(deploy.getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed' })
     await assertStopped()
   }, 20_000)
 
@@ -132,7 +132,7 @@ describe('managed local command trees', () => {
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected unfinished descendants to fail')
-    expect(getDeployCommandState(result.error)?.localTermination).toBe('confirmed')
+    expect(deploy.getDeployCommandState(result.error)?.localTermination).toBe('confirmed')
     await assertStopped()
   }, 20_000)
 
@@ -147,7 +147,7 @@ describe('managed local command trees', () => {
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected output failure')
-    expect(getDeployCommandState(result.error)).toMatchObject({ reason: 'output', localTermination: 'confirmed' })
+    expect(deploy.getDeployCommandState(result.error)).toMatchObject({ reason: 'output', localTermination: 'confirmed' })
     expect(JSON.stringify(result)).not.toContain('private-callback-value')
     await assertStopped()
   }, 20_000)
@@ -158,7 +158,7 @@ describe('managed local command trees', () => {
       if (result.success)
         expect(result.data.stdout).toBe('finished')
       else
-        expect(getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed' })
+        expect(deploy.getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'confirmed' })
     }
     const completed = await runCommand(process.execPath, ['-e', 'process.stdout.write("complete")'], { timeoutMs: 2500 })
     expect(completed.success).toBe(true)
@@ -205,7 +205,7 @@ describe('managed local command trees', () => {
       const result = await runCommand(process.execPath, args, options)
       expect(result.success).toBe(false)
       if (!result.success)
-        expect(getDeployCommandState(result.error)?.localTermination).toBe('not-started')
+        expect(deploy.getDeployCommandState(result.error)?.localTermination).toBe('not-started')
     }
     expect((await runCommand(process.execPath, [...args, '\0'])).success).toBe(false)
     await expect(readFile(marker)).rejects.toThrow()
@@ -227,7 +227,7 @@ describe('managed local command trees', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(getDeployCommandState(result.error)?.localTermination).toBe('confirmed')
+      expect(deploy.getDeployCommandState(result.error)?.localTermination).toBe('confirmed')
     release()
     await assertStopped()
     expect(calls).toBe(1)
@@ -239,7 +239,7 @@ describe('managed local command trees', () => {
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected a timeout')
-    expect(getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'unknown' })
+    expect(deploy.getDeployCommandState(result.error)).toMatchObject({ reason: 'timeout', localTermination: 'unknown' })
     await vi.waitFor(assertStopped, { timeout: 5000 })
   }, 20_000)
 })

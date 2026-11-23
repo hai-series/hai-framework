@@ -5,7 +5,7 @@ import { request as requestHttp } from 'node:http'
 import { request as requestHttps } from 'node:https'
 import { basename, isAbsolute } from 'node:path'
 import { rootCertificates } from 'node:tls'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { uploadAndApplyBundle } from './container/deploy-bundle-transport.js'
 import { runCommand } from './container/deploy-command.js'
@@ -184,7 +184,7 @@ async function archiveManifest(path: string, member: string, signal?: AbortSigna
   return JSON.parse(result.data.stdout) as unknown
 }
 
-const invalid = () => err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+const invalid = () => core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
 
 /**
  * 校验受信私有包和固定目标，再通过 SSH 上传并用部署脚本执行一次。
@@ -219,7 +219,7 @@ export async function executeBundle(input: DeployBundleExecution, options?: { si
     })
     if (!result.success) {
       const state = getDeployCommandState(result.error)
-      return err({
+      return core.err({
         ...result.error,
         ext: {
           commandExecution: {
@@ -231,11 +231,11 @@ export async function executeBundle(input: DeployBundleExecution, options?: { si
         },
       })
     }
-    return ok({ deploymentId: input.deploymentId })
+    return core.ok({ deploymentId: input.deploymentId })
   }
   catch {
     if (signal?.aborted)
-      return err(HaiDeployError.REMOTE_COMMAND_FAILED, deployM('deploy_commandCancelled'))
+      return core.err(HaiDeployError.REMOTE_COMMAND_FAILED, deployM('deploy_commandCancelled'))
     return invalid()
   }
 }
@@ -361,7 +361,7 @@ export async function verifyDeployment(input: DeployReleaseVerification, options
     return invalid()
   }
   const id = release.deploymentId
-  const pending = (): HaiResult<DeployReleaseVerificationResult> => ok({ status: 'pending_verify', deploymentId: id })
+  const pending = (): HaiResult<DeployReleaseVerificationResult> => core.ok({ status: 'pending_verify', deploymentId: id })
   const signal = options?.signal
   try {
     const initial = await remoteSnapshot(target, id, [], signal)
@@ -374,7 +374,7 @@ export async function verifyDeployment(input: DeployReleaseVerification, options
     if (!running) {
       return receipt.exitCode !== 0 && !previous && current === '' && ['stopped', 'not-needed'].includes(receipt.recoveryStatus)
         && !initial.observed.some(name => name.startsWith(`hai-${target.projectName}-`))
-        ? ok({ status: 'failed', deploymentId: id, receipt })
+        ? core.ok({ status: 'failed', deploymentId: id, receipt })
         : pending()
     }
     await input.prepareImages?.(running.deploymentId, signal)
@@ -387,7 +387,7 @@ export async function verifyDeployment(input: DeployReleaseVerification, options
     const before = await remoteSnapshot(target, id, roles, signal)
     if (!agrees(before) || !await healthy(health, input.caFile, signal) || !agrees(await remoteSnapshot(target, id, roles, signal)))
       return pending()
-    return ok({
+    return core.ok({
       status: succeeded ? 'succeeded' : 'restored',
       deploymentId: id,
       receipt,

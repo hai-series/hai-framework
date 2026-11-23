@@ -17,7 +17,7 @@ import type {
   ReldbCrudCountOptions,
   ReldbCrudRepository,
 } from './reldb-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldbM } from './reldb-i18n.js'
 import { parseCount } from './reldb-pagination.js'
 import { validateIdentifier, validateIdentifiers } from './reldb-security.js'
@@ -185,10 +185,10 @@ export function createCrud<TItem>(
     return ` ORDER BY ${safeParts.join(', ')}`
   }
   /** 构建空负载错误结果（数据为空时报错） */
-  const createPayloadError = (): HaiResult<ExecuteResult> => err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
+  const createPayloadError = (): HaiResult<ExecuteResult> => core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
 
   /** 构建无有效列错误结果（白名单过滤后无可写列时报错） */
-  const createColumnsError = (): HaiResult<ExecuteResult> => err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
+  const createColumnsError = (): HaiResult<ExecuteResult> => core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
 
   /** 解析实际数据操作接口：传入事务时使用事务接口，否则使用 reldb.sql */
   const resolveOps = (tx?: DmlWithTxOperations): DmlOperations => tx ?? ops
@@ -216,7 +216,7 @@ export function createCrud<TItem>(
       // 校验列名合法性，防止通过 data key 注入
       const colValid = validateIdentifiers(columns)
       if (!colValid.success) {
-        return err(colValid.error)
+        return core.err(colValid.error)
       }
 
       const placeholders = columns.map(() => '?').join(', ')
@@ -236,7 +236,7 @@ export function createCrud<TItem>(
     async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       if (!items || items.length === 0) {
         // 空数组视为成功
-        return ok(undefined)
+        return core.ok(undefined)
       }
 
       const statements: Array<{ sql: string, params?: unknown[] }> = []
@@ -244,19 +244,19 @@ export function createCrud<TItem>(
       for (const item of items) {
         if (!item || Object.keys(item).length === 0) {
           // 任意项为空则整体失败
-          return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
+          return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
         }
 
         const { columns, values } = pickColumns(item, config.createColumns)
         if (columns.length === 0) {
           // 过滤后无可写列
-          return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
+          return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
         }
 
         // 校验列名合法性
         const colValid = validateIdentifiers(columns)
         if (!colValid.success) {
-          return err(colValid.error)
+          return core.err(colValid.error)
         }
 
         const placeholders = columns.map(() => '?').join(', ')
@@ -288,7 +288,7 @@ export function createCrud<TItem>(
 
       const colValid = validateIdentifiers(columns)
       if (!colValid.success) {
-        return err(colValid.error)
+        return core.err(colValid.error)
       }
 
       const placeholders = columns.map(() => '?').join(', ')
@@ -332,7 +332,7 @@ export function createCrud<TItem>(
         return result
       }
       // 未命中时返回 null
-      return ok(result.data
+      return core.ok(result.data
         ? mapRow(result.data)
         : null)
     },
@@ -352,13 +352,13 @@ export function createCrud<TItem>(
         return findResult
       }
       if (findResult.data === null) {
-        return err(HaiReldbError.RECORD_NOT_FOUND, reldbM('reldb_crudRecordNotFound', {
+        return core.err(HaiReldbError.RECORD_NOT_FOUND, reldbM('reldb_crudRecordNotFound', {
           params: {
             id: String(id),
           },
         }))
       }
-      return ok(findResult.data)
+      return core.ok(findResult.data)
     },
 
     /**
@@ -389,7 +389,7 @@ export function createCrud<TItem>(
         // 透传查询错误
         return result
       }
-      return ok(result.data.map(row => mapRow(row)))
+      return core.ok(result.data.map(row => mapRow(row)))
     },
 
     /**
@@ -413,7 +413,7 @@ export function createCrud<TItem>(
         // 透传分页查询错误
         return pageResult
       }
-      return ok({
+      return core.ok({
         ...pageResult.data,
         items: pageResult.data.items.map(row => mapRow(row)),
       })
@@ -449,7 +449,7 @@ export function createCrud<TItem>(
       // 校验列名合法性，防止通过 data key 注入
       const colValid = validateIdentifiers(filtered)
       if (!colValid.success) {
-        return err(colValid.error)
+        return core.err(colValid.error)
       }
 
       const setClause = filtered.map(column => `${column} = ?`).join(', ')
@@ -488,7 +488,7 @@ export function createCrud<TItem>(
         // 透传查询错误
         return result
       }
-      return ok(parseCount(result.data ?? null))
+      return core.ok(parseCount(result.data ?? null))
     },
 
     /**
@@ -507,7 +507,7 @@ export function createCrud<TItem>(
         return result
       }
       // 只要命中一行即存在
-      return ok(Boolean(result.data))
+      return core.ok(Boolean(result.data))
     },
 
     /**
@@ -524,7 +524,7 @@ export function createCrud<TItem>(
         // 透传查询错误
         return result
       }
-      return ok(Boolean(result.data))
+      return core.ok(Boolean(result.data))
     },
   }
 }

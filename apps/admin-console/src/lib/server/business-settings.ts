@@ -1,7 +1,8 @@
 /** 示例业务配置仅管理公开公告，不接触系统凭据或安全策略。 */
+
 import type { HaiResult } from '@h-ai/core'
 import { audit } from '@h-ai/audit'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 
@@ -19,14 +20,14 @@ export function initBusinessSettings(): Promise<HaiResult<void>> {
 export async function readBusinessSettings(): Promise<HaiResult<{ notice: string }>> {
   const row = await reldb.sql.get<{ notice: string }>('SELECT notice FROM app_business_settings WHERE id = ?', ['public'])
   return row.success
-    ? ok({ notice: row.data?.notice ?? '' })
+    ? core.ok({ notice: row.data?.notice ?? '' })
     : row
 }
 
 export async function saveBusinessSettings(input: { notice: string }): Promise<HaiResult<{ notice: string }>> {
   const parsed = BusinessSettingsSchema.safeParse(input)
   if (!parsed.success)
-    return err(HaiCommonError.VALIDATION_ERROR)
+    return core.err(HaiCommonError.VALIDATION_ERROR)
   const begun = await reldb.tx.begin()
   if (!begun.success)
     return begun
@@ -56,11 +57,11 @@ export async function saveBusinessSettings(input: { notice: string }): Promise<H
     if (!committed.success)
       await tx.rollback()
     return committed.success
-      ? ok(parsed.data)
+      ? core.ok(parsed.data)
       : committed
   }
   catch (error) {
     await tx.rollback()
-    return err(HaiCommonError.INTERNAL_ERROR, undefined, error)
+    return core.err(HaiCommonError.INTERNAL_ERROR, undefined, error)
   }
 }

@@ -12,8 +12,8 @@ defaultLocale: en-US
 ```
 
 ```ts
-import type { CoreConfig } from '@h-ai/core'
-import { core } from '@h-ai/core'
+
+import { type CoreConfig, core } from '@h-ai/core'
 
 // Read configuration files directly in ./config and register successful loads by name. Initialization returns no value.
 core.init({ configDir: './config' })
@@ -227,11 +227,11 @@ Define domain errors, build complete diagnostics and safe public responses, and 
 | `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | Attach a message to a failure | Required error definition `def` and public `message`. Optional internal `cause` and recovery `suggestion`. | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
 | `core.error.toPublic(error, traceId?, locale?)` | Prepare an error for a client | Required `error`. Optional `traceId` overrides the request correlation ID. Optional `locale` selects the generic 5xx message language. | Public error | `core.error.toPublic(error, 'req-1')` |
 | `core.error.formatMessage(error)` | Format the visible message | Required `error` object with a message string and optional `traceId`. | `string` | `core.error.formatMessage(error)` |
-| `ok(data)`, `err(errorOrDef, message?, cause?, suggestion?)` | Construct a business result | Pass success `data` to `ok`. `err` requires `errorOrDef`, an error definition, `HaiError`, or native error, and accepts optional `message`, `cause`, and `suggestion`. | `HaiResult` | `ok({ id: 'order-1' })`, `err(errors.NOT_FOUND, 'Order not found')` |
+| `core.ok(data)`, `core.err(errorOrDef, message?, cause?, suggestion?)` | Construct a business result | Pass success `data` to `core.ok`. `core.err` requires `errorOrDef`, an error definition, `HaiError`, or native error, and accepts optional `message`, `cause`, and `suggestion`. | `HaiResult` | `core.ok({ id: 'order-1' })`, `core.err(errors.NOT_FOUND, 'Order not found')` |
 
 #### Scenario: Build domain failures and safe public messages
 
-A business caller checks `result.success` before reading `data` or `error`. Define codes once and translate messages when the failure occurs. Before sending an error over HTTP, strip internal causes with `core.error.toPublic()`. Return the visible error to the caller and correlate server logs using the trace ID. Import `ok` and `err` directly from `@h-ai/core`.
+A business caller checks `result.success` before reading `data` or `error`. Define codes once and translate messages when the failure occurs. Before sending an error over HTTP, strip internal causes with `core.error.toPublic()`. Return the visible error to the caller and correlate server logs using the trace ID. Import `core.ok` and `core.err` directly from `@h-ai/core`.
 
 <a id="i18n-api"></a>
 
@@ -302,8 +302,8 @@ The message function runs each time an error is generated. It can look up the cu
 An order lookup module can only tell whether an order exists after it loads the status index. A call that arrives during startup should fail as not initialized, so callers can distinguish it from an unknown order. The example uses an in-memory `Map` as the loaded index. It needs only `@h-ai/core` and no database.
 
 ```ts
-import type { HaiResult } from '@h-ai/core'
-import { core, HaiCommonError, ok } from '@h-ai/core'
+
+import { type HaiResult, HaiCommonError, core } from '@h-ai/core'
 
 interface OrderQueries {
   getStatus: (orderId: string) => Promise<HaiResult<string | null>>
@@ -330,11 +330,11 @@ const orderLookup = {
     activeQueries = {
       async getStatus(orderId) {
         // Look up the supplied ID and wrap the status or null as success data.
-        return ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
+        return core.ok(statusById.get(orderId) ?? null) // 查不到订单时成功返回 null。
       },
     }
     // Return initialization success with undefined data.
-    return ok(undefined)
+    return core.ok(undefined)
   },
   get orders(): OrderQueries {
     return activeQueries ?? fallback // 每次取接口时根据模块状态选择实现。

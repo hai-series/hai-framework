@@ -13,8 +13,8 @@ import type { ServHttpApp } from '../serv-app.js'
  *
  * @example
  * ```ts
- * import type { ServFetchHandler } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServFetchHandler, serv } from '@h-ai/serv'
  *
  * function handle(app: Parameters<typeof serv.toFetch>[0]): ServFetchHandler {
  *   return serv.toFetch(app)
@@ -36,9 +36,9 @@ export type ServFetchHandler = typeof fetch
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
+ *
  * import { apiContract } from '@h-ai/api-contract'
- * import { serv } from '@h-ai/serv'
+ * import { type ServContext, serv } from '@h-ai/serv'
  *
  * const contract = apiContract.create({})
  * const procedures = serv.implement(contract).context<ServContext>().build()

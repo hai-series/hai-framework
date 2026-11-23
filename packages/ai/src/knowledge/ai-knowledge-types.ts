@@ -116,7 +116,7 @@ export interface EntityDocumentRelation {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeSetupOptions } from '@h-ai/ai'
+ * import { type KnowledgeSetupOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeSetupOptions) {
  *   const result = await ai.knowledge.setup(options)
@@ -137,7 +137,7 @@ export interface KnowledgeSetupOptions {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeIngestInput } from '@h-ai/ai'
+ * import { type KnowledgeIngestInput, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeIngestInput) {
  *   const result = await ai.knowledge.ingest(options)
@@ -216,7 +216,7 @@ export interface KnowledgeIngestResult {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeRepairOptions } from '@h-ai/ai'
+ * import { type KnowledgeRepairOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeRepairOptions) {
  *   const result = await ai.knowledge.repair(options)
@@ -256,7 +256,7 @@ export interface KnowledgeRepairResult {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeRetrieveOptions } from '@h-ai/ai'
+ * import { type KnowledgeRetrieveOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeRetrieveOptions) {
  *   const result = await ai.knowledge.retrieve('部署要求', options)
@@ -332,7 +332,7 @@ export interface KnowledgeRetrieveResult {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeAskOptions } from '@h-ai/ai'
+ * import { type KnowledgeAskOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeAskOptions) {
  *   const result = await ai.knowledge.ask('如何部署？', options)
@@ -386,7 +386,7 @@ export interface KnowledgeAskResult {
  *
  * @example
  * ```ts
- * import { ai, type EntityQueryOptions } from '@h-ai/ai'
+ * import { type EntityQueryOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: EntityQueryOptions) {
  *   const result = await ai.knowledge.findByEntity('HAI', options)
@@ -430,7 +430,7 @@ export interface EntityDocumentResult {
  *
  * @example
  * ```ts
- * import { ai, type EntityListOptions } from '@h-ai/ai'
+ * import { type EntityListOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: EntityListOptions) {
  *   const result = await ai.knowledge.listEntities(options)
@@ -459,7 +459,7 @@ export interface EntityListOptions {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeIngestFileInput } from '@h-ai/ai'
+ * import { type KnowledgeIngestFileInput, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeIngestFileInput) {
  *   const result = await ai.knowledge.ingestFile(options)
@@ -523,7 +523,7 @@ export interface KnowledgeDocumentInfo {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeDocumentListOptions } from '@h-ai/ai'
+ * import { type KnowledgeDocumentListOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeDocumentListOptions) {
  *   const result = await ai.knowledge.listDocuments(options)
@@ -546,7 +546,7 @@ export interface KnowledgeDocumentListOptions {
  *
  * @example
  * ```ts
- * import { ai, type KnowledgeDocumentRemoveOptions } from '@h-ai/ai'
+ * import { type KnowledgeDocumentRemoveOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
  * async function run(options: KnowledgeDocumentRemoveOptions) {
  *   const result = await ai.knowledge.removeDocument('guide', options)

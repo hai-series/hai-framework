@@ -11,8 +11,8 @@
 Core、RelDB、非公開 Storage の後に Feedback を初期化します。Reach 通知を使う場合は Reach も先に準備します。このサーバー例は信頼できる context と再送時に共用する submissionId を受け取ります。依存サービスを閉じる前に feedback.close() の結果を確認します。
 
 ```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
+
+import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
 // 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 // orders 1.0.0 をコンソール通知と下記の管理 URL で起動する。成功時にデータはなく、初期化失敗時は報告を受け付けない。
@@ -84,8 +84,8 @@ init の入力は入門例の通りで、成功時の業務データはありま
 省略可能な `collectEvidence({ report, signal })` は報告の保存後に実行されます。`report` は読み取り専用の報告、`signal` はタイムアウトや終了に合わせて外部処理を中断するための通知です。同期または非同期で `FeedbackCollectedEvidence` を返し、省略可能な `text: string`、構造化した `data`、`attachments` を指定できます。添付ファイルには固定の文字列 `id`、ファイル名 `name`、メディアタイプ `contentType`、`bytes: Uint8Array` を指定します。報告番号が `FB-42` なら、たとえば `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }` を返せます。
 
 ```ts
-import type { FeedbackConfigInput } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
+
+import { type FeedbackConfigInput, feedback } from '@h-ai/feedback'
 
 function startFeedback(config: FeedbackConfigInput) {
   // 依存先を準備した後のアプリ設定を渡します。コールバックは報告番号を使い、タスクの中断時には処理を止めます。
@@ -160,8 +160,8 @@ function startFeedback(config: FeedbackConfigInput) {
 サーバーは認証済みユーザーと検証済みスコープから context を作ります。アプリ、スコープ、投稿者、有効期限で絞り込みます。カテゴリは大文字と小文字を区別し、既存の報告から読み出します。管理一覧には引き続き `feedback:read` が必要です。
 
 ```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
+
+import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
 async function listOwnReports(context: FeedbackContext) {
   // 現在のアプリとスコープで本人の bug 報告を最大 20 件取得する。該当がなければ空のページを返す。
@@ -316,7 +316,7 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 <a id="browser-capture"></a>
 
-### ブラウザの現場と下書き：`createFeedbackClient`
+### ブラウザの現場と下書き：`feedback.createClient`
 
 製品セッションごとにインスタンスを作り、画面を開く前に現場を固定し、プレビューと主体の下書きを解放します。
 
@@ -324,21 +324,21 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedbackClient.init(config)` | ブラウザー証拠収集を開始 | 必須の `config: FeedbackClientConfig`。[アプリと収集の項目](#feedback-client-config)を参照。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedbackClient.prepare()` | 今回のフィードバック証拠を準備 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedbackClient.captureScreenshot(attachmentId?)` | ページの画面を取得 | `attachmentId?: string` 省略するとスクリーンショットを追加。下書きの添付 ID を指定すると置換 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedbackClient.getDraft()` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
-| `feedbackClient.getView()` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
-| `feedbackClient.releasePreviews()` | 一時プレビューを解放 | `—` | `void` | `feedbackClient.releasePreviews()` |
-| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新しく選んだファイルと同じ処理で外す任意の添付 ID | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedbackClient.annotate(id, annotation)` | 画像に注釈・マスクを反映 | 必須の `id: string`（下書き内の添付 ID）と `annotation: FeedbackImageAnnotation`（注釈とマスクのデータ） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedbackClient.record(event)` | アプリの診断情報を記録 | 証拠の種類 `kind` とフィールドオブジェクト `data` を含む `event` が必須。任意の `requestId`、`errorId` で既存リクエストやエラーと関連付ける | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedbackClient.submit(input?)` | 現在の下書きを送信 | 任意の `input: FeedbackClientSubmitInput`。[ブラウザー送信項目](#feedback-client-submit-input)を参照。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedbackClient.flush()` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedbackClient.exportDraft(input?)` | ローカル診断パッケージを生成 | `input?: FeedbackClientSubmitInput` はオフラインパッケージ用の補足情報と添付変更。省略すると現在の下書きを出力 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedbackClient.saveDraft(input?)` | ローカル下書きを保存 | `input?: FeedbackClientSubmitInput` は `exportDraft` と同じ。その後でホストの保存機能を使う | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedbackClient.pause()` | 収集を一時停止 | `—` | `void` | `feedbackClient.pause()` |
-| `feedbackClient.close(options?)` | 収集を終了して解放 | `options?: { discard?: boolean }` 既定 false で上限付きの終了処理と後片付け。discard を true にしてローカル下書きを破棄 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedback.client.init(config)` | ブラウザー証拠収集を開始 | 必須の `config: FeedbackClientConfig`。[アプリと収集の項目](#feedback-client-config)を参照。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedback.client.prepare()` | 今回のフィードバック証拠を準備 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedback.client.captureScreenshot(attachmentId?)` | ページの画面を取得 | `attachmentId?: string` 省略するとスクリーンショットを追加。下書きの添付 ID を指定すると置換 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedback.client.getDraft()` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedback.client.getDraft()` |
+| `feedback.client.getView()` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedback.client.getView()` |
+| `feedback.client.releasePreviews()` | 一時プレビューを解放 | `—` | `void` | `feedback.client.releasePreviews()` |
+| `feedback.client.addFiles(files, removedAttachmentIds?)` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新しく選んだファイルと同じ処理で外す任意の添付 ID | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedback.client.annotate(id, annotation)` | 画像に注釈・マスクを反映 | 必須の `id: string`（下書き内の添付 ID）と `annotation: FeedbackImageAnnotation`（注釈とマスクのデータ） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedback.client.record(event)` | アプリの診断情報を記録 | 証拠の種類 `kind` とフィールドオブジェクト `data` を含む `event` が必須。任意の `requestId`、`errorId` で既存リクエストやエラーと関連付ける | `void` | `feedback.client.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedback.client.submit(input?)` | 現在の下書きを送信 | 任意の `input: FeedbackClientSubmitInput`。[ブラウザー送信項目](#feedback-client-submit-input)を参照。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedback.client.flush()` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedback.client.exportDraft(input?)` | ローカル診断パッケージを生成 | `input?: FeedbackClientSubmitInput` はオフラインパッケージ用の補足情報と添付変更。省略すると現在の下書きを出力 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedback.client.saveDraft(input?)` | ローカル下書きを保存 | `input?: FeedbackClientSubmitInput` は `exportDraft` と同じ。その後でホストの保存機能を使う | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedback.client.pause()` | 収集を一時停止 | `—` | `void` | `feedback.client.pause()` |
+| `feedback.client.close(options?)` | 収集を終了して解放 | `options?: { discard?: boolean }` 既定 false で上限付きの終了処理と後片付け。discard を true にしてローカル下書きを破棄 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
 
 <a id="feedback-client-config"></a>
 
@@ -385,11 +385,11 @@ prepare で現場を固定して確認し、submit で確実に送信します�
 初回送信で内容を固定し、再試行も同じ ID・内容を使います。受理は添付・業務証拠・通知の完了ではなく、収集状態を確認します。独立 Webhook は complete／partial／failed を待ち、収集失敗でも動作します。close は録画・監視・プレビューを解放します。
 
 ```ts
-import type { FeedbackClientConfig } from '@h-ai/feedback/client'
-import { createFeedbackClient } from '@h-ai/feedback/client'
+
+import { type FeedbackClientConfig, feedback } from '@h-ai/feedback/client'
 export async function capture(config: FeedbackClientConfig) {
   // 引数なしで独立した収集クライアントを作る。設定した収集は init の後で有効になる。
-  const feedbackClient = createFeedbackClient()
+  const feedbackClient = feedback.createClient()
   // ホストのクライアント設定でセッションを起動する。成功時にデータはなく、設定不正や初期化競合は 元の失敗結果を返す。
   const initResult = await feedbackClient.init(config)
   if (!initResult.success)

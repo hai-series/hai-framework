@@ -289,8 +289,8 @@ Install and initialize [Runner](runner.en.md), then import from `/server`. The h
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
-import type { ToolArtifactAccess } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
 
 export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
   // Create documents using the initialized Runner and enable documents and analysis. Success returns the service; invalid options or handler registration fail.
@@ -417,8 +417,8 @@ For `environments: { documents: 'docs-offline' }`, the job factory produces only
 The host supplies authenticated context, authorized file access, an initialized Runner and trusted environment mappings. Return the resulting ToolSet from createService.createTools. These factories neither submit jobs nor own resources to close.
 
 ```ts
-import type { JobToolOptions, ToolSet } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type JobToolOptions, type ToolSet, tools } from '@h-ai/tools/server'
 
 function createWorkTools(options: JobToolOptions): ToolSet {
   // Create artifact tools and groups using the host context and file access. Saving is present only with a save capability.

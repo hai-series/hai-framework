@@ -1,9 +1,10 @@
 /** 与标准 Kit 认证端点配套的表单动作；复用已有 CSRF/transport fetch。 */
+
 import type { IamCreateCaptchaInputSchema, IamLoginInput, IamPublicConfig, IamRegisterInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { KitClient } from './kit-client.js'
 import { apiContract, IamCaptchaChallengeSchema, IamPublicConfigSchema, IamReauthenticationProofSchema } from '@h-ai/api-contract'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiCryptoError, TransportTimeError } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createKitClient } from './kit-client.js'
@@ -32,7 +33,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     }
     catch (error) {
       if (error instanceof TransportTimeError)
-        return err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, { transportCode: error.code, serverTime: error.serverTime })
+        return core.err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, { transportCode: error.code, serverTime: error.serverTime })
       throw error
     }
   }
@@ -45,7 +46,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
       body: JSON.stringify(input),
     }, { recoverSession: false })
     return result.success
-      ? ok(result.data)
+      ? core.ok(result.data)
       : result
   }
   return {
@@ -69,7 +70,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     async createCaptcha(input: z.input<typeof IamCreateCaptchaInputSchema>) {
       const result = await post('captcha', input)
       return result.success
-        ? ok(IamCaptchaChallengeSchema.parse(result.data))
+        ? core.ok(IamCaptchaChallengeSchema.parse(result.data))
         : result
     },
     publicConfig(): Promise<HaiResult<IamPublicConfig | null>> {

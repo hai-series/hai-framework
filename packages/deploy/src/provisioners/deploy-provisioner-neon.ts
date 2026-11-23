@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ServiceProvisioner } from '../deploy-internal-types.js'
 import type { ProvisionResult } from '../deploy-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { recoveryFailure } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -190,11 +190,11 @@ export function createNeonProvisioner(): ServiceProvisioner {
         await listNeonProjects(apiToken)
         token = apiToken
         logger.info('Neon authenticated')
-        return ok('neon-user')
+        return core.ok('neon-user')
       }
       catch (error) {
         logger.error('Neon authentication failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
             params: {
@@ -210,7 +210,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
 
     async provision(appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!token) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -229,7 +229,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
             projectId: existingProject.id,
             projectName,
           })
-          return ok(buildNeonProvisionResult(existingProject.id, connectionUri, 'reused'))
+          return core.ok(buildNeonProvisionResult(existingProject.id, connectionUri, 'reused'))
         }
 
         const data = await neonFetch<NeonCreateProjectResponse>(token, '/projects', {
@@ -254,7 +254,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
 
         logger.info('Neon database provisioned', { projectId })
 
-        return ok(buildNeonProvisionResult(projectId, connectionUri, 'created'))
+        return core.ok(buildNeonProvisionResult(projectId, connectionUri, 'created'))
       }
       catch (error) {
         logger.error('Neon provisioning failed', { appName })
@@ -267,7 +267,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
             ],
           })
         }
-        return err(
+        return core.err(
           HaiDeployError.PROVISION_FAILED,
           deployM('deploy_provisionFailed', {
             params: {

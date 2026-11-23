@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { artifactChecksum, deploy } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const { exec, upload, probe } = vi.hoisted(() => ({
   exec: vi.fn(),
@@ -34,7 +34,7 @@ let healthStatus: number
 let onHealth: (() => void) | undefined
 
 function commandOutput(stdout = '') {
-  return ok({
+  return core.ok({
     code: 0,
     stdout,
     stderr: '',
@@ -65,7 +65,7 @@ async function frozen(): Promise<DeployReleaseVerification> {
       images: [
         {
           role: 'web',
-          archiveSha256: await artifactChecksum(archivePath),
+          archiveSha256: await deploy.artifactChecksum(archivePath),
           reference,
           archivePath,
         },
@@ -124,7 +124,7 @@ beforeEach(async () => {
     },
   }
   exec.mockReset().mockResolvedValue(commandOutput())
-  upload.mockReset().mockResolvedValue(ok(undefined))
+  upload.mockReset().mockResolvedValue(core.ok(undefined))
   healthStatus = 200
   onHealth = undefined
   probe.mockClear()
@@ -158,7 +158,7 @@ describe('分阶段可核验部署', () => {
         username: 'deploy',
       },
     })
-    const bundleSha256 = await artifactChecksum(bundlePath)
+    const bundleSha256 = await deploy.artifactChecksum(bundlePath)
     const input = {
       target,
       deploymentId,
@@ -176,7 +176,7 @@ describe('分阶段可核验部署', () => {
     })).toMatchObject({ success: false })
     expect(exec).not.toHaveBeenCalled()
     expect(upload).not.toHaveBeenCalled()
-    expect(await deploy.executeBundle(input)).toEqual(ok({ deploymentId }))
+    expect(await deploy.executeBundle(input)).toEqual(core.ok({ deploymentId }))
     expect(upload).toHaveBeenCalledTimes(1)
     expect(exec.mock.calls[1]?.[0]).toContain('sha256sum --check --status')
     expect(exec.mock.calls[1]?.[0]).toContain('apply.sh')
@@ -255,7 +255,7 @@ describe('分阶段可核验部署', () => {
     if (defect === 'changed-current') {
       onHealth = () => observed({ current: priorId })
     }
-    expect(await deploy.verifyDeployment(input)).toEqual(ok({ status: 'pending_verify', deploymentId }))
+    expect(await deploy.verifyDeployment(input)).toEqual(core.ok({ status: 'pending_verify', deploymentId }))
     expect(upload).not.toHaveBeenCalled()
   })
 })

@@ -1,22 +1,15 @@
+import { ui } from '@h-ai/ui/components/compounds/schedule-input'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_SCHEDULE_INPUT_CONFIG,
-  inspectScheduleDateTimeDraft,
-  inspectScheduleDateTimeValue,
-  isScheduleDateTimeValid,
-  normalizeScheduleInputConfig,
-  parseScheduleDateTimeValue,
-  serializeScheduleDateTime,
-} from '../src/lib/components/compounds/schedule-input.js'
+import { DEFAULT_SCHEDULE_INPUT_CONFIG, inspectScheduleDateTimeDraft, inspectScheduleDateTimeValue, isScheduleDateTimeValid, parseScheduleDateTimeValue, serializeScheduleDateTime } from '../src/lib/components/compounds/schedule-input.js'
 
 describe('scheduleInput schema metadata', () => {
   it('normalizes the supported schema and defaults allowCron to false', () => {
-    expect(normalizeScheduleInputConfig({
+    expect(ui.normalizeScheduleInputConfig({
       kind: 'schedule',
       timezone: 'Asia/Shanghai',
       precision: 'minute',
     })).toEqual(DEFAULT_SCHEDULE_INPUT_CONFIG)
-    expect(normalizeScheduleInputConfig({
+    expect(ui.normalizeScheduleInputConfig({
       kind: 'schedule',
       timezone: 'Asia/Shanghai',
       precision: 'minute',
@@ -25,30 +18,30 @@ describe('scheduleInput schema metadata', () => {
   })
 
   it('retains an explicit supported IANA time zone', () => {
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute' }))
+    expect(ui.normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'America/Los_Angeles', precision: 'minute' }))
       .toEqual({
         kind: 'schedule',
         timezone: 'America/Los_Angeles',
         precision: 'minute',
         allowCron: false,
       })
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'UTC', precision: 'minute' })?.timezone).toBe('UTC')
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Unsupported/Zone', precision: 'minute' })).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'UTC', precision: 'minute' })?.timezone).toBe('UTC')
+    expect(ui.normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Unsupported/Zone', precision: 'minute' })).toBeUndefined()
   })
 
   it('rejects unsupported or malformed schema metadata', () => {
-    expect(normalizeScheduleInputConfig(undefined)).toBeUndefined()
-    expect(normalizeScheduleInputConfig(null)).toBeUndefined()
-    expect(normalizeScheduleInputConfig({ kind: 'other', timezone: 'Asia/Shanghai', precision: 'minute' })).toBeUndefined()
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: '+08:00', precision: 'minute' })).toBeUndefined()
-    expect(normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'second' })).toBeUndefined()
-    expect(normalizeScheduleInputConfig({
+    expect(ui.normalizeScheduleInputConfig(undefined)).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig(null)).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig({ kind: 'other', timezone: 'Asia/Shanghai', precision: 'minute' })).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig({ kind: 'schedule', timezone: '+08:00', precision: 'minute' })).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig({ kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'second' })).toBeUndefined()
+    expect(ui.normalizeScheduleInputConfig({
       kind: 'schedule',
       timezone: 'Asia/Shanghai',
       precision: 'minute',
       allowCron: 'true',
     })).toBeUndefined()
-    expect(normalizeScheduleInputConfig({
+    expect(ui.normalizeScheduleInputConfig({
       kind: 'schedule',
       timezone: 'Asia/Shanghai',
       precision: 'minute',

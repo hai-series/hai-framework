@@ -1,4 +1,5 @@
 export * from './storage-config.js'
 export * from './storage-main.js'
-export * from './storage-schemas.js'
+export { STORAGE_DELETE_MAX_KEYS, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema, StorageKeySchema, StoragePrefixSchema, StoragePresignExpiresInSchema } from './storage-schemas.js'
+export type { StorageKeyIssue } from './storage-schemas.js'
 export * from './storage-types.js'

@@ -4,11 +4,12 @@
  * Cluster 只访问一个 slot，不使用进程锁、租约或跨 key 补偿发布认证状态。
  * @module iam-session-repository-cache
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { SessionConfig } from '../iam-config.js'
 import type { Session, TokenPair } from './iam-session-types.js'
 import { cache } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { applySessionPatch, getTokenSessionScope, getUserSessionScope } from './iam-session-utils.js'
@@ -77,7 +78,7 @@ function stateKey(scope: string): string {
 
 /** 保存基础设施原因，面向调用方的错误不包含认证快照。 */
 function repositoryFailure(cause: unknown): HaiResult<never> {
-  return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionStateFailed'), cause)
+  return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionStateFailed'), cause)
 }
 
 /**
@@ -152,7 +153,7 @@ export function createCacheSessionRepository(
       if (!result.success)
         return repositoryFailure(result.error)
       if (result.data === null)
-        return ok(undefined)
+        return core.ok(undefined)
       const state = result.data
       if (typeof state.revision !== 'string' || !state.revision || !state.sessions || typeof state.sessions !== 'object' || Array.isArray(state.sessions))
         throw new TypeError('Invalid session state')
@@ -163,7 +164,7 @@ export function createCacheSessionRepository(
           throw new TypeError('Invalid session state')
         }
       }
-      return ok(state)
+      return core.ok(state)
     }
     catch (cause) { return repositoryFailure(cause) }
   }
@@ -176,10 +177,11 @@ export function createCacheSessionRepository(
    * @returns CAS 已确认时返回 operation 结果；基础设施失败或冲突耗尽时保留失败结果。
    * @example 模块内部上下文
    * ```ts
+   * import { core } from '@h-ai/core'
    * const revoked = await mutate(getUserSessionScope('user-1'), (state) => {
    *   const count = Object.keys(state.sessions).length
    *   state.sessions = {}
-   *   return ok(count)
+   *   return core.ok(count)
    * })
    * if (!revoked.success)
    *   return revoked
@@ -212,7 +214,7 @@ export function createCacheSessionRepository(
         if (written.data)
           return outcome
       }
-      return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+      return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
     }
     catch (cause) { return repositoryFailure(cause) }
   }
@@ -221,9 +223,9 @@ export function createCacheSessionRepository(
   function storeSession(state: SessionState, session: Session, tokens: TokenPair): HaiResult<void> {
     const scope = getUserSessionScope(session.userId)
     if (getTokenSessionScope(session.accessToken) !== scope || tokens.accessToken !== session.accessToken || getTokenSessionScope(tokens.refreshToken) !== scope)
-      return err(HaiIamError.TOKEN_INVALID, iamM('iam_sessionStateFailed'))
+      return core.err(HaiIamError.TOKEN_INVALID, iamM('iam_sessionStateFailed'))
     state.sessions[session.accessToken] = { session, refreshToken: tokens.refreshToken, refreshExpiresAt: session.createdAt.getTime() + refreshTokenMaxAge * 1000 }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   return {
@@ -234,11 +236,11 @@ export function createCacheSessionRepository(
       const limits = policy.terminalLimits ?? {}
       const cap = limits[terminal]
       if (Object.keys(limits).length && cap === undefined)
-        return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+        return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
       const removed = new Set<string>()
       if (singleDevice) {
         if (policy.singleDeviceMode === 'reject' && active.length)
-          return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+          return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
         if (policy.singleDeviceMode !== 'reject')
           Object.keys(state.sessions).forEach(token => removed.add(token))
       }
@@ -247,12 +249,12 @@ export function createCacheSessionRepository(
           .sort(([firstToken, first], [secondToken, second]) => new Date(first.session.startedAt ?? first.session.createdAt).getTime() - new Date(second.session.startedAt ?? second.session.createdAt).getTime() || firstToken.localeCompare(secondToken))
         if (same.length >= cap) {
           if (policy.terminalLimitMode !== 'replace')
-            return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+            return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
           same.slice(0, same.length - cap + 1).forEach(([token]) => removed.add(token))
         }
       }
       if (maxSessions > 0 && active.filter(([token]) => !removed.has(token)).length >= maxSessions)
-        return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+        return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
       // 所有配额确认后再改候选状态；失败不能撤销已存在的任何终端会话。
       removed.forEach(token => delete state.sessions[token])
       return storeSession(state, session, tokens)
@@ -260,9 +262,9 @@ export function createCacheSessionRepository(
     rotate: (previous, refreshToken, session, tokens) => mutate(getUserSessionScope(previous.userId), (state) => {
       const old = state.sessions[previous.accessToken]
       if (!old || old.refreshToken !== refreshToken || old.refreshExpiresAt <= Date.now() || policyExpired(old.session))
-        return err(HaiIamError.TOKEN_EXPIRED, iamM('iam_refreshTokenExpired'))
+        return core.err(HaiIamError.TOKEN_EXPIRED, iamM('iam_refreshTokenExpired'))
       if (old.session.version !== previous.version || session.userId !== previous.userId)
-        return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
       // 绝对期限从首次签发计算，不随 refresh 创建新 access 重新计时。
       session.startedAt = new Date(old.session.startedAt ?? old.session.createdAt)
       // 自动换票不算业务活动，避免后台定时 refresh 无限延长闲置期限。
@@ -274,65 +276,65 @@ export function createCacheSessionRepository(
     async getByAccessToken(token) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return ok(null)
+        return core.ok(null)
       const result = await read(scope)
       if (!result.success)
         return result
       const record = result.data?.sessions[token]
       if (!record)
-        return ok(null)
+        return core.ok(null)
       const session = restoreSession(record.session)
-      return ok(session.expiresAt.getTime() <= Date.now() || policyExpired(session)
+      return core.ok(session.expiresAt.getTime() <= Date.now() || policyExpired(session)
         ? null
         : session)
     },
     async getByRefreshToken(token) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return ok(null)
+        return core.ok(null)
       const result = await read(scope)
       if (!result.success)
         return result
       const record = Object.values(result.data?.sessions ?? {}).find(entry => entry.refreshToken === token && entry.refreshExpiresAt > Date.now())
       if (!record)
-        return ok(null)
+        return core.ok(null)
       const session = restoreSession(record.session)
-      return ok(policyExpired(session)
+      return core.ok(policyExpired(session)
         ? null
         : session)
     },
     async updateByAccessToken(token, patch, expectedVersion) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+        return core.err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
       return mutate(scope, (state) => {
         const entry = state.sessions[token]
         if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now() || policyExpired(entry.session))
-          return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+          return core.err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (!expectedVersion || entry.session.version !== expectedVersion)
-          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+          return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
         if (patch.terminalType !== undefined && patch.terminalType !== (entry.session.terminalType ?? 'web'))
-          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+          return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
         const updated = applySessionPatch(restoreSession(entry.session), patch)
         if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))
-          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
+          return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
         entry.session = {
           ...updated,
           version: crypto.randomUUID(),
         }
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
     async touchByAccessToken(token, expectedVersion, now) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+        return core.err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
       return mutate(scope, (state) => {
         const entry = state.sessions[token]
         if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now() || policyExpired(entry.session))
-          return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+          return core.err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (entry.session.version !== expectedVersion)
-          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+          return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
         const current = restoreSession(entry.session)
         // 迟到节点只允许延长时间，不能覆盖较晚请求已提交的活动/过期点。
         const next = {
@@ -343,33 +345,33 @@ export function createCacheSessionRepository(
             : new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
         }
         entry.session = next
-        return ok(next)
+        return core.ok(next)
       })
     },
     async removeByAccessToken(token) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return ok(undefined)
+        return core.ok(undefined)
       return mutate(scope, (state) => {
         delete state.sessions[token]
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
     removeByUserId: userId => mutate(getUserSessionScope(userId), (state) => {
       const count = Object.keys(state.sessions).length
       state.sessions = {}
-      return ok(count)
+      return core.ok(count)
     }),
     async removeRefreshToken(token) {
       const scope = getTokenSessionScope(token)
       if (!scope)
-        return ok(undefined)
+        return core.ok(undefined)
       return mutate(scope, (state) => {
         for (const entry of Object.values(state.sessions)) {
           if (entry.refreshToken === token)
             delete entry.refreshToken
         }
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
     patchUserSessions(userId, patch) {
@@ -382,13 +384,13 @@ export function createCacheSessionRepository(
           if (!entry)
             continue
           if (entry.session.version !== version)
-            return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+            return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
           entry.session = {
             ...applySessionPatch(restoreSession(entry.session), patch),
             version: crypto.randomUUID(),
           }
         }
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
   }

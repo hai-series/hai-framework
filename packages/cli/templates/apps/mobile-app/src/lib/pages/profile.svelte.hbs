@@ -1,13 +1,12 @@
 <script lang='ts'>
-  import { ThemeSelector } from '@h-ai/ui'
-  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
+  import { ThemeSelector, ui } from '@h-ai/ui'
   import * as m from '../paraglide/messages.js'
 
-  let currentTheme = $state(getSavedTheme())
+  let currentTheme = $state(ui.getSavedTheme())
 
   function handleThemeChange(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 </script>
 

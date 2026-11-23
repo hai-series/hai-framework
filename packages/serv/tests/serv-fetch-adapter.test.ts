@@ -1,4 +1,5 @@
 /** 已发布 Fetch adapter 对照标准 Request 与真实 HTTP 的参数/取消回归。 */
+
 import type { ServContext, ServNodeServer } from '@h-ai/serv'
 import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'

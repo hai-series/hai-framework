@@ -23,8 +23,8 @@ import type { resolveRequestLocale, validateInputOrFail } from './serv-validatio
  * Serv 公开命名空间；显式函数签名避免消费者声明引用内部共享构建块。
  * @example
  * ```ts
- * import type { ServFunctions } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServFunctions, serv } from '@h-ai/serv'
  *
  * const runtime: ServFunctions = serv
  * const context = runtime.parseRequestContext({ request: new Request('https://example.com') })
@@ -32,6 +32,14 @@ import type { resolveRequestLocale, validateInputOrFail } from './serv-validatio
  * ```
  */
 export interface ServFunctions {
+  /** 装配 AI procedures；依赖及授权由宿主管理。 */
+  createAiProcedures: typeof import('./features/serv-feature-ai.js').createAiProcedures
+  /** 装配反馈 procedures；不自动初始化反馈服务。 */
+  createFeedbackProcedures: typeof import('./features/serv-feature-feedback.js').createFeedbackProcedures
+  /** 装配 IAM procedures。 */
+  createIamProcedures: typeof import('./features/serv-feature-iam.js').createIamProcedures
+  /** 装配存储 procedures；对象授权仍由宿主提供。 */
+  createStorageProcedures: typeof import('./features/serv-feature-storage.js').createStorageProcedures
   createApp: typeof createApp
   parseRequestContext: (input: CreateServContextInput) => ServContext
   buildAuthContextFactory: (verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>) => CreateServContext

@@ -2,7 +2,6 @@ import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { RunnerFunctions } from '@h-ai/runner'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { ACPPlatformPolicy } from './acp/ai-acp-platform.js'
-import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
 /**
  * @h-ai/ai — 公共类型定义
  *
@@ -10,8 +9,9 @@ import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
  * @module ai-types
  */
 
-import type { AIConfig, AIConfigInput } from './ai-config.js'
+import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
 
+import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -196,8 +196,8 @@ const AIErrorInfo = {
  * @example
  * ```ts
  * import { HaiAIError } from '@h-ai/ai'
- * import { err } from '@h-ai/core'
- * const result = err(HaiAIError.NOT_INITIALIZED, 'AI is not initialized')
+ * import { core } from '@h-ai/core'
+ * const result = core.err(HaiAIError.NOT_INITIALIZED, 'AI is not initialized')
  * if (!result.success) {
  *   const status = result.error.httpStatus
  *   const code = result.error.code
@@ -216,7 +216,7 @@ export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
  *
  * @example
  * ```ts
- * import { ai, type AIConfigInput, type AIInitOptions, type AIStoreProvider } from '@h-ai/ai'
+ * import { type AIConfigInput, type AIInitOptions, type AIStoreProvider, ai } from '@h-ai/ai'
  * async function start(config: AIConfigInput, storeProvider: AIStoreProvider) {
  *   const options: AIInitOptions = { storeProvider }
  *   const result = await ai.init(config, options)
@@ -252,7 +252,7 @@ export interface AIInitOptions {
  *
  * @example
  * ```ts
- * import { ai, type AIConfigInput, type AIInitOptions } from '@h-ai/ai'
+ * import { type AIConfigInput, type AIInitOptions, ai } from '@h-ai/ai'
  * // 一次性脚本示例；服务应用在启动阶段 init，在停止接入请求后 close。
  * async function run(config: AIConfigInput, options: AIInitOptions) {
  *   const ready = await ai.init(config, options)
@@ -269,6 +269,44 @@ export interface AIInitOptions {
  * ```
  */
 export interface AIFunctions {
+  /** A2A 协议对象构建器；无需初始化。 */
+  AgentEvent: typeof import('./a2a/ai-a2a-types.js').AgentEvent
+  /** A2A 消息构建器；无需初始化。 */
+  Message: typeof import('./a2a/ai-a2a-types.js').Message
+  /** A2A 消息部分构建器；无需初始化。 */
+  Part: typeof import('./a2a/ai-a2a-types.js').Part
+  /** A2A 发送请求构建器；无需初始化。 */
+  SendMessageRequest: typeof import('./a2a/ai-a2a-types.js').SendMessageRequest
+  /** A2A 任务构建器；无需初始化。 */
+  Task: typeof import('./a2a/ai-a2a-types.js').Task
+  /** A2A 任务产物事件构建器；无需初始化。 */
+  TaskArtifactUpdateEvent: typeof import('./a2a/ai-a2a-types.js').TaskArtifactUpdateEvent
+  /** A2A 任务状态构建器；无需初始化。 */
+  TaskStatus: typeof import('./a2a/ai-a2a-types.js').TaskStatus
+  /** A2A 任务状态事件构建器；无需初始化。 */
+  TaskStatusUpdateEvent: typeof import('./a2a/ai-a2a-types.js').TaskStatusUpdateEvent
+  /** MCP SDK 扩展构造器；无需初始化。 */
+  McpServer: typeof import('./mcp/ai-mcp-server.js').McpServer
+  /** MCP SDK 扩展构造器；无需初始化。 */
+  SSEServerTransport: typeof import('./mcp/ai-mcp-server.js').SSEServerTransport
+  /** MCP SDK 扩展构造器；无需初始化。 */
+  StdioServerTransport: typeof import('./mcp/ai-mcp-server.js').StdioServerTransport
+  /** MCP SDK 扩展构造器；无需初始化。 */
+  StreamableHTTPServerTransport: typeof import('./mcp/ai-mcp-server.js').StreamableHTTPServerTransport
+  /** resolveModelEntry 的公开工具入口；按原签名执行。 */
+  resolveModelEntry: typeof import('./ai-config.js').resolveModelEntry
+  /** resolveModelApi 的公开工具入口；按原签名执行。 */
+  resolveModelApi: typeof import('./ai-config.js').resolveModelApi
+  /** resolveAudioModel 的公开工具入口；按原签名执行。 */
+  resolveAudioModel: typeof import('./ai-config.js').resolveAudioModel
+  /** ensureAudioCredential 的公开工具入口；按原签名执行。 */
+  ensureAudioCredential: typeof import('./ai-config.js').ensureAudioCredential
+  /** resolveImageModel 的公开工具入口；按原签名执行。 */
+  resolveImageModel: typeof import('./ai-config.js').resolveImageModel
+  /** serializePlayableAudio 的公开工具入口；按原签名执行。 */
+  serializePlayableAudio: typeof import('./audio/ai-audio-serialization.js').serializePlayableAudio
+  /** createMcpServer 的公开工具入口；按原签名执行。 */
+  createMcpServer: typeof import('./mcp/ai-mcp-server.js').createMcpServer
   /**
    * 初始化 AI 服务
    *

@@ -1,11 +1,12 @@
 /** 中间件表单值与模块配置之间的部署适配；CLI 仅收集输入，不解释模块字段。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DeploymentEnvironment } from './deploy-environment.js'
 import type { MiddlewareBackend, MiddlewareField } from './deploy-middleware.js'
 import type { MiddlewareRequirement } from './deploy-types.js'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
 import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
@@ -22,8 +23,8 @@ import { HaiDeployError } from './deploy-types.js'
  * @returns 目标环境的公开或私有文件声明后端和必要连接字段时为 true。
  * @example
  * ```ts
- * import { canKeepMiddleware, DEPLOY_MIDDLEWARE } from '@h-ai/deploy'
- * const keep = canKeepMiddleware({ service: 'cache', backend: 'memory', source: 'cache', configName: 'cache', configPath: [], envPrefix: 'HAI_CACHE', config: {} }, DEPLOY_MIDDLEWARE.cache[0]!, { environment: 'test', envDir: '.', values: {}, targetValues: { HAI_CACHE_TYPE: 'memory' } })
+ * import { DEPLOY_MIDDLEWARE, deploy } from '@h-ai/deploy'
+ * const keep = deploy.canKeepMiddleware({ service: 'cache', backend: 'memory', source: 'cache', configName: 'cache', configPath: [], envPrefix: 'HAI_CACHE', config: {} }, DEPLOY_MIDDLEWARE.cache[0]!, { environment: 'test', envDir: '.', values: {}, targetValues: { HAI_CACHE_TYPE: 'memory' } })
  * ```
  */
 export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
@@ -98,8 +99,8 @@ export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: M
  * @returns 输入有效时为 true，不包含输入值或凭据。
  * @example
  * ```ts
- * import { validateMiddlewareField } from '@h-ai/deploy'
- * const valid = validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })
+ * import { deploy } from '@h-ai/deploy'
+ * const valid = deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })
  * ```
  */
 export function validateMiddlewareField(options: { value: string, field: MiddlewareField, backend: string }): boolean {
@@ -187,28 +188,28 @@ function middlewareFieldProblem(options: Parameters<typeof validateMiddlewareFie
  * @returns 类型化值或配置错误；空值表示移除该可选字段。
  * @example
  * ```ts
- * import { parseMiddlewareField } from '@h-ai/deploy'
- * const parsed = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+ * import { deploy } from '@h-ai/deploy'
+ * const parsed = deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
  * if (!parsed.success) throw new Error(parsed.error.message)
  * ```
  */
 export function parseMiddlewareField(options: { value: string, field: MiddlewareField, backend: string, managed?: boolean }): HaiResult<unknown> {
   if (options.managed && (options.field.secret || options.field.managed) && options.value === '')
-    return ok(undefined)
+    return core.ok(undefined)
   const problem = middlewareFieldProblem(options)
   if (problem) {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldError', {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldError', {
       params: { field: options.field.name, reason: problem },
     }))
   }
   const { value, field } = options
   if (value === '')
-    return ok(undefined)
+    return core.ok(undefined)
   if (field.kind === 'port' || field.kind === 'number')
-    return ok(Number(value))
+    return core.ok(Number(value))
   if (field.kind === 'boolean')
-    return ok(value === 'true')
-  return ok(field.name === 'ssl' || field.name === 'headers'
+    return core.ok(value === 'true')
+  return core.ok(field.name === 'ssl' || field.name === 'headers'
     ? parseDocument(value).toJS()
     : value)
 }
@@ -225,10 +226,10 @@ export function parseMiddlewareField(options: { value: string, field: Middleware
  * @returns 实际写入的变量名；错误不包含配置值。
  * @example
  * ```ts
- * import { loadDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
- * const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: process.cwd() })
+ * import { deploy } from '@h-ai/deploy'
+ * const loaded = deploy.loadDeploymentEnvironment({ environment: 'test', envDir: process.cwd() })
  * if (!loaded.success) throw new Error(loaded.error.message)
- * const saved = saveMiddlewareEnvironment(loaded.data, { appDir: process.cwd(), requirement: { service: 'cache', backend: 'memory', source: 'cache', configName: 'cache', configPath: [], envPrefix: 'HAI_CACHE', config: {} }, backend: 'memory', configuration: { type: 'memory' } })
+ * const saved = deploy.saveMiddlewareEnvironment(loaded.data, { appDir: process.cwd(), requirement: { service: 'cache', backend: 'memory', source: 'cache', configName: 'cache', configPath: [], envPrefix: 'HAI_CACHE', config: {} }, backend: 'memory', configuration: { type: 'memory' } })
  * ```
  */
 export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, options: { appDir: string, requirement: MiddlewareRequirement, backend: string, configuration?: Record<string, unknown>, updates?: Record<string, unknown> }): HaiResult<string[]> {
@@ -242,7 +243,7 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
       if (requirement.service === 'db') {
         const validated = ReldbConfigSchema.safeParse(configuration)
         if (!validated.success) {
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldInvalid', {
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldInvalid', {
             params: {
               fields: validated.error.issues.map(issue => `db.${issue.path.join('.')}`).join(', '),
             },
@@ -266,7 +267,7 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
       ? readLocalFile(path).toString('utf8')
       : '{}\n', { lineCounter, prettyErrors: false })
     if (document.errors.length) {
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
         params: {
           path,
           line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line),
@@ -292,6 +293,6 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     })
   }
   catch {
-    return err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))
+    return core.err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))
   }
 }

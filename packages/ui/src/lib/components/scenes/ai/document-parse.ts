@@ -60,9 +60,9 @@ export interface MarkdownDocumentParseOptions {
  *
  * @example
  * ```ts
- * import { renderMarkdownDocument } from '@h-ai/ui'
- * import type { MarkdownRenderResult } from '@h-ai/ui'
- * const result: MarkdownRenderResult = renderMarkdownDocument('# 简介\n正文')
+ * import { type MarkdownRenderResult, ui } from '@h-ai/ui'
+ *
+ * const result: MarkdownRenderResult = ui.renderMarkdownDocument('# 简介\n正文')
  * const headings = result.outline
  * ```
  */
@@ -588,8 +588,8 @@ function renderMarkdownDocumentBlocks(
  *
  * @example
  * ```ts
- * import { renderMarkdownDocument } from '@h-ai/ui'
- * const result = renderMarkdownDocument('# 简介\n正文', { allowHtmlTags: false, enableHighlight: true })
+ * import { ui } from '@h-ai/ui'
+ * const result = ui.renderMarkdownDocument('# 简介\n正文', { allowHtmlTags: false, enableHighlight: true })
  * const firstHeading = result.outline[0]?.text
  * ```
  */

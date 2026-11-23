@@ -46,7 +46,7 @@ import type { RetrievalSource } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider, SessionInfo } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createA2AStores } from './a2a/ai-a2a-functions.js'
 import { resolveEnvironment } from './acp/ai-acp-adapters.js'
 
@@ -367,7 +367,7 @@ export async function createAISubsystems(
       return await operation()
     }
     catch {
-      return err(
+      return core.err(
         HaiAIError.RESOURCE_OPERATION_FAILED,
         aiM('ai_resourceOperationFailed'),
       )
@@ -544,10 +544,10 @@ export async function createAISubsystems(
     ...mcpServers.operations,
     register: input => input?.pool?.maxTotal === undefined
       ? mcpServers.operations.register(input)
-      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+      : Promise.resolve(core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
     update: (input, version) => input?.pool?.maxTotal === undefined
       ? mcpServers.operations.update(input, version)
-      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+      : Promise.resolve(core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
   }
   const mcp: ManagedMCPOperations = Object.assign(createAIMCPFunctions(), {
     servers: managedMCPServers,

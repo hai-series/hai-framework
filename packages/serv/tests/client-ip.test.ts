@@ -1,6 +1,6 @@
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { resolveServHttpConfig } from '../src/serv-config.js'
@@ -63,7 +63,7 @@ describe('可信客户端 IP', () => {
     const contract = {
       peer: apiContract.route({ method: 'GET', path: '/peer' }).output(apiContract.haiResultSchema(z.string().optional())),
     }
-    const procedures = serv.implement(contract).context<ServContext>().route('peer').handle(async ({ context }) => ok(context.ip)).build()
+    const procedures = serv.implement(contract).context<ServContext>().route('peer').handle(async ({ context }) => core.ok(context.ip)).build()
     const app = serv.createApp({
       contract,
       procedures,

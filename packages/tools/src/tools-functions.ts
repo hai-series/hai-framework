@@ -6,7 +6,7 @@ import type {
   ToolRegistryOperations,
   ToolRegistryOptions,
 } from './tools-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { toolsM } from './tools-i18n.js'
 import { HaiToolsError } from './tools-types.js'
@@ -84,11 +84,11 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
         ? options.timeoutMs ?? timeoutMs
         : Math.max(0, options.deadline - Date.now())
       if (!validTimeout(duration) || (options.deadline !== undefined && !Number.isSafeInteger(options.deadline)))
-        return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
+        return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
       if (options.signal?.aborted)
-        return err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), options.signal.reason)
+        return core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), options.signal.reason)
       if (duration === 0)
-        return err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
+        return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
 
       const timeout = new AbortController()
       const timer = setTimeout(() => timeout.abort(new DOMException('Tool deadline exceeded', 'TimeoutError')), duration)
@@ -102,8 +102,8 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
         deadline: options.deadline ?? Date.now() + duration,
       }
       const interrupted = (cause: unknown) => options.signal?.aborted
-        ? err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
-        : err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
+        ? core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
+        : core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
       const refreshDeadline = () => {
         if (Date.now() >= context.deadline && !timeout.signal.aborted)
           timeout.abort(new DOMException('Tool deadline exceeded', 'TimeoutError'))
@@ -125,10 +125,10 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
           if (signal.aborted)
             return interrupted(cause)
           logger.debug('Tool validation failed', { tool: name })
-          return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), cause)
+          return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), cause)
         }
         if (!parsed.success)
-          return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), parsed.error)
+          return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), parsed.error)
 
         const authorizer = options.authorize
         if (authorizer) {
@@ -137,14 +137,14 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
             const allowed = await raceCancellation(() => authorizer({ toolName: name, input: parsed.data, context }), signal)
             checkActive()
             if (!allowed)
-              return err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'))
+              return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'))
           }
           catch (cause) {
             refreshDeadline()
             if (signal.aborted)
               return interrupted(cause)
             logger.debug('Tool authorization failed', { tool: name })
-            return err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'), cause)
+            return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'), cause)
           }
         }
         try {
@@ -152,7 +152,7 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
           // 显式结果处理器保留上游业务错误；普通处理器的 success 字段仍作为数据。
           const output = await raceCancellation(() => resultHandler
             ? resultHandler(parsed.data, context)
-            : Promise.resolve(handler!(parsed.data, context)).then(ok), signal)
+            : Promise.resolve(handler!(parsed.data, context)).then(core.ok), signal)
           checkActive()
           return output
         }
@@ -161,7 +161,7 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
           if (signal.aborted)
             return interrupted(cause)
           logger.warn('Tool execution failed', { tool: name, errorCode: HaiToolsError.EXECUTION_FAILED.code })
-          return err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
+          return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
         }
       }
       finally {
@@ -185,38 +185,38 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
  */
 export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegistryOperations {
   const registered = new Map<string, Tool>()
-  const duplicate = () => err(HaiToolsError.ALREADY_REGISTERED, toolsM('tools_alreadyRegistered'))
-  const missing = () => err(HaiToolsError.NOT_FOUND, toolsM('tools_notFound'))
+  const duplicate = () => core.err(HaiToolsError.ALREADY_REGISTERED, toolsM('tools_alreadyRegistered'))
+  const missing = () => core.err(HaiToolsError.NOT_FOUND, toolsM('tools_notFound'))
 
   const registry: ToolRegistryOperations = {
     register(tool) {
       if (!definitions.has(tool) || !portableName.test(tool.name))
-        return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
+        return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
       if (registered.has(tool.name))
         return duplicate()
       registered.set(tool.name, tool)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     registerMany(incoming) {
       const names = new Set<string>()
       for (const tool of incoming) {
         if (!definitions.has(tool) || !portableName.test(tool.name))
-          return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
+          return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
         if (registered.has(tool.name) || names.has(tool.name))
           return duplicate()
         names.add(tool.name)
       }
       for (const tool of incoming)
         registered.set(tool.name, tool)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     replace(tool) {
       if (!definitions.has(tool) || !portableName.test(tool.name))
-        return err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
+        return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
       if (!registered.has(tool.name))
         return missing()
       registered.set(tool.name, tool)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     unregister: name => registered.delete(name),
     get: name => registered.get(name),
@@ -254,7 +254,7 @@ export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegis
           outputs.push(result.data)
         }
       }
-      return ok(outputs)
+      return core.ok(outputs)
     },
     clear: () => registered.clear(),
     get size() { return registered.size },

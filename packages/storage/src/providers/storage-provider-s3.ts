@@ -8,6 +8,7 @@
 
 import type { BucketLocationConstraint, HeadObjectCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3'
 import type { Upload } from '@aws-sdk/lib-storage'
+
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
 import type { DirOperations, DownloadOptions, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary, StorageFileRead } from '../storage-types.js'
@@ -28,9 +29,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-import { core, err, ok } from '@h-ai/core'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { core } from '@h-ai/core'
 
 import { PresignOptionsSchema, PresignUploadOptionsSchema } from '../storage-config.js'
 import { deleteStoragePrefix, toStorageDeleteResult } from '../storage-delete.js'
@@ -367,15 +368,15 @@ export function createS3Provider(): StorageProvider {
       }), { abortSignal: options.signal })
 
       if (!(response.Body instanceof Readable))
-        return err(HaiStorageError.OPERATION_FAILED, storageM('storage_responseBodyEmpty'))
+        return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_responseBodyEmpty'))
 
-      return ok({
+      return core.ok({
         metadata: objectMetadata(key, response),
         ...createStorageReadStream(response.Body, options.signal),
       })
     }
     catch (error) {
-      return err(toStorageError(error, key))
+      return core.err(toStorageError(error, key))
     }
   }
 
@@ -481,7 +482,7 @@ export function createS3Provider(): StorageProvider {
                 ...(cleanupError && { cleanupPending: true, cleanupError }),
               }
             }
-            return err(error)
+            return core.err(error)
           }
           finally {
             stream.destroy()
@@ -489,7 +490,7 @@ export function createS3Provider(): StorageProvider {
         }
 
         // 按本次写入回执返回，避免读取同键被并发覆盖后的对象。
-        return ok({
+        return core.ok({
           key,
           size,
           contentType: params.ContentType || 'application/octet-stream',
@@ -499,7 +500,7 @@ export function createS3Provider(): StorageProvider {
         })
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
@@ -511,17 +512,17 @@ export function createS3Provider(): StorageProvider {
         const chunks: Uint8Array[] = []
         for await (const chunk of streamed.data)
           chunks.push(chunk)
-        return ok(Buffer.concat(chunks))
+        return core.ok(Buffer.concat(chunks))
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async getStream(key, options = {}) {
       const opened = await openObject(key, options)
       return opened.success
-        ? ok(opened.data.stream)
+        ? core.ok(opened.data.stream)
         : opened
     },
 
@@ -538,22 +539,22 @@ export function createS3Provider(): StorageProvider {
           Key: fullPath,
         }))
 
-        return ok(objectMetadata(key, response))
+        return core.ok(objectMetadata(key, response))
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
     async exists(key): Promise<HaiResult<boolean>> {
       const result = await file.head(key)
       if (result.success) {
-        return ok(true)
+        return core.ok(true)
       }
       if (result.error.code === HaiStorageError.NOT_FOUND.code) {
-        return ok(false)
+        return core.ok(false)
       }
-      return err(result.error)
+      return core.err(result.error)
     },
 
     async delete(key): Promise<HaiResult<void>> {
@@ -567,10 +568,10 @@ export function createS3Provider(): StorageProvider {
           Key: fullPath,
         }))
 
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(toStorageError(error, key))
+        return core.err(toStorageError(error, key))
       }
     },
 
@@ -680,7 +681,7 @@ export function createS3Provider(): StorageProvider {
         return toStorageDeleteResult(summary)
       }
       catch (error) {
-        return err(toStorageError(error))
+        return core.err(toStorageError(error))
       }
     },
 
@@ -703,7 +704,7 @@ export function createS3Provider(): StorageProvider {
           ? await s3Client.send(new HeadObjectCommand({ Bucket: s3Config.bucket, Key: sourceFullPath }))
           : undefined
         if (sourceMetadata && !sourceMetadata.ETag)
-          return err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceETagMissing'))
+          return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceETagMissing'))
 
         await s3Client.send(new CopyObjectCommand({
           Bucket: s3Config.bucket,
@@ -728,8 +729,8 @@ export function createS3Provider(): StorageProvider {
       catch (error) {
         const failure = toStorageError(error, sourceKey)
         if (replaceMetadata && failure.code === HaiStorageError.ALREADY_EXISTS.code)
-          return err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceChanged'), error)
-        return err(failure)
+          return core.err(HaiStorageError.OPERATION_FAILED, storageM('storage_copySourceChanged'), error)
+        return core.err(failure)
       }
     },
   }
@@ -764,7 +765,7 @@ export function createS3Provider(): StorageProvider {
           .map(p => withoutPrefix(p.Prefix || '', s3Config.prefix))
           .filter(p => p.length > 0)
 
-        return ok({
+        return core.ok({
           files,
           commonPrefixes,
           nextContinuationToken: response.NextContinuationToken,
@@ -772,7 +773,7 @@ export function createS3Provider(): StorageProvider {
         })
       }
       catch (error) {
-        return err(toStorageError(error))
+        return core.err(toStorageError(error))
       }
     },
 
@@ -781,7 +782,7 @@ export function createS3Provider(): StorageProvider {
         return await deleteStoragePrefix(prefix, dir.list, file.deleteMany)
       }
       catch (error) {
-        return err(toStorageError(error))
+        return core.err(toStorageError(error))
       }
     },
   }
@@ -810,10 +811,10 @@ export function createS3Provider(): StorageProvider {
           expiresIn: parsed.expiresIn,
         })
 
-        return ok(publicPresignedUrl(url, basePath))
+        return core.ok(publicPresignedUrl(url, basePath))
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiStorageError.PRESIGN_FAILED,
           storageM('storage_presignUrlFailed'),
           error,
@@ -840,10 +841,10 @@ export function createS3Provider(): StorageProvider {
           signableHeaders: new Set(['content-type']),
         })
 
-        return ok(publicPresignedUrl(url, basePath))
+        return core.ok(publicPresignedUrl(url, basePath))
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiStorageError.PRESIGN_FAILED,
           storageM('storage_presignUploadUrlFailed'),
           error,
@@ -876,7 +877,7 @@ export function createS3Provider(): StorageProvider {
 
     async connect(cfg: StorageConfig): Promise<HaiResult<void>> {
       if (cfg.type !== 's3') {
-        return err(
+        return core.err(
           HaiStorageError.CONFIG_ERROR,
           storageM('storage_s3ConfigTypeError'),
         )
@@ -958,16 +959,16 @@ export function createS3Provider(): StorageProvider {
         config = cfg
         ready = true
         logger.debug('S3 provider connected')
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         const original = toStorageError(error)
         try {
           await closeClients()
-          return err(original)
+          return core.err(original)
         }
         catch (cleanupError) {
-          return err({
+          return core.err({
             ...original,
             ext: { ...original.ext, cleanupPending: true, cleanupError },
           })

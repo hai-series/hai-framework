@@ -6,7 +6,7 @@
 
 import type { PageServerLoad } from './$types'
 import { audit } from '@h-ai/audit'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { requireAdminData } from '#lib/server/iam-admin.js'
@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const canReadRoles = kit.guard.check(locals.session, 'role:list')
   const canReadPermissions = kit.guard.check(locals.session, 'permission:list')
   const canReadAudit = kit.guard.check(locals.session, 'audit:read')
-  const emptyPage = ok({
+  const emptyPage = core.ok({
     items: [],
     total: 0,
     page: 1,
@@ -43,7 +43,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       : emptyPage,
     canReadAudit
       ? audit.getStats(7)
-      : ok([]),
+      : core.ok([]),
   ])
 
   const userTotal = requireAdminData(usersResult).total

@@ -8,18 +8,18 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai, createMcpServer, HaiAIError } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 afterEach(async () => {
   await ai.close()
 })
 
 it('根入口导出独立 MCP Server 工厂', () => {
-  expect(createMcpServer).toBeTypeOf('function')
+  expect(ai.createMcpServer).toBeTypeOf('function')
 })
 
 it('独立 MCP Server 与官方 Client 完成初始化、发现和调用', async () => {
-  const server = createMcpServer({ name: 'integration', version: '1.0.0' })
+  const server = ai.createMcpServer({ name: 'integration', version: '1.0.0' })
   const client = new Client({ name: 'test-client', version: '1.0.0' })
   server.registerTool('echo', {
     inputSchema: {

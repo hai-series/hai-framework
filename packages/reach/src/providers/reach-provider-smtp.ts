@@ -6,12 +6,12 @@
  */
 
 import type { HaiError, HaiResult } from '@h-ai/core'
-import type { ProviderConfig, SmtpProviderConfig } from '../reach-config.js'
 
+import type { ProviderConfig, SmtpProviderConfig } from '../reach-config.js'
 import type { ReachMessage, SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
 import { createRequire } from 'node:module'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { reachM } from '../reach-i18n.js'
 import { HaiReachError } from '../reach-types.js'
@@ -74,7 +74,7 @@ export function createSmtpProvider(): ReachProvider {
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'smtp') {
-        return err(
+        return core.err(
           HaiReachError.CONFIG_ERROR,
           reachM('reach_unsupportedType', {
             params: { type: config.type },
@@ -97,11 +97,11 @@ export function createSmtpProvider(): ReachProvider {
         })
 
         logger.info('SMTP provider connected', { host: config.host, port: config.port })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('SMTP connection failed', smtpErrorDiagnostics(error))
-        return err(toReachError())
+        return core.err(toReachError())
       }
     },
 
@@ -120,7 +120,7 @@ export function createSmtpProvider(): ReachProvider {
 
     async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       if (!transporter || !smtpConfig) {
-        return err(
+        return core.err(
           HaiReachError.NOT_INITIALIZED,
           reachM('reach_notInitialized'),
         )
@@ -138,11 +138,11 @@ export function createSmtpProvider(): ReachProvider {
         })
 
         logger.info('Email sent')
-        return ok({ success: true, messageId: info.messageId })
+        return core.ok({ success: true, messageId: info.messageId })
       }
       catch (error) {
         logger.warn('Email send failed', smtpErrorDiagnostics(error))
-        return err(toReachError())
+        return core.err(toReachError())
       }
     },
   }

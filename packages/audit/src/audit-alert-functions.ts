@@ -1,11 +1,12 @@
 /** 固定窗口告警：只查询已提交事件，持久领取先于外部通知，无隐式重试队列。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ReachFunctions } from '@h-ai/reach'
 import type { SchedulerInitInput } from '@h-ai/scheduler'
 import type { AuditInitConfig } from './audit-config.js'
 import type { AuditAlertReport, AuditFunctions } from './audit-types.js'
 import { createHash } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { withAuditContext } from './audit-context.js'
 import { auditClockSql, readAuditTime } from './audit-database-time.js'
@@ -35,7 +36,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
 
   async function run(signal: AbortSignal): Promise<HaiResult<AuditAlertReport>> {
     if (!input.config.enabled)
-      return err(HaiAuditError.ALERTS_DISABLED, auditM('audit_alertsDisabled'))
+      return core.err(HaiAuditError.ALERTS_DISABLED, auditM('audit_alertsDisabled'))
     signal.throwIfAborted()
     const type = reldb.config?.type
     const clock = auditClockSql()
@@ -96,7 +97,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
           return counted
         const count = Number(counted.data?.count)
         if (!Number.isSafeInteger(count) || count < 0)
-          return err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'))
+          return core.err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'))
         if (count < rule.threshold)
           continue
         for (const target of rule.targets) {
@@ -186,7 +187,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
             id,
           ])
           if (!updated.success || updated.data.changes !== 1)
-            return err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'), updated.success ? undefined : updated.error)
+            return core.err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'), updated.success ? undefined : updated.error)
           if (status === 'queued')
             report.queued++
           else if (status === 'submitted')
@@ -228,15 +229,15 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
     const oldest = now - Math.max(...input.config.rules.map(rule => rule.windowSeconds * 1000)) * 3
     const cleaned = await reldb.sql.execute(`DELETE FROM ${table} WHERE window_start < ? AND status IN ('submitted', 'queued')`, [oldest])
     return cleaned.success
-      ? ok(report)
+      ? core.ok(report)
       : cleaned
   }
 
   const check: AuditFunctions['checkAlerts'] = (options) => {
     if (!active)
-      return Promise.resolve(err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized')))
+      return Promise.resolve(core.err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized')))
     if (options?.signal !== undefined && !(options.signal instanceof AbortSignal))
-      return Promise.resolve(err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed')))
+      return Promise.resolve(core.err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed')))
     const controller = new AbortController()
     const cancel = () => controller.abort()
     options?.signal?.addEventListener('abort', cancel, { once: true })
@@ -248,7 +249,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
       category: 'system',
     }, () => run(controller.signal)).catch((error: unknown) => {
       logger.error('Audit alert check failed', { error })
-      return err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'), error)
+      return core.err(HaiAuditError.ALERTS_FAILED, auditM('audit_alertsFailed'), error)
     })
     pending.add(operation)
     void operation.finally(() => {

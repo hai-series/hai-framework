@@ -72,8 +72,8 @@ export const DEFAULT_SCHEDULE_INPUT_CONFIG: ScheduleInputConfig = {
  *
  * @example
  * ```ts
- * import { normalizeScheduleInputConfig } from '@h-ai/ui'
- * const config = normalizeScheduleInputConfig({
+ * import { ui } from '@h-ai/ui'
+ * const config = ui.normalizeScheduleInputConfig({
  *   kind: 'schedule', timezone: 'Asia/Shanghai', precision: 'minute',
  * })
  * ```

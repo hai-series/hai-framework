@@ -5,7 +5,7 @@ import type { BuiltinArtifactReference, BuiltinToolOptions } from './ai-tools-ty
 import type { VideoArchiveJob, VideoArchiveReply } from './ai-video-archive-worker.js'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { tools } from '@h-ai/tools'
 import { strFromU8, strToU8 } from 'fflate'
 import { z } from 'zod'
@@ -97,7 +97,7 @@ type Scene = z.infer<typeof sceneSchema>
 interface TimedScene extends Scene { startMs: number, durationMs: number, voiceMs: number, audioId: string, audioText: string }
 
 function invalid(cause?: unknown) {
-  return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolVideoInvalid'), cause)
+  return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_toolVideoInvalid'), cause)
 }
 
 /** 截图按 PNG 头限制解码像素，压缩文件大小不能替代图像内存边界。 */
@@ -249,7 +249,7 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
       }
       const stage = async (phase: string, progress: number): Promise<HaiResult<void>> => {
         if (!context.execution)
-          return ok(undefined)
+          return core.ok(undefined)
         return context.execution.emit({ type: 'phase', phase, progress })
       }
       const captureStage = await stage('capture', 0.05)
@@ -297,7 +297,7 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
       const palette = capture.colors.map(color).filter((value): value is string => !!value)
       const accent = input.brandColor ?? palette.find(value => !/^#(?:000000|ffffff)$/i.test(value)) ?? palette[0]
       if (!accent)
-        return err(HaiAIError.INVALID_REQUEST, aiM('ai_toolVideoMissingBrand'))
+        return core.err(HaiAIError.INVALID_REQUEST, aiM('ai_toolVideoMissingBrand'))
       const scriptStage = await stage('script', 0.2)
       if (!scriptStage.success)
         return scriptStage
@@ -408,7 +408,7 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
           if (!playable.success)
             return playable
           if (playable.data.format !== 'wav')
-            return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_toolVideoWavRequired'))
+            return core.err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_toolVideoWavRequired'))
           bytes = Buffer.from(playable.data.audioBase64, 'base64')
         }
         let voiceMs: number
@@ -434,7 +434,7 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
       }
       const voiceTotal = narrated.reduce((sum, scene) => sum + scene.voiceMs, 0)
       if (voiceTotal + narrated.length * 100 > input.durationSeconds * 1000)
-        return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_toolVideoNarrationTooLong'))
+        return core.err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_toolVideoNarrationTooLong'))
       const padding = (input.durationSeconds * 1000 - voiceTotal) / narrated.length
       let startMs = 0
       const scenes: TimedScene[] = narrated.map((scene) => {
@@ -517,7 +517,7 @@ export function createWebsiteVideoTool(options: BuiltinToolOptions, dependencies
       const done = await stage('complete', 1)
       if (!done.success)
         return done
-      return ok({ ...manifest, artifacts })
+      return core.ok({ ...manifest, artifacts })
     },
   })
 }

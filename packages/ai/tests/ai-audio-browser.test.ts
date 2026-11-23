@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { blobToWav, createAudioRecorder } from '../src/client/index.js'
+import { ai } from '../src/client/index.js'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -38,11 +38,11 @@ describe('browser WAV conversion', () => {
       })
     })
     const blob = new Blob(['encoded'])
-    await expect(blobToWav(blob, { maxInputBytes: 4 })).rejects.toThrow(RangeError)
+    await expect(ai.blobToWav(blob, { maxInputBytes: 4 })).rejects.toThrow(RangeError)
     expect(decode).not.toHaveBeenCalled()
-    await expect(blobToWav(blob, { maxDurationSeconds: 30 })).rejects.toThrow(RangeError)
+    await expect(ai.blobToWav(blob, { maxDurationSeconds: 30 })).rejects.toThrow(RangeError)
     expect(createOffline).not.toHaveBeenCalled()
-    const wav = await blobToWav(blob, { maxDurationSeconds: 30, overflow: 'truncate' })
+    const wav = await ai.blobToWav(blob, { maxDurationSeconds: 30, overflow: 'truncate' })
     expect(createOffline).toHaveBeenCalledWith(480_000)
     expect(wav.type).toBe('audio/wav')
     expect(wav.size).toBe(960_044)
@@ -51,7 +51,7 @@ describe('browser WAV conversion', () => {
     expect(data.getUint32(24, true)).toBe(16_000)
     expect([44, 46].map(offset => data.getInt16(offset, true))).toEqual([-32768, 32767])
     expect(close).toHaveBeenCalledTimes(2)
-    const oldCall = await blobToWav(blob, 8_000)
+    const oldCall = await ai.blobToWav(blob, 8_000)
     expect(new DataView(await oldCall.arrayBuffer()).getUint32(24, true)).toBe(8_000)
   })
 })
@@ -91,7 +91,7 @@ describe('browser recording session', () => {
       }
     })
     const onStop = vi.fn()
-    const recorder = createAudioRecorder({ maxDurationSeconds: 1, onStop })
+    const recorder = ai.createAudioRecorder({ maxDurationSeconds: 1, onStop })
     await recorder.start()
     await expect(recorder.snapshot().text()).resolves.toBe('start')
     await vi.advanceTimersByTimeAsync(1000)
@@ -110,7 +110,7 @@ describe('browser recording session', () => {
       },
     })
     vi.stubGlobal('MediaRecorder', class {})
-    const recorder = createAudioRecorder({ onStop })
+    const recorder = ai.createAudioRecorder({ onStop })
     const started = recorder.start()
     recorder.close()
     grant.resolve({

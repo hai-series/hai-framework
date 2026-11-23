@@ -36,8 +36,8 @@ import { resolveRequestLocale } from './serv-validation.js'
  *
  * @example
  * ```ts
- * import type { RefreshTokenPair } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type RefreshTokenPair, serv } from '@h-ai/serv'
  *
  * function publicAccess(pair: RefreshTokenPair) {
  *   return { accessToken: pair.accessToken, expiresIn: pair.expiresIn }
@@ -74,8 +74,8 @@ type SafeRefreshTokenPair = Omit<RefreshTokenPair, 'refreshToken'>
  *
  * @example
  * ```ts
- * import type { NativeRefreshTokenTransportConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type NativeRefreshTokenTransportConfig, serv } from '@h-ai/serv'
  *
  * function configureNative(isTrustedRequest: NativeRefreshTokenTransportConfig['isRequest']): NativeRefreshTokenTransportConfig {
  *   return { isRequest: isTrustedRequest }
@@ -100,8 +100,8 @@ export interface NativeRefreshTokenTransportConfig {
  *
  * @example
  * ```ts
- * import type { RefreshCookieConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type RefreshCookieConfig, serv } from '@h-ai/serv'
  *
  * const config: RefreshCookieConfig = { cookieName: 'hai_refresh_token', maxAge: 2592000, secure: true }
  * // createApp 同时提供 iam 或 onRefresh；此配置只负责 refresh 传输，不校验 access。

@@ -11,15 +11,16 @@ import type { StorageConfig, StorageConfigInput } from './storage-config.js'
 import type { DirOperations, FileOperations, PresignOperations, StorageFunctions } from './storage-types.js'
 
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
-
+import { core } from '@h-ai/core'
 import { client } from './client/storage-client.js'
+
 import { createLocalProvider } from './providers/storage-provider-local.js'
 import { createS3Provider } from './providers/storage-provider-s3.js'
 import { checksum } from './storage-checksum.js'
 import { StorageConfigSchema } from './storage-config.js'
 import { storageM } from './storage-i18n.js'
 import { logStorageResult, storageErrorContext, withStorageOperationLogs } from './storage-operation-log.js'
+import { getStorageKeyIssue } from './storage-schemas.js'
 import {
 
   HaiStorageError,
@@ -54,15 +55,15 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
   }
   currentConfig = null
   if (!pendingProvider)
-    return ok(undefined)
+    return core.ok(undefined)
   try {
     await pendingProvider.close()
     pendingProvider = null
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Provider cleanup failed; retaining resource for retry', storageErrorContext(HaiStorageError.CONNECTION_FAILED.code, error))
-    return err({
+    return core.err({
       ...HaiStorageError.CONNECTION_FAILED,
       message: storageM('storage_operationFailed', {
         params: {
@@ -86,14 +87,14 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
     const ext = { ...result.error.ext }
     delete ext.cleanupPending
     delete ext.cleanupError
-    return err({
+    return core.err({
       ...result.error,
       ext: Object.keys(ext).length > 0
         ? ext
         : undefined,
     })
   }
-  return err({
+  return core.err({
     ...result.error,
     ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
   })
@@ -185,6 +186,7 @@ const unavailableOperations = withStorageOperationLogs({
  * ```
  */
 export const storage: StorageFunctions = {
+  getKeyIssue: getStorageKeyIssue,
   client,
   checksum: {
     generate: (data, options) => logStorageResult('checksum.generate', checksum.generate(data, options)),
@@ -212,7 +214,7 @@ export const storage: StorageFunctions = {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
     if (initInProgress || closingPromise) {
       logger.error('Storage initialization refused during an existing lifecycle operation', { code: HaiStorageError.OPERATION_FAILED.code })
-      return err(
+      return core.err(
         HaiStorageError.OPERATION_FAILED,
         storageM('storage_operationFailed', {
           params: { error: 'Concurrent initialization detected' },
@@ -235,7 +237,7 @@ export const storage: StorageFunctions = {
       const parseResult = StorageConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Storage config validation failed', { code: HaiStorageError.CONFIG_ERROR.code, issueCount: parseResult.error.issues.length })
-        return err(
+        return core.err(
           HaiStorageError.CONFIG_ERROR,
           storageM('storage_configError', {
             params: { error: parseResult.error.message },
@@ -246,7 +248,7 @@ export const storage: StorageFunctions = {
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && parsed.type === 'local') {
         logger.error('Storage initialization requires a shared provider', { code: HaiStorageError.CONFIG_ERROR.code, provider: parsed.type })
-        return err(HaiStorageError.CONFIG_ERROR, storageM('storage_sharedBackendRequired'))
+        return core.err(HaiStorageError.CONFIG_ERROR, storageM('storage_sharedBackendRequired'))
       }
 
       const provider = createProvider(parsed)
@@ -266,11 +268,11 @@ export const storage: StorageFunctions = {
       pendingProvider = null
       currentConfig = parsed
       logger.debug('Storage module initialized')
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       logger.error('Storage module initialization failed', storageErrorContext(HaiStorageError.CONNECTION_FAILED.code, error))
-      return await failInitialization(err(
+      return await failInitialization(core.err(
         HaiStorageError.CONNECTION_FAILED,
         storageM('storage_operationFailed', {
           params: {

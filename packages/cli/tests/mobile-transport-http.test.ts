@@ -1,4 +1,5 @@
 /** 实际生成客户端 + 真实 HTTP/SM2/Cache registry，区分加密失败与显式明文模式。 */
+
 import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
@@ -56,7 +57,9 @@ function generatedClient(baseUrl: string, encrypted: boolean): MobileClient {
         return { crypto }
       if (name === '@h-ai/capacitor') {
         return {
-          createCapacitorTokenStorage: () => apiClient.tokenStorage.memory(),
+          capacitor: {
+            createTokenStorage: () => apiClient.tokenStorage.memory(),
+          },
         }
       }
       if (name === '@capacitor/core') {

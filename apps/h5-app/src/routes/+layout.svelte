@@ -7,15 +7,7 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import {
-    AppBar,
-    applyTheme,
-    BottomNav,
-    getSavedTheme,
-    LanguageSwitch,
-    setGlobalLocale,
-    ThemeSelector,
-  } from '@h-ai/ui'
+  import { AppBar, BottomNav, LanguageSwitch, ThemeSelector, ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import { authActions } from '#lib/services/auth.js'
@@ -36,12 +28,12 @@
   type TabRoute = ReturnType<typeof resolve>
 
   function handleThemeChange(theme: string) {
-    applyTheme(theme)
+    ui.applyTheme(theme)
     currentTheme = theme
   }
 
   function handleLanguageChange(lang: string) {
-    setGlobalLocale(lang)
+    ui.setGlobalLocale(lang)
     setLocale(lang as 'zh-CN' | 'en-US' | 'ja-JP')
     currentLanguage = lang
   }
@@ -49,11 +41,11 @@
   $effect(() => {
     if (!browser)
       return
-    const theme = getSavedTheme()
-    applyTheme(theme, false)
+    const theme = ui.getSavedTheme()
+    ui.applyTheme(theme, false)
     currentTheme = theme
     const lang = getLocale()
-    setGlobalLocale(lang)
+    ui.setGlobalLocale(lang)
     currentLanguage = lang
   })
 

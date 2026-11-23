@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/scheduler-main.js'
@@ -105,7 +105,7 @@ describe('distributed lock integration', () => {
     const minuteTimestamp = Math.floor(Date.now() / 60000)
 
     // 任务定义可读，但执行状态写入失败时绝不能调用处理器。
-    vi.spyOn(reldb.sql, 'execute').mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Database connection error'))
+    vi.spyOn(reldb.sql, 'execute').mockResolvedValue(core.err(HaiSchedulerError.DB_SAVE_FAILED, 'Database connection error'))
 
     const log = await runTask(task, minuteTimestamp, { type: 'scheduled', source: null })
     expect(log.status).toBe('interrupted')

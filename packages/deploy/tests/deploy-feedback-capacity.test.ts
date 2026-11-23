@@ -4,10 +4,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
-import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-import { createDeploymentPlan, deploy } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
@@ -122,7 +122,7 @@ function fixture(kit = false) {
 
 it.each([false, true])('公开离线包保留较大的显式上限并一致推导代理/Kit 容量，Kit=%s', async (kit) => {
   const { root, artifactDir } = fixture(kit)
-  const feedback = resolveFeedbackBudget({ maxTotalBytes: 8388608, maxEvidenceBytes: 2097152 })
+  const feedback = apiContract.resolveFeedbackBudget({ maxTotalBytes: 8388608, maxEvidenceBytes: 2097152 })
   expect(feedback.maxTransportBytes).toBe(11250348)
   expect(crypto.transport.resolveBodyLimits(25165824).encryptedPayloadBytes).toBe(50364416)
   expect((await deploy.init({
@@ -154,7 +154,7 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
 
 it('计划保持远端 Docker，与本地打包 Podman 分离', async () => {
   const { root, artifactDir } = fixture()
-  const plan = await createDeploymentPlan(root, {
+  const plan = await deploy.createDeploymentPlan(root, {
     provider: {
       type: 'docker-ssh',
       remote: { runtime: 'docker' },

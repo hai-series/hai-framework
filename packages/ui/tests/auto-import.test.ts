@@ -2,7 +2,7 @@
  * =============================================================================
  * @h-ai/ui - 自动导入预处理器测试
  * =============================================================================
- * 验证 autoImportHaiUi 预处理器的核心功能：
+ * 验证 ui.autoImport 预处理器的核心功能：
  * - 运行时组件注册表与真实导出一致
  * - global d.ts 与运行时注册表一致
  * - 模板中使用的组件自动注入 import
@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compile, parse, preprocess } from 'svelte/compiler'
 import { describe, expect, it } from 'vitest'
-import { autoImportHaiUi } from '../auto-import.js'
+import { ui } from '../auto-import.js'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const AUTO_IMPORT_FILE = join(PACKAGE_ROOT, 'auto-import.js')
@@ -42,7 +42,7 @@ const COMPONENT_EXPORT_INDEX_FILES = [
 const EXPLICIT_IMPORT_COMPONENTS = ['Range'] as const
 
 /** 取得预处理器实例 */
-const preprocessor = autoImportHaiUi()
+const preprocessor = ui.autoImport()
 
 /** 调用 markup 的快捷方法 */
 function process(content: string, filename = '/app/src/routes/+page.svelte') {

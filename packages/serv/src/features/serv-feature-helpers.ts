@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 /**
  * 把 `HaiResult<T[]>` 转换为 `HaiResult<{ items: T[] }>`。
@@ -17,7 +17,7 @@ import { ok } from '@h-ai/core'
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const mapped = wrapItemsResult(ok([{ id: 'report-1' }]))
+ * const mapped = wrapItemsResult(core.ok([{ id: 'report-1' }]))
  * if (!mapped.success) return mapped
  * return mapped.data.items
  * ```
@@ -25,7 +25,7 @@ import { ok } from '@h-ai/core'
 export function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T[] }> {
   if (!result.success)
     return result
-  return ok({ items: result.data })
+  return core.ok({ items: result.data })
 }
 
 /**
@@ -34,7 +34,7 @@ export function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const mapped = mapHaiResult(ok({ id: 'report-1', hidden: true }), value => ({ id: value.id }))
+ * const mapped = mapHaiResult(core.ok({ id: 'report-1', hidden: true }), value => ({ id: value.id }))
  * if (!mapped.success) return mapped
  * return mapped.data
  * ```
@@ -42,5 +42,5 @@ export function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T
 export function mapHaiResult<T, U>(result: HaiResult<T>, mapper: (data: T) => U): HaiResult<U> {
   if (!result.success)
     return result
-  return ok(mapper(result.data))
+  return core.ok(mapper(result.data))
 }

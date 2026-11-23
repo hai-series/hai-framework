@@ -66,8 +66,8 @@ pnpm run deploy --env prod --build
 ビルド済み工程と実際の設定を渡します。scan は要件を読み、provisionAll はサービスを作成するため計画確認後に実行します。--plan は読み取り専用です。
 
 ```ts
-import type { DeployConfigInput } from '@h-ai/deploy'
-import { deploy } from '@h-ai/deploy'
+
+import { type DeployConfigInput, deploy } from '@h-ai/deploy'
 
 async function deliver(appDir: string, config: DeployConfigInput) {
   // Scan the supplied app directory using production config. Success reports the app and its middleware requirements. Return the failed result on failure.
@@ -152,11 +152,11 @@ save の値は安全な経路で取得し、成功時に業務データはあり
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `loadDeploymentEnvironment(options)` | 配布環境の変数を取得 | 必須の `options` で対象環境とディレクトリーを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
-| `mergeEnvironmentLayers(layers, prefix?)` | 優先順位で環境変数を統合 | 変数マップ `layers` が必須。優先度の低い順に指定。`prefix` を省略すると全件、指定するとその名前とアンダースコアで続く項目だけを結合。 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
-| `loadDeploymentConfig(name, path, values)` | 配布先の設定を取得 | モジュール名 `name`、YAML またはプロジェクト JSON の `path`、環境の上書き `values` が必須。 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
-| `saveDeploymentEnvironment(environment, values, options?)` | 配布環境変数を保存 | 読込済みの対象 `environment` と変数マップ `values` が必須。任意の `options` で非公開保存と置き換えを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
-| `saveMiddlewareEnvironment(environment, options)` | ミドルウェア環境変数を保存 | 対象 `environment` と接続を選択する `options` が必須。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+| `deploy.loadDeploymentEnvironment(options)` | 配布環境の変数を取得 | 必須の `options` で対象環境とディレクトリーを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<DeploymentEnvironment>` | `deploy.loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `deploy.mergeEnvironmentLayers(layers, prefix?)` | 優先順位で環境変数を統合 | 変数マップ `layers` が必須。優先度の低い順に指定。`prefix` を省略すると全件、指定するとその名前とアンダースコアで続く項目だけを結合。 | 扁平变量映射 | `deploy.mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `deploy.loadDeploymentConfig(name, path, values)` | 配布先の設定を取得 | モジュール名 `name`、YAML またはプロジェクト JSON の `path`、環境の上書き `values` が必須。 | `HaiResult<Record<string, unknown>>` | `deploy.loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `deploy.saveDeploymentEnvironment(environment, values, options?)` | 配布環境変数を保存 | 読込済みの対象 `environment` と変数マップ `values` が必須。任意の `options` で非公開保存と置き換えを指定。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `deploy.saveMiddlewareEnvironment(environment, options)` | ミドルウェア環境変数を保存 | 対象 `environment` と接続を選択する `options` が必須。[環境の引数](#deployment-environment-options)を参照。 | `HaiResult<string[]>` | `deploy.saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
 
 <a id="deployment-environment-options"></a>
 
@@ -164,43 +164,43 @@ save の値は安全な経路で取得し、成功時に業務データはあり
 
 | 項目 | 既定値と条件 | 用途 |
 | --- | --- | --- |
-| `loadDeploymentEnvironment.options.environment` / `envDir` | 両方必須 | 環境名と dotenv ディレクトリー。例は `prod` と `./deployment`。 |
-| `loadDeploymentEnvironment.options.requireFile` | 既定は `true` | `false` にすると対象ファイルがない場合も既存レイヤーから読み込む。 |
-| `saveDeploymentEnvironment.options.private` | 既定は `false` | `true` で渡した変数をすべて `.env.<environment>.local` に保存。既定でも秘密として検出した変数はこのファイルに保存。 |
-| `saveDeploymentEnvironment.options.replace` | 既定は空リスト | 保存前に対象の公開・非公開ファイルから同名キーとアンダースコアで続く項目を除く。全件置換時に使用。 |
-| `saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | いずれも必須 | config ディレクトリーを持つアプリのルート、スキャンした設定パス、選んだバックエンド名。 |
-| `saveMiddlewareEnvironment.options.configuration` / `updates` | 任意。クラウドの作成前には接続情報を省略可。 | 指定時は選んだバックエンドの接続情報一式と、同時に更新する他の変数をまとめる。 |
+| `deploy.loadDeploymentEnvironment.options.environment` / `envDir` | 両方必須 | 環境名と dotenv ディレクトリー。例は `prod` と `./deployment`。 |
+| `deploy.loadDeploymentEnvironment.options.requireFile` | 既定は `true` | `false` にすると対象ファイルがない場合も既存レイヤーから読み込む。 |
+| `deploy.saveDeploymentEnvironment.options.private` | 既定は `false` | `true` で渡した変数をすべて `.env.<environment>.local` に保存。既定でも秘密として検出した変数はこのファイルに保存。 |
+| `deploy.saveDeploymentEnvironment.options.replace` | 既定は空リスト | 保存前に対象の公開・非公開ファイルから同名キーとアンダースコアで続く項目を除く。全件置換時に使用。 |
+| `deploy.saveMiddlewareEnvironment.options.appDir` / `requirement` / `backend` | いずれも必須 | config ディレクトリーを持つアプリのルート、スキャンした設定パス、選んだバックエンド名。 |
+| `deploy.saveMiddlewareEnvironment.options.configuration` / `updates` | 任意。クラウドの作成前には接続情報を省略可。 | 指定時は選んだバックエンドの接続情報一式と、同時に更新する他の変数をまとめる。 |
 
-たとえば `prod` で `saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` を呼ぶと、成功時は `["HAI_DB_HOST"]` を返し、対象の `.env.prod` に値を保存します。
+たとえば `prod` で `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` を呼ぶと、成功時は `["HAI_DB_HOST"]` を返し、対象の `.env.prod` に値を保存します。
 
 #### 利用例：配置変数の読込・統合・保存
 
 操作者が prod のディレクトリーを確認してから実行。読込・合成後、保存されたキー名を返し、秘密値は表示しません。
 
 ```ts
-import type { MiddlewareRequirement } from '@h-ai/deploy'
-import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+
+import { type MiddlewareRequirement, deploy } from '@h-ai/deploy'
 
 function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
   // Load the required prod environment from envDir. Success contains the merged values and file information. Return the failed result if loading fails.
-  const environmentResult = loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
+  const environmentResult = deploy.loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true })
   if (!environmentResult.success)
     return environmentResult
   const environment = environmentResult.data
   // Merge the loaded values and select the later cache type override under the HAI_CACHE prefix.
-  const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
+  const values = deploy.mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
   // Resolve this app's _cache.yml with those environment values. Success is a cache config object. Return the failed result on load or expansion failure.
-  const configResult = loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
+  const configResult = deploy.loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values)
   if (!configResult.success)
     return configResult
   const config = configResult.data
   // Write the memory override to the private production environment. Success lists written variable names. Return the failed result on failure.
-  const writtenResult = saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
+  const writtenResult = deploy.saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true })
   if (!writtenResult.success)
     return writtenResult
   const written = writtenResult.data
   // Save the given cache requirement as the memory backend for this app. Success lists updated names. Return the failed result if configuration cannot be written.
-  const middlewareResult = saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
+  const middlewareResult = deploy.saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } })
   if (!middlewareResult.success)
     return middlewareResult
   const middleware = middlewareResult.data
@@ -218,10 +218,10 @@ function updateEnvironment(envDir: string, appDir: string, requirement: Middlewa
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `canKeepMiddleware(requirement, backend, environment)` | 既存ミドルウェアの保持可否を確認 | スキャンした依存 `requirement`、カタログで選んだ `backend`、対象の環境スナップショット `environment` が必須。 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
-| `describeMiddlewareBackend(backend)` | ミドルウェアのバックエンドを説明 | 必須の `backend` は `purpose` を含むカタログ項目、またはその項目だけを含むオブジェクト。 | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
-| `validateMiddlewareField(options)` | ミドルウェアの入力を検証 | 必須の `options` にフォーム値、項目定義、実際のバックエンドを渡す。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
-| `parseMiddlewareField(options)` | ミドルウェアの入力を解析 | 必須の `options` にフォーム値、項目定義、バックエンドを渡す。任意でマネージド作成を指定。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | `HaiResult<unknown>` | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+| `deploy.canKeepMiddleware(requirement, backend, environment)` | 既存ミドルウェアの保持可否を確認 | スキャンした依存 `requirement`、カタログで選んだ `backend`、対象の環境スナップショット `environment` が必須。 | 能否保留该中间件的 boolean | `deploy.canKeepMiddleware(requirement, backend, environment)` |
+| `deploy.describeMiddlewareBackend(backend)` | ミドルウェアのバックエンドを説明 | 必須の `backend` は `purpose` を含むカタログ項目、またはその項目だけを含むオブジェクト。 | 本地化的功能说明 | `deploy.describeMiddlewareBackend(backend)` |
+| `deploy.validateMiddlewareField(options)` | ミドルウェアの入力を検証 | 必須の `options` にフォーム値、項目定義、実際のバックエンドを渡す。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | 校验是否通过的 boolean | `deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `deploy.parseMiddlewareField(options)` | ミドルウェアの入力を解析 | 必須の `options` にフォーム値、項目定義、バックエンドを渡す。任意でマネージド作成を指定。[ミドルウェア項目の引数](#middleware-field-options)を参照。 | `HaiResult<unknown>` | `deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
 
 <a id="middleware-field-options"></a>
 
@@ -230,19 +230,19 @@ function updateEnvironment(envDir: string, appDir: string, requirement: Middlewa
 | 項目 | 既定値と条件 | 用途 |
 | --- | --- | --- |
 | `options.value` / `field` / `backend` | いずれも必須 | 元のフォーム文字列、カタログ項目定義、実際のバックエンド。項目とバックエンドで検証規則が決まる。 |
-| `options.managed` | 既定では無効。 `parseMiddlewareField` 専用 | `true` の場合、`secret` または `managed` の空値を許可し、`undefined` を返す。 |
+| `options.managed` | 既定では無効。 `deploy.parseMiddlewareField` 専用 | `true` の場合、`secret` または `managed` の空値を許可し、`undefined` を返す。 |
 
-たとえば `parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` は成功時に真偽値 `false` を返します。
+たとえば `deploy.parseMiddlewareField({ value: "false", field: { name: "secure", kind: "boolean" }, backend: "smtp" })` は成功時に真偽値 `false` を返します。
 
 #### 利用例：ミドルウェア入力の検証
 
 ```ts
 // import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
-import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 // Check the PostgreSQL port field with input 5432. It is valid and returns true. Invalid ports return false.
-validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
+deploy.validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
 // Parse SMTP secure from the string false. The result is the boolean false. Return the failed result if parsing fails.
-const parseMiddlewareFieldResult = parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
+const parseMiddlewareFieldResult = deploy.parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })
 if (!parseMiddlewareFieldResult.success)
   return parseMiddlewareFieldResult
 parseMiddlewareFieldResult.data // false
@@ -262,27 +262,27 @@ parseMiddlewareFieldResult.data // false
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `normalizeProjectName(name)` | プロジェクト識別名を正規化 | アプリ名 `name` が必須。npm スコープ付きも可。 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
-| `artifactChecksum(file)` | 配布成果物のチェックサムを計算 | 必須の `file` は既存のローカルイメージまたは配布成果物へのパス。 | `Promise<string>` | `await artifactChecksum('./serv.tar')` |
-| `getDeployRecovery(error)` | 配布の復旧情報を取得 | 必須の `error` はデプロイ失敗の `HaiError`。復旧情報の取得元となる。 | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+| `deploy.normalizeProjectName(name)` | プロジェクト識別名を正規化 | アプリ名 `name` が必須。npm スコープ付きも可。 | 规范化的部署项目名 | `deploy.normalizeProjectName('@shop/orders')` |
+| `deploy.artifactChecksum(file)` | 配布成果物のチェックサムを計算 | 必須の `file` は既存のローカルイメージまたは配布成果物へのパス。 | `Promise<string>` | `await deploy.artifactChecksum('./serv.tar')` |
+| `deploy.getDeployRecovery(error)` | 配布の復旧情報を取得 | 必須の `error` はデプロイ失敗の `HaiError`。復旧情報の取得元となる。 | `DeployRecoveryInfo \| undefined` | `deploy.getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
 
 #### 利用例：成果物の識別と復旧情報
 
 今回の成果物を先に作成。digest はその SHA-256 です。失敗結果の復旧情報を読むだけでは復旧せず、未知の遠隔結果も成功に変わりません。
 
 ```ts
-import { artifactChecksum, getDeployRecovery, normalizeProjectName } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
 async function inspectDelivery(appDir: string, artifactFile: string) {
   // Normalize the supplied scoped name to the deploy project identifier orders.
-  const project = normalizeProjectName('@shop/orders') // 'orders'
+  const project = deploy.normalizeProjectName('@shop/orders') // 'orders'
   // Hash the existing artifact at the supplied path. Success is its SHA-256 digest. An unreadable path rejects.
-  const digest = await artifactChecksum(artifactFile) // existing artifact; failures reject
+  const digest = await deploy.artifactChecksum(artifactFile) // existing artifact; failures reject
   // Package the supplied app for prod without publishing. Success contains bundle details. On failure inspect recovery below.
   const delivered = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
   if (!delivered.success)
     // Extract the recovery information attached to this deploy failure, when available.
-    return { project, digest, error: delivered.error, recovery: getDeployRecovery(delivered.error) }
+    return { project, digest, error: delivered.error, recovery: deploy.getDeployRecovery(delivered.error) }
   return { project, digest, delivery: delivered.data }
 }
 ```
@@ -305,7 +305,7 @@ async function inspectDelivery(appDir: string, artifactFile: string) {
 #### 実行後に同じ ID を検証する
 
 ```ts
-import { deploy, type DeployBundleExecution, type DeployReleaseVerification } from '@h-ai/deploy'
+import { type DeployBundleExecution, type DeployReleaseVerification, deploy } from '@h-ai/deploy'
 
 export async function identifyBuild(stdout: string, projectDir: string, commit: string) {
   // CLI の標準出力とアーカイブを固定コミットと照合してから、配置バンドルを作成します。

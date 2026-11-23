@@ -4,11 +4,11 @@ import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import LanguageSwitch from '../src/lib/components/scenes/app/LanguageSwitch.svelte'
 import PasswordInput from '../src/lib/components/scenes/iam/PasswordInput.svelte'
-import { createLocaleStore, detectBrowserLocale, setGlobalLocale } from '../src/lib/i18n.svelte.js'
+import { ui } from '../src/lib/ui-i18n.js'
 
 afterEach(() => {
   localStorage.clear()
-  setGlobalLocale('zh-CN')
+  ui.setGlobalLocale('zh-CN')
   vi.restoreAllMocks()
 })
 
@@ -16,13 +16,13 @@ describe('japanese locale', () => {
   it('检测浏览器日语并跳过未支持的首选语言', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('fr-FR')
     vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fr-FR', 'ja'])
-    expect(detectBrowserLocale()).toBe('ja-JP')
-    expect(createLocaleStore().current).toBe('ja-JP')
+    expect(ui.detectBrowserLocale()).toBe('ja-JP')
+    expect(ui.createLocaleStore().current).toBe('ja-JP')
   })
 
   it('读取和保存日语偏好，统一使用规范语言码', () => {
     localStorage.setItem('hai-locale', 'ja')
-    const store = createLocaleStore({ detectBrowser: false })
+    const store = ui.createLocaleStore({ detectBrowser: false })
     expect(store.current).toBe('ja-JP')
     expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
     store.set('ja')
@@ -32,7 +32,7 @@ describe('japanese locale', () => {
   it('默认语言菜单可选择日语并更新已挂载组件的文案', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const store = createLocaleStore({ detectBrowser: false })
+    const store = ui.createLocaleStore({ detectBrowser: false })
     const menu = mount(LanguageSwitch, {
       target,
       props: {

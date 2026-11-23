@@ -9,8 +9,8 @@
  */
 
 import type { HaiError, HaiErrorDef, HaiResult } from '@h-ai/core'
-
 import type { ResolvedAudioModel } from '../../ai-config.js'
+
 import type {
   AudioContent,
   AudioFormat,
@@ -22,7 +22,6 @@ import type {
   TranscriptionResult,
   TranscriptionTimestampGranularity,
 } from '../ai-audio-types.js'
-
 import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import WebSocket from 'ws'

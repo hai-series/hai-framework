@@ -111,9 +111,9 @@ export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitSer
  * @returns 完整 transport 配置；`false` 表示关闭
  * @example
  * ```ts
- * import { resolveKitTransportConfig } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
  *
- * const transport = resolveKitTransportConfig({ excludePaths: ['/api/health'] })
+ * const transport = kit.resolveTransportConfig({ excludePaths: ['/api/health'] })
  * if (transport) void transport.keyExchangePath
  *```
  */
@@ -132,9 +132,9 @@ export function resolveKitTransportConfig(
  * @returns 已补齐默认值的配置；不合法输入抛出 ZodError。
  * @example
  * ```ts
- * import { resolveKitConfig } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
  *
- * const config = resolveKitConfig({ transport: false })
+ * const config = kit.resolveConfig({ transport: false })
  * void config.server.port
  *```
  */

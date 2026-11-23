@@ -7,8 +7,8 @@
 import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations, ToolRegistryOperations } from '../src/llm/ai-llm-types.js'
 import type { ReasoningStrategy, ReasoningStreamEvent } from '../src/reasoning/ai-reasoning-types.js'
+import { ai, LLMConfigSchema } from '@h-ai/ai'
 import { describe, expect, it, vi } from 'vitest'
-import { LLMConfigSchema, resolveModelEntry } from '../src/ai-config.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
 
 // ─── Mock LLM 工厂 ───
@@ -191,14 +191,14 @@ describe('reasoning 默认', () => {
 
 describe('resolveModelEntry', () => {
   it('显式指定模型优先', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o-mini', apiKey: 'k' }), 'chat', 'gpt-4o')
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o-mini', apiKey: 'k' }), 'chat', 'gpt-4o')
     expect(result.success).toBe(true)
     if (result.success)
       expect(result.data.model).toBe('gpt-4o')
   })
 
   it('场景映射 (scenarios) 命中时返回映射值', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
       apiKey: 'k',
       scenarios: { reasoning: 'gpt-4o' },
@@ -209,7 +209,7 @@ describe('resolveModelEntry', () => {
   })
 
   it('场景映射到 models 列表中的条目时返回条目 model 字段', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
       apiKey: 'k',
       models: [
@@ -223,7 +223,7 @@ describe('resolveModelEntry', () => {
   })
 
   it('场景未命中时回退到 default 场景', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
       apiKey: 'k',
       scenarios: { default: 'gpt-4' },
@@ -234,14 +234,14 @@ describe('resolveModelEntry', () => {
   })
 
   it('无 scenarios 时使用全局 model', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o', apiKey: 'k' }), 'reasoning')
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o', apiKey: 'k' }), 'reasoning')
     expect(result.success).toBe(true)
     if (result.success)
       expect(result.data.model).toBe('gpt-4o')
   })
 
   it('无 apiKey 时返回 CONFIGURATION_ERROR', () => {
-    const result = resolveModelEntry(LLMConfigSchema.parse({}), 'chat')
+    const result = ai.resolveModelEntry(LLMConfigSchema.parse({}), 'chat')
     expect(result.success).toBe(false)
   })
 
@@ -256,10 +256,10 @@ describe('resolveModelEntry', () => {
         summary: 'summary-model',
       },
     })
-    const r1 = resolveModelEntry(cfg, 'plan')
-    const r2 = resolveModelEntry(cfg, 'execute')
-    const r3 = resolveModelEntry(cfg, 'extraction')
-    const r4 = resolveModelEntry(cfg, 'summary')
+    const r1 = ai.resolveModelEntry(cfg, 'plan')
+    const r2 = ai.resolveModelEntry(cfg, 'execute')
+    const r3 = ai.resolveModelEntry(cfg, 'extraction')
+    const r4 = ai.resolveModelEntry(cfg, 'summary')
     expect(r1.success && r1.data.model).toBe('plan-model')
     expect(r2.success && r2.data.model).toBe('exec-model')
     expect(r3.success && r3.data.model).toBe('extract-model')

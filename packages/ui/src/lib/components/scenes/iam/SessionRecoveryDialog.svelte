@@ -3,9 +3,9 @@
   @example
   ```ts
   import { mount, unmount } from 'svelte'
-  import { createSessionRecovery, SessionRecoveryDialog } from '@h-ai/ui'
+  import { SessionRecoveryDialog, ui } from '@h-ai/ui'
   import { kit } from '@h-ai/kit'
-  const recovery = createSessionRecovery()
+  const recovery = ui.createSessionRecovery()
   const component = mount(SessionRecoveryDialog, { target: document.body, props: { recovery, actions: kit.client.createAuthActions() } })
   await unmount(component)
   ```
@@ -14,7 +14,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { AuthPanelActions } from '../types.js'
   import type { SessionRecovery } from './session-recovery.svelte.js'
-  import { err, HaiCommonError } from '@h-ai/core'
+  import { core, HaiCommonError } from '@h-ai/core'
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
   import Modal from '../../compounds/Modal.svelte'
@@ -32,14 +32,14 @@
       const expectedUserId = recovery.user?.id
       const version = recovery.version
       if (!expectedUserId || !recovery.open)
-        return err(HaiCommonError.UNAUTHORIZED, uiM('session_recovery_account_error'))
+        return core.err(HaiCommonError.UNAUTHORIZED, uiM('session_recovery_account_error'))
       authenticating = true
       try {
         const result = await actions.login({ ...input, expectedUserId })
         if (result.success) {
           const data = result.data
           if (!data || typeof data !== 'object' || !('user' in data) || !data.user || typeof data.user !== 'object' || !('id' in data.user) || data.user.id !== expectedUserId)
-            return err(HaiCommonError.UNAUTHORIZED, uiM('session_recovery_account_error'))
+            return core.err(HaiCommonError.UNAUTHORIZED, uiM('session_recovery_account_error'))
           authenticatedId = expectedUserId
           authenticatedVersion = version
         }

@@ -1319,7 +1319,7 @@ describe('createProject — fullstack 类型', () => {
       }
       else {
         expect(app).toContain('platform="app"')
-        expect(app).toContain('createCapacitorTokenStorage')
+        expect(app).toContain('capacitor.createTokenStorage()')
         expect(app).toContain('capacitor.isNative()')
         expect(app).toContain('X-HAI-Token-Transport')
       }

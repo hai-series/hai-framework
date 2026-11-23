@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { describe, expect, it } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
@@ -55,7 +55,7 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
     const imageId = (await container('image', 'inspect', '--format', '{{.Id}}', image!)).replace(/^(?:sha256:)?/u, 'sha256:')
     const network = `hai-managed-native-${randomUUID()}`
     const fixture = await readFile(new URL('./fixtures/acp-managed-model.mjs', import.meta.url), 'utf8')
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     let modelId: string | undefined
     await container('network', 'create', '--internal', network)
     try {

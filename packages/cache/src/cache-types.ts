@@ -34,8 +34,8 @@ const CacheErrorInfo = {
  * @example
  * ```ts
  * import { HaiCacheError } from '@h-ai/cache'
- * import { err } from '@h-ai/core'
- * const failure = err(HaiCacheError.INVALID_SET_OPTIONS, 'Conflicting expiry options')
+ * import { core } from '@h-ai/core'
+ * const failure = core.err(HaiCacheError.INVALID_SET_OPTIONS, 'Conflicting expiry options')
  * if (!failure.success) failure.error.code
  * ```
  */

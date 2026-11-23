@@ -10,12 +10,11 @@
  */
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
-
 import type { ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, TempModelConfig, ToolCall, ToolDefinition } from '../ai-llm-types.js'
-import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 
+import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
@@ -403,7 +402,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const model = tempModel?.model ?? entry?.model ?? requestModel ?? config.llm.model ?? 'claude-3-5-sonnet-latest'
     const apiKey = tempModel?.apiKey ?? entry?.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.ANTHROPIC_API_KEY)
     if (!apiKey) {
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
+      return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
         params: { error: 'API Key is required for Anthropic' },
       }))
     }
@@ -411,7 +410,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
       ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined)
       : undefined
     const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
-    return ok({
+    return core.ok({
       apiKey,
       baseUrl,
       model,
@@ -487,15 +486,15 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
         if (!res.ok) {
           const detail = await res.text().catch(() => res.statusText)
           const mapped = httpError(res.status, detail.slice(0, 500))
-          return err(mapped.def, mapped.message, { status: res.status })
+          return core.err(mapped.def, mapped.message, { status: res.status })
         }
         const data = await res.json() as AnthropicResponse
-        return ok(toChatResponse(data, resolved.model))
+        return core.ok(toChatResponse(data, resolved.model))
       }
       catch (error) {
         if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
-          return err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'), { message: error.message })
-        return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', {
+          return core.err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'), { message: error.message })
+        return core.err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', {
           params: {
             error: error instanceof Error
               ? error.message
@@ -569,7 +568,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
         if ((entry.protocol ?? config.llm.protocol) === 'anthropic')
           models.add(entry.model)
       }
-      return ok([...models])
+      return core.ok([...models])
     },
   }
 }

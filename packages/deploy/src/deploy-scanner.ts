@@ -1,9 +1,10 @@
 /** 应用、环境文件与中间件依赖扫描；不依赖 deploy.init()，不修改进程环境。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DeployScanOptions, MiddlewareRequirement, ScanResult, ServiceType } from './deploy-types.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { parseAllDocuments } from 'yaml'
 import { loadDeploymentConfig, loadDeploymentEnvironment } from './deploy-environment.js'
 import { resolveProjectDirectory } from './deploy-functions.js'
@@ -121,10 +122,10 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       ? record(JSON.parse(readFileSync(packageFile, 'utf8')))
       : {}
     if (typeof project.name !== 'string' || !project.name.trim())
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
     const appName = project.name.trim()
     if (!appName.replace(/^@[^/]+\//, '').replace(/[^a-z0-9]/gi, ''))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
+      return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
     const envDir = options?.envDir
       ? resolve(options.envDir)
       : existsSync(join(appDir, '.env'))
@@ -228,11 +229,11 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       requiredServices: scan.requiredServices,
       serviceBackends: scan.serviceBackends,
     })
-    return ok(scan)
+    return core.ok(scan)
   }
   catch {
     // JSON/YAML 异常可能带有凭据行，不把原异常暴露到日志或用户错误。
-    return err(HaiDeployError.SCAN_FAILED, deployM('deploy_scanFailed', {
+    return core.err(HaiDeployError.SCAN_FAILED, deployM('deploy_scanFailed', {
       params: { error: 'Invalid or ambiguous application/configuration/lockfile; specify the application directory and run pnpm install' },
     }))
   }

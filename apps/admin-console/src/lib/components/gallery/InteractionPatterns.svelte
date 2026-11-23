@@ -1,7 +1,5 @@
 <script lang='ts'>
-  import { DataTable, Empty, Pagination, TableToolbar, Tabs } from '@h-ai/ui/components/compounds/index'
-  import { Button } from '@h-ai/ui/components/primitives/index'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, DataTable, Empty, Pagination, TableToolbar, Tabs, ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
 
   let viewState = $state('ready')
@@ -49,7 +47,7 @@
     page = 1
     viewState = 'ready'
   }
-  useToastFeedback(() => viewState === 'error'
+  ui.useToastFeedback(() => viewState === 'error'
     ? `${m.gallery_interaction_error_title()} ${m.gallery_interaction_error_description()}`
     : '')
 </script>

@@ -1,10 +1,10 @@
 import type { NavAdapter } from '@h-ai/ui'
-import { createGuide } from '@h-ai/ui/guide'
+import { ui } from '@h-ai/ui/guide'
 import * as m from '#lib/paraglide/messages.js'
 
 /** 在后台布局中创建实例，应用只维护业务内容，通用交互由 UI 模块提供。 */
 export function createAdminGuide(nav: NavAdapter) {
-  return createGuide({
+  return ui.createGuide({
     nav,
     persistKey: 'hai-admin-guide',
     tours: [

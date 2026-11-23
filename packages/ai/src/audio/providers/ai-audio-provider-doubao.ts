@@ -11,9 +11,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ResolvedAudioModel } from '../../ai-config.js'
 
+import type { ResolvedAudioModel } from '../../ai-config.js'
 import type { AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+
 import type {
   AudioProvider,
   AudioWsMessage,
@@ -23,10 +24,9 @@ import type {
   ProviderTranscriptionStreamRequest,
   SynthesisOutputMeta,
 } from './ai-audio-provider.js'
-
 import { Buffer } from 'node:buffer'
 import { gunzipSync } from 'node:zlib'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { audioError, concatChunks, errorMessage, openAudioWebSocket, toAudioErrorResult } from './ai-audio-provider.js'
@@ -311,7 +311,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
         if (event.type === 'transcript' && event.final)
           finalText = event.text
       }
-      return ok({ text: finalText })
+      return core.ok({ text: finalText })
     }
     catch (error) {
       logger.debug('Doubao transcribe failed', {
@@ -420,7 +420,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
         signal: request.signal,
       }))
         chunks.push(audio)
-      return ok({
+      return core.ok({
         data: concatChunks(chunks),
         format: out.format,
         sampleRate: out.sampleRate,

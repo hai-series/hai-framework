@@ -1,6 +1,6 @@
 import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 import { crypto } from '@h-ai/crypto'
 import { navigateToLogin } from './navigation.js'
 
@@ -19,7 +19,7 @@ async function isNativeCapacitor(): Promise<boolean> {
 
 async function createTokenStorage() {
   if (await isNativeCapacitor())
-    return createCapacitorTokenStorage()
+    return capacitor.createTokenStorage()
 
   return apiClient.tokenStorage.httpOnlyCookie()
 }

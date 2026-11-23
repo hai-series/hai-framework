@@ -8,8 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { LLMOperations } from '../llm/ai-llm-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -114,7 +113,7 @@ export async function extractEntities(
   systemPrompt?: string,
 ): Promise<HaiResult<ExtractedEntity[]>> {
   if (!text.trim()) {
-    return ok([])
+    return core.ok([])
   }
 
   const resolvedTypes = entityTypes ?? DEFAULT_ENTITY_TYPES
@@ -133,7 +132,7 @@ export async function extractEntities(
 
     if (!chatResult.success) {
       logger.warn('Entity extraction LLM call failed', { error: chatResult.error })
-      return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
+      return core.err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
         params: {
           error: String(chatResult.error.message),
         },
@@ -147,11 +146,11 @@ export async function extractEntities(
     const entities = parseEntityResponse(content, validTypes)
     logger.trace('Entity extraction completed', { textLength: text.length, entityCount: entities.length })
 
-    return ok(entities)
+    return core.ok(entities)
   }
   catch (error) {
     logger.error('Entity extraction failed', { error })
-    return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
+    return core.err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
       params: {
         error: String(error),
       },
@@ -317,5 +316,5 @@ export async function extractEntitiesBatch(
     }
   }
 
-  return ok(Array.from(entityMap.values()))
+  return core.ok(Array.from(entityMap.values()))
 }

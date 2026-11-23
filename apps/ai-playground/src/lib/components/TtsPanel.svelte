@@ -1,6 +1,6 @@
 <script lang='ts'>
-  import { Button, Card } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, Card, ui } from '@h-ai/ui'
+
   // 语音合成面板：将文本合成为可播放的 WAV，音色列表由服务端配置注入
   import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
@@ -41,7 +41,7 @@
       audioUrl = URL.createObjectURL(audio)
     }
     catch (cause) {
-      const detail = errorMessage(cause, m.error_unknown())
+      const detail = ui.errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -53,7 +53,7 @@
     if (audioUrl)
       URL.revokeObjectURL(audioUrl)
   })
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>

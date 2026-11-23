@@ -611,7 +611,7 @@ export interface AIVectorBackend {
  *
  * @example
  * ```ts
- * import { ai, type AIStoreProvider, type AIConfigInput } from '@h-ai/ai'
+ * import { type AIStoreProvider, type AIConfigInput, ai } from '@h-ai/ai'
  * // provider 的 shared 声明必须由真实共享后端支撑；AI 关闭时调用其 close。
  * async function start(config: AIConfigInput, provider: AIStoreProvider) {
  *   const result = await ai.init(config, { storeProvider: provider })

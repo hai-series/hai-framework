@@ -7,8 +7,8 @@ const MiB = 1024 * 1024
  * 有效容量策略；只含公开上限，不暴露存储或通知配置。
  * @example
  * ```ts
- * import { FeedbackBudgetSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
- * const budget = FeedbackBudgetSchema.parse(resolveFeedbackBudget())
+ * import { FeedbackBudgetSchema, apiContract } from '@h-ai/api-contract/feedback'
+ * const budget = FeedbackBudgetSchema.parse(apiContract.resolveFeedbackBudget())
  * ```
  */
 export const FeedbackBudgetSchema = z.object({
@@ -25,8 +25,8 @@ export const FeedbackBudgetSchema = z.object({
  * 由服务端公开的有效预算。
  * @example
  * ```ts
- * import { type FeedbackBudget, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
- * const budget: FeedbackBudget = resolveFeedbackBudget()
+ * import { type FeedbackBudget, apiContract } from '@h-ai/api-contract/feedback'
+ * const budget: FeedbackBudget = apiContract.resolveFeedbackBudget()
  * ```
  */
 export type FeedbackBudget = z.infer<typeof FeedbackBudgetSchema>
@@ -35,8 +35,8 @@ export type FeedbackBudget = z.infer<typeof FeedbackBudgetSchema>
  * 配置一次总容量，派生附件、双份证据和 JSON/Base64 传输上限；更小的旧单项限制仍生效。
  * @example
  * ```ts
- * import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
- * const budget = resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
+ * import { apiContract } from '@h-ai/api-contract/feedback'
+ * const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
  * ```
  */
 export function resolveFeedbackBudget(input: { maxTotalBytes?: number, maxAttachmentBytes?: number, maxEvidenceBytes?: number, maxEvidenceCount?: number } = {}): FeedbackBudget {

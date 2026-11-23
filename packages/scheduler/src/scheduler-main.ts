@@ -7,10 +7,9 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-
 import type { SchedulerConfig } from './scheduler-config.js'
 import type { LogQueryOptions, SchedulerFunctions, SchedulerInitInput, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput, TriggerTaskInput } from './scheduler-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 
@@ -116,10 +115,10 @@ export const scheduler: SchedulerFunctions = {
       if (!currentConfig || !executionRepo)
         return notInitialized.result()
       if (!executionIdSchema.safeParse(id).success)
-        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const row = await executionRepo.byOccurrence(id)
       return row.success
-        ? ok(row.data
+        ? core.ok(row.data
             ? executionEntry(row.data)
             : null)
         : row
@@ -129,10 +128,10 @@ export const scheduler: SchedulerFunctions = {
         return notInitialized.result()
       const parsed = executionListSchema.safeParse(options ?? {})
       if (!parsed.success)
-        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const rows = await executionRepo.unknown(parsed.data.limit, parsed.data.offset)
       return rows.success
-        ? ok(rows.data.map(executionEntry))
+        ? core.ok(rows.data.map(executionEntry))
         : rows
     },
     async listLogFailures(options) {
@@ -140,17 +139,17 @@ export const scheduler: SchedulerFunctions = {
         return notInitialized.result()
       const parsed = executionListSchema.safeParse(options ?? {})
       if (!parsed.success)
-        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const rows = await executionRepo.pendingLogs(parsed.data.limit, parsed.data.offset)
       return rows.success
-        ? ok(rows.data.map(executionEntry))
+        ? core.ok(rows.data.map(executionEntry))
         : rows
     },
     async repairLog(id) {
       if (!currentConfig || !executionRepo || closeInProgress)
         return notInitialized.result()
       if (!executionIdSchema.safeParse(id).success)
-        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       return repairExecutionLogs(id)
     },
     async resolveUnknown(id, resolution) {
@@ -158,14 +157,14 @@ export const scheduler: SchedulerFunctions = {
         return notInitialized.result()
       const parsed = ExecutionResolutionSchema.safeParse(resolution)
       if (!executionIdSchema.safeParse(id).success || !parsed.success)
-        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       return executionRepo.resolve(id, parsed.data.status, parsed.data.expectedUpdatedAt)
     },
   },
   async init(config?: SchedulerInitInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Scheduler init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiSchedulerError.INIT_FAILED,
         schedulerM('scheduler_initFailed', {
           params: { error: 'Concurrent initialization detected' },
@@ -188,7 +187,7 @@ export const scheduler: SchedulerFunctions = {
       const parseResult = SchedulerConfigSchema.safeParse(configOptions)
       if (!parseResult.success) {
         logger.error('Scheduler config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiSchedulerError.CONFIG_ERROR,
           schedulerM('scheduler_configError', {
             params: { error: parseResult.error.message },
@@ -213,12 +212,12 @@ export const scheduler: SchedulerFunctions = {
         }
 
         logger.info('Scheduler module initialized', { enableDb: currentConfig.enableDb, taskCount: getTaskRegistry().size })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         logger.error('Scheduler initialization failed', { error })
         await scheduler.close()
-        return err(
+        return core.err(
           HaiSchedulerError.INIT_FAILED,
           schedulerM('scheduler_initFailed', {
             params: {
@@ -285,7 +284,7 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
 
     if (isTimerRunning()) {
-      return err(
+      return core.err(
         HaiSchedulerError.ALREADY_RUNNING,
         schedulerM('scheduler_alreadyRunning'),
       )
@@ -293,7 +292,7 @@ export const scheduler: SchedulerFunctions = {
 
     startTimer(currentConfig.tickInterval)
     logger.info('Scheduler started', { tickInterval: currentConfig.tickInterval })
-    return ok(undefined)
+    return core.ok(undefined)
   },
 
   stop(): HaiResult<void> {
@@ -301,7 +300,7 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
 
     if (!isTimerRunning()) {
-      return err(
+      return core.err(
         HaiSchedulerError.NOT_RUNNING,
         schedulerM('scheduler_notRunning'),
       )
@@ -309,7 +308,7 @@ export const scheduler: SchedulerFunctions = {
 
     stopTimer()
     logger.info('Scheduler stopped')
-    return ok(undefined)
+    return core.ok(undefined)
   },
 
   async trigger(taskId: string, options?: TriggerTaskInput): Promise<HaiResult<TaskExecutionLog>> {
@@ -317,7 +316,7 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
     const parsed = TriggerTaskSchema.safeParse(options ?? {})
     if (!parsed.success)
-      return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
 
     const config = currentConfig
     const refreshed = await loadPersistedTasks(taskRepo)
@@ -328,7 +327,7 @@ export const scheduler: SchedulerFunctions = {
 
     const task = getTask(taskId)
     if (!task) {
-      return err(
+      return core.err(
         HaiSchedulerError.TASK_NOT_FOUND,
         schedulerM('scheduler_taskNotFound', {
           params: { taskId },
@@ -337,7 +336,7 @@ export const scheduler: SchedulerFunctions = {
     }
 
     const log = await runTask(task, undefined, normalizeTriggerInput(parsed.data), parsed.data)
-    return ok(log)
+    return core.ok(log)
   },
 
   async getLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
@@ -352,7 +351,7 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
 
     setHooks(hooks)
-    return ok(undefined)
+    return core.ok(undefined)
   },
 
   clearHooks(): HaiResult<void> {
@@ -360,7 +359,7 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
 
     clearHooks()
-    return ok(undefined)
+    return core.ok(undefined)
   },
 
   get tasks(): ReadonlyMap<string, TaskDefinition> {

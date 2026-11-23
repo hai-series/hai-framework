@@ -24,8 +24,8 @@ import { resolveRequestLocale } from './serv-validation.js'
  *
  * @example
  * ```ts
- * import type { ServSession } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServSession, serv } from '@h-ai/serv'
  *
  * function canRead(session: ServSession): boolean {
  *   return session.permissions.includes('reports.read')
@@ -52,8 +52,8 @@ export interface ServSession {
  *
  * @example
  * ```ts
- * import type { ServIam } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServIam, serv } from '@h-ai/serv'
  *
  * import { iam } from '@h-ai/iam'
  *
@@ -77,8 +77,8 @@ export interface ServIam {
  *
  * @example
  * ```ts
- * import type { ServContext } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServContext, serv } from '@h-ai/serv'
  *
  * const context: ServContext = serv.parseRequestContext({ request: new Request('https://example.com/health'), remoteAddress: '192.0.2.10' })
  * const locale = context.locale
@@ -105,8 +105,8 @@ export interface ServContext {
  *
  * @example
  * ```ts
- * import type { ServRequestMetadata } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServRequestMetadata, serv } from '@h-ai/serv'
  *
  * const metadata: ServRequestMetadata = { remoteAddress: '192.0.2.10' }
  * // 由运行时 socket 提供；转发头必须另经过 trustedProxies 策略。
@@ -121,8 +121,8 @@ export interface ServRequestMetadata {
  *
  * @example
  * ```ts
- * import type { CreateServContextInput } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type CreateServContextInput, serv } from '@h-ai/serv'
  *
  * const input: CreateServContextInput = { request: new Request('https://example.com/health'), remoteAddress: '192.0.2.10' }
  * const context = serv.parseRequestContext(input)
@@ -139,8 +139,8 @@ export interface CreateServContextInput extends ServRequestMetadata {
  *
  * @example
  * ```ts
- * import type { CreateServContext } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type CreateServContext, serv } from '@h-ai/serv'
  *
  * const factory: CreateServContext = input => serv.parseRequestContext(input)
  * const context = await factory({ request: new Request('https://example.com/health') })

@@ -28,17 +28,21 @@ vi.mock('../src/cli-utils.js', async importOriginal => ({
   writeCliMessage: mocks.writeMessage,
 }))
 
-vi.mock('@h-ai/deploy', async importOriginal => ({
-  ...await importOriginal<typeof import('@h-ai/deploy')>(),
-  createDeploymentPlan: mocks.plan,
-  deploy: {
-    credentials: { load: mocks.loadCredentials },
-    init: mocks.init,
-    scan: mocks.scan,
-    deployApp: mocks.deployApp,
-    close: mocks.close,
-  },
-}))
+vi.mock('@h-ai/deploy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@h-ai/deploy')>()
+  return {
+    ...actual,
+    deploy: {
+      ...actual.deploy,
+      createDeploymentPlan: mocks.plan,
+      credentials: { load: mocks.loadCredentials },
+      init: mocks.init,
+      scan: mocks.scan,
+      deployApp: mocks.deployApp,
+      close: mocks.close,
+    },
+  }
+})
 
 let tmpRoot: string
 

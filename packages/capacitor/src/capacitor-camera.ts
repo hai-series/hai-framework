@@ -8,7 +8,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { PhotoOptions, PhotoResult } from './capacitor-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
@@ -76,13 +76,13 @@ export async function takePhoto(options?: PhotoOptions): Promise<HaiResult<Photo
       data = photo.webPath ?? ''
     }
 
-    return ok({
+    return core.ok({
       data,
       format: photo.format,
     })
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.CAMERA_FAILED,
       capacitorM('capacitor_cameraFailed'),
       cause,

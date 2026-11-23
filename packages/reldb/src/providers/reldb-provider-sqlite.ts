@@ -18,9 +18,9 @@ import type {
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 import type { ReldbProvider } from './reldb-provider-types.js'
-import type { SqliteEngine } from './sqlite/reldb-sqlite-engine.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { SqliteEngine } from './sqlite/reldb-sqlite-engine.js'
+import { core } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
 import { HaiReldbError } from '../reldb-types.js'
@@ -68,17 +68,17 @@ export function createSqliteProvider(): ReldbProvider {
       return closing
     const owned = engine
     if (!owned)
-      return Promise.resolve(ok(undefined))
+      return Promise.resolve(core.ok(undefined))
     closing = (async (): Promise<HaiResult<void>> => {
       try {
         // 在途事务拥有独立上下文；先等待释放，再关闭唯一引擎。
         await txChain.catch(() => undefined)
         await owned.close()
         engine = null
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
+        return core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
           params: {
             error: String(error),
           },
@@ -186,39 +186,39 @@ export function createSqliteProvider(): ReldbProvider {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(sqliteBuildColumnSql, quotedTable, columns, ifNotExists)
       await engine!.exec(sql)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async dropTable(name, ifExists) {
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       await engine!.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async addColumn(table, column, def) {
       const colSql = sqliteBuildColumnSql(column, def)
       await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async dropColumn(table, column) {
       await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async renameTable(oldName, newName) {
       await engine!.exec(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async createIndex(table, index, def) {
       const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
       await engine!.exec(sql)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async dropIndex(index, ifExists = true) {
       const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
       await engine!.exec(sql)
-      return ok(undefined)
+      return core.ok(undefined)
     },
     async raw(sql) {
       await engine!.exec(sql)
-      return ok(undefined)
+      return core.ok(undefined)
     },
   }
 
@@ -227,25 +227,25 @@ export function createSqliteProvider(): ReldbProvider {
   const rawDml: DmlOperations = {
     async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const rows = await engine!.all(sql, params)
-      return ok(rows as T[])
+      return core.ok(rows as T[])
     },
     async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const row = await engine!.get(sql, params)
-      return ok((row as T) ?? null)
+      return core.ok((row as T) ?? null)
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const result = await engine!.run(sql, params)
-      return ok(result)
+      return core.ok(result)
     },
     async batch(statements) {
       // 与显式事务串行，避免并发 BEGIN 导致 "cannot start a transaction within a transaction"。
       const releaseTxLock = await acquireTxLock()
       try {
         await engine!.batch(statements)
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', {
+        return core.err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', {
           params: {
             error: String(error),
           },
@@ -260,7 +260,7 @@ export function createSqliteProvider(): ReldbProvider {
         (sqlStr, params) => engine!.all(sqlStr, params),
         options,
       )
-      return ok(result)
+      return core.ok(result)
     },
   }
 
@@ -270,27 +270,27 @@ export function createSqliteProvider(): ReldbProvider {
   function createSqliteTxDmlOps(txEngine: SqliteEngine): DmlOperations {
     return {
       async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-        return ok((await txEngine.all(sql, params)) as T[])
+        return core.ok((await txEngine.all(sql, params)) as T[])
       },
       async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-        return ok(((await txEngine.get(sql, params)) as T) ?? null)
+        return core.ok(((await txEngine.get(sql, params)) as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-        return ok(await txEngine.run(sql, params))
+        return core.ok(await txEngine.run(sql, params))
       },
       async batch(statements) {
         // 已处于显式事务中，逐条执行即可，不再开启嵌套事务。
         for (const { sql: s, params } of statements) {
           await txEngine.run(s, params)
         }
-        return ok(undefined)
+        return core.ok(undefined)
       },
       async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
           (sqlStr, params) => txEngine.all(sqlStr, params),
           options,
         )
-        return ok(result)
+        return core.ok(result)
       },
     }
   }
@@ -312,7 +312,7 @@ export function createSqliteProvider(): ReldbProvider {
     }
     catch (error) {
       finishTransaction()
-      return err(HaiReldbError.TRANSACTION_FAILED, sqliteTxErrorMessage(String(error)), error)
+      return core.err(HaiReldbError.TRANSACTION_FAILED, sqliteTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createSqliteTxDmlOps(txEngine)
@@ -320,7 +320,7 @@ export function createSqliteProvider(): ReldbProvider {
       ...ctx,
       isConnected: () => txEngine.isOpen(),
     }, txDmlOps)
-    return ok(createTxHandle(guardedTxDmlOps, {
+    return core.ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await txEngine.exec('COMMIT') },
       rollback: async () => { await txEngine.exec('ROLLBACK') },
       release: () => finishTransaction(),
@@ -335,11 +335,11 @@ export function createSqliteProvider(): ReldbProvider {
   return {
     async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'sqlite') {
-        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_sqliteOnlySqlite'))
+        return core.err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_sqliteOnlySqlite'))
       }
 
       if (!config.database) {
-        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sqliteNeedPath'))
+        return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sqliteNeedPath'))
       }
 
       const previousCleanup = await closeResource()
@@ -368,18 +368,18 @@ export function createSqliteProvider(): ReldbProvider {
         ready = true
         currentConfig = config
         logger.info('Connected to SQLite', { database: config.database, executor: sqliteOptions.executor })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
+        const result = core.err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
           params: {
             error: String(error),
           },
         }), error)
         return cleanup.success || result.success
           ? result
-          : err({
+          : core.err({
               ...result.error,
               ext: { cleanupPending: true, cleanupError: cleanup.error },
             })

@@ -1,7 +1,7 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
-  import { Button, Input, Select, Textarea, toast } from '@h-ai/ui'
-  import { errorMessage } from '@h-ai/ui/toast'
+  import { Button, Input, Select, Textarea, ui } from '@h-ai/ui'
+
   import * as m from '#lib/paraglide/messages.js'
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
@@ -108,7 +108,7 @@
       const data = await response.json()
 
       if (data.success) {
-        toast.success(m.partner_submit_success())
+        ui.toast.success(m.partner_submit_success())
         form = {
           companyName: '',
           contactName: '',
@@ -121,13 +121,13 @@
         errors = {}
       }
       else {
-        toast.error(errorMessage(data.error && typeof data.error === 'object'
+        ui.toast.error(ui.errorMessage(data.error && typeof data.error === 'object'
           ? { ...data.error, httpStatus: response.status }
           : undefined, m.partner_submit_failed()))
       }
     }
     catch {
-      toast.error(m.partner_network_error())
+      ui.toast.error(m.partner_network_error())
     }
     finally {
       submitting = false

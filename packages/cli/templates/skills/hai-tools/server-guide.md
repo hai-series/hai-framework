@@ -6,8 +6,8 @@
 
 ```ts
 import type { RunnerFunctions } from '@h-ai/runner'
-import type { ToolArtifactAccess } from '@h-ai/tools/server'
-import { tools } from '@h-ai/tools/server'
+
+import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
 
 export function createDocuments(runner: RunnerFunctions, files: ToolArtifactAccess) {
   // 用已初始化的 Runner 创建下方文档服务，成功返回持久任务服务实例；配置或处理器注册失败返回错误。

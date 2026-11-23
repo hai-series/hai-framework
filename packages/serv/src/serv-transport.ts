@@ -19,7 +19,7 @@
 import type { RequestAccessCheck } from '@h-ai/core'
 import type { CryptoFunctions, KeyExchangeResponse, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto, HaiCryptoError, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
@@ -32,8 +32,8 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
  *
  * @example
  * ```ts
- * import type { ServTransportConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
+ *
+ * import { type ServTransportConfig, serv } from '@h-ai/serv'
  *
  * import { crypto } from '@h-ai/crypto'
  *
@@ -117,7 +117,7 @@ export function createTransportMiddleware(
     if (mode === 'disabled') {
       // 明文端点拒绝传输信封，防止把密文当业务数据处理或返回无法解密的成功响应。
       if (c.req.raw.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || c.req.raw.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {
-        return Response.json(err({
+        return Response.json(core.err({
           ...HaiCommonError.VALIDATION_ERROR,
           message: servM('serv_transportPlaintextRequired'),
           traceId: core.context.get().traceId ?? core.context.get().requestId,

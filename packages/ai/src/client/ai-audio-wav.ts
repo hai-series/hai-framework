@@ -37,9 +37,9 @@ export interface AudioWavOptions {
  * @returns `audio/wav` 类型的 Blob
  * @example
  * ```ts
- * import { blobToWav } from '@h-ai/ai/client'
+ * import { ai } from '@h-ai/ai/client'
  * async function prepareRecording(recording: Blob) {
- *   const wav = await blobToWav(recording)
+ *   const wav = await ai.blobToWav(recording)
  *   return new File([wav], 'recording.wav', { type: wav.type })
  * }
  * ```

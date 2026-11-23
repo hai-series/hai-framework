@@ -1,10 +1,11 @@
 /** OpenSSH 的私有 askpass；固定 helper 无密码，凭据只在本次受管理子进程环境中存在。 */
+
 import type { HaiResult } from '@h-ai/core'
 import { chmodSync, existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 import { runCommand } from './deploy-command.js'
@@ -109,7 +110,7 @@ printf '%s\n' "$HAI_DEPLOY_ASKPASS_PASSWORD"
  *     timeoutMs: 30000,
  *   })
  *   if (!compiled.success) return compiled
- *   return ok(undefined)
+ *   return core.ok(undefined)
  * }
  * ```
  */
@@ -122,7 +123,7 @@ export const compileAskpassScript = '$ErrorActionPreference=\'Stop\'; Add-Type -
  * function finishHelper(helper: SshAskpass): HaiResult<void> {
  *   const removed = helper.cleanup()
  *   if (!removed.success) return removed
- *   return ok(undefined)
+ *   return core.ok(undefined)
  * }
  * ```
  */
@@ -133,7 +134,7 @@ export interface SshAskpass {
 
 /** 不传播可能包含输入的异常；本地准备失败尚未开始 SSH 远端操作。 */
 function helperFailure(key: 'deploy_sshAskpassFailed' | 'deploy_sshAskpassCleanupFailed', reason: 'configuration' | 'timeout' = 'configuration'): HaiResult<never> {
-  return err({
+  return core.err({
     ...HaiDeployError.REMOTE_COMMAND_FAILED,
     message: deployM(key),
     ext: {
@@ -156,7 +157,7 @@ function helperFailure(key: 'deploy_sshAskpassFailed' | 'deploy_sshAskpassCleanu
  *   const askpassMode = prepared.data.env.SSH_ASKPASS_REQUIRE
  *   const removed = prepared.data.cleanup()
  *   if (!removed.success) return removed
- *   return ok(askpassMode)
+ *   return core.ok(askpassMode)
  * }
  * ```
  */
@@ -165,12 +166,12 @@ export async function prepareSshAskpass(password: string, deadline: number, term
   let temporaryRoot: string | undefined
   const cleanup = (): HaiResult<void> => {
     if (!directory || !existsSync(directory))
-      return ok(undefined)
+      return core.ok(undefined)
     try {
       if (lstatSync(directory).isSymbolicLink() || dirname(realpathSync(directory)) !== temporaryRoot || !basename(directory).startsWith('hai-ssh-askpass-'))
         return helperFailure('deploy_sshAskpassCleanupFailed')
       rmSync(directory, { recursive: true, force: false })
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch { return helperFailure('deploy_sshAskpassCleanupFailed') }
   }
@@ -219,7 +220,7 @@ export async function prepareSshAskpass(password: string, deadline: number, term
         ? helperFailure('deploy_sshAskpassFailed', 'timeout')
         : removed
     }
-    return ok({
+    return core.ok({
       env: {
         SSH_ASKPASS: helper,
         SSH_ASKPASS_REQUIRE: 'force',

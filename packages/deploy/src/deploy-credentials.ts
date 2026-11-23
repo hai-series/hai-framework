@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { parse, stringify } from 'yaml'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
@@ -151,11 +151,11 @@ export function loadCredentials(): HaiResult<string[]> {
         process.env[key] = String(data[key])
     }
     logger.debug('Credentials loaded', { count: keys.length })
-    return ok(keys)
+    return core.ok(keys)
   }
   catch (error) {
     logger.error('Failed to load credentials', { error })
-    return err(
+    return core.err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
         params: {
@@ -193,11 +193,11 @@ export function saveCredential(key: string, value: string): HaiResult<void> {
     writeCredentialsFile(data)
     process.env[key] = value
     logger.debug('Credential saved', { key })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Failed to save credential', { key, error })
-    return err(
+    return core.err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
         params: {
@@ -233,11 +233,11 @@ export function saveCredentials(entries: Record<string, string>): HaiResult<void
     }
     writeCredentialsFile(data)
     logger.debug('Credentials saved', { count: Object.keys(entries).length })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (error) {
     logger.error('Failed to save credentials', { error })
-    return err(
+    return core.err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
         params: {

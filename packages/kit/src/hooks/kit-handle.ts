@@ -14,7 +14,7 @@ import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareCont
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import process from 'node:process'
 import { audit } from '@h-ai/audit'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
@@ -237,7 +237,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
           if (!transportMiddleware && event.request.method !== 'OPTIONS'
             && (event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER))
             && checkAccess && checkAccess.encryption(event.url.pathname, event.request.method) === 'disabled') {
-            return Response.json(err({
+            return Response.json(core.err({
               ...HaiCommonError.VALIDATION_ERROR,
               message: kitM('kit_transportPlaintextRequired'),
               traceId: requestId,

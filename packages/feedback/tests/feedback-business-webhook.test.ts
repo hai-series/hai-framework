@@ -5,12 +5,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { strToU8, zipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, FeedbackConfigSchema, HaiFeedbackError } from '../src/index.js'
 
 let directory: string
@@ -125,7 +124,7 @@ describe('业务补采与反馈 Webhook', () => {
     const downloaded = await feedback.getExport({ id: report.id, jobId: exported.data.id }, actor)
     expect(downloaded.success).toBe(true)
     if (downloaded.success) {
-      const bundle = await readFeedbackBundle(Buffer.from(downloaded.data.dataBase64, 'base64'))
+      const bundle = await feedback.readBundle(Buffer.from(downloaded.data.dataBase64, 'base64'))
       expect(bundle.success && bundle.data.manifest.files.some(item => item.name === 'logs.zip')).toBe(true)
     }
     expect((await feedback.submit({ appId: config.appId, submissionId: 'one' }, actor)).success).toBe(true)
@@ -287,7 +286,7 @@ describe('业务补采与反馈 Webhook', () => {
     const put = storage.file.put.bind(storage.file)
     let count = 0
     const fail = vi.spyOn(storage.file, 'put').mockImplementation(async (...args) => ++count === 2
-      ? err(HaiFeedbackError.OPERATION_FAILED, 'Storage test failure')
+      ? core.err(HaiFeedbackError.OPERATION_FAILED, 'Storage test failure')
       : put(...args))
     expect((await feedback.runJobs()).success).toBe(true)
     expect(await feedback.get(report.id, actor)).toMatchObject({

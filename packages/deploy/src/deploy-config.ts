@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DeploymentArtifact } from './deploy-artifact.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
@@ -347,9 +347,9 @@ export function validateComposeServices(container: DeployConfig['container'], ar
       ? 'web'
       : undefined
   if (!unavailable)
-    return ok(undefined)
+    return core.ok(undefined)
   const field = `deploy.container.compose.services.${unavailable}`
-  return err({
+  return core.err({
     ...HaiDeployError.CONFIG_ERROR,
     message: deployM('deploy_composeServiceUnavailable', {
       params: { field },

@@ -7,9 +7,9 @@ import { writeFile } from '@tauri-apps/plugin-fs'
  * Tauri 保存对话框与受权路径写入；取消和退出会话均不继续写入。
  * @example
  * ```ts
- * import { configureFeedbackSaving } from '@h-ai/feedback/client'
- * import { saveTauriFeedbackFile } from '@h-ai/feedback/tauri'
- * configureFeedbackSaving(saveTauriFeedbackFile)
+ *
+ * import { feedback } from '@h-ai/feedback/tauri'
+ * feedback.configureSaving(feedback.saveTauriFile)
  * ```
  */
 export const saveTauriFeedbackFile: FeedbackFileSaver = async (bytes, filename, _contentType, signal) => {

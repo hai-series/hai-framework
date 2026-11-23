@@ -31,8 +31,8 @@ const DatapipeErrorInfo = {
  * @example
  * ```ts
  * import { HaiDatapipeError } from '@h-ai/datapipe'
- * import { err } from '@h-ai/core'
- * const result = err(HaiDatapipeError.CONFIG_ERROR, 'Invalid chunk configuration')
+ * import { core } from '@h-ai/core'
+ * const result = core.err(HaiDatapipeError.CONFIG_ERROR, 'Invalid chunk configuration')
  * if (!result.success) result.error.httpStatus
  * ```
  */
@@ -128,7 +128,7 @@ export interface PipelineResult {
  * 通过 `datapipe.clean()` 调用。
  * @example
  * ```ts
- * import { datapipe, type CleanOperations } from '@h-ai/datapipe'
+ * import { type CleanOperations, datapipe } from '@h-ai/datapipe'
  * const clean: CleanOperations = datapipe.clean
  * const result = clean('<p>Hello</p>')
  * if (result.success) result.data.trim()
@@ -151,7 +151,7 @@ export interface CleanOperations {
  * 通过 `datapipe.chunk()` 调用。
  * @example
  * ```ts
- * import { datapipe, type ChunkOperations } from '@h-ai/datapipe'
+ * import { type ChunkOperations, datapipe } from '@h-ai/datapipe'
  * const chunk: ChunkOperations = datapipe.chunk
  * const result = chunk('One. Two.', { mode: 'sentence', maxSize: 10 })
  * if (result.success) result.data.map(item => item.index)

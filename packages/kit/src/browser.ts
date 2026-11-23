@@ -1,3 +1,5 @@
+import type { BrowserKitFunctions } from './kit-types.js'
+import { createKitAuthActions } from './client/kit-client-auth.js'
 /**
  * @h-ai/kit — 浏览器入口
  *
@@ -5,10 +7,10 @@
  * @module browser
  */
 
-import type { BrowserKitFunctions } from './kit-types.js'
-import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
-import { defineCrud } from './crud/kit-crud.js'
+import { defineCrud, resolveOptions, resolveText } from './crud/kit-crud.js'
+
+import { matchPermission } from './guards/kit-permission.js'
 import { clearBrowserToken, setBrowserToken } from './kit-auth.js'
 import { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-config.js'
 import { setAllModulesLocale } from './kit-i18n.js'
@@ -24,6 +26,11 @@ import { setAllModulesLocale } from './kit-i18n.js'
  * ```
  */
 export const kit: BrowserKitFunctions = {
+  matchPermission,
+  resolveOptions,
+  resolveText,
+  resolveConfig: resolveKitConfig,
+  resolveTransportConfig: resolveKitTransportConfig,
   client: {
     create: createKitClient,
     createAuthActions: createKitAuthActions,
@@ -42,7 +49,7 @@ export const kit: BrowserKitFunctions = {
   },
 }
 
-export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
+export { KitConfigSchema }
 
 export type {
   ClientTransportConfig,

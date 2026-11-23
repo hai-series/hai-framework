@@ -44,8 +44,8 @@ export interface NavAdapter {
  *
  * @example
  * ```ts
- * import { createBrowserNavAdapter } from '@h-ai/ui'
- * const nav = createBrowserNavAdapter()
+ * import { ui } from '@h-ai/ui'
+ * const nav = ui.createBrowserNavAdapter()
  * await nav.navigate('/users?page=2')
  * ```
  */

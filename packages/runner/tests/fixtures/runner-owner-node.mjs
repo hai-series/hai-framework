@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner } from '@h-ai/runner'
 
 function value(result) {
   if (!result.success)
@@ -9,7 +9,7 @@ function value(result) {
 }
 
 async function main() {
-  const node = createRunner()
+  const node = runner.create()
   const { database, nodeId } = JSON.parse(process.env.HAI_TEST_RUNNER_OWNER)
   value(await reldb.init(database))
   value(await node.init({ nodeId, maxControlRunning: 1 }))

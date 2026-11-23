@@ -70,7 +70,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 直接部署的目标不完整时，先引导选择 SSH/Vercel。SSH 补齐主机、端口、用户名、认证方式、对应凭据、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。`auth: key` 使用私钥/agent，密钥路径留空使用 ssh-agent/默认密钥；`auth: password` 使用隐藏输入的密码。省略 auth 时，仅非空 password 启用密码方式，否则保持 key/agent；显式 key 忽略残留密码。密码原样保留空格、前导零，不经 YAML 类型转换；有效密码拒绝 CR/LF/NUL，UTF-8 最多 1023 字节。known_hosts 留空使用 OpenSSH 默认文件，不关闭主机键校验。
 
-完整有效目标自动复用，`--yes` 不重新询问；修改选中环境 `.env.<mode>.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。新填写的目标（含地址、端口、路径、Token、密码）只保存该环境私有文件并添加 Git 忽略。`--bundle-only` 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，写入同一环境私有文件，并用于本次和后续 `deploy-target.json`；`--yes` 或跳过时复用已有参数，缺项仍可在上传前填写到 target。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
+完整有效目标自动复用，`--yes` 不重新询问；修改选中环境 `.env.<mode>.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。新填写的目标（含地址、端口、路径、Token、密码）只保存该环境私有文件并添加 Git 忽略。`--bundle-only` 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，写入同一环境私有文件，并用于本次和后续 `deploy-target.json`；`--yes` 或跳过时复用已有参数，缺项仍可在上传前填写到 target。SDK 使用 `deploy.saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
 
 ### Hai 模块与中间件的关系
 
@@ -138,4 +138,4 @@ manifest.json 的 partial 与 selectedServices、apply 脚本共同记录部署�
 
 deadline 包括 helper 启动和输出处理。异常后 `terminationTimeoutMs` 另等待本地终止核验，默认 10000、上限 60000 毫秒。POSIX 用独立继承进程组；Windows 用隐藏且不加载 profile 的 PowerShell/.NET Job，挂起创建 → 分配成功 → 恢复，禁止 breakaway，helper/编译/分配失败拒绝执行。已脱离组的系统 daemon、现有容器和远端服务不在本地确认范围。只有受管理 Job/组无活动成员才是 confirmed；未证明为 unknown，启动前为 not-started。输入、回调和流异常同样经过此路径，已经进入的回调不能撤销，但不再交付新块。
 
-公开 `getDeployCommandState(result.error)` 在失败分支读取原因、本地状态、远端状态、deploymentId 和 resultFile。SSH 中断默认为远端 unknown；docker-ssh 新连接只读解析原子 `result-<ID>.json`，完整/未截断/ID 匹配才为 finished，并返回实际阶段、退出码。finished 指脚本及恢复结束，容器可以继续运行；即使终态为 0，原连接/输出失败仍保留。缺失、旧记录、损坏或重连失败保持 unknown，不自动重试写入。按 ID 核对步骤、current 和服务，再恢复。
+公开 `deploy.getDeployCommandState(result.error)` 在失败分支读取原因、本地状态、远端状态、deploymentId 和 resultFile。SSH 中断默认为远端 unknown；docker-ssh 新连接只读解析原子 `result-<ID>.json`，完整/未截断/ID 匹配才为 finished，并返回实际阶段、退出码。finished 指脚本及恢复结束，容器可以继续运行；即使终态为 0，原连接/输出失败仍保留。缺失、旧记录、损坏或重连失败保持 unknown，不自动重试写入。按 ID 核对步骤、current 和服务，再恢复。

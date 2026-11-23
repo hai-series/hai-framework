@@ -8,12 +8,13 @@
 
 import type { Task } from '@a2a-js/sdk'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
+
 import type { HaiResult } from '@h-ai/core'
+
 import type { A2AConfig } from '../ai-config.js'
-
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
-import type { A2AJournal, A2ARuntimeOptions } from './ai-a2a-runtime.js'
 
+import type { A2AJournal, A2ARuntimeOptions } from './ai-a2a-runtime.js'
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -23,11 +24,11 @@ import type {
   A2AOperations,
   A2ATaskFilter,
 } from './ai-a2a-types.js'
-import { Message, Role, SendMessageRequest } from '@a2a-js/sdk'
 
+import { Message, Role, SendMessageRequest } from '@a2a-js/sdk'
 import { ClientFactory, JsonRpcTransportFactory } from '@a2a-js/sdk/client'
 import { JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -165,13 +166,13 @@ async function executeRemoteAgentCall(
       result = {}
     }
 
-    return ok(result)
+    return core.ok(result)
   }
   catch (error) {
     const errorName = error instanceof Error
       ? error.name
       : 'UnknownError'
-    return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', {
+    return core.err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', {
       params: { url: safeLabel, error: errorName },
     }))
   }
@@ -296,11 +297,11 @@ export function createA2AOperations(
     close: () => requestHandler.close(),
     registerExecutor() {
       logger.warn('A2A executor already registered, ignoring duplicate registerExecutor call')
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     getAgentCard() {
-      return ok(buildAgentCardDocument(agentCardConfig))
+      return core.ok(buildAgentCardDocument(agentCardConfig))
     },
 
     async handleRequest(requestBody: unknown, context?: Record<string, unknown>): Promise<A2AHandleResult> {
@@ -355,10 +356,10 @@ export function createA2AOperations(
           },
           { offset: filter.offset ?? 0, limit: filter.limit ?? 50 },
         )
-        return ok(page)
+        return core.ok(page)
       }
       catch {
-        return err(HaiAIError.A2A_LIST_MESSAGES_FAILED, aiM('ai_a2aListMessagesFailed'))
+        return core.err(HaiAIError.A2A_LIST_MESSAGES_FAILED, aiM('ai_a2aListMessagesFailed'))
       }
     },
 
@@ -424,14 +425,14 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       }
       const a2aConfig = deps.getA2AConfig()
       if (!a2aConfig) {
-        return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
+        return core.err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
       }
       if (deps.getA2AImpl()) {
-        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_a2aExecutorAlreadyRegistered'))
+        return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_a2aExecutorAlreadyRegistered'))
       }
       const stores = deps.getStores()
       if (!stores) {
-        return err(HaiAIError.STORE_FAILED, aiM('ai_internalError', {
+        return core.err(HaiAIError.STORE_FAILED, aiM('ai_internalError', {
           params: { error: 'StoreProvider not available' },
         }))
       }
@@ -442,7 +443,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       )
       deps.setA2AImpl(impl)
       logger.info('A2A executor registered', { agentName: a2aConfig.agentCard.name })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     getAgentCard() {
@@ -451,10 +452,10 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.getAgentCard()
       const a2aConfig = deps.getA2AConfig()
       if (a2aConfig)
-        return ok(buildAgentCardDocument({ ...a2aConfig.agentCard, security: a2aConfig.security }))
+        return core.ok(buildAgentCardDocument({ ...a2aConfig.agentCard, security: a2aConfig.security }))
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
+      return core.err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
 
     async handleRequest(requestBody: unknown, context?: Record<string, unknown>) {
@@ -485,7 +486,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.listMessages(filter)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
+      return core.err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
 
     async callRemoteAgent(remoteUrl, message, options) {

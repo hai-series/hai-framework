@@ -9,7 +9,7 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto, HaiCryptoError } from '@h-ai/crypto'
 
 import { iamM } from '../iam-i18n.js'
@@ -26,8 +26,8 @@ import { HaiIamError } from '../iam-types.js'
  */
 export function mapPasswordWorkError(error: HaiError): HaiResult<never> {
   return error.code === HaiCryptoError.PASSWORD_BUSY.code
-    ? err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'), error)
-    : err(HaiIamError.INTERNAL_ERROR, error.message, error)
+    ? core.err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'), error)
+    : core.err(HaiIamError.INTERNAL_ERROR, error.message, error)
 }
 
 /**
@@ -47,7 +47,7 @@ export async function rejectMissingPasswordCredentials(): Promise<HaiResult<neve
   const padded = await crypto.password.hashAsync('dummy-password-to-prevent-timing-leak')
   if (!padded.success)
     return mapPasswordWorkError(padded.error)
-  return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+  return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
 }
 
 /**
@@ -73,12 +73,12 @@ export function ensureCredentialType<TType extends Credentials['type']>(
   type: TType,
 ): HaiResult<Extract<Credentials, { type: TType }>> {
   if (credentials.type !== type) {
-    return err(
+    return core.err(
       HaiIamError.INVALID_CREDENTIALS,
       iamM('iam_credentialTypeMismatch'),
     )
   }
-  return ok(credentials as Extract<Credentials, { type: TType }>)
+  return core.ok(credentials as Extract<Credentials, { type: TType }>)
 }
 
 /**

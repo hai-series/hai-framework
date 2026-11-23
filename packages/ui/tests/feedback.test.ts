@@ -8,7 +8,7 @@ import FeedbackForm from '../src/lib/components/scenes/app/FeedbackForm.svelte'
 import FeedbackList from '../src/lib/components/scenes/app/FeedbackList.svelte'
 import FeedbackModal from '../src/lib/components/scenes/app/FeedbackModal.svelte'
 import { setUILocale } from '../src/lib/messages.js'
-import { toast } from '../src/lib/toast.svelte.js'
+import { ui } from '../src/lib/ui-toast.js'
 import FeedbackFilesHarness from './fixtures/FeedbackFilesHarness.svelte'
 
 beforeEach(() => vi.stubGlobal('ResizeObserver', class {
@@ -17,7 +17,7 @@ beforeEach(() => vi.stubGlobal('ResizeObserver', class {
   disconnect() {}
 }))
 afterEach(() => {
-  toast.clear()
+  ui.toast.clear()
   setUILocale('zh-CN')
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
@@ -74,7 +74,7 @@ it('反馈详情展示 Webhook 失败与尝试次数，独立提供重试入口'
     expect(target.textContent).not.toContain('hai:feedback:020')
     button(target, '查看排查信息').click()
     flushSync()
-    expect(toast.items.at(-1)?.message).toBe('hai:feedback:020')
+    expect(ui.toast.items.at(-1)?.message).toBe('hai:feedback:020')
     button(target, '重试').click()
     await vi.waitFor(() => expect(onretry).toHaveBeenCalledOnce())
   }
@@ -558,8 +558,8 @@ describe('feedback collection', () => {
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       flushSync()
       button(target, '提交反馈').click()
-      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('提交失败，请重试'))
-      expect(toast.items.at(-1)?.traceId).toEqual(expect.any(String))
+      await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe('提交失败，请重试'))
+      expect(ui.toast.items.at(-1)?.traceId).toEqual(expect.any(String))
       expect(target.querySelector('textarea')?.value).toBe('The save button did nothing')
       expect(target.textContent).toContain('evidence.txt')
       expect(target.textContent).toContain('Logs · 12')
@@ -570,7 +570,7 @@ describe('feedback collection', () => {
         description: 'The save button did nothing',
         files: [file],
       })
-      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('已开始下载反馈文件。'))
+      await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe('已开始下载反馈文件。'))
       expect(target.textContent).not.toContain('已开始下载反馈文件。')
     }
     finally {
@@ -719,8 +719,8 @@ describe('feedback collection', () => {
         value: [file],
       })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
-      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('操作失败，请重试'))
-      expect(toast.items.at(-1)?.traceId).toEqual(expect.any(String))
+      await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe('操作失败，请重试'))
+      expect(ui.toast.items.at(-1)?.traceId).toEqual(expect.any(String))
       expect(target.textContent).toContain('retry-image.png')
       expect(target.querySelector('textarea')?.value).toBe('Keep this description')
       expect(button(target, '提交反馈').disabled).toBe(true)
@@ -839,8 +839,8 @@ describe('feedback management', () => {
       button(target, '标记已处理').click()
       await vi.waitFor(() => expect(onstatus).toHaveBeenCalledOnce())
       expect(onstatus.mock.calls[0]?.[0]).toEqual({ id: report.id, status: 'handled', expectedVersion: 7 })
-      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('操作失败，请重试'))
-      expect(toast.items.at(-1)?.traceId).toEqual(expect.any(String))
+      await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe('操作失败，请重试'))
+      expect(ui.toast.items.at(-1)?.traceId).toEqual(expect.any(String))
       expect(target.textContent).toContain('未处理')
     }
     finally {
@@ -875,7 +875,7 @@ describe('feedback management', () => {
           })
       try {
         flushSync()
-        expect(toast.items.at(-1)).toMatchObject({ message: '您没有查看反馈的权限。', variant: 'warning' })
+        expect(ui.toast.items.at(-1)).toMatchObject({ message: '您没有查看反馈的权限。', variant: 'warning' })
         expect(target.textContent).not.toContain('FB-123')
         expect(target.querySelector('table')).toBeNull()
       }
@@ -925,7 +925,7 @@ describe('feedback management', () => {
       expect(target.textContent).not.toContain('buffer-expired')
       button(target, '缺失').click()
       flushSync()
-      expect(toast.items.at(-1)?.message).toContain('buffer-expired')
+      expect(ui.toast.items.at(-1)?.message).toContain('buffer-expired')
       button(target, '处理与投递').click()
       flushSync()
       await vi.waitFor(() => expect(button(target, '撤销处理').disabled).toBe(false))

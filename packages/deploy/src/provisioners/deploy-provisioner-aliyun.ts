@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ServiceProvisioner } from '../deploy-internal-types.js'
 import type { ProvisionResult } from '../deploy-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -59,11 +59,11 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         secretKey = akSecret
         signName = credentials.signName
         logger.info('Aliyun authenticated')
-        return ok(akId)
+        return core.ok(akId)
       }
       catch (error) {
         logger.error('Aliyun authentication failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
             params: {
@@ -79,7 +79,7 @@ export function createAliyunProvisioner(): ServiceProvisioner {
 
     async provision(_appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!accessKey || !secretKey) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -88,7 +88,7 @@ export function createAliyunProvisioner(): ServiceProvisioner {
       logger.debug('Provisioning Aliyun SMS service')
 
       // 阿里云短信不支持 API 创建资源，仅返回凭证作为环境变量
-      return ok({
+      return core.ok({
         serviceType: 'sms',
         provisionerName: 'aliyun',
         resourceStatus: 'reused',

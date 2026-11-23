@@ -16,13 +16,14 @@ export type { AiContract } from './ai/ai-contract.js'
 export * from './ai/ai-schemas.js'
 // 扁平命名空间——所有 functionality 通过 `apiContract.*` 调用。
 export { apiContract } from './api-contract-main.js'
-export * from './common/pagination-schemas.js'
+export { PaginationQuerySchema } from './common/pagination-schemas.js'
 export * from './common/response-schemas.js'
 // result-schema：仅保留 HaiErrorSchema；工厂与 void 常量走 `apiContract.haiResultSchema` / `apiContract.voidResultSchema`。
 export { HaiErrorSchema } from './common/result-schemas.js'
 // 组合 contract 输入/输出类型。
 export type { CreateApiContractOptions, CreatedApiContract } from './composition/create-api-contract.js'
-export * from './feedback/feedback-budget.js'
+export { FeedbackBudgetSchema } from './feedback/feedback-budget.js'
+export type { FeedbackBudget } from './feedback/feedback-budget.js'
 export type { FeedbackContract } from './feedback/feedback-contract.js'
 export * from './feedback/feedback-schemas.js'
 

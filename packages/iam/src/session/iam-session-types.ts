@@ -17,7 +17,7 @@ import type { AgreementDisplay, User } from '../user/iam-user-types.js'
  * 使用完全相同的 Bearer Token 认证流程。
  * @example
  * ```ts
- * import { iam, type TokenPair } from '@h-ai/iam'
+ * import { type TokenPair, iam } from '@h-ai/iam'
  * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
  * if (login.success) {
  *   const tokens: TokenPair = login.data.tokens
@@ -46,7 +46,7 @@ export interface TokenPair {
  * 调用方无需再通过 `verifyToken` 获取。
  * @example
  * ```ts
- * import { iam, type AuthResult } from '@h-ai/iam'
+ * import { type AuthResult, iam } from '@h-ai/iam'
  * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
  * if (login.success) {
  *   const authenticated: AuthResult = login.data
@@ -73,7 +73,7 @@ export interface AuthResult {
  * 会话数据
  * @example
  * ```ts
- * import { iam, type Session } from '@h-ai/iam'
+ * import { type Session, iam } from '@h-ai/iam'
  * const verified = await iam.auth.verifyToken('token-from-authorization-header')
  * if (verified.success) {
  *   const session: Session = verified.data
@@ -179,7 +179,7 @@ export interface CreateSessionOptions {
  * 会话子功能接口
  * @example
  * ```ts
- * import { iam, type SessionOperations } from '@h-ai/iam'
+ * import { type SessionOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
  * const operations: SessionOperations = iam.session
  * const result = await operations.get('token-from-authorization-header')

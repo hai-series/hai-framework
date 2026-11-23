@@ -1,6 +1,6 @@
 # 新手引导与帮助中心
 
-`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；driver.js 引擎在开始导览时动态加载，样式由 GuideHost 导入并跟随现有 DaisyUI 主题。
+`@h-ai/ui/guide` 提供 `ui.createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；driver.js 引擎在开始导览时动态加载，样式由 GuideHost 导入并跟随现有 DaisyUI 主题。
 
 ## 最小接入
 
@@ -8,14 +8,14 @@
 
 ```svelte
 <script lang='ts'>
-  import { createGuide, GuideHost } from '@h-ai/ui/guide'
-  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
+  import { GuideHost, ui } from '@h-ai/ui/guide'
+  import { kit } from '@h-ai/kit/client'
   import * as m from '#lib/paraglide/messages.js'
 
   // 按下面的用户页步骤和帮助文章创建引导控制器，使用 my-app-guide 保存进度。
-  const guide = createGuide({
+  const guide = ui.createGuide({
     // 创建当前 SvelteKit 应用的导航适配器，供引导定位用户页面。
-    nav: createSvelteKitNavAdapter(),
+    nav: kit.client.createSvelteKitNavAdapter(),
     persistKey: 'my-app-guide',
     tours: [{
       id: 'users',
@@ -52,7 +52,7 @@
 
 | API / 配置 | 契约 |
 | --- | --- |
-| `resolveGuideText(text?)` | 将字符串或 i18n 回调解析为当前文本；宿主组件已自动调用，通常无需手动解析 |
+| `ui.resolveGuideText(text?)` | 将字符串或 i18n 回调解析为当前文本；宿主组件已自动调用，通常无需手动解析 |
 | `guide.start(id)` | 手动启动或重看；返回 `Promise<boolean>`。失败返回 false，`guide.error` 为当前 UI 语言提示 |
 | `guide.startIfNeeded(id)` | 尚未看过时提供首次邀请；返回 boolean，不直接跳转。通常由 GuideHost 的 autoStart 代劳 |
 | `guide.openHelp(articleId?)` | 打开帮助中心，可直接定位文章；开始导览时自动关闭帮助弹窗 |

@@ -1,10 +1,11 @@
 /** @h-ai/storage — Node 字节内容 checksum 生成与校验，无存储生命周期依赖。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ChecksumJob } from './storage-checksum-worker.js'
 import type { ChecksumOperations, ChecksumOptions, StorageData } from './storage-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
 import { toByteStream } from './storage-stream.js'
 import { HaiStorageError } from './storage-types.js'
@@ -30,22 +31,22 @@ async function generate(data: StorageData, options: ChecksumOptions = {}): Promi
     const algorithm = options.algorithm ?? 'sha256'
     const encoding = options.encoding ?? 'hex'
     if (!ALGORITHMS.has(algorithm))
-      return err(HaiStorageError.INVALID_CHECKSUM, storageM('storage_checksumInvalid'))
+      return core.err(HaiStorageError.INVALID_CHECKSUM, storageM('storage_checksumInvalid'))
     options.signal?.throwIfAborted()
     if ((typeof data === 'string' || data instanceof Uint8Array) && data.length >= 1024 * 1024) {
       const result = await checksumPool.run({ data, algorithm, encoding })
       options.signal?.throwIfAborted()
       return result.success
         ? result
-        : err(HaiStorageError.CHECKSUM_FAILED, storageM('storage_checksumFailed'), result.error)
+        : core.err(HaiStorageError.CHECKSUM_FAILED, storageM('storage_checksumFailed'), result.error)
     }
     const hash = createHash(algorithm)
     for await (const chunk of toByteStream(data, options.signal))
       hash.update(chunk)
-    return ok(hash.digest(encoding))
+    return core.ok(hash.digest(encoding))
   }
   catch (error) {
-    return err(HaiStorageError.CHECKSUM_FAILED, storageM('storage_checksumFailed'), error)
+    return core.err(HaiStorageError.CHECKSUM_FAILED, storageM('storage_checksumFailed'), error)
   }
 }
 
@@ -68,12 +69,12 @@ export const checksum: ChecksumOperations = {
       ? expected.length % 2 === 0 && HEX_CHECKSUM.test(expected)
       : BASE64_CHECKSUM.test(expected) && expected.length > 0
     if (!valid)
-      return err(HaiStorageError.INVALID_CHECKSUM, storageM('storage_checksumInvalid'))
+      return core.err(HaiStorageError.INVALID_CHECKSUM, storageM('storage_checksumInvalid'))
     const calculated = await generate(data, options)
     if (!calculated.success)
       return calculated
     const actualBytes = Buffer.from(calculated.data, encoding)
     const expectedBytes = Buffer.from(expected, encoding)
-    return ok(actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes))
+    return core.ok(actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes))
   },
 }

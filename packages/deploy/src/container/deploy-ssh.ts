@@ -10,7 +10,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { SshConfig } from '../deploy-config.js'
 import type { CommandOptions, CommandResult } from './deploy-command.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -150,7 +150,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
     if (!usesSshPassword(config))
       return runCommand(command, args, options)
     if (!config.password || (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2147483647))) {
-      return err({
+      return core.err({
         ...HaiDeployError.REMOTE_COMMAND_FAILED,
         message: deployM('deploy_sshPasswordInvalid'),
         ext: {
@@ -165,11 +165,11 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
     if (!prepared.success)
       return prepared
     let result: HaiResult<CommandResult>
-    let removed: HaiResult<void> = ok(undefined)
+    let removed: HaiResult<void> = core.ok(undefined)
     try {
       const remaining = deadline - performance.now()
       result = remaining <= 0
-        ? err({
+        ? core.err({
             ...HaiDeployError.REMOTE_COMMAND_FAILED,
             message: deployM('deploy_sshAskpassFailed'),
             ext: {
@@ -189,7 +189,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
           })
     }
     catch {
-      result = err({
+      result = core.err({
         ...HaiDeployError.REMOTE_COMMAND_FAILED,
         message: deployM('deploy_sshAskpassFailed'),
         ext: {
@@ -203,7 +203,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
     if (!removed.success) {
       return result.success
         ? removed
-        : err({ ...result.error, message: `${result.error.message}\n${removed.error.message}` })
+        : core.err({ ...result.error, message: `${result.error.message}\n${removed.error.message}` })
     }
     return result
   }
@@ -222,7 +222,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
       return result
     const state = getDeployCommandState(result.error)
     // 连接客户端退出并不能证明远端进程结束；只增加安全状态，不暴露远程命令原文。
-    return err({
+    return core.err({
       ...result.error,
       suggestion: deployM('deploy_remoteUnknown'),
       ext: {
@@ -241,7 +241,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
     const args = buildScpUploadArgs(config, localPath, remotePath, isolated)
     const result = await runAuthenticated('scp', args, { timeoutMs: 600_000, signal: options?.signal })
     if (!result.success) {
-      return err({
+      return core.err({
         ...HaiDeployError.IMAGE_TRANSFER_FAILED,
         message: deployM('deploy_imageTransferFailed', {
           params: { error: result.error.message },
@@ -249,14 +249,14 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
         ext: result.error.ext,
       })
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   const ping: SshExecutor['ping'] = async () => {
     logger.debug('SSH preflight', { host: config.host, port: config.port })
     const result = await exec('true', { timeoutMs: 20_000 })
     if (!result.success) {
-      return err({
+      return core.err({
         ...HaiDeployError.REMOTE_CONNECT_FAILED,
         message: deployM('deploy_remoteConnectFailed', {
           params: { host: config.host, error: result.error.message },
@@ -264,7 +264,7 @@ export function createSshExecutor(config: SshConfig, isolated = false): SshExecu
         ext: result.error.ext,
       })
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   return { exec, upload, ping }

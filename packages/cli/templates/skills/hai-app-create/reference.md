@@ -212,8 +212,8 @@ export const POST = kit.handler(async ({ request, locals }) => {
 服务层位于 `#lib/server/services/`，处理业务逻辑。
 
 ```typescript
-import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import { core, ok } from '@h-ai/core'
+
+import { type HaiResult, type PaginatedResult, core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 // Article/CreateArticleInput/ListParams 为应用类型；已完成建表。
@@ -233,7 +233,7 @@ export async function createArticle(input: CreateArticleInput): Promise<HaiResul
   const result = await articles.create({ id: article.id, title: article.title, created_at: article.createdAt })
   if (!result.success) return result
   // 将新 Article 放在 success=true 的 HaiResult.data 中。
-  return ok(article)
+  return core.ok(article)
 }
 
 export async function listArticles(params: ListParams): Promise<HaiResult<PaginatedResult<Article>>> {

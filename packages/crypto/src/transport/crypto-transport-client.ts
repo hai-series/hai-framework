@@ -20,7 +20,7 @@ import type {
   TransportKeyPair,
   TransportMessageContext,
 } from './crypto-transport-types.js'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
@@ -136,10 +136,10 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   async function doInit(attemptGeneration: number): Promise<HaiResult<TransportClientSession>> {
     const kpResult = options.crypto.asymmetric.generateKeyPair()
     if (!kpResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
+      return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
     const localKeyPair = kpResult.data
     if (new TextEncoder().encode(localKeyPair.publicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'))
+      return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'))
 
     const controller = new AbortController()
     handshakeController = controller
@@ -157,12 +157,12 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         })
       }
       catch (cause) {
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'), cause)
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'), cause)
       }
 
       if (!response.ok) {
         void response.body?.cancel().catch(() => {})
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', {
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', {
           params: { status: response.status },
         }))
       }
@@ -176,10 +176,10 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       }
       catch {
         // JSON 解析异常可能包含响应片段，不能进入 HaiResult/cause。
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'))
       }
       if (!isKeyExchangeResponse(body)) {
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
       }
 
       let bodyLimits: TransportBodyLimits
@@ -188,11 +188,11 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         bodyLimits = resolveTransportBodyLimits(Math.min(localLimits?.plaintextBytes ?? serverLimits.plaintextBytes, serverLimits.plaintextBytes))
       }
       catch {
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportBodyLimitInvalid'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportBodyLimitInvalid'))
       }
 
       if (attemptGeneration !== generation || controller.signal.aborted)
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
 
       const ttlMs = body.clientKeyTtlSeconds === undefined
         ? Number.POSITIVE_INFINITY
@@ -209,9 +209,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         monotonicRenewAt: monotonicStart + usableMs,
       }
       if (!isSessionUsable(nextSession))
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'))
+        return core.err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'))
       session = nextSession
-      return ok(nextSession)
+      return core.ok(nextSession)
     }
     finally {
       clearTimeout(timeout)
@@ -233,7 +233,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
    */
   async function ensureReady(): Promise<HaiResult<TransportClientSession>> {
     if (session && isSessionUsable(session))
-      return ok(session)
+      return core.ok(session)
     if (!initPromise) {
       session = undefined
       const pending = doInit(generation).finally(() => {
@@ -468,7 +468,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     async init() {
       const ready = await ensureReady()
       return ready.success
-        ? ok(undefined)
+        ? core.ok(undefined)
         : ready
     },
     encryptedFetch,

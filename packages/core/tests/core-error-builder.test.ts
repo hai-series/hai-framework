@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { err, HaiCommonError, HaiConfigError } from '../src/index.js'
+import { core, HaiCommonError, HaiConfigError } from '../src/index.js'
 
 describe('core.error', () => {
   // =========================================================================
@@ -80,7 +80,7 @@ describe('core.error', () => {
 
   describe('integration with err() function', () => {
     it('should work with err() to create HaiResult', () => {
-      const result = err(HaiCommonError.NOT_FOUND, 'Resource not found')
+      const result = core.err(HaiCommonError.NOT_FOUND, 'Resource not found')
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe('hai:common:300')
@@ -91,7 +91,7 @@ describe('core.error', () => {
 
     it('should support cause and suggestion', () => {
       const cause = new Error('Original error')
-      const result = err(
+      const result = core.err(
         HaiCommonError.INTERNAL_ERROR,
         'Processing failed',
         cause,

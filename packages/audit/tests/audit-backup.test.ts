@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, realpath, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -181,7 +181,7 @@ function tests() {
   it('扫描 SQL 失败会清理半成品，恢复后同一编号可以完成', async () => {
     const query = reldb.sql.query.bind(reldb.sql)
     const spy = vi.spyOn(reldb.sql, 'query').mockImplementation((sql, params) => sql.startsWith('SELECT id AS')
-      ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'Injected archive scan failure'))
+      ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'Injected archive scan failure'))
       : query(sql, params))
     try {
       expect((await audit.backup.run({ id: 'failed-scan' })).success).toBe(false)

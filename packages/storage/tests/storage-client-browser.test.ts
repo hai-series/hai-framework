@@ -164,7 +164,7 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       })
       expect(pageErrors).toEqual([])
       expect(evidence).toEqual({
-        operations: ['client'],
+        operations: ['client', 'getKeyIssue'],
         mime: 'text/plain',
         hasLegacyUpload: false,
         content: 'Storage download content',

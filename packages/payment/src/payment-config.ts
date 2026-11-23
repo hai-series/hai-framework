@@ -133,7 +133,7 @@ export type PaymentConfig = z.infer<typeof PaymentConfigSchema>
  * 支付初始化输入；允许省略由 Schema 补齐的配置默认值。
  * @example
  * ```ts
- * import { payment, type PaymentConfigInput } from '@h-ai/payment'
+ * import { type PaymentConfigInput, payment } from '@h-ai/payment'
  * async function initializePayment(input: PaymentConfigInput) {
  *   // 启用 Stripe 时，宿主已经先初始化共享 reldb 并检查成功。
  *   const result = await payment.init(input)

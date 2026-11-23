@@ -8,7 +8,7 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { toast } from '@h-ai/ui'
+  import { ui } from '@h-ai/ui'
   import * as m from '#lib/paraglide/messages.js'
 
   interface Props {
@@ -39,10 +39,10 @@
 
     try {
       await navigator.clipboard.writeText(code)
-      toast.success(m.gallery_code_copied())
+      ui.toast.success(m.gallery_code_copied())
     }
     catch {
-      toast.error(m.gallery_copy_failed())
+      ui.toast.error(m.gallery_copy_failed())
     }
   }
 </script>

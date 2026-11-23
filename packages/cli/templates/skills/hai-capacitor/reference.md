@@ -6,7 +6,7 @@
 
 ## 运行环境
 
-> **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力；`createCapacitorTokenStorage()` 仅在原生环境持久化 token，纯 Web 不做不安全回退。`capacitor.preferences` 仍可用于普通偏好数据。
+> **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力；`capacitor.createTokenStorage()` 仅在原生环境持久化 token，纯 Web 不做不安全回退。`capacitor.preferences` 仍可用于普通偏好数据。
 
 ### Android 容器打包
 
@@ -71,19 +71,19 @@ if (!closed.success)
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 // 使用应用提供的 apiBase 和原生凭据存储配置客户端。初始化失败返回错误。
 await apiClient.init({
   baseUrl: apiBase,
   auth: {
     // 创建安全令牌适配器供客户端持久化凭据，后续访问原生插件可能失败。
-    storage: createCapacitorTokenStorage(),
+    storage: capacitor.createTokenStorage(),
   },
 })
 ```
 
-`createCapacitorTokenStorage()` 返回 `TokenStorage` 实例（兼容 `@h-ai/api-client`），底层使用 `@aparajita/capacitor-secure-storage`：
+`capacitor.createTokenStorage()` 返回 `TokenStorage` 实例（兼容 `@h-ai/api-client`），底层使用 `@aparajita/capacitor-secure-storage`：
 
 - Android → Android KeyStore + 加密 SharedPreferences
 - iOS → Keychain
@@ -242,7 +242,7 @@ await capacitor.statusBar.show()
 | `capacitor.getPlatform()` | 获取当前平台 | `'android' \| 'ios' \| 'web'` |
 | `capacitor.isNative()` | 是否为原生环境 | `boolean` |
 | `capacitor.isInitialized` | 是否已初始化 | `boolean` |
-| `createCapacitorTokenStorage()` | 创建 Token 存储 | `TokenStorage`（兼容 api-client） |
+| `capacitor.createTokenStorage()` | 创建 Token 存储 | `TokenStorage`（兼容 api-client） |
 | `capacitor.preferences.get(key)` | 初始化成功后读取普通偏好 | `Promise<HaiResult<string \| null>>` |
 | `capacitor.preferences.set(key, value)` | 初始化成功后写入普通偏好 | `Promise<HaiResult<void>>` |
 | `capacitor.preferences.remove(key)` | 初始化成功后删除普通偏好 | `Promise<HaiResult<void>>` |
@@ -337,7 +337,7 @@ export default config
 ```typescript
 // src/lib/api.ts
 import { apiClient } from '@h-ai/api-client'
-import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+import { capacitor } from '@h-ai/capacitor'
 
 export async function initApi(apiBase: string) {
   // 按调用方给出的 API 根地址和原生安全存储初始化。将成功或失败结果交回调用者。
@@ -345,7 +345,7 @@ export async function initApi(apiBase: string) {
     baseUrl: apiBase,
     auth: {
       // 创建原生安全令牌适配器，供认证模块后续读写。
-      storage: createCapacitorTokenStorage(),
+      storage: capacitor.createTokenStorage(),
     },
   })
 }
@@ -423,7 +423,7 @@ async function captureAndUpload() {
 | 插件 | 类型 | 用于 |
 | --- | --- | --- |
 | `@capacitor/core` | peerDependency（必需） | 核心运行时 |
-| `@aparajita/capacitor-secure-storage` | 可选 peerDependency（原生 token 存储必需） | `createCapacitorTokenStorage()` |
+| `@aparajita/capacitor-secure-storage` | 可选 peerDependency（原生 token 存储必需） | `capacitor.createTokenStorage()` |
 | `@capacitor/preferences` | peerDependency（必需） | `capacitor.preferences.*` 普通偏好数据 |
 | `@capacitor/device` | 可选 | `getDeviceInfo()` |
 | `@capacitor/app` | 可选 | `getAppVersion()` |

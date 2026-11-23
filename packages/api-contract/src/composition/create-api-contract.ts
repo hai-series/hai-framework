@@ -12,8 +12,8 @@ import type { AnyContractRouter } from '@orpc/contract'
  * API contract 组合输入。key 为领域名称，value 为领域 contract 或 false/undefined（跳过该领域）。
  * @example
  * ```ts
- * import type { CreateApiContractOptions } from '@h-ai/api-contract'
- * import { apiContract } from '@h-ai/api-contract'
+ *
+ * import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
  *
  * const parts = { iam: apiContract.iam, payment: false } satisfies CreateApiContractOptions
  * const contract = apiContract.create(parts)
@@ -26,8 +26,8 @@ export type CreateApiContractOptions = Record<string, AnyContractRouter | false 
  * 根据输入过滤 false/undefined 后得到的应用级 contract 类型。
  * @example
  * ```ts
- * import type { CreatedApiContract } from '@h-ai/api-contract'
- * import { apiContract } from '@h-ai/api-contract'
+ *
+ * import { type CreatedApiContract, apiContract } from '@h-ai/api-contract'
  *
  * const parts = { iam: apiContract.iam, payment: false } as const
  * const contract: CreatedApiContract<typeof parts> = apiContract.create(parts)

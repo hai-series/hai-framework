@@ -10,7 +10,6 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
-
 import type { ReachFunctions } from '@h-ai/reach'
 import type { ApiKeyOperations } from './authn/apikey/iam-authn-apikey-types.js'
 import type { AuthnOperations } from './authn/iam-authn-types.js'
@@ -198,7 +197,7 @@ export interface IamConfigInput extends IamConfigSettingsInput {
  * 统一聚合所有 IAM 功能。
  * @example
  * ```ts
- * import { iam, type IamFunctions } from '@h-ai/iam'
+ * import { type IamFunctions, iam } from '@h-ai/iam'
  * const service: IamFunctions = iam
  * // 应用先初始化 Cache、RelDB、Crypto；关闭时先停止接收请求。
  * const initialized = await service.init({ seedDefaultData: false })

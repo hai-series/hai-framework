@@ -3,10 +3,11 @@
  * word 按非空白词计数，其他模式按 Unicode code point 计数，均先计入 overlap。
  * @module datapipe-chunk
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { ChunkMode, ChunkOptionsInput } from './datapipe-config.js'
 import type { DataChunk } from './datapipe-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { ChunkOptionsSchema } from './datapipe-config.js'
 import { datapipeConfigError, datapipeM } from './datapipe-i18n.js'
 import { HaiDatapipeError } from './datapipe-types.js'
@@ -25,7 +26,7 @@ const MAX_CHUNK_OUTPUT_CODE_UNITS = 16_777_216
 type ChunkRange = [start: number, end: number]
 
 function chunkLimitExceeded(): HaiResult<never> {
-  return err(HaiDatapipeError.CHUNK_LIMIT_EXCEEDED, datapipeM('datapipe_chunkLimitExceeded', {
+  return core.err(HaiDatapipeError.CHUNK_LIMIT_EXCEEDED, datapipeM('datapipe_chunkLimitExceeded', {
     params: { maxChunks: MAX_CHUNKS, maxCodeUnits: MAX_CHUNK_OUTPUT_CODE_UNITS },
   }))
 }
@@ -222,13 +223,13 @@ export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<D
     return datapipeConfigError(parsed.error)
   const opts = parsed.data
   if (opts.mode === 'custom' && !opts.separator)
-    return err(HaiDatapipeError.MISSING_SEPARATOR, datapipeM('datapipe_missingSeparator'))
+    return core.err(HaiDatapipeError.MISSING_SEPARATOR, datapipeM('datapipe_missingSeparator'))
   try {
     const expression = modeExpression(opts.mode === 'markdown'
       ? 'paragraph'
       : opts.mode, opts.separator)
     if (!text || text.trim().length === 0)
-      return ok([])
+      return core.ok([])
 
     const sections = opts.mode === 'markdown'
       ? markdownSections(text, opts.markdownMinLevel)
@@ -266,10 +267,10 @@ export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<D
           chunks[index]!.metadata!.subChunk = true
       }
     }
-    return ok(chunks)
+    return core.ok(chunks)
   }
   catch (cause) {
-    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', {
+    return core.err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', {
       params: {
         error: String(cause),
       },

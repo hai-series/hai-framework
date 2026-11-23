@@ -7,28 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  applyTheme,
-  createThemeBootstrapScript,
-  DAISYUI_THEMES_CONFIG,
-  DARK_THEMES,
-  DEFAULT_THEME,
-  DEFAULT_THEME_COLOR,
-  DEFAULT_THEME_COLOR_CSS_VAR,
-  getCurrentTheme,
-  getSavedTheme,
-  getThemeInfo,
-  getThemeInitScript,
-  isDarkTheme,
-  normalizeHexColor,
-  normalizeThemeId,
-  resolveThemeTone,
-  SUPPORTED_THEME_IDS,
-  THEME_COLOR_PRESETS,
-  THEME_GROUPS,
-  THEME_STORAGE_KEY,
-  THEMES,
-} from '../src/lib/theme-config.js'
+import { DAISYUI_THEMES_CONFIG, DARK_THEMES, DEFAULT_THEME, DEFAULT_THEME_COLOR, DEFAULT_THEME_COLOR_CSS_VAR, SUPPORTED_THEME_IDS, THEME_COLOR_PRESETS, THEME_GROUPS, THEME_STORAGE_KEY, THEMES, ui } from '../src/lib/ui-theme.js'
 
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -36,8 +15,8 @@ const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, '
 it('主题工具可通过公开子路径在浏览器条件下导入', async () => {
   const theme = await import('@h-ai/ui/theme')
   expect(theme.DEFAULT_THEME).toBe(DEFAULT_THEME)
-  expect(typeof theme.applyTheme).toBe('function')
-  expect(typeof theme.getSavedTheme).toBe('function')
+  expect(typeof theme.ui.applyTheme).toBe('function')
+  expect(typeof theme.ui.getSavedTheme).toBe('function')
 })
 
 afterEach(() => {
@@ -180,7 +159,7 @@ describe('tHEME_GROUPS - 主题分组', () => {
 
 describe('getThemeInfo - 获取主题信息', () => {
   it('应该返回已知主题的信息', () => {
-    const info = getThemeInfo('light')
+    const info = ui.getThemeInfo('light')
     expect(info).toBeDefined()
     expect(info!.id).toBe('light')
     expect(info!.name).toBe('Light')
@@ -188,18 +167,18 @@ describe('getThemeInfo - 获取主题信息', () => {
   })
 
   it('应该返回暗色主题的信息', () => {
-    const info = getThemeInfo('dracula')
+    const info = ui.getThemeInfo('dracula')
     expect(info).toBeDefined()
     expect(info!.id).toBe('dracula')
     expect(info!.dark).toBe(true)
   })
 
   it('不存在的主题应返回 undefined', () => {
-    expect(getThemeInfo('nonexistent')).toBeUndefined()
+    expect(ui.getThemeInfo('nonexistent')).toBeUndefined()
   })
 
   it('空字符串应返回 undefined', () => {
-    expect(getThemeInfo('')).toBeUndefined()
+    expect(ui.getThemeInfo('')).toBeUndefined()
   })
 })
 
@@ -209,65 +188,65 @@ describe('getThemeInfo - 获取主题信息', () => {
 
 describe('isDarkTheme - 暗色主题判断', () => {
   it('暗色主题应返回 true', () => {
-    expect(isDarkTheme('dark')).toBe(true)
-    expect(isDarkTheme('dracula')).toBe(true)
-    expect(isDarkTheme('night')).toBe(true)
-    expect(isDarkTheme('coffee')).toBe(true)
-    expect(isDarkTheme('sunset')).toBe(true)
+    expect(ui.isDarkTheme('dark')).toBe(true)
+    expect(ui.isDarkTheme('dracula')).toBe(true)
+    expect(ui.isDarkTheme('night')).toBe(true)
+    expect(ui.isDarkTheme('coffee')).toBe(true)
+    expect(ui.isDarkTheme('sunset')).toBe(true)
   })
 
   it('亮色主题应返回 false', () => {
-    expect(isDarkTheme('light')).toBe(false)
-    expect(isDarkTheme('cupcake')).toBe(false)
-    expect(isDarkTheme('emerald')).toBe(false)
-    expect(isDarkTheme('winter')).toBe(false)
+    expect(ui.isDarkTheme('light')).toBe(false)
+    expect(ui.isDarkTheme('cupcake')).toBe(false)
+    expect(ui.isDarkTheme('emerald')).toBe(false)
+    expect(ui.isDarkTheme('winter')).toBe(false)
   })
 
   it('不存在的主题应返回 false', () => {
-    expect(isDarkTheme('nonexistent')).toBe(false)
-    expect(isDarkTheme('')).toBe(false)
+    expect(ui.isDarkTheme('nonexistent')).toBe(false)
+    expect(ui.isDarkTheme('')).toBe(false)
   })
 })
 
 describe('normalizeThemeId - 主题 ID 归一化', () => {
   it('应保留支持的主题 ID', () => {
-    expect(normalizeThemeId('night')).toBe('night')
+    expect(ui.normalizeThemeId('night')).toBe('night')
   })
 
   it('不支持的主题 ID 应回退到默认主题', () => {
-    expect(normalizeThemeId('unknown')).toBe(DEFAULT_THEME)
+    expect(ui.normalizeThemeId('unknown')).toBe(DEFAULT_THEME)
   })
 
   it('应支持自定义 fallback', () => {
-    expect(normalizeThemeId('unknown', 'coffee')).toBe('coffee')
+    expect(ui.normalizeThemeId('unknown', 'coffee')).toBe('coffee')
   })
 
   it('fallback 非法时仍应回退到默认主题', () => {
-    expect(normalizeThemeId('unknown', 'invalid')).toBe(DEFAULT_THEME)
+    expect(ui.normalizeThemeId('unknown', 'invalid')).toBe(DEFAULT_THEME)
   })
 })
 
 describe('normalizeHexColor - Hex 颜色归一化', () => {
   it('应保留合法的 6 位 Hex 颜色', () => {
-    expect(normalizeHexColor('#5765f0')).toBe('#5765f0')
+    expect(ui.normalizeHexColor('#5765f0')).toBe('#5765f0')
   })
 
   it('应把合法的 3 位 Hex 颜色扩展为 6 位', () => {
-    expect(normalizeHexColor('#abc')).toBe('#aabbcc')
+    expect(ui.normalizeHexColor('#abc')).toBe('#aabbcc')
   })
 
   it('非法颜色应返回 null', () => {
-    expect(normalizeHexColor('rgb(0,0,0)')).toBeNull()
+    expect(ui.normalizeHexColor('rgb(0,0,0)')).toBeNull()
   })
 })
 
 describe('resolveThemeTone - 主题 tone 解析', () => {
   it('暗色主题应返回 dark', () => {
-    expect(resolveThemeTone('night')).toBe('dark')
+    expect(ui.resolveThemeTone('night')).toBe('dark')
   })
 
   it('亮色主题应返回 light', () => {
-    expect(resolveThemeTone('light')).toBe('light')
+    expect(ui.resolveThemeTone('light')).toBe('light')
   })
 })
 
@@ -307,34 +286,34 @@ describe('常量定义', () => {
 
 describe('getThemeInitScript - 主题初始化脚本', () => {
   it('应返回包含 localStorage 读取逻辑的脚本', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(typeof script).toBe('string')
     expect(script.length).toBeGreaterThan(0)
   })
 
   it('脚本应引用正确的 localStorage key', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(script).toContain(THEME_STORAGE_KEY)
   })
 
   it('脚本应包含默认主题 fallback', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(script).toContain(DEFAULT_THEME)
   })
 
   it('脚本应设置 data-theme 属性', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(script).toContain('data-theme')
   })
 
   it('脚本应在读取 localStorage 时自行兜底异常', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(script).toContain('try{')
     expect(script).toContain('catch{')
   })
 
   it('脚本应该是自执行函数', () => {
-    const script = getThemeInitScript()
+    const script = ui.getThemeInitScript()
     expect(script.startsWith('(function(){')).toBe(true)
     expect(script.endsWith('})()')).toBe(true)
   })
@@ -342,7 +321,7 @@ describe('getThemeInitScript - 主题初始化脚本', () => {
 
 describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
   it('应包含 storage key、主题色和 tone dataset 配置', () => {
-    const script = createThemeBootstrapScript({
+    const script = ui.createThemeBootstrapScript({
       storageKey: 'hai-demo-preferences',
       defaultThemeId: 'night',
       defaultThemeColor: '#abc',
@@ -363,7 +342,7 @@ describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
   })
 
   it('当不处理主题色时应生成 removeProperty 分支', () => {
-    const script = createThemeBootstrapScript({
+    const script = ui.createThemeBootstrapScript({
       storageKey: 'hai-demo-preferences',
       defaultThemeColor: null,
       colorCssVar: '--demo-theme-color',
@@ -379,7 +358,7 @@ describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
 
 describe('getCurrentTheme - 获取当前主题', () => {
   it('node 环境应返回默认主题', () => {
-    const theme = getCurrentTheme()
+    const theme = ui.getCurrentTheme()
     expect(theme).toBe(DEFAULT_THEME)
   })
 })
@@ -390,9 +369,9 @@ describe('getCurrentTheme - 获取当前主题', () => {
 
 describe('getSavedTheme - 获取保存的主题', () => {
   it('node 环境应返回默认主题', () => {
-    const theme = getSavedTheme()
+    const theme = ui.getSavedTheme()
     expect(theme).toBe(DEFAULT_THEME)
-    expect(getSavedTheme('corporate')).toBe('corporate')
+    expect(ui.getSavedTheme('corporate')).toBe('corporate')
   })
 
   it('localStorage 抛错时也应回退默认主题', () => {
@@ -405,8 +384,8 @@ describe('getSavedTheme - 获取保存的主题', () => {
       },
     })
 
-    expect(getSavedTheme()).toBe(DEFAULT_THEME)
-    expect(getSavedTheme('corporate')).toBe('corporate')
+    expect(ui.getSavedTheme()).toBe(DEFAULT_THEME)
+    expect(ui.getSavedTheme('corporate')).toBe('corporate')
   })
 
   it('保存的用户主题优先于宿主默认主题', () => {
@@ -416,7 +395,7 @@ describe('getSavedTheme - 获取保存的主题', () => {
         getItem: vi.fn(() => 'dark'),
       },
     })
-    expect(getSavedTheme('corporate')).toBe('dark')
+    expect(ui.getSavedTheme('corporate')).toBe('dark')
   })
 })
 
@@ -446,7 +425,7 @@ describe('applyTheme - 主题应用', () => {
       },
     })
 
-    expect(() => applyTheme('dark')).not.toThrow()
+    expect(() => ui.applyTheme('dark')).not.toThrow()
     expect(setAttribute).toHaveBeenCalledWith('data-theme', 'dark')
   })
 })

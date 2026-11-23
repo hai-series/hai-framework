@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { LoginFailurePolicy } from '../authn/iam-authn-utils.js'
 import type { StoredUser } from './iam-user-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { guardIamMutation } from '../iam-cache.js'
 import { iamM } from '../iam-i18n.js'
@@ -105,7 +105,7 @@ export async function lockIamUser(tx: DmlWithTxOperations, userId: string): Prom
     ? await tx.execute(`UPDATE ${TABLE_NAME} SET id = id WHERE id = ?`, [userId])
     : await tx.get(`SELECT id FROM ${TABLE_NAME} WHERE id = ? FOR UPDATE`, [userId])
   return locked.success
-    ? ok(undefined)
+    ? core.ok(undefined)
     : locked
 }
 
@@ -423,7 +423,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       userId,
     ])
     return result.success
-      ? ok(undefined)
+      ? core.ok(undefined)
       : this.buildQueryError(result.error, result.error)
   }
 
@@ -441,7 +441,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       ],
     )
     return result.success
-      ? ok(result.data.changes)
+      ? core.ok(result.data.changes)
       : this.buildQueryError(result.error, result.error)
   }
 
@@ -464,7 +464,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       ],
     )
     return result.success
-      ? ok(result.data.changes === 1)
+      ? core.ok(result.data.changes === 1)
       : this.buildQueryError(result.error, result.error)
   }
 
@@ -472,7 +472,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   async publishPasswordReset(input: { user: StoredUser, tokenHash: string, expiresAt: Date }): Promise<HaiResult<boolean>> {
     const expiry = input.expiresAt.getTime()
     if (!Number.isSafeInteger(expiry))
-      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_resetTokenInvalid'))
+      return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_resetTokenInvalid'))
     const result = await reldb.sql.execute(
       `UPDATE ${TABLE_NAME} SET reset_hash = ?, reset_expires_at = ?, reset_attempts = 0, reset_version = ? WHERE id = ? AND credential_version = ? AND reset_version = ? AND account_status = ? AND ? > ${this.databaseNow()}`,
       [
@@ -487,7 +487,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       ],
     )
     return result.success
-      ? ok(result.data.changes === 1)
+      ? core.ok(result.data.changes === 1)
       : this.buildQueryError(result.error, result.error)
   }
 
@@ -498,11 +498,11 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       return found
     const user = found.data
     if (!user)
-      return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+      return core.err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
     if (!isUserActive(user))
-      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     if ((user.resetAttempts ?? 0) >= maxAttempts)
-      return err(HaiIamError.RESET_TOKEN_MAX_ATTEMPTS, iamM('iam_resetTokenMaxAttempts'))
+      return core.err(HaiIamError.RESET_TOKEN_MAX_ATTEMPTS, iamM('iam_resetTokenMaxAttempts'))
     const version = crypto.randomUUID()
     const result = await reldb.sql.execute(
       `UPDATE ${TABLE_NAME} SET reset_attempts = reset_attempts + 1, reset_version = ? WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_attempts < ? AND reset_expires_at > ${this.databaseNow()} AND account_status = ?`,
@@ -519,8 +519,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     if (!result.success)
       return this.buildQueryError(result.error, result.error)
     if (result.data.changes !== 1)
-      return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
-    return ok({ ...user, resetVersion: version, resetAttempts: (user.resetAttempts ?? 0) + 1 })
+      return core.err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+    return core.ok({ ...user, resetVersion: version, resetAttempts: (user.resetAttempts ?? 0) + 1 })
   }
 
   /** 密码与令牌消费同一行原子提交，禁止先消费 Redis 凭据再无条件写数据库。 */
@@ -542,13 +542,13 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       ],
     )
     return result.success
-      ? ok(result.data.changes === 1)
+      ? core.ok(result.data.changes === 1)
       : this.buildQueryError(result.error, result.error)
   }
 
   async recordLoginFailure(userId: string, policy: LoginFailurePolicy): Promise<HaiResult<void>> {
     if (policy.lockoutEnabled === false)
-      return ok(undefined)
+      return core.ok(undefined)
     const sqlite = reldb.config?.type === 'sqlite'
     const timestamp = Date.now()
     const now = sqlite
@@ -578,7 +578,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     )
     if (!result.success)
       return this.buildQueryError(result.error, result.error)
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   async resetLoginFailures(userId: string, expectedCredentialVersion: string, lockoutEnabled = true): Promise<HaiResult<void>> {
@@ -599,13 +599,13 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       if (!user.success)
         return user
       if (!user.data || !isUserActive(user.data))
-        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if ((user.data.credentialVersion ?? '') !== expectedCredentialVersion)
-        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+        return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       if (lockoutEnabled && user.data.lockedUntil && user.data.lockedUntil > new Date())
-        return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+        return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   /** 根据用户名查找用户 */
@@ -646,7 +646,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
    * @param cause - 错误原因
    */
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM('iam_queryUserFailed', {
         params: { message: error.message },
@@ -667,7 +667,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   /**
@@ -683,6 +683,6 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }
-    return ok(result.data[0] ?? null)
+    return core.ok(result.data[0] ?? null)
   }
 }

@@ -141,7 +141,7 @@ export const ${contractName} = {
 `
   const procedureContent = `${domainMarker}
 import type { ServContext } from '@h-ai/serv'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { ${contractName} } from '${contract.name}'
 
@@ -154,8 +154,8 @@ export function ${factoryName}() {
   return serv
     .implement(${contractName})
     .context<ServContext>()
-    .route('list', () => ok({ items: [] }))
-    .route('create', ({ input }) => ok({ name: input.name }))
+    .route('list', () => core.ok({ items: [] }))
+    .route('create', ({ input }) => core.ok({ name: input.name }))
     .build()
 }
 `

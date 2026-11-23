@@ -9,7 +9,6 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { CompressConfig } from '../ai-config.js'
-
 import type { CompressOperations } from '../compress/ai-compress-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { MemoryOperations } from '../memory/ai-memory-types.js'
@@ -18,6 +17,7 @@ import type { ReasoningOperations } from '../reasoning/ai-reasoning-types.js'
 import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type { SummaryOperations, SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
+
 import type { ContextGeneration, PersistedContextState } from './ai-context-state.js'
 
 import type {
@@ -32,8 +32,7 @@ import type {
   ContextStreamEvent,
   ConversationTurn,
 } from './ai-context-types.js'
-
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { createStreamProcessor } from '../llm/ai-llm-stream.js'
@@ -80,7 +79,7 @@ function contextFailure(error: unknown): HaiResult<never> {
   const code = error instanceof ContextStateError
     ? error.definition
     : HaiAIError.STORE_FAILED
-  return err(code, aiM('ai_sessionFailed', {
+  return core.err(code, aiM('ai_sessionFailed', {
     params: {
       error: String(error),
     },
@@ -337,7 +336,7 @@ export function createContextOperations(
           })
           if (!generation) {
             if (concurrency === 'reject')
-              return err(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
+              return core.err(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
             await waitForContext(caller)
             continue
           }
@@ -373,7 +372,7 @@ export function createContextOperations(
           signal.addEventListener('abort', onAbort, { once: true })
           if (signal.aborted)
             onAbort()
-          return ok({ generation, signal, release })
+          return core.ok({ generation, signal, release })
         }
       }
       catch (error) { return contextFailure(error) }
@@ -429,31 +428,31 @@ export function createContextOperations(
             await append(candidate, message)
             return { value: undefined }
           })
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) { return contextFailure(error) }
       },
       async reload(): Promise<HaiResult<void>> {
         try {
           await access.read()
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) { return contextFailure(error) }
       },
 
       getMessages(): HaiResult<ChatMessage[]> {
-        return ok(structuredClone(state.messages))
+        return core.ok(structuredClone(state.messages))
       },
 
       getTokenUsage(): HaiResult<{ current: number, budget: number }> {
-        return ok({
+        return core.ok({
           current: tokenOps.estimateMessages(state.messages),
           budget: managerMaxTokens,
         })
       },
 
       getSummaries(): HaiResult<SummaryResult[]> {
-        return ok(structuredClone(state.summaries))
+        return core.ok(structuredClone(state.summaries))
       },
 
       async save(): Promise<HaiResult<void>> {
@@ -464,7 +463,7 @@ export function createContextOperations(
           // 消息即时 CAS；save 仅同步共享快照和目录，绝不覆盖远端新版本。
           await access.mutate(() => ({ value: undefined }))
           await touchSession(scope)
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) { return contextFailure(error) }
       },
@@ -493,11 +492,11 @@ export function createContextOperations(
               producer.stop()
             }
           }
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) { return contextFailure(error) }
       },
-      getTurns(): HaiResult<ConversationTurn[]> { return ok(structuredClone(state.turns)) },
+      getTurns(): HaiResult<ConversationTurn[]> { return core.ok(structuredClone(state.turns)) },
       async markTurnSpeaking(turnId: string): Promise<HaiResult<void>> {
         try {
           await access.mutate((candidate, now) => {
@@ -517,7 +516,7 @@ export function createContextOperations(
                 : undefined,
             }
           })
-          return ok(undefined)
+          return core.ok(undefined)
         }
         catch (error) { return contextFailure(error) }
       },
@@ -532,7 +531,7 @@ export function createContextOperations(
 
       async consolidate(consolidateOpts?: ConsolidateOptions): Promise<HaiResult<ConsolidateResult>> {
         if (!deps?.summary || !deps?.memory) {
-          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
+          return core.err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
             params: { error: 'summary/memory deps unavailable' },
           }))
         }
@@ -555,7 +554,7 @@ export function createContextOperations(
           const summaryText = summaryResult.data
 
           if (!summaryText.trim()) {
-            return ok({ summary: summaryText, memories: [] })
+            return core.ok({ summary: summaryText, memories: [] })
           }
 
           // 2) 从摘要中提取长期记忆，写入持久作用域（默认取管理器 memory.scope，通常不含 sessionId）
@@ -575,11 +574,11 @@ export function createContextOperations(
           if (!extracted.success)
             return extracted
 
-          return ok({ summary: summaryText, memories: extracted.data })
+          return core.ok({ summary: summaryText, memories: extracted.data })
         }
         catch (error) {
           logger.error('Context consolidate failed', { error })
-          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
+          return core.err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
             params: {
               error: String(error),
             },
@@ -599,10 +598,10 @@ export function createContextOperations(
           const failed = failedMemoryTasks
           failedMemoryTasks = 0
           return failed > 0
-            ? err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_contextMemoryTasksFailed', {
+            ? core.err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_contextMemoryTasksFailed', {
                 params: { count: failed },
               }))
-            : ok(undefined)
+            : core.ok(undefined)
         })().finally(() => { memoryFlush = undefined })
         return memoryFlush
       },
@@ -611,7 +610,7 @@ export function createContextOperations(
 
       async chat(message: string, chatOpts?: ContextChatOptions): Promise<HaiResult<ContextChatResult>> {
         if (!deps?.llm) {
-          return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+          return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
         }
 
         // 单活动生成：获取许可（reject 时直接返回 CONTEXT_BUSY）
@@ -654,7 +653,7 @@ export function createContextOperations(
               const reply = ragResult.data.answer
               turnId = await finalizeAssistantReply(generation, reply)
 
-              return ok({
+              return core.ok({
                 reply,
                 model: ragResult.data.model,
                 turnId,
@@ -681,7 +680,7 @@ export function createContextOperations(
               const reply = reasonResult.data.answer
               turnId = await finalizeAssistantReply(generation, reply)
 
-              return ok({
+              return core.ok({
                 reply,
                 model: chatOpts?.model ?? options.model ?? '',
                 turnId,
@@ -759,7 +758,7 @@ export function createContextOperations(
             // 完成本轮生成：auto 直接提交完整文本，manual 登记待提交轮次
             turnId = await finalizeAssistantReply(generation, reply)
 
-            return ok({
+            return core.ok({
               reply,
               model: lastModel,
               turnId,
@@ -773,7 +772,7 @@ export function createContextOperations(
             ? lastAssistantMsg.content
             : ''
           turnId = await finalizeAssistantReply(generation, fallbackReply)
-          return ok({
+          return core.ok({
             reply: fallbackReply,
             model: lastModel,
             turnId,
@@ -1093,7 +1092,7 @@ export function createContextOperations(
         producers.get(turnId)?.stop()
         if (extracted?.reply)
           enqueueMemoryExtract(extracted.user, extracted.reply)
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) { return contextFailure(error) }
     }
@@ -1124,25 +1123,25 @@ export function createContextOperations(
     createManager(options: ContextManagerOptions): HaiResult<ContextManager> {
       try {
         if (!validScope(options?.scope))
-          return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
-        return ok(buildManager(options))
+          return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
+        return core.ok(buildManager(options))
       }
       catch (error) { return contextFailure(error) }
     },
     async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<HaiResult<ContextManager>> {
       try {
         if (!validScope(scope))
-          return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
+          return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
         const persisted = await contextStore.readVersioned(sessionStoreKey(scope))
         if (persisted?.data.deleted)
           throw new ContextStateError(HaiAIError.SESSION_FAILED, 'Context has been deleted')
-        return ok(buildManager({ ...options, scope }, persisted?.data))
+        return core.ok(buildManager({ ...options, scope }, persisted?.data))
       }
       catch (error) { return contextFailure(error) }
     },
     async listSessions(objectId: string): Promise<HaiResult<SessionInfo[]>> {
       if (!sessionStore)
-        return ok([])
+        return core.ok([])
       try {
         const sessions = await sessionStore.query({
           objectId,
@@ -1151,13 +1150,13 @@ export function createContextOperations(
         const contexts = await contextStore.query({ objectId })
         // 一次批量读，避免目录同步失败后重新展示已删除正文；不做逐会话 N+1 查询。
         const deleted = new Set(contexts.filter(item => item.deleted).map(item => sessionStoreKey(item.scope)))
-        return ok(sessions.filter(item => !item.deleted && !deleted.has(sessionStoreKey(item))))
+        return core.ok(sessions.filter(item => !item.deleted && !deleted.has(sessionStoreKey(item))))
       }
       catch (error) { return contextFailure(error) }
     },
     async renameSession(scope: InteractionScope, title: string): Promise<HaiResult<void>> {
       if (!sessionStore)
-        return ok(undefined)
+        return core.ok(undefined)
       try {
         const context = await contextStore.readVersioned(sessionStoreKey(scope))
         if (context?.data.deleted)
@@ -1167,7 +1166,7 @@ export function createContextOperations(
             throw new ContextStateError(HaiAIError.SESSION_FAILED, 'Session not found')
           return { ...existing, title, updatedAt: now }
         })
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) { return contextFailure(error) }
     },
@@ -1200,7 +1199,7 @@ export function createContextOperations(
             deleted: true,
           }))
         }
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) { return contextFailure(error) }
     },

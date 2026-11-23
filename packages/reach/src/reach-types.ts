@@ -30,7 +30,7 @@ const ReachErrorInfo = {
  *
  * @example
  * ```ts
- * import { reach, HaiReachError } from '@h-ai/reach'
+ * import { HaiReachError, reach } from '@h-ai/reach'
  * const result = await reach.send({ provider: 'webhook', to: 'user@example.com', body: 'hello' })
  * if (!result.success && result.error.code === HaiReachError.NOT_INITIALIZED.code) {
  *   // 先执行依赖初始化，不能把未初始化失败当作触达成功。
@@ -130,7 +130,7 @@ export interface ReachMessage {
  *
  * @example
  * ```ts
- * import { reach, type SendResult } from '@h-ai/reach'
+ * import { type SendResult, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -199,7 +199,7 @@ export type ReachQueueFailure = 'provider_unavailable' | 'invalid_message' | 'pe
  *
  * @example
  * ```ts
- * import { reach, type ReachQueueEntry } from '@h-ai/reach'
+ * import { type ReachQueueEntry, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -246,7 +246,7 @@ export interface ReachQueueEntry {
  *
  * @example
  * ```ts
- * import { reach, type ReachQueueListOptions } from '@h-ai/reach'
+ * import { type ReachQueueListOptions, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -281,7 +281,7 @@ export interface ReachQueueListOptions {
  *
  * @example
  * ```ts
- * import { reach, type ReachDeadRequeue } from '@h-ai/reach'
+ * import { type ReachDeadRequeue, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -318,7 +318,7 @@ export interface ReachDeadRequeue {
  *
  * @example
  * ```ts
- * import { reach, type ReachUnknownResolution } from '@h-ai/reach'
+ * import { type ReachUnknownResolution, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -441,7 +441,7 @@ export interface ReachQueueOperations {
    *
    * @example
    * ```ts
-   * import { reach, type ReachDeadRequeue } from '@h-ai/reach'
+   * import { type ReachDeadRequeue, reach } from '@h-ai/reach'
    * const { reldb } = await import('@h-ai/reldb')
    * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
    * if (!connected.success) throw new Error(connected.error.message)
@@ -476,7 +476,7 @@ export interface ReachQueueOperations {
    *
    * @example
    * ```ts
-   * import { reach, type ReachUnknownResolution } from '@h-ai/reach'
+   * import { type ReachUnknownResolution, reach } from '@h-ai/reach'
    * const { reldb } = await import('@h-ai/reldb')
    * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
    * if (!connected.success) throw new Error(connected.error.message)
@@ -511,7 +511,7 @@ export interface ReachQueueOperations {
  *
  * @example
  * ```ts
- * import { reach, type ReachTemplate } from '@h-ai/reach'
+ * import { type ReachTemplate, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -547,7 +547,7 @@ export interface ReachTemplate {
  *
  * @example
  * ```ts
- * import { reach, type RenderedTemplate } from '@h-ai/reach'
+ * import { type RenderedTemplate, reach } from '@h-ai/reach'
  * const { reldb } = await import('@h-ai/reldb')
  * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
  * if (!connected.success) throw new Error(connected.error.message)
@@ -710,7 +710,7 @@ export interface ReachTemplateRegistry {
    *
    * @example
    * ```ts
-   * import { reach, type ReachTemplate } from '@h-ai/reach'
+   * import { type ReachTemplate, reach } from '@h-ai/reach'
    * const { reldb } = await import('@h-ai/reldb')
    * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
    * if (!connected.success) throw new Error(connected.error.message)
@@ -821,7 +821,7 @@ export interface ReachTemplateRegistry {
    *
    * @example
    * ```ts
-   * import { reach, type RenderedTemplate } from '@h-ai/reach'
+   * import { type RenderedTemplate, reach } from '@h-ai/reach'
    * const { reldb } = await import('@h-ai/reldb')
    * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
    * if (!connected.success) throw new Error(connected.error.message)

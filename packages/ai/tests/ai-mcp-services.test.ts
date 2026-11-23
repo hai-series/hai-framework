@@ -1,3 +1,4 @@
+import type { StreamableHTTPServerTransport } from '../src/index.js'
 import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -5,12 +6,12 @@ import { createServer } from 'node:http'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
-import { createRunner } from '@h-ai/runner'
+import { runner as frameworkRunner } from '@h-ai/runner'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai, createMcpServer, HaiAIError, MCPExternalServerSchema, StreamableHTTPServerTransport } from '../src/index.js'
+import { ai, HaiAIError, MCPExternalServerSchema } from '../src/index.js'
 
 const principal = { tenantId: 'tenant', userId: 'ada' }
 const request = {
@@ -44,7 +45,7 @@ async function remoteMcp(onInitialize?: () => Promise<void>) {
         : undefined
       if (!id && req.method === 'POST') {
         await onInitialize?.()
-        const server = createMcpServer({ name: 'fixture' })
+        const server = ai.createMcpServer({ name: 'fixture' })
         server.registerTool('echo', {
           inputSchema: {
             text: z.string(),
@@ -57,7 +58,7 @@ async function remoteMcp(onInitialize?: () => Promise<void>) {
             },
           ],
         }))
-        transport = new StreamableHTTPServerTransport({
+        transport = new ai.StreamableHTTPServerTransport({
           sessionIdGenerator: randomUUID,
           enableJsonResponse: true,
           onsessioninitialized: id => sessions.set(id, transport!),
@@ -485,7 +486,7 @@ describe('ai.mcp.services', () => {
   })
 
   it('registers a deployment warm pool and submits jobs with its ceiling and tool capacity class', async () => {
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     const started = await runner.init({
       nodeId: 'tool-capacity-api',
       executor: false,
@@ -663,7 +664,7 @@ describe('ai.mcp.services', () => {
       '{{.Id}}',
       process.env.HAI_TOOL_IMAGE_DOCUMENTS!,
     ])
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     const started = await runner.init({
       engine,
       nodeId: 'documents-e2e',
@@ -800,7 +801,7 @@ with zipfile.ZipFile(data, 'w') as doc:
     doc.writestr('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ACP office artifact</w:t></w:r></w:p><w:sectPr/></w:body></w:document>')
 print(base64.b64encode(data.getvalue()).decode())`,
     ], { timeout: 15_000 })
-    const runner = createRunner()
+    const runner = frameworkRunner.create()
     const started = await runner.init({
       engine,
       nodeId: 'office-e2e',

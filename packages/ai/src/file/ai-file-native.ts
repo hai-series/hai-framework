@@ -2,7 +2,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { OutputFormat } from './ai-file-types.js'
 import { Buffer } from 'node:buffer'
 import { fileURLToPath } from 'node:url'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { parseHtmlFile } from './ai-file-html.js'
@@ -71,7 +71,7 @@ export async function parsePdfContent(
           break
       }
 
-      return ok({
+      return core.ok({
         text: textParts.join(separator),
         pageCount: totalPages,
         ...(local && (pagesToProcess < totalPages || textLength > maxTextLength)
@@ -84,7 +84,7 @@ export async function parsePdfContent(
     }
   }
   catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+    return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
       params: {
         error: String(error),
       },
@@ -110,15 +110,15 @@ export async function parseDocxContent(content: Uint8Array, outputFormat: Output
       const result = await mammoth.convertToHtml({
         buffer: Buffer.from(content.buffer, content.byteOffset, content.byteLength),
       })
-      return ok(parseHtmlFile(result.value, 'markdown'))
+      return core.ok(parseHtmlFile(result.value, 'markdown'))
     }
     const result = await mammoth.extractRawText({
       buffer: Buffer.from(content.buffer, content.byteOffset, content.byteLength),
     })
-    return ok(result.value)
+    return core.ok(result.value)
   }
   catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+    return core.err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
       params: {
         error: String(error),
       },

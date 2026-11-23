@@ -10,9 +10,9 @@
   @example
   ```svelte
   <script lang="ts">
-    import { CrudPage, defineCrud } from '@h-ai/ui'
-    import type { CrudPageProps } from '@h-ai/ui'
-    const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+    import { CrudPage, type CrudPageProps, ui } from '@h-ai/ui'
+
+    const crud = ui.defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
     const props: CrudPageProps = { crud, data: { items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, permissions: { create: true, update: true, delete: false } }
   </script>
   <CrudPage {...props} />

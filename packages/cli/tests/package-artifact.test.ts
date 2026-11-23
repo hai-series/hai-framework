@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createFeedbackBundle } from '@h-ai/feedback/bundle'
+import { feedback } from '@h-ai/feedback/bundle'
 import fse from 'fs-extra'
 import { afterAll, expect, it } from 'vitest'
 import { stringify } from 'yaml'
@@ -160,7 +160,7 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   })
   const help = run(['--help'])
   expect(help.status, help.error?.message || help.stderr || help.stdout).toBe(0)
-  const diagnostic = await createFeedbackBundle({
+  const diagnostic = await feedback.createBundle({
     report: { id: 'artifact-feedback', description: 'Standalone published CLI feedback' },
     evidence: [
       {

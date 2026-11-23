@@ -1,10 +1,10 @@
 <script lang='ts'>
+
   import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
   import type { PageData } from './$types'
   import { refreshAll } from '$app/navigation'
-  import { toast } from '@h-ai/ui'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
-  import { errorMessage } from '@h-ai/ui/toast'
+  import { ui } from '@h-ai/ui'
+
   import * as m from '#lib/paraglide/messages.js'
   import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '#lib/services/profile-api.js'
 
@@ -105,7 +105,7 @@
       const uploadBody = await uploadResponse.json()
       if (!uploadResponse.ok || !uploadBody.success) {
         profileErrors = {
-          general: errorMessage(uploadBody.error, m.common_error()),
+          general: ui.errorMessage(uploadBody.error, m.common_error()),
         }
         return
       }
@@ -115,7 +115,7 @@
       })
       if (!response.ok || !body.success) {
         profileErrors = {
-          general: errorMessage(body.error, m.common_error()),
+          general: ui.errorMessage(body.error, m.common_error()),
         }
         return
       }
@@ -125,7 +125,7 @@
         avatarUrl: body.data?.user?.avatar ?? uploadBody.data?.avatar,
       }
       await refreshAll()
-      toast.success(m.common_success())
+      ui.toast.success(m.common_success())
     }
     catch {
       profileErrors = {
@@ -166,7 +166,7 @@
       if (!response.ok || !body.success) {
         profileErrors = {
           ...normalizeProfileFieldErrors(body.error?.details?.fieldErrors),
-          general: errorMessage(body.error, m.common_error()),
+          general: ui.errorMessage(body.error, m.common_error()),
         }
         return false
       }
@@ -180,7 +180,7 @@
         avatarUrl: body.data?.user?.avatar ?? '',
       }
       await refreshAll()
-      toast.success(m.common_success())
+      ui.toast.success(m.common_success())
       return true
     }
     catch {
@@ -241,12 +241,12 @@
 
       if (!result.success) {
         passwordErrors = {
-          general: authErrorMessage(result.error),
+          general: ui.authErrorMessage(result.error),
         }
         return
       }
 
-      toast.success(m.common_success())
+      ui.toast.success(m.common_success())
       if (result.data.reloginRequired && typeof window !== 'undefined') {
         window.setTimeout(() => {
           window.location.assign('/auth/login')

@@ -4,7 +4,7 @@ import type { MCPJobFiles, MCPServiceOperations } from './ai-mcp-types.js'
 import { Buffer } from 'node:buffer'
 import { addAbortListener } from 'node:events'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -48,11 +48,11 @@ export function createMCPServiceOperations(
     : undefined
   const operations: MCPServiceOperations = {
     createBroker: options => lifecycle.signal.aborted
-      ? err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+      ? core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
       : createMCPServiceBroker(read, operations.invoke, options, lifecycle.signal),
     async invoke(request, authorization) {
       if (lifecycle.signal.aborted)
-        return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
+        return core.err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
       let connected = false
       let timeout: AbortSignal | undefined
       let transport: StreamableHTTPClientTransport | undefined
@@ -62,17 +62,17 @@ export function createMCPServiceOperations(
         const parsed = requestSchema.safeParse(request)
         const principal = principalSchema.safeParse(authorization?.principal)
         if (!parsed.success || !principal.success || Buffer.byteLength(JSON.stringify(parsed.data)) > maxInputBytes)
-          return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
+          return core.err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
         if (authorization.signal?.aborted)
-          return err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
+          return core.err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
         const input = parsed.data
         const service = await read(input.serviceId)
         if (!service?.allowedTools?.includes(input.tool) || typeof authorization.authorize !== 'function')
-          return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+          return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
         if (service.transport === 'job' && !jobs)
-          return err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+          return core.err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
         if (service.transport !== 'job' && (service.transport !== 'http' || !service.url))
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+          return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
 
         const timeoutMs = service.timeoutMs ?? 30_000
         timeout = AbortSignal.timeout(timeoutMs)
@@ -102,26 +102,26 @@ export function createMCPServiceOperations(
           listener?.[Symbol.dispose]()
         }
         if (allowed !== true)
-          return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+          return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
         // 审批可以等待，期间变动的注册条目需要重新取得授权。
         if (JSON.stringify(await read(input.serviceId)) !== JSON.stringify(service))
-          return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+          return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
         signal.throwIfAborted()
 
         if (service.transport === 'job' && jobs) {
           connected = true
-          return ok(await jobs.invoke(service, input, principal.data, authorization.taskId, signal))
+          return core.ok(await jobs.invoke(service, input, principal.data, authorization.taskId, signal))
         }
         if (!service.url)
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+          return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
         const url = new URL(service.url)
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash)
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+          return core.err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpServiceConnectionFailed'))
         const headers = new Headers()
         for (const [key, reference] of Object.entries(service.headerEnv)) {
           const value = process.env[reference]
           if (!value || forbiddenHeaders.test(key))
-            return err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+            return core.err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
           headers.set(key, value)
         }
         let received = 0
@@ -165,21 +165,21 @@ export function createMCPServiceOperations(
         connected = true
         // 握手可能等待远端响应；发出工具调用前复核同一授权对象仍在目录中。
         if (JSON.stringify(await read(input.serviceId)) !== JSON.stringify(service))
-          return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+          return core.err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
         signal.throwIfAborted()
         const result = CallToolResultSchema.parse(await client.callTool({ name: input.tool, arguments: input.arguments }, CallToolResultSchema, { signal, timeout: timeoutMs }))
         return result.isError
-          ? err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
-          : ok(result)
+          ? core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
+          : core.ok(result)
       }
       catch {
         if (timeout?.aborted)
-          return err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'))
+          return core.err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'))
         if (lifecycle.signal.aborted || authorization?.signal?.aborted)
-          return err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
+          return core.err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
         return connected
-          ? err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
-          : err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
+          ? core.err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))
+          : core.err(HaiAIError.MCP_CONNECTION_ERROR, aiM('ai_mcpServiceConnectionFailed'))
       }
       finally {
         // 结束远端会话时使用独立短期限。清理失败不能覆盖已知的工具结果。

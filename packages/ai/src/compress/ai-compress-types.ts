@@ -46,7 +46,7 @@ export type CompressionStrategy = z.infer<typeof CompressionStrategySchema>
  *
  * @example
  * ```ts
- * import { ai, type CompressOptions } from '@h-ai/ai'
+ * import { type CompressOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: CompressOptions) {
  *   const result = await ai.compress.tryCompress([{ role: 'user', content: '你好' }], options)
@@ -103,7 +103,7 @@ export interface CompressResult {
  *
  * @example
  * ```ts
- * import { ai, type CompressOperations } from '@h-ai/ai'
+ * import { type CompressOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * const operations: CompressOperations = ai.compress
  * const result = await operations.tryCompress([{ role: 'user', content: '你好' }], { strategy: 'sliding-window', maxTokens: 100 })

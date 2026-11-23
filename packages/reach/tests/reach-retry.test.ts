@@ -3,7 +3,7 @@ import type { SendLogRepository, StoredSendLog } from '../src/repositories/reach
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
@@ -129,8 +129,8 @@ describe('bounded durable retries', { concurrent: false }, () => {
       bad.push(await insert('bad', 2))
     const healthy = await insert('healthy', 2)
     const send = vi.fn<ReachProvider['send']>(async message => message.body === 'healthy'
-      ? ok({ success: true })
-      : err(HaiReachError.SEND_FAILED, 'temporary failure'))
+      ? core.ok({ success: true })
+      : core.err(HaiReachError.SEND_FAILED, 'temporary failure'))
     const provider: ReachProvider = {
       ...createConsoleProvider(),
       isConnected: () => true,
@@ -195,7 +195,7 @@ describe('bounded durable retries', { concurrent: false }, () => {
       reach.queue.requeueDead(bad[0].queueId!, { expectedUpdatedAt: version }),
     ])
     expect(recovered.filter(result => result.success)).toHaveLength(1)
-    send.mockResolvedValue(ok({ success: true }))
+    send.mockResolvedValue(core.ok({ success: true }))
     now += 60_000
     await vi.advanceTimersByTimeAsync(60_000)
     expect(await reach.queue.get(bad[0].queueId!)).toMatchObject({

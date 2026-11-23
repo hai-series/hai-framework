@@ -1,9 +1,8 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { Button, Card, FormField, Input, PasswordInput } from '@h-ai/ui'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { Button, Card, FormField, Input, PasswordInput, ui } from '@h-ai/ui'
+
   import { z } from 'zod'
   import * as m from '#lib/paraglide/messages.js'
 
@@ -37,7 +36,7 @@
       const data = loginResultSchema.parse(await response.json())
 
       if (!data.success) {
-        error = authErrorMessage({
+        error = ui.authErrorMessage({
           code: data.error?.code === 'AUTH_FAILED'
             ? 'hai:iam:003'
             : 'hai:iam:999',
@@ -58,7 +57,7 @@
       loading = false
     }
   }
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <svelte:head>

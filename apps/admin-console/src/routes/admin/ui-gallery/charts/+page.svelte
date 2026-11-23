@@ -3,10 +3,10 @@
   展示 @h-ai/ui Chart 统一入口及 LayerChart 原生配置透传。
 -->
 <script lang='ts'>
+
   import type { ChartDataItem, ChartSeries } from '@h-ai/ui'
-  import { Button, Select } from '@h-ai/ui'
-  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
-  import { notifyError } from '@h-ai/ui/toast'
+  import { Button, Chart, DashboardGrid, MetricCard, ReportCard, Select, ui } from '@h-ai/ui'
+
   import DemoCard from '#lib/components/gallery/DemoCard.svelte'
   import DemoSection from '#lib/components/gallery/DemoSection.svelte'
   import * as m from '#lib/paraglide/messages.js'
@@ -17,7 +17,7 @@
   let showNative = $state(false)
   const nativeGauge = $derived(showNative
     ? import('#lib/components/gallery/NativeGauge.svelte').catch((error: unknown) => {
-      notifyError(m.common_error())
+      ui.notifyError(m.common_error())
       throw error
     })
     : undefined)

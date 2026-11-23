@@ -2,12 +2,13 @@
  * 共享数据库执行状态驱动 cron、手动触发与崩溃恢复。
  * @module scheduler-runner
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository, StoredExecution } from './repositories/index.js'
 import type { SchedulerLogCleanupPolicy, TaskDefinition, TaskExecutionLog, TaskTriggerInfo, TriggerTaskInput } from './scheduler-types.js'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { executionId } from './repositories/scheduler-repository-execution.js'
 import { executeTask, interruptTask } from './scheduler-executor.js'
@@ -98,17 +99,17 @@ async function projectExecutionLogs(id: string): Promise<HaiResult<void>> {
   const logs = currentLogRepo
   const cleanupPolicy = currentCleanupPolicy
   if (!execution || !logs)
-    return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+    return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
   try {
     const found = await execution.byOccurrence(id)
     if (!found.success || !found.data || ['claimed', 'running'].includes(found.data.status))
-      return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+      return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
     const row = found.data
     if (row.logPersistence === 'persisted')
-      return ok(undefined)
+      return core.ok(undefined)
     const parsed = z.array(publishedLogSchema).min(1).max(101).safeParse(JSON.parse(row.logsJson ?? 'null') as unknown)
     if (!parsed.success || parsed.data.some(log => log.occurrenceId !== id || log.taskId !== row.taskId))
-      return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+      return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
     for (const log of parsed.data) {
       const saved = await logs.saveLog(log)
       if (!saved.success)
@@ -116,14 +117,14 @@ async function projectExecutionLogs(id: string): Promise<HaiResult<void>> {
     }
     const confirmed = await execution.confirmLogs(row)
     if (!confirmed.success)
-      return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+      return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
     const cleanup = await logs.cleanupLogs(cleanupPolicy)
     if (!cleanup.success)
       logger.warn('Execution logs persisted but retention cleanup failed', { occurrenceId: id, errorCode: cleanup.error.code })
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch {
-    return err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+    return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
   }
 }
 

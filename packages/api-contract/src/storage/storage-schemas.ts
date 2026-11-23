@@ -235,9 +235,9 @@ export type StoragePresignUploadInput = z.infer<typeof StoragePresignUploadInput
  * ```ts
  * import type { StoragePresignedUrlOutput } from '@h-ai/api-contract'
  * import { StoragePresignedUrlSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: StoragePresignedUrlOutput = ok(StoragePresignedUrlSchema.parse({
+ * const response: StoragePresignedUrlOutput = core.ok(StoragePresignedUrlSchema.parse({
  *   url: 'https://example.com/resource',
  *   key: 'examples/readme.txt'
  * }))

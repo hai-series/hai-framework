@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { PaymentOrder } from '../payment-types.js'
 import type { InvokePaymentResult } from './payment-client-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { paymentM } from '../payment-i18n.js'
 import { HaiPaymentError } from '../payment-types.js'
 
@@ -138,11 +138,11 @@ function invokeStripeCheckout(clientParams: Record<string, unknown>): InvokePaym
  * @returns 调起结果；失败时应向用户提示并允许重试。
  * @example
  * ```ts
- * import { invokePayment } from '@h-ai/payment/client'
+ * import { payment } from '@h-ai/payment/client'
  * import type { PaymentOrder } from '@h-ai/payment'
  * async function pay(orderFromServer: PaymentOrder) {
  *   // 浏览器环境；微信先等待 WeixinJSBridgeReady。参数来自受信服务端创建订单接口。
- *   const result = await invokePayment(orderFromServer)
+ *   const result = await payment.client.invoke(orderFromServer)
  *   if (!result.success) throw new Error(result.error.message)
  *   if (!result.data.invoked) throw new Error(result.data.message)
  *   // 继续等待服务端查询/通知确认，不能依据 invoked、页面跳转或用户返回就发货。
@@ -154,20 +154,20 @@ export async function invokePayment(order: PaymentOrder): Promise<HaiResult<Invo
     switch (order.provider) {
       case 'wechat':
         if (order.tradeType === 'jsapi')
-          return ok(await invokeWechatJsapi(order.clientParams))
+          return core.ok(await invokeWechatJsapi(order.clientParams))
         break
       case 'alipay':
         if (order.tradeType === 'h5')
-          return ok(invokeAlipayH5(order.clientParams))
+          return core.ok(invokeAlipayH5(order.clientParams))
         break
       case 'stripe':
         if (order.tradeType === 'h5')
-          return ok(invokeStripeCheckout(order.clientParams))
+          return core.ok(invokeStripeCheckout(order.clientParams))
         break
     }
-    return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
+    return core.err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
   }
   catch (cause) {
-    return err(HaiPaymentError.INVOKE_WEB_FAILED, paymentM('payment_invokeWebFailed'), cause)
+    return core.err(HaiPaymentError.INVOKE_WEB_FAILED, paymentM('payment_invokeWebFailed'), cause)
   }
 }

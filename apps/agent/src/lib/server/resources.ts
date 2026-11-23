@@ -4,7 +4,7 @@ import type { AgentResource } from '#lib/workspace.js'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { ai, HaiAIError } from '@h-ai/ai'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { storage } from '@h-ai/storage'
 import { id } from '#lib/workspace.js'
@@ -104,26 +104,26 @@ export const jobFiles: MCPJobFiles = {
     try {
       const { ref, bytes } = await readFile(owner(principal), fileId)
       if (ref.kind !== 'file' || bytes.byteLength > fileLimit)
-        return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized')
-      return ok({
+        return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized')
+      return core.ok({
         name: ref.title,
         base64: bytes.toString('base64'),
       })
     }
     catch {
-      return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized')
+      return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'File is not authorized')
     }
   },
   async publish({ principal, taskId, jobId, name, base64, signal }) {
     const user = owner(principal)
     if (signal.aborted || !taskId || !(await taskBySession(user, taskId)))
-      return err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Artifact is not authorized')
+      return core.err(HaiAIError.MCP_TOOL_FORBIDDEN, 'Artifact is not authorized')
     const ref = await saveFile(user, {
       id: sameArtifact(jobId),
       title: name,
       kind: 'artifact',
     }, Buffer.from(base64, 'base64'))
-    return ok({ fileId: ref.id })
+    return core.ok({ fileId: ref.id })
   },
 }
 

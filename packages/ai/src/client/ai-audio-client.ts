@@ -61,10 +61,10 @@ export interface AudioTicketRequest {
  *
  * @example
  * ```ts
- * import { createAudioClient } from '@h-ai/ai/client'
- * import type { AudioTicketRequest } from '@h-ai/ai/client'
+ * import { type AudioTicketRequest, ai } from '@h-ai/ai/client'
+ *
  * function connect(issueTicket: (request: AudioTicketRequest) => Promise<string>) {
- *   return createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
+ *   return ai.createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
  * }
  * ```
  */
@@ -274,10 +274,10 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
  *
  * @example
  * ```ts
- * import { createAudioClient } from '@h-ai/ai/client'
- * import type { AudioTicketRequest } from '@h-ai/ai/client'
+ * import { type AudioTicketRequest, ai } from '@h-ai/ai/client'
+ *
  * function connect(issueTicket: (request: AudioTicketRequest) => Promise<string>) {
- *   return createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
+ *   return ai.createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
  * }
  * ```
  */

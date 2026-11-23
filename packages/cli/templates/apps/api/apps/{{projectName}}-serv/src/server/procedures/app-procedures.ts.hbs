@@ -1,6 +1,6 @@
 import type { ServContext } from '@h-ai/serv'
 import type { AppEchoOutputData, AppInfoOutputData } from '{{api.contractPackageName}}'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { appContract } from '{{api.contractPackageName}}'
 
@@ -29,7 +29,7 @@ export function createAppProcedures(deps: AppProcedureDeps) {
         transportEnabled: deps.info.transportEnabled,
         uptimeMs: Math.max(0, Date.now() - deps.startedAt),
       }
-      return ok(data)
+      return core.ok(data)
     })
 {{#if features.iam}}
     .route('echo')
@@ -41,7 +41,7 @@ export function createAppProcedures(deps: AppProcedureDeps) {
         requestId: context.requestId,
         timestamp: new Date().toISOString(),
       }
-      return ok(data)
+      return core.ok(data)
     })
 {{else}}
     .route('echo', ({ input, context }) => {
@@ -50,7 +50,7 @@ export function createAppProcedures(deps: AppProcedureDeps) {
         requestId: context.requestId,
         timestamp: new Date().toISOString(),
       }
-      return ok(data)
+      return core.ok(data)
     })
 {{/if}}
     .build()

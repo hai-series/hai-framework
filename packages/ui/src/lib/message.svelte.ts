@@ -48,10 +48,10 @@ class MessageState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.add({ message: '保存完成', type: 'success', duration: 3000 })
-   * message.remove(id)
+   * const id = ui.message.add({ message: '保存完成', type: 'success', duration: 3000 })
+   * ui.message.remove(id)
    * ```
    */
   add(options: MessageOptions | string): string {
@@ -72,10 +72,10 @@ class MessageState {
    * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.info('同步中', 0)
-   * message.remove(id)
+   * const id = ui.message.info('同步中', 0)
+   * ui.message.remove(id)
    * ```
    */
   remove(id: string): void {
@@ -87,10 +87,10 @@ class MessageState {
    * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * message.info('同步中', 0)
-   * message.clear()
+   * ui.message.info('同步中', 0)
+   * ui.message.clear()
    * ```
    */
   clear(): void {
@@ -104,10 +104,10 @@ class MessageState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.info('操作结果', 3000)
-   * message.remove(id)
+   * const id = ui.message.info('操作结果', 3000)
+   * ui.message.remove(id)
    * ```
    */
   info(message: string, duration?: number): string {
@@ -121,10 +121,10 @@ class MessageState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.success('操作结果', 3000)
-   * message.remove(id)
+   * const id = ui.message.success('操作结果', 3000)
+   * ui.message.remove(id)
    * ```
    */
   success(message: string, duration?: number): string {
@@ -138,10 +138,10 @@ class MessageState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.warning('操作结果', 3000)
-   * message.remove(id)
+   * const id = ui.message.warning('操作结果', 3000)
+   * ui.message.remove(id)
    * ```
    */
   warning(message: string, duration?: number): string {
@@ -155,10 +155,10 @@ class MessageState {
    * @returns 新条目的 ID，可用于提前移除。
    * @example
    * ```ts
-   * import { message } from '@h-ai/ui'
+   * import { ui } from '@h-ai/ui'
    * // 布局中需挂载 MessageContainer。
-   * const id = message.error('操作结果', 3000)
-   * message.remove(id)
+   * const id = ui.message.error('操作结果', 3000)
+   * ui.message.remove(id)
    * ```
    */
   error(message: string, duration?: number): string {
@@ -171,11 +171,11 @@ class MessageState {
  *
  * @example
  * ```ts
- * import { message } from '@h-ai/ui'
+ * import { ui } from '@h-ai/ui'
  * // 页面布局需挂载 MessageContainer。
- * const id = message.success('保存完成', 3000)
- * message.remove(id)
- * message.clear()
+ * const id = ui.message.success('保存完成', 3000)
+ * ui.message.remove(id)
+ * ui.message.clear()
  * ```
  */
 export const message = new MessageState()

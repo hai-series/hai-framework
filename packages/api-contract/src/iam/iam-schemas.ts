@@ -1000,9 +1000,9 @@ export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>
  * ```ts
  * import type { IamAuthResultOutput } from '@h-ai/api-contract'
  * import { IamAuthResultSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: IamAuthResultOutput = ok(IamAuthResultSchema.parse({
+ * const response: IamAuthResultOutput = core.ok(IamAuthResultSchema.parse({
  *   user: {
  *     id: 'example-1',
  *     username: 'alice',
@@ -1050,9 +1050,9 @@ export type IamCurrentUser = z.infer<typeof IamCurrentUserSchema>
  * ```ts
  * import type { IamCurrentUserOutput } from '@h-ai/api-contract'
  * import { IamCurrentUserSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: IamCurrentUserOutput = ok(IamCurrentUserSchema.parse({
+ * const response: IamCurrentUserOutput = core.ok(IamCurrentUserSchema.parse({
  *   id: 'example-1',
  *   username: 'alice',
  *   enabled: true,
@@ -1089,9 +1089,9 @@ export type IamRefreshTokenInput = z.infer<typeof IamRefreshTokenInputSchema>
  * ```ts
  * import type { IamRefreshTokenOutput } from '@h-ai/api-contract'
  * import { IamRefreshTokenDataSchema } from '@h-ai/api-contract'
- * import { ok } from '@h-ai/core'
+ * import { core } from '@h-ai/core'
  *
- * const response: IamRefreshTokenOutput = ok(IamRefreshTokenDataSchema.parse({
+ * const response: IamRefreshTokenOutput = core.ok(IamRefreshTokenDataSchema.parse({
  *   tokens: {
  *     accessToken: 'example-only-access',
  *     expiresIn: 0,

@@ -8,7 +8,7 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import type { ApiKeySortField, ListApiKeysOptions, StoredApiKey } from './iam-authn-apikey-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { guardIamMutation } from '../../iam-cache.js'
 import { iamM } from '../../iam-i18n.js'
@@ -206,7 +206,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   async insert(data: StoredApiKey, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.create({ ...data }, tx)
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_apikeyCreateFailed', {
           params: { message: result.error.message },
@@ -214,7 +214,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
         result.error,
       )
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   async findOneById(id: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey | null>> {
@@ -222,7 +222,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   async findByKeyPrefix(prefix: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey[]>> {
@@ -233,7 +233,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   async findPageByUserId(userId: string, options: ListApiKeysOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<StoredApiKey>>> {
@@ -278,13 +278,13 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
-    return ok(result.data)
+    return core.ok(result.data)
   }
 
   async updateFields(id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.updateById(id, { ...data }, tx)
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_apikeyUpdateFailed', {
           params: { message: result.error.message },
@@ -292,13 +292,13 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
         result.error,
       )
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   async removeById(id: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.deleteById(id, tx)
     if (!result.success) {
-      return err(
+      return core.err(
         HaiIamError.REPOSITORY_ERROR,
         iamM('iam_apikeyDeleteFailed', {
           params: { message: result.error.message },
@@ -306,11 +306,11 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
         result.error,
       )
     }
-    return ok(undefined)
+    return core.ok(undefined)
   }
 
   private buildQueryError(error: { message: string }): HaiResult<never> {
-    return err(
+    return core.err(
       HaiIamError.REPOSITORY_ERROR,
       iamM('iam_apikeyQueryFailed', {
         params: { message: error.message },

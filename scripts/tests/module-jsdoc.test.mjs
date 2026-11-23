@@ -55,7 +55,7 @@ it('内部上下文和 fenced 示例须显式声明，不能用自然语言代�
 
 it('真实公开入口和 HaiResult 收窄通过，虚构入口和未判 success 均失败', () => {
   const file = resolve('scripts/tests/__hai_doc_probe.ts')
-  const valid = 'import { ok } from "@h-ai/core"; const result = ok("value"); if (result.success) result.data.toUpperCase()'
+  const valid = 'import { core } from "@h-ai/core"; const result = core.ok("value"); if (result.success) result.data.toUpperCase()'
   assert.deepEqual(typecheckVirtualFiles(new Map([
     [file, valid],
   ])), [])

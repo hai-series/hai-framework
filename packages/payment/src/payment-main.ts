@@ -17,7 +17,7 @@ import type {
   PaymentProvider,
   RefundResult,
 } from './payment-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { PaymentConfigSchema } from './payment-config.js'
 import {
@@ -59,7 +59,7 @@ const notInitialized = core.module.createNotInitializedKit(
  * 支付生命周期与统一渠道操作入口；初始化失败必须停止依赖该模块的业务。
  * @example
  * ```ts
- * import { payment, type PaymentConfigInput } from '@h-ai/payment'
+ * import { type PaymentConfigInput, payment } from '@h-ai/payment'
  * async function run(config: PaymentConfigInput) {
  *   // 使用 Stripe 时，宿主已先初始化同一共享 reldb；payment.close 不关闭它。
  *   const initialized = await payment.init(config)
@@ -87,7 +87,7 @@ export const payment: PaymentFunctions = {
   async init(config: PaymentConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Payment module init already in progress, skipping')
-      return err(
+      return core.err(
         HaiPaymentError.CONFIG_ERROR,
         paymentM('payment_configError', {
           params: { error: 'init already in progress' },
@@ -113,7 +113,7 @@ export const payment: PaymentFunctions = {
       const parseResult = PaymentConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Payment config validation failed', { error: parseResult.error.message })
-        return err(
+        return core.err(
           HaiPaymentError.CONFIG_ERROR,
           paymentM('payment_configError', {
             params: { error: parseResult.error.message },
@@ -127,13 +127,13 @@ export const payment: PaymentFunctions = {
       let stripeProvider: PaymentProvider | undefined
       if (parsed.stripe) {
         if (!reldb.isInitialized)
-          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeDatabaseRequired'))
+          return core.err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeDatabaseRequired'))
         const repository = new StripeOperationRepository(reldb)
         const ready = await repository.initialize()
         if (generation !== lifecycleGeneration)
           return notInitialized.result()
         if (!ready.success)
-          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeStoreInitFailed'), ready.error)
+          return core.err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeStoreInitFailed'), ready.error)
         stripeProvider = createStripeProvider(parsed.stripe, repository)
       }
 
@@ -158,11 +158,11 @@ export const payment: PaymentFunctions = {
           parsed.stripe ? 'stripe' : null,
         ].filter(Boolean),
       })
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       logger.error('Payment module initialization failed', { error })
-      return err(
+      return core.err(
         HaiPaymentError.CONFIG_ERROR,
         paymentM('payment_initFailed', {
           params: {

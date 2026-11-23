@@ -1,4 +1,4 @@
-import { err } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
@@ -26,7 +26,7 @@ function defineAuthorizationTests() {
     expect(login.success).toBe(true)
     if (!login.success)
       return
-    vi.spyOn(iam.session, 'patchUserSessions').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
+    vi.spyOn(iam.session, 'patchUserSessions').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
     expect((await iam.authz.removeRole(user.data.user.id, role.data.id)).success).toBe(true)
     const cached = await iam.session.verifyToken(login.data.tokens.accessToken)
     expect(cached.success).toBe(true)
@@ -47,7 +47,7 @@ function defineAuthorizationTests() {
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
     expect(query).toHaveBeenCalledTimes(1)
     expect(get).not.toHaveBeenCalled()
-    vi.spyOn(iam.session, 'deleteByUserId').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
+    vi.spyOn(iam.session, 'deleteByUserId').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
     expect((await iam.user.updateUser(user.data.user.id, { accountStatus: 'dormant' })).success).toBe(true)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
   })
@@ -69,8 +69,8 @@ function defineAuthorizationTests() {
     const get = vi.spyOn(reldb.sql, 'get')
     const query = vi.spyOn(reldb.sql, 'query')
     if (failedRead === 'credential')
-      get.mockResolvedValueOnce(err(HaiIamError.REPOSITORY_ERROR, 'persistent user unavailable'))
-    else query.mockResolvedValueOnce(err(HaiIamError.REPOSITORY_ERROR, 'current authorization unavailable'))
+      get.mockResolvedValueOnce(core.err(HaiIamError.REPOSITORY_ERROR, 'persistent user unavailable'))
+    else query.mockResolvedValueOnce(core.err(HaiIamError.REPOSITORY_ERROR, 'current authorization unavailable'))
     const current = await iam.auth.verifyToken(login.data.tokens.accessToken)
     expect(current.success).toBe(false)
     if (!current.success)
@@ -95,13 +95,13 @@ function defineAuthorizationTests() {
     if (!login.success)
       return
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
-    const warm = vi.spyOn(reldb.sql, 'query').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'database unavailable'))
+    const warm = vi.spyOn(reldb.sql, 'query').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'database unavailable'))
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
     expect(warm).not.toHaveBeenCalled()
     warm.mockRestore()
     expect((await iam.authz.createPermission({ code: 'invalidate:authorization-failure', name: 'Invalidate authorization' })).success).toBe(true)
     expect((await iam.session.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
-    const cold = vi.spyOn(reldb.sql, 'query').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'database unavailable'))
+    const cold = vi.spyOn(reldb.sql, 'query').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'database unavailable'))
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
     expect(cold).toHaveBeenCalledTimes(1)
   })

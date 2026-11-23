@@ -1,7 +1,7 @@
 import type { DbTestEnv } from '../../../packages/reldb/tests/helpers/reldb-test-suite.js'
 import { randomUUID } from 'node:crypto'
 import { HaiAIError } from '@h-ai/ai'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { findTask, initWorkspace, insertTask, owner, reserveTurn, turnById, writeTurn } from '#lib/server/data.js'
@@ -72,23 +72,23 @@ describe.each([
       expect(saved.submission?.sessionId).toBe(nativeId)
       expect((await findTask(account, input.task)).acpId).toBe(nativeId)
       if (fault === 'acp')
-        return err(HaiAIError.ACP_OPERATION_FAILED, 'Receipt unavailable')
-      vi.spyOn(reldb.tx, 'begin').mockResolvedValueOnce(err(HaiReldbError.TRANSACTION_FAILED, 'Write unavailable'))
-      return ok({ taskId: receiptId, status: 'queued' as const })
+        return core.err(HaiAIError.ACP_OPERATION_FAILED, 'Receipt unavailable')
+      vi.spyOn(reldb.tx, 'begin').mockResolvedValueOnce(core.err(HaiReldbError.TRANSACTION_FAILED, 'Write unavailable'))
+      return core.ok({ taskId: receiptId, status: 'queued' as const })
     })
-    const findSubmission = vi.fn(async () => ok({ taskId: receiptId, status: 'succeeded' as const }))
+    const findSubmission = vi.fn(async () => core.ok({ taskId: receiptId, status: 'succeeded' as const }))
     scoped.mockReturnValue({
-      plan: async () => ok({ resolvedMode: 'task', reason: 'explicit', modelId: 'fixture' }),
+      plan: async () => core.ok({ resolvedMode: 'task', reason: 'explicit', modelId: 'fixture' }),
       sessions: {
-        create: async () => ok({ id: nativeId, submit }),
+        create: async () => core.ok({ id: nativeId, submit }),
       },
       tasks: {
         findSubmission,
-        get: async () => ok({
+        get: async () => core.ok({
           status: 'succeeded',
           output: { text: 'Done' },
         }),
-        events: async () => ok([]),
+        events: async () => core.ok([]),
       },
     })
 
@@ -129,16 +129,16 @@ describe.each([
     const submit = vi.fn(async () => {
       dispatched.resolve()
       await release.promise
-      return ok({ taskId: 'accepted', status: 'queued' })
+      return core.ok({ taskId: 'accepted', status: 'queued' })
     })
     const findSubmission = vi.fn()
-      .mockResolvedValueOnce(ok(null))
-      .mockResolvedValueOnce(ok({ taskId: 'accepted', status: 'queued' }))
-    const cancel = vi.fn(async () => ok({ status: 'cancelling' }))
+      .mockResolvedValueOnce(core.ok(null))
+      .mockResolvedValueOnce(core.ok({ taskId: 'accepted', status: 'queued' }))
+    const cancel = vi.fn(async () => core.ok({ status: 'cancelling' }))
     scoped.mockReturnValue({
-      plan: async () => ok({ resolvedMode: 'task' }),
+      plan: async () => core.ok({ resolvedMode: 'task' }),
       sessions: {
-        create: async () => ok({ id: 'session', submit }),
+        create: async () => core.ok({ id: 'session', submit }),
       },
       tasks: { findSubmission, cancel },
     })
@@ -166,7 +166,7 @@ describe.each([
   it('准备阶段的失败可被确认并释放新轮次的提交权', async () => {
     const input = await nextTurn()
     scoped.mockReturnValue({
-      plan: async () => err(HaiAIError.ACP_UNSUPPORTED, 'No available configuration'),
+      plan: async () => core.err(HaiAIError.ACP_UNSUPPORTED, 'No available configuration'),
     })
 
     await expect(action(subject, input)).rejects.toMatchObject({ code: HaiAIError.ACP_UNSUPPORTED.code })

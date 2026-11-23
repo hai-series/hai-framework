@@ -6,13 +6,12 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { IamConfig } from './iam-config.js'
 import type { IamPublicConfig } from './iam-public-config.js'
-import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
 
+import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 
@@ -108,7 +107,7 @@ export const iam: IamFunctions = {
     // 并发防护：防止多次同时调用导致子功能/连接泄漏
     if (initInProgress) {
       logger.warn('IAM init already in progress, skipping concurrent call')
-      return err(
+      return core.err(
         HaiIamError.CONFIG_ERROR,
         iamM('iam_initInProgress'),
       )
@@ -126,7 +125,7 @@ export const iam: IamFunctions = {
 
       // 前置依赖检查：reldb 和 cache 必须已初始化
       if (!reldb.isInitialized) {
-        return err(
+        return core.err(
           HaiIamError.CONFIG_ERROR,
           iamM('iam_depsNotInitialized', {
             params: { dep: 'reldb' },
@@ -134,7 +133,7 @@ export const iam: IamFunctions = {
         )
       }
       if (!cache.isInitialized) {
-        return err(
+        return core.err(
           HaiIamError.CONFIG_ERROR,
           iamM('iam_depsNotInitialized', {
             params: { dep: 'cache' },
@@ -146,7 +145,7 @@ export const iam: IamFunctions = {
       if (!crypto.isInitialized) {
         const cryptoResult = await crypto.init()
         if (!cryptoResult.success) {
-          return err(
+          return core.err(
             HaiIamError.CONFIG_ERROR,
             iamM('iam_initFailed'),
             cryptoResult.error,
@@ -167,7 +166,7 @@ export const iam: IamFunctions = {
           ...new Set(issues.map(issue => issue.path).filter(Boolean)),
         ]
         logger.error('IAM config validation failed', { errorCode: HaiIamError.CONFIG_ERROR.code, issues })
-        return err({
+        return core.err({
           ...HaiIamError.CONFIG_ERROR,
           message: iamM('iam_configError', {
             params: {
@@ -201,7 +200,7 @@ export const iam: IamFunctions = {
             if (!passwordState.success)
               return passwordState
           }
-          return ok(found.data
+          return core.ok(found.data
             ? {
                 version: found.data.credentialVersion ?? '',
                 available: isUserActive(found.data),
@@ -297,11 +296,11 @@ export const iam: IamFunctions = {
         accountScanTimer.unref()
       }
       logger.info('IAM module initialized')
-      return ok(undefined)
+      return core.ok(undefined)
     }
     catch (error) {
       logger.error('IAM module initialization failed', { error })
-      return err(
+      return core.err(
         HaiIamError.CONFIG_ERROR,
         iamM('iam_initFailed'),
         error,
@@ -323,11 +322,11 @@ export const iam: IamFunctions = {
     if (!snapshot || !authz)
       return notInitialized.result<IamPublicConfig>()
     if (!snapshot.reauthentication.enabled)
-      return ok(snapshot)
+      return core.ok(snapshot)
     const configured = await authz.getSensitiveOperations()
     if (!configured.success)
       return configured
-    return ok({
+    return core.ok({
       ...snapshot,
       reauthentication: {
         ...snapshot.reauthentication,

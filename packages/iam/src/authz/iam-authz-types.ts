@@ -135,7 +135,7 @@ export interface UserRole {
  * 授权子功能接口
  * @example
  * ```ts
- * import { iam, type AuthzOperations } from '@h-ai/iam'
+ * import { type AuthzOperations, iam } from '@h-ai/iam'
  * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
  * const operations: AuthzOperations = iam.authz
  * const result = await operations.checkPermission('user-1', 'report:read')

@@ -1,6 +1,6 @@
 /** 可选依赖不可加载时，密码、自定义通知和注入 LDAP 工厂仍可独立使用。 */
 import type { LdapClientFactory } from '../src/index.js'
-import { ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
 import { defineIamSuite, initIam, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
@@ -45,9 +45,9 @@ defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
   })
 
   it('启用 LDAP 并注入工厂后不需要 ldapts', async () => {
-    const factory: LdapClientFactory = async () => ok({
-      bind: async () => ok(undefined),
-      search: async () => ok([
+    const factory: LdapClientFactory = async () => core.ok({
+      bind: async () => core.ok(undefined),
+      search: async () => core.ok([
         {
           dn: 'uid=directory,dc=test',
           attributes: {
@@ -58,7 +58,7 @@ defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
           },
         },
       ]),
-      unbind: async () => ok(undefined),
+      unbind: async () => core.ok(undefined),
     })
     await initIam({
       login: { ldap: true },

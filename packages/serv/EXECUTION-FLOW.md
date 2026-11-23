@@ -19,12 +19,7 @@
 
 ### 入口与子路径导出
 
-`packages/serv/package.json` 当前对外暴露四类入口：
-
-- `@h-ai/serv`：扁平入口，提供 `serv.createApp()`、`serv.implement()`、`serv.listen()` 等主 API
-- `@h-ai/serv/features/iam`：内置 IAM procedures
-- `@h-ai/serv/features/storage`：内置 Storage procedures
-- `@h-ai/serv/features/ai`：内置 AI procedures
+`@h-ai/serv` 的 `serv` 对象提供应用装配、监听和四个预置处理函数工厂。公开的 `/features/iam`、`/features/storage`、`/features/ai` 和 `/features/feedback` 子路径转发同一个 `serv`，同时保留各功能的输入类型。
 
 ### 最常见的外部接入方式
 
@@ -36,8 +31,6 @@
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
 
 // 组合 IAM 和存储定义，返回供客户端与服务端共享的 API 契约。
 const contract = apiContract.create({
@@ -47,9 +40,9 @@ const contract = apiContract.create({
 
 const procedures = {
   // 注入宿主 IAM 实例，返回对应端点的处理器。
-  iam: createIamProcedures({ iam }),
+  iam: serv.createIamProcedures({ iam }),
   // 注入 Storage 并限制用户路径，返回会执行该授权检查的存储处理器。
-  storage: createStorageProcedures({
+  storage: serv.createStorageProcedures({
     storage,
     authorize: ({ context, keys }) => keys.every(key =>
       key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
@@ -106,9 +99,10 @@ serv.listen(app, { onClose: closeApp })
 
 ### 内置 feature procedures
 
-- `src/features/serv-feature-iam.ts` → `@h-ai/serv/features/iam`：登录、登出、当前用户、用户/角色/权限 CRUD
-- `src/features/serv-feature-storage.ts` → `@h-ai/serv/features/storage`：预签名上传/下载、文件列表、元数据、删除
-- `src/features/serv-feature-ai.ts` → `@h-ai/serv/features/ai`：对话补全、发消息、历史、记忆、会话列表
+- `serv.createIamProcedures()`：登录、登出、当前用户、用户/角色/权限 CRUD
+- `serv.createStorageProcedures()`：预签名上传/下载、文件列表、元数据、删除
+- `serv.createAiProcedures()`：对话补全、发消息、历史、记忆、会话列表
+- `serv.createFeedbackProcedures()`：反馈提交、查询、处理和导出
 
 这些 feature 是“开箱即用的默认装配”，不是强制依赖。调用方可以：
 
@@ -279,7 +273,7 @@ serv
 
 ### IAM feature
 
-`createIamProcedures()` 提供四组默认路由：
+`serv.createIamProcedures()` 提供四组默认路由：
 
 - `auth`：登录、OTP 登录、登出、当前用户、刷新、注册、改密、更新当前用户
 - `users`：列表、详情、创建、更新、删除、重置密码
@@ -295,7 +289,7 @@ serv
 
 ### Storage feature
 
-`createStorageProcedures()` 默认提供：
+`serv.createStorageProcedures()` 默认提供：
 
 - 预签名上传 / 下载 URL
 - 文件列表
@@ -310,7 +304,7 @@ serv
 
 ### AI feature
 
-`createAiProcedures()` 默认提供：
+`serv.createAiProcedures()` 默认提供：
 
 - 对话补全
 - 发送消息

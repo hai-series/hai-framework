@@ -6,9 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { CleanOptionsInput } from './datapipe-config.js'
 
-import { err, ok } from '@h-ai/core'
+import type { CleanOptionsInput } from './datapipe-config.js'
+import { core } from '@h-ai/core'
 
 import { CleanOptionsSchema } from './datapipe-config.js'
 import { datapipeConfigError, datapipeM } from './datapipe-i18n.js'
@@ -177,7 +177,7 @@ export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<
           regex = new RegExp(pattern, 'g')
         }
         catch (regexError) {
-          return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+          return core.err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
             params: {
               error: String(regexError),
             },
@@ -198,10 +198,10 @@ export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<
       result = result.trim()
     }
 
-    return ok(result)
+    return core.ok(result)
   }
   catch (error) {
-    return err(HaiDatapipeError.CLEAN_FAILED, datapipeM('datapipe_cleanFailed', {
+    return core.err(HaiDatapipeError.CLEAN_FAILED, datapipeM('datapipe_cleanFailed', {
       params: {
         error: String(error),
       },

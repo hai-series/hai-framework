@@ -4,9 +4,8 @@
 -->
 <script lang='ts'>
   import { core, HaiCommonError } from '@h-ai/core'
-  import { Card, DataTable, PageHeader, Pagination, TableToolbar } from '@h-ai/ui'
-  import { authErrorMessage } from '@h-ai/ui/i18n'
-  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { Card, DataTable, PageHeader, Pagination, TableToolbar, ui } from '@h-ai/ui'
+
   import { desktopApiClient } from '../lib/api.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
 
@@ -68,7 +67,7 @@
     }
     else {
       error = result.error.code === HaiCommonError.REQUEST_ACCESS_DENIED.code
-        ? authErrorMessage(result.error)
+        ? ui.authErrorMessage(result.error)
         : core.error.formatMessage({
           message: m('users_failed'),
           traceId: result.error.traceId,
@@ -96,7 +95,7 @@
     sortDir = direction
     page = 1
   }
-  useToastFeedback(() => error)
+  ui.useToastFeedback(() => error)
 </script>
 
 <div class='flex min-h-0 flex-1 flex-col gap-4'>

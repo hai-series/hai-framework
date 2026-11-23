@@ -93,8 +93,8 @@ export const paymentContract = {
  * payment 领域公开 procedure 契约的完整类型。
  * @example
  * ```ts
- * import type { PaymentContract } from '@h-ai/api-contract'
- * import { apiContract } from '@h-ai/api-contract'
+ *
+ * import { type PaymentContract, apiContract } from '@h-ai/api-contract'
  *
  * const contract: PaymentContract = apiContract.payment
  * void contract

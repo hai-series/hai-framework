@@ -16,11 +16,10 @@
 {{/if}}
 {{/if}}
 {{#if hasI18n}}
-  import { LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
+  import { LanguageSwitch, ThemeSelector, ToastContainer, ui } from '@h-ai/ui'
 {{else}}
-  import { ThemeSelector, ToastContainer } from '@h-ai/ui'
+  import { ThemeSelector, ToastContainer, ui } from '@h-ai/ui'
 {{/if}}
-  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
 {{#if features.crypto}}
   import { untrack } from 'svelte'
 {{/if}}
@@ -36,15 +35,15 @@
 
   const { children }: Props = $props()
   const initialTheme = browser
-    ? getSavedTheme()
+    ? ui.getSavedTheme()
     : 'light'
   let currentTheme = $state(initialTheme)
   if (browser)
-    applyTheme(initialTheme, false)
+    ui.applyTheme(initialTheme, false)
 
   function handleThemeChange(theme: string) {
     currentTheme = theme
-    applyTheme(theme)
+    ui.applyTheme(theme)
   }
 {{#if features.crypto}}
   if (browser) {
@@ -87,13 +86,13 @@
 {{#if hasI18n}}
 
   function handleLanguageChange(language: string) {
-    setGlobalLocale(language)
+    ui.setGlobalLocale(language)
     setLocale(language as Parameters<typeof setLocale>[0])
   }
 
   if (browser) {
     const paraglideLocale = getLocale()
-    setGlobalLocale(paraglideLocale)
+    ui.setGlobalLocale(paraglideLocale)
   }
 {{/if}}
 </script>

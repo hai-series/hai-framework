@@ -1,10 +1,10 @@
 <script lang='ts'>
   import type { SensitiveActionsOptions } from '../../src/lib/components/scenes/iam/index.js'
   import { untrack } from 'svelte'
-  import { createSensitiveActions, ReauthenticationDialog } from '../../src/lib/components/scenes/iam/index.js'
+  import { ReauthenticationDialog, ui } from '../../src/lib/components/scenes/iam/index.js'
 
   const { actions }: { actions: SensitiveActionsOptions } = $props()
-  const confirmation = untrack(() => createSensitiveActions(actions))
+  const confirmation = untrack(() => ui.createSensitiveActions(actions))
   let result = $state<string | null | undefined>()
   $effect(() => {
     confirmation.configure({

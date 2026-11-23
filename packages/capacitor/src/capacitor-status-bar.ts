@@ -8,7 +8,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { StatusBarConfig } from './capacitor-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
 
@@ -59,10 +59,10 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<HaiRe
       await StatusBar.setOverlaysWebView({ overlay: config.overlay })
     }
 
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.STATUS_BAR_FAILED,
       capacitorM('capacitor_statusBarFailed'),
       cause,
@@ -94,10 +94,10 @@ export async function showStatusBar(): Promise<HaiResult<void>> {
   try {
     const { StatusBar } = await import('@capacitor/status-bar')
     await StatusBar.show()
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.STATUS_BAR_FAILED,
       capacitorM('capacitor_statusBarFailed'),
       cause,
@@ -129,10 +129,10 @@ export async function hideStatusBar(): Promise<HaiResult<void>> {
   try {
     const { StatusBar } = await import('@capacitor/status-bar')
     await StatusBar.hide()
-    return ok(undefined)
+    return core.ok(undefined)
   }
   catch (cause) {
-    return err(
+    return core.err(
       HaiCapacitorError.STATUS_BAR_FAILED,
       capacitorM('capacitor_statusBarFailed'),
       cause,

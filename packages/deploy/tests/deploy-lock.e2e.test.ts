@@ -14,7 +14,7 @@ import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testContainerRuntimeCandidates } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createApplyScript, shellArgument } from '../src/container/deploy-scripts.js'
-import { deploy, normalizeProjectName } from '../src/index.js'
+import { deploy } from '../src/index.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
@@ -63,7 +63,7 @@ function declareService(directory: string, service: string, definition: Record<s
 
 /** 只在故障夹具中替换已校验的卷/引擎元数据，重新生成真实 SHA-256。 */
 function declareDatabaseBackend(bundle: { directory: string }, backend: 'postgresql' | 'mysql'): string {
-  const project = `hai-${normalizeProjectName(basename(root))}-test`
+  const project = `hai-${deploy.normalizeProjectName(basename(root))}-test`
   const volume = `${project}_${project.slice('hai-'.length)}-db-data`
   updateMetadata(bundle.directory, { 'state-backends': `db ${backend} ${volume}\n` })
   declareService(bundle.directory, 'db', {

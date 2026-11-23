@@ -1,4 +1,4 @@
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
@@ -58,7 +58,7 @@ describe('persistent DND enqueue', { concurrent: false }, () => {
 
   it('队列建表失败时不发布已初始化状态', async () => {
     await reldb.init({ type: 'sqlite', database: ':memory:' })
-    vi.spyOn(reldb.ddl, 'createTable').mockResolvedValue(err(HaiReachError.SEND_FAILED, 'queue schema unavailable'))
+    vi.spyOn(reldb.ddl, 'createTable').mockResolvedValue(core.err(HaiReachError.SEND_FAILED, 'queue schema unavailable'))
     const result = await reach.init(config)
     expect(result.success).toBe(false)
     expect(reach.isInitialized).toBe(false)
@@ -78,9 +78,9 @@ describe('persistent DND enqueue', { concurrent: false }, () => {
     const repository = await initializeQueue()
     const create = vi.spyOn(repository, 'create')
     if (failure === 'result')
-      create.mockResolvedValueOnce(err(HaiReachError.SEND_FAILED, 'insert unavailable'))
+      create.mockResolvedValueOnce(core.err(HaiReachError.SEND_FAILED, 'insert unavailable'))
     else if (failure === 'no rows')
-      create.mockResolvedValueOnce(ok({ changes: 0 }))
+      create.mockResolvedValueOnce(core.ok({ changes: 0 }))
     else
       create.mockRejectedValueOnce(new Error('connection lost'))
 
@@ -154,7 +154,7 @@ describe('persistent DND enqueue', { concurrent: false }, () => {
   it('即时发送后普通日志写入失败不使已发送消息返回失败', async () => {
     const repository = await initializeQueue()
     vi.setSystemTime(new Date('2026-01-02T09:00:00'))
-    vi.spyOn(repository, 'create').mockResolvedValueOnce(err(HaiReachError.SEND_FAILED, 'optional log unavailable'))
+    vi.spyOn(repository, 'create').mockResolvedValueOnce(core.err(HaiReachError.SEND_FAILED, 'optional log unavailable'))
     const result = await reach.send(message)
     expect(result).toMatchObject({
       success: true,

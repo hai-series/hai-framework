@@ -130,7 +130,7 @@ const app = serv.createApp({
   contract: appContract,
   procedures: {
     // 用已初始化的 IAM 服务创建认证和管理路由的处理器。
-    iam: createIamProcedures({ iam }),
+    iam: serv.createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
   http: { apiPrefix: '/api/v1' },
@@ -183,7 +183,7 @@ myContract.ai.chats.createCompletion  // POST /ai/chats/completions，非流式 
 
 ### `apiContract.haiResultSchema(dataSchema)` — 标准输出包装
 
-所有 HTTP 输出必须通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `ok()/err()` 返回结构一致：
+所有 HTTP 输出必须通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `core.ok()/err()` 返回结构一致：
 
 ```typescript
 import { apiContract } from '@h-ai/api-contract'
@@ -259,7 +259,7 @@ middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，
 ### 带分页的列表接口
 
 ```typescript
-import { apiContract, PaginationQuerySchema } from '@h-ai/api-contract'
+import { PaginationQuerySchema, apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })

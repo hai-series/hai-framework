@@ -10,7 +10,7 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
   // FileList 与 DOM 全局类型同名，必须显式导入
-  import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+  import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, ui } from '@h-ai/ui'
   import CodeWorkspaceDemo from '#lib/components/gallery/CodeWorkspaceDemo.svelte'
   import markdownEn from '#lib/components/gallery/content/markdown.en-US.md?raw'
   import markdownJa from '#lib/components/gallery/content/markdown.ja-JP.md?raw'
@@ -544,7 +544,7 @@
             showTitle
             showForgotPassword
             showRegisterLink
-            onsubmit={async (data) => { toast.success(m.gallery_demo_login_value({ value: data.username })) }}
+            onsubmit={async (data) => { ui.toast.success(m.gallery_demo_login_value({ value: data.username })) }}
           />
         </div>
       </div>
@@ -557,7 +557,7 @@
             showTitle
             showLoginLink
             showPasswordStrength
-            onsubmit={async (data) => { toast.success(m.gallery_demo_register_value({ value: data.username ?? data.email ?? '' })) }}
+            onsubmit={async (data) => { ui.toast.success(m.gallery_demo_register_value({ value: data.username ?? data.email ?? '' })) }}
           />
         </div>
       </div>
@@ -571,7 +571,7 @@
             showTitle
             showDescription
             showBackLink
-            onsubmit={async () => { toast.info(m.gallery_demo_reset_email_sent()) }}
+            onsubmit={async () => { ui.toast.info(m.gallery_demo_reset_email_sent()) }}
           />
         </div>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
@@ -581,7 +581,7 @@
             showDescription
             showCode
             showPasswordStrength
-            onsubmit={async () => { toast.success(m.gallery_demo_password_reset()) }}
+            onsubmit={async () => { ui.toast.success(m.gallery_demo_password_reset()) }}
           />
         </div>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
@@ -589,7 +589,7 @@
           <ChangePasswordForm
             requireOldPassword
             showPasswordStrength
-            onsubmit={async () => { toast.success(m.gallery_demo_password_changed()) }}
+            onsubmit={async () => { ui.toast.success(m.gallery_demo_password_changed()) }}
           />
         </div>
       </div>
@@ -629,7 +629,7 @@
         user={demoUser}
         editable
         onsubmit={async () => {
-          toast.success(m.gallery_demo_profile_updated())
+          ui.toast.success(m.gallery_demo_profile_updated())
           return true
         }}
       />
@@ -679,8 +679,8 @@
             showDelete
             showSize
             layout='list'
-            ondownload={f => toast.info(m.gallery_demo_download_value({ value: f.name }))}
-            ondelete={f => toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
+            ondownload={f => ui.toast.info(m.gallery_demo_download_value({ value: f.name }))}
+            ondelete={f => ui.toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
           />
         </div>
         <div class='divider my-2'></div>
@@ -692,8 +692,8 @@
             showDownload
             showDelete
             layout='grid'
-            ondownload={f => toast.info(m.gallery_demo_download_value({ value: f.name }))}
-            ondelete={f => toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
+            ondownload={f => ui.toast.info(m.gallery_demo_download_value({ value: f.name }))}
+            ondelete={f => ui.toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
           />
         </div>
         <div class='divider my-2'></div>

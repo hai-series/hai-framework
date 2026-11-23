@@ -1,7 +1,8 @@
 /** 向量库生命周期须保留失败候选与旧资源所有权；关闭期间停止业务发布。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { VecdbProvider } from '../src/providers/vecdb-provider-base.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { vecdb } from '../src/vecdb-main.js'
 import { HaiVecdbError } from '../src/vecdb-types.js'
@@ -10,7 +11,7 @@ const state = vi.hoisted(() => ({
   factory: vi.fn<() => VecdbProvider>(),
 }))
 vi.mock('../src/providers/vecdb-provider-qdrant.js', () => ({ createQdrantProvider: state.factory }))
-const failure = () => err(HaiVecdbError.CONNECTION_FAILED, 'Controlled provider failure')
+const failure = () => core.err(HaiVecdbError.CONNECTION_FAILED, 'Controlled provider failure')
 const connect = vi.fn<() => Promise<HaiResult<void>>>()
 const close = vi.fn<() => Promise<HaiResult<void>>>()
 function provider(): VecdbProvider {
@@ -20,37 +21,37 @@ function provider(): VecdbProvider {
     close,
     isConnected: () => true,
     collection: {
-      create: async () => ok(undefined),
-      drop: async () => ok(undefined),
-      exists: async () => ok(true),
-      info: async () => ok({
+      create: async () => core.ok(undefined),
+      drop: async () => core.ok(undefined),
+      exists: async () => core.ok(true),
+      info: async () => core.ok({
         name: 'docs',
         dimension: 3,
         metric: 'cosine',
         count: 0,
       }),
-      list: async () => ok(['docs']),
+      list: async () => core.ok(['docs']),
     },
     vector: {
-      insert: async () => ok(undefined),
-      upsert: async () => ok(undefined),
-      delete: async () => ok(undefined),
-      search: async () => ok([]),
-      count: async () => ok(0),
-      scan: async () => ok({ items: [] }),
+      insert: async () => core.ok(undefined),
+      upsert: async () => core.ok(undefined),
+      delete: async () => core.ok(undefined),
+      search: async () => core.ok([]),
+      count: async () => core.ok(0),
+      scan: async () => core.ok({ items: [] }),
     },
   }
 }
 beforeEach(async () => {
-  close.mockResolvedValue(ok(undefined))
+  close.mockResolvedValue(core.ok(undefined))
   await vecdb.close()
   vi.clearAllMocks()
   state.factory.mockImplementation(provider)
-  connect.mockResolvedValue(ok(undefined))
-  close.mockResolvedValue(ok(undefined))
+  connect.mockResolvedValue(core.ok(undefined))
+  close.mockResolvedValue(core.ok(undefined))
 })
 afterEach(async () => {
-  close.mockResolvedValue(ok(undefined))
+  close.mockResolvedValue(core.ok(undefined))
   await vecdb.close()
 })
 const config = { type: 'qdrant', url: 'http://localhost:6333' } as const
@@ -82,12 +83,12 @@ describe('vecdb resource ownership', () => {
     expect(close).toHaveBeenCalledTimes(1)
     expect((await vecdb.init(config)).success).toBe(false)
     expect(state.factory).toHaveBeenCalledTimes(1)
-    close.mockResolvedValue(ok(undefined))
+    close.mockResolvedValue(core.ok(undefined))
     expect((await vecdb.init(config)).success).toBe(true)
     expect(state.factory).toHaveBeenCalledTimes(2)
   })
   it('初始化错误上的 cleanupPending 在后续回收成功后清除', async () => {
-    connect.mockResolvedValueOnce(err({
+    connect.mockResolvedValueOnce(core.err({
       ...HaiVecdbError.CONNECTION_FAILED,
       message: 'Controlled startup failure',
       ext: { cleanupPending: true, cleanupError: 'first cleanup failed' },
@@ -117,7 +118,7 @@ describe('vecdb resource ownership', () => {
     })
     await Promise.resolve()
     expect(settled).toBe(false)
-    finish(ok(undefined))
+    finish(core.ok(undefined))
     expect((await initializing).success).toBe(true)
     expect((await closing).success).toBe(true)
     expect(vecdb.isInitialized).toBe(false)
@@ -134,7 +135,7 @@ describe('vecdb resource ownership', () => {
     await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1))
     expect((await vecdb.init(config)).success).toBe(false)
     expect(state.factory).toHaveBeenCalledTimes(1)
-    finish(ok(undefined))
+    finish(core.ok(undefined))
     expect((await first).success).toBe(true)
     expect((await second).success).toBe(true)
     expect(close).toHaveBeenCalledTimes(1)

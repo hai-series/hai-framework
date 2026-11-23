@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ServiceProvisioner } from '../deploy-internal-types.js'
 import type { ProvisionResult } from '../deploy-types.js'
 import { Buffer } from 'node:buffer'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { deployM } from '../deploy-i18n.js'
 import { recoveryFailure } from '../deploy-recovery.js'
@@ -152,11 +152,11 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         email = userEmail
         apiKey = userKey
         logger.info('Upstash authenticated')
-        return ok(userEmail)
+        return core.ok(userEmail)
       }
       catch (error) {
         logger.error('Upstash authentication failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
             params: {
@@ -172,7 +172,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
 
     async provision(appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!apiKey || !email) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -195,7 +195,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           resource = { resourceInfo: `upstash-db:${databaseId}`, resourceStatus: 'reused' }
           const detail = await getUpstashDatabase(email, apiKey, databaseId)
           logger.info('Upstash Redis reused', { databaseId, databaseName })
-          return ok(buildUpstashProvisionResult({
+          return core.ok(buildUpstashProvisionResult({
             ...existingDatabase,
             ...detail,
           }, 'reused'))
@@ -214,7 +214,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           resource = { resourceInfo: `upstash-db:${data.database_id}`, resourceStatus: 'created' }
         logger.info('Upstash Redis provisioned', { databaseId: data.database_id })
 
-        return ok(buildUpstashProvisionResult(data, 'created'))
+        return core.ok(buildUpstashProvisionResult(data, 'created'))
       }
       catch (error) {
         logger.error('Upstash provisioning failed', { appName })
@@ -227,7 +227,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
             ],
           })
         }
-        return err(
+        return core.err(
           HaiDeployError.PROVISION_FAILED,
           deployM('deploy_provisionFailed', {
             params: {

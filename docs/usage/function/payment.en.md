@@ -9,8 +9,8 @@
 Initialize Payment before creating orders. Validate amounts and authorize operations in application code. Treat provider callbacks and query results as inputs to the app’s own order state machine.
 
 ```typescript
-import type { PaymentConfigInput } from '@h-ai/payment'
-import { payment } from '@h-ai/payment'
+
+import { type PaymentConfigInput, payment } from '@h-ai/payment'
 
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
@@ -46,12 +46,12 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
 
 ```typescript
 import type { PaymentOrder } from '@h-ai/payment'
-import { invokePayment } from '@h-ai/payment/client'
+import { payment } from '@h-ai/payment/client'
 
 export async function startPayment(orderData: PaymentOrder) {
   // 用订单及渠道参数发起支付，检查接口调用是否成功。
   // Launch payment using the server-created order and channel parameters. Check data.invoked for launch and message when unavailable; the server confirms settlement.
-  const invoked = await invokePayment(orderData)
+  const invoked = await payment.client.invoke(orderData)
   if (!invoked.success)
     throw new Error(invoked.error.message)
   if (!invoked.data.invoked)
@@ -229,7 +229,7 @@ async function verifyNotification(providerName: string, request: Request) {
 
 <a id="browser-payment"></a>
 
-### Start payment in the browser: `invokePayment`
+### Start payment in the browser: `payment.client.invoke`
 
 Use startPayment in the quick start with an order successfully created by the server.
 
@@ -237,7 +237,7 @@ Use startPayment in the quick start with an order successfully created by the se
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `invokePayment(order)` | Open the provider payment UI | Required `order: PaymentOrder` from the successful server-side order creation | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+| `payment.client.invoke(order)` | Open the provider payment UI | Required `order: PaymentOrder` from the successful server-side order creation | `Promise<HaiResult<InvokePaymentResult>>` | `await payment.client.invoke(orderData)` |
 
 #### Scenario: Handle invocation results
 

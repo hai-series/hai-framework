@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ToolRegistryOperations as NeutralToolRegistryOperations, ToolInvocation } from '@h-ai/tools'
 import type { ToolCall, ToolMessage, ToolRegistryOperations } from './ai-llm-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { projectToolProtocolSchema } from '../tools/ai-tools-protocol-schema.js'
@@ -18,13 +18,13 @@ const logger = core.logger.child({ module: 'ai', scope: 'tool-protocol' })
 /** 模型入参只在协议层解析 JSON；业务 Schema 仍由中立工具校验。 */
 function decodeCall(call: ToolCall): HaiResult<ToolInvocation> {
   if (call.type !== 'function')
-    return err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidCall'))
+    return core.err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidCall'))
   try {
     const input: unknown = JSON.parse(call.function.arguments)
-    return ok({ name: call.function.name, input })
+    return core.ok({ name: call.function.name, input })
   }
   catch (cause) {
-    return err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidJson'), cause)
+    return core.err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidJson'), cause)
   }
 }
 
@@ -38,11 +38,11 @@ function encodeResult(call: ToolCall, output: unknown): HaiResult<ToolMessage> {
           : output)
     if (typeof content !== 'string')
       throw new TypeError('Tool output is not JSON serializable')
-    return ok({ role: 'tool', tool_call_id: call.id, content })
+    return core.ok({ role: 'tool', tool_call_id: call.id, content })
   }
   catch (cause) {
     logger.error('Tool result encoding failed', { code: HaiAIError.TOOL_RESULT_ERROR.code })
-    return err(HaiAIError.TOOL_RESULT_ERROR, aiM('ai_toolInvalidResult'), cause)
+    return core.err(HaiAIError.TOOL_RESULT_ERROR, aiM('ai_toolInvalidResult'), cause)
   }
 }
 
@@ -94,7 +94,7 @@ export function adaptToolRegistry(registry: NeutralToolRegistryOperations): Tool
           return encoded
         messages.push(encoded.data)
       }
-      return ok(messages)
+      return core.ok(messages)
     },
   }
 }

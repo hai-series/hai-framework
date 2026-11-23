@@ -5,7 +5,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { TransportServerKeyRing } from './crypto-transport-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
@@ -30,10 +30,10 @@ export function parseTransportServerKeyRing(serialized: unknown): HaiResult<Tran
       ? JSON.parse(serialized)
       : serialized
     if (isTransportServerKeyRing(value))
-      return ok(value)
+      return core.ok(value)
   }
   catch {}
-  return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
+  return core.err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
 }
 
 /**

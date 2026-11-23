@@ -2,10 +2,11 @@
  * @h-ai/iam — 单身份 CAS 验证码状态；不依赖可过期的进程租约。
  * @module iam-authn-otp-repository-otp
  */
+
 import type { HaiResult } from '@h-ai/core'
 import type { IamNotificationContext } from '../../iam-types.js'
 import { cache } from '@h-ai/cache'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
@@ -99,8 +100,8 @@ export function createCacheOtpRepository(): OtpRepository {
     return otpRepoInstance
 
   const keyFor = (identifier: string) => `hai:iam:otp:${normalizeOtpIdentifier(identifier)}`
-  const failure = () => err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'))
-  const invalid = () => err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
+  const failure = () => core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'))
+  const invalid = () => core.err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
   otpRepoInstance = {
     async issueOtp(input) {
       const now = Date.now()
@@ -116,7 +117,7 @@ export function createCacheOtpRepository(): OtpRepository {
       if (!current.success)
         return failure()
       if (current.data && current.data.cooldownUntil > Date.now()) {
-        return err(HaiIamError.OTP_RESEND_TOO_FAST, iamM('iam_otpResendTooFast', {
+        return core.err(HaiIamError.OTP_RESEND_TOO_FAST, iamM('iam_otpResendTooFast', {
           params: {
             seconds: Math.ceil((current.data.cooldownUntil - Date.now()) / 1000),
           },
@@ -128,10 +129,10 @@ export function createCacheOtpRepository(): OtpRepository {
       if (!published.success)
         return failure()
       if (!published.data)
-        return err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
+        return core.err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
       if (Date.now() >= state.expiresAt)
         return invalid()
-      return ok({
+      return core.ok({
         idempotencyKey: `iam-otp:${state.version}`,
         expiresAt: new Date(state.expiresAt),
       })
@@ -164,10 +165,10 @@ export function createCacheOtpRepository(): OtpRepository {
         if (!committed.data)
           continue
         if (!correct || state.expiresAt <= Date.now())
-          return err(HaiIamError.OTP_INVALID, iamM('iam_otpWrong'))
-        return ok(undefined)
+          return core.err(HaiIamError.OTP_INVALID, iamM('iam_otpWrong'))
+        return core.ok(undefined)
       }
-      return err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
+      return core.err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
     },
   }
   return otpRepoInstance

@@ -44,7 +44,7 @@ if (!info.success) throw new Error(info.error.message)
 initializeManagementApi接受baseUrl、fetchFn、clientName、terminalType、tokenStorage、headers、requireApiBase和onSessionExpired。基址顺序为显式baseUrl→公开runtime-config→PUBLIC_API_BASE→当前origin；只给origin时补/api/v1，自定义http.apiPrefix必须明确包含。
 
 - Web/浏览器预览使用内存access token和服务端HttpOnly刷新Cookie，刷新恢复会话；认证token不放localStorage。
-- Capacitor原生使用createCapacitorTokenStorage及受信原生通道。编译/同步前在App的public/runtime-config.js设置公开API地址，不放服务端秘密。
+- Capacitor原生使用capacitor.createTokenStorage()及受信原生通道。编译/同步前在App的public/runtime-config.js设置公开API地址，不放服务端秘密。
 - Tauri原生凭据只在内存，重启重新登录。启动安装程序前设置进程PUBLIC_API_BASE，Rust宿主注入地址；缺省http://localhost:3000/api/v1只适合本机服务。
 - 原生请求声明clientName及body通道头，服务端还核验可信Origin；仅声明头不获得原生权限。
 

@@ -1,5 +1,7 @@
 /** 默认补全经 typed client、真实 HTTP serv 和 OpenAI 协议 Provider 的工具往返。 */
+
 import type { AiChatCompletionInput } from '@h-ai/api-contract'
+import type { ServContext } from '../src/serv-context.js'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { ai } from '@h-ai/ai'
@@ -7,7 +9,6 @@ import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
-import { createAiProcedures } from '../src/features/serv-feature-ai.js'
 import { serv } from '../src/serv-main.js'
 
 describe('ai completion HTTP protocol', () => {
@@ -58,7 +59,7 @@ describe('ai completion HTTP protocol', () => {
       })).success).toBe(true)
       const app = serv.createApp({
         contract: apiContract.ai,
-        procedures: createAiProcedures({ ai }),
+        procedures: serv.createAiProcedures({ ai }),
         createContext: ({ request }): ServContext => ({
           requestId: 'ai-cancellation',
           locale: 'en-US',
@@ -172,7 +173,7 @@ describe('ai completion HTTP protocol', () => {
       const app = serv.createApp({
         contract,
         procedures: {
-          ai: createAiProcedures({ ai }),
+          ai: serv.createAiProcedures({ ai }),
         },
         createContext: ({ request }) => ({
           requestId: 'completion-http-test',

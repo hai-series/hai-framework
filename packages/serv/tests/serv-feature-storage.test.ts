@@ -3,10 +3,9 @@ import type { StorageProcedureDeps } from '../src/features/serv-feature-storage.
 import type { ServContext } from '../src/serv-context.js'
 import { Buffer } from 'node:buffer'
 import { apiContract } from '@h-ai/api-contract'
-import { core, HaiCommonError, ok } from '@h-ai/core'
-import { storage } from '@h-ai/storage'
+import { core, HaiCommonError } from '@h-ai/core'
+import { storage as frameworkStorage } from '@h-ai/storage'
 import { describe, expect, it, vi } from 'vitest'
-import { createStorageProcedures } from '../src/features/serv-feature-storage.js'
 import { serv } from '../src/serv-main.js'
 
 const logger = core.logger.child({ module: 'serv-test', scope: 'feature-storage' })
@@ -26,37 +25,37 @@ const baseListResult: ListResult = {
 
 function createStorageMock(): StorageFunctions {
   return {
-    client: storage.client,
-    init: async () => ok(undefined),
-    close: async () => ok(undefined),
+    client: frameworkStorage.client,
+    init: async () => core.ok(undefined),
+    close: async () => core.ok(undefined),
     config: null,
     isInitialized: true,
     checksum: {
-      generate: async () => ok('digest'),
-      verify: async () => ok(true),
+      generate: async () => core.ok('digest'),
+      verify: async () => core.ok(true),
     },
     file: {
-      put: async () => ok(baseFileMetadata),
-      get: async () => ok(Buffer.from('demo')),
-      getStream: async () => ok((async function* () { yield Buffer.from('demo') })()),
-      getStreamWithMetadata: async key => ok({
+      put: async () => core.ok(baseFileMetadata),
+      get: async () => core.ok(Buffer.from('demo')),
+      getStream: async () => core.ok((async function* () { yield Buffer.from('demo') })()),
+      getStreamWithMetadata: async key => core.ok({
         metadata: { ...baseFileMetadata, key },
         stream: (async function* () { yield Buffer.from('demo') })(),
         close: async () => {},
       }),
-      head: async key => ok({ ...baseFileMetadata, key }),
-      exists: async () => ok(true),
-      delete: async () => ok(undefined),
-      deleteMany: async keys => ok({ deletedKeys: keys, failures: [] }),
-      copy: async (_sourceKey, destKey) => ok({ ...baseFileMetadata, key: destKey }),
+      head: async key => core.ok({ ...baseFileMetadata, key }),
+      exists: async () => core.ok(true),
+      delete: async () => core.ok(undefined),
+      deleteMany: async keys => core.ok({ deletedKeys: keys, failures: [] }),
+      copy: async (_sourceKey, destKey) => core.ok({ ...baseFileMetadata, key: destKey }),
     },
     dir: {
-      list: async () => ok(baseListResult),
-      delete: async () => ok(undefined),
+      list: async () => core.ok(baseListResult),
+      delete: async () => core.ok(undefined),
     },
     presign: {
-      getUrl: async key => ok(`https://download.test/${key}`),
-      putUrl: async key => ok(`https://upload.test/${key}`),
+      getUrl: async key => core.ok(`https://download.test/${key}`),
+      putUrl: async key => core.ok(`https://upload.test/${key}`),
       publicUrl: key => `https://public.test/${key}`,
     },
   }
@@ -81,7 +80,7 @@ describe('serv feature storage', () => {
   it('对非法存储 key 返回本地化字段错误', async () => {
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({
+      procedures: serv.createStorageProcedures({
         storage: createStorageMock(),
         authorize: authorizeUserKeys,
       }),
@@ -108,7 +107,7 @@ describe('serv feature storage', () => {
   it('deleteMany 会指出首个非法 key 的数组字段路径', async () => {
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({
+      procedures: serv.createStorageProcedures({
         storage: createStorageMock(),
         authorize: authorizeUserKeys,
       }),
@@ -157,7 +156,7 @@ describe('serv feature storage', () => {
     })
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage, authorize: authorizeUserKeys }),
+      procedures: serv.createStorageProcedures({ storage, authorize: authorizeUserKeys }),
       createContext: createContext('en-US'),
     })
     const response = await app.request('/api/v1/storage/files/delete-many', {
@@ -240,7 +239,7 @@ describe('serv feature storage', () => {
     ]
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage, authorize: authorizeUserKeys }),
+      procedures: serv.createStorageProcedures({ storage, authorize: authorizeUserKeys }),
       createContext: createContext('en-US'),
     })
     const response = await app.request(`/api/v1${path}`, {
@@ -264,7 +263,7 @@ describe('serv feature storage', () => {
     const authorize = vi.fn(authorizeUserKeys)
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage, authorize }),
+      procedures: serv.createStorageProcedures({ storage, authorize }),
       createContext: createContext('en-US'),
     })
     const response = await app.request('/api/v1/storage/files/metadata', {
@@ -278,7 +277,7 @@ describe('serv feature storage', () => {
 
     const adminApp = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({
+      procedures: serv.createStorageProcedures({
         storage,
         authorize: request => request.context.session.permissions.includes('storage.manage'),
       }),
@@ -343,7 +342,7 @@ describe('serv feature storage', () => {
     const authorize = vi.fn(async (request: Parameters<StorageProcedureDeps['authorize']>[0]) => authorizeUserKeys(request))
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({
+      procedures: serv.createStorageProcedures({
         storage: createStorageMock(),
         authorize,
       }),
@@ -369,7 +368,7 @@ describe('serv feature storage', () => {
     const app = serv.createApp({
       contract: apiContract.storage,
       // @ts-expect-error 模拟未经过 TypeScript 检查的调用方，运行时必须默认拒绝。
-      procedures: createStorageProcedures({ storage }),
+      procedures: serv.createStorageProcedures({ storage }),
       createContext: createContext('en-US'),
     })
     const response = await app.request('/api/v1/storage/files/metadata', {

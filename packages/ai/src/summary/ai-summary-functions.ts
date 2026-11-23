@@ -8,12 +8,11 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { LLMConfig, SummaryConfig } from '../ai-config.js'
-
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
-import type { SummaryOperations, SummaryOptions, SummaryResult } from './ai-summary-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { SummaryOperations, SummaryOptions, SummaryResult } from './ai-summary-types.js'
+import { core } from '@h-ai/core'
 
 import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -125,14 +124,14 @@ export function createSummaryOperations(
     })
 
     if (!chatResult.success) {
-      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
+      return core.err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
         params: {
           error: String(chatResult.error.message),
         },
       }), chatResult.error)
     }
 
-    return ok(chatResult.data.choices[0]?.message?.content ?? '')
+    return core.ok(chatResult.data.choices[0]?.message?.content ?? '')
   }
 
   /**
@@ -150,7 +149,7 @@ export function createSummaryOperations(
         return result as HaiResult<never>
 
       const summary = result.data
-      return ok({
+      return core.ok({
         summary,
         tokenCount: token.estimateText(summary),
         coveredMessages: messages.filter(m => m.role !== 'system').length,
@@ -158,7 +157,7 @@ export function createSummaryOperations(
     }
     catch (error) {
       logger.error('Context summarization failed', { error })
-      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
+      return core.err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
         params: {
           error: String(error),
         },

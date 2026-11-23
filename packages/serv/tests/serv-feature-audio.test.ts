@@ -8,6 +8,7 @@
  */
 
 import type { AudioOperations } from '@h-ai/ai'
+
 import type { HaiResult } from '@h-ai/core'
 import type { Hono } from 'hono'
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
@@ -15,7 +16,7 @@ import type { AudioWsDeps } from '../src/features/serv-feature-audio.js'
 import type { ServContext } from '../src/serv-context.js'
 import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { registerAudioWsRoute } from '../src/features/serv-feature-audio.js'
@@ -25,14 +26,14 @@ import { serv } from '../src/serv-main.js'
 /** 构造可控的 ai.audio mock */
 function createAudioMock(): AudioOperations {
   return {
-    transcribe: async () => ok({ text: '完整识别结果' }),
+    transcribe: async () => core.ok({ text: '完整识别结果' }),
     async* transcribeStream() {
       yield { type: 'speech_started' }
       yield { type: 'transcript', text: '临时', final: false }
       yield { type: 'transcript', text: '最终', final: true }
       yield { type: 'speech_stopped' }
     },
-    synthesize: async () => ok({
+    synthesize: async () => core.ok({
       data: new Uint8Array([1]),
       format: 'pcm16',
     }),
@@ -62,7 +63,7 @@ function createAudioMock(): AudioOperations {
         yield { type: 'segment_done', segmentId: segment.id }
       }
     },
-    getCapabilities: () => ok({
+    getCapabilities: () => core.ok({
       synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
     }),
   }
@@ -91,7 +92,7 @@ function captureHandlers(deps: AudioWsTestDeps, ticket = 'ticket-1'): WsHandlers
   }) as unknown as UpgradeWebSocket
   registerAudioWsRoute(app, '/api/v1/ai/audio', upgradeWebSocket, {
     ...deps,
-    verifyTicket: deps.verifyTicket ?? (async () => ok({ session: TEST_SESSION })),
+    verifyTicket: deps.verifyTicket ?? (async () => core.ok({ session: TEST_SESSION })),
   })
   const honoContext = {
     req: {
@@ -139,7 +140,7 @@ describe('serv feature audio', () => {
         ai: {
           audio: createAudioMock(),
         },
-        verifyTicket: async () => ok({ session: TEST_SESSION }),
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
       },
       http: { openapi: false, docs: false },
     })
@@ -171,7 +172,7 @@ describe('serv feature audio', () => {
     audio.transcribe = async () => {
       if (mode === 'throw')
         throw new Error('SELECT private_column; postgres://private-user:private-pass@internal-db/private-schema')
-      return err({ code: 'provider:internal', httpStatus: 500 }, 'SELECT private_column; private-schema; credential=private-key')
+      return core.err({ code: 'provider:internal', httpStatus: 500 }, 'SELECT private_column; private-schema; credential=private-key')
     }
     const contract = apiContract.create({})
     const app = serv.createApp({
@@ -179,7 +180,7 @@ describe('serv feature audio', () => {
       procedures: serv.implement(contract).context<ServContext>().build(),
       audio: {
         ai: { audio },
-        verifyTicket: async () => ok({ session: TEST_SESSION }),
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
       },
       http: { openapi: false, docs: false },
     })
@@ -233,7 +234,7 @@ describe('serv feature audio', () => {
         ai: {
           audio: createAudioMock(),
         },
-        verifyTicket: async () => ok({ session: TEST_SESSION }),
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
       },
       http: { openapi: false, docs: false },
     })
@@ -375,7 +376,7 @@ describe('serv feature audio', () => {
   })
 
   it('无效或已消费的 ticket 返回错误并关闭', async () => {
-    const verifyTicket = async (): Promise<HaiResult<never>> => err(HaiCommonError.UNAUTHORIZED, 'invalid')
+    const verifyTicket = async (): Promise<HaiResult<never>> => core.err(HaiCommonError.UNAUTHORIZED, 'invalid')
     const handlers = captureHandlers({
       ai: {
         audio: createAudioMock(),
@@ -395,7 +396,7 @@ describe('serv feature audio', () => {
   })
 
   it('缺失 ticket 时不会调用校验或付费能力', async () => {
-    const verifyTicket = vi.fn(async () => ok({ session: TEST_SESSION }))
+    const verifyTicket = vi.fn(async () => core.ok({ session: TEST_SESSION }))
     const transcribeStream = vi.fn(createAudioMock().transcribeStream)
     const audio = {
       ...createAudioMock(),
@@ -439,7 +440,7 @@ describe('serv feature audio', () => {
   })
 
   it('鉴权未完成前不调用付费 ASR（串行化 + 鉴权先行，消除竞态）', async () => {
-    const transcribe = vi.fn(async () => ok({ text: '不该被识别' }))
+    const transcribe = vi.fn(async () => core.ok({ text: '不该被识别' }))
     const audio = {
       ...createAudioMock(),
       transcribe,
@@ -447,7 +448,7 @@ describe('serv feature audio', () => {
     // 鉴权异步失败（下一 tick 才 resolve），模拟快速连发时的竞态窗口
     const verifyTicket = async (): Promise<HaiResult<never>> => {
       await Promise.resolve()
-      return err(HaiCommonError.UNAUTHORIZED, 'invalid')
+      return core.err(HaiCommonError.UNAUTHORIZED, 'invalid')
     }
     const handlers = captureHandlers({
       ai: { audio },
@@ -506,7 +507,7 @@ describe('serv feature audio', () => {
       ...createAudioMock(),
       synthesizeStream,
     }
-    const authorize = vi.fn(async () => ok({
+    const authorize = vi.fn(async () => core.ok({
       operation: 'synthesize' as const,
       model: 'allowed-tts',
       voice: 'ServerVoice',
@@ -688,7 +689,7 @@ describe('serv feature audio', () => {
 
   it('票据 grant 绑定操作与 start 不符时默认授权拒绝', async () => {
     const verifyTicket = async (): Promise<HaiResult<{ session: typeof TEST_SESSION, grant: { operation: 'transcribe' } }>> =>
-      ok({
+      core.ok({
         session: TEST_SESSION,
         grant: { operation: 'transcribe' },
       })
@@ -717,7 +718,7 @@ describe('serv feature audio', () => {
         ai: {
           audio: createAudioMock(),
         },
-        verifyTicket: async () => ok({ session: TEST_SESSION }),
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
       },
       http: { openapi: false, docs: false },
     })

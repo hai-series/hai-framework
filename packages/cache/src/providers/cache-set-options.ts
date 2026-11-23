@@ -1,7 +1,8 @@
 /** SET 和锁操作的共同输入边界。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { SetOptions } from '../cache-types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
 import { HaiCacheError } from '../cache-types.js'
 
@@ -61,7 +62,7 @@ interface ValidatedSetOptions {
  * ```
  */
 export function validateSetOptions(options?: SetOptions): HaiResult<ValidatedSetOptions> {
-  const invalid = () => err(HaiCacheError.INVALID_SET_OPTIONS, cacheM('cache_invalidSetOptions'))
+  const invalid = () => core.err(HaiCacheError.INVALID_SET_OPTIONS, cacheM('cache_invalidSetOptions'))
   if (options !== undefined && (options === null || typeof options !== 'object' || Array.isArray(options)))
     return invalid()
   for (const flag of ['nx', 'xx', 'keepTtl'] as const) {
@@ -96,5 +97,5 @@ export function validateSetOptions(options?: SetOptions): HaiResult<ValidatedSet
     result.expiry = [command[mode], value]
     result.expiresAt = expiresAt
   }
-  return ok(result)
+  return core.ok(result)
 }

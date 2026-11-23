@@ -14,9 +14,9 @@ import { fromError } from '../kit-response.js'
  * @example
  * ```ts
  * import { iam } from '@h-ai/iam'
- * import type { SessionLike } from '@h-ai/kit'
+ *
  * import type { RequestEvent } from '@sveltejs/kit'
- * import { kit } from '@h-ai/kit'
+ * import { type SessionLike, kit } from '@h-ai/kit'
  * // session 由应用在当前请求完成鉴别后传入，不在跨请求闭包中保存。
  * async function remove(event: Pick<RequestEvent, 'request' | 'cookies'>, session: SessionLike) {
  *   kit.guard.require(session, 'user:delete')

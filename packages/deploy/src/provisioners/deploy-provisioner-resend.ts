@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ServiceProvisioner } from '../deploy-internal-types.js'
 import type { ProvisionResult } from '../deploy-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -68,11 +68,11 @@ export function createResendProvisioner(): ServiceProvisioner {
         token = apiToken
         from = credentials.from
         logger.info('Resend authenticated')
-        return ok('resend-user')
+        return core.ok('resend-user')
       }
       catch (error) {
         logger.error('Resend authentication failed', { error })
-        return err(
+        return core.err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
             params: {
@@ -88,7 +88,7 @@ export function createResendProvisioner(): ServiceProvisioner {
 
     async provision(_appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!token) {
-        return err(
+        return core.err(
           HaiDeployError.AUTH_REQUIRED,
           deployM('deploy_authRequired'),
         )
@@ -97,7 +97,7 @@ export function createResendProvisioner(): ServiceProvisioner {
       logger.debug('Provisioning Resend email service')
 
       // Resend 不支持 API 创建资源，仅返回凭证作为环境变量
-      return ok({
+      return core.ok({
         serviceType: 'email',
         provisionerName: 'resend',
         resourceStatus: 'reused',

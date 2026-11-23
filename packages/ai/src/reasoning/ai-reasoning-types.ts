@@ -35,7 +35,7 @@ export type ReasoningStrategy = 'react' | 'cot' | 'plan-execute'
  *
  * @example
  * ```ts
- * import { ai, type ReasoningOptions } from '@h-ai/ai'
+ * import { type ReasoningOptions, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * async function run(options: ReasoningOptions) {
  *   const result = await ai.reasoning.run('解释这项设计的权衡', options)
@@ -186,7 +186,7 @@ export type ReasoningStreamEvent
  *
  * @example
  * ```ts
- * import { ai, type ReasoningOperations } from '@h-ai/ai'
+ * import { type ReasoningOperations, ai } from '@h-ai/ai'
  * // 应用启动已成功初始化 ai。
  * const operations: ReasoningOperations = ai.reasoning
  * const result = await operations.run('解释为何需要共享状态', { strategy: 'cot', maxRounds: 3 })

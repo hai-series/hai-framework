@@ -13,9 +13,9 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Cron } from 'croner'
 import type { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskRetryPolicy, TaskUpdateInput } from './scheduler-types.js'
 
-import { err, ok } from '@h-ai/core'
+import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskRetryPolicy, TaskUpdateInput } from './scheduler-types.js'
+import { core } from '@h-ai/core'
 
 import { TaskHandlerConfigSchema } from './repositories/scheduler-repository-task.js'
 import { parseCronExpression } from './scheduler-cron.js'
@@ -38,7 +38,7 @@ let definitionLifetime = new AbortController()
 function withTaskDefinitions<T>(operation: (signal: AbortSignal) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
   const signal = definitionLifetime.signal
   const result = definitionTail.then(() => signal.aborted
-    ? err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    ? core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
     : operation(signal))
   definitionTail = result.then(() => undefined, () => undefined)
   return result
@@ -273,7 +273,7 @@ function normalizeTaskDescription(description: string | undefined): string | und
 
 function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<TaskRetryPolicy> {
   if (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1 || retry.maxAttempts > 100) {
-    return err(
+    return core.err(
       HaiSchedulerError.EXECUTION_FAILED,
       schedulerM('scheduler_invalidRetryConfig', {
         params: { taskId },
@@ -284,7 +284,7 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
   if (retry.backoffMs !== undefined) {
     const hasInvalidBackoff = retry.backoffMs.some(ms => !Number.isInteger(ms) || ms < 0)
     if (hasInvalidBackoff) {
-      return err(
+      return core.err(
         HaiSchedulerError.EXECUTION_FAILED,
         schedulerM('scheduler_invalidRetryConfig', {
           params: { taskId },
@@ -293,7 +293,7 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
     }
   }
 
-  return ok({
+  return core.ok({
     maxAttempts: retry.maxAttempts,
     ...(retry.backoffMs
       ? {
@@ -324,7 +324,7 @@ export async function loadPersistedTasks(taskRepo: SchedulerTaskRepository | nul
 
 async function refreshTaskDefinitions(taskRepo: SchedulerTaskRepository | null, signal: AbortSignal): Promise<HaiResult<void>> {
   if (!taskRepo)
-    return ok(undefined)
+    return core.ok(undefined)
   const epoch = definitionEpoch
   return refreshPersistedTasks(taskRepo, epoch, signal)
 }
@@ -333,7 +333,7 @@ async function refreshTaskDefinitions(taskRepo: SchedulerTaskRepository | null, 
 async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: number, signal: AbortSignal): Promise<HaiResult<void>> {
   let cancel: () => void = () => {}
   const cancelled = new Promise<HaiResult<TaskDefinition[]>>((resolve) => {
-    cancel = () => resolve(err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing')))
+    cancel = () => resolve(core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing')))
     signal.addEventListener('abort', cancel, { once: true })
     if (signal.aborted)
       cancel()
@@ -352,18 +352,18 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
     return loadResult
 
   if (signal.aborted)
-    return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
   if (epoch !== definitionEpoch)
-    return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_definitionsChanged'))
+    return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_definitionsChanged'))
 
   // 先完整验证快照再整体替换；保留仅由本节点配置声明的任务。
   const nextTasks = new Map([...taskRegistry].filter(([id]) => !persistedTaskIds.has(id)))
   const nextCrons = new Map([...cronCache].filter(([id]) => !persistedTaskIds.has(id)))
   for (const task of loadResult.data) {
     if (!task.id)
-      return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_taskIdEmpty'))
+      return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_taskIdEmpty'))
     if (nextTasks.has(task.id)) {
-      return err(HaiSchedulerError.TASK_ALREADY_EXISTS, schedulerM('scheduler_taskAlreadyExists', {
+      return core.err(HaiSchedulerError.TASK_ALREADY_EXISTS, schedulerM('scheduler_taskAlreadyExists', {
         params: { taskId: task.id },
       }))
     }
@@ -383,7 +383,7 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
     cronCache.set(id, cron)
   for (const task of loadResult.data)
     persistedTaskIds.add(task.id)
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -403,7 +403,7 @@ export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<HaiResul
     if (!registerResult.success)
       return registerResult
   }
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -428,7 +428,7 @@ export async function registerTask(
     if (!refreshed.success)
       return refreshed
     if (signal.aborted)
-      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+      return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
     return registerTaskDefinition(task, taskRepo)
   })
 }
@@ -439,19 +439,19 @@ async function registerTaskDefinition(
 ): Promise<HaiResult<void>> {
   if ((task.handler && !TaskHandlerConfigSchema.safeParse(task.handler).success)
     || (task.idempotent !== undefined && typeof task.idempotent !== 'boolean')) {
-    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
+    return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
       params: { taskId: task.id },
     }))
   }
   if (!task.id) {
-    return err(
+    return core.err(
       HaiSchedulerError.EXECUTION_FAILED,
       schedulerM('scheduler_taskIdEmpty'),
     )
   }
 
   if (hasTask(task.id)) {
-    return err(
+    return core.err(
       HaiSchedulerError.TASK_ALREADY_EXISTS,
       schedulerM('scheduler_taskAlreadyExists', {
         params: { taskId: task.id },
@@ -465,7 +465,7 @@ async function registerTaskDefinition(
 
   const retryResult = task.retry
     ? validateRetryPolicy(task.id, task.retry)
-    : ok(undefined)
+    : core.ok(undefined)
   if (!retryResult.success)
     return retryResult
 
@@ -483,7 +483,7 @@ async function registerTaskDefinition(
   if (taskRepo) {
     const saveResult = await taskRepo.saveTask(normalizedTask)
     if (!saveResult.success) {
-      return err(
+      return core.err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
           params: { error: saveResult.error.message },
@@ -498,7 +498,7 @@ async function registerTaskDefinition(
   setTask(task.id, normalizedTask)
   setCron(task.id, cronResult.data)
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -524,7 +524,7 @@ export async function unregisterTask(
     if (!refreshed.success)
       return refreshed
     if (signal.aborted)
-      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+      return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
     return unregisterTaskDefinition(taskId, taskRepo, expected)
   })
 }
@@ -535,7 +535,7 @@ async function unregisterTaskDefinition(
   expected?: TaskDefinition,
 ): Promise<HaiResult<void>> {
   if (!hasTask(taskId)) {
-    return err(
+    return core.err(
       HaiSchedulerError.TASK_NOT_FOUND,
       schedulerM('scheduler_taskNotFound', {
         params: { taskId },
@@ -547,7 +547,7 @@ async function unregisterTaskDefinition(
     const deleteResult = await taskRepo.deleteTask(taskId, expected)
     if (!deleteResult.success) {
       // 删除失败保留原投影；数据库不可用时调度刷新也会阻止执行。
-      return err(
+      return core.err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
           params: { error: deleteResult.error.message },
@@ -556,14 +556,14 @@ async function unregisterTaskDefinition(
       )
     }
     if (expected && !deleteResult.data)
-      return ok(undefined)
+      return core.ok(undefined)
   }
 
   deleteTask(taskId)
   deleteCron(taskId)
   persistedTaskIds.delete(taskId)
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -589,7 +589,7 @@ export async function updateRegisteredTask(
     if (!refreshed.success)
       return refreshed
     if (signal.aborted)
-      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+      return core.err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
     return updateTaskDefinition(taskId, updates, taskRepo)
   })
 }
@@ -601,7 +601,7 @@ async function updateTaskDefinition(
 ): Promise<HaiResult<void>> {
   const existingTask = getTask(taskId)
   if (!existingTask) {
-    return err(
+    return core.err(
       HaiSchedulerError.TASK_NOT_FOUND,
       schedulerM('scheduler_taskNotFound', {
         params: { taskId },
@@ -654,7 +654,7 @@ async function updateTaskDefinition(
 
   if ((updates.handler && !TaskHandlerConfigSchema.safeParse(updates.handler).success)
     || (updates.idempotent !== undefined && typeof updates.idempotent !== 'boolean')) {
-    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
+    return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
       params: { taskId },
     }))
   }
@@ -696,7 +696,7 @@ async function updateTaskDefinition(
   if (taskRepo) {
     const updateResult = await taskRepo.updateTask(taskId, normalizedUpdates)
     if (!updateResult.success) {
-      return err(
+      return core.err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
           params: { error: updateResult.error.message },
@@ -710,7 +710,7 @@ async function updateTaskDefinition(
   if (updatedCron)
     setCron(taskId, updatedCron)
 
-  return ok(undefined)
+  return core.ok(undefined)
 }
 
 /**
@@ -731,7 +731,7 @@ export async function queryTaskLogs(
   options?: LogQueryOptions,
 ): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
   if (!logRepo) {
-    return err(
+    return core.err(
       HaiSchedulerError.DB_SAVE_FAILED,
       schedulerM('scheduler_dbNotInitialized'),
     )

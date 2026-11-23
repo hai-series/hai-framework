@@ -13,7 +13,6 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { MemoryConfig } from '../../ai-config.js'
-
 import type { EmbeddingOperations } from '../../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../../store/ai-store-types.js'
@@ -31,10 +30,10 @@ import type {
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
 import type { MemoryVectorScanState } from '../ai-memory-vector-scan.js'
-import type { MemoryVectorJob, StoredMemory } from '../ai-memory-vector-sync.js'
 
+import type { MemoryVectorJob, StoredMemory } from '../ai-memory-vector-sync.js'
 import { randomUUID } from 'node:crypto'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
@@ -182,7 +181,7 @@ export function assembleNativeMemory(
       logger.error('Memory storage operation failed', {
         error: core.sanitize.sanitizeSensitiveFields(error),
       })
-      return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+      return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
     }
   }
 
@@ -339,7 +338,7 @@ export function assembleNativeMemory(
     try {
       const before = await store.get(memoryId)
       if (!before || isMemoryAccessDenied(before, accessScope)) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+        return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
@@ -388,19 +387,19 @@ export function assembleNativeMemory(
         return publicEntry(changed)
       })
       if (!existing) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+        return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
       logger.trace('Memory updated', { id: memoryId })
-      return ok(existing)
+      return core.ok(existing)
     }
     catch (error) {
       logger.error('Memory update failed', {
         id: memoryId,
         error: core.sanitize.sanitizeSensitiveFields(error),
       })
-      return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+      return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
     }
   }
 
@@ -458,7 +457,7 @@ export function assembleNativeMemory(
         : allCandidates
 
       if (candidates.length === 0) {
-        return ok([])
+        return core.ok([])
       }
 
       let queryVector: number[] | undefined
@@ -533,13 +532,13 @@ export function assembleNativeMemory(
         resultCount: results.length,
         updateAccessStats,
       })
-      return ok(results)
+      return core.ok(results)
     }
     catch (error) {
       logger.error('Memory recall failed', {
         error: core.sanitize.sanitizeSensitiveFields(error),
       })
-      return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
+      return core.err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryOperationFailed'))
     }
   }
 
@@ -591,15 +590,15 @@ export function assembleNativeMemory(
         const vector = await computeVector(entry.content)
         const stored = await saveEntry(entry, vector)
         if (!stored)
-          return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+          return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
         logger.trace('Memory added', { id: stored.id, type: stored.type })
-        return ok(stored)
+        return core.ok(stored)
       }
       catch (error) {
         logger.error('Memory add failed', {
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
+        return core.err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
       }
     },
 
@@ -620,11 +619,11 @@ export function assembleNativeMemory(
     async get(memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
       const entry = await touchEntry(memoryId, accessScope)
       if (!entry) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+        return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
-      return ok(publicEntry(entry))
+      return core.ok(publicEntry(entry))
     },
 
     /**
@@ -642,12 +641,12 @@ export function assembleNativeMemory(
         return deleteEntry(active, existing, pending)
       })
       if (!removed) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+        return core.err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
       logger.trace('Memory removed', { id: memoryId })
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     /**
@@ -677,10 +676,10 @@ export function assembleNativeMemory(
       })
 
       if (!options?.scope)
-        return ok(results.map(publicEntry))
+        return core.ok(results.map(publicEntry))
 
       const filtered = results.filter(e => matchScope(e, options.scope!))
-      return ok((options.limit
+      return core.ok((options.limit
         ? filtered.slice(0, options.limit)
         : filtered).map(publicEntry))
     },
@@ -715,7 +714,7 @@ export function assembleNativeMemory(
           },
           { offset, limit },
         )
-        return ok({
+        return core.ok({
           ...page,
           items: page.items.map(publicEntry),
         })
@@ -730,7 +729,7 @@ export function assembleNativeMemory(
         orderBy: { field: 'createdAt', direction: 'desc' },
       })
       const filtered = all.filter(e => matchScope(e, options.scope!))
-      return ok({
+      return core.ok({
         items: filtered.slice(offset, offset + limit).map(publicEntry),
         total: filtered.length,
       })
@@ -751,7 +750,7 @@ export function assembleNativeMemory(
         await vectorStore.clear()
         await store.clear()
         logger.debug('All memories cleared')
-        return ok(undefined)
+        return core.ok(undefined)
       }
 
       const where: WhereClause<MemoryEntry> = {}
@@ -796,7 +795,7 @@ export function assembleNativeMemory(
         types: options?.types,
         scoped: Boolean(scope),
       })
-      return ok(undefined)
+      return core.ok(undefined)
     },
   }
 

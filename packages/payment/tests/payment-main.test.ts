@@ -5,7 +5,7 @@
  */
 
 import type { PaymentProvider } from '../src/payment-types'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { payment } from '../src/payment-main'
@@ -15,12 +15,12 @@ import { HaiPaymentError } from '../src/payment-types'
 function createMockProvider(name: string): PaymentProvider {
   return {
     name,
-    createOrder: async input => ok({
+    createOrder: async input => core.ok({
       provider: name,
       tradeType: input.tradeType,
       clientParams: { mock: true },
     }),
-    handleNotify: async () => ok({
+    handleNotify: async () => core.ok({
       orderNo: 'ORD001',
       transactionId: 'TXN001',
       eventId: 'evt_mock_001',
@@ -28,17 +28,17 @@ function createMockProvider(name: string): PaymentProvider {
       amount: 100,
       status: 'paid' as const,
     }),
-    queryOrder: async orderNo => ok({
+    queryOrder: async orderNo => core.ok({
       orderNo,
       status: 'paid' as const,
       amount: 100,
     }),
-    refund: async input => ok({
+    refund: async input => core.ok({
       refundNo: input.refundNo,
       refundId: 'REF001',
       status: 'success' as const,
     }),
-    closeOrder: async () => ok(undefined),
+    closeOrder: async () => core.ok(undefined),
   }
 }
 
@@ -154,7 +154,7 @@ describe('payment.init', () => {
   })
 
   it('stripe 建表失败时拒绝初始化', async () => {
-    vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'test DDL failure'))
+    vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'test DDL failure'))
     const result = await payment.init({
       stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' },
     })

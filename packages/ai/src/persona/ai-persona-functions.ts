@@ -7,11 +7,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { AIRelStore } from '../store/ai-store-types.js'
-import type { PersonaOperations, PersonaProfile, PersonaProfileInput, PersonaProfileUpdate, PersonaScopeOptions } from './ai-persona-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { PersonaOperations, PersonaProfile, PersonaProfileInput, PersonaProfileUpdate, PersonaScopeOptions } from './ai-persona-types.js'
+import { core } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -64,7 +63,7 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       logger.error('Persona storage operation failed', {
         error: core.sanitize.sanitizeSensitiveFields(error),
       })
-      return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
+      return core.err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
     }
   }
   const operations: PersonaOperations = {
@@ -86,13 +85,13 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
         }
         await store.save(key, profile, { objectId })
         logger.trace('Persona saved', { id: profile.id, objectId })
-        return ok(profile)
+        return core.ok(profile)
       }
       catch (error) {
         logger.error('Persona save failed', {
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
-        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
+        return core.err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
       }
     },
 
@@ -100,11 +99,11 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       const profile = await store.get(personaKey(objectId, id))
       if (!profile) {
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+        return core.err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
           params: { id },
         }))
       }
-      return ok(profile)
+      return core.ok(profile)
     },
 
     async update(id: string, updates: PersonaProfileUpdate, options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile>> {
@@ -112,7 +111,7 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       const key = personaKey(objectId, id)
       const existing = await store.get(key)
       if (!existing) {
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+        return core.err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
           params: { id },
         }))
       }
@@ -126,20 +125,20 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
           updatedAt: Date.now(),
         }
         await store.save(key, profile, { objectId })
-        return ok(profile)
+        return core.ok(profile)
       }
       catch (error) {
         logger.error('Persona update failed', {
           error: core.sanitize.sanitizeSensitiveFields(error),
         })
-        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
+        return core.err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
       }
     },
 
     async remove(id: string, options?: PersonaScopeOptions): Promise<HaiResult<void>> {
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       await store.remove(personaKey(objectId, id))
-      return ok(undefined)
+      return core.ok(undefined)
     },
 
     async list(options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile[]>> {
@@ -148,18 +147,18 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
         objectId,
         orderBy: { field: 'createdAt', direction: 'asc' },
       })
-      return ok(profiles)
+      return core.ok(profiles)
     },
 
     async compose(id: string, options?: PersonaScopeOptions): Promise<HaiResult<string>> {
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       const profile = await store.get(personaKey(objectId, id))
       if (!profile) {
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+        return core.err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
           params: { id },
         }))
       }
-      return ok(composeSystemPrompt(profile))
+      return core.ok(composeSystemPrompt(profile))
     },
   }
   return {

@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import type { AuthPanelActions, AuthPanelConfig } from '../src/lib/components/scenes/types.js'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
+import { SensitiveOperationsForm, SessionRecoveryDialog, ui } from '@h-ai/ui'
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createSessionRecovery, SensitiveOperationsForm, SessionRecoveryDialog } from '../src/lib/components/scenes/iam/index.js'
-import { toast } from '../src/lib/toast.svelte.js'
 
-afterEach(() => toast.clear())
+afterEach(() => ui.toast.clear())
 
 const config: AuthPanelConfig = {
   login: {
@@ -31,12 +30,12 @@ const config: AuthPanelConfig = {
 }
 
 it('安全场景组件将宿主的data属性传到实际弹窗和表单', async () => {
-  const recovery = createSessionRecovery()
+  const recovery = ui.createSessionRecovery()
   recovery.configure(config, { id: 'original', username: 'alice' })
   const pending = recovery.recover()
   const target = document.createElement('div')
   document.body.append(target)
-  const action = async () => ok(undefined)
+  const action = async () => core.ok(undefined)
   const dialog = mount(SessionRecoveryDialog, {
     target,
     props: {
@@ -78,7 +77,7 @@ it('安全场景组件将宿主的data属性传到实际弹窗和表单', async 
 })
 
 it('匿名访问不弹窗；并发请求共用一次恢复，原主体和确认代际必须匹配', async () => {
-  const recovery = createSessionRecovery()
+  const recovery = ui.createSessionRecovery()
   expect(await recovery.recover()).toBe(false)
   recovery.configure(config, { id: 'original', username: 'alice' })
   const first = recovery.recover()
@@ -97,7 +96,7 @@ it('匿名访问不弹窗；并发请求共用一次恢复，原主体和确认�
 })
 
 it('切换或退出账号会取消原请求的恢复，迟到响应不能继续新账号的动作', async () => {
-  const recovery = createSessionRecovery()
+  const recovery = ui.createSessionRecovery()
   recovery.configure(config, { id: 'first' })
   const pending = recovery.recover()
   const version = recovery.version
@@ -111,15 +110,15 @@ it('切换或退出账号会取消原请求的恢复，迟到响应不能继续�
 })
 
 it('原地登录复用正常表单，验证错误保留弹窗和页面输入，成功时限定原主体', async () => {
-  const recovery = createSessionRecovery()
+  const recovery = ui.createSessionRecovery()
   recovery.configure(config, { id: 'original', username: 'alice' })
   const pending = recovery.recover()
   const login = vi.fn<AuthPanelActions['login']>()
-    .mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Incorrect password', httpStatus: 401 }))
-    .mockResolvedValueOnce(ok({
+    .mockResolvedValueOnce(core.err({ code: 'hai:iam:002', message: 'Incorrect password', httpStatus: 401 }))
+    .mockResolvedValueOnce(core.ok({
       user: { id: 'original' },
     }))
-  const action = async () => ok(undefined)
+  const action = async () => core.ok(undefined)
   const target = document.createElement('div')
   const draft = document.createElement('textarea')
   draft.value = 'Unsaved business draft'
@@ -153,7 +152,7 @@ it('原地登录复用正常表单，验证错误保留弹窗和页面输入，�
     await submit('Wrong-password!')
     await vi.waitFor(() => {
       flushSync()
-      expect(toast.items.at(-1)?.message).toContain('用户名或密码不正确')
+      expect(ui.toast.items.at(-1)?.message).toContain('用户名或密码不正确')
       expect(document.querySelector('[data-testid="session-recovery-dialog"] .alert-error')).toBeNull()
     })
     expect(recovery.open).toBe(true)

@@ -6,7 +6,7 @@
 
 ## 运行环境
 
-> **服务端 + 浏览器分工模块。** `payment.createOrder` / `payment.handleNotify` / `payment.refund` 等操作在 Node.js 端执行。浏览器端使用 `invokePayment()`（从 `@h-ai/payment/client` 导入）调起支付。
+> **服务端 + 浏览器分工模块。** `payment.createOrder` / `payment.handleNotify` / `payment.refund` 等操作在 Node.js 端执行。浏览器端使用 `payment.client.invoke()`（从 `@h-ai/payment/client` 导入）调起支付。
 
 ## 依赖
 
@@ -177,13 +177,13 @@ const result = await payment.refund('wechat', {
 ### 7. 客户端调起支付（浏览器）
 
 ```typescript
-import { invokePayment } from '@h-ai/payment/client'
+import { payment } from '@h-ai/payment/client'
 
 // 前端拿到服务端返回的 PaymentOrder 后调起支付
 if (!orderResult.success)
   throw new Error(orderResult.error.message)
 // 把服务端返回的 PaymentOrder 交给浏览器。成功 data.invoked 表示是否拉起，最终支付状态由服务端确认。
-const payResult = await invokePayment(orderResult.data)
+const payResult = await payment.client.invoke(orderResult.data)
 if (!payResult.success)
   throw new Error(payResult.error.message)
 if (!payResult.data.invoked)
@@ -208,7 +208,7 @@ if (!payResult.data.invoked)
 
 | API                      | 用途     | 返回值                           |
 | ------------------------ | -------- | -------------------------------- |
-| `invokePayment(options)` | 调起支付 | `HaiResult<InvokePaymentResult>` |
+| `payment.client.invoke(options)` | 调起支付 | `HaiResult<InvokePaymentResult>` |
 
 ## 错误码 — `HaiPaymentError`
 
@@ -316,7 +316,7 @@ export function createPaymentHandler(
 1. 客户端 → 服务端：创建订单（api.payment.orders.create({...})）
 2. 服务端 → 支付平台：调用 Provider 创建预支付
 3. 服务端 → 客户端：返回 providerData（含调起参数）
-4. 客户端：invokePayment(providerData) 调起支付
+4. 客户端：payment.client.invoke(providerData) 调起支付
 5. 支付平台 → 服务端：异步回调通知
 6. 服务端：handleNotify() 验签解析，业务层持久核对并幂等更新订单状态
 7. 客户端：轮询或回调查询订单状态

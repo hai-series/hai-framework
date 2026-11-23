@@ -113,8 +113,8 @@ export const storageContract = {
  * storage 领域公开 procedure 契约的完整类型。
  * @example
  * ```ts
- * import type { StorageContract } from '@h-ai/api-contract'
- * import { apiContract } from '@h-ai/api-contract'
+ *
+ * import { type StorageContract, apiContract } from '@h-ai/api-contract'
  *
  * const contract: StorageContract = apiContract.storage
  * void contract

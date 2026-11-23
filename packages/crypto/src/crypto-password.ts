@@ -6,9 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-
 import type { HashOperations, PasswordConfig, PasswordOperations } from './crypto-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 import { cryptoM } from './crypto-i18n.js'
 import { HaiCryptoError } from './crypto-types.js'
@@ -106,7 +105,7 @@ function iterateHash(
     }
     current = result.data
   }
-  return ok(current)
+  return core.ok(current)
 }
 
 // ─── 密码操作工厂 ───
@@ -149,20 +148,20 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
       try {
         const { saltLength = 16, iterations = 10000 } = config
         if (typeof password !== 'string' || !password) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_passwordEmpty'),
           )
         }
 
         if (!Number.isInteger(iterations) || iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),
           )
         }
         if (!Number.isInteger(saltLength) || saltLength < MIN_SALT_LENGTH || saltLength > MAX_SALT_LENGTH) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),
           )
@@ -175,10 +174,10 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
         }
 
         const formatted = `$hai$${iterations}$${salt}$${hashResult.data}`
-        return ok(formatted)
+        return core.ok(formatted)
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.HASH_FAILED,
           cryptoM('crypto_passwordHashFailed'),
           error,
@@ -199,7 +198,7 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
     verify(password: string, hash: string): HaiResult<boolean> {
       try {
         if (typeof password !== 'string' || !password || typeof hash !== 'string' || !hash) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_passwordHashEmpty'),
           )
@@ -207,7 +206,7 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
 
         const parts = PASSWORD_RECORD_REGEX.exec(hash)
         if (!parts || parts[0] !== hash) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),
           )
@@ -224,7 +223,7 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
           || !salt
           || !storedHash
         ) {
-          return err(
+          return core.err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),
           )
@@ -235,10 +234,10 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
           return hashResult
         }
 
-        return ok(core.string.constantTimeEqual(hashResult.data, storedHash))
+        return core.ok(core.string.constantTimeEqual(hashResult.data, storedHash))
       }
       catch (error) {
-        return err(
+        return core.err(
           HaiCryptoError.VERIFY_FAILED,
           cryptoM('crypto_passwordVerifyFailed'),
           error,

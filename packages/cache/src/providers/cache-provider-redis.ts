@@ -9,10 +9,10 @@ import type { HaiResult } from '@h-ai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
 import type { CacheConfig } from '../cache-config.js'
 import type { CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
-import type { CacheProvider } from './cache-provider-types.js'
 
+import type { CacheProvider } from './cache-provider-types.js'
 import { setMaxListeners } from 'node:events'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import Redis from 'ioredis'
 import { cacheM } from '../cache-i18n.js'
 import { HaiCacheError } from '../cache-types.js'
@@ -282,26 +282,26 @@ export function createRedisProvider(): CacheProvider {
    */
   async function wrapOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
     if (!ready || !client) {
-      return err(
+      return core.err(
         HaiCacheError.NOT_INITIALIZED,
         cacheM('cache_notInitialized'),
       )
     }
     try {
       const result = await operation()
-      return ok(result)
+      return core.ok(result)
     }
     catch (error) {
       if (error instanceof CacheSerializationError)
-        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
+        return core.err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
       if (error instanceof RedisScanError) {
         return error.reason === 'topology'
-          ? err(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), error)
-          : err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), error)
+          ? core.err(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), error)
+          : core.err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), error)
       }
       if (error instanceof Error && error.message.startsWith('CROSSSLOT'))
-        return err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
-      return err(
+        return core.err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
+      return core.err(
         HaiCacheError.OPERATION_FAILED,
         cacheM('cache_operationFailed', {
           params: {
@@ -551,10 +551,10 @@ export function createRedisProvider(): CacheProvider {
       value?: CacheValue,
     ): Promise<HaiResult<number>> {
       if (typeof fieldOrData === 'string' && value === undefined) {
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+        return core.err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
       }
       if (typeof fieldOrData !== 'string' && (fieldOrData === null || Array.isArray(fieldOrData))) {
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+        return core.err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
       }
 
       return wrapOperation(async () => {
@@ -911,7 +911,7 @@ export function createRedisProvider(): CacheProvider {
       const { ttl, owner } = options ?? {}
       if (owner !== undefined) {
         if (ttl !== undefined)
-          return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockOwnerOptions'))
+          return core.err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockOwnerOptions'))
         return wrapOperation(async () => {
           if (!isValidLockOwner(owner))
             return null
@@ -924,7 +924,7 @@ export function createRedisProvider(): CacheProvider {
         ? 30
         : ttl
       if (!isValidLockTtl(lockTtl))
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockTtl'))
+        return core.err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockTtl'))
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         const token = core.id.uuid()
@@ -954,7 +954,7 @@ export function createRedisProvider(): CacheProvider {
 
     async extend(key: string, ttl: number, owner: string): Promise<HaiResult<boolean>> {
       if (!isValidLockTtl(ttl))
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockTtl'))
+        return core.err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidLockTtl'))
       return wrapOperation(async () => {
         if (!isValidLockOwner(owner))
           return false
@@ -982,7 +982,7 @@ export function createRedisProvider(): CacheProvider {
      */
     async connect(config: CacheConfig): Promise<HaiResult<void>> {
       if (config.type !== 'redis') {
-        return err(
+        return core.err(
           HaiCacheError.UNSUPPORTED_TYPE,
           cacheM('cache_unsupportedType', {
             params: { type: config.type },
@@ -1071,7 +1071,7 @@ export function createRedisProvider(): CacheProvider {
           : `${config.host}:${config.port}`
         logger.info('Redis connected', { address })
 
-        return ok(undefined)
+        return core.ok(undefined)
       }
       catch (error) {
         const diagnostics = redisErrorDiagnostics(error)
@@ -1092,7 +1092,7 @@ export function createRedisProvider(): CacheProvider {
         catch (failure) {
           cleanupError = failure
         }
-        const result = err(
+        const result = core.err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_redisConnectionFailed', {
             params: {
@@ -1104,7 +1104,7 @@ export function createRedisProvider(): CacheProvider {
           error,
         )
         if (cleanupError !== undefined && !result.success) {
-          return err({
+          return core.err({
             ...result.error,
             ext: { cleanupPending: true, cleanupError },
           })

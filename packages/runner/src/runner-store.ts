@@ -7,7 +7,7 @@ import type { RunnerEvent, RunnerExecution, RunnerJson, RunnerOwner, RunnerRecon
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { runnerM } from './runner-i18n.js'
 import { HaiRunnerError } from './runner-types.js'
@@ -198,23 +198,23 @@ function projectRequest(row: ExecutionRow) {
 }
 
 function unavailable() {
-  return err(HaiRunnerError.UNAVAILABLE, runnerM('runner_unavailable'))
+  return core.err(HaiRunnerError.UNAVAILABLE, runnerM('runner_unavailable'))
 }
 
 function lost() {
-  return err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
+  return core.err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
 }
 
 function missing() {
-  return err(HaiRunnerError.NOT_FOUND, runnerM('runner_notFound'))
+  return core.err(HaiRunnerError.NOT_FOUND, runnerM('runner_notFound'))
 }
 
 function conflict() {
-  return err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
+  return core.err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
 }
 
 function overflow() {
-  return err(HaiRunnerError.CAPACITY, runnerM('runner_capacity'))
+  return core.err(HaiRunnerError.CAPACITY, runnerM('runner_capacity'))
 }
 
 /** 数据库失败抛给事务包装以触发回滚。 */
@@ -392,7 +392,7 @@ async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): P
     : ' ON CONFLICT (id) DO NOTHING'
   const seed = await sql.execute(`INSERT INTO ${GATE} (id, revision) VALUES (1, 0)${syntax}`)
   return seed.success
-    ? ok(undefined)
+    ? core.ok(undefined)
     : unavailable()
 }
 
@@ -490,17 +490,17 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       if (!due.success)
         return unavailable()
       if (!due.data)
-        return ok(undefined)
+        return core.ok(undefined)
       return serialized(async (sql) => {
         await sweep(sql)
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
 
     async prune(): Promise<HaiResult<number>> {
       try {
         if (!(await expired(reldb.sql, 1)).length)
-          return ok(0)
+          return core.ok(0)
       }
       catch {
         return unavailable()
@@ -508,12 +508,12 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       return serialized(async (sql) => {
         const entries = await expired(sql, RETENTION_BATCH)
         if (!entries.length)
-          return ok(0)
+          return core.ok(0)
         const ids = entries.map(entry => entry.id)
         const keys = ids.map(() => '?').join(', ')
         data(await sql.execute(`DELETE FROM ${EVENTS} WHERE execution_id IN (${keys})`, ids))
         const removed = data(await sql.execute(`DELETE FROM ${EXECUTIONS} WHERE id IN (${keys})`, ids))
-        return ok(removed.changes)
+        return core.ok(removed.changes)
       })
     },
 
@@ -545,7 +545,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
             : null)
         if (existing) {
           return existing.request_key === requestKey
-            ? ok(projectRequest(existing))
+            ? core.ok(projectRequest(existing))
             : conflict()
         }
 
@@ -624,14 +624,14 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         const row = await find(sql, id, scopeKey)
         if (!row)
           throw new Error('Newly inserted execution could not be read')
-        return ok(projectRequest(row))
+        return core.ok(projectRequest(row))
       })
     },
 
     async find(scope: RunnerScope, kind: string, key: string): Promise<HaiResult<RunnerExecution | undefined>> {
       try {
         const scopeKey = hash([scope.tenantId, scope.userId])
-        return ok(await summary(hash([scopeKey, kind, key]), scopeKey))
+        return core.ok(await summary(hash([scopeKey, kind, key]), scopeKey))
       }
       catch {
         return unavailable()
@@ -642,7 +642,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       try {
         const found = await summary(id, hash([scope.tenantId, scope.userId]))
         return found
-          ? ok(found)
+          ? core.ok(found)
           : missing()
       }
       catch {
@@ -661,7 +661,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelling', reason = 'parent-ended', updated_at = ${now} WHERE parent_id = ? AND state = 'running'`, [id]))
         const changed = await find(sql, id, row.scope_key)
         return changed
-          ? ok(projectRequest(changed))
+          ? core.ok(projectRequest(changed))
           : missing()
       })
     },
@@ -669,7 +669,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
     async reserveWarm(pool: RunnerWarmPool): Promise<HaiResult<RunnerClaim | null>> {
       const environment = envById.get(pool.environmentId)
       if (!environment || !pool.minReady || !envKeys.includes(hash(environment)))
-        return ok(null)
+        return core.ok(null)
       const fingerprint = hash({
         pool: { ...pool },
         environment,
@@ -706,14 +706,14 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       }
       try {
         if (!await canReserve(reldb.sql))
-          return ok(null)
+          return core.ok(null)
       }
       catch {
         return unavailable()
       }
       return serialized(async (sql) => {
         if (!await canReserve(sql))
-          return ok(null)
+          return core.ok(null)
         const id = hash([
           owner.generation,
           randomUUID(),
@@ -747,7 +747,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           fingerprint,
           pool.maxTotal,
         ]))
-        return ok({ id, kind: pool.kind, request })
+        return core.ok({ id, kind: pool.kind, request })
       })
     },
 
@@ -756,13 +756,13 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         WHERE id = ? AND owner_generation = ? AND state = 'running' AND warm_state = 'starting'
           AND leased_until > ${now} AND container_json IS NOT NULL`, [id, owner.generation])
       return result.success && result.data.changes === 1
-        ? ok(undefined)
+        ? core.ok(undefined)
         : lost()
     },
 
     async claim(kinds: string[], category: 'control' | 'default' | 'tool', pools: RunnerWarmPool[] = [], warmIds: string[] = []): Promise<HaiResult<RunnerClaim | null>> {
       if (!kinds.length)
-        return ok(null)
+        return core.ok(null)
       const capacityClass = category === 'tool'
         ? 'tool'
         : 'default'
@@ -781,7 +781,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       if (!queued.success)
         return unavailable()
       if (!queued.data)
-        return ok(null)
+        return core.ok(null)
       async function eligible(sql: DmlOperations, includeRequest: boolean) {
         const maxRunning = category === 'tool'
           ? config.toolMaxRunning
@@ -871,7 +871,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       }
       try {
         if (!await eligible(reldb.sql, false))
-          return ok(null)
+          return core.ok(null)
       }
       catch {
         return unavailable()
@@ -879,7 +879,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       return serialized(async (sql) => {
         const row = await eligible(sql, true)
         if (!row)
-          return ok(null)
+          return core.ok(null)
         const request = databaseValue<StoredRequest>(row.request_json)
         const standby = row.pool_fingerprint && warmIds.length
           ? data(await sql.get<ExecutionRow>(`
@@ -905,7 +905,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           if (transferred.changes !== 1)
             throw new Error('Warm container reservation expired')
         }
-        return ok(changed.changes === 1
+        return core.ok(changed.changes === 1
           ? {
               id: row.id,
               kind: row.kind,
@@ -921,7 +921,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       const result = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelling', updated_at = ${now}
         WHERE id = ? AND owner_generation = ? AND state = 'running' AND leased_until > ${now}`, [id, owner.generation])
       return result.success
-        ? ok(undefined)
+        ? core.ok(undefined)
         : unavailable()
     },
 
@@ -934,7 +934,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         owner.generation,
       ])
       return result.success && result.data.changes === 1
-        ? ok(undefined)
+        ? core.ok(undefined)
         : lost()
     },
 
@@ -950,12 +950,12 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         if (row.container_json) {
           const container = databaseValue<RunnerContainerIdentity>(row.container_json)
           return container.engine === config.engine
-            ? ok({ container, generation: row.owner_generation })
+            ? core.ok({ container, generation: row.owner_generation })
             : conflict()
         }
         if (row.environment_key !== null || !row.owner_process_json || !await parentSettled(reldb.sql, row))
           return conflict()
-        return ok({
+        return core.ok({
           container: undefined,
           process: databaseValue<RunnerProcessIdentity>(row.owner_process_json),
           generation: row.owner_generation,
@@ -991,7 +991,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           return conflict()
         const row = await find(sql, id, scopeKey)
         return row
-          ? ok(projectRequest(row))
+          ? core.ok(projectRequest(row))
           : missing()
       })
     },
@@ -1019,11 +1019,11 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         if (!parent.data) {
           const cancelled = await this.cancelOwned(id)
           return cancelled.success
-            ? ok('cancelling')
+            ? core.ok('cancelling')
             : cancelled
         }
       }
-      return ok(row.data.state)
+      return core.ok(row.data.state)
     },
 
     async emit(id: string, value: RunnerJson): Promise<HaiResult<void>> {
@@ -1056,7 +1056,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         ]))
         if (published.changes !== 1)
           throw new Error('Event owner lost')
-        return ok(undefined)
+        return core.ok(undefined)
       })
       return result.success
         ? result.data
@@ -1080,7 +1080,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       if (!page.success)
         return unavailable()
       try {
-        return ok(page.data.map(row => ({
+        return core.ok(page.data.map(row => ({
           sequence: Number(row.sequence_number),
           data: databaseValue<{ value: RunnerJson }>(row.event_json).value,
           createdAt: Number(row.created_at),
@@ -1145,7 +1145,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           return lost()
         data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelled', reason = 'parent-ended', updated_at = ${now} WHERE parent_id = ? AND state = 'queued'`, [id]))
         data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelling', reason = 'parent-ended', updated_at = ${now} WHERE parent_id = ? AND state = 'running'`, [id]))
-        return ok(undefined)
+        return core.ok(undefined)
       })
     },
   }

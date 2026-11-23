@@ -11,7 +11,7 @@
 ## 最小接入示例
 
 ```ts
-import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
+import { HaiDatapipeError, datapipe } from '@h-ai/datapipe'
 
 const rawText = '<p>Hello framework.</p>'
 const text = '# Getting started\n\nHello framework.'
@@ -268,7 +268,7 @@ result.data.chunks.map(part => part.content) // ['alpha ', 'gamma']
 清洗、分块和管线执行返回领域结果，以 `result.success` 区分成功与失败。管线步骤构造器直接返回构造器本身。错误码为字符串格式 `hai:datapipe:NNN`。
 
 ```ts
-import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
+import { HaiDatapipeError, datapipe } from '@h-ai/datapipe'
 
 // 对示例句选择 custom 模式但省略 separator，本次返回失败 MISSING_SEPARATOR，无分块数据。
 const result = datapipe.chunk('A sample sentence.', { mode: 'custom' }) // 缺少分隔符，返回 MISSING_SEPARATOR。

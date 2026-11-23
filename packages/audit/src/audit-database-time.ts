@@ -1,7 +1,8 @@
 /** 审计写入、归档截止和告警窗口共用数据库时钟，不使用各节点系统时间作为共享真值。 */
+
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations } from '@h-ai/reldb'
-import { err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { auditM } from './audit-i18n.js'
 import { HaiAuditError } from './audit-types.js'
@@ -34,9 +35,9 @@ export function auditClockSql(): string {
 export async function readAuditTime(sql: DmlOperations = reldb.sql): Promise<HaiResult<Date>> {
   const result = await sql.get<{ now_ms: number | string }>(`SELECT ${auditClockSql()} AS now_ms`)
   if (!result.success)
-    return err(HaiAuditError.LOG_FAILED, auditM('audit_eventTimeUnavailable'), result.error)
+    return core.err(HaiAuditError.LOG_FAILED, auditM('audit_eventTimeUnavailable'), result.error)
   const value = Number(result.data?.now_ms)
   if (!Number.isSafeInteger(value) || value < 0 || !Number.isFinite(new Date(value).getTime()))
-    return err(HaiAuditError.LOG_FAILED, auditM('audit_eventTimeUnavailable'))
-  return ok(new Date(value))
+    return core.err(HaiAuditError.LOG_FAILED, auditM('audit_eventTimeUnavailable'))
+  return core.ok(new Date(value))
 }

@@ -28,7 +28,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 - 使用 `core.config` 读取/校验模块配置
 - 使用 `core.i18n` 管理多语言
 - 使用 `core.zodValidation` 将 Zod 默认英文错误映射为模块自己的 i18n 文案
-- 使用 `ok()` / `err()` 构建 HaiResult 类型返回值
+- 使用 `core.ok()` / `core.err()` 构建 HaiResult 类型返回值
 - 创建模块级 logger 或 i18n 消息获取器
 
 ## 使用步骤
@@ -272,8 +272,8 @@ m('welcome', { params: { name: '张三' } }) // "欢迎，张三"
 | `mapZodErrorToFormErrors` | `(error, getMessage) => ValidationFormError[]` | 一步完成提取 + 本地化 + 扁平化 |
 
 ```typescript
-import type { ZodMessageGetter } from '@h-ai/core'
-import { core } from '@h-ai/core'
+
+import { type ZodMessageGetter, core } from '@h-ai/core'
 import { z } from 'zod'
 
 const LoginSchema = z.object({
@@ -438,15 +438,15 @@ core.time.addDays(date, 7)
 返回 `HaiResult<T>` 的操作须处理成功/失败分支；core 工具等直接返回值的 API 不套用此模式：
 
 ```typescript
-import { ok, err, HaiCommonError } from '@h-ai/core'
+import { HaiCommonError, core } from '@h-ai/core'
 
 // 成功
 // 将 data 包装成 success=true 的 HaiResult。
-return ok(data)
+return core.ok(data)
 
 // 失败
 // 将 NOT_FOUND 错误码和指定消息包装成 success=false 的 HaiResult。
-return err(HaiCommonError.NOT_FOUND, 'Resource not found')
+return core.err(HaiCommonError.NOT_FOUND, 'Resource not found')
 ```
 
 **使用模式**：
@@ -501,13 +501,13 @@ Core 模块定义了两组标准错误码：
 **使用示例**：
 
 ```typescript
-import { HaiCommonError, err } from '@h-ai/core'
+import { HaiCommonError, core } from '@h-ai/core'
 
 // 创建错误实例
 // 创建 success=false 的 HaiResult，包含 NOT_FOUND 错误码及用户不存在的消息。
-err(HaiCommonError.NOT_FOUND, 'User not found')
+core.err(HaiCommonError.NOT_FOUND, 'User not found')
 // 创建带 VALIDATION_ERROR 的失败结果，将 validationErrors 作为错误原因。
-err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
+core.err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 ```
 
 ### `HaiConfigError`（配置错误）
@@ -523,7 +523,7 @@ err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 **使用场景**：
 
 ```typescript
-import { core, HaiConfigError } from '@h-ai/core'
+import { HaiConfigError, core } from '@h-ai/core'
 
 // 按 schema 读取 ./config/db.yml 并注册为 db 配置。成功 data 是校验后的配置。
 const result = core.config.load('db', './config/db.yml', schema)

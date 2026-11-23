@@ -1,4 +1,4 @@
-import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
+import { ui } from '@h-ai/ui/theme'
 
 export const DEFAULT_THEME = '{{fullstack.theme.defaultTheme}}'
 export const AVAILABLE_THEMES: readonly string[] = [
@@ -12,7 +12,7 @@ class ThemeState {
   current = $state<string>(DEFAULT_THEME)
 
   constructor() {
-    const saved = getSavedTheme(DEFAULT_THEME)
+    const saved = ui.getSavedTheme(DEFAULT_THEME)
     this.set(AVAILABLE_THEMES.includes(saved)
       ? saved
       : DEFAULT_THEME)
@@ -22,7 +22,7 @@ class ThemeState {
     if (!AVAILABLE_THEMES.includes(value))
       return
     this.current = value
-    applyTheme(value)
+    ui.applyTheme(value)
   }
 }
 

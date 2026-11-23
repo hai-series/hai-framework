@@ -1,15 +1,15 @@
-export * from './deploy-artifact.js'
+export { DeploymentArtifactSchema } from './deploy-artifact.js'
+export type { DeploymentArtifact } from './deploy-artifact.js'
 export type { BuildReceipt, BuildReceiptExpectation } from './deploy-build-receipt.js'
 export type { DeployConfig, DeployConfigInput, DockerSshProviderConfig, PortExposeConfig, SshConfig } from './deploy-config.js'
 export { DeployConfigSchema, ProviderConfigSchema } from './deploy-config.js'
-export { resolveDownloadProxy, resolveImageReference } from './deploy-download.js'
+
 export type { DeploymentEnvironment } from './deploy-environment.js'
-export { loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from './deploy-environment.js'
-export { normalizeProjectName } from './deploy-functions.js'
+
 export * from './deploy-main.js'
-export { canKeepMiddleware, parseMiddlewareField, saveMiddlewareEnvironment, validateMiddlewareField } from './deploy-middleware-environment.js'
-export * from './deploy-middleware.js'
-export * from './deploy-plan.js'
-export { getDeployCommandState, getDeployRecovery } from './deploy-recovery.js'
+
+export { DEPLOY_MIDDLEWARE } from './deploy-middleware.js'
+export type { MiddlewareBackend, MiddlewareField } from './deploy-middleware.js'
+
 export type { DeployBundleExecution, DeployReleaseTarget, DeployReleaseVerification, DeployReleaseVerificationResult } from './deploy-release.js'
 export * from './deploy-types.js'

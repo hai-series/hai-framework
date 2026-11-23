@@ -10,12 +10,12 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+
 import type { Headers } from 'undici'
 
 import type { AudioFormat, AudioModelCapabilities, AudioReference, SynthesisResult } from '../ai-audio-types.js'
-
 import type { AudioProvider, ProviderSynthesisRequest, SynthesisOutputMeta } from './ai-audio-provider.js'
-import { core, err, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { Agent, fetch as fetchAudio, FormData } from 'undici'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
@@ -70,7 +70,7 @@ export function createIndexTtsAudioProvider(): AudioProvider {
     const { model, text, language, speakerReference, styleReference, styleStrength, speed, targetDurationMs, durationToleranceMs, format, sampleRate, signal } = request
     // IndexTTS 需要说话人参考音频；缺失时在调用服务前返回明确错误
     if (!speakerReference) {
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+      return core.err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
         params: { reason: 'speaker_reference is required' },
       }))
     }
@@ -119,13 +119,13 @@ export function createIndexTtsAudioProvider(): AudioProvider {
           dispatcher,
         })
         if (!response.ok) {
-          return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          return core.err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
             params: { error: await describeHttpError(response) },
           }))
         }
 
         const data = new Uint8Array(await response.arrayBuffer())
-        return ok(buildSynthesisResult(data, out, response.headers))
+        return core.ok(buildSynthesisResult(data, out, response.headers))
       }
       finally {
         await dispatcher.close()

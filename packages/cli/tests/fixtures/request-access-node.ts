@@ -7,7 +7,7 @@ import { unlinkSync } from 'node:fs'
 import { createServer } from 'node:http'
 import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
-import { core, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { serv } from '@h-ai/serv'
 import { z } from 'zod'
@@ -33,7 +33,7 @@ const contract = {
     ip: z.string().optional(),
   }))),
 }
-const procedures = serv.implement(contract).context<ServContext>().route('ip').handle(({ context }) => ok({ ip: context.ip })).route('denied').handle(({ context }) => ok({ ip: context.ip })).build()
+const procedures = serv.implement(contract).context<ServContext>().route('ip').handle(({ context }) => core.ok({ ip: context.ip })).route('denied').handle(({ context }) => core.ok({ ip: context.ip })).build()
 const application = serv.createApp({
   contract,
   procedures,
