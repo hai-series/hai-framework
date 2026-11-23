@@ -343,7 +343,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 ## HTTP API 契约
 
-IAM HTTP API 统一由 `@h-ai/api-contract` 的 `apiContract.iam` 定义，由 `@h-ai/serv/features/iam` 绑定到本模块。
+IAM HTTP API 由 `@h-ai/api-contract` 的 `apiContract.iam` 定义，通过 `@h-ai/serv` 的 `serv.createIamProcedures` 绑定到本模块。
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'

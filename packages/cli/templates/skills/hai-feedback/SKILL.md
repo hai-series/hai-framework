@@ -22,8 +22,8 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 ## 使用路径
 
 1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 默认仅输出 metadata，摘要需 consoleContent: summary 显式启用，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
-2. 挂载 apiContract.feedback 与 createFeedbackProcedures；resolveContext 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
-3. createFeedbackClient 的 actions 接 typed API，policy 读取 reports.policy({})；prepare 后打开 FeedbackModal。getView() 提供附件 URL/证据/预算；annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图；首次包络冻结，重试编辑冲突保留输入。
+2. 用 `serv.createFeedbackProcedures` 与 `apiContract.feedback` 挂载反馈路由。`resolveContext` 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
+3. 用 `feedback.createClient()` 创建收集器。actions 接 typed API，policy 读取 reports.policy({})。prepare 后打开 FeedbackModal。getView() 提供附件 URL、证据和预算。annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图。首次提交时冻结包络，重试遇到编辑冲突时保留输入。
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
 
 作者用 `feedback.listMine({ category: 'bug', page: 1 }, context)` 或已认证的 `feedback.reports.listMine` 路由查看自己在当前应用和作用域下、尚未过期的报告。作用域和作者来自可信服务端身份。管理列表 `feedback.list` 继续要求 `feedback:read`，两种列表都可按原始类别精确筛选。检查结果的 `success` 后再读取分页数据。

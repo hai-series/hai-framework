@@ -189,7 +189,7 @@ CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_C
 
 已有能力满足需求时使用它；已导入模块但仍手写其已有认证、缓存、上传、分页或 UI 功能，需要修正。确有缺口时记录缺失的具体能力、当前版本和最小补充方案，按需求增加依赖或应用代码；不为凑模块覆盖率增加服务和抽象。
 
-独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；有业务缺口时覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`ui.applyTheme` / `ui.getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换；实际权限、资源范围和写入一致性按目标业务落实。
+独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。通过 `@h-ai/serv` 的 `serv.createIamProcedures` 选用与 contract 一致的默认 procedures，业务需要时可覆写相应路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`ui.applyTheme` / `ui.getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换，实际权限、资源范围和写入一致性按目标业务落实。
 
 Fullstack 创建时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，文件不提交 Git，克隆后通过受保护配置共享，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把环境凭据复制到前端配置、日志、源码或镜像。
 

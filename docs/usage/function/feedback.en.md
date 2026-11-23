@@ -102,6 +102,8 @@ function startFeedback(config: FeedbackConfigInput) {
 
 Save the accepted report ID, then let authorized operators inspect evidence and change status with a version check.
 
+To mount the HTTP routes, import `serv` from `@h-ai/serv` and use `serv.createFeedbackProcedures({ feedback, resolveContext })` with `apiContract.feedback`. Resolve `scopeId`, `userId` and `permissions` on the server.
+
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |

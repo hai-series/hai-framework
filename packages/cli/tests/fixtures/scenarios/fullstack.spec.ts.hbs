@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
 {{#if features.feedback}}
-import { readFeedbackBundle } from '@h-ai/feedback/bundle'
+import { feedback } from '@h-ai/feedback/bundle'
 {{/if}}
 import { expect, test } from '@playwright/test'
 import { configuredPassword } from '../scripts/test-server.js'
@@ -1056,7 +1056,7 @@ test('feedback submits an empty description and business operator can process an
   await download.saveAs(archivePath)
   expect(await download.failure()).toBeNull()
   // 复用公开读取器校验路径、容量和全部文件摘要，不以下载事件代替包内容验收。
-  const opened = await readFeedbackBundle(new Uint8Array(await readFile(archivePath)))
+  const opened = await feedback.readBundle(new Uint8Array(await readFile(archivePath)))
   expect(opened.success).toBe(true)
   if (!opened.success)
     throw new Error(opened.error.message)

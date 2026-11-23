@@ -4,10 +4,11 @@
   import type { FeedbackDetail as Detail, FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
   import type { FeedbackEvidenceQuery, FeedbackListQuery, FeedbackReportView, FeedbackStatusChange } from '@h-ai/ui'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
+  import { feedback } from '@h-ai/feedback/client'
   import { FeedbackDetail, FeedbackList, PageHeader, ui } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import { managementApi } from '../api/api-client.js'
-  import { downloadFeedback, feedbackDataBytes, feedbackReview } from '../api/feedback-client.js'
+  import { downloadFeedback, feedbackReview } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
 
   const { store }: { store: ManagementStore } = $props()
@@ -129,16 +130,17 @@
     const result = await managementApi.feedback.attachments.get({ id: selected.report.id, attachmentId: id })
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
+    const bytes = feedback.dataBytes(result.data)
     if (result.data.contentType.startsWith('image/') || result.data.contentType.startsWith('video/')) {
       if (imageUrls[id])
         URL.revokeObjectURL(imageUrls[id])
       imageUrls = {
         ...imageUrls,
-        [id]: URL.createObjectURL(new Blob([new Uint8Array(feedbackDataBytes(result.data)).buffer], { type: result.data.contentType })),
+        [id]: URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer], { type: result.data.contentType })),
       }
     }
     else {
-      await downloadFeedback(feedbackDataBytes(result.data), result.data.name, result.data.contentType)
+      await downloadFeedback(bytes, result.data.name, result.data.contentType)
     }
   }
   onMount(() => {

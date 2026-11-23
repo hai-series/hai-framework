@@ -104,6 +104,8 @@ function startFeedback(config: FeedbackConfigInput) {
 
 ### 報告の提出・照会・処理：`feedback`
 
+HTTP ルートを登録するには、`@h-ai/serv` から `serv` を読み込み、`apiContract.feedback` と `serv.createFeedbackProcedures({ feedback, resolveContext })` を使います。`scopeId`、`userId`、`permissions` はサーバー側で確定します。
+
 受付 ID を保存し、権限のある担当者が現場を調べ、版を確認して状態を更新します。
 
 #### インターフェース一覧

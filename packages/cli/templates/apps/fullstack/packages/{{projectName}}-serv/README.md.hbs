@@ -34,7 +34,7 @@
 - `src/app-server.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures；应用名称 / 版本与 CORS 来源均取自上述配置。
 - `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
 - `src/server/procedures/admin-procedures.ts`：认证、管理员用户/角色/审计管理和个人设置，使用 `.auth()` / `.permission(...)` 守卫。每个请求读取用户最新启用状态、角色和权限。
-- 标准认证 procedures 复用 `@h-ai/serv/features/iam`，注册、登录方式、重置与协议由 `_iam.yml` 控制；登录、退出、修改密码追加业务审计。HTTP App 类型复用公开 `ServHttpApp`。
+- 标准认证 procedures 复用 `@h-ai/serv` 的 `serv.createIamProcedures`。注册、登录方式、重置与协议由 `_iam.yml` 控制。登录、退出、修改密码追加业务审计。HTTP App 类型复用公开 `ServHttpApp`。
 - `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。初始使用 admin、audit_admin、config_admin、business_operator 和 user 五种角色，四类职责及基础成员权限由 security-roles.ts 配置；锁内重新鉴权，默认禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。业务规则可按需求替换，保留的不变量需验证并发与失败路径。
 - `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
 

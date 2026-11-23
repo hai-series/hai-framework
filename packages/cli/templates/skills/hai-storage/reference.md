@@ -209,7 +209,7 @@ PUT 签名绑定 `Content-Type`。调用 `storage.client.uploadWithPresignedUrl(
 
 ## HTTP API 契约
 
-公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv/features/storage` 绑定到本模块。
+公共 HTTP API 由 `@h-ai/api-contract` 提供，通过 `@h-ai/serv` 的 `serv.createStorageProcedures` 绑定到本模块。
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'
