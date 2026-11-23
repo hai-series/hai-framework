@@ -163,7 +163,7 @@ describe('自动注入', () => {
 
   it('已有 @h-ai/ui import 时应合并而非重复', () => {
     const input = `<script lang="ts">
-  import { toast } from '@h-ai/ui';
+  import { ui } from '@h-ai/ui';
   let val = $state('')
 </script>
 
@@ -171,7 +171,7 @@ describe('自动注入', () => {
 <Input bind:value={val} />`
 
     const result = process(input)
-    expect(result.code).toContain('toast')
+    expect(runtimeUiNames(result.code)).toContain('ui')
     expect(result.code).toContain('Button')
     expect(result.code).toContain('Input')
     expect((result.code.match(/@h-ai\/ui/g) || []).length).toBe(1)
@@ -274,8 +274,8 @@ describe('自动注入', () => {
   })
 
   it('内联类型别名提升时保留其显式组件映射', () => {
-    const result = process(`<script lang="ts">import { type Button as Card, toast } from '@h-ai/ui'</script><Card /><Input />`)
-    expect(runtimeUiNames(result.code)).toEqual(['Card', 'toast', 'Input'])
+    const result = process(`<script lang="ts">import { type Button as Card, ui } from '@h-ai/ui'</script><Card /><Input />`)
+    expect(runtimeUiNames(result.code)).toEqual(['Card', 'ui', 'Input'])
     expect(result.code).toContain('Button as Card')
   })
 

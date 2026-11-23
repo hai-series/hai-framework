@@ -108,22 +108,22 @@
   title='确认删除'
   message='确定要永久删除此项目吗？此操作不可恢复。'
   variant='error'
-  onconfirm={async () => { toast.success('已永久删除'); open = false }}
+  onconfirm={async () => { ui.toast.success('已永久删除'); open = false }}
   oncancel={() => open = false}
 />`
 
-  const codeToast = `<Button variant='info' onclick={() => toast.info('这是一条信息通知')}>信息</Button>
-<Button variant='success' onclick={() => toast.success('操作成功完成！')}>成功</Button>
-<Button variant='warning' onclick={() => toast.warning('请注意检查配置项')}>警告</Button>
-<Button variant='error' onclick={() => toast.error('操作失败，请稍后重试')}>错误</Button>
+  const codeToast = `<Button variant='info' onclick={() => ui.toast.info('这是一条信息通知')}>信息</Button>
+<Button variant='success' onclick={() => ui.toast.success('操作成功完成！')}>成功</Button>
+<Button variant='warning' onclick={() => ui.toast.warning('请注意检查配置项')}>警告</Button>
+<Button variant='error' onclick={() => ui.toast.error('操作失败，请稍后重试')}>错误</Button>
 
 <!-- 自定义持续时间（毫秒） -->
-<Button onclick={() => toast.info('1 秒后消失', 1000)}>1 秒</Button>`
+<Button onclick={() => ui.toast.info('1 秒后消失', 1000)}>1 秒</Button>`
 
   const codeToastModal = `<!-- ToastContainer 使用 Popover API 进入 top-layer，
      可稳定叠加在 Modal（原生 dialog）之上，不被遮挡。 -->
 <Modal {open} title='在弹窗中触发 Toast' onclose={() => open = false}>
-  <Button variant='success' onclick={() => toast.success('Toast 显示在弹窗之上！')}>
+  <Button variant='success' onclick={() => ui.toast.success('Toast 显示在弹窗之上！')}>
     触发成功 Toast
   </Button>
 </Modal>`
@@ -131,7 +131,7 @@
   const codeFeedbackSettings = `<Button onclick={() => feedbackOpen = true}>意见反馈</Button>
 <Button onclick={() => settingsOpen = true}>系统设置</Button>
 
-<FeedbackModal bind:open={feedbackOpen} onsubmit={async () => toast.success('反馈已提交')} />
+<FeedbackModal bind:open={feedbackOpen} onsubmit={async () => ui.toast.success('反馈已提交')} />
 <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />`
 
   const codeTheme = `<ThemeToggle />
@@ -139,23 +139,25 @@
 <ThemeSelector showPreview grouped />
 <ThemeSelector showPreview={false} />`
 
-  const codeMessage = `// m 为应用翻译函数；根布局只挂载一次 <ToastContainer />。
-toast.success(m.common_success()) // 默认右下角，3 秒后消失
-toast.add({ message: m.common_success(), position: 'bottom-center' })
+  const codeMessage = `import { ui } from '@h-ai/ui'
+
+// m 为应用翻译函数，根布局只挂载一次 <ToastContainer />。
+ui.toast.success(m.common_success()) // 默认右下角，3 秒后消失
+ui.toast.add({ message: m.common_success(), position: 'bottom-center' })
 // 连续触发会进入同一队列，每条在展示后单独计时。
-toast.info(m.common_success(), 1000)`
+ui.toast.info(m.common_success(), 1000)`
 
-  const codeMessageBox = `import { messageBox } from '@h-ai/ui'
+  const codeMessageBox = `import { ui } from '@h-ai/ui'
 
-const ok = await messageBox.confirm({
+const ok = await ui.messageBox.confirm({
   title: '确认操作',
   message: '确定要继续吗？',
   confirmText: '确定',
 })
 
-await messageBox.alert('这是一条提示信息')
+await ui.messageBox.alert('这是一条提示信息')
 
-<!-- 应用根部需挂载一次 <MessageBoxContainer /> -->`
+// 根布局只挂载一次 <MessageBoxContainer />。`
 
   const codeThemeColorPicker = `<ThemeColorPicker value={themeColor} onchange={c => (themeColor = c)} />`
 
