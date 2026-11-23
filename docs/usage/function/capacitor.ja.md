@@ -187,7 +187,7 @@ const registrationResult = await capacitor.push.register()
 if (!registrationResult.success)
   return registrationResult
 const registration = registrationResult.data // { token: '<プラットフォームが発行した token>' }
-// 受信通知と利用者の操作を各配列に追加します。成功時は非同期の解除関数を返し、設定失敗時は元の失敗結果を返します。
+// 通知の到着とタップをそれぞれ記録します。購読に成功したら、後で使う非同期の解除処理を受け取ります。
 const stopResult = await capacitor.push.listen({
   onReceived: notification => { received.push(notification) },
   onActionPerformed: action => { actions.push(action) },
