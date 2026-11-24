@@ -4,11 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
-Use `scheduler` to run JavaScript handlers or call HTTP endpoints on a cron schedule. It saves task settings and execution logs in the database and can call application callbacks before and after runs.
+Use `scheduler` for scheduled or manual jobs. Register an HTTP or trusted JavaScript handler, or supply the application's `hooks.onTaskExecute` at startup. The shared database stores definitions, execution receipts, and attempt logs.
 
 ## Quick Start
 
-Install with pnpm: `pnpm add @h-ai/scheduler @h-ai/reldb`.
+Install with `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler`.
 
 [Open the quick-start guide](../../docs/usage/function/scheduler.en.md#quick-start).
 

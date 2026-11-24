@@ -4,11 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-`scheduler` は cron スケジュールに従って JavaScript の処理や HTTP API を実行します。タスク設定と実行ログをデータベースに保存し、実行前後にアプリが指定した処理も呼び出せます。
+`scheduler` はタスクを定期実行または手動実行します。HTTP、信頼できる JavaScript のハンドラーを登録するか、初期化でアプリの `hooks.onTaskExecute` を指定します。定義、受領情報、試行ログは共有データベースに保存します。
 
 ## クイックスタート
 
-`pnpm add @h-ai/scheduler @h-ai/reldb` でインストールします。
+`pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler` でインストールします。
 
 [最小構成の導入手順](../../docs/usage/function/scheduler.ja.md#quick-start)を参照してください。
 

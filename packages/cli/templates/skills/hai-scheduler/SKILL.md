@@ -19,7 +19,7 @@ description: "注册或排查 cron/API/JS/Hook 任务、手工触发、执行日
 
 ## 使用路径
 
-1. 始终先初始化同一共享 reldb；enableDb 只能 true，跨主机生产使用 PostgreSQL/MySQL，不需要缓存。检查 scheduler.init 的 HaiResult。
+1. 先连接共享 RelDB，检查 `scheduler.init({ tasks, hooks })` 的 HaiResult。各节点各自注入回调；跨主机生产使用 PostgreSQL 或 MySQL，`enableDb` 只能为 `true`。
 2. 动态共享任务通过 register 管理，不与 init.tasks 重复声明；读取失败、禁用、删除或改期时不得继续旧任务。
 3. 根据可信逻辑选择 API/JS/Hook。Worker/vm 不是安全沙箱；Hook 监听 signal，业务以 occurrenceId 原子持久去重，只有实际满足该约束才设 idempotent:true；API 自动覆盖幂等头。
 4. 明确 timeout、响应大小、重试与执行状态；关闭时 await scheduler.close，再关闭数据库；unknown须先确认旧runner终止并核对副作用，按版本人工resolveUnknown，禁止直接重排。

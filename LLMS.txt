@@ -42,7 +42,7 @@
 | @h-ai/runner | [受管容器、容量、任务保留与失联核验](packages/runner/README.md) |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
 | @h-ai/audit | [审计记录、按筛选统计、归档与清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
-| @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
+| @h-ai/scheduler | [定时与手动任务、HTTP/JS/Hook 执行和共享回执](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
 | @h-ai/crypto | [SM2/SM3/SM4、Node.js 异步密码哈希、缓存传输状态与共享配额](packages/cli/templates/skills/hai-crypto/SKILL.md) |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) |
 | @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫、ServFunctions 公开类型](packages/cli/templates/skills/hai-serv/SKILL.md) |

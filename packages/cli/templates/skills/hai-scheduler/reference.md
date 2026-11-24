@@ -28,10 +28,12 @@ import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
 // 连接 scheduler.db 的 SQLite 数据库，成功 data 为 undefined，连接失败阻止持久化调度。
-await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+const database = await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+if (!database.success)
+  throw new Error(database.error.message)
 
 // 以下方参数启动数据库模式，创建或加载持久化记录。成功 data 为 undefined，失败返回错误。
-await scheduler.init({
+const initialized = await scheduler.init({
   enableDb: true,
   maxLogs: 1000,
   retentionDays: 30,
@@ -39,6 +41,12 @@ await scheduler.init({
     onTaskStart(event) {
       // 记录本次任务 ID 和触发来源，返回 void。
       core.logger.info('Task started', { taskId: event.task.id, trigger: event.trigger })
+    },
+    onTaskExecute({ context, signal }) {
+      signal.throwIfAborted()
+      if (context.taskId !== 'cleanup')
+        throw new Error('Unsupported task')
+      return { taskId: context.taskId, checked: true }
     },
     onTaskInterrupted(event) {
       // 在中断回调中记录任务 ID 与原因，返回 void。
@@ -50,6 +58,8 @@ await scheduler.init({
     },
   },
 })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 ```
 
 ### 2. 注册任务
@@ -125,12 +135,12 @@ const logs = await scheduler.getLogs({
 
 | 方法 / 属性 | 签名 | 说明 |
 | --- | --- | --- |
-| `init` | `(config?) => Promise<HaiResult<void>>` | 初始化调度器 |
-| `register` | `(task) => Promise<HaiResult<void>>` | 注册统一任务模型 |
+| `init` | `(config?) => Promise<HaiResult<void>>` | 从共享库装配执行状态；可用 `tasks` 加载本地定义、用 `hooks` 注入执行和观察回调 |
+| `register` | `(task) => Promise<HaiResult<void>>` | 注册共享定义；`handler` 选择 HTTP 或可信 JS，省略时走 `onTaskExecute` |
 | `updateTask` | `(taskId, updates) => Promise<HaiResult<void>>` | 更新 cron / params / handler |
 | `refreshTasks` | `() => Promise<HaiResult<void>>` | 主动刷新共享定义，不执行任务 |
 | `register` 扩展字段 | `description / deleteAfterRun / retry / idempotent` | 支持任务描述、一次性任务、失败重试策略 |
-| `trigger` | `(taskId, { source?, idempotencyKey? }) => Promise<HaiResult<TaskExecutionLog>>` | 手工触发并记录来源 |
+| `trigger` | `(taskId, { source?, idempotencyKey? }) => Promise<HaiResult<TaskExecutionLog>>` | 手工触发并记录来源；同任务同键可复用已提交回执，包括定义已移除的情况 |
 | `execution.listLogFailures / repairLog` | `(options?) / (occurrenceId)` | 有界监控并幂等补写已发布 journal，不重执行业务 |
 | `getLogs` | `(options?) => Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |
 | `setHooks` | `(hooks) => HaiResult<void>` | 设置全局生命周期回调 |
@@ -193,7 +203,7 @@ await scheduler.init({
 
 可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
 
-领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；`scheduler.init()` 创建并校验任务、执行及日志表，结构不符时返回初始化失败。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+一次触发在 `hai_scheduler_executions` 留一条账本记录，结束后保留；每次尝试的查询日志按 `occurrence_id` 关联到它。退避前先保存已完成尝试和下次可执行的 DB 时间，接管沿用原回执。一次性任务的成功账本使该定义失效，即使定义清理延迟也不会再次执行。观测日志可能没有关联账本行。日志清理只作用于查询日志，采用数据库时钟。
 
 ```ts
 // 用本次清理的稳定幂等键触发任务，成功 data 含任务状态及执行日志持久化状态。
@@ -229,7 +239,7 @@ if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败 |
 | `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | 日志持久化未确认 |
 
-调度循环按分钟匹配 cron，同一分生成稳定的持久 occurrenceId。
+调度循环只接受五字段 cron 和有效 IANA 时区，按数据库分钟生成稳定的 occurrenceId。扫描间隔、HTTP/JS 超时和重试退避的单次计时器上限为 2147483647 毫秒。leaseMs 控制每次领取或续签后的执行权，默认 5 分钟，在途约每三分之一租期续签。
 
 数据库是共享租约的时间权威：claim/begin/renew/finish/expired/isolate 均在执行 SQL 内取存储端时钟并原子核验期限，不用节点 Date.now 或“先查 now 再写”的结果授权。PostgreSQL clock_timestamp、MySQL SYSDATE(3)、SQLite now 在真实锁等待后仍拒绝过期提交；updatedAt 条件版本使用同一数据库时钟并单调推进。cron 从 DB 时间生成分钟身份并匹配；默认 timezone 为 UTC，显式 IANA 时区只改变墙上时间解释，不读取节点 TZ。节点偏差 ±2h、不同 TZ 下同一分钟身份、过期但未接管、接管后的旧 owner 和行锁跨期限均须真实多进程验证。应用仍维护 DB 时钟与外部接收端的持久幂等/fence；未知效果不能靠补写日志或重新 trigger 重做。
 

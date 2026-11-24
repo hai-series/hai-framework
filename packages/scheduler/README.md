@@ -4,11 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-用 `scheduler` 按 cron 表达式运行任务。任务可执行 JavaScript 处理函数或调用 HTTP 接口。模块把任务设置和执行日志写入数据库，也可在执行前后调用应用提供的函数。
+用 `scheduler` 定时或手动运行任务。注册时可指定 HTTP 或可信 JavaScript 处理器，应用也可以在初始化时通过 `hooks.onTaskExecute` 接管执行。共享数据库保存定义、执行回执和尝试日志。
 
 ## 快速开始
 
-使用 pnpm 安装：`pnpm add @h-ai/scheduler @h-ai/reldb`。
+使用 pnpm 安装 `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler`。
 
 [跟着最小示例完成接入](../../docs/usage/function/scheduler.md#quick-start)。
 
