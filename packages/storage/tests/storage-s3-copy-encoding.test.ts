@@ -92,7 +92,7 @@ it('s3 encodes copy sources and preserves metadata not replaced by the caller', 
       secretAccessKey: 'fixture',
       endpoint: `http://127.0.0.1:${address.port}`,
       forcePathStyle: true,
-      prefix: '目录/',
+      prefix: '目录///',
     })).success).toBe(true)
     const key = '报告 ?#%+!().txt'
     expect((await storage.file.put(key, 'original content', {

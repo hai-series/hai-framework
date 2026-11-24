@@ -44,7 +44,6 @@ import {
 } from '../storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
-const TRAILING_SLASHES_REGEX = /\/+$/
 const LEADING_SLASHES_REGEX = /^\/+/
 /** S3 单次 DeleteObjects 最多接受 1000 项；不并发放大删除请求。 */
 const DELETE_BATCH_SIZE = 1000
@@ -197,6 +196,14 @@ function toStorageError(error: unknown, key?: string): HaiError {
   }
 }
 
+/** 线性移除路径末尾的斜杠。 */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '/')
+    end--
+  return value.slice(0, end)
+}
+
 /**
  * 为 key 添加配置中的路径前缀
  *
@@ -207,7 +214,7 @@ function toStorageError(error: unknown, key?: string): HaiError {
 function withPrefix(key: string, prefix: string): string {
   if (!prefix)
     return key
-  return `${prefix.replace(TRAILING_SLASHES_REGEX, '')}/${key.replace(LEADING_SLASHES_REGEX, '')}`
+  return `${trimTrailingSlashes(prefix)}/${key.replace(LEADING_SLASHES_REGEX, '')}`
 }
 
 /**
@@ -859,7 +866,7 @@ export function createS3Provider(): StorageProvider {
       }
       const url = new URL(s3Config.publicUrl)
       const objectPath = fullKey(key).split('/').map(part => encodeURIComponent(part)).join('/')
-      url.pathname = `${url.pathname.replace(TRAILING_SLASHES_REGEX, '')}/${objectPath}`
+      url.pathname = `${trimTrailingSlashes(url.pathname)}/${objectPath}`
       return url.href
     },
   }
@@ -908,7 +915,7 @@ export function createS3Provider(): StorageProvider {
         // 签名阶段不联网；不得用外部地址执行内部健康检查，也不能在签名后改写 Host。
         if (cfg.publicEndpoint) {
           const endpoint = new URL(cfg.publicEndpoint)
-          publicBasePath = endpoint.pathname.replace(TRAILING_SLASHES_REGEX, '')
+          publicBasePath = trimTrailingSlashes(endpoint.pathname)
           // 含目录的网关使用桶路径；签名针对网关还原后的 S3 URI，而非入口前缀。
           presignClient = new S3Client({
             ...clientConfig,
