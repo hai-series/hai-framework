@@ -682,7 +682,7 @@ export async function runRelease(bundle: DeployBundleExecution, verification: De
 }
 ```
 
-执行和核对均使用已登记的 SSH 主机密钥与固定 Docker 或 Podman。核对以被冻结的 Docker 镜像归档和摘要推导镜像配置 ID，分别在健康检查前后读取正在运行的镜像和当前发布。工作节点更换后可通过 `prepareImages` 按所选发布 ID 重新准备归档。`pending_verify` 继续调用只读核对，`restored` 的证据属于前一发布。
+执行和核对使用同一已登记的 SSH 目标与本机引擎。[Rootless Docker 与外部 HTTPS 配置](../configuration/deploy.md#rootless-docker-external-https)下，`healthUrl` 应填写公开域名下可直接返回成功的健康路径，例如 `https://app.example.com/health`。框架校验冻结的镜像归档和其中配置内容，再与实际运行容器对应。Docker containerd 的容器记录使用 OCI 镜像摘要时，框架从该容器的平台清单核对配置摘要。健康检查前后均确认同一发布和运行容器。工作节点更换后可通过 `prepareImages` 按观察到的发布 ID 重新准备归档。证据不足保留 `pending_verify`，可继续只读核对。`restored` 返回前一发布的证据。
 
 ```mermaid
 flowchart LR

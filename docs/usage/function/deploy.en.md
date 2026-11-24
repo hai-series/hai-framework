@@ -323,7 +323,7 @@ export async function runRelease(bundle: DeployBundleExecution, verification: De
 }
 ```
 
-Both operations use a pinned SSH host key and a fixed Docker or Podman runtime. Verification derives the image configuration ID from the frozen Docker image archive and checks running images and the current release before and after the health probe. After a worker replacement, `prepareImages` can materialize the archives for the observed release. Poll `pending_verify` with the read-only method. `restored` returns evidence for the previous release.
+Both operations use the same registered SSH target and local engine. With [Rootless Docker and external HTTPS](../configuration/deploy.en.md#rootless-docker-external-https), supply a health URL under the public origin that returns success directly, such as `https://app.example.com/health`. Hai checks the frozen archive and its image configuration, then matches them to the running container. For Docker with the containerd image store, Hai reads the running container’s OCI platform manifest to establish the configuration digest. The same release and containers must be present before and after the health probe. A replacement worker can use `prepareImages` to materialize the archives for the observed release. Repeat the read-only check for `pending_verify`. The proof for `restored` identifies the previous release.
 
 ```mermaid
 flowchart LR

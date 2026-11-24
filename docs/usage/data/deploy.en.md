@@ -76,7 +76,7 @@ The script writes a final result so a disconnected caller can verify the same de
 
 deploy-orders-42 completed with exit code 0 in 42 seconds, with no recovery needed. This is not a statement about business-data changes.
 
-A CLI receipt with `schemaVersion: 1` contains `artifactDir`, `manifestPath`, and the v5 manifest. In the private bundle, `deploymentTarget` records the project, remote directory, and runtime. Its bundle digest covers those fields and the deployment ID. Verification success includes `proof.deploymentId` and each running role’s `imageId` and `archiveSha256`, the image configuration digest and the whole image tar digest, respectively. The caller persists bundle receipts and verification outcomes.
+A CLI receipt with `schemaVersion: 1` contains `artifactDir`, `manifestPath`, and the v5 manifest. The private bundle’s `deploymentTarget` records the project, remote directory, engine and Docker mode, listener and port, and external HTTPS address. The bundle digest covers the target and deployment ID. Successful verification includes `proof.deploymentId` and each running role’s `imageId` and `archiveSha256`. These are the SHA-256 of the image configuration and the entire image tar, respectively. Docker containerd uses the running container’s platform manifest to find the configuration. The caller persists the bundle receipt and verification outcome.
 
 ## Field, storage and cleanup reference
 

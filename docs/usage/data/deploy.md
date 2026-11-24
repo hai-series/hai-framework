@@ -78,7 +78,7 @@ health 步骤通过，用时2秒。这只证明该步骤通过，整个发布是
 
 deploy-orders-42 在 complete 阶段以0退出，用时42秒且无需恢复；这不证明应用业务数据没有变化。
 
-CLI 回执 `schemaVersion: 1` 带 `artifactDir`、`manifestPath` 与 v5 清单。分步部署包内的 `deploymentTarget` 记录项目、目标目录和引擎，与现有的部署 ID 一同受到包摘要保护。核对成功结果带 `proof.deploymentId` 和每个运行角色的 `imageId`、`archiveSha256`。前者是引擎镜像配置摘要，后者是完整镜像 tar 文件摘要。应用在自身数据库或任务记录中保存包收据和最终结果。
+CLI 回执 `schemaVersion: 1` 带 `artifactDir`、`manifestPath` 与 v5 清单。私有部署包的 `deploymentTarget` 记录项目、远端目录、引擎及 Docker 模式、监听地址和端口、外部 HTTPS 地址。包摘要覆盖目标和部署 ID。核对成功返回 `proof.deploymentId` 以及各运行角色的 `imageId` 和 `archiveSha256`。前者始终是镜像配置内容的 SHA-256，后者是整个镜像 tar 的 SHA-256。Docker containerd 用运行容器的平台清单定位配置，返回的 `imageId` 含义相同。调用方保存部署包回执与核对结论。
 
 ## 字段、存储与清理参考
 

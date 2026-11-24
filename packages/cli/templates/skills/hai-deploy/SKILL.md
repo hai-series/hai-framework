@@ -117,7 +117,7 @@ S3 的内部 endpoint 与预签名 publicEndpoint 分开；后者无默认，填
 
 deploy.init 后检查 HaiResult.success，deploy.deployApp 接收 artifactDir、bundleOnly、selectedServices、runtime 与 onProgress；finally 中 deploy.close。deploy.scan 和 deploy.credentials.* 不依赖 init。Vercel 只消费已有 .vercel/output，不执行源码构建，也不支持 Compose 离线/部分更新。
 
-编排平台先用 `deploy.verifyBuildReceipt` 核对 CLI v1 回执和 v5 归档，再持久化私有包的部署 ID、路径和摘要。对同一个已登记的 SSH 目标调用 `deploy.executeBundle`，随后用 `deploy.verifyDeployment` 独立核对远端终态、运行镜像和健康入口。已断线或只有 `pending_verify` 时继续只读核对。框架需要冻结镜像归档来推导预期镜像 ID，原包丢失时可重新从已登记制品准备归档。
+编排平台先用 `deploy.verifyBuildReceipt` 核对 CLI v1 回执和 v5 归档，再持久化私有包的部署 ID、路径和摘要。对同一个已登记的 SSH 目标调用 `deploy.executeBundle`，随后用 `deploy.verifyDeployment` 独立核对远端终态、运行镜像和健康入口。已断线或只有 `pending_verify` 时继续只读核对。框架校验冻结归档和实际运行容器的镜像身份。经典 Docker、Podman 与 Docker containerd 都使用 `deploy.verifyDeployment`。containerd 从实际容器的平台清单核对配置摘要。原包丢失时可重新从已登记制品准备归档。
 
 下载源由 `--image-source official|cn|custom` 控制构建和打包中间件，`--npm-source` 只随 `--build` 作用于 Corepack/pnpm。SDK 的 DeployAppOptions.imageSource 接收 `{ type, registries? }`，proxy 接收 `{ mode, url?, bypass? }`；resolveImageReference / resolveDownloadProxy 是无 init 的解析工具。配置、优先级与代理边界见 [hai-build 下载源与代理](../hai-build/reference.md#下载源与代理)。SDK 拉取子进程会覆盖代理变量，远程引擎仍需自身设置；镜像归档保持原始标签。
 

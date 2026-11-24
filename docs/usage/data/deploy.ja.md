@@ -76,7 +76,7 @@ health は2秒で成功しましたが、全体の結果は最終結果ファイ
 
 0終了で42秒、復旧不要の例です。業務データが変わっていない証明ではありません。
 
-`schemaVersion: 1` の CLI 受領書には `artifactDir`、`manifestPath`、v5 マニフェストが入ります。非公開バンドルの `deploymentTarget` にはプロジェクト、対象ディレクトリ、ランタイムを記録します。配置 ID もバンドルのハッシュで保護されます。検証成功時の `proof` には `deploymentId` と各稼働ロールの `imageId`（イメージ構成のハッシュ）、`archiveSha256`（tar 全体のハッシュ）が入ります。呼び出し元がバンドル受領書と検証結果を保存します。
+`schemaVersion: 1` の CLI 受領書には `artifactDir`、`manifestPath`、v5 マニフェストが入ります。非公開バンドルの `deploymentTarget` にはプロジェクト、対象ディレクトリ、エンジンと Docker モード、リスナーとポート、外部 HTTPS アドレスを記録し、配備 ID とともにバンドルのハッシュで保護します。検証成功時の `proof` には `deploymentId` と各稼働ロールの `imageId` と `archiveSha256` が入ります。順にイメージ構成と tar 全体の SHA-256 です。Docker containerd では稼働コンテナーのプラットフォームマニフェストで構成を特定します。呼び出し元がバンドル受領書と検証結果を保存します。
 
 ## 項目・保存・削除のリファレンス
 

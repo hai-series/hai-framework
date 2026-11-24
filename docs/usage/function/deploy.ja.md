@@ -325,7 +325,7 @@ export async function runRelease(bundle: DeployBundleExecution, verification: De
 }
 ```
 
-どちらも登録済みの SSH ホスト鍵と固定の Docker または Podman を使います。保存された Docker イメージアーカイブの情報から構成 ID を求め、ヘルスチェックの前後に現在のリリースと稼働イメージを読み取ります。ワーカーを交換した場合は `prepareImages` で検証対象のアーカイブを準備できます。`pending_verify` は読み取り専用の検証を繰り返せます。`restored` の証拠は直前のリリースを指します。
+実行と検証は同じ登録済み SSH 接続先とローカルエンジンで行います。[Rootless Docker と外部 HTTPS の設定](../configuration/deploy.ja.md#rootless-docker-external-https)を使う場合、`healthUrl` は公開オリジンで直接成功を返すヘルスパスです。例は `https://app.example.com/health` です。保存したアーカイブとイメージ構成を検証し、稼働中のコンテナーと照合します。Docker が containerd イメージストアを使う場合は、そのコンテナーの OCI プラットフォームマニフェストから構成ハッシュを取得します。ヘルスチェックの前後で同じリリースとコンテナーを確認します。ワーカーの交代後は `prepareImages` で対象アーカイブを準備できます。`pending_verify` は読み取り専用の検証を再実行できます。`restored` の証拠は直前のリリースを指します。
 
 ```mermaid
 flowchart LR
