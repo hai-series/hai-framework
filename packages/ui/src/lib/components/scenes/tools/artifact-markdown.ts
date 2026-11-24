@@ -314,7 +314,10 @@ export function captureMarkdownEdit(content: string, host: HTMLElement): Markdow
           const prefix = entry.token.type === 'heading' && 'depth' in entry.token
             ? `${'#'.repeat(Number(entry.token.depth))} `
             : ''
-          const suffix = content.slice(entry.start, entry.end).match(/(?:\r\n|\r|\n)*$/)?.[0] ?? ''
+          let suffixStart = entry.end
+          while (suffixStart > entry.start && /[\r\n]/.test(content.charAt(suffixStart - 1)))
+            suffixStart--
+          const suffix = content.slice(suffixStart, entry.end)
           const newline = content.includes('\r\n')
             ? '\r\n'
             : '\n'
