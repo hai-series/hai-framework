@@ -87,11 +87,14 @@ provider:
 | `provider.remote`                       | `type=docker-ssh`                      | `/opt/hai/apps`，运行时 `auto` | 远程主机运行参数                                                                                                                   |
 | `provider.remote.baseDir`               | `type=docker-ssh`                      | `"/opt/hai/apps"`              | 远程应用根目录                                                                                                                     |
 | `provider.remote.runtime`               | `type=docker-ssh`                      | `"auto"`                       | 远程容器运行时（auto 优先 podman）。可填 `"auto"`、`"docker"`、`"podman"`                                                          |
+| `provider.remote.dockerMode` | `type=docker-ssh` | 可省略 | `rootless` 要求 `runtime: docker`，使用目标 SSH 账号的本机用户套接字。缺省或 `default` 沿用普通本机引擎选择。 |
 | `provider.expose`                       | `type=docker-ssh`                      | 必填                           | 应用暴露方式                                                                                                                       |
 | `provider.expose.type`                  | `type=docker-ssh`                      | `"port"`                       | 应用部署：平台/暴露方式，按所在节点的枚举选择。可填 `"port"`                                                                       |
 | `provider.expose.containerPort`         | `type=docker-ssh`                      | `3000`                         | 容器内监听端口（adapter-node 默认 3000）。可填整数，1–65535                                                                        |
 | `provider.expose.hostPort`              | `type=docker-ssh`                      | 必填                           | 目标服务器对外监听的 HTTP 端口。可填整数，1–65535                                                                                  |
-| `provider.expose.https`                 | `type=docker-ssh`                      | 可省略                         | 可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP。可填 `type=files` 或 `type=letsencrypt` |
+| `provider.expose.hostAddress` | 外部 HTTPS | 与 `publicUrl` 同时填写 | 绑定具体宿主 IPv4/IPv6。网关同机时可用 `127.0.0.1`。 |
+| `provider.expose.publicUrl` | 外部 HTTPS | 与 `hostAddress` 同时填写 | 公开 HTTPS origin，含协议、主机和可选端口。应用路径取自制品。 |
+| `provider.expose.https` | Hai 管理 HTTPS | 可省略 | `files` 使用已有证书，`letsencrypt` 由 Certbot 申请续期。与外部 `publicUrl` 二选一。 |
 | `provider.expose.https.type`            | `type=docker-ssh` / `type=files`       | 必填                           | 应用部署：平台/暴露方式，按所在节点的枚举选择。可填 `"files"`                                                                      |
 | `provider.expose.https.domain`          | `type=docker-ssh` / `type=files`       | 必填                           | HTTPS 公开域名；证书必须匹配该域名。可填字符串，最多 253 个字符                                                                    |
 | `provider.expose.https.port`            | `type=docker-ssh` / `type=files`       | `443`                          | 目标服务器对外监听的 HTTPS 端口，默认 443，须与 HTTP 端口不同。可填整数，1–65535                                                   |
@@ -148,6 +151,31 @@ provider:
 | `container.compose.services.web`                     | 可省略      | Web 容器的 Compose 扩展                                                                          |
 | `container.compose.services.web.extra_hosts`         | 可省略      | 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名                                   |
 | `container.compose.services.web.extra_hosts.<名称>`  | 必填        | 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。可填字符串，IPv4 或 字符串，IPv6 |
+
+<a id="rootless-docker-external-https"></a>
+
+### 用 Rootless Docker 发布到现有 HTTPS 网关
+
+例如用户访问 `https://app.example.com/`，同机网关转发至 `http://127.0.0.1:18070`。以下是 `hai.json.deploy` 的内容。SSH 账号应拥有 Rootless Docker 的用户套接字并能写入 `baseDir`。远端网关使用受防火墙限制的具体私网地址。
+
+```yaml schema=@h-ai/deploy:DeployConfigSchema
+environment: prod
+provider:
+  type: docker-ssh
+  ssh:
+    host: deployment.example.com
+    username: deploy
+  remote:
+    runtime: docker
+    dockerMode: rootless
+    baseDir: /home/deploy/hai-apps
+  expose:
+    hostAddress: 127.0.0.1
+    hostPort: 18070
+    publicUrl: https://app.example.com
+```
+
+网关配置好 DNS 和证书，并覆盖 Host、客户端地址和协议头。在 `trustedEdgeProxies` 填写部署侧实际看到的可信对端地址，特别是 rootless 端口转发后的地址。先用 `hai deploy --env prod --plan` 核对两层地址，再全量发布。换域名或监听地址时重新生成全量包，按[网关配置与验收](delivery.md#外部-https-网关)检查登录、跳转和探活。
 
 ## 生效与核对
 

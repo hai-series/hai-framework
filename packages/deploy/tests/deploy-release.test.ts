@@ -154,6 +154,9 @@ describe('分阶段可核验部署', () => {
         directory: '/opt/hai/apps/shop-prod',
         runtime: 'podman',
         dockerMode: 'default',
+        hostAddress: '',
+        hostPort: 8080,
+        publicUrl: '',
         host: 'deploy.example.test',
         port: 22,
         username: 'deploy',
@@ -174,6 +177,16 @@ describe('分阶段可核验部署', () => {
     expect(await deploy.executeBundle({
       ...input,
       target: { ...target, projectName: 'other-prod' },
+    })).toMatchObject({ success: false })
+    expect(await deploy.executeBundle({
+      ...input,
+      target: {
+        ...target,
+        provider: {
+          ...target.provider,
+          expose: { ...target.provider.expose, hostPort: 18070 },
+        },
+      },
     })).toMatchObject({ success: false })
     expect(exec).not.toHaveBeenCalled()
     expect(upload).not.toHaveBeenCalled()

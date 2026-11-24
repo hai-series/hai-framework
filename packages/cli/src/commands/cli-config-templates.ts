@@ -819,6 +819,11 @@ provider:
   expose:
     hostPort: 18080
     containerPort: 3000
+    # 可以在 pnpm run deploy 的公开入口环节选择 HTTPS。
+    # 已有 HTTPS 网关时填写以下两项，网关转发到 hostAddress:hostPort。
+    # hostAddress: 127.0.0.1
+    # publicUrl: https://app.example.com
+    # Hai 管理证书时填写 https，和上方的外部网关配置二选一。
     # https:
     #   type: files
     #   domain: app.example.com
@@ -828,6 +833,8 @@ provider:
     #   privateKeyFile: .hai/certificates/privkey.pem
     # Let's Encrypt：type 改为 letsencrypt，HTTP hostPort 设为 80；
     # 以 email 和 acceptTerms: true 替代两个文件路径。
+  # 外部网关覆盖转发头；确认部署侧看到的对端地址后再设置信任。
+  # trustedEdgeProxies: [192.0.2.10]
 
 container:
   s3Engine: \${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs} # rustfs | minio

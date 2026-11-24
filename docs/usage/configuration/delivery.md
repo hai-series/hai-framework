@@ -251,7 +251,7 @@ http:
 
 SvelteKit SSR 的 HTTP/HTTPS 部署统一通过独立 `gateway`，SSR 容器不映射公开端口。网关以实际连接覆盖 Host 和标准转发头，Compose 固定 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=host`、`ADDRESS_HEADER=x-forwarded-for` 与 `XFF_DEPTH=1`，不信任客户端提供的转发值；`PORT_HEADER` 为空，端口保留在 Host 中。这些项由部署装配提供，不能在业务 `.env.runtime` 中覆盖。adapter-node 使用受信转发头还原来源，不读取运行期 `ORIGIN`；应用默认不固定构建期 `paths.origin`，同一镜像可跨环境复用。首次建立或改变网关拓扑时执行全量交付，普通环境变量重启不能代替拓扑更新。
 
-外层负载均衡终止 TLS 时，将其实际来源 IP/CIDR 填入 `trustedEdgeProxies`，并由它覆盖 `Host`、`X-Forwarded-For` 与单值 `X-Forwarded-Proto`。独立 gateway 只从白名单真实对端接受 `http` / `https`；其他对端、重复/组合协议值仍使用网关自身连接协议。不要把所有公网或不受控共享网段列为可信上游。
+外层负载均衡终止 TLS 时，将其实际来源 IP/CIDR 填入 `trustedEdgeProxies`，并由它覆盖 `Host`、`X-Forwarded-For` 与单值 `X-Forwarded-Proto`。受管 Web 代理和独立 gateway 只从白名单真实对端接受 `http` / `https`；其他对端、重复/组合协议值仍使用网关自身连接协议。不要把所有公网或不受控共享网段列为可信上游。
 
 CLI 与 Deploy 使用匹配版本。即使只构建后端，也要传入与既有网站一致的公开目录，让增量包保留完整的网站信息：
 
@@ -478,9 +478,17 @@ Docker 和 Podman 部署可以在项目根 `hai.json` 的 `deploy.container.comp
 docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intranet.example", (error, address) => { if (error) throw error; process.stdout.write(address + "\n") })'
 ```
 
+## 外部 HTTPS 网关
+
+已有网关负责证书和域名时，在 `provider.expose` 一起填写 `hostAddress`、`hostPort` 和 `publicUrl`。例如同机网关把 `https://app.example.com/` 转发到 `http://127.0.0.1:18070`。网关不在同机时，选网关可达的具体私网地址，并用防火墙限制其访问。完整配置见[Rootless Docker 与外部 HTTPS 示例](deploy.md#rootless-docker-external-https)。
+
+1. 由网关配置 DNS、TLS 和相应的 Web、API、健康路径。网关覆盖客户端提交的 Host、X-Forwarded-For 和单值 X-Forwarded-Proto。确认部署侧看见的网关地址后，再填入 `trustedEdgeProxies`。确认其它机器无法直连内部端口或伪造协议与客户地址。
+2. 用 `hai deploy --env prod --plan` 检查监听地址和公开域名，再执行全量发布。服务器用内部监听检查应用启动和恢复。在线部署从操作机检查公开入口。若结果为「服务器已完成发布，但公开入口未通过」，排查网关的证书与路由，再核对发布结果。离线脚本完成后由运维从网关外部检查。
+3. 用浏览器实际登录、刷新会话并调用 API。HTTPS 入口保留安全 Cookie 设置。修改网关域名或目标监听后，用新的全量包更新部署配置，旧域名跳转由网关维护。
+
 ## 可选HTTPS证书
 
-所有 Docker-SSH 模板共用 `provider.expose.https`，不区分 fullstack、API、admin、website、h5 或静态 SPA。`pnpm run deploy` 的 HTTPS 环节可选不启用、已有 PEM 证书、Let’s Encrypt；选择保存到当前环境私有文件，`--yes` 复用配置。未配置时保持 HTTP，HTTPS 端口默认 443，`redirectHttp` 默认 true。`expose.hostPort` 仍为 HTTP 端口，必须与 HTTPS 端口不同。
+所有 Docker-SSH 模板可选 HTTP、外部网关、已有 PEM 证书或 Let’s Encrypt。用 Hai 安装证书时配置 `provider.expose.https`。HTTPS 端口默认 443，`redirectHttp` 默认 true，HTTP `hostPort` 须与 HTTPS 端口不同。交互选择保存到当前环境私有文件，`--yes` 复用配置。
 
 使用 Serv 刷新 Cookie 的生产应用在受控内网或 VPN 上通过 HTTP 提供登录时，在所选部署环境的 `.env.prod.local` 中设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。验证步骤见 [生产 HTTP 入口的 Serv 刷新 Cookie](http.md#生产-http-入口的-serv-刷新-cookie)。
 

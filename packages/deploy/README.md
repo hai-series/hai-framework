@@ -16,6 +16,8 @@
 
 在[模块配置清单](../../docs/usage/configuration/deploy.md)中查阅配置入口、默认值、取值限制和生效条件。
 
+已有 HTTPS 网关时，可在同一配置中选择 Rootless Docker、内网监听和独立的公开 HTTPS 地址。 [配置示例](../../docs/usage/configuration/deploy.md#rootless-docker-external-https)
+
 ## 功能说明
 
 [查 API 清单](../../docs/usage/function/deploy.md#api-reference)，包含调用入口、输入、返回值和用法。

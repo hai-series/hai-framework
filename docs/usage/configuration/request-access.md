@@ -168,7 +168,7 @@ trustedEdgeProxies: [192.0.2.10/32]
 
 这会让 Nginx 只从指定上游解析 XFF，再向应用发送经过确认的地址。填写的应是入口代理的实际来源，不能填所有公网地址。
 
-独立 SSR/API gateway 还只从白名单真实对端接受单值 `http` / `https` 的 `X-Forwarded-Proto`，支持外层 TLS 终止；未列入白名单或组合值仍使用网关自身协议。Host 使用请求 Host，忽略外部 `X-Forwarded-Host` / `X-Forwarded-Port` / `Forwarded`。SDK 的 SSR 后端始终位于该 gateway 后且不公开端口。
+受管 Web 代理和独立 SSR/API gateway 只接受白名单真实对端提供的单值 `http` 或 `https` 协议头。其他来源和组合值使用代理自身协议。Host 使用入口请求的 Host，外部 `X-Forwarded-Host`、`X-Forwarded-Port` 和 `Forwarded` 不直接透传。使用[外部 HTTPS 网关](delivery.md#外部-https-网关)时，由网关覆盖客户端提交的转发头。
 
 `trustedEdgeProxies` 只影响实际生成的 Nginx。直接公开 Node 的部署若没有 Nginx，应在 Serv/Kit 的 `trustedProxies` 中配置连接它的上游，不能只设置部署 Provider。浏览器配置只接收 `transport` 等公共字段，不应包含内部代理网段和策略文件路径。
 

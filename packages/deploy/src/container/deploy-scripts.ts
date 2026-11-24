@@ -227,6 +227,12 @@ wait_http() {
   http_release=$1
   http_port=$2
   shift 2
+  http_address=$(deployment_json read deploymentTarget.hostAddress string "$http_release/manifest.json") || return 1
+  case "$http_address" in
+    '') http_address=127.0.0.1;;
+    *[!0-9A-Fa-f.:]*) return 1;;
+    *:*) http_address="[$http_address]";;
+  esac
   https_domain=''
   https_metadata=$(deployment_json read metadata.https string "$http_release/manifest.json") || return 1
   if [ -n "$https_metadata" ]; then
@@ -242,7 +248,7 @@ HTTPS_METADATA
     while [ "$http_attempt" -lt 40 ]; do
       if [ -n "$https_domain" ]; then
         if curl --noproxy '*' -fsS --max-time 5 --cacert "$https_certificates/fullchain.pem" --resolve "$https_domain:$https_port:127.0.0.1" "https://$https_domain:$https_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
-      elif curl --noproxy '*' -fsS --max-time 5 "http://127.0.0.1:$http_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
+      elif curl --noproxy '*' -fsS --max-time 5 "http://$http_address:$http_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
       http_attempt=$((http_attempt + 1))
       sleep 3
     done
@@ -421,7 +427,7 @@ if [ "$partial" = true ]; then
   previous_layout=$(deployment_metadata_file "$root/releases/$previous" layout)
   if ! cmp -s "$source_layout" "$previous_layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
-    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$source_layout")" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$previous_layout")" || { printf 'Ports, HTTPS or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$source_layout")" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$previous_layout")" || { printf 'Listener, public URL, HTTPS or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
     test -f .hai/web.conf || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
     json_proxy_service=$(read_proxy_service "$root/releases/$previous")
     previous_proxy=$(deployment_json proxy-source '' '' "$root/releases/$previous/.hai/compose.json")

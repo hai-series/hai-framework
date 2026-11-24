@@ -16,6 +16,8 @@
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/deploy.ja.md)を参照してください。
 
+既存の HTTPS ゲートウェイを使う場合は、Rootless Docker、内部リスナー、公開 HTTPS アドレスを同じ配備設定で指定できます。 [設定例](../../docs/usage/configuration/deploy.ja.md#rootless-docker-external-https)
+
 ## 機能
 
 [API 一覧](../../docs/usage/function/deploy.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。

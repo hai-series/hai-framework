@@ -271,23 +271,32 @@ export async function createDeploymentBundle(options: {
       if (file !== 'https')
         put(`.hai/${file}`, content)
     }
-    const httpsFingerprint = config.expose.https
-      ? createHash('sha256').update(JSON.stringify({
-          ...config.expose.https,
+    const { hostAddress, hostPort, publicUrl, https } = config.expose
+    const publicOrigin = publicUrl
+      ? new URL(publicUrl).origin
+      : ''
+    const entryIdentity = https
+      ? {
+          ...https,
           certificateFile: undefined,
           privateKeyFile: undefined,
           certificate: options.httpsAssets?.['tls/fullchain.pem'],
-        })).digest('hex')
+        }
+      : publicOrigin
+        ? { hostAddress, publicOrigin }
+        : undefined
+    const entryFingerprint = entryIdentity
+      ? createHash('sha256').update(JSON.stringify(entryIdentity)).digest('hex')
       : ''
     const metadata = {
-      'layout': `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig
+      'layout': `${hostPort}:${options.containerPort}:${options.hasWebConfig
         ? options.proxyService === 'gateway'
           ? 'gateway'
           : 'true'
         : 'false'}:${artifact.primaryService}:${options.hasWebConfig
         ? await artifactChecksum(join(directory, 'web.conf'))
-        : ''}${httpsFingerprint
-        ? `:${httpsFingerprint}`
+        : ''}${entryFingerprint
+        ? `:${entryFingerprint}`
         : ''}\n`,
       'web-base-path': `${artifact.webBasePath}\n`,
       'health-paths': `${options.healthPaths.join('\n')}\n`,
@@ -327,6 +336,9 @@ export async function createDeploymentBundle(options: {
         directory: serverDirectory,
         runtime: config.remote.runtime,
         dockerMode: config.remote.dockerMode ?? 'default',
+        hostAddress: hostAddress ?? '',
+        hostPort,
+        publicUrl: publicOrigin,
         host: config.ssh?.host,
         port: config.ssh?.port,
         username: config.ssh?.username,
@@ -345,7 +357,7 @@ export async function createDeploymentBundle(options: {
       partial: options.partial,
       selected,
       primaryService: artifact.primaryService,
-      hostPort: config.expose.hostPort,
+      hostPort,
       healthPaths: options.healthPaths,
     }))
     const instructionParams = {
@@ -366,7 +378,6 @@ export async function createDeploymentBundle(options: {
     const variableGuide = deployM('deploy_bundleVariables', {
       params: { environment, keys: Object.keys(core.config.parseEnv(applicationEnvironment)).sort().join(', ') || '—' },
     })
-    const https = config.expose.https
     const certificates = https?.type === 'files'
       ? `${serverDirectory}/releases/${options.deploymentId}/.hai/tls`
       : `${serverDirectory}/https/certificates/${https?.domain}`
@@ -385,9 +396,13 @@ export async function createDeploymentBundle(options: {
           params: { state: `${serverDirectory}/https/acme`, domain: https.domain },
         })}`
         : '')
-      : deployM('deploy_bundleHttpOnly', {
-          params: { port: config.expose.hostPort },
-        })
+      : publicOrigin
+        ? deployM('deploy_bundleExternalHttps', {
+            params: { address: hostAddress!, port: hostPort, url: publicOrigin },
+          })
+        : deployM('deploy_bundleHttpOnly', {
+            params: { port: hostPort },
+          })
     const accountGuide = deployM('deploy_bundleAccounts', {
       params: { sources: options.accountSources || '—' },
     })

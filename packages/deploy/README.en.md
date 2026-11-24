@@ -16,6 +16,8 @@ Set deployment targets in the project’s `hai.json.deploy`. When you run `hai d
 
 See the [configuration reference](../../docs/usage/configuration/deploy.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
+For an existing HTTPS gateway, configure Rootless Docker, the internal listener, and the public HTTPS address in the same deployment settings. [Configuration example](../../docs/usage/configuration/deploy.en.md#rootless-docker-external-https)
+
 ## Features
 
 [Browse the API list](../../docs/usage/function/deploy.en.md#api-reference) for entry points, inputs, results and examples.

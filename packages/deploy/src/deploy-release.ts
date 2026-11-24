@@ -13,7 +13,7 @@ import { deploymentRuntimeFunctions, deploymentStoreHeader } from './container/d
 import { shellArgument } from './container/deploy-scripts.js'
 import { createSshExecutor, usesSshPassword } from './container/deploy-ssh.js'
 import { artifactChecksum } from './deploy-artifact.js'
-import { ProviderConfigSchema } from './deploy-config.js'
+import { deploymentOrigin, ProviderConfigSchema } from './deploy-config.js'
 import { normalizeProjectName } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { getDeployCommandState } from './deploy-recovery.js'
@@ -34,6 +34,9 @@ const bundleMetadata = z.object({
     directory: z.string(),
     runtime: z.enum(['docker', 'podman', 'auto']),
     dockerMode: z.enum(['default', 'rootless']),
+    hostAddress: z.string(),
+    hostPort: z.number(),
+    publicUrl: z.string(),
     host: z.string(),
     port: z.number(),
     username: z.string(),
@@ -125,6 +128,7 @@ export interface DeployReleaseVerification {
   target: DeployReleaseTarget
   release: z.input<typeof releaseSchema>
   previous?: z.input<typeof releaseSchema>
+  /** 已登记公开入口下的健康 URL，含应用的健康检查路径。 */
   healthUrl: string
   /** HTTPS 自有 CA 的绝对文件路径。 */
   caFile?: string
@@ -210,10 +214,14 @@ export async function executeBundle(input: DeployBundleExecution, options?: { si
     }
     const manifest = bundleMetadata.parse(await archiveManifest(input.bundlePath, './manifest.json', signal))
     const identity = manifest.deploymentTarget
+    const { hostAddress, hostPort, publicUrl } = target.provider.expose
     if (manifest.deploymentId !== input.deploymentId || identity.projectName !== target.projectName
       || identity.directory !== target.directory || identity.runtime !== target.runtime || identity.host !== target.connection.host
       || identity.port !== target.connection.port || identity.username !== target.connection.username
-      || identity.dockerMode !== target.dockerMode) {
+      || identity.dockerMode !== target.dockerMode || identity.hostAddress !== (hostAddress ?? '')
+      || identity.hostPort !== hostPort || identity.publicUrl !== (publicUrl
+      ? new URL(publicUrl).origin
+      : '')) {
       return invalid()
     }
     const { result } = await uploadAndApplyBundle(target.ssh, input.bundlePath, target.directory, 'apply.sh', {
@@ -246,15 +254,9 @@ export async function executeBundle(input: DeployBundleExecution, options?: { si
 
 function validatedHealthUrl(input: DeployReleaseVerification, target: ReturnType<typeof resolveTarget>): URL {
   const url = new URL(input.healthUrl)
-  const https = target.provider.expose.https
-  const host = https?.domain ?? target.connection.host
-  const canonicalHost = host?.includes(':')
-    ? `[${host}]`
-    : host
-  if (url.protocol !== (https ? 'https:' : 'http:') || url.hostname !== canonicalHost?.toLowerCase()
-    || Number(url.port || (https ? 443 : 80)) !== (https?.port ?? target.provider.expose.hostPort)
+  if (url.origin !== new URL(deploymentOrigin(target.provider)).origin
     || url.username || url.password || url.hash || url.search
-    || (input.caFile && (!https || !isAbsolute(input.caFile)))) {
+    || (input.caFile && (url.protocol !== 'https:' || !isAbsolute(input.caFile)))) {
     throw new Error('Invalid release health endpoint')
   }
   return url

@@ -261,6 +261,57 @@ it.each([false, true])('普通 HTTP SSR 使用私有 gateway，计划和发布�
   expect(JSON.parse(read('manifest.json')).metadata.layout.trim().split(':')[2]).toBe('gateway')
 })
 
+it.each(['api', 'fullstack', 'spa', 'ssr'])('外部 HTTPS 为 %s 只发布指定 HTTP 地址并记录公开入口', async (kind) => {
+  const artifacts = project(kind)
+  const hostAddress = '127.0.0.1'
+  const publicUrl = 'https://app.example.test'
+  const config = {
+    provider: {
+      type: 'docker-ssh' as const,
+      remote: { runtime: 'docker' as const, dockerMode: 'rootless' as const },
+      expose: { hostAddress, hostPort: 18070, publicUrl },
+      trustedEdgeProxies: ['192.0.2.10'],
+    },
+  }
+  const options = { environment: 'test', artifactDir: artifacts }
+  expect(await deploy.createDeploymentPlan(root, config, options)).toMatchObject({
+    success: true,
+    data: {
+      target: {
+        runtime: 'docker',
+        dockerMode: 'rootless',
+        hostAddress,
+        hostPort: 18070,
+        publicUrl,
+      },
+    },
+  })
+  expect(await deploy.init(config)).toMatchObject({ success: true })
+  const result = await deploy.deployApp(root, { ...options, bundleOnly: true })
+  expect(result.success, result.success ? undefined : result.error.message).toBe(true)
+  if (!result.success || !result.data.bundlePath)
+    return
+  const read = (file: string) => execFileSync('tar', ['-xOf', result.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
+  const { services } = JSON.parse(read('.hai/compose.json'))
+  expect((services.gateway ?? services.web).ports).toEqual(['127.0.0.1:18070:8080'])
+  expect(services.serv?.ports).toBeUndefined()
+  expect(services.certbot).toBeUndefined()
+  expect(JSON.parse(read('manifest.json')).deploymentTarget).toMatchObject({
+    dockerMode: 'rootless',
+    hostAddress,
+    hostPort: 18070,
+    publicUrl,
+  })
+  const nginx = read('.hai/web.conf')
+  expect(nginx).not.toContain('ssl_certificate')
+  if (kind !== 'spa') {
+    expect(nginx).toContain('geo $realip_remote_addr $hai_trusted_edge')
+    expect(nginx).toContain('proxy_set_header X-Forwarded-Proto $hai_request_scheme;')
+  }
+  if (kind === 'api' || kind === 'fullstack')
+    expect(parseEnv(read('config/.env.runtime')).HAI_SERV_CORS_ORIGIN).toBe(publicUrl)
+})
+
 it('let’s Encrypt 交付官方 Certbot 镜像与申请、续期脚本，打包不访问 CA', async () => {
   const artifacts = project('api')
   const initialized = await deploy.init({

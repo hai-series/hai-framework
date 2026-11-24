@@ -81,15 +81,30 @@ const HttpsConfigSchema = z.discriminatedUnion('type', [
   }),
 ])
 
-/** HTTP 端口及可选 HTTPS 入口；Let's Encrypt 使用 HTTP-01，HTTP 必须映射 80。 */
+/** 外部入口只接受 HTTPS origin；制品决定 Web 路径。 */
+const PublicUrlSchema = z.string().max(300).refine((value) => {
+  if (/\s/.test(value) || !/^https:\/\/(?:[a-z0-9.-]+|\[[0-9a-f:]+\])(?::\d{1,5})?\/?$/i.test(value) || !URL.canParse(value))
+    return false
+  const url = new URL(value)
+  return url.port !== '0' && (url.hostname.startsWith('[') || HttpsDomainSchema.safeParse(url.hostname).success)
+}, deployM('deploy_publicUrlInvalid'))
+
+/** HTTP 监听与可选 HTTPS 入口；外部网关使用独立的内部绑定。 */
 const PortExposeSchema = z.object({
   type: z.literal('port').default('port'),
   /** 容器内监听端口（adapter-node 默认 3000） */
   containerPort: z.number().int().min(1).max(65535).default(3000),
   /** 宿主机映射端口 */
   hostPort: z.number().int().min(1).max(65535),
-  /** 可选 HTTPS：已有 PEM 文件或官方 Certbot 自动申请续期；省略保留 HTTP。 */
-  https: HttpsConfigSchema.optional().describe('可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP'),
+  /** 外部网关专用的宿主绑定 IP，例如同机网关使用 127.0.0.1。 */
+  hostAddress: z.union([
+    z.ipv4(),
+    z.ipv6(),
+  ]).optional().describe('外部 HTTPS 网关访问的宿主 IPv4 或 IPv6 地址，与 publicUrl 一起配置'),
+  /** 由外部网关提供 TLS 的公开 HTTPS origin。 */
+  publicUrl: PublicUrlSchema.optional().describe('外部网关的公开 HTTPS 地址，仅填写 origin，例如 https://app.example.com'),
+  /** 由 Hai 管理的 HTTPS：已有 PEM 文件或官方 Certbot 自动申请续期。 */
+  https: HttpsConfigSchema.optional().describe('由 Hai 管理的 HTTPS 入口，files 使用已有证书，letsencrypt 使用官方 Certbot；与 publicUrl 互斥'),
 }).superRefine((expose, context) => {
   if (expose.https && (expose.https.port === expose.hostPort || (expose.https.type === 'letsencrypt' && expose.hostPort !== 80))) {
     context.addIssue({
@@ -98,10 +113,26 @@ const PortExposeSchema = z.object({
       message: deployM('deploy_httpsPortsInvalid'),
     })
   }
+  const { hostAddress, https, publicUrl } = expose
+  const address = hostAddress && `http://${formatDeploymentHost(hostAddress)}`
+  const bindHost = address && URL.canParse(address)
+    ? new URL(address).hostname
+    : undefined
+  if ((publicUrl && (!bindHost || ['0.0.0.0', '[::]', '[::ffff:0:0]'].includes(bindHost))) || (hostAddress && !publicUrl)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['hostAddress'],
+      message: deployM('deploy_hostAddressInvalid'),
+    })
+  }
+  if (publicUrl && https) {
+    context.addIssue({
+      code: 'custom',
+      path: ['publicUrl'],
+      message: deployM('deploy_publicUrlConflict'),
+    })
+  }
 })
-
-/** 应用入口：HTTP 及统一的可选 HTTPS。 */
-const ExposeSchema = PortExposeSchema
 
 /** docker-ssh 部署平台配置 */
 const DockerSshProviderConfigSchema = z.object({
@@ -118,7 +149,7 @@ const DockerSshProviderConfigSchema = z.object({
     dockerMode: z.enum(['default', 'rootless']).optional().describe('Docker 连接模式；rootless 需要 runtime=docker，省略使用现有本机引擎规则'),
   }).default({ baseDir: '/opt/hai/apps', runtime: 'auto' }),
   /** 应用暴露方式 */
-  expose: ExposeSchema,
+  expose: PortExposeSchema,
   /** Nginx 前方可信负载均衡的 IP/CIDR；省略时不接受外部转发头。 */
   trustedEdgeProxies: z.array(z.union([
     z.ipv4(),
@@ -183,6 +214,26 @@ export type PortExposeConfig = z.infer<typeof PortExposeSchema>
  * ```
  */
 export type DockerSshProviderConfig = z.infer<typeof DockerSshProviderConfigSchema>
+
+/** 格式化 URL 或端口映射里的字面地址，IPv6 用方括号。 */
+export function formatDeploymentHost(host: string): string {
+  return host.includes(':')
+    ? `[${host}]`
+    : host
+}
+
+/** 从目标配置得到 CLI 与 SDK 共用的公开入口。 */
+export function deploymentOrigin({ expose, ssh }: DockerSshProviderConfig): string {
+  if (expose.publicUrl)
+    return new URL(expose.publicUrl).origin
+  if (expose.https) {
+    const { domain, port } = expose.https
+    return `https://${domain}${port === 443
+      ? ''
+      : `:${port}`}`
+  }
+  return `http://${formatDeploymentHost(ssh?.host ?? 'SERVER_HOST')}:${expose.hostPort}`
+}
 
 // ─── Provisioner 配置 Schema ───
 

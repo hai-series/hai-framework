@@ -5108,8 +5108,28 @@
                     "minimum": 1,
                     "maximum": 65535
                   },
+                  "hostAddress": {
+                    "description": "外部 HTTPS 网关访问的宿主 IPv4 或 IPv6 地址，与 publicUrl 一起配置",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6",
+                        "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                      }
+                    ]
+                  },
+                  "publicUrl": {
+                    "description": "外部网关的公开 HTTPS 地址，仅填写 origin，例如 https://app.example.com",
+                    "type": "string",
+                    "maxLength": 300
+                  },
                   "https": {
-                    "description": "可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP",
+                    "description": "由 Hai 管理的 HTTPS 入口，files 使用已有证书，letsencrypt 使用官方 Certbot；与 publicUrl 互斥",
                     "oneOf": [
                       {
                         "type": "object",

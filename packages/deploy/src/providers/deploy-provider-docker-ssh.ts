@@ -40,6 +40,7 @@ import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.j
 import { deploymentRuntimeFunctions } from '../container/deploy-runtime-selection.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
+import { deploymentOrigin } from '../deploy-config.js'
 import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
@@ -203,7 +204,7 @@ export function createDockerSshProvider(
   }
 
   /** HTTP 健康检查：轮询访问地址直到返回成功。 */
-  async function healthCheck(url: string, certificate?: string): Promise<boolean> {
+  async function healthCheck(url: string, { certificate, external }: { certificate?: string, external: boolean }): Promise<boolean> {
     for (let attempt = 0; attempt < HEALTH_MAX_ATTEMPTS; attempt++) {
       try {
         if (certificate) {
@@ -226,6 +227,7 @@ export function createDockerSshProvider(
         else {
           const response = await fetch(url, {
             signal: AbortSignal.timeout(5000),
+            redirect: external ? 'manual' : 'follow',
           })
           // 健康检查只消费状态码，主动释放响应体和连接，避免失败轮询积压未读数据。
           await response.body?.cancel()
@@ -244,8 +246,7 @@ export function createDockerSshProvider(
   const deploy = async (context: ContainerDeployContext): Promise<HaiResult<DeployResult>> => {
     const { appDir, projectName, scan, provisionEnv, appEnv, options } = context
     const deploymentId = makeDeploymentId()
-    const hostPort = config.expose.hostPort
-    const https = config.expose.https
+    const { hostAddress, hostPort, https, publicUrl } = config.expose
     const httpsAssets = https
       ? createHttpsAssets(https, resolveProjectDirectory(appDir))
       : undefined
@@ -274,21 +275,12 @@ export function createDockerSshProvider(
       ? artifact.servContainerPort
       : artifact.webContainerPort) ?? config.expose.containerPort
     const webContainerPort = web?.containerPort ?? artifact.webContainerPort ?? 8080
-    const host = config.ssh?.host
-    const url = https
-      ? `https://${https.domain}${https.port === 443
-        ? ''
-        : `:${https.port}`}`
-      : host
-        ? `http://${host.includes(':')
-          ? `[${host}]`
-          : host}:${hostPort}`
-        : `http://SERVER_HOST:${hostPort}`
+    const url = deploymentOrigin(config)
     const webBasePath = artifact.webBasePath
     const applicationUrl = `${url}${webBasePath
       ? `${webBasePath}/`
       : ''}`
-    const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && (!!webBasePath || !!https)
+    const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && Boolean(webBasePath || https || publicUrl)
     const healthPaths = hasWebProxy
       ? ['/_hai/web-health', `${webBasePath}/`]
       : scan.isSvelteKit
@@ -330,8 +322,8 @@ export function createDockerSshProvider(
     const storageRouting = managedStorage
       ? createHash('sha256').update(JSON.stringify({ ...managedStorage, secretAccessKey: undefined })).digest('hex')
       : ''
-    // SSR 始终通过私有网关确定真实协议；API 仅在存储或 HTTPS 需要时追加网关。
-    const gateway = !hasWebProxy && (scan.isSvelteKit || !!managedStorage || (!!https && !standaloneWebConfig))
+    // SSR 始终通过私有网关，独立 API 在需要存储路由或 HTTPS 转发时使用同一网关。
+    const gateway = !hasWebProxy && (scan.isSvelteKit || !!managedStorage || (primaryService === 'serv' && Boolean(https || publicUrl)))
     if (gateway && primaryService === 'web' && !scan.isSvelteKit)
       return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     const proxyService = gateway ? 'gateway' : 'web'
@@ -481,7 +473,6 @@ export function createDockerSshProvider(
     if (hasWebProxy) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
       const http = server.data.http as { apiPrefix?: string } | undefined
-      const cors = server.data.cors as { origin?: string } | undefined
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..')) {
         return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
@@ -509,21 +500,6 @@ export function createDockerSshProvider(
           ? error.message
           : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
-      // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
-      env = mergeEnvironmentLayers([
-        env,
-        {
-          HAI_SERV: JSON.stringify({
-            ...server.data,
-            cors: {
-              ...cors,
-              origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https)
-                ? url
-                : cors?.origin ?? '*',
-            },
-          }),
-        },
-      ])
     }
     else if (gateway) {
       try {
@@ -563,8 +539,9 @@ export function createDockerSshProvider(
         ? webContainerPort
         : gateway ? 8080 : containerPort)
     }
-    if (https && primaryService === 'serv' && !hasWebProxy) {
+    if (primaryService === 'serv' && (hasWebProxy || https || publicUrl)) {
       const cors = server.data.cors as { origin?: string } | undefined
+      // 每次从当前配置生成默认 Origin，保留应用显式设置的来源。
       env = mergeEnvironmentLayers([
         env,
         {
@@ -572,9 +549,11 @@ export function createDockerSshProvider(
             ...server.data,
             cors: {
               ...cors,
-              origin: !cors?.origin || cors.origin === '*'
-                ? url
-                : cors.origin,
+              origin: cors?.origin && cors.origin !== '*'
+                ? cors.origin
+                : (config.ssh || https || publicUrl)
+                    ? new URL(url).origin
+                    : '*',
             },
           }),
         },
@@ -660,6 +639,7 @@ export function createDockerSshProvider(
       projectName,
       appVersion: artifact.appVersion,
       imageRef: app?.imageRef ?? 'localhost/hai-unselected:0',
+      hostAddress,
       hostPort,
       containerPort,
       primaryService,
@@ -835,18 +815,22 @@ export function createDockerSshProvider(
 
     // 在线部署完成后检查实际公开入口。
     logger.info('Running health check', { url: applicationUrl })
-    let healthy = true
-    for (const healthPath of healthPaths) {
-      if (!await healthCheck(`${url}${healthPath}`, httpsAssets?.['tls/fullchain.pem'])) {
-        healthy = false
-        break
+    // SSR 首页可以重定向登录，公开探测用网关就绪路由，目标机仍检查 SSR 首页。
+    const publicHealthPaths = publicUrl && primaryService === 'web' && scan.isSvelteKit
+      ? ['/_hai/gateway-health']
+      : healthPaths
+    for (const healthPath of publicHealthPaths) {
+      if (await healthCheck(`${url}${healthPath}`, {
+        certificate: httpsAssets?.['tls/fullchain.pem'],
+        external: Boolean(publicUrl),
+      })) {
+        continue
       }
-    }
-    if (!healthy) {
+      logger.warn('Deployment completed but public health check failed', { deploymentId, url: applicationUrl })
       return core.err(
         {
           ...HaiDeployError.HEALTH_CHECK_FAILED,
-          message: deployM('deploy_healthCheckFailed', {
+          message: deployM(publicUrl ? 'deploy_publicHealthCheckFailed' : 'deploy_healthCheckFailed', {
             params: { url: applicationUrl },
           }),
           ext: {

@@ -31,14 +31,65 @@ describe('haiDeployError', () => {
 })
 
 describe('deployConfigSchema', () => {
-  it.each(['docker', 'auto', 'podman'] as const)('按所选引擎校验 Rootless Docker 配置 %s', (runtime) => {
+  it('支持明确选择 Rootless Docker 和外部 HTTPS，两者独立于构建机或 SSH 地址', () => {
     expect(DeployConfigSchema.safeParse({
       provider: {
         type: 'docker-ssh',
-        remote: { runtime, dockerMode: 'rootless' },
-        expose: { hostPort: 18070 },
+        remote: { runtime: 'docker', dockerMode: 'rootless' },
+        expose: { hostAddress: '::1', hostPort: 18070, publicUrl: 'https://app.example.test:8443/' },
       },
-    }).success).toBe(runtime === 'docker')
+    }).success).toBe(true)
+  })
+
+  it.each([
+    {
+      remote: { runtime: 'auto', dockerMode: 'rootless' },
+    },
+    {
+      remote: { runtime: 'podman', dockerMode: 'rootless' },
+    },
+    {
+      expose: { hostPort: 18070, publicUrl: 'https://app.example.test' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: '127.0.0.1' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: '0:0:0:0:0:0:0:0', publicUrl: 'https://app.example.test' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: 'wrong:address', publicUrl: 'https://app.example.test' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: '127.0.0.1', publicUrl: 'http://app.example.test' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: '127.0.0.1', publicUrl: 'https://app.example.test/other' },
+    },
+    {
+      expose: { hostPort: 18070, hostAddress: '127.0.0.1', publicUrl: 'https://user@app.example.test' },
+    },
+    {
+      expose: {
+        hostPort: 80,
+        hostAddress: '127.0.0.1',
+        publicUrl: 'https://app.example.test',
+        https: {
+          type: 'files',
+          domain: 'app.example.test',
+          certificateFile: 'cert',
+          privateKeyFile: 'key',
+        },
+      },
+    },
+  ])('拒绝不一致或不安全的公开入口和引擎配置 %#', (input) => {
+    expect(DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        expose: { hostPort: 18070 },
+        ...input,
+      },
+    }).success).toBe(false)
   })
 
   it('应校验最小合法配置（仅 provider）', () => {

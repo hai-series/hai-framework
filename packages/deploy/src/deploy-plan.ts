@@ -9,7 +9,7 @@ import { planSidecars, resolveSidecarOptions } from './container/deploy-containe
 import { shellArgument } from './container/deploy-scripts.js'
 import { createSshExecutor } from './container/deploy-ssh.js'
 import { DeploymentArtifactSchema, readDeploymentArtifact } from './deploy-artifact.js'
-import { DeployConfigSchema, validateComposeServices } from './deploy-config.js'
+import { DeployConfigSchema, deploymentOrigin, validateComposeServices } from './deploy-config.js'
 import { loadDeploymentEnvironment } from './deploy-environment.js'
 import { normalizeProjectName, resolveArtifactDirectory, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
@@ -179,8 +179,11 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     const https = provider.type === 'docker-ssh'
       ? provider.expose.https
       : undefined
+    const publicUrl = provider.type === 'docker-ssh'
+      ? provider.expose.publicUrl
+      : undefined
     const gateway = !!artifact && !(artifact.primaryService === 'serv' && artifact.hasWeb)
-      && (app.isSvelteKit || sidecar?.services.includes('storage') || (!!https && artifact.primaryService === 'serv'))
+      && (app.isSvelteKit || sidecar?.services.includes('storage') || (artifact.primaryService === 'serv' && Boolean(https || publicUrl)))
     if (gateway && artifact.primaryService === 'web' && !app.isSvelteKit)
       return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     if (gateway) {
@@ -207,7 +210,11 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
             directory: remoteDirectory,
             runtime: provider.remote.runtime,
             dockerMode: provider.remote.dockerMode,
+            hostAddress: provider.expose.hostAddress,
             hostPort: provider.expose.hostPort,
+            publicUrl: publicUrl
+              ? deploymentOrigin(provider)
+              : undefined,
             https: https
               ? { type: https.type, domain: https.domain, port: https.port }
               : undefined,

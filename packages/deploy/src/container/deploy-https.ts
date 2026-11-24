@@ -93,7 +93,7 @@ export function renderHttpsProxy(source: string, config: HttpsConfig, httpPort: 
       ? 8444
       : 8443} ssl;\n  ssl_certificate /etc/nginx/tls/fullchain.pem;\n  ssl_certificate_key /etc/nginx/tls/privkey.pem;`)
     .replace('server_name _;', `server_name ${config.domain};`)
-    .replaceAll('proxy_set_header X-Forwarded-Proto $scheme;', 'proxy_set_header X-Forwarded-Proto https;')
+    .replaceAll(/proxy_set_header X-Forwarded-Proto \$(?:scheme|hai_request_scheme);/g, 'proxy_set_header X-Forwarded-Proto https;')
   const http = config.redirectHttp
     ? `server {\n  listen ${httpPort};\n  server_name ${config.domain};\n${challenge}  location ~ ^/_hai/(web-health|gateway-health)$ { access_log off; return 200 'ok'; }\n  location / { return 308 https://${config.domain}${publicPort}$request_uri; }\n}\n`
     : source.slice(source.indexOf('server {')).replace('server_name _;', `server_name ${config.domain};\n${challenge}`)

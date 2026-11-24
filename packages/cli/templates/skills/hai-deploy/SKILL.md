@@ -45,9 +45,11 @@ Vercel API/文件上传只请求官方入口，拒绝重定向，每次请求和
 
 `hai.json` 的 `deploy.container.compose.services` 支持给 `serv`、`web` 分别配置 `extra_hosts`，写主机名到 IPv4/IPv6 的映射。沿用环境插值、`--plan` 和离线归档校验，已有成功基线时可复用镜像制品只更新对应角色。恢复读取上次成功的 Compose 快照。
 
-## 可选 HTTPS
+## 公开 HTTPS 入口
 
-所有容器模板共用deploy.provider.expose.https，省略时HTTP。files指定domain、certificateFile、privateKeyFile（相对工程根），校验域名/期限/密钥并复制到私有包。letsencrypt指定domain、email、acceptTerms:true，HTTP hostPort必须80，公网DNS、80入站及CA出站须可达。固定版本官方Certbot申请并每12小时检查续期，Nginx自动重载。仅单域名HTTP-01，无DNS/通配符。HTTPS默认443、redirectHttp默认true；--yes复用配置。启停或改模式/域名/端口/本地证书需全量。状态在服务器https/acme及按域名隔离的https/certificates目录，需备份；续期失败保留旧证书并须及时处理，隔离目标用已有证书。打包/plan不申请证书。
+已有网关时，设置 `expose.hostAddress`、`hostPort`、`publicUrl`。例如 `127.0.0.1:18070` 接收网关转发，用户访问 `https://app.example.com`。目标脚本查内部健康，CLI 和 SDK 使用公开地址验收。由网关配证书并覆盖转发头，在 `trustedEdgeProxies` 填部署侧看到的可信来源。更换入口用全量包。
+
+由 Hai 管理证书时配置 `deploy.provider.expose.https`。外部 HTTPS 与 Hai 管理证书二选一，两者都省略时使用 HTTP。files指定domain、certificateFile、privateKeyFile（相对工程根），校验域名/期限/密钥并复制到私有包。letsencrypt指定domain、email、acceptTerms:true，HTTP hostPort必须80，公网DNS、80入站及CA出站须可达。固定版本官方Certbot申请并每12小时检查续期，Nginx自动重载。仅单域名HTTP-01，无DNS/通配符。HTTPS默认443、redirectHttp默认true；--yes复用配置。启停或改模式/域名/端口/本地证书需全量。状态在服务器https/acme及按域名隔离的https/certificates目录，需备份；续期失败保留旧证书并须及时处理，隔离目标用已有证书。打包/plan不申请证书。
 
 files 只接收末级无软链接或硬链接的普通 PEM 文件，每份最多 1 MiB，父目录仍须可信。Certbot `live/` 软链需安全复制为受控目录中的普通文件，或使用框架 `letsencrypt` 模式。
 
@@ -59,7 +61,7 @@ Serv 生产登录的刷新 Cookie 默认带 `Secure`。受控内网或 VPN 的 H
 
 SvelteKit SSR 的 HTTP/HTTPS 部署均通过独立 `gateway`，SSR 容器不映射公开端口。网关覆盖 Host 与标准转发头；Compose 固定 adapter-node 的协议/主机/客户端地址信任，业务 `.env.runtime` 不能覆盖。adapter-node 6 不再读取运行期 `ORIGIN`，旧直接公开 SSR 的部署必须重新生成全量交付包；源应用默认不固定 `paths.origin`，保持镜像跨环境复用。
 
-外层 TLS 终止时，独立 gateway 只接受 `trustedEdgeProxies` 白名单真实对端的单值 `http` / `https` 协议；外层必须覆盖 Host/XFF/协议头。未授权来源或组合值使用 gateway 自身协议，不直接透传外部 Forwarded、主机/端口转发值。
+外层 TLS 终止时，受管 Web 代理和独立 gateway 只接受 `trustedEdgeProxies` 白名单真实对端的单值 `http` / `https` 协议；外层必须覆盖 Host/XFF/协议头。未授权来源或组合值使用 gateway 自身协议，不直接透传外部 Forwarded、主机/端口转发值。
 
 交付 README 仅列初始账号变量名及所选环境文件或 `process.env` 来源，不打印密码。Fullstack 初始密码在创建工程时生成，部署带入已有值；已有账号不因环境变量变更重置密码或恢复旧职责，自定义应用以实际引导逻辑为准。
 

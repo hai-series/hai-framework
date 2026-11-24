@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto'
 import { core, TrustedProxiesSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
+import { formatDeploymentHost } from '../deploy-config.js'
 import { generatedVariables, mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { mergeManagedMiddlewareConfig } from '../deploy-middleware-config.js'
@@ -591,6 +592,7 @@ export function buildRuntimeEnv(
  * @param options.projectName - 项目名
  * @param options.imageRef - 应用镜像引用
  * @param options.appVersion - 应用发布版本，例如 1.2.3；不改变持久化卷身份
+ * @param options.hostAddress - 外部网关连接的宿主绑定 IP，省略时使用引擎默认绑定。
  * @param options.hostPort - 宿主机映射端口
  * @param options.https - 可选的统一 HTTPS 入口与 Certbot 设置。
  * @param options.containerPort - 容器内端口
@@ -616,6 +618,7 @@ export function generateComposeFile(options: {
   projectName: string
   appVersion: string
   imageRef: string
+  hostAddress?: string
   hostPort: number
   containerPort: number
   /** 独立 API 为 serv，独立静态或 SSR 站点为 web。 */
@@ -636,6 +639,9 @@ export function generateComposeFile(options: {
   compose?: NonNullable<DeployConfig['container']>['compose']
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
+  const hostBinding = options.hostAddress
+    ? `${formatDeploymentHost(options.hostAddress)}:${hostPort}`
+    : String(hostPort)
   const primaryService = options.primaryService ?? 'serv'
   const nodeRuntime = options.nodeRuntime ?? primaryService === 'serv'
 
@@ -647,7 +653,7 @@ export function generateComposeFile(options: {
     // 镜像已由 load 注入本地，禁止 compose 再从 registry 拉取
     pull_policy: 'never',
     env_file: ['.env.runtime'],
-    ports: [`${hostPort}:${containerPort}`],
+    ports: [`${hostBinding}:${containerPort}`],
     networks: ['hai-app'],
   }
   if (primaryService === 'serv') {
@@ -714,7 +720,7 @@ export function generateComposeFile(options: {
       container_name: `hai-${projectName}-web`,
       restart: 'unless-stopped',
       pull_policy: 'never',
-      ports: [`${hostPort}:${options.web.containerPort}`],
+      ports: [`${hostBinding}:${options.web.containerPort}`],
       environment: { PUBLIC_API_BASE: '' },
       healthcheck: {
         test: [
@@ -744,7 +750,7 @@ export function generateComposeFile(options: {
       image: IMAGES.nginx,
       container_name: `hai-${projectName}-gateway`,
       restart: 'unless-stopped',
-      ports: [`${hostPort}:8080`],
+      ports: [`${hostBinding}:8080`],
       healthcheck: {
         test: [
           'CMD',
@@ -872,6 +878,14 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     throw new Error('Invalid web proxy target')
   }
   const webLocation = renderWebLocation(webBasePath)
+  const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
+  const forwardedHeaders = `    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Port "";
+    proxy_set_header Forwarded "";
+    proxy_set_header X-Forwarded-Proto ${forwardedProtocol};
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;`
   const storageLocation = options.storageBucket
     ? renderStorageLocation(options.storageBucket, [
         apiPath,
@@ -884,15 +898,12 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   const backendLocations = backendPaths.map(path => `  location = ${path} {
     proxy_pass http://hai_serv_backend;
     proxy_http_version 1.1;
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Real-IP $remote_addr;
+${forwardedHeaders}
   }
 `).join('')
   return `include /tmp/hai-dns.conf;
 ${renderDownloadErrorMaps()}
-${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${options.storageBucket
+${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${options.storageBucket
   ? renderStorageUpstream(options.storageBucket, options.storageBasePath)
   : ''}server {
   listen ${webPort};
@@ -912,10 +923,7 @@ ${backendLocations}  location ${apiPrefix.replace(/\/$/, '')}/ {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
     proxy_pass http://hai_serv_backend;
     proxy_http_version 1.1;
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Real-IP $remote_addr;
+${forwardedHeaders}
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;

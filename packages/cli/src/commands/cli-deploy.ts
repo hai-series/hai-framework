@@ -298,28 +298,33 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   writeCliMessage(cliM('cli_deploy_target_saved'))
 }
 
-/** 所有模板共用的可选 HTTPS 环节；配置保存到选中环境的私有层。 */
+/** 所有模板共用的公开入口环节；配置保存到选中环境的私有层。 */
 async function configureDeployHttps(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean, partial?: boolean): Promise<void> {
   const provider = configObject(config.provider)
   if (provider.type !== 'docker-ssh' || nonInteractive || partial)
     return
   const expose = configObject(provider.expose)
   const previous = configObject(expose.https)
+  const configured = Boolean(previous.type || expose.publicUrl)
   const selection = await prompts({
     type: 'select',
     name: 'httpsMode',
     message: cliM('cli_deploy_https_mode'),
     choices: [
       {
-        title: cliM(previous.type ? 'cli_deploy_https_keep' : 'cli_deploy_https_off'),
+        title: cliM(configured ? 'cli_deploy_https_keep' : 'cli_deploy_https_off'),
         value: 'keep',
+      },
+      {
+        title: cliM('cli_deploy_https_external'),
+        value: 'external',
       },
       {
         title: cliM('cli_deploy_https_files'),
         value: 'files',
       },
       { title: 'Let\'s Encrypt (Certbot)', value: 'letsencrypt' },
-      ...(previous.type
+      ...(configured
         ? [
             {
               title: cliM('cli_deploy_https_off'),
@@ -333,22 +338,30 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
     throw new Error(cliM('cli_deploy_cancelled'))
   if (selection.httpsMode === 'keep')
     return
+  const ask = async (name: string, initial?: unknown): Promise<string> => {
+    const answer = await prompts({
+      type: 'text',
+      name,
+      message: cliM((`cli_deploy_${name}`) as Parameters<typeof cliM>[0]),
+      initial: initial === undefined
+        ? ''
+        : String(initial),
+      validate: (value: string) => !!value.trim() || cliM('cli_deploy_invalid_value'),
+    })
+    if (answer[name] === undefined)
+      throw new Error(cliM('cli_deploy_cancelled'))
+    return String(answer[name]).trim()
+  }
   let https: Record<string, unknown> | undefined
-  if (selection.httpsMode !== 'off') {
-    const ask = async (name: string, initial?: unknown): Promise<string> => {
-      const answer = await prompts({
-        type: 'text',
-        name,
-        message: cliM((`cli_deploy_${name}`) as Parameters<typeof cliM>[0]),
-        initial: initial === undefined
-          ? ''
-          : String(initial),
-        validate: (value: string) => !!value.trim() || cliM('cli_deploy_invalid_value'),
-      })
-      if (answer[name] === undefined)
-        throw new Error(cliM('cli_deploy_cancelled'))
-      return String(answer[name]).trim()
-    }
+  let hostAddress: string | undefined
+  let hostPort = expose.hostPort
+  let publicUrl: string | undefined
+  if (selection.httpsMode === 'external') {
+    publicUrl = await ask('publicUrl', expose.publicUrl)
+    hostAddress = await ask('hostAddress', expose.hostAddress ?? '127.0.0.1')
+    hostPort = Number(await ask('internalPort', hostPort))
+  }
+  else if (selection.httpsMode !== 'off') {
     https = {
       type: selection.httpsMode,
       domain: await ask('httpsDomain', previous.domain),
@@ -360,6 +373,7 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
       https.privateKeyFile = await ask('httpsPrivateKey', previous.privateKeyFile)
     }
     else {
+      hostPort = 80
       writeCliMessage(cliM('cli_deploy_https_requirements'))
       https.email = await ask('httpsEmail', previous.email)
       const consent = await prompts({
@@ -377,9 +391,9 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
     ...provider,
     expose: {
       ...expose,
-      ...(https?.type === 'letsencrypt'
-        ? { hostPort: 80 }
-        : {}),
+      hostPort,
+      hostAddress,
+      publicUrl,
       https,
     },
   })

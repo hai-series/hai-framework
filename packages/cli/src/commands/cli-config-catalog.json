@@ -3536,6 +3536,14 @@
     "constraint": "整数；>= 1；<= 65535"
   },
   {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HOSTADDRESS",
+    "module": "deploy",
+    "path": "deploy.provider.expose.hostAddress",
+    "description": "外部 HTTPS 网关访问的宿主 IPv4 或 IPv6 地址，与 publicUrl 一起配置",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+  },
+  {
     "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT",
     "module": "deploy",
     "path": "deploy.provider.expose.hostPort",
@@ -3547,7 +3555,7 @@
     "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS",
     "module": "deploy",
     "path": "deploy.provider.expose.https",
-    "description": "可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP",
+    "description": "由 Hai 管理的 HTTPS 入口，files 使用已有证书，letsencrypt 使用官方 Certbot；与 publicUrl 互斥",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
@@ -3614,6 +3622,14 @@
     "description": "应用部署：平台/暴露方式，按所在节点的枚举选择",
     "value": "files",
     "constraint": "字符串；取值：files | letsencrypt"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_PUBLICURL",
+    "module": "deploy",
+    "path": "deploy.provider.expose.publicUrl",
+    "description": "外部网关的公开 HTTPS 地址，仅填写 origin，例如 https://app.example.com",
+    "value": "",
+    "constraint": "字符串；最大字符数 300"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_EXPOSE_TYPE",

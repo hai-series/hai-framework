@@ -1457,7 +1457,14 @@ it.each([
   expect(applyCalls).toBe(1)
 })
 it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
-  await initialize()
+  expect(await deploy.init({
+    provider: {
+      type: 'docker-ssh',
+      ssh: { host: '127.0.0.1', username: 'deploy' },
+      remote: { runtime: 'docker', dockerMode: 'rootless' },
+      expose: { hostAddress: '127.0.0.1', hostPort: 18070, publicUrl: 'https://app.example.test' },
+    },
+  })).toMatchObject({ success: true })
   vi.useFakeTimers()
   vi.mocked(fetch).mockImplementation(async input => new Response('health', {
     status: String(input).endsWith('/_hai/web-health')
@@ -1465,12 +1472,15 @@ it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
       : 200,
   }))
   const pending = deploy.deployApp(root, { environment: 'test' })
-  await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled(), { timeout: 5000 })
+  await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith('https://app.example.test/_hai/web-health', expect.objectContaining({ redirect: 'manual' })), { timeout: 5000 })
   await vi.runAllTimersAsync()
   const result = await pending
   expect(result).toMatchObject({
     success: false,
-    error: { code: HaiDeployError.HEALTH_CHECK_FAILED.code },
+    error: {
+      code: HaiDeployError.HEALTH_CHECK_FAILED.code,
+      message: expect.stringContaining('https://app.example.test'),
+    },
   })
   if (!result.success) {
     expect(deploy.getDeployCommandState(result.error)).toMatchObject({

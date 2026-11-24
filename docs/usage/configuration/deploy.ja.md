@@ -67,6 +67,8 @@ provider:
 | --- | --- | --- |
 | `provider.token`, `provider.ssh` | バックエンドによる | Vercel のトークン、または SSH のホスト・ユーザー・検証・認証設定。 |
 | `provider.remote`, `provider.expose` | バックエンドによる | リモートのリリースディレクトリとコンテナランタイム、ポート対応、HTTPS 設定。 |
+| `provider.remote.dockerMode` | 省略可 | `rootless` は `runtime: docker` と組み合わせ、SSH ユーザーのローカルソケットを使います。省略または `default` で通常のローカルエンジンを使用します。 |
+| `provider.expose.hostAddress`, `provider.expose.publicUrl` | 外部ゲートウェイ使用時に両方を指定 | ホストの具体的な IPv4/IPv6 アドレスと公開 HTTPS オリジンを指定します。アプリのパスは成果物で決まります。Hai 管理の `provider.expose.https` とは排他です。 |
 
 <a id="services"></a>
 
@@ -77,3 +79,28 @@ provider:
 | `services.db`, `services.cache`, `services.storage` | 省略可 | 任意のサービス作成設定。有効にした場合にプロバイダーと認証情報を指定。 |
 
 未翻訳：プロバイダー、HTTPS、SSH、ミドルウェアの全設定。[中国語の該当節](deploy.md#configuration-fields)を参照してください。
+
+<a id="rootless-docker-external-https"></a>
+
+### 既存の HTTPS ゲートウェイの背後に Rootless Docker で配備する
+
+ユーザーは `https://app.example.com/` にアクセスします。同じホストのゲートウェイからは `http://127.0.0.1:18070` に転送します。以下は `hai.json.deploy` の内容です。SSH ユーザーが Rootless Docker ソケットを所有し、`baseDir` に書き込めることを確認します。別ホストのゲートウェイにはファイアウォールで制限したプライベート IP を使います。
+
+```yaml schema=@h-ai/deploy:DeployConfigSchema
+environment: prod
+provider:
+  type: docker-ssh
+  ssh:
+    host: deployment.example.com
+    username: deploy
+  remote:
+    runtime: docker
+    dockerMode: rootless
+    baseDir: /home/deploy/hai-apps
+  expose:
+    hostAddress: 127.0.0.1
+    hostPort: 18070
+    publicUrl: https://app.example.com
+```
+
+ゲートウェイで DNS と TLS を設定し、Host、クライアント IP、プロトコルのヘッダーを上書きします。`trustedEdgeProxies` には rootless のポート転送も含め、配備側から見える実際のゲートウェイのアドレスを設定します。`hai deploy --env prod --plan` で両方のアドレスを確認してから全体を配備します。ドメインやリスナーの変更では全体のバンドルを作成し直し、ログイン、リダイレクト、ヘルスチェックを確認します。
