@@ -361,7 +361,7 @@ templates:
     body: 'Reset: {resetUrl}. Expires: {expiresAt}.'
 ```
 
-标准模板及变量：`otp_email / otp_sms` 使用 `{code}`；`password_reset / password_reset_sms` 使用 `{token}`、`{expiresAt}`、`{resetUrl}`。`passwordReset.mode: phone` 选择短信重置。必须在 `iam.init()` 前配置模板；缺少通道时公开配置隐藏对应入口。
+`otp_email` 和 `otp_sms` 把验证码填入 `{code}`。`password_reset` 和 `password_reset_sms` 使用 `{token}`、`{expiresAt}`、`{resetUrl}`，也用于初始设密邀请。`passwordReset.mode: phone` 选择短信渠道。IAM 发送这几类通知时都传 `ignoreDnd: true`。请在 `iam.init()` 前准备所用模板。缺少发送渠道时，公开配置会隐藏对应入口。[夜间发送示例](reach.md#reach-quiet-hours)
 
 ```ts
 
@@ -756,7 +756,7 @@ async function resetByAdministrator(userId: string, newPassword: string) {
 
 #### 账号、通知与审计的提交边界
 
-先初始化 RelDB，再调用 `iam.init()`。IAM 会创建并校验所需表，结构不符时返回初始化失败。会话必须匹配当前凭据代次，不匹配时需重新登录。默认 Reach 通知使用 `sensitive`、`expiresAt` 和 `idempotencyKey`，不保存凭据正文或延迟重投。自定义回调也须遵守有效期与凭据保护要求。
+先初始化 RelDB，再调用 `iam.init()`。IAM 校验所需表，结构不符时返回初始化失败。会话必须匹配当前凭据代次。IAM 校验验证码和令牌原来的有效期。Reach 按普通即时通知处理，发送历史包含实际收件人、正文和变量。
 
 审计模块已初始化且 capture.enabled 开启时，IAM 自动记录关键账号、鉴别、密码、授权、API Key 和会话事件，包含失败/拒绝与安全原因码。先初始化 audit 再初始化 IAM，关闭时反序。不会记录密码、一次性票据或令牌；成功登录才确认主体，可信服务/CLI 调用应以 audit.withContext 提供操作者和关联信息。外部授权事务的事件随该事务提交或回滚，回滚失败尝试由调用入口在事务结束后记录。审计写失败输出诊断，不把已生效业务改成可盲目重试的失败。
 

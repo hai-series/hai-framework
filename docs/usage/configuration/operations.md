@@ -64,13 +64,13 @@ exportRetentionHours: 12
 
 通道、模板和失败重试字段见 [Reach 配置清单](reach.md#配置清单)。SMTP 需要已获授权的发件地址。仅在实际接收端按幂等键持久去重时设置 `idempotent: true`；重试参数的修改只影响后续新入队消息。
 
-API 回调省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
+API 渠道默认拒绝重定向。设置 `requireHttps: true` 时，渠道只接受 HTTPS 地址，并使用 `redirect: error`。传验证码或设密链接的 HTTP 渠道用这项设置。
 
 API 的整个 `headers` 字典都作为私密配置处理，不靠 `Authorization` 等特定头名猜测秘密。把 API 请求头的密钥放进私有环境文件或部署平台的密钥管理中。`reach.config` 会隐藏这些请求头的值，只适合检查启用的渠道，重新连接仍应从私有配置读取原值。`timeout: 0` 会在计时器下一次执行时取消请求，不表示无限等待；普通通道应设置能完成实际请求的正数预算。
 
-阿里云隔离网关使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。网关需要逐次生成请求头或正文时，服务端在 `reach.init(config, { gatewayHooks: { sms: hook } })` 中传入生成数据的函数，`sms` 对应渠道的 `name`。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。明文查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`；最终送达以运营商回执为准。
+阿里云直连要求已审核的模板编码，可通过 `templateCodes` 按 Reach 模板名配置。阿里云渠道配置 `gateway` 后，会使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。该网关需要逐次生成请求头或正文时，服务端在 `reach.init(config, { gatewayHooks: { sms: hook } })` 中传入生成数据的函数，`sms` 对应渠道的 `name`。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`，最终送达以运营商回执为准。
 
-免打扰的 `start` 和 `end` 使用运行进程的本地时区，不继承 IAM 或 Scheduler 的时区设置。部署时设置进程的 `TZ`，并让同一环境的节点保持一致。`22:00` 到 `08:00` 表示跨午夜，包含起点、不包含终点；起止时间相等表示**没有免打扰时段**。因此只打开 `enabled: true`，仍保留 `00:00` 到 `00:00`，不会拦截通知。必须送达的消息选择 `delay` 并先初始化关系数据库；选择 `discard` 会丢弃消息。
+免打扰的 `start` 和 `end` 使用进程的本地时区。用 `TZ` 让同一环境的节点一致。`22:00` 到 `08:00` 跨午夜，包含起点。起止相等表示没有免打扰时段。普通通知可选择 `delay` 并先初始化关系数据库，或选择 `discard` 拒绝发送。IAM 发内置验证码、密码重置和初始设密邀请时会传 `ignoreDnd: true`。[夜间通知示例](../function/reach.md#reach-quiet-hours)
 
 ```yaml schema=@h-ai/reach:ReachConfigSchema
 providers:
@@ -85,7 +85,7 @@ queue: { maxAttempts: 5, retryDelayMs: 60000, maxRetryDelayMs: 3600000 }
 dnd: { enabled: false, strategy: discard, start: '00:00', end: '00:00' }
 ```
 
-配置好后，用测试收件箱或受控接口接收一条不含敏感内容的消息，同时核对发送结果和接收端记录。状态为 `unknown` 时，先确认接收端是否已收到，再按事实标记 `sent` 或 `discarded`；重排 `dead` 消息时携带当前版本，防止覆盖其他人的操作。敏感消息同时设置 `sensitive`、到期时间 `expiresAt` 和幂等键 `idempotencyKey`。
+配置好后，用测试收件箱或受控接口接收一条测试通知，核对调用结果和接收端记录。`unknown` 先核对渠道，再登记 `sent` 或 `discarded`。重排 `dead` 时原样传回查询所得的 `updatedAt`。[发送记录](../data/reach.md#send-log)
 
 已有邮件服务或手机消息渠道的应用可使用下列配置。输入凭据来自对应私有变量，模板通过 Provider 的 `name` 路由：
 
@@ -105,14 +105,19 @@ providers:
     accessKeySecret: ${ALIYUN_ACCESS_KEY_SECRET}
     signName: example-sign
     endpoint: dysmsapi.aliyuncs.com
+    templateCodes:
+      order-ready-sms: SMS_100000003
 templates:
   - name: order-ready
     provider: email
     subject: 'Order {orderId}'
     body: 'Order {orderId} is ready.'
+  - name: order-ready-sms
+    provider: sms
+    body: 'Order {orderId} is ready.'
 ```
 
-为 `order-ready` 提供测试变量 `orderId: demo-42` 时，渲染正文为 `Order demo-42 is ready.`，再由 `email` 通道发送；SMTP 接受不等于最终送达。短信还需真实获批签名、渠道模板及对应参数。设置 DND delay 后，时段内应先看到持久队列回执，时段结束才尝试发送；discard 则返回阻止结果，不应展示“发送成功”。
+为 `order-ready` 提供测试变量 `orderId: demo-42` 时，`email` 渠道投递 `Order demo-42 is ready.`。使用 `order-ready-sms` 时，先将示例编码换为实际获批、接收 `orderId` 变量的编码。渠道受理只是投递过程中的一个状态。启用 `delay` 后，免打扰时段内普通通知先返回持久队列回执，时段结束后才尝试发送。`discard` 返回 `DND_BLOCKED`。
 
 ## Audit采集、保留保护、归档与告警
 

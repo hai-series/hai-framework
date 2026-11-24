@@ -2,86 +2,49 @@
 
 <!-- translation: partial -->
 
+Use Reach on the server to send a sign-in code or tell the warehouse about a new order. A sign-in code typically needs an immediate attempt, while an order notice can wait until morning. The examples show how to send and check both.
+
 [Chinese source](reach.md) · [Configuration](../configuration/reach.en.md) · [Data structures](../data/reach.en.md)
+
+<a id="quick-start"></a>
 
 ## Quick start
 
-Initialize Reach and the configured backend. Send with a provider and a trusted recipient. For queued delivery inspect the recorded state before deciding to retry.
+Install Reach first. Install `nodemailer` as well if you send mail through SMTP.
 
 ```bash
 pnpm add @h-ai/reach
 ```
 
+### Try one send locally
+
 ```ts
-import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
 
-// Create the host lifecycle with RelDB before its dependent Reach step. The returned runtime exposes start and close.
-const runtime = core.module.createRuntime([
-  {
-    name: 'reldb',
-    // Start in-memory SQLite for templates and delivery state. Success has no data; a database failure prevents Reach from starting.
-    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
-    // Close the database with no arguments after Reach. Success has undefined data.
-    close: () => reldb.close()
-  },
-  {
-    name: 'reach',
-    // Initialize the local console provider with the welcome template. Success enables sending; invalid config or template storage failure stops startup.
-    start: () => reach.init({
-      providers: [
-        { name: 'local', type: 'console' }
-      ],
-      templates: [
-        {
-          name: 'welcome',
-          provider: 'local',
-          subject: 'Welcome',
-          body: 'Hello {userName}'
-        }
-      ],
-    }),
-    // Close Reach with no arguments so subsequent sends are unavailable. The runtime reports any cleanup failure.
-    close: () => reach.close()
-  },
-])
-// Start the registered steps in dependency order. Success has undefined data; failure triggers cleanup of started steps and retains the error.
-const initialized = await runtime.start()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
+// Register a test provider named local. Handle initialization errors before calling send.
+const started = await reach.init({
+  providers: [{ name: 'local', type: 'console' }],
+})
+if (!started.success)
+  throw new Error(started.error.message)
 
-let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  // Render Hello Alice for user@example.com using welcome and dispatch to the local console provider. Immediate success has deferred false or omitted; render or send errors fail.
-  result = await reach.send({
-    to: 'user@example.com',
-    template: 'welcome',
-    vars: { userName: 'Alice' }
+  // Send a test message. A success returns a message ID starting with console-. On failure, read error.
+  const result = await reach.send({
+    provider: 'local',
+    to: 'demo@example.invalid',
+    body: 'Hello',
   })
+  if (!result.success)
+    throw new Error(result.error.message)
 }
-catch (error) {
-  // Close Reach and SQLite in reverse order. Success has no data; report cleanup errors separately.
-  const closed = await runtime.close()
-  throw new AggregateError(closed.success
-    ? [error]
-    : [error, closed.error], 'Reach operation failed')
+finally {
+  // Close the test provider. This returns Promise<void>.
+  await reach.close()
 }
-// Close Reach and SQLite in reverse order. Success has no data; report cleanup errors separately.
-const closed = await runtime.close()
-if (!closed.success) {
-  throw new AggregateError(result.success
-    ? [closed.error]
-    : [result.error, closed.error], 'Reach cleanup failed')
-}
-if (!result.success)
-  throw new Error(result.error.message)
 ```
 
-```ts
-const ready = reach.isInitialized // 无需参数，至少一个通知 Provider 已发布时为 true。
-const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭后为 null。
-```
+`local` records the send in development and tests. A `messageId` starting with `console-` confirms the local call worked. Use `reach.isInitialized` to check whether the process has any providers and `reach.config` to read the active settings with credentials and header values masked. See the [local configuration example](../configuration/reach.en.md#reach-example-local) for the file version.
 
 <a id="api-list"></a>
 
@@ -89,27 +52,25 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 ## Features
 
-Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
-
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
+Run the remaining examples on the server. Pass the [Reach configuration](../configuration/reach.en.md#configuration-fields) to `reach.init()` and check the result. Start [RelDB](../configuration/reldb.en.md) first when you need send history, templates or the delayed queue.
 
 <a id="sending"></a>
 
-### Start providers and send: `reach`
-
-Prepare mail or SMS providers, then send using a template and recipient. Durable templates and queues require RelDB.
+### Send verification codes and business notifications (`reach`)
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `reach.init(config, options?)` | Prepare providers and enabled queue dependencies | `config: ReachConfigInput`, `options?: ReachInitOptions` · [Initialization options](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
-| `reach.close()` | Stop the service and release its resources | None | `Promise<void>` | `await reach.close()` |
-| `reach.send(message)` | Send a message or enqueue it durably | Required `message: ReachMessage` supplies recipient and content. See [message fields](#reach-message-fields). | `SendResult` | `await reach.send(message)` |
+| `reach.close()` | Stop claiming new messages, wait for active queue deliveries to record their outcomes, and release the providers | None | `Promise<void>` | `await reach.close()` |
+| `reach.isInitialized` | Check whether providers are available on this node | None | `boolean` | `reach.isInitialized` |
+| `reach.config` | Read the current redacted configuration | None | `ReachConfig \| null` | `reach.config` |
+| `reach.send(message)` | Send a message or enqueue it durably | Required `message: ReachMessage` supplies recipient and content. See [message fields](#reach-message-fields). | `Promise<HaiResult<SendResult>>` · [Returned IDs](#reach-send-result) | `await reach.send(message)` |
 
 <a id="reach-message-fields"></a>
 
-**ReachMessage**
+##### Message fields (`ReachMessage`)
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
@@ -119,47 +80,178 @@ Prepare mail or SMS providers, then send using a template and recipient. Durable
 | `vars` | `Record<string, string>` | Optional | Fill template variables by key. |
 | `subject / body` | `string` | Optional | Direct-send subject and body. The subject is used by channels such as email. |
 | `extra` | `Record<string, unknown>` | Optional | Provide provider-specific values, such as an SMS template code or signature. |
-| `idempotencyKey` | `string` | Optional | Stable receiver key for direct API sends. Queued delivery uses its queueId. |
-| `sensitive` | `boolean` | `false` | Set true for credentials. They are delivered in memory without deferred or retry queuing. |
-| `expiresAt` | `number` | Required with sensitive=true | Business credential deadline in Unix milliseconds. |
-| `deferPolicy` | `'queue' \| 'reject'` | `queue` | During quiet hours, queue follows the existing delay configuration. reject returns DND_BLOCKED so the host can defer it. |
+| `ignoreDnd` | `boolean` | `false` | Set to `true` to try sending this message immediately during quiet hours. |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | Chooses who handles an ordinary notification during quiet hours. `queue` lets Reach follow `dnd.strategy`. `reject` returns `DND_BLOCKED` so the application can reschedule its own job. |
 
-#### Scenario: Start providers and send
+<a id="reach-idempotency-key"></a>
 
-reach.send may contact a provider or return a queue receipt for an ordinary notification. Sensitive credential messages use a separate receipt ledger without queuing their payload.
+##### HTTP request IDs
 
-![Notifications: direct send, queue and unknown outcomes](../images/function-reach-delivery.en.svg)
+Reach generates a new request ID for each direct HTTP send. If a message is queued, the first delivery and its retries use the entry's `queueId`. Reach places the ID in the `Idempotency-Key` header and the JSON `idempotencyKey` field.
 
-Ordinary messages may be durably deferred unless the caller selects reject. Sensitive messages are not automatically retried after quiet hours, expiry or unknown outcomes. Provider acceptance is not final delivery or a read receipt; reconcile unknown results before recovery.
+An immediate send makes one attempt and returns any failure or timeout to the application. A queue entry saves the message, request ID and attempt count so a worker can continue under the configured retry policy. `idempotent: true` allows retries of queued requests with an uncertain outcome.
 
-```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Render Ada into the stored demo-welcome template for demo@example.com. A deferred receipt means queued; return the failed result on a template or provider error.
-const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
-if (!sentResult.success)
-  return sentResult
-const sent = sentResult.data
-// sent: SendResult for this provider attempt, not proof that a person read the message
-```
+Choose the field according to which duplicate the receiver needs to detect.
 
-Use a configured template and test provider. Sending contacts an external service. init has no business data and close returns Promise<void>; queue acceptance is not delivery.
+| What was repeated | Field the receiver reads | What the warehouse does |
+| --- | --- | --- |
+| Reach retries the same queue entry | HTTP `Idempotency-Key` header or its matching JSON `idempotencyKey` field | Return the saved result if that request ID was already processed. |
+| The application submits the same order event twice | JSON `extra.event` and `extra.orderId` | Reuse the picking job if both events carry `order.received` and `order-42`. The two submissions have separate request IDs. |
 
-Delivery, template and queue methods return HaiResult; the table shows successful data. close returns no data.
+<a id="reach-send-result"></a>
 
-Queue acceptance does not prove receipt. Only reconcile an unknown delivery after obtaining the provider’s actual outcome.
+##### IDs returned by `send` (`SendResult`)
 
-[Detailed parameters and workflows](reach.md#sending)
+Check `result.success` before reading the result in `result.data`.
+
+| ID | When it is returned | How to use it |
+| --- | --- | --- |
+| `messageId` | Returned when a channel accepts an immediate send and supplies an ID, such as Alibaba Cloud `BizId`, SMTP `messageId`, or `messageId` in an HTTP response. The test channel returns a `console-` ID. | Use it to check with the channel. An empty HTTP `204` also means acceptance. |
+| `queueId` | Returned with `deferred: true` after Reach saves a queued message. | Use `reach.queue.get(queueId)` to look up that entry's send status. |
+
+<a id="reach-providers"></a>
+
+##### Built-in providers
+
+Reach has four ways to send a notification. In `providers[]`, `type` selects how to send it and `name` identifies that provider in your application. Pass that `name` as `provider` when calling `reach.send()`.
+
+| `type` | Example `name` | What it does |
+| --- | --- | --- |
+| `console` | `local` | Records the send in development or tests so you can check the call. |
+| `smtp` | `email` | Sends email, such as sign-in codes, through an SMTP server. Configure the server, sender and credentials. |
+| `aliyun-sms` | `sms` | Sends texts using an Alibaba Cloud SMS signature and template. Connect directly or forward through your gateway. |
+| `api` | `warehouse-webhook` | Sends JSON to a configured URL. In this example, `warehouse-webhook` names the provider that sends new orders to the warehouse. |
 
 <a id="reach-init-options"></a>
 
-#### Initialization options
+##### Initialization options
 
 Pass the required `config: ReachConfigInput` from the [notification configuration](../configuration/reach.en.md). Omitting `options: ReachInitOptions` uses the gateway headers and body from the configuration.
 
 `gatewayHooks` maps provider names to callbacks. Each name must identify an `aliyun-sms` provider with a configured `gateway`. The callback receives `method: POST`, the gateway `url`, the current request `body: string | undefined`, and the deadline signal `signal: AbortSignal`. It can return `{ headers?, body? }` directly or as a promise, setting only fields to override. Return `undefined` to use the static configuration. Run the callback on the server and keep signed URLs out of logs.
 
-```ts
+<a id="reach-sms-code"></a>
 
+#### Scenario: Text a verification code
+
+When the user requests a code, the application or IAM issues it and saves its verification deadline. Load the [SMS verification configuration](../configuration/reach.en.md#reach-example-sms-code) and send with `otp_sms`. The template routes to `sms`. The channel selects the Alibaba Cloud template from `templateCodes.otp_sms` and passes `vars.code` for substitution.
+
+```ts
+import { reach } from '@h-ai/reach'
+
+function sendSmsCode(phone: string, code: string) {
+  // Send the issued code. Check success before reading the optional messageId.
+  return reach.send({
+    to: phone,
+    template: 'otp_sms',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+If Alibaba Cloud accepts the message with `BizId` of `aliyun-42`, the call returns the result below. With a database connected, Reach attempts to save the phone number, rendered body and variables in the send history. [Example SMS send record](../data/reach.en.md#sms-code-record)
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "messageId": "aliyun-42"
+  }
+}
+```
+
+<a id="reach-email-code"></a>
+
+#### Scenario: Email a verification code
+
+When the user chooses email, load the [email verification configuration](../configuration/reach.en.md#reach-example-email-code) and use `otp_email`. Reach selects the `email` channel and replaces `{code}` in the HTML with `vars.code`.
+
+```ts
+function sendEmailCode(email: string, code: string) {
+  // Try a direct SMTP send. Read messageId on success or error on failure.
+  return reach.send({
+    to: email,
+    template: 'otp_email',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+If the application issues a code at 14:00 and saves 14:05 as its deadline, it checks submissions against that saved time. A code submitted at 14:06 has expired. The user can ask for a fresh code under the application’s resend rules.
+
+<a id="reach-api-notification"></a>
+
+#### Scenario: Notify a warehouse over HTTP
+
+After creating `order-42`, use the `order-received` template in the [warehouse settings](../configuration/reach.en.md#reach-example-warehouse). Reach replaces `{orderId}` with `vars.orderId`. `extra` passes the event type and order ID to the warehouse.
+
+The second argument, `deferPolicy`, applies during quiet hours. The default `queue` leaves the decision to Reach. If the order service already manages its own job, call `sendOrderNotice('order-42', 'reject')`. On `DND_BLOCKED`, keep that job and process it after quiet hours.
+
+```ts
+function sendOrderNotice(orderId: string, deferPolicy: 'queue' | 'reject' = 'queue') {
+  // Notify the warehouse about a new order. Read messageId on immediate acceptance, queueId when queued, or error on failure.
+  return reach.send({
+    to: 'warehouse',
+    template: 'order-received',
+    vars: { orderId },
+    extra: { event: 'order.received', orderId },
+    deferPolicy,
+  })
+}
+```
+
+For a direct daytime send, Reach generates a request ID for the warehouse and puts it in `Idempotency-Key` and the JSON `idempotencyKey`. After a timeout, the order service can check with the warehouse using the order ID. See the [nighttime warehouse configuration](../configuration/reach.en.md#reach-example-warehouse) for the ID used by queue retries.
+
+After acceptance, the warehouse can respond with `200` and `{"messageId":"warehouse-42"}`. The application reads that number from `result.data.messageId`. An empty `204` also signals acceptance and leaves the ID unset. A response body must be a JSON object no larger than 64 KiB. If included, `messageId` is a string up to 255 characters.
+
+For verification codes or reset links sent over an HTTP API, set `requireHttps: true` on that channel to use HTTPS and reject redirects. See the [API provider configuration](../configuration/reach.en.md#http-api).
+
+<a id="reach-quiet-hours"></a>
+
+#### Scenario: Handle quiet hours
+
+Quiet hours (DND) are when Reach holds or skips ordinary notifications, using the server process’s local time. Suppose they run from `22:00` to `08:00` and a send comes in at `23:10`.
+
+| Message at 23:10 | What Reach does | What the application does next |
+| --- | --- | --- |
+| A code, reset link or setup invitation needed now (`ignoreDnd: true`) | Tries to send immediately. Returns a `messageId` if the channel supplies one. | Ask the user to verify or set their password before the application deadline. |
+| Order notice that can wait (`strategy: delay`, `deferPolicy: queue`) | Returns `deferred: true` and `queueId` after saving the message. | Save the number. From 08:00, Reach checks the queue and tries to send it. |
+| Reminder that can be skipped (`strategy: discard`) | Returns `DND_BLOCKED` and skips this send. | End this reminder according to the application's rules. |
+| Application owns the background job (`deferPolicy: reject`) | Returns `DND_BLOCKED` and leaves job scheduling to the application. | Keep the job and process it after quiet hours. |
+
+IAM passes `ignoreDnd: true` when it sends built-in verification codes, password reset notifications or initial password setup invitations through Reach. With a custom callback, the application chooses when to send.
+
+Use the [queued order notification settings](../configuration/reach.en.md#reach-example-warehouse) and call the previous function at 23:10.
+
+```ts
+// Submit an order notice during quiet hours. queueId is returned only after the message is stored.
+const result = await sendOrderNotice('order-42')
+if (!result.success)
+  throw new Error(result.error.message)
+
+if (result.data.deferred) {
+  // Look up the returned queue ID. A new entry is usually pending. A missing record returns null.
+  const lookup = await reach.queue.get(result.data.queueId)
+  if (!lookup.success)
+    throw new Error(lookup.error.message)
+  const status = lookup.data?.status
+}
+```
+
+A queued notice is saved and the warehouse request is still pending. For this delivery and its retries, Reach uses the entry’s `queueId` as the request ID. Another submission may create a new entry. Save the first queue ID in the order service, or use the event type and order ID to keep one picking job per order at the warehouse.
+
+![Delivery flow for ordinary notices, verification codes and queued requests](../images/function-reach-delivery.en.svg)
+
+`order-42` follows the queue path. Reach returns a `queueId` at 23:10 and tries to contact the warehouse from 08:00 onward. Passing `deferPolicy: 'reject'` returns `DND_BLOCKED` immediately.
+
+#### Scenario: Add a header to SMS gateway requests
+
+When the gateway needs `X-Client` to identify the calling service, register a function at startup that adds the header to each SMS request. [SMS gateway configuration](../configuration/reach.en.md#reach-example-sms-gateway)
+
+```ts
 import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
@@ -185,12 +277,12 @@ Templates select a provider, body and subject. Render previews variable substitu
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve(name)` | Resolve an effective template | `name: string` Unique name used to look up the template | `ReachTemplate` | `await reach.template.resolve(name)` |
-| `reach.template.save(template)` | Save a template | `template: ReachTemplate` Requires name, provider, and body, with optional email subject. Use {var} in the body and subject | `void` | `await reach.template.save(template)` |
-| `reach.template.saveBatch(templates)` | Save multiple templates | `templates: ReachTemplate[]` Templates to save in a batch, with the same fields as save | `void` | `await reach.template.saveBatch(templates)` |
-| `reach.template.remove(name)` | Remove a custom template | `name: string` Unique name used to look up the template | `void` | `await reach.template.remove(name)` |
-| `reach.template.list()` | List effective templates | None | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render(name, vars)` | Render template variables | `name: string` Unique name used to look up the template. `vars: Record<string, string>` Map placeholder names to replacement values | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.template.resolve(name)` | Resolve an effective template | `name: string` Unique name used to look up the template | `Promise<HaiResult<ReachTemplate>>` | `await reach.template.resolve(name)` |
+| `reach.template.save(template)` | Save a template | `template: ReachTemplate` Requires name, provider, and body, with optional email subject. Use {var} in the body and subject | `Promise<HaiResult<void>>` | `await reach.template.save(template)` |
+| `reach.template.saveBatch(templates)` | Save multiple templates | `templates: ReachTemplate[]` Templates to save in a batch, with the same fields as save | `Promise<HaiResult<void>>` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove(name)` | Remove a custom template | `name: string` Unique name used to look up the template | `Promise<HaiResult<void>>` | `await reach.template.remove(name)` |
+| `reach.template.list()` | List effective templates | None | `Promise<HaiResult<ReachTemplate[]>>` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | Render template variables | `name: string` Unique name used to look up the template. `vars: Record<string, string>` Map placeholder names to replacement values | `Promise<HaiResult<RenderedTemplate>>` | `await reach.template.render('demo-welcome', { name: 'Alice' })` |
 
 #### Scenario: Maintain and preview templates
 
@@ -225,7 +317,7 @@ if (!removeResult.success)
   return removeResult
 ```
 
-Configure a test provider named mail first. The name variable produces Hello Ada. Removing a template does not recall sent messages.
+Use the `local` provider from Quick start. The sample renders Hello Ada with `name: 'Ada'`. `render()` performs text substitution, and SMTP sends the body as HTML. Escape values from forms or other untrusted sources for their HTML context.
 
 [Detailed parameters and workflows](reach.md#templates)
 
@@ -239,12 +331,27 @@ Save queue IDs when sends are queued. Read their status or list dead letters for
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get(queueId)` | Read a delivery by ID | `queueId: string` UUID from the send receipt or queue record | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.get(queueId)` | Read a delivery by ID | `queueId: string` returned when the message was queued | `Promise<HaiResult<ReachQueueEntry \| null>>` | `await reach.queue.get(queueId)` |
 | `reach.queue.list(options)` | Filter and paginate deliveries | `options: ReachQueueListOptions` · [query arguments](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'unknown' })` |
 
 <a id="reach-queue-options"></a>
 
+##### Query options
+
 Required `ReachQueueListOptions`: `status` is required and accepts `dead` or `unknown`. `limit` is 1–100 (default 50). `offset` skips 0–1,000,000 records (default 0).
+
+##### Look up a send by its reference number
+
+Use `reach.queue.get(queueId)` to read the queued entry. For immediate sends, use the provider’s `messageId` to check with the channel. See an [API send history record](../data/reach.en.md#direct-api-record).
+
+| Status | What happened |
+| --- | --- |
+| `pending` | The notice is stored and waiting for quiet hours to end or another attempt. |
+| `processing` / `sending` | The worker has claimed the job or started contacting the provider. |
+| `sent` | The provider accepted it, or an operator recorded confirmed delivery. |
+| `dead` | Processing stopped, for example after a definite failure or the last allowed attempt. Find the cause before [deciding whether to requeue](#recovery). |
+| `unknown` | The provider may have received the request. Check its records before [recording the outcome](#recovery). |
+| `discarded` | An operator closed the entry after checking the outcome. |
 
 #### Scenario: Inspect queued and failed sends
 
@@ -278,16 +385,16 @@ A provider may have sent a message even when its receipt was lost. Check provide
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead(queueId, options)` | Requeue a reconciled dead letter | `queueId: string` comes from the queue entry. Required `options.expectedUpdatedAt: number` is the `updatedAt` from the most recent read. | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, retryDecision)` |
-| `reach.queue.resolveUnknown(queueId, resolution)` | Reconcile an unknown delivery | `queueId: string` UUID from the send receipt or queue record. `resolution: ReachUnknownResolution` Required verified decision. See [resolution fields](#reach-resolution-fields) | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+| `reach.queue.requeueDead(queueId, options)` | Requeue a message whose retries stopped | `queueId: string` comes from the queue entry. Required `options.expectedUpdatedAt: number` is the `updatedAt` returned by the lookup. | `Promise<HaiResult<void>>` · `SEND_FAILED` if the entry has changed | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | Reconcile an unknown delivery | `queueId: string` UUID from the send receipt or queue record. `resolution: ReachUnknownResolution` Required verified decision. See [resolution fields](#reach-resolution-fields) | `Promise<HaiResult<void>>` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
 
 <a id="reach-resolution-fields"></a>
 
-**Recovery and resolution fields**
+##### Recovery and resolution fields
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
-| `options.expectedUpdatedAt` | `number` | Required | When requeuing a dead item, use its latest read updatedAt. Reread after a concurrent write. |
+| `options.expectedUpdatedAt` | `number` | Required | Pass the exact `updatedAt` returned by `reach.queue.get(queueId)`. Reach requeues the entry when it is still `dead` and has that timestamp. See [two operators handling one notice](#detailed-workflow). |
 | `resolution.status` | `'sent' \| 'discarded'` | Required | Record sent or discarded after external reconciliation. |
 | `resolution.messageId` | `string` | Optional | On confirmed delivery, record up to 255 characters of provider receipt ID. |
 
@@ -317,3 +424,30 @@ async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownRes
   return getResult.data // status is sent or discarded
 }
 ```
+
+<a id="detailed-workflow"></a>
+
+#### Scenario: Requeue a warehouse notice after fixing the cause
+
+The warehouse notice has used all of its attempts and is now `dead`. After fixing the warehouse URL, two operators open the same record. `reach.queue.get(queueId)` returns `status: 'dead'` and `updatedAt: 1795478460000`. Both operators pass the value they saw, `1795478460000`, as `expectedUpdatedAt`.
+
+The first request succeeds, changes the entry to `pending` and updates its timestamp. The second request still uses the old value and gets `SEND_FAILED`. Refresh the view to show the current status. If another attempt fails and the entry returns to `dead`, it has a new timestamp. Check the new failure before deciding to requeue it.
+
+Copy the `updatedAt` in Unix milliseconds from the lookup. `Date.now()` gives a fresh timestamp that can fail the update check.
+
+```ts
+async function restoreDead(queueId: string) {
+  // Look up the status and updatedAt from the notice's queue ID. A missing record has null data.
+  const state = await reach.queue.get(queueId)
+  if (!state.success)
+    throw new Error(state.error.message)
+  if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+    // Pass back the timestamp from the lookup. Success moves the entry to pending. A changed entry returns an error.
+    const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+    if (!restored.success)
+      throw new Error(restored.error.message)
+  }
+}
+```
+
+Requeuing resets the attempt count and preserves the `queueId` and the retry schedule. If an earlier HTTP request may still arrive, first confirm that the receiver can deduplicate using the original ID. Use the manual reconciliation flow for `unknown` entries.

@@ -619,7 +619,7 @@ Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@
 
 服务策略暂不可用时，客户端按有界本地预算继续采集并标记 server-policy-unavailable，允许本地导出；在线提交前重新获取有效策略，失败不受理。addFiles(files, removedAttachmentIds?) 在同一原子批次移除已删除的旧附件，容量显示与实际合并一致。
 
-console/disabled 无 Reach npm 依赖；选 reach 模式需显式安装 @h-ai/reach（optional peer）并由应用启动代码初始化。凭据通知只返回生成的 receiptId，不保存或回传可能携带载荷的 Provider messageId。
+`console` 和 `disabled` 模式可直接使用。选 `reach` 模式时，应用安装并初始化 `@h-ai/reach`，作为可选依赖注入。
 
 #### 场景：提交前遮挡选中的图片区域
 

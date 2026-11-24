@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+用 `reach.send()` 发送验证码时传 `ignoreDnd: true` 可立即尝试发送。渠道受理后，接入数据库的应用可在发送历史中查到写入成功的记录。[发送示例](../../docs/usage/function/reach.md#reach-sms-code) · [发送记录](../../docs/usage/data/reach.md#sms-code-record)
+
 [查 API 清单](../../docs/usage/function/reach.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构

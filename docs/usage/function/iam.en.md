@@ -169,7 +169,7 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 
 ##### Parameters and result semantics: Sign-in and registration
 
-Login requires valid input, challenge, account state and session policy. This follows password login; other strategies validate their own credentials.
+IAM passes `ignoreDnd: true` when it sends built-in verification codes, password resets or initial password setup invitations through Reach. IAM validates credentials against their original deadlines. Applications using custom callbacks choose when to send. [Quiet-hours examples](reach.en.md#reach-quiet-hours)
 
 Choose the method that matches the configured credentials. `context` is optional and carries trusted request metadata. Success returns the user, tokens, roles and permissions.
 

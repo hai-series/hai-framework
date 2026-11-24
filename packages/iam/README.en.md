@@ -20,6 +20,8 @@ See the [configuration reference](../../docs/usage/configuration/iam.en.md) for 
 
 ## Features
 
+IAM sends built-in verification codes, password reset notices and initial password setup invitations through Reach during quiet hours. Applications can supply their own send callbacks. [Quiet-hours examples](../../docs/usage/function/reach.en.md#reach-quiet-hours)
+
 Passwords and API keys share the Crypto worker pool for SM3. Stored hashes are still valid. A full queue returns `SECURITY_BUSY` (HTTP 429) without recording a failed sign-in attempt.
 
 [Browse the API list](../../docs/usage/function/iam.en.md#api-reference) for entry points, inputs, results and examples.

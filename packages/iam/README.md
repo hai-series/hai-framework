@@ -20,6 +20,8 @@
 
 ## 功能说明
 
+IAM 通过 Reach 发内置验证码、密码重置和初始设密邀请时会跳过免打扰。应用可用自定义回调接管发送。[夜间通知](../../docs/usage/function/reach.md#reach-quiet-hours)
+
 密码与 API Key 的 SM3 计算共用 Crypto 的后台线程池，已保存的哈希可继续使用。等待队列满时返回 `SECURITY_BUSY`（HTTP 429），登录不累计密码错误次数。
 
 [查 API 清单](../../docs/usage/function/iam.md#api-reference)，包含调用入口、输入、返回值和用法。

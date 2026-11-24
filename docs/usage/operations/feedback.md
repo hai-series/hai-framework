@@ -64,7 +64,7 @@
 
 按[通知配置](../configuration/operations.md#reach通道免打扰与失败队列)准备测试收件箱/受控端点，发送无敏感材料，核对Provider回执和接收端记录。console只说明本地输出，不说明真实送达。
 
-免打扰delay需RelDB持久入队成功才能称deferred。非幂等请求unknown先核对接收端，不盲目requeue；真正支持原子持久去重才声明`idempotent`。敏感消息用sensitive/`expiresAt`/`idempotencyKey`并限制保留。
+选择免打扰 `delay` 时，只有数据库写入成功才会返回 `deferred: true`。遇到 `unknown` 先核对接收端。接收端能持久保存请求编号并去重时，才设置 `idempotent: true`。
 
 ## Audit：保留、隐私、归档与告警
 

@@ -2,88 +2,49 @@
 
 <!-- translation: partial -->
 
+Reach はサーバーからログイン確認コードを送ったり、新しい注文を倉庫へ通知したりするときに使います。確認コードはすぐに送信を試み、注文通知は翌朝まで待てる場合があります。以下の例で送信と確認の手順を示します。
+
 [原文（中国語）](reach.md) · [設定](../configuration/reach.ja.md) · [データ構造](../data/reach.ja.md)
 
 <a id="quick-start"></a>
 
 ## クイックスタート
 
-Reach と設定済みバックエンドを初期化します。プロバイダーと信頼できる宛先を指定して送信します。キュー配送を再試行するかは記録された状態から判断します。
+まず Reach をインストールします。SMTP でメールを送る場合は `nodemailer` もインストールします。
 
 ```bash
 pnpm add @h-ai/reach
 ```
 
+### ローカルで送信を試す
+
 ```ts
-import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
 
-// RelDB を先に、その依存先として Reach を並べたランタイムを作る。戻り値から start と close を呼べる。
-const runtime = core.module.createRuntime([
-  {
-    name: 'reldb',
-    // テンプレートと通知状態の保存にインメモリ SQLite を起動する。成功時にデータはなく、DB の失敗で Reach の起動を止める。
-    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
-    // Reach の終了後、引数なしで DB 接続を解放する。成功時の data は undefined。
-    close: () => reldb.close()
-  },
-  {
-    name: 'reach',
-    // local コンソールチャネルと welcome テンプレートを用意する。成功後に送信可能になり、設定やテンプレートの保存失敗で起動を止める。
-    start: () => reach.init({
-      providers: [
-        { name: 'local', type: 'console' }
-      ],
-      templates: [
-        {
-          name: 'welcome',
-          provider: 'local',
-          subject: 'Welcome',
-          body: 'Hello {userName}'
-        }
-      ],
-    }),
-    // 引数なしで Reach を終了し、以降の送信を停止する。解放失敗はランタイムから報告される。
-    close: () => reach.close()
-  },
-])
-// 登録済みの手順を依存順に起動する。成功時の data は undefined、失敗時は起動済みの手順を解放してエラーを保持する。
-const initialized = await runtime.start()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
+// local という名前のテストチャネルを登録します。初期化の失敗は送信前に処理します。
+const started = await reach.init({
+  providers: [{ name: 'local', type: 'console' }],
+})
+if (!started.success)
+  throw new Error(started.error.message)
 
-let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  // welcome に Alice を渡し user@example.com 向けに Hello Alice を組み立て、local コンソールに渡す。即時成功の deferred は false または省略、描画・送信失敗はエラー。
-  result = await reach.send({
-    to: 'user@example.com',
-    template: 'welcome',
-    vars: { userName: 'Alice' }
+  // テスト通知を送ります。成功時は console- で始まるメッセージ ID、失敗時は error が返ります。
+  const result = await reach.send({
+    provider: 'local',
+    to: 'demo@example.invalid',
+    body: 'Hello',
   })
+  if (!result.success)
+    throw new Error(result.error.message)
 }
-catch (error) {
-  // Reach と SQLite を逆順に解放する。成功時にデータはなく、後片付けの失敗は別に報告する。
-  const closed = await runtime.close()
-  throw new AggregateError(closed.success
-    ? [error]
-    : [error, closed.error], 'Reach operation failed')
+finally {
+  // テストチャネルを閉じます。戻り値は Promise<void> です。
+  await reach.close()
 }
-// Reach と SQLite を逆順に解放する。成功時にデータはなく、後片付けの失敗は別に報告する。
-const closed = await runtime.close()
-if (!closed.success) {
-  throw new AggregateError(result.success
-    ? [closed.error]
-    : [result.error, closed.error], 'Reach cleanup failed')
-}
-if (!result.success)
-  throw new Error(result.error.message)
 ```
 
-```ts
-const ready = reach.isInitialized // 无需参数，至少一个通知 Provider 已发布时为 true。
-const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭后为 null。
-```
+`local` は開発とテストで送信操作を記録します。`console-` で始まる `messageId` が返れば、ローカルの呼び出しは成功しています。`reach.isInitialized` で利用可能なチャネルを確認できます。`reach.config` は認証情報やヘッダー値を伏せた現在の設定を返します。ファイルで指定する方法は [ローカル送信の設定](../configuration/reach.ja.md#reach-example-local)を参照してください。
 
 <a id="api-一覧"></a>
 
@@ -91,27 +52,25 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 
 ## 機能
 
-各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
-
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
+以降の例はサーバー側で実行します。起動時に [Reach の設定](../configuration/reach.ja.md#configuration-fields)を `reach.init()` に渡し、結果を確認します。送信履歴、テンプレート、遅延キューを使う場合は先に [RelDB](../configuration/reldb.ja.md) を起動します。
 
 <a id="sending"></a>
 
-### 通知経路の起動と送信：`reach`
-
-メール・SMS 経路を準備し、テンプレートと宛先を指定します。永続テンプレートとキューには RelDB が必要です。
+### 確認コードや業務通知を送る (`reach`)
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `reach.init(config, options?)` | プロバイダーと、キューを使う場合の依存先を準備 | `config: ReachConfigInput`, `options?: ReachInitOptions` · [初期化オプション](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
-| `reach.close()` | サービスを停止してリソースを解放 | なし | `Promise<void>` | `await reach.close()` |
-| `reach.send(message)` | 通知を送信・永続キューに追加 | 宛先と内容を含む `message: ReachMessage` が必須。[メッセージ項目](#reach-message-fields)を参照。 | `SendResult` | `await reach.send(message)` |
+| `reach.close()` | 新規メッセージの取得を停止し、実行中のキュー配信の結果が保存されてからプロバイダーを解放 | なし | `Promise<void>` | `await reach.close()` |
+| `reach.isInitialized` | このノードで送信経路を利用できるか確認 | なし | `boolean` | `reach.isInitialized` |
+| `reach.config` | 機密項目を伏せた現在の設定を取得 | なし | `ReachConfig \| null` | `reach.config` |
+| `reach.send(message)` | 通知を送信・永続キューに追加 | 宛先と内容を含む `message: ReachMessage` が必須。[メッセージ項目](#reach-message-fields)を参照。 | `Promise<HaiResult<SendResult>>` · [返される番号](#reach-send-result) | `await reach.send(message)` |
 
 <a id="reach-message-fields"></a>
 
-**ReachMessage**
+##### メッセージ項目 (`ReachMessage`)
 
 | フィールド | 型 | 必須と既定値 | 用途と適用条件 |
 | --- | --- | --- | --- |
@@ -121,49 +80,178 @@ const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭�
 | `vars` | `Record<string, string>` | 任意 | キーに対応するテンプレート変数を埋めます。 |
 | `subject / body` | `string` | 任意 | 直接送信の件名と本文。件名はメールなどで使用。 |
 | `extra` | `Record<string, unknown>` | 任意 | SMS テンプレートコードや署名など事業者固有の値を指定。 |
-| `idempotencyKey` | `string` | 任意 | 直接 API 送信の受信側に安定したキーを渡します。キューでは queueId を使用。 |
-| `sensitive` | `boolean` | `false` | 認証情報を送る場合は true。遅延や再送キューを使わずメモリ内で送信します。 |
-| `expiresAt` | `number` | sensitive=true で必須 | 業務認証情報の期限を Unix ミリ秒で指定。 |
-| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 通常の通知が通知停止時間に当たると、queue は既存の遅延設定を使用。reject は DND_BLOCKED を返し、ホストで延期できます。 |
+| `ignoreDnd` | `boolean` | `false` | `true` にすると、通知を控える時間帯でもこの通知の即時送信を試みます。 |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 通知を控える時間帯の通常通知を誰が処理するか選びます。`queue` は Reach の `dnd.strategy` に従います。`reject` は `DND_BLOCKED` を返し、アプリが自分のタスクを延期できます。 |
 
-#### 利用例：通知経路の起動と送信
+<a id="reach-idempotency-key"></a>
 
-reach.send は送信先に接続する場合と、通常通知の待機番号を返す場合があります。機密情報を含む通知は本文なしの専用台帳を使い、遅延キューに入れません。
+##### HTTP リクエスト番号
 
-![通知：直接送信・待機・結果不明](../images/function-reach-delivery.ja.svg)
+Reach は HTTP API に直接送るたびに新しいリクエスト番号を割り当てます。キューに入れた場合は、同じ項目の初回送信と再試行で `queueId` を使います。番号は `Idempotency-Key` ヘッダーと JSON の `idempotencyKey` に入ります。
 
-通常通知は許可されれば永続キューで待機し、reject 指定なら待機を拒否します。機密通知は通知禁止時間・期限切れ・結果不明で自動再送しません。送信先の受理は到達・既読ではなく、不明な結果は記録を照合してから回復します。
+即時送信の試行は一回で、失敗やタイムアウトはアプリに返ります。キューは通知、番号、試行回数を保存し、バックグラウンド処理が設定に従って配信を続けられるようにします。`idempotent: true` を設定すると、結果が不明なキュー項目を再試行できます。
 
-```ts
-// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
-// 保存済みの demo-welcome に Ada を差し込み demo@example.com に通知する。deferred ならキュー登録済みであり、テンプレート・チャネルの失敗は 元の失敗結果を返す。
-const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
-if (!sentResult.success)
-  return sentResult
-const sent = sentResult.data
-// sent: SendResult for this provider attempt, not proof that a person read the message
-```
+受信側は防ぎたい重複に合わせて項目を選びます。
 
-設定済みテンプレートとテスト経路を使います。外部サービスに送信する例です。init に業務データはなく、close は Promise<void> です。キューの受付は配信完了ではありません。
+| 重複の種類 | 受信側が読む項目 | 倉庫側の処理 |
+| --- | --- | --- |
+| Reach が同じキュー項目を再試行 | HTTP の `Idempotency-Key` ヘッダー、または同じ値を含む JSON の `idempotencyKey` | 処理済みの番号なら保存済みの結果を返す。 |
+| アプリが同じ注文イベントを二回送信 | JSON の `extra.event` と `extra.orderId` | どちらも `order.received` と `order-42` なら、作成済みのピッキング作業を使う。二回の送信には別々のリクエスト番号が付く。 |
 
-送信、テンプレート、キューの操作は HaiResult を返します。表は成功時のデータです。close に業務データはありません。
+<a id="reach-send-result"></a>
 
-キューへの登録は受信の証明ではありません。結果不明の送信を照合する際は、プロバイダーの実際の結果を確認します。
+##### 送信結果の番号 (`SendResult`)
 
-未翻訳：送信結果の照合、失敗キューの復旧、本番での制約。[中国語の該当節](reach.md#detailed-workflow)を参照してください。
+外側の `result.success` を確認してから `result.data` を読み取ります。
 
-[引数と手順の詳細](reach.md#sending)
+| 番号 | 返される条件 | 使い方 |
+| --- | --- | --- |
+| `messageId` | 即時送信の受付時にチャネルが番号を提供すると返ります。Alibaba Cloud の `BizId`、SMTP の `messageId`、HTTP 応答の `messageId` などです。テストチャネルは `console-` で始まる番号を返します。 | チャネルへの問い合わせに使います。本文のない HTTP `204` も受付扱いです。 |
+| `queueId` | キューに保存したあと `deferred: true` と一緒に返ります。 | `reach.queue.get(queueId)` でその項目の送信状態を確認します。 |
+
+<a id="reach-providers"></a>
+
+##### 組み込みの送信チャネル
+
+Reach には四つの送信方式があります。`providers[]` の `type` で送信方式を選び、`name` でアプリ内の名前を付けます。`reach.send()` の `provider` には設定した `name` を渡します。
+
+| `type` | このページの `name` の例 | 用途 |
+| --- | --- | --- |
+| `console` | `local` | 開発やテストで送信操作の記録を確認します。 |
+| `smtp` | `email` | ログイン確認コードなどを SMTP サーバー経由で送ります。サーバー、送信元、認証情報を設定します。 |
+| `aliyun-sms` | `sms` | Alibaba Cloud の署名とテンプレートで SMS を送ります。直接接続または独自ゲートウェイ経由で送信できます。 |
+| `api` | `warehouse-webhook` | 指定した URL に JSON を送ります。この例の `warehouse-webhook` は倉庫へ新規注文を通知するチャネルの名前です。 |
 
 <a id="reach-init-options"></a>
 
-#### 初期化オプション
+##### 初期化オプション
 
 [通知設定](../configuration/reach.ja.md)の `config: ReachConfigInput` は必須です。`options: ReachInitOptions` を省略すると、設定に記載したゲートウェイのヘッダーと本文を使います。
 
 `gatewayHooks` はプロバイダー名とコールバックの対応表です。対象には `gateway` が設定された `aliyun-sms` プロバイダーを指定します。引数には `method: POST`、ゲートウェイの `url`、現在の本文 `body: string | undefined` と期限を伝える `signal: AbortSignal` が入ります。`{ headers?, body? }` を同期または非同期で返し、上書きする項目だけを指定できます。`undefined` を返すと設定済みの値を使います。処理はサーバーで実行し、署名付き URL はログに出さないでください。
 
-```ts
+<a id="reach-sms-code"></a>
 
+#### 利用例：確認コードを SMS で送る
+
+確認コードを要求されたら、アプリまたは IAM がコードを発行し、照合期限を保存します。[SMS の設定](../configuration/reach.ja.md#reach-example-sms-code)を読み込み、`otp_sms` を使って送信します。テンプレートで `sms` チャネルを選び、`templateCodes.otp_sms` で Alibaba Cloud のテンプレートを指定します。`vars.code` が短信本文に反映されます。
+
+```ts
+import { reach } from '@h-ai/reach'
+
+function sendSmsCode(phone: string, code: string) {
+  // 発行したコードを送信します。success を確認し、受付番号があれば messageId から読めます。
+  return reach.send({
+    to: phone,
+    template: 'otp_sms',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+Alibaba Cloud が `BizId` として `aliyun-42` を返す例です。データベースに接続している場合、Reach は電話番号、置換済み本文、変数を送信履歴へ書き込もうとします。[SMS の送信記録例](../data/reach.ja.md#sms-code-record)
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "messageId": "aliyun-42"
+  }
+}
+```
+
+<a id="reach-email-code"></a>
+
+#### 利用例：確認コードをメールで送る
+
+メールを選んだら、[メールの設定](../configuration/reach.ja.md#reach-example-email-code)を読み込んで `otp_email` を使います。Reach は `email` を選び、HTML 本文の `{code}` を `vars.code` で置き換えます。
+
+```ts
+function sendEmailCode(email: string, code: string) {
+  // SMTP で即時送信を試みます。成功時は messageId、失敗時は error を確認します。
+  return reach.send({
+    to: email,
+    template: 'otp_email',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+アプリが 14:00 にコードを発行し、期限を 14:05 と保存した場合、入力を確認するときにその期限を使います。14:06 に入力したコードは期限切れです。利用者はアプリの再送ルールに従って新しいコードを要求できます。
+
+<a id="reach-api-notification"></a>
+
+#### 利用例：HTTP API で倉庫に通知する
+
+注文 `order-42` を作成したら、[倉庫通知の設定](../configuration/reach.ja.md#reach-example-warehouse)の `order-received` を使います。本文の `{orderId}` に `vars.orderId` が入り、`extra` で倉庫にイベント種別と注文 ID を渡します。
+
+第 2 引数の `deferPolicy` は通知を控える時間帯に適用されます。既定の `queue` では Reach の設定に従います。注文サービスが送信タスクを管理している場合は `sendOrderNotice('order-42', 'reject')` を呼び出します。`DND_BLOCKED` が返ったら、タスクを保持してこの時間帯が終わってから処理します。
+
+```ts
+function sendOrderNotice(orderId: string, deferPolicy: 'queue' | 'reject' = 'queue') {
+  // 注文作成を倉庫に通知します。即時受付は messageId、待機は queueId、失敗は error を確認します。
+  return reach.send({
+    to: 'warehouse',
+    template: 'order-received',
+    vars: { orderId },
+    extra: { event: 'order.received', orderId },
+    deferPolicy,
+  })
+}
+```
+
+日中に直接送る場合、Reach は倉庫へのリクエスト番号を生成し、`Idempotency-Key` と JSON の `idempotencyKey` に入れます。タイムアウト時は注文番号で倉庫側の状態を確認できます。キューに入れた場合の番号は[夜間の倉庫通知設定](../configuration/reach.ja.md#reach-example-warehouse)を参照してください。
+
+倉庫は受付後に `200` と `{"messageId":"warehouse-42"}` を返せます。アプリは `result.data.messageId` でその番号を取得します。本文が空の `204` も受付として扱い、番号は省略されます。本文を返す場合は 64 KiB 以下の JSON オブジェクトにします。`messageId` を含める場合は 255 文字以下の文字列です。
+
+確認コードや再設定リンクを HTTP API に送る場合は、チャネルに `requireHttps: true` を指定し、HTTPS を使ってリダイレクトを拒否します。[API チャネルの設定](../configuration/reach.ja.md#http-api)を参照してください。
+
+<a id="reach-quiet-hours"></a>
+
+#### 利用例：通知を控える時間帯の扱い
+
+通知を控える時間帯（DND）は、通常通知を遅らせたり見送ったりする時間です。サーバープロセスの現地時刻で判断します。`22:00` から翌朝 `08:00` に設定し、`23:10` に送るとします。
+
+| 23:10 に送るもの | Reach の動作 | アプリの次の処理 |
+| --- | --- | --- |
+| すぐ必要な確認コード、再設定リンク、初期設定の招待（`ignoreDnd: true`） | 即時送信を試みます。チャネルが提供する場合は `messageId` が返ります。 | アプリが定めた期限内に確認やパスワード設定を済ませてもらいます。 |
+| 翌朝でも使える注文通知（`strategy: delay` と `deferPolicy: queue`） | 保存後に `deferred: true` と `queueId` を返します。 | 番号を保存します。08:00 以降に Reach がキューを確認して送信します。 |
+| 後から送る必要のないリマインダー（`strategy: discard`） | `DND_BLOCKED` を返して今回の送信を見送ります。 | アプリのルールに従って今回のリマインダーを終了します。 |
+| アプリが送信タスクを管理する通知（`deferPolicy: reject`） | `DND_BLOCKED` を返し、タスク管理はアプリに任せます。 | 自分のタスクを保持し、時間帯が終わってから処理します。 |
+
+IAM が Reach で組み込みの確認コード、パスワード再設定、初期パスワード設定の招待を送る場合は `ignoreDnd: true` を渡します。独自のコールバックを使う場合はアプリが送信時期を決めます。
+
+[注文通知を翌朝送る設定](../configuration/reach.ja.md#reach-example-warehouse)を使って、23:10 に先ほどの関数を呼び出します。
+
+```ts
+// 通知を控える時間帯に注文通知を送ります。保存に成功した場合だけ queueId が返ります。
+const result = await sendOrderNotice('order-42')
+if (!result.success)
+  throw new Error(result.error.message)
+
+if (result.data.deferred) {
+  // 返されたキュー ID で進捗を確認します。登録直後は通常 pending、記録がなければ null が返ります。
+  const lookup = await reach.queue.get(result.data.queueId)
+  if (!lookup.success)
+    throw new Error(lookup.error.message)
+  const status = lookup.data?.status
+}
+```
+
+キューに入った時点で通知は保存され、倉庫への送信は待機中です。同じ項目の配信と再試行では `queueId` をリクエスト番号として使います。再度登録すると新しい項目が作られる場合があります。注文サービスでは最初の番号を保存し、倉庫ではイベント種別と注文番号でピッキング作業の重複を防げます。
+
+![通常通知、確認コード、キューからの配信の流れ](../images/function-reach-delivery.ja.svg)
+
+`order-42` はキューに入る経路を通ります。Reach は 23:10 に `queueId` を返し、08:00 以降に倉庫への送信を試みます。`deferPolicy: 'reject'` を渡した場合は、すぐに `DND_BLOCKED` が返ります。
+
+#### 利用例：SMS ゲートウェイにリクエストヘッダーを追加する
+
+ゲートウェイが `X-Client` で呼び出し元を識別する場合、起動時に関数を登録して各 SMS リクエストにヘッダーを追加できます。[SMS ゲートウェイの設定](../configuration/reach.ja.md#reach-example-sms-gateway)
+
+```ts
 import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
@@ -189,12 +277,12 @@ function startReach(config: ReachConfigInput) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve(name)` | 有効なテンプレートを取得 | `name: string` テンプレート検索用の一意な名前 | `ReachTemplate` | `await reach.template.resolve(name)` |
-| `reach.template.save(template)` | テンプレートを保存 | `template: ReachTemplate` name、provider、body が必須。メールの subject は任意。本文と件名に {var} を使用可能 | `void` | `await reach.template.save(template)` |
-| `reach.template.saveBatch(templates)` | テンプレートを一括保存 | `templates: ReachTemplate[]` 一括保存するテンプレート配列。各項目は save と同じ | `void` | `await reach.template.saveBatch(templates)` |
-| `reach.template.remove(name)` | 独自テンプレートを削除 | `name: string` テンプレート検索用の一意な名前 | `void` | `await reach.template.remove(name)` |
-| `reach.template.list()` | 現在のテンプレートを列挙 | なし | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render(name, vars)` | 変数を置き換えてプレビュー | `name: string` テンプレート検索用の一意な名前。`vars: Record<string, string>` プレースホルダー名から置換値へのマップ | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+| `reach.template.resolve(name)` | 有効なテンプレートを取得 | `name: string` テンプレート検索用の一意な名前 | `Promise<HaiResult<ReachTemplate>>` | `await reach.template.resolve(name)` |
+| `reach.template.save(template)` | テンプレートを保存 | `template: ReachTemplate` name、provider、body が必須。メールの subject は任意。本文と件名に {var} を使用可能 | `Promise<HaiResult<void>>` | `await reach.template.save(template)` |
+| `reach.template.saveBatch(templates)` | テンプレートを一括保存 | `templates: ReachTemplate[]` 一括保存するテンプレート配列。各項目は save と同じ | `Promise<HaiResult<void>>` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove(name)` | 独自テンプレートを削除 | `name: string` テンプレート検索用の一意な名前 | `Promise<HaiResult<void>>` | `await reach.template.remove(name)` |
+| `reach.template.list()` | 現在のテンプレートを列挙 | なし | `Promise<HaiResult<ReachTemplate[]>>` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | 変数を置き換えてプレビュー | `name: string` テンプレート検索用の一意な名前。`vars: Record<string, string>` プレースホルダー名から置換値へのマップ | `Promise<HaiResult<RenderedTemplate>>` | `await reach.template.render('demo-welcome', { name: 'Alice' })` |
 
 #### 利用例：テンプレートの管理と確認
 
@@ -229,7 +317,7 @@ if (!removeResult.success)
   return removeResult
 ```
 
-mail というテスト Provider を先に設定します。name= Ada により Hello Ada を得ます。テンプレートの削除は送信済み内容を取り消しません。
+入門例の `local` を使います。`name: 'Ada'` を渡すと Hello Ada になります。`render()` はテキストを置換し、SMTP は本文を HTML として送信します。フォームなど信頼できない入力を本文に埋め込むときは、埋め込み先の HTML に合わせてエスケープします。
 
 [引数と手順の詳細](reach.md#templates)
 
@@ -243,12 +331,27 @@ mail というテスト Provider を先に設定します。name= Ada により 
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get(queueId)` | ID で送信記録を取得 | `queueId: string` 送信結果またはキュー記録から取得した UUID | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.get(queueId)` | ID で送信記録を取得 | `queueId: string`。キュー登録時に返る番号です。 | `Promise<HaiResult<ReachQueueEntry \| null>>` | `await reach.queue.get(queueId)` |
 | `reach.queue.list(options)` | 送信記録を絞り込みページ取得 | `options: ReachQueueListOptions` · [検索の引数](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'unknown' })` |
 
 <a id="reach-queue-options"></a>
 
+##### 検索の引数
+
 `ReachQueueListOptions` は必須です。`status` には `dead` または `unknown` を指定します。`limit` は 1～100（既定 50）、`offset` はスキップする件数で 0～1,000,000（既定 0）です。
+
+##### 番号で送信記録を確認する
+
+`reach.queue.get(queueId)` でキューの項目を照会します。即時送信の `messageId` はチャネルへの問い合わせに使います。[API の即時送信記録](../data/reach.ja.md#direct-api-record)を参照してください。
+
+| 状態 | 実際の状況 |
+| --- | --- |
+| `pending` | 通知は保存済みで、時間帯の終了か次の試行を待っています。 |
+| `processing` / `sending` | ワーカーがタスクを取得したか、チャネルへの送信を始めています。 |
+| `sent` | チャネルが受け付けたか、運用担当者が確認して記録しました。 |
+| `dead` | 明確な失敗や試行回数の上限などで処理が止まりました。原因を調べてから[再登録するか判断します](#recovery)。 |
+| `unknown` | チャネルが受け取った可能性があります。先方の記録を照合してから[結果を登録します](#recovery)。 |
+| `discarded` | 運用担当者が結果を確認して処理を終了しました。 |
 
 #### 利用例：待機・失敗した通知の確認
 
@@ -282,16 +385,16 @@ if (entries.length > 0) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead(queueId, options)` | 確認後にデッドレターを再投入 | `queueId: string` はキューのレコードから取得します。必須の `options.expectedUpdatedAt: number` には最後に読み取った `updatedAt` を渡します。 | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, retryDecision)` |
-| `reach.queue.resolveUnknown(queueId, resolution)` | 不明な送信結果を確認 | `queueId: string` 送信結果またはキュー記録から取得した UUID。`resolution: ReachUnknownResolution` 確認済みの裁定が必須。[裁定項目](#reach-resolution-fields)を参照 | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+| `reach.queue.requeueDead(queueId, options)` | 再試行が止まった通知を再登録 | `queueId: string` はキューのレコードから取得します。必須の `options.expectedUpdatedAt: number` には照会結果の `updatedAt` をそのまま渡します。 | `Promise<HaiResult<void>>` · 記録が変わっている場合は `SEND_FAILED` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | 不明な送信結果を確認 | `queueId: string` 送信結果またはキュー記録から取得した UUID。`resolution: ReachUnknownResolution` 確認済みの裁定が必須。[裁定項目](#reach-resolution-fields)を参照 | `Promise<HaiResult<void>>` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
 
 <a id="reach-resolution-fields"></a>
 
-**回復と裁定の項目**
+##### 復旧と確認結果の項目
 
 | フィールド | 型 | 必須と既定値 | 用途と適用条件 |
 | --- | --- | --- | --- |
-| `options.expectedUpdatedAt` | `number` | 必須 | dead の再キュー登録では最後に取得した updatedAt を使います。並行更新後は読み取り直します。 |
+| `options.expectedUpdatedAt` | `number` | 必須 | `reach.queue.get(queueId)` の `updatedAt` をそのまま渡します。現在も `dead` で時刻が一致する場合に再登録します。[二人で同じ通知を操作する例](#detailed-workflow)を参照。 |
 | `resolution.status` | `'sent' \| 'discarded'` | 必須 | 外部で確認した後に送信済みまたは破棄を記録します。 |
 | `resolution.messageId` | `string` | 任意 | 送信済みと確認できた場合、最大 255 文字の事業者の受領 ID を記録できます。 |
 
@@ -321,3 +424,30 @@ async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownRes
   return getResult.data // status is sent or discarded
 }
 ```
+
+<a id="detailed-workflow"></a>
+
+#### 利用例：原因を直して倉庫通知を再登録する
+
+倉庫通知が試行回数の上限に達して `dead` になりました。倉庫の URL を直した後、二人の運用担当者が同じ記録を開きます。`reach.queue.get(queueId)` は `status: 'dead'` と `updatedAt: 1795478460000` を返します。どちらも見ていた `1795478460000` を `expectedUpdatedAt` に渡します。
+
+一人目の操作が成功し、記録は `pending` に変わり、更新時刻も変わります。二人目が古い値で操作すると `SEND_FAILED` が返ります。再照会して現在の状態を表示します。再試行が失敗してまた `dead` になった場合も更新時刻は新しい値です。その回の失敗理由を確認してから、再登録するか判断します。
+
+Unix ミリ秒の `updatedAt` を照会結果からそのままコピーします。`Date.now()` は現在時刻を返します。渡す値は担当者が照会した記録の更新時刻です。
+
+```ts
+async function restoreDead(queueId: string) {
+  // 通知のキュー番号で状態と更新時刻を照会します。記録がなければ data は null です。
+  const state = await reach.queue.get(queueId)
+  if (!state.success)
+    throw new Error(state.error.message)
+  if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+    // 照会した更新時刻を渡します。成功すると pending に戻り、記録が変わっていれば失敗します。
+    const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+    if (!restored.success)
+      throw new Error(restored.error.message)
+  }
+}
+```
+
+再登録すると試行回数がゼロになり、元の `queueId` と再試行の待機設定を使います。以前の HTTP リクエストがまだ届く可能性がある場合は、受信側が元の番号で重複処理を防げるか先に確認します。`unknown` の記録は運用担当者が照合します。

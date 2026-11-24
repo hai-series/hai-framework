@@ -20,6 +20,8 @@
 
 ## 機能
 
+確認コードをすぐ送る場合は `reach.send()` に `ignoreDnd: true` を渡します。データベースへの書き込みに成功すると、送信履歴から宛先と内容を確認できます。[送信例](../../docs/usage/function/reach.ja.md#reach-sms-code) · [SMS の送信履歴](../../docs/usage/data/reach.ja.md#sms-code-record)
+
 [API 一覧](../../docs/usage/function/reach.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造

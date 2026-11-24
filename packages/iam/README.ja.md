@@ -20,6 +20,8 @@
 
 ## 機能
 
+IAM の組み込みの確認コード、パスワード再設定、初期設定の招待は、通知を控える時間帯にも Reach で即時送信を試みます。独自の送信コールバックも指定できます。[夜間の通知](../../docs/usage/function/reach.ja.md#reach-quiet-hours)
+
 パスワードと API キーの SM3 計算は Crypto のワーカープールを共用します。保存済みのハッシュも引き続き有効です。キューが満杯の場合は `SECURITY_BUSY`（HTTP 429）を返し、ログイン失敗回数に加算しません。
 
 [API 一覧](../../docs/usage/function/iam.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。

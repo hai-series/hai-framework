@@ -2,7 +2,7 @@
 
 [English](reach.en.md) · [日本語](reach.ja.md)
 
-在服务端用 `reach` 发送邮件、短信或 HTTP 通知。发送前配置相应渠道的服务商，按需要使用模板、避免重复投递或排队重试。超过重试次数的通知可在失败队列中检查和处理。
+用 Reach 在服务端把登录验证码发给用户，或在订单创建后通知仓库。验证码通常需要立即尝试发送，订单通知可以等到白天。下面用实际发送流程说明怎么发、怎么查。
 
 [模块 README](../../../packages/reach/README.md) · [配置清单](../configuration/reach.md) · [数据结构](../data/reach.md) · [业务集成](../development/integrations.md)
 
@@ -10,125 +10,65 @@
 
 ## 最小接入示例
 
-### 依赖
-
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 quiet hours delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
-- `@h-ai/cache` — 缓存（quiet hours delay 策略分布式锁），可选；已初始化时自动启用分布式锁
-
-#### 安装
+先安装 Reach。接入 SMTP 邮件时还需要安装 `nodemailer`。
 
 ```bash
 pnpm add @h-ai/reach
 ```
 
-邮件发送需安装 `nodemailer`。
-
-#### 多 Provider 初始化
+### 先在本机试一次发送
 
 ```ts
-import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
 
-// 把 RelDB 和 Reach 两个步骤交给宿主运行时。后者依赖前者；这里仅创建 start/close 编排器。
-const runtime = core.module.createRuntime([
-  {
-    name: 'reldb',
-    // 启动进程内 SQLite，为模板和通知状态提供存储；成功无数据，数据库失败会阻止 Reach 启动。
-    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
-    // 不传参数释放数据库连接，成功 data 为 undefined；运行时会在 Reach 之后执行此步。
-    close: () => reldb.close()
-  },
-  {
-    name: 'reach',
-    // 启动 local 控制台渠道并注册 welcome 模板。成功后可调用发送接口，配置或模板存储失败会终止启动。
-    start: () => reach.init({
-      providers: [
-        { name: 'local', type: 'console' }
-      ],
-      templates: [
-        {
-          name: 'welcome',
-          provider: 'local',
-          subject: 'Welcome',
-          body: 'Hello {userName}'
-        }
-      ],
-    }),
-    // 不传参数关闭通知模块，成功后不再接收发送；解放失败由运行时继续报告。
-    close: () => reach.close()
-  },
-])
-// 按依赖顺序启动已登记步骤；全部成功时 data 为 undefined，失败时回收已启动部分并保留错误。
-const initialized = await runtime.start()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
+// 注册名为 local 的测试渠道。初始化失败时先处理错误。
+const started = await reach.init({
+  providers: [{ name: 'local', type: 'console' }],
+})
+if (!started.success)
+  throw new Error(started.error.message)
 
-let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  // 用 welcome 模板给 user@example.com 渲染 Hello Alice，并交给 local 控制台渠道。即发成功时 deferred 为 false 或省略；渲染或发送失败则报告错误。
-  result = await reach.send({
-    to: 'user@example.com',
-    template: 'welcome',
-    vars: { userName: 'Alice' }
+  // 发送一条测试消息。成功时返回 console- 开头的消息编号，失败时读取 error。
+  const result = await reach.send({
+    provider: 'local',
+    to: 'demo@example.invalid',
+    body: 'Hello',
   })
+  if (!result.success)
+    throw new Error(result.error.message)
 }
-catch (error) {
-  // 逆序解放 Reach 和 SQLite，成功无数据；失败单独报告清理错误。
-  const closed = await runtime.close()
-  throw new AggregateError(closed.success
-    ? [error]
-    : [error, closed.error], 'Reach operation failed')
+finally {
+  // 关闭测试渠道，返回 Promise<void>。
+  await reach.close()
 }
-// 逆序解放 Reach 和 SQLite，成功无数据；失败单独报告清理错误。
-const closed = await runtime.close()
-if (!closed.success) {
-  throw new AggregateError(result.success
-    ? [closed.error]
-    : [result.error, closed.error], 'Reach cleanup failed')
-}
-if (!result.success)
-  throw new Error(result.error.message)
 ```
 
-以上示例使用开发 Console Provider，只记录发送元数据，不实际发邮件或短信。需要真实投递时，按下方配置 SMTP、短信或 API Provider；数据库持久化和共享缓存按需初始化。
-
-`reach.config` 返回的是**脱敏后的配置快照**：`api.url` / `endpoint` 的内嵌凭证、所有自定义请求头值、SMTP `pass` 和短信密钥都会隐藏。网关正文不进入快照；部署向导把 API 请求头整体保存到私有环境文件，不依赖头名猜测认证信息。
-
-```ts
-const ready = reach.isInitialized // 无需参数，至少一个通知 Provider 已发布时为 true。
-const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭后为 null。
-```
-
-Provider 就绪后仍需检查每次发送的 `HaiResult`。
-
-Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信原始响应不进入返回消息或 cause；前端使用本地化提示，服务端日志保留诊断上下文。
-
-一次模板发送使用同一个模板快照渲染主题、正文并选择默认 Provider，避免并发编辑时混用不同版本。显式 `provider` 仍可覆盖模板渠道。
+`local` 只在开发和测试环境记录发送动作。拿到 `console-` 开头的 `messageId` 就说明本机调用走通了。启动后可用 `reach.isInitialized` 查看当前进程是否有可用渠道，`reach.config` 可读到隐去密钥和请求头值的配置。文件写法见 [本地发送配置](../configuration/reach.md#reach-example-local)。
 
 <a id="api-reference"></a>
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+后续示例在服务端运行。启动时将 [Reach 配置](../configuration/reach.md#configuration-fields) 传给 `reach.init()` 并检查结果。使用发送历史、模板或夜间排队时，先启动 [RelDB](../configuration/reldb.md)。
 
 <a id="sending"></a>
 
-### 启动渠道并发送通知：`reach`
-
-先按配置准备邮件或短信渠道，再用模板和收件人发送；持久化模板与队列依赖 RelDB。
+### 发验证码和业务通知 (`reach`)
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `reach.init(config, options?)` | 准备配置中的通知渠道。存储模板或使用延迟队列时先连接 RelDB | `config: ReachConfigInput`, `options?: ReachInitOptions` · [初始化选项](#reach-init-options) | `Promise<HaiResult<void>>` | `await reach.init(config)` |
-| `reach.close()` | 关闭当前通知渠道；持久化记录仍可由后续实例读取 | 无参数 | `Promise<void>` | `await reach.close()` |
-| `reach.send(message)` | 发送消息或交给持久队列 | 必填 `message: ReachMessage` 包含收件人和内容，见[消息字段](#reach-message-fields)。 | `SendResult` | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
+| `reach.close()` | 停止领取新消息，等待已开始的队列投递记录结果后释放渠道 | 无参数 | `Promise<void>` | `await reach.close()` |
+| `reach.isInitialized` | 查询本机是否已有发布的渠道 | 无参数 | `boolean` | `reach.isInitialized` |
+| `reach.config` | 读取当前脱敏配置 | 无参数 | `ReachConfig \| null` | `reach.config` |
+| `reach.send(message)` | 发送消息或交给持久队列 | 必填 `message: ReachMessage` 包含收件人和内容，见[消息字段](#reach-message-fields)。 | `Promise<HaiResult<SendResult>>` · [返回的编号](#reach-send-result) | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { userName: 'Alice' } })` |
 
 <a id="reach-message-fields"></a>
 
-**ReachMessage**
+##### 发送字段 (`ReachMessage`)
 
 | 字段 | 类型 | 必填与默认 | 用途及生效条件 |
 | --- | --- | --- | --- |
@@ -138,47 +78,178 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 | `vars` | `Record<string, string>` | 可省略 | 按键替换模板中的变量。 |
 | `subject / body` | `string` | 可省略 | 直接发送时的标题和正文。标题用于需要主题的渠道，例如邮件。 |
 | `extra` | `Record<string, unknown>` | 可省略 | 传渠道专有字段，例如短信模板编码或签名。 |
-| `idempotencyKey` | `string` | 可省略 | API 直接发送时可传给接收端作为稳定键。队列固定使用其 queueId。 |
-| `sensitive` | `boolean` | `false` | 凭据类消息用 true，仅在内存发送，不进入延迟或重投队列。 |
-| `expiresAt` | `number` | sensitive 为 true 时必填 | 业务凭据截止时间，Unix 毫秒。 |
-| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 普通通知遇免打扰时，queue 使用已有延迟配置，reject 返回 DND_BLOCKED 以便宿主自行延后。 |
+| `ignoreDnd` | `boolean` | `false` | 设为 `true` 时，这一条消息跳过免打扰检查并尝试立即发送。 |
+| `deferPolicy` | `'queue' \| 'reject'` | `queue` | 遇到免打扰时由谁安排普通通知。`queue` 让 Reach 按 `dnd.strategy` 决定排队或跳过。`reject` 返回 `DND_BLOCKED`，由已有待发送任务的应用安排下一次发送。 |
 
-#### 场景：启动渠道并发送通知
+<a id="reach-idempotency-key"></a>
 
-reach.send 可能联系渠道，也可能为普通通知返回排队回执。敏感凭据通知使用单独的发送账本，不把正文放入延迟队列。
+##### HTTP 请求编号
 
-![通知：直接发送、排队和未知结果](../images/function-reach-delivery.svg)
+每次直接发送 HTTP 通知时，Reach 生成一个新的请求编号。消息进队列后，首次发送和后台重试都用该条记录的 `queueId`。Reach 将编号填入 `Idempotency-Key` 请求头和 JSON 的 `idempotencyKey` 字段。
 
-普通消息允许延迟时，由持久队列稍后领取发送；显式 reject 则拒绝排队。敏感消息遇到免打扰、过期或结果不明时不自动重投。渠道受理成功不代表用户已读或最终送达；超时后的未知结果先核对渠道记录，再决定人工恢复。
+即时发送只尝试一次，超时或失败会直接返回给应用。队列保存了消息、请求编号和尝试次数，后台可以按队列策略继续处理。`idempotent: true` 允许 Reach 重试结果不明的排队请求。
 
-```ts
-// 以下为应用异步业务函数体片段；失败时返回原结果。
-// 用已保存的 demo-welcome 模板将 Ada 渲染到正文并通知 demo@example.com。收到 deferred 回执只表示入队；模板或渠道失败时返回原失败结果。
-const sentResult = await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } })
-if (!sentResult.success)
-  return sentResult
-const sent = sentResult.data
-// sent: SendResult for this provider attempt, not proof that a person read the message
-```
+接收方按业务需要选字段。
 
-输入使用已配置的渠道和模板；真实发送会联系外部服务，仅在测试渠道执行示例。init 成功无数据，close 返回 Promise<void>；队列受理也不等于最终送达。
+| 要识别的重复 | 接收方读取的字段 | 仓库收到时怎么做 |
+| --- | --- | --- |
+| Reach 重试同一条队列消息 | HTTP 请求头 `Idempotency-Key`，也可以读 JSON 中的同一个 `idempotencyKey` | 同一个编号已经处理过，就返回之前的结果。 |
+| 应用先后提交了两次同一个订单事件 | JSON 的 `extra.event` 和 `extra.orderId` | 例如两次都收到 `order.received` 和 `order-42`，就复用这笔订单已创建的拣货任务。两次提交会有各自的请求编号。 |
 
-模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
+<a id="reach-send-result"></a>
 
-初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+##### 发送结果里的编号 (`SendResult`)
 
-模板用 `name` 标识，`vars` 是替换正文或标题的变量，模板定义包含发送渠道 `provider` 和正文 `body`，还可以包含标题 `subject`。队列用持久化的 `queueId`（UUID）查找。恢复失败消息或确认发送结果之前，先读取当前版本并人工核对实际投递记录。
+先检查 `result.success`，成功后从 `result.data` 读取结果。
+
+| 编号 | 什么时候返回 | 怎么用 |
+| --- | --- | --- |
+| `messageId` | 即时发送受理后，渠道提供编号时返回。例如阿里云的 `BizId`、SMTP 的 `messageId`，或 HTTP 响应的 `messageId`。本地测试返回 `console-` 开头的编号。 | 用于向渠道核对。HTTP API 返回空的 `204` 同样算受理。 |
+| `queueId` | Reach 成功保存排队消息后，和 `deferred: true` 一起返回。 | 用 `reach.queue.get(queueId)` 查这一条记录的发送状态。 |
+
+<a id="reach-providers"></a>
+
+##### 内置发送渠道
+
+Reach 内置四种发送方式。配置 `providers[]` 时，`type` 决定怎么发，`name` 由应用取名。调用 `reach.send()` 时，`provider` 填配置里的 `name`。
+
+| `type` | 本页示例的 `name` | 用来做什么 |
+| --- | --- | --- |
+| `console` | `local` | 在开发或测试环境检查发送流程，只记录发送信息。 |
+| `smtp` | `email` | 通过 SMTP 邮件服务器发送邮件，例如登录验证码。配置服务器、发件人和认证信息。 |
+| `aliyun-sms` | `sms` | 用阿里云签名和短信模板发送短信。可直连阿里云，也可通过自有网关转发。 |
+| `api` | `warehouse-webhook` | 向指定 URL 发送 JSON，例如把新订单通知给仓库服务。`warehouse-webhook` 是本页仓库示例选的渠道名。 |
 
 <a id="reach-init-options"></a>
 
-#### 初始化选项
+##### 初始化选项
 
 启动时从[通知配置](../configuration/reach.md)取得 `config: ReachConfigInput`。可省略 `options: ReachInitOptions`，默认沿用配置中的网关请求头和请求体。
 
 `gatewayHooks` 是按 Provider 名称索引的回调对象，只能绑定配置了 `gateway` 的 `aliyun-sms` Provider。回调获知 `method: POST`、网关 `url`、当前请求体 `body: string | undefined` 和请求期限内有效的 `signal: AbortSignal`。它可同步或异步返回 `{ headers?, body? }`，仅设置需要覆盖的字段，或返回 `undefined` 沿用静态配置。回调在服务端执行，避免将带签名的 URL 写入日志。
 
-```ts
+<a id="reach-sms-code"></a>
 
+#### 场景：短信验证码
+
+用户点「获取验证码」后，由应用或 IAM 签发验证码并保存校验期限。加载[短信验证码配置](../configuration/reach.md#reach-example-sms-code)后，用 `otp_sms` 模板发送。模板选择 `sms` 渠道，该渠道用 `templateCodes.otp_sms` 选阿里云模板，把 `vars.code` 填进短信。
+
+```ts
+import { reach } from '@h-ai/reach'
+
+function sendSmsCode(phone: string, code: string) {
+  // 发送本次签发的验证码。先检查 success，渠道受理后可读 messageId。
+  return reach.send({
+    to: phone,
+    template: 'otp_sms',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+例如阿里云受理时返回 `BizId` 为 `aliyun-42`，调用结果如下。接入数据库时，Reach 会尝试把实际手机号、替换后的正文和变量写进发送历史。[短信发送记录示例](../data/reach.md#sms-code-record)
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "messageId": "aliyun-42"
+  }
+}
+```
+
+<a id="reach-email-code"></a>
+
+#### 场景：邮件验证码
+
+用户选择邮箱验证时，先加载[邮件验证码配置](../configuration/reach.md#reach-example-email-code)，再用 `otp_email` 模板发送。Reach 选择 `email` 渠道，把 `vars.code` 填到邮件 HTML 正文的 `{code}`。
+
+```ts
+function sendEmailCode(email: string, code: string) {
+  // 用 SMTP 尝试立即发送。成功后可读 messageId，失败时读 error。
+  return reach.send({
+    to: email,
+    template: 'otp_email',
+    vars: { code },
+    ignoreDnd: true,
+  })
+}
+```
+
+应用在 14:00 签发验证码时，同时保存 14:05 这个截止时间。用户在 14:06 提交时，应用按原来保存的期限校验，结果是验证码已过期。用户可以按应用的重发规则申请新码。
+
+<a id="reach-api-notification"></a>
+
+#### 场景：通过 HTTP API 通知仓库
+
+订单 `order-42` 创建后，用[仓库通知配置](../configuration/reach.md#reach-example-warehouse)中的 `order-received` 模板发送。`vars.orderId` 把正文中的 `{orderId}` 换成 `order-42`。`extra` 提供仓库处理所需的事件类型和订单 ID。
+
+函数第二个参数 `deferPolicy` 用在免打扰时段。默认 `queue`，让 Reach 按配置处理。订单服务如果已经有自己的待发送任务，可以调用 `sendOrderNotice('order-42', 'reject')`。收到 `DND_BLOCKED` 时，订单服务保留自己的任务，等时段结束再发送。
+
+```ts
+function sendOrderNotice(orderId: string, deferPolicy: 'queue' | 'reject' = 'queue') {
+  // 通知仓库订单已创建。直接受理后可读 messageId，延迟时读 queueId，失败时读 error。
+  return reach.send({
+    to: 'warehouse',
+    template: 'order-received',
+    vars: { orderId },
+    extra: { event: 'order.received', orderId },
+    deferPolicy,
+  })
+}
+```
+
+白天直接发送时，Reach 给仓库请求生成一个编号，放进 `Idempotency-Key` 和 JSON 的 `idempotencyKey`。请求超时后，订单服务可先用订单编号向仓库核对。后台重试排队消息时如何复用编号，见[夜间仓库通知配置](../configuration/reach.md#reach-example-warehouse)。
+
+仓库受理后可以回 `200` 和 `{"messageId":"warehouse-42"}`，应用就能在 `result.data.messageId` 读到对方的编号。返回空的 `204` 也算受理，此时没有消息编号。若返回正文，必须是 JSON 对象，最多 64 KiB，`messageId` 可省略，填写时必须是最多 255 字符的字符串。
+
+通过 HTTP API 发送验证码或重置链接时，在该渠道设置 `requireHttps: true`，使用 HTTPS 且拒绝重定向。见 [API 渠道配置](../configuration/reach.md#http-api)。
+
+<a id="reach-quiet-hours"></a>
+
+#### 场景：夜间遇到免打扰怎么办
+
+免打扰（DND）是 Reach 暂缓或跳过普通通知的时段，按服务进程的本地时区判断。假设设为 `22:00` 到次日 `08:00`，并在 `23:10` 发送。
+
+| 这时要发什么 | 23:10 会怎样 | 应用接下来做什么 |
+| --- | --- | --- |
+| 需要立刻发出的验证码、重置链接或设密邀请（`ignoreDnd: true`） | 立即尝试发送，渠道提供编号时返回 `messageId`。 | 让用户按业务期限完成验证或设密。 |
+| 早上仍有用的订单通知（`strategy: delay`，`deferPolicy: queue`） | 消息保存成功后返回 `deferred: true` 和 `queueId`。 | 保存编号。08:00 起 Reach 后台开始检查并尝试发送。 |
+| 过了今晚就不用发的提醒（`strategy: discard`） | 返回 `DND_BLOCKED`，直接跳过这次发送。 | 按业务规则结束本次提醒。 |
+| 应用自己管理待发送任务（`deferPolicy: reject`） | 返回 `DND_BLOCKED`，由应用保留自己的任务。 | 等时段结束后，由应用再次处理该任务。 |
+
+IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时，都会传 `ignoreDnd: true`。使用自定义回调时，由应用决定何时发送。
+
+下面用 `delay` 的[订单通知配置](../configuration/reach.md#reach-example-warehouse)，在 23:10 调用前面的函数。
+
+```ts
+// 在免打扰时段提交订单通知。只有持久入队成功才会得到 queueId。
+const result = await sendOrderNotice('order-42')
+if (!result.success)
+  throw new Error(result.error.message)
+
+if (result.data.deferred) {
+  // 用返回的队列编号查进度。刚入队通常是 pending，记录不存在时返回 null。
+  const lookup = await reach.queue.get(result.data.queueId)
+  if (!lookup.success)
+    throw new Error(lookup.error.message)
+  const status = lookup.data?.status
+}
+```
+
+“已排队”表示数据库已经存下通知，仓库还没收到请求。Reach 发出消息时使用这条记录的 `queueId` 作为请求编号，后台重试也用同一个编号。应用重复提交可能新增另一条记录。订单服务可保存首次入队的编号，仓库可按事件类型和订单编号确保一笔订单只生成一份拣货任务。
+
+![普通通知、验证码和排队请求的发送流程](../images/function-reach-delivery.svg)
+
+`order-42` 走图中的排队路径。23:10 返回 `queueId`，08:00 起才尝试联系仓库。应用传入 `deferPolicy: 'reject'` 时，直接收到 `DND_BLOCKED`。
+
+#### 场景：启动时给短信网关补一个请求头
+
+网关需要用 `X-Client` 区分调用它的服务时，应用可以在启动时注册一个函数，为每次短信请求加上这个头。[短信网关配置](../configuration/reach.md#reach-example-sms-gateway)
+
+```ts
 import { type ReachConfigInput, reach } from '@h-ai/reach'
 
 function startReach(config: ReachConfigInput) {
@@ -194,24 +265,6 @@ function startReach(config: ReachConfigInput) {
 }
 ```
 
-#### 生产共享状态
-
-生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
-
-#### 凭据通知与持久化准备
-
-发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；quiet hours/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
-
-`reach.init()` 创建并校验发送日志表及队列标识约束，结构不符时返回初始化失败。保留发送账本，按持久回执核对状态，避免重发结果不明的凭据通知。
-
-#### API 回执与目标边界
-
-空正文的成功 2xx（含 204/205）表示接收端受理，messageId 可缺省，不代表最终送达。非空正文须为 JSON 对象，messageId 若存在须为不超过 255 字符的字符串；响应最多 64 KiB，非法响应、超时和网络失败不会假装成功或输出第三方正文。
-
-API Provider 的 `redirect` 默认为 `error`；只有普通消息可显式设为 `follow`。`sensitive:true` 始终拒绝跳转，不转发正文和私有头。`requireHttps:true` 强制初始 HTTPS 且与 follow 互斥；省略时生产敏感消息要求 HTTPS，显式 false 仅适用于操作者确认的受信内网。超时或源端已产生的未知副作用仍须核对，敏感消息不自动重投。域名授权、内网地址限制和出口策略由应用及部署环境负责。
-
-PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的数据库时钟；扫描截止也从数据库读取。节点时差及行锁等待跨过期限后不能续活旧 owner。本地 SQLite 只用于开发/测试，可控制测试时钟，不作为生产共享状态。
-
 <a id="templates"></a>
 
 ### 维护与预览通知模板：`reach.template`
@@ -222,12 +275,12 @@ PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的�
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.template.resolve(name)` | 读取一个生效模板 | `name: string` 用于查找模板的唯一名称 | `ReachTemplate` | `await reach.template.resolve('welcome')` |
-| `reach.template.save(template)` | 保存一个模板 | `template: ReachTemplate` 必填 name、provider 和 body，可选邮件 subject。正文与标题可写 {var} 占位符 | `void` | `await reach.template.save({ name: 'welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })` |
-| `reach.template.saveBatch(templates)` | 批量保存模板 | `templates: ReachTemplate[]` 批量保存的模板数组，每项与 save 的字段相同 | `void` | `await reach.template.saveBatch([{ name: 'welcome', provider: 'local', body: 'Hello {name}' }])` |
-| `reach.template.remove(name)` | 删除自定义模板 | `name: string` 用于查找模板的唯一名称 | `void` | `await reach.template.remove('welcome')` |
-| `reach.template.list()` | 列出当前模板 | 无参数 | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render(name, vars)` | 替换模板变量并预览 | `name: string` 用于查找模板的唯一名称。`vars: Record<string, string>` 占位符名称到替换值的映射 | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })` |
+| `reach.template.resolve(name)` | 读取一个生效模板 | `name: string` 用于查找模板的唯一名称 | `Promise<HaiResult<ReachTemplate>>` | `await reach.template.resolve('welcome')` |
+| `reach.template.save(template)` | 保存一个模板 | `template: ReachTemplate` 必填 name、provider 和 body，可选邮件 subject。正文与标题可写 {var} 占位符 | `Promise<HaiResult<void>>` | `await reach.template.save({ name: 'welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' })` |
+| `reach.template.saveBatch(templates)` | 批量保存模板 | `templates: ReachTemplate[]` 批量保存的模板数组，每项与 save 的字段相同 | `Promise<HaiResult<void>>` | `await reach.template.saveBatch([{ name: 'welcome', provider: 'local', body: 'Hello {name}' }])` |
+| `reach.template.remove(name)` | 删除自定义模板 | `name: string` 用于查找模板的唯一名称 | `Promise<HaiResult<void>>` | `await reach.template.remove('welcome')` |
+| `reach.template.list()` | 列出当前模板 | 无参数 | `Promise<HaiResult<ReachTemplate[]>>` | `await reach.template.list()` |
+| `reach.template.render(name, vars)` | 替换模板变量并预览 | `name: string` 用于查找模板的唯一名称。`vars: Record<string, string>` 占位符名称到替换值的映射 | `Promise<HaiResult<RenderedTemplate>>` | `await reach.template.render('welcome', { name: 'Alice' })` |
 
 #### 场景：维护与预览通知模板
 
@@ -262,24 +315,39 @@ if (!removeResult.success)
   return removeResult
 ```
 
-先配置名为 mail 的测试 Provider。输出中的正文由 name= Ada 得到，remove 只删除模板，不撤回已发送内容。
+示例使用入门流程的 `local` 渠道。输出中的正文通过 `name: 'Ada'` 得到。`render()` 做文本替换，SMTP 会将正文作为 HTML 发送。来自表单等不可信来源的正文变量需要按模板中的 HTML 上下文转义。
 
 <a id="queue"></a>
 
 ### 查询延迟与失败发送：`reach.queue`
 
-发送被排队后保存返回的队列编号；排查时按编号读取状态，或列出死信。
+订单被排队后，可以按编号看它是在等、已经受理，还是需要人工核对。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.get(queueId)` | 按 ID 查询发送记录 | `queueId: string` 从发送回执或队列记录取得的 UUID | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)` |
+| `reach.queue.get(queueId)` | 按 ID 查询发送记录 | `queueId: string` | `Promise<HaiResult<ReachQueueEntry \| null>>` | `await reach.queue.get(queueId)` |
 | `reach.queue.list(options)` | 筛选并分页查询发送记录 | `options: ReachQueueListOptions` · [查询参数](#reach-queue-options) | `Promise<HaiResult<ReachQueueEntry[]>>` | `await reach.queue.list({ status: 'dead', limit: 20 })` |
 
 <a id="reach-queue-options"></a>
 
+##### 查询参数
+
 查询选项 `ReachQueueListOptions` 必填。`status` 必填，取 `dead` 或 `unknown`。`limit` 取 1–100，默认 50。`offset` 取 0–1,000,000，默认 0，表示跳过多少条。
+
+##### 按编号查看发送记录
+
+用 `reach.queue.get(queueId)` 查原队列记录。即时发送获得的 `messageId` 可用于向渠道核对，写入历史后的数据见[直发 API 记录](../data/reach.md#direct-api-record)。
+
+| 当前状态 | 对应的实际情况 |
+| --- | --- |
+| `pending` | 订单通知已保存，正在等免打扰结束或下次尝试。 |
+| `processing` / `sending` | 后台已领到任务，或已经开始联系渠道。 |
+| `sent` | 渠道已受理，或运维核对后记为已发送。 |
+| `dead` | 处理已停止，例如确定失败或重试次数耗尽。查明原因后可[决定是否重排](#recovery)。 |
+| `unknown` | 渠道可能已收到请求。先查渠道记录，再[登记核对结果](#recovery)。 |
+| `discarded` | 运维核对后将这条记录标为停止处理。 |
 
 #### 场景：查询延迟与失败发送
 
@@ -311,16 +379,16 @@ if (entries.length > 0) {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reach.queue.requeueDead(queueId, options)` | 核对后重新排队死信 | `queueId: string` 来自队列记录。`options.expectedUpdatedAt: number` 必填，传最近一次读取记录的 `updatedAt`。 | `Promise<HaiResult<void>>` | `await reach.queue.requeueDead(queueId, requeueDecision)` |
-| `reach.queue.resolveUnknown(queueId, resolution)` | 人工确认未知的发送结果 | `queueId: string` 从发送回执或队列记录取得的 UUID。`resolution: ReachUnknownResolution` 必填人工核对结果，见[裁定字段](#reach-resolution-fields) | `void` | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
+| `reach.queue.requeueDead(queueId, options)` | 把停止重试的消息重新排队 | `queueId: string` 来自队列记录。`options.expectedUpdatedAt: number` 必填，原样传查询结果里的 `updatedAt`。 | `Promise<HaiResult<void>>` · 记录已更新或状态已变化时返回 `SEND_FAILED` | `await reach.queue.requeueDead(queueId, requeueDecision)` |
+| `reach.queue.resolveUnknown(queueId, resolution)` | 人工确认未知的发送结果 | `queueId: string` 从发送回执或队列记录取得的 UUID。`resolution: ReachUnknownResolution` 必填人工核对结果，见[裁定字段](#reach-resolution-fields) | `Promise<HaiResult<void>>` | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
 
 <a id="reach-resolution-fields"></a>
 
-**恢复与裁定输入**
+##### 恢复与裁定输入
 
 | 字段 | 类型 | 必填与默认 | 用途及生效条件 |
 | --- | --- | --- | --- |
-| `options.expectedUpdatedAt` | `number` | 必填 | 重排 dead 时用最近读取回执的 updatedAt，并发写入后重新读取。 |
+| `options.expectedUpdatedAt` | `number` | 必填 | 把 `reach.queue.get(queueId)` 返回的 `updatedAt` 原样传回。数据库里的记录仍为 `dead`，且更新时间等于这个值，才会重新排队。见[两位同事操作同一条通知](#detailed-workflow)。 |
 | `resolution.status` | `'sent' \| 'discarded'` | 必填 | 只在外部核对后记录已发送或终止处理。 |
 | `resolution.messageId` | `string` | 可省略 | 确认已发送时可记渠道回执编号，最多 255 字符。 |
 
@@ -364,24 +432,28 @@ async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownRes
 
 #### 场景：核对后重排死信
 
-可信服务端可用 `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` 查询死信，也可查询 `unknown`；每页最多 100 条，offset 上限 1000000。get/list 返回状态、attemptCount、maxAttempts、nextAttemptAt、lastFailure 和 updatedAt，不含正文、收件人及 owner。修复 Provider 配置或消息根因后，查询最新 dead 版本再恢复：
+仓库通知用完了尝试次数，记录变成 `dead`，也就是 Reach 已停止自动重试。运维修复仓库地址后，两位同事都打开了这条记录。`reach.queue.get(queueId)` 返回 `status: 'dead'` 和 `updatedAt: 1795478460000`。他们点「重新排队」时，都把刚看到的 `1795478460000` 传给 `expectedUpdatedAt`。
+
+第一位同事成功后，记录变为 `pending`，更新时间也跟着更新。第二位同事拿着旧值提交会收到 `SEND_FAILED`。重新查询发现已是 `pending`，界面就显示当前状态。如果任务又重试失败回到 `dead`，记录也有了新的更新时间，应先看这一次的失败原因，再决定是否重新排队。
+
+下面用 `queueId` 查询这条通知，再把查询回来的时间原样传回。`updatedAt` 的单位是 Unix 毫秒，值来自 Reach 的记录。用 `Date.now()` 生成的当前时间无法代表你读到的那条记录。
 
 ```ts
 async function restoreDead(queueId: string) {
-// 用运维人员提供的回执读取最新记录和更新时间；不存在为 null，读取失败由下方处理。
-const state = await reach.queue.get(queueId)
-if (!state.success)
-  throw new Error(state.error.message)
-if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
-  // 按刚读取的更新时间条件恢复死信。成功无数据，只改为待处理；状态或更新时间不匹配时失败。
-  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
-  if (!restored.success)
-    throw new Error(restored.error.message)
-}
+  // 用通知的队列编号查状态和更新时间。记录不存在时 data 为 null。
+  const state = await reach.queue.get(queueId)
+  if (!state.success)
+    throw new Error(state.error.message)
+  if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+    // 把读到的更新时间传回。成功时记录回到 pending；记录已变化时返回失败。
+    const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+    if (!restored.success)
+      throw new Error(restored.error.message)
+  }
 }
 ```
 
-调用 `reach.queue.requeueDead()` 只会恢复版本匹配且仍为 `dead` 的记录，重置尝试次数并保留原来的 `queueId` 和重试等待策略。过时请求、并发更新和 `unknown` 状态都会失败。如果此前有送往外部 API 的请求正在执行，复发前要确认对方仍会按原 `queueId` 去重。发送内容本身有误时，应先排查和更正内容，重复恢复不会修复消息。
+重新排队会把尝试次数归零，同一条记录继续使用原来的 `queueId` 和重试等待策略。旧 HTTP 请求仍可能到达时，先确认接收方还能按原编号去重。看到 `unknown` 时，走下面的人工核对流程。
 
 #### 未知结果人工核对
 
@@ -402,7 +474,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 | `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | 模板渲染失败     |
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方       |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册  |
-| `HaiReachError.quiet hours_BLOCKED`            | `hai:reach:006` | 免打扰丢弃       |
+| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰时本次没有发送 |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化         |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型     |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误         |

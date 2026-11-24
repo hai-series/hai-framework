@@ -22,7 +22,7 @@ API 空 2xx 表示受理成功；非空 JSON 回执上限 64 KiB。redirect 默�
 - 使用模板先初始化 reldb，再初始化 Reach；非空配置模板的仓库/保存失败会使 init 返回 CONFIG_ERROR 并关闭候选 Provider。单次发送从同一模板快照渲染内容和选择默认 Provider，显式 provider 仍可覆盖；直接发送须提供 provider。启用 DND delay 也必须先初始化 reldb 并确保队列表可用；成功时 `deferred: true` 与 `queueId` 表示可靠入队，尚未投递；缺库、断连或插入失败须按 HaiResult 失败处理。即时投递与排队状态须区分。
 - API 自定义请求头整体视为私密数据，部署时写私有环境文件；`reach.config` 隐藏全部头值，不能只依靠 Authorization/token 等名称识别秘密。
 - 验证模板替换和错误分支时使用隔离测试收件人；真实通知须在用户授权范围内。
-- 阿里云短信的 `gateway` 通过 POST 转发已签名查询，可配置请求头和正文；服务端 `reach.init` 可按 Provider 名注入 `gatewayHooks`。受信内网 HTTP 须显式启用，转发日志应脱敏查询串。
+- 阿里云短信直连需要已审核的编码。在 `templateCodes` 中按本地模板名配置，或发送时传 `extra.templateCode`。配置了 `gateway` 的 `aliyun-sms` 可在 `reach.init` 注入 `gatewayHooks`，并通过 POST 转发已签名查询。受信内网 HTTP 须显式启用，转发日志应脱敏查询串。
 - 缓存锁只减少扫描，按实际执行逐条领取并在途续租。API 只有接收端真正具备原子持久去重时才能声明 idempotent=true，全部请求固定用 queueId 作为 Idempotency-Key；旧节点迟到请求也必须去重。SMTP/短信/默认 API 的在途失败或过期转 unknown，禁止自动重发；可信服务端用 queue.get/resolveUnknown 在人工隔离旧 worker、核对外部记录后裁定 sent/discarded。
 - queue 重试策略随消息持久保存，默认最多领取 5 次，指数退避 60 秒至 1 小时；永久失败/超限进 dead，满批失败不会原地自旋。可信服务端用 queue.list 查询 dead/unknown；修复根因后以最新 updatedAt 调用 requeueDead，只能恢复 dead，保留同一 queueId 和接收端幂等要求。unknown 不能重排。
 
@@ -42,4 +42,4 @@ API 空 2xx 表示受理成功；非空 JSON 回执上限 64 KiB。redirect 默�
 
 IAM 通知使用 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 标准模板；将已初始化的 `reach` 传入 `iam.init`。Console Provider 只记录元数据，不输出验证码/令牌，不代替实际邮件/短信发送。
 
-凭据通知用 sensitive:true、Unix 毫秒 expiresAt 和无凭据的稳定 idempotencyKey。共享 DB 仅存元数据回执，不存正文/变量/凭据摘要，不延迟重投；成功返回 receiptId，不明结果不自动重发。开发 Console 明确允许的输出与持久观察器隔离，生产 Console 限制不变。普通通知可用 deferPolicy: reject 将排队交给调用方。`reach.init()` 创建并校验发送日志表及队列标识约束。
+即时发送可传 `ignoreDnd: true`。IAM 的内置验证码、密码重置和初始设密邀请会自动传入。渠道受理后，连接数据库的 Reach 会尝试写一行发送历史，保存收件人、正文和变量。普通通知可用 `deferPolicy: 'reject'` 将免打扰等待交给调用方。

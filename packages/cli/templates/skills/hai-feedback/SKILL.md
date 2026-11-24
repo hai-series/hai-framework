@@ -84,4 +84,4 @@ Web 使用 `@h-ai/feedback/client`。桌面端从 `@h-ai/feedback/tauri` 导入 
 
 服务策略不可用时仍可本地准备/保存，明确 server-policy-unavailable；在线提交重新校验，不能以本地预算伪装服务端受理成功。onfileschange 的第二参数 removedAttachmentIds 透传 addFiles，删除与新增原子合并且按有效容量检查。
 
-Reach 为 optional peer，console/disabled 不安装或初始化它；reach 模式须显式安装并初始化 @h-ai/reach。凭据通知只有安全 receiptId，不保存/回传 Provider messageId。
+`reach` 模式依赖应用安装并初始化 `@h-ai/reach`。`console` 和 `disabled` 模式可以独立使用。
