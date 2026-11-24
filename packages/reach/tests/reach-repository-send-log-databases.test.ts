@@ -4,7 +4,7 @@ import type { SendLogRepository } from '../src/repositories/reach-repository-sen
 import { reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { HaiReachError } from '../src/index.js'
+import { HaiReachError, reach } from '../src/index.js'
 import { createSendLogRepository, resetSendLogRepoSingleton } from '../src/repositories/reach-repository-send-log.js'
 
 const milliseconds = 1_789_009_309_123
@@ -86,6 +86,32 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect(pending.data[0].id).toBeTypeOf('number')
       return pending.data[0].id
     }
+
+    it('模板按唯一名称并发保存时两次都成功', async () => {
+      const template = { name: 'shared-notice', provider: 'local', body: 'Notification {name}' }
+      expect(await reach.init({
+        providers: [
+          { name: 'local', type: 'console' },
+        ],
+      })).toMatchObject({ success: true })
+      try {
+        const saved = await Promise.all([
+          reach.template.save(template),
+          reach.template.save(template),
+        ])
+        expect(saved).toEqual([
+          { success: true, data: undefined },
+          { success: true, data: undefined },
+        ])
+        expect(await reach.template.list()).toMatchObject({
+          success: true,
+          data: [template],
+        })
+      }
+      finally {
+        await reach.close()
+      }
+    })
 
     it('四项队列时间列均使用可容纳毫秒的 BIGINT', async () => {
       if (type === 'sqlite') {

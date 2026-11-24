@@ -260,18 +260,24 @@ export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiR
   if (templateRepoInstance && templateRepoSqlOps === db.sql)
     return core.ok(templateRepoInstance)
 
-  const repo = new DbTemplateRepository(db)
-  // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
-  const initResult = await repo.count()
-  if (!initResult.success) {
+  const columns = Object.fromEntries(TEMPLATE_FIELDS.map(field => [field.columnName, field.def]))
+  // PostgreSQL 的 IF NOT EXISTS 无法独立处理多个节点同时创建同一张表。
+  const initialized = await db.prepareSchema('hai:reach:template:schema', async ({ ddl, sql }) => {
+    const created = await ddl.createTable(TABLE_NAME, columns, true)
+    if (!created.success)
+      return created
+    return sql.get(`SELECT id FROM ${TABLE_NAME} LIMIT 1`)
+  })
+  if (!initialized.success) {
     return core.err(
       HaiReachError.SEND_FAILED,
       reachM('reach_templateDbInitFailed', {
-        params: { error: initResult.error.message },
+        params: { error: initialized.error.message },
       }),
-      initResult.error,
+      initialized.error,
     )
   }
+  const repo = new DbTemplateRepository(db)
   templateRepoInstance = repo
   templateRepoSqlOps = db.sql
   return core.ok(repo)
@@ -293,13 +299,21 @@ function toReachTemplate(stored: StoredTemplate): ReachTemplate {
  * 基于数据库的模板存储实现
  */
 class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> implements TemplateRepository {
+  private readonly templatesByName
+
   constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: TEMPLATE_FIELDS,
       idColumn: 'id',
       idField: 'id',
-      createTableIfNotExists: true,
+      createTableIfNotExists: false,
+    })
+    this.templatesByName = db.crud.table({
+      table: TABLE_NAME,
+      idColumn: 'name',
+      updateColumns: TEMPLATE_FIELDS.filter(field => field.update).map(field => field.columnName),
+      get dbType() { return db.config!.type },
     })
   }
 
@@ -318,47 +332,21 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
 
   /** 保存模板（存在则更新，不存在则插入） */
   async upsert(template: ReachTemplate, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const existing = await this.findByName(template.name, tx)
-    if (!existing.success) {
-      return existing
-    }
-
-    const now = Date.now()
-
-    if (existing.data) {
-      // 更新
-      const updateResult = await this.updateById(
-        existing.data.id,
-        {
-          provider: template.provider,
-          subject: template.subject ?? null,
-          body: template.body,
-          updatedAt: now,
-        },
-        tx,
-      )
-      if (!updateResult.success) {
-        return updateResult
-      }
-    }
-    else {
-      // 插入
-      const createResult = await this.create(
-        {
-          name: template.name,
-          provider: template.provider,
-          subject: template.subject ?? null,
-          body: template.body,
-          createdAt: now,
-          updatedAt: now,
-        },
-        tx,
-      )
-      if (!createResult.success) {
-        return createResult
-      }
-    }
-    return core.ok(undefined)
+    // 以已有唯一名称原子合并，覆盖内容但保留原有创建时间。
+    const now = this.db.config?.type === 'sqlite'
+      ? Date.now()
+      : new Date()
+    const saved = await this.templatesByName.createOrUpdate({
+      name: template.name,
+      provider: template.provider,
+      subject: template.subject ?? null,
+      body: template.body,
+      created_at: now,
+      updated_at: now,
+    }, tx)
+    return saved.success
+      ? core.ok(undefined)
+      : saved
   }
 
   /** 按名称删除模板 */
