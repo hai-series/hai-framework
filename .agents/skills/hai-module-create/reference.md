@@ -348,12 +348,3 @@ import { baseVitestConfig } from '../vitest.base'
 
 export default defineConfig({ ...baseVitestConfig })
 ```
-
-## R9 README 章节顺序（面向人类）
-
-按[模块文档规范](../../instructions/module-documentation.md)的六章顺序、参考页分工及三语规则撰写：
-
-1. 从实际公开入口、配置消费点、数据读写和测试逐项列出本次需说明的内容；既有模块先定位原有章节和已发布链接。
-2. 先写配置、数据和功能参考页。用 API 表清点方法，再写解决读者实际任务的示例；从安装或前置条件开始走一遍，核对可观察结果和失败边界。同步相关源码注释。
-3. 改 README 和官网索引，让读者到达对应语言的最小示例和参考页。已有内容移入参考页时保留原锚点，以链接替代重复内容。
-4. 按规范运行适用验证，检查尚未翻译的范围和原文链接，按[文档审查步骤](../hai-module-review/review.md#readme-信息结构与事实核验)完成自查。

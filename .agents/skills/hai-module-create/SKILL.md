@@ -5,8 +5,6 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 
 # hai-module-create — 模块创建决策手册
 
-数据结构参考必须同时提供结构说明与示例数据：覆盖每张表、每类缓存值、文件记录和主要接口/运行时对象，核对真实类型、时间单位、关联标识和脱敏；片段须标明字段投影。没有自有存储时展示实际返回或运行时结构，不虚构表。详细要求见[模块文档规范](../../instructions/module-documentation.md)。 先讲每类数据解决什么问题、谁读写、何时清理；每份示例解释业务状态和关键值。不能以 CAS/TTL 等实现词或无注解 JSON 代替用途，配额要说明周期、满额及恢复，详见同一文档规范。
-
 开发沟通和交付前同步检查遵循[沟通与同步维护](../../../packages/cli/templates/skills/hai-app-create/collaboration.md)，按实际影响维护使用文档、配置示例、截图、测试、CLI 模板和调用方。
 
 ## 能力契约
@@ -25,13 +23,9 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 >
 > **变量约定**：`xx` = 模块名（如 storage、iam），`yy` / `zz` = 子功能名，`aaa` = Provider 实现名。
 
-只编写或修正文档时，直接按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)执行；以现有公开契约为准。新增模块或能力时，再执行下列架构与实现步骤。
+## 文档任务
 
-配置页先核对实际配置文件与读取者；API 的 config/options、依赖注入和组件 props 写功能页，响应结构写数据页。无独立配置文件时明确说明，不虚构模块 YAML，详见上述模块文档规范。
-
-功能页按大功能写三级标题（任务名称 + 真实入口），每节依次为用途、四级「接口清单」、四级场景。场景串联实际调用流程，每次公共业务 API 调用都用代码块内的相邻注释交代实参、结果及相关失败。同一方法重复调用也逐次解释。属性、组件、CLI、工厂和流按真实契约展示，三语分组与锚点一致。写法和验收见[模块文档规范](../../instructions/module-documentation.md#功能清单与场景示例)。
-
-多阶段、有条件分支、异步状态或跨端协作的接口，在对应场景配流程、时序、状态或职责图，并解释具体路径、失败与清理；按[复杂接口与辅助图](../../instructions/module-documentation.md#复杂接口与辅助图)核对源码、三语和实际渲染。简单接口不强制配图。
+只写或修正文档时，直接按[模块文档规范](../../instructions/module-documentation.md)开始。先从实际业务操作核对源码和现有页面，再按对应页面要求修改。功能页写完[接口清单与字段说明](../../instructions/module-documentation.md#接口清单)，再展开场景。用最终文档的配置、输入和调用顺序验证关键结果，完成[交付核对](../../instructions/module-documentation.md#交付前核对)。新增模块或能力时继续以下实现步骤。
 
 ## §1 架构决策（按顺序回答）
 
@@ -165,7 +159,7 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
-16. **README 与模块手册** → 按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)，先完成三类参考页及三语链接，再更新 README。功能页逐个大功能写用途、四级「接口清单」和场景，统一五列 `API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例`；逐项解释具体输入与结果，工厂继续演示返回实例的操作及清理。逐文件通读三语章节与示例，不能以批处理代替审查，不重复添加逐行场景链接或堆放锚点。
+16. **README 与模块手册** → 按[模块文档规范](../../instructions/module-documentation.md#各页面怎么写)完成三类参考页，再同步 README、索引和调用方入口。
 
 ## §6 创建检查清单
 
@@ -184,6 +178,6 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
-- [ ] 中英日 README、三类参考页、逐方法 API 清单及场景示例已按[模块文档规范](../../instructions/module-documentation.md)核对。单独阅读代码块，逐次检查调用行旁的实参、结果和失败说明，并运行关键场景。文档链接、锚点和受影响的使用 skill 或 CLI 模板已同步
+- [ ] 模块文档已按[交付核对](../../instructions/module-documentation.md#交付前核对)验收，受影响的使用 skill 和 CLI 模板已同步
 - [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
 - [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过
