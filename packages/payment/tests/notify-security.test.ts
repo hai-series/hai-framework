@@ -1,12 +1,14 @@
 /** 通知身份、协议时钟、证书轮换与请求保密边界回归。 */
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createHmac, createPublicKey, createSign, generateKeyPairSync, X509Certificate } from 'node:crypto'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AlipayConfigSchema, StripeConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
 import { formatAlipayTime } from '../src/providers/alipay/payment-alipay-time'
 import { createAlipayProvider } from '../src/providers/alipay/payment-provider-alipay'
 import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
+import { StripeOperationRepository } from '../src/providers/stripe/payment-stripe-repository-operation'
 import { createWechatPayProvider } from '../src/providers/wechat/payment-provider-wechat'
 
 const now = new Date('2026-10-22T00:00:00Z')
@@ -191,18 +193,17 @@ describe('alipay notification security', () => {
   })
 
   it('uTC 节点使用北京时间签名，并将订单和签名放在 form body 而非 URL', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        alipay_trade_query_response: {
-          code: '10000',
-          out_trade_no: 'ORDER_PRIVATE',
-          trade_no: 'ALI_PRIVATE',
-          trade_status: 'WAIT_BUYER_PAY',
-          total_amount: '1.00',
-        },
-      }),
+    const payload = JSON.stringify({
+      code: '10000',
+      out_trade_no: 'ORDER_PRIVATE',
+      trade_no: 'ALI_PRIVATE',
+      trade_status: 'WAIT_BUYER_PAY',
+      total_amount: '1.00',
     })
+    const signature = createSign('RSA-SHA256').update(payload).sign(pair.privateKey, 'base64')
+    const fetchSpy = vi.fn().mockResolvedValue(new Response(
+      `{"alipay_trade_query_response":${payload},"sign":${JSON.stringify(signature)}}`,
+    ))
     vi.stubGlobal('fetch', fetchSpy)
     const result = await createAlipayProvider(alipayConfig).queryOrder('ORDER_PRIVATE')
     expect(result.success).toBe(true)
@@ -367,10 +368,31 @@ describe('stripe notification security', () => {
     expect((await createStripeProvider(config).handleNotify(request({}, timestamp))).success).toBe(false)
   })
   it('密钥轮换的多 v1 签名可匹配当前密钥；重复 t 拒绝', async () => {
-    const valid = request()
-    valid.headers['Stripe-Signature'] = valid.headers['Stripe-Signature'].replace(',v1=', `,v1=${'0'.repeat(64)},v1=`)
-    expect((await createStripeProvider(config).handleNotify(valid)).success).toBe(true)
-    valid.headers['Stripe-Signature'] += `,t=${now.getTime() / 1000}`
-    expect((await createStripeProvider(config).handleNotify(valid)).success).toBe(false)
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    try {
+      const repository = new StripeOperationRepository(reldb)
+      expect((await repository.initialize()).success).toBe(true)
+      vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(Response.json(
+        url.endsWith('/v1/account')
+          ? { id: 'acct_security' }
+          : { id: event.data.object.id, url: 'https://checkout.stripe.com/pay/session' },
+      ))))
+      const provider = createStripeProvider(config, repository)
+      expect((await provider.createOrder({
+        orderNo: event.data.object.metadata.orderNo,
+        amount: event.data.object.amount_total,
+        description: 'Test',
+        tradeType: 'h5',
+        notifyUrl: 'https://example.invalid/notify',
+      })).success).toBe(true)
+      const valid = request()
+      valid.headers['Stripe-Signature'] = valid.headers['Stripe-Signature'].replace(',v1=', `,v1=${'0'.repeat(64)},v1=`)
+      expect((await provider.handleNotify(valid)).success).toBe(true)
+      valid.headers['Stripe-Signature'] += `,t=${now.getTime() / 1000}`
+      expect((await provider.handleNotify(valid)).success).toBe(false)
+    }
+    finally {
+      await reldb.close()
+    }
   })
 })

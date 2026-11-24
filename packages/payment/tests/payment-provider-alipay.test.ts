@@ -13,7 +13,13 @@ import { formatAlipayTime } from '../src/providers/alipay/payment-alipay-time'
 import { createAlipayProvider } from '../src/providers/alipay/payment-provider-alipay'
 
 // 生成测试用 RSA 密钥对
-const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+const { privateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+})
+
+const alipayKeys = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' },
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
@@ -23,7 +29,7 @@ const testConfig = AlipayConfigSchema.parse({
   appId: '2021000000000001',
   sellerId: '2088_test',
   privateKey,
-  alipayPublicKey: publicKey,
+  alipayPublicKey: alipayKeys.publicKey,
   returnUrl: 'https://example.invalid/payment/return',
 })
 
@@ -46,7 +52,7 @@ function signNotifyParams(params: Record<string, string>): string {
 
   const sign = createSign('RSA-SHA256')
   sign.update(sorted)
-  return sign.sign(privateKey, 'base64')
+  return sign.sign(alipayKeys.privateKey, 'base64')
 }
 
 /** 构建 form-urlencoded 回调 body */
@@ -62,6 +68,20 @@ function buildNotifyBody(params: Record<string, string>): string {
   })
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&')
+}
+
+/** 签名目标是网关方法对象的原始 JSON 文本，所有测试密钥都仅在进程内生成。 */
+function signedGatewayResponse(
+  methodKey: string,
+  body: Record<string, unknown> | string,
+  key = alipayKeys.privateKey,
+  algorithm: 'RSA-SHA256' | 'RSA-SHA1' = 'RSA-SHA256',
+): Response {
+  const payload = typeof body === 'string'
+    ? body
+    : JSON.stringify(body)
+  const signature = createSign(algorithm).update(payload).sign(key, 'base64')
+  return new Response(`{${JSON.stringify(methodKey)}:${payload},"sign":${JSON.stringify(signature)}}`)
 }
 
 describe('payment-provider-alipay', () => {
@@ -284,19 +304,14 @@ describe('payment-provider-alipay', () => {
 
   describe('queryOrder', () => {
     it('查询成功返回订单状态', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_query_response: {
-            code: '10000',
-            out_trade_no: 'ORD001',
-            trade_no: 'ALI_Q_001',
-            trade_status: 'TRADE_SUCCESS',
-            total_amount: '5.00',
-            send_pay_date: '2024-01-01 12:00:00',
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_query_response', {
+        code: '10000',
+        out_trade_no: 'ORD001',
+        trade_no: 'ALI_Q_001',
+        trade_status: 'TRADE_SUCCESS',
+        total_amount: '5.00',
+        send_pay_date: '2024-01-01 12:00:00',
+      }))
 
       const provider = createAlipayProvider(testConfig)
       const result = await provider.queryOrder('ORD001')
@@ -318,18 +333,13 @@ describe('payment-provider-alipay', () => {
       ['TRADE_FINISHED', 'paid'],
       ['WAIT_BUYER_PAY', 'pending'],
     ])('查询状态 %s 映射为 %s', async (tradeStatus, expectedStatus) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_query_response: {
-            code: '10000',
-            out_trade_no: 'ORD-MAP',
-            trade_no: 'ALI_MAP',
-            trade_status: tradeStatus,
-            total_amount: '1.00',
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_query_response', {
+        code: '10000',
+        out_trade_no: 'ORD-MAP',
+        trade_no: 'ALI_MAP',
+        trade_status: tradeStatus,
+        total_amount: '1.00',
+      }))
 
       const provider = createAlipayProvider(testConfig)
       const result = await provider.queryOrder('ORD-MAP')
@@ -355,18 +365,13 @@ describe('payment-provider-alipay', () => {
 
   describe('refund', () => {
     it('退款成功（fund_change=Y → success）', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_refund_response: {
-            code: '10000',
-            out_trade_no: 'ORD001',
-            refund_fee: '5.00',
-            trade_no: 'ALI_RF_001',
-            fund_change: 'Y',
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_refund_response', {
+        code: '10000',
+        out_trade_no: 'ORD001',
+        refund_fee: '5.00',
+        trade_no: 'ALI_RF_001',
+        fund_change: 'Y',
+      }))
 
       const provider = createAlipayProvider(testConfig)
       const result = await provider.refund({
@@ -385,18 +390,13 @@ describe('payment-provider-alipay', () => {
     })
 
     it.each(['N', undefined])('fund_change=%s 时状态为 processing，不宣称退款成功', async (fundChange) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_refund_response: {
-            code: '10000',
-            out_trade_no: 'ORD002',
-            refund_fee: '1.00',
-            trade_no: 'ALI_RF_002',
-            fund_change: fundChange,
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_refund_response', {
+        code: '10000',
+        out_trade_no: 'ORD002',
+        refund_fee: '1.00',
+        trade_no: 'ALI_RF_002',
+        fund_change: fundChange,
+      }))
 
       const provider = createAlipayProvider(testConfig)
       const result = await provider.refund({
@@ -426,12 +426,7 @@ describe('payment-provider-alipay', () => {
 
   describe('closeOrder', () => {
     it('关闭订单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_close_response: { code: '10000', out_trade_no: 'ORD001', trade_no: 'ALI_CLOSE' },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_close_response', { code: '10000', out_trade_no: 'ORD001', trade_no: 'ALI_CLOSE' }))
 
       const provider = createAlipayProvider(testConfig)
       const result = await provider.closeOrder('ORD001')
@@ -486,6 +481,21 @@ describe('payment-provider-alipay', () => {
       describe(operation.method, () => {
         const key = `${operation.method.replace(/\./g, '_')}_response`
 
+        it.each(['missing', 'merchant-key'] as const)('合法业务结构的成功响应须带网关签名 (%s)', async (signature) => {
+          const payload = { code: '10000', ...operation.fields }
+          fetchSpy.mockResolvedValueOnce(signature === 'missing'
+            ? Response.json({ [key]: payload })
+            : signedGatewayResponse(key, payload, privateKey))
+
+          const result = await operation.run(createAlipayProvider(testConfig))
+          expect(result).toMatchObject({
+            success: false,
+            error: { code: operation.errorCode },
+          })
+          if (!result.success && result.error.cause instanceof Error)
+            expect(result.error.cause.message).toBe('Invalid Alipay response signature')
+        })
+
         it.each([
           'ACQ.TRADE_NOT_EXIST',
           'ACQ.BUYER_BALANCE_NOT_ENOUGH',
@@ -495,18 +505,13 @@ describe('payment-provider-alipay', () => {
           'hTTP 200 + code=40004/%s 返回操作失败，不泄漏渠道描述',
           async (subCode) => {
             const sensitiveValue = 'sensitive-buyer@example.com'
-            fetchSpy.mockResolvedValueOnce({
-              ok: true,
-              json: async () => ({
-                [key]: {
-                  code: '40004',
-                  sub_code: subCode,
-                  msg: sensitiveValue,
-                  sub_msg: sensitiveValue,
-                  buyer_logon_id: sensitiveValue,
-                },
-              }),
-            })
+            fetchSpy.mockResolvedValueOnce(signedGatewayResponse(key, {
+              code: '40004',
+              sub_code: subCode,
+              msg: sensitiveValue,
+              sub_msg: sensitiveValue,
+              buyer_logon_id: sensitiveValue,
+            }))
 
             const result = await operation.run(createAlipayProvider(testConfig))
             expect(result.success).toBe(false)
@@ -546,10 +551,7 @@ describe('payment-provider-alipay', () => {
             [key]: { code: '20000' },
           },
         ])('畸形或失败响应 %# 不能返回成功', async (body) => {
-          fetchSpy.mockResolvedValueOnce({
-            ok: true,
-            json: async () => body,
-          })
+          fetchSpy.mockResolvedValueOnce(Response.json(body))
           const result = await operation.run(createAlipayProvider(testConfig))
           expect(result.success).toBe(false)
           if (!result.success)
@@ -559,12 +561,7 @@ describe('payment-provider-alipay', () => {
         it.each(Object.keys(operation.fields))('code=10000 但缺少 %s 仍返回失败', async (field) => {
           const fields: Record<string, unknown> = { ...operation.fields }
           delete fields[field]
-          fetchSpy.mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({
-              [key]: { code: '10000', ...fields },
-            }),
-          })
+          fetchSpy.mockResolvedValueOnce(signedGatewayResponse(key, { code: '10000', ...fields }))
           const result = await operation.run(createAlipayProvider(testConfig))
           expect(result.success).toBe(false)
           if (!result.success)
@@ -572,21 +569,13 @@ describe('payment-provider-alipay', () => {
         })
 
         it('返回其它订单号时失败，不能把渠道结果用于本次订单', async () => {
-          fetchSpy.mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({
-              [key]: { code: '10000', ...operation.fields, out_trade_no: 'ANOTHER_ORDER' },
-            }),
-          })
+          fetchSpy.mockResolvedValueOnce(signedGatewayResponse(key, { code: '10000', ...operation.fields, out_trade_no: 'ANOTHER_ORDER' }))
           const result = await operation.run(createAlipayProvider(testConfig))
           expect(result.success).toBe(false)
         })
 
         it('非法 JSON 的错误不泄漏响应片段', async () => {
-          fetchSpy.mockResolvedValueOnce({
-            ok: true,
-            json: async () => { throw new SyntaxError('Unexpected token in sensitive-buyer@example.com') },
-          })
+          fetchSpy.mockResolvedValueOnce(new Response('Invalid JSON: sensitive-buyer@example.com'))
           const result = await operation.run(createAlipayProvider(testConfig))
           expect(result.success).toBe(false)
           if (!result.success && result.error.cause instanceof Error) {
@@ -597,6 +586,35 @@ describe('payment-provider-alipay', () => {
       })
     }
 
+    it('按原始 JSON 文本验签，保留嵌套结构、空白和字符串转义', async () => {
+      const payload = JSON.stringify({
+        code: '10000',
+        out_trade_no: 'ORDER_CHECK',
+        trade_no: 'ALI_CHECK',
+        trade_status: 'TRADE_SUCCESS',
+        total_amount: '1.00',
+        details: [
+          { label: '地址 {确认}', url: 'https://example.invalid/order' },
+        ],
+      }, null, 2).replaceAll('/', '\\/')
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_query_response', payload))
+      const result = await createAlipayProvider(testConfig).queryOrder('ORDER_CHECK')
+      expect(result).toMatchObject({
+        success: true,
+        data: { status: 'paid', amount: 100 },
+      })
+    })
+
+    it('rSA 配置使用已声明的签名算法校验同步应答', async () => {
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_close_response', {
+        code: '10000',
+        out_trade_no: 'ORDER_CHECK',
+        trade_no: 'ALI_CHECK',
+      }, alipayKeys.privateKey, 'RSA-SHA1'))
+      const result = await createAlipayProvider({ ...testConfig, signType: 'RSA' }).closeOrder('ORDER_CHECK')
+      expect(result.success).toBe(true)
+    })
+
     it.each([
       { trade_status: 'UNKNOWN_STATUS' },
       { total_amount: '1.001' },
@@ -606,30 +624,20 @@ describe('payment-provider-alipay', () => {
       { total_amount: '90071992547409.92' },
       { send_pay_date: 'invalid-date' },
     ])('查单拒绝非法状态或金额：%j', async (fields) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_query_response: {
-            code: '10000',
-            out_trade_no: 'ORDER_CHECK',
-            trade_no: 'ALI_CHECK',
-            trade_status: 'TRADE_SUCCESS',
-            total_amount: '1.00',
-            ...fields,
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_query_response', {
+        code: '10000',
+        out_trade_no: 'ORDER_CHECK',
+        trade_no: 'ALI_CHECK',
+        trade_status: 'TRADE_SUCCESS',
+        total_amount: '1.00',
+        ...fields,
+      }))
       const result = await createAlipayProvider(testConfig).queryOrder('ORDER_CHECK')
       expect(result.success).toBe(false)
     })
 
     it('原始子错误码含敏感值时不回传', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_close_response: { code: '40004', sub_code: 'sensitive-buyer@example.com' },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_close_response', { code: '40004', sub_code: 'sensitive-buyer@example.com' }))
       const result = await createAlipayProvider(testConfig).closeOrder('ORDER_CHECK')
       expect(result.success).toBe(false)
       if (!result.success && result.error.cause instanceof Error)
@@ -643,37 +651,27 @@ describe('payment-provider-alipay', () => {
     ])(
       '退款拒绝非法业务字段：%j',
       async (fields) => {
-        fetchSpy.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            alipay_trade_refund_response: {
-              code: '10000',
-              out_trade_no: 'ORDER_CHECK',
-              trade_no: 'ALI_CHECK',
-              refund_fee: '1.00',
-              fund_change: 'Y',
-              ...fields,
-            },
-          }),
-        })
+        fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_refund_response', {
+          code: '10000',
+          out_trade_no: 'ORDER_CHECK',
+          trade_no: 'ALI_CHECK',
+          refund_fee: '1.00',
+          fund_change: 'Y',
+          ...fields,
+        }))
         const result = await createAlipayProvider(testConfig).refund({ orderNo: 'ORDER_CHECK', refundNo: 'REFUND_CHECK', amount: 100 })
         expect(result.success).toBe(false)
       },
     )
 
     it('refund_fee 为累计退款额，可大于本次退款金额', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_refund_response: {
-            code: '10000',
-            out_trade_no: 'ORDER_CHECK',
-            trade_no: 'ALI_CHECK',
-            refund_fee: '2.00',
-            fund_change: 'Y',
-          },
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedGatewayResponse('alipay_trade_refund_response', {
+        code: '10000',
+        out_trade_no: 'ORDER_CHECK',
+        trade_no: 'ALI_CHECK',
+        refund_fee: '2.00',
+        fund_change: 'Y',
+      }))
       const result = await createAlipayProvider(testConfig).refund({ orderNo: 'ORDER_CHECK', refundNo: 'REFUND_CHECK', amount: 100 })
       expect(result.success).toBe(true)
       if (result.success)

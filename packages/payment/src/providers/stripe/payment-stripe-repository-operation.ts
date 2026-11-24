@@ -130,7 +130,7 @@ export class StripeOperationRepository {
    * 通过主键插入原子预留；并发节点只接受相同请求摘要，不覆盖已有参数或删除未知操作。
    * @param id - 所有节点复用的稳定操作 ID，也是渠道幂等键。
    * @param requestHash - 路径和排序后表单参数的规范摘要。
-   * @returns 数据库中唯一的操作记录；已有 result 必须复用而非重新请求渠道。
+   * @returns 数据库中唯一的操作记录和本次是否成功创建预留；已有 result 必须复用。
    * @throws 预留/读取失败或同标识复用不同参数时抛错，由 Provider 转为操作失败。
    * @example 模块内部上下文
    * ```ts
@@ -142,13 +142,15 @@ export class StripeOperationRepository {
    * }
    * ```
    */
-  async reserve(id: string, requestHash: string): Promise<StripeOperationRecord> {
+  async reserve(id: string, requestHash: string): Promise<StripeOperationRecord & { newReservation: boolean }> {
     let record = await this.load(id)
+    let newReservation = false
     if (!record) {
       const inserted = await this.db.sql.execute(
         `INSERT INTO ${STRIPE_OPERATION_TABLE} (id, request_hash, created_at) VALUES (?, ?, ${this.nowSql()})`,
         [id, requestHash],
       )
+      newReservation = inserted.success
       record = await this.load(id)
       if (!record) {
         throw new Error('Failed to reserve Stripe operation', {
@@ -158,7 +160,7 @@ export class StripeOperationRepository {
     }
     if (record.requestHash !== requestHash)
       throw new Error('Stripe operation identifier was reused with different parameters')
-    return record
+    return { ...record, newReservation }
   }
 
   /**
@@ -167,7 +169,7 @@ export class StripeOperationRepository {
    * @param requestHash - 与预留完全一致的规范请求摘要。
    * @param result - 已经由渠道结果 Schema 校验、允许持久化的最小结果。
    * @param paymentIntent - 已核对身份的 PaymentIntent；创建时尚未知可省略。
-   * @returns 数据库确认的结果，可能由并发完成者先写入；调用者须再按结果 Schema 解析。
+   * @returns 数据库确认的结果和本次是否提交该结果；调用者须再按结果 Schema 解析。
    * @throws 更新、重读或持久状态核对失败时抛错；不将未知状态伪装为成功。
    * @example 模块内部上下文
    * ```ts
@@ -177,7 +179,12 @@ export class StripeOperationRepository {
    * }
    * ```
    */
-  async complete(id: string, requestHash: string, result: unknown, paymentIntent?: string | null): Promise<unknown> {
+  async complete(
+    id: string,
+    requestHash: string,
+    result: unknown,
+    paymentIntent?: string | null,
+  ): Promise<{ result: unknown, newCompletion: boolean }> {
     const updated = await this.db.sql.execute(
       `UPDATE ${STRIPE_OPERATION_TABLE} SET result_json = ?, payment_intent = ?
        WHERE id = ? AND request_hash = ? AND result_json IS NULL`,
@@ -193,7 +200,7 @@ export class StripeOperationRepository {
     const persisted = await this.load(id)
     if (!persisted || persisted.requestHash !== requestHash || persisted.result === null)
       throw new Error('Stripe operation result was not persisted')
-    return persisted.result
+    return { result: persisted.result, newCompletion: updated.data.changes === 1 }
   }
 
   /**

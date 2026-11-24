@@ -63,6 +63,67 @@ export const WechatNotifyResourceSchema = z.object({
 }).passthrough()
 
 /**
+ * 微信商户单号查单应答。渠道可能省略未完成订单的金额和交易号。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const order = WechatOrderQueryResponseSchema.parse({
+ *   appid: 'app-1', mchid: 'merchant-1', out_trade_no: 'ORDER_1', trade_state: 'NOTPAY',
+ * })
+ * const amount = order.amount?.total
+ * ```
+ */
+export const WechatOrderQueryResponseSchema = z.object({
+  appid: z.string().min(1),
+  mchid: z.string().min(1),
+  out_trade_no: z.string().min(1),
+  trade_state: z.enum([
+    'SUCCESS',
+    'REFUND',
+    'NOTPAY',
+    'CLOSED',
+    'REVOKED',
+    'USERPAYING',
+    'PAYERROR',
+  ]),
+  transaction_id: z.string().trim().optional(),
+  amount: z.object({
+    total: z.number().int().positive().optional(),
+    currency: z.literal('CNY').optional(),
+  }).optional(),
+  success_time: z.iso.datetime({ offset: true }).or(z.literal('')).optional(),
+}).refine(order => order.trade_state !== 'SUCCESS' || (!!order.transaction_id && order.amount?.total !== undefined))
+
+/**
+ * 微信退款申请应答。核对原订单、退款号和金额后才能采用渠道状态。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const refund = WechatRefundResponseSchema.parse({
+ *   out_trade_no: 'ORDER_1', out_refund_no: 'REFUND_1', refund_id: 'WX_REFUND_1',
+ *   status: 'PROCESSING', amount: { total: 100, refund: 50 },
+ * })
+ * const amountInCents = refund.amount.refund
+ * ```
+ */
+export const WechatRefundResponseSchema = z.object({
+  refund_id: z.string().trim().min(1),
+  out_refund_no: z.string().min(1),
+  out_trade_no: z.string().min(1),
+  status: z.enum([
+    'SUCCESS',
+    'CLOSED',
+    'PROCESSING',
+    'ABNORMAL',
+  ]),
+  amount: z.object({
+    total: z.number().int().positive(),
+    refund: z.number().int().positive(),
+    currency: z.literal('CNY').optional(),
+  }),
+})
+
+/**
  * 微信 JSAPI 下单请求；本模块仅保留公众号网页的完整调起契约。
  * @internal
  * @example 模块内部上下文

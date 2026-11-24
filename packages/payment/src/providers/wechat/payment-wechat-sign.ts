@@ -108,34 +108,35 @@ export function signJsapi(
 }
 
 /**
- * 验证微信支付回调签名
+ * 验证微信支付 APIv3 同步应答或回调签名。
  *
- * @param timestamp - 回调 header 中的时间戳
- * @param nonce - 回调 header 中的随机串
- * @param body - 回调原始 body
- * @param signature - 回调签名
+ * @param timestamp - 微信应答或回调头中的时间戳
+ * @param nonce - 微信应答或回调头中的随机串
+ * @param body - 微信应答或回调原始正文
+ * @param signature - 微信应答或回调签名
  * @param platformKey - 已按 serial 选择的微信支付平台证书或公钥 PEM
  * @returns 是否验签通过
- * @throws 公钥格式非法或 Crypto 验签异常时抛错，由通知 Provider 边界转为失败。
+ * @throws 公钥格式非法或 Crypto 验签异常时抛错，由 Provider 边界转为失败。
  * @internal
  * @example 模块内部上下文
  * ```ts
  * function verifyRawNotification(timestamp: string, nonce: string, body: string, signature: string, trustedPlatformPem: string) {
- *   return verifyNotifySignature(timestamp, nonce, body, signature, trustedPlatformPem)
+ *   return verifyWechatSignature(timestamp, nonce, body, signature, trustedPlatformPem)
  *   // 调用前已按 Wechatpay-Serial 选定受信平台密钥；该 helper 不做时间、身份或业务去重校验。
  * }
  * ```
  */
-export function verifyNotifySignature(
+export function verifyWechatSignature(
   timestamp: string,
   nonce: string,
-  body: string,
+  body: string | Uint8Array,
   signature: string,
   platformKey: string,
 ): boolean {
-  const message = `${timestamp}\n${nonce}\n${body}\n`
   const verify = createVerify('RSA-SHA256')
-  verify.update(message)
+  verify.update(`${timestamp}\n${nonce}\n`)
+  verify.update(body)
+  verify.update('\n')
   return verify.verify(platformKey, signature, 'base64')
 }
 

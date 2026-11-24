@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** 服务端真实 RSA 签名与真实 DOM 表单消费的协议回归；不代表商户/设备支付验收。 */
 import type { PaymentOrder } from '../src/payment-types'
-import { createVerify, generateKeyPairSync } from 'node:crypto'
+import { createSign, createVerify, generateKeyPairSync } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { invokePayment } from '../src/client/payment-client-web'
 import { AlipayConfigSchema, WechatPayConfigSchema } from '../src/payment-config'
@@ -180,10 +180,18 @@ describe('complete payment trade contracts', () => {
   })
 
   it('微信下单必填 payer，生成签名后仅调起公众号 JSAPI，不把客户端回调当付款证明', async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ prepay_id: 'wx_prepay_test' }),
-    })
+    const body = JSON.stringify({ prepay_id: 'wx_prepay_test' })
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const nonce = 'test-response-nonce'
+    const signature = createSign('RSA-SHA256').update(`${timestamp}\n${nonce}\n${body}\n`).sign(pair.privateKey, 'base64')
+    const fetch = vi.fn().mockResolvedValue(new Response(body, {
+      headers: {
+        'Wechatpay-Timestamp': timestamp,
+        'Wechatpay-Nonce': nonce,
+        'Wechatpay-Serial': 'TEST_SERIAL',
+        'Wechatpay-Signature': signature,
+      },
+    }))
     vi.stubGlobal('fetch', fetch)
     const result = await createWechatPayProvider(wechat).createOrder({ ...input, tradeType: 'jsapi', userId: 'trusted-openid' })
     if (!result.success)

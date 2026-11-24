@@ -24,6 +24,8 @@
 
 [查 API 清单](../../docs/usage/function/payment.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+微信与支付宝的同步 API 响应会验签。Stripe 通知还会核对共享数据库中的 Checkout Session。接入支付宝时，使用渠道要求的纯文本成功回执。[通知接入示例](../../docs/usage/function/payment.md#alipay-notification-ack)
+
 ## 数据结构
 
 查看[数据结构](../../docs/usage/data/payment.md)，了解支付渠道状态、商户订单映射与通知幂等记录。

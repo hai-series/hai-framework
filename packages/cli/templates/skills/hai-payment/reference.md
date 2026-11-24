@@ -35,17 +35,17 @@
 wechat:
   appId: ''
   mchId: ''
-  apiV3Key: ''
+  apiV3Key: '' # 32 位 ASCII 字母或数字，用于解密通知
   privateKey: ''
   serialNo: ''
-  platformKeys: # 必填，按通知 Wechatpay-Serial 精确选择受信平台证书/公钥
+  platformKeys: # 必填，按同步响应及通知的 Wechatpay-Serial 选取受信证书或公钥
     PUB_KEY_ID_123: '' # 平台公钥 PEM；证书使用其真实序列号作为 key
 
 alipay:
   appId: ''
   sellerId: '' # 必填，验签后核对 seller_id
   privateKey: ''
-  alipayPublicKey: ''
+  alipayPublicKey: '' # 用于同步响应与通知验签
   returnUrl: 'https://app.example/payment/return' # 必填 HTTPS，不能作为付款证明
   signType: RSA2 # 可选，默认 RSA2
   sandbox: false # 可选，默认 false
@@ -77,7 +77,7 @@ const initResult = await payment.init({
   wechat: {
     appId: 'wx1234567890',
     mchId: '1600000000',
-    apiV3Key: 'your-api-key-v3',
+    apiV3Key: process.env.HAI_PAYMENT_WECHAT_APIV3KEY ?? '',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     serialNo: 'CERT_SERIAL_NO',
     platformKeys: { PUB_KEY_ID_123: '-----BEGIN PUBLIC KEY-----...' },
@@ -114,8 +114,10 @@ if (result.success) {
   // clientParams 包含调起支付所需参数
 }
 
-// amount / totalAmount 必须是正整数（单位：分）
+// amount 和 totalAmount 使用币种最小单位的正整数，例如 CNY 使用分。
 ```
+
+Stripe 的 ISK、UGX 使用整单位，例如 10,000 ISK 传 amount: 10000。模块将请求金额转换为 Stripe 的两位小数编码，查询和通知使用业务金额。旧版 ISK/UGX 持久记录仍用于幂等核对，升级后暂停从旧记录自动下单、查单、履约或退款。通过 Stripe 后台核对原会话、实际资金和退款后再处理，保留原订单映射及操作记录。
 
 ### 4. 处理支付回调
 
@@ -134,11 +136,13 @@ if (result.success) {
 }
 ```
 
-Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_succeeded`、`async_payment_failed`、`expired` 事件，其它事件或缺失订单号/金额/币种返回 `NOTIFY_PARSE_FAILED`。结果的 `eventId` 用于持久去重，`currency` 为大写，`transactionId` 为 Session ID。只有 paid 结果返回 `paidAt`，取成功事件的 created 时间；Provider 不维护业务订单或进程内去重集合。
+Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_succeeded`、`async_payment_failed`、`expired` 事件，其它事件或缺失订单号/金额/币种返回 `NOTIFY_PARSE_FAILED`。结果的 `eventId` 用于持久去重，`currency` 为大写，`transactionId` 为已和持久记录核对的 Session ID。核对以账户和 test/live 模式隔离，共享库映射缺失或尚未确认时返回失败，回调路由应返回非 2xx 让 Stripe 重试。只有 paid 结果返回 `paidAt`，取成功事件的 created 时间；Provider 不维护业务订单或进程内去重集合。
 
-所有 Provider（含自定义实现）都必须返回 eventId/currency：微信 id、支付宝 notify_id、Stripe event.id；支付宝 currency 固定 CNY。微信只处理 TRANSACTION.SUCCESS/transaction，验签后继续校验 appid/mchid，按 Wechatpay-Serial 精确选择 platformKeys 项，检查证书序列号及有效期、严格整数签名时钟与当前节点相差不超过 300 秒。轮换期间所有节点同时保存新旧项；未知 serial 不能自动下载并信任。支付宝核对 app_id/seller_id/配置签名算法，拒绝重复表单字段，按北京时间严格解析真实日期；notify_id 跨日重试不变，不能对原始通知时间套五分钟有效期。支付宝请求使用 Asia/Shanghai 和 POST form body，不能把签名/订单内容放 URL。Stripe 按密钥校验 test/live，支持轮换期多个 v1 签名，只支持当前账户，拒绝 Connect/组织 context 事件。
+所有 Provider（含自定义实现）都必须返回 eventId/currency：微信 id、支付宝 notify_id、Stripe event.id；支付宝 currency 固定 CNY。微信只处理 TRANSACTION.SUCCESS/transaction，验签后继续校验 appid/mchid，按 Wechatpay-Serial 精确选择 platformKeys 项，检查证书序列号及有效期、严格整数签名时钟与当前节点相差不超过 300 秒。同步响应也按原始正文和响应头验签。轮换期间所有节点同时保存受信的新旧项。仅配置一个以 `PUB_KEY_ID_` 开头的标识时才主动用该标识请求响应签名，其他情况下默认签名密钥也应在受信配置中。支付宝核对 app_id/seller_id/配置签名算法，拒绝重复表单字段，按北京时间严格解析真实日期；notify_id 跨日重试不变，不能对原始通知时间套五分钟有效期。支付宝请求使用 Asia/Shanghai 和 POST form body，不能把签名/订单内容放 URL。Stripe 按密钥校验 test/live，支持轮换期多个 v1 签名，只支持当前账户，拒绝 Connect/组织 context 事件。
 
 接入应用应把“业务订单 pending→paid 的条件更新 + 唯一 eventId 记录 + 唯一履约 outbox”放进共享数据库同一个事务；所有 HaiResult 失败必须抛错使 reldb.tx.wrap 回滚，数据库提交后才应答渠道成功。条件须核对已存渠道、金额、币种和交易号，重复已支付通知或晚到 pending 不重复履约，已退款状态也不能倒退。订单号不得删除后复用，切换商户不能复用旧业务订单命名空间。外部发货等由 outbox 消费者携带稳定 outbox ID 幂等调用，不能在数据库事务中直接调用后宣称跨系统只执行一次。
+
+支付宝用原始表单的 POST 路由，验签后交给业务事务。事务提交或识别出已处理通知时返回 HTTP 200 和纯文本 `success`，验签或业务处理失败时用非 2xx 触发渠道重试。在 `serv.createApp` 的自定义中间件中挂载由 `apiContract.pathOf(apiContract.payment.notifications.alipay)` 取得的路径，并拼上应用 API 前缀。中间件读取一次原始 `c.req.raw.text()` 后调用 `payment.handleNotify('alipay', { body, headers })`。启用了传输加密时，把完整通知路径加入 `transport.excludePaths`，以便接收平台的原始表单并返回纯文本回执。
 
 ### 5. 查询订单
 
@@ -146,7 +150,7 @@ Stripe 创建操作将 orderNo 与 Session ID 持久绑定，查单/退款通过
 
 Stripe closeOrder 会通过可信映射读取 Session，只有 open/unpaid 才调用 expire；已 expired 幂等成功，complete/paid 失败。并发关闭或响应丢失后必须重读确认 expired，不能把“已发送请求”当关闭成功。successUrl/cancelUrl 的页面跳转不代表已付款或已经关单，业务仍以可信状态为准。
 
-微信关单的成功响应为 204 空体。`payment.closeOrder('wechat', orderNo)` 在渠道确认后返回成功。
+再次提交原 Stripe 订单时，只有原 Session 仍可付款才返回 Checkout 链接，已过期或完成返回 `CREATE_ORDER_FAILED`。微信关单成功要求 204 空正文通过渠道签名校验。微信查单返回 `refund_started` 时，应按退款号核对单笔退款。非付款状态下渠道可能省略金额，`data.amount` 可缺省。
 
 响应丢失或落库失败会保留未知记录，只能在数据库时钟的 23 小时安全窗口内沿用同一键重试；窗口之外先核对渠道结果并修复记录，不删除后重发。成功结果长期保留，不按缓存 TTL 清理。Stripe 仅保存渠道操作结果，宿主业务订单、回调去重与履约事务仍需自己实现。
 
@@ -155,13 +159,13 @@ Stripe closeOrder 会通过可信映射读取 Session，只有 open/unpaid 才�
 const result = await payment.queryOrder('wechat', 'ORDER_20250101_001')
 
 if (result.success) {
-  // result.data.status: 'pending' | 'paid' | 'closed' | 'refunded' | 'failed'
+  // result.data.status: 'pending' | 'paid' | 'closed' | 'refund_started' | 'refunded' | 'failed'
 }
 ```
 
 ### 6. 退款
 
-支付宝查单/退款/关单会验证方法对应的 envelope、字符串 code=10000、关键字段和订单号；HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。
+支付宝查单、退款和关单会验证对应方法的原始响应签名、字符串 code=10000、关键字段和订单号。HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。微信的退款单状态 CLOSED 或 ABNORMAL 返回 failed，PROCESSING 返回 processing。Stripe 返回首次退款受理状态，保存 refundId 供后续向渠道查询最终结果。
 
 ```typescript
 // 用独立退款编号提交全额 9900 分退款及原订单总额。成功 data 含渠道退款结果，可继续核对状态。
@@ -248,6 +252,7 @@ import { apiContract } from '@h-ai/api-contract'
 // apiContract.payment.orders.get           — GET  /payment/orders/{orderNo}
 // apiContract.payment.orders.refund        — POST /payment/orders/{orderNo}/refunds
 // apiContract.payment.notifications.wechat — POST /payment/notifications/wechat
+// apiContract.payment.notifications.alipay — POST /payment/notifications/alipay，纯文本回执
 ```
 
 ## 常见模式
@@ -324,7 +329,7 @@ export function createPaymentHandler(
 
 ## 审计日志
 
-关键支付操作（创建订单、回调、退款、关闭订单）成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。`queryOrder` 为只读操作，不写审计日志。
+关键支付操作（创建订单、回调、退款、关闭订单）成功后会尝试写入审计日志。应用须先初始化 `@h-ai/audit`。`queryOrder` 为只读操作，不写审计日志。
 
 内置 Provider 的 HTTP 请求默认带 15 秒超时；Stripe 可通过 `webhookToleranceSeconds` 调整 webhook 时间戳容忍窗口。
 

@@ -1080,10 +1080,10 @@ function generatePaymentConfig(): string {
 # 微信支付（仅公众号 JSAPI，需当前 appId 的 openid）
 # wechat:
 #   mchId: ''
-#   apiV3Key: ''
+#   apiV3Key: '' # API v3 密钥，恰好 32 位 ASCII 字母或数字；用于解密通知
 #   serialNo: ''
 #   privateKey: ''
-#   platformKeys: # 必填；按 Wechatpay-Serial 精确选择平台证书/公钥，轮换时保留新旧项
+#   platformKeys: # 必填；同步响应和通知按 Wechatpay-Serial 选键，轮换时保留新旧项
 #     PUB_KEY_ID_123: '' # 平台公钥 PEM；证书则以其真实序列号作为 key
 #   appId: ''
 
@@ -1092,7 +1092,7 @@ function generatePaymentConfig(): string {
 #   appId: ''
 #   sellerId: '' # 必填；回调 seller_id 必须与此一致
 #   privateKey: ''
-#   alipayPublicKey: ''
+#   alipayPublicKey: '' # 支付宝公钥，用于同步响应和通知验签
 #   returnUrl: 'https://app.example/payment/return' # 必填 HTTPS；回跳不代表已付款
 #   signType: RSA2
 #   sandbox: false

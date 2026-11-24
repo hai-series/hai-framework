@@ -79,17 +79,21 @@ Prepare providers with validated server settings. Custom providers implement the
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.init(config)` | Initialize configured payment channels | `config` | `void` | `await payment.init(config)` |
+| `payment.init(config)` | Initialize configured payment channels | `config` | `Promise<HaiResult<void>>` | `await payment.init(config)` |
 | `payment.close()` | Release module state | None | `Promise<void>` | `await payment.close()` |
+| `payment.config` | Read the parsed configuration | No arguments. Contains secrets. Keep it on the server. | `PaymentConfig \| null` | `payment.config?.stripe?.successUrl` |
+| `payment.isInitialized` | Check whether initialization succeeded | No arguments | `boolean` | `payment.isInitialized` |
 | `payment.getProvider(name)` | Read a registered payment provider | `name: string` Registered name used to look up the instance in this process | `PaymentProvider or undefined` | `payment.getProvider(name)` |
 | `payment.registerProvider(provider)` | Register an application payment provider | `provider: PaymentProvider` Fully implemented provider instance. Registering the same name replaces it in this process | `void` | `payment.registerProvider(customProvider)` |
 
 #### Scenario: Connect payment providers
 
+Finish `payment.init()` before registering an application provider. Read `payment.isInitialized` to check module state and `payment.config` for the server-side configuration. After closing, they read `false` and `null`.
+
 Input is an application PaymentProvider instance. Registration and lookup are synchronous; initialization and shutdown are in the quick start.
 
 ```ts
-import type { PaymentProvider } from '@h-ai/payment'
+import { type PaymentProvider, payment } from '@h-ai/payment'
 
 function installProvider(provider: PaymentProvider) {
   // Register the supplied provider under provider.name, replacing a provider with the same name. Returns no data.
@@ -111,9 +115,9 @@ Create a provider order with your business order number, query its status and cl
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.createOrder(providerName, input)` | Create a payment order | Required `providerName: string` names a registered provider. See [order fields](#payment-create-order-input) for required `input: CreateOrderInput`. | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder(providerName, orderNo)` | Query payment status | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.closeOrder(providerName, orderNo)` | Close a payment order | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.createOrder(providerName, input)` | Create a payment order | Required `providerName: string` names a registered provider. See [order fields](#payment-create-order-input) for required `input: CreateOrderInput`. | `Promise<HaiResult<PaymentOrder>>` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder(providerName, orderNo)` | Query payment status | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `Promise<HaiResult<OrderStatus>>` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder(providerName, orderNo)` | Close a payment order | `providerName: string` Registered provider that owns the order. `orderNo: string` Merchant order number used at creation | `Promise<HaiResult<void>>` | `await payment.closeOrder(providerName, orderNo)` |
 
 <a id="payment-create-order-input"></a>
 
@@ -132,7 +136,23 @@ Create a provider order with your business order number, query its status and cl
 
 Creating a Stripe order with `amount: 100, currency: "USD", tradeType: "h5"` returns hosted Checkout redirect data on success. Confirm the final payment via query or notification.
 
-When WeChat returns `204 No Content`, `payment.closeOrder('wechat', orderNo)` succeeds with `undefined` data. Pass the channel status through the proxy. Other statuses and network errors return `CLOSE_ORDER_FAILED`.
+##### WeChat order queries and closure
+
+`queryOrder('wechat', orderNo)` verifies the response signature and checks the app ID, merchant ID, and order number. Unpaid or closed orders can omit the amount, in which case `OrderStatus.amount` is `undefined`. Read your business order to obtain the expected total. A paid result requires a valid amount and transaction ID. WeChat’s `REFUND` is returned as `refund_started`. Check the individual refund for its outcome.
+
+`payment.closeOrder('wechat', orderNo)` requires a valid signature for the HTTP 204 response and its empty body. Other statuses, a signature failure, or a network error return `CLOSE_ORDER_FAILED`.
+
+<a id="stripe-amounts"></a>
+
+##### Stripe amounts
+
+Order creation, refunds, queries, and notifications use the business currency’s smallest unit. USD 100 is one US dollar and JPY 100 is 100 yen. Supply whole units for ISK and UGX. For example, pass `amount: 10000, currency: 'ISK'` for 10,000 ISK. The module sends 1,000,000 to Stripe and converts query and notification amounts back to 10,000. Follow [legacy data reconciliation](../data/payment.en.md#stripe-legacy-amounts) for ISK or UGX orders and unconfirmed operations created before the fix. [Stripe currency rules](https://docs.stripe.com/currencies#special-cases)
+
+##### Stripe Checkout and closing an order
+
+The server creates hosted Checkout for `mode=payment` and `tradeType=h5`. The account and test or live mode scope the saved Checkout Session ID. When the same order is submitted again, the module checks the stored session and returns its current URL only while it can take payment. A closed, expired, or completed session returns `CREATE_ORDER_FAILED` and keeps the original mapping. `closeOrder` expires an open, unpaid session or confirms it already expired.
+
+Alipay creation prepares a signed form. The backend confirms payments through a provider query or verified notification.
 
 #### Scenario: Create, query and close orders
 
@@ -165,7 +185,7 @@ Request a refund using the original order and a distinct refund number; distingu
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.refund(providerName, input)` | Request a refund and read acceptance | Required `providerName: string` specifies the original provider. See [refund fields](#payment-refund-input) for `input: RefundInput`. | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.refund(providerName, input)` | Request a refund and read acceptance | Required `providerName: string` specifies the original provider. See [refund fields](#payment-refund-input) for `input: RefundInput`. | `Promise<HaiResult<RefundResult>>` | `await payment.refund(providerName, refundInput)` |
 
 <a id="payment-refund-input"></a>
 
@@ -180,17 +200,30 @@ Request a refund using the original order and a distinct refund number; distingu
 
 For a 50-fen refund on a 100-fen WeChat order, pass `{ amount: 50, totalAmount: 100 }`. Check the refund status if the provider only acknowledges receipt.
 
+##### Check the individual refund
+
+WeChat `PROCESSING` returns `processing`, and `CLOSED` or `ABNORMAL` returns `failed`. An order with `refund_started` has entered the refund flow, which includes partial refunds. Use the [WeChat single refund query](https://pay.wechatpay.cn/doc/v3/merchant/4012791863) to check the amount and outcome.
+
+Alipay verifies the original signed API response for order queries, refunds, and closure, then checks the operation, business result, and order number. A refund with `fund_change=Y` returns `success`. For `N` or an absent value, the result is `processing`. Look up the original order and refund number through [Alipay’s refund query](https://developer.alibaba.com/docs/api.htm?apiId=1049&docType=4). A Stripe receipt describes initial acceptance. Save the returned `refundId` and [retrieve the refund from Stripe](https://docs.stripe.com/api/refunds/retrieve) when the receipt is `processing`.
+
 #### Scenario: Refund and inspect outcomes
 
-Input is a verified order and a unique refund number; 100 is in minor currency units. Neither failure nor processing confirms a completed refund.
+Read the original total and persisted refund number from the business database. This example refunds 50 minor units of a 100-unit WeChat order.
 
 ```ts
-async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
-  // Request a refund of 100 minor units for the merchant order and stored refund number. An accepted refund may still be processing; provider rejection fails, and retries reuse the refund number.
-  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
-  if (!refunded.success)
-    return refunded
-  return refunded // data.status distinguishes success from processing
+import { payment } from '@h-ai/payment'
+
+async function refundWeChatOrder(orderNo: string, refundNo: string) {
+  // Submit with the verified business order and stable refund number. Check the receipt and query the provider if it is processing.
+  const refunded = await payment.refund('wechat', {
+    orderNo,
+    refundNo,
+    amount: 50,
+    totalAmount: 100,
+  })
+  return refunded.success
+    ? { status: refunded.data.status, refundId: refunded.data.refundId }
+    : { error: refunded.error }
 }
 ```
 
@@ -204,7 +237,7 @@ Use the original body and signature headers, verify the provider and update busi
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `payment.handleNotify(providerName, request)` | Verify provider notifications and invoke callbacks | `providerName: string` Registered name from the trusted notification route. `request: PaymentNotifyRequest` Required raw body string and string-valued headers for provider verification | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.handleNotify(providerName, request)` | Verify provider notifications and return parsed details | `providerName: string` Registered name from the trusted notification route. `request: PaymentNotifyRequest` Required raw body string and string-valued headers for provider verification | `Promise<HaiResult<PaymentNotifyResult>>` | `await payment.handleNotify(providerName, originalNotification)` |
 
 #### Scenario: Verify payment callbacks
 
@@ -226,6 +259,52 @@ async function verifyNotification(providerName: string, request: Request) {
 }
 ```
 
+<a id="alipay-notification-ack"></a>
+
+#### Scenario: Acknowledge Alipay notifications
+
+Alipay sends a form request. Return HTTP 200 with the exact text `success` when the transaction commits or the application recognizes a duplicate. Mount the returned middleware in `serv.createApp({ ...options, middlewares: [...] })` using the app’s API prefix. If enabling application transport encryption, add the complete notification path to `transport.excludePaths` so the provider can use its normal form request. For a deny-by-default `http.access` policy, allow the provider’s POST requests on that path. Implement `recordVerified` as the application transaction that checks the order, deduplicates the event, and enqueues fulfillment. Its success indicates a committed transaction or an already processed duplicate.
+
+Enqueue fulfillment only for a `paid` event. If the service composes the entire `apiContract.payment`, provide an Alipay procedure that fails closed when the raw middleware is absent. You can also compose only the order routes and the other notifications the app implements.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import type { PaymentNotifyResult } from '@h-ai/payment'
+import type { ServMiddlewareMount } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
+import { payment } from '@h-ai/payment'
+
+export function alipayNotification(
+  apiPrefix: string,
+  recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
+): ServMiddlewareMount {
+  const path = apiPrefix + apiContract.pathOf(apiContract.payment.notifications.alipay)
+  return {
+    path,
+    async middleware(c, next) {
+      if (c.req.method !== 'POST')
+        return next()
+
+      const request = c.req.raw
+      // Read the original form once. Pass verified data to the business transaction. Invalid notifications return HTTP 400.
+      const verified = await payment.handleNotify('alipay', {
+        body: await request.text(),
+        headers: Object.fromEntries(request.headers),
+      })
+      if (!verified.success)
+        return c.text('fail', 400)
+
+      // Check the business order and commit. Return HTTP 500 on failure so the provider retries.
+      const committed = await recordVerified(verified.data)
+      if (!committed.success)
+        return c.text('fail', 500)
+      return c.text('success', 200)
+    },
+  }
+}
+```
+
+Acknowledge WeChat and Stripe after the business commit as well. WeChat accepts HTTP 200 or 204. Stripe accepts HTTP 2xx. The module checks the signed Stripe event against the persisted account-and-mode-scoped Session ID, order, amount, and currency before returning it. Return a non-2xx response when the mapping has yet to be saved or application processing fails so Stripe can retry. A completed Checkout event can still be `pending`. Fulfill only on `paid`.
 
 <a id="browser-payment"></a>
 

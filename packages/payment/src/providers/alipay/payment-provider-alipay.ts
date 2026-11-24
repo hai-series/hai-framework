@@ -14,7 +14,7 @@ import { core } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
-import { signAlipayParams, verifyAlipayNotify } from './payment-alipay-sign.js'
+import { signAlipayParams, verifyAlipayNotify, verifyAlipayResponse } from './payment-alipay-sign.js'
 import { formatAlipayTime, parseAlipayTime } from './payment-alipay-time.js'
 import { AlipayCloseResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './payment-alipay-types.js'
 
@@ -105,8 +105,8 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
    * HTTP 200 不代表业务成功；禁止把错误对象、原始响应或 Zod 输入放入 cause。
    * @param params - 已固定 method 和 biz_content 的未签名公共参数。
    * @param schema - 对应该方法所需字段的响应 Schema。
-   * @returns HTTP、方法 envelope、10000 业务码与字段校验均通过的结果。
-   * @throws 超时、网络、业务码或字段校验失败时抛错，由对应公共操作转为 HaiResult。
+   * @returns HTTP、方法 envelope、10000 业务码、网关签名与字段校验均通过的结果。
+   * @throws 超时、网络、网关签名、业务码或字段校验失败时抛错，由对应公共操作转为 HaiResult。
    * @example 模块内部上下文
    * ```ts
    * async function closeKnownOrder(orderNo: string) {
@@ -134,9 +134,11 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
       throw new Error(`Alipay API failed: ${timedResponse.status}`)
     }
 
+    let raw: string
     let body: unknown
     try {
-      body = await timedResponse.json()
+      raw = new TextDecoder('utf-8', { fatal: true }).decode(await timedResponse.arrayBuffer())
+      body = JSON.parse(raw)
     }
     catch {
       throw new Error('Invalid Alipay JSON response')
@@ -153,6 +155,18 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     if (!common.success) {
       throw new Error('Invalid Alipay response code')
     }
+    // 成功必须带签名；网关可返回无签名的失败。有签名的失败也必须通过验证。
+    const signature = root.data.sign
+    if (common.data.code === '10000' || signature !== undefined) {
+      if (typeof signature !== 'string' || !signature || !verifyAlipayResponse(raw, key, {
+        signature,
+        publicKey: config.alipayPublicKey,
+        signType,
+      })) {
+        throw new Error('Invalid Alipay response signature')
+      }
+    }
+
     if (common.data.code !== '10000') {
       // 仅保留有界的渠道错误标识；msg/sub_msg 可能含订单、买家信息，不得透传。
       const subCode = common.data.sub_code

@@ -21,7 +21,7 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', {
 const testConfig = {
   mchId: 'test-mch-001',
   platformKeys: { PUB_KEY_ID_TEST: publicKey },
-  apiV3Key: 'a]1234567890abcdef1234567890abcd', // 32字节
+  apiV3Key: '0123456789abcdef0123456789abcdef',
   serialNo: 'TEST-SERIAL-001',
   privateKey,
   appId: 'wx-test-app-001',
@@ -46,6 +46,30 @@ function signNotifyPayload(timestamp: string, nonce: string, body: string, key: 
   return sign.sign(key, 'base64')
 }
 
+const responseSerial = 'PUB_KEY_ID_TEST'
+
+/** 使用原始 JSON 或空响应体生成渠道签名。 */
+function signedResponse(data: unknown, options: { status?: number, timestamp?: string, serial?: string, signingKey?: string } = {}): Response {
+  const status = options.status ?? 200
+  const body = status === 204
+    ? ''
+    : JSON.stringify(data, null, 2)
+  const timestamp = options.timestamp ?? String(Math.floor(Date.now() / 1000))
+  const nonce = 'test-response-nonce'
+  return new Response(status === 204
+    ? null
+    : body, {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Wechatpay-Timestamp': timestamp,
+      'Wechatpay-Nonce': nonce,
+      'Wechatpay-Serial': options.serial ?? responseSerial,
+      'Wechatpay-Signature': signNotifyPayload(timestamp, nonce, body, options.signingKey ?? privateKey),
+    },
+  })
+}
+
 /** 按平台公钥 ID 选择验签密钥的测试配置。 */
 const testConfigWithCert = { ...testConfig }
 
@@ -59,14 +83,12 @@ describe('payment-provider-wechat', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   describe('createOrder', () => {
     it('jSAPI 下单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ prepay_id: 'wx_prepay_001' }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedResponse({ prepay_id: 'wx_prepay_001' }))
 
       const provider = createWechatPayProvider(testConfig)
       const result = await provider.createOrder({
@@ -98,6 +120,7 @@ describe('payment-provider-wechat', () => {
       expect(url).toContain('/v3/pay/transactions/jsapi')
       expect(options.method).toBe('POST')
       expect(options.headers.Authorization).toContain('WECHATPAY2-SHA256-RSA2048')
+      expect(options.headers['Wechatpay-Serial']).toBe(responseSerial)
       expect(options.signal).toBeDefined()
       const body = JSON.parse(options.body)
       expect(body.out_trade_no).toBe('ORD001')
@@ -152,10 +175,7 @@ describe('payment-provider-wechat', () => {
       { prepay_id: 42 },
       { h5_url: 'https://example.com' },
     ])('拒绝不能调起的预支付响应 %j', async (response) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => response,
-      })
+      fetchSpy.mockResolvedValueOnce(signedResponse(response))
       const result = await createWechatPayProvider(testConfig).createOrder({
         orderNo: 'ORD-PREPAY',
         amount: 100,
@@ -171,10 +191,7 @@ describe('payment-provider-wechat', () => {
     })
 
     it('附带 metadata 会包含在请求 body 中', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ prepay_id: 'test' }),
-      })
+      fetchSpy.mockResolvedValueOnce(signedResponse({ prepay_id: 'test' }))
 
       const provider = createWechatPayProvider(testConfig)
       await provider.createOrder({
@@ -413,188 +430,282 @@ describe('payment-provider-wechat', () => {
     })
   })
 
-  describe('queryOrder', () => {
-    it('查询成功返回订单状态（SUCCESS → paid）', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          out_trade_no: 'ORD001',
-          transaction_id: 'wx_txn_001',
-          trade_state: 'SUCCESS',
-          amount: { total: 100 },
-          success_time: '2024-01-01T12:00:00+08:00',
-        }),
+  describe('merchant operations', () => {
+    beforeEach(async () => {
+      expect((await payment.init({ wechat: testConfig })).success).toBe(true)
+    })
+
+    afterEach(async () => {
+      await payment.close()
+    })
+
+    const queryResponse = {
+      appid: testConfig.appId,
+      mchid: testConfig.mchId,
+      out_trade_no: 'ORD001',
+      transaction_id: 'wx_txn_001',
+      trade_state: 'SUCCESS',
+      amount: { total: 100 },
+      success_time: '2024-01-01T12:00:00+08:00',
+    }
+
+    const refundResponse = {
+      out_trade_no: 'ORD001',
+      out_refund_no: 'RF001',
+      refund_id: 'wx_refund_001',
+      amount: { refund: 50, total: 100 },
+      status: 'SUCCESS',
+    }
+
+    it('验证应答签名后返回订单状态（SUCCESS → paid）', async () => {
+      fetchSpy.mockResolvedValueOnce(signedResponse(queryResponse))
+      const result = await payment.queryOrder('wechat', 'ORD001')
+
+      expect(result).toMatchObject({
+        success: true,
+        data: {
+          orderNo: 'ORD001',
+          transactionId: 'wx_txn_001',
+          status: 'paid',
+          amount: 100,
+          paidAt: new Date('2024-01-01T04:00:00.000Z'),
+        },
       })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.queryOrder('ORD001')
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.orderNo).toBe('ORD001')
-        expect(result.data.transactionId).toBe('wx_txn_001')
-        expect(result.data.status).toBe('paid')
-        expect(result.data.amount).toBe(100)
-        expect(result.data.paidAt).toBeInstanceOf(Date)
-      }
     })
 
     it.each([
       ['CLOSED', 'closed'],
-      ['REFUND', 'refunded'],
+      ['REFUND', 'refund_started'],
       ['NOTPAY', 'pending'],
+      ['REVOKED', 'closed'],
+      ['USERPAYING', 'pending'],
       ['PAYERROR', 'failed'],
-      ['UNKNOWN_STATE', 'pending'], // 未知状态默认 pending
-    ])('交易状态 %s 映射为 %s', async (tradeState, expectedStatus) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          out_trade_no: 'ORD-MAP',
-          transaction_id: 'txn',
-          trade_state: tradeState,
-          amount: { total: 100 },
-        }),
+    ])('正常映射没有金额的交易状态 %s 为 %s', async (tradeState, expectedStatus) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({
+        appid: testConfig.appId,
+        mchid: testConfig.mchId,
+        out_trade_no: 'ORD001',
+        trade_state: tradeState,
+      }))
+
+      const result = await payment.queryOrder('wechat', 'ORD001')
+
+      expect(result).toMatchObject({
+        success: true,
+        data: { orderNo: 'ORD001', status: expectedStatus },
       })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.queryOrder('ORD-MAP')
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe(expectedStatus)
-      }
+      if (result.success)
+        expect(result.data).not.toHaveProperty('amount')
     })
 
-    it('fetch 失败返回 QUERY_ORDER_FAILED', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        text: async () => 'Not Found',
+    it('金额对象存在但没有总金额时返回未支付订单', async () => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({
+        appid: testConfig.appId,
+        mchid: testConfig.mchId,
+        out_trade_no: 'ORD001',
+        trade_state: 'NOTPAY',
+        amount: { currency: 'CNY' },
+      }))
+
+      const result = await payment.queryOrder('wechat', 'ORD001')
+      expect(result).toMatchObject({
+        success: true,
+        data: { status: 'pending' },
       })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.queryOrder('ORD-NOT-FOUND')
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.QUERY_ORDER_FAILED.code)
-      }
-    })
-  })
-
-  describe('refund', () => {
-    it('退款成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          refund_id: 'wx_refund_001',
-          status: 'SUCCESS',
-        }),
-      })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.refund({
-        orderNo: 'ORD001',
-        refundNo: 'RF001',
-        amount: 50,
-        reason: '用户退款',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.refundNo).toBe('RF001')
-        expect(result.data.refundId).toBe('wx_refund_001')
-        expect(result.data.status).toBe('success')
-      }
-
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body)
-      expect(body.out_trade_no).toBe('ORD001')
-      expect(body.out_refund_no).toBe('RF001')
-      expect(body.amount.refund).toBe(50)
-      expect(body.reason).toBe('用户退款')
+      if (result.success)
+        expect(result.data).not.toHaveProperty('amount')
     })
 
     it.each([
-      ['PROCESSING', 'processing'],
-      ['ABNORMAL', 'failed'],
-      ['UNKNOWN', 'processing'], // 未知状态默认 processing
-    ])('退款状态 %s 映射为 %s', async (status, expectedStatus) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ refund_id: 'rf', status }),
+      { appid: 'OTHER_APP' },
+      { mchid: 'OTHER_MERCHANT' },
+      { out_trade_no: 'OTHER_ORDER' },
+      { trade_state: 'UNKNOWN_STATE' },
+      {
+        amount: { total: '100' },
+      },
+      { amount: {} },
+      { transaction_id: undefined },
+      { success_time: 'invalid-date' },
+    ])('拒绝不匹配的订单或缺少关键信息的已支付订单 %j', async (overrides) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({
+        ...queryResponse,
+        ...overrides,
+      }))
+
+      expect(await payment.queryOrder('wechat', 'ORD001')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
       })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.refund({ orderNo: 'ORD', refundNo: 'RF', amount: 10 })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe(expectedStatus)
-      }
     })
 
-    it('fetch 失败返回 REFUND_FAILED', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('timeout'))
+    it.each([
+      { serial: 'PUB_KEY_ID_UNTRUSTED' },
+      { timestamp: '1000000000' },
+    ])('拒绝未获信任或过期的应答 %j', async (options) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse(queryResponse, options))
 
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.refund({ orderNo: 'ORD', refundNo: 'RF', amount: 10 })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
-      }
-    })
-  })
-
-  describe('closeOrder', () => {
-    it('统一支付入口允许微信以 204 确认关单', async () => {
-      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }))
-      expect((await payment.init({ wechat: testConfig })).success).toBe(true)
-      try {
-        expect(await payment.closeOrder('wechat', 'PUBLIC-ORDER')).toEqual({ success: true, data: undefined })
-      }
-      finally {
-        await payment.close()
-      }
+      expect(await payment.queryOrder('wechat', 'ORD001')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
+      })
     })
 
-    it('微信返回 204 空响应时关闭订单成功', async () => {
+    it('拒绝缺少签名的 200 查单结果和 204 关单结果', async () => {
+      fetchSpy.mockResolvedValueOnce(Response.json(queryResponse))
       fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }))
 
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.closeOrder('ORD001')
-
-      expect(result.success).toBe(true)
-
-      const [url, options] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/v3/pay/transactions/out-trade-no/ORD001/close')
-      expect(options.method).toBe('POST')
-      const body = JSON.parse(options.body)
-      expect(body.mchid).toBe(testConfig.mchId)
-    })
-
-    it.each([200, 400, 503])('hTTP %s 未确认关单时返回 CLOSE_ORDER_FAILED', async (status) => {
-      fetchSpy.mockResolvedValueOnce(Response.json({}, { status }))
-      const provider = createWechatPayProvider(testConfig)
-
-      const result = await provider.closeOrder('ORD-FAIL')
-
-      expect(result).toMatchObject({
+      expect(await payment.queryOrder('wechat', 'ORD001')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
+      })
+      expect(await payment.closeOrder('wechat', 'ORD001')).toMatchObject({
         success: false,
         error: { code: HaiPaymentError.CLOSE_ORDER_FAILED.code },
       })
     })
 
-    it('fetch 失败返回 CLOSE_ORDER_FAILED', async () => {
+    it('渠道拒绝时返回 QUERY_ORDER_FAILED', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response('Not Found', { status: 404 }))
+
+      expect(await payment.queryOrder('wechat', 'ORD-NOT-FOUND')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
+      })
+    })
+
+    it('校验应答签名和金额后返回部分退款结果', async () => {
+      fetchSpy.mockResolvedValueOnce(signedResponse(refundResponse))
+
+      const result = await payment.refund('wechat', {
+        orderNo: 'ORD001',
+        refundNo: 'RF001',
+        amount: 50,
+        totalAmount: 100,
+        reason: '用户退款',
+      })
+
+      expect(result).toMatchObject({
+        success: true,
+        data: { refundNo: 'RF001', refundId: 'wx_refund_001', status: 'success' },
+      })
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body)
+      expect(body).toMatchObject({
+        out_trade_no: 'ORD001',
+        out_refund_no: 'RF001',
+        amount: { refund: 50, total: 100, currency: 'CNY' },
+        reason: '用户退款',
+      })
+    })
+
+    it.each([
+      ['PROCESSING', 'processing'],
+      ['ABNORMAL', 'failed'],
+      ['CLOSED', 'failed'],
+    ])('退款状态 %s 映射为 %s', async (status, expectedStatus) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({ ...refundResponse, status }))
+
+      const result = await payment.refund('wechat', {
+        orderNo: 'ORD001',
+        refundNo: 'RF001',
+        amount: 50,
+        totalAmount: 100,
+      })
+      expect(result).toMatchObject({
+        success: true,
+        data: { status: expectedStatus },
+      })
+    })
+
+    it.each([
+      { status: 'UNKNOWN' },
+      { status: undefined },
+      { refund_id: '' },
+      { out_refund_no: 'OTHER_REFUND' },
+      { out_trade_no: 'OTHER_ORDER' },
+      {
+        amount: { refund: 40, total: 100 },
+      },
+    ])('拒绝无法对应到本次请求的退款结果 %j', async (overrides) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({
+        ...refundResponse,
+        ...overrides,
+      }))
+
+      const result = await payment.refund('wechat', {
+        orderNo: 'ORD001',
+        refundNo: 'RF001',
+        amount: 50,
+        totalAmount: 100,
+      })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.REFUND_FAILED.code },
+      })
+    })
+
+    it('网络失败返回 REFUND_FAILED', async () => {
+      fetchSpy.mockRejectedValueOnce(new Error('timeout'))
+
+      const result = await payment.refund('wechat', { orderNo: 'ORD001', refundNo: 'RF001', amount: 50 })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.REFUND_FAILED.code },
+      })
+    })
+
+    it('微信返回已签名的 204 空响应时确认关单', async () => {
+      fetchSpy.mockResolvedValueOnce(signedResponse(undefined, { status: 204 }))
+
+      expect(await payment.closeOrder('wechat', 'ORD001')).toEqual({ success: true, data: undefined })
+      const [url, options] = fetchSpy.mock.calls[0]
+      expect(url).toContain('/v3/pay/transactions/out-trade-no/ORD001/close')
+      expect(options.method).toBe('POST')
+      expect(JSON.parse(options.body).mchid).toBe(testConfig.mchId)
+    })
+
+    it('配置多个公钥 ID 时采用渠道默认签名标识并验证返回的序列号', async () => {
+      const rotated = generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      })
+      const initialized = await payment.init({
+        wechat: {
+          ...testConfig,
+          platformKeys: {
+            ...testConfig.platformKeys,
+            PUB_KEY_ID_ROTATED: rotated.publicKey,
+          },
+        },
+      })
+      expect(initialized.success).toBe(true)
+      fetchSpy.mockResolvedValueOnce(signedResponse(undefined, {
+        status: 204,
+        serial: 'PUB_KEY_ID_ROTATED',
+        signingKey: rotated.privateKey,
+      }))
+
+      expect(await payment.closeOrder('wechat', 'ORD001')).toEqual({ success: true, data: undefined })
+      expect(fetchSpy.mock.calls[0][1].headers).not.toHaveProperty('Wechatpay-Serial')
+    })
+
+    it.each([200, 400, 503])('hTTP %s 未确认关单时返回 CLOSE_ORDER_FAILED', async (status) => {
+      fetchSpy.mockResolvedValueOnce(signedResponse({}, { status }))
+
+      expect(await payment.closeOrder('wechat', 'ORD-FAIL')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.CLOSE_ORDER_FAILED.code },
+      })
+    })
+
+    it('网络失败返回 CLOSE_ORDER_FAILED', async () => {
       fetchSpy.mockRejectedValueOnce(new Error('connection refused'))
 
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.closeOrder('ORD-FAIL')
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.CLOSE_ORDER_FAILED.code)
-      }
+      expect(await payment.closeOrder('wechat', 'ORD-FAIL')).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.CLOSE_ORDER_FAILED.code },
+      })
     })
   })
 

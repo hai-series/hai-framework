@@ -1,12 +1,14 @@
 /** Stripe Checkout 通知状态与边界回归。 */
 import { createHmac } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { reldb } from '@h-ai/reldb'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { payment } from '../src/payment-main'
 import { HaiPaymentError } from '../src/payment-types'
 import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
 
 const config = {
   successUrl: 'https://example.invalid/payment/success',
-  secretKey: 'test-only-api-key',
+  secretKey: 'sk_test_notifications',
   webhookSecret: 'test-only-webhook-key',
   webhookToleranceSeconds: 300,
 }
@@ -44,6 +46,29 @@ async function notify(event: unknown) {
 }
 
 describe('stripe Checkout notifications', () => {
+  beforeEach(async () => {
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    expect((await payment.init({ stripe: config })).success).toBe(true)
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(Response.json(
+      url.endsWith('/v1/account')
+        ? { id: 'acct_notifications' }
+        : { id: 'cs_checkout_001', url: 'https://checkout.stripe.com/pay/session' },
+    ))))
+    expect((await payment.createOrder('stripe', {
+      orderNo: 'ORD001',
+      amount: 2000,
+      description: 'Test',
+      tradeType: 'h5',
+      notifyUrl: 'https://example.invalid/notify',
+    })).success).toBe(true)
+  })
+
+  afterEach(async () => {
+    vi.unstubAllGlobals()
+    await payment.close()
+    await reldb.close()
+  })
+
   it.each([
     ['checkout.session.completed', 'unpaid', 'pending'],
     ['checkout.session.completed', 'paid', 'paid'],
@@ -81,6 +106,7 @@ describe('stripe Checkout notifications', () => {
       notify(event),
       notify(event),
     ])
+    expect(first.success).toBe(true)
     expect(first).toEqual(second)
   })
 

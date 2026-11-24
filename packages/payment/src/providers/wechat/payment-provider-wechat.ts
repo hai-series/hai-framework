@@ -21,9 +21,14 @@ import {
   getTimestamp,
   signJsapi,
   signRequest,
-  verifyNotifySignature,
+  verifyWechatSignature,
 } from './payment-wechat-sign.js'
-import { WechatNotifyEnvelopeSchema, WechatNotifyResourceSchema } from './payment-wechat-types.js'
+import {
+  WechatNotifyEnvelopeSchema,
+  WechatNotifyResourceSchema,
+  WechatOrderQueryResponseSchema,
+  WechatRefundResponseSchema,
+} from './payment-wechat-types.js'
 
 /** 微信支付 API 基地址 */
 const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
@@ -45,26 +50,33 @@ const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
  * ```
  */
 export function createWechatPayProvider(config: WechatPayConfig): PaymentProvider {
+  // 公钥迁移时由请求头协商应答签名方式；配置多个公钥 ID 时使用渠道默认值。
+  const publicKeyIds = Object.keys(config.platformKeys).filter(serial => serial.startsWith('PUB_KEY_ID_'))
+  const requestedSerial = publicKeyIds.length === 1
+    ? publicKeyIds[0]
+    : undefined
+
   /**
    * 精确选择受信平台密钥，并校验签名时间和证书有效期。
-   * 不联网信任通知携带的未知 serial；配置轮换由宿主受信配置完成。
-   * @param request - 保留原始 body 和协议头的通知请求。
+   * 未知 serial 视为验签失败；配置轮换由宿主受信配置完成。
+   * @param body - 微信同步应答或通知的原始正文。
+   * @param headers - 微信同步应答或通知携带的签名头。
    * @returns 唯一协议头、当前时间容差、受信 serial/证书及原始体签名均通过时为 true。
    * @example 模块内部上下文
    * ```ts
    * function authenticateNotification(request: PaymentNotifyRequest): boolean {
-   *   return verifyNotification(request)
+   *   return verifyChannelMessage(request.body, request.headers)
    *   // 成功后才允许解密资源，随后仍需核对 appId、mchId、订单、金额及持久去重。
    * }
    * ```
    */
-  function verifyNotification(request: PaymentNotifyRequest): boolean {
+  function verifyChannelMessage(body: string | Uint8Array, headers: Record<string, string>): boolean {
     try {
-      const timestamp = getNotifyHeader(request.headers, 'wechatpay-timestamp') ?? ''
-      const nonce = getNotifyHeader(request.headers, 'wechatpay-nonce') ?? ''
-      const signature = getNotifyHeader(request.headers, 'wechatpay-signature') ?? ''
-      const serial = getNotifyHeader(request.headers, 'wechatpay-serial') ?? ''
-      const signatureType = getNotifyHeader(request.headers, 'wechatpay-signature-type')
+      const timestamp = getNotifyHeader(headers, 'wechatpay-timestamp') ?? ''
+      const nonce = getNotifyHeader(headers, 'wechatpay-nonce') ?? ''
+      const signature = getNotifyHeader(headers, 'wechatpay-signature') ?? ''
+      const serial = getNotifyHeader(headers, 'wechatpay-serial') ?? ''
+      const signatureType = getNotifyHeader(headers, 'wechatpay-signature-type')
       const now = Date.now()
       if (!/^(?:0|[1-9]\d{0,11})$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))
         || Math.abs(Math.floor(now / 1000) - Number(timestamp)) > 300
@@ -84,7 +96,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           return false
         }
       }
-      return verifyNotifySignature(timestamp, nonce, request.body, signature, key)
+      return verifyWechatSignature(timestamp, nonce, body, signature, key)
     }
     catch {
       return false
@@ -92,9 +104,9 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
   }
 
   /**
-   * 发送微信支付 API 请求
+   * 发送微信支付 API 请求，验证成功应答的原始字节及签名，包含 204 空正文。
    */
-  async function wechatRequest(method: string, path: string, body?: unknown): Promise<Response> {
+  async function wechatRequest(method: string, path: string, body?: unknown): Promise<{ status: number, body: Uint8Array }> {
     const timestamp = getTimestamp()
     const nonce = generateNonce()
     const bodyStr = body
@@ -111,6 +123,9 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         'Content-Type': 'application/json',
         'Authorization': authorization,
         'Accept': 'application/json',
+        ...(requestedSerial
+          ? { 'Wechatpay-Serial': requestedSerial }
+          : {}),
       },
       body: bodyStr || undefined,
     })
@@ -120,12 +135,16 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
       throw new Error(`Wechat API ${method} ${path} failed: ${response.status} ${errorText}`)
     }
 
-    return response
+    const responseBody = new Uint8Array(await response.arrayBuffer())
+    if (!verifyChannelMessage(responseBody, Object.fromEntries(response.headers)))
+      throw new Error('Invalid Wechat API response signature')
+
+    return { status: response.status, body: responseBody }
   }
 
-  async function wechatJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function wechatJson(method: string, path: string, body?: unknown): Promise<unknown> {
     const response = await wechatRequest(method, path, body)
-    return response.json() as T
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(response.body))
   }
 
   return {
@@ -157,9 +176,11 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           requestBody.attach = JSON.stringify(input.metadata)
         }
 
-        const response = await wechatJson<{ prepay_id?: unknown }>('POST', '/v3/pay/transactions/jsapi', requestBody)
-        if (typeof response.prepay_id !== 'string' || !response.prepay_id.trim())
+        const response = await wechatJson('POST', '/v3/pay/transactions/jsapi', requestBody)
+        if (!response || typeof response !== 'object' || !('prepay_id' in response)
+          || typeof response.prepay_id !== 'string' || !response.prepay_id.trim()) {
           throw new Error('Invalid Wechat JSAPI prepay response')
+        }
 
         const timestamp = getTimestamp()
         const nonce = generateNonce()
@@ -190,7 +211,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
-        if (!verifyNotification(request)) {
+        if (!verifyChannelMessage(request.body, request.headers)) {
           return core.err(
             HaiPaymentError.NOTIFY_VERIFY_FAILED,
             paymentM('payment_notifyVerifyFailed'),
@@ -239,27 +260,31 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
     async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
         const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(config.mchId)}`
-        const response = await wechatJson<{
-          out_trade_no: string
-          transaction_id: string
-          trade_state: string
-          amount: { total: number }
-          success_time?: string
-        }>('GET', path)
+        const parsed = WechatOrderQueryResponseSchema.safeParse(await wechatJson('GET', path))
+        if (!parsed.success)
+          throw new Error('Invalid Wechat order query response')
+        const response = parsed.data
+        if (response.appid !== config.appId || response.mchid !== config.mchId || response.out_trade_no !== orderNo)
+          throw new Error('Wechat order query response identity mismatch')
 
-        const statusMap: Record<string, OrderStatus['status']> = {
+        const statusMap = {
           SUCCESS: 'paid',
           CLOSED: 'closed',
-          REFUND: 'refunded',
+          REFUND: 'refund_started',
           NOTPAY: 'pending',
+          REVOKED: 'closed',
+          USERPAYING: 'pending',
           PAYERROR: 'failed',
-        }
+        } as const satisfies Record<typeof response.trade_state, OrderStatus['status']>
 
+        const amount = response.amount?.total
         return core.ok({
           orderNo: response.out_trade_no,
-          transactionId: response.transaction_id,
-          status: statusMap[response.trade_state] ?? 'pending',
-          amount: response.amount.total,
+          transactionId: response.transaction_id || undefined,
+          status: statusMap[response.trade_state],
+          ...(amount === undefined
+            ? {}
+            : { amount }),
           paidAt: response.success_time
             ? new Date(response.success_time)
             : undefined,
@@ -276,30 +301,38 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
-        const response = await wechatJson<{
-          refund_id: string
-          status: string
-        }>('POST', '/v3/refund/domestic/refunds', {
+        const total = input.totalAmount ?? input.amount
+        const result = await wechatJson('POST', '/v3/refund/domestic/refunds', {
           out_trade_no: input.orderNo,
           out_refund_no: input.refundNo,
           amount: {
             refund: input.amount,
-            total: input.totalAmount ?? input.amount,
+            total,
             currency: 'CNY',
           },
           reason: input.reason,
         })
 
-        const statusMap: Record<string, RefundResult['status']> = {
-          SUCCESS: 'success',
-          PROCESSING: 'processing',
-          ABNORMAL: 'failed',
+        const parsed = WechatRefundResponseSchema.safeParse(result)
+        if (!parsed.success)
+          throw new Error('Invalid Wechat refund response')
+        const response = parsed.data
+        if (response.out_trade_no !== input.orderNo || response.out_refund_no !== input.refundNo
+          || response.amount.refund !== input.amount || response.amount.total !== total) {
+          throw new Error('Wechat refund response identity or amount mismatch')
         }
 
+        const statusMap = {
+          SUCCESS: 'success',
+          PROCESSING: 'processing',
+          CLOSED: 'failed',
+          ABNORMAL: 'failed',
+        } as const satisfies Record<typeof response.status, RefundResult['status']>
+
         return core.ok({
-          refundNo: input.refundNo,
+          refundNo: response.out_refund_no,
           refundId: response.refund_id,
-          status: statusMap[response.status] ?? 'processing',
+          status: statusMap[response.status],
         })
       }
       catch (cause) {

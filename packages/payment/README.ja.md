@@ -24,6 +24,8 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 [API 一覧](../../docs/usage/function/payment.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+WeChat Pay と Alipay の同期 API 応答を署名検証します。Stripe の通知は共有 DB の Checkout セッションと照合します。Alipay の通知にはプレーンテキストで受領を返します。[通知の連携例](../../docs/usage/function/payment.ja.md#alipay-notification-ack)
+
 ## データ構造
 
 決済プロバイダーの状態、加盟店注文の対応、通知の冪等性については[データ構造](../../docs/usage/data/payment.ja.md)を参照してください。

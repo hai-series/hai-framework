@@ -7,9 +7,12 @@ import { parse } from 'yaml'
 
 function placeholders(value) {
   if (typeof value === 'string' && /^\$\{[A-Z\d_]+\}$/.test(value)) {
-    return value.slice(2, -1) === 'STRIPE_SECRET_KEY'
-      ? 'sk_test_documentation_placeholder'
-      : 'documentation-placeholder'
+    const name = value.slice(2, -1)
+    if (name === 'STRIPE_SECRET_KEY')
+      return 'sk_test_documentation_placeholder'
+    if (name === 'WECHATPAY_API_V3_KEY' || name === 'WECHAT_API_V3_KEY')
+      return '0'.repeat(32)
+    return 'documentation-placeholder'
   }
   if (Array.isArray(value))
     return value.map(placeholders)

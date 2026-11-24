@@ -1,3 +1,4 @@
+import { ORPCError } from '@orpc/contract'
 import { z } from 'zod'
 import { haiResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
@@ -15,11 +16,28 @@ import {
 // Webhook 通知体由各支付渠道决定（且通常需要原始 raw body 校验签名），
 // 因此 contract 层只声明为 unknown，由 procedure 实现负责按渠道解析。
 const WebhookBodySchema = z.unknown()
-// 微信与支付宝通知共享同一响应结构，仅在本 contract 内复用。
-const notifyMessageOutputSchema = haiResultSchema(PaymentNotifyMessageSchema)
+const alipayNotifyOperation = {
+  operationId: 'payment.notifications.alipay',
+  summary: 'Handle Alipay payment notification',
+  tags: ['payment', 'notifications'],
+}
+
+// oRPC 的普通字符串响应会序列化为带引号的 JSON，支付宝要求原样返回 success。
+const alipayNotifyOutputSchema = haiResultSchema(z.literal('success')).transform((result) => {
+  if (!result.success) {
+    const status = result.error.httpStatus ?? 500
+    throw new ORPCError(status >= 400 && status < 500
+      ? 'BAD_REQUEST'
+      : 'INTERNAL_SERVER_ERROR')
+  }
+  return {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: new Blob([result.data]).stream(),
+  }
+})
 
 /**
- * Payment 领域 oRPC contract。
+ * Payment 领域 oRPC contract。支付宝通知使用纯文本回执，应用在原始 HTTP 路由中读取表单并验签。
  * @example
  * ```ts
  * import { apiContract } from '@h-ai/api-contract'
@@ -67,16 +85,43 @@ export const paymentContract = {
       tags: ['payment', 'notifications'],
     })
       .input(WebhookBodySchema)
-      .output(notifyMessageOutputSchema),
+      .output(haiResultSchema(PaymentNotifyMessageSchema)),
     alipay: route({
       method: 'POST',
       path: '/payment/notifications/alipay',
-      operationId: 'payment.notifications.alipay',
-      summary: 'Handle Alipay payment notification',
-      tags: ['payment', 'notifications'],
+      ...alipayNotifyOperation,
+      outputStructure: 'detailed',
+      // 应用挂载原始 HTTP 路由读取验签所需正文，避免 oRPC 的表单解码。
+      spec: {
+        ...alipayNotifyOperation,
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Payment notification acknowledged',
+            content: {
+              'text/plain': {
+                schema: { type: 'string', const: 'success' },
+              },
+            },
+          },
+          400: { description: 'Invalid payment notification' },
+          500: { description: 'Payment notification processing failed' },
+        },
+      },
     })
       .input(WebhookBodySchema)
-      .output(notifyMessageOutputSchema),
+      .output(alipayNotifyOutputSchema),
     stripe: route({
       method: 'POST',
       path: '/payment/notifications/stripe',

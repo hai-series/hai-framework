@@ -81,17 +81,21 @@ export async function startPayment(orderData: PaymentOrder) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.init(config)` | 設定済みの決済チャネルを初期化 | 必須の `config: PaymentConfigInput` | `void` | `await payment.init(config)` |
+| `payment.init(config)` | 設定済みの決済チャネルを初期化 | 必須の `config: PaymentConfigInput` | `Promise<HaiResult<void>>` | `await payment.init(config)` |
 | `payment.close()` | モジュールの状態を解放 | なし | `Promise<void>` | `await payment.close()` |
+| `payment.config` | 解析済みの設定を取得 | 引数なし。秘密情報を含むためサーバー内部で使います。 | `PaymentConfig \| null` | `payment.config?.stripe?.successUrl` |
+| `payment.isInitialized` | 初期化が完了したか確認 | 引数なし | `boolean` | `payment.isInitialized` |
 | `payment.getProvider(name)` | 登録済み決済プロバイダーを取得 | `name: string` このプロセス内でインスタンスを検索する登録名 | `PaymentProvider or undefined` | `payment.getProvider(name)` |
 | `payment.registerProvider(provider)` | 独自決済プロバイダーを登録 | `provider: PaymentProvider` 決済インターフェースを実装したインスタンス。同名ならこのプロセス内の登録を置換 | `void` | `payment.registerProvider(customProvider)` |
 
 #### 利用例：決済経路への接続
 
+`payment.init()` の完了後にアプリ独自の事業者を登録します。`payment.isInitialized` でモジュールの状態、`payment.config` でサーバー側の設定を参照できます。終了後の値はそれぞれ `false` と `null` です。
+
 入力はアプリが実装した PaymentProvider。登録・取得は同期処理です。初期化と終了は最小例を参照してください。
 
 ```ts
-import type { PaymentProvider } from '@h-ai/payment'
+import { type PaymentProvider, payment } from '@h-ai/payment'
 
 function installProvider(provider: PaymentProvider) {
   // 受け取ったチャネルを provider.name で登録し、同名の実装があれば置き換える。戻り値はない。
@@ -113,9 +117,9 @@ payment.getProvider('not-registered') // undefined
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.createOrder(providerName, input)` | 決済注文を作成 | 必須の `providerName: string` は登録済み事業者名。必須の `input: CreateOrderInput` は[注文項目](#payment-create-order-input)を参照。 | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder(providerName, orderNo)` | 決済状態を取得 | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.closeOrder(providerName, orderNo)` | 決済注文をクローズ | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `void` | `await payment.closeOrder(providerName, orderNo)` |
+| `payment.createOrder(providerName, input)` | 決済注文を作成 | 必須の `providerName: string` は登録済み事業者名。必須の `input: CreateOrderInput` は[注文項目](#payment-create-order-input)を参照。 | `Promise<HaiResult<PaymentOrder>>` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder(providerName, orderNo)` | 決済状態を取得 | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `Promise<HaiResult<OrderStatus>>` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder(providerName, orderNo)` | 決済注文をクローズ | `providerName: string` 注文に対応する登録済み事業者名。`orderNo: string` 作成時の加盟店注文番号 | `Promise<HaiResult<void>>` | `await payment.closeOrder(providerName, orderNo)` |
 
 <a id="payment-create-order-input"></a>
 
@@ -134,7 +138,23 @@ payment.getProvider('not-registered') // undefined
 
 Stripe で `amount: 100, currency: "USD", tradeType: "h5"` を指定すると、成功時にホスト型 Checkout の遷移データが返ります。最終的な決済状態は照会または通知で確認します。
 
-微信支付が `204 No Content` を返すと、`payment.closeOrder('wechat', orderNo)` は成功し、`data` は `undefined` です。プロキシは決済サービスのステータスをそのまま転送します。他のステータスや通信エラーは `CLOSE_ORDER_FAILED` です。
+##### WeChat の注文照会とクローズ
+
+`queryOrder('wechat', orderNo)` は応答の署名とアプリ ID、加盟店 ID、注文番号を確認します。未払いまたは終了済みの注文で事業者が金額を省略した場合、`OrderStatus.amount` は `undefined` です。予定の請求額はアプリの注文から参照できます。支払済みを返すには事業者の有効な金額と取引番号が必要です。WeChat の `REFUND` は `refund_started` として返るため、個々の返金状態を別途確認します。
+
+`payment.closeOrder('wechat', orderNo)` は HTTP 204 と空の本文の署名を検証してから成功します。他の応答コード、署名エラー、通信エラーの場合は `CLOSE_ORDER_FAILED` を返します。
+
+<a id="stripe-amounts"></a>
+
+##### Stripe の金額
+
+作成、返金、照会、通知では業務通貨の最小単位を使用します。USD の 100 は 1 米ドル、JPY の 100 は 100 円です。ISK と UGX は整数の通貨単位を指定します。たとえば 10,000 ISK は `amount: 10000, currency: 'ISK'` と指定します。モジュールから Stripe に 1,000,000 を送り、照会と通知の金額は 10,000 に戻して返します。修正前に作成した ISK または UGX の注文や未確定操作は[旧データの照合手順](../data/payment.ja.md#stripe-legacy-amounts)を確認してください。[Stripe の通貨ルール](https://docs.stripe.com/currencies#special-cases)
+
+##### Stripe Checkout と注文のクローズ
+
+サーバーは `mode=payment`、`tradeType=h5` のホスト型 Checkout を作成します。Checkout セッション ID はアカウントとテスト・本番モードごとに保存します。同じ注文の再送時は保存済みセッションを照会し、支払い可能な間だけ現在の URL を返します。終了、期限切れ、完了の場合は `CREATE_ORDER_FAILED` を返し、元の記録を保持します。`closeOrder` は未払いで開いているセッションの期限を切るか、すでに期限切れであることを確認します。
+
+Alipay の注文作成は署名付きフォームを準備します。入金はバックエンドで照会または検証済み通知を使って確定します。
 
 #### 利用例：注文の作成・照会・終了
 
@@ -167,7 +187,7 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.refund(providerName, input)` | 返金要求と受付結果を取得 | 必須の `providerName: string` は元の決済事業者を指定。`input: RefundInput` は[返金項目](#payment-refund-input)を参照。 | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+| `payment.refund(providerName, input)` | 返金要求と受付結果を取得 | 必須の `providerName: string` は元の決済事業者を指定。`input: RefundInput` は[返金項目](#payment-refund-input)を参照。 | `Promise<HaiResult<RefundResult>>` | `await payment.refund(providerName, refundInput)` |
 
 <a id="payment-refund-input"></a>
 
@@ -182,17 +202,30 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 WeChat の 100 分の注文から 50 分を返金する場合は `{ amount: 50, totalAmount: 100 }`。事業者で受理しただけなら返金状態を確認します。
 
+##### 個別の返金を確認する
+
+WeChat の `PROCESSING` は `processing`、`CLOSED` と `ABNORMAL` は `failed` として返ります。注文が `refund_started` の場合、部分返金も含めて返金処理に入っています。[WeChat の個別返金照会](https://pay.wechatpay.cn/doc/v3/merchant/4012791863)で金額と結果を確認してください。
+
+Alipay では照会、返金、クローズの元の応答を署名検証し、操作、結果、注文番号を確認します。`fund_change=Y` の返金は `success`、`N` または値がない場合は `processing` です。[Alipay の返金照会](https://developer.alibaba.com/docs/api.htm?apiId=1049&docType=4)で元の注文番号と返金番号を照合します。Stripe の返金結果は初回の受付時点の情報です。`processing` の場合は `refundId` を保存し、[Stripe で返金状態を取得](https://docs.stripe.com/api/refunds/retrieve)します。
+
 #### 利用例：返金と結果の確認
 
-確認済み注文と今回の一意な返金番号を入力。100 は最小通貨単位です。失敗や processing は返金完了を意味しません。
+元の注文総額と保存した返金番号は業務 DB から取得します。ここでは WeChat の 100 分の注文から 50 分を返金します。
 
 ```ts
-async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
-  // 加盟店注文番号と保存済みの返金番号で最小通貨単位 100 の返金を申請する。受理後も processing の場合があり、拒否は失敗。同じ返金の再試行では番号を再利用する。
-  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
-  if (!refunded.success)
-    return refunded
-  return refunded // data.status distinguishes success from processing
+import { payment } from '@h-ai/payment'
+
+async function refundWeChatOrder(orderNo: string, refundNo: string) {
+  // 確認済みの注文と保存した返金番号で申請します。受付結果が processing の場合は事業者に照会します。
+  const refunded = await payment.refund('wechat', {
+    orderNo,
+    refundNo,
+    amount: 50,
+    totalAmount: 100,
+  })
+  return refunded.success
+    ? { status: refunded.data.status, refundId: refunded.data.refundId }
+    : { error: refunded.error }
 }
 ```
 
@@ -206,7 +239,7 @@ async function refundOrder(providerName: string, orderNo: string, refundNo: stri
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `payment.handleNotify(providerName, request)` | 通知を検証してコールバックを実行 | `providerName: string` 信頼できる通知ルートの登録済み事業者名。`request: PaymentNotifyRequest` 事業者の検証に必要な生の body 文字列と文字列の headers | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+| `payment.handleNotify(providerName, request)` | チャネルの通知を検証して解析結果を返す | `providerName: string` 信頼できる通知ルートの登録済み事業者名。`request: PaymentNotifyRequest` 事業者の検証に必要な生の body 文字列と文字列の headers | `Promise<HaiResult<PaymentNotifyResult>>` | `await payment.handleNotify(providerName, originalNotification)` |
 
 #### 利用例：決済通知の検証
 
@@ -228,6 +261,52 @@ async function verifyNotification(providerName: string, request: Request) {
 }
 ```
 
+<a id="alipay-notification-ack"></a>
+
+#### 利用例：Alipay 通知に応答する
+
+Alipay の通知はフォームリクエストです。処理をコミットした場合、または処理済みの通知だと確認できた場合は、HTTP 200 と本文 `success` のプレーンテキストを返します。アプリの API プレフィックスを使い、返されたミドルウェアを `serv.createApp({ ...options, middlewares: [...] })` に渡します。アプリ側の通信暗号化を有効にしている場合は、通知の完全なパスを `transport.excludePaths` に追加して事業者のフォームを受け付けます。`http.access` の既定が拒否の場合は、このパスへの事業者の POST を許可する設定を追加します。`recordVerified` には注文照合、重複排除、履行キューの書き込みを行うアプリのトランザクション関数を渡します。成功はコミット済み、または処理済みの通知を意味します。
+
+`paid` のイベントだけ履行タスクを作成します。 サービスで `apiContract.payment` 全体を組み込む場合、元の本文を扱うミドルウェアを通らない Alipay procedure は失敗を返すようにします。注文ルートとアプリが実装する他の通知だけを組み込む方法もあります。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import type { PaymentNotifyResult } from '@h-ai/payment'
+import type { ServMiddlewareMount } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
+import { payment } from '@h-ai/payment'
+
+export function alipayNotification(
+  apiPrefix: string,
+  recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
+): ServMiddlewareMount {
+  const path = apiPrefix + apiContract.pathOf(apiContract.payment.notifications.alipay)
+  return {
+    path,
+    async middleware(c, next) {
+      if (c.req.method !== 'POST')
+        return next()
+
+      const request = c.req.raw
+      // 元のフォームを一度だけ読み、検証済みデータを業務処理に渡します。通知が無効な場合は HTTP 400 を返します。
+      const verified = await payment.handleNotify('alipay', {
+        body: await request.text(),
+        headers: Object.fromEntries(request.headers),
+      })
+      if (!verified.success)
+        return c.text('fail', 400)
+
+      // 業務注文を照合してコミットします。失敗時は事業者が再送できるよう HTTP 500 を返します。
+      const committed = await recordVerified(verified.data)
+      if (!committed.success)
+        return c.text('fail', 500)
+      return c.text('success', 200)
+    },
+  }
+}
+```
+
+WeChat と Stripe にも業務データのコミット後に応答します。WeChat は HTTP 200 または 204、Stripe は HTTP 2xx を受理します。モジュールは署名付き Stripe イベントを、アカウントとモードごとに保存されたセッション ID、注文、金額、通貨と照合します。セッション記録が未確定の場合や業務処理が失敗した場合は 2xx 以外を返し、Stripe の再送を待ちます。Checkout が完了しても `pending` のことがあり、履行は `paid` のときに行います。
 
 <a id="browser-payment"></a>
 

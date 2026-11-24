@@ -113,8 +113,7 @@ export const PaymentQueryOrderInputSchema = z.object({
  *
  * const value = PaymentOrderSchema.parse({
  *   orderNo: 'order_1',
- *   status: 'pending',
- *   amount: 0
+ *   status: 'pending'
  * })
  * void value
  * ```
@@ -126,10 +125,11 @@ export const PaymentOrderSchema = z.object({
     'pending',
     'paid',
     'closed',
+    'refund_started',
     'refunded',
     'failed',
   ]),
-  amount: z.number(),
+  amount: z.number().optional(),
   // ISO 8601 时间戳（例如 `2024-01-02T03:04:05.000Z`），由服务端以 `Date#toISOString()` 序列化。
   paidAt: z.iso.datetime().optional(),
 })
@@ -178,7 +178,7 @@ export const PaymentRefundDataSchema = z.object({
 })
 
 /**
- * 微信/支付宝通知响应 Schema。
+ * 微信通知响应 Schema。
  * @example
  * ```ts
  * import { PaymentNotifyMessageSchema } from '@h-ai/api-contract'

@@ -201,6 +201,19 @@ describe('payment-provider-stripe', () => {
   })
 
   describe('handleNotify', () => {
+    async function persistOrder(orderNo: string, sessionId: string, amount: number) {
+      fetchSpy.mockResolvedValueOnce(Response.json({ id: sessionId, url: 'https://checkout.stripe.com/pay/session' }))
+      const provider = createStripeProvider(testConfig)
+      expect((await provider.createOrder({
+        orderNo,
+        amount,
+        description: 'Test',
+        tradeType: 'h5',
+        notifyUrl: 'https://example.invalid/notify',
+      })).success).toBe(true)
+      return provider
+    }
+
     it('合法 Webhook 验签通过并解析 checkout.session.completed', async () => {
       const event = {
         id: 'evt_completed_001',
@@ -222,7 +235,7 @@ describe('payment-provider-stripe', () => {
       const payload = JSON.stringify(event)
       const signature = generateStripeSignature(payload, testConfig.webhookSecret)
 
-      const provider = createStripeProvider(testConfig)
+      const provider = await persistOrder('ORD001', 'cs_completed_001', 2000)
       const result = await provider.handleNotify({
         body: payload,
         headers: { 'stripe-signature': signature },
@@ -259,7 +272,7 @@ describe('payment-provider-stripe', () => {
       const payload = JSON.stringify(event)
       const signature = generateStripeSignature(payload, testConfig.webhookSecret)
 
-      const provider = createStripeProvider(testConfig)
+      const provider = await persistOrder('ORD-FAIL', 'cs_failed_001', 1000)
       const result = await provider.handleNotify({
         body: payload,
         headers: { 'stripe-signature': signature },
@@ -395,6 +408,7 @@ describe('payment-provider-stripe', () => {
       const oldTimestamp = (Math.floor(Date.now() / 1000) - 500).toString()
       const signature = generateStripeSignature(payload, testConfig.webhookSecret, oldTimestamp)
 
+      await persistOrder('ORD-TOLERANCE', 'cs_old_sig', 500)
       const provider = createStripeProvider({
         ...testConfig,
         webhookToleranceSeconds: 600,

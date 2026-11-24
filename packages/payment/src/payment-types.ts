@@ -56,7 +56,7 @@ export const HaiPaymentError = core.error.buildHaiErrorsDef('payment', PaymentEr
 export type TradeType = 'jsapi' | 'h5'
 
 /**
- * 订单状态
+ * 订单状态。微信 refund_started 表示订单进入退款流程，退款金额和到账状态由退款单确认。
  * @example
  * ```ts
  * import type { OrderStatusValue } from '@h-ai/payment'
@@ -65,7 +65,7 @@ export type TradeType = 'jsapi' | 'h5'
  * }
  * ```
  */
-export type OrderStatusValue = 'pending' | 'paid' | 'closed' | 'refunded' | 'failed'
+export type OrderStatusValue = 'pending' | 'paid' | 'closed' | 'refund_started' | 'refunded' | 'failed'
 
 // ─── 创建订单 ───
 
@@ -84,7 +84,7 @@ export type OrderStatusValue = 'pending' | 'paid' | 'closed' | 'refunded' | 'fai
 export interface CreateOrderInput {
   /** 商户订单号 */
   orderNo: string
-  /** 金额（分） */
+  /** 订单金额，使用币种最小单位的正整数，例如 CNY 的分或 ISK 的整单位。 */
   amount: number
   /** 大写币种；微信/支付宝使用 CNY，Stripe 省略时使用 USD，必须与业务订单一致。 */
   currency?: string
@@ -166,11 +166,11 @@ export interface PaymentNotifyRequest {
 export interface PaymentNotifyResult {
   /** 商户订单号 */
   orderNo: string
-  /** 支付渠道交易号 */
+  /** 支付渠道交易号；Stripe 为已核对持久映射的 Checkout Session ID。 */
   transactionId: string
   /** 渠道通知事件 ID：微信 id、支付宝 notify_id、Stripe event.id；宿主按渠道/商户命名空间持久去重。 */
   eventId: string
-  /** 支付金额（分） */
+  /** 支付金额，使用币种最小单位，与 CreateOrderInput.amount 单位一致。 */
   amount: number
   /** ISO 4217 大写币种；支付宝为 CNY，宿主必须与订单核对。 */
   currency: string
@@ -178,7 +178,7 @@ export interface PaymentNotifyResult {
   status: OrderStatusValue
   /** 渠道支付时间；Stripe 为支付成功事件的创建时间，非本次通知接收时间。 */
   paidAt?: Date
-  /** 原始数据 */
+  /** 渠道原始数据；其中的金额等字段仍使用渠道自己的编码。 */
   raw?: Record<string, unknown>
 }
 
@@ -200,10 +200,10 @@ export interface OrderStatus {
   orderNo: string
   /** 渠道交易号 */
   transactionId?: string
-  /** 订单状态 */
+  /** 订单状态；微信 refund_started 表示订单已进入退款流程，退款结果需按退款单确认。 */
   status: OrderStatusValue
-  /** 金额（分） */
-  amount: number
+  /** 渠道提供的订单金额，使用币种最小单位；微信查单未返回金额时省略。 */
+  amount?: number
   /** 支付时间 */
   paidAt?: Date
 }
@@ -226,9 +226,9 @@ export interface RefundInput {
   orderNo: string
   /** 退款单号 */
   refundNo: string
-  /** 退款金额（分） */
+  /** 退款金额，使用原订单币种最小单位的正整数。 */
   amount: number
-  /** 订单总金额（分），微信退款必填 */
+  /** 原订单总金额；微信部分退款传完整原订单金额，单位为分。 */
   totalAmount?: number
   /** 退款原因 */
   reason?: string
@@ -313,9 +313,9 @@ export interface PaymentFunctions {
   readonly config: PaymentConfig | null
   /** 是否已有成功发布的配置；不代表渠道实时可用或商户凭据已被远端验证。 */
   readonly isInitialized: boolean
-  /** 创建订单并返回对应场景的最小客户端参数；调用方必须先检查 success。 */
+  /** 创建订单并返回客户端参数；Stripe 重试仅在原会话可付款时返回链接。 */
   createOrder: (providerName: string, input: CreateOrderInput) => Promise<HaiResult<PaymentOrder>>
-  /** 验签并解析原始回调；宿主核对金额/币种并持久去重后才可确认业务履约。 */
+  /** 验签并解析原始回调，Stripe 同时核对持久会话；宿主提交业务事务后确认履约。 */
   handleNotify: (providerName: string, request: PaymentNotifyRequest) => Promise<HaiResult<PaymentNotifyResult>>
   /** 查渠道状态；失败不能映射成未付款或直接重建订单。 */
   queryOrder: (providerName: string, orderNo: string) => Promise<HaiResult<OrderStatus>>

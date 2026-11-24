@@ -54,4 +54,49 @@
 
 result_json 与 payment_intent 都为 null，表示尚未取得已确认结果，不能据此交付商品。created_at 是 Unix 秒，其他摘要只是示例占位。
 
+#### 示例 · 已确认的 Stripe 会话
+
+下例仅展示同一张表的 `result_json` 列，Checkout 链接和渠道 ID 已替换。模块用 `orderNo`、`currency`、`stripeAmount` 及 `session.id` 核对查单和通知。充值、发货等业务动作以业务事务为准。
+
+```json
+{
+  "orderNo": "ORDER-ISK-01",
+  "amount": 10000,
+  "stripeAmount": 1000000,
+  "currency": "ISK",
+  "session": {
+    "id": "cs_test_example",
+    "url": "https://checkout.stripe.com/c/pay/example",
+    "payment_intent": null
+  }
+}
+```
+
+`amount` 是业务端使用的最小单位，`stripeAmount` 是 Stripe API 编码。初次创建时 `payment_intent` 可以为空，会话查询确认后补全表的 `payment_intent` 列。保留会话映射可避免重试重复创建。重新调起支付前，模块还会读取会话的最新状态和链接。过期会话的行继续保留。
+
+<a id="stripe-legacy-amounts"></a>
+
+#### 核对旧版 ISK/UGX 记录
+
+旧版创建的 ISK/UGX 记录没有 `stripeAmount`。旧版用业务整数作为 Stripe API 金额，不能根据这类记录认定足额支付。发布前先停止旧节点接收这两个币种的新请求，再切换所有付款和回调节点。升级后，旧记录的下单重放、查单、通知和退款会返回失败，已知未支付的会话仍可按原金额核对后关单。旧版结果未知的下单或退款预留也会保留，其旧请求摘要不能用新金额重试。
+
+用持久化的 Session ID 或业务订单号在 Stripe 商户后台核对实际金额与状态，再按业务情况处理关单、差额或退款。已确认关单的业务如需恢复付款，应创建可追踪的新业务支付编号。保留原操作记录与事件，便于核对已有资金和幂等历史。
+
+## 运行时数据与业务记录
+
+微信未支付的查单结果可能只包含 `orderNo` 和 `status: 'pending'`，金额从应用已保存的订单读取。支付宝和 Stripe 的查单可返回渠道确认的金额。微信 `refund_started` 记录订单进入退款流程，单笔退款的金额与到账状态由渠道的退款记录确认。
+
+下面是 Stripe 支付通知的字段节选。模块已用持久会话映射核对 `transactionId` 和金额，应用以渠道、商户命名空间及 `eventId` 保存去重记录，并在同一事务中保存订单状态和履约任务。唯一履约任务的编号可交给下游作幂等键。支付宝收到已处理事件时仍返回纯文本 `success`。
+
+```json
+{
+  "orderNo": "ORDER-ISK-01",
+  "transactionId": "cs_test_example",
+  "eventId": "evt_example",
+  "currency": "ISK",
+  "amount": 10000,
+  "status": "paid"
+}
+```
+
 模块不创建 Redis 键，也没有自动过期的结果缓存。多个实例通过连接同一个 [reldb](reldb.md) 数据库读取同一份 Stripe 操作记录。

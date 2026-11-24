@@ -15,6 +15,7 @@
   "payment_configError": "決済設定の検証に失敗しました: {error}",
   "payment_initFailed": "決済モジュールの初期化に失敗しました: {error}",
   "payment_configFieldRequired": "この設定項目は必須です",
+  "payment_wechatApiV3KeyInvalid": "WeChat Pay の APIv3 キーは半角英数字32文字で指定してください",
   "payment_stripeDatabaseRequired": "Stripe 決済には初期化済みの共有 reldb データベースが必要です",
   "payment_stripeStoreInitFailed": "Stripe 決済の永続化ストアの初期化に失敗しました",
   "payment_stripeKeyInvalid": "Stripe には sk_test_、sk_live_、rk_test_、rk_live_ のいずれかで始まるサーバー API キーが必要です",

@@ -1,6 +1,6 @@
 /** Stripe 的公开 API 仅接受已实现的托管 h5 模式。 */
 import { describe, expect, it } from 'vitest'
-import { PaymentCreateOrderDataSchema, PaymentCreateOrderInputSchema } from '../src/payment/payment-schemas'
+import { PaymentCreateOrderDataSchema, PaymentCreateOrderInputSchema, PaymentOrderSchema } from '../src/payment/payment-schemas'
 
 describe('payment Checkout contract', () => {
   const input = {
@@ -68,5 +68,17 @@ describe('built-in payment trade matrix', () => {
       description: '商品',
       userId,
     }).success).toBe(false)
+  })
+})
+
+describe('payment order query contract', () => {
+  it('保留退款流程状态与可缺省的订单金额', () => {
+    const order = { orderNo: 'ORDER_1', status: 'refund_started' }
+    expect(PaymentOrderSchema.safeParse(order)).toEqual({ success: true, data: order })
+  })
+
+  it('保留可确认退款完成的订单状态', () => {
+    const order = { orderNo: 'ORDER_1', status: 'refunded', amount: 100 }
+    expect(PaymentOrderSchema.safeParse(order)).toEqual({ success: true, data: order })
   })
 })

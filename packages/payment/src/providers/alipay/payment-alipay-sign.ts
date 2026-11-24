@@ -44,6 +44,92 @@ export function signAlipayParams(
   return sign.sign(privateKey, 'base64')
 }
 
+function verifyRsaSignature(
+  content: string,
+  signature: string,
+  publicKey: string,
+  signType: 'RSA2' | 'RSA',
+): boolean {
+  const algorithm = signType === 'RSA2'
+    ? 'RSA-SHA256'
+    : 'RSA-SHA1'
+  const verify = createVerify(algorithm)
+  verify.update(content)
+  return verify.verify(publicKey, signature, 'base64')
+}
+
+/** 在已通过 JSON 语法解析的响应中，定位方法对象的原始文本，并拒绝重复的顶层字段。 */
+function getAlipayResponsePayload(raw: string, methodKey: string): string | undefined {
+  const rootKeys = new Set<string>()
+  const tokens = /("(?:[^"\\]|\\.)*")(\s*:)?|[{}[\]]/gs
+  let depth = 0
+  let currentKey: string | undefined
+  let payloadStart: number | undefined
+  let payload: string | undefined
+
+  // 字符串整体匹配，因此字符串值中的括号、引号和字段名不会影响对象边界。
+  for (const { 0: token, 1: quoted, 2: colon, index } of raw.matchAll(tokens)) {
+    if (quoted !== undefined) {
+      if (depth === 1 && colon) {
+        const key: unknown = JSON.parse(quoted)
+        if (typeof key !== 'string' || rootKeys.has(key))
+          return undefined
+
+        rootKeys.add(key)
+        currentKey = key
+      }
+      continue
+    }
+
+    if (token === '{' || token === '[') {
+      if (token === '{' && depth === 1 && currentKey === methodKey)
+        payloadStart = index
+      depth++
+      continue
+    }
+
+    depth--
+    if (depth === 1 && payloadStart !== undefined) {
+      payload = raw.slice(payloadStart, index + 1)
+      payloadStart = undefined
+    }
+  }
+  return payload
+}
+
+/**
+ * 用受信的支付宝公钥，对网关原始 JSON 中对应方法的嵌套对象验签。
+ * @param raw - 已确认 JSON 语法有效的原始响应，保留空白和字符串转义
+ * @param methodKey - 请求方法对应的响应字段名
+ * @param options - 网关验签选项
+ * @param options.signature - 渠道返回的 Base64 签名
+ * @param options.publicKey - 配置中受信的支付宝公钥
+ * @param options.signType - 该请求使用的签名算法
+ * @returns 仅在方法对象和签名字段明确且签名有效时返回 true
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function verifyGatewayResponse(raw: string, signature: string, publicKey: string) {
+ *   return verifyAlipayResponse(raw, 'alipay_trade_query_response', { signature, publicKey, signType: 'RSA2' })
+ * }
+ * ```
+ */
+export function verifyAlipayResponse(
+  raw: string,
+  methodKey: string,
+  options: { signature: string, publicKey: string, signType: 'RSA2' | 'RSA' },
+): boolean {
+  const payload = getAlipayResponsePayload(raw, methodKey)
+  if (payload === undefined)
+    return false
+  try {
+    return verifyRsaSignature(payload, options.signature, options.publicKey, options.signType)
+  }
+  catch {
+    return false
+  }
+}
+
 /**
  * 验证支付宝回调签名
  *
@@ -77,10 +163,5 @@ export function verifyAlipayNotify(
     .map(k => `${k}=${params[k]}`)
     .join('&')
 
-  const algorithm = signType === 'RSA2'
-    ? 'RSA-SHA256'
-    : 'RSA-SHA1'
-  const verify = createVerify(algorithm)
-  verify.update(sorted)
-  return verify.verify(alipayPublicKey, sign, 'base64')
+  return verifyRsaSignature(sorted, sign, alipayPublicKey, signType)
 }

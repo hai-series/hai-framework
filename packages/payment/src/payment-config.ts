@@ -31,10 +31,12 @@ import { paymentM } from './payment-i18n.js'
  */
 export const WechatPayConfigSchema = z.object({
   mchId: z.string().min(1, paymentM('payment_configFieldRequired')),
-  apiV3Key: z.string().min(1, paymentM('payment_configFieldRequired')),
+  // 发布的 JSON Schema 只保存正则表达式本身，需要显式保留大小写范围。
+  // eslint-disable-next-line regexp/use-ignore-case
+  apiV3Key: z.string().regex(/^[A-Za-z0-9]{32}$/, paymentM('payment_wechatApiV3KeyInvalid')),
   serialNo: z.string().min(1, paymentM('payment_configFieldRequired')),
   privateKey: z.string().min(1, paymentM('payment_configFieldRequired')),
-  /** 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。 */
+  /** 按 Wechatpay-Serial 选择同步应答及通知的受信证书或公钥，轮换期间保留新旧项。 */
   platformKeys: z.record(z.string().min(1), z.string().min(1))
     .refine(keys => Object.keys(keys).length > 0, paymentM('payment_configFieldRequired')),
   appId: z.string().min(1, paymentM('payment_configFieldRequired')),

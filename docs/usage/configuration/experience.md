@@ -8,7 +8,7 @@
 
 把渠道参数写入 `config/_payment.yml`。启用 Stripe 时，先用 `reldb.init()` 让各服务连接同一个数据库，再调用 `payment.init()`。当前微信使用 JSAPI、支付宝使用 H5、Stripe 使用托管付款页面。
 
-渠道字段、默认值和验签必填项见 [Payment 配置清单](payment.md#配置清单)。轮换微信平台证书时同时保留受信的新旧标识。支付宝返回页和 Stripe 取消页负责导航；订单状态由签名核验后按商户、订单及金额确认。
+渠道字段、默认值和验签必填项见 [Payment 配置清单](payment.md#配置清单)。轮换微信平台证书或公钥时，在所有节点保留受信的新旧标识，供同步响应和通知验签。支付宝返回页和 Stripe 取消页负责导航；订单状态由签名核验后按商户、订单及金额确认。
 
 ```yaml schema=@h-ai/payment:PaymentConfigSchema
 stripe:
@@ -34,7 +34,7 @@ wechat:
     example-trusted-platform-serial: ${WECHAT_PLATFORM_PUBLIC_KEY}
 ```
 
-占位值必须替换为支付平台已登记的真实值，私钥/公钥变量保存完整 PEM 内容。有效支付创建应返回对应渠道的客户端支付参数；验签时只按配置的 `platformKeys` 标识选键。未登记标识、错误签名或金额不符应拒绝，不能从来访通知中接受新公钥。
+占位值必须替换为支付平台已登记的真实值。API v3 密钥须为 32 位 ASCII 字母或数字，私钥/公钥变量保存完整 PEM 内容。有效支付创建应返回对应渠道的客户端支付参数；验签时只按配置的 `platformKeys` 标识选键。未登记标识、错误签名或金额不符应拒绝，不能从来访通知中接受新公钥。
 
 支付宝 H5 使用自己的身份和 RSA 密钥，不复用微信或 Stripe 凭据：
 
@@ -49,7 +49,7 @@ alipay:
   sandbox: true
 ```
 
-输入使用授权沙箱账号。支付宝创建成功后的 `data.clientParams` 是 `{ gateway, fields }` 对象：浏览器向可信的渠道 `gateway` 提交已签名的 `fields` 表单，不把它当成链接或 HTML。`returnUrl` 只是导航，服务端查询或已验签通知才可推进订单状态。生产使用对应账号、密钥及 `sandbox: false`，先验证拒绝错误商户、重复通知和重放。Stripe 的 `data.clientParams.checkoutUrl` 是支付页面地址，也需区分 test/live；`successUrl/cancelUrl` 都不能成为付款事实。
+输入使用授权沙箱账号。支付宝创建成功后的 `data.clientParams` 是 `{ gateway, fields }` 对象：浏览器向可信的渠道 `gateway` 提交已签名的 `fields` 表单，不把它当成链接或 HTML。`returnUrl` 只是导航，服务端查询或已验签通知才可推进订单状态。生产使用对应账号、密钥及 `sandbox: false`。上线前验证错误商户被拒绝、重复通知只处理一次，而且事务提交后通知端点返回纯文本 `success`。Stripe 的 `data.clientParams.checkoutUrl` 是支付页面地址，也需区分 test/live；`successUrl/cancelUrl` 都不能成为付款事实。
 
 ## 原生地址、权限与安全存储
 

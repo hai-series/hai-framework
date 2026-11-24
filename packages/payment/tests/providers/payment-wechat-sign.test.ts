@@ -2,7 +2,7 @@
  * @h-ai/payment — payment-wechat-sign（微信支付签名）单元测试
  *
  * 覆盖纯函数：generateNonce, getTimestamp, signRequest, signJsapi,
- * verifyNotifySignature, decryptResource。
+ * verifyWechatSignature, decryptResource。
  */
 
 import { Buffer } from 'node:buffer'
@@ -14,7 +14,7 @@ import {
   getTimestamp,
   signJsapi,
   signRequest,
-  verifyNotifySignature,
+  verifyWechatSignature,
 } from '../../src/providers/wechat/payment-wechat-sign'
 
 /** 测试用 RSA 密钥对（2048 位） */
@@ -132,7 +132,7 @@ describe('signJsapi', () => {
   })
 })
 
-describe('verifyNotifySignature', () => {
+describe('verifyWechatSignature', () => {
   const timestamp = '1611037020'
   const nonce = 'abc123'
   const body = '{"id":"notify-001","event_type":"TRANSACTION.SUCCESS"}'
@@ -147,21 +147,21 @@ describe('verifyNotifySignature', () => {
 
   it('有效签名验证通过', () => {
     const sig = signCallback(timestamp, nonce, body)
-    expect(verifyNotifySignature(timestamp, nonce, body, sig, platformCert)).toBe(true)
+    expect(verifyWechatSignature(timestamp, nonce, body, sig, platformCert)).toBe(true)
   })
 
   it('篡改 body 验证失败', () => {
     const sig = signCallback(timestamp, nonce, body)
-    expect(verifyNotifySignature(timestamp, nonce, '{"tampered":true}', sig, platformCert)).toBe(false)
+    expect(verifyWechatSignature(timestamp, nonce, '{"tampered":true}', sig, platformCert)).toBe(false)
   })
 
   it('篡改 timestamp 验证失败', () => {
     const sig = signCallback(timestamp, nonce, body)
-    expect(verifyNotifySignature('9999999999', nonce, body, sig, platformCert)).toBe(false)
+    expect(verifyWechatSignature('9999999999', nonce, body, sig, platformCert)).toBe(false)
   })
 
   it('无效签名字符串验证失败', () => {
-    expect(verifyNotifySignature(timestamp, nonce, body, 'invalid-base64', platformCert)).toBe(false)
+    expect(verifyWechatSignature(timestamp, nonce, body, 'invalid-base64', platformCert)).toBe(false)
   })
 })
 

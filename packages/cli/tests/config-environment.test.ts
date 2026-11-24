@@ -7,7 +7,7 @@ import { CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { deploy } from '@h-ai/deploy'
 import { IamConfigSchema } from '@h-ai/iam'
-import { AlipayConfigSchema } from '@h-ai/payment'
+import { AlipayConfigSchema, WechatPayConfigSchema } from '@h-ai/payment'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -140,6 +140,27 @@ describe('environment configuration', () => {
     expect(AlipayConfigSchema.parse(config.alipay).returnUrl).toBe('https://shop.example/payment/return')
     vi.stubEnv('HAI_PAYMENT_ALIPAY_RETURNURL', 'http://shop.example/payment/return')
     expect(AlipayConfigSchema.safeParse(loadConfigText<{ alipay: unknown }>('payment', yaml).alipay).success).toBe(false)
+  })
+  it('生成的微信支付配置从环境读取 APIv3 密钥并执行渠道校验', () => {
+    const generated = generateConfigFile('payment')
+    const example = generated.match(/^# wechat:[^\n]*\n(?:# {3}.*\n)+/m)?.[0]
+    if (!example)
+      throw new Error('Missing WeChat payment configuration example')
+
+    const yaml = parameterizeConfig('payment', example.replace(/^# ?/gm, ''))
+    expect(yaml).toContain('HAI_PAYMENT_WECHAT_APIV3KEY')
+    vi.stubEnv('HAI_PAYMENT_WECHAT_MCHID', 'test-merchant')
+    vi.stubEnv('HAI_PAYMENT_WECHAT_APPID', 'test-app')
+    vi.stubEnv('HAI_PAYMENT_WECHAT_SERIALNO', 'test-serial')
+    vi.stubEnv('HAI_PAYMENT_WECHAT_PRIVATEKEY', 'test-merchant-key')
+    vi.stubEnv('HAI_PAYMENT_WECHAT_PLATFORMKEYS', '{"PUB_KEY_ID_TEST":"test-platform-key"}')
+
+    const key = 'A'.repeat(32)
+    vi.stubEnv('HAI_PAYMENT_WECHAT_APIV3KEY', key)
+    expect(WechatPayConfigSchema.parse(loadConfigText<{ wechat: unknown }>('payment', yaml).wechat).apiV3Key).toBe(key)
+
+    vi.stubEnv('HAI_PAYMENT_WECHAT_APIV3KEY', key.slice(1))
+    expect(WechatPayConfigSchema.safeParse(loadConfigText<{ wechat: unknown }>('payment', yaml).wechat).success).toBe(false)
   })
   it('服务端密钥环仅出现在实际服务端入口，不能随客户端 crypto 配置推荐', () => {
     expect(moduleEnvironmentVariables('crypto').some(variable => variable.name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toBe(false)

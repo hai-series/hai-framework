@@ -100,7 +100,7 @@ describe('payment.init', () => {
     await payment.init({
       wechat: {
         mchId: 'test-mch',
-        apiV3Key: 'test-key-32chars-0123456789abcde',
+        apiV3Key: '0123456789abcdef0123456789abcdef',
         serialNo: 'test-serial',
         platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'test-private-key',
@@ -111,6 +111,29 @@ describe('payment.init', () => {
     const provider = payment.getProvider('wechat')
     expect(provider).toBeDefined()
     expect(provider!.name).toBe('wechat')
+  })
+
+  it.each([
+    '0123456789abcdef',
+    '0123456789abcdef0123456789abcdé',
+    '0123456789abcdef0123456789abcdef ',
+  ])('aPIv3 密钥格式无效时拒绝启用微信支付', async (apiV3Key) => {
+    const result = await payment.init({
+      wechat: {
+        mchId: 'test-mch',
+        apiV3Key,
+        serialNo: 'test-serial',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
+        privateKey: 'test-private-key',
+        appId: 'test-app-id',
+      },
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiPaymentError.CONFIG_ERROR.code },
+    })
+    expect(payment.getProvider('wechat')).toBeUndefined()
   })
 
   it('配置 alipay 时注册 alipay Provider', async () => {
@@ -167,7 +190,7 @@ describe('payment.init', () => {
     await payment.init({
       wechat: {
         mchId: 'mch',
-        apiV3Key: 'key-32-chars-padded-000000000000',
+        apiV3Key: '0123456789abcdef0123456789abcdef',
         serialNo: 'sn',
         platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
@@ -196,7 +219,7 @@ describe('payment.init', () => {
     await payment.init({
       wechat: {
         mchId: 'mch',
-        apiV3Key: 'key-32-chars-padded-000000000000',
+        apiV3Key: '0123456789abcdef0123456789abcdef',
         serialNo: 'sn',
         platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',

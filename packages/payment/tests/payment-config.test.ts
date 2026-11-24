@@ -16,7 +16,7 @@ describe('wechatPayConfigSchema', () => {
   it('完整有效配置通过校验', () => {
     const result = WechatPayConfigSchema.safeParse({
       mchId: 'mch001',
-      apiV3Key: 'key-32-chars-padded-000000000000',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'serial-no-001',
       platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: '-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----',
@@ -28,7 +28,7 @@ describe('wechatPayConfigSchema', () => {
   it('platformKeys 必须显式配置，且至少包含一个受信标识', () => {
     const withCert = WechatPayConfigSchema.safeParse({
       mchId: 'mch001',
-      apiV3Key: 'k',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'sn',
       platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
@@ -38,7 +38,7 @@ describe('wechatPayConfigSchema', () => {
 
     const withoutCert = WechatPayConfigSchema.safeParse({
       mchId: 'mch001',
-      apiV3Key: 'k',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'sn',
       platformKeys: {},
       privateKey: 'pk',
@@ -49,7 +49,7 @@ describe('wechatPayConfigSchema', () => {
 
   it('缺少必填字段 mchId 校验失败', () => {
     const result = WechatPayConfigSchema.safeParse({
-      apiV3Key: 'k',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'sn',
       platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
@@ -61,7 +61,7 @@ describe('wechatPayConfigSchema', () => {
   it('空字符串 mchId 校验失败', () => {
     const result = WechatPayConfigSchema.safeParse({
       mchId: '',
-      apiV3Key: 'k',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'sn',
       platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
@@ -84,7 +84,7 @@ describe('wechatPayConfigSchema', () => {
   it('缺少 appId 校验失败', () => {
     const result = WechatPayConfigSchema.safeParse({
       mchId: 'mch',
-      apiV3Key: 'k',
+      apiV3Key: '0123456789abcdef0123456789abcdef',
       serialNo: 'sn',
       platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
@@ -290,7 +290,7 @@ describe('paymentConfigSchema（顶层）', () => {
     const result = PaymentConfigSchema.safeParse({
       wechat: {
         mchId: 'mch',
-        apiV3Key: 'key',
+        apiV3Key: '0123456789abcdef0123456789abcdef',
         serialNo: 'sn',
         platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',

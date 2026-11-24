@@ -46,9 +46,9 @@ it('stripe 两个独立进程共享映射和退款幂等，后续新进程可查
               },
               amount_total: Number(params.get('line_items[0][price_data][unit_amount]')),
               currency: params.get('line_items[0][price_data][currency]'),
-              payment_status: 'paid',
-              payment_intent: `pi_${id}`,
-              status: 'complete',
+              payment_status: 'unpaid',
+              payment_intent: null,
+              status: 'open',
             }
             sessions.set(id, session)
             outcomes.set(key, session)
@@ -183,6 +183,11 @@ try {
       success: true,
       data: { orderNo: 'PROCESS-ORDER', transactionId: 'cs_process_1' },
     })
+    const session = sessions.get('cs_process_1')
+    expect(session).toBeDefined()
+    if (!session)
+      throw new Error('Missing shared Checkout Session')
+    Object.assign(session, { payment_status: 'paid', payment_intent: 'pi_process_1', status: 'complete' })
     const refunds = await runBoth('refund')
     expect(refunds[0]).toEqual(refunds[1])
     expect(refunds[0]).toMatchObject({
