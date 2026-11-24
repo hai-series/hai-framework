@@ -146,9 +146,9 @@ export async function getDocument(file: string, base: string, locale = docFileLo
   const parser = new Marked({
     renderer: {
       code({ text, lang }) {
-      // 公共 MarkdownRenderer 按语言安全重建代码高亮；校验元数据不进入语言名。
+        // 让 MarkdownRenderer 单独识别 pre 块，保留代码中的空行和缩进。
         const language = lang?.split(/\s+/)[0] ?? 'text'
-        return `<pre><code class="language-${escapeAttribute(language)}">${escapeAttribute(text)}</code></pre>`
+        return `\n\n<pre><code class="language-${escapeAttribute(language)}">${escapeAttribute(text)}</code></pre>\n\n`
       },
       heading({ tokens, depth }) {
         const text = this.parser.parseInline(tokens)

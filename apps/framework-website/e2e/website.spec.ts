@@ -236,7 +236,7 @@ test('三级配置目录、接口配置代码与账号操作图在桌面和手�
   })
 })
 
-test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和窄屏可读', async ({ page, context }, testInfo) => {
+test('代码示例高亮，复制保留空行和缩进，深色主题和窄屏可读', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/hai-framework/docs/configuration/runtime/')
   const yaml = page.locator('.hai-md-code-block').filter({
@@ -271,6 +271,17 @@ test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和�
   await page.screenshot({
     path: testInfo.outputPath('website-command-highlight-mobile.png'),
   })
+
+  await page.goto('/hai-framework/docs/function/core/')
+  const typescript = page.locator('article .hai-md-code-block').filter({
+    has: page.locator('code.language-ts'),
+    hasText: 'const runtime = core.module.createRuntime([',
+  })
+  await expect(typescript.locator('code span[style*="color:"]').first()).toBeAttached()
+  const source = await typescript.locator('code').textContent()
+  expect(source).toContain('\n\ntry {\n  // ')
+  await typescript.locator('[data-copy-code]').click()
+  await expect.poll(async () => (await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n')).toBe(source)
 })
 
 test('配置流程图可加载、保留比例，手机端可以打开原图阅读', async ({ page }) => {
