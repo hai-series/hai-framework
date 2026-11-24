@@ -4,13 +4,23 @@
 
 [Data reference index](README.en.md) · [Configuration](../configuration/payment.en.md) · [API reference](../function/payment.en.md)
 
-On repeated submission of a Stripe operation, Payment looks up the stored operation digest and checks the request content. The application tracks fulfillment and callback processing separately.
+Payment providers store their orders and transaction states. The application stores its business orders, processed notification records, and fulfillment tasks.
+
+<a id="provider-order-storage"></a>
+
+## How each provider looks up orders
+
+`payment.queryOrder(providerName, orderNo)` takes the order number stored by the application.
+
+- **WeChat Pay**. The server passes `orderNo` to WeChat as the merchant order number `out_trade_no` when creating the order. Later queries go directly to WeChat Pay with the same order number and merchant ID. The module needs no stored order mapping for WeChat Pay. [WeChat JSAPI payment flow](../function/payment.en.md#wechat-jsapi-flow)
+- **Alipay**. `payment.createOrder()` builds a signed WAP form on the server. Alipay can process the order after the browser submits the form to its gateway. The `alipay.trade.query` API takes the merchant order number `out_trade_no` directly, so the module needs no stored order mapping. [Alipay WAP payment flow](../function/payment.en.md#alipay-wap-flow)
+- **Stripe**. Queries also go to the payment provider. The module first looks up the stored Checkout Session ID by Stripe account, test or live mode, and business order number `orderNo`. It then queries Stripe by that Session ID. It also stores request digests and results for order creation and refunds so different instances can safely retry using the same idempotency key.
+
+<a id="database"></a>
 
 ## Database
 
-The application owns orders, fulfillment and callback processing records. Only the built-in Stripe channel creates a relational operations table.
-
-The built-in Stripe channel uses one table.
+When you enable the built-in Stripe provider, `payment.init()` creates the table below. WeChat Pay and Alipay setups need no module-owned payment table.
 
 | Table | Purpose |
 | --- | --- |
@@ -95,4 +105,4 @@ This Stripe notification excerpt shows the fields an application uses before ful
 }
 ```
 
-There are no Redis keys. Share the RelDB backend between service instances that handle the same channel.
+There are no Redis keys. Instances of the same Stripe deployment share one RelDB backend to read the same operation records.

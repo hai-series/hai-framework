@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="692" viewBox="0 0 400 692" xml:lang="zh-CN" role="img" aria-labelledby="diagram-title diagram-description">
+  <title id="diagram-title">支付宝 WAP 支付与付款确认</title>
+  <desc id="diagram-description">商户服务端在本地生成签名表单，浏览器将表单提交给支付宝网关。页面回跳可展示订单状态，异步通知可独立到达。商户验签、核对订单并完成业务提交，或确认通知已处理后，才返回 HTTP 200 和纯文本 success。</desc>
+  <style>
+    text { font-family: "Noto Sans CJK SC", system-ui, sans-serif; fill: #172b4d; }
+    .heading { font-size: 18px; font-weight: 700; }
+    .label { font-size: 16px; font-weight: 700; }
+    .detail { font-size: 14px; fill: #334864; }
+    .code { font: 14px ui-monospace, monospace; fill: #284d88; }
+    .step { fill: #fff; stroke: #9eb5d5; }
+    .browser { fill: #edf3ff; stroke: #9eb5d5; }
+    .merchant { fill: #f0f7f3; stroke: #90b8a2; }
+    .ack { fill: #e3f3e9; stroke: #69a181; }
+    .ack-label, .ack-code { fill: #17452f; }
+    .join { fill: none; stroke: #617995; stroke-width: 1.5; }
+    .arrow { marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 8 4 0 8Z" fill="#617995"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="399" height="691" rx="15" fill="#f7f9fc" stroke="#d4deeb"/>
+
+  <text class="heading" x="20" y="34">发起支付</text>
+  <g>
+    <rect class="step" x="20" y="48" width="360" height="78" rx="9"/>
+    <text class="label" x="34" y="73">商户服务端准备签名表单</text>
+    <text class="code" x="34" y="95">payment.createOrder('alipay', …)</text>
+    <text class="detail" x="34" y="114">在本地签名并返回表单，无需请求网关</text>
+  </g>
+  <path class="join arrow" d="M200 126v19"/>
+  <g>
+    <rect class="browser" x="20" y="149" width="360" height="78" rx="9"/>
+    <text class="label" x="34" y="174">浏览器打开支付宝收银台</text>
+    <text class="code" x="34" y="196">payment.client.invoke(order)</text>
+    <text class="detail" x="34" y="215">向支付宝网关 POST 表单，由用户付款</text>
+  </g>
+
+  <!-- 浏览器回跳与异步通知独立到达，从同一个网关节点分岔。 -->
+  <path class="join" d="M200 227v13"/>
+  <path class="join arrow" d="M200 240H105v15"/>
+  <path class="join arrow" d="M200 240h95v15"/>
+  <g>
+    <rect class="browser" x="20" y="259" width="170" height="106" rx="9"/>
+    <text class="label" x="32" y="283">浏览器回跳</text>
+    <text class="code" x="32" y="304">returnUrl</text>
+    <text class="detail" x="32" y="327">打开支付结果页</text>
+    <text class="detail" x="32" y="348">从服务端读取订单状态</text>
+  </g>
+  <g>
+    <rect class="merchant" x="210" y="259" width="170" height="106" rx="9"/>
+    <text class="label" x="222" y="283">支付宝异步通知</text>
+    <text class="code" x="222" y="304">notifyUrl</text>
+    <text class="detail" x="222" y="327">向商户通知端点</text>
+    <text class="detail" x="222" y="348">POST 原始表单</text>
+  </g>
+  <path class="join arrow" d="M295 365v45"/>
+
+  <text class="heading" x="20" y="393">商户服务端确认付款</text>
+  <g>
+    <rect class="merchant" x="20" y="414" width="360" height="78" rx="9"/>
+    <text class="label" x="34" y="439">验证通知</text>
+    <text class="code" x="34" y="461">payment.handleNotify('alipay', …)</text>
+    <text class="detail" x="34" y="480">验证签名，核对应用与商户身份</text>
+  </g>
+  <path class="join arrow" d="M200 492v19"/>
+  <g>
+    <rect class="merchant" x="20" y="515" width="360" height="78" rx="9"/>
+    <text class="label" x="34" y="540">提交业务事务或确认已处理</text>
+    <text class="detail" x="34" y="562">核对订单、金额、币种，并对通知去重</text>
+    <text class="detail" x="34" y="581">付款成功时保存订单状态与履约任务</text>
+  </g>
+  <path class="join arrow" d="M200 593v19"/>
+  <g>
+    <rect class="ack" x="20" y="616" width="360" height="56" rx="9"/>
+    <text class="label ack-label" x="34" y="639">向支付宝确认通知已处理</text>
+    <text class="code ack-code" x="34" y="660">HTTP 200 · text/plain · success</text>
+  </g>
+</svg>

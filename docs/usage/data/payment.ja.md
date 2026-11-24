@@ -4,15 +4,23 @@
 
 [データ構造一覧](README.ja.md) · [設定](../configuration/payment.ja.md) · [API リファレンス](../function/payment.ja.md)
 
-同じ Stripe 操作を再送すると、Payment は保存済みの操作ダイジェストで記録を探し、リクエスト内容を照合します。商品提供とコールバックの処理状況はアプリが別途管理します。
+決済事業者は、決済側の注文と取引状態を管理します。アプリは、業務注文、決済通知の処理済み記録、商品提供タスクを保存します。
+
+<a id="provider-order-storage"></a>
+
+## 決済手段ごとの注文照会
+
+`payment.queryOrder(providerName, orderNo)` には、アプリが保存した注文番号を渡します。
+
+- **WeChat Pay**。サーバーは注文作成時に、`orderNo` を加盟店注文番号 `out_trade_no` として WeChat Pay に送ります。その後、同じ注文番号と加盟店番号を使って WeChat Pay に直接照会できます。モジュール側で注文番号の対応を保存する必要はありません。[WeChat JSAPI 決済の流れ](../function/payment.ja.md#wechat-jsapi-flow)
+- **Alipay**。`payment.createOrder()` はサーバーで署名済みの WAP フォームを作成します。ブラウザーがフォームをゲートウェイに送信すると、Alipay が注文を受け付ける処理が始まります。`alipay.trade.query` は加盟店注文番号 `out_trade_no` を直接受け取るため、モジュール側で注文番号の対応を保存する必要はありません。[Alipay WAP 決済の流れ](../function/payment.ja.md#alipay-wap-flow)
+- **Stripe**。照会先は Stripe です。モジュールは Stripe アカウント、テストか本番かの区分、業務注文番号 `orderNo` を使って保存済みの Checkout Session ID を探し、その ID で Stripe に照会します。注文作成と返金では、複数のインスタンスが同じ冪等キーで安全に再試行できるよう、リクエストのダイジェストと結果も保存します。
 
 <a id="database"></a>
 
 ## データベース
 
-注文、提供状況、コールバックの処理記録はアプリで管理します。組み込みの Stripe チャネルだけが操作テーブルを作成します。
-
-組み込みの Stripe チャネルは 1 テーブルを使用します。
+組み込みの Stripe を有効にすると、`payment.init()` が以下の 1 テーブルを作成します。WeChat Pay と Alipay のみを使う場合、モジュール側の決済テーブルは不要です。
 
 | テーブル | 用途 |
 | --- | --- |
@@ -97,4 +105,4 @@ Stripe 通知の抜粋を示します。モジュールは、取引 ID と金額
 }
 ```
 
-Redis キーはありません。同じ決済手段を扱うインスタンスでは RelDB を共有します。
+Redis キーはありません。同じ Stripe の構成で動くインスタンスは RelDB を共有し、同じ操作レコードを参照します。

@@ -4,6 +4,8 @@
 
 [Chinese source](payment.md) · [Configuration](../configuration/payment.en.md) · [Data structures](../data/payment.en.md)
 
+[WeChat JSAPI payment](#wechat-jsapi-flow) · [Alipay mobile web payment](#alipay-wap-flow)
+
 ## Quick start
 
 Initialize Payment before creating orders. Validate amounts and authorize operations in application code. Treat provider callbacks and query results as inputs to the app’s own order state machine.
@@ -321,3 +323,95 @@ Use startPayment in the quick start with an order successfully created by the se
 #### Scenario: Handle invocation results
 
 startPayment checks success and data.invoked and returns the invocation result. Cancellation, redirects and page loads do not confirm payment.
+
+<a id="wechat-jsapi-flow"></a>
+
+#### Scenario: Pay inside WeChat with JSAPI
+
+A customer opens the order in WeChat and selects Pay. Initialize the module with the [WeChat JSAPI configuration](../configuration/payment.en.md#wechat-jsapi-configuration). Authenticate the customer and load their pending order `WX-20261124-01` for CNY 100 fen, or one yuan. Read the saved OpenID for your official account and obtain the notification URL from server configuration.
+
+![WeChat JSAPI flow showing prepayment, browser launch, notification verification, commit, and order lookup](../images/function-payment-wechat-flow.en.svg)
+
+Pass the authorized order, OpenID, and notification URL to this server function. Send its `PaymentOrder` to the browser. When the WeChat bridge is available or `WeixinJSBridgeReady` fires, call `startPayment(orderData)` from the quick start. After cancellation or return, show the order state from the application backend.
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareWeChatPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  openid: string,
+  notifyUrl: string,
+) {
+  // Request JSAPI prepayment for the merchant order. Success returns launch parameters. Stop this attempt on failure.
+  const created = await payment.createOrder('wechat', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'jsapi',
+    userId: openid,
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+Mount `receiveWeChatNotify` as the POST handler at `notifyUrl`. Supply `recordVerified` from your application. In one transaction, match the provider, merchant, order, amount and currency, deduplicate the event, mark the order `paid`, and create a unique fulfillment job. See the [business transaction example](../../../packages/payment/examples/payment-notify-consumer.ts).
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { type PaymentNotifyResult, payment } from '@h-ai/payment'
+
+export async function receiveWeChatNotify(
+  request: Request,
+  recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
+): Promise<Response> {
+  // Verify the original body and signature headers. Return HTTP 400 if verification or parsing fails.
+  const verified = await payment.handleNotify('wechat', {
+    body: await request.text(),
+    headers: Object.fromEntries(request.headers),
+  })
+  if (!verified.success)
+    return Response.json({ code: 'FAIL', message: 'Notification verification failed' }, { status: 400 })
+
+  // Return an empty 204 after commit or duplicate detection. Return 500 on a transaction failure so WeChat retries.
+  const committed = await recordVerified(verified.data)
+  if (!committed.success)
+    return Response.json({ code: 'FAIL', message: 'Notification processing failed' }, { status: 500 })
+  return new Response(null, { status: 204 })
+}
+```
+
+The verified notification includes `WX-20261124-01`, 100 fen, CNY, and the WeChat transaction ID. Once the app commits, the browser sees paid when it reloads the order. If the notification is delayed, the backend can call `payment.queryOrder('wechat', 'WX-20261124-01')`. Confirm a `paid` result against the order, amount, and transaction ID, using the channel’s fixed CNY currency, before applying the same idempotent transition and job. The lookup has no notification event ID. Use the order state and unique fulfillment job to prevent repeated delivery.
+
+<a id="alipay-wap-flow"></a>
+
+#### Scenario: Pay with Alipay on a mobile website
+
+A customer opens a pending order in a mobile browser. Initialize the module with the [Alipay sandbox configuration](../configuration/payment.en.md#alipay-sandbox-configuration) before switching to production settings. Authenticate the customer and load their order `AL-20261124-01` for CNY 100 fen. Obtain the notification URL from server configuration and set `alipay.returnUrl` to the application’s payment result page.
+
+![Alipay mobile web flow showing server signing, form submission, redirect, asynchronous notification, and plain-text acknowledgement](../images/function-payment-alipay-flow.en.svg)
+
+Pass the authorized order and notification URL to this server function. The returned `PaymentOrder.clientParams` contains the Alipay gateway and signed form fields. The browser calls `startPayment(orderData)` to submit the form to Alipay and open the checkout. On return to `returnUrl`, the page reads the order state from the application backend.
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareAlipayPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  notifyUrl: string,
+) {
+  // Sign the WAP form parameters for the merchant order. The browser can submit them on success. Stop before opening checkout on failure.
+  const created = await payment.createOrder('alipay', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'h5',
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+Alipay posts a separate form notification to `notifyUrl`. The [Alipay acknowledgement example](#alipay-notification-ack) reads the original body and verifies the signature. The business transaction checks the order, 100-fen amount, currency and transaction identity, then commits the order state and unique job. After commit or duplicate detection, respond with HTTP 200 and the exact body `success`. If the app is still awaiting confirmation on return, the backend can call `payment.queryOrder('alipay', 'AL-20261124-01')`. Confirm `paid` against the order, amount and transaction ID before applying the same idempotent transition and fulfillment.

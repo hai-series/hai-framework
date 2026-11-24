@@ -4,15 +4,23 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/payment.md) · [功能说明](../function/payment.md)
 
-重复提交同一 Stripe 操作时，Payment 根据持久化的操作摘要找回已有记录并核对请求内容。商品交付状态与回调处理进度由应用单独保存。
+支付渠道保存渠道订单和交易状态。应用保存自己的业务订单、支付通知去重记录和履约任务。
+
+<a id="provider-order-storage"></a>
+
+## 各渠道如何查单
+
+`payment.queryOrder(providerName, orderNo)` 接收应用保存的订单号。
+
+- **微信支付**。服务端下单时把 `orderNo` 作为商户订单号 `out_trade_no` 发送给微信，后续用同一订单号和商户号直接查微信支付。微信渠道在模块内无需保存订单映射。[微信 JSAPI 支付流程](../function/payment.md#wechat-jsapi-flow)
+- **支付宝**。`payment.createOrder()` 在服务端生成已签名的 WAP 表单。浏览器提交到支付宝网关后，支付宝才有机会受理订单。后续 `alipay.trade.query` 直接按商户订单号 `out_trade_no` 查询。支付宝渠道在模块内也无需保存订单映射。[支付宝 WAP 支付流程](../function/payment.md#alipay-wap-flow)
+- **Stripe**。查单同样请求渠道。模块先按 Stripe 账户、测试或正式模式和业务订单号 `orderNo` 找到持久化的 Checkout Session ID，再用该 ID 向 Stripe 查询。模块还保存创建订单和退款的请求摘要及结果，供不同节点用同一个幂等键安全重试。
 
 <a id="database"></a>
 
 ## 数据库
 
-启用内置 Stripe 渠道时，模块创建 `hai_payment_stripe_operations` 表，用来核对同一次操作的重试并记下已确认的渠道结果。业务订单、是否已交付商品，以及是否已处理某条回调，由应用自己的数据库记录。
-
-内置 Stripe 渠道使用 1 张表。
+启用内置 Stripe 渠道时，`payment.init()` 创建下列 1 张表。仅启用微信支付或支付宝时，模块无需创建渠道表。
 
 | 表名 | 用途 |
 | --- | --- |
@@ -31,8 +39,6 @@
 | `result_json` | `JSON` | 是 | — | 已确认的渠道返回值。为空表示尚未取得结果。 | `null` |
 | `payment_intent` | `TEXT` | 是 | — | Stripe PaymentIntent ID，渠道返回后记录。 | `null` |
 | `created_at` | `BIGINT` | 否 | — | 登记时间，由数据库给出。单位是 Unix 秒，用于判断安全重试窗口。 | `1794873600` |
-
-微信、支付宝和模拟渠道不创建该表。应用可用 `payment.queryOrder()` 读取渠道状态，确认付款后再更新订单并交付商品。
 
 <a id="example-data"></a>
 

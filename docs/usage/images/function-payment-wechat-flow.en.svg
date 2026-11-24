@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:lang="en" width="440" height="845" viewBox="0 0 440 845" role="img" aria-labelledby="title description">
+  <title id="title">WeChat Pay JSAPI flow</title>
+  <desc id="description">A signed-in customer pays 100 fen for order WX-20261124-01 on a page inside WeChat. The merchant server reads the saved unpaid order and the customer’s OpenID for the official account, then creates a WeChat prepayment order. When the bridge is ready, the page opens the WeChat cashier. The merchant uses the raw notification body and signature headers to verify and decrypt the payment notification. After matching the order, deduplicating the event, and saving a fulfillment task in a shared database transaction, the merchant returns HTTP 204. If confirmation is delayed or unclear, a server-side query can verify the payment and use the same business transaction.</desc>
+  <style>
+    text { font-family: system-ui, sans-serif; fill: #172b4d; }
+    .title { font-size: 25px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #44556d; }
+    .actor { font-size: 13.5px; font-weight: 700; fill: #345885; }
+    .heading { font-size: 18px; font-weight: 700; }
+    .detail { font-size: 15.5px; }
+    .code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 15px; fill: #274d80; }
+    .card { fill: #f5f8ff; stroke: #b5c7e4; }
+    .confirmed { fill: #e9f6ef; stroke: #77a88e; }
+    .retry { fill: #fff6df; stroke: #caa556; }
+    .confirmed-label { fill: #276347; }
+    .retry-label { fill: #765514; }
+    .line { fill: none; stroke: #4b658b; stroke-width: 2; marker-end: url(#arrow); }
+    .retry-line { fill: none; stroke: #9a711e; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#retry-arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#4b658b"/>
+    </marker>
+    <marker id="retry-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#9a711e"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="438" height="843" rx="16" fill="#fff" stroke="#dce3ef"/>
+  <text class="title" x="24" y="40">WeChat Pay JSAPI flow</text>
+  <text class="subtitle" x="24" y="64">WX-20261124-01 · 100 fen (CNY 1.00)</text>
+
+  <path class="line" d="M80 187V195"/>
+  <path class="line" d="M80 307V319"/>
+  <path class="line" d="M80 431V450"/>
+  <path class="line" d="M80 562V574"/>
+  <path class="retry-line" d="M46 409H25V758H43"/>
+
+  <g transform="translate(46 84)">
+    <rect class="card" width="374" height="100" rx="12"/>
+    <text class="actor" x="16" y="23">Merchant server</text>
+    <text class="heading" x="16" y="48">Accept an authenticated order POST</text>
+    <text class="detail" x="16" y="70">Check owner. Read saved order and amount.</text>
+    <text class="detail" x="16" y="88">Load the user’s official account OpenID.</text>
+  </g>
+
+  <g transform="translate(46 198)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">Merchant server → WeChat Pay</text>
+    <text class="heading" x="16" y="48">Create the JSAPI prepayment order</text>
+    <text class="code" x="16" y="71">payment.createOrder('wechat', …)</text>
+    <text class="detail" x="16" y="93">Verify reply. Return prepayId and params.</text>
+  </g>
+
+  <g transform="translate(46 322)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">Browser inside WeChat</text>
+    <text class="heading" x="16" y="48">Open cashier after bridge is ready</text>
+    <text class="code" x="16" y="71">payment.client.invoke(order)</text>
+    <text class="detail" x="16" y="93">The cashier result updates the page.</text>
+  </g>
+
+  <g transform="translate(46 453)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">WeChat Pay → Merchant notification route</text>
+    <text class="heading" x="16" y="48">Verify and decrypt the notice</text>
+    <text class="code" x="16" y="71">payment.handleNotify('wechat', …)</text>
+    <text class="detail" x="16" y="93">Pass the raw body and signature headers</text>
+  </g>
+
+  <g transform="translate(46 577)">
+    <rect class="confirmed" width="374" height="124" rx="12"/>
+    <text class="actor confirmed-label" x="16" y="23">Merchant server → WeChat Pay</text>
+    <text class="heading" x="16" y="48">Commit, then return HTTP 204</text>
+    <text class="detail" x="16" y="71">Match the order, amount, and currency.</text>
+    <text class="detail" x="16" y="90">Deduplicate by eventId and mark paid.</text>
+    <text class="detail" x="16" y="109">Save one fulfillment task.</text>
+  </g>
+
+  <g transform="translate(46 720)">
+    <rect class="retry" width="374" height="106" rx="12"/>
+    <text class="actor retry-label" x="16" y="23">Confirmation is delayed or unclear</text>
+    <text class="heading" x="16" y="48">Query from the merchant server</text>
+    <text class="code" x="16" y="71">payment.queryOrder('wechat', orderNo)</text>
+    <text class="detail" x="16" y="93">If paid, match the order and record payment.</text>
+  </g>
+</svg>

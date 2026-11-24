@@ -54,6 +54,8 @@ stripe:
   cancelUrl: https://shop.example.com/payment/cancel
 ```
 
+<a id="alipay-sandbox-configuration"></a>
+
 ### Start with the Alipay sandbox
 
 Use a sandbox merchant and keys to check the mobile website flow. The app ID, seller ID and key pair must all belong to that sandbox setup. Before real payments, switch to production credentials and disable `sandbox`. `returnUrl` is still navigation only.
@@ -67,6 +69,8 @@ alipay:
   returnUrl: https://shop.example.com/payment/result
   sandbox: true
 ```
+
+<a id="wechat-jsapi-configuration"></a>
 
 ### Use WeChat Pay JSAPI
 

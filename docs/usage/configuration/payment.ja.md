@@ -54,6 +54,8 @@ stripe:
   cancelUrl: https://shop.example.com/payment/cancel
 ```
 
+<a id="alipay-sandbox-configuration"></a>
+
 ### まず Alipay のサンドボックスで確認する
 
 サンドボックスの加盟店と鍵を使い、モバイル Web 決済を確認します。アプリ ID、販売者 ID、秘密鍵、Alipay 公開鍵は同じサンドボックスの設定を使います。本番決済の確認前に本番設定へ切り替え、`sandbox` を無効にします。`returnUrl` は画面への遷移先です。
@@ -67,6 +69,8 @@ alipay:
   returnUrl: https://shop.example.com/payment/result
   sandbox: true
 ```
+
+<a id="wechat-jsapi-configuration"></a>
 
 ### WeChat Pay の JSAPI 決済を利用する
 

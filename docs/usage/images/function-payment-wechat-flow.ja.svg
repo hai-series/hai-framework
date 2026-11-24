@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:lang="ja" width="440" height="845" viewBox="0 0 440 845" role="img" aria-labelledby="title description">
+  <title id="title">WeChat Pay の JSAPI フロー</title>
+  <desc id="description">ログイン済みのユーザーが WeChat 内のページで注文 WX-20261124-01 の 100 分を支払います。加盟店サーバーは保存済みの未払い注文と公式アカウントに対応するユーザーの OpenID を読み、WeChat に事前決済注文を作成します。ブリッジの準備ができるとページが決済画面を開きます。加盟店は通知の元の本文と署名ヘッダーを使って署名検証と復号を行い、共有データベースで注文照合、イベントの重複排除、履行タスクの記録を同じトランザクションで行います。コミット後に HTTP 204 を返します。結果の確定が遅い場合や結果が不明な場合は、サーバーで照会し、支払いが確認できたら同じ業務トランザクションで記録します。</desc>
+  <style>
+    text { font-family: "Noto Sans CJK JP", "Yu Gothic", sans-serif; fill: #172b4d; }
+    .title { font-size: 25px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #44556d; }
+    .actor { font-size: 13.5px; font-weight: 700; fill: #345885; }
+    .heading { font-size: 18px; font-weight: 700; }
+    .detail { font-size: 15.5px; }
+    .code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 15px; fill: #274d80; }
+    .card { fill: #f5f8ff; stroke: #b5c7e4; }
+    .confirmed { fill: #e9f6ef; stroke: #77a88e; }
+    .retry { fill: #fff6df; stroke: #caa556; }
+    .confirmed-label { fill: #276347; }
+    .retry-label { fill: #765514; }
+    .line { fill: none; stroke: #4b658b; stroke-width: 2; marker-end: url(#arrow); }
+    .retry-line { fill: none; stroke: #9a711e; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#retry-arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#4b658b"/>
+    </marker>
+    <marker id="retry-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#9a711e"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="438" height="843" rx="16" fill="#fff" stroke="#dce3ef"/>
+  <text class="title" x="24" y="40">WeChat Pay の JSAPI フロー</text>
+  <text class="subtitle" x="24" y="64">WX-20261124-01 · 100 分（1.00 人民元）</text>
+
+  <path class="line" d="M80 187V195"/>
+  <path class="line" d="M80 307V319"/>
+  <path class="line" d="M80 431V450"/>
+  <path class="line" d="M80 562V574"/>
+  <path class="retry-line" d="M46 409H25V758H43"/>
+
+  <g transform="translate(46 84)">
+    <rect class="card" width="374" height="100" rx="12"/>
+    <text class="actor" x="16" y="23">加盟店サーバー</text>
+    <text class="heading" x="16" y="48">認証済みの注文 POST を受け付ける</text>
+    <text class="detail" x="16" y="70">注文の所有者を確認し、保存済みの金額を読む</text>
+    <text class="detail" x="16" y="88">対象の公式アカウントの OpenID を取得</text>
+  </g>
+
+  <g transform="translate(46 198)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">加盟店サーバー → WeChat Pay</text>
+    <text class="heading" x="16" y="48">JSAPI の事前決済注文を作成</text>
+    <text class="code" x="16" y="71">payment.createOrder('wechat', …)</text>
+    <text class="detail" x="16" y="93">応答を検証し、prepayId と起動情報を返す</text>
+  </g>
+
+  <g transform="translate(46 322)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">WeChat 内のブラウザー</text>
+    <text class="heading" x="16" y="48">ブリッジが準備できたら決済画面を開く</text>
+    <text class="code" x="16" y="71">payment.client.invoke(order)</text>
+    <text class="detail" x="16" y="93">支払い後、コールバックで画面を更新</text>
+  </g>
+
+  <g transform="translate(46 453)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">WeChat Pay → 加盟店の通知ルート</text>
+    <text class="heading" x="16" y="48">支払い通知の署名を検証して復号</text>
+    <text class="code" x="16" y="71">payment.handleNotify('wechat', …)</text>
+    <text class="detail" x="16" y="93">リクエストの元の本文と署名ヘッダーを渡す</text>
+  </g>
+
+  <g transform="translate(46 577)">
+    <rect class="confirmed" width="374" height="124" rx="12"/>
+    <text class="actor confirmed-label" x="16" y="23">加盟店サーバー → WeChat Pay</text>
+    <text class="heading" x="16" y="48">コミット後に HTTP 204 を返す</text>
+    <text class="detail" x="16" y="71">注文と金額、通貨を照合する</text>
+    <text class="detail" x="16" y="90">eventId で重複を除き支払い済みにする</text>
+    <text class="detail" x="16" y="109">履行タスクを一件だけ記録する</text>
+  </g>
+
+  <g transform="translate(46 720)">
+    <rect class="retry" width="374" height="106" rx="12"/>
+    <text class="actor retry-label" x="16" y="23">通知が遅れている場合や結果が不明な場合</text>
+    <text class="heading" x="16" y="48">加盟店サーバーから注文を照会</text>
+    <text class="code" x="16" y="71">payment.queryOrder('wechat', orderNo)</text>
+    <text class="detail" x="16" y="93">paid と注文を照合し、同じ支払いを記録する</text>
+  </g>
+</svg>

@@ -4,6 +4,8 @@
 
 [原文（中国語）](payment.md) · [設定](../configuration/payment.ja.md) · [データ構造](../data/payment.ja.md)
 
+[WeChat JSAPI 決済](#wechat-jsapi-flow) · [Alipay モバイル Web 決済](#alipay-wap-flow)
+
 <a id="quick-start"></a>
 
 ## クイックスタート
@@ -323,3 +325,95 @@ WeChat と Stripe にも業務データのコミット後に応答します。We
 #### 利用例：呼び出し結果を確認
 
 startPayment は success と data.invoked を確認して結果を返します。キャンセル・遷移・画面表示は入金確認になりません。
+
+<a id="wechat-jsapi-flow"></a>
+
+#### 利用例：WeChat 内で JSAPI 決済を行う
+
+顧客が WeChat 内で注文を開き、支払いを選びます。[WeChat JSAPI の設定](../configuration/payment.ja.md#wechat-jsapi-configuration)でモジュールを初期化します。顧客を認証してから、業務 DB の未払い注文 `WX-20261124-01` を読み込みます。金額は CNY 100 分（1 元）です。アプリに保存された対象の公式アカウントの OpenID と、サーバー設定の通知 URL を使います。
+
+![WeChat JSAPI の事前決済、ブラウザーでの起動、通知の署名検証、業務処理の確定と注文照会の流れ](../images/function-payment-wechat-flow.ja.svg)
+
+認可済みの注文、OpenID、通知 URL を次のサーバー関数に渡します。返された `PaymentOrder` はブラウザーに渡します。WeChat のブリッジが利用可能になった時点、または `WeixinJSBridgeReady` の受信後に、クイックスタートの `startPayment(orderData)` を呼び出します。キャンセルや復帰後は、アプリのバックエンドから取得した注文状態を表示します。
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareWeChatPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  openid: string,
+  notifyUrl: string,
+) {
+  // この加盟店注文番号で JSAPI の事前決済を作成します。成功時は起動用の値を返し、失敗時は決済の起動を止めます。
+  const created = await payment.createOrder('wechat', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'jsapi',
+    userId: openid,
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+`notifyUrl` に対応する POST ハンドラーとして `receiveWeChatNotify` を登録します。アプリ側の `recordVerified` は、同じトランザクションでチャネル、加盟店、注文、金額、通貨を照合します。イベントの重複を除き、注文を `paid` に更新して一意な履行タスクを作ります。[業務トランザクションの例](../../../packages/payment/examples/payment-notify-consumer.ts)を参照してください。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { type PaymentNotifyResult, payment } from '@h-ai/payment'
+
+export async function receiveWeChatNotify(
+  request: Request,
+  recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
+): Promise<Response> {
+  // 元の本文と署名ヘッダーを検証し、署名の検証や解析に失敗した場合は HTTP 400 を返します。
+  const verified = await payment.handleNotify('wechat', {
+    body: await request.text(),
+    headers: Object.fromEntries(request.headers),
+  })
+  if (!verified.success)
+    return Response.json({ code: 'FAIL', message: 'Notification verification failed' }, { status: 400 })
+
+  // コミットまたは処理済みの確認後に空の 204 を返します。処理失敗時は WeChat が再送できるよう 500 を返します。
+  const committed = await recordVerified(verified.data)
+  if (!committed.success)
+    return Response.json({ code: 'FAIL', message: 'Notification processing failed' }, { status: 500 })
+  return new Response(null, { status: 204 })
+}
+```
+
+検証済みの支払通知には `WX-20261124-01`、100 分、CNY、WeChat の取引番号が含まれます。業務処理が確定した後、画面で注文を読み直すと支払済みになります。通知が遅れている場合はバックエンドから `payment.queryOrder('wechat', 'WX-20261124-01')` を呼べます。`paid` なら、注文、金額、取引番号とチャネルの固定通貨 CNY を照合して、同じ冪等な状態更新と履行処理に進みます。照会結果に通知イベント ID は含まれないため、注文状態と一意な履行タスクで重複を防ぎます。
+
+<a id="alipay-wap-flow"></a>
+
+#### 利用例：モバイルサイトで Alipay で支払う
+
+顧客がモバイルブラウザーで未払い注文を開きます。[Alipay サンドボックスの設定](../configuration/payment.ja.md#alipay-sandbox-configuration)で初期化し、動作確認後に本番設定へ切り替えます。認証した顧客の注文 `AL-20261124-01` を読み込みます。金額は CNY 100 分です。通知 URL はサーバー設定から取得し、`alipay.returnUrl` はアプリの決済結果ページに設定します。
+
+![Alipay モバイル Web 決済のサーバー署名、フォーム送信、画面復帰、非同期通知とプレーンテキスト応答の流れ](../images/function-payment-alipay-flow.ja.svg)
+
+認可済みの注文と通知 URL を次のサーバー関数に渡します。返される `PaymentOrder.clientParams` には Alipay のゲートウェイと署名済みフォームの項目が含まれます。ブラウザーから `startPayment(orderData)` を呼び出し、フォームを送信すると Alipay の決済画面に進みます。`returnUrl` への復帰後は、アプリのバックエンドから取得した注文状態を表示します。
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareAlipayPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  notifyUrl: string,
+) {
+  // 加盟店注文番号に対応する WAP フォームを署名します。成功時はブラウザーから送信でき、失敗時は決済画面を開きません。
+  const created = await payment.createOrder('alipay', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'h5',
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+Alipay は画面復帰とは別に `notifyUrl` へフォーム通知を POST します。[Alipay の通知応答例](#alipay-notification-ack)では、元の本文を読み込んで署名を検証します。業務トランザクションで注文、100 分の金額、通貨、取引情報を照合し、状態更新と一意な履行タスクを保存します。コミットまたは処理済みの確認後に HTTP 200 と本文 `success` を返します。画面復帰時に注文が確認待ちなら、バックエンドから `payment.queryOrder('alipay', 'AL-20261124-01')` を呼べます。`paid` の場合は注文、金額、取引番号を照合して、同じ冪等な状態更新と履行処理を行います。

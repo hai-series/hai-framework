@@ -60,6 +60,8 @@ stripe:
   cancelUrl: https://shop.example.com/payment/cancel
 ```
 
+<a id="alipay-sandbox-configuration"></a>
+
 ### 先接入支付宝沙箱
 
 使用沙箱商户和密钥验证手机网站付款流程。应用 ID、卖家 ID、私钥和支付宝公钥必须属于同一套沙箱配置。验收真实支付前，换成生产配置并关闭 `sandbox`；`returnUrl` 仍只用于页面导航。
@@ -73,6 +75,8 @@ alipay:
   returnUrl: https://shop.example.com/payment/result
   sandbox: true
 ```
+
+<a id="wechat-jsapi-configuration"></a>
 
 ### 接入微信公众号 JSAPI 支付
 

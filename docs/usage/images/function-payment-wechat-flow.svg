@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:lang="zh-CN" width="440" height="845" viewBox="0 0 440 845" role="img" aria-labelledby="title description">
+  <title id="title">微信支付 JSAPI 流程</title>
+  <desc id="description">已登录的用户从微信内网页为订单 WX-20261124-01 支付 100 分。应用服务端读取该用户的待支付订单和公众号 OpenID，创建微信预支付订单。桥接就绪后，浏览器调起微信收银台。微信支付成功通知使用原始正文和签名头验签并解密，服务端在共享数据库核对订单、去重并记录履约任务，提交事务后返回 HTTP 204。通知延迟或结果未确认时，服务端查单，确认付款后走同一业务事务。</desc>
+  <style>
+    text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #172b4d; }
+    .title { font-size: 25px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #44556d; }
+    .actor { font-size: 13.5px; font-weight: 700; fill: #345885; }
+    .heading { font-size: 18px; font-weight: 700; }
+    .detail { font-size: 15.5px; }
+    .code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 15px; fill: #274d80; }
+    .card { fill: #f5f8ff; stroke: #b5c7e4; }
+    .confirmed { fill: #e9f6ef; stroke: #77a88e; }
+    .retry { fill: #fff6df; stroke: #caa556; }
+    .confirmed-label { fill: #276347; }
+    .retry-label { fill: #765514; }
+    .line { fill: none; stroke: #4b658b; stroke-width: 2; marker-end: url(#arrow); }
+    .retry-line { fill: none; stroke: #9a711e; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#retry-arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#4b658b"/>
+    </marker>
+    <marker id="retry-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0 0L6 3L0 6Z" fill="#9a711e"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="438" height="843" rx="16" fill="#fff" stroke="#dce3ef"/>
+  <text class="title" x="24" y="40">微信支付 JSAPI 流程</text>
+  <text class="subtitle" x="24" y="64">WX-20261124-01 · 100 分（人民币 1.00 元）</text>
+
+  <path class="line" d="M80 187V195"/>
+  <path class="line" d="M80 307V319"/>
+  <path class="line" d="M80 431V450"/>
+  <path class="line" d="M80 562V574"/>
+  <path class="retry-line" d="M46 409H25V758H43"/>
+
+  <g transform="translate(46 84)">
+    <rect class="card" width="374" height="100" rx="12"/>
+    <text class="actor" x="16" y="23">商户服务端</text>
+    <text class="heading" x="16" y="48">接收登录用户的下单 POST</text>
+    <text class="detail" x="16" y="70">校验订单归属，读取待支付订单及其金额</text>
+    <text class="detail" x="16" y="88">读取当前用户在该公众号下的 OpenID</text>
+  </g>
+
+  <g transform="translate(46 198)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">商户服务端 → 微信支付</text>
+    <text class="heading" x="16" y="48">创建 JSAPI 预支付订单</text>
+    <text class="code" x="16" y="71">payment.createOrder('wechat', …)</text>
+    <text class="detail" x="16" y="93">验签后向页面返回 prepayId 和调起参数</text>
+  </g>
+
+  <g transform="translate(46 322)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">微信内浏览器</text>
+    <text class="heading" x="16" y="48">桥接就绪后调起微信收银台</text>
+    <text class="code" x="16" y="71">payment.client.invoke(order)</text>
+    <text class="detail" x="16" y="93">用户完成付款，浏览器回调只用于页面反馈</text>
+  </g>
+
+  <g transform="translate(46 453)">
+    <rect class="card" width="374" height="106" rx="12"/>
+    <text class="actor" x="16" y="23">微信支付 → 商户通知路由</text>
+    <text class="heading" x="16" y="48">验证并解密支付成功通知</text>
+    <text class="code" x="16" y="71">payment.handleNotify('wechat', …)</text>
+    <text class="detail" x="16" y="93">传入原始通知正文与签名头</text>
+  </g>
+
+  <g transform="translate(46 577)">
+    <rect class="confirmed" width="374" height="124" rx="12"/>
+    <text class="actor confirmed-label" x="16" y="23">商户服务端 → 微信支付</text>
+    <text class="heading" x="16" y="48">提交事务后应答 HTTP 204</text>
+    <text class="detail" x="16" y="71">核对业务订单、金额和币种</text>
+    <text class="detail" x="16" y="90">按 eventId 去重，保存已支付状态</text>
+    <text class="detail" x="16" y="109">记录唯一履约任务</text>
+  </g>
+
+  <g transform="translate(46 720)">
+    <rect class="retry" width="374" height="106" rx="12"/>
+    <text class="actor retry-label" x="16" y="23">通知延迟或结果未确认</text>
+    <text class="heading" x="16" y="48">服务端主动查单</text>
+    <text class="code" x="16" y="71">payment.queryOrder('wechat', orderNo)</text>
+    <text class="detail" x="16" y="93">确认 paid 并核对订单后，补记同一笔支付</text>
+  </g>
+</svg>

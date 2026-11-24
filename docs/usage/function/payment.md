@@ -8,6 +8,8 @@
 
 [模块 README](../../../packages/payment/README.md) · [配置清单](../configuration/payment.md) · [数据结构](../data/payment.md) · [业务集成](../development/integrations.md)
 
+[微信公众号 JSAPI 付款](#wechat-jsapi-flow) · [支付宝手机网站付款](#alipay-wap-flow)
+
 <a id="quick-start"></a>
 
 ## 最小接入示例
@@ -432,6 +434,98 @@ export function alipayNotification(
 #### 场景：处理调起结果
 
 最小接入中的 startPayment 检查 success 和 data.invoked，返回调起结果；客户取消、跳转或支付页加载均不能代替服务端到账确认。
+
+<a id="wechat-jsapi-flow"></a>
+
+#### 场景：在微信公众号内用 JSAPI 付款
+
+用户在微信内打开订单并点击付款。按[微信公众号 JSAPI 配置](../configuration/payment.md#wechat-jsapi-configuration)初始化支付模块。认证后，应用从数据库读取该用户的待付款订单 `WX-20261124-01`，金额为 CNY 100 分，即 1 元。应用从服务端记录取得该用户在当前公众号下的 OpenID，从服务端配置取得通知 URL。
+
+![微信公众号 JSAPI 付款流程，含预支付、浏览器调起、通知验签、业务提交与查单](../images/function-payment-wechat-flow.svg)
+
+将已授权的订单、OpenID 和通知 URL 交给下面的服务端函数。将返回的 `PaymentOrder` 传给浏览器。微信桥接对象已可用或收到 `WeixinJSBridgeReady` 后，调用最小接入示例中的 `startPayment(orderData)`。用户取消或返回后，页面从应用后端读取订单状态。
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareWeChatPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  openid: string,
+  notifyUrl: string,
+) {
+  // 向微信申请该商户单号的 JSAPI 预支付。成功返回调起参数，失败则停止本次调起。
+  const created = await payment.createOrder('wechat', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'jsapi',
+    userId: openid,
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+把 `receiveWeChatNotify` 挂载到 `notifyUrl` 对应的 POST 路由。注入应用的 `recordVerified`，在同一事务中核对渠道、商户、订单、金额和币种，按事件去重，将订单更新为 `paid` 并写入唯一履约任务。可参考[业务事务示例](../../../packages/payment/examples/payment-notify-consumer.ts)。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { type PaymentNotifyResult, payment } from '@h-ai/payment'
+
+export async function receiveWeChatNotify(
+  request: Request,
+  recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
+): Promise<Response> {
+  // 保留原始正文和签名头。验签或解析失败时返回 HTTP 400。
+  const verified = await payment.handleNotify('wechat', {
+    body: await request.text(),
+    headers: Object.fromEntries(request.headers),
+  })
+  if (!verified.success)
+    return Response.json({ code: 'FAIL', message: 'Notification verification failed' }, { status: 400 })
+
+  // 事务提交或确认重复后返回空正文 204。事务失败返回 500，让微信重试。
+  const committed = await recordVerified(verified.data)
+  if (!committed.success)
+    return Response.json({ code: 'FAIL', message: 'Notification processing failed' }, { status: 500 })
+  return new Response(null, { status: 204 })
+}
+```
+
+验签通过的付款通知包含 `WX-20261124-01`、金额 100 分、CNY 和微信交易号。应用提交后，浏览器重新读取业务订单即可看到已付款。通知延迟时，后台调用 `payment.queryOrder('wechat', 'WX-20261124-01')`。只有拿到 `paid` 且订单、金额和交易号核对通过后，才按微信固定币种 CNY 提交同一个幂等的状态更新和履约任务。查询没有通知事件 ID，使用订单状态和唯一履约任务防止重复发货。
+
+<a id="alipay-wap-flow"></a>
+
+#### 场景：用支付宝手机网站付款
+
+用户在手机浏览器打开待付款订单。先按[支付宝沙箱配置](../configuration/payment.md#alipay-sandbox-configuration)初始化模块，验收后切换生产配置。认证后，应用从数据库读取该用户的订单 `AL-20261124-01`，金额为 CNY 100 分。通知 URL 来自服务端配置，`alipay.returnUrl` 指向应用自己的付款结果页。
+
+![支付宝手机网站付款流程，含服务端签名、浏览器提交表单、回跳、异步通知及纯文本回执](../images/function-payment-alipay-flow.svg)
+
+将已授权的订单和通知 URL 交给下面的服务端函数。返回的 `PaymentOrder.clientParams` 包含支付宝网关及签名表单字段。浏览器调用 `startPayment(orderData)`，向网关提交表单，用户进入支付宝收银台。回跳到 `returnUrl` 后，页面从应用后端读取订单状态。
+
+```ts
+import { type CreateOrderInput, payment } from '@h-ai/payment'
+
+export async function prepareAlipayPayment(
+  order: Pick<CreateOrderInput, 'orderNo' | 'amount' | 'description'>,
+  notifyUrl: string,
+) {
+  // 为该商户订单生成签名表单参数。成功后浏览器才能向网关提交，失败则不打开收银台。
+  const created = await payment.createOrder('alipay', {
+    ...order,
+    currency: 'CNY',
+    tradeType: 'h5',
+    notifyUrl,
+  })
+  if (!created.success)
+    throw new Error(created.error.message)
+  return created.data
+}
+```
+
+支付宝另行向 `notifyUrl` POST 表单。[支付宝通知回执示例](#alipay-notification-ack)读取原始正文并验签，应用事务核对订单、100 分金额、币种和交易身份，提交状态及履约任务。事务提交或确认重复后返回 HTTP 200，正文恰好为 `success`。回跳时订单仍待确认，可由应用后台调用 `payment.queryOrder('alipay', 'AL-20261124-01')`。拿到 `paid` 并核对订单、金额和交易号后，走同一条幂等入账和履约路径。
 
 ## 错误处理
 
