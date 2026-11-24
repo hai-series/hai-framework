@@ -365,4 +365,6 @@ const report = reportResult.data // AuditAlertReport for this check
 
 With no arguments, current rules apply. The report describes this check and notification attempts; inspect actual outcomes rather than assuming delivery.
 
+Reach API receivers can deduplicate alerts by `extra.alertId` in the JSON payload. It matches `resourceId` in the corresponding audit events.
+
 [Detailed parameters and workflows](audit.md#alerts)

@@ -131,9 +131,17 @@ function tests() {
     expect(messages[0]).toContain('security@example.invalid')
     expect(messages[0]).not.toContain('private-password')
     expect(messages[0]).not.toContain('private-phone')
-    expect(await audit.list({ resource: 'audit.alert' })).toMatchObject({
+    const auditEvents = await audit.list({ resource: 'audit.alert' })
+    expect(auditEvents).toMatchObject({
       success: true,
       data: { total: 2 },
+    })
+    if (!auditEvents.success)
+      return
+    const alertId = auditEvents.data.items[0]?.resourceId
+    expect(alertId).toBeTypeOf('string')
+    expect(JSON.parse(messages[0])).toMatchObject({
+      extra: { alertId },
     })
   })
 

@@ -426,7 +426,7 @@ const report = reportResult.data // 本轮告警检查报告
 
 调用 `audit.checkAlerts({ signal })` 会统计当前和上一个固定时间段内已经提交的事件。如果停机超过两个时间段，不会补发更早的通知。默认每次最多尝试发送 100 条，可配置 `maxNotificationsPerCheck`。报告中的 `more: true` 表示下次调用还要继续检查。共享数据库为同一规则、收件人和时间段登记一次通知，并在发送前核对执行期限。这样多个节点看到同一批事件时不会分别发送。更改规则条件或收件人后，系统视为一条新通知规则。
 
-通知只包含规则/目标编号、等级、计数与窗口，不复制审计详情或凭据。submitted 表示 Provider 接受，queued 仅表示 Reach 持久入队，可通过 queueId 查询；都不等于人员已收到或阅读。失败/中断/崩溃留下 unknown、sending 或 claimed 回执，不自动重发不确定外部效果。运维先检查 `audit.alert` 事件与 `hai_audit_alert_claims`，核验通知端后处理；Reach 已入队的消息遵循其自身恢复规则。领取表不保存地址/正文，查询范围外已确认提交/入队的领取定期清理；未决回执保留供运维核验，通知审计遵守审计保留策略。
+通知只包含告警、规则和目标编号、等级、计数与窗口，不复制审计详情或凭据。Reach API 接收方按 JSON 的 `extra.alertId` 识别同一条告警，该编号与审计事件的 `resourceId` 一致。submitted 表示 Provider 接受，queued 仅表示 Reach 持久入队，可通过 queueId 查询；都不等于人员已收到或阅读。失败/中断/崩溃留下 unknown、sending 或 claimed 回执，不自动重发不确定外部效果。运维先检查 `audit.alert` 事件与 `hai_audit_alert_claims`，核验通知端后处理；Reach 已入队的消息遵循其自身恢复规则。领取表不保存地址/正文，查询范围外已确认提交/入队的领取定期清理；未决回执保留供运维核验，通知审计遵守审计保留策略。
 
 `alerts.schedule` 可独立启用，默认每分钟、UTC。`audit.schedulerPlan` 合并已启用的备份和告警任务，由应用启动代码传给 `scheduler.init()`；计划没有自动任务时为 null。调度回调在检查失败或 failed>0 时准确失败。先关闭 Scheduler，再关闭 Audit 和 Reach；关闭 Audit 取消后续领取并等待在途通知完成（受 Reach Provider 超时约束），Reach 仍由应用在 Audit 关闭后关闭。数据库查询/审计失败返回失败；通知业务失败在成功检查报告的 failed 字段体现，调用方必须检查。
 

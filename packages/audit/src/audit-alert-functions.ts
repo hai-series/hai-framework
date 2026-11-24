@@ -172,7 +172,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
               params: { severity: rule.severity, rule: rule.id },
             }),
             body: JSON.stringify(details),
-            idempotencyKey: id,
+            extra: { alertId: id },
           })
           const accepted = sent.success && sent.data.success
           const status = accepted

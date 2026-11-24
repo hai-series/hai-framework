@@ -369,4 +369,6 @@ const report = reportResult.data // AuditAlertReport for this check
 
 引数なしでは現在の規則を使います。今回の検査と通知試行の報告であり、すべて配信済みとは限りません。
 
+Reach API の受信側は JSON の `extra.alertId` で同じアラートを識別できます。この値は対応する監査イベントの `resourceId` と一致します。
+
 [引数と手順の詳細](audit.md#alerts)
