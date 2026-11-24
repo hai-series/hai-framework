@@ -73,6 +73,44 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 | `apiClient.config` | 現在のマスク済みクライアント設定を取得 | 読み取り専用プロパティ、引数なし | `ApiClientConfig \| null` | `apiClient.config` |
 | `apiClient.isInitialized` | 既定クライアントの準備状態を確認 | 読み取り専用プロパティ、引数なし | `boolean` | `apiClient.isInitialized` |
 
+<a id="call-options"></a>
+
+##### 呼び出し引数と接続オプション
+
+既定のクライアントには `apiClient.init(config)` で設定を渡します。アプリ独自の契約を使う場合は `apiClient.create(contract)` でクライアントを作成し、戻り値の `init(config)` を呼びます。ブラウザーはサーバーの応答に従って Cookie を保存し、Fetch で送信します。SSR ではクライアントとトークンの保存先をリクエストごとに作ります。
+
+初期化時にルート相対パスをブラウザーのオリジン（スキーム、ホスト、ポート）で解決します。API 呼び出し、トークン更新、暗号化ハンドシェイクは解決済みの URL を共用します。ユーザー情報、クエリ、フラグメントは省略してください。`//example.com` のようなスキーム相対 URL は初期化時に拒否されます。
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `baseUrl` | 必須 | HTTP(S) の絶対 API URL、またはブラウザーでは `/api/v1` のような同一オリジンのルート相対パス。 |
+| `timeout` | `30000` ms | ヘッダーと JSON 読み取りの期限。ストリームの読み取りは呼び出し元の中断シグナルを使う。 |
+| `clientName` | `hai-api-client` | 診断用の `x-request-client` の値。 |
+| `headers` | 追加なし | 固定のヘッダーまたはヘッダーを返す同期・非同期関数。 |
+| `fetch` | グローバルの `fetch` | Fetch 互換の関数。差し替える場合はキャンセルと Cookie の扱いを維持する。 |
+| `auth` | `undefined` | 既定の認証と更新を有効にするには `{}` を指定。 |
+| `auth.storage` | `apiClient.tokenStorage.httpOnlyCookie()` | アクセストークンはブラウザーのメモリー。更新 Cookie はサーバーで管理。 |
+| `auth.refreshPath` | `/auth/refresh` | ベース URL からの相対パス。 |
+| `auth.refreshTimeoutMs` | `10000` | 更新の期限（ミリ秒）。タイムアウトでは認証情報を保持。 |
+| `auth.terminalType` | `web` | IAM が許可する端末種別。 `web`、`app`、`desktop`、`api`。 |
+| `auth.recoverSession` | 省略可 | 更新の確定失敗後に同じセッションを復元。true を返すと元のリクエストを一回再試行。 |
+| `auth.onTokenRefreshed` | 省略可 | 更新の成功後に呼ぶ。表示中のログイン状態を更新できる。 |
+| `auth.onRefreshFailed` | 省略可 | 更新できないことが確定したときに呼ぶ。再ログインを案内できる。 |
+| `transport` | `undefined` | オブジェクトを指定するとアプリ層の通信暗号化が有効。 |
+| `transport.crypto` | 必須 | 暗号化を使う場合に初期化済みの `@h-ai/crypto` を指定。 |
+| `transport.keyExchangePath` | `/_hai/key-exchange` | ベース URL からの鍵交換の相対パス。 |
+| `transport.maxPlaintextBytes` | 省略可 | サーバーの上限を使用。小さい上限を指定した場合はその値を採用。 |
+
+更新結果に応じて保存済み認証情報を扱います。`401` の場合は認証情報を削除し、セッション失効を通知します。`429`、`408`、`409` などの失敗やタイムアウト時は既存の認証情報を保持します。HTTP 200 内の有効な失敗 `HaiResult` は `error.httpStatus` で判定します。後続の業務リクエストで再度更新できます。
+
+<a id="client-integration"></a>
+
+##### クライアントのアドレス・期限・復旧
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](api-client.md#client-integration)にあり、この節は部分翻訳です。
+
+[引数と手順の詳細](api-client.md#client-lifecycle)
+
 #### 利用例：クライアントの準備と分離
 
 ```ts
@@ -104,44 +142,6 @@ finally {
 ローカルトークンの削除とサーバー側のログアウトは別の操作です。サーバーで無効化するには IAM のログアウトを呼び出します。認証の復旧では同じ利用者のセッションを復元してください。
 
 未翻訳：既定の各 API、認証フォーム用操作、更新処理の詳細。[中国語の該当節](api-client.md#detailed-workflow)を参照してください。
-
-<a id="call-options"></a>
-
-#### 呼び出し引数と接続オプション
-
-既定のクライアントには `apiClient.init(config)` で設定を渡します。アプリ独自の契約を使う場合は `apiClient.create(contract)` でクライアントを作成し、戻り値の `init(config)` を呼びます。ブラウザーはサーバーの応答に従って Cookie を保存し、Fetch で送信します。SSR ではクライアントとトークンの保存先をリクエストごとに作ります。
-
-初期化時にルート相対パスをブラウザーのオリジン（スキーム、ホスト、ポート）で解決します。API 呼び出し、トークン更新、暗号化ハンドシェイクは解決済みの URL を共用します。ユーザー情報、クエリ、フラグメントは省略してください。`//example.com` のようなスキーム相対 URL は初期化時に拒否されます。
-
-| 項目 | 既定値・必須条件 | 用途 |
-| --- | --- | --- |
-| `baseUrl` | 必須 | HTTP(S) の絶対 API URL、またはブラウザーでは `/api/v1` のような同一オリジンのルート相対パス。 |
-| `timeout` | `30000` ms | ヘッダーと JSON 読み取りの期限。ストリームの読み取りは呼び出し元の中断シグナルを使う。 |
-| `clientName` | `hai-api-client` | 診断用の `x-request-client` の値。 |
-| `headers` | 追加なし | 固定のヘッダーまたはヘッダーを返す同期・非同期関数。 |
-| `fetch` | グローバルの `fetch` | Fetch 互換の関数。差し替える場合はキャンセルと Cookie の扱いを維持する。 |
-| `auth` | `undefined` | 既定の認証と更新を有効にするには `{}` を指定。 |
-| `auth.storage` | `apiClient.tokenStorage.httpOnlyCookie()` | アクセストークンはブラウザーのメモリー。更新 Cookie はサーバーで管理。 |
-| `auth.refreshPath` | `/auth/refresh` | ベース URL からの相対パス。 |
-| `auth.refreshTimeoutMs` | `10000` | 更新の期限（ミリ秒）。タイムアウトでは認証情報を保持。 |
-| `auth.terminalType` | `web` | IAM が許可する端末種別。 `web`、`app`、`desktop`、`api`。 |
-| `auth.recoverSession` | 省略可 | 更新の確定失敗後に同じセッションを復元。true を返すと元のリクエストを一回再試行。 |
-| `auth.onTokenRefreshed` | 省略可 | 更新の成功後に呼ぶ。表示中のログイン状態を更新できる。 |
-| `auth.onRefreshFailed` | 省略可 | 更新できないことが確定したときに呼ぶ。再ログインを案内できる。 |
-| `transport` | `undefined` | オブジェクトを指定するとアプリ層の通信暗号化が有効。 |
-| `transport.crypto` | 必須 | 暗号化を使う場合に初期化済みの `@h-ai/crypto` を指定。 |
-| `transport.keyExchangePath` | `/_hai/key-exchange` | ベース URL からの鍵交換の相対パス。 |
-| `transport.maxPlaintextBytes` | 省略可 | サーバーの上限を使用。小さい上限を指定した場合はその値を採用。 |
-
-更新結果に応じて保存済み認証情報を扱います。`401` の場合は認証情報を削除し、セッション失効を通知します。`429`、`408`、`409` などの失敗やタイムアウト時は既存の認証情報を保持します。HTTP 200 内の有効な失敗 `HaiResult` は `error.httpStatus` で判定します。後続の業務リクエストで再度更新できます。
-
-<a id="client-integration"></a>
-
-#### クライアントのアドレス・期限・復旧
-
-コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](api-client.md#client-integration)にあり、この節は部分翻訳です。
-
-[引数と手順の詳細](api-client.md#client-lifecycle)
 
 <a id="credentials"></a>
 
@@ -359,6 +359,35 @@ unbind() // call when this page is destroyed
 
 管理権限を持つセッションで `{ page: 1, pageSize: 20, accountStatus: 'active' }` を指定すると、成功時の `data.items` は有効アカウント最大 20 件。失敗時は `error` を確認。
 
+<a id="request-options"></a>
+
+##### 呼び出しごとのオプション
+
+第 1 引数には契約が定める業務入力を渡します。入力のない手続きに第 2 引数を渡すときは、第 1 引数を `undefined` にします。
+
+| 第 2 引数の項目 | 省略時 | 指定した場合 |
+| --- | --- | --- |
+| `signal` | 呼び出し元からの中断なし | `AbortController.signal` で応答待ちと送受信を中断できます。サーバーで開始済みの書き込みは完了することがあります。 |
+| `context.autoRefresh` | クライアントの更新方針を継承 | `false` でこの呼び出しからの認証情報の更新を停止します。現在のアクセストークンはクライアント設定に従って送信します。 |
+| `context.keepalive` | Fetch の既定値 | `true` で Fetch の `keepalive` を有効にします。ブラウザーの制限があり、ページ離脱後の送信は保証されません。 |
+| `context.reauthentication` | 操作用の証明を送信しない | 認証操作から得た証明を、このリクエストの `X-Hai-Reauthentication` ヘッダーに設定します。 |
+| `context.reauthorize` | 再試行用の証明を取得しない | 再承認が必要な再試行の前に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+// アプリの非同期関数内で実行します。初期化済みのクライアントには利用者一覧の権限があります。
+// ページ破棄時は controller.abort() を呼びます。
+const controller = new AbortController()
+// 1 ページ目を最大 20 件取得します。signal で応答待ちを中断でき、成功時は閲覧可能な一覧、失敗時は元のエラーを返します。
+const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
+if (!users.success)
+  return users
+const visibleUsers = users.data.items
+```
+
+[引数と手順の詳細](api-client.md#iam-requests)
+
 #### 利用例：認証と管理 API の呼び出し
 
 ```ts
@@ -386,35 +415,6 @@ const permissions = permissionsResult.data // permitted permission records
 ```
 
 一覧に個々の入力と成功データを示しています。ID は前の成功応答から取得し、内容は実サービスと権限によります。ログインだけで管理権限は得られません。
-
-<a id="request-options"></a>
-
-#### 呼び出しごとのオプション
-
-第 1 引数には契約が定める業務入力を渡します。入力のない手続きに第 2 引数を渡すときは、第 1 引数を `undefined` にします。
-
-| 第 2 引数の項目 | 省略時 | 指定した場合 |
-| --- | --- | --- |
-| `signal` | 呼び出し元からの中断なし | `AbortController.signal` で応答待ちと送受信を中断できます。サーバーで開始済みの書き込みは完了することがあります。 |
-| `context.autoRefresh` | クライアントの更新方針を継承 | `false` でこの呼び出しからの認証情報の更新を停止します。現在のアクセストークンはクライアント設定に従って送信します。 |
-| `context.keepalive` | Fetch の既定値 | `true` で Fetch の `keepalive` を有効にします。ブラウザーの制限があり、ページ離脱後の送信は保証されません。 |
-| `context.reauthentication` | 操作用の証明を送信しない | 認証操作から得た証明を、このリクエストの `X-Hai-Reauthentication` ヘッダーに設定します。 |
-| `context.reauthorize` | 再試行用の証明を取得しない | 再承認が必要な再試行の前に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-// アプリの非同期関数内で実行します。初期化済みのクライアントには利用者一覧の権限があります。
-// ページ破棄時は controller.abort() を呼びます。
-const controller = new AbortController()
-// 1 ページ目を最大 20 件取得します。signal で応答待ちを中断でき、成功時は閲覧可能な一覧、失敗時は元のエラーを返します。
-const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
-if (!users.success)
-  return users
-const visibleUsers = users.data.items
-```
-
-[引数と手順の詳細](api-client.md#iam-requests)
 
 <a id="business-requests"></a>
 

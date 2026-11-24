@@ -145,6 +145,15 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 例如自动采集已启用但不记录读取时，同一读取事件传 `{ read: true }`，`outcome: "success"` 成功返回且不写日志，`outcome: "denied"` 会保存拒绝事件。
 
+##### 事件输入约束
+
+- `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
+- `audit.log(input)`：`details` 中的凭证类敏感字段（如 `password` / `token` / `secret`）会在持久化前自动脱敏；业务隐私字段（如邮箱、手机号）默认同时隐藏，可通过 privacy 配置调整。
+- `audit.list(options)`：若同时传 `startDate` 与 `endDate`，必须满足 `startDate <= endDate`。
+- `audit.getUserRecent(userId, limit)`：`userId` 必须为非空字符串；`limit`（如传入）必须为正整数。
+- `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
+- `audit.getStats(days)`：`days`（如传入）必须为非负整数。
+
 #### 场景：记录操作与关联身份
 
 ```ts
@@ -193,15 +202,6 @@ if (!passwordResetCompleteResult.success)
 ```
 
 输入中的用户 ID 由应用鉴权取得，示例标识为虚构。log 返回已保存记录；capture 和 helper 成功无业务数据，withContext 直接保留回调的返回值。CRUD 事件结构见后续示例。
-
-#### 事件输入约束
-
-- `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
-- `audit.log(input)`：`details` 中的凭证类敏感字段（如 `password` / `token` / `secret`）会在持久化前自动脱敏；业务隐私字段（如邮箱、手机号）默认同时隐藏，可通过 privacy 配置调整。
-- `audit.list(options)`：若同时传 `startDate` 与 `endDate`，必须满足 `startDate <= endDate`。
-- `audit.getUserRecent(userId, limit)`：`userId` 必须为非空字符串；`limit`（如传入）必须为正整数。
-- `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
-- `audit.getStats(days)`：`days`（如传入）必须为非负整数。
 
 #### 场景：把业务变更与审计记录放进同一事务
 

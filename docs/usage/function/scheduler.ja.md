@@ -281,18 +281,18 @@ if (!clearHooksResult.success)
 
 <a id="scheduler-execution-options"></a>
 
-**実行記録のページ指定と裁定**
+##### 実行記録のページ指定と確認結果
 
 | フィールド | 型 | 必須と既定値 | 用途と適用条件 |
 | --- | --- | --- | --- |
 | `options.limit` | `number` | `50` | 両方の一覧で使用。ページごとに 1–100 件。 |
 | `options.offset` | `number` | `0` | 両方の一覧で使用。0–1000000 件を飛ばします。 |
 | `resolution.status` | `'success' \| 'discarded'` | 必須 | 確認後に成功を確定するか、追跡を終了します。ここでは裁定を記録します。 |
-| `resolution.expectedUpdatedAt` | `number` | 必須 | 最後に読み取った updatedAt。並行更新があった場合は読み直して確認します。 |
+| `resolution.expectedUpdatedAt` | `number` | 必須 | `scheduler.execution.get(occurrenceId)` の `updatedAt` をそのまま渡します。現在も `unknown` で時刻が一致する場合に確認結果を保存します。 |
 
 #### 利用例：不明な結果の確認とログ修復
 
-ログ補完は業務処理を再実行しません。別の判断関数は外部確認済みの結論と最新 updatedAt で更新します。
+旧ワーカーの実行を止め、外部サービスの結果を確認します。例えば日次レポートのアップロードを確認したら、その実行を `success` に確定します。照会時の `updatedAt` を渡してください。別の担当者が結果を保存済みなら、古い時刻での更新は失敗します。もう一度照会すると現在の状態が分かります。実行済みでログだけが不足している場合は `repairLog()` を使います。
 
 ```ts
 async function repairPendingLogs() {

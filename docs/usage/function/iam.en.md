@@ -87,6 +87,14 @@ Prepare the database and cache before IAM. Public settings drive available authe
 | `iam.publicConfig` | Read the last public policy snapshot | Read-only property; no arguments | `IamPublicConfig \| null` | `iam.publicConfig` |
 | `iam.isInitialized` | Check whether IAM is ready | Read-only property; no arguments | `boolean` | `iam.isInitialized` |
 
+##### Parameters and result semantics: Public settings and lifecycle
+
+The public settings exclude directory, database and notification credentials. Check `iam.isInitialized` before relying on `iam.isRegisterEnabled`, which is true before initialization or unless public registration is explicitly disabled.
+
+[Detailed parameters and workflows](iam.md#lifecycle)
+
+config/publicConfig are null before initialization. publicConfig is the last in-memory snapshot; call getPublicConfig to refresh persisted policy and check its result. isInitialized does not grant authorization.
+
 #### Scenario: Prepare IAM and public policies
 
 ```ts
@@ -102,14 +110,6 @@ const publicSettings = publicSettingsResult.data // merged public IAM settings
 See the quick start for initialization and reverse shutdown. Public policy reflects current settings and cannot bypass server checks. File settings stay in the configuration guide.
 
 Examples assume that IAM is initialized and that the application has checked permissions for the target user or resource. For a `HaiResult`, check `success` before reading `data` or `error`. The success column shows the value inside `data`; `void` means there is no data to read. `?` marks an optional argument.
-
-#### Parameters and result semantics: Public settings and lifecycle
-
-The public settings exclude directory, database and notification credentials. Check `iam.isInitialized` before relying on `iam.isRegisterEnabled`, which is true before initialization or unless public registration is explicitly disabled.
-
-[Detailed parameters and workflows](iam.md#lifecycle)
-
-config/publicConfig are null before initialization. publicConfig is the last in-memory snapshot; call getPublicConfig to refresh persisted policy and check its result. isInitialized does not grant authorization.
 
 <a id="authentication"></a>
 
@@ -167,6 +167,18 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 
 `private-db.json` contains the private RelDB JSON configuration for the target database. The first command previews the number of new and existing bindings. Run `--apply` after reviewing the counts. The import commits in one transaction, supports reruns of the same bindings and rejects conflicts. Keep both input files private. Reopen LDAP sign-in after checking the verified accounts. Use `ldapSyncUser: false` to require an existing binding.
 
+##### Parameters and result semantics: Sign-in and registration
+
+Login requires valid input, challenge, account state and session policy. This follows password login; other strategies validate their own credentials.
+
+Choose the method that matches the configured credentials. `context` is optional and carries trusted request metadata. Success returns the user, tokens, roles and permissions.
+
+##### Parameters and result semantics: Challenges, verification and fresh proof
+
+Create a challenge for the intended operation. Pass the access token to validate or end a session. Bind a reauthentication ticket to the operation for which it was issued.
+
+[Detailed parameters and workflows](iam.md#authentication)
+
 #### Scenario: Sign in, register and reauthenticate
 
 Login requires valid input, challenge, account state and session policy. This follows password login; other strategies validate their own credentials.
@@ -176,16 +188,6 @@ Login requires valid input, challenge, account state and session policy. This fo
 An enabled challenge is consumed once for its operation, even when the password is wrong. Valid credentials and account state precede effective authorization and shared terminal/session-limit checks. Tokens and user data do not grant access to every resource.
 
 The workflows cover registration, login, challenges, OTP/LDAP, session verification and reauthentication. Form values are inputs; use identities and proof only from successful results. Disabled methods fail.
-
-#### Parameters and result semantics: Sign-in and registration
-
-Choose the method that matches the configured credentials. `context` is optional and carries trusted request metadata. Success returns the user, tokens, roles and permissions.
-
-#### Parameters and result semantics: Challenges, verification and fresh proof
-
-Create a challenge for the intended operation. Pass the access token to validate or end a session. Bind a reauthentication ticket to the operation for which it was issued.
-
-[Detailed parameters and workflows](iam.md#authentication)
 
 <a id="users"></a>
 
@@ -254,6 +256,16 @@ if (result.success) {
 else result.error.code
 ```
 
+##### Parameters and result semantics: User records
+
+Use the current-user methods with the caller’s access token. Authorize access to the target account before calling an administrative method. The optional read options can include roles; list options can set pagination.
+
+##### Parameters and result semantics: Password and account maintenance
+
+Use the submitted old password to change an existing credential. A reset link or an administrator can use the corresponding reset method. The account scan returns the number of affected users.
+
+[Detailed parameters and workflows](iam.md#users)
+
 #### Scenario: Maintain users and passwords
 
 User scenarios cover create, ID/name/email lookup, pages, updates and deletion; password scenarios cover reset proof, expiry and account state. Handle missing users separately from failed database operations.
@@ -271,16 +283,6 @@ const updated = await iam.user.updateUserWithRoles(userId, {
 })
 if (!updated.success) throw new Error(updated.error.message)
 ```
-
-#### Parameters and result semantics: User records
-
-Use the current-user methods with the caller’s access token. Authorize access to the target account before calling an administrative method. The optional read options can include roles; list options can set pagination.
-
-#### Parameters and result semantics: Password and account maintenance
-
-Use the submitted old password to change an existing credential. A reset link or an administrator can use the corresponding reset method. The account scan returns the number of affected users.
-
-[Detailed parameters and workflows](iam.md#users)
 
 <a id="authorization"></a>
 
@@ -328,6 +330,24 @@ Store roles and permissions on the server and authorize sensitive operations aga
 | `PaginationOptionsInput / PermissionQueryOptions` | Use `page` and `pageSize` to paginate. Permission queries also accept `type` and `search`. |
 | `role / data` | A new role requires `code` and `name` and accepts `description`, `isSystem`, and `permissionIds`. Send only changed fields when updating. |
 | `permission` | `code` and `name` are required. Optional fields are `description`, `type`, `resource`, `action`, and `sensitiveOperations`. |
+
+##### Parameters and result semantics: Authorization reads
+
+Pass trusted user or role IDs. The batch methods return maps keyed by the corresponding IDs.
+
+##### Parameters and result semantics: Role and permission assignments
+
+Assign or remove individual relations, or replace the user’s role set with `syncRoles`. Pass an existing transaction in `tx` only when grouping writes.
+
+##### Parameters and result semantics: Managing roles and permissions
+
+Create, retrieve, list, update or delete definitions. Lookups return `null` if nothing matches. The list options can specify pagination.
+
+##### Parameters and result semantics: Policies for sensitive operations
+
+Read the current RBAC operations that require additional proof. Omit `operation` to list all operations; when RBAC is disabled the list is empty. Assign a new list to a permission, or pass an empty list to clear the database rules for it and keep the file rules.
+
+[Detailed parameters and workflows](iam.md#authorization)
 
 #### Scenario: Assign roles and check permissions
 
@@ -470,24 +490,6 @@ async function reviewReader(userId: string) {
 
 The flow creates permissions and roles, links them, assigns users, checks and revokes access, then covers sensitive-operation policy. Boolean false means denied; a failed HaiResult means the check failed to complete.
 
-#### Parameters and result semantics: Authorization reads
-
-Pass trusted user or role IDs. The batch methods return maps keyed by the corresponding IDs.
-
-#### Parameters and result semantics: Role and permission assignments
-
-Assign or remove individual relations, or replace the user’s role set with `syncRoles`. Pass an existing transaction in `tx` only when grouping writes.
-
-#### Parameters and result semantics: Managing roles and permissions
-
-Create, retrieve, list, update or delete definitions. Lookups return `null` if nothing matches. The list options can specify pagination.
-
-#### Parameters and result semantics: Policies for sensitive operations
-
-Read the current RBAC operations that require additional proof. Omit `operation` to list all operations; when RBAC is disabled the list is empty. Assign a new list to a permission, or pass an empty list to clear the database rules for it and keep the file rules.
-
-[Detailed parameters and workflows](iam.md#authorization)
-
 <a id="sessions"></a>
 
 ### Renew and revoke sessions: `iam.session`
@@ -517,6 +519,12 @@ Validate session tokens on the server. Refresh, list and revoke through the same
 | `CreateSessionOptions` | `userId` is required. The trusted host may supply `terminalType`, `expectedCredentialVersion`, and verified `apiKeyId` / `apiKeyScopes`. Other optional fields are `username`, `displayName`, `avatarUrl`, `roles`, `permissions`, `source`, `maxAge` in seconds, and application `data`. |
 | `SessionFieldUpdates` | Optional `roles: string[]` and `permissions: string[]` update existing sessions for the user. |
 
+##### Parameters and result semantics: Sessions
+
+Verify or revoke credentials and rotate a token pair with a refresh token. Use the most recently read version for optimistic updates. Use `create` only with trusted session input.
+
+[Detailed parameters and workflows](iam.md#sessions)
+
 #### Scenario: Renew and revoke sessions
 
 Refresh does not extend the same token string. IAM prepares a successor and atomically consumes the old refresh token while publishing the new session.
@@ -526,12 +534,6 @@ Refresh does not extend the same token string. IAM prepares a successor and atom
 Two nodes using the same old token cannot both publish successors. Account, API Key and credential-version checks can reject refresh. After success the client replaces the credential pair. Storage or network failures must not be reported as completed refresh.
 
 Session workflows explain create’s TokenPair, verify’s session, refresh’s replacement tokens and destroy/destroyAll revocation. Tokens are described by source and type rather than logged; optional policies remain server-enforced.
-
-#### Parameters and result semantics: Sessions
-
-Verify or revoke credentials and rotate a token pair with a refresh token. Use the most recently read version for optimistic updates. Use `create` only with trusted session input.
-
-[Detailed parameters and workflows](iam.md#sessions)
 
 #### Scenario: Manage sessions and rotate tokens
 
@@ -635,15 +637,15 @@ Issue API keys with ownership and scopes for programmatic access. Give the raw k
 | `list.options.enabled: boolean` | Optional | Select enabled or disabled keys. Omit for both |
 | `list.options.sortBy / list.options.sortDirection` | `createdAt / desc` | Sort on name, createdAt, lastUsedAt or expiresAt |
 
-#### Scenario: Issue and revoke API keys
-
-Use issuance results for validation, listing, updates and revocation. Stored summaries cannot reconstruct the secret. Pass the keyId or issued secret according to each method’s signature.
-
-#### Parameters and result semantics: API keys
+##### Parameters and result semantics: API keys
 
 Save the raw key securely when creating it; only the creation result contains it. List or get key metadata, verify a submitted secret, or revoke a key.
 
 [Detailed parameters and workflows](iam.md#api-keys)
+
+#### Scenario: Issue and revoke API keys
+
+Use issuance results for validation, listing, updates and revocation. Stored summaries cannot reconstruct the secret. Pass the keyId or issued secret according to each method’s signature.
 
 <a id="tickets"></a>
 
@@ -677,12 +679,12 @@ Allow a verified principal to perform one purpose for a short period. A successf
 | `ttlMs: number` | `30000 ms` | Lifetime measured from issuance |
 | `consume.options.purpose: string` | Optional | When supplied, check the issued purpose. A mismatch returns TICKET_INVALID |
 
-#### Scenario: Issue and consume one-time proof
-
-issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. A purpose mismatch rejects the request and leaves the ticket available for its intended purpose. An expired or consumed ticket cannot be used.
-
-#### Parameters and result semantics: One-time tickets
+##### Parameters and result semantics: One-time tickets
 
 Issue a short-lived ticket for a purpose and subject. Consume it with the expected binding; a consumed ticket cannot be reused.
 
 [Detailed parameters and workflows](iam.md#tickets)
+
+#### Scenario: Issue and consume one-time proof
+
+issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. A purpose mismatch rejects the request and leaves the ticket available for its intended purpose. An expired or consumed ticket cannot be used.

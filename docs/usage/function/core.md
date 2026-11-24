@@ -385,7 +385,7 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 | `core.logger.getLevel()` | 读当前全局阈值 | 无参数 | `LogLevel` | `core.logger.getLevel()` |
 | `core.logger.observe(observer)` | 接收通过级别筛选且已脱敏的记录 | 必填同步 `observer(record)`，参数为已按级别过滤且经脱敏的 `LogRecord`。 | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
-#### 场景：按级别记录业务与诊断日志
+##### Logger 的字段和默认值
 
 | 字段 | `create(options?)` | `configure(config)` |
 | --- | --- | --- |
@@ -394,6 +394,10 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 | `format` | `'json'` 或 `'pretty'`，省略时动态继承全局格式 | 初始为 `'pretty'`。传入时修改全局格式，省略时保留当前值 |
 | `context` | 可选对象。其字段添加到此 Logger 的每条记录，同名字段覆盖全局上下文 | 可选对象。按顶层键合并全局上下文，省略或传 `{}` 都会保留旧字段 |
 | `redact` | 继承全局规则 | 可选字段路径数组，默认 `[]`。传入 `['customer.email']` 等路径会替换旧的附加规则。传入 `[]` 清空附加规则，内置敏感字段照常脱敏 |
+
+#### 场景：按级别记录业务与诊断日志
+
+订单服务在创建订单时写一条业务日志。发生重试时，值班同事可以用请求编号查到是哪次调用出了问题。先设置进程输出级别，再看带请求编号的日志。
 
 ```ts
 import { core } from '@h-ai/core'

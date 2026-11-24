@@ -71,15 +71,9 @@ export default defineConfig({
 | `kit.i18n.setLocale(locale)` | 启动默认语言 | 必須の `locale` は起動時の既定言語。例は `ja-JP`。 | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
 | `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | リクエストの `locale` と結果をそのまま返す `operation` が必須。Node サーバー専用。 | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
 
-#### 利用例：SvelteKit の要求処理
-
-createHandle と sequence から始め、初期化済み Cache を制限の保存先にします。制限超過は 429、保存障害は 503 です。要求ごとにグローバル言語を変えません。
-
-未翻訳：SvelteKit フック、セッションガード、暗号化 Fetch の接続手順。[中国語の該当節](kit.md#detailed-workflow)を参照してください。
-
 <a id="host-options"></a>
 
-#### フック引数と実行時の依存
+##### フック引数と実行時の依存
 
 | 項目 | 既定値と条件 | 用途と結果 |
 | --- | --- | --- |
@@ -93,6 +87,12 @@ createHandle と sequence から始め、初期化済み Cache を制限の保�
 | `a2a.operations` / `cardPath` / `rpcPath` / `authenticate` | 有効化には操作が必要。パスの既定は `/.well-known/agent-card.json` と `/a2a`。 | 発見・プロトコル用のエンドポイントを追加し、認証も設定できる。 |
 
 たとえば `kit.createHandle({ logging: true, auth: { verifyToken, protectedPaths: ["/admin/**"] } })` は、該当ルートにセッションを要求します。
+
+#### 利用例：SvelteKit の要求処理
+
+createHandle と sequence から始め、初期化済み Cache を制限の保存先にします。制限超過は 429、保存障害は 503 です。要求ごとにグローバル言語を変えません。
+
+未翻訳：SvelteKit フック、セッションガード、暗号化 Fetch の接続手順。[中国語の該当節](kit.md#detailed-workflow)を参照してください。
 
 <a id="responses"></a>
 

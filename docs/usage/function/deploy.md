@@ -43,7 +43,32 @@ pnpm run deploy --env prod --build
 | `deploy.provisionAll(projectName, services?)` | 准备已选中间件 | 必填项目标识字符串 `projectName`。`services` 为待开通的服务类型数组，省略时处理所有已配置的 Provisioner，`[]` 不开通任何服务。 | `Promise<HaiResult<ProvisionResult[]>>` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
 | `deploy.deployApp(appDir, options?)` | 交付应用或生成交付包 | 必填应用目录 `appDir`。`options` 可选，支持下文所列的目标环境、Compose 服务、镜像输入、打包与进度参数。 | `Promise<HaiResult<DeployResult>>` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
-#### 场景：扫描工程并交付应用
+##### build 的可选参数
+
+| 参数                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `--target`              | compile（默认）、image、app、desktop      |
+| `--images`              | serv、web 或 serv,web；只构建导出所选镜像 |
+| `--runtime`             | auto（优先 Podman）、podman、docker       |
+| `--network`             | 容器构建网络，默认引擎设置                |
+| `--no-http-proxy`       | 禁用本次构建代理（等价 none）             |
+| `--platform` / `--arch` | 原生安装包的系统与架构                    |
+
+##### deploy 的可选参数
+
+| 参数                  | 用途                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| `--env` / `--env-dir` | 环境和环境文件目录                                         |
+| `--build`             | 先构建选中应用镜像，再打包部署；可结合 bundle-only         |
+| `--services`          | 只更新指定 Compose 服务，例如 web、serv、serv,web、storage |
+| `--artifact-dir`      | 精确选择已构建制品                                         |
+| `--bundle-only`       | 只生成 tar 和跨平台脚本，不连接服务器                      |
+| `--runtime`           | 本地构建及中间件镜像导出引擎                               |
+| `--output`            | 自定义部署 tar 路径，相对命令执行目录解析，自动补版本后缀  |
+| `--skip-middleware`   | 跳过中间件配置与开通                                       |
+| `--yes`               | 无交互使用有效配置；缺必要值明确报错                       |
+
+##### SDK 交付选项
 
 `deploy.deployApp()` 的 `options` 可整组省略，也可按交付方式填写下列字段。
 
@@ -56,6 +81,10 @@ pnpm run deploy --env prod --build
 | `bundleOnly`、`output` | 默认执行部署，交付目录由应用和版本生成 | 仅 docker-ssh 支持 `bundleOnly: true`，生成归档及脚本，省去 SSH 连接。`output` 可自定义输出路径，已有交付目录时拒绝覆盖。 |
 | `imageSource`、`proxy` | 官方镜像源、继承进程代理 | `imageSource.type` 选 `'official'`、`'cn'` 或 `'custom'`，自定义源传 `registries` 映射。`proxy.mode` 选 `'inherit'`、`'system'`、`'custom'` 或 `'none'`，自定义时传 HTTP(S) `url` 与可选 `bypass`。 |
 | `onProgress(stage)` | 省略时不回调 | 将实际阶段交给进度界面，例如 `packaging` 或 `health`。阶段还有 `preflight`、`images`、`dependencies`、`start`、`https` 和 `complete`。 |
+
+#### 场景：扫描工程并交付应用
+
+例如要发布订单服务，先用只读计划核对目标环境。在产物和依赖都准备好后，再选择生成离线包或连接服务器。
 
 这是调用方的推荐交付顺序。plan 是只读预览，build 准备制品，deploy 才会更改目标环境。
 
@@ -119,17 +148,6 @@ pnpm build --target desktop --platform windows --arch x64
 自动化可使用 `hai build --target image --json` 的 `artifactDir` 指定本次构建。`deploy.readDeploymentArtifact` 校验归档路径及 SHA-256，并返回清单中的来源提交、工作区状态和镜像平台；历史清单可以省略这些字段。
 
 源码编译、镜像构建、桌面打包分别对应 compile/image/desktop。构建不选择部署环境、不注入运行期密钥。原生安装包在对应操作系统准备 SDK 与 Rust 工具链后构建。
-
-#### build 的可选参数
-
-| 参数                    | 用途                                      |
-| ----------------------- | ----------------------------------------- |
-| `--target`              | compile（默认）、image、app、desktop      |
-| `--images`              | serv、web 或 serv,web；只构建导出所选镜像 |
-| `--runtime`             | auto（优先 Podman）、podman、docker       |
-| `--network`             | 容器构建网络，默认引擎设置                |
-| `--no-http-proxy`       | 禁用本次构建代理（等价 none）             |
-| `--platform` / `--arch` | 原生安装包的系统与架构                    |
 
 #### 下载源和代理
 
@@ -240,20 +258,6 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器地址用 `_storage.yml` 的 `publicEndpoint` 配置，例如 `https://app.example.com/delivery/files`。Nginx 对外开放 `/delivery/files/<bucket>/...`，去掉 `/delivery/files` 后将原始桶 URI、签名查询与 Host 直接转发 storage:9000，文件不经过 Serv；省略目录时继续使用根桶路径。入口可位于网站目录内，API/资源/健康路径冲突会在打包前失败。存储端口与控制台不公开，对象缓冲和签名日志关闭；S3 负责私有桶授权和跨源 CORS。外层代理须保留完整入口路径与 Host，只由 SDK 网关去掉前缀。
 
 自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../configuration/data.md#配置人员区分三个访问地址).
-
-#### deploy 的可选参数
-
-| 参数                  | 用途                                                       |
-| --------------------- | ---------------------------------------------------------- |
-| `--env` / `--env-dir` | 环境和环境文件目录                                         |
-| `--build`             | 先构建选中应用镜像，再打包部署；可结合 bundle-only         |
-| `--services`          | 只更新指定 Compose 服务，例如 web、serv、serv,web、storage |
-| `--artifact-dir`      | 精确选择已构建制品                                         |
-| `--bundle-only`       | 只生成 tar 和跨平台脚本，不连接服务器                      |
-| `--runtime`           | 本地构建及中间件镜像导出引擎                               |
-| `--output`            | 自定义部署 tar 路径，相对命令执行目录解析，自动补版本后缀  |
-| `--skip-middleware`   | 跳过中间件配置与开通                                       |
-| `--yes`               | 无交互使用有效配置；缺必要值明确报错                       |
 
 #### 两机连通：直接部署
 

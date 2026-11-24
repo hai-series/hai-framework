@@ -55,6 +55,18 @@ Choose a template for new projects, add modules or missing configuration to exis
 | `[module]` | `add` | Module ID to add, for example ai. Choose interactively if omitted |
 | `--force` | `init` | Regenerate module configuration. Existing files are kept by default |
 
+<a id="command-options"></a>
+
+##### Common command options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--yes` | Optional | Skip source selection. Without settings, use official sources. |
+
+`hai deploy --env prod` selects `.env.prod` and the matching deployment environment.
+
+[Detailed parameters and workflows](cli.md#projects)
+
 #### Scenario: Create and extend projects
 
 Flags and interactive choices determine template and features. Source generation and dependency installation are separate stages; review the destination and selections first.
@@ -74,18 +86,6 @@ hai init
 ```
 
 Inputs select demo-app, website and the ai module. Outputs are project, module settings and skills. Installation and Git initialization are disabled in this example; init preserves existing files by default.
-
-<a id="command-options"></a>
-
-#### Common command options
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `--yes` | Optional | Skip source selection. Without settings, use official sources. |
-
-`hai deploy --env prod` selects `.env.prod` and the matching deployment environment.
-
-[Detailed parameters and workflows](cli.md#projects)
 
 <a id="scaffolding"></a>
 

@@ -350,6 +350,10 @@ const ops = reldb.createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操�
 | `reldb.tx.wrap(fn)` | 自动提交或回滚回调中的事务 | `fn: TxWrapCallback<T>` 异步回调接收事务句柄。正常返回后提交，抛出时回滚 | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
 | `reldb.tx.wrapResult(fn)` | 根据回调的业务结果结束事务 | 返回 `Promise<HaiResult<T>>` 的回调 | 成功提交，失败回滚并保留原业务错误 | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
+##### 事务结束与失败规则
+
+一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
+
 #### 场景：一起提交或回滚
 
 下图展示自动事务的边界。回调中的每一步仍返回 HaiResult，必须逐步检查，业务失败时抛错才能阻止提交。
@@ -359,10 +363,6 @@ const ops = reldb.createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操�
 回调普通返回（包括误返回失败 HaiResult）都会进入提交。抛错才进入回滚；提交或回滚本身失败也要上报。事务只覆盖同一数据库连接上的操作，外部发消息、支付或文件上传不会随 SQL 回滚撤销。
 
 下文分别演示 wrap 的返回值、抛错回滚、begin 后 commit/rollback，以及事务内分页和批量操作。业务 HaiResult 失败要先检查，不能把失败对象当回调的普通成功值提交。
-
-#### 事务结束与失败规则
-
-一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
 
 #### 场景：保留业务失败并回滚
 

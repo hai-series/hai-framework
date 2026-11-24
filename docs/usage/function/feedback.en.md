@@ -54,6 +54,14 @@ The server accepts reports, collects evidence, notifies and expires records usin
 | `feedback.close()` | Stop the worker and release service state | None | `void` | `await feedback.close()` |
 | `feedback.runJobs()` | Run available background jobs | None | `{ processed: number }` | `await feedback.runJobs()` |
 
+<a id="feedback-init-options"></a>
+
+##### Initialization arguments
+
+Pass the required `config: FeedbackConfigInput`. See the [configuration file reference](../configuration/feedback.en.md) for its fields. Omit `options: FeedbackInitOptions` to skip application-defined evidence collection.
+
+The optional `collectEvidence({ report, signal })` runs after a report is stored. It receives the read-only report and a signal that the application can pass to work that must stop on timeout or shutdown. Return `FeedbackCollectedEvidence` directly or as a promise, with optional `text: string`, structured `data`, and `attachments`. Each attachment has a stable string `id`, file `name`, media type `contentType`, and `bytes: Uint8Array`. For example, a report numbered `FB-42` can yield `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }`.
+
 #### Scenario: Prepare the service and collection jobs
 
 ```ts
@@ -71,13 +79,7 @@ The output is successful HaiResult.data. Build context from the authenticated se
 
 Finalization stops the current collection; it does not wait for all notifications to finish. Read attachments and exports through a server endpoint that checks the caller’s access.
 
-<a id="feedback-init-options"></a>
-
-#### Initialization arguments
-
-Pass the required `config: FeedbackConfigInput`. See the [configuration file reference](../configuration/feedback.en.md) for its fields. Omit `options: FeedbackInitOptions` to skip application-defined evidence collection.
-
-The optional `collectEvidence({ report, signal })` runs after a report is stored. It receives the read-only report and a signal that the application can pass to work that must stop on timeout or shutdown. Return `FeedbackCollectedEvidence` directly or as a promise, with optional `text: string`, structured `data`, and `attachments`. Each attachment has a stable string `id`, file `name`, media type `contentType`, and `bytes: Uint8Array`. For example, a report numbered `FB-42` can yield `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }`.
+#### Scenario: Collect application evidence after submission
 
 ```ts
 

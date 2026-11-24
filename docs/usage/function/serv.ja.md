@@ -78,6 +78,24 @@ export function startApi(closeApp: () => Promise<void>) {
 | `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | `serv.createApp()` が返す `app` が必須。 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
 | `serv.implement(contract)` | 实现契约中的路由 | クライアントと共有する型付きルート `contract` が必須。 | `ServImplementer` | `serv.implement(contract)` |
 
+<a id="host-options"></a>
+
+##### アプリ工場の引数と実行時依存
+
+| `options` の項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `contract`、`procedures` | 両方必須。契約と実装のルート構成を一致させる。 | 契約で入出力を定義し、プロシージャーが各ルートを実装する。 |
+| `http` | [HTTP の既定値](../configuration/serv.ja.md)を使用 | API、ヘルスチェック、文書のパスとリクエスト方針を設定する。 |
+| `middlewares` | 追加のミドルウェアなし | `{ middleware, path? }` の配列。`path` を省略すると全ルートが対象。 |
+| `iam` | 初期化済み IAM を任意で指定 | Bearer アクセストークンを検証し、`refreshCookie` の使用時は更新も行う。 |
+| `verifyToken` | IAM があればその検証を使用 | `Promise<HaiResult<ServSession>>` を返す独自のアクセストークン検証。 |
+| `createContext` | Serv のコンテキストを使用 | リクエストごとのコンテキストと認証済みセッションを自分で構築する。コンテキストの生成時は `verifyToken` と `iam` より優先。 |
+| `refreshCookie` | 無効 | ブラウザーの更新 Cookie や信頼済みネイティブのリクエスト方針を指定。IAM の更新機能か `onRefresh` が必要。 |
+| `transport` | 無効 | 初期化済み crypto、管理された `serverKeyRing`、共有 `keyStore` を渡して送受信を暗号化する。 |
+| `audio` | WebSocket ルートなし | 初期化済み AI と `verifyTicket` を渡して音声ルートを追加。Node の WebSocket アップグレードは `serv.listen()` が処理する。 |
+
+[引数と手順の詳細](serv.md#http-app)
+
 #### 利用例：契約の実装と HTTP の起動
 
 status の契約と処理から JSON 成功応答を得ます。toFetch は関数を返すだけで、listen がポートを開きます。以下に両方と終了手順を示します。
@@ -100,24 +118,6 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 | `onClose` | 終了シグナルのコールバックなし | 非同期の解放関数を渡すと、`SIGINT` または `SIGTERM` で待ち受けと音声接続を閉じたあと 1 回呼び出します。`close()` を直接呼ぶ場合は呼び出し側で業務リソースを解放します。 |
 
 アプリは環境変数 `HOST`、`PORT` や設定ファイルの `server` から値を解決して `serv.listen()` に明示的に渡せます。省略した項目には待ち受け側の既定値が適用されます。
-
-<a id="host-options"></a>
-
-#### アプリ工場の引数と実行時依存
-
-| `options` の項目 | 既定値・必須条件 | 用途 |
-| --- | --- | --- |
-| `contract`、`procedures` | 両方必須。契約と実装のルート構成を一致させる。 | 契約で入出力を定義し、プロシージャーが各ルートを実装する。 |
-| `http` | [HTTP の既定値](../configuration/serv.ja.md)を使用 | API、ヘルスチェック、文書のパスとリクエスト方針を設定する。 |
-| `middlewares` | 追加のミドルウェアなし | `{ middleware, path? }` の配列。`path` を省略すると全ルートが対象。 |
-| `iam` | 初期化済み IAM を任意で指定 | Bearer アクセストークンを検証し、`refreshCookie` の使用時は更新も行う。 |
-| `verifyToken` | IAM があればその検証を使用 | `Promise<HaiResult<ServSession>>` を返す独自のアクセストークン検証。 |
-| `createContext` | Serv のコンテキストを使用 | リクエストごとのコンテキストと認証済みセッションを自分で構築する。コンテキストの生成時は `verifyToken` と `iam` より優先。 |
-| `refreshCookie` | 無効 | ブラウザーの更新 Cookie や信頼済みネイティブのリクエスト方針を指定。IAM の更新機能か `onRefresh` が必要。 |
-| `transport` | 無効 | 初期化済み crypto、管理された `serverKeyRing`、共有 `keyStore` を渡して送受信を暗号化する。 |
-| `audio` | WebSocket ルートなし | 初期化済み AI と `verifyTicket` を渡して音声ルートを追加。Node の WebSocket アップグレードは `serv.listen()` が処理する。 |
-
-[引数と手順の詳細](serv.md#http-app)
 
 <a id="authentication"></a>
 
@@ -237,6 +237,12 @@ spec.servers?.[0]?.url // '/api/v1'。仕様上のサーバー URL。
 | --- | --- | --- | --- | --- |
 | `serv.createApp(options)` | 暗号化・音声・業務ルートを装配 | `options`、`contract`、`procedures` が必須。任意項目は[アプリ設定](#host-options)を参照。 | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
 
+##### 音声接続の認可と予算
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](serv.md#audio-options)にあり、この節は部分翻訳です。
+
+[引数と手順の詳細](serv.md#integrations)
+
 #### 利用例：暗号・音声・フィードバックの接続
 
 transport 有効時の通常 API 要求です。伝送認証はメッセージの送信元・完全性を確認し、IAM の本人と業務権限は後段で確認します。
@@ -246,9 +252,3 @@ transport 有効時の通常 API 要求です。伝送認証はメッセージ�
 本文を復元してから契約の検証と procedures に渡し、認可失敗では handler に入りません。通常のアクセス拒否も暗号化範囲内です。協商・プリフライトは専用確認があり、除外パスや静的ファイルには各設定が適用されます。
 
 createApp を使い、transport manager・音声チケットと認可・フィードバックの文脈を渡します。HTTP/WS の結果、容量超過、解放まで説明します。
-
-#### 音声接続の認可と予算
-
-コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](serv.md#audio-options)にあり、この節は部分翻訳です。
-
-[引数と手順の詳細](serv.md#integrations)

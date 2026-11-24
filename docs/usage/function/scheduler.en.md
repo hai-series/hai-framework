@@ -277,18 +277,18 @@ Check external effects when execution is uncertain. Repair a missing log without
 
 <a id="scheduler-execution-options"></a>
 
-**Execution paging and reconciliation**
+##### Execution paging and reconciliation
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
 | `options.limit` | `number` | `50` | For both lists. 1–100 records per page. |
 | `options.offset` | `number` | `0` | For both lists. Skip 0–1000000 records. |
 | `resolution.status` | `'success' \| 'discarded'` | Required | Record confirmed success or end follow-up after verification. This publishes the resolution. |
-| `resolution.expectedUpdatedAt` | `number` | Required | The updatedAt from the last read. Reread and reconcile if concurrent changes occurred. |
+| `resolution.expectedUpdatedAt` | `number` | Required | Pass the exact `updatedAt` from `scheduler.execution.get(occurrenceId)`. Scheduler records the outcome while the entry is still `unknown` and the timestamp matches. |
 
 #### Scenario: Reconcile unknown outcomes and repair logs
 
-Log repair never executes business work. The separate resolution function accepts an externally verified decision and commits only against the latest updatedAt.
+Stop the old worker and check the external result. For example, mark the daily report run `success` once you verify the report was uploaded. Submit the `updatedAt` you read. If another operator has already recorded the result, the old timestamp fails the update check. Look up the run to see its current status. Use `repairLog()` when the completed run only needs its log repaired.
 
 ```ts
 async function repairPendingLogs() {

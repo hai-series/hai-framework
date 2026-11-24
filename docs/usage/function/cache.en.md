@@ -147,6 +147,16 @@ With `orders:1` present, `{ nx: true, ex: 60 }` returns `data: false` and preser
 
 Key operations apply to all structures. TTL is measured in seconds, with `-1` for a persistent key and `-2` for a missing key. `persist` returns `true` only if it removed an expiry. Memory counters accept safe integers or integer strings and preserve the original value if the increment is invalid or the result exceeds the safe integer range.
 
+##### Write conditions and expiry
+
+`cache.kv.set()` stores a JSON snapshot. `nx` writes only when the key is absent, and `xx` writes only when it exists. These flags are mutually exclusive. If the condition fails, the result has `success: true` and `data: false` and preserves the value and expiry.
+
+Operations that need to serialize a cache value return `SERIALIZATION_FAILED` if it cannot be encoded as JSON. Examples include circular objects and objects whose `toJSON()` returns `undefined`. If serialization fails during a batch write, no item is written.
+
+Choose one expiry option from `ex` (relative seconds), `px` (relative milliseconds), `exat` (Unix seconds), and `pxat` (Unix milliseconds). `kv.set` returns `INVALID_SET_OPTIONS` for an invalid expiry, a deadline in milliseconds outside the safe integer range, or a combination of expiry and `keepTtl: true`. Expiry values must be positive safe integers. A positive absolute deadline in the past expires the key immediately. Omitting expiry clears any existing TTL. Set `keepTtl: true` to preserve the current TTL or leave a new key without expiry.
+
+`cache.kv.compareAndSwap()` applies expiry only if the comparison succeeds. For example, replacing a matching value with `{ px: 60_000 }` sets about 60 seconds of new lifetime. `{ keepTtl: true }` preserves the old expiry and leaves a new key without expiry. Choose one option.
+
 #### Scenario: Update a value only if its version still matches
 
 Start with a fresh `demo:revision` key. The first call expects `undefined`, writes version `1`, and sets a 60-second expiry with `{ px: 60_000 }`. The second call expects `1`, writes `2`, and preserves the expiry with `{ keepTtl: true }`. If the key stays live and no other writer intervenes, both results have `data: true`.
@@ -169,16 +179,6 @@ core.logger.info('Revision update', { created: created.data, replaced: replaced.
 ```
 
 The comparison and update of the JSON snapshot run in one operation. If another node changes the stored value before the second call, `replaced.success` is `true` and `replaced.data` is `false`. The existing value and expiry are preserved. An `undefined` expected value matches a missing key. An `undefined` replacement deletes a matching key. A backend error returns `success: false`.
-
-#### Write conditions and expiry
-
-`cache.kv.set()` stores a JSON snapshot. `nx` writes only when the key is absent, and `xx` writes only when it exists. These flags are mutually exclusive. If the condition fails, the result has `success: true` and `data: false` and preserves the value and expiry.
-
-Operations that need to serialize a cache value return `SERIALIZATION_FAILED` if it cannot be encoded as JSON. Examples include circular objects and objects whose `toJSON()` returns `undefined`. If serialization fails during a batch write, no item is written.
-
-Choose one expiry option from `ex` (relative seconds), `px` (relative milliseconds), `exat` (Unix seconds), and `pxat` (Unix milliseconds). `kv.set` returns `INVALID_SET_OPTIONS` for an invalid expiry, a deadline in milliseconds outside the safe integer range, or a combination of expiry and `keepTtl: true`. Expiry values must be positive safe integers. A positive absolute deadline in the past expires the key immediately. Omitting expiry clears any existing TTL. Set `keepTtl: true` to preserve the current TTL or leave a new key without expiry.
-
-`cache.kv.compareAndSwap()` applies expiry only if the comparison succeeds. For example, replacing a matching value with `{ px: 60_000 }` sets about 60 seconds of new lifetime. `{ keepTtl: true }` preserves the old expiry and leaves a new key without expiry. Choose one option.
 
 #### Scenario: Scan and batch operations in Redis Cluster
 

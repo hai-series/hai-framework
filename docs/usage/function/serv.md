@@ -85,6 +85,63 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 | `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 必填 `app`，由 `serv.createApp()` 返回。 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
 | `serv.implement(contract)` | 实现契约中的路由 | 必填 `contract`，应用与客户端共享的带类型路由契约。 | `ServImplementer`，可继续设置上下文和各路由的鉴权、权限、角色及处理函数 | `serv.implement(contract)` |
 
+<a id="host-options"></a>
+
+##### 应用工厂参数与依赖
+
+以下参数由服务端启动代码传给 `serv.createApp()`。应用从 `_serv.yml` 读出 `http` 设置，并在代码中提供接口定义、处理函数和已初始化的模块。
+
+| 参数 | 默认与前置 | 用途、输出和边界 |
+| --- | --- | --- |
+| `contract` / `procedures` | 必填，形状互相匹配 | `contract` 定义接口的输入输出，`procedures` 实现接口。应用先启动数据库等依赖，再将返回的 App 交给 `serv.listen()` 或接到自己的 Fetch 入口 |
+| `http` | 省略采用前述默认值 | 挂载 API、健康和文档路径，实施请求来源与协议策略；与业务依赖分开 |
+| `middlewares[].middleware` / `path` | 可省略；每项必须有 middleware，path 省略匹配全部 | 普通中间件在访问策略及解密后、业务路由前执行，提前响应仍走加密；二进制端点须显式排除传输加密。`serv.cors` 的响应头补充在外层，预检仍检查访问策略 |
+| `iam` | 可选的已初始化 IAM 实例 | 为 Bearer access token 派生会话校验；启用 refreshCookie 时也提供刷新能力。只创建 IAM procedures 不会代替顶层注入 |
+| `verifyToken` | 可选回调，覆盖 `iam.auth.verifyToken` | 输入实际 access token，返回 `HaiResult<ServSession>`；失败不能构造已认证 session |
+| `createContext` | 可选回调，优先于 verifyToken 和 iam | 完全接管请求上下文，框架不再自动填充 session。回调须保留传入请求元数据、可信地址并自行验证身份，不能照信用户自报 userId/roles |
+| `refreshCookie` | 省略不启用 | 管理 refresh 传输；浏览器 HttpOnly Cookie 与受信原生 body 分开，具体字段见下表 |
+| `transport` | 省略不启用 | 显式提供已初始化 crypto、受管 serverKeyRing 与共享 keyStore；容量、时间、路径和排除项见[传输配置](../configuration/http.md#加密传输与容量)，不能只提供 YAML 而漏私有依赖 |
+| `audio` | 省略不挂载 WebSocket | 在服务端传入已初始化的 `ai`、一次性票据的验证函数，以及可选的付费授权函数。在 Node.js 中使用 `serv.listen()` 会处理 WebSocket 协议升级 |
+
+上下文优先级为 **createContext → verifyToken → iam.auth.verifyToken → 只解析请求元数据**。没有验证器时 session 不会凭空出现；即使配置了验证器，资源授权仍由 procedure/业务守卫执行。
+
+| `refreshCookie` 字段 | 默认与单位 | 行为与配置影响 |
+| --- | --- | --- |
+| `cookieName` | `hai_refresh_token` | 修改后浏览器需要取得新 Cookie；access token 的传输不因此改变 |
+| `maxAge` | 2592000 秒（30 天） | 浏览器 Cookie 的保存期限，应与 IAM refresh TTL 对齐，不会延长已失效的服务端令牌 |
+| `secure` | 显式 boolean 最优先 | 优先于 `HAI_SERV_REFRESH_COOKIE_SECURE`，两者都省略时由 NODE_ENV/HAI_CORE_ENV 是否 production 决定；测试开关不关闭此默认保护 |
+| `onRefresh` | 可选，优先于顶层 iam.session.refresh | 传入刷新令牌，成功时返回新的令牌对。如果未提供此函数，也没有 `iam.session.refresh()`，`serv.createApp()` 会报错，应用应停止启动 |
+| `nativeTokenTransport.isRequest` | 可选，无默认信任回调 | 同时核对原生客户端标识及允许的 Origin。匹配时登录/注册/刷新使用 body 中的 refreshToken，不读写浏览器 Cookie；不能只信可伪造的单个头 |
+
+下例创建可处理登录请求的 HTTP 应用。运行示例前先连接数据库和缓存，再调用 `iam.init()`。若 IAM 还未初始化，函数会报错。用户名和密码由用户在登录时提交。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+
+
+export function createAuthApp() {
+  if (!iam.isInitialized)
+    throw new Error('Initialize IAM before creating the HTTP application')
+  // Build the route contract from the built-in IAM contract.
+  const contract = apiContract.create({ iam: apiContract.iam })
+  // Create a Serv app under /api/v1 with IAM auth and a 30-day refresh cookie. The returned app has no public docs route.
+  return serv.createApp({
+    contract,
+    // Bind the initialized IAM service's handlers to the contract. Requests without required authorization fail.
+    procedures: { iam: serv.createIamProcedures({ iam }) },
+    iam,
+    http: { apiPrefix: '/api/v1', docs: false, openapi: false },
+    refreshCookie: { maxAge: 30 * 24 * 3600 },
+  })
+}
+```
+
+函数返回 App，应用可以把它交给 `serv.listen()` 开始监听。未登录时请求受保护接口应得到 401。登录响应会让浏览器保存刷新 Cookie，刷新成功后旧刷新令牌失效。上例省略 `secure`，因此进程覆盖才有机会生效；生产 HTTPS 无覆盖时 Cookie 带 Secure。它没有启用应用层传输加密、原生 body 通道或 API 文档，应用按所需功能分别装配。关闭先停止 HTTP 句柄，再释放 IAM 及其依赖。
+
+`serv.listen(app, options)` 的 `host`/`port` 省略时为 `127.0.0.1:3000`，不会自行读取 HOST/PORT；应用先解析上述 Serv 配置，再把 `server.host/port` 显式传入监听器。`onListening(info)` 用于记录实际地址，`onClose()` 是可选异步清理回调。提供 onClose 才自动注册信号关闭；手动调用返回句柄的 close() 只停止监听及连接，应用还须显式等待业务模块清理，不能以端口关闭代替数据库、任务和凭据的释放。
+
 #### 场景：实现契约并启动 HTTP
 
 最小示例把 IAM、Storage、AI 的契约和实现交给 createApp；HTTP 请求按契约返回 HaiResult JSON。toFetch(app) 返回函数，不启动端口；listen(app) 才创建 Node 监听。下文保留两种运行方式和关闭步骤。
@@ -143,63 +200,6 @@ export function createFetchAdapter(app: ServHttpApp) {
 Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。
 
 toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
-
-<a id="host-options"></a>
-
-#### 应用工厂参数与依赖
-
-以下参数由服务端启动代码传给 `serv.createApp()`。应用从 `_serv.yml` 读出 `http` 设置，并在代码中提供接口定义、处理函数和已初始化的模块。
-
-| 参数 | 默认与前置 | 用途、输出和边界 |
-| --- | --- | --- |
-| `contract` / `procedures` | 必填，形状互相匹配 | `contract` 定义接口的输入输出，`procedures` 实现接口。应用先启动数据库等依赖，再将返回的 App 交给 `serv.listen()` 或接到自己的 Fetch 入口 |
-| `http` | 省略采用前述默认值 | 挂载 API、健康和文档路径，实施请求来源与协议策略；与业务依赖分开 |
-| `middlewares[].middleware` / `path` | 可省略；每项必须有 middleware，path 省略匹配全部 | 普通中间件在访问策略及解密后、业务路由前执行，提前响应仍走加密；二进制端点须显式排除传输加密。`serv.cors` 的响应头补充在外层，预检仍检查访问策略 |
-| `iam` | 可选的已初始化 IAM 实例 | 为 Bearer access token 派生会话校验；启用 refreshCookie 时也提供刷新能力。只创建 IAM procedures 不会代替顶层注入 |
-| `verifyToken` | 可选回调，覆盖 `iam.auth.verifyToken` | 输入实际 access token，返回 `HaiResult<ServSession>`；失败不能构造已认证 session |
-| `createContext` | 可选回调，优先于 verifyToken 和 iam | 完全接管请求上下文，框架不再自动填充 session。回调须保留传入请求元数据、可信地址并自行验证身份，不能照信用户自报 userId/roles |
-| `refreshCookie` | 省略不启用 | 管理 refresh 传输；浏览器 HttpOnly Cookie 与受信原生 body 分开，具体字段见下表 |
-| `transport` | 省略不启用 | 显式提供已初始化 crypto、受管 serverKeyRing 与共享 keyStore；容量、时间、路径和排除项见[传输配置](../configuration/http.md#加密传输与容量)，不能只提供 YAML 而漏私有依赖 |
-| `audio` | 省略不挂载 WebSocket | 在服务端传入已初始化的 `ai`、一次性票据的验证函数，以及可选的付费授权函数。在 Node.js 中使用 `serv.listen()` 会处理 WebSocket 协议升级 |
-
-上下文优先级为 **createContext → verifyToken → iam.auth.verifyToken → 只解析请求元数据**。没有验证器时 session 不会凭空出现；即使配置了验证器，资源授权仍由 procedure/业务守卫执行。
-
-| `refreshCookie` 字段 | 默认与单位 | 行为与配置影响 |
-| --- | --- | --- |
-| `cookieName` | `hai_refresh_token` | 修改后浏览器需要取得新 Cookie；access token 的传输不因此改变 |
-| `maxAge` | 2592000 秒（30 天） | 浏览器 Cookie 的保存期限，应与 IAM refresh TTL 对齐，不会延长已失效的服务端令牌 |
-| `secure` | 显式 boolean 最优先 | 优先于 `HAI_SERV_REFRESH_COOKIE_SECURE`，两者都省略时由 NODE_ENV/HAI_CORE_ENV 是否 production 决定；测试开关不关闭此默认保护 |
-| `onRefresh` | 可选，优先于顶层 iam.session.refresh | 传入刷新令牌，成功时返回新的令牌对。如果未提供此函数，也没有 `iam.session.refresh()`，`serv.createApp()` 会报错，应用应停止启动 |
-| `nativeTokenTransport.isRequest` | 可选，无默认信任回调 | 同时核对原生客户端标识及允许的 Origin。匹配时登录/注册/刷新使用 body 中的 refreshToken，不读写浏览器 Cookie；不能只信可伪造的单个头 |
-
-下例创建可处理登录请求的 HTTP 应用。运行示例前先连接数据库和缓存，再调用 `iam.init()`。若 IAM 还未初始化，函数会报错。用户名和密码由用户在登录时提交。
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-
-
-export function createAuthApp() {
-  if (!iam.isInitialized)
-    throw new Error('Initialize IAM before creating the HTTP application')
-  // Build the route contract from the built-in IAM contract.
-  const contract = apiContract.create({ iam: apiContract.iam })
-  // Create a Serv app under /api/v1 with IAM auth and a 30-day refresh cookie. The returned app has no public docs route.
-  return serv.createApp({
-    contract,
-    // Bind the initialized IAM service's handlers to the contract. Requests without required authorization fail.
-    procedures: { iam: serv.createIamProcedures({ iam }) },
-    iam,
-    http: { apiPrefix: '/api/v1', docs: false, openapi: false },
-    refreshCookie: { maxAge: 30 * 24 * 3600 },
-  })
-}
-```
-
-函数返回 App，应用可以把它交给 `serv.listen()` 开始监听。未登录时请求受保护接口应得到 401。登录响应会让浏览器保存刷新 Cookie，刷新成功后旧刷新令牌失效。上例省略 `secure`，因此进程覆盖才有机会生效；生产 HTTPS 无覆盖时 Cookie 带 Secure。它没有启用应用层传输加密、原生 body 通道或 API 文档，应用按所需功能分别装配。关闭先停止 HTTP 句柄，再释放 IAM 及其依赖。
-
-`serv.listen(app, options)` 的 `host`/`port` 省略时为 `127.0.0.1:3000`，不会自行读取 HOST/PORT；应用先解析上述 Serv 配置，再把 `server.host/port` 显式传入监听器。`onListening(info)` 用于记录实际地址，`onClose()` 是可选异步清理回调。提供 onClose 才自动注册信号关闭；手动调用返回句柄的 close() 只停止监听及连接，应用还须显式等待业务模块清理，不能以端口关闭代替数据库、任务和凭据的释放。
 
 <a id="authentication"></a>
 
@@ -663,6 +663,10 @@ const app = serv.createApp({
 | `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 必填 `headers`，接受 Headers 或字符串键值对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN`。 | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
 | `serv.m(key, options?)` | 读取本地化提示 | 必填已注册的消息 `key`。可选 `options.locale` 覆盖本次语言，`options.params` 提供插值字段。 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
 
+##### 存储 HTTP 输入约束
+
+对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
+
 #### 场景：校验输入并提供接口描述
 
 ```ts
@@ -696,10 +700,6 @@ spec.servers?.[0]?.url // '/api/v1'，此选项只改变描述中的服务地址
 
 设定请求语言后，`ui.setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
-#### 存储 HTTP 输入约束
-
-对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
-
 <a id="integrations"></a>
 
 ### 接入加密、语音与反馈：`serv.createApp`
@@ -711,6 +711,28 @@ spec.servers?.[0]?.url // '/api/v1'，此选项只改变描述中的服务地址
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `serv.createApp(options)` | 装配加密、语音和业务路由 | 必填 `options`。`contract` 和 `procedures` 必填，其余见[工厂参数](#host-options)。 | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
+
+<a id="audio-options"></a>
+
+##### 语音连接的授权与预算
+
+这些字段属于 `serv.createApp({ audio })` 的运行时参数，没有 `_serv.yml.audio`。用途是限制每次 WebSocket 会话能做什么、能消耗多少资源。
+
+| 字段 | 默认与输入 | 输出、影响和限制 |
+| --- | --- | --- |
+| `ai` / `verifyTicket` | 必填的已初始化实例与回调 | 验证票据并同时标记为已使用，使并发提交同一张票据时也只有一次成功。成功返回会话和可选授权信息 |
+| `authorize(session, request, grant)` | 可选回调 | 返回服务端确认的操作/模型/声音等付费参数。省略时只保留操作和音频格式，客户端自报 model/voice/instruction 不生效 |
+| `onSessionEnd(session, request)` | 可选异步回调 | 释放套餐并发占用等资源，成功、失败及断连至多调用一次；不把回调当跨系统事务 |
+| `path` | `/ai/audio`，相对 apiPrefix | 修改后客户端 WebSocket 地址同步；不是普通 JSON procedure |
+| `maxMessageBytes` | 1 MiB | 单条消息上限；不表示整段会话总量 |
+| `maxBufferedBytes` | 10 MiB | 单连接累计音频输入预算，超过后失败并结束会话 |
+| `maxTextBytes` | 1 MiB | 单连接累计文本输入预算；与音频容量分开 |
+| `maxSessionMs` | 300000 毫秒 | 从建立起的最长会话时间；不是单条语音的下游请求超时 |
+| `preAuthTimeoutMs` | 5000 毫秒 | 在该期限内完成鉴权并收到 start，否则关闭，防止空连接长期占用 |
+| `maxPendingMessages` | 256 条 | 串行处理尚未完成的消息积压上限，过量即关闭，而不是无限排队 |
+| `maxSendBufferBytes` | 8 MiB | 服务端发送缓冲高水位，慢客户端超过后以领域错误结束 |
+
+例如把 `maxBufferedBytes` 设为 `2 * 1024 * 1024`、`maxSessionMs` 设为 `60000`，应观察到合法小音频仍可处理，累计超 2 MiB 或连接超 60 秒会失败关闭。用本轮签发票据验证首次允许、重复消费拒绝及越权模型拒绝，真实音频 Provider、设备录音与网络行为还需在目标环境验收。
 
 #### 场景：接入加密、语音与反馈
 
@@ -949,28 +971,6 @@ const app = serv.createApp({
 浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
 
 浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
-
-<a id="audio-options"></a>
-
-#### 语音连接的授权与预算
-
-这些字段属于 `serv.createApp({ audio })` 的运行时参数，没有 `_serv.yml.audio`。用途是限制每次 WebSocket 会话能做什么、能消耗多少资源。
-
-| 字段 | 默认与输入 | 输出、影响和限制 |
-| --- | --- | --- |
-| `ai` / `verifyTicket` | 必填的已初始化实例与回调 | 验证票据并同时标记为已使用，使并发提交同一张票据时也只有一次成功。成功返回会话和可选授权信息 |
-| `authorize(session, request, grant)` | 可选回调 | 返回服务端确认的操作/模型/声音等付费参数。省略时只保留操作和音频格式，客户端自报 model/voice/instruction 不生效 |
-| `onSessionEnd(session, request)` | 可选异步回调 | 释放套餐并发占用等资源，成功、失败及断连至多调用一次；不把回调当跨系统事务 |
-| `path` | `/ai/audio`，相对 apiPrefix | 修改后客户端 WebSocket 地址同步；不是普通 JSON procedure |
-| `maxMessageBytes` | 1 MiB | 单条消息上限；不表示整段会话总量 |
-| `maxBufferedBytes` | 10 MiB | 单连接累计音频输入预算，超过后失败并结束会话 |
-| `maxTextBytes` | 1 MiB | 单连接累计文本输入预算；与音频容量分开 |
-| `maxSessionMs` | 300000 毫秒 | 从建立起的最长会话时间；不是单条语音的下游请求超时 |
-| `preAuthTimeoutMs` | 5000 毫秒 | 在该期限内完成鉴权并收到 start，否则关闭，防止空连接长期占用 |
-| `maxPendingMessages` | 256 条 | 串行处理尚未完成的消息积压上限，过量即关闭，而不是无限排队 |
-| `maxSendBufferBytes` | 8 MiB | 服务端发送缓冲高水位，慢客户端超过后以领域错误结束 |
-
-例如把 `maxBufferedBytes` 设为 `2 * 1024 * 1024`、`maxSessionMs` 设为 `60000`，应观察到合法小音频仍可处理，累计超 2 MiB 或连接超 60 秒会失败关闭。用本轮签发票据验证首次允许、重复消费拒绝及越权模型拒绝，真实音频 Provider、设备录音与网络行为还需在目标环境验收。
 
 ## 错误处理
 

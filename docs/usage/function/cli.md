@@ -63,6 +63,12 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 | `[module]` | `add` | 要添加的模块 ID，例如 ai。省略时选择 |
 | `--force` | `init` | 重新生成模块配置。默认保留已有文件 |
 
+##### 命令的通用参数
+
+直接在终端运行 `hai`。根据命令输出和退出码判断结果。升级示例中的 `TARGET_VERSION` 需替换为 `pnpm view` 查到的已发布精确版本。
+
+全局 `--cwd/-C` 指定工程目录，`--verbose/-v` 开启详细诊断。CLI消息按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择中英日文；生成应用的默认语言独立配置。
+
 #### 场景：创建与补齐工程
 
 命令行参数和交互选择共同决定模板及功能。生成源码和安装依赖是两个阶段；先看清最终目录和功能再继续。
@@ -82,12 +88,6 @@ hai init
 ```
 
 输入为 demo-app、website 模板及按需添加 ai；输出是工程、模块配置和 Skills 文件。示例关闭安装和 Git 初始化，init 默认保留已有文件。
-
-#### 命令的通用参数
-
-直接在终端运行 `hai`。根据命令输出和退出码判断结果。升级示例中的 `TARGET_VERSION` 需替换为 `pnpm view` 查到的已发布精确版本。
-
-全局 `--cwd/-C` 指定工程目录，`--verbose/-v` 开启详细诊断。CLI消息按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择中英日文；生成应用的默认语言独立配置。
 
 #### 场景：选择适合应用的模板
 
@@ -311,6 +311,14 @@ HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1M
 | `--from <timestamp> / --to <timestamp>` | `feedback evidence` | 毫秒级 Unix 时间戳，限定证据时间范围 |
 | `--port <number>` | `feedback view` | 查看器端口，默认 0 由系统分配 |
 
+<a id="command-options"></a>
+
+##### 升级预检选项
+
+| 参数 | 默认值/必填 | 说明 |
+| --- | --- | --- |
+| `--yes`                                 | 省略时由当前是否交互终端决定 | 跳过交互选源，尚未配置时使用官方源                                                                                            |
+
 #### 场景：查看帮助、升级与诊断
 
 ```sh
@@ -341,13 +349,6 @@ hai upgrade TARGET_VERSION # 输入已发布精确版本，输出当前工程的
 
 `hai upgrade` 只读核对实际消费包、CLI/deploy 制品、catalog、锁文件、安装状态和技能差异。
 
-| 参数 | 默认值/必填 | 说明 |
-| --- | --- | --- |
-| `--yes`                                 | 省略时由当前是否交互终端决定 | 跳过交互选源，尚未配置时使用官方源                                                                                            |
-| `hai deploy --env`                      | 选择部署环境    | 选择发布环境及该环境的文件。例如 `--env prod` 选用 `.env.prod`，私有文件仍按优先级合并 · [参数表](#cli-deployments-arguments) |
-
 ## 错误处理
 
 命令失败显示安全原因、路径或步骤并以非零码退出。安装失败保留已生成文件便于重试；构建失败不更新成功latest。密钥不放命令参数或日志。计划、预检和导入回执各有明确范围，不能当部署成功。失败后按诊断修复配置、权限或前置依赖，再重试原步骤；结果未知先查事实。
-
-<a id="command-options"></a>

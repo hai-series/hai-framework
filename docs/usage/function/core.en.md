@@ -123,7 +123,7 @@ Valid JSON object or array strings in context are expanded before field redactio
 | `core.logger.getLevel()` | Read the current global threshold | None | `LogLevel` | `core.logger.getLevel()` |
 | `core.logger.observe(observer)` | Receive records after filtering and redaction | Required synchronous `observer(record)` receiving a filtered and redacted `LogRecord`. | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
-#### Scenario: Record business and diagnostic logs by level
+##### Logger fields and defaults
 
 | Field | `create(options?)` | `configure(config)` |
 | --- | --- | --- |
@@ -132,6 +132,10 @@ Valid JSON object or array strings in context are expanded before field redactio
 | `format` | `'json'` or `'pretty'`. Omitting it inherits the current global format at each call. | Initially `'pretty'`. A supplied value sets the global format. |
 | `context` | Optional object added to every entry from this logger. Its keys override global context keys. | Optional object merged into global context by top-level key. Omitting it or passing `{}` preserves existing keys. |
 | `redact` | Inherits the global rules. | Optional array of field paths, initially `[]`. Passing `['customer.email']` replaces the extra rules. Passing `[]` clears them and keeps built-in redaction. |
+
+#### Scenario: Record business and diagnostic logs by level
+
+The orders service records a new order, then reports a retry if the next step fails. Set the process log level and use the request ID to find the retry in the logs.
 
 ```ts
 import { core } from '@h-ai/core'

@@ -43,7 +43,7 @@ pnpm run deploy --env prod --build
 | `deploy.provisionAll(projectName, services?)` | 選択したミドルウェアを準備 | プロジェクトの識別文字列 `projectName` が必須。任意の `services` で対象種類を選択。省略時は設定済みの全 Provisioner、`[]` の場合は開通なし。 | `Promise<HaiResult<ProvisionResult[]>>` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
 | `deploy.deployApp(appDir, options?)` | アプリを配布・配布パッケージを生成 | アプリのディレクトリ `appDir` が必須。任意の `options` で環境、Compose サービス、イメージ入力、配布パッケージ、進捗を指定する。下記参照。 | `Promise<HaiResult<DeployResult>>` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
-#### 利用例：工程の確認と配布
+##### SDK の配布オプション
 
 `deploy.deployApp()` の `options` は省略できます。配布手順に応じて次の項目を指定できます。
 
@@ -56,6 +56,10 @@ pnpm run deploy --env prod --build
 | `bundleOnly`、`output` | 既定ではデプロイを実行。アプリとバージョンから出力先を決定。 | docker-ssh の `bundleOnly: true` で SSH 接続を行わず、アーカイブとスクリプトを作成。`output` で出力先を指定。既存の出力ディレクトリがあればエラー。 |
 | `imageSource`、`proxy` | 公式イメージ配布元と、プロセスのプロキシ設定を使用。 | `imageSource.type` は `'official'`、`'cn'`、`'custom'`。カスタム時は `registries` を渡す。`proxy.mode` は `'inherit'`、`'system'`、`'custom'`、`'none'`。カスタム時は HTTP(S) の `url` と任意の `bypass` を渡す。 |
 | `onProgress(stage)` | 省略時は通知なし。 | `packaging`、`health` などの実行段階を進捗 UI に通知。他の値は `preflight`、`images`、`dependencies`、`start`、`https`、`complete`。 |
+
+#### 利用例：工程の確認と配布
+
+注文サービスを公開する前に、読み取り専用の計画で配布先を確認します。成果物と依存先が揃ったら、オフラインパッケージを作るか、サーバーに配布します。
 
 呼び出し側の配置手順です。plan は読取専用、build は成果物の準備、deploy が対象環境を変更します。
 

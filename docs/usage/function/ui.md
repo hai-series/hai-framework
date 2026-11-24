@@ -614,6 +614,48 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 | `<ToastContainer>` | 通知容器 | 根布局挂载一次，由 `toast` 或 `message` 向同一个提示队列推送消息。 | 显示全局通知队列 | `<ToastContainer />` |
 | `<ErrorPage>` | 通用错误页（内置 401/403/404/500/503 预设） | `status` 选择要表达的结果或状态；`code` 设置显示的错误或跟踪代码；`title` 设置标题；`description` 提供补充说明；`homeUrl` 指定回到首页的链接；`onhome` 接管返回首页操作；`onback` 接管返回操作。 | 显示503预设与返回入口 | `<ErrorPage status={503} homeUrl='/' />` |
 
+<a id="toast-options"></a>
+
+##### Toast 通知参数
+
+| 字段 | 类型 | 默认值 | 作用与生效条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必填 | 提示中显示的本地化正文。 |
+| `variant` | `Variant` | `info` | 决定通知的视觉样式。 |
+| `duration` | `number` | `3000` ms | 从显示时开始计时。设为 0 时不自动关闭。 |
+| `position` | `top-right` / `top-center` / `top-left` / `bottom-right` / `bottom-center` / `bottom-left` | `bottom-right` | 提示出现的位置。上下各有左、中、右三个选项，全部共用一个队列。 |
+| `dismissible` | `boolean` | `true` | 控制手动关闭按钮。 |
+| `traceId` | `string` | 未设置 | 有可公开的追踪编号时显示排查入口，展开后才显示编号。 |
+
+<a id="message-options"></a>
+
+##### 行内消息参数
+
+| 字段 | 类型 | 默认值 | 作用与生效条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必填 | 要显示的本地化消息。若直接传字符串，它就是正文。 |
+| `type` | `info` / `success` / `warning` / `error` | `info` | 决定同一提示队列中这条消息的样式。 |
+| `duration` | `number` | `3000` ms | 自动关闭前的毫秒数。设为 0 时不自动关闭。 |
+| `closable` | `boolean` | `true` | 是否显示手动关闭按钮。 |
+
+<a id="message-box-options"></a>
+
+##### 确认弹窗参数
+
+| 字段 | 类型 | 默认值 | 作用与生效条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必填 | 弹窗正文。直接传字符串等于提供此字段，HTML 标签按原样显示。 |
+| `title` | `string` | 当前语言的标题 | 覆盖标题。 |
+| `type` | `confirm` / `alert` | 由入口指定 | 可显式覆盖入口选择的模式。取消按钮仍由 `showCancel` 控制。 |
+| `iconType` | `info` / `success` / `warning` / `error` | 确认 `warning`，提示 `info` | 覆盖正文旁的图标。 |
+| `confirmText` | `string` | 当前语言的确认文案 | 覆盖确认按钮文字。 |
+| `cancelText` | `string` | 当前语言的取消文案 | 显示取消按钮时使用。 |
+| `confirmVariant` | `default` / `primary` / `warning` / `error` | `primary` | 决定确认按钮样式。 |
+| `showCancel` | `boolean` | 确认 `true`，提示 `false` | 切换取消按钮的可见性。 |
+| `closeOnClickModal` | `boolean` | `true` | 点遮罩时是否触发关闭。 |
+| `showClose` | `boolean` | `true` | 是否显示右上角关闭按钮。 |
+| `beforeClose` | `MessageBoxOptions["beforeClose"]` | 未设置 | 确认、取消或关闭时接收动作和可设置加载状态的实例。返回或异步解析为 `false` 时，弹窗继续打开。 |
+
 #### 场景：Toast 通知
 
 ```svelte
@@ -700,20 +742,9 @@ const preset = ui.resolveErrorPreset(503) // 输入 HTTP 状态，返回对应�
 const fallback = ui.resolveErrorPreset(undefined) // 输入缺省状态，返回通用错误预设。
 ```
 
-<a id="toast-options"></a>
-
 #### 场景：Toast位置、时长和排查信息
 
 根布局只挂载一个 `ToastContainer`。所有警告/错误均由它显示，`Alert` 仅支持 `info` / `success` 持续信息；恢复按钮留在原页面，用户能继续处理。
-
-| 字段 | 类型 | 默认值 | 作用与生效条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必填 | 提示中显示的本地化正文。 |
-| `variant` | `Variant` | `info` | 决定通知的视觉样式。 |
-| `duration` | `number` | `3000` ms | 从显示时开始计时。设为 0 时不自动关闭。 |
-| `position` | `ToastProps["position"]` | `bottom-right` | 提示出现的位置。上下各有左、中、右三个选项，全部共用一个队列。 |
-| `dismissible` | `boolean` | `true` | 控制手动关闭按钮。 |
-| `traceId` | `string` | 未设置 | 有可公开的追踪编号时显示排查入口，展开后才显示编号。 |
 
 ```ts
 import { ui } from '@h-ai/ui/toast'
@@ -729,16 +760,7 @@ ui.toast.add({ message: '还有 2 项未审核', variant: 'warning', duration: 0
 
 编号用于联系客户支持/开发定位日志，不显示堆栈、SQL或密钥。悬停、聚焦、展开时暂停计时，交互结束按剩余时间恢复；复制拒绝时可手动选择。F8进入/返回提示，Escape关闭并恢复焦点。
 
-<a id="message-options"></a>
-
-#### 行内消息参数
-
-| 字段 | 类型 | 默认值 | 作用与生效条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必填 | 要显示的本地化消息。若直接传字符串，它就是正文。 |
-| `type` | `MessageOptions["type"]` | `info` | 决定同一提示队列中这条消息的样式。 |
-| `duration` | `number` | `3000` ms | 自动关闭前的毫秒数。设为 0 时不自动关闭。 |
-| `closable` | `boolean` | `true` | 是否显示手动关闭按钮。 |
+#### 场景：短暂显示保存成功的提示
 
 ```ts
 import { ui } from '@h-ai/ui'
@@ -748,23 +770,7 @@ const id = ui.message.add({ message: '已保存 2 条记录', type: 'success', d
 
 返回提示 ID。页面显示成功消息，2 秒后自动关闭。
 
-<a id="message-box-options"></a>
-
-#### 确认弹窗参数
-
-| 字段 | 类型 | 默认值 | 作用与生效条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必填 | 弹窗正文。直接传字符串等于提供此字段，HTML 标签按原样显示。 |
-| `title` | `string` | 当前语言的标题 | 覆盖标题。 |
-| `type` | `confirm` / `alert` | 由入口指定 | 可显式覆盖入口选择的模式。取消按钮仍由 `showCancel` 控制。 |
-| `iconType` | `MessageBoxIconType` | 确认 `warning`，提示 `info` | 覆盖正文旁的图标。 |
-| `confirmText` | `string` | 当前语言的确认文案 | 覆盖确认按钮文字。 |
-| `cancelText` | `string` | 当前语言的取消文案 | 显示取消按钮时使用。 |
-| `confirmVariant` | `MessageBoxOptions["confirmVariant"]` | `primary` | 决定确认按钮样式。 |
-| `showCancel` | `boolean` | 确认 `true`，提示 `false` | 切换取消按钮的可见性。 |
-| `closeOnClickModal` | `boolean` | `true` | 点遮罩时是否触发关闭。 |
-| `showClose` | `boolean` | `true` | 是否显示右上角关闭按钮。 |
-| `beforeClose` | `MessageBoxOptions["beforeClose"]` | 未设置 | 确认、取消或关闭时接收动作和可设置加载状态的实例。返回或异步解析为 `false` 时，弹窗继续打开。 |
+#### 场景：请求用户确认操作
 
 示例要求根布局已挂载 `MessageBoxContainer`。
 
@@ -1039,6 +1045,23 @@ const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', '
 
 自定义动作生成带 `RAW` 短标签的一项，裸代码在下载前包装成带语言的 Markdown 代码块。
 
+<a id="markdown-parse-options"></a>
+
+##### Markdown 解析选项
+
+两种解析入口均可省略 `options`。所有字段可单独覆盖。
+
+| 字段 | 默认值 | 效果 |
+| --- | --- | --- |
+| `enableHighlight` | `true` | 高亮代码块。 |
+| `showCopyButton` | `true` | 在代码块上显示复制按钮。 |
+| `breaks` | `true` | 将普通换行渲染成 `<br>`。传 `false` 时按 Markdown 段落规则处理。 |
+| `allowHtmlTags` | `false` | 启用后仅按安全白名单处理原始 HTML。 |
+| `showRunButton` | `false` | 仅文档模式。显示运行入口，实际执行由宿主授权。 |
+| `showCodePreviewToggle` | `false` | 仅文档模式。为代码块显示代码与预览切换。 |
+| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 仅文档模式。切换开启时的两项标签文本。 |
+| `codePreviewHint` | `''` | 仅文档模式。代码块语言标签旁的文字，默认不显示。 |
+
 #### 场景：解析和预览文档内容
 
 输入 Markdown '# Hello'，输出安全 HTML 和文档模型。markdown 是页面 $state 字符串；表格 columns/rows 采用 AiTableEditor 的公开类型。下载动作由 actions 和 download 宿主回调提供，拒绝 Promise 时交给页面错误边界。
@@ -1091,23 +1114,6 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
   showOutline={false}
 />
 ```
-
-<a id="markdown-parse-options"></a>
-
-#### Markdown 解析选项
-
-两种解析入口均可省略 `options`。所有字段可单独覆盖。
-
-| 字段 | 默认值 | 效果 |
-| --- | --- | --- |
-| `enableHighlight` | `true` | 高亮代码块。 |
-| `showCopyButton` | `true` | 在代码块上显示复制按钮。 |
-| `breaks` | `true` | 将普通换行渲染成 `<br>`。传 `false` 时按 Markdown 段落规则处理。 |
-| `allowHtmlTags` | `false` | 启用后仅按安全白名单处理原始 HTML。 |
-| `showRunButton` | `false` | 仅文档模式。显示运行入口，实际执行由宿主授权。 |
-| `showCodePreviewToggle` | `false` | 仅文档模式。为代码块显示代码与预览切换。 |
-| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 仅文档模式。切换开启时的两项标签文本。 |
-| `codePreviewHint` | `''` | 仅文档模式。代码块语言标签旁的文字，默认不显示。 |
 
 <a id="private-document-media"></a>
 

@@ -431,6 +431,48 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 | `<ToastContainer>` | 通知キュー表示 | ルートレイアウトに一度だけ配置します。`toast` と `message` は共通のキューに通知を追加します。 | 通知キュー表示 | `<ToastContainer />` |
 | `<ErrorPage>` | 503 状態と戻るリンク | `status` は表示する結果や状態。`code` は表示するエラーコードや追跡コード。`title` はタイトル。`description` は補足説明。`homeUrl` はホームへのリンク先。`onhome` はホームに戻る操作を処理。`onback` は戻る操作を処理。 | 503 状態と戻るリンク | `<ErrorPage status={503} homeUrl='/' />` |
 
+<a id="toast-options"></a>
+
+##### 通知の設定
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | 通知に表示する翻訳済み本文。 |
+| `variant` | `Variant` | `info` | 通知の見た目を指定します。 |
+| `duration` | `number` | `3000` ms | 表示時から計測します。0 は自動で閉じません。 |
+| `position` | `top-right` / `top-center` / `top-left` / `bottom-right` / `bottom-center` / `bottom-left` | `bottom-right` | 通知の位置を上下・左中右の組み合わせから選びます。キューは共通です。 |
+| `dismissible` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
+| `traceId` | `string` | 未設定 | 公開可能な追跡 ID があると、利用者が展開して ID を確認できます。 |
+
+<a id="message-options"></a>
+
+##### メッセージのフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | 表示する翻訳済みメッセージ。文字列を直接渡すと本文になります。 |
+| `type` | `info` / `success` / `warning` / `error` | `info` | 共通キュー内のこのメッセージの見た目を選びます。 |
+| `duration` | `number` | `3000` ms | 自動で閉じるまでのミリ秒数。0 は自動で閉じません。 |
+| `closable` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
+
+<a id="message-box-options"></a>
+
+##### 確認ダイアログのフィールド
+
+| フィールド | 型 | 既定値 | 用途と適用条件 |
+| --- | --- | --- | --- |
+| `message` | `string` | 必須 | ダイアログ本文。文字列を直接渡すと本文になり、HTML タグも文字として表示します。 |
+| `title` | `string` | 現在の言語のタイトル | タイトルを上書きします。 |
+| `type` | `confirm` / `alert` | メソッドで設定 | メソッドで選んだモードを上書きします。キャンセルボタンの表示は `showCancel` で指定します。 |
+| `iconType` | `info` / `success` / `warning` / `error` | 確認は `warning`、通知は `info` | 本文の横に表示するアイコンを上書きします。 |
+| `confirmText` | `string` | 現在の言語の確認ラベル | 確認ボタンのラベルを上書きします。 |
+| `cancelText` | `string` | 現在の言語のキャンセルラベル | キャンセルボタンが表示される場合に使います。 |
+| `confirmVariant` | `default` / `primary` / `warning` / `error` | `primary` | 確認ボタンの見た目を指定します。 |
+| `showCancel` | `boolean` | 確認は `true`、通知は `false` | キャンセルボタンの表示を切り替えます。 |
+| `closeOnClickModal` | `boolean` | `true` | 背景のクリックで閉じる操作を開始するか指定します。 |
+| `showClose` | `boolean` | `true` | 右上の閉じるボタンを表示するか指定します。 |
+| `beforeClose` | `MessageBoxOptions["beforeClose"]` | 未設定 | 確認・キャンセル・閉じる操作と、読み込み状態を変更できるインスタンスを受け取ります。`false` を返すか非同期に解決すると表示を継続します。 |
+
 #### 利用例：操作結果を表示して通知を管理する
 
 操作結果、エラー、確認を共通の表示領域に渡します。返された ID で個別の通知を削除できます。 詳細は[中国語の手順](ui.md#notifications)を参照してください。
@@ -455,6 +497,41 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 <!-- Mount the view that renders the four notifications queued by notify. -->
 <ToastContainer />
 ```
+
+#### 利用例：警告を閉じるまで表示する
+
+```ts
+import { ui } from '@h-ai/ui/toast'
+
+ui.toast.add({ message: '未確認の項目が 2 件あります', variant: 'warning', duration: 0, position: 'top-right' })
+```
+
+右上に警告が表示され、手動で閉じるまで残ります。
+
+#### 利用例：保存後に短い通知を表示する
+
+```ts
+import { ui } from '@h-ai/ui'
+
+const id = ui.message.add({ message: '2 件を保存しました', type: 'success', duration: 2000 })
+```
+
+通知 ID が返り、成功メッセージが 2 秒で消えます。
+
+#### 利用例：利用者に確認する
+
+例の実行前に、ルートレイアウトに `MessageBoxContainer` を配置します。
+
+```ts
+import { ui } from '@h-ai/ui'
+
+const accepted = await ui.messageBox.confirm({
+  message: '下書き 2 件を送信しますか？',
+  closeOnClickModal: false,
+})
+```
+
+背景をクリックしても開いたままです。確認を押すと `accepted` は `true`、キャンセルでは `false` になります。
 
 <a id="auth"></a>
 
@@ -604,6 +681,23 @@ const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', '
 
 独自の操作は `RAW` バッジ付きの 1 項目になり、コードは出力前に言語付きの Markdown コードブロックになります。
 
+<a id="markdown-parse-options"></a>
+
+##### Markdown の解析オプション
+
+どちらのパーサーも `options` を省略でき、必要な項目だけ変更できます。
+
+| 項目 | 既定値 | 動作 |
+| --- | --- | --- |
+| `enableHighlight` | `true` | コードブロックを強調表示します。 |
+| `showCopyButton` | `true` | コードブロックにコピーボタンを表示します。 |
+| `breaks` | `true` | 通常の改行に `<br>` を使います。`false` で Markdown の段落規則に従います。 |
+| `allowHtmlTags` | `false` | 有効時も許可リスト内の生 HTML のみを表示します。 |
+| `showRunButton` | `false` | 文書モードのみ。実行用の入口を表示します。実行はホストが許可します。 |
+| `showCodePreviewToggle` | `false` | 文書モードのみ。コードとプレビューの切り替えを表示します。 |
+| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 文書モードのみ。切り替えが有効な場合の 2 つのラベルです。 |
+| `codePreviewHint` | `''` | 文書モードのみ。言語ラベル横の任意のテキストです。 |
+
 #### 利用例：文書を解析してプレビューする
 
 テキスト、Markdown、表、文書データを表示し、必要に応じて編集、ダウンロード、引用操作に接続します。 詳細は[中国語の手順](ui.md#documents)を参照してください。
@@ -625,23 +719,6 @@ const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Mar
 // Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
 await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
-
-<a id="markdown-parse-options"></a>
-
-#### Markdown の解析オプション
-
-どちらのパーサーも `options` を省略でき、必要な項目だけ変更できます。
-
-| 項目 | 既定値 | 動作 |
-| --- | --- | --- |
-| `enableHighlight` | `true` | コードブロックを強調表示します。 |
-| `showCopyButton` | `true` | コードブロックにコピーボタンを表示します。 |
-| `breaks` | `true` | 通常の改行に `<br>` を使います。`false` で Markdown の段落規則に従います。 |
-| `allowHtmlTags` | `false` | 有効時も許可リスト内の生 HTML のみを表示します。 |
-| `showRunButton` | `false` | 文書モードのみ。実行用の入口を表示します。実行はホストが許可します。 |
-| `showCodePreviewToggle` | `false` | 文書モードのみ。コードとプレビューの切り替えを表示します。 |
-| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | 文書モードのみ。切り替えが有効な場合の 2 つのラベルです。 |
-| `codePreviewHint` | `''` | 文書モードのみ。言語ラベル横の任意のテキストです。 |
 
 <a id="private-document-media"></a>
 
@@ -1094,77 +1171,6 @@ const copied = await ui.writeTextToClipboard('trace-001') // true if copied; fal
 ## フォーム配置
 
 詳細は[中国語ガイド](ui.md#form-layout-guide).
-
-<a id="toast-options"></a>
-
-## 通知の設定
-
-| フィールド | 型 | 既定値 | 用途と適用条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必須 | 通知に表示する翻訳済み本文。 |
-| `variant` | `Variant` | `info` | 通知の見た目を指定します。 |
-| `duration` | `number` | `3000` ms | 表示時から計測します。0 は自動で閉じません。 |
-| `position` | `ToastProps["position"]` | `bottom-right` | 通知の位置を上下・左中右の組み合わせから選びます。キューは共通です。 |
-| `dismissible` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
-| `traceId` | `string` | 未設定 | 公開可能な追跡 ID があると、利用者が展開して ID を確認できます。 |
-
-```ts
-import { ui } from '@h-ai/ui/toast'
-
-ui.toast.add({ message: '未確認の項目が 2 件あります', variant: 'warning', duration: 0, position: 'top-right' })
-```
-
-右上に警告が表示され、手動で閉じるまで残ります。
-
-<a id="message-options"></a>
-
-## メッセージのフィールド
-
-| フィールド | 型 | 既定値 | 用途と適用条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必須 | 表示する翻訳済みメッセージ。文字列を直接渡すと本文になります。 |
-| `type` | `MessageOptions["type"]` | `info` | 共通キュー内のこのメッセージの見た目を選びます。 |
-| `duration` | `number` | `3000` ms | 自動で閉じるまでのミリ秒数。0 は自動で閉じません。 |
-| `closable` | `boolean` | `true` | 手動で閉じるボタンの表示を切り替えます。 |
-
-```ts
-import { ui } from '@h-ai/ui'
-
-const id = ui.message.add({ message: '2 件を保存しました', type: 'success', duration: 2000 })
-```
-
-通知 ID が返り、成功メッセージが 2 秒で消えます。
-
-<a id="message-box-options"></a>
-
-## 確認ダイアログのフィールド
-
-| フィールド | 型 | 既定値 | 用途と適用条件 |
-| --- | --- | --- | --- |
-| `message` | `string` | 必須 | ダイアログ本文。文字列を直接渡すと本文になり、HTML タグも文字として表示します。 |
-| `title` | `string` | 現在の言語のタイトル | タイトルを上書きします。 |
-| `type` | `confirm` / `alert` | メソッドで設定 | メソッドで選んだモードを上書きします。キャンセルボタンの表示は `showCancel` で指定します。 |
-| `iconType` | `MessageBoxIconType` | 確認は `warning`、通知は `info` | 本文の横に表示するアイコンを上書きします。 |
-| `confirmText` | `string` | 現在の言語の確認ラベル | 確認ボタンのラベルを上書きします。 |
-| `cancelText` | `string` | 現在の言語のキャンセルラベル | キャンセルボタンが表示される場合に使います。 |
-| `confirmVariant` | `MessageBoxOptions["confirmVariant"]` | `primary` | 確認ボタンの見た目を指定します。 |
-| `showCancel` | `boolean` | 確認は `true`、通知は `false` | キャンセルボタンの表示を切り替えます。 |
-| `closeOnClickModal` | `boolean` | `true` | 背景のクリックで閉じる操作を開始するか指定します。 |
-| `showClose` | `boolean` | `true` | 右上の閉じるボタンを表示するか指定します。 |
-| `beforeClose` | `MessageBoxOptions["beforeClose"]` | 未設定 | 確認・キャンセル・閉じる操作と、読み込み状態を変更できるインスタンスを受け取ります。`false` を返すか非同期に解決すると表示を継続します。 |
-
-例の実行前に、ルートレイアウトに `MessageBoxContainer` を配置します。
-
-```ts
-import { ui } from '@h-ai/ui'
-
-const accepted = await ui.messageBox.confirm({
-  message: '下書き 2 件を送信しますか？',
-  closeOnClickModal: false,
-})
-```
-
-背景をクリックしても開いたままです。確認を押すと `accepted` は `true`、キャンセルでは `false` になります。
 
 <a id="theme-locale-guide"></a>
 

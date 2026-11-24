@@ -157,6 +157,16 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 
 通用键操作适用于所有结构。TTL 以秒计，`-1` 表示永久，`-2` 表示键不存在。`persist` 只有移除了期限才返回 `true`。Memory 计数接受安全整数或整数字符串，非法增量或结果超出安全整数范围时保留原值。
 
+##### 写入条件与到期规则
+
+`cache.kv.set()` 保存值的 JSON 快照。`nx` 仅在键不存在时写入，`xx` 仅在键已存在时写入，两者互斥。条件未命中时返回 `success: true` 和 `data: false`，保留原值和期限。
+
+需要 JSON 序列化的缓存值无法编码时，操作返回 `SERIALIZATION_FAILED`。例如，循环对象和 `toJSON()` 返回 `undefined` 的对象会失败。批量写入遇到此类错误时不写入任何项。
+
+用 `ex`（相对秒数）、`px`（相对毫秒数）、`exat`（Unix 秒）或 `pxat`（Unix 毫秒）设置期限。四种期限只能选一个，且不能与 `keepTtl: true` 同用。期限须是正安全整数，换算后的到期毫秒数也须是安全整数，否则返回 `INVALID_SET_OPTIONS`。指定已过去的正绝对时间会立即到期。省略期限会清除已有 TTL，`keepTtl: true` 则保留原期限，新键仍无期限。
+
+`cache.kv.compareAndSwap()` 只在比较成功时应用期限。例如替换旧值时传 `{ px: 60_000 }`，新值从替换完成时起保留约 60 秒。用 `{ keepTtl: true }` 则保留旧到期时间，新键无期限。两者不可同传。
+
 #### 场景：按旧版本有条件地更新
 
 对全新的 `demo:revision` 键，第一次传入预期值 `undefined`、新版本 `1` 和 `{ px: 60_000 }`，只在键不存在时创建，有效期为 60 秒。第二次传入预期版本 `1`、新版本 `2` 和 `{ keepTtl: true }`，更新时保留第一次设置的期限。没有其他写入者且键尚未过期时，两次调用的 `data` 都为 `true`。
@@ -179,16 +189,6 @@ core.logger.info('Revision update', { created: created.data, replaced: replaced.
 ```
 
 同一操作内比较并更新 JSON 快照。如果另一节点在第二次提交前已修改值，`replaced.success` 仍为 `true`，但 `replaced.data` 为 `false`，原值和期限都保留。传 `expected: undefined` 表示只在键不存在时匹配，传 `value: undefined` 表示匹配后删除。后端出错时，`success` 为 `false`。
-
-#### 写入条件与到期规则
-
-`cache.kv.set()` 保存值的 JSON 快照。`nx` 仅在键不存在时写入，`xx` 仅在键已存在时写入，两者互斥。条件未命中时返回 `success: true` 和 `data: false`，保留原值和期限。
-
-需要 JSON 序列化的缓存值无法编码时，操作返回 `SERIALIZATION_FAILED`。例如，循环对象和 `toJSON()` 返回 `undefined` 的对象会失败。批量写入遇到此类错误时不写入任何项。
-
-用 `ex`（相对秒数）、`px`（相对毫秒数）、`exat`（Unix 秒）或 `pxat`（Unix 毫秒）设置期限。四种期限只能选一个，且不能与 `keepTtl: true` 同用。期限须是正安全整数，换算后的到期毫秒数也须是安全整数，否则返回 `INVALID_SET_OPTIONS`。指定已过去的正绝对时间会立即到期。省略期限会清除已有 TTL，`keepTtl: true` 则保留原期限，新键仍无期限。
-
-`cache.kv.compareAndSwap()` 只在比较成功时应用期限。例如替换旧值时传 `{ px: 60_000 }`，新值从替换完成时起保留约 60 秒。用 `{ keepTtl: true }` 则保留旧到期时间，新键无期限。两者不可同传。
 
 #### 场景：在 Redis Cluster 扫描和批量操作
 

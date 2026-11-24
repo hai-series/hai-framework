@@ -49,23 +49,9 @@ Extract text from sources such as HTML and optionally remove URLs or extra white
 | --- | --- | --- | --- | --- |
 | `datapipe.clean(text, options?)` | Strip tags and optionally remove or replace other content | Required `text: string` is the source text to strip, normalize, or rewrite. Optional `options: CleanOptionsInput` selects the cleaning steps. See [cleaning arguments](#clean-options). | `HaiResult<string>`. Invalid options or patterns return `CONFIG_ERROR`. | `datapipe.clean('<p>Hello</p>')` |
 
-#### Scenario: Extract and clean text
-
-```ts
-// Strip the tags and collapse whitespace. Success returns 'Hello Ada'. Read error if cleaning fails.
-const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
-if (!cleaned.success)
-  throw new Error(cleaned.error.message)
-cleaned.data // 'Hello Ada'
-```
-
-The input has tags and repeated spaces. The successful plain-text result is Hello Ada; whitespace normalization is enabled by default.
-
-HTML cleaning preserves plain-text comparisons such as `x < 2 and y > 3` and strips a tag even if a quoted attribute contains `>`.
-
 <a id="clean-options"></a>
 
-#### Cleaning arguments
+##### Cleaning arguments
 
 Omit `options` or supply just the fields to override. The enabled steps run in this order: strip tags, remove URLs, remove email addresses, apply custom replacements, normalize whitespace, and trim.
 
@@ -79,6 +65,20 @@ Omit `options` or supply just the fields to override. The enabled steps run in t
 | `customReplacements` | `{ pattern: string, replacement: string }[]` | Optional | Apply entries in array order. Omit the field or pass an empty array to skip replacement. |
 | `customReplacements[].pattern` | `string` | Required for each entry | Regular-expression string from trusted configuration. The module uses the `g` flag to match all occurrences. |
 | `customReplacements[].replacement` | `string` | Required for each entry | Replacement text. `$1` inserts the first capture, and `''` deletes the match. |
+
+#### Scenario: Extract and clean text
+
+```ts
+// Strip the tags and collapse whitespace. Success returns 'Hello Ada'. Read error if cleaning fails.
+const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
+cleaned.data // 'Hello Ada'
+```
+
+The input has tags and repeated spaces. The successful plain-text result is Hello Ada; whitespace normalization is enabled by default.
+
+HTML cleaning preserves plain-text comparisons such as `x < 2 and y > 3` and strips a tag even if a quoted attribute contains `>`.
 
 #### Scenario: Rewrite ticket numbers with `customReplacements`
 
@@ -110,19 +110,7 @@ Choose word, sentence, paragraph or Markdown boundaries, then limit chunk size. 
 | --- | --- | --- | --- | --- |
 | `datapipe.chunk(text, options)` | Split by sentence, paragraph, heading, or another boundary | Required `text: string` is the source text to split. Required `options: ChunkOptionsInput` selects the unit, boundary, and maximum size. See [chunk arguments](#chunk-options). | `HaiResult<DataChunk[]>`. Blank input with valid options returns an empty array. | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
-#### Scenario: Split documents by size
-
-```ts
-// Split into one word per chunk. Success returns three chunks in input order, preserving separator spaces. Read error on failure.
-const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
-if (!chunks.success)
-  throw new Error(chunks.error.message)
-chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
-```
-
-The input is three words with a one-word limit. Spaces remain so chunks can be traced to the source. See the data page for full DataChunk fields.
-
-#### Chunk units and rendering
+##### Chunk units and rendering
 
 `sentence`, `paragraph`, `markdown`, and `page` use the corresponding document boundaries. `custom` uses the supplied regular expression. `word` counts whitespace-separated words, so a span of Chinese text with no spaces may count as one word. Other modes use Unicode code points. The splitter preserves whitespace, punctuation, and separators. If a natural segment exceeds the limit, the splitter divides it further. Configure overlap smaller than the limit to repeat a short suffix in the next chunk.
 
@@ -134,7 +122,7 @@ For HTML display, use the UI's safe rendering features after cleaning. Supply on
 
 <a id="chunk-options"></a>
 
-#### Chunk arguments
+##### Chunk arguments
 
 | Field | Type | Default or requirement | Effect |
 | --- | --- | --- | --- |
@@ -144,6 +132,18 @@ For HTML display, use the UI's safe rendering features after cleaning. Supply on
 | `separator` | `string` | Required and nonempty for `custom` | Trusted regular-expression string. The splitter prefers to cut after the match and includes the separator in the output. |
 | `markdownMinLevel` | Integer from `1` to `6` | `2` | Applies in `markdown` mode. `2` splits at `#` and `##`. `3` also splits at `###`. |
 | `markdownKeepTitle` | `boolean` | `true` | Applies in `markdown` mode. `false` omits the heading lines used as boundaries. The heading text remains in `metadata.title`. |
+
+#### Scenario: Split documents by size
+
+```ts
+// Split into one word per chunk. Success returns three chunks in input order, preserving separator spaces. Read error on failure.
+const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
+chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
+```
+
+The input is three words with a one-word limit. Spaces remain so chunks can be traced to the source. See the data page for full DataChunk fields.
 
 #### Scenario: Choose split points with `separator` or `overlap`
 

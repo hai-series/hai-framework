@@ -103,6 +103,29 @@ if (!result.success)
 | `iam.publicConfig` | 读取最近一次公开策略快照 | 只读属性，无参数 | `IamPublicConfig \| null` | `iam.publicConfig` |
 | `iam.isInitialized` | 检查身份服务是否就绪 | 只读属性，无参数 | `boolean` | `iam.isInitialized` |
 
+##### 公开策略与认证界面
+
+密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
+
+服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 接入见上方可选配置，默认关闭；只有选用默认客户端时才安装 ldapts。
+
+| 配置                                                                                 | 用途                                                  |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `login.password / otp / ldap`                                                        | 独立启用密码、验证码、企业账号                        |
+| `otp.email / sms`                                                                    | 独立启用邮件、短信                                    |
+| `register.enabled / defaultAccountStatus`                                            | 自助注册及新账户状态                                  |
+| `passwordReset.enabled / mode / resetUrl`                                            | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
+| `agreements.showOnRegister / showOnLogin`                                            | 注册/登录协议弹窗显示；链接只接受 HTTP(S)             |
+| `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图                |
+
+选用 Reach 时，在 reldb/cache/Reach 初始化成功后使用 `iam.init({ ...settings, reach })` 自动接入 Reach 的 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 模板。模板绑定对应邮件/短信 Provider；显式发送回调可覆盖默认行为。Console Provider 只记录元数据，实际收信需配置 SMTP、短信或 HTTP 通知服务。发送失败返回错误，不会伪报已发送。
+
+SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点白名单使用 `kit.auth.publicPaths`。客户端通过 `kit.client.createAuthActions()` 连接 Cookie 端点；独立 HTTP 客户端通过 `apiClient.createAuthActions(client)` 连接 IAM contract 并自动保存 Token 到已配置安全存储。将配置及动作直接传入 `AuthPanel`，完成登录、注册、找回及重置；单独使用 `LoginForm` 可传 `methods`、`onsendotp`、`resendInterval`，密码表单可传完整 `passwordPolicy`。
+
+管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认休眠账号不会创建会话；`defaultAccountStatus` 默认 active，可设为 dormant 等待管理员激活。
+
+协议在 Modal 中打开，关闭后保留表单输入。使用 URL 时，协议页面须允许 iframe 嵌入；禁止脚本执行，并提供新窗口查看入口。`LoginForm/RegisterForm` 提供 `header/extraFields/footer` snippet，`AuthPanel` 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`；自定义字段由应用绑定状态并在动作中处理。示例见 [UI 用法](./ui.md#配置驱动认证页面).
+
 #### 场景：准备认证服务与公开策略
 
 ```ts
@@ -138,29 +161,6 @@ config/publicConfig 未初始化时为 null；publicConfig 是内存中的最近
 #### 场景：在浏览器读取公开策略
 
 浏览器使用 [API Client](api-client.md#auth-actions) 调用标准 HTTP 接口。浏览器入口只有类型、Schema 和错误定义，不包含服务端 iam 实例；不要把 iam.config 发到浏览器。
-
-#### 公开策略与认证界面
-
-密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
-
-服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 接入见上方可选配置，默认关闭；只有选用默认客户端时才安装 ldapts。
-
-| 配置                                                                                 | 用途                                                  |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| `login.password / otp / ldap`                                                        | 独立启用密码、验证码、企业账号                        |
-| `otp.email / sms`                                                                    | 独立启用邮件、短信                                    |
-| `register.enabled / defaultAccountStatus`                                            | 自助注册及新账户状态                                  |
-| `passwordReset.enabled / mode / resetUrl`                                            | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
-| `agreements.showOnRegister / showOnLogin`                                            | 注册/登录协议弹窗显示；链接只接受 HTTP(S)             |
-| `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图                |
-
-选用 Reach 时，在 reldb/cache/Reach 初始化成功后使用 `iam.init({ ...settings, reach })` 自动接入 Reach 的 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 模板。模板绑定对应邮件/短信 Provider；显式发送回调可覆盖默认行为。Console Provider 只记录元数据，实际收信需配置 SMTP、短信或 HTTP 通知服务。发送失败返回错误，不会伪报已发送。
-
-SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点白名单使用 `kit.auth.publicPaths`。客户端通过 `kit.client.createAuthActions()` 连接 Cookie 端点；独立 HTTP 客户端通过 `apiClient.createAuthActions(client)` 连接 IAM contract 并自动保存 Token 到已配置安全存储。将配置及动作直接传入 `AuthPanel`，完成登录、注册、找回及重置；单独使用 `LoginForm` 可传 `methods`、`onsendotp`、`resendInterval`，密码表单可传完整 `passwordPolicy`。
-
-管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认休眠账号不会创建会话；`defaultAccountStatus` 默认 active，可设为 dormant 等待管理员激活。
-
-协议在 Modal 中打开，关闭后保留表单输入。使用 URL 时，协议页面须允许 iframe 嵌入；禁止脚本执行，并提供新窗口查看入口。`LoginForm/RegisterForm` 提供 `header/extraFields/footer` snippet，`AuthPanel` 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`；自定义字段由应用绑定状态并在动作中处理。示例见 [UI 用法](./ui.md#配置驱动认证页面).
 
 #### 场景：提供可安全显示的协议内容
 
@@ -232,6 +232,19 @@ agreements:
 | `ApiKeyCredentials` | 必填 `key: string`，传签发时拿到的明文 API Key。 |
 | `AuthRequestContext` | 可选 `terminalType`（`web`、`app`、`desktop`、`api`，普通登录默认 `web`）、`ip`、`userAgent`、`requestId`。由可信宿主读取和解析。 |
 
+<a id="可选-ldap-与通知接入"></a>
+
+##### 可选依赖的启动前提
+
+只使用密码、用户管理和 RBAC 时，无需安装或初始化 LDAP/Reach。两者均为可选 peer dependency，应用只安装选用的集成。下列发送、LDAP 片段位于应用启动/认证函数中，reldb/cache 必须先成功初始化；`username/password` 来自已校验输入。
+
+##### 认证输入与成功数据
+
+- **`AuthnOperations`** — 认证操作接口，包含 `login` / `loginWithOtp` / `loginWithLdap` / `loginWithApiKey` / `logout` / `verifyToken` / `sendOtp` / `registerAndLogin`
+- **`AuthStrategy`** — 认证策略接口（`type` + `authenticate` + `challenge?`），4 种实现：密码、OTP、LDAP、API Key
+- **`AuthResult`** — 登录结果，含用户信息、`TokenPair`（accessToken + refreshToken）、角色/权限列表
+- **`Credentials`** — 统一凭证联合类型（`{ type: 'password' | 'otp' | 'ldap' | 'apikey' } & 具体凭证`）
+
 #### 场景：登录、注册与再次验证
 
 登录成功必须同时满足输入、挑战、账号状态和会话策略。下面用密码登录串起这些步骤；其它策略沿用自己的凭据校验。
@@ -241,12 +254,6 @@ agreements:
 启用交互挑战时，挑战按操作一次性消费，密码错误也不能复用。凭据与账号检查通过后，才读取有效授权并在共享存储中应用终端及会话数量策略。返回 token 和用户信息不意味着所有资源都有权限，业务路由仍需授权。
 
 下文按注册→登录→挑战与 OTP/LDAP→会话验证→敏感操作再次验证介绍。输入标识和密码来自表单，用户/角色/票据只能使用成功返回的数据；未启用的认证方式返回相应失败。
-
-<a id="可选-ldap-与通知接入"></a>
-
-#### 可选依赖的启动前提
-
-只使用密码、用户管理和 RBAC 时，无需安装或初始化 LDAP/Reach。两者均为可选 peer dependency，应用只安装选用的集成。下列发送、LDAP 片段位于应用启动/认证函数中，reldb/cache 必须先成功初始化；`username/password` 来自已校验输入。
 
 #### 场景：用企业目录登录
 
@@ -403,13 +410,6 @@ export function startWithOwnDelivery(delivery: Delivery) {
 ```
 
 例如，应用可在 `onOtpSendEmail(email, code, context)` 中把收件地址、验证码和 `context.idempotencyKey` 交给邮件服务。只有邮件服务确认受理才让回调完成；受理失败时拒绝 Promise。检查 `startWithOwnDelivery()` 成功后再开放登录。
-
-#### 认证输入与成功数据
-
-- **`AuthnOperations`** — 认证操作接口，包含 `login` / `loginWithOtp` / `loginWithLdap` / `loginWithApiKey` / `logout` / `verifyToken` / `sendOtp` / `registerAndLogin`
-- **`AuthStrategy`** — 认证策略接口（`type` + `authenticate` + `challenge?`），4 种实现：密码、OTP、LDAP、API Key
-- **`AuthResult`** — 登录结果，含用户信息、`TokenPair`（accessToken + refreshToken）、角色/权限列表
-- **`Credentials`** — 统一凭证联合类型（`{ type: 'password' | 'otp' | 'ldap' | 'apikey' } & 具体凭证`）
 
 #### 认证的校验顺序
 
@@ -584,6 +584,14 @@ if (result.success) {
 else result.error.code
 ```
 
+##### 用户数据与可写字段
+
+- **`UserOperations`** — 用户操作接口：注册、查询、更新、删除、密码修改与重置、密码强度验证
+- **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, accountType?, accountStatus, accountExpiresAt?, roles? }`
+- **`StoredUser`** — 内部存储用户（含 `passwordHash`、`loginFailedCount`、`lockedUntil` 等敏感字段）
+- **`RegisterOptions`** / **`RegisterResult`** — 注册输入与输出
+- **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）
+
 #### 场景：维护用户资料与密码
 
 用户场景展示创建→按 ID/用户名/邮箱查找→分页→修改→删除；密码场景说明重置票据、到期续密与账号停用。成功 null 与失败错误分别处理，不能把查不到用户当数据库故障。
@@ -601,14 +609,6 @@ const updated = await iam.user.updateUserWithRoles(userId, {
 })
 if (!updated.success) throw new Error(updated.error.message)
 ```
-
-#### 用户数据与可写字段
-
-- **`UserOperations`** — 用户操作接口：注册、查询、更新、删除、密码修改与重置、密码强度验证
-- **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, accountType?, accountStatus, accountExpiresAt?, roles? }`
-- **`StoredUser`** — 内部存储用户（含 `passwordHash`、`loginFailedCount`、`lockedUntil` 等敏感字段）
-- **`RegisterOptions`** / **`RegisterResult`** — 注册输入与输出
-- **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）
 
 #### 注册与重置的提交规则
 
@@ -811,6 +811,17 @@ Web 原地恢复使用 `ui.createSessionRecovery`、`SessionRecoveryDialog` 与 
 | `role / data` | 创建角色时 `code` 和 `name` 必填，可传 `description`、`isSystem` 和 `permissionIds`。更新时仅传要变更的字段。 |
 | `permission` | `code`、`name` 必填。可传 `description`、`type`、`resource`、`action`、`sensitiveOperations`。 |
 
+##### 授权数据与成员统计
+
+角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
+
+##### 角色与权限标识
+
+- **`AuthzOperations`** — 授权操作接口，覆盖角色 CRUD、权限 CRUD、角色-权限/用户-角色分配、权限检查
+- **`Role`** — 角色实体：`{ id, code, name, description, isSystem }`
+- **`Permission`** — 权限实体：`{ id, code, name, type, resource, action }`，type 可为 `menu` / `api` / `button`
+- **`PermissionType`** — 权限类型枚举
+
 #### 场景：分配角色与检查权限
 
 示例仅在隔离开发数据上运行，RBAC 已启用，userId 是本次测试创建的用户且没有其他角色。syncRoles 替换完整集合，不应用于真实用户试验。记录页和 Map 的具体内容取决于当前库；任何失败都中止后续写入。
@@ -952,17 +963,6 @@ async function reviewReader(userId: string) {
 
 下面按创建权限/角色→关联→分配给用户→检查→撤销介绍，并列出敏感操作策略读写。布尔值 false 表示权限不满足，失败 HaiResult 表示检查未完成；不能把两者合并。
 
-#### 授权数据与成员统计
-
-角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
-
-#### 角色与权限标识
-
-- **`AuthzOperations`** — 授权操作接口，覆盖角色 CRUD、权限 CRUD、角色-权限/用户-角色分配、权限检查
-- **`Role`** — 角色实体：`{ id, code, name, description, isSystem }`
-- **`Permission`** — 权限实体：`{ id, code, name, type, resource, action }`，type 可为 `menu` / `api` / `button`
-- **`PermissionType`** — 权限类型枚举
-
 #### 权限检查顺序
 
 #### 场景：按当前主体检查权限
@@ -1077,6 +1077,12 @@ IAM 在数据库变更前标记这一批缓存暂时不可用。在事务提交�
 | `CreateSessionOptions` | 必填 `userId`。可信宿主可提供 `terminalType`、`expectedCredentialVersion`、已验证的 `apiKeyId`／`apiKeyScopes`。可传 `username`、`displayName`、`avatarUrl`、`roles`、`permissions`、`source`、`maxAge`（秒）和业务 `data`。 |
 | `SessionFieldUpdates` | 只接收可选的 `roles: string[]` 和 `permissions: string[]`，按用户更新现有会话。 |
 
+##### 会话与令牌对
+
+- **`SessionOperations`** — 会话操作接口：`create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh` / `patchUserSessions`
+- **`Session`** — 会话实体，含 userId、roles、permissions、accessToken、过期时间等
+- **`TokenPair`** — 令牌对：`{ accessToken, refreshToken, expiresIn, tokenType: 'Bearer' }`
+
 #### 场景：续期与撤销会话
 
 刷新不是延长同一 token 字符串。IAM 创建候选会话，再把消费旧刷新令牌和发布新会话放在同一次共享存储操作中。
@@ -1086,12 +1092,6 @@ IAM 在数据库变更前标记这一批缓存暂时不可用。在事务提交�
 两个节点同时拿同一旧刷新令牌，只有取得原子更新资格的一方能发布后继；不能先删旧记录再分别创建新记录。账号、API Key 或凭据版本失效时拒绝。成功后客户端替换保存整对凭据，存储和网络失败必须保留实际失败，不能假定刷新已经完成。
 
 会话场景说明 create 返回的 Session、verify 的会话结果、refresh 的新令牌，以及 delete/deleteByUserId 的撤销效果。令牌只演示来源和类型，不记录真实内容；可选安全策略仍由服务端执行。
-
-#### 会话与令牌对
-
-- **`SessionOperations`** — 会话操作接口：`create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh` / `patchUserSessions`
-- **`Session`** — 会话实体，含 userId、roles、permissions、accessToken、过期时间等
-- **`TokenPair`** — 令牌对：`{ accessToken, refreshToken, expiresIn, tokenType: 'Bearer' }`
 
 #### 轮换与单设备提交规则
 
@@ -1290,6 +1290,12 @@ async function rotateThenRevoke(refreshToken: string) {
 | `list.options.enabled: boolean` | 可省略 | 筛选启用或停用，省略时包含两种 |
 | `list.options.sortBy / list.options.sortDirection` | `createdAt / desc` | 可按 name、createdAt、lastUsedAt 或 expiresAt 排序 |
 
+##### 密钥元数据与一次性明文
+
+- **`ApiKeyOperations`** — API Key 操作接口：`createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`
+- **`ApiKey`** — API Key 实体（公开字段）：`{ id, userId, name, keyPrefix, enabled, expiresAt, scopes }`
+- **`CreateApiKeyResult`** — 创建结果：`{ apiKey, rawKey }`（明文密钥仅返回一次）
+
 #### 场景：签发与撤销程序凭据
 
 下文用创建结果继续验证、列出、更新与撤销；列表和数据库保存脱敏信息，不可从摘要还原原始密钥。各接口输入使用同一 keyId 或原始签发值，按实际签名区分。
@@ -1297,12 +1303,6 @@ async function rotateThenRevoke(refreshToken: string) {
 #### API Key 与主体权限的关系
 
 `scopes` 与主体权限取交集，支持 `*` 和命名空间 `:*`；默认空数组只保留身份，不授予操作权限。受限 key 的会话 `roles` 为空，通过 permission 守卫访问，显式 `*` 也不能超出主体授权。API Key 登录绑定 key ID，派生会话的 get/verifyToken/refresh 每次检查持久化 key，撤销、禁用、过期或 DB 读取失败即拒绝。单独 verifyApiKey 仅返回验证后的 key 元数据，仍需主体与操作授权。
-
-#### 密钥元数据与一次性明文
-
-- **`ApiKeyOperations`** — API Key 操作接口：`createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`
-- **`ApiKey`** — API Key 实体（公开字段）：`{ id, userId, name, keyPrefix, enabled, expiresAt, scopes }`
-- **`CreateApiKeyResult`** — 创建结果：`{ apiKey, rawKey }`（明文密钥仅返回一次）
 
 #### 密钥验证顺序
 

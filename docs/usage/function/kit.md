@@ -75,6 +75,56 @@ export default {
 | `kit.i18n.setLocale(locale)` | 启动默认语言 | 必填 `locale` 设置启动阶段的默认语言，例如 `zh-CN`。 | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
 | `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | 必填请求 `locale` 和保留返回值的 `operation` 回调，只用于 Node 服务端。 | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
 
+##### Hook 的可选依赖
+
+- `@h-ai/iam` — 身份认证与授权（A2A 认证），可选；使用 A2A 功能时需在 kit 使用前初始化
+- `@h-ai/crypto` — 加密（传输加密 / Cookie 加密），可选；启用加密时需在 kit 使用前初始化
+
+##### 选择服务端与浏览器入口
+
+子模块运行时方法通过 `kit` 命名空间或明确子路径使用，类型单独导出；浏览器声明不暴露服务端工厂。Vite 配置使用 `@sveltejs/kit/vite`，不存在 `@h-ai/kit/vite` 插件。
+
+- `@h-ai/kit`：主入口，提供 `kit` 命名空间与类型。
+- `@h-ai/kit/client`：浏览器端客户端。
+- `@h-ai/kit/adapter`：双构建 adapter（`kit.adapter.create()`）。
+- `@h-ai/kit/a2a`：A2A 协议集成。
+- `@h-ai/kit/crypto`：加密模块集成。
+
+<a id="host-options"></a>
+
+##### Hook 参数与业务 Cookie 加密
+
+在服务端代码中调用 `kit.createHandle()` 时传这些参数。地址等设置可以来自 `_kit.yml`，函数、私钥和已初始化的存储对象由服务端代码提供。
+
+| 参数 | 默认与用途 | 输入改变后的结果和限制 |
+| --- | --- | --- |
+| `auth.verifyToken` / `operations` | auth 省略时不自动认证；提供 auth 时 verifyToken 必填 | 校验 Bearer/Cookie 并得到会话；operations 可用 `() => iam.auth` 延迟取已初始化实例 |
+| `auth.cookieName` / `protectedPaths` / `publicPaths` / `loginUrl` | Cookie名 `hai_access_token`，路径由应用明确配置 | publicPaths 优先；匿名API返回401，页面按 loginUrl 跳转。路径含实际挂载目录 |
+| `guards[].guard/paths/exclude` | 可省略，exclude 优先于 paths | auth 自动守卫之后检查业务权限；返回 allowed 不代替资源所有权校验 |
+| `rateLimit` | 省略或 false 不启用；对象内 windowMs=60000、maxRequests=100 | 必须提供原子 `store`；超过每窗次数时拒绝。keyGenerator 选择稳定限流主体，onLimitReached 可返回安全响应 |
+| `logging` / `logging.logBody` | 默认 true；logBody 默认不启用 | 请求日志用于关联诊断。正文可能有凭据和业务隐私，开启前明确脱敏与采集必要性 |
+| `middleware` / `onError` | 可选；默认错误为安全500响应 | 自定义中间件在内置日志/限流之后；自定义异常响应同样不能泄露堆栈、SQL和密钥 |
+| `crypto.encryptedCookies` / `cookieEncryptionKey` | 未列Cookie不加密；密钥可从 `HAI_KIT_COOKIE_KEY` 读取 | 指定Cookie保存为认证加密格式 `enc:v2`，读取时先验真；密钥必须为32个十六进制字符，缺失/非法时创建Handle失败 |
+| `a2a.operations` / `cardPath` / `rpcPath` / `authenticate` | 显式接入；路径默认 `/.well-known/agent-card.json` 与 `/a2a` | 挂载Agent Card及协议入口；未提供authenticate即匿名，生产按实际需求提供apiKey或认证回调；不自动获得业务权限 |
+
+例如只给业务偏好 Cookie 启用加密：
+
+```ts
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+// Initialize crypto with defaults before building cookie middleware. Failure throws and stops hook setup.
+const ready = await crypto.init()
+if (!ready.success) throw new Error(ready.error.message)
+// Build a request hook that uses the ready crypto instance to protect order_preferences. The installed hook uses the server cookie key.
+const handle = kit.createHandle({
+  crypto: { crypto, encryptedCookies: ['order_preferences'] },
+})
+// 从 hooks.server.ts 导出 handle，先在服务端环境设置 HAI_KIT_COOKIE_KEY。
+```
+
+应用向 `order_preferences` Cookie 写入文本后，浏览器保存密文，服务端读取时解密为原文本。验证时可修改 Cookie 的加密值，确认服务端拒绝读取。示例只开启 Cookie 加密，可把这段设置合并到已有的请求处理函数中。密钥留在服务端。
+
 #### 场景：组装 SvelteKit 请求管道
 
 下文从 createHandle 开始，用 sequence 组合，限流 store 由应用初始化的 Cache 提供。普通超限返回 429，存储故障返回 503；语言回调保留原返回值，不能为并发请求改全局默认语言。
@@ -136,21 +186,6 @@ export const handle: Handle = haiHandle
 
 限流采用首次成功提交为起点的固定窗口，后续请求不延长 TTL。必须显式传 store；应用先检查共享 Redis 初始化结果，所有节点使用相同 namespace/windowMs/maxRequests。缓存读取/条件提交失败或冲突耗尽返回503，超限429；不会回退 get+set 或本地计数。createMemoryRateLimitStore 仅开发或显式 HAI_E2E/HAI_E2E_MOCK 测试使用，无常驻定时器，丢弃引用即可回收；每次请求最多惰性扫描 64 项，最多保存 10000 个窗口，容量满时对新 key 返回503且不驱逐有效计数，外部 store 生命周期由创建者管理；生产不得设置测试开关。响应重置时间为节点时钟估算，实际窗口由 Redis TTL 决定，须同步时钟。默认键只读取可信 adapter 的 getClientAddress、规范化等价IPv6和IPv4映射地址，不采信原始转发头；代理信任通过部署adapter配置。
 
-#### Hook 的可选依赖
-
-- `@h-ai/iam` — 身份认证与授权（A2A 认证），可选；使用 A2A 功能时需在 kit 使用前初始化
-- `@h-ai/crypto` — 加密（传输加密 / Cookie 加密），可选；启用加密时需在 kit 使用前初始化
-
-#### 选择服务端与浏览器入口
-
-子模块运行时方法通过 `kit` 命名空间或明确子路径使用，类型单独导出；浏览器声明不暴露服务端工厂。Vite 配置使用 `@sveltejs/kit/vite`，不存在 `@h-ai/kit/vite` 插件。
-
-- `@h-ai/kit`：主入口，提供 `kit` 命名空间与类型。
-- `@h-ai/kit/client`：浏览器端客户端。
-- `@h-ai/kit/adapter`：双构建 adapter（`kit.adapter.create()`）。
-- `@h-ai/kit/a2a`：A2A 协议集成。
-- `@h-ai/kit/crypto`：加密模块集成。
-
 #### 场景：隔离同时到达请求的语言
 
 多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
@@ -166,41 +201,6 @@ export const handle: Handle = haiHandle
 独立文件使用 `access: { file: './config/security/request-access.yml' }`，按工作目录解析，启动读取一次，最大 1 MiB，修改后重建 Handle。全局与所有匹配规则取交集，空列表不限对应维度，时区默认 UTC。时间窗口结束后，已有会话的后续请求同样被拒绝。预检和密钥交换也执行策略；普通 transport 请求的 HTTP 403 / `hai:common:104` 保留响应加密。
 
 `trustedProxies: auto` 在未配置托管代理的应用中不使用转发头；受管 Compose 只有后端私有且存在入口代理时才采用容器网段。自管入口显式指定代理 IP/CIDR，`[]` 可关闭。解析后的 `event.getClientAddress()` 与策略、IAM、审计使用相同地址。外层代理、不可恢复的源地址丢失、环境变量与部署回滚见[请求访问控制手册](../configuration/request-access.md)。
-
-<a id="host-options"></a>
-
-#### Hook 参数与业务 Cookie 加密
-
-在服务端代码中调用 `kit.createHandle()` 时传这些参数。地址等设置可以来自 `_kit.yml`，函数、私钥和已初始化的存储对象由服务端代码提供。
-
-| 参数 | 默认与用途 | 输入改变后的结果和限制 |
-| --- | --- | --- |
-| `auth.verifyToken` / `operations` | auth 省略时不自动认证；提供 auth 时 verifyToken 必填 | 校验 Bearer/Cookie 并得到会话；operations 可用 `() => iam.auth` 延迟取已初始化实例 |
-| `auth.cookieName` / `protectedPaths` / `publicPaths` / `loginUrl` | Cookie名 `hai_access_token`，路径由应用明确配置 | publicPaths 优先；匿名API返回401，页面按 loginUrl 跳转。路径含实际挂载目录 |
-| `guards[].guard/paths/exclude` | 可省略，exclude 优先于 paths | auth 自动守卫之后检查业务权限；返回 allowed 不代替资源所有权校验 |
-| `rateLimit` | 省略或 false 不启用；对象内 windowMs=60000、maxRequests=100 | 必须提供原子 `store`；超过每窗次数时拒绝。keyGenerator 选择稳定限流主体，onLimitReached 可返回安全响应 |
-| `logging` / `logging.logBody` | 默认 true；logBody 默认不启用 | 请求日志用于关联诊断。正文可能有凭据和业务隐私，开启前明确脱敏与采集必要性 |
-| `middleware` / `onError` | 可选；默认错误为安全500响应 | 自定义中间件在内置日志/限流之后；自定义异常响应同样不能泄露堆栈、SQL和密钥 |
-| `crypto.encryptedCookies` / `cookieEncryptionKey` | 未列Cookie不加密；密钥可从 `HAI_KIT_COOKIE_KEY` 读取 | 指定Cookie保存为认证加密格式 `enc:v2`，读取时先验真；密钥必须为32个十六进制字符，缺失/非法时创建Handle失败 |
-| `a2a.operations` / `cardPath` / `rpcPath` / `authenticate` | 显式接入；路径默认 `/.well-known/agent-card.json` 与 `/a2a` | 挂载Agent Card及协议入口；未提供authenticate即匿名，生产按实际需求提供apiKey或认证回调；不自动获得业务权限 |
-
-例如只给业务偏好 Cookie 启用加密：
-
-```ts
-import { crypto } from '@h-ai/crypto'
-import { kit } from '@h-ai/kit'
-
-// Initialize crypto with defaults before building cookie middleware. Failure throws and stops hook setup.
-const ready = await crypto.init()
-if (!ready.success) throw new Error(ready.error.message)
-// Build a request hook that uses the ready crypto instance to protect order_preferences. The installed hook uses the server cookie key.
-const handle = kit.createHandle({
-  crypto: { crypto, encryptedCookies: ['order_preferences'] },
-})
-// 从 hooks.server.ts 导出 handle，先在服务端环境设置 HAI_KIT_COOKIE_KEY。
-```
-
-应用向 `order_preferences` Cookie 写入文本后，浏览器保存密文，服务端读取时解密为原文本。验证时可修改 Cookie 的加密值，确认服务端拒绝读取。示例只开启 Cookie 加密，可把这段设置合并到已有的请求处理函数中。密钥留在服务端。
 
 <a id="responses"></a>
 
@@ -487,6 +487,10 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 | `@h-ai/kit` 的 `kit.resolveText(text)` | 读取静态或延迟翻译的文案 | 必填 `text` 字符串或返回字符串的无参函数。 | `string` | `kit.resolveText('Name')` |
 | `@h-ai/kit` 的 `kit.resolveOptions(options)` | 读取静态或延迟生成的选项 | 必填 `options` 数组或返回该数组的无参函数，每项至少有 `label` 和 `value`。 | `CrudOption[]` | `kit.resolveOptions([{ label: 'Active', value: true }])` |
 
+##### 字段布局与校验文案
+
+声明式 CRUD 字段支持 `colSpan: 'auto' | 1 | 2`，供 UI 双列表单决定字段宽度；`validation.message` 支持字符串或 `() => string`，便于随当前语言显示校验错误。UI 布局在 `CrudPage.form` 上配置，服务端仍须独立校验。
+
 #### 场景：声明资源与表单字段
 
 resource 是应用按 CrudResource 契约提供的字段和已授权 CRUD 回调；两个入口返回相同种类的资源操作对象，不执行数据库写入。下面的选项值 true 是业务值。
@@ -509,10 +513,6 @@ function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
 
 下面资源定义是输入，输出为 CrudOperations；resolveText 把文字或函数解析为字符串，resolveOptions 得到选项数组。声明不自动授予写入权限。
 
-#### 字段布局与校验文案
-
-声明式 CRUD 字段支持 `colSpan: 'auto' | 1 | 2`，供 UI 双列表单决定字段宽度；`validation.message` 支持字符串或 `() => string`，便于随当前语言显示校验错误。UI 布局在 `CrudPage.form` 上配置，服务端仍须独立校验。
-
 <a id="transport"></a>
 
 ### 装配传输加密：`kit.client` 与中间件
@@ -526,13 +526,9 @@ function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
 | `@h-ai/kit` 的 `kit.resolveTransportConfig(input?)` | 合并 Kit 传输调用参数 | `input` 为 `false` 或部署层的传输参数。对象字段见[传输参数](#kit-transport-arguments)。 | `false \| KitTransportConfig` | `kit.resolveTransportConfig(false)` |
 | `@h-ai/kit/crypto` 的 `kit.crypto.transportEncryptionMiddleware(config, encryption?)` | 创建传输认证中间件 | 必填运行时 `config`。可选 `encryption(pathname, method)` 返回匹配路径的方法级加密策略。见[传输参数](#kit-transport-arguments)。 | `Middleware` | `kit.crypto.transportEncryptionMiddleware(transportConfig)` |
 
-#### 场景：装配传输加密
-
-下面输入传输部分配置，resolveKitTransportConfig 输出 false 或完整选项；中间件输出 SvelteKit 请求处理函数。超限与握手失败保持真实 HTTP 结果，应用负责依赖的生命周期。
-
 <a id="kit-transport-arguments"></a>
 
-#### 公开 transport 配置与中间件参数
+##### 公开 transport 配置与中间件参数
 
 | 字段 | 默认与条件 | 用途或具体结果 |
 | --- | --- | --- |
@@ -543,6 +539,10 @@ function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
 | `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 默认 30 秒（0–300）与 300 秒（1–600） | 允许客户端时间领先服务端的秒数，以及从请求签发起的有效秒数。 |
 
 `kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` 返回该排除列表和默认 `keyExchangePath`。
+
+#### 场景：装配传输加密
+
+下面输入传输部分配置，resolveKitTransportConfig 输出 false 或完整选项；中间件输出 SvelteKit 请求处理函数。超限与握手失败保持真实 HTTP 结果，应用负责依赖的生命周期。
 
 #### 场景：同时装配服务端与浏览器加密
 

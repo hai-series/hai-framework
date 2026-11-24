@@ -80,6 +80,16 @@ Encrypt with the recipient public key and decrypt with its private key. Sign wit
 | `crypto.asymmetric.isValidPrivateKey(key)` | Check the SM2 private key format. | Required `key` is the candidate SM2 private key. | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
 | `crypto.asymmetric.isValidPublicKey(key)` | Validate the encoding and curve point of an external SM2 public key | Required `key` is an external SM2 public-key candidate. Valid encoding has 128 hexadecimal coordinate characters, or 130 with the `04` prefix. | `boolean` type guard: `true` only for valid encoding and a point on the SM2 curve; initialization is unnecessary | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
 
+<a id="sm2-options"></a>
+
+##### SM2 encryption and signing settings
+
+| Field | Default and conditions | Purpose |
+| --- | --- | --- |
+| `cipherMode` | Default `1` | Selects ciphertext order, C1C3C2 for `1` and C1C2C3 for `0`. Match on encryption and decryption. |
+| `outputFormat` | Default `hex` | Encryption returns a `hex` or `base64` ciphertext string. |
+| `hash` / `userId` | Defaults to `true` and `1234567812345678` | Controls SM3 preprocessing and the public SM2 identity. Use the same settings to verify. |
+
 #### Scenario: Generate keys, round-trip a message and verify its signature
 
 The message is order-42. Decryption restores that text; verification of a changed message succeeds with false. The independent validator also accepts external values such as null and returns false.
@@ -127,16 +137,6 @@ if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
 changedMessageResult.data // false
 ```
-
-<a id="sm2-options"></a>
-
-#### SM2 encryption and signing settings
-
-| Field | Default and conditions | Purpose |
-| --- | --- | --- |
-| `cipherMode` | Default `1` | Selects ciphertext order, C1C3C2 for `1` and C1C2C3 for `0`. Match on encryption and decryption. |
-| `outputFormat` | Default `hex` | Encryption returns a `hex` or `base64` ciphertext string. |
-| `hash` / `userId` | Defaults to `true` and `1234567812345678` | Controls SM3 preprocessing and the public SM2 identity. Use the same settings to verify. |
 
 #### Scenario: Select ciphertext encoding and signing options
 
@@ -266,6 +266,16 @@ SM4 defaults to CBC with a fresh IV; the result carries the fields needed for de
 | `crypto.symmetric.isValidKey(key)` | Check the SM4 key format. | Required `key` is the SM4 key candidate to validate. | `boolean` | `crypto.symmetric.isValidKey(key)` |
 | `crypto.symmetric.isValidIV(iv)` | Check the initialization vector format. | Required `iv` is the initialization-vector candidate to validate. | `boolean` | `crypto.symmetric.isValidIV(iv)` |
 
+<a id="sm4-options"></a>
+
+##### SM4 encryption settings
+
+| Field | Default and conditions | Purpose |
+| --- | --- | --- |
+| `mode` | Default `cbc` | Selects `cbc` or `ecb` for protocols that require it. |
+| `iv` | Generated for CBC when omitted | Used by CBC. An explicit value has 32 hexadecimal characters. Use a fresh IV for each encryption. |
+| `outputFormat` | Default `hex` | Selects `hex` or `base64`. The result records the selection in `encoding`. |
+
 #### Scenario: Store a structured payload and decrypt it
 
 The input is hello and a generated 32-digit hexadecimal key. Both round trips restore hello; ciphertext and IV vary.
@@ -297,16 +307,6 @@ if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
 plaintextWithIVResult.data // 'hello'
 ```
-
-<a id="sm4-options"></a>
-
-#### SM4 encryption settings
-
-| Field | Default and conditions | Purpose |
-| --- | --- | --- |
-| `mode` | Default `cbc` | Selects `cbc` or `ecb` for protocols that require it. |
-| `iv` | Generated for CBC when omitted | Used by CBC. An explicit value has 32 hexadecimal characters. Use a fresh IV for each encryption. |
-| `outputFormat` | Default `hex` | Selects `hex` or `base64`. The result records the selection in `encoding`. |
 
 #### Scenario: Supply a fresh IV and return Base64
 
@@ -443,6 +443,23 @@ Ordinary applications use Serv/Kit on the server and api-client/kit.client on th
 | `session.ready()` | Check whether the session can send a new request. | None | `boolean` | `session.ready()` |
 | `session.destroy()` | Remove the local session's key material. | None | `void` | `session.destroy()` |
 | `crypto.transport.parseServerKeyRing(serialized)` | Parse a key ring supplied by trusted startup code | Required `serialized` is JSON text or an equivalent object from a trusted server Secret. | `HaiResult<TransportServerKeyRing>`; errors omit secrets | `crypto.transport.parseServerKeyRing(secret)` |
+
+<a id="call-options"></a>
+
+##### Server and client arguments
+
+These are code arguments, not `_crypto.yml` fields.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| Server `serverKeyRing` | Required | Managed `{ activeKeyId, keys }`, injected by trusted server startup. |
+| Server `keyStore` | Required | Registry from `crypto.transport.createKeyStore({ cache })`; production uses Redis. |
+| Server `maxPlaintextBytes` | 1048576 | Request/response UTF-8 plaintext bytes, integer 1024–67108864; the host may forward Serv/Kit file settings. |
+| Server `maxFutureSkewSeconds` | 30 | Allowed future skew, integer 0–300 seconds. |
+| Server `maxRequestAgeSeconds` | 300 | Request age from issuance, integer 1–600 seconds. |
+| Client `keyExchangeUrl` | Required | Trusted server key-exchange URL. |
+| Client `maxPlaintextBytes` | Follow server | An explicit local limit selects the smaller local/exchanged value. |
+| Client `fetch` | Global fetch | Standard Fetch implementation preserving body and cancellation semantics. |
 
 #### Scenario: Build a server from a trusted Secret
 
@@ -623,23 +640,6 @@ Custom adapters call `await crypto.transport.authenticateRequest(manager, reques
 
 Still untranslated: extended worked examples. Read the [Chinese source section](crypto.md#detailed-workflow).
 
-<a id="call-options"></a>
-
-#### Server and client arguments
-
-These are code arguments, not `_crypto.yml` fields.
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| Server `serverKeyRing` | Required | Managed `{ activeKeyId, keys }`, injected by trusted server startup. |
-| Server `keyStore` | Required | Registry from `crypto.transport.createKeyStore({ cache })`; production uses Redis. |
-| Server `maxPlaintextBytes` | 1048576 | Request/response UTF-8 plaintext bytes, integer 1024–67108864; the host may forward Serv/Kit file settings. |
-| Server `maxFutureSkewSeconds` | 30 | Allowed future skew, integer 0–300 seconds. |
-| Server `maxRequestAgeSeconds` | 300 | Request age from issuance, integer 1–600 seconds. |
-| Client `keyExchangeUrl` | Required | Trusted server key-exchange URL. |
-| Client `maxPlaintextBytes` | Follow server | An explicit local limit selects the smaller local/exchanged value. |
-| Client `fetch` | Global fetch | Standard Fetch implementation preserving body and cancellation semantics. |
-
 <a id="registry"></a>
 
 ### Store public keys and used request IDs: `crypto.transport.createKeyStore`
@@ -656,6 +656,22 @@ Registered keys let the server verify client signatures; remembered request IDs 
 | `registry.claimRequest(clientId, requestId, expiresAt)` | Accept an ID once and reject replays | Required `clientId` and `requestId` identify this request. Required `expiresAt` is the retention deadline in Unix milliseconds. | Atomic `Promise<boolean>`; storage failure rejects | `await registry.claimRequest(clientId, requestId, expiresAt)` |
 | `registry.delete?.(clientId)` | Delete a key registration | Required `clientId` identifies the client to unregister. | `Promise<void>`; deletes only the key; storage failure rejects | `await registry.delete?.(clientId)` |
 | `registry.close?.()` | Clean up custom store resources | None | `Promise<void>`; optional cleanup for custom stores; the built-in Cache store does not close its borrowed connection | `await registry.close?.()` |
+
+<a id="registry-options"></a>
+
+##### Cache arguments and capacity guards
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `cache` | Required | Initialized `@h-ai/cache`: memory for development/tests, Redis for shared production state. |
+| `ttlSeconds` | 3600 | Fixed public-key lifetime, integer 1–86400 seconds; reads never renew it and permanent keys are disallowed. |
+| `maxRegistrationsPerMinute` | 10000 | Positive safe integer of registrations per shared 60-second window. |
+| `maxRequestsPerMinute` | 100000 | Positive safe integer of new requests per shared 60-second window. |
+
+These application-wide safeguards bound cache growth and do not replace per-IP/user/route rate limits. Defaults are 10000 registrations and 100000 new IDs per 60-second window starting at first reservation. Full windows return 503 and recover on expiry; live keys/markers remain. See [examples](../data/crypto.en.md#transport-state). Raising limits also requires a Redis memory review.
+
+
+Each quota window starts with its first write and expires through cache TTL. CAS consumes capacity atomically while preserving the original TTL; application clock differences do not reset the window. All nodes use identical limits. Exhaustion or sustained contention returns `hai:crypto:072`, mapped by Serv/Kit to 503 without automatic replay. Failed writes and concurrent duplicates may conservatively consume quota; ordinary replays of existing nonces consume none. Keys, nonces and the two fixed quota counters all expire. No full-key scan or eviction of live nonces is used. State is bounded approximately by minute quota times retained minutes: default public keys span at most 61 windows; nonces at most 17. Configure Redis memory, noeviction and reliable persistence as well.
 
 #### Scenario: Observe registration and duplicate rejection with test IDs
 
@@ -698,22 +714,6 @@ finally {
 // Look up the deleted ID again. This returns undefined. Storage errors may throw.
 await registry.get(clientId) // undefined
 ```
-
-<a id="registry-options"></a>
-
-#### Cache arguments and capacity guards
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `cache` | Required | Initialized `@h-ai/cache`: memory for development/tests, Redis for shared production state. |
-| `ttlSeconds` | 3600 | Fixed public-key lifetime, integer 1–86400 seconds; reads never renew it and permanent keys are disallowed. |
-| `maxRegistrationsPerMinute` | 10000 | Positive safe integer of registrations per shared 60-second window. |
-| `maxRequestsPerMinute` | 100000 | Positive safe integer of new requests per shared 60-second window. |
-
-These application-wide safeguards bound cache growth and do not replace per-IP/user/route rate limits. Defaults are 10000 registrations and 100000 new IDs per 60-second window starting at first reservation. Full windows return 503 and recover on expiry; live keys/markers remain. See [examples](../data/crypto.en.md#transport-state). Raising limits also requires a Redis memory review.
-
-
-Each quota window starts with its first write and expires through cache TTL. CAS consumes capacity atomically while preserving the original TTL; application clock differences do not reset the window. All nodes use identical limits. Exhaustion or sustained contention returns `hai:crypto:072`, mapped by Serv/Kit to 503 without automatic replay. Failed writes and concurrent duplicates may conservatively consume quota; ordinary replays of existing nonces consume none. Keys, nonces and the two fixed quota counters all expire. No full-key scan or eviction of live nonces is used. State is bounded approximately by minute quota times retained minutes: default public keys span at most 61 windows; nonces at most 17. Configure Redis memory, noeviction and reliable persistence as well.
 
 <a id="http-budgets"></a>
 

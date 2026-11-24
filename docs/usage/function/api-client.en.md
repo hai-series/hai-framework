@@ -71,39 +71,9 @@ Browsers may use the default client; SSR creates an isolated client per request 
 | `apiClient.config` | Read the current redacted client config | Read-only property; no arguments | `ApiClientConfig \| null` | `apiClient.config` |
 | `apiClient.isInitialized` | Check whether the default client is ready | Read-only property; no arguments | `boolean` | `apiClient.isInitialized` |
 
-#### Scenario: Prepare isolated clients
-
-```ts
-// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
-import { apiContract } from '@h-ai/api-contract'
-apiClient.isInitialized // default client readiness
-const settings = apiClient.config // redacted config or null
-// Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
-const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
-// Initialize that client for the HTTPS API and default auth options. Return the failed result on initialization failure.
-const initResult = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
-if (!initResult.success)
-  return initResult
-try {
-  // Fetch public authentication settings from this client's server. Read data only on success and return the original result on failure.
-  const policyResult = await client.iam.auth.publicConfig()
-  if (!policyResult.success)
-    return policyResult
-  const policy = policyResult.data // IamPublicConfig from this server
-}
-finally {
-  // Close only the independent client used in this try block. Its local resources are released.
-  await client.close() // undefined; local resources released
-}
-```
-
-Replace the address with a deployed test service. create sends nothing; initialize before calls. Closing only releases the client and does not log out server-side.
-
-Refresh credentials are distinct from server logout. Use the IAM logout endpoint to invalidate the server session. Recovery after refresh failure must restore the same user.
-
 <a id="call-options"></a>
 
-#### Call arguments and integration options
+##### Call arguments and integration options
 
 Call `apiClient.init(config)` to configure the default client. If your application defines its own contract, call `apiClient.create(contract)` and pass the settings to that instance's `init(config)`. The browser sends and stores cookies through Fetch and the server's responses. For SSR, create a separate client and token store per request.
 
@@ -133,11 +103,41 @@ The refresh response determines how stored credentials are handled. A `401` clea
 
 <a id="client-integration"></a>
 
-#### Client addresses, deadlines and recovery
+##### Client addresses, deadlines and recovery
 
 This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](api-client.md#client-integration); this subsection is partially translated.
 
 [Detailed parameters and workflows](api-client.md#client-lifecycle)
+
+#### Scenario: Prepare isolated clients
+
+```ts
+// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
+import { apiContract } from '@h-ai/api-contract'
+apiClient.isInitialized // default client readiness
+const settings = apiClient.config // redacted config or null
+// Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
+const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+// Initialize that client for the HTTPS API and default auth options. Return the failed result on initialization failure.
+const initResult = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+if (!initResult.success)
+  return initResult
+try {
+  // Fetch public authentication settings from this client's server. Read data only on success and return the original result on failure.
+  const policyResult = await client.iam.auth.publicConfig()
+  if (!policyResult.success)
+    return policyResult
+  const policy = policyResult.data // IamPublicConfig from this server
+}
+finally {
+  // Close only the independent client used in this try block. Its local resources are released.
+  await client.close() // undefined; local resources released
+}
+```
+
+Replace the address with a deployed test service. create sends nothing; initialize before calls. Closing only releases the client and does not log out server-side.
+
+Refresh credentials are distinct from server logout. Use the IAM logout endpoint to invalidate the server session. Recovery after refresh failure must restore the same user.
 
 <a id="credentials"></a>
 
@@ -355,6 +355,35 @@ Use standard HTTP contracts for accounts, users, roles and permissions. The serv
 
 For example, in a session with administrative permissions, list users with `{ page: 1, pageSize: 20, accountStatus: 'active' }`. Success returns at most 20 active entries in `data.items`. Read `error` on failure.
 
+<a id="request-options"></a>
+
+##### Per-call request options
+
+Pass the contract input first. For a procedure with no business input, pass `undefined` before the optional second argument.
+
+| Field in the second argument | When omitted | Effect when supplied |
+| --- | --- | --- |
+| `signal` | No caller cancellation | Pass an `AbortController.signal` to cancel waiting and transmission. A server-side write may already be in progress. |
+| `context.autoRefresh` | Inherits the client's refresh policy | `false` disables credential refresh for this call, for example while the application handles its own recovery. The client still sends the current access token according to its configuration. |
+| `context.keepalive` | Uses Fetch defaults | `true` sets Fetch `keepalive`. Browser limits still apply, and delivery after page exit is best effort. |
+| `context.reauthentication` | Sends no operation credential | Sends an operation credential obtained from an authentication action in `X-Hai-Reauthentication` for this request. |
+| `context.reauthorize` | Obtains no new credential on retry | Optional asynchronous callback for an eligible retry that requires reauthorization. Return the new credential string, `null` to cancel, or `undefined` to allow the retry without the header. |
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+// Use this fragment in an async application function with an initialized client authorized to list users.
+// Call controller.abort() when the page is disposed.
+const controller = new AbortController()
+// Request page 1 with up to 20 users. The signal cancels waiting. Success contains a visible page and failure keeps its error.
+const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
+if (!users.success)
+  return users
+const visibleUsers = users.data.items
+```
+
+[Detailed parameters and workflows](api-client.md#iam-requests)
+
 #### Scenario: Call identity and administration APIs
 
 ```ts
@@ -382,35 +411,6 @@ const permissions = permissionsResult.data // permitted permission records
 ```
 
 The list gives per-method inputs and success data. Use IDs from prior successful responses. Results depend on server state and authorization; a signed-in browser does not automatically have administration rights.
-
-<a id="request-options"></a>
-
-#### Per-call request options
-
-Pass the contract input first. For a procedure with no business input, pass `undefined` before the optional second argument.
-
-| Field in the second argument | When omitted | Effect when supplied |
-| --- | --- | --- |
-| `signal` | No caller cancellation | Pass an `AbortController.signal` to cancel waiting and transmission. A server-side write may already be in progress. |
-| `context.autoRefresh` | Inherits the client's refresh policy | `false` disables credential refresh for this call, for example while the application handles its own recovery. The client still sends the current access token according to its configuration. |
-| `context.keepalive` | Uses Fetch defaults | `true` sets Fetch `keepalive`. Browser limits still apply, and delivery after page exit is best effort. |
-| `context.reauthentication` | Sends no operation credential | Sends an operation credential obtained from an authentication action in `X-Hai-Reauthentication` for this request. |
-| `context.reauthorize` | Obtains no new credential on retry | Optional asynchronous callback for an eligible retry that requires reauthorization. Return the new credential string, `null` to cancel, or `undefined` to allow the retry without the header. |
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-// Use this fragment in an async application function with an initialized client authorized to list users.
-// Call controller.abort() when the page is disposed.
-const controller = new AbortController()
-// Request page 1 with up to 20 users. The signal cancels waiting. Success contains a visible page and failure keeps its error.
-const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
-if (!users.success)
-  return users
-const visibleUsers = users.data.items
-```
-
-[Detailed parameters and workflows](api-client.md#iam-requests)
 
 <a id="business-requests"></a>
 

@@ -429,6 +429,48 @@ Send results, errors and confirmation to shared hosts; use returned IDs to remov
 | `<ToastContainer>` | Global toast queue | Mount once in the root layout. `toast` and `message` push into its shared queue. | Global toast queue | `<ToastContainer />` |
 | `<ErrorPage>` | 503 state and home navigation | `status` selects the outcome or status to display. `code` sets the error or tracking code to display. `title` sets the title. `description` supplies explanatory text. `homeUrl` sets the home link destination. `onhome` handles the home action. `onback` handles the back action. | 503 state and home navigation | `<ErrorPage status={503} homeUrl='/' />` |
 
+<a id="toast-options"></a>
+
+##### Toast fields
+
+| Field | Type | Default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `message` | `string` | Required | Localized text displayed in the toast. |
+| `variant` | `Variant` | `info` | Sets the toast’s visual style. |
+| `duration` | `number` | `3000` ms | Starts when the toast becomes visible. Zero disables automatic dismissal. |
+| `position` | `top-right` / `top-center` / `top-left` / `bottom-right` / `bottom-center` / `bottom-left` | `bottom-right` | Chooses one of six placements. All placements share a queue. |
+| `dismissible` | `boolean` | `true` | Controls the manual dismiss button. |
+| `traceId` | `string` | Unset | A valid public trace ID enables the disclosure that shows it on demand. |
+
+<a id="message-options"></a>
+
+##### Message fields
+
+| Field | Type | Default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `message` | `string` | Required | Localized message to display. A direct string supplies this field. |
+| `type` | `info` / `success` / `warning` / `error` | `info` | Sets this message’s appearance in the shared queue. |
+| `duration` | `number` | `3000` ms | Time before automatic dismissal in milliseconds. Use 0 to disable automatic dismissal. |
+| `closable` | `boolean` | `true` | Shows or hides the manual dismiss button. |
+
+<a id="message-box-options"></a>
+
+##### Message box fields
+
+| Field | Type | Default | Purpose and when it applies |
+| --- | --- | --- | --- |
+| `message` | `string` | Required | Dialog body. A direct string supplies this field. HTML markup is displayed literally. |
+| `title` | `string` | Localized title | Overrides the title. |
+| `type` | `confirm` / `alert` | Set by the method | Overrides the mode selected by the method. `showCancel` controls whether the cancel button is visible. |
+| `iconType` | `info` / `success` / `warning` / `error` | `warning` for confirm, `info` for alert | Overrides the icon next to the message. |
+| `confirmText` | `string` | Localized confirm label | Overrides the confirm label. |
+| `cancelText` | `string` | Localized cancel label | Applies when the cancel button is visible. |
+| `confirmVariant` | `default` / `primary` / `warning` / `error` | `primary` | Styles the confirm button. |
+| `showCancel` | `boolean` | `true` for confirm, `false` for alert | Toggles the cancel button. |
+| `closeOnClickModal` | `boolean` | `true` | Allows clicking the backdrop to initiate closing. |
+| `showClose` | `boolean` | `true` | Shows the close button in the top corner. |
+| `beforeClose` | `MessageBoxOptions["beforeClose"]` | Unset | Receives the action and an instance that can set loading state. Returning or resolving to `false` keeps the dialog open. |
+
 #### Scenario: Show results and manage notification lifetime
 
 Send results, errors and confirmation to shared hosts; use returned IDs to remove individual notifications. For extended examples, see the [Chinese walkthrough](ui.md#notifications).
@@ -453,6 +495,41 @@ Send results, errors and confirmation to shared hosts; use returned IDs to remov
 <!-- Mount the view that renders the four notifications queued by notify. -->
 <ToastContainer />
 ```
+
+#### Scenario: Keep a warning visible until it is dismissed
+
+```ts
+import { ui } from '@h-ai/ui/toast'
+
+ui.toast.add({ message: '2 items still need review', variant: 'warning', duration: 0, position: 'top-right' })
+```
+
+The warning appears in the top right and stays until dismissed.
+
+#### Scenario: Show a brief message after saving
+
+```ts
+import { ui } from '@h-ai/ui'
+
+const id = ui.message.add({ message: 'Saved 2 records', type: 'success', duration: 2000 })
+```
+
+The call returns a notification ID. The success message disappears after two seconds.
+
+#### Scenario: Ask the user to confirm
+
+Mount `MessageBoxContainer` in the root layout before running this example.
+
+```ts
+import { ui } from '@h-ai/ui'
+
+const accepted = await ui.messageBox.confirm({
+  message: 'Submit 2 drafts?',
+  closeOnClickModal: false,
+})
+```
+
+Clicking the backdrop leaves the dialog open. Confirm resolves `accepted` to `true`; Cancel resolves it to `false`.
 
 <a id="auth"></a>
 
@@ -602,6 +679,23 @@ const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', '
 
 The custom action creates one menu entry with a `RAW` badge. Raw code becomes a language-tagged Markdown code block before export.
 
+<a id="markdown-parse-options"></a>
+
+##### Markdown parse options
+
+Both parsers accept optional `options`. Override only the fields you need.
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `enableHighlight` | `true` | Highlight code blocks. |
+| `showCopyButton` | `true` | Show the copy button on code blocks. |
+| `breaks` | `true` | Render ordinary line breaks as `<br>`. Use `false` for Markdown paragraph rules. |
+| `allowHtmlTags` | `false` | When enabled, only allowlisted raw HTML is rendered. |
+| `showRunButton` | `false` | Document mode only. Shows a run entry point. The host authorizes execution. |
+| `showCodePreviewToggle` | `false` | Document mode only. Add a code/preview toggle. |
+| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | Document mode only. Labels for the two views when the toggle is enabled. |
+| `codePreviewHint` | `''` | Document mode only. Optional text alongside the language label. |
+
 #### Scenario: Parse and preview document content
 
 Pass text, Markdown, tables or document data to viewers and connect editing, downloads and citation actions. For extended examples, see the [Chinese walkthrough](ui.md#documents).
@@ -623,23 +717,6 @@ const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Mar
 // Export # Hello through the Markdown browser download action as hello.md. Browser or export failures reject.
 await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
-
-<a id="markdown-parse-options"></a>
-
-#### Markdown parse options
-
-Both parsers accept optional `options`. Override only the fields you need.
-
-| Field | Default | Effect |
-| --- | --- | --- |
-| `enableHighlight` | `true` | Highlight code blocks. |
-| `showCopyButton` | `true` | Show the copy button on code blocks. |
-| `breaks` | `true` | Render ordinary line breaks as `<br>`. Use `false` for Markdown paragraph rules. |
-| `allowHtmlTags` | `false` | When enabled, only allowlisted raw HTML is rendered. |
-| `showRunButton` | `false` | Document mode only. Shows a run entry point. The host authorizes execution. |
-| `showCodePreviewToggle` | `false` | Document mode only. Add a code/preview toggle. |
-| `codeViewCodeLabel / codeViewPreviewLabel` | `Code / Preview` | Document mode only. Labels for the two views when the toggle is enabled. |
-| `codePreviewHint` | `''` | Document mode only. Optional text alongside the language label. |
 
 <a id="private-document-media"></a>
 
@@ -1092,77 +1169,6 @@ const copied = await ui.writeTextToClipboard('trace-001') // true if copied; fal
 ## Form layout
 
 Details remain in the [Chinese guide](ui.md#form-layout-guide).
-
-<a id="toast-options"></a>
-
-## Toast fields
-
-| Field | Type | Default | Purpose and when it applies |
-| --- | --- | --- | --- |
-| `message` | `string` | Required | Localized text displayed in the toast. |
-| `variant` | `Variant` | `info` | Sets the toast’s visual style. |
-| `duration` | `number` | `3000` ms | Starts when the toast becomes visible. Zero disables automatic dismissal. |
-| `position` | `ToastProps["position"]` | `bottom-right` | Chooses one of six placements. All placements share a queue. |
-| `dismissible` | `boolean` | `true` | Controls the manual dismiss button. |
-| `traceId` | `string` | Unset | A valid public trace ID enables the disclosure that shows it on demand. |
-
-```ts
-import { ui } from '@h-ai/ui/toast'
-
-ui.toast.add({ message: '2 items still need review', variant: 'warning', duration: 0, position: 'top-right' })
-```
-
-The warning appears in the top right and stays until dismissed.
-
-<a id="message-options"></a>
-
-## Message fields
-
-| Field | Type | Default | Purpose and when it applies |
-| --- | --- | --- | --- |
-| `message` | `string` | Required | Localized message to display. A direct string supplies this field. |
-| `type` | `MessageOptions["type"]` | `info` | Sets this message’s appearance in the shared queue. |
-| `duration` | `number` | `3000` ms | Time before automatic dismissal in milliseconds. Use 0 to disable automatic dismissal. |
-| `closable` | `boolean` | `true` | Shows or hides the manual dismiss button. |
-
-```ts
-import { ui } from '@h-ai/ui'
-
-const id = ui.message.add({ message: 'Saved 2 records', type: 'success', duration: 2000 })
-```
-
-The call returns a notification ID. The success message disappears after two seconds.
-
-<a id="message-box-options"></a>
-
-## Message box fields
-
-| Field | Type | Default | Purpose and when it applies |
-| --- | --- | --- | --- |
-| `message` | `string` | Required | Dialog body. A direct string supplies this field. HTML markup is displayed literally. |
-| `title` | `string` | Localized title | Overrides the title. |
-| `type` | `confirm` / `alert` | Set by the method | Overrides the mode selected by the method. `showCancel` controls whether the cancel button is visible. |
-| `iconType` | `MessageBoxIconType` | `warning` for confirm, `info` for alert | Overrides the icon next to the message. |
-| `confirmText` | `string` | Localized confirm label | Overrides the confirm label. |
-| `cancelText` | `string` | Localized cancel label | Applies when the cancel button is visible. |
-| `confirmVariant` | `MessageBoxOptions["confirmVariant"]` | `primary` | Styles the confirm button. |
-| `showCancel` | `boolean` | `true` for confirm, `false` for alert | Toggles the cancel button. |
-| `closeOnClickModal` | `boolean` | `true` | Allows clicking the backdrop to initiate closing. |
-| `showClose` | `boolean` | `true` | Shows the close button in the top corner. |
-| `beforeClose` | `MessageBoxOptions["beforeClose"]` | Unset | Receives the action and an instance that can set loading state. Returning or resolving to `false` keeps the dialog open. |
-
-Mount `MessageBoxContainer` in the root layout before running this example.
-
-```ts
-import { ui } from '@h-ai/ui'
-
-const accepted = await ui.messageBox.confirm({
-  message: 'Submit 2 drafts?',
-  closeOnClickModal: false,
-})
-```
-
-Clicking the backdrop leaves the dialog open. Confirm resolves `accepted` to `true`; Cancel resolves it to `false`.
 
 <a id="theme-locale-guide"></a>
 

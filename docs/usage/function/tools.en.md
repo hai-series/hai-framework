@@ -90,6 +90,41 @@ Bind validation and a business function as a neutral tool. Definition does not e
 | `tool.execute(input, options?)` | Validate and execute. Options can supply identity, authorization, an abort signal and a deadline | `input: unknown, options?: ToolExecutionOptions`. `input` follows this tool’s parameter schema. Omitted options use the execution defaults. | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
 | `tool.toDefinition()` | Convert parameter rules to JSON Schema. Throws if conversion is unsupported | No arguments | `ToolDefinition` | `tool.toDefinition()` |
 
+##### Lightweight tool contracts
+
+`tool` and `registry` are returned instances, not independent package functions. Registries do not discover other tools. They accept instances made by `tools.define`, rejecting handwritten or copied objects.
+
+Tool names contain 1–64 ASCII characters: start with a letter, followed by letters, digits, underscores or hyphens. Invalid names, default timeouts or handler combinations are definition errors and throw `TypeError`. Model parameters must convert to JSON Schema, usually an object Schema; unrepresentable types such as `z.date()` cannot be used directly.
+
+`HaiToolsError` includes NOT_FOUND, ALREADY_REGISTERED, VALIDATION_FAILED, EXECUTION_FAILED, FORBIDDEN, TIMEOUT and CANCELLED under `hai:tools`. Input, authorization, timeout and cancellation failures return failed `HaiResult` values. `resultHandler` preserves existing business errors; model JSON parsing errors remain in the AI adapter.
+
+Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents/projects or other known input rejections to `VALIDATION_FAILED`. Missing sandbox support/dependencies, invalid worker output and unknown worker faults remain `EXECUTION_FAILED`; they are not classified as user input errors. Public messages are localized and do not expose raw worker messages. If both the operation and container cleanup fail, the cleanup error remains primary and `error.ext.operationError` retains the sanitized original operation error. A single failure does not add this extension.
+
+<a id="call-options"></a>
+
+##### Call arguments
+
+`tools.define/createRegistry` are pure definitions and factories, with no module YAML, environment variables or `init/close`. Import server factories from `@h-ai/tools/server`; they borrow an initialized Runner.
+
+##### Definition and execution options
+
+| Location | Field | Default and purpose |
+| --- | --- | --- |
+| Definition | `name/description/parameters` | Required; name has 1–64 ASCII characters, starts with a letter, then letters/digits/underscores/hyphens; Zod validates input |
+| Definition | `handler` or `resultHandler` | Exactly one is required: plain data or an existing `HaiResult`, respectively |
+| Definition | `title/examples` | Optional UI label and `{ label, input }[]` presets; no authorization effect |
+| Definition | `timeoutMs` | Integer 0–2147483647 ms; default 30 seconds; 0 times out immediately |
+| Registry | `authorize` | Optional; every registry invocation must pass when configured |
+| Execution | `signal` | Cancellation signal forwarded to the handler |
+| Execution | `objectId/sessionId` | Trusted identity/session, not unauthenticated model input |
+| Execution | `deadline/timeoutMs` | Absolute deadline first, then call timeout, tool timeout, 30 seconds; includes validation, authorization and handler |
+| Execution | `authorize` | Additional per-call check; must pass alongside registry authorization |
+| Batch | `parallel` | Default false; enable only for operations that can run concurrently |
+
+Invalid names, default timeouts and handler combinations throw `TypeError` when defined. Business execution returns `HaiResult`. Registries only accept tools created by `tools.define`. Model parameters must convert to JSON Schema, usually object parameters.
+
+[Detailed parameters and workflows](tools.md#definitions)
+
 #### Scenario: Define and execute a tool
 
 Defining a tool does not run its handler. execute applies one cancellation/deadline boundary to input validation, authorization and execution.
@@ -120,44 +155,9 @@ const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALID
 
 Two numbers produce total=5; invalid a never reaches the handler. Use resultHandler for existing HaiResult services. Definition errors throw TypeError, execution failures return HaiResult.
 
-#### Lightweight tool contracts
-
-`tool` and `registry` are returned instances, not independent package functions. Registries do not discover other tools. They accept instances made by `tools.define`, rejecting handwritten or copied objects.
-
-Tool names contain 1–64 ASCII characters: start with a letter, followed by letters, digits, underscores or hyphens. Invalid names, default timeouts or handler combinations are definition errors and throw `TypeError`. Model parameters must convert to JSON Schema, usually an object Schema; unrepresentable types such as `z.date()` cannot be used directly.
-
-`HaiToolsError` includes NOT_FOUND, ALREADY_REGISTERED, VALIDATION_FAILED, EXECUTION_FAILED, FORBIDDEN, TIMEOUT and CANCELLED under `hai:tools`. Input, authorization, timeout and cancellation failures return failed `HaiResult` values. `resultHandler` preserves existing business errors; model JSON parsing errors remain in the AI adapter.
-
-Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents/projects or other known input rejections to `VALIDATION_FAILED`. Missing sandbox support/dependencies, invalid worker output and unknown worker faults remain `EXECUTION_FAILED`; they are not classified as user input errors. Public messages are localized and do not expose raw worker messages. If both the operation and container cleanup fail, the cleanup error remains primary and `error.ext.operationError` retains the sanitized original operation error. A single failure does not add this extension.
-
 #### Development tests
 
 `pnpm --filter @h-ai/tools test` checks the kernel and service; `pnpm --filter @h-ai/tools test:jobs` checks job protocols. Real images and browser acceptance require the job environments separately. Unit results do not certify an image.
-
-<a id="call-options"></a>
-
-#### Call arguments
-
-`tools.define/createRegistry` are pure definitions and factories, with no module YAML, environment variables or `init/close`. Import server factories from `@h-ai/tools/server`; they borrow an initialized Runner.
-
-#### Definition and execution options
-
-| Location | Field | Default and purpose |
-| --- | --- | --- |
-| Definition | `name/description/parameters` | Required; name has 1–64 ASCII characters, starts with a letter, then letters/digits/underscores/hyphens; Zod validates input |
-| Definition | `handler` or `resultHandler` | Exactly one is required: plain data or an existing `HaiResult`, respectively |
-| Definition | `title/examples` | Optional UI label and `{ label, input }[]` presets; no authorization effect |
-| Definition | `timeoutMs` | Integer 0–2147483647 ms; default 30 seconds; 0 times out immediately |
-| Registry | `authorize` | Optional; every registry invocation must pass when configured |
-| Execution | `signal` | Cancellation signal forwarded to the handler |
-| Execution | `objectId/sessionId` | Trusted identity/session, not unauthenticated model input |
-| Execution | `deadline/timeoutMs` | Absolute deadline first, then call timeout, tool timeout, 30 seconds; includes validation, authorization and handler |
-| Execution | `authorize` | Additional per-call check; must pass alongside registry authorization |
-| Batch | `parallel` | Default false; enable only for operations that can run concurrently |
-
-Invalid names, default timeouts and handler combinations throw `TypeError` when defined. Business execution returns `HaiResult`. Registries only accept tools created by `tools.define`. Model parameters must convert to JSON Schema, usually object parameters.
-
-[Detailed parameters and workflows](tools.md#definitions)
 
 <a id="registry"></a>
 
@@ -279,6 +279,28 @@ The server factory borrows Runner and connects catalogs, submission, receipts, i
 
 For events 5, 6, and 7, `inspect(receipt, context, { after: 5 })` returns 6 and 7. Continue with the returned `next`. Selection `{ groups: ['docs'], exclude: ['docs_export'] }` exposes the other registered tools in the docs group and submissions still pass through the authorization callback.
 
+##### Service factory parameters
+
+| Field | Requirement/default | Purpose |
+| --- | --- | --- |
+| `id` | Required, 1–60 letters, digits, underscores, dots or hyphens | Runner kind `hai.tools.<id>.v1`; identical across nodes of one service |
+| `runner` | Required | Initialized Runner; the service does not own its lifecycle |
+| `createTools` | Required | Trusted `ToolServiceContext` → `ToolSet` or Promise; rebuilt on the execution node |
+| `enabled` | Required | `ToolSelection` or context function; union groups/tools, then apply `exclude`; `{}` disables all |
+| `authorize` | Required | Receives `{ context, name, input, phase }`, with `phase: 'submit'` or `'execute'`; both must allow |
+| `runTimeoutMs` | 300000 ms | Execution timeout; integer 1–86400000 |
+| `queueTimeoutMs` | 300000 ms | Queue timeout; integer 1–86400000 |
+
+`ToolServiceContext` contains `scope: { tenantId, userId }` and optional `sessionId/signal`. The Runner executor supplies the real `execution` context. Do not accept identities or execution contexts claimed by clients.
+
+`ToolSet` contains `tools`, optional `groups: { id, title, tools }[]` and `environments: Record<toolName, environmentId>`. Environment bindings select Runner environments and are checked again at execution. `ToolSelection` has `groups/tools/exclude`, each an array of names.
+
+The catalog does not call `authorize` for every tool. Filter `createTools/enabled` by context to restrict visibility. Server authorization and final resource access still apply; hiding buttons does not disable execution.
+
+Keep one idempotencyKey per user intent for `service.submit/invoke`. If acceptance is unknown, recover with `service.find(key, context)` rather than resubmitting a new key. Catalog disabling does not prevent owned-task lookup; principal/service checks still apply.
+
+[Detailed parameters and workflows](tools.md#services)
+
 #### Scenario: Submit recoverable tasks
 
 Construct service, select from catalog, submit/find with one idempotency key and preserve the full receipt for inspect/cancel. invoke waits for a terminal result. close removes handlers without closing borrowed Runner.
@@ -320,28 +342,6 @@ Lightweight execution uses absolute `deadline`, then per-call `timeoutMs`, tool 
 The service registers Runner kind `hai.tools.<id>.v1` and reuses Runner tasks, leases and events. It creates no new queue or Tools state tables. Nodes use consistent service IDs, tool configuration, the shared Runner database and Storage. API nodes may use `executor: false`; execution nodes provide images and unique, restart-stable node IDs. Validate the full receipt against task, service and principal ownership rather than accepting only a task ID.
 
 Return authorized references for large artifacts. The host still checks file reads and publication. Keep secrets and image/audio/video bodies out of logs and events.
-
-#### Service factory parameters
-
-| Field | Requirement/default | Purpose |
-| --- | --- | --- |
-| `id` | Required, 1–60 letters, digits, underscores, dots or hyphens | Runner kind `hai.tools.<id>.v1`; identical across nodes of one service |
-| `runner` | Required | Initialized Runner; the service does not own its lifecycle |
-| `createTools` | Required | Trusted `ToolServiceContext` → `ToolSet` or Promise; rebuilt on the execution node |
-| `enabled` | Required | `ToolSelection` or context function; union groups/tools, then apply `exclude`; `{}` disables all |
-| `authorize` | Required | Receives `{ context, name, input, phase }`, with `phase: 'submit'` or `'execute'`; both must allow |
-| `runTimeoutMs` | 300000 ms | Execution timeout; integer 1–86400000 |
-| `queueTimeoutMs` | 300000 ms | Queue timeout; integer 1–86400000 |
-
-`ToolServiceContext` contains `scope: { tenantId, userId }` and optional `sessionId/signal`. The Runner executor supplies the real `execution` context. Do not accept identities or execution contexts claimed by clients.
-
-`ToolSet` contains `tools`, optional `groups: { id, title, tools }[]` and `environments: Record<toolName, environmentId>`. Environment bindings select Runner environments and are checked again at execution. `ToolSelection` has `groups/tools/exclude`, each an array of names.
-
-The catalog does not call `authorize` for every tool. Filter `createTools/enabled` by context to restrict visibility. Server authorization and final resource access still apply; hiding buttons does not disable execution.
-
-Keep one idempotencyKey per user intent for `service.submit/invoke`. If acceptance is unknown, recover with `service.find(key, context)` rather than resubmitting a new key. Catalog disabling does not prevent owned-task lookup; principal/service checks still apply.
-
-[Detailed parameters and workflows](tools.md#services)
 
 #### Scenario: Submit, recover, inspect and cancel
 

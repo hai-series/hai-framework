@@ -69,13 +69,9 @@ Compose authentication, access, rate limits and locale into hooks; map failures 
 | `kit.i18n.setLocale(locale)` | 启动默认语言 | Required `locale` sets the startup default locale, such as `en-US`. | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
 | `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | Required request `locale` and `operation` callback whose result is preserved. Node server only. | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
 
-#### Scenario: Compose SvelteKit hooks
-
-The workflow starts with createHandle and sequence, using an application-initialized Cache for rate-limit storage. Limits return 429, store failures 503. Locale callbacks preserve their result; do not mutate global defaults per request.
-
 <a id="host-options"></a>
 
-#### Hook arguments and runtime dependencies
+##### Hook arguments and runtime dependencies
 
 | Field | Default and conditions | Purpose or concrete result |
 | --- | --- | --- |
@@ -89,6 +85,10 @@ The workflow starts with createHandle and sequence, using an application-initial
 | `a2a.operations` / `cardPath` / `rpcPath` / `authenticate` | Operations required when enabled. Paths default to `/.well-known/agent-card.json` and `/a2a`. | Mounts discovery and protocol endpoints and can add endpoint authentication. |
 
 For example, `kit.createHandle({ logging: true, auth: { verifyToken, protectedPaths: ["/admin/**"] } })` requires a session on matching routes.
+
+#### Scenario: Compose SvelteKit hooks
+
+The workflow starts with createHandle and sequence, using an application-initialized Cache for rate-limit storage. Limits return 429, store failures 503. Locale callbacks preserve their result; do not mutate global defaults per request.
 
 <a id="responses"></a>
 

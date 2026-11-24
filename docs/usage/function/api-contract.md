@@ -213,6 +213,10 @@ stringResult.safeParse({ success: true, data: 42 }).success // false
 | `apiContract.payment` | 支付接口 | `—` | `payment contract router` | `apiContract.create({ payment: apiContract.payment })` |
 | `apiContract.feedback` | 反馈接口 | `—` | `feedback contract router` | `apiContract.create({ feedback: apiContract.feedback })` |
 
+##### 存储接口的输入约束
+
+对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
+
 #### 场景：选择标准业务接口
 
 ```ts
@@ -238,10 +242,6 @@ const standard = apiContract.create({
 标准 IAM contract 新增 GET /auth/config、POST /auth/login/ldap、POST /auth/password-reset/request、POST /auth/password-reset/confirm。公开配置 Schema 是安全白名单。IamLdapLoginInput、IamPublicConfig 对调用方提供真实类型。密码长度以 IAM 运行时策略为准，contract 不固定注册密码最小长度。
 
 [IAM 配置清单](../configuration/iam.md)
-
-#### 存储接口的输入约束
-
-对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
 
 #### 场景：接入反馈路由与校验输入
 

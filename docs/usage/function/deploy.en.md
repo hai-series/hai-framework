@@ -41,7 +41,7 @@ Scan requirements and artifacts before choosing a read-only plan, offline bundle
 | `deploy.provisionAll(projectName, services?)` | Provision selected middleware | Required string `projectName`. Optional `services` selects service types. Omitting it uses all configured provisioners, while `[]` provisions none. | `Promise<HaiResult<ProvisionResult[]>>` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
 | `deploy.deployApp(appDir, options?)` | Deploy an app or produce a delivery bundle | Required application directory `appDir`. Optional `options` selects the environment, Compose services, image inputs, packaging, and progress, as listed below. | `Promise<HaiResult<DeployResult>>` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
-#### Scenario: Scan and deliver applications
+##### SDK delivery options
 
 Omit `deploy.deployApp()`'s `options` or supply the fields required by your delivery workflow.
 
@@ -54,6 +54,10 @@ Omit `deploy.deployApp()`'s `options` or supply the fields required by your deli
 | `bundleOnly`, `output` | Deploys by default, with delivery paths derived from the app and version. | `bundleOnly: true` is supported by docker-ssh and prepares an archive and scripts without SSH. Set `output` to name the output path. An existing delivery directory is rejected. |
 | `imageSource`, `proxy` | Official image sources and inherited process proxy. | Set `imageSource.type` to `'official'`, `'cn'`, or `'custom'` and add `registries` for custom maps. Set `proxy.mode` to `'inherit'`, `'system'`, `'custom'`, or `'none'`. Custom proxy settings take an HTTP(S) `url` and optional `bypass`. |
 | `onProgress(stage)` | No callback when omitted. | Report the active stage, such as `packaging` or `health`. Other stages are `preflight`, `images`, `dependencies`, `start`, `https`, and `complete`. |
+
+#### Scenario: Scan and deliver applications
+
+To release the orders service, review a read-only plan first. Once the artifacts and dependencies are ready, choose an offline bundle or deploy to a server.
 
 This is the caller’s delivery workflow. plan is read-only, build prepares artifacts, and deploy changes the target environment.
 

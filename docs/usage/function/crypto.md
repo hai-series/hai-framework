@@ -82,6 +82,16 @@ crypto.isInitialized // true
 | `crypto.asymmetric.isValidPrivateKey(key)` | 检查私钥格式 | 必填 `key` 是待校验的 SM2 私钥候选值。 | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
 | `crypto.asymmetric.isValidPublicKey(key)` | 校验外部提交的 SM2 公钥 | 必填 `key` 是外部 SM2 公钥候选值。有效格式是 128 个十六进制坐标字符，或带 `04` 前缀的 130 字符公钥。 | 直接返回 `boolean` 并收窄为 `string`；编码及曲线点有效为 `true`，否则 `false`；无需初始化 | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
 
+<a id="sm2-options"></a>
+
+##### SM2 加密与签名参数
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `cipherMode` | 默认 `1` | 选择密文顺序，`1` 为 C1C3C2，`0` 为 C1C2C3。加解密一致。 |
+| `outputFormat` | 默认 `hex` | 加密返回 `hex` 或 `base64` 密文字符串。 |
+| `hash` / `userId` | 默认 `true` 与 `1234567812345678` | 控制签名时的 SM3 预处理与公开的 SM2 标识。验签沿用相同设置。 |
+
 #### 场景：生成密钥、往返加密并验证签名
 
 输入为 order-42。成功解密后还原原文；改动消息后验签成功返回 false。公钥校验也能接收 null 等外部值，返回 false，不会把无效输入当作公钥。
@@ -129,16 +139,6 @@ if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
 changedMessageResult.data // false
 ```
-
-<a id="sm2-options"></a>
-
-#### SM2 加密与签名参数
-
-| 字段 | 默认与条件 | 用途 |
-| --- | --- | --- |
-| `cipherMode` | 默认 `1` | 选择密文顺序，`1` 为 C1C3C2，`0` 为 C1C2C3。加解密一致。 |
-| `outputFormat` | 默认 `hex` | 加密返回 `hex` 或 `base64` 密文字符串。 |
-| `hash` / `userId` | 默认 `true` 与 `1234567812345678` | 控制签名时的 SM3 预处理与公开的 SM2 标识。验签沿用相同设置。 |
 
 #### 场景：选择密文编码和签名参数
 
@@ -268,6 +268,16 @@ SM4 默认 CBC，每次生成新 IV，结果包含解密所需的字段。IV 可
 | `crypto.symmetric.isValidKey(key)` | 检查密钥格式 | 必填 `key` 为待检查的 SM4 密钥候选值。 | `boolean` | `crypto.symmetric.isValidKey(key)` |
 | `crypto.symmetric.isValidIV(iv)` | 检查 IV 格式 | 必填 `iv` 为待检查的初始化向量候选值。 | `boolean` | `crypto.symmetric.isValidIV(iv)` |
 
+<a id="sm4-options"></a>
+
+##### SM4 加密参数
+
+| 字段 | 默认与条件 | 用途 |
+| --- | --- | --- |
+| `mode` | 默认 `cbc` | 选择 `cbc` 或协议需兼容的 `ecb`。 |
+| `iv` | CBC 省略时自动生成 | 仅 CBC 使用，显式值为 32 位十六进制字符，每次加密使用不同的 IV。 |
+| `outputFormat` | 默认 `hex` | 可选 `hex` 或 `base64`。结果的 `encoding` 记录所选格式。 |
+
 #### 场景：保存结构化密文再还原
 
 输入为 hello 和随机生成的32字符十六进制密钥；两种往返调用均还原 hello，密文与 IV 每次不同。
@@ -299,16 +309,6 @@ if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
 plaintextWithIVResult.data // 'hello'
 ```
-
-<a id="sm4-options"></a>
-
-#### SM4 加密参数
-
-| 字段 | 默认与条件 | 用途 |
-| --- | --- | --- |
-| `mode` | 默认 `cbc` | 选择 `cbc` 或协议需兼容的 `ecb`。 |
-| `iv` | CBC 省略时自动生成 | 仅 CBC 使用，显式值为 32 位十六进制字符，每次加密使用不同的 IV。 |
-| `outputFormat` | 默认 `hex` | 可选 `hex` 或 `base64`。结果的 `encoding` 记录所选格式。 |
 
 #### 场景：显式提供新 IV 并输出 Base64
 
@@ -447,6 +447,23 @@ Node 服务端通过独立的 Worker 池封包和解包。池满时可返回 `TR
 | `session.ready()` | 检查会话能否发送新请求 | `—` | `boolean` | `session.ready()` |
 | `session.destroy()` | 清除本地传输会话 | `—` | `void` | `session.destroy()` |
 | `crypto.transport.parseServerKeyRing(serialized)` | 解析可信启动代码提供的密钥环 | 必填 `serialized` 为可信服务端 Secret 中的 JSON 字符串或等价对象。 | `HaiResult<TransportServerKeyRing>`，失败不回显密钥 | `crypto.transport.parseServerKeyRing(secret)` |
+
+<a id="call-options"></a>
+
+##### 服务端与客户端调用参数
+
+这些是代码参数，不是 `_crypto.yml` 配置项。
+
+| 参数 | 默认/必填 | 含义 |
+| --- | --- | --- |
+| 服务端 `serverKeyRing` | 必填 | 服务端受管 `{ activeKeyId, keys }`；私钥仅由可信启动代码注入。 |
+| 服务端 `keyStore` | 必填 | 传入 `crypto.transport.createKeyStore({ cache })` 创建的 registry；生产使用 Redis。 |
+| 服务端 `maxPlaintextBytes` | 1048576 | 请求/响应明文 UTF-8 字节上限，整数 1024–67108864；宿主可从 Serv/Kit 文件配置转交。 |
+| 服务端 `maxFutureSkewSeconds` | 30 | 允许的未来时间偏差，整数 0–300 秒。 |
+| 服务端 `maxRequestAgeSeconds` | 300 | 从签发起的有效期，整数 1–600 秒。 |
+| 客户端 `keyExchangeUrl` | 必填 | 可信服务端的密钥协商 URL。 |
+| 客户端 `maxPlaintextBytes` | 跟随服务端 | 显式传入时取本地与握手值的较小值。 |
+| 客户端 `fetch` | 全局 fetch | 可注入遵守取消及正文契约的标准 Fetch 实现。 |
 
 <a id="detailed-workflow"></a>
 
@@ -621,23 +638,6 @@ interface Context {
 
 所有消息设置 `X-Encrypted: true`，请求再带 `X-Client-Id`。POST 等带正文方法将完整封装放 JSON 正文，空明文也一样；GET/HEAD 将空明文封装放 `X-Hai-Transport`，不得再带正文。普通响应使用 JSON 正文，HEAD、无正文状态或实际无正文响应改用同名头；同一消息不能重复使用头和正文。CORS 必须允许并暴露此头。明文路由须通过服务端与客户端对应的排除规则显式隔离，Kit 没有 `requireEncryption` / `encryptResponse` 降级开关。
 
-<a id="call-options"></a>
-
-#### 服务端与客户端调用参数
-
-这些是代码参数，不是 `_crypto.yml` 配置项。
-
-| 参数 | 默认/必填 | 含义 |
-| --- | --- | --- |
-| 服务端 `serverKeyRing` | 必填 | 服务端受管 `{ activeKeyId, keys }`；私钥仅由可信启动代码注入。 |
-| 服务端 `keyStore` | 必填 | 传入 `crypto.transport.createKeyStore({ cache })` 创建的 registry；生产使用 Redis。 |
-| 服务端 `maxPlaintextBytes` | 1048576 | 请求/响应明文 UTF-8 字节上限，整数 1024–67108864；宿主可从 Serv/Kit 文件配置转交。 |
-| 服务端 `maxFutureSkewSeconds` | 30 | 允许的未来时间偏差，整数 0–300 秒。 |
-| 服务端 `maxRequestAgeSeconds` | 300 | 从签发起的有效期，整数 1–600 秒。 |
-| 客户端 `keyExchangeUrl` | 必填 | 可信服务端的密钥协商 URL。 |
-| 客户端 `maxPlaintextBytes` | 跟随服务端 | 显式传入时取本地与握手值的较小值。 |
-| 客户端 `fetch` | 全局 fetch | 可注入遵守取消及正文契约的标准 Fetch 实现。 |
-
 <a id="registry"></a>
 
 ### 保存公钥与已用请求编号：`crypto.transport.createKeyStore`
@@ -654,6 +654,22 @@ interface Context {
 | `registry.claimRequest(clientId, requestId, expiresAt)` | 首次接纳编号并拒绝重复请求 | 必填 `clientId` 与 `requestId` 标识本次请求。必填 `expiresAt` 为记录保留截止时间，以 Unix 毫秒表示。 | `Promise<boolean>`，原子消费，存储错误 reject | `await registry.claimRequest(clientId, requestId, expiresAt)` |
 | `registry.delete?.(clientId)` | 删除公钥登记 | 必填 `clientId` 指定要注销的客户端标识。 | `Promise<void>`，只删公钥，存储错误 reject | `await registry.delete?.(clientId)` |
 | `registry.close?.()` | 清理自定义存储自有资源 | 无 | `Promise<void>`，可选自定义存储清理钩子；内置 Cache registry 不关闭借用连接 | `await registry.close?.()` |
+
+<a id="registry-options"></a>
+
+##### 缓存参数与容量保底
+
+| 参数 | 默认/必填 | 含义 |
+| --- | --- | --- |
+| `cache` | 必填 | 已初始化的 `@h-ai/cache`；memory 用于开发/测试，Redis 提供生产共享状态。 |
+| `ttlSeconds` | 3600 | 公钥固定寿命，整数 1–86400 秒；读取不续期，不能永久保存。 |
+| `maxRegistrationsPerMinute` | 10000 | 每个共享 60 秒窗口可登记的公钥数，正安全整数。 |
+| `maxRequestsPerMinute` | 100000 | 每个共享 60 秒窗口可接纳的新请求数，正安全整数。 |
+
+这两项是全应用共享的缓存容量保底，不是按 IP、用户或接口的业务限流。默认每60秒10000次登记、100000个新请求编号；首次写入开始计时，满额503，到期后恢复。公钥/已用编号自身的保留期不会随计数清零而结束，见[周期、满额与限流的例子](../data/crypto.md#transport-state)。调大上限时同步核对 Redis 内存预算。
+
+
+两个配额窗口在首次写入时启动，由 cache TTL 统一计时；CAS 原子扣额，更新保留原 TTL，应用节点时钟偏差不会重置窗口。不同节点必须使用相同配额。用尽或持续争用时返回 `hai:crypto:072`，Serv/Kit 映射为 503，客户端不自动重放。失败写入和并发重复可能保守占额；已存在 nonce 的普通重放不占新额度。公钥、nonce 和固定两条配额键均过期，不扫描全量键、不驱逐有效 nonce。状态数量约受“每分钟配额 × 保留分钟数”限制；公钥默认最多覆盖 61 个窗口，nonce 最长覆盖 17 个窗口。部署仍须设置 Redis 内存预算、noeviction 和可靠持久化。
 
 #### 场景：用一次性测试编号观察登记与重复拒绝
 
@@ -696,22 +712,6 @@ finally {
 // 再查询已删除的登记 ID，本例返回 undefined，存储查找失败可能抛错。
 await registry.get(clientId) // undefined
 ```
-
-<a id="registry-options"></a>
-
-#### 缓存参数与容量保底
-
-| 参数 | 默认/必填 | 含义 |
-| --- | --- | --- |
-| `cache` | 必填 | 已初始化的 `@h-ai/cache`；memory 用于开发/测试，Redis 提供生产共享状态。 |
-| `ttlSeconds` | 3600 | 公钥固定寿命，整数 1–86400 秒；读取不续期，不能永久保存。 |
-| `maxRegistrationsPerMinute` | 10000 | 每个共享 60 秒窗口可登记的公钥数，正安全整数。 |
-| `maxRequestsPerMinute` | 100000 | 每个共享 60 秒窗口可接纳的新请求数，正安全整数。 |
-
-这两项是全应用共享的缓存容量保底，不是按 IP、用户或接口的业务限流。默认每60秒10000次登记、100000个新请求编号；首次写入开始计时，满额503，到期后恢复。公钥/已用编号自身的保留期不会随计数清零而结束，见[周期、满额与限流的例子](../data/crypto.md#transport-state)。调大上限时同步核对 Redis 内存预算。
-
-
-两个配额窗口在首次写入时启动，由 cache TTL 统一计时；CAS 原子扣额，更新保留原 TTL，应用节点时钟偏差不会重置窗口。不同节点必须使用相同配额。用尽或持续争用时返回 `hai:crypto:072`，Serv/Kit 映射为 503，客户端不自动重放。失败写入和并发重复可能保守占额；已存在 nonce 的普通重放不占新额度。公钥、nonce 和固定两条配额键均过期，不扫描全量键、不驱逐有效 nonce。状态数量约受“每分钟配额 × 保留分钟数”限制；公钥默认最多覆盖 61 个窗口，nonce 最长覆盖 17 个窗口。部署仍须设置 Redis 内存预算、noeviction 和可靠持久化。
 
 <a id="http-budgets"></a>
 

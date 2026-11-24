@@ -127,7 +127,7 @@ core.logger.info('Listening', { port: loaded.data.port })
 | `core.logger.getLevel()` | 現在の全体しきい値を取得 | 引数なし | `LogLevel` | `core.logger.getLevel()` |
 | `core.logger.observe(observer)` | 出力レベルによる選別とマスクの後の記録を購読 | 必須の同期 `observer(record)`。レベルで選別しマスクした `LogRecord` を受け取る。 | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
-#### 利用例：レベル別の業務・診断ログ
+##### ロガーの項目と既定値
 
 | 項目 | `create(options?)` | `configure(config)` |
 | --- | --- | --- |
@@ -136,6 +136,10 @@ core.logger.info('Listening', { port: loaded.data.port })
 | `format` | `'json'` または `'pretty'`。省略時は出力時の全体形式を継承。 | 初期値は `'pretty'`。指定すると全体形式を更新。 |
 | `context` | このロガーの各ログに付加するオブジェクト。省略可。同じキーは全体の値を上書き。 | 指定したオブジェクトを最上位キーで全体のコンテキストへマージ。省略または `{}` で既存の値を保持。 |
 | `redact` | 全体のルールを継承。 | 追加でマスクするフィールドパスの配列。初期値は `[]`。`['customer.email']` を渡すと追加ルールを置換し、`[]` で解除。組み込みのマスクは継続。 |
+
+#### 利用例：レベル別の業務・診断ログ
+
+注文サービスは注文の作成を記録し、次の処理に失敗すれば再試行を記録します。プロセスのログレベルを決め、リクエスト ID で再試行の記録を探せます。
 
 ```ts
 import { core } from '@h-ai/core'

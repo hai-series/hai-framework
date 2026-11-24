@@ -76,6 +76,24 @@ Implement a shared contract and compose a Fetch application; release a Node list
 | `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | Required `app` returned by `serv.createApp()`. | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
 | `serv.implement(contract)` | 实现契约中的路由 | Required typed route `contract` shared with the application client. | `ServImplementer` | `serv.implement(contract)` |
 
+<a id="host-options"></a>
+
+##### Application factory arguments and dependencies
+
+| `options` field | Default or requirement | Effect |
+| --- | --- | --- |
+| `contract`, `procedures` | Both required and mutually compatible | The contract describes inputs and outputs. Procedures implement those routes. |
+| `http` | Uses the [HTTP defaults](../configuration/serv.en.md) | Select API, health, and documentation paths and set the request policy. |
+| `middlewares` | No custom middleware | Supply `{ middleware, path? }` mounts. Omitting `path` mounts that middleware on every route. |
+| `iam` | Optional initialized IAM service | Verify bearer access tokens and supply refresh support when `refreshCookie` is configured. |
+| `verifyToken` | Uses IAM's verifier if available | Override access-token verification with a function returning `Promise<HaiResult<ServSession>>`. |
+| `createContext` | Uses Serv's context builder | Construct your own per-request context and authenticated session. This takes precedence over both `verifyToken` and `iam` for context creation. |
+| `refreshCookie` | Disabled | Define browser refresh-cookie behavior and optionally a trusted native request policy. Requires an IAM refresh implementation or `onRefresh`. |
+| `transport` | Disabled | Pass initialized crypto, the managed `serverKeyRing`, and a shared `keyStore` to enable request and response encryption. |
+| `audio` | No WebSocket route | Pass initialized AI and `verifyTicket` to mount audio. `serv.listen()` handles the WebSocket upgrade on Node. |
+
+[Detailed parameters and workflows](serv.md#http-app)
+
 #### Scenario: Implement contracts and serve HTTP
 
 The minimal status contract and handler produce an HTTP JSON success. toFetch returns a function without opening a port; listen opens the Node listener. Both modes and cleanup are described below.
@@ -96,24 +114,6 @@ Close the Node listener before releasing borrowed database or cache services. Ke
 | `onClose` | No process exit callback | Supply an async cleanup function to run once after the listener and audio connections stop on `SIGINT` or `SIGTERM`. After calling `close()` directly, release business resources in the caller. |
 
 The application can resolve `HOST` and `PORT` or the `server` values from its configuration file and pass them explicitly to `serv.listen()`. The listener uses its own defaults for omitted fields.
-
-<a id="host-options"></a>
-
-#### Application factory arguments and dependencies
-
-| `options` field | Default or requirement | Effect |
-| --- | --- | --- |
-| `contract`, `procedures` | Both required and mutually compatible | The contract describes inputs and outputs. Procedures implement those routes. |
-| `http` | Uses the [HTTP defaults](../configuration/serv.en.md) | Select API, health, and documentation paths and set the request policy. |
-| `middlewares` | No custom middleware | Supply `{ middleware, path? }` mounts. Omitting `path` mounts that middleware on every route. |
-| `iam` | Optional initialized IAM service | Verify bearer access tokens and supply refresh support when `refreshCookie` is configured. |
-| `verifyToken` | Uses IAM's verifier if available | Override access-token verification with a function returning `Promise<HaiResult<ServSession>>`. |
-| `createContext` | Uses Serv's context builder | Construct your own per-request context and authenticated session. This takes precedence over both `verifyToken` and `iam` for context creation. |
-| `refreshCookie` | Disabled | Define browser refresh-cookie behavior and optionally a trusted native request policy. Requires an IAM refresh implementation or `onRefresh`. |
-| `transport` | Disabled | Pass initialized crypto, the managed `serverKeyRing`, and a shared `keyStore` to enable request and response encryption. |
-| `audio` | No WebSocket route | Pass initialized AI and `verifyTicket` to mount audio. `serv.listen()` handles the WebSocket upgrade on Node. |
-
-[Detailed parameters and workflows](serv.md#http-app)
 
 <a id="authentication"></a>
 

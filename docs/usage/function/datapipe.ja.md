@@ -51,23 +51,9 @@ HTML などから文字列を抽出し、必要に応じて URL や余分な空�
 | --- | --- | --- | --- | --- |
 | `datapipe.clean(text, options?)` | HTML タグを除去し、必要に応じて文字列を削除・置換 | 必須の `text: string` に、タグを取り除いたり空白を整えたり置換したりする原文を渡します。`options: CleanOptionsInput` は実行する整形処理を選びます。省略時の設定は[整形オプション](#clean-options)を参照してください。 | `HaiResult<string>`。オプションや正規表現が無効な場合は `CONFIG_ERROR` が返ります。 | `datapipe.clean('<p>Hello</p>')` |
 
-#### 利用例：テキストの抽出と整形
-
-```ts
-// タグと余分な空白を除き、成功時に 'Hello Ada' を返します。失敗時は error を確認します。
-const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
-if (!cleaned.success)
-  throw new Error(cleaned.error.message)
-cleaned.data // 'Hello Ada'
-```
-
-タグと連続した空白を含む文字列から、成功時にプレーンテキスト Hello Ada を得ます。空白の正規化は既定で有効です。
-
-`x < 2 and y > 3` のような比較式はそのまま残ります。タグの属性値が引用符で囲まれ、その中に `>` がある場合も、タグ全体を除去します。
-
 <a id="clean-options"></a>
 
-#### 整形オプション
+##### 整形オプション
 
 `options` は省略でき、変更する項目だけ指定できます。有効にした処理を、タグの除去、URL の削除、メールアドレスの削除、置換、空白の正規化、前後の空白の除去の順に適用します。
 
@@ -81,6 +67,20 @@ cleaned.data // 'Hello Ada'
 | `customReplacements` | `{ pattern: string, replacement: string }[]` | 省略可能 | 配列の順に適用します。省略または空配列の場合は置換しません。 |
 | `customReplacements[].pattern` | `string` | ルールごとに必須 | 信頼できる設定の正規表現文字列です。`g` フラグで一致する箇所をすべて置き換えます。 |
 | `customReplacements[].replacement` | `string` | ルールごとに必須 | 置換後の文字列です。`$1` は最初のキャプチャを入れ、`''` は一致箇所を削除します。 |
+
+#### 利用例：テキストの抽出と整形
+
+```ts
+// タグと余分な空白を除き、成功時に 'Hello Ada' を返します。失敗時は error を確認します。
+const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
+cleaned.data // 'Hello Ada'
+```
+
+タグと連続した空白を含む文字列から、成功時にプレーンテキスト Hello Ada を得ます。空白の正規化は既定で有効です。
+
+`x < 2 and y > 3` のような比較式はそのまま残ります。タグの属性値が引用符で囲まれ、その中に `>` がある場合も、タグ全体を除去します。
 
 #### 利用例：`customReplacements` でチケット番号の表記を揃える
 
@@ -112,19 +112,7 @@ else result.error.code // 正規表現が無効な場合は 'hai:datapipe:005'
 | --- | --- | --- | --- | --- |
 | `datapipe.chunk(text, options)` | 文、段落、見出しなどで分割 | 必須の `text: string` は分割する原文です。必須の `options: ChunkOptionsInput` で単位、境界、最大サイズを選びます。[分割オプション](#chunk-options)を参照してください。 | `HaiResult<DataChunk[]>`。設定が有効で本文が空白のみの場合は空配列です。 | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
-#### 利用例：文書を分割する
-
-```ts
-// 1 語ずつ分割します。成功時は区切りの空白を保った 3 チャンク、失敗時は error を確認します。
-const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
-if (!chunks.success)
-  throw new Error(chunks.error.message)
-chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
-```
-
-三つの単語を一語ずつに分割します。元の位置を追えるよう空白を残します。DataChunk の全フィールドはデータのページを参照してください。
-
-#### 分割と表示の注意点
+##### 分割と表示の注意点
 
 `sentence`、`paragraph`、`markdown`、`page` はそれぞれ文、段落、見出し、改ページで区切ります。`custom` は正規表現を使います。`word` は空白で分けた語の数を数えるため、空白を含まない日本語のまとまりが 1 語になることがあります。他のモードでは Unicode コードポイントを数えます。空白、句読点、区切り文字も残ります。一つのまとまりが上限を超える場合は途中で分割します。重複は上限未満で指定すると、前のチャンクの末尾を次のチャンクにも含められます。
 
@@ -136,7 +124,7 @@ HTML として表示する場合は、整形後も UI の安全なレンダリ�
 
 <a id="chunk-options"></a>
 
-#### 分割オプション
+##### 分割オプション
 
 | 項目 | 型 | 既定値または必須条件 | 動作 |
 | --- | --- | --- | --- |
@@ -146,6 +134,18 @@ HTML として表示する場合は、整形後も UI の安全なレンダリ�
 | `separator` | `string` | `custom` では空でない値が必須 | 信頼できる正規表現文字列です。一致箇所の直後を優先して分割し、区切りは結果に残します。 |
 | `markdownMinLevel` | `1`～`6` の整数 | `2` | `markdown` モードでのみ使います。`2` は `#` と `##` を境界にし、`3` では `###` も境界にします。 |
 | `markdownKeepTitle` | `boolean` | `true` | `markdown` モードでのみ使います。`false` は境界として使った見出し行を省略します。名前は `metadata.title` に残ります。 |
+
+#### 利用例：文書を分割する
+
+```ts
+// 1 語ずつ分割します。成功時は区切りの空白を保った 3 チャンク、失敗時は error を確認します。
+const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
+chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
+```
+
+三つの単語を一語ずつに分割します。元の位置を追えるよう空白を残します。DataChunk の全フィールドはデータのページを参照してください。
 
 #### 利用例：`separator` や `overlap` で分割位置を指定する
 

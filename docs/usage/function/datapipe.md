@@ -63,6 +63,23 @@ if (!result.success)
 | --- | --- | --- | --- | --- |
 | `datapipe.clean(text, options?)` | 移除标签，按需清理 URL、邮箱或替换文本 | 必填 `text: string`，是需要去标签、整理空白或替换的原始正文。可省略 `options: CleanOptionsInput`；它决定执行哪些清洗步骤，字段见[清洗参数](#clean-options)。 | `HaiResult<string>`。选项或正则格式无效时返回 `CONFIG_ERROR` | `datapipe.clean('<p>Hello</p>')` |
 
+<a id="clean-options"></a>
+
+##### 清洗参数
+
+可以省略整个 `options`，也可以只填要覆盖的字段。模块依次去 HTML 标签、去 URL、去邮箱、自定义替换、整理空白、去首尾空白，各步骤按选项执行。
+
+| 字段 | 类型 | 默认值或必填条件 | 效果 |
+| --- | --- | --- | --- |
+| `removeHtml` | `boolean` | `true` | 移除 HTML 标签，保留标签内的文字。 |
+| `removeUrls` | `boolean` | `false` | 移除匹配的 `http://` 和 `https://` 地址。 |
+| `removeEmails` | `boolean` | `false` | 移除匹配的邮箱地址。 |
+| `normalizeWhitespace` | `boolean` | `true` | 合并连续空格或 Tab，将连续三个及以上的 `\n` 压为两个。 |
+| `trim` | `boolean` | `true` | 去掉整段文本首尾的空白。 |
+| `customReplacements` | `{ pattern: string, replacement: string }[]` | 可省略 | 按数组顺序执行。省略或传空数组时跳过替换。 |
+| `customReplacements[].pattern` | `string` | 每条规则必填 | 可信配置提供的正则字符串，模块用 `g` 标志匹配所有位置。 |
+| `customReplacements[].replacement` | `string` | 每条规则必填 | 替换文本。`$1` 引用第一组捕获，`''` 删除匹配内容。 |
+
 #### 场景：提取与清理文本
 
 ```ts
@@ -80,23 +97,6 @@ HTML 清洗用于提取文本。标签属性中带引号的 `>` 会随标签一�
 清洗选项见下表；这些是调用参数，不写入独立配置文件。
 
 > 安全提示：`customReplacements` 与 `mode: 'custom'` 的 `separator` 会作为正则使用。仅传入受信任、已审查的模式；不要把用户输入直接拼进正则，避免 ReDoS 或意外大范围替换。
-
-<a id="clean-options"></a>
-
-#### 清洗参数
-
-可以省略整个 `options`，也可以只填要覆盖的字段。模块依次去 HTML 标签、去 URL、去邮箱、自定义替换、整理空白、去首尾空白，各步骤按选项执行。
-
-| 字段 | 类型 | 默认值或必填条件 | 效果 |
-| --- | --- | --- | --- |
-| `removeHtml` | `boolean` | `true` | 移除 HTML 标签，保留标签内的文字。 |
-| `removeUrls` | `boolean` | `false` | 移除匹配的 `http://` 和 `https://` 地址。 |
-| `removeEmails` | `boolean` | `false` | 移除匹配的邮箱地址。 |
-| `normalizeWhitespace` | `boolean` | `true` | 合并连续空格或 Tab，将连续三个及以上的 `\n` 压为两个。 |
-| `trim` | `boolean` | `true` | 去掉整段文本首尾的空白。 |
-| `customReplacements` | `{ pattern: string, replacement: string }[]` | 可省略 | 按数组顺序执行。省略或传空数组时跳过替换。 |
-| `customReplacements[].pattern` | `string` | 每条规则必填 | 可信配置提供的正则字符串，模块用 `g` 标志匹配所有位置。 |
-| `customReplacements[].replacement` | `string` | 每条规则必填 | 替换文本。`$1` 引用第一组捕获，`''` 删除匹配内容。 |
 
 #### 场景：用 `customReplacements` 统一工单编号
 
@@ -128,19 +128,7 @@ else result.error.code // 正则格式错误时为 'hai:datapipe:005'
 | --- | --- | --- | --- | --- |
 | `datapipe.chunk(text, options)` | 按句、段、标题等边界拆分文本 | `text: string` 是将要分块的原始正文。`options: ChunkOptionsInput` 决定单位、边界和每块大小，两者必填，见[分块参数](#chunk-options)。 | `HaiResult<DataChunk[]>`。选项有效时，空白文本返回空数组 | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
-#### 场景：按大小拆分文档
-
-```ts
-// 以每块最多一词拆分示例，data 含按原顺序保留分隔空格的三个块，失败读取 error。
-const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
-if (!chunks.success)
-  throw new Error(chunks.error.message)
-chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
-```
-
-输入为三个词、每块最多一个词。输出不是去掉空格的三个词；保留空格便于追溯原文。完整 DataChunk 字段见数据页。
-
-#### 分块模式与计量单位
+##### 分块模式与计量单位
 
 | 模式      | 说明                             |
 | --------- | -------------------------------- |
@@ -162,7 +150,7 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 
 <a id="chunk-options"></a>
 
-#### 分块参数
+##### 分块参数
 
 | 字段 | 类型 | 默认值或必填条件 | 效果 |
 | --- | --- | --- | --- |
@@ -172,6 +160,18 @@ chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
 | `separator` | `string` | `custom` 模式必填且不能为空 | 可信正则字符串。优先在匹配末尾切分，分隔符留在结果中。 |
 | `markdownMinLevel` | `1` 至 `6` 的整数 | `2` | 仅用于 `markdown`。`2` 将 `#` 和 `##` 当作分节边界，`3` 还会按 `###` 分节。 |
 | `markdownKeepTitle` | `boolean` | `true` | 仅用于 `markdown`。`false` 省去用作分节边界的标题行，`metadata.title` 仍保留标题名称。 |
+
+#### 场景：按大小拆分文档
+
+```ts
+// 以每块最多一词拆分示例，data 含按原顺序保留分隔空格的三个块，失败读取 error。
+const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
+chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
+```
+
+输入为三个词、每块最多一个词。输出不是去掉空格的三个词；保留空格便于追溯原文。完整 DataChunk 字段见数据页。
 
 #### 场景：用 `separator` 或 `overlap` 控制切分位置
 

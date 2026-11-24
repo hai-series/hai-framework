@@ -56,6 +56,14 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 | `feedback.close()` | ワーカーを停止して状態を解放 | なし | `void` | `await feedback.close()` |
 | `feedback.runJobs()` | 実行可能なバックグラウンド処理を実行 | なし | `{ processed: number }` | `await feedback.runJobs()` |
 
+<a id="feedback-init-options"></a>
+
+##### 初期化の引数
+
+`config: FeedbackConfigInput` は必須です。項目は[設定ファイル](../configuration/feedback.ja.md)を参照してください。`options: FeedbackInitOptions` を省略すると、アプリ独自の資料収集は実行されません。
+
+省略可能な `collectEvidence({ report, signal })` は報告の保存後に実行されます。`report` は読み取り専用の報告、`signal` はタイムアウトや終了に合わせて外部処理を中断するための通知です。同期または非同期で `FeedbackCollectedEvidence` を返し、省略可能な `text: string`、構造化した `data`、`attachments` を指定できます。添付ファイルには固定の文字列 `id`、ファイル名 `name`、メディアタイプ `contentType`、`bytes: Uint8Array` を指定します。報告番号が `FB-42` なら、たとえば `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }` を返せます。
+
 #### 利用例：サービスと採取処理の準備
 
 ```ts
@@ -75,13 +83,7 @@ init の入力は入門例の通りで、成功時の業務データはありま
 
 未翻訳：証拠収集、非公開添付、エクスポート、再試行の詳しい手順。[中国語の該当節](feedback.md#api-reference)を参照してください。
 
-<a id="feedback-init-options"></a>
-
-#### 初期化の引数
-
-`config: FeedbackConfigInput` は必須です。項目は[設定ファイル](../configuration/feedback.ja.md)を参照してください。`options: FeedbackInitOptions` を省略すると、アプリ独自の資料収集は実行されません。
-
-省略可能な `collectEvidence({ report, signal })` は報告の保存後に実行されます。`report` は読み取り専用の報告、`signal` はタイムアウトや終了に合わせて外部処理を中断するための通知です。同期または非同期で `FeedbackCollectedEvidence` を返し、省略可能な `text: string`、構造化した `data`、`attachments` を指定できます。添付ファイルには固定の文字列 `id`、ファイル名 `name`、メディアタイプ `contentType`、`bytes: Uint8Array` を指定します。報告番号が `FB-42` なら、たとえば `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }` を返せます。
+#### 利用例：保存後にアプリの証拠を収集する
 
 ```ts
 

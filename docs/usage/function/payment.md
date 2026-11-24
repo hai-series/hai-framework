@@ -179,6 +179,14 @@ finally {
 
 微信回传 `204 No Content` 时，`payment.closeOrder('wechat', orderNo)` 返回成功，`data` 为 `undefined`。代理应透传微信的状态。其他响应状态或网络错误返回 `CLOSE_ORDER_FAILED`。
 
+##### Stripe 托管 Checkout 与主动关单
+
+只实现 `mode=payment`、`ui_mode=hosted_page` 和 `tradeType=h5`，API 请求固定 `Stripe-Version: 2026-09-30.endive`。不支持 embedded/elements、JSAPI、App、Native 或小程序模式；创建入口、HTTP schema 与浏览器调用均拒绝未实现的场景。服务端 `successUrl` 必填，`cancelUrl` 可选，均为 HTTP(S) 地址；可在成功地址中保留 `{CHECKOUT_SESSION_ID}` 让 Stripe 替换。跳转配置属于服务端，不接受客户端覆盖；同订单重试也不能改变这组创建参数。
+
+`closeOrder('stripe', orderNo)` 按持久映射读取 Session：open/unpaid 调用 `/checkout/sessions/:id/expire`；已 expired 确认后幂等成功，complete/paid 返回失败。遇到并发关闭或响应丢失会重新查询，只有确认过期才成功。成功页/取消页跳转本身既不代表已支付，也不等于已关单。
+
+依据：[创建 Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)、[主动过期 Session](https://docs.stripe.com/api/checkout/sessions/expire).
+
 #### 场景：创建、查询与关单
 
 创建订单见最小接入；此函数输入原渠道名和业务单号，只对 pending 订单申请关单，返回最终查询结果或失败。实际状态由渠道确认。
@@ -199,14 +207,6 @@ async function inspectAndClose(providerName: string, orderNo: string) {
   return payment.queryOrder(providerName, orderNo)
 }
 ```
-
-#### Stripe 托管 Checkout 与主动关单
-
-只实现 `mode=payment`、`ui_mode=hosted_page` 和 `tradeType=h5`，API 请求固定 `Stripe-Version: 2026-09-30.endive`。不支持 embedded/elements、JSAPI、App、Native 或小程序模式；创建入口、HTTP schema 与浏览器调用均拒绝未实现的场景。服务端 `successUrl` 必填，`cancelUrl` 可选，均为 HTTP(S) 地址；可在成功地址中保留 `{CHECKOUT_SESSION_ID}` 让 Stripe 替换。跳转配置属于服务端，不接受客户端覆盖；同订单重试也不能改变这组创建参数。
-
-`closeOrder('stripe', orderNo)` 按持久映射读取 Session：open/unpaid 调用 `/checkout/sessions/:id/expire`；已 expired 确认后幂等成功，complete/paid 返回失败。遇到并发关闭或响应丢失会重新查询，只有确认过期才成功。成功页/取消页跳转本身既不代表已支付，也不等于已关单。
-
-依据：[创建 Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)、[主动过期 Session](https://docs.stripe.com/api/checkout/sessions/expire).
 
 <a id="refunds"></a>
 
@@ -233,21 +233,7 @@ async function inspectAndClose(providerName: string, orderNo: string) {
 
 微信订单原金额 100 分、退款 50 分时传 `{ amount: 50, totalAmount: 100 }`，渠道仅受理时仍须依据退款状态核对结果。
 
-#### 场景：退款与核对结果
-
-输入是已核对订单及本次唯一退款号，金额100的单位为分；失败不更新业务账本，processing 也不能标为已退款。
-
-```ts
-async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
-  // 用商户订单号和持久化退款号申请退回 100 分。成功回执的 status 仍可能为 processing；渠道拒绝返回失败，重试同一退款须复用退款号。
-  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
-  if (!refunded.success)
-    return refunded
-  return refunded // data.status distinguishes success from processing
-}
-```
-
-#### 支付宝业务响应与退款状态
+##### 支付宝业务响应与退款状态
 
 查单、退款和关单均校验对应方法的响应 envelope、字符串 `code=10000`、关键字段及返回订单号。HTTP 200、缺失 envelope 或只有成功码均不能当作业务成功。交易不存在、权限/余额不足等业务错误返回对应 `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`；错误 cause 只保留有界的渠道错误标识，不透传原始响应和 `msg/sub_msg`。查单拒绝未知状态及非法金额，不能伪造 pending 或零金额。
 
@@ -268,6 +254,20 @@ if (closed.success) {
 
 依据：[支付宝退款接口与成功判定](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html).
 
+#### 场景：退款与核对结果
+
+输入是已核对订单及本次唯一退款号，金额100的单位为分；失败不更新业务账本，processing 也不能标为已退款。
+
+```ts
+async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  // 用商户订单号和持久化退款号申请退回 100 分。成功回执的 status 仍可能为 processing；渠道拒绝返回失败，重试同一退款须复用退款号。
+  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
+  if (!refunded.success)
+    return refunded
+  return refunded // data.status distinguishes success from processing
+}
+```
+
 <a id="notifications"></a>
 
 ### 验证并接收支付通知：`payment.handleNotify`
@@ -279,6 +279,16 @@ if (closed.success) {
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `payment.handleNotify(providerName, request)` | 验证渠道通知并执行回调 | `providerName: string` 从可信通知路由取得的已注册渠道名。`request: PaymentNotifyRequest` 必填原始 body 字符串与 headers 字符串键值，用于渠道验签 | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
+
+##### Stripe 回调状态
+
+Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired`。Webhook 端点只订阅这些事件；其它资源事件或不完整 Session 返回 `NOTIFY_PARSE_FAILED`，不会伪造 pending 订单。
+
+`completed` 且 `payment_status=unpaid` 返回 `pending`，不得履约；`paid` / `no_payment_required` 才返回 `paid`。异步失败返回 `failed`，过期返回 `closed`。只有 `paid` 结果带 `paidAt`，时间取支付成功事件的 `created`，重复接收不会改变它。
+
+结果包含 `eventId`、大写 `currency`，`transactionId` 是 Checkout Session ID。应用须在共享数据库中核对订单、金额、币种，持久去重并防止乱序通知把已支付/已退款订单回退；Provider 验签解析不代替业务事务。回调成功结果也可能为 pending，不能仅判断 `success` 就发货。
+
+依据：[Stripe 事件类型](https://docs.stripe.com/api/events/types)、[Checkout Session 字段](https://docs.stripe.com/api/checkout/sessions/object).
 
 #### 场景：验证并接收支付通知
 
@@ -311,16 +321,6 @@ async function verifyNotification(providerName: string, request: Request) {
 [可运行消费者示例](../../../packages/payment/examples/payment-notify-consumer.ts) 将业务订单 pending→paid 的条件更新、唯一通知记录和唯一履约 outbox 放进同一事务，SQL 失败必须抛错以回滚。重复 paid 和晚到 pending 不重复生成 outbox；不同金额、币种、渠道或交易号不能更新订单。只有数据库提交成功才向渠道确认成功。示例表属于应用，payment 不会自动创建它们；外部发货由 outbox 投递者携带稳定 ID 做幂等，数据库事务不能保证跨系统副作用恰好一次。定向双进程测试使用两个真实 Node 进程共享 SQLite，证明重复通知和重启后仍仅产生一条业务 outbox；多主机生产使用同一 PostgreSQL/MySQL。
 
 依据：[微信证书与签名时钟](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[微信公钥轮换](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[支付宝通知核对与重试](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346).
-
-#### Stripe 回调状态
-
-Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired`。Webhook 端点只订阅这些事件；其它资源事件或不完整 Session 返回 `NOTIFY_PARSE_FAILED`，不会伪造 pending 订单。
-
-`completed` 且 `payment_status=unpaid` 返回 `pending`，不得履约；`paid` / `no_payment_required` 才返回 `paid`。异步失败返回 `failed`，过期返回 `closed`。只有 `paid` 结果带 `paidAt`，时间取支付成功事件的 `created`，重复接收不会改变它。
-
-结果包含 `eventId`、大写 `currency`，`transactionId` 是 Checkout Session ID。应用须在共享数据库中核对订单、金额、币种，持久去重并防止乱序通知把已支付/已退款订单回退；Provider 验签解析不代替业务事务。回调成功结果也可能为 pending，不能仅判断 `success` 就发货。
-
-依据：[Stripe 事件类型](https://docs.stripe.com/api/events/types)、[Checkout Session 字段](https://docs.stripe.com/api/checkout/sessions/object).
 
 #### Stripe 持久化与幂等
 

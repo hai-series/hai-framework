@@ -82,6 +82,16 @@ crypto.isInitialized // true
 | `crypto.asymmetric.isValidPrivateKey(key)` | SM2 秘密鍵の形式を確認する。 | 必須の `key` は検証する SM2 秘密鍵候補。 | `boolean` | `crypto.asymmetric.isValidPrivateKey(privateKey)` |
 | `crypto.asymmetric.isValidPublicKey(key)` | 外部の SM2 公開鍵の形式と曲線上の点を検証 | 必須の `key` は外部の SM2 公開鍵候補。有効形式は 128 桁の 16 進数、または `04` を付けた 130 桁。 | 形式と曲線上の点が有効なら `true`、それ以外は `false`。`string` に型を絞り込み、初期化は不要 | `crypto.asymmetric.isValidPublicKey(pair.publicKey)` |
 
+<a id="sm2-options"></a>
+
+##### SM2 の暗号化と署名設定
+
+| 項目 | 既定値と条件 | 用途 |
+| --- | --- | --- |
+| `cipherMode` | 既定は `1` | 暗号文の順序を選ぶ。 `1` は C1C3C2、`0` は C1C2C3。暗号化と復号で一致させる。 |
+| `outputFormat` | 既定は `hex` | 暗号化は `hex` または `base64` の文字列を返す。 |
+| `hash` / `userId` | 既定は `true` と `1234567812345678` | SM3 の前処理と公開 SM2 識別子を指定。検証も同じ設定を使用。 |
+
 #### 利用例：鍵生成から暗号化・復号・署名検証まで
 
 入力は order-42 です。復号すると元の文が戻り、変更された文の署名検証は成功データ false を返します。独立した検証関数は null などの外部値も受け付け、false を返します。
@@ -129,16 +139,6 @@ if (!changedMessageResult.success)
   throw new Error(changedMessageResult.error.message, { cause: changedMessageResult.error })
 changedMessageResult.data // false
 ```
-
-<a id="sm2-options"></a>
-
-#### SM2 の暗号化と署名設定
-
-| 項目 | 既定値と条件 | 用途 |
-| --- | --- | --- |
-| `cipherMode` | 既定は `1` | 暗号文の順序を選ぶ。 `1` は C1C3C2、`0` は C1C2C3。暗号化と復号で一致させる。 |
-| `outputFormat` | 既定は `hex` | 暗号化は `hex` または `base64` の文字列を返す。 |
-| `hash` / `userId` | 既定は `true` と `1234567812345678` | SM3 の前処理と公開 SM2 識別子を指定。検証も同じ設定を使用。 |
 
 #### 利用例：暗号文形式と署名オプション
 
@@ -268,6 +268,16 @@ SM4 の既定値は CBC で、毎回新しい IV を作り、復号に必要な�
 | `crypto.symmetric.isValidKey(key)` | SM4 鍵の形式を確認する。 | 必須の `key` は検証する SM4 鍵候補。 | `boolean` | `crypto.symmetric.isValidKey(key)` |
 | `crypto.symmetric.isValidIV(iv)` | 初期化ベクトルの形式を確認する。 | 必須の `iv` は検証する初期化ベクトル候補。 | `boolean` | `crypto.symmetric.isValidIV(iv)` |
 
+<a id="sm4-options"></a>
+
+##### SM4 の暗号化設定
+
+| 項目 | 既定値と条件 | 用途 |
+| --- | --- | --- |
+| `mode` | 既定は `cbc` | `cbc`、またはプロトコルで必要な場合は `ecb`。 |
+| `iv` | CBC では省略時に生成 | CBC で使用。明示値は 16 進数 32 桁。暗号化ごとに新しい IV を使う。 |
+| `outputFormat` | 既定は `hex` | `hex` または `base64` を選ぶ。返却値の `encoding` に形式が記録される。 |
+
 #### 利用例：構造化暗号文を保存して復号
 
 入力は hello と生成した32桁の16進数鍵です。どちらの手順でも hello に戻り、暗号文と IV は毎回変わります。
@@ -299,16 +309,6 @@ if (!plaintextWithIVResult.success)
   throw new Error(plaintextWithIVResult.error.message, { cause: plaintextWithIVResult.error })
 plaintextWithIVResult.data // 'hello'
 ```
-
-<a id="sm4-options"></a>
-
-#### SM4 の暗号化設定
-
-| 項目 | 既定値と条件 | 用途 |
-| --- | --- | --- |
-| `mode` | 既定は `cbc` | `cbc`、またはプロトコルで必要な場合は `ecb`。 |
-| `iv` | CBC では省略時に生成 | CBC で使用。明示値は 16 進数 32 桁。暗号化ごとに新しい IV を使う。 |
-| `outputFormat` | 既定は `hex` | `hex` または `base64` を選ぶ。返却値の `encoding` に形式が記録される。 |
 
 #### 利用例：新しい IV と Base64 出力を指定
 
@@ -445,6 +445,23 @@ Node サーバーは専用の Worker プールで封入と開封を行います�
 | `session.ready()` | セッションが新しいリクエストを送れるか確認する。 | `—` | `boolean` | `session.ready()` |
 | `session.destroy()` | ローカルのセッション鍵を破棄する。 | `—` | `void` | `session.destroy()` |
 | `crypto.transport.parseServerKeyRing(serialized)` | 信頼済み起動コードの鍵リングを解析 | 必須の `serialized` は信頼できるサーバー Secret の JSON 文字列または同等のオブジェクト。 | `HaiResult<TransportServerKeyRing>` | `crypto.transport.parseServerKeyRing(secret)` |
+
+<a id="call-options"></a>
+
+##### サーバーとクライアントの引数
+
+以下はコードの引数で、`_crypto.yml` の設定項目ではありません。
+
+| 引数 | 既定値 | 意味 |
+| --- | --- | --- |
+| サーバー `serverKeyRing` | 必須 | 信頼できる起動処理から渡す管理鍵 `{ activeKeyId, keys }`。 |
+| サーバー `keyStore` | 必須 | `crypto.transport.createKeyStore({ cache })` の registry。本番は Redis。 |
+| サーバー `maxPlaintextBytes` | 1048576 | 要求・応答の UTF-8 平文バイト数、整数 1024–67108864。宿主は Serv/Kit のファイル値を転送可能。 |
+| サーバー `maxFutureSkewSeconds` | 30 | 未来時刻の許容差、整数 0–300 秒。 |
+| サーバー `maxRequestAgeSeconds` | 300 | 発行からの有効期間、整数 1–600 秒。 |
+| クライアント `keyExchangeUrl` | 必須 | 信頼するサーバーの鍵交換 URL。 |
+| クライアント `maxPlaintextBytes` | サーバーに追従 | 明示値があればローカル値と交換値の小さい方。 |
+| クライアント `fetch` | グローバル fetch | 本文・キャンセルの契約を守る標準 Fetch 実装。 |
 
 #### 利用例：安全な Secret からサーバーを作成
 
@@ -625,23 +642,6 @@ interface Context {
 
 未翻訳：詳細な使用例。[中国語の該当節](crypto.md#detailed-workflow)を参照してください。
 
-<a id="call-options"></a>
-
-#### サーバーとクライアントの引数
-
-以下はコードの引数で、`_crypto.yml` の設定項目ではありません。
-
-| 引数 | 既定値 | 意味 |
-| --- | --- | --- |
-| サーバー `serverKeyRing` | 必須 | 信頼できる起動処理から渡す管理鍵 `{ activeKeyId, keys }`。 |
-| サーバー `keyStore` | 必須 | `crypto.transport.createKeyStore({ cache })` の registry。本番は Redis。 |
-| サーバー `maxPlaintextBytes` | 1048576 | 要求・応答の UTF-8 平文バイト数、整数 1024–67108864。宿主は Serv/Kit のファイル値を転送可能。 |
-| サーバー `maxFutureSkewSeconds` | 30 | 未来時刻の許容差、整数 0–300 秒。 |
-| サーバー `maxRequestAgeSeconds` | 300 | 発行からの有効期間、整数 1–600 秒。 |
-| クライアント `keyExchangeUrl` | 必須 | 信頼するサーバーの鍵交換 URL。 |
-| クライアント `maxPlaintextBytes` | サーバーに追従 | 明示値があればローカル値と交換値の小さい方。 |
-| クライアント `fetch` | グローバル fetch | 本文・キャンセルの契約を守る標準 Fetch 実装。 |
-
 <a id="registry"></a>
 
 ### 公開鍵と使用済みリクエスト ID を保存：`crypto.transport.createKeyStore`
@@ -658,6 +658,22 @@ interface Context {
 | `registry.claimRequest(clientId, requestId, expiresAt)` | ID を一度だけ受け付け再利用を拒否 | 要求を識別する `clientId` と `requestId` が必須。 `expiresAt` は保持期限を Unix ミリ秒で指定。 | `Promise<boolean>` | `await registry.claimRequest(clientId, requestId, expiresAt)` |
 | `registry.delete?.(clientId)` | 公開鍵登録を削除 | 登録を削除するクライアント識別子 `clientId` が必須。 | `Promise<void>` | `await registry.delete?.(clientId)` |
 | `registry.close?.()` | 独自ストアの所有リソースを解放 | なし | `Promise<void>` | `await registry.close?.()` |
+
+<a id="registry-options"></a>
+
+##### キャッシュ引数と容量保護
+
+| 引数 | 既定値 | 意味 |
+| --- | --- | --- |
+| `cache` | 必須 | 初期化済み `@h-ai/cache`。memory は開発・テスト、本番共有状態は Redis。 |
+| `ttlSeconds` | 3600 | 公開鍵の固定寿命、整数 1–86400 秒。読み取りで延長せず、無期限は不可。 |
+| `maxRegistrationsPerMinute` | 10000 | 共有 60 秒窓の登録上限、正の安全な整数。 |
+| `maxRequestsPerMinute` | 100000 | 共有 60 秒窓の新規要求上限、正の安全な整数。 |
+
+アプリ全体のキャッシュ増加を守る枠で、IP・利用者・経路別の制限とは別です。最初の確保から60秒ごとに登録10000本、新規番号100000件が既定で、上限時503、期限後復旧します。公開鍵や印は消しません。[具体例](../data/crypto.ja.md#transport-state)を参照し、上限を増やす際は Redis メモリも確認します。
+
+
+窓は最初の書き込みから cache TTL で計測します。CAS で原子的に消費し、元の TTL を保持するため、アプリの時刻差で窓をリセットしません。全ノードで上限を一致させます。満杯・継続的な競合は `hai:crypto:072`、Serv/Kit では 503 とし、自動再送しません。失敗書き込み・並行重複は保守的に枠を消費する場合がありますが、既存 nonce の通常の再送は消費しません。公開鍵・nonce・固定二つのカウンターは全て期限付きです。全キー走査や有効 nonce の追い出しはしません。件数は分単位上限と保持分数で有界となり、既定の公開鍵は最大 61 窓、nonce は最大 17 窓をまたぎます。Redis のメモリ、noeviction、信頼できる永続化も設定してください。
 
 #### 利用例：テスト用 ID で登録と重複拒否を確認
 
@@ -700,22 +716,6 @@ finally {
 // 削除済み ID を再度読みます。この例では undefined、保存先の失敗は例外になり得ます。
 await registry.get(clientId) // undefined
 ```
-
-<a id="registry-options"></a>
-
-#### キャッシュ引数と容量保護
-
-| 引数 | 既定値 | 意味 |
-| --- | --- | --- |
-| `cache` | 必須 | 初期化済み `@h-ai/cache`。memory は開発・テスト、本番共有状態は Redis。 |
-| `ttlSeconds` | 3600 | 公開鍵の固定寿命、整数 1–86400 秒。読み取りで延長せず、無期限は不可。 |
-| `maxRegistrationsPerMinute` | 10000 | 共有 60 秒窓の登録上限、正の安全な整数。 |
-| `maxRequestsPerMinute` | 100000 | 共有 60 秒窓の新規要求上限、正の安全な整数。 |
-
-アプリ全体のキャッシュ増加を守る枠で、IP・利用者・経路別の制限とは別です。最初の確保から60秒ごとに登録10000本、新規番号100000件が既定で、上限時503、期限後復旧します。公開鍵や印は消しません。[具体例](../data/crypto.ja.md#transport-state)を参照し、上限を増やす際は Redis メモリも確認します。
-
-
-窓は最初の書き込みから cache TTL で計測します。CAS で原子的に消費し、元の TTL を保持するため、アプリの時刻差で窓をリセットしません。全ノードで上限を一致させます。満杯・継続的な競合は `hai:crypto:072`、Serv/Kit では 503 とし、自動再送しません。失敗書き込み・並行重複は保守的に枠を消費する場合がありますが、既存 nonce の通常の再送は消費しません。公開鍵・nonce・固定二つのカウンターは全て期限付きです。全キー走査や有効 nonce の追い出しはしません。件数は分単位上限と保持分数で有界となり、既定の公開鍵は最大 61 窓、nonce は最大 17 窓をまたぎます。Redis のメモリ、noeviction、信頼できる永続化も設定してください。
 
 <a id="http-budgets"></a>
 

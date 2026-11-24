@@ -90,6 +90,31 @@ Tools にモジュール単位の init/close はありません。軽量機能�
 | `tool.execute(input, options?)` | 入力を検証して実行する。利用者、認可、キャンセル信号、期限も指定できる | `input: unknown, options?: ToolExecutionOptions`。`input` はツールのパラメータースキーマに従います。オプションを省略すると既定の実行設定を使います。 | `Promise<HaiResult<TOutput>>` | `await tool.execute({ a: 2, b: 3 })` |
 | `tool.toDefinition()` | 入力の規則を JSON Schema に変換する。変換できないときは例外 | 引数なし | `ToolDefinition` | `tool.toDefinition()` |
 
+<a id="call-options"></a>
+
+##### 呼び出し引数
+
+[機能説明](tools.ja.md) · [データの帰属](../data/tools.ja.md)
+
+`tools.define/createRegistry` は純粋な定義・ファクトリーで、モジュール YAML・環境変数・`init/close` はありません。サーバー用は `@h-ai/tools/server` からインポートし、初期化済み Runner を利用します。
+
+##### 定義と実行のオプション
+
+| 場所 | フィールド | 既定値と用途 |
+| --- | --- | --- |
+| 定義 | `name/description/parameters` | 必須。名前は ASCII 1～64 文字、先頭は英字、以降は英数字・アンダースコア・ハイフン。Zod で入力を検証 |
+| 定義 | `handler` または `resultHandler` | 片方だけ必須。通常データ、または既存の `HaiResult` を返す |
+| 定義 | `title/examples` | 任意の表示名と `{ label, input }[]` プリセット。権限は変わらない |
+| 定義 | `timeoutMs` | 整数 0～2147483647 ミリ秒。省略時 30 秒、0 は即時期限切れ |
+| 登録器 | `authorize` | 任意。設定時は毎回の呼び出しで許可が必要 |
+| 実行 | `signal` | 処理関数へ渡すキャンセルシグナル |
+| 実行 | `objectId/sessionId` | 信頼済みの本人・セッション。未認証のモデル入力から取得しない |
+| 実行 | `deadline/timeoutMs` | 絶対期限、呼び出し別、ツール、30 秒の順。検証・認可・処理を含む |
+| 実行 | `authorize` | 呼び出し別の追加認可。登録器の認可と両方必要 |
+| 一括実行 | `parallel` | 既定 false。並列可能な操作だけ有効にする |
+
+不正な名前・既定タイムアウト・処理関数の組み合わせは定義時に `TypeError` を送出します。業務実行は `HaiResult` を返します。登録器は `tools.define` が作成したツールだけを受け付けます。モデル用パラメーターは JSON Schema に変換可能なものを使い、通常はオブジェクトにします。
+
 #### 利用例：単一ツールの定義と実行
 
 定義時は handler を実行しません。execute は入力検証、認可、実行に共通の中止・時間制限を適用します。
@@ -131,31 +156,6 @@ const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALID
 #### 開発テスト
 
 `pnpm --filter @h-ai/tools test` はカーネルとサービス、`pnpm --filter @h-ai/tools test:jobs` はジョブプロトコルを検証します。実イメージとブラウザーの受け入れは別途環境が必要です。ユニットテストだけで実イメージを検証済みとはしません。
-
-<a id="call-options"></a>
-
-#### 呼び出し引数
-
-[機能説明](tools.ja.md) · [データの帰属](../data/tools.ja.md)
-
-`tools.define/createRegistry` は純粋な定義・ファクトリーで、モジュール YAML・環境変数・`init/close` はありません。サーバー用は `@h-ai/tools/server` からインポートし、初期化済み Runner を利用します。
-
-#### 定義と実行のオプション
-
-| 場所 | フィールド | 既定値と用途 |
-| --- | --- | --- |
-| 定義 | `name/description/parameters` | 必須。名前は ASCII 1～64 文字、先頭は英字、以降は英数字・アンダースコア・ハイフン。Zod で入力を検証 |
-| 定義 | `handler` または `resultHandler` | 片方だけ必須。通常データ、または既存の `HaiResult` を返す |
-| 定義 | `title/examples` | 任意の表示名と `{ label, input }[]` プリセット。権限は変わらない |
-| 定義 | `timeoutMs` | 整数 0～2147483647 ミリ秒。省略時 30 秒、0 は即時期限切れ |
-| 登録器 | `authorize` | 任意。設定時は毎回の呼び出しで許可が必要 |
-| 実行 | `signal` | 処理関数へ渡すキャンセルシグナル |
-| 実行 | `objectId/sessionId` | 信頼済みの本人・セッション。未認証のモデル入力から取得しない |
-| 実行 | `deadline/timeoutMs` | 絶対期限、呼び出し別、ツール、30 秒の順。検証・認可・処理を含む |
-| 実行 | `authorize` | 呼び出し別の追加認可。登録器の認可と両方必要 |
-| 一括実行 | `parallel` | 既定 false。並列可能な操作だけ有効にする |
-
-不正な名前・既定タイムアウト・処理関数の組み合わせは定義時に `TypeError` を送出します。業務実行は `HaiResult` を返します。登録器は `tools.define` が作成したツールだけを受け付けます。モデル用パラメーターは JSON Schema に変換可能なものを使い、通常はオブジェクトにします。
 
 #### ライフサイクルと複数ノード
 
@@ -279,6 +279,28 @@ registry.size // 0
 
 イベントが 5、6、7 の場合、`inspect(receipt, context, { after: 5 })` は 6、7 を返します。次は戻り値の `next` を使います。`{ groups: ['docs'], exclude: ['docs_export'] }` を選ぶと、docs の残りの登録済みツールが対象となり、投入時は引き続き認可コールバックを通ります。
 
+##### サービスファクトリーの引数
+
+| フィールド | 必須・既定値 | 用途 |
+| --- | --- | --- |
+| `id` | 必須、英数字・アンダースコア・点・ハイフンの 1～60 文字 | Runner 型 `hai.tools.<id>.v1`。同じサービスのノード間で統一 |
+| `runner` | 必須 | 初期化済み Runner。サービスはライフサイクルを所有しない |
+| `createTools` | 必須 | 信頼済み `ToolServiceContext` から `ToolSet` または Promise を返す。実行ノードで再構築 |
+| `enabled` | 必須 | `ToolSelection` またはコンテキスト関数。グループとツールの和集合から `exclude` を除く。`{}` はすべて無効 |
+| `authorize` | 必須 | `{ context, name, input, phase }`。`phase` は `submit` または `execute` で両方の許可が必要 |
+| `runTimeoutMs` | 300000 ミリ秒 | 実行期限。整数 1～86400000 |
+| `queueTimeoutMs` | 300000 ミリ秒 | 待機期限。整数 1～86400000 |
+
+`ToolServiceContext` は `scope: { tenantId, userId }` と任意の `sessionId/signal` を含みます。実際の `execution` は Runner 実行ノードが設定します。クライアントが申告した本人情報や実行コンテキストを受け入れないでください。
+
+`ToolSet` は `tools`、任意の `groups: { id, title, tools }[]` と `environments: Record<toolName, environmentId>` を含みます。環境割り当ては Runner 環境を指定し、実行ノードでも再確認します。`ToolSelection` の `groups/tools/exclude` は名前の配列です。
+
+カタログは各ツールの `authorize` を呼びません。利用者別の表示制限は `createTools/enabled` で行います。サーバーの認可と最終リソース検証は別途必要で、ボタンを隠すだけでは無効化できません。
+
+`service.submit/invoke` は同一ユーザー操作の idempotencyKey を維持します。受付不明時は新しいキーで重複提出せず `service.find(key, context)` で取得します。カタログ無効化後も本人の旧タスクは照会でき、本人・サービスの検証は維持します。
+
+[引数と手順の詳細](tools.md#services)
+
 #### 利用例：復元可能な業務タスク
 
 service を作り、catalog から選択して同じキーで submit/find、完全な receipt で inspect/cancel します。invoke は終端を待ち、close は借用 Runner を閉じません。
@@ -310,28 +332,6 @@ export function createDocumentService(runner: RunnerFunctions, files: ToolArtifa
 業務結果は先に `success` を確認します。最終出力が必要な業務処理では `invoke`、長い画面操作では `submit/inspect` を使い、完全な受領情報と `queued/running/cancelling` などの実際の状態を保持します。キャンセルの応答だけではプロセス終了を証明できません。
 
 `enabled` は必須です。指定グループと個別ツールの和集合から `exclude` を除きます。空オブジェクトはすべて無効です。`catalog` はファクトリーと有効化ルールで作成し、個々の `authorize` は呼びません。利用者別の非表示はコンテキストに応じた `createTools/enabled` で実施します。提出時と実行ノードで集合を作り直して認可するため、古いカタログから無効化を回避できません。
-
-#### サービスファクトリーの引数
-
-| フィールド | 必須・既定値 | 用途 |
-| --- | --- | --- |
-| `id` | 必須、英数字・アンダースコア・点・ハイフンの 1～60 文字 | Runner 型 `hai.tools.<id>.v1`。同じサービスのノード間で統一 |
-| `runner` | 必須 | 初期化済み Runner。サービスはライフサイクルを所有しない |
-| `createTools` | 必須 | 信頼済み `ToolServiceContext` から `ToolSet` または Promise を返す。実行ノードで再構築 |
-| `enabled` | 必須 | `ToolSelection` またはコンテキスト関数。グループとツールの和集合から `exclude` を除く。`{}` はすべて無効 |
-| `authorize` | 必須 | `{ context, name, input, phase }`。`phase` は `submit` または `execute` で両方の許可が必要 |
-| `runTimeoutMs` | 300000 ミリ秒 | 実行期限。整数 1～86400000 |
-| `queueTimeoutMs` | 300000 ミリ秒 | 待機期限。整数 1～86400000 |
-
-`ToolServiceContext` は `scope: { tenantId, userId }` と任意の `sessionId/signal` を含みます。実際の `execution` は Runner 実行ノードが設定します。クライアントが申告した本人情報や実行コンテキストを受け入れないでください。
-
-`ToolSet` は `tools`、任意の `groups: { id, title, tools }[]` と `environments: Record<toolName, environmentId>` を含みます。環境割り当ては Runner 環境を指定し、実行ノードでも再確認します。`ToolSelection` の `groups/tools/exclude` は名前の配列です。
-
-カタログは各ツールの `authorize` を呼びません。利用者別の表示制限は `createTools/enabled` で行います。サーバーの認可と最終リソース検証は別途必要で、ボタンを隠すだけでは無効化できません。
-
-`service.submit/invoke` は同一ユーザー操作の idempotencyKey を維持します。受付不明時は新しいキーで重複提出せず `service.find(key, context)` で取得します。カタログ無効化後も本人の旧タスクは照会でき、本人・サービスの検証は維持します。
-
-[引数と手順の詳細](tools.md#services)
 
 #### 利用例：送信後の復旧・状態確認・中止
 

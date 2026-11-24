@@ -58,6 +58,14 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 | `feedback.close()` | 停止本实例的反馈后台工作并清理模块状态；共享依赖由应用关闭 | 共享依赖由应用关闭；无 | `Promise<HaiResult<void>>` | `await feedback.close()` |
 | `feedback.runJobs()` | 执行当前可领取的后台任务 | 无参数 | `processed 处理数` | `await feedback.runJobs()` |
 
+<a id="feedback-init-options"></a>
+
+##### 初始化参数
+
+启动时使用的 `config: FeedbackConfigInput` 必填，字段见[配置文件](../configuration/feedback.md)。`options: FeedbackInitOptions` 可以省略，省略时不运行应用提供的业务采集函数。
+
+可选的 `collectEvidence({ report, signal })` 在报告入库后运行。`report` 是只读反馈记录，`signal` 用于在超时或关闭时取消外部操作。回调同步或异步返回 `FeedbackCollectedEvidence`，可包含 `text: string`、结构化 `data: FeedbackEvidenceInput['data']` 或 `attachments`。每个附件传稳定的字符串 `id`、文件名 `name`、媒体类型 `contentType` 和 `bytes: Uint8Array`。下方异步采集示例展示如何用反馈编号给材料命名，并将取消信号传给文件读取。
+
 #### 场景：准备服务与接入采集任务
 
 ```ts
@@ -80,14 +88,6 @@ init 输入来自最小接入，成功无数据；runJobs 无参数，输出本�
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
-
-<a id="feedback-init-options"></a>
-
-#### 初始化参数
-
-启动时使用的 `config: FeedbackConfigInput` 必填，字段见[配置文件](../configuration/feedback.md)。`options: FeedbackInitOptions` 可以省略，省略时不运行应用提供的业务采集函数。
-
-可选的 `collectEvidence({ report, signal })` 在报告入库后运行。`report` 是只读反馈记录，`signal` 用于在超时或关闭时取消外部操作。回调同步或异步返回 `FeedbackCollectedEvidence`，可包含 `text: string`、结构化 `data: FeedbackEvidenceInput['data']` 或 `attachments`。每个附件传稳定的字符串 `id`、文件名 `name`、媒体类型 `contentType` 和 `bytes: Uint8Array`。下方异步采集示例展示如何用反馈编号给材料命名，并将取消信号传给文件读取。
 
 #### 场景：在服务端异步补充业务证据
 
