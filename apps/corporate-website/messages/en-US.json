@@ -192,5 +192,6 @@
   "api_chat_failed": "The assistant could not reply. Please try again later or use our contact form.",
   "api_contact_unconfigured": "Email delivery is not configured. Your message has not been sent.",
   "api_contact_failed": "Email delivery failed. Please try again.",
+  "api_contact_queued": "Your message is queued for delivery.",
   "api_contact_sent": "Message sent successfully"
 }

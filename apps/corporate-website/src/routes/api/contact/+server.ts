@@ -14,6 +14,15 @@ const ContactSchema = z.object({
   message: z.string().min(1).max(2000),
 })
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\'', '&#39;')
+}
+
 export const POST = kit.handler(async ({ request, locals }) => {
   const locale = locals.locale === 'en-US'
     ? 'en-US'
@@ -54,14 +63,32 @@ export const POST = kit.handler(async ({ request, locals }) => {
     provider: 'email',
     to: recipient,
     template: 'contact_form',
-    vars: { name, email, message },
+    vars: {
+      name: escapeHtml(name),
+      subjectName: name.replaceAll(/[\r\n]+/g, ' '),
+      email: escapeHtml(email),
+      message: escapeHtml(message),
+    },
   })
 
-  if (!result.success) {
-    core.logger.error('Failed to send contact email', { error: result.error?.message ?? 'unknown error' })
+  if (!result.success || !result.data.success) {
+    if (!result.success) {
+      core.logger.error('Failed to send contact email', {
+        errorCode: result.error.code,
+        traceId: result.error.traceId,
+      })
+    }
     return kit.response.ok({
       sent: false,
       message: m.api_contact_failed({}, { locale }),
+    })
+  }
+
+  if (result.data.deferred) {
+    return kit.response.ok({
+      sent: false,
+      deferred: true,
+      message: m.api_contact_queued({}, { locale }),
     })
   }
 

@@ -22,9 +22,10 @@ templates:
     # 说明：绑定的 Provider 名称
     # 取值：字符串；最小字符数 1
     provider: email
+    # 姓名的纯文本版本仅用于邮件主题；正文继续使用 {name}。
     # 说明：邮件主题模板
     # 取值：字符串
-    subject: 'New contact from website: {name}'
+    subject: 'New contact from website: {subjectName}'
     # 说明：正文模板
     # 取值：字符串；最小字符数 1
     body: 'Name: {name}

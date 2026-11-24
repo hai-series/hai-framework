@@ -192,5 +192,6 @@
   "api_chat_failed": "抱歉，智能助手暂时无法回复，请稍后再试或通过联系表单联系我们。",
   "api_contact_unconfigured": "邮件服务尚未配置，消息未发送。",
   "api_contact_failed": "邮件发送失败，请重试。",
+  "api_contact_queued": "您的消息已排队，等待发送。",
   "api_contact_sent": "消息已成功发送"
 }

@@ -90,7 +90,26 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('aPI fallback locale %s', (locale) =>
       : locale === 'ja-JP'
         ? '失敗'
         : '失败')
-    mocks.reach.send.mockResolvedValue({ success: true, data: {} })
+    mocks.reach.send.mockResolvedValue({
+      success: true,
+      data: { success: false },
+    })
+    expect((await (await contact(event(locale, body))).json()).data.sent).toBe(false)
+    mocks.reach.send.mockResolvedValue({
+      success: true,
+      data: { success: true, deferred: true, queueId: 'fixture' },
+    })
+    const queued = await (await contact(event(locale, body))).json()
+    expect(queued.data).toMatchObject({ sent: false, deferred: true })
+    expect(queued.data.message).toContain(locale === 'en-US'
+      ? 'queued'
+      : locale === 'ja-JP'
+        ? '待機中'
+        : '已排队')
+    mocks.reach.send.mockResolvedValue({
+      success: true,
+      data: { success: true },
+    })
     const sent = await (await contact(event(locale, body))).json()
     expect(sent.data.sent).toBe(true)
     expect(sent.data.message).toContain(locale === 'en-US'
@@ -99,4 +118,27 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('aPI fallback locale %s', (locale) =>
         ? '送信しました'
         : '成功')
   })
+})
+
+it('联系表单将访客输入作为邮件正文中的文本，并保留纯文本主题', async () => {
+  mocks.reach.isInitialized = true
+  vi.stubEnv('HAI_CONTACT_RECIPIENT', 'recipient@example.test')
+  mocks.reach.send.mockResolvedValue({
+    success: true,
+    data: { success: true },
+  })
+  const response = await contact(event('zh-CN', {
+    name: 'A & B',
+    email: 'test@example.test',
+    message: '<b>one & two</b>',
+  }))
+  expect((await response.json()).data.sent).toBe(true)
+  expect(mocks.reach.send).toHaveBeenCalledWith(expect.objectContaining({
+    vars: {
+      name: 'A &amp; B',
+      subjectName: 'A & B',
+      email: 'test@example.test',
+      message: '&lt;b&gt;one &amp; two&lt;/b&gt;',
+    },
+  }))
 })

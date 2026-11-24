@@ -129,6 +129,24 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.locator('#message')).toHaveValue('')
   })
 
+  test('contact queue acceptance shows pending delivery and clears input', async ({ page }) => {
+    await page.route('**/api/contact', route => route.fulfill({
+      json: {
+        success: true,
+        data: { sent: false, deferred: true },
+      },
+    }))
+    await page.goto('/contact')
+    await page.locator('#name').fill('Contact tester')
+    await page.locator('#email').fill('contact@example.com')
+    await page.locator('#message').fill('Please contact me about your services.')
+    await page.locator('button[type="submit"]').click()
+    await expect(page.locator('.hai-toast-item[data-variant="info"]')).toContainText('已排队')
+    await expect(page.locator('#name')).toHaveValue('')
+    await expect(page.locator('#email')).toHaveValue('')
+    await expect(page.locator('#message')).toHaveValue('')
+  })
+
   test('public pages render and support locale switch', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveTitle(/海纳智企|Hai Enterprise/)

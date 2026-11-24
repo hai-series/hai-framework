@@ -23,8 +23,11 @@
       })
       const data = await res.json()
 
-      if (res.ok && data.success && data.data?.sent === true) {
-        ui.toast.success(m.contact_submit_success())
+      if (res.ok && data.success && (data.data?.sent === true || data.data?.deferred === true)) {
+        if (data.data.deferred === true)
+          ui.toast.info(m.api_contact_queued())
+        else
+          ui.toast.success(m.contact_submit_success())
         name = ''
         email = ''
         message = ''
