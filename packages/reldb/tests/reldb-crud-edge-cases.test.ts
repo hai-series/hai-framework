@@ -128,6 +128,30 @@ describe('reldb.crud edge cases', () => {
       }
     })
 
+    it(`${label}: 空或只包含主键的更新白名单禁止其他字段`, async () => {
+      await ensureTable()
+      const unrestricted = reldb.crud.table<UserRow>({ table: 'users', dbType: label })
+      expect((await unrestricted.create({ name: '原名', email: 'original@example.test' })).success).toBe(true)
+
+      for (const updateColumns of [
+        [],
+        ['id'],
+      ]) {
+        const restricted = reldb.crud.table<UserRow>({ table: 'users', dbType: label, updateColumns })
+        const update = await restricted.updateById(1, { name: '新名' })
+        expect(update).toMatchObject({
+          success: false,
+          error: { code: HaiReldbError.CONFIG_ERROR.code },
+        })
+      }
+
+      const found = await unrestricted.findById(1)
+      expect(found).toMatchObject({
+        success: true,
+        data: { name: '原名' },
+      })
+    })
+
     // ─── createMany 边界 ───
 
     it(`${label}: createMany 含空对象的项应返回 CONFIG_ERROR`, async () => {

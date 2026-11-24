@@ -11,58 +11,67 @@
 ## 最小接入示例
 
 ```ts
-import { HaiReldbError, reldb } from '@h-ai/reldb'
+import { reldb } from '@h-ai/reldb'
 
-// 初始化
-// 打开本进程临时 SQLite 库，成功后可执行 SQL，失败读取 error。
+// 打开本进程的临时 SQLite 数据库。成功后才能执行 SQL。
 const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
 if (!initialized.success)
-  throw new Error(initialized.error.message)
+  throw new Error(initialized.error.message, { cause: initialized.error })
 
-// DDL
-// 用下方 ID、姓名和邮件字段建表，成功 data 无值，DDL 失败在 error 中。
-await reldb.ddl.createTable('users', {
-  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-  name: { type: 'TEXT', notNull: true },
-  email: { type: 'TEXT', unique: true },
-})
+try {
+  // 建表并确认成功后再写入，避免把结构错误当作业务写入异常。
+  const table = await reldb.ddl.createTable('users', {
+    id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    name: { type: 'TEXT', notNull: true },
+    email: { type: 'TEXT', unique: true },
+  })
+  if (!table.success)
+    throw new Error(table.error.message, { cause: table.error })
 
-// SQL
-// 将示例姓名及邮件绑定到两个占位符，data.changes 为插入行数，约束或执行失败读取 error。
-await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
-// 读取 users 所有行，data 是记录数组，刚插入后包含张三，查询失败读取 error。
-const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
+  // 绑定姓名和邮件。成功结果的 changes 为 1。
+  const inserted = await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['Ada', 'ada@example.com'])
+  if (!inserted.success)
+    throw new Error(inserted.error.message, { cause: inserted.error })
 
-// 分页查询
-// 按 ID 排序读取第一页，每页最多 20 条。成功 data 有记录与总数，失败读取 error。
-const page = await reldb.sql.queryPage<{ id: number, name: string }>({
-  sql: 'SELECT id, name FROM users ORDER BY id',
-  pagination: { page: 1, pageSize: 20 },
-})
+  // 按 ID 排序查询第一页。成功结果包含 Ada，total 为 1。
+  const page = await reldb.sql.queryPage<{ id: number, name: string }>({
+    sql: 'SELECT id, name FROM users ORDER BY id',
+    pagination: { page: 1, pageSize: 20 },
+  })
+  if (!page.success)
+    throw new Error(page.error.message, { cause: page.error })
 
-// CRUD
-// 用 users、主键和字段白名单创建 CRUD 仓库对象，下方用它执行写入和查询。
-const userCrud = reldb.crud.table({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
-  dbType: 'sqlite',
-})
-// 传李四和邮件创建第二位用户。成功包含影响行数，约束等失败读取 error。
-await userCrud.create({ name: '李四', email: 'li@test.com' })
-// 传主键 1 查找先前用户，成功 data 是对应记录或 null，查询失败读取 error。
-const user = await userCrud.findById(1)
+  // 将现有表和可写列配置交给 SQLite 仓库。
+  const users = reldb.crud.table<{ id: number, name: string, email: string | null }>({
+    table: 'users',
+    dbType: 'sqlite',
+    select: ['id', 'name', 'email'],
+    createColumns: ['name', 'email'],
+    updateColumns: ['name', 'email'],
+  })
 
-// 关闭
-// 无参数关闭本例的数据库连接，成功无 data，释放失败读取 error。
-await reldb.close()
+  // 使用仓库新增 Lin。成功结果的 changes 为 1。
+  const created = await users.create({ name: 'Lin', email: 'lin@example.com' })
+  if (!created.success)
+    throw new Error(created.error.message, { cause: created.error })
+
+  // 按主键 1 找回 Ada。查不到时，成功结果的 data 为 null。
+  const user = await users.findById(1)
+  if (!user.success)
+    throw new Error(user.error.message, { cause: user.error })
+  user.data // { id: 1, name: 'Ada', email: 'ada@example.com' }
+}
+finally {
+  // 关闭本例的数据库连接。关闭失败时保留原因。
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message, { cause: closed.error })
+}
 ```
 
 `reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password`、URL 内嵌凭证和 TLS 客户端私钥 `ssl.key` 会自动隐藏，便于排查状态但不应用于回放原始连接信息。
 
-多个部署节点同时准备模块结构时，使用 `reldb.prepareSchema(key, ({ ddl, sql }) => ...)`。PostgreSQL 通过固定模块标识的事务锁协调建表、检查索引和更新种子行，回调失败回滚。请通过回调提供的操作访问数据库，并将模型服务、容器等外部调用放在事务结束之后。其他提供方沿用自身 DDL 提交规则。
+多个 PostgreSQL 部署节点同时准备模块结构时，使用 `reldb.prepareSchema(key, ({ ddl, sql }) => ...)`。PostgreSQL 通过固定模块标识的事务锁协调建表、检查索引和更新种子行，回调失败回滚。请通过回调提供的操作访问数据库，并将模型服务、容器等外部调用放在事务结束之后。其他提供方沿用自身 DDL 提交规则。
 
 <a id="api-reference"></a>
 
@@ -75,7 +84,7 @@ await reldb.close()
 
 ### 连接、准备结构与关闭：`reldb`
 
-应用先连接数据库；同库结构准备通过 prepareSchema 协调，结束事务后才关闭连接。
+应用先连接数据库。PostgreSQL 可用 `prepareSchema` 协调多个实例的结构准备。关闭前先结束应用持有的事务。
 
 #### 接口清单
 
@@ -83,15 +92,17 @@ await reldb.close()
 | --- | --- | --- | --- | --- |
 | `reldb.init(config)` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
 | `reldb.close()` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema(key, prepare)` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.prepareSchema(key, prepare)` | 运行结构准备回调。PostgreSQL 按固定名称加事务锁，使用同一条连接 | `key: string` 是各节点共用的标识。异步回调接收 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
 
 #### 场景：连接、准备结构与关闭
 
-最小接入输入开发 SQLite 配置，init 与 close 成功无数据；prepareSchema 把当前连接的 ddl/sql 交给回调，成功数据是回调的结果。生产后端与清理边界见下文。
+PostgreSQL 在同一条连接上持有事务锁。回调失败时回滚。SQLite 和 MySQL 回调接收普通 `ddl`、`sql` 操作，按各自数据库规则执行。MySQL 操作由连接池借用连接，同一个 `key` 不提供跨进程锁。
+
+已连接时，如果新的配置未通过 Schema 校验，或环境要求使用 PostgreSQL/MySQL 而新配置选择了 SQLite，`init()` 返回配置错误，现有连接仍可用。通过检查的配置会进入替换流程。如果新连接失败，需要重新初始化。
 
 模块在健康检查通过后才允许业务读写。如果初始化失败，会尝试释放已经打开的资源。释放也失败时，返回的 `error.ext.cleanupPending` 为 `true`。
 
-关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()` 或 `init()` 会先重试释放原连接。检查 `await reldb.close()` 的结果，再停止数据库服务。
+关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()`，或发起通过配置校验的 `init()`，会先重试释放原连接。检查 `await reldb.close()` 的结果，再停止数据库服务。
 
 ```ts
 // 无参数关闭当前连接。成功释放资源，失败进入重试分支。
@@ -155,8 +166,12 @@ if (!dropTableResult.success)
 | `reldb.ddl.renameTable(oldName, newName)` | 重命名表 | `oldName: string, newName: string` 可信的原表名与新表名 | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
 | `reldb.ddl.createIndex(tableName, indexName, indexDef)` | 创建索引 | `tableName: string` 可信表名。`indexName: string` 可信索引名。`indexDef: ReldbIndexDef` 索引列及选项。[列与索引定义](#reldb-ddl-fields) | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
 | `reldb.ddl.dropIndex(indexName, ifExists?)` | 删除索引 | `indexName: string` 可信索引名。`ifExists?: boolean` 默认 true，目标不存在时跳过 | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
-| `reldb.ddl.raw(sql)` | 执行可信的结构变更语句 | `sql: string` 可信代码提供的结构 SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+| `reldb.ddl.raw(sql)` | 执行可信的结构变更语句 | `sql: string` 可信代码提供的结构 SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id VARCHAR(255) PRIMARY KEY)')` |
 | `reldb.schemaColumns(table, sql?)` | 检查表结构 | `table: string` 可信表名。`sql?: DmlOperations` 可传已有 SQL 操作对象，默认用当前连接 | `string[]` | `await reldb.schemaColumns('orders')` |
+
+在 MySQL 上用 `addColumn()` 添加外键列时，列和 `references` 约束在同一次结构变更中创建。只有某个索引名唯一定位一张表时，`dropIndex()` 才执行。如果多张表存在同名索引，返回 `DDL_FAILED` 并保留这些索引，`ifExists: true` 只跳过不存在的索引。迁移中需要删除指定表的索引时，可用可信静态 SQL 明确写出表名。
+
+SQLite 新建文本主键列时显式写 `notNull: true`，以拒绝空值。旧表需[检查已有结构和记录](../data/reldb.md#schema-migration-checks)。PostgreSQL 的 `prepareSchema()` 会检查已有同名部分索引的定义。如果定义不同或无法核对，返回失败，由调用方通过迁移处理。重复准备部分索引时，数据库账号需要创建临时表的权限。
 
 <a id="reldb-ddl-fields"></a>
 
@@ -213,7 +228,7 @@ const dropTableResult = await reldb.ddl.dropTable('demo_orders_old', true)
 if (!dropTableResult.success)
   return dropTableResult
 // 执行示例常量 DDL 创建标记表，成功无 data，驱动失败时返回原失败结果。
-const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)')
+const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id VARCHAR(255) PRIMARY KEY)')
 if (!rawResult.success)
   return rawResult
 // All successful DDL calls have no business data.
@@ -348,11 +363,11 @@ const ops = reldb.createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操�
 | --- | --- | --- | --- | --- |
 | `reldb.tx.begin()` | 开启手工事务 | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
 | `reldb.tx.wrap(fn)` | 自动提交或回滚回调中的事务 | `fn: TxWrapCallback<T>` 异步回调接收事务句柄。正常返回后提交，抛出时回滚 | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
-| `reldb.tx.wrapResult(fn)` | 根据回调的业务结果结束事务 | 返回 `Promise<HaiResult<T>>` 的回调 | 成功提交，失败回滚并保留原业务错误 | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
+| `reldb.tx.wrapResult(fn)` | 根据回调的业务结果结束事务 | 返回 `Promise<HaiResult<T>>` 的回调 | 成功提交。业务失败时回滚，回滚成功后保留原业务错误 | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
 
-##### 事务结束与失败规则
+开始 `commit()` 或 `rollback()` 后，事务立即拒绝新操作和重复结束请求，返回 `TRANSACTION_FAILED`。结束请求等待事务句柄已经接收的 SQL 操作完成，再向数据库发送提交或回滚命令。已经接收的 `tx.batch()` 会在当前事务内完成并返回成功或失败，即使调用方尚未等待它。业务代码仍要处理每次操作的结果，并等待结束请求的结果。
 
-一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
+SQLite 的普通全局 SQL 和 DDL 按调用顺序等待连接空闲，等待中的操作最多排队 30 秒。从 `wrap()` 或 `wrapResult()` 回调中误用全局入口会立即失败，此时应改用回调给出的 `tx`。使用 `begin()` 手动管理事务时也用 `tx` 执行本次事务内的操作。SQLite 提交失败后尝试回滚，如果回滚也失败，该连接退出服务，调用方需要执行 `close()` 后再 `init()`。PostgreSQL 如果因事务已中止而把 `COMMIT` 实际执行为回滚，提交结果为 `TRANSACTION_FAILED`。
 
 #### 场景：一起提交或回滚
 
@@ -520,7 +535,7 @@ await reldb.tx.wrap(async (tx) => {
 | `reldb.crud.table(config)` | 创建指定表的 CRUD 操作对象 | 必填 `config: CrudConfig<TItem>` 描述表到业务记录的映射。见[配置字段](#reldb-crud-config)。 | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
 | `repository.create(data, tx?)` | 新增记录 | `data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
 | `repository.createMany(items, tx?)` | 批量新增 | `items: Array<Record<string, unknown>>` 每项为一条记录的列名和值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
-| `repository.createOrUpdate(data, tx?)` | 按主键新增或更新 | `data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
+| `repository.createOrUpdate(data, tx?)` | 按配置的键新增或更新 | `data: Record<string, unknown>` 按数据库列名提供业务值。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
 | `repository.findById(id, tx?)` | 查找一条，缺失为空 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
 | `repository.getById(id, tx?)` | 查找一条，缺失失败 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
 | `repository.findAll(options?, tx?)` | 条件查询 | `options` 可选 `where`、`params`、`orderBy`、`limit`、`offset`；可传已有事务 `tx` | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
@@ -530,6 +545,8 @@ await reldb.tx.wrap(async (tx) => {
 | `repository.count(options?, tx?)` | 统计记录数 | `options` 可选 `where` 与 `params`（省略条件时统计整表）；可传 `tx` | `Promise<HaiResult<number>>` | `await repository.count()` |
 | `repository.exists(options?, tx?)` | 检查条件是否命中 | `options` 可选 `where` 与 `params`（省略条件时检查表内是否有记录）；可传 `tx` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
 | `repository.existsById(id, tx?)` | 检查主键是否存在 | `id` 主键值，类型应匹配建表列。`tx?: DmlWithTxOperations` 已有事务，省略时走普通连接 | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
+
+使用 `createOrUpdate()` 时，`idColumn` 必须对应主键或单列唯一键。以 MySQL 为例，`idColumn: "id"` 时，尝试插入新 ID `o2`，但邮箱已属于 `o1`，会返回 `DUPLICATE_ENTRY` 并保留 `o1`。未提供目标键时执行普通插入。提供 `tx` 时使用该事务，独立调用的 MySQL 新增或更新由框架开启事务。更新成功时，`changes` 是 UPDATE 驱动报告的行数。在 MySQL 上，只有插入分支才可能提供 `lastInsertRowid`。
 
 <a id="reldb-crud-config"></a>
 
@@ -541,7 +558,7 @@ await reldb.tx.wrap(async (tx) => {
 | `dbType` | `DbType` | 必填 | 当前连接的方言，用于生成 SQL。 |
 | `idColumn` | `string` | `id` | 主键定位、冲突更新和删除所用的列。 |
 | `select` | `string[]` | `*` | 返回记录的列。 |
-| `createColumns / updateColumns` | `string[]` | 按传入数据取列 | 限制可写入的列，更新仍排除主键。 |
+| `createColumns / updateColumns` | `string[]` | 按传入数据取列 | 限制可写入的列。省略白名单时按给定数据选列。显式空白名单不允许相应写入，更新仍排除主键。 |
 | `mapRow` | `(row: QueryRow) => TItem` | 可省略 | 把查询行转换为宿主业务对象。 |
 
 例如为 `orders` 设 `idColumn: "order_id"`、`select: ["order_id", "status"]`，`findById("o1")` 按 order_id 定位并返回两列，找不到返回 null。
@@ -923,7 +940,7 @@ if (!result.success) {
 
 ### 错误提示与关联日志
 
-唯一约束冲突统一返回 `HaiReldbError.DUPLICATE_ENTRY`（409）；超时、队列已满等已有错误码保持不变。业务按错误码分支，不解析本地化消息或驱动错误文本。日志保留驱动 code/schema/routine/constraint 和堆栈行号；数字绑定值不会误遮蔽这些诊断标识。
+唯一约束冲突返回 `HaiReldbError.DUPLICATE_ENTRY`（409），SQLite 的 sync 和 worker 执行方式一致；超时、队列已满等已有错误码保持不变。业务按错误码分支，不解析本地化消息或驱动错误文本。日志保留驱动 code/schema/routine/constraint 和堆栈行号；数字绑定值不会误遮蔽这些诊断标识。
 
 HTTP 错误向浏览器返回当前语言的提示和追踪编号。编号既在响应的 `error.traceId`，也在 `X-Trace-Id` 响应头，等于本次请求的 `requestId`。用户可在 Toast 的排查信息中展开并复制编号，开发人员可用它查找前后端日志。异常详情、堆栈和操作信息去除凭据后写入服务端日志。字段校验仅返回字段名和可显示的错误提示。
 

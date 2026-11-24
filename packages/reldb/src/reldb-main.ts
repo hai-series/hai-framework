@@ -230,10 +230,6 @@ export const reldb: ReldbFunctions = {
       resolveInit = resolve
     })
     try {
-      const cleanup = await closeOwnedProvider()
-      if (!cleanup.success)
-        return cleanup
-
       logger.info('Initializing RelDB module')
 
       const parseResult = ReldbConfigSchema.safeParse(config)
@@ -246,6 +242,10 @@ export const reldb: ReldbFunctions = {
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'sqlite'))
         return core.err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sharedBackendRequired'))
+
+      const cleanup = await closeOwnedProvider()
+      if (!cleanup.success)
+        return cleanup
 
       try {
         const provider = createProvider(parsed)
@@ -373,19 +373,25 @@ export const reldb: ReldbFunctions = {
    *
    * @example
    * ```ts
-   * // 提取 JSON 字段值
-   * const { sql, params } = reldb.json.extract('settings', '$.theme')
-   * const rows = await reldb.sql.query(
-   *   `SELECT * FROM users WHERE ${sql} = ?`,
-   *   [...params, '"dark"'],
-   * )
+   * import { reldb } from '@h-ai/reldb'
    *
-   * // 设置 JSON 字段路径
-   * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-   * await reldb.sql.execute(
-   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
-   *   [...params, userId],
+   * // 数据库已初始化，users 表已保存 u1 的 settings。
+   * const userId = 'u1'
+   * const theme = reldb.json.extract('settings', '$.theme')
+   * const result = await reldb.sql.get<{ theme: unknown }>(
+   *   `SELECT ${theme.sql} AS theme FROM users WHERE id = ?`,
+   *   [...theme.params, userId],
    * )
+   * if (!result.success) throw new Error(result.error.message)
+   * const previousTheme = result.data?.theme // 未找到用户时没有主题，找到时按当前后端返回值读取。
+   *
+   * const updatedTheme = reldb.json.set('settings', '$.theme', 'dark')
+   * const updated = await reldb.sql.execute(
+   *   `UPDATE users SET settings = ${updatedTheme.sql} WHERE id = ?`,
+   *   [...updatedTheme.params, userId],
+   * )
+   * if (!updated.success) throw new Error(updated.error.message)
+   * const affectedUsers = updated.data.changes
    * ```
    */
   get json(): ReldbJsonOps {

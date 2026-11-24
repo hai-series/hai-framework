@@ -221,6 +221,8 @@ export interface DdlOperations {
 
   /**
    * 添加列
+   *
+   * MySQL 在同一条 ALTER TABLE 中创建列和 references 指定的外键。
    * @param tableName - 表名
    * @param columnName - 列名
    * @param columnDef - 列定义
@@ -283,8 +285,10 @@ export interface DdlOperations {
 
   /**
    * 删除索引
+   *
+   * MySQL 在当前库按名称查找索引。多张表使用同一名称时返回 DDL_FAILED。
    * @param indexName - 索引名
-   * @param ifExists - 是否使用 IF EXISTS（默认 true）
+   * @param ifExists - 目标不存在时是否成功返回（默认 true）
    * @example
    * ```ts
    * import { reldb } from '@h-ai/reldb'
@@ -600,13 +604,13 @@ export interface ReldbCrudCountOptions {
 export interface CrudConfig<TItem> {
   /** 表名 */
   table: string
-  /** 主键列名（默认 id） */
+  /** 主键或单列唯一键的列名（默认 id），也是插入或更新的冲突目标。 */
   idColumn?: string
   /** 查询列（默认 *） */
   select?: string[]
   /** 允许插入的列（不填则使用数据本身列） */
   createColumns?: string[]
-  /** 允许更新的列（不填则使用数据本身列） */
+  /** 允许更新的列（省略时使用数据本身的非主键列，空数组禁止更新）。 */
   updateColumns?: string[]
   /** 行映射函数（可选） */
   mapRow?: (row: QueryRow) => TItem
@@ -686,6 +690,12 @@ export interface BaseReldbCrudRepositoryConfig<TItem> {
 export interface ReldbCrudRepository<TItem> {
   create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
   createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
+  /**
+   * 按配置的唯一键插入或更新。MySQL 更新时返回实际 UPDATE 的计数。
+   * @param data - 以数据库列名提供插入所需字段及允许更新的值。
+   * @param tx - 可选，复用调用方事务。
+   * @returns 执行结果。MySQL 遇到其他唯一键冲突且目标行不存在时返回 DUPLICATE_ENTRY。
+   */
   createOrUpdate: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
   findById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<TItem | null>>
   getById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<TItem>>
@@ -779,9 +789,9 @@ export type TxWrapCallback<T> = (tx: DmlWithTxOperations) => Promise<T>
  * ```
  */
 export interface TxManager {
-  /** 开启事务（分步事务） */
+  /** 开启事务（分步事务）。SQLite 应使用返回的句柄访问数据库，独立操作等待本事务结束。 */
   begin: () => Promise<HaiResult<DmlWithTxOperations>>
-  /** 包裹事务（自动提交/回滚） */
+  /** 包裹事务（自动提交/回滚）。回调内通过传入的事务句柄访问数据库。 */
   wrap: <T>(fn: TxWrapCallback<T>) => Promise<HaiResult<T>>
   /**
    * 回调返回成功时提交，返回业务失败或抛错时回滚。
@@ -842,6 +852,7 @@ export interface ReldbFunctions {
   /**
    * 初始化数据库连接
    *
+   * 配置 Schema 或生产共享后端检查失败时保留当前连接。
    * @param config - 数据库配置
    * @returns 初始化结果
    * @example
@@ -881,6 +892,7 @@ export interface ReldbFunctions {
   /**
    * 准备模块结构。PostgreSQL 在一条连接上等待同名事务锁，再执行 DDL 和结构检查。
    * 失败结果或异常均回滚；回调使用传入的操作。其他后端沿用各自 DDL 提交规则。
+   * PostgreSQL 复用已有部分索引前比较数据库归一化后的谓词。验证需要 TEMP 权限，定义不同须显式迁移。
    * @param key - 部署各节点共用的固定模块标识。
    * @param prepare - 同一结构变更的检查、DDL 和种子写入。
    * @returns 结构准备结果。

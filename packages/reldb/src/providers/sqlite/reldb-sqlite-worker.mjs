@@ -5,8 +5,8 @@
  * 持有唯一 better-sqlite3 连接，按 FIFO 串行处理主线程消息，把同步查询的阻塞移出主线程事件循环。
  *
  * 消息协议：
- *   主线程 → worker: { id, op: 'all'|'get'|'run'|'exec'|'batch'|'close', sql?, params?, statements? }
- *   worker → 主线程: { id, ok, result } | { id, ok:false, error:{ message } } | { type:'ready'|'init-error' }
+ *   主线程 → worker: { id, op: 'all'|'get'|'run'|'exec'|'rollbackIfActive'|'batch'|'close', sql?, params?, statements? }
+ *   worker → 主线程: { id, ok, result } | { id, ok:false, error:{ message, code? } } | { type:'ready'|'init-error' }
  */
 
 import { createRequire } from 'node:module'
@@ -25,6 +25,9 @@ function serializeError(error) {
     message: error instanceof Error
       ? error.message
       : String(error),
+    code: error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : undefined,
   }
 }
 
@@ -125,6 +128,11 @@ async function initialize() {
         case 'exec': {
           db.exec(sql)
           result = undefined
+          break
+        }
+        case 'rollbackIfActive': {
+          if (db.inTransaction)
+            db.exec('ROLLBACK')
           break
         }
         case 'batch': {

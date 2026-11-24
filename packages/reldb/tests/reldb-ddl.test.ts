@@ -219,12 +219,87 @@ describe('reldb.ddl', () => {
     tableQuery: 'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ?',
   }))
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon({
-    label: 'mysql',
-    columnQuery: 'SELECT COLUMN_NAME as name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\'',
-    indexQuery: 'SELECT INDEX_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\' AND INDEX_NAME = ?',
-    tableQuery: 'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
-  }))
+  defineDbSuite('mysql', mysqlEnv, () => {
+    defineCommon({
+      label: 'mysql',
+      columnQuery: 'SELECT COLUMN_NAME as name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\'',
+      indexQuery: 'SELECT INDEX_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\' AND INDEX_NAME = ?',
+      tableQuery: 'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+    })
+
+    it('mysql: addColumn 原子地添加列和外键并保留级联动作', async () => {
+      for (const table of ['ddl_parent', 'ddl_child']) {
+        expect((await reldb.ddl.createTable(table, {
+          id: { type: 'INTEGER', primaryKey: true },
+        })).success).toBe(true)
+      }
+      const rejected = await reldb.ddl.addColumn('ddl_child', 'missing_parent_id', {
+        type: 'INTEGER',
+        references: { table: 'ddl_missing_parent', column: 'id' },
+      })
+      expect(rejected).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.DDL_FAILED.code },
+      })
+      expect(await reldb.schemaColumns('ddl_child')).toMatchObject({
+        success: true,
+        data: ['id'],
+      })
+
+      const added = await reldb.ddl.addColumn('ddl_child', 'parent_id', {
+        type: 'INTEGER',
+        references: {
+          table: 'ddl_parent',
+          column: 'id',
+          onDelete: 'CASCADE',
+          onUpdate: 'CASCADE',
+        },
+      })
+      expect(added.success).toBe(true)
+      const orphan = await reldb.sql.execute('INSERT INTO ddl_child (id, parent_id) VALUES (?, ?)', [1, 9])
+      expect(orphan).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.QUERY_FAILED.code },
+      })
+      expect((await reldb.sql.execute('INSERT INTO ddl_parent (id) VALUES (?)', [1])).success).toBe(true)
+      expect((await reldb.sql.execute('INSERT INTO ddl_child (id, parent_id) VALUES (?, ?)', [1, 1])).success).toBe(true)
+      expect((await reldb.sql.execute('UPDATE ddl_parent SET id = ? WHERE id = ?', [2, 1])).success).toBe(true)
+      expect(await reldb.sql.get('SELECT parent_id FROM ddl_child WHERE id = ?', [1]))
+        .toMatchObject({
+          success: true,
+          data: { parent_id: 2 },
+        })
+      expect((await reldb.sql.execute('DELETE FROM ddl_parent WHERE id = ?', [2])).success).toBe(true)
+      expect(await reldb.sql.get('SELECT id FROM ddl_child WHERE id = ?', [1])).toMatchObject({ success: true, data: null })
+    })
+
+    it('mysql: dropIndex 拒绝跨表同名索引且保留两个索引', async () => {
+      const tables = ['ddl_index_a', 'ddl_index_b']
+      for (const table of tables) {
+        expect((await reldb.ddl.createTable(table, {
+          id: { type: 'INTEGER', primaryKey: true },
+          code: { type: 'TEXT' },
+        })).success).toBe(true)
+        expect((await reldb.ddl.createIndex(table, 'idx_shared_name', {
+          columns: ['code'],
+          unique: true,
+        })).success).toBe(true)
+      }
+      const dropped = await reldb.ddl.dropIndex('idx_shared_name', true)
+      expect(dropped).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.DDL_FAILED.code },
+      })
+      const indexes = await reldb.sql.query<{ name: string }>(`
+        SELECT DISTINCT TABLE_NAME AS name FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? ORDER BY TABLE_NAME
+      `, ['idx_shared_name'])
+      expect(indexes).toMatchObject({
+        success: true,
+        data: tables.map(name => ({ name })),
+      })
+    })
+  })
 
   defineDbSuite('postgresql', postgresEnv, () => defineCommon({
     label: 'postgresql',

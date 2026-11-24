@@ -9,53 +9,62 @@
 Initialize the configured database, then select SQL, a typed CRUD table or a transaction. Pass data as bound parameters and choose identifiers from trusted definitions. Check `HaiResult.success` before using data.
 
 ```ts
-import { HaiReldbError, reldb } from '@h-ai/reldb'
+import { reldb } from '@h-ai/reldb'
 
-// 初始化
-// Open an in-memory SQLite database for this process. Success enables SQL. Read error on failure.
+// Open an in-memory SQLite database. Run SQL after initialization succeeds.
 const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
 if (!initialized.success)
-  throw new Error(initialized.error.message)
+  throw new Error(initialized.error.message, { cause: initialized.error })
 
-// DDL
-// Create users with the ID, name, and email fields below. Success has no data. DDL failures appear in error.
-await reldb.ddl.createTable('users', {
-  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-  name: { type: 'TEXT', notNull: true },
-  email: { type: 'TEXT', unique: true },
-})
+try {
+  // Create the table and check the result before writing any data.
+  const table = await reldb.ddl.createTable('users', {
+    id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    name: { type: 'TEXT', notNull: true },
+    email: { type: 'TEXT', unique: true },
+  })
+  if (!table.success)
+    throw new Error(table.error.message, { cause: table.error })
 
-// SQL
-// Bind the sample name and email to the two placeholders. data.changes is the insert count. Check error on failure.
-await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
-// Read all users rows. Success is an array containing the inserted user. Check error on failure.
-const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
+  // Bind the name and email. On success, changes is 1.
+  const inserted = await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['Ada', 'ada@example.com'])
+  if (!inserted.success)
+    throw new Error(inserted.error.message, { cause: inserted.error })
 
-// 分页查询
-// Read page 1 in ID order, up to 20 rows. Success has items and total. Check error on failure.
-const page = await reldb.sql.queryPage<{ id: number, name: string }>({
-  sql: 'SELECT id, name FROM users ORDER BY id',
-  pagination: { page: 1, pageSize: 20 },
-})
+  // Read the first page in ID order. The result contains Ada and total is 1.
+  const page = await reldb.sql.queryPage<{ id: number, name: string }>({
+    sql: 'SELECT id, name FROM users ORDER BY id',
+    pagination: { page: 1, pageSize: 20 },
+  })
+  if (!page.success)
+    throw new Error(page.error.message, { cause: page.error })
 
-// CRUD
-// Build a CRUD repository for users using the key and allowed columns below. The following calls use that object.
-const userCrud = reldb.crud.table({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
-  dbType: 'sqlite',
-})
-// Create the second user from the sample name and email. Success includes the affected-row count. Check error on failure.
-await userCrud.create({ name: '李四', email: 'li@test.com' })
-// Look up key 1 for the first user. Success data is the row or null. Check error on failure.
-const user = await userCrud.findById(1)
+  // Create a repository for this table with the SQLite dialect and allowed columns.
+  const users = reldb.crud.table<{ id: number, name: string, email: string | null }>({
+    table: 'users',
+    dbType: 'sqlite',
+    select: ['id', 'name', 'email'],
+    createColumns: ['name', 'email'],
+    updateColumns: ['name', 'email'],
+  })
 
-// 关闭
-// Close this database connection without arguments. Success has no data. Check error on failure.
-await reldb.close()
+  // Insert Lin through the repository. On success, changes is 1.
+  const created = await users.create({ name: 'Lin', email: 'lin@example.com' })
+  if (!created.success)
+    throw new Error(created.error.message, { cause: created.error })
+
+  // Find Ada by key 1. A successful lookup with no match has null data.
+  const user = await users.findById(1)
+  if (!user.success)
+    throw new Error(user.error.message, { cause: user.error })
+  user.data // { id: 1, name: 'Ada', email: 'ada@example.com' }
+}
+finally {
+  // Close the database connection. Preserve the error details if cleanup fails.
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message, { cause: closed.error })
+}
 ```
 
 <a id="api-list"></a>
@@ -73,7 +82,7 @@ Import the module as in the quick start. Except for lifecycle examples, run scen
 
 ### Connect, prepare and close: `reldb`
 
-Connect first, coordinate schema preparation with prepareSchema and end transactions before closing.
+Connect first. With PostgreSQL, use `prepareSchema` to coordinate schema preparation across instances. End transactions before closing the connection.
 
 #### Interface list
 
@@ -81,11 +90,13 @@ Connect first, coordinate schema preparation with prepareSchema and end transact
 | --- | --- | --- | --- | --- |
 | `reldb.init(config)` | Create and verify the database connection | Required `config: ReldbConfigInput`. See [backend configuration](../configuration/reldb.en.md). | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
 | `reldb.close()` | Release the connection after ending active transactions | None | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema(key, prepare)` | Coordinate a schema change by name on the same database connection | Required `key: string` identifies the schema work. The async `prepare` callback receives the current connection’s `ddl` and `sql`. | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.prepareSchema(key, prepare)` | Run schema preparation. PostgreSQL uses a named transaction lock and one connection | Required `key: string` shared by deployments. The async callback receives `ddl` and `sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
 
 #### Scenario: Connect, prepare and close
 
-The quick start uses development SQLite. init and close have no business data; prepareSchema supplies this connection’s ddl/sql and returns the callback result. Production and cleanup rules follow.
+PostgreSQL holds a transaction lock on one connection and rolls back if the callback fails. SQLite and MySQL provide ordinary `ddl` and `sql` operations governed by their database rules. MySQL borrows pooled connections, and a shared `key` supplies no cross-process lock.
+
+If an active connection exists and new settings fail schema validation or the deployment check for a shared backend, `init()` returns a configuration error and keeps the existing connection usable. Valid settings enter the replacement flow. If the new connection fails, initialize again.
 
 [Detailed parameters and workflows](reldb.md#connection)
 
@@ -106,8 +117,12 @@ Use trusted table names, columns and definitions, and inspect destructive change
 | `reldb.ddl.renameTable(oldName, newName)` | Rename a table | `oldName: string, newName: string` Trusted former and new table names | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
 | `reldb.ddl.createIndex(tableName, indexName, indexDef)` | Create an index | `tableName: string` Trusted table name. `indexName: string` Trusted index name. `indexDef: ReldbIndexDef` Indexed columns and options. See [column and index fields](#reldb-ddl-fields) | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
 | `reldb.ddl.dropIndex(indexName, ifExists?)` | Drop an index | `indexName: string` Trusted index name. `ifExists?: boolean` Defaults to true, skipping an absent target | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
-| `reldb.ddl.raw(sql)` | Execute trusted DDL | `sql: string` Trusted schema SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+| `reldb.ddl.raw(sql)` | Execute trusted DDL | `sql: string` Trusted schema SQL | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id VARCHAR(255) PRIMARY KEY)')` |
 | `reldb.schemaColumns(table, sql?)` | Inspect table columns | `table: string` Trusted table name. `sql?: DmlOperations` Optional existing SQL operations, defaulting to the current connection | `string[]` | `await reldb.schemaColumns('orders')` |
+
+On MySQL, `addColumn()` creates the column and its `references` constraint in one schema change. If the same index name appears on multiple tables, `dropIndex()` returns `DDL_FAILED` and preserves those indexes. `ifExists: true` skips only a missing index. To delete an index from a specific table in a migration, name the table explicitly in trusted SQL.
+
+Use `notNull: true` on a new SQLite text primary key to reject null values. For older tables, [verify the schema and existing rows](../data/reldb.en.md#schema-migration-checks). PostgreSQL `prepareSchema()` checks the definition of an existing partial index with the same name. A mismatched or unverifiable definition causes failure so the caller can migrate it explicitly. Repeated preparation of a partial index requires permission to create temporary tables.
 
 <a id="reldb-ddl-fields"></a>
 
@@ -164,7 +179,7 @@ const dropTableResult = await reldb.ddl.dropTable('demo_orders_old', true)
 if (!dropTableResult.success)
   return dropTableResult
 // Execute the trusted constant DDL for the marker table. Success has no data. Return the failed result on failure.
-const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)')
+const rawResult = await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id VARCHAR(255) PRIMARY KEY)')
 if (!rawResult.success)
   return rawResult
 // All successful DDL calls have no business data.
@@ -274,7 +289,13 @@ Use one transaction for related reads and writes. Manually opened transactions m
 | --- | --- | --- | --- | --- |
 | `reldb.tx.begin()` | Begin a manual transaction | None | `DmlWithTxOperations` | `await reldb.tx.begin()` |
 | `reldb.tx.wrap(fn)` | Commit or roll back a transaction callback | `fn: TxWrapCallback<T>` Async callback receiving the transaction. Returning commits, and throwing rolls back | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
-| `reldb.tx.wrapResult(fn)` | End the transaction according to the business result | Callback returning `Promise<HaiResult<T>>` | Commit on success, roll back and preserve the business error on failure | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
+| `reldb.tx.wrapResult(fn)` | End the transaction according to the business result | Callback returning `Promise<HaiResult<T>>` | Commit on success. On business failure, preserve the original error after a successful rollback | `await reldb.tx.wrapResult(tx => tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1']))` |
+
+Once `commit()` or `rollback()` starts, the transaction immediately rejects new operations and further finish requests with `TRANSACTION_FAILED`. The finish request waits for SQL operations already accepted by the transaction handle before sending its command to the database. An accepted `tx.batch()` returns its success or failure inside the transaction even if the caller has yet to await it. Check each operation and the final transaction result.
+
+Both SQLite executors report unique constraint violations as `DUPLICATE_ENTRY`.
+
+Ordinary global SQLite SQL and DDL wait for the connection in call order, with a 30-second queue timeout. Global operations called from a `wrap()` or `wrapResult()` callback fail immediately. Use its `tx` argument, or the handle returned by `begin()`, for work in the transaction. If a SQLite commit fails, RelDB attempts a rollback. If rollback also fails, the connection stops serving requests. Call `close()` and then `init()`. When PostgreSQL executes `COMMIT` as a rollback because the transaction was aborted, the commit returns `TRANSACTION_FAILED`.
 
 #### Scenario: Commit or roll back together
 
@@ -313,7 +334,7 @@ Map table fields to application objects with a repository, then create, query, u
 | `reldb.crud.table(config)` | Create CRUD operations for a table | Required `config: CrudConfig<TItem>` maps the table to business records. See [configuration fields](#reldb-crud-config). | Create a typed table handle for common create/read/update/delete operations. | `reldb.crud.table('orders')` |
 | `repository.create(data, tx?)` | Insert a record | `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
 | `repository.createMany(items, tx?)` | Insert records | `items: Array<Record<string, unknown>>` Each item maps a record’s columns to values. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
-| `repository.createOrUpdate(data, tx?)` | Upsert by ID | `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
+| `repository.createOrUpdate(data, tx?)` | Upsert by the configured key | `data: Record<string, unknown>` Business values keyed by database column name. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
 | `repository.findById(id, tx?)` | Find, allowing a missing record | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
 | `repository.getById(id, tx?)` | Get, failing if missing | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
 | `repository.findAll(options?, tx?)` | Query records | Optional `options` accepts `where`, `params`, `orderBy`, `limit`, and `offset`. Pass `tx` to use an existing transaction | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
@@ -323,6 +344,8 @@ Map table fields to application objects with a repository, then create, query, u
 | `repository.count(options?, tx?)` | Count records | Optional `options` accepts `where` and `params`. Without a condition, count all rows. Optional `tx` | `Promise<HaiResult<number>>` | `await repository.count()` |
 | `repository.exists(options?, tx?)` | Test a condition | Optional `options` accepts `where` and `params`. Without a condition, check whether the table contains any rows. Optional `tx` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
 | `repository.existsById(id, tx?)` | Test an ID | `id` Primary-key value matching the column type. `tx?: DmlWithTxOperations` Existing transaction. Omit for normal connection use | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
+
+For `createOrUpdate()`, `idColumn` must identify a primary key or a unique single column. In MySQL, with `idColumn: "id"`, inserting a new ID `o2` with an email that belongs to `o1` returns `DUPLICATE_ENTRY` and leaves `o1` intact. Without a target key, the operation performs a regular INSERT. Standalone MySQL upserts open a transaction and calls with `tx` use that transaction. On update, `changes` is the affected-row count from UPDATE. With MySQL, only the insert path may produce `lastInsertRowid`.
 
 <a id="reldb-crud-config"></a>
 
@@ -334,7 +357,7 @@ Map table fields to application objects with a repository, then create, query, u
 | `dbType` | `DbType` | Required | Dialect of the current connection, used to generate SQL. |
 | `idColumn` | `string` | `id` | Column used for lookups, conflict updates, and deletes. |
 | `select` | `string[]` | `*` | Columns to return. |
-| `createColumns / updateColumns` | `string[]` | Use input data columns | Restrict writable columns. Updates still exclude the primary key. |
+| `createColumns / updateColumns` | `string[]` | Use input data columns | Restrict writable columns. Omit a list to use the supplied fields. An explicit empty list allows no writes of that kind, and updates exclude the primary key |
 | `mapRow` | `(row: QueryRow) => TItem` | Optional | Map each queried row into the application object. |
 
 With `idColumn: "order_id"` and `select: ["order_id", "status"]` for `orders`, `findById("o1")` looks up by order_id and returns those columns or null if absent.

@@ -15,11 +15,13 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
+  TxWrapCallback,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 import type { ReldbProvider } from './reldb-provider-types.js'
 
 import type { SqliteEngine } from './sqlite/reldb-sqlite-engine.js'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { core } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
@@ -56,8 +58,10 @@ export function createSqliteProvider(): ReldbProvider {
   /** 只有健康检查完成的连接才可供业务使用；清理失败仍保留底层资源。 */
   let ready = false
   let closing: Promise<HaiResult<void>> | null = null
-  /** 串行化 SQLite 事务，关闭前等待所有借出事务归还。 */
-  let txChain: Promise<void> = Promise.resolve()
+  /** 普通操作和事务共享唯一连接；关闭前等待已接受的操作归还执行权。 */
+  let connectionQueue: Promise<void> = Promise.resolve()
+  let unusableEngine: SqliteEngine | null = null
+  const transactionScope = new AsyncLocalStorage<{ active: boolean }>()
   let currentConfig: ReldbConfig | null = null
 
   /** 保留所有权直到释放成功；合并并发关闭且立即阻止新操作。 */
@@ -71,10 +75,10 @@ export function createSqliteProvider(): ReldbProvider {
       return Promise.resolve(core.ok(undefined))
     closing = (async (): Promise<HaiResult<void>> => {
       try {
-        // 在途事务拥有独立上下文；先等待释放，再关闭唯一引擎。
-        await txChain.catch(() => undefined)
+        await connectionQueue
         await owned.close()
         engine = null
+        unusableEngine = null
         return core.ok(undefined)
       }
       catch (error) {
@@ -88,30 +92,28 @@ export function createSqliteProvider(): ReldbProvider {
     return closing
   }
 
-  /** 事务锁获取超时（毫秒），防止永久阻塞 */
-  const TX_LOCK_TIMEOUT_MS = 30_000
+  /** SQLite 连接执行权获取超时（毫秒）。 */
+  const CONNECTION_LOCK_TIMEOUT_MS = 30_000
 
   /**
-   * 获取事务锁，带超时保护
-   *
-   * 当锁等待超过 TX_LOCK_TIMEOUT_MS 时抛出超时错误，防止无限阻塞。
+   * 按调用顺序获取连接执行权。超时的队列项完成后会被跳过。
    */
-  async function acquireTxLock(): Promise<() => void> {
+  async function acquireConnectionLock(): Promise<() => void> {
     let release!: () => void
     const current = new Promise<void>((resolve) => {
       release = resolve
     })
-    const prev = txChain
-    txChain = txChain.then(() => current)
+    const prev = connectionQueue
+    connectionQueue = prev.then(() => current)
 
     // 带超时的等待
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        // 超时后释放锁链，避免后续事务也阻塞
+        // 预先释放本项，前一项结束后队列可以继续。
         release()
-        reject(new Error(`SQLite transaction lock acquisition timed out after ${TX_LOCK_TIMEOUT_MS}ms`))
-      }, TX_LOCK_TIMEOUT_MS)
+        reject(new Error(`SQLite connection lock acquisition timed out after ${CONNECTION_LOCK_TIMEOUT_MS}ms`))
+      }, CONNECTION_LOCK_TIMEOUT_MS)
     })
 
     try {
@@ -124,6 +126,30 @@ export function createSqliteProvider(): ReldbProvider {
     }
 
     return release
+  }
+
+  function reentrantOperationError() {
+    return core.err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_sqliteOperationRequiresTransaction'))
+  }
+
+  function canUseEngine(owned: SqliteEngine): boolean {
+    return owned !== unusableEngine && owned.isOpen()
+  }
+
+  /** 回调内误用全局入口会与自己持有的执行权互等，因此直接返回失败。 */
+  async function withEngine<T>(run: (owned: SqliteEngine) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    if (transactionScope.getStore()?.active)
+      return reentrantOperationError()
+    const owned = engine!
+    const release = await acquireConnectionLock()
+    try {
+      if (!canUseEngine(owned))
+        return core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+      return await run(owned)
+    }
+    finally {
+      release()
+    }
   }
 
   // ─── 操作上下文 ───
@@ -167,6 +193,9 @@ export function createSqliteProvider(): ReldbProvider {
         const extras: string[] = []
         if (d.primaryKey && d.autoIncrement)
           extras.push('AUTOINCREMENT')
+        // SQLite 文本主键需要单独应用调用方声明的非空约束。
+        if (d.type === 'TEXT' && d.primaryKey && d.notNull)
+          extras.push('NOT NULL')
         return extras
       },
     })
@@ -181,156 +210,166 @@ export function createSqliteProvider(): ReldbProvider {
 
   // ─── DDL 操作 ───
 
+  function executeDdl(sql: string): Promise<HaiResult<void>> {
+    return withEngine(async (owned) => {
+      await owned.exec(sql)
+      return core.ok(undefined)
+    })
+  }
+
   const rawDdl: DdlOperations = {
-    async createTable(name, columns, ifNotExists = true) {
+    createTable(name, columns, ifNotExists = true) {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(sqliteBuildColumnSql, quotedTable, columns, ifNotExists)
-      await engine!.exec(sql)
-      return core.ok(undefined)
+      return executeDdl(sql)
     },
-    async dropTable(name, ifExists) {
+    dropTable(name, ifExists) {
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      await engine!.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
-      return core.ok(undefined)
+      return executeDdl(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
     },
-    async addColumn(table, column, def) {
+    addColumn(table, column, def) {
       const colSql = sqliteBuildColumnSql(column, def)
-      await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
-      return core.ok(undefined)
+      return executeDdl(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
     },
-    async dropColumn(table, column) {
-      await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
-      return core.ok(undefined)
+    dropColumn(table, column) {
+      return executeDdl(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
     },
-    async renameTable(oldName, newName) {
-      await engine!.exec(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
-      return core.ok(undefined)
+    renameTable(oldName, newName) {
+      return executeDdl(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
     },
-    async createIndex(table, index, def) {
+    createIndex(table, index, def) {
       const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
-      await engine!.exec(sql)
-      return core.ok(undefined)
+      return executeDdl(sql)
     },
-    async dropIndex(index, ifExists = true) {
-      const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
-      await engine!.exec(sql)
-      return core.ok(undefined)
+    dropIndex(index, ifExists = true) {
+      return executeDdl(buildDefaultDropIndexSql(quoteIdentifier, index, ifExists))
     },
-    async raw(sql) {
-      await engine!.exec(sql)
-      return core.ok(undefined)
-    },
+    raw: executeDdl,
   }
 
   // ─── DML 操作 ───
 
-  const rawDml: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-      const rows = await engine!.all(sql, params)
-      return core.ok(rows as T[])
-    },
-    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-      const row = await engine!.get(sql, params)
-      return core.ok((row as T) ?? null)
-    },
-    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-      const result = await engine!.run(sql, params)
-      return core.ok(result)
-    },
-    async batch(statements) {
-      // 与显式事务串行，避免并发 BEGIN 导致 "cannot start a transaction within a transaction"。
-      const releaseTxLock = await acquireTxLock()
-      try {
-        await engine!.batch(statements)
-        return core.ok(undefined)
-      }
-      catch (error) {
-        return core.err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', {
-          params: {
-            error: String(error),
-          },
-        }), error)
-      }
-      finally {
-        releaseTxLock()
-      }
-    },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
-      const result = await queryPageAsync<T>(
-        (sqlStr, params) => engine!.all(sqlStr, params),
-        options,
-      )
-      return core.ok(result)
-    },
+  function createSqliteDmlOps(run: typeof withEngine, inTransaction = false): DmlOperations {
+    return {
+      query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
+        return run(async owned => core.ok((await owned.all(sql, params)) as T[]))
+      },
+      get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
+        return run(async owned => core.ok(((await owned.get(sql, params)) as T) ?? null))
+      },
+      execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
+        return run(async owned => core.ok(await owned.run(sql, params)))
+      },
+      batch(statements) {
+        return run(async (owned) => {
+          if (inTransaction) {
+            for (const { sql, params } of statements)
+              await owned.run(sql, params)
+            return core.ok(undefined)
+          }
+          try {
+            await owned.batch(statements)
+            return core.ok(undefined)
+          }
+          catch (error) {
+            return core.err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', {
+              params: {
+                error: String(error),
+              },
+            }), error)
+          }
+        })
+      },
+      queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
+        return run(async (owned) => {
+          const result = await queryPageAsync<T>((sql, params) => owned.all(sql, params), options)
+          return core.ok(result)
+        })
+      },
+    }
   }
 
   // ─── 事务 ───
 
-  /** 创建事务连接上的 DML 操作（无守卫，由 createTxHandle 统一守卫）。事务内批量不再包裹嵌套事务。 */
-  function createSqliteTxDmlOps(txEngine: SqliteEngine): DmlOperations {
-    return {
-      async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-        return core.ok((await txEngine.all(sql, params)) as T[])
-      },
-      async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-        return core.ok(((await txEngine.get(sql, params)) as T) ?? null)
-      },
-      async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-        return core.ok(await txEngine.run(sql, params))
-      },
-      async batch(statements) {
-        // 已处于显式事务中，逐条执行即可，不再开启嵌套事务。
-        for (const { sql: s, params } of statements) {
-          await txEngine.run(s, params)
-        }
-        return core.ok(undefined)
-      },
-      async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
-        const result = await queryPageAsync<T>(
-          (sqlStr, params) => txEngine.all(sqlStr, params),
-          options,
-        )
-        return core.ok(result)
-      },
-    }
-  }
-
   async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
+    if (transactionScope.getStore()?.active)
+      return reentrantOperationError()
     const txEngine = engine!
-    let released = false
-    const releaseTxLock = await acquireTxLock()
-
-    const finishTransaction = () => {
-      if (!released) {
-        released = true
-        releaseTxLock()
-      }
-    }
-
+    const release = await acquireConnectionLock()
     try {
+      if (!canUseEngine(txEngine)) {
+        release()
+        return core.err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+      }
       await txEngine.exec('BEGIN TRANSACTION')
     }
     catch (error) {
-      finishTransaction()
+      release()
       return core.err(HaiReldbError.TRANSACTION_FAILED, sqliteTxErrorMessage(String(error)), error)
     }
 
-    const txDmlOps = createSqliteTxDmlOps(txEngine)
+    // SQLite 事务内仍使用同一连接，依次运行已接受的操作。
+    let transactionWork: Promise<void> = Promise.resolve()
+    function withTransaction<T>(run: (owned: SqliteEngine) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+      const result = transactionWork.then(() => run(txEngine))
+      transactionWork = result.then(() => undefined, () => undefined)
+      return result
+    }
+
+    async function finishTransaction(commit: boolean): Promise<void> {
+      try {
+        if (commit)
+          await txEngine.exec('COMMIT')
+        else
+          await txEngine.rollbackIfActive()
+      }
+      catch (error) {
+        try {
+          // COMMIT 可能失败但保留事务，例如延迟外键检查失败或写锁竞争。
+          await txEngine.rollbackIfActive()
+        }
+        catch (cleanupError) {
+          // 仍持有连接执行权。先隔离此连接，后续 close/init 负责释放。
+          unusableEngine = txEngine
+          ready = false
+          logger.error('SQLite transaction cleanup failed; connection disabled', {
+            traceId: core.context.get().traceId ?? core.context.get().requestId,
+            errorCode: HaiReldbError.TRANSACTION_FAILED.code,
+          })
+          throw new AggregateError([error, cleanupError], String(error), { cause: error })
+        }
+        throw error
+      }
+    }
+
     const guardedTxDmlOps = createBaseDmlOps({
       ...ctx,
       isConnected: () => txEngine.isOpen(),
-    }, txDmlOps)
+    }, createSqliteDmlOps(withTransaction, true))
     return core.ok(createTxHandle(guardedTxDmlOps, {
-      commit: async () => { await txEngine.exec('COMMIT') },
-      rollback: async () => { await txEngine.exec('ROLLBACK') },
-      release: () => finishTransaction(),
+      commit: () => finishTransaction(true),
+      rollback: () => finishTransaction(false),
+      release,
       errorMessage: sqliteTxErrorMessage,
     }))
   }
 
+  function withTransactionScope<T>(fn: TxWrapCallback<T>): TxWrapCallback<T> {
+    return async (tx) => {
+      const scope = { active: true }
+      try {
+        return await transactionScope.run(scope, fn, tx)
+      }
+      finally {
+        scope.active = false
+      }
+    }
+  }
+
   // ─── 组装 Provider ───
 
-  const dmlOps = createBaseDmlOps(ctx, rawDml)
+  const dmlOps = createBaseDmlOps(ctx, createSqliteDmlOps(withEngine))
+  const txManager = createBaseTxManager(ctx, beginTx)
 
   return {
     async connect(config: ReldbConfig): Promise<HaiResult<void>> {
@@ -392,6 +431,10 @@ export function createSqliteProvider(): ReldbProvider {
     ddl: createBaseDdlOps(ctx, rawDdl),
     sql: dmlOps,
     crud: createBaseCrudManager(dmlOps),
-    tx: createBaseTxManager(ctx, beginTx),
+    tx: {
+      begin: txManager.begin,
+      wrap: fn => txManager.wrap(withTransactionScope(fn)),
+      wrapResult: fn => txManager.wrapResult(withTransactionScope(fn)),
+    },
   }
 }

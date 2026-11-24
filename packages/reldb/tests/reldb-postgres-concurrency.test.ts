@@ -2,7 +2,7 @@ import type { ReldbConfigInput } from '../src/reldb-config.js'
 /** 真实 PostgreSQL 锁等待复现首次 DDL 目录竞争；非幂等、权限及业务约束错误不能重试。 */
 import { createRequire } from 'node:module'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { reldb } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { acquirePostgresContainer } from './helpers/postgres-container.js'
 
 const require = createRequire(import.meta.url)
@@ -33,6 +33,62 @@ afterAll(async () => {
   }
   finally { await release?.() }
 }, 30_000)
+
+it('提交已中止的事务返回事务失败且保留可用连接', async () => {
+  expect((await reldb.ddl.createTable('tx_rejected_commit', {
+    id: { type: 'TEXT', primaryKey: true },
+  })).success).toBe(true)
+  const begun = await reldb.tx.begin()
+  if (!begun.success)
+    throw new Error(begun.error.message)
+
+  const tx = begun.data
+  try {
+    const insert = 'INSERT INTO tx_rejected_commit (id) VALUES (?)'
+    expect((await tx.execute(insert, ['original'])).success).toBe(true)
+    const duplicate = await tx.execute(insert, ['original'])
+    expect(duplicate.success).toBe(false)
+    if (!duplicate.success)
+      expect(duplicate.error.code).toBe(HaiReldbError.DUPLICATE_ENTRY.code)
+
+    const commit = await tx.commit()
+    expect(commit.success).toBe(false)
+    if (!commit.success)
+      expect(commit.error.code).toBe(HaiReldbError.TRANSACTION_FAILED.code)
+    const rows = await reldb.sql.query('SELECT id FROM tx_rejected_commit')
+    expect(rows.success && rows.data).toEqual([])
+    expect((await reldb.sql.execute(insert, ['recovered'])).success).toBe(true)
+  }
+  finally {
+    await tx.rollback()
+  }
+})
+
+it('只复用谓词等同的 PostgreSQL 部分索引', async () => {
+  const table = 'review_partial_index'
+  const index = 'review_partial_index_name'
+  expect((await reldb.ddl.createTable(table, {
+    name: { type: 'TEXT' },
+  })).success).toBe(true)
+
+  const prepare = (where: string) => reldb.prepareSchema('review:partial-index', ({ ddl }) =>
+    ddl.createIndex(table, index, {
+      columns: ['name'],
+      where,
+    }))
+  expect((await prepare('name = \'original\'')).success).toBe(true)
+  expect((await prepare(' (name = \'original\') ')).success).toBe(true)
+
+  const conflict = await prepare('name = \'current\'')
+  expect(conflict.success).toBe(false)
+  if (!conflict.success)
+    expect(conflict.error.code).toBe(HaiReldbError.DDL_FAILED.code)
+  const current = await reldb.sql.get<{ predicate: string }>(
+    'SELECT pg_get_expr(indpred, indrelid) AS predicate FROM pg_index WHERE indexrelid = to_regclass(?)',
+    [index],
+  )
+  expect(current.success && current.data?.predicate).toContain('\'original\'')
+})
 
 describe.each(['table', 'index'] as const)('concurrent PostgreSQL %s creation', (kind) => {
   it.each(['ddl', 'sql'] as const)('%s 等待另一个事务提交后仍返回成功', async (entry) => {

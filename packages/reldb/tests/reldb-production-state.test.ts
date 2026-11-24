@@ -1,6 +1,6 @@
 /** 生产配置不能把本机状态误当跨节点共享；显式测试模式可使用原后端。 */
 import { afterEach, expect, it, vi } from 'vitest'
-import { reldb } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 
 afterEach(async () => {
   vi.unstubAllEnvs()
@@ -16,4 +16,20 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('生产标记%s拒绝本机后端且不发
   const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
   expect(result.success).toBe(false)
   expect(reldb.isInitialized).toBe(false)
+})
+
+it('生产后端校验拒绝替换时保留当前连接', async () => {
+  vi.stubEnv('NODE_ENV', 'test')
+  vi.stubEnv('HAI_CORE_ENV', 'test')
+  vi.stubEnv('HAI_E2E', '0')
+  vi.stubEnv('HAI_E2E_MOCK', '0')
+  expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+  vi.stubEnv('HAI_CORE_ENV', 'production')
+
+  const rejected = await reldb.init({ type: 'sqlite', database: ':memory:' })
+  expect(rejected.success).toBe(false)
+  if (!rejected.success)
+    expect(rejected.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
+  expect(reldb.isInitialized).toBe(true)
+  expect((await reldb.sql.get('SELECT 1')).success).toBe(true)
 })

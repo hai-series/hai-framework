@@ -468,6 +468,7 @@ export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['be
  * 创建 CRUD 管理器
  *
  * @param ops - DML 操作接口
+ * @param wrapResult - MySQL 普通连接的事务入口。
  * @returns CRUD 管理器
  * @example 模块内部上下文
  * ```ts
@@ -476,9 +477,9 @@ export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['be
  * }
  * ```
  */
-export function createBaseCrudManager(ops: DmlOperations): CrudManager {
+export function createBaseCrudManager(ops: DmlOperations, wrapResult?: TxManager['wrapResult']): CrudManager {
   return {
-    table: config => createCrud(ops, config),
+    table: config => createCrud(ops, config, wrapResult),
   }
 }
 

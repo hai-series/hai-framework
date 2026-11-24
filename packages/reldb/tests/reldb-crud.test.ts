@@ -474,7 +474,105 @@ describe('reldb.crud', () => {
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'), { resetConnection: true })
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), { resetConnection: true })
+  defineDbSuite('mysql', mysqlEnv, () => {
+    defineCommon('mysql')
+
+    it('mysql: upsert 只更新指定唯一键，未提供目标键时保留自增', async () => {
+      expect((await reldb.ddl.createTable('crud_upsert_accounts', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', unique: true },
+        email: { type: 'TEXT', unique: true },
+      })).success).toBe(true)
+
+      const accounts = reldb.crud.table<UserRow>({ table: 'crud_upsert_accounts', dbType: 'mysql' })
+      const inserted = await accounts.createOrUpdate({ name: 'one', email: 'original@example.test' })
+      expect(inserted).toMatchObject({
+        success: true,
+        data: { changes: 1, lastInsertRowid: 1 },
+      })
+      const byName = reldb.crud.table<UserRow>({
+        table: 'crud_upsert_accounts',
+        idColumn: 'name',
+        dbType: 'mysql',
+        updateColumns: ['email'],
+      })
+
+      const duplicate = await byName.createOrUpdate({ name: 'two', email: 'original@example.test' })
+      expect(duplicate).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.DUPLICATE_ENTRY.code },
+      })
+      const implicitIdConflict = await accounts.createOrUpdate({ name: 'two', email: 'original@example.test' })
+      expect(implicitIdConflict).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.DUPLICATE_ENTRY.code },
+      })
+      expect(await byName.findById('one')).toMatchObject({
+        success: true,
+        data: { email: 'original@example.test' },
+      })
+      expect(await byName.findById('two')).toMatchObject({ success: true, data: null })
+      expect(await byName.createOrUpdate({ name: 'one', email: 'updated@example.test' }))
+        .toMatchObject({
+          success: true,
+          data: { changes: 1 },
+        })
+      expect(await byName.createOrUpdate({ name: 'one', email: 'updated@example.test' }))
+        .toMatchObject({
+          success: true,
+          data: { changes: 1 },
+        })
+      expect(await byName.findById('one')).toMatchObject({
+        success: true,
+        data: { email: 'updated@example.test' },
+      })
+    })
+
+    it('mysql: 并发 upsert 收敛为一行，tx.crud 的冲突更新可以回滚', async () => {
+      expect((await reldb.ddl.createTable('crud_upsert_concurrent', {
+        id: { type: 'INTEGER', primaryKey: true },
+        name: { type: 'TEXT' },
+      })).success).toBe(true)
+
+      const config = { table: 'crud_upsert_concurrent', dbType: 'mysql' as const }
+      const crud = reldb.crud.table<UserRow>(config)
+      const results = await Promise.all(['first', 'second', 'third'].map(name => crud.createOrUpdate({ id: 1, name })))
+      expect(results.some(result => result.success)).toBe(true)
+      // InnoDB 可能因多次冲突的共享锁升级而回滚其中一个事务。
+      for (const result of results) {
+        if (!result.success) {
+          expect(result.error).toMatchObject({
+            code: HaiReldbError.QUERY_FAILED.code,
+            cause: { code: 'ER_LOCK_DEADLOCK' },
+          })
+        }
+      }
+      expect(await crud.count()).toMatchObject({ success: true, data: 1 })
+
+      const before = await crud.findById(1)
+      expect(before.success).toBe(true)
+      const rolledBack = await reldb.tx.wrapResult(async (tx) => {
+        const update = await tx.crud.table<UserRow>(config).createOrUpdate({ id: 1, name: 'rolled back' })
+        expect(update).toMatchObject({
+          success: true,
+          data: { changes: 1 },
+        })
+        expect(await tx.crud.table<UserRow>(config).findById(1)).toMatchObject({
+          success: true,
+          data: { name: 'rolled back' },
+        })
+        return {
+          success: false,
+          error: { ...HaiReldbError.CONFIG_ERROR, message: 'rollback fixture' },
+        }
+      })
+      expect(rolledBack).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.CONFIG_ERROR.code },
+      })
+      expect(await crud.findById(1)).toEqual(before)
+    })
+  }, { resetConnection: true })
 
   defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), { resetConnection: true })
 })

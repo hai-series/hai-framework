@@ -23,6 +23,7 @@ import type {
   ReldbTableDef,
 } from './reldb-types.js'
 import { core } from '@h-ai/core'
+import { executeMysqlUpsert } from './reldb-crud-kernel.js'
 import { reldbM } from './reldb-i18n.js'
 import { HaiReldbError } from './reldb-types.js'
 
@@ -555,8 +556,8 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    *
    * ### 为什么不复用 this.crud.createOrUpdate（kernel）
    *
-   * Kernel 的 createOrUpdate 使用 `excluded.col` / `VALUES(col)` 引用 INSERT 值作为
-   * UPDATE 值，即 INSERT 和 UPDATE 共享同一组数据。但 Repository 层的 INSERT 负载和
+   * Kernel 的 createOrUpdate 从 INSERT 负载取 UPDATE 值，两者共享同一组数据。
+   * 但 Repository 层的 INSERT 负载和
    * UPDATE 负载语义不同：
    *
    * - **INSERT 负载**（buildCreatePayload）：包含自动生成的主键、createdAt、updatedAt、
@@ -610,34 +611,41 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     const insertColumns = Object.keys(createPayload)
     const insertValues = Object.values(createPayload)
     const placeholders = insertColumns.map(() => '?').join(', ')
+    const insert = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders})`
+    const ops = this.sql(tx)
 
     // UPDATE 负载：仅用户显式传入的可更新字段 + updatedAt
     // 与 INSERT 负载独立，不含 createdAt / 应用默认值，避免冲突更新时覆盖已有数据
     const updatePayload = this.buildUpdatePayload(data)
 
-    if (!updatePayload || Object.keys(updatePayload).length === 0) {
+    if (!updatePayload) {
       // 无可更新列，退化为普通 INSERT
-      const sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders})`
-      return this.sql(tx).execute(sql, insertValues)
+      return ops.execute(insert, insertValues)
     }
 
+    if (dbType === 'mysql')
+      delete updatePayload[this.idColumn]
     const updateColumns = Object.keys(updatePayload)
+    if (updateColumns.length === 0)
+      return ops.execute(insert, insertValues)
     const updateValues = Object.values(updatePayload)
-    // 使用 col = ? 参数化占位（而非 kernel 的 excluded.col / VALUES(col)），
-    // 使 UPDATE 值独立于 INSERT 值
     const updateSet = updateColumns.map(col => `${col} = ?`).join(', ')
 
-    let sql: string
     if (dbType === 'mysql') {
-      sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateSet}`
+      const target = createPayload[this.idColumn]
+      if (target === undefined || target === null)
+        return ops.execute(insert, insertValues)
+
+      const update = {
+        sql: `UPDATE ${this.table} SET ${updateSet} WHERE ${this.idColumn} = ?`,
+        params: [...updateValues, target],
+      }
+      return executeMysqlUpsert(ops, { sql: insert, params: insertValues }, update, tx ? undefined : this.db.tx.wrapResult)
     }
-    else {
-      // SQLite / PostgreSQL
-      sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(${this.idColumn}) DO UPDATE SET ${updateSet}`
-    }
+    const sql = `${insert} ON CONFLICT(${this.idColumn}) DO UPDATE SET ${updateSet}`
 
     // 参数顺序：先 INSERT 值，再 UPDATE 值（两组独立）
-    return this.sql(tx).execute(sql, [
+    return ops.execute(sql, [
       ...insertValues,
       ...updateValues,
     ])

@@ -703,7 +703,53 @@ describe('db.BaseReldbCrudRepository', () => {
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'), { resetConnection: true })
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), { resetConnection: true })
+  defineDbSuite('mysql', mysqlEnv, () => {
+    defineCommon('mysql')
+
+    it('mysql: 仓库 upsert 拒绝其他唯一键冲突并复用调用方事务', async () => {
+      expect((await reldb.ddl.dropTable('api_keys')).success).toBe(true)
+      const repo = new ApiKeyRepository()
+      expect((await repo.create({ id: 'one', name: 'original' })).success).toBe(true)
+      expect((await reldb.ddl.createIndex('api_keys', 'idx_api_key_name', {
+        columns: ['name'],
+        unique: true,
+      })).success).toBe(true)
+
+      const conflict = await repo.createOrUpdate({ id: 'two', name: 'original' })
+      expect(conflict).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.DUPLICATE_ENTRY.code },
+      })
+      expect(await repo.findById('two')).toMatchObject({ success: true, data: null })
+      expect(await repo.findById('one')).toMatchObject({
+        success: true,
+        data: { name: 'original' },
+      })
+
+      const opened = await reldb.tx.begin()
+      expect(opened.success).toBe(true)
+      if (!opened.success)
+        return
+      try {
+        const update = await repo.createOrUpdate({ id: 'one', name: 'changed' }, opened.data)
+        expect(update).toMatchObject({
+          success: true,
+          data: { changes: 1 },
+        })
+        expect(await repo.findById('one', opened.data)).toMatchObject({
+          success: true,
+          data: { name: 'changed' },
+        })
+      }
+      finally {
+        expect((await opened.data.rollback()).success).toBe(true)
+      }
+      expect(await repo.findById('one')).toMatchObject({
+        success: true,
+        data: { name: 'original' },
+      })
+    })
+  }, { resetConnection: true })
 
   defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), { resetConnection: true })
 })

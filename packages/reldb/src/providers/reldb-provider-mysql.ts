@@ -35,6 +35,12 @@ import { createBaseCrudManager, createBaseDdlOps, createBaseDmlOps, createBaseTx
 import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'mysql' })
+const FOREIGN_KEY_ACTIONS = new Set([
+  'CASCADE',
+  'SET NULL',
+  'RESTRICT',
+  'NO ACTION',
+])
 
 /**
  * 借用真实驱动连接及其容量槽位；超时只约束借用完成前，不中止已启动 SQL。
@@ -260,7 +266,7 @@ export function createMysqlProvider(): ReldbProvider {
 
   /** MySQL 标识符引用（反引号） */
   function mysqlQuoteId(name: string): string {
-    return `\`${name}\``
+    return `\`${name.replaceAll('\`', '\`\`')}\``
   }
 
   /** 事务错误消息生成 */
@@ -274,19 +280,54 @@ export function createMysqlProvider(): ReldbProvider {
    * 根据索引名解析所在表
    *
    * MySQL 的 `DROP INDEX` 语句需要表名，因此通过 INFORMATION_SCHEMA
-   * 在当前数据库中查找索引所属表。
+   * 在当前数据库中查找索引所属表。同名索引分布在多张表时返回 DDL_FAILED。
+   * @param indexName - 待删除的索引名。
+   * @returns 唯一匹配的表名；未匹配时为 null。
    */
   async function findIndexTableName(
     indexName: string,
   ): Promise<HaiResult<string | null>> {
     return withConnection(async (connection) => {
       const [rows] = await connection.query(
-        'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? LIMIT 1',
+        `SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS
+          WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ?
+          GROUP BY TABLE_NAME, CAST(TABLE_NAME AS BINARY) LIMIT 2`,
         [indexName],
       )
       const data = rows as Array<{ name: string }>
+      if (data.length > 1) {
+        return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_mysqlIndexAmbiguous', {
+          params: { index: indexName },
+        }))
+      }
       return core.ok(data[0]?.name ?? null)
     })
+  }
+
+  /**
+   * 在 CREATE TABLE 与 ALTER TABLE 中生成同一表级外键约束。
+   * @param column - 当前表的外键列名。
+   * @param references - 父表、列和可选的更新、删除动作。
+   * @returns 表级外键 SQL。
+   * @throws 动作不在受支持的枚举中时抛出 TypeError，由 DDL 边界转换为 HaiResult。
+   * @example 模块内部上下文
+   * ```ts
+   * const constraint = mysqlBuildForeignKeySql('parent_id', { table: 'parents', column: 'id', onDelete: 'CASCADE' })
+   * void constraint
+   * ```
+   */
+  function mysqlBuildForeignKeySql(column: string, references: NonNullable<ReldbColumnDef['references']>): string {
+    const { onDelete, onUpdate } = references
+    if ((onDelete !== undefined && !FOREIGN_KEY_ACTIONS.has(onDelete))
+      || (onUpdate !== undefined && !FOREIGN_KEY_ACTIONS.has(onUpdate))) {
+      throw new TypeError(reldbM('reldb_mysqlForeignKeyActionInvalid'))
+    }
+    let sql = `FOREIGN KEY (${mysqlQuoteId(column)}) REFERENCES ${mysqlQuoteId(references.table)}(${mysqlQuoteId(references.column)})`
+    if (onDelete)
+      sql += ` ON DELETE ${onDelete}`
+    if (onUpdate)
+      sql += ` ON UPDATE ${onUpdate}`
+    return sql
   }
 
   // ─── MySQL 方言辅助 ───
@@ -365,16 +406,8 @@ export function createMysqlProvider(): ReldbProvider {
 
     // 外键约束
     for (const [name, def] of Object.entries(columns)) {
-      if (def.references) {
-        let fkSql = `FOREIGN KEY (${mysqlQuoteId(name)}) REFERENCES ${mysqlQuoteId(def.references.table)}(${mysqlQuoteId(def.references.column)})`
-        if (def.references.onDelete) {
-          fkSql += ` ON DELETE ${def.references.onDelete}`
-        }
-        if (def.references.onUpdate) {
-          fkSql += ` ON UPDATE ${def.references.onUpdate}`
-        }
-        columnDefs.push(fkSql)
-      }
+      if (def.references)
+        columnDefs.push(mysqlBuildForeignKeySql(name, def.references))
     }
 
     const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
@@ -403,7 +436,10 @@ export function createMysqlProvider(): ReldbProvider {
     },
     async addColumn(table, column, def) {
       const colSql = mysqlBuildColumnSql(column, def)
-      return executeDdl(`ALTER TABLE ${mysqlQuoteId(table)} ADD COLUMN ${colSql}`)
+      const foreignKey = def.references
+        ? `, ADD ${mysqlBuildForeignKeySql(column, def.references)}`
+        : ''
+      return executeDdl(`ALTER TABLE ${mysqlQuoteId(table)} ADD COLUMN ${colSql}${foreignKey}`)
     },
     async dropColumn(table, column) {
       return executeDdl(`ALTER TABLE ${mysqlQuoteId(table)} DROP COLUMN ${mysqlQuoteId(column)}`)
@@ -569,6 +605,7 @@ export function createMysqlProvider(): ReldbProvider {
   // ─── 组装 Provider ───
 
   const dmlOps = createBaseDmlOps(ctx, rawDml)
+  const txManager = createBaseTxManager(ctx, beginTx)
 
   return {
     async connect(config: ReldbConfig): Promise<HaiResult<void>> {
@@ -647,7 +684,7 @@ export function createMysqlProvider(): ReldbProvider {
     isConnected: () => ctx.isConnected(),
     ddl: createBaseDdlOps(ctx, rawDdl),
     sql: dmlOps,
-    crud: createBaseCrudManager(dmlOps),
-    tx: createBaseTxManager(ctx, beginTx),
+    crud: createBaseCrudManager(dmlOps, txManager.wrapResult),
+    tx: txManager,
   }
 }

@@ -1,6 +1,6 @@
 /** 数据库生命周期故障回归：候选连接不可发布，释放失败必须保留并阻止替换。 */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { reldb } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 
 const faults = vi.hoisted(() => ({
   connect: 0,
@@ -55,6 +55,23 @@ afterEach(async () => {
 })
 
 describe('reldb lifecycle ownership', { concurrent: false }, () => {
+  it('rejects invalid replacement configuration without closing the current database', async () => {
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    expect((await reldb.ddl.createTable('preserved_records', {
+      id: { type: 'TEXT', primaryKey: true },
+    })).success).toBe(true)
+    expect((await reldb.sql.execute('INSERT INTO preserved_records (id) VALUES (?)', ['retained'])).success).toBe(true)
+
+    const rejected = await reldb.init({ type: 'sqlite', database: 42 } as never)
+    expect(rejected.success).toBe(false)
+    if (!rejected.success)
+      expect(rejected.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
+    expect(reldb.isInitialized).toBe(true)
+    expect(faults.closed).toBe(0)
+    const retained = await reldb.sql.get<{ id: string }>('SELECT id FROM preserved_records')
+    expect(retained.success && retained.data?.id).toBe('retained')
+  })
+
   it('failed health closes the candidate and allows a clean retry', async () => {
     faults.connect = 1
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(false)

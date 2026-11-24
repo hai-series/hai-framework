@@ -6,8 +6,9 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { reldb } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 
 const Database = createRequire(import.meta.url)('better-sqlite3') as typeof BetterSqlite3
 const directories: string[] = []
@@ -267,14 +268,81 @@ describe('sQLite resource ownership', { concurrent: false }, () => {
     if (!tx.success)
       return
     try {
+      const accepted = reldb.sql.get('SELECT 2 AS value')
       const closing = reldb.close()
       expect(reldb.isInitialized).toBe(false)
       expect((await reldb.sql.query('SELECT 1')).success).toBe(false)
       expect((await tx.data.get('SELECT 1 AS value')).success).toBe(true)
       expect((await tx.data.commit()).success).toBe(true)
+      expect(await accepted).toEqual({
+        success: true,
+        data: { value: 2 },
+      })
       expect((await closing).success).toBe(true)
     }
     finally { await tx.data.rollback() }
+  })
+
+  it('isolates a connection when commit and cleanup both fail', async () => {
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    expect((await reldb.ddl.raw(`
+      CREATE TABLE parent (id INTEGER PRIMARY KEY);
+      CREATE TABLE child (pid INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED);
+    `)).success).toBe(true)
+    const original = Database.prototype.exec
+    vi.spyOn(Database.prototype, 'exec').mockImplementation(function (this: BetterSqlite3.Database, sql) {
+      if (sql === 'ROLLBACK')
+        throw new Error('injected rollback failure')
+      return original.call(this, sql)
+    })
+    const records: Array<Record<string, unknown>> = []
+    const stop = core.logger.observe((record) => {
+      if (record.message === 'SQLite transaction cleanup failed; connection disabled')
+        records.push({ level: record.level, ...record.context })
+    })
+    try {
+      const begun = await reldb.tx.begin()
+      expect(begun.success).toBe(true)
+      if (!begun.success)
+        return
+      const tx = begun.data
+      const inserted = await tx.execute('INSERT INTO child (pid) VALUES (?)', [1])
+      const queued = reldb.sql.get('SELECT pid FROM child')
+      const committed = await core.context.run({ requestId: 'sqlite-cleanup' }, () => tx.commit())
+      expect(inserted.success).toBe(true)
+      expect(committed).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.TRANSACTION_FAILED.code },
+      })
+      if (!committed.success) {
+        expect(committed.error.cause).toBeInstanceOf(AggregateError)
+        expect(committed.error.cause).toMatchObject({
+          errors: [
+            { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' },
+            { message: 'injected rollback failure' },
+          ],
+        })
+      }
+      expect(reldb.isInitialized).toBe(false)
+      expect(await queued).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.NOT_INITIALIZED.code },
+      })
+      expect(records).toMatchObject([
+        {
+          level: 'error',
+          traceId: 'sqlite-cleanup',
+          errorCode: HaiReldbError.TRANSACTION_FAILED.code,
+        },
+      ])
+      expect(JSON.stringify(records)).not.toContain('injected rollback failure')
+    }
+    finally {
+      stop()
+    }
+    expect((await reldb.close()).success).toBe(true)
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    expect((await reldb.sql.get('SELECT 1 AS value')).success).toBe(true)
   })
 
   it('failed worker termination keeps the same worker for cleanup retry', async () => {

@@ -48,9 +48,9 @@ operationLog:
 
 ### 2. 初始化与关闭
 
-MySQL `pool` 仅支持 `{ max: 10, acquireTimeout: 10000, queueLimit: 1000 }`（也是省略时默认值）。`acquireTimeout` 为 1–2147483647 毫秒的整数，覆盖排队和建连；queueLimit 为正整数。SQL/DDL/CRUD/batch/tx 共用有界 FIFO，超时移除并返回 `TIMEOUT`，满额返回 `POOL_EXHAUSTED`；迟到建连结算前仍占槽位，只归还连接，不执行 SQL。close 立即取消排队，再等待借用/事务和驱动有界建连完成，不中止已启动 SQL。min/idleTimeout/mysql.timezone 明确拒绝，不承诺 MySQL 最小保留或可配置空闲回收；PostgreSQL 保留自己的 min/idleTimeout/acquireTimeout=0 契约，min 不会预建连接。
+MySQL `pool` 仅支持 `{ max: 10, acquireTimeout: 10000, queueLimit: 1000 }`（也是省略时默认值）。`acquireTimeout` 为 1–2147483647 毫秒的整数，覆盖排队和建连；queueLimit 为正整数。SQL/DDL/CRUD/batch/tx 共用有界 FIFO，超时移除并返回 `TIMEOUT`，满额返回 `POOL_EXHAUSTED`；迟到建连结算前仍占槽位，只归还连接，不执行 SQL。close 立即取消排队，再等待借用/事务和驱动有界建连完成，不中止已启动 SQL。min/idleTimeout/mysql.timezone 明确拒绝，不承诺 MySQL 最小保留或可配置空闲回收；PostgreSQL 的 `min` 不预建连接。提供 `pool` 对象时，RelDB 补齐 `min: 1`、`max: 10`、`idleTimeout: 30000`、`acquireTimeout: 10000`。省略整个对象时，最大连接数仍为 10，pg 池默认最少保留 0 条、10 秒回收空闲连接，且无池获取超时。设置 `idleTimeout: 0` 或 `acquireTimeout: 0` 可分别关闭对应时限。
 
-MySQL 仅传 mysql:// URL 即可连接，优先于 host/port/database/user/password；无 URL 时 database 必填。禁止 URL query/fragment，pool/mysql.charset/ssl/operationLog 仍独立适用。ssl 仅 false 或严格对象，空对象默认校验证书链和 DNS 身份；ca/cert/key 为 PEM 内容，cert/key 必须成对。当前驱动不验证 IP 身份，验证开启的 IP 目标返回 CONFIG_ERROR；关闭验证有固定风险日志，加密不代表身份认证。环境变量为 HAI_DB_POOL_* / HAI_DB_SSL_*，min/idleTimeout 仅适用 PostgreSQL，queueLimit/verifyIdentity 仅适用 MySQL。
+MySQL 可以用包含库名的 `mysql://` URL 连接，此时省略单独的 `database` 字段。从 URL 读取主机、端口、库名和凭据。URL 省略或为空字符串时使用拆分字段，`database` 必填。PostgreSQL 在 Schema 中仍要求单独填写 `database`。禁止 URL query/fragment，pool/mysql.charset/ssl/operationLog 仍独立适用。ssl 仅 false 或严格对象，空对象默认校验证书链和 DNS 身份；ca/cert/key 为 PEM 内容，cert/key 必须成对。当前驱动不验证 IP 身份，验证开启的 IP 目标返回 CONFIG_ERROR；关闭验证有固定风险日志，加密不代表身份认证。环境变量为 HAI_DB_POOL_* / HAI_DB_SSL_*，min/idleTimeout 仅适用 PostgreSQL，queueLimit/verifyIdentity 仅适用 MySQL。
 
 ```ts
 // trustedCaPem 从部署信任配置提供。
@@ -78,7 +78,7 @@ if (!closed.success) throw new Error(closed.error.message)
 ```
 
 
-初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+初始化只在健康检查成功后发布连接，失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作暂停。清理失败时保留资源，后续 `close()` 或通过配置校验的 `init()` 会先重试释放。调用方必须检查关闭结果。已有连接时，新的配置若未通过 Schema 或生产共享状态检查，`init()` 返回配置错误并保留现有连接。新配置通过检查后才进入替换流程。
 
 ```ts
 // 无参数，等待数据库资源释放。成功 data 为 undefined，失败可检查 error。
@@ -124,6 +124,10 @@ if (!closed.success) {
 | `raw`         | `(sql: string) => HaiResult<void>`                                         | 执行原始 DDL               |
 
 > 所有方法均返回 `Promise<HaiResult<void>>`，上表省略异步与错误类型。
+
+SQLite 文本主键需显式设 `notNull: true`。旧表用 `PRAGMA table_info(table_name)` 检查 `pk` 和 `notnull`，并检查已有空 ID，由应用安排修数和迁移。MySQL 的 `addColumn()` 在同一次结构变更中添加列和 `references` 外键约束。MySQL 若有多个表使用同一个索引名，`dropIndex()` 返回 `DDL_FAILED` 并保留现有索引。
+
+PostgreSQL 的 `prepareSchema(key, prepare)` 按共同键加事务锁，回调内的 `ddl` 和 `sql` 在同一连接执行。重复准备部分索引时会核对已有定义，定义不符或无法校验时报错，需要显式迁移。校验已有部分索引的谓词需要创建临时表的权限。SQLite 和 MySQL 回调使用各自的普通操作，按各自数据库的 DDL 规则执行。
 
 **ReldbTableDef**（列名到列定义的映射）：
 
@@ -240,6 +244,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 | ------------ | ---------------------------------------------- | ------------ |
 | `create`     | `(data, tx?) => HaiResult<ExecuteResult>`         | 创建单条     |
 | `createMany` | `(items, tx?) => HaiResult<void>`                 | 批量创建     |
+| `createOrUpdate` | `(data, tx?) => HaiResult<ExecuteResult>`      | 按配置的键新增或更新 |
 | `findById`   | `(id, tx?) => HaiResult<T \| null>`               | 按 ID 查询   |
 | `findAll`    | `(options?, tx?) => HaiResult<T[]>`               | 条件查询     |
 | `findPage`   | `(options, tx?) => HaiResult<PaginatedResult<T>>` | 分页查询     |
@@ -251,7 +256,9 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 
 `findAll({ orderBy, offset })` 会跳过指定条数并返回剩余记录，在 SQLite、PostgreSQL 和 MySQL 中均可省略 `limit`。
 
-> 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。
+> 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。省略写入白名单时按给定数据选列，显式的空白名单不允许相应写入。只允许主键的更新白名单也不会写入其他列。
+
+`createOrUpdate()` 的 `idColumn` 必须是主键或单列唯一键。MySQL 只更新此键定位的记录。例如目标 ID `u2` 不存在、但传入邮件属于 `u1` 时，返回 `DUPLICATE_ENTRY` 并保留 u1。省略目标值时执行普通 INSERT。已传 `tx` 时沿用该事务，否则 MySQL 的有目标键新增或更新在同一个事务内执行。更新返回 UPDATE 的影响行数，只在插入分支返回可能的 `lastInsertRowid`。
 
 **使用示例**：
 
@@ -368,7 +375,9 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 
 ### 事务 — `reldb.tx`
 
-一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
+开始 `commit()` 或 `rollback()` 后，事务立即拒绝新操作和重复结束请求，返回 `TRANSACTION_FAILED`。结束请求等待事务句柄已经接收的 SQL 操作完成，再向数据库发送提交或回滚命令。已经接收的 `tx.batch()` 会在当前事务内完成并返回成功或失败，即使调用方尚未等待它。业务代码仍要处理每次操作的结果，并等待结束请求的结果。
+
+SQLite 普通 SQL/DDL 按调用顺序排队等待连接空闲，上限为 30 秒。若在 `wrap()` 或 `wrapResult()` 的回调内使用全局 SQL/DDL，操作会立即失败。请使用回调参数 `tx`，手动事务使用 `begin()` 返回的句柄。SQLite 提交失败会尝试回滚，回滚失败的连接退出服务，需要 `close()` 后再 `init()`。PostgreSQL 如果将已中止事务的 `COMMIT` 执行为回滚，结果为 `TRANSACTION_FAILED`。
 
 ```typescript
 // 方式1：wrap（自动 commit/rollback）
@@ -450,9 +459,11 @@ import { type ReldbFunctions, reldb } from '@h-ai/reldb'
 async function updateSettings(db: ReldbFunctions, userId: string) {
   // 针对当前数据库生成 settings 的 $.theme 提取表达式，返回 SQL 片段及参数。
   const extracted = db.json.extract('settings', '$.theme')
-  // 把表达式及参数和 JSON 字符串 dark 绑定到查询中，成功 data 是匹配行数组。
-  const rows = await db.sql.query(`SELECT * FROM users WHERE ${extracted.sql} = ?`, [...extracted.params, '"dark"'])
-  if (!rows.success) return rows
+  // 根据用户 ID 查询提取出的 theme。成功 data 是包含 theme 的行或 null。
+  // SQLite 将 JSON 字符串 "dark" 返回为普通字符串 dark，其他后端请按驱动返回值处理。
+  const current = await db.sql.get<{ theme: unknown }>(`SELECT ${extracted.sql} AS theme FROM users WHERE id = ?`, [...extracted.params, userId])
+  if (!current.success) return current
+  current.data?.theme // SQLite 中，原值为 "dark" 时这里是普通字符串 dark。
 
   // 生成把 settings 的 $.theme 更新为 dark 的 SQL 片段及参数。
   const changed = db.json.set('settings', '$.theme', 'dark')
@@ -522,19 +533,26 @@ export const GET = kit.handler(async ({ url }) => {
 
 ### 事务跨仓库
 
-```typescript
-// 在同一个事务中执行回调并提交，成功 data 是回调返回值。抛错时回滚并返回失败。
-const result = await reldb.tx.wrap(async (tx) => {
-  // 在事务内用 userData 创建用户，成功 data 包含数据库返回的插入 ID。
-  const user = await userRepo.create(userData, tx)
-  if (!user.success)
-    throw new Error(user.error.message)
+下面假设 `userRepo` 接受调用方生成的文本主键 `id`，`profileRepo` 用 `userId` 保存关联。应用提供 `userData` 和 `profileData`，使用同一主键值和事务句柄执行两次写入。
 
-  // 用用户插入 ID 与 profileData 创建资料，成功 data 是写入统计，失败触发回滚。
-  const profile = await profileRepo.create({ userId: user.data.lastInsertRowid, ...profileData }, tx)
-  if (!profile.success) throw new Error(profile.error.message)
-  return user.data
+```typescript
+import { core } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
+
+const userId = core.id.uuid()
+
+// 两个仓库均成功后提交。业务失败时回滚，回滚成功后返回原错误。
+const result = await reldb.tx.wrapResult(async (tx) => {
+  // 在当前事务内使用已生成的主键创建用户。成功 data 为写入统计。
+  const user = await userRepo.create({ ...userData, id: userId }, tx)
+  if (!user.success)
+    return user
+
+  // 在同一事务用相同主键创建资料。成功返回该次写入统计。
+  return profileRepo.create({ ...profileData, userId }, tx)
 })
+if (!result.success)
+  return result
 ```
 
 ### BaseReldbCrudRepository 事务集成
@@ -554,4 +572,4 @@ const result = await reldb.tx.wrap(async (tx) => {
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
 
-MySQL 空 url（含空环境变量占位）按未配置处理，使用分字段；非空仍严格校验。
+SQLite 的 sync 与 worker 执行方式都将唯一约束冲突报告为 `DUPLICATE_ENTRY`。应用可按错误码处理重复记录。

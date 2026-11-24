@@ -16,6 +16,7 @@ import type {
   QueryRow,
   ReldbCrudCountOptions,
   ReldbCrudRepository,
+  TxManager,
 } from './reldb-types.js'
 import { core } from '@h-ai/core'
 import { reldbM } from './reldb-i18n.js'
@@ -48,7 +49,7 @@ function buildSelectColumns(select?: string[]): string {
  * 从数据对象中挑选允许的列和值
  *
  * @param data - 原始数据
- * @param allowList - 允许列清单（为空时不过滤）
+ * @param allowList - 允许列清单（省略时不过滤）
  * @returns 列名与参数值数组
  */
 function pickColumns(
@@ -62,6 +63,50 @@ function pickColumns(
     : keys
   const values = columns.map(key => data[key])
   return { columns, values }
+}
+
+/**
+ * MySQL 先尝试插入，仅在唯一键冲突时尝试更新指定目标。
+ *
+ * MySQL 的 ON DUPLICATE KEY UPDATE 可能更新其他唯一键匹配的记录。两步操作使用同一事务，
+ * 影响行数由 MySQL 默认的 FOUND_ROWS 返回，目标行存在但值未变化时也算匹配。
+ * @param ops - 已选定的 SQL 操作；已有事务时必须为该事务的操作。
+ * @param insert - 普通 INSERT 及参数。
+ * @param insert.sql - 参数化 INSERT 语句。
+ * @param insert.params - 依照占位符顺序传入的 INSERT 值。
+ * @param update - 按单列唯一目标定位的 UPDATE 及参数。
+ * @param update.sql - 按单列唯一目标定位的参数化 UPDATE 语句。
+ * @param update.params - 更新值及冲突目标值。
+ * @param wrapResult - 普通连接创建事务的入口；调用方已有事务时省略。
+ * @returns 插入或更新结果；冲突目标不存在时返回原始重复键错误。
+ * @example 模块内部上下文
+ * ```ts
+ * function save(ops: DmlOperations) {
+ *   return executeMysqlUpsert(ops, { sql: 'INSERT INTO users (id, name) VALUES (?, ?)', params: ['u1', 'Alice'] },
+ *     { sql: 'UPDATE users SET name = ? WHERE id = ?', params: ['Alice', 'u1'] })
+ * }
+ * ```
+ */
+export async function executeMysqlUpsert(
+  ops: DmlOperations,
+  insert: { sql: string, params: unknown[] },
+  update: { sql: string, params: unknown[] },
+  wrapResult?: TxManager['wrapResult'],
+): Promise<HaiResult<ExecuteResult>> {
+  const save = async (txOps: DmlOperations): Promise<HaiResult<ExecuteResult>> => {
+    const inserted = await txOps.execute(insert.sql, insert.params)
+    if (inserted.success || inserted.error.code !== HaiReldbError.DUPLICATE_ENTRY.code)
+      return inserted
+
+    const updated = await txOps.execute(update.sql, update.params)
+    return updated.success && updated.data.changes === 0
+      ? inserted
+      : updated
+  }
+
+  return wrapResult
+    ? wrapResult(save)
+    : save(ops)
 }
 
 // ─── CRUD 工厂 ───
@@ -95,6 +140,7 @@ function createFailReldbCrudRepository<TItem>(failedResult: HaiResult<never>): R
  *
  * @param ops - 数据操作接口（reldb.sql 或 tx）
  * @param config - CRUD 配置
+ * @param wrapResult - MySQL 普通连接的事务入口；已经在事务内时省略。
  * @returns CRUD 仓库
  * @example 模块内部上下文
  * ```ts
@@ -106,6 +152,7 @@ function createFailReldbCrudRepository<TItem>(failedResult: HaiResult<never>): R
 export function createCrud<TItem>(
   ops: DmlOperations,
   config: CrudConfig<TItem>,
+  wrapResult?: TxManager['wrapResult'],
 ): ReldbCrudRepository<TItem> {
   const table = config.table
   const idColumn = config.idColumn ?? 'id'
@@ -297,24 +344,31 @@ export function createCrud<TItem>(
       const updateCols = (config.updateColumns ?? columns)
         .filter(col => col !== idColumn && columns.includes(col))
 
+      const insert = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
+      const selectedOps = resolveOps(tx)
       if (updateCols.length === 0) {
         // 无可更新列，退化为普通 INSERT
-        const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
-        return resolveOps(tx).execute(sql, values)
+        return selectedOps.execute(insert, values)
       }
 
-      let sql: string
       if (dbType === 'mysql') {
-        const updateSet = updateCols.map(col => `${col} = VALUES(${col})`).join(', ')
-        sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateSet}`
-      }
-      else {
-        // SQLite / PostgreSQL
-        const updateSet = updateCols.map(col => `${col} = excluded.${col}`).join(', ')
-        sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(${idColumn}) DO UPDATE SET ${updateSet}`
-      }
+        const target = values[columns.indexOf(idColumn)]
+        if (target === undefined || target === null)
+          return selectedOps.execute(insert, values)
 
-      return resolveOps(tx).execute(sql, values)
+        const updateSet = updateCols.map(col => `${col} = ?`).join(', ')
+        const update = {
+          sql: `UPDATE ${table} SET ${updateSet} WHERE ${idColumn} = ?`,
+          params: [
+            ...updateCols.map(col => values[columns.indexOf(col)]),
+            target,
+          ],
+        }
+        return executeMysqlUpsert(selectedOps, { sql: insert, params: values }, update, tx ? undefined : wrapResult)
+      }
+      const updateSet = updateCols.map(col => `${col} = excluded.${col}`).join(', ')
+      const sql = `${insert} ON CONFLICT(${idColumn}) DO UPDATE SET ${updateSet}`
+      return selectedOps.execute(sql, values)
     },
 
     /**
@@ -435,10 +489,7 @@ export function createCrud<TItem>(
         return createPayloadError()
       }
 
-      const allowList = (config.updateColumns ?? []).filter(column => column !== idColumn)
-      const { columns } = pickColumns(data, allowList.length > 0
-        ? allowList
-        : undefined)
+      const { columns } = pickColumns(data, config.updateColumns)
       const filtered = columns.filter(column => column !== idColumn)
 
       if (filtered.length === 0) {

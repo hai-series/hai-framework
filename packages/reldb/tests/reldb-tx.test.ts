@@ -93,6 +93,36 @@ describe('reldb.tx', () => {
       }
     })
 
+    it(`${label}: rollback 等待已接受的 batch 并撤销整批数据`, async () => {
+      const table = await reldb.ddl.createTable('tx_finish_batch_items', {
+        name: { type: 'TEXT', notNull: true },
+      })
+      expect(table.success).toBe(true)
+      const begun = await reldb.tx.begin()
+      expect(begun.success).toBe(true)
+      if (!begun.success)
+        return
+      const tx = begun.data
+      const writing = tx.batch([
+        {
+          sql: 'INSERT INTO tx_finish_batch_items (name) VALUES (?)',
+          params: ['first'],
+        },
+        {
+          sql: 'INSERT INTO tx_finish_batch_items (name) VALUES (?)',
+          params: ['second'],
+        },
+      ])
+      const [batch, rolledBack] = await Promise.all([
+        writing,
+        tx.rollback(),
+      ])
+
+      expect(batch.success).toBe(true)
+      expect(rolledBack.success).toBe(true)
+      expect(await reldb.sql.query('SELECT name FROM tx_finish_batch_items')).toEqual(core.ok([]))
+    })
+
     it(`${label}: 事务内分页查询应返回总数`, async () => {
       await reldb.ddl.dropTable('users', true)
       const createTable = await reldb.ddl.createTable('users', {

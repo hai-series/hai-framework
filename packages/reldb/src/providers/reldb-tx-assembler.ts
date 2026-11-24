@@ -2,7 +2,7 @@
  * @h-ai/reldb — 事务句柄组装
  *
  * 将事务连接的 DML 操作 + commit/rollback 生命周期组装为完整的 DmlWithTxOperations。
- * 内部自动管理 ensureActive 守卫（commit/rollback 后拒绝操作）。
+ * 事务结束开始时拒绝新操作并等待此前接受的操作结算。
  * @module reldb-tx-assembler
  */
 
@@ -55,7 +55,7 @@ export interface TxCallbacks {
  * - ensureActive 守卫（commit/rollback 后拒绝操作）
  * - DmlOperations（带守卫）
  * - crud（基于 DmlOperations 创建）
- * - commit/rollback（调用回调 + 标记非活跃 + 释放资源）
+ * - commit/rollback（拒绝新操作、等待在途操作、结束事务并释放资源）
  *
  * @param baseDmlOps - 事务连接上的 DML 操作
  * @param callbacks - 事务生命周期回调
@@ -69,6 +69,7 @@ export interface TxCallbacks {
  */
 export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks): DmlWithTxOperations {
   let active = true
+  const inFlight = new Set<Promise<unknown>>()
 
   const ensureActive = (): HaiResult<void> => {
     if (!active) {
@@ -77,36 +78,36 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
     return core.ok(undefined)
   }
 
+  function runOperation<T>(run: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    const check = ensureActive()
+    if (!check.success)
+      return Promise.resolve(check)
+
+    // 先登记再进入驱动。两条完成路径都移除登记，原结果交给调用方。
+    const operation = Promise.resolve().then(run)
+    inFlight.add(operation)
+    const remove = () => {
+      inFlight.delete(operation)
+    }
+    void operation.then(remove, remove)
+    return operation
+  }
+
   const guardedOps: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseDmlOps.query<T>(sql, params)
+    query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
+      return runOperation(() => baseDmlOps.query<T>(sql, params))
     },
-    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseDmlOps.get<T>(sql, params)
+    get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
+      return runOperation(() => baseDmlOps.get<T>(sql, params))
     },
-    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseDmlOps.execute(sql, params)
+    execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
+      return runOperation(() => baseDmlOps.execute(sql, params))
     },
-    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<HaiResult<void>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseDmlOps.batch(statements)
+    batch(statements) {
+      return runOperation(() => baseDmlOps.batch(statements))
     },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseDmlOps.queryPage<T>(options)
+    queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
+      return runOperation(() => baseDmlOps.queryPage<T>(options))
     },
   }
 
@@ -114,44 +115,31 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
     table: config => createCrud(guardedOps, config),
   }
 
+  async function finish(action: 'commit' | 'rollback'): Promise<HaiResult<void>> {
+    const check = ensureActive()
+    if (!check.success)
+      return check
+    // 先独占结束权，后续 DML 无法加入等待集合。
+    active = false
+    try {
+      if (inFlight.size)
+        await Promise.allSettled(inFlight)
+      await callbacks[action]()
+      return core.ok(undefined)
+    }
+    catch (error) {
+      return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
+    }
+    finally {
+      callbacks.release()
+    }
+  }
+
   return {
     ...guardedOps,
     crud: crudManager,
-
-    async commit(): Promise<HaiResult<void>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      // 在等待驱动前独占结束权，阻止并发提交/回滚及结束期间的新操作。
-      active = false
-      try {
-        await callbacks.commit()
-        return core.ok(undefined)
-      }
-      catch (error) {
-        return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
-      }
-      finally {
-        callbacks.release()
-      }
-    },
-
-    async rollback(): Promise<HaiResult<void>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      active = false
-      try {
-        await callbacks.rollback()
-        return core.ok(undefined)
-      }
-      catch (error) {
-        return core.err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
-      }
-      finally {
-        callbacks.release()
-      }
-    },
+    commit: () => finish('commit'),
+    rollback: () => finish('rollback'),
   }
 }
 

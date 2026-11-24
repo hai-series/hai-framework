@@ -7,8 +7,7 @@
  *     的同步查询阻塞主线程事件循环。WAL 只能改善数据库锁并发，无法避免同步调用占用调用线程，
  *     因此把阻塞移出主线程才是关键。
  *
- * 说明：worker 引擎只使用单个连接（单 worker），配合 Provider 主线程事务串行锁与 worker 的
- * FIFO 消息顺序保证事务正确性；不做只读连接池，避免事务/写路径复杂化。
+ * worker 引擎只使用单个连接。Provider 将普通操作和事务排入同一队列，worker 按 FIFO 顺序处理消息。
  *
  * @module reldb-sqlite-engine
  */
@@ -64,6 +63,8 @@ export interface SqliteEngine {
   run: (sql: string, params?: unknown[]) => Promise<ExecuteResult>
   /** 执行无参数 SQL（DDL / BEGIN / COMMIT / ROLLBACK）。 */
   exec: (sql: string) => Promise<void>
+  /** 仍处于事务时回滚，允许 SQLite 已自动回滚时直接结束。 */
+  rollbackIfActive: () => Promise<void>
   /** 在单个原子事务中批量执行语句。 */
   batch: (statements: SqliteStatement[]) => Promise<void>
   /** 关闭连接（worker 引擎同时终止线程）。 */
@@ -163,6 +164,10 @@ export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngi
     async exec(sql) {
       db.exec(sql)
     },
+    async rollbackIfActive() {
+      if (db.inTransaction)
+        db.exec('ROLLBACK')
+    },
     async batch(statements) {
       const tx = db.transaction((items: SqliteStatement[]) => {
         for (const item of items) {
@@ -213,7 +218,7 @@ interface WorkerResponse {
   id: number
   ok: boolean
   result?: unknown
-  error?: { message: string }
+  error?: { message: string, code?: string }
 }
 
 /**
@@ -264,9 +269,15 @@ export function createWorkerSqliteEngine(
     if (!entry)
       return
     pending.delete(msg.id)
-    if (msg.ok)
+    if (msg.ok) {
       entry.resolve(msg.result)
-    else entry.reject(new Error(msg.error?.message ?? 'sqlite worker error'))
+    }
+    else {
+      const error = new Error(msg.error?.message ?? 'sqlite worker error')
+      entry.reject(msg.error?.code
+        ? Object.assign(error, { code: msg.error.code })
+        : error)
+    }
   })
   void worker.exited.then(({ code, error }) => {
     unsubscribe()
@@ -343,6 +354,9 @@ export function createWorkerSqliteEngine(
     },
     async exec(sql) {
       await post('exec', { sql })
+    },
+    async rollbackIfActive() {
+      await post('rollbackIfActive', {})
     },
     async batch(statements) {
       await post('batch', { statements })

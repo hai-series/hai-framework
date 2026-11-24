@@ -5,7 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { HaiReldbError } from '../src/index.js'
 import { createTxHandle } from '../src/providers/reldb-tx-assembler.js'
 
-it.each(['commit', 'rollback'] as const)('%s 一旦开始即拒绝并发结束和新查询，连接仅归还一次', async (first) => {
+it.each(['commit', 'rollback'] as const)('%s 拒绝新操作并等待已接受的失败查询，连接仅归还一次', async (first) => {
   let release!: () => void
   const gate = new Promise<void>((resolve) => {
     release = resolve
@@ -14,7 +14,15 @@ it.each(['commit', 'rollback'] as const)('%s 一旦开始即拒绝并发结束�
     await gate
   })
   const released = vi.fn()
-  const query = vi.fn(async () => core.ok([]))
+  let finishQuery!: () => void
+  const queryGate = new Promise<void>((resolve) => {
+    finishQuery = resolve
+  })
+  const queryError = new Error('driver query rejected')
+  const query = vi.fn(async () => {
+    await queryGate
+    throw queryError
+  })
   const operations: DmlOperations = {
     query,
     get: async () => core.ok(null),
@@ -34,18 +42,27 @@ it.each(['commit', 'rollback'] as const)('%s 一旦开始即拒绝并发结束�
     errorMessage: detail => detail,
   })
   try {
+    const accepted = tx.query('SELECT 1')
+    const queryRejected = expect(accepted).rejects.toBe(queryError)
     const pending = tx[first]()
-    for (const result of [await tx.commit(), await tx.rollback(), await tx.query('SELECT 1')]) {
+    for (const result of [await tx.commit(), await tx.rollback(), await tx.query('SELECT 2')]) {
       expect(result).toMatchObject({
         success: false,
         error: { code: HaiReldbError.TRANSACTION_FAILED.code },
       })
     }
-    expect(query).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledExactlyOnceWith('SELECT 1', undefined)
+    expect(finish).not.toHaveBeenCalled()
+    expect(released).not.toHaveBeenCalled()
+    finishQuery()
+    await queryRejected
     release()
     expect((await pending).success).toBe(true)
     expect(finish).toHaveBeenCalledTimes(1)
     expect(released).toHaveBeenCalledTimes(1)
   }
-  finally { release() }
+  finally {
+    finishQuery()
+    release()
+  }
 })

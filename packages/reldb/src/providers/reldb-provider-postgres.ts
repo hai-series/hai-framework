@@ -71,7 +71,7 @@ interface PgPool {
  */
 interface PgClient {
   query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number, command?: string }>
-  release: () => void
+  release: (destroy?: boolean) => void
 }
 
 // ─── PostgreSQL Provider 实现 ───
@@ -349,6 +349,20 @@ export function createPostgresProvider(): ReldbProvider {
 
   // ─── DDL 操作 ───
 
+  /** 使用空临时表让 PostgreSQL 归一化新谓词，避免扫描或锁住业务表执行建索引。 */
+  async function normalizeIndexPredicate(execute: PgClient['query'], table: string, where: string): Promise<string | undefined> {
+    const name = quoteIdentifier(`hai_reldb_index_${core.id.uuid().replaceAll('-', '')}`)
+    const tempTable = `pg_temp.${name}`
+    await execute(`CREATE TEMP TABLE ${tempTable} (LIKE ${table}) ON COMMIT DROP`)
+    await execute(`CREATE INDEX ON ${tempTable} ((1)) WHERE ${where}`)
+    const normalized = await execute(
+      'SELECT pg_catalog.pg_get_expr(indpred, indrelid) AS predicate FROM pg_catalog.pg_index WHERE indrelid = pg_catalog.to_regclass($1) AND indpred IS NOT NULL',
+      [tempTable],
+    )
+    await execute(`DROP TABLE ${tempTable}`)
+    return (normalized.rows[0] as { predicate?: string } | undefined)?.predicate
+  }
+
   function createRawDdl(execute: PgClient['query'], scoped = false): DdlOperations {
     return {
       async createTable(name, columns, ifNotExists = true) {
@@ -392,7 +406,8 @@ export function createPostgresProvider(): ReldbProvider {
             AND (i.indpred IS NOT NULL) = $5 AND i.indexprs IS NULL
             AND ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(num, pos)
               JOIN pg_catalog.pg_attribute AS a ON a.attrelid = i.indrelid AND a.attnum = k.num
-              ORDER BY k.pos) = $6::text[] AS usable
+              ORDER BY k.pos) = $6::text[] AS usable,
+            pg_catalog.pg_get_expr(i.indpred, i.indrelid) AS predicate
           FROM pg_catalog.pg_index AS i JOIN pg_catalog.pg_class AS c ON c.oid = i.indexrelid
           WHERE i.indrelid = pg_catalog.to_regclass($1) AND c.relname = $2
         `, [
@@ -403,8 +418,14 @@ export function createPostgresProvider(): ReldbProvider {
           !!def.where,
           def.columns,
         ])
-        if ((existing.rows[0] as { usable?: boolean } | undefined)?.usable)
-          return core.ok(undefined)
+        const candidate = existing.rows[0] as { usable: boolean, predicate: string | null } | undefined
+        if (candidate?.usable) {
+          if (!def.where || (candidate.predicate !== null && candidate.predicate === await normalizeIndexPredicate(execute, quotedTable, def.where)))
+            return core.ok(undefined)
+          return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_schemaMismatch', {
+            params: { table },
+          }))
+        }
         await execute(statement.replace('INDEX IF NOT EXISTS ', 'INDEX '))
         return core.ok(undefined)
       },
@@ -521,7 +542,7 @@ export function createPostgresProvider(): ReldbProvider {
     }
     catch (error) {
       try {
-        client?.release()
+        client?.release(true)
       }
       finally { releaseOwnership() }
       return core.err(HaiReldbError.TRANSACTION_FAILED, pgTxErrorMessage(String(error)), error)
@@ -532,12 +553,25 @@ export function createPostgresProvider(): ReldbProvider {
       ...ctx,
       isConnected: () => client !== null,
     }, txDmlOps)
+    let discardConnection = false
+    const finish = async (command: 'COMMIT' | 'ROLLBACK') => {
+      let result: Awaited<ReturnType<PgClient['query']>>
+      try {
+        result = await client!.query(command)
+      }
+      catch (error) {
+        discardConnection = true
+        throw error
+      }
+      if (command === 'COMMIT' && result.command !== 'COMMIT')
+        throw new Error('PostgreSQL did not commit the transaction')
+    }
     return core.ok(createTxHandle(guardedTxDmlOps, {
-      commit: async () => { await client!.query('COMMIT') },
-      rollback: async () => { await client!.query('ROLLBACK') },
+      commit: () => finish('COMMIT'),
+      rollback: () => finish('ROLLBACK'),
       release: () => {
         try {
-          client!.release()
+          client!.release(discardConnection)
         }
         finally {
           client = null
