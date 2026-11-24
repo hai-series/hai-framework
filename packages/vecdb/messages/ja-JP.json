@@ -11,6 +11,7 @@
   "vecdb_collectionNotFound": "コレクションが見つかりません: {name}",
   "vecdb_collectionAlreadyExists": "コレクションは既に存在します: {name}",
   "vecdb_invalidCollectionSchema": "コレクションに有効な永続化済みのベクトル次元または距離メトリックがありません：{name}",
+  "vecdb_invalidPgvectorIdentifier": "pgvector のテーブル名は接頭辞を含めて {limit} バイト以内の有効な識別子を指定してください",
   "vecdb_atomicUpsertUnavailable": "LanceDB コレクションまたはドライバーに安全な主キーによるアトミックな merge 機能がありません。書き込みは行っていません。コレクションを再作成するか、対応ドライバーを使用してください",
   "vecdb_duplicateDocumentIds": "同一バッチのベクトル文書 ID は一意である必要があります。書き込みは行っていません",
   "vecdb_jsonMetadataRequired": "LanceDB コレクションにはネイティブ JSON メタデータが必要です。旧形式の文字列メタデータを使用するコレクションは、書き込みやフィルター処理の前に再作成してください",
@@ -30,5 +31,6 @@
   "vecdb_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",
   "vecdb_chromaEndpointInvalid": "Chroma には HTTP(S) のルートエンドポイントを指定してください。認証情報、パスプレフィックス、クエリ、フラグメントは使用できません",
   "vecdb_chromaTokenInvalid": "Chroma Bearer トークンには空白を含まない表示可能な ASCII 文字のみ使用できます",
+  "vecdb_chromaReservedMetadataKey": "Chroma の文書メタデータには予約フィールド {key} を使用できません",
   "vecdb_collectionMetricMissing": "コレクションの距離尺度がありません。ベクトルインデックスまたは列メタデータを復元してください"
 }

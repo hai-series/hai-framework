@@ -133,7 +133,15 @@ export class QdrantRestClient {
     return this.request(`/collections/${encodeURIComponent(name)}/points/delete?wait=${options.wait}`, 'POST', 'write', { points: options.points })
   }
 
-  query(name: string, options: { query: number[], limit: number, filter?: { must: Array<{ key: string, match: { value: unknown } }> }, with_payload: boolean }) {
+  query(name: string, options: {
+    query: number[]
+    limit: number
+    filter?: {
+      must: Array<{ key: string, match: { value: unknown } }>
+      must_not?: Array<{ is_empty: { key: string } }>
+    }
+    with_payload: boolean
+  }) {
     return this.request(`/collections/${encodeURIComponent(name)}/points/query`, 'POST', 'query', options)
   }
 

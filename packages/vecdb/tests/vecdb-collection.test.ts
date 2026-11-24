@@ -112,5 +112,38 @@ describe('vecdb.collection', () => {
   defineVecdbSuite('pgvector', pgvectorEnv, defineCommon)
 
   // ─── Qdrant（容器） ───
-  defineVecdbSuite('qdrant', qdrantEnv, defineCommon)
+  defineVecdbSuite('qdrant', qdrantEnv, () => {
+    defineCommon()
+
+    it('并发创建同名集合时保留获胜方的配置，并返回已存在错误', async () => {
+      const name = 'concurrent-create'
+      const definitions = [
+        { dimension: 2, metric: 'cosine' },
+        { dimension: 3, metric: 'dot' },
+      ] as const
+      const results = await Promise.all(definitions.map(options => vecdb.collection.create(name, options)))
+      expect(results.map(result => result.success ? 'created' : result.error.code)).toEqual(expect.arrayContaining([
+        'created',
+        HaiVecdbError.COLLECTION_ALREADY_EXISTS.code,
+      ]))
+      await expect(vecdb.collection.info(name)).resolves.toMatchObject({
+        success: true,
+        data: definitions[results.findIndex(result => result.success)],
+      })
+    })
+
+    it('并发删除同名集合时只有实际发生删除的请求返回成功', async () => {
+      const name = 'concurrent-drop'
+      expect((await vecdb.collection.create(name, { dimension: 2 })).success).toBe(true)
+      const results = await Promise.all([
+        vecdb.collection.drop(name),
+        vecdb.collection.drop(name),
+      ])
+      expect(results.map(result => result.success ? 'dropped' : result.error.code)).toEqual(expect.arrayContaining([
+        'dropped',
+        HaiVecdbError.COLLECTION_NOT_FOUND.code,
+      ]))
+      await expect(vecdb.collection.exists(name)).resolves.toMatchObject({ success: true, data: false })
+    })
+  })
 })

@@ -231,7 +231,7 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
    * 初始化向量数据库连接
    *
    * @param config - 向量数据库配置（允许部分字段，内部会补齐默认值）
-   * @returns 初始化结果，失败时包含错误信息
+   * @returns 初始化结果；配置或部署模式校验失败时保留现有连接
    */
   async init(config: VecdbConfigInput): Promise<HaiResult<void>> {
     // 并发防护：防止多次同时调用导致 Provider/连接泄漏
@@ -246,12 +246,6 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
     })
 
     try {
-      const cleanup = await closeOwnedProvider()
-      if (!cleanup.success)
-        return cleanup
-
-      logger.info('Initializing vecdb module')
-
       const parseResult = VecdbConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Vecdb config validation failed', { error: parseResult.error.message })
@@ -262,6 +256,12 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'lancedb' || (parsed.type === 'chroma' && !!parsed.path && !parsed.url)))
         return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_sharedBackendRequired'))
+
+      const cleanup = await closeOwnedProvider()
+      if (!cleanup.success)
+        return cleanup
+
+      logger.info('Initializing vecdb module')
 
       try {
         const provider = createProvider(parsed)

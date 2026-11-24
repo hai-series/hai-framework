@@ -20,9 +20,10 @@ import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
 import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
-import { MAX_QDRANT_POINT_ID, QdrantRestClient } from './vecdb-qdrant-rest.js'
+import { MAX_QDRANT_POINT_ID, QdrantHttpError, QdrantRestClient } from './vecdb-qdrant-rest.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
+const MAX_SEARCH_CANDIDATES = 10_000
 
 /**
  * 将字符串 ID 转换为 UUID 格式（Qdrant 要求 UUID 或无符号整数作为 point ID）
@@ -33,6 +34,13 @@ const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 function hashToUuid(id: string): string {
   const hash = createHash('sha256').update(id).digest('hex')
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
+}
+
+/** 只认可能按原文档 ID 删除的 point，原生 ID 和不匹配的载荷均不参与框架检索。 */
+function readFrameworkId(pointId: string | number | bigint, documentId: unknown): string | undefined {
+  return typeof pointId === 'string' && typeof documentId === 'string' && hashToUuid(documentId) === pointId
+    ? documentId
+    : undefined
 }
 
 /**
@@ -66,8 +74,7 @@ export function createQdrantProvider(): VecdbProvider {
 
   /** 判断 Qdrant 错误是否为 404（集合不存在） */
   function isQdrantNotFoundError(error: unknown): boolean {
-    // Qdrant REST SDK 的 ApiError 携带顶层 status；不猜测其它 SDK 的异常形态。
-    return typeof error === 'object' && error !== null && 'status' in error && error.status === 404
+    return error instanceof QdrantHttpError && error.status === 404
   }
 
   /** 获取集合信息；集合不存在时返回 COLLECTION_NOT_FOUND，其余异常继续抛出 */
@@ -150,23 +157,24 @@ export function createQdrantProvider(): VecdbProvider {
     async create(name, options) {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
-      // 检查集合是否已存在
-      const collections = await client!.getCollections()
-      const exists = collections.collections.some(c => c.name === name)
-      if (exists) {
+      const metric = options.metric ?? config?.metric ?? 'cosine'
+      try {
+        const created = await client!.createCollection(name, {
+          vectors: {
+            size: options.dimension,
+            distance: toQdrantDistance(metric),
+          },
+        })
+        if (!created)
+          throw new Error('Qdrant did not confirm collection creation')
+      }
+      catch (error) {
+        if (!(error instanceof QdrantHttpError) || error.status !== 409)
+          throw error
         return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
           params: { name },
         }))
       }
-
-      const metric = options.metric ?? config?.metric ?? 'cosine'
-
-      await client!.createCollection(name, {
-        vectors: {
-          size: options.dimension,
-          distance: toQdrantDistance(metric),
-        },
-      })
 
       logger.info('Collection created', { name, dimension: options.dimension, metric })
       return core.ok(undefined)
@@ -175,12 +183,16 @@ export function createQdrantProvider(): VecdbProvider {
     async drop(name) {
       logger.debug('Dropping collection', { name })
 
-      const infoResult = await getCollectionInfo(name)
-      if (!infoResult.success) {
-        return infoResult
+      const dropped = await client!.deleteCollection(name).catch((error: unknown) => {
+        if (isQdrantNotFoundError(error))
+          return false
+        throw error
+      })
+      if (!dropped) {
+        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name },
+        }))
       }
-
-      await client!.deleteCollection(name)
 
       logger.info('Collection dropped', { name })
       return core.ok(undefined)
@@ -317,6 +329,8 @@ export function createQdrantProvider(): VecdbProvider {
     async search(collection, vector, options) {
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
+      if (!Number.isSafeInteger(topK) || topK < 1)
+        throw new Error('Qdrant search limit must be a positive safe integer')
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
@@ -334,46 +348,73 @@ export function createQdrantProvider(): VecdbProvider {
         return dimensionValidation
       }
 
-      // 构建过滤条件
-      let filter: { must: Array<{ key: string, match: { value: unknown } }> } | undefined
-      if (options?.filter && Object.keys(options.filter).length > 0) {
-        const mustConditions = Object.entries(options.filter).map(([key, value]) => ({
-          key,
-          match: { value },
-        }))
-        filter = { must: mustConditions }
-      }
+      const must = Object.entries(options?.filter ?? {}).map(([key, value]) => ({
+        key,
+        match: { value },
+      }))
+      // Strict 模式可能拒绝未索引的内部字段或增加的过滤条件，保持调用方原有查询条件。
+      const strictMode = collectionInfo.data.config.strict_mode_config
+      const mustNot = strictMode?.enabled
+        ? undefined
+        : [
+            {
+              is_empty: { key: '_id' },
+            },
+          ]
+      const filter = must.length || mustNot
+        ? { must, must_not: mustNot }
+        : undefined
+      const maxCandidates = strictMode?.enabled
+        ? Math.min(strictMode.max_query_limit ?? MAX_SEARCH_CANDIDATES, MAX_SEARCH_CANDIDATES)
+        : MAX_SEARCH_CANDIDATES
 
-      const searchResult = await client!.query(collection, {
-        query: vector,
-        limit: topK,
-        filter,
-        with_payload: true,
-      })
+      let limit = topK
+      while (true) {
+        const { points } = await client!.query(collection, {
+          query: vector,
+          limit,
+          filter,
+          with_payload: true,
+        })
 
-      const results: VectorSearchResult[] = searchResult.points.map((point) => {
-        const payload = point.payload ?? {}
-        const { _id, _content, ...metadata } = payload
-        return {
-          id: typeof _id === 'string'
-            ? _id
-            : '',
-          // Qdrant 余弦/内积返回相似值，欧氏返回距离；统一后再应用公开阈值。
-          score: vectorScoreFromDistance(definition.metric === 'cosine'
+        const results: VectorSearchResult[] = []
+        for (const point of points) {
+          // Qdrant 按相关度返回，转换保留顺序，低于阈值的后续候选无需再查。
+          const score = vectorScoreFromDistance(definition.metric === 'cosine'
             ? 1 - point.score
             : definition.metric === 'dot'
               ? -point.score
-              : point.score, definition.metric),
-          content: typeof _content === 'string' && _content.length > 0
-            ? _content
-            : undefined,
-          metadata: Object.keys(metadata).length > 0
-            ? metadata
-            : undefined,
-        }
-      }).filter(point => point.score >= minScore)
+              : point.score, definition.metric)
+          if (!(score >= minScore))
+            return core.ok(results)
 
-      return core.ok(results)
+          const { _id, _content, ...metadata } = point.payload ?? {}
+          const id = readFrameworkId(point.id, _id)
+          if (id === undefined)
+            continue
+
+          results.push({
+            id,
+            score,
+            content: typeof _content === 'string' && _content.length > 0
+              ? _content
+              : undefined,
+            metadata: Object.keys(metadata).length > 0
+              ? metadata
+              : undefined,
+          })
+          if (results.length === topK)
+            return core.ok(results)
+        }
+
+        if (points.length < limit)
+          return core.ok(results)
+        if (limit >= maxCandidates)
+          throw new Error('Qdrant candidate limit reached before collecting requested framework results')
+
+        // 扩展同一排名前缀，避免多次近似搜索分页时的边界重复或遗漏。
+        limit = Math.min(limit * 2, maxCandidates)
+      }
     },
 
     async count(collection) {
@@ -405,13 +446,12 @@ export function createQdrantProvider(): VecdbProvider {
         }))
       }
       const items = page.points.flatMap(({ id, payload }) => {
-        const documentId = payload?._id
-        // 仅返回能被本模块按相同 ID 删除的记录，避免将原生 point ID 或伪造载荷当作框架 ID。
-        return typeof documentId === 'string' && hashToUuid(documentId) === id
-          ? [
+        const documentId = readFrameworkId(id, payload?._id)
+        return documentId === undefined
+          ? []
+          : [
               { id: documentId },
             ]
-          : []
       })
       const next = page.next_page_offset ?? undefined
       if (next !== undefined && next === offset)

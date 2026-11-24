@@ -7,6 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { Pool as PgPool } from 'pg'
 import type { DistanceMetric, PgvectorConfig } from '../vecdb-config.js'
 import type {
   VectorDocument,
@@ -14,6 +15,7 @@ import type {
 } from '../vecdb-types.js'
 
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
+import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
@@ -35,42 +37,26 @@ async function prepareRows(documents: VectorDocument[], dimension: number) {
   return prepared.data.value
 }
 
-/**
- * pg Pool 的最小接口定义（避免强依赖可选包）
- * @example 模块内部上下文
- * ```ts
- * async function ready(pool: PgPool) {
- *   const result = await pool.query('SELECT $1 AS value', [1])
- *   return result.rows.length > 0
- * }
- * ```
- */
-interface PgPool {
-  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
-  end: () => Promise<void>
+/** 仅保留格式安全的 SQLSTATE 或网络错误码，日志不输出驱动错误的原文。 */
+function pgErrorCode(error: unknown): string | undefined {
+  return error && typeof error === 'object' && 'code' in error
+    && typeof error.code === 'string' && /^[A-Z0-9_]{1,32}$/.test(error.code)
+    ? error.code
+    : undefined
 }
 
-/**
- * pg 模块的最小接口定义（避免强依赖可选包）
- * @example 模块内部上下文
- * ```ts
- * async function ready(module: PgModule) {
- *   const pool = new module.Pool({ host: 'db', database: 'shop' })
- *   try { return await pool.query('SELECT 1') } finally { await pool.end() }
- * }
- * ```
- */
-interface PgModule {
-  Pool: new (config: unknown) => PgPool
+/** 生成集合不存在的统一错误，避免暴露物理表名。 */
+function collectionNotFound(name: string): HaiResult<never> {
+  return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+    params: { name },
+  }))
 }
 
-function isPgModule(value: unknown): value is PgModule {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const maybeModule = value as { Pool?: unknown }
-  return typeof maybeModule.Pool === 'function'
+/** 创建集合时，已经存在的可见关系占用同一个逻辑名称。 */
+function collectionAlreadyExists(name: string): HaiResult<never> {
+  return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+    params: { name },
+  }))
 }
 
 /**
@@ -88,17 +74,27 @@ function isPgModule(value: unknown): value is PgModule {
 export function createPgvectorProvider(): VecdbProvider {
   let pool: PgPool | null = null
   let config: PgvectorConfig | null = null
+  let maxIdentifierBytes = 0
+  let checkEncodedLength = false
 
   // ─── 辅助函数 ───
 
-  /** 获取完整表名（带前缀） */
-  function tableName(collection: string): string {
-    return `${config?.tablePrefix ?? 'vec_'}${collection}`
-  }
-
-  /** 双引号转义 SQL 标识符，支持含特殊字符的表名 */
-  function quoteIdent(name: string): string {
-    return `"${name.replace(/"/g, '""')}"`
+  /** 先校验物理标识符，避免 PostgreSQL 自动截断而定位到其它集合。 */
+  async function collectionIdentifier(collection: string): Promise<HaiResult<string>> {
+    const name = `${config?.tablePrefix ?? 'vec_'}${collection}`
+    if (name.length !== 0 && !name.includes('\0') && !/\p{Surrogate}/u.test(name)) {
+      // pg 默认收发 UTF-8。其它服务端编码由数据库计算转换后的字节数，保留合法的旧表名。
+      const length = checkEncodedLength
+        ? (await pool!.query<{ bytes: number }>('SELECT pg_catalog.octet_length($1::text) AS bytes', [name])).rows[0].bytes
+        : Buffer.byteLength(name)
+      if (length <= maxIdentifierBytes)
+        return core.ok(`"${name.replace(/"/g, '""')}"`)
+    }
+    return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidPgvectorIdentifier', {
+      params: {
+        limit: String(maxIdentifierBytes),
+      },
+    }))
   }
 
   /** 获取距离算符（pgvector 语法） */
@@ -125,10 +121,10 @@ export function createPgvectorProvider(): VecdbProvider {
   }
 
   /** 动态加载 pg 驱动 */
-  async function loadPg(): Promise<HaiResult<PgModule>> {
+  async function loadPg(): Promise<HaiResult<typeof import('pg')>> {
     try {
       const mod = await import('pg')
-      if (!isPgModule(mod)) {
+      if (typeof mod.Pool !== 'function') {
         const error = new Error('pg driver module does not export Pool')
         logger.error('Failed to load pg driver', { error: error.message })
         return core.err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
@@ -153,40 +149,28 @@ export function createPgvectorProvider(): VecdbProvider {
     }
   }
 
-  /** 获取集合维度；集合不存在时返回 COLLECTION_NOT_FOUND */
-  async function getCollectionDimension(name: string): Promise<HaiResult<number>> {
-    const table = tableName(name)
-
-    const existsResult = await pool!.query(
-      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-      [table],
-    )
-    if (!existsResult.rows[0].exists) {
-      return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
-        params: { name },
-      }))
-    }
-
-    const dimResult = await pool!.query(`
-      SELECT atttypmod FROM pg_attribute
-      WHERE attrelid = $1::regclass AND attname = 'vector'
-    `, [
-      quoteIdent(table),
-    ])
-
-    return core.ok(dimResult.rows.length > 0
-      ? Number(dimResult.rows[0].atttypmod)
-      : 0)
+  /** 通过同一 search_path 解析表和维度，避免其它 schema 的同名表被误判。 */
+  async function getCollectionDimension(name: string, identifier: string): Promise<HaiResult<number>> {
+    const result = await pool!.query<{ dimension: number | null }>(`
+      SELECT a.atttypmod AS dimension
+      FROM pg_catalog.pg_class c
+      LEFT JOIN pg_catalog.pg_attribute a
+        ON a.attrelid = c.oid AND a.attname = 'vector' AND NOT a.attisdropped
+      WHERE c.oid = pg_catalog.to_regclass($1) AND c.relkind IN ('r', 'p', 'f')
+    `, [identifier])
+    return result.rows[0]
+      ? core.ok(result.rows[0].dimension ?? 0)
+      : collectionNotFound(name)
   }
 
   /** 集合算法保存在向量列注释；旧集合从实际索引恢复，不受连接默认值变化影响。 */
-  async function getCollectionMetric(name: string): Promise<HaiResult<DistanceMetric>> {
-    const result = await pool!.query(`SELECT col_description(a.attrelid, a.attnum) AS definition,
-      (SELECT opc.opcname FROM pg_index i JOIN pg_opclass opc ON opc.oid = ANY(i.indclass)
-       WHERE i.indrelid = a.attrelid AND opc.opcname IN ('vector_cosine_ops', 'vector_l2_ops', 'vector_ip_ops') LIMIT 1) AS operator
-      FROM pg_attribute a WHERE a.attrelid = $1::regclass AND a.attname = 'vector'`, [
-      quoteIdent(tableName(name)),
-    ])
+  async function getCollectionMetric(identifier: string): Promise<HaiResult<DistanceMetric>> {
+    const result = await pool!.query<{ definition: string | null, operator: string | null }>(`
+      SELECT pg_catalog.col_description(a.attrelid, a.attnum) AS definition,
+        (SELECT opc.opcname FROM pg_catalog.pg_index i JOIN pg_catalog.pg_opclass opc ON opc.oid = ANY(i.indclass)
+         WHERE i.indrelid = a.attrelid AND opc.opcname IN ('vector_cosine_ops', 'vector_l2_ops', 'vector_ip_ops') LIMIT 1) AS operator
+      FROM pg_catalog.pg_attribute a WHERE a.attrelid = pg_catalog.to_regclass($1) AND a.attname = 'vector' AND NOT a.attisdropped
+    `, [identifier])
     const row = result.rows[0]
     const stored = typeof row?.definition === 'string' && row.definition.startsWith('hai.vecdb.metric=')
       ? row.definition.slice('hai.vecdb.metric='.length)
@@ -246,112 +230,128 @@ export function createPgvectorProvider(): VecdbProvider {
 
   const collectionDriver: CollectionDriver = {
     async create(name, options) {
-      const table = tableName(name)
+      const identifier = await collectionIdentifier(name)
+      if (!identifier.success)
+        return identifier
+      const qi = identifier.data
       const dimension = options.dimension
       const metric = DistanceMetricSchema.parse(options.metric ?? config?.metric ?? 'cosine')
       const indexType = config?.indexType ?? 'hnsw'
-
-      logger.debug('Creating collection', { name, dimension, metric, indexType })
-
-      // 检查表是否已存在
-      const checkResult = await pool!.query(
-        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-        [table],
-      )
-      if (checkResult.rows[0].exists) {
-        return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
-          params: { name },
-        }))
-      }
-
-      // 创建表
-      const qi = quoteIdent(table)
-      await pool!.query(`
-        CREATE TABLE ${qi} (
-          id TEXT PRIMARY KEY,
-          vector vector(${dimension}),
-          content TEXT,
-          metadata JSONB DEFAULT '{}'::jsonb
-        )
-      `)
-
-      // 创建向量索引
       const distOp = distanceOp(metric)
       const opsClass = distOp === '<=>'
         ? 'vector_cosine_ops'
         : distOp === '<->'
           ? 'vector_l2_ops'
           : 'vector_ip_ops'
+      // IVFFlat 在空表按通用默认值建立 100 个列表。
+      const indexOptions = indexType === 'ivfflat'
+        ? 'WITH (lists = 100)'
+        : ''
 
-      if (indexType === 'hnsw') {
-        await pool!.query(`
-          CREATE INDEX ON ${qi}
-          USING hnsw (vector ${opsClass})
+      logger.debug('Creating collection', { name, dimension, metric, indexType })
+
+      const client = await pool!.connect()
+      let discardClient = false
+      try {
+        // 获取事务锁后用新的快照读取已发布关系，随后原子提交表、索引与距离定义。
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
+        await client.query(
+          'SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(\'hai.vecdb.collection:\' || $1::text, 0))',
+          [qi],
+        )
+        const occupied = await client.query<{ exists: boolean }>(
+          'SELECT pg_catalog.to_regclass($1) IS NOT NULL AS exists',
+          [qi],
+        )
+        if (occupied.rows[0]?.exists) {
+          await client.query('COMMIT')
+          return collectionAlreadyExists(name)
+        }
+
+        await client.query(`
+          CREATE TABLE ${qi} (
+            id TEXT PRIMARY KEY,
+            vector vector(${dimension}),
+            content TEXT,
+            metadata JSONB DEFAULT '{}'::jsonb
+          )
         `)
+        await client.query(`CREATE INDEX ON ${qi} USING ${indexType} (vector ${opsClass}) ${indexOptions}`)
+        // metric 和 indexType 取自已校验的枚举，不能拼接任意配置文本。
+        await client.query(`COMMENT ON COLUMN ${qi}.vector IS 'hai.vecdb.metric=${metric}'`)
+        await client.query('COMMIT')
       }
-      else {
-        // IVFFlat lists 参数：建表时数据为空，使用 100 作为通用默认值
-        // 适用于 100 万行以内的数据集；超大数据集应在数据增长后重建索引
-        await pool!.query(`
-          CREATE INDEX ON ${qi}
-          USING ivfflat (vector ${opsClass})
-          WITH (lists = 100)
-        `)
+      catch (error) {
+        try {
+          await client.query('ROLLBACK')
+        }
+        catch (rollbackError) {
+          discardClient = true
+          logger.warn('Failed to roll back pgvector collection creation', {
+            code: pgErrorCode(rollbackError),
+          })
+        }
+        if (pgErrorCode(error) === '42P07')
+          return collectionAlreadyExists(name)
+        throw error
+      }
+      finally {
+        client.release(discardClient)
       }
 
-      // metric 已由公开 Schema 枚举校验，不拼接任意配置文本。
-      await pool!.query(`COMMENT ON COLUMN ${qi}.vector IS 'hai.vecdb.metric=${metric}'`)
       logger.info('Collection created', { name, dimension, metric, indexType })
       return core.ok(undefined)
     },
 
     async drop(name) {
-      const table = tableName(name)
+      const identifier = await collectionIdentifier(name)
+      if (!identifier.success)
+        return identifier
 
       logger.debug('Dropping collection', { name })
-
-      const checkResult = await pool!.query(
-        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-        [table],
-      )
-      if (!checkResult.rows[0].exists) {
-        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
-          params: { name },
-        }))
+      try {
+        await pool!.query(`DROP TABLE ${identifier.data}`)
       }
-
-      await pool!.query(`DROP TABLE ${quoteIdent(table)}`)
+      catch (error) {
+        if (pgErrorCode(error) === '42P01')
+          return collectionNotFound(name)
+        throw error
+      }
 
       logger.info('Collection dropped', { name })
       return core.ok(undefined)
     },
 
     async exists(name) {
+      const identifier = await collectionIdentifier(name)
+      if (!identifier.success)
+        return identifier
       logger.debug('Checking collection exists', { name })
 
-      const result = await pool!.query(
-        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-        [
-          tableName(name),
-        ],
+      const result = await pool!.query<{ exists: boolean }>(
+        `SELECT EXISTS (SELECT FROM pg_catalog.pg_class
+          WHERE oid = pg_catalog.to_regclass($1) AND relkind IN ('r', 'p', 'f'))`,
+        [identifier.data],
       )
-      return core.ok(result.rows[0].exists as boolean)
+      return core.ok(result.rows[0].exists)
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      const table = tableName(name)
-      const dimensionResult = await getCollectionDimension(name)
+      const identifier = await collectionIdentifier(name)
+      if (!identifier.success)
+        return identifier
+      const dimensionResult = await getCollectionDimension(name, identifier.data)
       if (!dimensionResult.success) {
         return dimensionResult
       }
 
-      const metric = await getCollectionMetric(name)
+      const metric = await getCollectionMetric(identifier.data)
       if (!metric.success)
         return metric
       // 获取文档数量
-      const countResult = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
+      const countResult = await pool!.query<{ count: string }>(`SELECT COUNT(*) as count FROM ${identifier.data}`)
       const count = Number.parseInt(String(countResult.rows[0].count), 10)
 
       return core.ok({
@@ -367,14 +367,15 @@ export function createPgvectorProvider(): VecdbProvider {
 
       logger.debug('Listing collections')
 
-      const result = await pool!.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_name LIKE $1 AND table_schema = 'public'`,
-        [`${prefix}%`],
-      )
-      const names = result.rows.map((row: Record<string, unknown>) =>
-        String(row.table_name).slice(prefix.length),
-      )
-      return core.ok(names)
+      const result = await pool!.query<{ name: string }>(`
+        SELECT table_name::text AS name
+        FROM information_schema.tables
+        WHERE table_type IN ('BASE TABLE', 'FOREIGN', 'LOCAL TEMPORARY')
+          AND pg_catalog.starts_with(table_name::text, $1)
+          AND pg_catalog.pg_table_is_visible(pg_catalog.to_regclass(pg_catalog.format('%I.%I', table_schema, table_name)))
+        ORDER BY table_name
+      `, [prefix])
+      return core.ok(result.rows.map(row => row.name.slice(prefix.length)))
     },
   }
 
@@ -382,11 +383,13 @@ export function createPgvectorProvider(): VecdbProvider {
 
   const vectorDriver: VectorDriver = {
     async insert(collection, documents) {
-      const table = tableName(collection)
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
 
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
-      const dimensionResult = await getCollectionDimension(collection)
+      const dimensionResult = await getCollectionDimension(collection, identifier.data)
       if (!dimensionResult.success) {
         return dimensionResult
       }
@@ -398,11 +401,10 @@ export function createPgvectorProvider(): VecdbProvider {
 
       // 构建多值 INSERT（单条 SQL，避免 await-in-loop N+1 问题）
       // 注意：PostgreSQL 参数上限为 65535，每条文档占 4 个参数，单批最多 ~16383 条
-      const qi = quoteIdent(table)
       const { placeholders, params } = await prepareRows(documents, dimensionResult.data)
 
       await pool!.query(
-        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${placeholders}`,
+        `INSERT INTO ${identifier.data} (id, vector, content, metadata) VALUES ${placeholders}`,
         params,
       )
 
@@ -411,11 +413,13 @@ export function createPgvectorProvider(): VecdbProvider {
     },
 
     async upsert(collection, documents) {
-      const table = tableName(collection)
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
 
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
-      const dimensionResult = await getCollectionDimension(collection)
+      const dimensionResult = await getCollectionDimension(collection, identifier.data)
       if (!dimensionResult.success) {
         return dimensionResult
       }
@@ -425,12 +429,11 @@ export function createPgvectorProvider(): VecdbProvider {
         return dimensionValidation
       }
 
-      const qi = quoteIdent(table)
       // 构建多值 INSERT ON CONFLICT（单条 SQL，避免 await-in-loop N+1 问题）
       const { placeholders, params } = await prepareRows(documents, dimensionResult.data)
 
       await pool!.query(
-        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${placeholders}
+        `INSERT INTO ${identifier.data} (id, vector, content, metadata) VALUES ${placeholders}
          ON CONFLICT (id) DO UPDATE SET
            vector = EXCLUDED.vector,
            content = EXCLUDED.content,
@@ -443,25 +446,29 @@ export function createPgvectorProvider(): VecdbProvider {
     },
 
     async delete(collection, ids) {
-      const table = tableName(collection)
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
 
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
       const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
-      await pool!.query(`DELETE FROM ${quoteIdent(table)} WHERE id IN (${placeholders})`, ids)
+      await pool!.query(`DELETE FROM ${identifier.data} WHERE id IN (${placeholders})`, ids)
 
       logger.info('Vectors deleted', { collection, count: ids.length })
       return core.ok(undefined)
     },
 
     async search(collection, vector, options) {
-      const table = tableName(collection)
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
-      const dimensionResult = await getCollectionDimension(collection)
+      const dimensionResult = await getCollectionDimension(collection, identifier.data)
       if (!dimensionResult.success) {
         return dimensionResult
       }
@@ -471,7 +478,7 @@ export function createPgvectorProvider(): VecdbProvider {
         return dimensionValidation
       }
 
-      const metric = await getCollectionMetric(collection)
+      const metric = await getCollectionMetric(identifier.data)
       if (!metric.success)
         return metric
       const op = distanceOp(metric.data)
@@ -497,7 +504,7 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const result = await pool!.query(
         `SELECT id, content, metadata, vector ${op} $1::vector AS distance
-         FROM ${quoteIdent(table)}
+         FROM ${identifier.data}
          ${filterSQL}
          ORDER BY vector ${op} $1::vector
          LIMIT $2`,
@@ -520,30 +527,31 @@ export function createPgvectorProvider(): VecdbProvider {
     },
 
     async count(collection) {
-      const table = tableName(collection)
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
 
       logger.debug('Counting vectors', { collection })
 
-      const result = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
+      const result = await pool!.query(`SELECT COUNT(*) as count FROM ${identifier.data}`)
       return core.ok(Number.parseInt(String(result.rows[0].count), 10))
     },
 
     async scan(collection, limit, cursor) {
-      const table = quoteIdent(tableName(collection))
+      const identifier = await collectionIdentifier(collection)
+      if (!identifier.success)
+        return identifier
       const request = cursor === undefined
-        ? pool!.query(`SELECT id FROM ${table} ORDER BY id LIMIT $1`, [limit + 1])
-        : pool!.query(`SELECT id FROM ${table} WHERE id > $1 ORDER BY id LIMIT $2`, [cursor, limit + 1])
+        ? pool!.query<{ id: string }>(`SELECT id FROM ${identifier.data} ORDER BY id LIMIT $1`, [limit + 1])
+        : pool!.query<{ id: string }>(`SELECT id FROM ${identifier.data} WHERE id > $1 ORDER BY id LIMIT $2`, [cursor, limit + 1])
       const page = await request.catch((error: unknown) => {
-        if (typeof error === 'object' && error !== null && 'code' in error && error.code === '42P01')
+        if (pgErrorCode(error) === '42P01')
           return undefined
         throw error
       })
-      if (!page) {
-        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
-          params: { name: collection },
-        }))
-      }
-      const items = page.rows.slice(0, limit).map(row => ({ id: row.id as string }))
+      if (!page)
+        return collectionNotFound(collection)
+      const items = page.rows.slice(0, limit).map(row => ({ id: row.id }))
       return core.ok({
         items,
         nextCursor: page.rows.length > limit
@@ -586,9 +594,25 @@ export function createPgvectorProvider(): VecdbProvider {
             }
 
         pool = new Pool(poolConfig)
+        // pg-pool 会移除已损坏的空闲连接；处理后台事件，避免 EventEmitter 终止进程。
+        pool.on('error', (error: unknown) => {
+          logger.warn('PostgreSQL idle connection error; pool will replace connection', {
+            code: pgErrorCode(error),
+            name: error instanceof Error
+              ? 'Error'
+              : 'UnknownError',
+          })
+        })
 
         // 确保 pgvector 扩展已启用
         await pool.query('CREATE EXTENSION IF NOT EXISTS vector')
+        const serverSettings = await pool.query<{ identifier_limit: number, encoding: string }>(`
+          SELECT pg_catalog.current_setting('max_identifier_length')::int AS identifier_limit,
+            pg_catalog.current_setting('server_encoding') AS encoding
+        `)
+        const { identifier_limit: identifierLimit, encoding } = serverSettings.rows[0]
+        maxIdentifierBytes = identifierLimit
+        checkEncodedLength = encoding !== 'UTF8' && encoding !== 'SQL_ASCII'
 
         config = pgConfig
 
@@ -619,6 +643,8 @@ export function createPgvectorProvider(): VecdbProvider {
         }
         pool = null
         config = null
+        maxIdentifierBytes = 0
+        checkEncodedLength = false
         logger.info('pgvector connection closed')
         return core.ok(undefined)
       }

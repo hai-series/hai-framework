@@ -94,9 +94,19 @@ password: ${HAI_VECDB_PASSWORD}
 indexType: hnsw
 ```
 
+<a id="pgvector-schema"></a>
+
+#### 选择集合所在的 PostgreSQL schema
+
+pgvector 在 PostgreSQL 的当前 schema 中创建集合表。查询、写入和删除按 `search_path` 查找同名表，列表只显示按该路径可见且当前角色有权限的表。为共享集合的实例设置相同的 `search_path`，以应用角色执行 `SHOW search_path` 核对顺序，再用 `vecdb.collection.list()` 核对已有集合。参见 [PostgreSQL 的 schema 搜索路径](https://www.postgresql.org/docs/17/ddl-schemas.html#DDL-SCHEMAS-PATH)。
+
+`tablePrefix` 是字面表名前缀。下划线和百分号按普通字符处理。拼接后的表名按数据库编码计算字节数，超过服务器的 `max_identifier_length`（通常为 63 字节）时返回 `CONFIG_ERROR`。参见 [PostgreSQL 标识符](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)。
+
+<a id="chroma-server"></a>
+
 ### 连接独立的 Chroma 服务
 
-此例使用已有 Chroma 服务，不把向量写到当前进程的本地目录。连接后创建一个测试集合并写入、检索向量，确认所部署版本支持应用使用的接口。
+此例连接独立运行的 Chroma 服务。框架通过 `upsert` 保存有效元数据键清单。服务需支持数组元数据，以及 `$contains` 和 `$not_contains` 过滤。已用 Chroma 1.5.5 验证。连接后，按[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)写入、更新并检索一条测试文档，确认移除的键无法用旧值命中。
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma

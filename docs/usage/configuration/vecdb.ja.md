@@ -52,9 +52,19 @@ password: ${HAI_VECDB_PASSWORD}
 indexType: hnsw
 ```
 
+<a id="pgvector-schema"></a>
+
+#### コレクションを配置する PostgreSQL スキーマを選ぶ
+
+pgvector は PostgreSQL の現在のスキーマにコレクションのテーブルを作成します。読み取り、書き込み、削除は `search_path` の順にテーブル名を解決します。一覧には、このパスで参照でき、現在のロールにアクセス権があるテーブルが表示されます。コレクションを共有するインスタンスでは同じ `search_path` を使います。アプリのロールで `SHOW search_path` を実行して順序を確認し、`vecdb.collection.list()` で想定したコレクションが表示されることを確認します。[PostgreSQL のスキーマ検索パス](https://www.postgresql.org/docs/17/ddl-schemas.html#DDL-SCHEMAS-PATH)を参照してください。
+
+`tablePrefix` はテーブル名の接頭辞です。アンダースコアとパーセント記号は通常の文字として扱います。連結したテーブル名は データベースの文字エンコーディングでバイト数を検証します。サーバー設定の `max_identifier_length`（通常は 63 バイト）を超えると `CONFIG_ERROR` が返ります。[PostgreSQL の識別子](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)を参照してください。
+
+<a id="chroma-server"></a>
+
 ### Chroma サーバーへ接続する
 
-アプリ内のローカルディレクトリではなく、既存の Chroma サーバーを利用します。接続後にテスト用コレクションを作成し、ベクトルの登録と検索を行って、導入済みバージョンの API を確認します。
+別途稼働する Chroma サービスに接続します。VecDB は `upsert` で有効なメタデータのキーを保存します。サーバーには配列型のメタデータと、`$contains` および `$not_contains` による絞り込みが必要です。Chroma 1.5.5 で検証済みです。接続後、[メタデータの置き換え例](../function/vecdb.ja.md#chroma-metadata-replacement)に沿ってテスト用文書を書き込み、更新して検索します。削除したキーを古い値で絞り込んでも一致しないことを確認します。
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma
