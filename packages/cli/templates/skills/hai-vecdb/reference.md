@@ -30,7 +30,8 @@ path: ./data/vecdb
 
 # pgvector
 # type: pgvector
-# url: postgres://user:pass@localhost:5432/mydb
+# url: ${HAI_VECDB_URL}
+# database: mydb
 # indexType: hnsw
 # tablePrefix: vec_
 
@@ -60,6 +61,8 @@ operationLog:
 
 `operationLog` 在集合/向量操作进入真实 Provider 前输出日志。日志包含操作类型以及条数、维度、topK、是否有过滤条件等摘要。`maxLength` 限制摘要字符数，0 省略摘要。`level` 默认 `debug`。
 
+pgvector 在当前 PostgreSQL schema 创建集合表。读写按 `search_path` 解析表名，列表返回按该路径可见且当前角色有权限的表。为共享集合的实例设置相同的 `search_path`，以应用角色核对 `SHOW search_path` 和 `vecdb.collection.list()`。表名是字面 `tablePrefix` 加集合名，下划线和百分号按普通字符匹配。拼接后的表名按数据库编码计算字节数，超过服务器的 `max_identifier_length`（通常为 63）时返回 `CONFIG_ERROR`。
+
 ### 2. 初始化与关闭
 
 ```typescript
@@ -80,7 +83,9 @@ if (!closeResult.success) {
 }
 ```
 
-> `vecdb.config` 返回的是**脱敏配置快照**；连接字符串中的用户名/密码、独立 `password` 字段和 `apiKey` 会被替换为 `[REDACTED]`。
+`vecdb.config` 返回脱敏配置快照，其中连接字符串中的凭据、独立 `password` 和 `apiKey` 都会被脱敏。
+
+已有连接时，`init` 先校验新配置和部署环境。校验失败返回 `CONFIG_ERROR`，已有连接仍可用。校验成功后才清理旧资源并尝试连接新后端。pgvector 的空闲连接断开后会由连接池移除，后续请求按需建立连接。故障期间的操作仍可能失败。
 
 ### 3. 选择操作接口
 
@@ -129,13 +134,17 @@ interface CollectionCreateOptions {
 }
 ```
 
+pgvector 在同一个事务内建表、建向量索引并保存列的 metric 注释。建索引失败会回滚本次建表。Chroma、pgvector 和 Qdrant 并发创建同名集合时，后续创建调用返回 `COLLECTION_ALREADY_EXISTS`。使用共享集合前核对其维度和度量。Qdrant 删除不存在的集合会返回 `COLLECTION_NOT_FOUND`。
+
+通过 Chroma 原生接口创建的集合按服务端索引配置读取度量。`collection.info()` 在集合收到第一条向量前返回维度 0，首次写入后使用服务端保存的维度。删空文档后该维度仍保留。通过 VecDB 创建集合时显式传入 `options.dimension`。
+
 LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。旧表/外部表如缺少该定义，需要重建集合，不提供兼容推断。
 
 LanceDB 是嵌入式本地文件后端。只有访问相同持久目录、且底层文件系统支持 LanceDB 并发提交的进程才能共享数据；不同节点各自的同名本地路径互不共享。分布式服务优先选择 pgvector、Qdrant 或 Chroma 服务端。AI Knowledge 的 reldb 与 vecdb 都须持久化并指向同一业务数据集，替换 embedding 维度时须重建匹配的集合。
 
 搜索始终使用集合 metric，`euclidean` 映射 LanceDB 的 `l2`。`score` 延续公开 API 的 0–1、越大越相似约定：cosine 为 `clamp(1 - distance / 2, 0, 1)`；euclidean 为 `1 / (1 + squaredL2)`；dot 为 `sigmoid(dotProduct)`，用于保持内积排序而非概率。`minScore` 在该转换后过滤；不同 metric/后端的阈值不应视为通用校准值。
 
-LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。新集合在初始 Arrow schema 声明 id 为不可空主键；insert/upsert 均使用原生 merge，以 id 参与严格键冲突检测。依据：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts)。
+LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。新集合在初始 Arrow schema 声明 id 为非空的 Lance 非强制主键。insert/upsert 均使用原生 merge，按 id 处理键冲突。依据：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts)。
 
 LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。旧表需重建，不自动迁移或清空。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
 
@@ -143,11 +152,13 @@ LanceDB metadata 使用原生 JSON 字段，仍可保存嵌套 JSON 对象，搜
 
 LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/有限 number/boolean/null；例如 `{ tenant: 'acme', page: 1, active: true, removedAt: null }`。数字/布尔不匹配同形字符串；null 只匹配显式 JSON null，不匹配缺失键。引号、反斜线、百分号、下划线均为字面量，点/括号不解释为嵌套路径。空对象不筛选；对象、数组、undefined、非有限数值返回 CONFIG_ERROR，不能忽略条件重试。过滤在向量 topK 前执行，随后应用 minScore；其它 Provider 沿用原生约束，不保证同样的 null、复杂值和路径语义。
 
+升级 LanceDB 旧集合时，暂停旧集合写入并备份完整目录。用应用原始数据或能读取旧格式的工具导出 ID、向量、正文和元数据。通过 `vecdb.collection.create()` 新建集合，复用旧向量时使用其原维度和度量。先处理重复 ID，再用小批次 `upsert` 回填，每批检查 `success`。通过 `collection.info`、`vector.count` 和已知文档的带过滤检索验证结果后，再切换应用读写目标。按应用的回退周期保留备份与旧集合。
+
 ### 向量操作 — `vecdb.vector`
 
 | 方法     | 签名                                                          | 说明          |
 | -------- | ------------------------------------------------------------- | ------------- |
-| `insert` | `(collection, documents) => HaiResult<void>`                  | 批量插入      |
+| `insert` | `(collection, documents) => HaiResult<void>`                  | 批量插入，已有 ID 的处理见下文 |
 | `upsert` | `(collection, documents) => HaiResult<void>`                  | 批量更新/插入 |
 | `delete` | `(collection, ids) => HaiResult<void>`                        | 按 ID 删除    |
 | `search` | `(collection, vector, options?) => HaiResult<SearchResult[]>` | 向量搜索      |
@@ -155,6 +166,8 @@ LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/�
 | `scan`   | `(collection, options?) => HaiResult<VectorScanPage>`          | 分页读取文档 ID |
 
 > 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
+
+对已经存在的同一个 ID 再调用 `insert`，LanceDB 和 Chroma 保留旧文档并返回成功，pgvector 拒绝整批并返回 `INSERT_FAILED`，Qdrant 覆盖旧文档并返回成功。LanceDB 在同一批次出现重复 ID 时返回 `CONFIG_ERROR`。更新文档用 `upsert`。参见 [Chroma add 行为](https://docs.trychroma.com/docs/collections/add-data#behaviors)。
 
 ```typescript
 // 插入向量文档
@@ -199,13 +212,15 @@ if (page.success && page.data.nextCursor !== undefined) {
 
 > 空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`。Qdrant `collection.exists()` 仅在 404 时返回 `false`，网络异常会返回查询错误而不是误判不存在。
 
-Qdrant `insert/upsert/delete` 等待服务端应用完成（wait:true）才返回成功，`vector.count` 请求精确计数。多次操作之间没有事务；Knowledge 在此基础上使用共享版本清单发布与补偿。
+Qdrant `insert/upsert/delete` 等待服务端应用完成（wait:true）才返回成功，`vector.count` 请求所有点的精确计数。`search` 和 `scan` 使用同一文档 ID 条件，无法映射回 VecDB 文档 ID 的原生点保留在集合中，而且不占用搜索 `topK`。搜索达到候选上限仍无法确认所需结果时返回 `QUERY_FAILED`。多次操作之间没有事务；Knowledge 在此基础上使用共享版本清单发布与补偿。
 
 > Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式（提供 `path` 且无 `url`）下 `vecdb.init` 通过 `serverCommand`（默认 `chroma`）拉起本地服务，`vecdb.close` 时关闭进程；npm `chromadb` 提供客户端，服务端 CLI 需另行安装。服务命令不可用或就绪超时时 `init` 返回 `HaiVecdbError.CONNECTION_FAILED`。
 
 Chroma 直连 `url` 仅支持 HTTP(S) 根端点，优先于 `host/port`；URL 不得带凭据、路径前缀、query 或 fragment。无 `url` 时 `host/port` 使用 HTTP。可选 `apiKey` 以 `Authorization: Bearer <apiKey>` 发送给采用此协议的自托管服务/网关；远程传输应使用 HTTPS。空串表示未配置，其余值只允许无空白的可打印 ASCII。本接口使用默认 tenant/database，不提供 Chroma Cloud 契约。初始化在心跳后验证数据端点权限，认证/权限失败返回 `CONNECTION_FAILED`，必须先检查 `success` 再执行业务。SDK 参数依据：[chromadb 3.5.0 官方客户端](https://docs.trychroma.com/reference/typescript/client)。
 
 直连初始化总截止为 5 秒，本地服务拉起使用 `startupTimeout`；超时中止候选 HTTP 请求。成功清除初始化 timer，不限制后续业务请求。
+
+框架对 Chroma 执行 `upsert` 时，在同一次请求中提交向量、正文和有效元数据键清单。已有旧记录可读。用 `upsert` 省略上次写入的键后，VecDB 搜索结果不会返回旧键，按旧值过滤也不会命中；通过 Chroma 原生接口仍可能看到旧值。保留字段 `_hai_vecdb_metadata_keys` 由框架维护，`insert` 和 `upsert` 会拒绝显式提供该键。服务需支持数组元数据及 `$contains`、`$not_contains`，已用 Chroma 1.5.5 验证。
 
 Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖；超时 30 秒覆盖完整响应体，响应超过 16 MiB 明确失败。仅支持未命名向量字段的 cosine/euclidean/dot；外部 named-vector/Manhattan 集合的 info/写入/搜索返回 CONFIG_ERROR，不猜测维度或 metric。Chroma 使用 `chromadb 3.5.0` 的真实类型及 metadata/filter 校验，非法输入返回操作错误，不丢弃过滤；content 可省略。各后端的 null 和复杂元数据语义不承诺统一。
 

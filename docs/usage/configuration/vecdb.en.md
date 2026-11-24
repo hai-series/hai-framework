@@ -52,9 +52,19 @@ password: ${HAI_VECDB_PASSWORD}
 indexType: hnsw
 ```
 
+<a id="pgvector-schema"></a>
+
+#### Select the PostgreSQL schema for collections
+
+pgvector creates collection tables in the current PostgreSQL schema. Reads, writes, and deletion resolve names in `search_path` order. Listing shows tables visible on that path that the current role has permission to access. Use the same `search_path` on instances that share collections. Verify the order with `SHOW search_path` as the application role, then check `vecdb.collection.list()` for the expected collections. See the [PostgreSQL schema search path](https://www.postgresql.org/docs/17/ddl-schemas.html#DDL-SCHEMAS-PATH).
+
+`tablePrefix` is a literal table-name prefix. Underscores and percent signs are ordinary characters. The combined table name is measured in bytes using the database encoding. A name longer than the server setting `max_identifier_length` (usually 63 bytes) returns `CONFIG_ERROR`. See [PostgreSQL identifiers](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS).
+
+<a id="chroma-server"></a>
+
 ### Connect to a Chroma server
 
-This uses an existing Chroma server rather than a directory in the application process. After connecting, create a test collection, insert a vector and query it to confirm that the deployed version supports the required API.
+This connects to a separately deployed Chroma service. VecDB stores the active metadata keys on `upsert`. The server needs array-valued metadata and both `$contains` and `$not_contains` filters. This behavior was verified with Chroma 1.5.5. After connecting, follow the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement) to write, update, and search for a test document. Confirm that filtering on a removed key with its old value yields no match.
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma

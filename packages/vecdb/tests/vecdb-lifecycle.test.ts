@@ -51,12 +51,42 @@ beforeEach(async () => {
   close.mockResolvedValue(core.ok(undefined))
 })
 afterEach(async () => {
+  vi.unstubAllEnvs()
   close.mockResolvedValue(core.ok(undefined))
   await vecdb.close()
 })
 const config = { type: 'qdrant', url: 'http://localhost:6333' } as const
 
 describe('vecdb resource ownership', () => {
+  it('配置校验失败时继续使用现有向量库', async () => {
+    expect((await vecdb.init(config)).success).toBe(true)
+
+    await expect(vecdb.init({ type: 'lancedb', path: '' })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiVecdbError.CONFIG_ERROR.code },
+    })
+    expect(close).not.toHaveBeenCalled()
+    expect(vecdb.config?.type).toBe('qdrant')
+    await expect(vecdb.collection.list()).resolves.toEqual({
+      success: true,
+      data: ['docs'],
+    })
+  })
+
+  it('生产环境拒绝本地后端时继续使用现有向量库', async () => {
+    expect((await vecdb.init(config)).success).toBe(true)
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('HAI_E2E', '0')
+    vi.stubEnv('HAI_E2E_MOCK', '0')
+
+    await expect(vecdb.init({ type: 'lancedb', path: './unused' })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiVecdbError.CONFIG_ERROR.code },
+    })
+    expect(close).not.toHaveBeenCalled()
+    expect(vecdb.isInitialized).toBe(true)
+  })
+
   it.each(['result', 'throw'])('close %s失败停止发布且同一资源可以重试', async (mode) => {
     expect((await vecdb.init(config)).success).toBe(true)
     const captured = vecdb.collection

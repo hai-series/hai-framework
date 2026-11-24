@@ -6,7 +6,8 @@ import type { StartedTestContainer } from 'testcontainers'
 import { once } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { GenericContainer, Wait } from 'testcontainers'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { vecdb } from '../src/index.js'
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 import { VecdbConfigSchema } from '../src/vecdb-config.js'
 import { HaiVecdbError } from '../src/vecdb-types.js'
@@ -83,6 +84,29 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
     }
     finally {
       await provider.close()
+    }
+  })
+
+  it('并发创建同名集合只有获胜方成功，且服务保存其配置', async () => {
+    const name = 'concurrent-collection-creation'
+    const definitions = [
+      { dimension: 2, metric: 'cosine' },
+      { dimension: 3, metric: 'dot' },
+    ] as const
+    try {
+      expect((await vecdb.init({ type: 'chroma', url, apiKey: token })).success).toBe(true)
+      const results = await Promise.all(definitions.map(options => vecdb.collection.create(name, options)))
+      expect(results.map(result => result.success ? 'created' : result.error.code)).toEqual(expect.arrayContaining([
+        'created',
+        HaiVecdbError.COLLECTION_ALREADY_EXISTS.code,
+      ]))
+      await expect(vecdb.collection.info(name)).resolves.toMatchObject({
+        success: true,
+        data: definitions[results.findIndex(result => result.success)],
+      })
+    }
+    finally {
+      await vecdb.close()
     }
   })
 
@@ -241,6 +265,138 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
     }
     finally {
       await provider.close()
+    }
+  }, 30_000)
+
+  it('upsert 替换元数据，旧字段在 topK 前失效且早期记录仍可筛选', async () => {
+    const name = 'metadata-replacement'
+    const query = [1, 0]
+    try {
+      expect((await vecdb.init({ type: 'chroma', url, apiKey: token })).success).toBe(true)
+      expect((await vecdb.collection.create(name, { dimension: 2 })).success).toBe(true)
+      expect((await vecdb.vector.insert(name, [
+        {
+          id: 'updated',
+          vector: query,
+          content: 'old',
+          metadata: {
+            status: 'retired',
+            topics: ['guide'],
+            revision: 1,
+          },
+        },
+        {
+          id: 'legacy',
+          vector: [0, 1],
+          metadata: {
+            status: 'retired',
+            topics: ['guide'],
+            revision: 1,
+          },
+        },
+      ])).success).toBe(true)
+      expect((await vecdb.vector.upsert(name, [
+        {
+          id: 'updated',
+          vector: query,
+          content: 'current',
+          metadata: { revision: 2 },
+        },
+      ])).success).toBe(true)
+
+      const search = async (filter?: Record<string, unknown>) => {
+        const result = await vecdb.vector.search(name, query, { topK: 1, filter })
+        expect(result.success).toBe(true)
+        if (!result.success)
+          throw new Error(result.error.message)
+        return result.data[0]
+      }
+      expect(await search()).toMatchObject({ id: 'updated', content: 'current' })
+      expect((await search())?.metadata).toEqual({ revision: 2 })
+      expect((await search({ status: 'retired' }))?.id).toBe('legacy')
+      expect((await search({
+        topics: { $contains: 'guide' },
+      }))?.id).toBe('legacy')
+      expect((await search({
+        $or: [
+          {
+            status: { $ne: 'retired' },
+          },
+          {
+            topics: { $not_contains: 'guide' },
+          },
+        ],
+        revision: { $gte: 2 },
+      }))?.id).toBe('updated')
+
+      expect((await vecdb.vector.upsert(name, [
+        { id: 'updated', vector: query },
+      ])).success).toBe(true)
+      expect((await search())?.metadata).toBeUndefined()
+      expect((await search())?.content).toBeUndefined()
+      expect(await search({ revision: 2 })).toBeUndefined()
+
+      const before = vectorWrites
+      await expect(vecdb.vector.upsert(name, [
+        {
+          id: 'updated',
+          vector: query,
+          metadata: { _hai_vecdb_metadata_keys: 'application-value' },
+        },
+      ])).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.UPDATE_FAILED.code },
+      })
+      expect(vectorWrites).toBe(before)
+    }
+    finally {
+      await vecdb.close()
+    }
+  }, 30_000)
+
+  it('独立连接并发 upsert 后只读取一次完整替换的元数据', async () => {
+    const name = 'concurrent-metadata-replacement'
+    vi.resetModules()
+    const { vecdb: second } = await import('../src/index.js')
+    const config = { type: 'chroma', url, apiKey: token } as const
+    const vector = [1, 0]
+    try {
+      expect((await vecdb.init(config)).success).toBe(true)
+      expect((await second.init(config)).success).toBe(true)
+      expect((await vecdb.collection.create(name, { dimension: 2 })).success).toBe(true)
+      const writes = await Promise.all([
+        vecdb.vector.upsert(name, [
+          {
+            id: 'doc',
+            vector,
+            content: 'first',
+            metadata: { first: true },
+          },
+        ]),
+        second.vector.upsert(name, [
+          {
+            id: 'doc',
+            vector,
+            content: 'second',
+            metadata: { second: true },
+          },
+        ]),
+      ])
+      expect(writes.map(result => result.success)).toEqual([true, true])
+      const read = await second.vector.search(name, vector)
+      expect(read.success).toBe(true)
+      if (!read.success)
+        throw new Error(read.error.message)
+      expect(read.data).toHaveLength(1)
+      const [document] = read.data
+      expect(['first', 'second']).toContain(document.content)
+      expect(document.metadata).toEqual({ [document.content!]: true })
+    }
+    finally {
+      await Promise.all([
+        vecdb.close(),
+        second.close(),
+      ])
     }
   }, 30_000)
 })

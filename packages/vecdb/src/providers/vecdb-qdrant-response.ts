@@ -38,6 +38,10 @@ const collectionSchema = z.object({
     params: z.object({
       vectors: z.unknown(),
     }),
+    strict_mode_config: z.object({
+      enabled: z.boolean().optional(),
+      max_query_limit: z.number().int().nonnegative().nullish(),
+    }).nullish(),
   }),
   points_count: z.number().nullable().optional(),
 })

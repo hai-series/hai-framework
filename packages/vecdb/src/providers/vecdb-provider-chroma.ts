@@ -16,6 +16,7 @@ import type { ChromaClient, ChromaClientArgs, Collection, EmbeddingFunction, Met
 import type { ChildProcess } from 'node:child_process'
 import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
+  VectorDocument,
   VectorSearchResult,
 } from '../vecdb-types.js'
 
@@ -23,6 +24,7 @@ import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-prov
 import { spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { core } from '@h-ai/core'
+import { z } from 'zod'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
@@ -31,7 +33,21 @@ import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance }
 const logger = core.logger.child({ module: 'vecdb', scope: 'chroma' })
 const DIMENSION_METADATA_KEY = 'hai_dimension'
 const SPACE_METADATA_KEY = 'hnsw:space'
+// Chroma 的原生 schema 使用此保留键表示集合的密集向量索引。
+const EMBEDDING_SCHEMA_KEY = '#embedding'
 const HEARTBEAT_POLL_INTERVAL = 300
+const ACTIVE_METADATA_KEYS = '_hai_vecdb_metadata_keys'
+const ACTIVE_METADATA_FORMAT = 'v1'
+const NEGATIVE_WHERE_OPERATORS = new Set(['$ne', '$nin', '$not_contains'])
+
+// SDK 的 Collection 对象没有保留 GET 响应中的持久化维度和原始标识。
+const NativeCollectionDefinitionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  tenant: z.string(),
+  database: z.string(),
+  dimension: z.number().int().positive().nullable(),
+})
 
 /**
  * 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。
@@ -69,12 +85,40 @@ function toChromaSpace(metric: DistanceMetric): string {
 }
 
 /** Chroma hnsw:space → DistanceMetric */
-function fromChromaSpace(space: unknown): DistanceMetric {
+function fromChromaSpace(space: unknown): DistanceMetric | undefined {
   if (space === 'l2')
     return 'euclidean'
   if (space === 'ip')
     return 'dot'
-  return 'cosine'
+  return space === 'cosine'
+    ? 'cosine'
+    : undefined
+}
+
+/** 优先读取实际密集索引，保留旧服务只在 metadata 声明距离空间的兼容路径。 */
+function readMetric(collection: Collection): HaiResult<DistanceMetric> {
+  const schema = collection.schema
+  const space = schema?.keys[EMBEDDING_SCHEMA_KEY]?.floatList?.vectorIndex?.config.space
+    ?? collection.configuration?.hnsw?.space
+    ?? collection.configuration?.spann?.space
+    ?? schema?.defaults.floatList?.vectorIndex?.config.space
+    ?? collection.metadata?.[SPACE_METADATA_KEY]
+  const metric = fromChromaSpace(space)
+  return metric === undefined
+    ? invalidNativeCollectionDefinition(collection.name)
+    : core.ok(metric)
+}
+
+function invalidNativeCollectionDefinition(name: string): HaiResult<never> {
+  return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+    params: { name },
+  }))
+}
+
+function missingNativeCollectionDefinition(name: string): HaiResult<never> {
+  return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+    params: { name },
+  }))
 }
 
 /** 将 Chroma 距离转换为相似度分数 [0, 1] */
@@ -85,7 +129,59 @@ function distanceToScore(distance: number, metric: DistanceMetric): number {
     : distance, metric)
 }
 
-/** 构建 Chroma where 过滤条件（单键直接匹配，多键用 $and） */
+/** Chroma 原地合并元数据。只有同次写入声明为有效的字段才参与过滤，旧记录仍用原生过滤。 */
+function guardMetadataWhere(where: Where): Where {
+  const entries: Array<[string, unknown]> = Object.entries(where)
+  if (entries.length !== 1)
+    return where
+  const [[key, test]] = entries
+  if (key === '$and' || key === '$or') {
+    if (!Array.isArray(test) || test.some(child => child === null || typeof child !== 'object' || Array.isArray(child)))
+      return where
+    // SDK 校验嵌套谓词及其操作数，此处仅为合法形状的节点添加过滤条件。
+    const children = (test as Where[]).map(guardMetadataWhere)
+    return key === '$and'
+      ? { $and: children }
+      : { $or: children }
+  }
+
+  const marker = `k:${key}`
+  if (test && typeof test === 'object' && Object.keys(test).some(operator => NEGATIVE_WHERE_OPERATORS.has(operator))) {
+    // Chroma 的否定谓词匹配缺失字段。物理存在但已失效的字段也按缺失处理。
+    return {
+      $or: [
+        where,
+        {
+          $and: [
+            {
+              [ACTIVE_METADATA_KEYS]: { $contains: ACTIVE_METADATA_FORMAT },
+            },
+            {
+              [ACTIVE_METADATA_KEYS]: { $not_contains: marker },
+            },
+          ],
+        },
+      ],
+    }
+  }
+  return {
+    $and: [
+      where,
+      {
+        $or: [
+          {
+            [ACTIVE_METADATA_KEYS]: { $not_contains: ACTIVE_METADATA_FORMAT },
+          },
+          {
+            [ACTIVE_METADATA_KEYS]: { $contains: marker },
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/** 单字段直接匹配，多字段用 AND；有效键检查在服务端和 topK 一同执行。 */
 function buildWhere(filter?: Record<string, unknown>): Where | undefined {
   if (!filter)
     return undefined
@@ -97,8 +193,8 @@ function buildWhere(filter?: Record<string, unknown>): Where | undefined {
     : {
         $and: entries.map(([key, value]) => ({ [key]: value })),
       }
-  // 公共 filter 保留各后端的原生能力；query 会先调用 SDK validateWhere 校验，不复制上游规则。
-  return where as Where
+  // query 仍交给 SDK 校验原始谓词及新增的有效键约束。
+  return guardMetadataWhere(where as Where)
 }
 
 /**
@@ -115,6 +211,7 @@ function buildWhere(filter?: Record<string, unknown>): Where | undefined {
 export function createChromaProvider(): VecdbProvider {
   let client: ChromaClient | null = null
   let config: ChromaConfig | null = null
+  let endpointOrigin: URL | null = null
   let serverProcess: ChildProcess | null = null
   let spawnFailed = false
   let closing: Promise<HaiResult<void>> | null = null
@@ -244,6 +341,7 @@ export function createChromaProvider(): VecdbProvider {
     if (!closing) {
       client = null
       config = null
+      endpointOrigin = null
       closing = (async () => {
         try {
           await stopEmbeddedServer()
@@ -293,12 +391,43 @@ export function createChromaProvider(): VecdbProvider {
     return client!.getCollection({ name, embeddingFunction: NOOP_EMBEDDING_FUNCTION })
   }
 
-  /** 读取集合存储的维度 */
-  function readDimension(collection: Collection): number {
+  /** 框架集合沿用预先声明的维度，原生集合从同一连接的服务端定义读取。 */
+  async function readDimension(collection: Collection): Promise<HaiResult<number>> {
     const value = collection.metadata?.[DIMENSION_METADATA_KEY]
-    return typeof value === 'number'
-      ? value
-      : 0
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+      return core.ok(value)
+
+    const activeClient = client
+    const origin = endpointOrigin
+    if (!activeClient || !origin)
+      return core.err(HaiVecdbError.NOT_INITIALIZED, vecdbM('vecdb_notInitialized'))
+
+    const scope = [collection.tenant, collection.database, collection.name]
+    if (scope.some(segment => !segment || segment === '.' || segment === '..'))
+      return invalidNativeCollectionDefinition(collection.name)
+    const [tenant, database, name] = scope.map(segment => encodeURIComponent(segment))
+    // SDK GET 的业务路径按名称解析。校验响应 ID，避免同名重建把新集合定义与旧句柄混用。
+    const endpoint = new URL(`/api/v2/tenants/${tenant}/databases/${database}/collections/${name}`, origin)
+    const response = await fetch(endpoint, {
+      headers: activeClient.headers,
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) {
+      await response.body?.cancel()
+      if (response.status === 404)
+        return missingNativeCollectionDefinition(collection.name)
+      throw new Error(`Chroma collection definition request returned HTTP ${response.status}`)
+    }
+    const definition = NativeCollectionDefinitionSchema.safeParse(await response.json().catch(() => undefined))
+    if (!definition.success)
+      return invalidNativeCollectionDefinition(collection.name)
+    if (definition.data.id !== collection.id || definition.data.name !== collection.name
+      || definition.data.tenant !== collection.tenant || definition.data.database !== collection.database) {
+      return missingNativeCollectionDefinition(collection.name)
+    }
+    return core.ok(definition.data.dimension ?? 0)
   }
 
   function validateDimension<T>(expected: number, actual: number): HaiResult<T> | null {
@@ -327,23 +456,25 @@ export function createChromaProvider(): VecdbProvider {
     async create(name, options) {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
-      const existing = await client!.listCollections()
-      const exists = existing.some(item => item.name === name)
-      if (exists) {
+      const metric = options.metric ?? config?.metric ?? 'cosine'
+      try {
+        await client!.createCollection({
+          name,
+          metadata: {
+            [SPACE_METADATA_KEY]: toChromaSpace(metric),
+            [DIMENSION_METADATA_KEY]: options.dimension,
+          },
+          embeddingFunction: NOOP_EMBEDDING_FUNCTION,
+        })
+      }
+      catch (error) {
+        // Chroma SDK 将服务端的 HTTP 409 映射为 ChromaUniqueError。
+        if (!(error instanceof Error) || error.name !== 'ChromaUniqueError')
+          throw error
         return core.err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
           params: { name },
         }))
       }
-
-      const metric = options.metric ?? config?.metric ?? 'cosine'
-      await client!.getOrCreateCollection({
-        name,
-        metadata: {
-          [SPACE_METADATA_KEY]: toChromaSpace(metric),
-          [DIMENSION_METADATA_KEY]: options.dimension,
-        },
-        embeddingFunction: NOOP_EMBEDDING_FUNCTION,
-      })
 
       logger.info('Collection created', { name, dimension: options.dimension, metric })
       return core.ok(undefined)
@@ -372,21 +503,26 @@ export function createChromaProvider(): VecdbProvider {
 
     async info(name) {
       logger.debug('Getting collection info', { name })
-      const existing = await client!.listCollections()
-      if (!existing.some(item => item.name === name)) {
-        return core.err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
-          params: { name },
-        }))
+      try {
+        const collection = await getCollection(name)
+        const dimension = await readDimension(collection)
+        if (!dimension.success)
+          return dimension
+        const metric = readMetric(collection)
+        if (!metric.success)
+          return metric
+        return core.ok({
+          name,
+          dimension: dimension.data,
+          metric: metric.data,
+          count: await collection.count(),
+        })
       }
-
-      const collection = await getCollection(name)
-      const count = await collection.count()
-      return core.ok({
-        name,
-        dimension: readDimension(collection),
-        metric: fromChromaSpace(collection.metadata?.[SPACE_METADATA_KEY]),
-        count,
-      })
+      catch (error) {
+        if (error instanceof Error && ['ChromaNotFoundError', 'InvalidCollectionError'].includes(error.name))
+          return missingNativeCollectionDefinition(name)
+        throw error
+      }
     },
 
     async list() {
@@ -398,14 +534,29 @@ export function createChromaProvider(): VecdbProvider {
 
   // ─── 向量操作适配器 ───
 
-  function toWriteParams(documents: { id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }[]): Parameters<Collection['add']>[0] {
+  function toWriteParams(documents: VectorDocument[], operation: 'insert' | 'upsert'): Parameters<Collection['add']>[0] {
     return {
       ids: documents.map(doc => doc.id),
       embeddings: documents.map(doc => doc.vector),
       documents: documents.map(doc => doc.content ?? ''),
       // 统一 API 的 metadata 更宽；SDK 在 add/upsert 中先执行 validateMetadata，再发送请求。
       // 使用上游 Metadata 类型跨越此边界，避免复制其标量、数组及稀疏向量规则；原生拒绝会由 base 转为 HaiResult。
-      metadatas: documents.map(doc => ({ ...doc.metadata, _content: doc.content ?? '' })) as Metadata[],
+      metadatas: documents.map((doc) => {
+        const metadata: Record<string, unknown> = { ...doc.metadata, _content: doc.content ?? '' }
+        if (Object.hasOwn(metadata, ACTIVE_METADATA_KEYS)) {
+          throw new Error(vecdbM('vecdb_chromaReservedMetadataKey', {
+            params: { key: ACTIVE_METADATA_KEYS },
+          }))
+        }
+        if (operation === 'upsert') {
+          // SDK 省略 null/undefined。与字段在同一次原生 upsert 提交，读者只看到完整的最新版本。
+          const keys = Object.entries(metadata)
+            .filter(([, value]) => value !== null && value !== undefined)
+            .map(([key]) => `k:${key}`)
+          metadata[ACTIVE_METADATA_KEYS] = [ACTIVE_METADATA_FORMAT, ...keys]
+        }
+        return metadata as Metadata
+      }),
     }
   }
 
@@ -413,13 +564,15 @@ export function createChromaProvider(): VecdbProvider {
     async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
       const target = await getCollection(collection)
-      const expected = readDimension(target)
+      const expected = await readDimension(target)
+      if (!expected.success)
+        return expected
       for (const doc of documents) {
-        const validation = validateDimension<void>(expected, doc.vector.length)
+        const validation = validateDimension<void>(expected.data, doc.vector.length)
         if (validation)
           return validation
       }
-      await target.add(toWriteParams(documents))
+      await target.add(toWriteParams(documents, 'insert'))
       logger.info('Vectors inserted', { collection, count: documents.length })
       return core.ok(undefined)
     },
@@ -427,13 +580,15 @@ export function createChromaProvider(): VecdbProvider {
     async upsert(collection, documents) {
       logger.debug('Upserting vectors', { collection, count: documents.length })
       const target = await getCollection(collection)
-      const expected = readDimension(target)
+      const expected = await readDimension(target)
+      if (!expected.success)
+        return expected
       for (const doc of documents) {
-        const validation = validateDimension<void>(expected, doc.vector.length)
+        const validation = validateDimension<void>(expected.data, doc.vector.length)
         if (validation)
           return validation
       }
-      await target.upsert(toWriteParams(documents))
+      await target.upsert(toWriteParams(documents, 'upsert'))
       logger.info('Vectors upserted', { collection, count: documents.length })
       return core.ok(undefined)
     },
@@ -452,12 +607,16 @@ export function createChromaProvider(): VecdbProvider {
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
       const target = await getCollection(collection)
-      const expected = readDimension(target)
-      const validation = validateDimension<VectorSearchResult[]>(expected, vector.length)
+      const expected = await readDimension(target)
+      if (!expected.success)
+        return expected
+      const validation = validateDimension<VectorSearchResult[]>(expected.data, vector.length)
       if (validation)
         return validation
 
-      const metric = fromChromaSpace(target.metadata?.[SPACE_METADATA_KEY])
+      const metric = readMetric(target)
+      if (!metric.success)
+        return metric
       const response = await target.query({
         queryEmbeddings: [vector],
         nResults: topK,
@@ -470,19 +629,25 @@ export function createChromaProvider(): VecdbProvider {
 
       const results: VectorSearchResult[] = []
       for (let i = 0; i < ids.length; i++) {
-        const score = distanceToScore(distances[i] ?? 0, metric)
+        const score = distanceToScore(distances[i] ?? 0, metric.data)
         if (score < minScore)
           continue
         const metadata = metadatas[i] ?? {}
-        const { _content, ...rest } = metadata
+        const { _content, [ACTIVE_METADATA_KEYS]: keys, ...rest } = metadata
+        const active = Array.isArray(keys)
+          ? new Set<unknown>(keys)
+          : undefined
+        const visible = active?.has(ACTIVE_METADATA_FORMAT)
+          ? Object.fromEntries(Object.entries(rest).filter(([key]) => active.has(`k:${key}`)))
+          : rest
         results.push({
           id: ids[i],
           score,
           content: typeof _content === 'string' && _content.length > 0
             ? _content
             : undefined,
-          metadata: Object.keys(rest).length > 0
-            ? rest
+          metadata: Object.keys(visible).length > 0
+            ? visible
             : undefined,
         })
       }
@@ -578,6 +743,7 @@ export function createChromaProvider(): VecdbProvider {
         startupAbort.signal.throwIfAborted()
         if (embedded && (spawnFailed || !serverProcess || serverProcess.exitCode !== null || serverProcess.signalCode !== null))
           throw new Error('Chroma child exited before readiness was confirmed')
+        endpointOrigin = endpoint ?? new URL(`http://${chromaConfig.host}:${chromaConfig.port}`)
         client = chromaClient
         config = chromaConfig
         logger.info('Chroma connected', {

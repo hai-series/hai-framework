@@ -6,7 +6,7 @@
 
 ## クイックスタート
 
-ベクトルバックエンドを初期化し、名前と次元を指定してコレクションを作成し、ベクトルの書き込みと検索を行います。カーソルを使う走査では同じ保存先とコレクションを指定します。
+開発環境で、空の `./data/vecdb` ディレクトリを使って実行します。接続を閉じた後も `docs` コレクションは残ります。再実行には別の空のディレクトリを使います。
 
 ```ts
 import { vecdb } from '@h-ai/vecdb'
@@ -109,7 +109,36 @@ vecdb.config // null
 
 スコアは割合ではなく 0〜1 の値です。実際の距離尺度とバックエンドでしきい値を確かめてください。走査の結果は ID のみです。空ページでも nextCursor があれば同じコレクションとバックエンドで続けます。
 
-[引数と手順の詳細](vecdb.md#connection)
+<a id="production-backends"></a>
+
+#### 本番環境のバックエンド要件
+
+本番環境では Qdrant、pgvector、または別途稼働する Chroma サービスを使います。`NODE_ENV=production` または `HAI_CORE_ENV=production` の場合、`init` は LanceDB と組み込み Chroma を拒否します。明示的なテストでは `HAI_E2E=1` または `HAI_E2E_MOCK=1` を設定してこの検証を省略できます。[共有状態と復旧の仕様（中国語）](../../../.agents/instructions/distributed-state.md)を参照してください。
+
+接続済みの状態で `init` を呼び出すと、先に新しい設定と実行環境を検証します。検証に失敗した場合は `CONFIG_ERROR` が返り、既存の接続は引き続き使えます。検証に成功すると、既存の接続を閉じてから新しいバックエンドへ接続します。
+
+<a id="connection-recovery"></a>
+
+#### 利用例：接続の解放に失敗したときの復旧
+
+pgvector のアイドル接続が切断されると、プールはその接続を除外し、必要に応じて新しい接続を作成します。障害発生時の操作は失敗することがあるため、各結果の `success` を確認します。
+
+`vecdb.close()` を呼び出すと、アプリが保持している操作オブジェクトからの呼び出しを含め、新しい操作の受け付けを停止します。同時に呼び出された `close()` は同じ解放処理を待ちます。初期化や終了処理に失敗し、`error.ext.cleanupPending` が `true` の場合は、`close()` を再実行します。`init()` を呼び出した場合も、解放待ちのリソースを処理してから接続します。
+
+```ts
+// アプリの非同期関数内の断片です。解放に成功すると data は undefined です。
+const closed = await vecdb.close()
+if (!closed.success) {
+  if (!closed.error.ext?.cleanupPending)
+    return closed
+  // 解放待ちのリソースを再度解放し、失敗時は呼び出し元に結果を返します。
+  const retried = await vecdb.close()
+  if (!retried.success)
+    return retried
+}
+```
+
+組み込み Chroma の終了時は、モジュールが直接起動したサービスプロセスの終了を待ちます。終了シグナルを送信して最大 1.5 秒待ち、時間内に終了しなければ強制終了を試してさらに最大 1.5 秒待ちます。終了を確認できない場合は失敗を返し、再試行のためにプロセスハンドルを保持します。
 
 <a id="collections"></a>
 
@@ -126,6 +155,10 @@ vecdb.config // null
 | `vecdb.collection.exists(name)` | コレクションの存在を確認 | `name: string` 必須の設定済みコレクション名 | `boolean` | `await vecdb.collection.exists('documents')` |
 | `vecdb.collection.info(name)` | 次元、距離尺度、文書数を取得 | `name: string` 必須の設定済みコレクション名 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
 | `vecdb.collection.list()` | コレクション名を一覧表示 | なし | `string[]` | `await vecdb.collection.list()` |
+
+複数のインスタンスが Chroma、pgvector、または Qdrant で同名のコレクションを同時に作成し、別の呼び出しが先に作成した場合は `COLLECTION_ALREADY_EXISTS` が返ります。共有コレクションを使い始める前に、次元と距離尺度がアプリの設定に一致することを確認します。存在しない Qdrant コレクションを削除すると `COLLECTION_NOT_FOUND` が返ります。
+
+Chroma のネイティブ API で作成し、ベクトルが一度も書き込まれていない集合では、`vecdb.collection.info()` の `dimension` が `0` になります。最初の書き込みで次元が決まり、その後すべてのレコードを削除しても保持されます。距離尺度は Chroma サーバーの索引設定に従います。VecDB で集合を作成する場合は `options.dimension` を指定します。
 
 #### 利用例：集合の作成と削除
 
@@ -181,7 +214,7 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 | `vecdb.vector.upsert(collection, documents)` | ID で文書全体を挿入または置換 | `collection: string` 必須のコレクション名。`documents: VectorDocument[]` 必須の文書配列。[文書項目](#vecdb-vector-options)を参照 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
 | `vecdb.vector.delete(collection, ids)` | ID で文書を削除 | `collection: string` 必須のコレクション名。`ids: string[]` 削除する文書 ID 配列 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
 | `vecdb.vector.search(collection, vector, options?)` | ベクトルの類似度で検索 | `collection: string` 必須のコレクション名。`vector: number[]` コレクションと次元が一致する検索ベクトル。`options?: VectorSearchOptions` [検索項目](#vecdb-vector-options)を参照 | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | コレクション内の文書数を集計 | `collection: string` 必須のコレクション名 | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.count(collection)` | 文書数を集計。Qdrant ではコレクション内の全ポイントを集計 | `collection: string` 必須のコレクション名 | `number` | `await vecdb.vector.count('documents')` |
 | `vecdb.vector.scan(collection, options?)` | 文書 ID をページ単位で取得 | `collection: string` 必須のコレクション名。`options?: VectorScanOptions` [走査項目](#vecdb-vector-options)を参照 | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
 
 <a id="vecdb-vector-options"></a>
@@ -193,7 +226,7 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 | `VectorDocument.id` | `string` | 必須 | 置換・削除で使うアプリの安定した文書 ID。 |
 | `VectorDocument.vector` | `number[]` | 必須 | コレクションと次元が一致する浮動小数点配列。 |
 | `VectorDocument.content` | `string` | 任意 | ヒット結果に含める元のテキスト。 |
-| `VectorDocument.metadata` | `Record<string, unknown>` | 任意 | source など後で絞り込むための追加データ。 |
+| `VectorDocument.metadata` | `Record<string, unknown>` | 任意 | source など後で絞り込むための追加データ。Chroma の予約キーは[メタデータの置き換え](#chroma-metadata-replacement)を参照してください。 |
 | `VectorSearchOptions.topK` | `number` | `10` | 類似度順に取得する最大件数。 |
 | `VectorSearchOptions.minScore` | `number` | `0` | 0–1 の下限。下限と等しいスコアも含みます。 |
 | `VectorSearchOptions.filter` | `Record<string, unknown>` | メタデータの絞り込みなし | メタデータで絞り込み。比較規則は下記を参照。 |
@@ -201,6 +234,33 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 | `VectorScanOptions.limit` | `number` | `64` | 1 ページの文書 ID 数。1–128 の整数。 |
 
 `topK` は類似度順で返す最大件数です。`minScore` は 0–1 のスコアの下限です。下限と等しいスコアも含まれます。`filter` は、たとえば `{ source: "handbook" }` のようにメタデータを絞り込みます。LanceDB は上位フィールドの型と値を厳密に比較し、指定した全項目の一致を求めます。文字列、有限の数値、真偽値、`null` に対応し、欠損は `null` と一致しません。未対応の値は `CONFIG_ERROR` になります。他のバックエンドでは比較規則が異なることがあります。下の例は上位フィールドの文字列を使います。
+
+##### 文書 ID の重複
+
+`doc-1` に本文 `Install` が保存されている状態で、同じ ID と新しい本文 `Install v2` を `insert` で送信します。2 回目の呼び出しの結果は次のとおりです。
+
+| バックエンド | 2 回目の `insert` の結果 |
+| --- | --- |
+| LanceDB | 成功し、`Install` が残ります。同じバッチ内で ID が重複するとバッチ全体が `CONFIG_ERROR` になります。 |
+| pgvector | `INSERT_FAILED` が返ります。バッチ全体が拒否され、`doc-1` には `Install` が残ります。 |
+| Qdrant | 成功し、本文が `Install v2` に変わります。 |
+| Chroma | 成功し、`Install` が残ります。 |
+
+既存の文書を更新する場合は `upsert` を使います。Chroma の既存 ID の扱いは [`add` の仕様](https://docs.trychroma.com/docs/collections/add-data#behaviors)を参照してください。
+
+古い LanceDB コレクションを使う場合は保存形式を確認し、必要に応じて[コレクションを更新](../data/vecdb.ja.md#lancedb-upgrade)します。
+
+<a id="chroma-metadata-replacement"></a>
+
+##### Chroma メタデータの置き換え
+
+次の例では、`doc-1` を `{ legacyTag: 'draft' }` で書き込んでから、同じ ID を `{ source: 'handbook' }` で upsert します。Chroma でも、VecDB の検索結果には新しいアプリの属性だけが含まれます。`{ legacyTag: 'draft' }` で絞り込んでもこの文書は一致しません。有効なメタデータのキー、ベクトル、本文は同じ `upsert` で送信します。古いレコードも保存済みの形式のまま読み取れます。Chroma から直接読み取ると、削除した属性が残って見えることがあります。`_hai_vecdb_metadata_keys` は VecDB の予約キーです。このキーを指定した `insert` や `upsert` は拒否されます。必要なサーバー機能は [Chroma の接続例](../configuration/vecdb.ja.md#chroma-server)を参照してください。
+
+<a id="qdrant-document-visibility"></a>
+
+##### Qdrant の文書とサーバー上のポイント
+
+`search` と `scan` は VecDB の文書 ID に対応付けられるポイントだけを返します。他のポイントはコレクションに残り、`topK` の件数には含まれません。例えば、VecDB の文書と対応付けられないネイティブのポイントが 1 件ずつあるとします。ネイティブのポイントのほうが検索ベクトルに近くても、`topK: 1` は条件に合う VecDB 文書を返せます。`vector.count()` は全ポイントの正確な件数を返すため、この例では `2` になります。必要な結果を確定する前に候補数の上限に達した場合、検索は `QUERY_FAILED` を返します。
 
 #### 利用例：文書の保存・検索・削除
 
@@ -216,8 +276,8 @@ VecDB は数値ベクトルを保存・比較します。テキストの変換�
 const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
 if (!createResult.success)
   return createResult
-// doc-1、3 次元ベクトル、本文 Install を demo-docs に挿入します。成功時の data は undefined、失敗は 元の失敗結果を返します。
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }])
+// doc-1、3 次元ベクトル、本文 Install、下書きタグを demo-docs に挿入します。成功時の data は undefined、失敗は元の失敗結果を返します。
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
 if (!insertResult.success)
   return insertResult
 // 挿入後の demo-docs の文書数は 1 です。失敗は 元の失敗結果を返します。
@@ -234,9 +294,9 @@ const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
-// matches[0]: id 'doc-1', content 'Install v2', score approximately 1
-// source=release-notes で検索します。該当文書がないため、成功時の data は []。失敗時はその結果を返します。
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+// 最初の結果は doc-1 です。本文は Install v2、メタデータは { source: 'handbook' }、得点は約 1 です。
+// 削除した legacyTag=draft で検索します。成功時の data は [] です。失敗時はその結果を返します。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []
@@ -259,4 +319,49 @@ countResult2.data // 0
 
 保存済みと同じベクトルを検索するため、変換後のコサイン得点は約 1 です。本文は最後の upsert の値です。並行更新は scan に影響し、得点は百分率ではありません。
 
-[引数と手順の詳細](vecdb.md#vectors)
+<a id="scan-pages"></a>
+
+#### 利用例：バックエンドのカーソルで文書の確認を続ける
+
+`scan` で文書 ID をページごとに確認します。各項目には `id` だけが含まれます。`nextCursor` がある場合は、現在のページが空でも同じバックエンドとコレクションにカーソルを渡して続けます。走査中に書き込みや削除があると結果が変わることがあります。棚卸しや削除の確認では、データが安定した後にもう一度走査できます。Qdrant の対象範囲は[コレクション内のポイント](#qdrant-document-visibility)を参照してください。
+
+```ts
+// アプリの非同期関数内の断片です。documents コレクションは作成済みです。
+const firstPage = await vecdb.vector.scan('documents', { limit: 32 })
+if (!firstPage.success)
+  return firstPage
+// 成功時の data.items に最大 32 件の ID が入ります。カーソルがある場合に続けます。
+const cursor = firstPage.data.nextCursor
+if (cursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor, limit: 32 })
+  if (!nextPage.success)
+    return nextPage
+  // data.items は次のページの ID です。data.nextCursor がなければ最終ページです。
+}
+```
+
+<a id="vecdb-errors"></a>
+
+## エラー処理
+
+`HaiResult<T>` の `success` を確認してから、`data` または `error` を読み取ります。障害を記録するときはエラーコードと返されたトレース ID を保持します。
+
+```ts
+import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+
+// 1536 次元の docs コレクションを作成します。成功時の data は undefined です。
+const result = await vecdb.collection.create('docs', { dimension: 1536 })
+if (!result.success) {
+  switch (result.error.code) {
+    case HaiVecdbError.NOT_INITIALIZED.code:
+      // 先に vecdb.init() を完了させます。
+      break
+    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
+      // 既存コレクションを再利用する前に次元と距離尺度を確認します。
+      break
+    case HaiVecdbError.QUERY_FAILED.code:
+      // 操作のエラーとバックエンドの状態を確認します。
+      break
+  }
+}
+```

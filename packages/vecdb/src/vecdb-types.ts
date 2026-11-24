@@ -68,7 +68,7 @@ export interface VectorDocument {
   vector: number[]
   /** 文本内容（可选，用于存储原始文本） */
   content?: string
-  /** 元数据（可选，用于存储附加信息） */
+  /** 元数据（可选）。Chroma 保留 `_hai_vecdb_metadata_keys` 字段供整条替换使用。 */
   metadata?: Record<string, unknown>
 }
 
@@ -139,7 +139,7 @@ export interface VectorSearchResult {
 export interface CollectionInfo {
   /** 集合名称 */
   name: string
-  /** 向量维度 */
+  /** 向量维度。原生 Chroma 集合在首次写入前维度尚未确定时为 0。 */
   dimension: number
   /** 距离度量类型 */
   metric: DistanceMetric
@@ -257,6 +257,7 @@ export interface VectorOperations {
    * @param documents - 待写入文档；已有 ID 更新，不存在的 ID 插入
    * @returns 成功返回 ok(undefined)；LanceDB 缺少原子主键能力或同批重复 ID 返回 CONFIG_ERROR。
    * Qdrant 成功前等待服务端应用写入。
+   * Chroma 查询和过滤只使用本次写入的元数据字段，原生 Chroma 读接口仍可能显示旧字段。
    * @example await vecdb.vector.upsert('docs', [{ id: 'doc-1', vector: [1, 0], content: 'updated' }])
    */
   upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
@@ -277,7 +278,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @param vector - 查询向量
    * @param options - 搜索选项
-   * @returns 搜索结果列表（按相似度降序排列）
+   * @returns 搜索结果列表（按相似度降序排列）。Qdrant 仅搜索可映射为框架文档 ID 的记录。
    * @example await vecdb.vector.search('docs', [1, 0], { topK: 5, filter: { tenant: 'acme', active: true } })
    */
   search: (

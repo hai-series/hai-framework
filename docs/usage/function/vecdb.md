@@ -10,6 +10,8 @@
 
 ## 最小接入示例
 
+在开发环境用空的 `./data/vecdb` 目录运行示例。示例关闭连接后保留 `docs` 集合。需要重跑时，使用另一个空目录。
+
 搜索结果的 `score` 在 0 到 1 之间，值越大越相似。例如 `minScore: 0.7` 会滤掉转换后小于 0.7 的条目。得分不是百分比，换用距离算法或数据库后，应重新用实际数据确认阈值。
 
 余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏距离使用 `1 / (1 + distance)`。LanceDB 和 Chroma 返回的是欧氏距离的平方，其余后端使用欧氏距离。Qdrant 同样按模块转换后的分数筛选。
@@ -113,29 +115,42 @@ vecdb.config // null
 
 异步操作返回 `Promise<HaiResult<T>>`。下表的返回值说明成功时 `data` 的内容，失败时读取 `error`。集合和向量操作要在 `vecdb.init()` 成功后调用。
 
+<a id="production-backends"></a>
+
 #### 生产后端要求
 
-生产使用 Qdrant、pgvector 或远端 Chroma；LanceDB 和嵌入式 Chroma 只用于开发/明确测试。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
+生产部署选择 Qdrant、pgvector 或独立运行的 Chroma 服务。设置 `NODE_ENV=production` 或 `HAI_CORE_ENV=production` 时，`init` 会拒绝 LanceDB 和嵌入式 Chroma。设置 `HAI_E2E=1` 或 `HAI_E2E_MOCK=1` 可在明确的测试环境中豁免此限制。参见[状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md)。
+
+已有连接时，`init` 先校验新配置和部署环境。校验失败时返回 `CONFIG_ERROR`，已有连接继续可用。通过校验后，模块关闭旧连接再尝试连接新后端。
+
+<a id="connection-recovery"></a>
 
 #### 场景：连接清理失败后恢复
 
+pgvector 的空闲连接断开后，连接池会移除该连接，后续操作按需建立新连接。故障期间的操作仍可能返回失败，应用应检查 `success`。
+
+调用 `vecdb.close()` 会停止接收新操作，包括应用通过已保存的操作对象发起的请求。并发调用共享同一次清理。若初始化或关闭失败且 `error.ext.cleanupPending` 为 `true`，调用 `close()` 重试清理。`init()` 也会先处理待清理资源，清理成功后才连接后端。
+
 ```ts
-const ready = vecdb.isInitialized // 无需参数，Provider 已连接并且未在关闭时为 true。
-const safeType = vecdb.config?.type // 无需参数，从脱敏配置快照中读出后端类型。
-const connection = vecdb.rawConnection // 无需参数，返回同进程集成使用的后端连接参数。
+// 应用异步函数片段。关闭当前连接，成功时 data 为 undefined。
+const closed = await vecdb.close()
+if (!closed.success) {
+  if (!closed.error.ext?.cleanupPending)
+    return closed
+  // 有待清理资源时再尝试关闭，仍失败则把错误交给调用方处理。
+  const retried = await vecdb.close()
+  if (!retried.success)
+    return retried
+}
 ```
 
-模块未初始化或正在关闭时，`vecdb.config` 与 `vecdb.rawConnection` 均返回 `null`。`rawConnection` 可能含未脱敏凭据，仅在可信服务端同进程内传递。
-
-调用 `vecdb.close()` 后，模块停止接收新的操作，之前保存的操作对象也不能继续提交请求。多次同时关闭共用一次清理。如果连接或关闭失败后仍有资源未释放，`error.ext.cleanupPending` 会提示应用再次调用 `vecdb.close()`。资源未清理完时，`vecdb.init()` 不会另外打开连接。
-
-使用进程内启动的 Chroma 时，模块会等待直接启动的服务器进程退出。正常终止等待 1.5 秒，超时后尝试强制终止并再等待 1.5 秒。仍未确认退出时返回失败，并保留句柄供后续清理。这一步确认的是模块直接启动的进程。
+嵌入式 Chroma 关闭时等待模块直接启动的服务进程退出。模块发出终止信号后最多等待 1.5 秒，超时则尝试强制终止，再等待 1.5 秒。若仍未确认退出，模块返回失败并保留进程句柄供重试。
 
 <a id="collections"></a>
 
 ### 准备与删除集合：`vecdb.collection`
 
-集合固定向量维度和距离算法；删除集合会删除其中所有向量。
+集合固定向量维度和距离算法。删除集合会删除其中所有向量。
 
 #### 接口清单
 
@@ -146,6 +161,10 @@ const connection = vecdb.rawConnection // 无需参数，返回同进程集成�
 | `vecdb.collection.exists(name)` | 检查集合是否存在 | `name: string` 必填的已配置集合名 | `boolean` | `await vecdb.collection.exists('documents')` |
 | `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | `name: string` 必填的已配置集合名 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
 | `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
+
+多个实例同时在 Chroma、pgvector 或 Qdrant 创建同名集合时，后续创建调用会返回 `COLLECTION_ALREADY_EXISTS`。准备共享集合的应用可读取已有集合的维度和度量，确认匹配后再继续。Qdrant 删除不存在的集合时返回 `COLLECTION_NOT_FOUND`。
+
+对于通过 Chroma 原生接口创建、尚未写入过向量的集合，`vecdb.collection.info()` 的 `dimension` 为 `0`。第一次写入确定维度，之后即使删光文档也会保留。度量以服务端索引配置为准。创建框架集合时仍用 `options.dimension` 明确指定维度。
 
 #### 场景：准备与删除集合
 
@@ -199,7 +218,7 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 | `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | `collection: string` 必填的集合名。`documents: VectorDocument[]` 必填文档数组，见[文档字段](#vecdb-vector-options) | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
 | `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | `collection: string` 必填的集合名。`ids: string[]` 待删除的文档 ID 数组 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
 | `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | `collection: string` 必填的集合名。`vector: number[]` 与集合维度一致的查询向量。`options?: VectorSearchOptions` 见[搜索字段](#vecdb-vector-options) | 按分数从高到低排列的 `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | 统计集合中的文档数 | `collection: string` 必填的集合名 | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.count(collection)` | 统计集合中的文档数。Qdrant 返回集合中点的总数 | `collection: string` 必填的集合名 | `number` | `await vecdb.vector.count('documents')` |
 | `vecdb.vector.scan(collection, options?)` | 按页列出文档 ID | `collection: string` 必填的集合名。`options?: VectorScanOptions` 见[扫描字段](#vecdb-vector-options) | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
 
 <a id="vecdb-vector-options"></a>
@@ -211,7 +230,7 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 | `VectorDocument.id` | `string` | 必填 | 应用的稳定文档标识，用于覆盖和删除。 |
 | `VectorDocument.vector` | `number[]` | 必填 | 浮点数数组，维度必须与集合相同。 |
 | `VectorDocument.content` | `string` | 可省略 | 随命中结果返回的原始文本。 |
-| `VectorDocument.metadata` | `Record<string, unknown>` | 可省略 | 存储额外业务信息，例如 source，后续可据此筛选。 |
+| `VectorDocument.metadata` | `Record<string, unknown>` | 可省略 | 存储额外业务信息，例如 source，后续可据此筛选。Chroma 保留键见[元数据替换](#chroma-metadata-replacement)。 |
 | `VectorSearchOptions.topK` | `number` | `10` | 返回的条数上限，按相似度排序。 |
 | `VectorSearchOptions.minScore` | `number` | `0` | 0–1 的分数下限，等于阈值的结果也保留。 |
 | `VectorSearchOptions.filter` | `Record<string, unknown>` | 不筛选元数据 | 按元数据筛选。后端比较语义见下文。 |
@@ -219,6 +238,33 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 | `VectorScanOptions.limit` | `number` | `64` | 每页 ID 数量，取整数 1–128。 |
 
 `topK` 是按相似度返回的条数上限。`minScore` 是 0–1 的分数下限，结果必须大于等于该值。`filter` 按元数据匹配，例如 `{ source: "handbook" }`。LanceDB 对顶层字段按类型精确比较，多字段须全部匹配，支持字符串、有限数字、布尔值和 `null`。缺失字段不匹配 `null`；不支持的值会返回 `CONFIG_ERROR`。其他后端的类型比较规则可能不同。可移植示例使用顶层字符串字段。
+
+##### 重复文档 ID
+
+假设 `doc-1` 已保存正文 `Install`，随后用 `insert` 提交相同 ID 和新正文 `Install v2`。第二次调用的结果取决于后端。
+
+| 后端 | 第二次 `insert` 的结果 |
+| --- | --- |
+| LanceDB | 成功，保留 `Install`。同一批次中有重复 ID 时，整批返回 `CONFIG_ERROR`。 |
+| pgvector | 返回 `INSERT_FAILED`，整批没有写入，`doc-1` 保留 `Install`。 |
+| Qdrant | 成功，正文替换为 `Install v2`。 |
+| Chroma | 成功，保留 `Install`。 |
+
+要更新已存在的文档，请调用 `upsert`。Chroma 的已有 ID 行为来自其 [`add` 接口](https://docs.trychroma.com/docs/collections/add-data#behaviors)。
+
+使用早期 LanceDB 集合时，先核对其存储结构，再按需[升级集合](../data/vecdb.md#lancedb-upgrade)。
+
+<a id="chroma-metadata-replacement"></a>
+
+##### Chroma 元数据替换
+
+下例先用 `{ legacyTag: 'draft' }` 写入 `doc-1`，再对同一个 ID 调用 `upsert` 并传入 `{ source: 'handbook' }`。在 Chroma 上，VecDB 搜索结果只返回新的业务属性，使用 `{ legacyTag: 'draft' }` 过滤时不会命中。有效字段清单与向量、正文通过同一次 `upsert` 提交。旧记录仍可直接读取。直接通过 Chroma 查看存储数据时，可能仍看到被移除的字段。框架保留 `_hai_vecdb_metadata_keys`，`insert` 和 `upsert` 会拒绝显式提供该键。部署版本的要求见 [Chroma 连接示例](../configuration/vecdb.md#chroma-server)。
+
+<a id="qdrant-document-visibility"></a>
+
+##### Qdrant 文档与集合中的点
+
+`search` 和 `scan` 都只返回能映射回 VecDB 文档 ID 的点。其他点仍留在原集合，也不会占用 `topK`。例如同一集合有一条 VecDB 文档和一个无法映射的原生点。即使原生点的相似度更高，`topK: 1` 仍可返回那条符合条件的 VecDB 文档。`vector.count()` 精确统计所有点，本例返回 `2`。达到候选上限后，如果仍无法确认已取到所需文档，搜索会返回 `QUERY_FAILED`。
 
 #### 场景：写入、检索和清理文档
 
@@ -234,8 +280,8 @@ VecDB 保存和比较数字向量，不会自动把文本变成向量。写入�
 const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
 if (!createResult.success)
   return createResult
-// 将 doc-1、三维向量和原文 Install 写入 demo-docs，成功无 data，插入失败时返回原失败结果。
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }])
+// 将 doc-1、三维向量、原文 Install 和草稿标记写入 demo-docs。成功无 data，失败时返回原结果。
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
 if (!insertResult.success)
   return insertResult
 // 按集合名统计插入后的文档数，data 为 1，失败时返回原失败结果。
@@ -252,9 +298,9 @@ const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
-// matches[0]: id 'doc-1', content 'Install v2', score approximately 1
-// 改查 source=release-notes，现有文档不符合，成功 data 为 []；失败时返回原失败结果。
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+// 首个结果是 doc-1，正文为 Install v2，元数据为 { source: 'handbook' }，分数约 1。
+// 查询已移除的 legacyTag=draft。成功 data 为 []，失败时返回原结果。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []
@@ -277,41 +323,48 @@ countResult2.data // 0
 
 输入向量 [1,0,0] 与被存储向量一致，余弦转换分数约为 1。内容来自最新的整条 upsert。并发变化时扫描可能不完整，游标规则见下文；不要把 score 当百分比。
 
+<a id="scan-pages"></a>
+
 #### 场景：按后端游标继续盘点文档
 
-`scan` 分页返回文档 ID，可用于核对或批量清理集合。`collection` 是集合名，`options.limit` 默认为 64，取值为 1 到 128，`options.cursor` 在首页省略。每页的 `items` 只包含 `{ id }`。有 `nextCursor` 时，即使本页为空也继续读取，并将游标传给同一后端的同一集合。并发写入或删除可能改变分页结果，清理任务应重复扫描。Qdrant 只返回能映射回框架文档的记录。
+用 `scan` 分页核对集合中的文档 ID。每页 `items` 只有 `{ id }`。只要有 `nextCursor`，即使本页为空也继续读取，并把游标交回同一后端的同一集合。扫描期间发生写入或删除时，分页结果可能变化。盘点或清理任务可在数据稳定后再扫描一轮。Qdrant 的扫描范围见[集合中的点](#qdrant-document-visibility)。
 
 ```ts
-// 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
-// 从 documents 扫描最多 32 个 ID。成功返回 items 及可选游标，失败保留 error 并停止续页。
-const page = await vecdb.vector.scan('documents', { limit: 32 })
-// 成功且存在下一页时，将上一页游标与页大小传入同一集合。
-if (page.success && page.data.nextCursor !== undefined) {
-  // 把上页游标交回同一集合，每页最多 32 条。成功返回下一批 ID，失败查看 error。
-  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
-  // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
+// 应用异步函数片段。documents 是一个已存在的集合。
+const firstPage = await vecdb.vector.scan('documents', { limit: 32 })
+if (!firstPage.success)
+  return firstPage
+// 成功时 data.items 含最多 32 个 ID。仅在返回游标时续页。
+const cursor = firstPage.data.nextCursor
+if (cursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor, limit: 32 })
+  if (!nextPage.success)
+    return nextPage
+  // data.items 是下一页 ID，data.nextCursor 缺失时已到末页。
 }
 ```
 
+<a id="vecdb-errors"></a>
+
 ## 错误处理
 
-收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
+收到 `HaiResult<T>` 时先检查 `success`，再读取 `data` 或 `error`。记录故障时保留错误码和返回的追踪编号。
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
-// 创建 1536 维 docs 集合，成功无 data，未连接、重名等失败由下方按 code 分流。
+// 尝试创建 1536 维的 docs 集合，成功无业务数据。
 const result = await vecdb.collection.create('docs', { dimension: 1536 })
 if (!result.success) {
   switch (result.error.code) {
     case HaiVecdbError.NOT_INITIALIZED.code:
-      // 请先调用 vecdb.init()
+      // 先完成 vecdb.init()。
       break
     case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
-      // 集合已存在
+      // 读取已有集合的维度和度量，确认是否能复用。
       break
-    case HaiVecdbError.CONNECTION_FAILED.code:
-      // 连接失败
+    case HaiVecdbError.QUERY_FAILED.code:
+      // 检查集合操作的 error 和后端状态。
       break
   }
 }

@@ -80,13 +80,13 @@ vi.mock('chromadb', () => {
       return chroma.store.size
     }
 
-    async getOrCreateCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
-      if (!chroma.store.has(name)) {
-        chroma.store.set(name, {
-          metadata: metadata ?? {},
-          records: new Map(),
-        })
-      }
+    async createCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
+      if (chroma.store.has(name))
+        throw Object.assign(new Error('The resource already exists'), { name: 'ChromaUniqueError' })
+      chroma.store.set(name, {
+        metadata: metadata ?? {},
+        records: new Map(),
+      })
       return makeCollection(name)
     }
 

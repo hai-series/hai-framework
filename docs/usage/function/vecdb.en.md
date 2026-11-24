@@ -4,7 +4,7 @@
 
 ## Quick start
 
-Initialize a vector backend, create a named collection with its dimension, then insert vectors and query the collection. Use the same backend and collection on each cursor scan.
+Run the example in a development environment with an empty `./data/vecdb` directory. The `docs` collection persists after the connection closes. Use another empty directory to run the example again.
 
 ```ts
 import { vecdb } from '@h-ai/vecdb'
@@ -107,7 +107,36 @@ Each async operation returns a HaiResult. The table shows successful data; check
 
 Scores run from 0 to 1 and are not percentages. Test a threshold with the actual metric and provider. A scan returns only IDs. Pass the returned nextCursor even after an empty page, and keep using the same collection and backend.
 
-[Detailed parameters and workflows](vecdb.md#connection)
+<a id="production-backends"></a>
+
+#### Production backend requirements
+
+Use Qdrant, pgvector, or a separately deployed Chroma service in production. With `NODE_ENV=production` or `HAI_CORE_ENV=production`, `init` rejects LanceDB and embedded Chroma. Explicit tests can set `HAI_E2E=1` or `HAI_E2E_MOCK=1` to bypass this check. See [shared state and recovery](../../../.agents/instructions/distributed-state.md) in Chinese.
+
+When a connection already exists, `init` validates the new configuration and deployment environment first. Failed validation returns `CONFIG_ERROR` and the existing connection remains available. After successful validation, the module closes the previous connection before connecting to the new backend.
+
+<a id="connection-recovery"></a>
+
+#### Scenario: Recover from failed connection cleanup
+
+If an idle pgvector connection drops, the pool removes it and creates a new connection as needed. Operations around the outage can still fail. Check `success` on each result.
+
+Calling `vecdb.close()` stops new operations, including requests through operation objects the application has saved. Concurrent calls share the same cleanup. If initialization or close fails with `error.ext.cleanupPending` set to `true`, call `close()` again to retry cleanup. An `init()` call also clears pending resources before connecting.
+
+```ts
+// Fragment inside an async application function. Successful close has no data.
+const closed = await vecdb.close()
+if (!closed.success) {
+  if (!closed.error.ext?.cleanupPending)
+    return closed
+  // Reattempt cleanup of pending resources and return any further failure.
+  const retried = await vecdb.close()
+  if (!retried.success)
+    return retried
+}
+```
+
+For embedded Chroma, close waits for the service process started directly by the module to exit. The module waits up to 1.5 seconds after signaling termination. It then tries forced termination and waits up to another 1.5 seconds. If it cannot confirm exit, it returns a failure and retains the process handle for another cleanup attempt.
 
 <a id="collections"></a>
 
@@ -124,6 +153,10 @@ A collection fixes the vector dimension and metric. Dropping it removes all its 
 | `vecdb.collection.exists(name)` | Check whether the collection exists | `name: string` Required configured collection name | `boolean` | `await vecdb.collection.exists('documents')` |
 | `vecdb.collection.info(name)` | Read collection dimension, metric, and document count | `name: string` Required configured collection name | `CollectionInfo` | `await vecdb.collection.info('documents')` |
 | `vecdb.collection.list()` | List collection names | None | `string[]` | `await vecdb.collection.list()` |
+
+When instances race to create the same collection in Chroma, pgvector, or Qdrant, a call that finds it already created returns `COLLECTION_ALREADY_EXISTS`. Before using a shared collection created by another instance, check that its dimension and metric match your application. Dropping a missing Qdrant collection returns `COLLECTION_NOT_FOUND`.
+
+For a collection created through native Chroma that has never received a vector, `vecdb.collection.info()` returns a `dimension` of `0`. The first write determines the dimension. Chroma retains it even if all records are later deleted. The metric comes from the server's index configuration. Supply `options.dimension` when creating a collection through VecDB.
 
 #### Scenario: Prepare and remove collections
 
@@ -179,7 +212,7 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 | `vecdb.vector.upsert(collection, documents)` | Insert or replace a whole document by ID | `collection: string` Required collection name. `documents: VectorDocument[]` Required documents. See [document fields](#vecdb-vector-options) | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
 | `vecdb.vector.delete(collection, ids)` | Delete documents by ID | `collection: string` Required collection name. `ids: string[]` Document IDs to delete | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
 | `vecdb.vector.search(collection, vector, options?)` | Search by vector similarity | `collection: string` Required collection name. `vector: number[]` Query vector matching the collection dimension. `options?: VectorSearchOptions` See [search fields](#vecdb-vector-options) | `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | Count documents in the collection | `collection: string` Required collection name | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.count(collection)` | Count documents. Qdrant counts all points in the collection | `collection: string` Required collection name | `number` | `await vecdb.vector.count('documents')` |
 | `vecdb.vector.scan(collection, options?)` | Page through document IDs | `collection: string` Required collection name. `options?: VectorScanOptions` See [scan fields](#vecdb-vector-options) | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
 
 <a id="vecdb-vector-options"></a>
@@ -191,7 +224,7 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 | `VectorDocument.id` | `string` | Required | Stable application document identifier used for replacement and deletion. |
 | `VectorDocument.vector` | `number[]` | Required | Floating-point values matching the collection dimension. |
 | `VectorDocument.content` | `string` | Optional | Source text to return with a hit. |
-| `VectorDocument.metadata` | `Record<string, unknown>` | Optional | Store auxiliary data such as source for later filtering. |
+| `VectorDocument.metadata` | `Record<string, unknown>` | Optional | Store auxiliary data such as source for later filtering. See [metadata replacement](#chroma-metadata-replacement) for the reserved Chroma key. |
 | `VectorSearchOptions.topK` | `number` | `10` | Maximum matches ranked by similarity. |
 | `VectorSearchOptions.minScore` | `number` | `0` | Inclusive 0–1 score threshold. |
 | `VectorSearchOptions.filter` | `Record<string, unknown>` | No metadata filter | Filter based on metadata. See backend comparison semantics below. |
@@ -199,6 +232,33 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 | `VectorScanOptions.limit` | `number` | `64` | Document IDs per page, integer 1–128. |
 
 `topK` caps the number of results ranked by similarity. `minScore` is an inclusive score threshold from 0 to 1. `filter` matches metadata, for example `{ source: "handbook" }`. LanceDB requires a typed exact match on all supplied top-level fields and supports strings, finite numbers, booleans, and `null`. A missing field does not match `null`, and unsupported values yield `CONFIG_ERROR`. Other backends may compare values differently. The portable example below uses a top-level string.
+
+##### Duplicate document IDs
+
+Suppose `doc-1` already stores the text `Install`, and a second `insert` call sends the same ID with `Install v2`. The second call behaves as follows.
+
+| Backend | Result of the second `insert` |
+| --- | --- |
+| LanceDB | Succeeds and keeps `Install`. Duplicate IDs within one batch fail with `CONFIG_ERROR` for the entire batch. |
+| pgvector | Returns `INSERT_FAILED`. The entire batch is rejected and `doc-1` still contains `Install`. |
+| Qdrant | Succeeds and replaces the text with `Install v2`. |
+| Chroma | Succeeds and keeps `Install`. |
+
+Use `upsert` to update existing documents. See the [Chroma `add` contract](https://docs.trychroma.com/docs/collections/add-data#behaviors) for its behavior on existing IDs.
+
+For older LanceDB collections, check the storage format and [upgrade the collection](../data/vecdb.en.md#lancedb-upgrade) if needed.
+
+<a id="chroma-metadata-replacement"></a>
+
+##### Chroma metadata replacement
+
+The example below writes `doc-1` with `{ legacyTag: 'draft' }`, then upserts the same ID with `{ source: 'handbook' }`. On Chroma, VecDB search returns only the new application metadata. The filter `{ legacyTag: 'draft' }` no longer matches that document. The same `upsert` submits the active metadata keys, vector, and text. Older records remain readable as stored. Direct reads from Chroma may still show removed fields. VecDB reserves `_hai_vecdb_metadata_keys` and rejects `insert` or `upsert` calls that supply this key. See the [Chroma connection example](../configuration/vecdb.en.md#chroma-server) for server requirements.
+
+<a id="qdrant-document-visibility"></a>
+
+##### Qdrant documents and server points
+
+Both `search` and `scan` return only points that map back to a VecDB document ID. Other points stay in the collection and do not fill `topK` slots. For example, a collection contains one VecDB document and one native point that cannot be mapped. Even if the native point is closer to the query, `topK: 1` can return the eligible VecDB document. The exact `vector.count()` includes all points and returns `2` in this example. Search returns `QUERY_FAILED` if it reaches the candidate limit before it can confirm the required results.
 
 #### Scenario: Write, search and clean documents
 
@@ -214,8 +274,8 @@ The example uses dimension 3, so both write and query use [1,0,0]; identical cos
 const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' })
 if (!createResult.success)
   return createResult
-// Insert doc-1, its three-dimensional vector, and Install into demo-docs. Success has no data. Return the failed result on failure.
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }])
+// Insert doc-1, its three-dimensional vector, the text Install, and a draft tag into demo-docs. Success has no data. Return the failed result on failure.
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
 if (!insertResult.success)
   return insertResult
 // Count documents in demo-docs after insertion. Success returns 1. Return the failed result on failure.
@@ -232,9 +292,9 @@ const matchesResult = await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 
 if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
-// matches[0]: id 'doc-1', content 'Install v2', score approximately 1
-// Query source=release-notes instead. No stored document matches, so success returns []. Return the failed result on failure.
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { source: 'release-notes' } })
+// The first result is doc-1 with text Install v2, metadata { source: 'handbook' }, and a score of about 1.
+// Filter by the removed legacyTag=draft. Success returns []. Return the failed result on failure.
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []
@@ -257,4 +317,49 @@ countResult2.data // 0
 
 The query equals the stored vector, so its normalized cosine score is about 1. Content comes from the latest full upsert. Concurrent changes affect scans; a score is not a percentage.
 
-[Detailed parameters and workflows](vecdb.md#vectors)
+<a id="scan-pages"></a>
+
+#### Scenario: Continue an inventory with a backend cursor
+
+Use `scan` to check document IDs a page at a time. Each item has only an `id`. Continue whenever the result includes `nextCursor`, even if the current page is empty, and pass it back to the same backend and collection. Writes or deletes during the scan can change the results. For inventory or cleanup, scan again once the data is stable. See [Qdrant points](#qdrant-document-visibility) for the scan scope on that backend.
+
+```ts
+// Fragment inside an async application function. The documents collection already exists.
+const firstPage = await vecdb.vector.scan('documents', { limit: 32 })
+if (!firstPage.success)
+  return firstPage
+// On success, data.items contains up to 32 IDs. Continue only if there is a cursor.
+const cursor = firstPage.data.nextCursor
+if (cursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor, limit: 32 })
+  if (!nextPage.success)
+    return nextPage
+  // data.items contains the next page of IDs. A missing data.nextCursor means the scan is complete.
+}
+```
+
+<a id="vecdb-errors"></a>
+
+## Error handling
+
+Check `success` on each `HaiResult<T>` before reading `data` or `error`. Preserve the error code and any trace ID in failure logs.
+
+```ts
+import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+
+// Try to create the 1536-dimensional docs collection. Success has no data.
+const result = await vecdb.collection.create('docs', { dimension: 1536 })
+if (!result.success) {
+  switch (result.error.code) {
+    case HaiVecdbError.NOT_INITIALIZED.code:
+      // Complete vecdb.init() first.
+      break
+    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
+      // Check the existing dimension and metric before reusing the collection.
+      break
+    case HaiVecdbError.QUERY_FAILED.code:
+      // Review the operation error and backend state.
+      break
+  }
+}
+```

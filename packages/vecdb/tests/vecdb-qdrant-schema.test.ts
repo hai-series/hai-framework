@@ -1,11 +1,12 @@
-/** 真实 Qdrant 的向量字段联合类型必须按实际能力处理，不能用仿造类型猜成默认集合。 */
+/** 使用真实 Qdrant 验证向量字段和原生 point 的兼容边界。 */
 
 import type { QdrantContainerLease } from './helpers/qdrant-container.js'
 
-import { afterAll, beforeAll, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
+import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { HaiVecdbError, vecdb } from '../src/index.js'
 import { createQdrantProvider } from '../src/providers/vecdb-provider-qdrant.js'
 import { VecdbConfigSchema } from '../src/vecdb-config.js'
-import { HaiVecdbError } from '../src/vecdb-types.js'
 import { acquireQdrantContainer } from './helpers/qdrant-container.js'
 
 let lease: QdrantContainerLease | undefined
@@ -61,5 +62,146 @@ it.each(['named', 'manhattan'] as const)('不将外部 %s 集合当作未命名 
   finally {
     await provider.close()
     await fetch(`${url}/collections/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  }
+}, 15_000)
+
+it.each([false, true])('从混合集合搜索可管理的框架文档（strict mode = %s）', async (strict) => {
+  const url = lease!.url
+  const name = `mixed-points-${strict}`
+  const endpoint = `${url}/collections/${name}`
+  const writeFixture = async (path: string, body: unknown, method = 'PUT') => {
+    const response = await fetch(endpoint + path, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    expect(response.ok).toBe(true)
+    await response.body?.cancel()
+  }
+
+  try {
+    await writeFixture('', {
+      vectors: { size: 2, distance: 'Cosine' },
+      strict_mode_config: { enabled: strict, unindexed_filtering_retrieve: false, max_query_limit: 8 },
+    })
+    await writeFixture('/index?wait=true', { field_name: 'tenant', field_schema: 'keyword' })
+
+    expect((await vecdb.init({ type: 'qdrant', url })).success).toBe(true)
+    expect((await vecdb.vector.upsert(name, [
+      {
+        id: 'modern',
+        vector: [0.6, 0.8],
+        metadata: { tenant: 'alpha' },
+      },
+      {
+        id: 'other-tenant',
+        vector: [0.96, 0.28],
+        metadata: { tenant: 'beta' },
+      },
+      {
+        id: '',
+        vector: [-1, 0],
+        metadata: { tenant: 'alpha' },
+      },
+    ])).success).toBe(true)
+
+    const trace = vi.spyOn(globalThis, 'fetch')
+    try {
+      await expect(vecdb.vector.search(name, [1, 0], { topK: 1 })).resolves.toMatchObject({
+        success: true,
+        data: [
+          { id: 'other-tenant' },
+        ],
+      })
+      await expect(vecdb.vector.search(name, [1, 0], { topK: 0 })).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.QUERY_FAILED.code },
+      })
+      expect(trace.mock.calls.filter(([request]) => request instanceof URL && request.pathname.endsWith('/points/query'))).toHaveLength(1)
+    }
+    finally {
+      trace.mockRestore()
+    }
+
+    // 模拟旧版本落盘的框架记录，不要求新增标记或迁移。
+    const hash = createHash('sha256').update('legacy').digest('hex')
+    const legacyId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
+    await writeFixture('/points?wait=true', {
+      points: [
+        {
+          id: legacyId,
+          vector: [0.8, 0.6],
+          payload: { _id: 'legacy', _content: 'Old text', tenant: 'alpha' },
+        },
+        {
+          id: 42,
+          vector: [1, 0],
+          payload: { tenant: 'alpha' },
+        },
+        {
+          id: 43,
+          vector: [1, 0],
+          payload: { _id: 'legacy', tenant: 'alpha' },
+        },
+        {
+          id: '12345678-1234-1234-1234-123456789abc',
+          vector: [1, 0],
+          payload: { _id: 'legacy', tenant: 'alpha' },
+        },
+      ],
+    })
+
+    await expect(vecdb.vector.search(name, [1, 0], {
+      topK: 2,
+      minScore: 0.75,
+      filter: { tenant: 'alpha' },
+    })).resolves.toMatchObject({
+      success: true,
+      data: [
+        {
+          id: 'legacy',
+          content: 'Old text',
+          metadata: { tenant: 'alpha' },
+        },
+        {
+          id: 'modern',
+          metadata: { tenant: 'alpha' },
+        },
+      ],
+    })
+    await expect(vecdb.vector.search(name, [1, 0], {
+      topK: 2,
+      minScore: 0.85,
+      filter: { tenant: 'alpha' },
+    })).resolves.toMatchObject({
+      success: true,
+      data: [
+        { id: 'legacy' },
+      ],
+    })
+    const alpha = await vecdb.vector.search(name, [1, 0], {
+      topK: 5,
+      filter: { tenant: 'alpha' },
+    })
+    expect(alpha.success && alpha.data.map(point => point.id)).toEqual(['legacy', 'modern', ''])
+    const all = await vecdb.vector.search(name, [1, 0], { topK: 8 })
+    expect(all.success && all.data.map(point => point.id)).toEqual(['other-tenant', 'legacy', 'modern', ''])
+    const scanned = await vecdb.vector.scan(name, { limit: 8 })
+    expect(scanned.success && scanned.data.items.map(point => point.id).sort()).toEqual(['', 'legacy', 'modern', 'other-tenant'])
+    await expect(vecdb.vector.count(name)).resolves.toEqual({ success: true, data: 7 })
+    if (strict) {
+      await writeFixture('', {
+        strict_mode_config: { max_query_limit: 2 },
+      }, 'PATCH')
+      await expect(vecdb.vector.search(name, [1, 0], { topK: 2 })).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.QUERY_FAILED.code },
+      })
+    }
+  }
+  finally {
+    await vecdb.close()
+    const removed = await fetch(endpoint, { method: 'DELETE' })
+    await removed.body?.cancel()
   }
 }, 15_000)
