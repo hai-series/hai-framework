@@ -74,6 +74,8 @@ async function dispatch(command, args) {
   }
   if (command === 'executionGet')
     return scheduler.execution.get(...args)
+  if (command === 'retryCheckpoint')
+    return reldb.sql.get('SELECT log_json FROM hai_scheduler_executions WHERE occurrence_id = ?', args)
   if (command === 'executionUnknown')
     return scheduler.execution.listUnknown(...args)
   if (command === 'executionResolve')

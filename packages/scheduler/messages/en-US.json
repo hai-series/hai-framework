@@ -10,6 +10,7 @@
   "scheduler_taskNotFound": "Task not found: {taskId}",
   "scheduler_taskAlreadyExists": "Task already exists: {taskId}",
   "scheduler_invalidCron": "Invalid cron expression: {expression}",
+  "scheduler_invalidTimezone": "Invalid IANA time zone: {timezone}",
   "scheduler_executionFailed": "Task execution failed: {error}",
   "scheduler_jsExecutionFailed": "JS code execution failed: {error}",
   "scheduler_jsTimedOut": "JS task timed out after {timeout}ms",

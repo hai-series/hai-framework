@@ -10,6 +10,7 @@
   "scheduler_taskNotFound": "任务未找到: {taskId}",
   "scheduler_taskAlreadyExists": "任务已存在: {taskId}",
   "scheduler_invalidCron": "无效的 cron 表达式: {expression}",
+  "scheduler_invalidTimezone": "无效的 IANA 时区: {timezone}",
   "scheduler_executionFailed": "任务执行失败: {error}",
   "scheduler_jsExecutionFailed": "JS 代码执行失败: {error}",
   "scheduler_jsTimedOut": "JS 任务执行超过 {timeout} 毫秒",

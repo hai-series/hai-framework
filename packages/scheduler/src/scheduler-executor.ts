@@ -50,14 +50,21 @@ async function notifyTaskStart(hooks: Readonly<SchedulerTaskHooks>, event: Sched
 }
 
 async function notifyTaskInterrupted(hooks: Readonly<SchedulerTaskHooks>, event: SchedulerTaskInterruptedEvent): Promise<void> {
-  if (!hooks.onTaskInterrupted)
+  const callback = hooks.onTaskInterrupted
+  if (!callback)
     return
 
+  const reportFailure = (error: unknown) => logger.warn('Task interrupted hook failed', { taskId: event.task.id, error })
   try {
-    await waitWithSignal(() => hooks.onTaskInterrupted!(event), event.signal)
+    if (event.signal.aborted) {
+      // 已取消的执行仍通知旧实例；关闭不依赖中断观察者完成异步工作。
+      void Promise.resolve(callback(event)).catch(reportFailure)
+      return
+    }
+    await waitWithSignal(() => callback(event), event.signal)
   }
   catch (error) {
-    logger.warn('Task interrupted hook failed', { taskId: event.task.id, error })
+    reportFailure(error)
   }
 }
 
@@ -106,6 +113,25 @@ function createExecutionLog(
   return log
 }
 
+function serializeResult(value: unknown, taskId: string): string | null {
+  if (value === undefined)
+    return null
+  try {
+    const json = JSON.stringify(value, (_key, item: unknown) => {
+      if (item instanceof Map || item instanceof Set || typeof item === 'symbol' || typeof item === 'function')
+        throw new TypeError('Task output has no JSON representation')
+      return item
+    })
+    if (json !== undefined)
+      return json
+  }
+  catch {
+    // Handler 已完成；输出无法记录不触发第二次业务执行。
+  }
+  logger.warn('Task result could not be recorded as JSON', { taskId })
+  return null
+}
+
 /**
  * 构造本地中断观测；不代表已确认业务终态。
  *
@@ -146,13 +172,14 @@ export async function interruptTask(
   reason: string,
   hooks: Readonly<SchedulerTaskHooks>,
   signal: AbortSignal = new AbortController().signal,
+  startedAt = Date.now(),
 ): Promise<TaskExecutionLog> {
-  const startedAt = Date.now()
+  const started = performance.now()
   const taskType = resolveTaskType(task, hooks)
 
   await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
 
-  const finishedAt = Date.now()
+  const finishedAt = startedAt + Math.floor(performance.now() - started)
   const interruptedLog = await createInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
 
   await notifyTaskInterrupted(hooks, {
@@ -201,9 +228,7 @@ export async function executeJsTask(
 
   try {
     const result = await compileResult.data(context, signal)
-    return core.ok(result !== undefined
-      ? JSON.stringify(result)
-      : null)
+    return core.ok(serializeResult(result, task.id))
   }
   catch (error) {
     const message = error instanceof Error
@@ -369,9 +394,7 @@ async function executeHookTask(
 
   try {
     const result = await waitWithSignal(() => hooks.onTaskExecute!(executeEvent), signal)
-    return core.ok(result !== undefined
-      ? JSON.stringify(result)
-      : null)
+    return core.ok(serializeResult(result, task.id))
   }
   catch (error) {
     const message = error instanceof Error
@@ -409,8 +432,9 @@ export async function executeTask(
   hooks: Readonly<SchedulerTaskHooks>,
   signal: AbortSignal = new AbortController().signal,
   execution?: Partial<SchedulerTaskContext>,
+  startedAt = Date.now(),
 ): Promise<TaskExecutionLog> {
-  const startedAt = Date.now()
+  const started = performance.now()
   const taskType = resolveTaskType(task, hooks)
   const context = createTaskContext(task, trigger, execution)
 
@@ -441,7 +465,7 @@ export async function executeTask(
   }
 
   shouldNotifyInterrupted ||= signal.aborted
-  const finishedAt = Date.now()
+  const finishedAt = startedAt + Math.floor(performance.now() - started)
   let status: ExecutionStatus = executionResult.success
     ? 'success'
     : (shouldNotifyInterrupted ? 'interrupted' : 'failed')
@@ -460,25 +484,31 @@ export async function executeTask(
     context.occurrenceId,
   )
 
-  if (!executionResult.success && shouldNotifyInterrupted) {
+  if (shouldNotifyInterrupted) {
     await notifyTaskInterrupted(hooks, {
       task,
       trigger,
       startedAt,
       interruptedAt: finishedAt,
       signal,
-      reason: executionResult.error.message,
+      reason: executionResult.success
+        ? schedulerM('scheduler_closing')
+        : executionResult.error.message,
       context,
     })
   }
 
   if (status !== 'interrupted' && !signal.aborted) {
+    const observed = Object.freeze({
+      ...log,
+      persistence: Object.freeze({ ...log.persistence }),
+    })
     await notifyTaskFinish(hooks, {
       task,
       trigger,
       startedAt,
       finishedAt,
-      log,
+      log: observed,
       signal,
       context,
     })

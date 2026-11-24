@@ -93,6 +93,7 @@ describe('scheduler close during execution', () => {
     })
     let oldSignal: AbortSignal | undefined
     const finished = vi.fn()
+    const interrupted = vi.fn(() => new Promise<void>(() => {}))
     expect((await scheduler.init({
       enableDb: true,
       hooks: {
@@ -102,6 +103,7 @@ describe('scheduler close during execution', () => {
           started()
         }),
         onTaskFinish: finished,
+        onTaskInterrupted: interrupted,
       },
     })).success).toBe(true)
     expect((await scheduler.register({
@@ -114,6 +116,7 @@ describe('scheduler close during execution', () => {
     await entered
     await scheduler.close()
     expect(oldSignal?.aborted).toBe(true)
+    expect(interrupted).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ signal: oldSignal }))
     const oldResult = await oldRun
     expect(oldResult.success).toBe(true)
     if (oldResult.success)

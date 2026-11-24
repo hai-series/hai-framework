@@ -25,27 +25,36 @@ let caseIndex = 0
 let nextId = 0
 const children: ChildProcess[] = []
 const heldResponses: ServerResponse[] = []
-const requests: Array<{ receipt: string, sequence: number, attempt: number }> = []
+const requests: Array<{ receipt: string, sequence: number, attempt: number, receivedAt: number }> = []
 
 /** IPC 是本测试的序列化边界，泛型由调用命令的公开返回契约确定。 */
 function call<T = unknown>(child: ChildProcess, command: string, args: unknown = [], timeoutMs = 10_000): Promise<T> {
   const id = ++nextId
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      child.off('message', receive)
+      clear()
       reject(new Error(`Child command timed out: ${command}`))
     }, timeoutMs)
+    function clear() {
+      clearTimeout(timer)
+      child.off('message', receive)
+      child.off('exit', exited)
+    }
+    function exited() {
+      clear()
+      reject(new Error(`Child exited during command: ${command}`))
+    }
     function receive(message: { id: number, data?: unknown, error?: string }) {
       if (message.id !== id)
         return
-      clearTimeout(timer)
-      child.off('message', receive)
+      clear()
       if (message.error)
         reject(new Error(message.error))
       else
         resolve(message.data as T)
     }
     child.on('message', receive)
+    child.once('exit', exited)
     child.send({ id, command, args })
   })
 }
@@ -130,7 +139,12 @@ beforeEach(async () => {
       receipt,
       sequence: Number(request.headers['x-scheduler-sequence']),
       attempt: Number(request.headers['x-scheduler-attempt']),
+      receivedAt: Date.now(),
     })
+    if (index === 1 && request.url === '/retry-checkpoint') {
+      response.writeHead(503).end('retry')
+      return
+    }
     const tx = await reldb.tx.begin()
     if (!tx.success) {
       response.writeHead(503).end()
@@ -194,6 +208,62 @@ afterAll(async () => {
 })
 
 describe('durable execution across actual processes', { concurrent: false }, () => {
+  it('进程在退避中退出后，接管保留原截止时间和全部已完成的尝试', async () => {
+    const task = {
+      id: 'resume-retry',
+      name: 'Resume retry',
+      cron: '0 0 1 1 *',
+      idempotent: true,
+      retry: {
+        maxAttempts: 2,
+        backoffMs: [3500],
+      },
+      handler: { kind: 'api', url: `${url}/retry-checkpoint` },
+    }
+    expect(await call(nodeA, 'register', [task])).toMatchObject({ success: true })
+    const first = call(nodeA, 'trigger', [
+      task.id,
+      { idempotencyKey: 'retry-key' },
+    ])
+    void first.catch(() => {})
+    let retryAt = 0
+    await vi.waitFor(async () => {
+      expect(requests).toHaveLength(1)
+      const row = await call<HaiResult<{ log_json: string } | null>>(nodeB, 'retryCheckpoint', [requests[0].receipt])
+      expect(row.success && row.data?.log_json).toMatch(/retryAt/)
+      if (row.success && row.data)
+        retryAt = Number(JSON.parse(row.data.log_json).retryAt)
+    }, { timeout: 2000 })
+    const stopped = once(nodeA, 'exit')
+    nodeA.kill('SIGKILL')
+    await stopped
+    expect(await call(nodeB, 'start')).toMatchObject({ success: true })
+    const receipt = requests[0].receipt
+    await vi.waitFor(async () => expect(await state(nodeB, receipt)).toMatchObject({
+      status: 'success',
+      attemptCount: 2,
+      logPersistence: 'persisted',
+    }), { timeout: 7000 })
+    expect(requests.map(request => [request.receipt, request.attempt])).toEqual([
+      [receipt, 1],
+      [receipt, 2],
+    ])
+    expect(requests[1].receivedAt).toBeGreaterThanOrEqual(retryAt)
+    expect(await effects()).toBe(1)
+    expect(await call(nodeB, 'getLogs', [
+      { taskId: task.id },
+    ])).toMatchObject({
+      success: true,
+      data: {
+        total: 2,
+        items: [
+          expect.objectContaining({ status: 'success' }),
+          expect.objectContaining({ status: 'failed' }),
+        ],
+      },
+    })
+  }, 12000)
+
   it('同分钟竞争、跨真实分钟长任务和手动入口共用串行槽，续租不依赖cache', async () => {
     const task = {
       id: 'long-global',

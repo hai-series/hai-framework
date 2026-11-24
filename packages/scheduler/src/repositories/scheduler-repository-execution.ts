@@ -4,15 +4,20 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ExecuteResult, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlOperations, ExecuteResult, ReldbFunctions } from '@h-ai/reldb'
 import type { SchedulerExecutionEntry, SchedulerExecutionState, TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from '../scheduler-types.js'
 import { createHash, randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { schedulerM } from '../scheduler-i18n.js'
 import { HaiSchedulerError } from '../scheduler-types.js'
+import { databaseClockSql } from './scheduler-database-clock.js'
 
 const TABLE = 'hai_scheduler_executions'
+const RECOVERABLE = '((status = \'claimed\' AND attempt_count = 0) OR (idempotent = TRUE AND attempt_count < max_attempts))'
+const ISOLATE = `status = 'unknown', owner = NULL, leased_until = 0, log_json = NULL,
+  log_persistence = CASE WHEN logs_json IS NOT NULL THEN 'pending' ELSE log_persistence END`
 
 /**
  * 内部持久执行记录；owner 不对运维查询输出。
@@ -53,10 +58,12 @@ export interface StoredExecution {
   snapshot: string
   /** 首次触发的类型、来源和可选分钟槽 JSON。 */
   triggerJson: string
-  /** 已确认结果 JSON，用于相同手动键返回持久结果。 */
+  /** 终态回执，或在退避期间保存下一次可执行时间。 */
   logJson?: string
-  /** 已确认终态的全部尝试日志 JSON；日志投影失败或进程退出后仍可补写。 */
+  /** 已完成尝试的日志 JSON；退避、进程接管及日志补写共用。 */
   logsJson?: string
+  /** 等待重试时，从 logJson 解出的数据库毫秒截止点。 */
+  retryAt?: number
   /** 与业务阶段独立的日志投影状态。 */
   logPersistence: 'pending' | 'persisted' | 'unconfirmed'
   /** 最近共享状态更新时间（Unix 毫秒）。 */
@@ -77,6 +84,17 @@ export interface StoredExecution {
  */
 export function executionId(taskId: string, type: string, key: string): string {
   return createHash('sha256').update(JSON.stringify([taskId, type, key])).digest('hex')
+}
+
+/**
+ * 执行定义的持久快照。数据库行编号区分删除后重新注册的同名任务；配置任务没有该字段。
+ * @example 模块内部上下文
+ * ```ts
+ * const snapshot: ExecutionTaskSnapshot = { id: 'daily-report', name: 'Report', cron: '0 2 * * *', definitionRowId: 42 }
+ * ```
+ */
+export interface ExecutionTaskSnapshot extends TaskDefinition {
+  definitionRowId?: number
 }
 
 /**
@@ -235,11 +253,28 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
    * ```
    */
   private databaseClock(): string {
+    return databaseClockSql(this.db.config?.type)
+  }
+
+  private retryDeadline(): string {
     if (this.db.config?.type === 'postgresql')
-      return 'CAST(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS BIGINT)'
+      return 'CAST(log_json ->> \'retryAt\' AS BIGINT)'
     if (this.db.config?.type === 'mysql')
-      return 'CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED)'
-    return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+      return 'CAST(JSON_UNQUOTE(JSON_EXTRACT(log_json, \'$.retryAt\')) AS SIGNED)'
+    return 'json_extract(log_json, \'$.retryAt\')'
+  }
+
+  private withExecutionLock<T>(id: string, write: (sql: DmlOperations) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    if (this.db.config?.type === 'sqlite')
+      return write(this.db.sql)
+
+    // PostgreSQL 可能在等待行锁前已求值 WHERE；持锁后再执行带存储时钟条件的写入。
+    return this.db.tx.wrapResult(async (tx) => {
+      const locked = await tx.get(`SELECT occurrence_id FROM ${TABLE} WHERE occurrence_id = ? FOR UPDATE`, [id])
+      return locked.success && locked.data
+        ? write(tx)
+        : failed(locked.success ? undefined : locked.error)
+    })
   }
 
   /** 同毫秒内的持久状态版本仍单调增加，日志确认/人工裁定不依赖节点墙钟。 */
@@ -249,8 +284,8 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
   }
 
   /** 存储端毫秒时钟供 cron 计算共享分钟身份；读取失败停止本轮调度，不回退节点时钟。 */
-  async currentTime(): Promise<HaiResult<number>> {
-    const result = await this.db.sql.get<{ now: number | string }>(`SELECT ${this.databaseClock()} AS now`)
+  async currentTime(sql = this.db.sql): Promise<HaiResult<number>> {
+    const result = await sql.get<{ now: number | string }>(`SELECT ${this.databaseClock()} AS now`)
     if (!result.success)
       return failed(result.error)
     const now = Number(result.data?.now)
@@ -285,6 +320,17 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         return failed()
       value[field] = number
     }
+    if (value.logJson && (value.status === 'claimed' || value.status === 'running')) {
+      try {
+        const checkpoint: { retryAt?: unknown } = JSON.parse(value.logJson)
+        if (typeof checkpoint.retryAt !== 'number' || !Number.isSafeInteger(checkpoint.retryAt) || checkpoint.retryAt < 0)
+          return failed()
+        value.retryAt = checkpoint.retryAt
+      }
+      catch (error) {
+        return failed(error)
+      }
+    }
     return core.ok(value)
   }
 
@@ -309,20 +355,60 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /** 任务被删除或触发元数据损坏时，过期记录隔离为 unknown，允许可信人工核对而非永久悬挂。 */
   async isolateExpired(row: StoredExecution): Promise<HaiResult<void>> {
-    const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ${this.nextUpdatedAt()}
-       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${this.databaseClock()} AND status IN (?, ?)`,
-      [
-        'unknown',
-        row.occurrenceId,
-        row.owner,
-        'claimed',
-        'running',
-      ],
-    )
-    return result.success && result.data.changes === 1
-      ? core.ok(undefined)
-      : failed()
+    return this.withExecutionLock(row.occurrenceId, async (sql) => {
+      const result = await sql.execute(
+        `UPDATE ${TABLE} SET ${ISOLATE}, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${this.databaseClock()} AND status IN (?, ?)`,
+        [
+          row.occurrenceId,
+          row.owner,
+          'claimed',
+          'running',
+        ],
+      )
+      return result.success && result.data.changes === 1
+        ? core.ok(undefined)
+        : failed(result.success ? undefined : result.error)
+    })
+  }
+
+  /** 成功账本同时是一次性定义的失效记录；即使定义尚未清除，也禁止再次运行。 */
+  async completedDefinition(task: ExecutionTaskSnapshot, registeredAt?: number): Promise<HaiResult<boolean>> {
+    try {
+      const expected: unknown = JSON.parse(JSON.stringify(task))
+      const { definitionRowId, ...definition } = task
+      const legacy: unknown = registeredAt === undefined || definitionRowId === undefined
+        ? undefined
+        : JSON.parse(JSON.stringify(definition))
+      let sequence = 0
+      for (;;) {
+        const rows = await this.db.sql.query<{ sequence: number | string, snapshot: unknown, created_at: number | string }>(
+          `SELECT sequence, snapshot, created_at FROM ${TABLE} WHERE task_id = ? AND status = ? AND sequence > ? ORDER BY sequence LIMIT 100`,
+          [task.id, 'success', sequence],
+        )
+        if (!rows.success)
+          return failed(rows.error)
+        for (const row of rows.data) {
+          const snapshot: unknown = typeof row.snapshot === 'string'
+            ? JSON.parse(row.snapshot)
+            : row.snapshot
+          if (isDeepStrictEqual(snapshot, expected))
+            return core.ok(true)
+          // 旧成功记录没有定义行号。只接受当前定义登记后的同内容记录。
+          if (legacy !== undefined && registeredAt !== undefined && Number(row.created_at) >= registeredAt && isDeepStrictEqual(snapshot, legacy))
+            return core.ok(true)
+          const next = Number(row.sequence)
+          if (!Number.isSafeInteger(next) || next <= sequence)
+            return failed()
+          sequence = next
+        }
+        if (rows.data.length < 100)
+          return core.ok(false)
+      }
+    }
+    catch (error) {
+      return failed(error)
+    }
   }
 
   /** 有界读取待人工核对记录。@example await repository.unknown(50, 0) */
@@ -337,19 +423,18 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /**
    * 确认相同终态快照的日志投影；不变更业务状态，不重新领取任务。
-   * @example await repository.confirmLogs(row)
+   * @example await repository.confirmLogs(row, receipt)
    */
-  async confirmLogs(row: StoredExecution): Promise<HaiResult<void>> {
-    if (!row.logJson || !row.logsJson)
+  async confirmLogs(row: StoredExecution, receipt: TaskExecutionLog): Promise<HaiResult<void>> {
+    if (!row.logsJson)
       return failed()
-    const log = JSON.parse(row.logJson) as TaskExecutionLog
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET log_persistence = ?, log_json = ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND updated_at = ? AND log_persistence = ? AND status NOT IN (?, ?)`,
       [
         'persisted',
         JSON.stringify({
-          ...log,
+          ...receipt,
           persistence: { status: 'persisted' },
         }),
         row.occurrenceId,
@@ -391,7 +476,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
    * 唯一 active_task 防止不同 occurrence 并行；同 occurrence 只可恢复安全的过期记录。
    * @example await repository.claim(task, id, trigger, nodeId, leaseMs)
    */
-  async claim(task: TaskDefinition, id: string, trigger: TaskTriggerInfo, nodeId: string, leaseMs: number): Promise<HaiResult<StoredExecution | null>> {
+  async claim(task: ExecutionTaskSnapshot, id: string, trigger: TaskTriggerInfo, nodeId: string, leaseMs: number): Promise<HaiResult<StoredExecution | null>> {
     const ready = await this.ensureReady()
     if (!ready.success)
       return failed(ready.error)
@@ -443,7 +528,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
         : failed(created.success ? undefined : created.error)
     }
     const row = existing.data
-    if ((created.success && created.data.changes === 1) || [
+    if ([
       'success',
       'failed',
       'interrupted',
@@ -453,100 +538,161 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     }
     if (row.status === 'unknown')
       return core.ok(null)
-    // 是否过期只在下方写语句里判断，不能先用某个节点的墙钟决定接管或隔离。
-    if (row.status === 'running' && (!row.idempotent || row.attemptCount >= row.maxAttempts)) {
-      const isolated = await this.db.sql.execute(
-        `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ${this.nextUpdatedAt()}
-         WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status = ?`,
-        ['unknown', id, row.owner, 'running'],
+    if (created.success && created.data.changes === 1) {
+      return core.ok(row.owner === owner
+        ? row
+        : null)
+    }
+
+    const recovered = await this.withExecutionLock(id, async (sql) => {
+      // 读取和写入之间，旧 owner 可能已开始执行或用掉最后一次尝试；以最终条件为准。
+      const eligible = `occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status IN (?, ?)`
+      const previous = [id, row.owner, 'claimed', 'running']
+      const changed = await sql.execute(
+        `UPDATE ${TABLE} SET status = ?, owner = ?, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
+         WHERE ${eligible} AND ${RECOVERABLE}`,
+        ['claimed', owner, leaseMs, ...previous],
+      )
+      if (!changed.success)
+        return failed(changed.error)
+      if (changed.data.changes === 1)
+        return core.ok(true)
+      const isolated = await sql.execute(
+        `UPDATE ${TABLE} SET ${ISOLATE}, updated_at = ${this.nextUpdatedAt()}
+         WHERE ${eligible} AND NOT ${RECOVERABLE}`,
+        previous,
       )
       return isolated.success
-        ? core.ok(null)
+        ? core.ok(false)
         : failed(isolated.error)
-    }
-    const recovered = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, owner = ?, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
-       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status IN (?, ?)`,
-      [
-        'claimed',
-        owner,
-        leaseMs,
-        id,
-        row.owner,
-        'claimed',
-        'running',
-      ],
-    )
+    })
     if (!recovered.success)
-      return failed(recovered.error)
-    return recovered.data.changes === 1
-      ? this.byOccurrence(id)
-      : core.ok(null)
+      return recovered
+    if (!recovered.data)
+      return core.ok(null)
+
+    const current = await this.byOccurrence(id)
+    return current.success
+      ? core.ok(current.data?.owner === owner
+          ? current.data
+          : null)
+      : current
   }
 
   /** 外部副作用前的条件门闩，并原子递增持久尝试次数。@example await repository.begin(row, leaseMs) */
-  async begin(row: StoredExecution, leaseMs: number): Promise<HaiResult<void>> {
+  async begin(row: StoredExecution, leaseMs: number): Promise<HaiResult<number>> {
     const clock = this.databaseClock()
-    const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, attempt_count = attempt_count + 1, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
-       WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?) AND attempt_count < max_attempts`,
-      [
-        'running',
-        leaseMs,
-        row.occurrenceId,
-        row.owner,
-        'claimed',
-        'running',
-      ],
-    )
-    if (!result.success || result.data.changes !== 1)
-      return failed(result.success ? undefined : result.error)
-    row.status = 'running'
-    row.attemptCount += 1
-    return core.ok(undefined)
+    const begun = await this.withExecutionLock(row.occurrenceId, async (sql) => {
+      const startedAt = await this.currentTime(sql)
+      if (!startedAt.success)
+        return startedAt
+      const result = await sql.execute(
+        `UPDATE ${TABLE} SET status = ?, attempt_count = attempt_count + 1, log_json = NULL,
+            leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)
+           AND attempt_count = ? AND attempt_count < max_attempts
+           AND (log_json IS NULL OR ${clock} >= ${this.retryDeadline()})`,
+        [
+          'running',
+          leaseMs,
+          row.occurrenceId,
+          row.owner,
+          'claimed',
+          'running',
+          row.attemptCount,
+        ],
+      )
+      return result.success && result.data.changes === 1
+        ? startedAt
+        : failed(result.success ? undefined : result.error)
+    })
+    if (begun.success) {
+      row.status = 'running'
+      row.attemptCount += 1
+      delete row.retryAt
+    }
+    return begun
   }
 
   /** 只续租仍然有效的 owner；过期凭据不能复活。@example await repository.renew(row, leaseMs) */
   async renew(row: StoredExecution, leaseMs: number): Promise<HaiResult<void>> {
     const clock = this.databaseClock()
-    const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()} WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
-      [
-        leaseMs,
-        row.occurrenceId,
-        row.owner,
-        'claimed',
-        'running',
-      ],
-    )
-    return result.success && result.data.changes === 1
-      ? core.ok(undefined)
-      : failed()
+    return this.withExecutionLock(row.occurrenceId, async (sql) => {
+      const result = await sql.execute(
+        `UPDATE ${TABLE} SET leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
+        [
+          leaseMs,
+          row.occurrenceId,
+          row.owner,
+          'claimed',
+          'running',
+        ],
+      )
+      return result.success && result.data.changes === 1
+        ? core.ok(undefined)
+        : failed(result.success ? undefined : result.error)
+    })
+  }
+
+  /** 保存已完成的失败尝试和下一次允许开始的 DB 时间，恢复时沿用同一执行及预算。 */
+  async checkpointRetry(row: StoredExecution, logs: TaskExecutionLog[], delay: number): Promise<HaiResult<number>> {
+    const clock = this.databaseClock()
+    const jsonObject = this.db.config?.type === 'postgresql'
+      ? 'jsonb_build_object'
+      : 'json_object'
+    return this.withExecutionLock(row.occurrenceId, async (sql) => {
+      const result = await sql.execute(
+        `UPDATE ${TABLE} SET log_json = ${jsonObject}('retryAt', ${clock} + ?), logs_json = ?, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status = ?
+           AND idempotent = TRUE AND attempt_count = ? AND attempt_count < max_attempts`,
+        [
+          delay,
+          JSON.stringify(logs),
+          row.occurrenceId,
+          row.owner,
+          'running',
+          row.attemptCount,
+        ],
+      )
+      if (!result.success || result.data.changes !== 1)
+        return failed(result.success ? undefined : result.error)
+      const stored = await sql.get<{ retry_at: number | string }>(
+        `SELECT ${this.retryDeadline()} AS retry_at FROM ${TABLE} WHERE occurrence_id = ? AND owner = ?`,
+        [row.occurrenceId, row.owner],
+      )
+      const retryAt = Number(stored.success ? stored.data?.retry_at : undefined)
+      return Number.isSafeInteger(retryAt) && retryAt > 0
+        ? core.ok(retryAt)
+        : failed(stored.success ? undefined : stored.error)
+    })
   }
 
   /** 有效 owner 确认终态；unknown 保留串行槽，阻止下一 cron/manual 与旧副作用并行。@example await repository.finish(row, log) */
   async finish(row: StoredExecution, log: TaskExecutionLog, logs: TaskExecutionLog[] = [log]): Promise<HaiResult<void>> {
     const clock = this.databaseClock()
-    const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, active_task = ?, owner = NULL, leased_until = 0, log_json = ?, logs_json = ?, log_persistence = ?, updated_at = ${this.nextUpdatedAt()}
-       WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
-      [
-        log.status,
-        log.status === 'unknown'
-          ? row.taskId
-          : null,
-        JSON.stringify(log),
-        JSON.stringify(logs),
-        'pending',
-        row.occurrenceId,
-        row.owner,
-        'claimed',
-        'running',
-      ],
-    )
-    return result.success && result.data.changes === 1
-      ? core.ok(undefined)
-      : failed()
+    return this.withExecutionLock(row.occurrenceId, async (sql) => {
+      const result = await sql.execute(
+        `UPDATE ${TABLE} SET status = ?, active_task = ?, owner = NULL, leased_until = 0, log_json = ?, logs_json = ?, log_persistence = ?, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
+        [
+          log.status,
+          log.status === 'unknown'
+            ? row.taskId
+            : null,
+          JSON.stringify(log),
+          JSON.stringify(logs),
+          'pending',
+          row.occurrenceId,
+          row.owner,
+          'claimed',
+          'running',
+        ],
+      )
+      return result.success && result.data.changes === 1
+        ? core.ok(undefined)
+        : failed(result.success ? undefined : result.error)
+    })
   }
 
   /** 人工隔离旧 runner 后条件裁定；不重排旧 occurrence，只有成功裁定才释放任务槽。@example await repository.resolve(id, 'discarded', updatedAt) */

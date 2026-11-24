@@ -14,12 +14,15 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Cron } from 'croner'
 import type { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 
+import type { ExecutionTaskSnapshot, SchedulerExecutionRepository } from './repositories/scheduler-repository-execution.js'
 import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskRetryPolicy, TaskUpdateInput } from './scheduler-types.js'
+import { isDeepStrictEqual } from 'node:util'
 import { core } from '@h-ai/core'
 
 import { TaskHandlerConfigSchema } from './repositories/scheduler-repository-task.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { MAX_TIMER_MS } from './scheduler-timer.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 // ─── 任务注册表状态 ───
@@ -282,7 +285,7 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
   }
 
   if (retry.backoffMs !== undefined) {
-    const hasInvalidBackoff = retry.backoffMs.some(ms => !Number.isInteger(ms) || ms < 0)
+    const hasInvalidBackoff = retry.backoffMs.some(ms => !Number.isInteger(ms) || ms < 0 || ms > MAX_TIMER_MS)
     if (hasInvalidBackoff) {
       return core.err(
         HaiSchedulerError.EXECUTION_FAILED,
@@ -397,11 +400,25 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
  * return [...getTaskRegistry().values()]
  * ```
  */
-export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<HaiResult<void>> {
+export async function loadConfigTasks(tasks: TaskDefinition[], execution?: SchedulerExecutionRepository): Promise<HaiResult<void>> {
   for (const task of tasks) {
     const registerResult = await registerTask(task)
     if (!registerResult.success)
       return registerResult
+  }
+  if (execution) {
+    for (const task of tasks) {
+      const definition = getTask(task.id)
+      if (!definition?.deleteAfterRun)
+        continue
+      const completed = await execution.completedDefinition(definition)
+      if (!completed.success)
+        return completed
+      if (completed.data) {
+        deleteTask(task.id)
+        deleteCron(task.id)
+      }
+    }
   }
   return core.ok(undefined)
 }
@@ -517,7 +534,7 @@ async function registerTaskDefinition(
 export async function unregisterTask(
   taskId: string,
   taskRepo?: SchedulerTaskRepository | null,
-  expected?: TaskDefinition,
+  expected?: ExecutionTaskSnapshot,
 ): Promise<HaiResult<void>> {
   return withTaskDefinitions(async (signal) => {
     const refreshed = await refreshTaskDefinitions(taskRepo ?? null, signal)
@@ -532,9 +549,12 @@ export async function unregisterTask(
 async function unregisterTaskDefinition(
   taskId: string,
   taskRepo?: SchedulerTaskRepository | null,
-  expected?: TaskDefinition,
+  expected?: ExecutionTaskSnapshot,
 ): Promise<HaiResult<void>> {
-  if (!hasTask(taskId)) {
+  const current = getTask(taskId)
+  if (!current) {
+    if (expected)
+      return core.ok(undefined)
     return core.err(
       HaiSchedulerError.TASK_NOT_FOUND,
       schedulerM('scheduler_taskNotFound', {
@@ -543,7 +563,15 @@ async function unregisterTaskDefinition(
     )
   }
 
-  if (taskRepo) {
+  if (expected) {
+    const { definitionRowId, ...definition } = expected
+    if (taskRepo?.definitionRowId(current) !== definitionRowId
+      || !isDeepStrictEqual(JSON.parse(JSON.stringify(current)), JSON.parse(JSON.stringify(definition)))) {
+      return core.ok(undefined)
+    }
+  }
+
+  if (taskRepo && persistedTaskIds.has(taskId)) {
     const deleteResult = await taskRepo.deleteTask(taskId, expected)
     if (!deleteResult.success) {
       // 删除失败保留原投影；数据库不可用时调度刷新也会阻止执行。

@@ -9,11 +9,13 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { TaskDefinition, TaskUpdateInput } from '../scheduler-types.js'
+import type { ExecutionTaskSnapshot } from './scheduler-repository-execution.js'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { z } from 'zod'
 
 import { schedulerM } from '../scheduler-i18n.js'
+import { MAX_TIMER_MS } from '../scheduler-timer.js'
 import { HaiSchedulerError } from '../scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'task-repository' })
@@ -23,7 +25,7 @@ const SCHEDULER_TASK_TABLE = 'hai_scheduler_tasks'
 const TaskParamsSchema = z.record(z.string(), z.unknown())
 const TaskRetryPolicySchema = z.object({
   maxAttempts: z.number().int().min(1).max(100),
-  backoffMs: z.array(z.number().int().min(0)).optional(),
+  backoffMs: z.array(z.number().int().min(0).max(MAX_TIMER_MS)).optional(),
 })
 const ApiTaskConfigSchema = z.object({
   kind: z.literal('api'),
@@ -37,13 +39,13 @@ const ApiTaskConfigSchema = z.object({
   ]).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
-  timeout: z.number().int().positive().optional(),
+  timeout: z.number().int().positive().max(MAX_TIMER_MS).optional(),
   maxResponseBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 })
 const JsTaskConfigSchema = z.object({
   kind: z.literal('js'),
   code: z.string().min(1),
-  timeout: z.number().int().positive().optional(),
+  timeout: z.number().int().positive().max(MAX_TIMER_MS).optional(),
 })
 /**
  * 注册与持久读取共用的处理器校验，拒绝未开始发送就可以识别的非法配置。
@@ -101,6 +103,16 @@ interface TaskRow {
  * ```
  */
 export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
+  private readonly rows = new WeakMap<TaskDefinition, Pick<TaskRow, 'id' | 'createdAt'>>()
+
+  definitionRowId(task: TaskDefinition): number | undefined {
+    return this.rows.get(task)?.id
+  }
+
+  definitionCreatedAt(task: TaskDefinition): number | undefined {
+    return this.rows.get(task)?.createdAt?.getTime()
+  }
+
   ready(): Promise<HaiResult<void>> {
     return this.ensureSchema()
   }
@@ -351,7 +363,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
   }
 
   /** 删除任务；自动清理携带执行定义，在同一条 DELETE 内原子比较，保留并发编辑。 */
-  async deleteTask(taskId: string, expected?: TaskDefinition): Promise<HaiResult<boolean>> {
+  async deleteTask(taskId: string, expected?: ExecutionTaskSnapshot): Promise<HaiResult<boolean>> {
     try {
       if (expected) {
         const conditions = [
@@ -383,6 +395,11 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
             ? expected.idempotent === true
             : Number(expected.idempotent === true),
         ]
+        if (expected.definitionRowId !== undefined) {
+          conditions.push('id = ?')
+          params.push(expected.definitionRowId)
+        }
+        const sqlite = this.db.config?.type === 'sqlite'
         const jsonValue = this.db.config?.type === 'mysql'
           ? 'CAST(? AS JSON)'
           : this.db.config?.type === 'postgresql'
@@ -399,6 +416,17 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
             // CRUD 的 JSON 列可能保存 JSON null，而不是 SQL NULL，两者都表示未配置。
             conditions.push(`(${column} IS NULL OR ${column} = ${jsonValue})`)
             params.push('null')
+          }
+          else if (sqlite) {
+            // SQLite 的 JSON 是文本；按路径和值比较，避免键顺序改变阻止正常清理。
+            const stored = `SELECT fullkey, type, atom FROM json_tree(${column})`
+            const input = 'SELECT fullkey, type, atom FROM json_tree(?)'
+            const serialized = JSON.stringify(value)
+            conditions.push(
+              `NOT EXISTS (${stored} EXCEPT ${input})`,
+              `NOT EXISTS (${input} EXCEPT ${stored})`,
+            )
+            params.push(serialized, serialized)
           }
           else {
             conditions.push(`${column} = ${jsonValue}`)
@@ -504,7 +532,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           }))
         }
 
-        tasks.push({
+        const task: TaskDefinition = {
           id: row.taskId,
           name: row.taskName,
           ...(row.description
@@ -524,7 +552,12 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           ...(handlerResult.data
             ? { handler: handlerResult.data }
             : {}),
+        }
+        this.rows.set(task, {
+          id: Number(row.id),
+          createdAt: row.createdAt,
         })
+        tasks.push(task)
       }
 
       return core.ok(tasks)

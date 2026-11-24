@@ -16,6 +16,120 @@ const failure = {
   error: { code: 'hai:reldb:002', message: 'private driver connection secret' },
 }
 
+it('keeps non-JSON handler results out of the journal without replaying completed effects', async () => {
+  const execute = vi.fn(() => Symbol('no JSON representation'))
+  expect((await scheduler.init({
+    hooks: { onTaskExecute: execute },
+  })).success).toBe(true)
+  expect((await scheduler.register(task)).success).toBe(true)
+  const first = await scheduler.trigger(task.id)
+  expect(first).toMatchObject({
+    success: true,
+    data: {
+      status: 'success',
+      result: null,
+      persistence: { status: 'persisted' },
+    },
+  })
+  if (!first.success || !first.data.occurrenceId)
+    throw new Error('Receipt missing')
+  expect((await scheduler.execution.repairLog(first.data.occurrenceId)).success).toBe(true)
+  expect(execute).toHaveBeenCalledOnce()
+
+  const js = {
+    ...task,
+    id: 'bigint-result',
+    handler: { kind: 'js' as const, code: '() => 1n' },
+  }
+  expect((await scheduler.register(js)).success).toBe(true)
+  expect(await scheduler.trigger(js.id)).toMatchObject({
+    success: true,
+    data: {
+      status: 'success',
+      result: null,
+      persistence: { status: 'persisted' },
+    },
+  })
+})
+
+it('preserves fresh shared logs when a scheduler has a fast or slow local clock', async () => {
+  expect((await scheduler.init({
+    retentionDays: 1,
+    maxLogs: 3,
+    hooks: {
+      onTaskExecute: () => 'done',
+    },
+  })).success).toBe(true)
+  expect((await scheduler.register(task)).success).toBe(true)
+  const now = Date.now.bind(Date)
+  const offset = 2 * 24 * 60 * 60 * 1000
+  const receipts: string[] = []
+  try {
+    for (const drift of [0, -offset, offset]) {
+      vi.spyOn(Date, 'now').mockImplementation(() => now() + drift)
+      const result = await scheduler.trigger(task.id)
+      expect(result).toMatchObject({
+        success: true,
+        data: {
+          status: 'success',
+          persistence: { status: 'persisted' },
+        },
+      })
+      if (!result.success)
+        throw new Error('Execution failed')
+      receipts.push(result.data.id)
+    }
+  }
+  finally {
+    vi.restoreAllMocks()
+  }
+  const history = await scheduler.getLogs({ taskId: task.id })
+  expect(history.success && history.data.items.map(log => log.id).sort()).toEqual(receipts.sort())
+})
+
+it('can repair already completed attempts when the last lease expires with an unknown outcome', async () => {
+  const execute = vi.fn(async ({ context }: SchedulerTaskExecuteEvent) => {
+    if (context.attempt === 1)
+      throw new Error('First attempt failed before effect')
+    expect((await reldb.sql.execute('UPDATE hai_scheduler_executions SET leased_until = 0 WHERE occurrence_id = ?', [context.occurrenceId])).success).toBe(true)
+    return 'unconfirmed'
+  })
+  expect((await scheduler.init({
+    hooks: { onTaskExecute: execute },
+  })).success).toBe(true)
+  expect((await scheduler.register({
+    ...task,
+    idempotent: true,
+    retry: { maxAttempts: 2 },
+  })).success).toBe(true)
+  const options = { idempotencyKey: 'completed-attempts' }
+  expect(await scheduler.trigger(task.id, options)).toMatchObject({
+    success: true,
+    data: { status: 'unknown' },
+  })
+  const replay = await scheduler.trigger(task.id, options)
+  expect(replay).toMatchObject({
+    success: true,
+    data: {
+      status: 'unknown',
+      persistence: { status: 'pending' },
+    },
+  })
+  if (!replay.success || !replay.data.occurrenceId)
+    throw new Error('Receipt missing')
+  expect((await scheduler.execution.repairLog(replay.data.occurrenceId)).success).toBe(true)
+  expect(await scheduler.getLogs({ taskId: task.id })).toMatchObject({
+    success: true,
+    data: {
+      total: 1,
+      items: [
+        expect.objectContaining({ status: 'failed', occurrenceId: replay.data.occurrenceId }),
+      ],
+    },
+  })
+  expect(execute).toHaveBeenCalledTimes(2)
+})
+
 it('日志失败可查询，重启后并发补写只写一条且不重执行业务', async () => {
   const effect = vi.fn(() => '业务结果'.repeat(1000))
   expect((await scheduler.init({

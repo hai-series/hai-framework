@@ -11,6 +11,7 @@ import { join, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { build } from 'tsup'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -223,55 +224,64 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect(await call(b, 'finish', { receipt })).toMatchObject({ success: true })
     })
 
-    it('a real database row lock held beyond the deadline cannot authorize a late final commit', async () => {
-      const definition = { ...task, id: `${task.id}-lock-wait` }
-      const receipt = executionId(definition.id, 'manual', 'lock-wait')
-      await call(a, 'clock', { offset: 0 })
-      expect(await call(a, 'claim', { task: definition, receipt })).toMatchObject({ success: true })
-      expect(await call(a, 'begin', { receipt })).toMatchObject({ success: true })
-      let unlock!: () => void
-      const held = new Promise<void>((resolveHeld) => {
-        unlock = resolveHeld
-      })
-      let locked!: () => void
-      const ready = new Promise<void>((resolveReady) => {
-        locked = resolveReady
-      })
-      const transaction = reldb.tx.wrap(async (tx) => {
-        const lock = await tx.execute('UPDATE hai_scheduler_executions SET updated_at = updated_at WHERE occurrence_id = ?', [receipt])
-        if (!lock.success)
-          throw new Error(lock.error.message)
-        locked()
-        await held
-        return undefined
-      })
-      try {
-        await Promise.race([
-          ready,
-          transaction.then(() => {
-            throw new Error('Lock transaction ended before the hold was released')
-          }),
-        ])
-        let requested!: () => void
-        const attempted = new Promise<void>((resolveAttempt) => {
-          requested = resolveAttempt
+    it.each(backend === 'sqlite'
+      ? ['update-commit']
+      : ['update-commit', 'lock-commit', 'update-rollback'])(
+      'a real database row lock held beyond the deadline cannot authorize a late final commit (%s)',
+      async (mode) => {
+        const definition = { ...task, id: `${task.id}-lock-wait-${mode}` }
+        const receipt = executionId(definition.id, 'manual', 'lock-wait')
+        await call(a, 'clock', { offset: 0 })
+        expect(await call(a, 'claim', { task: definition, receipt })).toMatchObject({ success: true })
+        expect(await call(a, 'begin', { receipt })).toMatchObject({ success: true })
+        let unlock!: () => void
+        const held = new Promise<void>((resolveHeld) => {
+          unlock = resolveHeld
         })
-        const finishing = call(a, 'finish', { receipt }, requested)
-        await attempted
-        await delay(1150)
-        unlock()
-        expect((await transaction).success).toBe(true)
-        expect(await finishing).toMatchObject({ success: false })
-      }
-      finally {
-        unlock()
-        await transaction
-      }
-      expect(await call(b, 'get', { receipt })).toMatchObject({
-        success: true,
-        data: { status: 'running', logPersistence: 'unconfirmed' },
-      })
-    })
+        let locked!: () => void
+        const ready = new Promise<void>((resolveReady) => {
+          locked = resolveReady
+        })
+        const transaction = reldb.tx.wrapResult(async (tx) => {
+          const lock = mode === 'lock-commit'
+            ? await tx.get('SELECT occurrence_id FROM hai_scheduler_executions WHERE occurrence_id = ? FOR UPDATE', [receipt])
+            : await tx.execute('UPDATE hai_scheduler_executions SET updated_at = updated_at WHERE occurrence_id = ?', [receipt])
+          if (!lock.success)
+            throw new Error(lock.error.message)
+          locked()
+          await held
+          return mode === 'update-rollback'
+            ? core.err('test:rollback', 'Intentional rollback')
+            : core.ok(undefined)
+        })
+        try {
+          await Promise.race([
+            ready,
+            transaction.then(() => {
+              throw new Error('Lock transaction ended before the hold was released')
+            }),
+          ])
+          let requested!: () => void
+          const attempted = new Promise<void>((resolveAttempt) => {
+            requested = resolveAttempt
+          })
+          const finishing = call(a, 'finish', { receipt }, requested)
+          await attempted
+          await delay(1150)
+          unlock()
+          expect((await transaction).success).toBe(mode !== 'update-rollback')
+          expect(await finishing).toMatchObject({ success: false })
+        }
+        finally {
+          unlock()
+          await transaction
+        }
+        expect(await call(b, 'get', { receipt })).toMatchObject({
+          success: true,
+          data: { status: 'running', logPersistence: 'unconfirmed' },
+        })
+      },
+    )
 
     it('public cron uses one DB minute and UTC across opposite clocks and different process TZ', async () => {
       expect((await reldb.sql.execute('CREATE TABLE scheduler_clock_effects (receipt VARCHAR(64) PRIMARY KEY, call_count INTEGER NOT NULL)')).success).toBe(true)

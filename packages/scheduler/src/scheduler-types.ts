@@ -99,7 +99,7 @@ export type TaskHandlerKind = 'api' | 'js'
 export interface TaskRetryPolicy {
   /** 最大尝试次数（含首次及崩溃恢复，范围 1–100，默认 1）。 */
   maxAttempts: number
-  /** 每次重试前的退避时间（毫秒）；按顺序对应第 2、3... 次尝试 */
+  /** 每次重试前的退避时间（0–2147483647 毫秒）；按顺序对应第 2、3... 次尝试。 */
   backoffMs?: number[]
 }
 
@@ -211,7 +211,7 @@ export interface TaskDefinition {
   timezone?: string
   /** 是否启用（默认 true） */
   enabled?: boolean
-  /** 是否在执行后自动删除（默认 false） */
+  /** 当前任务定义成功后失效并移除（默认 false）；计算使用共享执行记录。 */
   deleteAfterRun?: boolean
   /** 失败重试策略 */
   retry?: TaskRetryPolicy
@@ -361,19 +361,19 @@ export interface SchedulerTaskInterruptedEvent extends SchedulerTaskStartEvent {
  *
  * @example
  * ```ts
- * import type { SchedulerTaskFinishEvent } from '@h-ai/scheduler'
+ * import type { ExecutionStatus, SchedulerTaskFinishEvent } from '@h-ai/scheduler'
  *
- * function needsLogRepair(event: SchedulerTaskFinishEvent): boolean {
- *   return event.log.persistence.status === 'pending'
+ * function localStatus(event: SchedulerTaskFinishEvent): ExecutionStatus {
+ *   return event.log.status
  * }
- * // 结束回调是观测；业务是否已提交以 journal 为准。
+ * // 结束回调是观测；从手动回执或 execution.get 查看持久化状态。
  * ```
  */
 export interface SchedulerTaskFinishEvent extends SchedulerTaskStartEvent {
   /** 结束时间（Unix 时间戳，毫秒） */
   finishedAt: number
-  /** 执行日志 */
-  log: TaskExecutionLog
+  /** 执行日志的只读快照；持久终态由执行账本确认。 */
+  log: Readonly<TaskExecutionLog>
 }
 
 /**
@@ -473,7 +473,7 @@ export interface TaskExecutionLog {
   triggerSource: string | null
   /** 执行状态 */
   status: ExecutionStatus
-  /** 序列化 JS/Hook 结果或 API 响应正文；无结果为 null */
+  /** JS/Hook 的 JSON 结果或 API 响应正文；无结果或无法用 JSON 表示时为 null。 */
   result: string | null
   /** 错误或中断信息 */
   error: string | null

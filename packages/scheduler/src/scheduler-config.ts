@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod'
+import { MAX_TIMER_MS } from './scheduler-timer.js'
 
 // ─── 配置 Schema ───
 
@@ -27,8 +28,8 @@ import { z } from 'zod'
 export const SchedulerConfigSchema = z.object({
   /** 必须使用共享数据库保存执行状态；false 不再允许，需要先初始化 @h-ai/reldb。 */
   enableDb: z.literal(true).default(true),
-  /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
-  tickInterval: z.number().int().min(100).default(1000),
+  /** 调度检查间隔，100–2147483647 毫秒，默认 1000。 */
+  tickInterval: z.number().int().min(100).max(MAX_TIMER_MS).default(1000),
   /** 执行租约毫秒数（默认 300000，范围 1000–86400000），在途每三分之一周期续期。 */
   leaseMs: z.number().int().min(1000).max(86_400_000).default(300000),
   /** 节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计） */

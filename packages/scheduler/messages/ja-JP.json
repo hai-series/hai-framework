@@ -10,6 +10,7 @@
   "scheduler_taskNotFound": "タスクが見つかりません: {taskId}",
   "scheduler_taskAlreadyExists": "タスクは既に存在します: {taskId}",
   "scheduler_invalidCron": "cron式が無効です: {expression}",
+  "scheduler_invalidTimezone": "無効な IANA タイムゾーン: {timezone}",
   "scheduler_executionFailed": "タスクの実行に失敗しました: {error}",
   "scheduler_jsExecutionFailed": "JSコードの実行に失敗しました: {error}",
   "scheduler_jsTimedOut": "JSタスクが{timeout}msでタイムアウトしました",

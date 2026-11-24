@@ -1,7 +1,7 @@
 /**
  * @h-ai/scheduler — Cron 表达式工具（基于 croner）
  *
- * 使用 croner 库解析和匹配 cron 表达式。 支持标准 5/6 字段 cron 表达式及扩展语法。
+ * 使用 croner 解析和匹配按分钟执行的五字段 cron 表达式。
  * @module scheduler-cron
  */
 
@@ -31,17 +31,35 @@ import { HaiSchedulerError } from './scheduler-types.js'
  * ```
  */
 export function parseCronExpression(expression: string, timezone?: string): HaiResult<Cron> {
+  const invalidCron = () => core.err(
+    HaiSchedulerError.INVALID_CRON,
+    schedulerM('scheduler_invalidCron', {
+      params: { expression },
+    }),
+  )
+  if (typeof expression !== 'string' || expression.trim().split(/\s+/).length !== 5)
+    return invalidCron()
+
+  const zone = timezone ?? 'UTC'
+  const invalidTimezone = () => core.err(HaiSchedulerError.INVALID_CRON, schedulerM('scheduler_invalidTimezone', {
+    params: { timezone: zone },
+  }))
+  // 数字偏移不属于任务定义的 IANA 时区契约。
+  if (typeof zone !== 'string' || /^[+-]/.test(zone))
+    return invalidTimezone()
+  let timeZone: string
   try {
-    const cron = new Cron(expression, { legacyMode: false, timezone: timezone ?? 'UTC' })
-    return core.ok(cron)
+    // Croner 在构造时未必检查时区。
+    timeZone = new Intl.DateTimeFormat('en', { timeZone: zone }).resolvedOptions().timeZone
   }
   catch {
-    return core.err(
-      HaiSchedulerError.INVALID_CRON,
-      schedulerM('scheduler_invalidCron', {
-        params: { expression },
-      }),
-    )
+    return invalidTimezone()
+  }
+  try {
+    return core.ok(new Cron(expression.trim(), { legacyMode: false, timezone: timeZone }))
+  }
+  catch {
+    return invalidCron()
   }
 }
 

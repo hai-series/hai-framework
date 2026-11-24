@@ -6747,9 +6747,9 @@
     "name": "HAI_SCHEDULER_TICKINTERVAL",
     "module": "scheduler",
     "path": "scheduler.tickInterval",
-    "description": "调度检查间隔，单位毫秒（默认 1000，即每秒检查一次）",
+    "description": "调度检查间隔，100–2147483647 毫秒，默认 1000。",
     "value": "1000",
-    "constraint": "整数；>= 100；<= 9007199254740991"
+    "constraint": "整数；>= 100；<= 2147483647"
   },
   {
     "name": "HAI_SERV",

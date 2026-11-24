@@ -1,5 +1,6 @@
 /** 调度定义更新、并发刷新与在途任务收敛的公共 API 回归。 */
 import type { SchedulerTaskExecuteEvent } from '../src/index.js'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/index.js'
@@ -150,4 +151,57 @@ it.each([false, true])('atomically checks the executed definition at database de
   expect(scheduler.tasks.has('atomic-delete')).toBe(edit)
   if (edit)
     expect(scheduler.tasks.get('atomic-delete')?.name).toBe('Replacement')
+})
+
+it.each([false, true])('prevents a second execution when cleanup fails after a one-time success (old journal=%s)', async (legacy) => {
+  const task = {
+    id: 'cleanup-failed',
+    name: 'One-time',
+    cron: '* * * * *',
+    deleteAfterRun: true,
+  }
+  const execute = vi.fn(() => 'done')
+  const config = {
+    hooks: { onTaskExecute: execute },
+  }
+  expect((await scheduler.init(config)).success).toBe(true)
+  expect((await scheduler.register(task)).success).toBe(true)
+  const sql = reldb.sql.execute.bind(reldb.sql)
+  const failing = vi.spyOn(reldb.sql, 'execute').mockImplementation((statement, params) => statement.startsWith('DELETE FROM hai_scheduler_tasks')
+    ? Promise.resolve(core.err('test:delete', 'Definition cleanup delayed'))
+    : sql(statement, params))
+  expect(await scheduler.trigger(task.id)).toMatchObject({
+    success: true,
+    data: { status: 'success' },
+  })
+  expect(scheduler.tasks.has(task.id)).toBe(true)
+  if (legacy) {
+    expect((await sql('UPDATE hai_scheduler_executions SET snapshot = json_remove(snapshot, ?) WHERE task_id = ?', ['$.definitionRowId', task.id])).success).toBe(true)
+  }
+  await scheduler.close()
+  failing.mockRestore()
+  expect((await scheduler.init(config)).success).toBe(true)
+  expect(await scheduler.trigger(task.id)).toMatchObject({
+    success: true,
+    data: { status: 'interrupted' },
+  })
+  expect(scheduler.tasks.has(task.id)).toBe(false)
+  expect(execute).toHaveBeenCalledOnce()
+})
+
+it('removes a completed definition even if the handler JSON keys were stored in another order', async () => {
+  const id = 'ordered-handler'
+  expect((await scheduler.init()).success).toBe(true)
+  expect((await scheduler.register({
+    id,
+    name: 'Ordered handler',
+    cron: '* * * * *',
+    deleteAfterRun: true,
+    handler: { timeout: 1000, code: '() => 42', kind: 'js' },
+  })).success).toBe(true)
+  expect(await scheduler.trigger(id)).toMatchObject({
+    success: true,
+    data: { status: 'success', result: '42' },
+  })
+  expect(scheduler.tasks.has(id)).toBe(false)
 })

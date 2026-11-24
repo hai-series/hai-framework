@@ -1,7 +1,7 @@
 import type { SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskStartEvent, TaskDefinition } from '../src/index.js'
 import type { SchedulerExecutionRepository as ExecutionRepository, StoredExecution } from '../src/repositories/index.js'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduler, SchedulerConfigSchema } from '../src/index.js'
 import { executionId, SchedulerExecutionRepository } from '../src/repositories/index.js'
 
@@ -30,11 +30,61 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await scheduler.close()
   await reldb.close()
 })
 
 describe('shared execution gates', () => {
+  it.each(['insert', 'takeover'])('只返回本次写入获得的 owner（%s）', async (stage) => {
+    const contender = new SchedulerExecutionRepository(reldb)
+    const key = `owner-${stage}`
+    const id = executionId(task.id, 'manual', key)
+    if (stage === 'takeover')
+      await expire(await claim(key))
+
+    const original = repo.byOccurrence.bind(repo)
+    const replaceOwner = async () => {
+      expect((await reldb.sql.execute('UPDATE hai_scheduler_executions SET leased_until = 0 WHERE occurrence_id = ?', [id])).success).toBe(true)
+      const next = await contender.claim(task, id, trigger, 'contender', 30_000)
+      expect(next.success && next.data?.owner).toMatch(/^contender:/)
+      return original(id)
+    }
+    const read = vi.spyOn(repo, 'byOccurrence')
+    if (stage === 'takeover')
+      read.mockImplementationOnce(original)
+    read.mockImplementationOnce(replaceOwner)
+    expect(await repo.claim(task, id, trigger, 'initial', 1000)).toMatchObject({ success: true, data: null })
+  })
+
+  it.each([false, true])('恢复写入重新判断旧节点刚开始的尝试（idempotent=%s）', async (idempotent) => {
+    const key = 'stale-before-start'
+    const id = executionId(task.id, 'manual', key)
+    const definition = {
+      ...task,
+      idempotent,
+      retry: {
+        maxAttempts: idempotent ? 1 : 2,
+      },
+    }
+    const original = await repo.claim(definition, id, trigger, 'original', 30_000)
+    if (!original.success || !original.data)
+      throw new Error('Initial claim missing')
+    const row = original.data
+    const read = repo.byOccurrence.bind(repo)
+    vi.spyOn(repo, 'byOccurrence').mockImplementationOnce(async (receipt) => {
+      const snapshot = await read(receipt)
+      expect((await repo.begin(row, 1000)).success).toBe(true)
+      await expire(row)
+      return snapshot
+    })
+    expect(await repo.claim(definition, id, trigger, 'contender', 30_000)).toMatchObject({ success: true, data: null })
+    expect(await repo.byOccurrence(id)).toMatchObject({
+      success: true,
+      data: { status: 'unknown', attemptCount: 1 },
+    })
+  })
+
   it('已过期但尚未开始的领取可以恢复，旧owner不能开始、续租或提交', async () => {
     const old = await claim('same')
     await expire(old)

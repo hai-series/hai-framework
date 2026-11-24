@@ -15,6 +15,7 @@ import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { schedulerM } from '../scheduler-i18n.js'
 import { HaiSchedulerError } from '../scheduler-types.js'
+import { databaseClockSql } from './scheduler-database-clock.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'log-repository' })
 
@@ -294,10 +295,10 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
 
     try {
       if (retentionDays) {
-        const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+        const retentionMs = Math.min(Number.MAX_SAFE_INTEGER, retentionDays * 86_400_000)
         const retentionResult = await this.sql().execute(
-          `DELETE FROM ${SCHEDULER_LOG_TABLE} WHERE started_at < ?`,
-          [cutoff],
+          `DELETE FROM ${SCHEDULER_LOG_TABLE} WHERE started_at < ${databaseClockSql(this.db.config?.type)} - ?`,
+          [retentionMs],
         )
 
         if (!retentionResult.success) {

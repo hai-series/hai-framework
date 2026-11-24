@@ -4,7 +4,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository, StoredExecution } from './repositories/index.js'
+import type { ExecutionTaskSnapshot, SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository, StoredExecution } from './repositories/index.js'
 import type { SchedulerLogCleanupPolicy, TaskDefinition, TaskExecutionLog, TaskTriggerInfo, TriggerTaskInput } from './scheduler-types.js'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -14,6 +14,7 @@ import { executionId } from './repositories/scheduler-repository-execution.js'
 import { executeTask, interruptTask } from './scheduler-executor.js'
 import { getCron, getHooks, getTask, getTaskRegistry, loadPersistedTasks, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { MAX_TIMER_MS } from './scheduler-timer.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'runner' })
@@ -59,7 +60,8 @@ const publishedLogSchema = z.object({
     'interrupted',
     'unknown',
   ]),
-  result: z.string().nullable(),
+  // 旧版本可能省略无 JSON 表示的 result；补写时恢复 nullable 契约。
+  result: z.string().nullable().default(null),
   error: z.string().nullable(),
   startedAt: z.number().safe(),
   finishedAt: z.number().safe(),
@@ -72,6 +74,73 @@ const publishedLogSchema = z.object({
     }).optional(),
   }),
 })
+const publishedLogsSchema = z.array(publishedLogSchema).min(1).max(101)
+
+function receiptFromExecution(row: StoredExecution): TaskExecutionLog | null {
+  if (row.status === 'claimed' || row.status === 'running')
+    return null
+  const status = row.status === 'discarded'
+    ? 'interrupted'
+    : row.status
+  const saved = publishedLogSchema.safeParse(JSON.parse(row.logJson ?? 'null'))
+  if (saved.success) {
+    return {
+      ...saved.data,
+      status,
+      error: status === 'success'
+        ? null
+        : saved.data.error,
+      persistence: { ...saved.data.persistence, status: row.logPersistence },
+      occurrenceId: row.occurrenceId,
+    }
+  }
+
+  // 没有尝试日志的隔离/人工裁定仍用稳定的只读回执，不写一条新的中断日志。
+  const task: ExecutionTaskSnapshot = JSON.parse(row.snapshot)
+  const trigger: TaskTriggerInfo = JSON.parse(row.triggerJson)
+  const id = row.occurrenceId
+  return {
+    id: `${id.slice(0, 8)}-${id.slice(8, 12)}-8${id.slice(12, 15)}-8${id.slice(15, 18)}-${id.slice(18, 30)}`,
+    occurrenceId: id,
+    persistence: { status: row.logPersistence },
+    taskId: row.taskId,
+    taskName: task.name,
+    taskType: task.handler?.kind ?? 'hook',
+    triggerType: trigger.type,
+    triggerSource: trigger.source,
+    status,
+    result: null,
+    error: status === 'unknown'
+      ? schedulerM('scheduler_executionUnknown')
+      : null,
+    startedAt: row.createdAt,
+    finishedAt: row.updatedAt,
+    duration: row.updatedAt - row.createdAt,
+  }
+}
+
+/**
+ * 在查找当前定义前复用已提交的手动回执；在途记录仍由领取协议处理。
+ * @example 模块内部上下文
+ * ```ts
+ * async function lookup(repository: SchedulerExecutionRepository) {
+ *   return replayTaskReceipt(repository, executionId('daily-report', 'manual', 'report-2026-10'))
+ * }
+ * ```
+ */
+export async function replayTaskReceipt(repository: SchedulerExecutionRepository, id: string): Promise<HaiResult<TaskExecutionLog | null>> {
+  const row = await repository.byOccurrence(id)
+  if (!row.success)
+    return row
+  try {
+    return core.ok(row.data
+      ? receiptFromExecution(row.data)
+      : null)
+  }
+  catch (error) {
+    return core.err(HaiSchedulerError.DB_SAVE_FAILED, schedulerM('scheduler_executionStateFailed'), error)
+  }
+}
 
 /**
  * 只投影已通过 owner/lease 条件提交的完整尝试快照；补写不调用 handler 或业务 Hook。
@@ -107,15 +176,18 @@ async function projectExecutionLogs(id: string): Promise<HaiResult<void>> {
     const row = found.data
     if (row.logPersistence === 'persisted')
       return core.ok(undefined)
-    const parsed = z.array(publishedLogSchema).min(1).max(101).safeParse(JSON.parse(row.logsJson ?? 'null') as unknown)
+    const parsed = publishedLogsSchema.safeParse(JSON.parse(row.logsJson ?? 'null'))
     if (!parsed.success || parsed.data.some(log => log.occurrenceId !== id || log.taskId !== row.taskId))
+      return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
+    const receipt = receiptFromExecution(row)
+    if (!receipt)
       return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
     for (const log of parsed.data) {
       const saved = await logs.saveLog(log)
       if (!saved.success)
         return saved
     }
-    const confirmed = await execution.confirmLogs(row)
+    const confirmed = await execution.confirmLogs(row, receipt)
     if (!confirmed.success)
       return core.err(HaiSchedulerError.LOG_PERSIST_FAILED, schedulerM('scheduler_logPersistFailed'))
     const cleanup = await logs.cleanupLogs(cleanupPolicy)
@@ -205,6 +277,36 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+async function waitUntilRetry(repo: SchedulerExecutionRepository, retryAt: number, signal: AbortSignal): Promise<boolean> {
+  while (!signal.aborted) {
+    const now = await repo.currentTime()
+    if (!now.success)
+      return false
+    const remaining = retryAt - now.data
+    if (remaining <= 0)
+      return true
+    await sleep(Math.min(MAX_TIMER_MS, remaining), signal)
+  }
+  return true
+}
+
+function definitionSnapshot(task: TaskDefinition, repository: SchedulerTaskRepository | null): ExecutionTaskSnapshot {
+  const definitionRowId = repository?.definitionRowId(task)
+  return {
+    ...task,
+    ...(definitionRowId !== undefined
+      ? { definitionRowId }
+      : {}),
+  }
+}
+
+function pendingLog(log: TaskExecutionLog): TaskExecutionLog {
+  return {
+    ...log,
+    persistence: { status: 'pending' },
+  }
+}
+
 /**
  * 停止领取并等待取消链退出；取消不表示已撤销外部副作用。
  *
@@ -271,6 +373,9 @@ async function tick(): Promise<void> {
     if (now?.success && isCurrent())
       scheduleDueTasks(now.data)
   }
+  catch (error) {
+    logger.warn('Scheduler scan failed', { error })
+  }
   finally {
     if (tickInProgress === timer)
       tickInProgress = null
@@ -286,8 +391,14 @@ function scheduleDueTasks(databaseNow: number): void {
   for (const [taskId, task] of getTaskRegistry()) {
     if (task.enabled === false || runningTasks.has(taskId))
       continue
-    if (!getCron(taskId)?.match(new Date(currentMinute * 60_000)))
+    try {
+      if (!getCron(taskId)?.match(new Date(currentMinute * 60_000)))
+        continue
+    }
+    catch (error) {
+      logger.warn('Failed to match task schedule', { taskId, error })
       continue
+    }
     void runTask(task, currentMinute, { type: 'scheduled', source: null }).catch(error => logger.error('Unhandled task execution error', { taskId, error }))
   }
 }
@@ -326,12 +437,13 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
     ? options?.idempotencyKey ?? randomUUID()
     : String(minute))
   const interrupted = async (reason: string, observationOnly = false): Promise<TaskExecutionLog> => {
+    const now = await executionRepo?.currentTime()
     const log = {
-      ...await interruptTask(task, trigger, reason, {}, controller.signal),
+      ...await interruptTask(task, trigger, reason, {}, controller.signal, now?.success ? now.data : undefined),
       occurrenceId,
     }
     // 领取前的竞争/跳过只是一条观测事件，不代表 owner 已提交业务终态。
-    if (observationOnly && logRepository) {
+    if (observationOnly && logRepository && now?.success) {
       const saved = await logRepository.saveLog(log)
       log.persistence = saved.success
         ? { status: 'persisted' }
@@ -347,7 +459,7 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
   }
   if (!executionRepo)
     return interrupted(schedulerM('scheduler_executionStateFailed'), true)
-  const claimed = await executionRepo.claim(task, occurrenceId, {
+  const claimed = await executionRepo.claim(definitionSnapshot(task, repository), occurrenceId, {
     ...trigger,
     ...(minute !== undefined
       ? { minute }
@@ -356,6 +468,11 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
   if (!claimed.success)
     return interrupted(claimed.error.message, true)
   if (!claimed.data) {
+    if (trigger.type === 'manual' && options?.idempotencyKey) {
+      const replay = await replayTaskReceipt(executionRepo, occurrenceId)
+      if (replay.success && replay.data)
+        return replay.data
+    }
     return interrupted(schedulerM('scheduler_taskRunning', {
       params: { taskId: task.id },
     }), true)
@@ -365,34 +482,9 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
     if (minute === undefined) {
       // 已完成的相同手动幂等键返回持久结果，绝不重新执行。
       try {
-        const log: TaskExecutionLog = row.logJson
-          ? JSON.parse(row.logJson)
-          : {
-              id: randomUUID(),
-              persistence: { status: 'unconfirmed' },
-              taskId: row.taskId,
-              taskName: task.name,
-              taskType: task.handler?.kind ?? 'hook',
-              triggerType: trigger.type,
-              triggerSource: trigger.source,
-              status: 'interrupted',
-              result: null,
-              error: null,
-              startedAt: row.createdAt,
-              finishedAt: row.updatedAt,
-              duration: row.updatedAt - row.createdAt,
-            }
-        const status = row.status === 'discarded'
-          ? 'interrupted'
-          : row.status as TaskExecutionLog['status']
-        return {
-          ...log,
-          status,
-          error: status === 'success'
-            ? null
-            : log.error,
-          occurrenceId,
-        }
+        const log = receiptFromExecution(row)
+        if (log)
+          return log
       }
       catch {
         return interrupted(schedulerM('scheduler_executionStateFailed'))
@@ -429,18 +521,30 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
   }, Math.max(1, Math.floor(leaseMs / 3)))
   try {
     let log: TaskExecutionLog | undefined
-    const attempts: TaskExecutionLog[] = []
+    let executedDefinition: ExecutionTaskSnapshot | undefined
+    const recovered = row.logsJson
+      ? publishedLogsSchema.safeParse(JSON.parse(row.logsJson))
+      : undefined
+    if (recovered && (!recovered.success || recovered.data.some(attempt => attempt.occurrenceId !== occurrenceId || attempt.taskId !== row.taskId)))
+      lost = true
+    const attempts: TaskExecutionLog[] = recovered?.success
+      ? recovered.data
+      : []
+    const { definitionRowId: storedDefinitionId, ...storedDefinition }: ExecutionTaskSnapshot = JSON.parse(row.snapshot)
     for (; row.attemptCount < row.maxAttempts;) {
+      if (lost || controller.signal.aborted)
+        break
+      if (row.retryAt !== undefined && !await waitUntilRetry(executionRepo, row.retryAt, controller.signal)) {
+        lost = true
+        break
+      }
       if (controller.signal.aborted)
         break
       const refreshed = await loadPersistedTasks(repository)
       const latest = getTask(task.id)
-      let unchanged = false
-      try {
-        // JSON 快照不会保留 undefined 属性，比较时两侧都采用持久化表示。
-        unchanged = latest !== undefined && isDeepStrictEqual(JSON.parse(JSON.stringify(latest)), JSON.parse(row.snapshot))
-      }
-      catch {}
+      const unchanged = latest !== undefined
+        && (storedDefinitionId === undefined || repository?.definitionRowId(latest) === storedDefinitionId)
+        && isDeepStrictEqual(JSON.parse(JSON.stringify(latest)), storedDefinition)
       if (!refreshed.success || !latest || latest.enabled === false || !unchanged) {
         log = await interrupted(schedulerM('scheduler_taskNoLongerDue', {
           params: { taskId: task.id },
@@ -451,11 +555,26 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
         break
       }
       task = latest
+      executedDefinition = definitionSnapshot(task, repository)
+      if (task.deleteAfterRun && row.attemptCount === 0) {
+        const completed = await executionRepo.completedDefinition(executedDefinition, repository?.definitionCreatedAt(task))
+        if (!completed.success || completed.data) {
+          log = await interrupted(completed.success
+            ? schedulerM('scheduler_occurrenceHandled', {
+                params: { taskId: task.id },
+              })
+            : completed.error.message)
+          if (completed.success)
+            await unregisterTask(task.id, repository, executedDefinition)
+          break
+        }
+      }
       if (!task.handler && !hooks.onTaskExecute) {
+        const now = await executionRepo.currentTime()
         log = {
           ...await interruptTask(task, trigger, schedulerM('scheduler_taskHandlerMissing', {
             params: { taskId: task.id },
-          }), hooks, controller.signal),
+          }), hooks, controller.signal, now.success ? now.data : undefined),
           occurrenceId,
         }
         break
@@ -470,14 +589,19 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
         executionToken: row.owner,
         sequence: row.sequence,
         attempt: row.attemptCount,
-      })
+      }, begun.data)
       log.occurrenceId = occurrenceId
       attempts.push(log)
       if (log.status !== 'failed' || !row.idempotent || row.attemptCount >= row.maxAttempts)
         break
       const delays = task.retry?.backoffMs ?? []
       const delay = delays[Math.min(row.attemptCount - 1, Math.max(0, delays.length - 1))] ?? 0
-      await sleep(delay, controller.signal)
+      const checkpoint = await executionRepo.checkpointRetry(row, attempts.map(pendingLog), delay)
+      if (!checkpoint.success) {
+        lost = true
+        break
+      }
+      row.retryAt = checkpoint.data
     }
     if (!log)
       log = await interrupted(schedulerM('scheduler_executionStateFailed'))
@@ -503,14 +627,7 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
       attempts[currentAttempt] = log
     else
       attempts.push(log)
-    const published = attempts.map(attempt => ({
-      ...attempt,
-      persistence: { status: 'pending' as const },
-    }))
-    const finished = await executionRepo.finish(row, {
-      ...log,
-      persistence: { status: 'pending' },
-    }, published)
+    const finished = await executionRepo.finish(row, pendingLog(log), attempts.map(pendingLog))
     if (!finished.success) {
       return {
         ...log,
@@ -519,6 +636,12 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
         error: finished.error.message,
         occurrenceId,
       }
+    }
+    // 成功账本先使该定义失效；清理定义和日志投影可分别恢复。
+    if (executedDefinition?.deleteAfterRun && log.status === 'success') {
+      const removed = await unregisterTask(task.id, repository, executedDefinition)
+      if (!removed.success)
+        logger.warn('Completed one-time task definition could not be removed', { taskId: task.id, occurrenceId, errorCode: removed.error.code })
     }
     // 终态已确认，后续日志故障只能留下 pending，不能改写业务结果或重新执行。
     const projected = await repairExecutionLogs(occurrenceId)
@@ -533,11 +656,6 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
         }
     if (!projected.success)
       logger.warn('Execution completed with pending log persistence', { taskId: task.id, occurrenceId, errorCode: projected.error.code })
-    if (task.deleteAfterRun && log.status === 'success') {
-      const refreshed = await loadPersistedTasks(repository)
-      if (refreshed.success && isDeepStrictEqual(getTask(task.id), task))
-        await unregisterTask(task.id, repository, task)
-    }
     return log
   }
   finally {

@@ -4960,7 +4960,7 @@
         "default": 1000,
         "type": "integer",
         "minimum": 100,
-        "maximum": 9007199254740991
+        "maximum": 2147483647
       },
       "leaseMs": {
         "default": 300000,
