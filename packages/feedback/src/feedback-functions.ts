@@ -1661,7 +1661,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         to: recipient,
         subject: `${feedbackM('feedback_received')} ${current.number}`,
         body,
-        idempotencyKey: job.id,
+        extra: { notificationId: job.id },
         deferPolicy: 'reject',
       })
       if (!sent.success && sent.error.code === HaiReachError.DND_BLOCKED.code)

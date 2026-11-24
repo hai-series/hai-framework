@@ -75,6 +75,8 @@ const jobs = jobsResult.data // this round's processed count
 
 The quick start provides init input. init has no business data; runJobs takes no input and reports this round; close stops this instance’s workers. Collection and webhook inputs and recovery are detailed below.
 
+Reach API receivers can deduplicate feedback notifications by `extra.notificationId` in the JSON payload. Retries reuse the same notification job ID from `feedback.get()`.
+
 The output is successful HaiResult.data. Build context from the authenticated server identity and check success.
 
 Finalization stops the current collection; it does not wait for all notifications to finish. Read attachments and exports through a server endpoint that checks the caller’s access.

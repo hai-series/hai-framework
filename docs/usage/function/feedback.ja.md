@@ -77,6 +77,8 @@ const jobs = jobsResult.data // this round's processed count
 
 init の入力は入門例の通りで、成功時の業務データはありません。runJobs は引数なしで今回の結果を返し、close はこのインスタンスの処理を停止します。
 
+Reach API の受信側は JSON の `extra.notificationId` で通知の重複を識別できます。再試行時も `feedback.get()` で確認できる同じ通知ジョブの ID を使います。
+
 出力は成功時の HaiResult.data です。認証済みのサーバー側の情報から context を作り、success を確認します。
 
 収集完了は現在の収集を終える処理で、通知の完了までは待ちません。添付とエクスポートは権限を確認するサーバーのエンドポイントを通じて取得します。

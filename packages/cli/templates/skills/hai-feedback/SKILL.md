@@ -27,7 +27,7 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
 
 作者用 `feedback.listMine({ category: 'bug', page: 1 }, context)` 或已认证的 `feedback.reports.listMine` 路由查看自己在当前应用和作用域下、尚未过期的报告。作用域和作者来自可信服务端身份。管理列表 `feedback.list` 继续要求 `feedback:read`，两种列表都可按原始类别精确筛选。检查结果的 `success` 后再读取分页数据。
-5. 同一 submissionId 和证据来源/序号重试，持久化 ACK 前不释放待传材料。附件取实际 checksum，不保存公开 URL；数据库、对象存储与外部通知通道无共同事务，依靠持久任务和补偿核对。
+5. 同一 submissionId 和证据来源/序号重试，持久化 ACK 前不释放待传材料。附件取实际 checksum，不保存公开 URL；数据库、对象存储与外部通知通道无共同事务，依靠持久任务和补偿核对。Reach API 接收方按 `extra.notificationId` 去重，同一通知任务重试沿用其任务 ID。
 6. 普通界面导出只传 id，由服务端当前事务固定证据快照；只有用户显式选择历史修订时才传 evidenceRevision，不沿用列表中的陈旧修订。导出固定证据修订；getExport 仅在有效快照 pending/running 时返回 CONFLICT/409，调用方只对此状态有界轮询；failed 为 OPERATION_FAILED/500，缺失/归属不符/未完成快照过期为 NOT_FOUND/404，缺少导出权限为 FORBIDDEN/403。当前修订快照过期可重新 export。离线包包含附件/查看器/索引/checksum，开发侧不持有生产凭据。用 hai feedback summary/inspect/evidence/view 或 /bundle 入口读取，不能执行导入包自带的任意脚本。
 7. 验证正常、越权、容量、崩溃、断线、重复提交、租约接管和离线查看；明确真实 S3/SMTP 与 mock 的不同证据。
 8. errorId 按锚点 source/request/sequence 查询前后各100条日志，不以首次归属丢弃重叠窗口上下文。到期删除报告、证据、附件、历史及含快照的任务，按前缀删除孤立 attempt；只保留前缀/24小时截止的最小墓碑清扫迟到对象，完成后删除，清理失败持续重试。

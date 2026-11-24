@@ -388,11 +388,24 @@ describe('反馈公开流程', { concurrent: false }, () => {
     await feedback.runJobs()
     const failed = await feedback.get(report.data.id, admin)
     expect(failed.success && failed.data.report.notificationStatus).toBe('failed')
+    const notificationId = failed.success
+      ? failed.data.jobs.find(job => job.type === 'notify')?.id
+      : undefined
+    expect(notificationId).toBeTypeOf('string')
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      extra: { notificationId },
+    }))
     send.mockRestore()
     await feedback.close()
     expect((await feedback.init(config)).success).toBe(true)
     expect((await feedback.retry({ id: report.data.id, target: 'notify' }, admin)).success).toBe(true)
+    const resend = vi.spyOn(reach, 'send')
     await feedback.runJobs()
+    const retriedMessage = resend.mock.calls[0]?.[0]
+    resend.mockRestore()
+    expect(retriedMessage).toMatchObject({
+      extra: { notificationId },
+    })
     const detail = await feedback.get(report.data.id, admin)
     expect(detail.success && detail.data.report.notificationStatus).toBe('sent')
   })
