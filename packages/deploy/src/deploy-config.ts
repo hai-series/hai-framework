@@ -215,14 +215,40 @@ export type PortExposeConfig = z.infer<typeof PortExposeSchema>
  */
 export type DockerSshProviderConfig = z.infer<typeof DockerSshProviderConfigSchema>
 
-/** 格式化 URL 或端口映射里的字面地址，IPv6 用方括号。 */
+/**
+ * 格式化 URL 或端口映射里的字面地址，IPv6 用方括号。
+ * @param host - 域名、IPv4 或未加方括号的 IPv6 地址。
+ * @returns 可拼接端口的地址。
+ * @example 模块内部上下文
+ * ```ts
+ * const origin = `http://${formatDeploymentHost('2001:db8::42')}:8080`
+ * ```
+ */
 export function formatDeploymentHost(host: string): string {
   return host.includes(':')
     ? `[${host}]`
     : host
 }
 
-/** 从目标配置得到 CLI 与 SDK 共用的公开入口。 */
+/**
+ * 从目标配置得到 CLI 与 SDK 共用的公开入口。
+ * @param config - 已校验的 Docker SSH 部署配置。
+ * @returns 可用于访问应用的 origin。
+ * @example 模块内部上下文
+ * ```ts
+ * const origin = deploymentOrigin({
+ *   type: 'docker-ssh',
+ *   remote: { baseDir: '/opt/hai/apps', runtime: 'auto' },
+ *   expose: {
+ *     type: 'port',
+ *     hostAddress: '127.0.0.1',
+ *     hostPort: 8080,
+ *     containerPort: 3000,
+ *     publicUrl: 'https://app.example.com',
+ *   },
+ * })
+ * ```
+ */
 export function deploymentOrigin({ expose, ssh }: DockerSshProviderConfig): string {
   if (expose.publicUrl)
     return new URL(expose.publicUrl).origin

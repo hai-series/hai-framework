@@ -1,4 +1,13 @@
-/** 在线预检、交付包和只读核对共用的 Linux 引擎连接与存储身份规则。 */
+/**
+ * 在线预检和交付脚本共用的 Linux 引擎连接及 Compose 检查函数。
+ * @example 模块内部上下文
+ * ```ts
+ * const precheckScript = [
+ *   deploymentRuntimeFunctions,
+ *   'select_deployment_runtime docker rootless && check_deployment_compose',
+ * ].join('\n')
+ * ```
+ */
 export const deploymentRuntimeFunctions = String.raw`
 runtime_error() { printf '%s\n' "$*" >&2; return 1; }
 
@@ -66,7 +75,19 @@ select_deployment_runtime() {
 }
 `
 
-/** 已选连接的存储账本头；调用方持锁，通过同一连接读引擎数据。 */
+/**
+ * 生成存储账本头的 Shell 函数。调用方在持锁期间通过选定的连接读取引擎数据。
+ * @example 模块内部上下文
+ * ```ts
+ * const identityScript = [
+ *   'set -eu',
+ *   deploymentRuntimeFunctions,
+ *   deploymentStoreHeader,
+ *   'select_deployment_runtime docker default',
+ *   'deployment_store_header "$runtime" demo-app',
+ * ].join('\n')
+ * ```
+ */
 export const deploymentStoreHeader = String.raw`
 deployment_store_header() (
   owner=$(id -u) || exit 1
