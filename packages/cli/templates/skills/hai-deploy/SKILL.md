@@ -28,7 +28,7 @@ Vercel API/文件上传只请求官方入口，拒绝重定向，每次请求和
 
 全量和增量部署都须在变更服务前核对实际卷及后端家族。已有卷须匹配 `persistent-backends`，缺少记录或活动卷时停止部署，先恢复核验过的备份。服务启动前写入账本，移除服务、首次安装失败和恢复都会保留。账本与 `managed-secrets.env`、数据卷成套备份。`previous-state-backends` 用于恢复前重新验证原绑定。
 
-身份限制只发生在 SSH 目标 Linux 服务器执行 `apply.sh`：固定 SSH uid、本地默认 Docker context 或实际本地 Podman，以及 daemon/store；远程连接、非默认 context、显式存储覆盖拒绝。生产显式 pin `remote.runtime`；auto 因新装 Podman 换引擎时，先恢复原 runtime/用户/store。Windows/macOS 操作机用 Docker Desktop/Podman VM 构建打包再 SSH 发布不受限。有意更换 daemon、服务器或恢复/替换数据时单独迁移，不能用 uid、路径或家族相同证明数据格式兼容；主版本和 Schema 兼容仍须单独确认。
+部署目标须使用固定的 SSH 用户、本机引擎和存储。普通 Docker 使用 `default` context，本机 Podman 可由普通用户运行。Rootless Docker 在 `remote` 指定 `runtime: docker` 与 `dockerMode: rootless`，由同一个非 root 用户启动引擎并写入 `baseDir`。部署及核对固定使用该用户的 `$XDG_RUNTIME_DIR/docker.sock`（变量未设置时取 `/run/user/<uid>/docker.sock`）。生产明确选择 `remote.runtime`。有意更换服务、服务器或存储时单独安排数据迁移。构建打包使用操作机所选引擎。
 
 排错与交付按[沟通与同步维护](../hai-app-create/collaboration.md)先说明实际影响、恢复步骤和验证边界，再附脱敏错误码/traceId/日志；配置、使用文档和截图随实际部署流程同步。
 

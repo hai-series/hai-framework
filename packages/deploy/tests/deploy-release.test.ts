@@ -153,6 +153,7 @@ describe('分阶段可核验部署', () => {
         projectName: 'shop-prod',
         directory: '/opt/hai/apps/shop-prod',
         runtime: 'podman',
+        dockerMode: 'default',
         host: 'deploy.example.test',
         port: 22,
         username: 'deploy',

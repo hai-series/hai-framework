@@ -37,6 +37,7 @@ import {
   serializeEnvFile,
 } from '../container/deploy-container-compose.js'
 import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.js'
+import { deploymentRuntimeFunctions } from '../container/deploy-runtime-selection.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
 import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from '../deploy-environment.js'
@@ -125,6 +126,7 @@ const ServerResultSchema = z.object({
     'credentials',
     'recover',
     'images',
+    'configuration',
     'dependencies',
     'start',
     'https',
@@ -175,25 +177,26 @@ export function createDockerSshProvider(
   async function detectRemoteRuntime(): Promise<HaiResult<ContainerRuntime>> {
     if (!ssh)
       return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
-    const candidates: ContainerRuntime[] = config.remote.runtime === 'auto'
-      ? ['podman', 'docker']
-      : [config.remote.runtime]
-
-    for (const runtime of candidates) {
-      const versionResult = await ssh.exec(`${runtime} version`, { timeoutMs: 20_000 })
-      if (!versionResult.success)
-        continue
-      const composeResult = await ssh.exec(`${runtime} compose version`, { timeoutMs: 20_000 })
-      if (composeResult.success) {
-        logger.info('Remote container runtime detected', { runtime })
-        return core.ok(runtime)
-      }
+    const { runtime, dockerMode } = config.remote
+    const checked = await ssh.exec([
+      'set -eu',
+      deploymentRuntimeFunctions,
+      `select_deployment_runtime ${shellArgument(runtime)} ${shellArgument(dockerMode ?? 'default')}`,
+      'check_deployment_compose',
+      'printf "%s\\n" "$runtime"',
+    ].join('\n'), { timeoutMs: 30_000, maxCaptureChars: 4096 })
+    if (!checked.success)
+      return checked
+    const selected = checked.data.stdout.trim()
+    if (!checked.data.stdoutTruncated && (selected === 'docker' || selected === 'podman')) {
+      logger.info('Remote container runtime detected', { runtime: selected, dockerMode })
+      return core.ok(selected)
     }
     return core.err(
       HaiDeployError.REMOTE_COMMAND_FAILED,
       deployM('deploy_remoteRuntimeMissing', {
         params: {
-          runtime: candidates.join(' / '),
+          runtime,
         },
       }),
     )

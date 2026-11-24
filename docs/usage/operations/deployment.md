@@ -77,7 +77,7 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 
 受控导入后，未认领卷还须合法v2的准确项目/组/卷与唯一运行原容器的角色标签、挂载、镜像家族完全吻合，已知账本或运行环境冲突仍拒绝。导入不创建成功基线：无current时必须当前CLI生成新ID完整全量包首次接管，成功后再增量；不能把这一步当作数据库数据恢复。
 
-这些校验发生在SSH目标Linux服务器：固定SSH用户、默认本地Docker或实际本地Podman及存储，生产固定`remote.runtime`；Windows/`macOS`操作机的Docker Desktop/Podman VM构建打包不受限。auto因新装Podman切换引擎时，先恢复原`runtime`/用户/store再重试。有意迁移则另做数据方案，不改账本绕过；详见[服务器引擎身份](../configuration/delivery.md#目标服务器的引擎身份)。
+这些校验发生在 SSH 目标 Linux 服务器。生产明确选择 `remote.runtime`。启用 Rootless Docker 时再设 `remote.dockerMode: rootless`，使用部署账号自己的 Docker 用户服务。若安装新引擎使 `auto` 换到不同存储，先恢复原运行时、账号和存储再重试。更换引擎需迁移及验证数据。详见[服务器引擎身份](../configuration/delivery.md#目标服务器的引擎身份)。
 
 失败时查result-<部署ID>.json/current/实际容器及`remoteRecovery`。passed表示旧端口和路径健康已验，failed表示恢复仍失败，unknown需新连接只读核对。固定flock不能删除/替换；强杀和断电不执行恢复trap，锁释放不证明业务回滚。
 

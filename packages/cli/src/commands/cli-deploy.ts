@@ -238,12 +238,18 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       : undefined
     const knownHostsFile = await input('HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE', ssh.knownHostsFile, { optional: true })
     const baseDir = await input('HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR', remote.baseDir || '/opt/hai/apps')
+    const runtimeChoices = [
+      ...['auto', 'podman', 'docker'].map(value => ({ title: value, value })),
+      { title: 'Rootless Docker', value: 'docker-rootless' },
+    ]
     const runtime = await prompts({
       type: 'select',
       name: 'value',
       message: cliM('cli_deploy_target_runtime'),
-      choices: ['auto', 'podman', 'docker'].map(value => ({ title: value, value })),
-      initial: ['auto', 'podman', 'docker'].indexOf(String(remote.runtime ?? 'auto')),
+      choices: runtimeChoices,
+      initial: Math.max(0, runtimeChoices.findIndex(choice => choice.value === (remote.dockerMode === 'rootless'
+        ? 'docker-rootless'
+        : remote.runtime))),
     })
     if (!runtime.value)
       throw new Error(cliM('cli_deploy_cancelled'))
@@ -261,7 +267,16 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
         identityFile: identityFile || undefined,
         knownHostsFile: knownHostsFile || undefined,
       },
-      remote: { ...remote, baseDir, runtime: runtime.value },
+      remote: {
+        ...remote,
+        baseDir,
+        runtime: runtime.value === 'docker-rootless'
+          ? 'docker'
+          : runtime.value,
+        dockerMode: runtime.value === 'docker-rootless'
+          ? 'rootless'
+          : undefined,
+      },
       expose: {
         ...expose,
         type: 'port',

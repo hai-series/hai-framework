@@ -108,6 +108,7 @@
   "deploy_managedSecretsInvalid": "自建中间件候选凭据无效，请重新生成部署包；服务器凭据不会自动更换。",
   "deploy_projectNameRequired": "工程根 package.json.name 缺失或无法归一化，不能生成镜像与部署资源身份。",
   "deploy_requestAccessInvalid": "请求访问策略配置无效（{field}）。请检查字段、IP、时区及时间窗口；如引用文件，请确认文件可读、格式为 YAML 且不超过 1 MiB。修正后重新打包。",
+  "deploy_dockerModeInvalid": "选择 Rootless Docker 时，远程 runtime 必须为 docker。",
   "deploy_httpsPortsInvalid": "HTTP 与 HTTPS 端口必须不同；Let’s Encrypt 的 HTTP-01 入口必须使用宿主机 80 端口。",
   "deploy_httpsCertificateInvalid": "HTTPS 证书无效：请核对 PEM 文件可读、证书与未加密私钥匹配、证书有效期及域名，然后重新打包。",
   "deploy_bundleRuntime": "配置文件与生效时机\n解包目录 config/.env.runtime 是本包输入，包含应用配置和可能的随包中间件候选。修改项目源环境后重新打包。apply.sh 会校验归档内容。\n{directory}/config/.env.runtime 是当前运行配置。Serv 和 SvelteKit SSR 每次启动从只读挂载的 /run/hai/config/.env.runtime 读取。\n运行文件按 dotenv 字面语法读取，大小上限为 1 MiB。缺失、不可读、重复赋值或超限时会在应用启动前报错。\n{directory}/releases/{deploymentId}/config/.env.runtime 是本次发布记录。仅更新 Web 或中间件时，记录采用当时的当前配置。查当前值用部署根文件，查某次发布用对应 release。\n全量采用新包配置并复用服务器受管密码。包含主应用的增量采用新包的外部连接和应用配置，并保留既有受管连接。未选主应用的增量保留当前配置。外部和受管之间的切换需要全量发布。\n临时修复 Node 后端配置时，备份后修改部署根的运行文件，再 docker restart <容器名> 或 podman restart <容器名>，验证健康和相关业务。长期修改写回项目源环境，否则下次包含后端的发布可能覆盖。容器进程显式传入的同名 HAI_* 优先。\n静态 Web、中间件原生环境、端口和挂载、Node 启动参数、Nginx 路由和限额、HTTPS 装配均在部署时生效。网站 base 变更还需重建。\n失败恢复先还原应用运行文件，再恢复旧服务。数据库中已执行的密码或数据变更须由数据库维护流程处理。",

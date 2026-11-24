@@ -2,6 +2,7 @@
 import { deployM } from '../deploy-i18n.js'
 import { resolveComposeNamedVolumes } from './deploy-managed-secrets.js'
 import { createDeploymentManifestFunctions } from './deploy-manifest.js'
+import { deploymentStoreHeader } from './deploy-runtime-selection.js'
 
 const backendFamilies: Record<string, readonly string[]> = {
   db: ['postgresql', 'mysql'],
@@ -16,17 +17,17 @@ const backendFamilies: Record<string, readonly string[]> = {
  * @param compose.services - 实际服务定义。
  * @param compose.volumes - 命名卷定义。
  * @param selected - 本包更新的服务；未选服务由成功基线补齐。
- * @returns 三列 state-backends 与固定本地引擎的身份校验脚本。
+ * @returns 三列 state-backends，包含服务、后端类型和实际卷名称。
  * @throws Error - 有状态服务的引擎或实际卷绑定不符合生成契约。
  * @example 模块内部上下文
  * ```ts
- * const assets = createBackendStateAssets('shop-prod', { services: { db: { image: 'postgres:16', volumes: ['data:/data'] } }, volumes: { data: null } }, ['db'])
+ * const bindings = createBackendVolumeBindings('shop-prod', { services: { db: { image: 'postgres:16', volumes: ['data:/data'] } }, volumes: { data: null } }, ['db'])
  * ```
  */
-export function createBackendStateAssets(projectName: string, compose: {
+export function createBackendVolumeBindings(projectName: string, compose: {
   services: Record<string, Record<string, unknown>>
   volumes?: Record<string, unknown>
-}, selected: readonly string[]): Record<string, string> {
+}, selected: readonly string[]): string {
   if (!/^[\w.-]+$/.test(projectName))
     throw new Error(deployM('deploy_artifactInvalid'))
   const tuples: string[] = []
@@ -50,12 +51,9 @@ export function createBackendStateAssets(projectName: string, compose: {
     volumes.add(volume)
     tuples.push(`${serviceName} ${family} ${volume}`)
   }
-  return {
-    'state-backends': tuples.length
-      ? `${tuples.join('\n')}\n`
-      : '',
-    'resolve-backend-state.sh': createBackendStateScript(projectName),
-  }
+  return tuples.length
+    ? `${tuples.join('\n')}\n`
+    : ''
 }
 
 /**
@@ -118,23 +116,9 @@ valid_state() {
     END {if(NR<5+snapshot) exit 1}
   ' "$1"
 }
-# 本机制只支持固定用户的本地默认引擎。连接名称或路径不证明数据格式，更换存储需独立迁移。
-env | LC_ALL=C awk -F= '$1~/^(DOCKER_HOST|DOCKER_CONTEXT|CONTAINER_HOST|CONTAINER_CONNECTION|CONTAINERS_STORAGE_CONF|CONTAINERS_CONF|STORAGE_DRIVER|STORAGE_OPTS)$/ && length(substr($0,index($0,"=")+1)) {exit 1}' || fail 'Remote or overridden container storage is unsupported for persistent backend state. Use a fixed local default engine.'
-owner=$(id -u) || fail 'Cannot identify the deployment user.'
-case "$owner" in ''|*[!0-9]*) fail 'Invalid deployment user identity.';; esac
-if [ "$runtime" = docker ]; then
-  context=$(docker context show) || fail 'Cannot check the Docker context.'
-  test "$context" = default || fail 'Persistent backend state requires the default local Docker context.'
-  engine=$(docker info --format '{{.ID}}|{{.DockerRootDir}}|{{.Driver}}') || fail 'Cannot identify the local Docker daemon.'
-else
-  remote=$(podman info --format '{{.Host.ServiceIsRemote}}') || fail 'Cannot check whether Podman is local.'
-  test "$remote" = false || fail 'Persistent backend state requires local Podman; remote connections are unsupported.'
-  engine=$(podman info --format '{{.Host.Hostname}}|{{.Store.GraphRoot}}|{{.Store.GraphDriverName}}') || fail 'Cannot identify the local Podman store.'
-fi
-printf '%s\n' "$engine" | LC_ALL=C awk -F'|' 'NR!=1 || NF!=3 || $1=="" || $1=="<no value>" || $2!~/^\// || $3=="" || $3=="<no value>" {exit 1}' || fail 'Incomplete container store identity; no services were started.'
-identity=$(printf '%s\n%s\n%s\n' "$runtime" "$owner" "$engine" | sha256sum | awk '{print $1}')
-printf '%s\n' "$identity" | LC_ALL=C awk 'NR!=1 || $0!~/^[0-9a-f]+$/ || length($0)!=64 {exit 1}' || fail 'Cannot calculate the container store identity.'
-header=$(printf 'FORMAT_VERSION 1\nRUNTIME %s\nUID %s\nIDENTITY %s\nPROJECT %s' "$runtime" "$owner" "$identity" "$project")
+# 连接方式由父脚本固定并继承；同名连接或同名卷不能替代实际存储身份。
+@@STORE_HEADER@@
+header=$(deployment_store_header "$runtime" "$project") || fail 'Cannot identify the deployment container store.'
 same_identity() {
   test "$(sed -n '1,5p' "$1")" = "$header" || fail 'Deployment project, container runtime, user or daemon/store identity changed. Use a separate deployment identity and migrate or restore data explicitly.'
 }
@@ -226,5 +210,5 @@ mv -f -- "$snapshot.next" "$snapshot"
 (set -C; printf '%s\n' "$state_content" > "$state.next") || fail 'Cannot stage the persistent backend ledger.'
 chmod 600 "$state.next"
 mv -f -- "$state.next" "$state"
-`.replace('@@PROJECT@@', () => projectName).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions())
+`.replace('@@PROJECT@@', () => projectName).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions()).replace('@@STORE_HEADER@@', () => deploymentStoreHeader)
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createBackendStateAssets } from '../src/container/deploy-backend-state.js'
+import { createBackendVolumeBindings } from '../src/container/deploy-backend-state.js'
 import { createManagedSecretAssets } from '../src/container/deploy-managed-secrets.js'
 
-type Compose = Parameters<typeof createBackendStateAssets>[1]
+type Compose = Parameters<typeof createBackendVolumeBindings>[1]
 
 function databaseCompose(service: Record<string, unknown> = {}, volumes: Record<string, unknown> = { data: null }): Compose {
   return {
@@ -50,8 +50,8 @@ describe('部署包后端状态资产', () => {
         'vector-data': { external: true },
       },
     }
-    const assets = createBackendStateAssets('shop-prod', compose, ['db', 'storage', 'vecdb', 'web'])
-    expect(assets['state-backends']).toBe([
+    const bindings = createBackendVolumeBindings('shop-prod', compose, ['db', 'storage', 'vecdb', 'web'])
+    expect(bindings).toBe([
       'db postgresql hai-shop-prod_db-data',
       'storage minio shared-storage-production',
       'vecdb qdrant vector-data',
@@ -59,14 +59,14 @@ describe('部署包后端状态资产', () => {
     ].join('\n'))
 
     const managed = createManagedSecretAssets('shop-prod', `POSTGRES_PASSWORD=${syntheticSecret}\nMINIO_ROOT_PASSWORD=${syntheticSecret}\n`, compose)
-    const stateVolumes = assets['state-backends']!.trim().split('\n').map(row => row.split(' ')[2]).sort()
+    const stateVolumes = bindings.trim().split('\n').map(row => row.split(' ')[2]).sort()
     const managedVolumes = managed['managed-volumes']!.trim().split('\n').map(row => row.split(' ')[1]).sort()
     expect(stateVolumes).toEqual(managedVolumes)
-    expect(Object.values(assets).join('\n')).not.toContain(syntheticSecret)
+    expect(bindings).not.toContain(syntheticSecret)
   })
 
   it('为 MySQL、RustFS 和 pgvector 组合保留各自后端家族', () => {
-    const assets = createBackendStateAssets('shop-test', {
+    const bindings = createBackendVolumeBindings('shop-test', {
       services: {
         db: {
           image: 'mysql:8.4',
@@ -83,11 +83,11 @@ describe('部署包后端状态资产', () => {
       },
       volumes: { 'mysql-data': null, 'objects': null, 'vectors': null },
     }, ['db', 'storage', 'vecdb'])
-    expect(assets['state-backends']).toBe('db mysql hai-shop-test_mysql-data\nstorage rustfs hai-shop-test_objects\nvecdb pgvector hai-shop-test_vectors\n')
+    expect(bindings).toBe('db mysql hai-shop-test_mysql-data\nstorage rustfs hai-shop-test_objects\nvecdb pgvector hai-shop-test_vectors\n')
   })
 
   it('只更新 Chroma 时不检查未选服务，也不把应用服务加入有状态清单', () => {
-    const assets = createBackendStateAssets('shop-test', {
+    const bindings = createBackendVolumeBindings('shop-test', {
       services: {
         db: { image: 'unsupported:latest' },
         storage: {},
@@ -98,16 +98,16 @@ describe('部署包后端状态资产', () => {
       },
       volumes: { vectors: null },
     }, ['vecdb', 'serv'])
-    expect(assets['state-backends']).toBe('vecdb chroma hai-shop-test_vectors\n')
+    expect(bindings).toBe('vecdb chroma hai-shop-test_vectors\n')
   })
 
   it('无状态增量包不生成后端身份行', () => {
-    const assets = createBackendStateAssets('shop-test', {
+    const bindings = createBackendVolumeBindings('shop-test', {
       services: {
         web: { image: 'example/web:test' },
       },
     }, ['web'])
-    expect(assets['state-backends']).toBe('')
+    expect(bindings).toBe('')
   })
 
   it.each([
@@ -143,7 +143,7 @@ describe('部署包后端状态资产', () => {
       },
     },
   ])('$scenario 时拒绝生成资产', ({ compose }) => {
-    expect(() => createBackendStateAssets('shop-test', compose, ['db'])).toThrow(Error)
+    expect(() => createBackendVolumeBindings('shop-test', compose, ['db'])).toThrow(Error)
   })
 
   it('不同声明指向同一实际卷时拒绝让两个后端共用数据目录', () => {
@@ -163,7 +163,7 @@ describe('部署包后端状态资产', () => {
         'vector-data': { name: 'shared-real-volume' },
       },
     }
-    expect(() => createBackendStateAssets('shop-test', compose, ['db', 'vecdb'])).toThrow(Error)
+    expect(() => createBackendVolumeBindings('shop-test', compose, ['db', 'vecdb'])).toThrow(Error)
   })
 
   it.each([
@@ -173,7 +173,7 @@ describe('部署包后端状态资产', () => {
     'shop\nprod',
     '商城-prod',
   ])('项目名 %j 无法安全嵌入资产时拒绝生成', (projectName) => {
-    expect(() => createBackendStateAssets(projectName, databaseCompose(), ['db'])).toThrow(Error)
+    expect(() => createBackendVolumeBindings(projectName, databaseCompose(), ['db'])).toThrow(Error)
   })
 
   it('实际卷名不能含路径、空白或 shell 语法', () => {
@@ -183,7 +183,7 @@ describe('部署包后端状态资产', () => {
       'data;echo-injected',
       'data\nother',
     ]) {
-      expect(() => createBackendStateAssets('shop-test', databaseCompose({}, {
+      expect(() => createBackendVolumeBindings('shop-test', databaseCompose({}, {
         data: { name: volumeName },
       }), ['db'])).toThrow(Error)
     }

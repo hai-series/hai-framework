@@ -114,6 +114,8 @@ const DockerSshProviderConfigSchema = z.object({
     baseDir: z.string().regex(/^\/[\w/. -]+$/).refine(value => !value.split('/').includes('..')).default('/opt/hai/apps'),
     /** 远程容器运行时（auto 优先 podman） */
     runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
+    /** 显式选择 SSH 用户本机的 Rootless Docker 服务。 */
+    dockerMode: z.enum(['default', 'rootless']).optional().describe('Docker 连接模式；rootless 需要 runtime=docker，省略使用现有本机引擎规则'),
   }).default({ baseDir: '/opt/hai/apps', runtime: 'auto' }),
   /** 应用暴露方式 */
   expose: ExposeSchema,
@@ -124,6 +126,14 @@ const DockerSshProviderConfigSchema = z.object({
     z.cidrv4(),
     z.cidrv6(),
   ])).max(1000).optional(),
+}).superRefine(({ remote }, context) => {
+  if (remote.dockerMode === 'rootless' && remote.runtime !== 'docker') {
+    context.addIssue({
+      code: 'custom',
+      path: ['remote', 'dockerMode'],
+      message: deployM('deploy_dockerModeInvalid'),
+    })
+  }
 })
 
 /**

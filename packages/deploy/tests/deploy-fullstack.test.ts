@@ -105,16 +105,18 @@ beforeEach(() => {
   writeArtifact()
   ssh.ping.mockResolvedValue({ success: true, data: undefined })
   ssh.upload.mockResolvedValue({ success: true, data: undefined })
-  ssh.exec.mockResolvedValue({
+  ssh.exec.mockImplementation(async (command: string) => ({
     success: true,
     data: {
       code: 0,
-      stdout: '',
+      stdout: command.includes('check_deployment_compose')
+        ? 'docker\n'
+        : '',
       stderr: '',
       stdoutTruncated: false,
       stderrTruncated: false,
     },
-  })
+  }))
   vi.stubGlobal('fetch', vi.fn(async () => new Response('ok')))
 })
 afterEach(async () => {
@@ -1383,7 +1385,9 @@ it.each([
   ssh.exec.mockImplementation(async (command: string) => {
     const data = {
       code: 0,
-      stdout: '',
+      stdout: command.includes('check_deployment_compose')
+        ? 'docker\n'
+        : '',
       stderr: '',
       stdoutTruncated: false,
       stderrTruncated: false,

@@ -600,9 +600,9 @@ sh ./apply.sh
 
 ### 目标服务器的引擎身份
 
-部署工具通过 SSH 在目标 Linux 服务器运行 `apply.sh` 时检查持久卷。目标机须使用同一个 SSH 用户和本地容器引擎：Docker要求`default` `context`，Podman必须实际以本地模式运行；非默认`context`、远程连接及显式存储覆盖会被拒绝。不要把操作机和服务器混为一谈：Windows/`macOS`操作机仍可用Docker Desktop或远程Podman VM构建、打包，再经SSH发布到符合条件的服务器。
+首次发布、增量、核对和恢复须由同一个 SSH 用户连接同一 Linux 服务器上的容器引擎与存储。普通 Docker 使用本机 `default` context。Podman 使用本机模式。选择 `remote.runtime: docker` 和 `remote.dockerMode: rootless` 时，框架验证 SSH 用户自己的 `$XDG_RUNTIME_DIR/docker.sock`，变量未设置时使用 `/run/user/<uid>/docker.sock`。运行目录需为该用户所有的私有目录，Docker 服务须报告 rootless。由运维准备 Docker 用户服务及可写的部署目录。
 
-具体检查目标服务器执行环境中非空的DOCKER_HOST、DOCKER_CONTEXT、CONTAINER_HOST、CONTAINER_CONNECTION、CONTAINERS_STORAGE_CONF、CONTAINERS_CONF、STORAGE_DRIVER、STORAGE_OPTS；这些覆盖值会被拒绝。先核对服务器实际daemon和数据位置，不通过临时删除状态文件掩盖环境变化。该规则不要求移除操作机用于构建的VM连接设置。
+Rootless Docker 固定连接已校验的 Unix 套接字。普通 Docker 与本机 Podman 拒绝目标执行环境的连接和存储覆盖。操作机可用 Docker Desktop 或 Podman VM 构建、打包，目标引擎单独配置。
 
 框架默认`remote.runtime`为auto，优先可用Podman。生产建议在`hai.json.deploy.provider.remote`中将`runtime`明确设为已经验收的docker或podman。若后续安装Podman，使auto从原Docker切换过来，身份检查会停止发布。先恢复原`runtime`、SSH用户和原存储再重试，无须立即新建项目；只有有意更换服务器、daemon或存储时，才规划独立身份和数据迁移。相同uid、路径或卷名不能证明跨daemon的数据身份，不要删除或编辑账本让检查通过。
 

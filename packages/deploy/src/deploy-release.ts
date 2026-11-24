@@ -9,6 +9,7 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { uploadAndApplyBundle } from './container/deploy-bundle-transport.js'
 import { runCommand } from './container/deploy-command.js'
+import { deploymentRuntimeFunctions, deploymentStoreHeader } from './container/deploy-runtime-selection.js'
 import { shellArgument } from './container/deploy-scripts.js'
 import { createSshExecutor, usesSshPassword } from './container/deploy-ssh.js'
 import { artifactChecksum } from './deploy-artifact.js'
@@ -32,6 +33,7 @@ const bundleMetadata = z.object({
     projectName: z.string(),
     directory: z.string(),
     runtime: z.enum(['docker', 'podman', 'auto']),
+    dockerMode: z.enum(['default', 'rootless']),
     host: z.string(),
     port: z.number(),
     username: z.string(),
@@ -167,6 +169,7 @@ function resolveTarget(input: DeployReleaseTarget) {
     projectName,
     directory: `${provider.remote.baseDir}/${projectName}`,
     runtime: provider.remote.runtime,
+    dockerMode: provider.remote.dockerMode ?? 'default',
     ssh: createSshExecutor(provider.ssh, true),
   }
 }
@@ -209,7 +212,8 @@ export async function executeBundle(input: DeployBundleExecution, options?: { si
     const identity = manifest.deploymentTarget
     if (manifest.deploymentId !== input.deploymentId || identity.projectName !== target.projectName
       || identity.directory !== target.directory || identity.runtime !== target.runtime || identity.host !== target.connection.host
-      || identity.port !== target.connection.port || identity.username !== target.connection.username) {
+      || identity.port !== target.connection.port || identity.username !== target.connection.username
+      || identity.dockerMode !== target.dockerMode) {
       return invalid()
     }
     const { result } = await uploadAndApplyBundle(target.ssh, input.bundlePath, target.directory, 'apply.sh', {
@@ -299,16 +303,30 @@ async function expectedImages(release: z.infer<typeof releaseSchema>, signal?: A
   }))
 }
 
-async function remoteSnapshot(target: ReturnType<typeof resolveTarget>, id: string, roles: readonly ('serv' | 'web')[], signal?: AbortSignal) {
-  const quote = shellArgument
-  const snapshots = roles.map(role =>
-    `${target.runtime} container inspect --format '{{.Image}} {{.State.Running}}' ${quote(`hai-${target.projectName}-${role}`)}`)
-  const result = await target.ssh.exec([
+function lockedReleaseRead(target: ReturnType<typeof resolveTarget>): string[] {
+  return [
     'set -eu',
-    `root=${quote(target.directory)}`,
+    `root=${shellArgument(target.directory)}`,
     'test -f "$root/.deploy.lock" && test ! -L "$root/.deploy.lock"',
     'exec 9<"$root/.deploy.lock"',
     'flock -sn 9',
+    deploymentRuntimeFunctions,
+    deploymentStoreHeader,
+    `select_deployment_runtime ${shellArgument(target.runtime)} ${shellArgument(target.dockerMode)}`,
+    'ledger="$root/persistent-backends"',
+    'if [ -e "$ledger" ] || [ -L "$ledger" ]; then',
+    '  test -f "$ledger" && test ! -L "$ledger"',
+    `  expected_header=$(deployment_store_header "$runtime" ${shellArgument(`hai-${target.projectName}`)})`,
+    '  test "$(head -n 5 "$ledger")" = "$expected_header"',
+    'fi',
+  ]
+}
+
+async function remoteSnapshot(target: ReturnType<typeof resolveTarget>, id: string, roles: readonly ('serv' | 'web')[], signal?: AbortSignal) {
+  const snapshots = roles.map(role =>
+    `"$runtime" container inspect --format '{{.Image}} {{.State.Running}}' ${shellArgument(`hai-${target.projectName}-${role}`)}`)
+  const result = await target.ssh.exec([
+    ...lockedReleaseRead(target),
     `receipt="$root/result-${id}.json"`,
     'test -f "$receipt" && test ! -L "$receipt"',
     'test "$(wc -c < "$receipt")" -le 8192',
@@ -317,13 +335,14 @@ async function remoteSnapshot(target: ReturnType<typeof resolveTarget>, id: stri
     'if [ -e "$root/current" ] || [ -L "$root/current" ]; then',
     '  test -f "$root/current" && test ! -L "$root/current"',
     '  current=$(head -c 129 "$root/current")',
-    '  case "$current" in ""|*[!a-zA-Z0-9._-]*) exit 1;; esac',
+    '  case "$current" in ""|.|..|*[!a-zA-Z0-9._-]*) exit 1;; esac',
     '  test -f "$root/releases/$current/.hai/compose.json"',
+    '  test -f "$ledger"',
     'fi',
     'printf "%s\\n" "$current"',
     ...(roles.length
       ? snapshots
-      : [`if [ -z "$current" ]; then ${target.runtime} ps --format '{{.Names}}'; fi`]),
+      : ['if [ -z "$current" ]; then "$runtime" ps --format \'{{.Names}}\'; fi']),
   ].join('\n'), { timeoutMs: 15_000, maxCaptureChars: 16_384, signal })
   if (!result.success || result.data.stdoutTruncated)
     throw new Error('Remote release unavailable')

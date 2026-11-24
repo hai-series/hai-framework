@@ -13,7 +13,7 @@ import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { resolveDownloadProxy, resolveImageReference } from '../deploy-download.js'
 import { deployM } from '../deploy-i18n.js'
-import { createBackendStateAssets } from './deploy-backend-state.js'
+import { createBackendVolumeBindings } from './deploy-backend-state.js'
 import { runCommand } from './deploy-command.js'
 import { createManagedSecretAssets } from './deploy-managed-secrets.js'
 import { createProxyStartupScript } from './deploy-proxy-start.js'
@@ -279,7 +279,6 @@ export async function createDeploymentBundle(options: {
           certificate: options.httpsAssets?.['tls/fullchain.pem'],
         })).digest('hex')
       : ''
-    const backend = createBackendStateAssets(projectName, compose, selected)
     const metadata = {
       'layout': `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig
         ? options.proxyService === 'gateway'
@@ -315,7 +314,7 @@ export async function createDeploymentBundle(options: {
           ...new Set(options.unmanagedAppKeys),
         ].join('\n')}\n`
         : '\n',
-      'state-backends': backend['state-backends']!,
+      'state-backends': createBackendVolumeBindings(projectName, compose, selected),
     }
     const serverDirectory = `${config.remote.baseDir}/${projectName}`
     put('manifest.json', `${JSON.stringify({
@@ -327,6 +326,7 @@ export async function createDeploymentBundle(options: {
         projectName,
         directory: serverDirectory,
         runtime: config.remote.runtime,
+        dockerMode: config.remote.dockerMode ?? 'default',
         host: config.ssh?.host,
         port: config.ssh?.port,
         username: config.ssh?.username,
@@ -341,6 +341,7 @@ export async function createDeploymentBundle(options: {
       environment,
       directory: serverDirectory,
       runtime: config.remote.runtime,
+      dockerMode: config.remote.dockerMode,
       partial: options.partial,
       selected,
       primaryService: artifact.primaryService,
@@ -412,7 +413,9 @@ export async function createDeploymentBundle(options: {
         file: shellArgument(basename(output)),
         directory: serverDirectory,
         target: shellArgument(serverDirectory),
-        runtime: config.remote.runtime,
+        runtime: config.remote.dockerMode === 'rootless'
+          ? 'Rootless Docker'
+          : config.remote.runtime,
         deploymentId: options.deploymentId,
       },
     })

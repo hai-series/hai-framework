@@ -5,6 +5,7 @@ import { createComposeContainerLookupScript } from './deploy-compose-identity.js
 import { createManagedSecretScript } from './deploy-managed-secrets.js'
 import { createDeploymentManifestFunctions } from './deploy-manifest.js'
 import { createRuntimeConfigurationScript } from './deploy-runtime-script.js'
+import { deploymentRuntimeFunctions } from './deploy-runtime-selection.js'
 import { shellArgument } from './deploy-shell.js'
 import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 import { createTargetReader } from './deploy-target.js'
@@ -28,6 +29,7 @@ function embeddedHandler(name: string, script: string): string {
  * @param options.environment - 部署环境标识，通常为 prod。
  * @param options.directory - 包含已准备制品或部署文件的目录；具体见函数用途。
  * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
+ * @param options.dockerMode - Docker 连接模式，rootless 固定使用当前用户套接字。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.hostPort - 宿主公开端口。
@@ -45,6 +47,7 @@ export function createApplyScript(options: {
   environment: string
   directory: string
   runtime: 'auto' | 'docker' | 'podman'
+  dockerMode?: 'default' | 'rootless'
   partial: boolean
   selected: string[]
   hostPort: number
@@ -56,6 +59,7 @@ export function createApplyScript(options: {
     PROJECT: shellArgument(`hai-${options.projectName}`),
     ENV: shellArgument(options.environment),
     RUNTIME: shellArgument(options.runtime),
+    DOCKER_MODE: shellArgument(options.dockerMode ?? 'default'),
     PARTIAL: options.partial ? 'true' : 'false',
     SELECTED: shellArgument(options.selected.join(' ')),
     ROOT: shellArgument(options.directory),
@@ -63,6 +67,7 @@ export function createApplyScript(options: {
     HEALTH: options.healthPaths.map(shellArgument).join(' '),
     PRIMARY: options.primaryService ?? 'serv',
     LOOKUP: createComposeContainerLookupScript(),
+    RUNTIME_FUNCTIONS: deploymentRuntimeFunctions,
     MANIFEST: createDeploymentManifestFunctions(),
     BACKEND: embeddedHandler('resolve_backend_state', createBackendStateScript(options.projectName)),
     MANAGED: embeddedHandler('resolve_managed_secrets', createManagedSecretScript()),
@@ -83,7 +88,7 @@ test "$root" != / || { printf 'The filesystem root cannot be used as a deploymen
 id=@@ID@@
 project=@@PROJECT@@
 export HAI_DEPLOY_ENVIRONMENT=@@ENV@@
-runtime=@@RUNTIME@@
+runtime=''
 partial=@@PARTIAL@@
 orphan_option=''
 if [ "$partial" = false ]; then orphan_option=--remove-orphans; fi
@@ -112,6 +117,7 @@ runtime_next_owned=false
 started=$(date +%s)
 step_started=$started
 @@LOOKUP@@
+@@RUNTIME_FUNCTIONS@@
 @@MANIFEST@@
 @@BACKEND@@
 @@MANAGED@@
@@ -346,13 +352,6 @@ trap finish EXIT
 trap 'interrupted=true; exit 130' HUP INT TERM
 step preflight 'Checking deployment tools and package'
 for tool in sha256sum tar awk curl flock mktemp; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
-if [ "$runtime" = auto ]; then
-  if command -v podman >/dev/null 2>&1 && podman version >/dev/null 2>&1; then runtime=podman; else runtime=docker; fi
-fi
-case "$runtime" in docker|podman) ;; *) printf 'Runtime must be docker or podman\n' >&2; exit 1;; esac
-"$runtime" version >/dev/null
-"$runtime" compose version >/dev/null
-"$runtime" compose up --help | grep -q never || { printf 'Compose is too old. Install Docker Compose v2 or podman-compose 1.6.0 or newer (supports --pull never).\n' >&2; exit 1; }
 # 内核锁绑定同一文件描述符；绝不删除/替换锁文件，避免新 inode 绕过活跃部署。
 # 子命令继承 FD 9：即使父 shell 被强杀，仍执行的命令继续持锁；全部退出或重启后自动释放。
 exec 9>"$root/.deploy.lock"
@@ -374,6 +373,8 @@ if [ -e "$release" ] || [ -L "$release" ] || [ -e "$root/result-$id.json" ] || [
   exit 1
 fi
 result_owned=true
+select_deployment_runtime @@RUNTIME@@ @@DOCKER_MODE@@
+check_deployment_compose
 deployment_metadata_init
 cd "$source_dir"
 sha256sum -c .hai/SHA256SUMS
@@ -556,7 +557,7 @@ case " $selected " in *' @@PRIMARY@@ '*)
   ;;
 esac
 printf '[PASS] %s\n' "$id"
-`.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!)
+`.replace(/@@([A-Z_]+)@@/g, (_match, name: string) => values[name]!)
 }
 
 /**
@@ -994,7 +995,7 @@ if [ "$#" -gt 0 ]; then destination=$1; fi
 for tool in tar mktemp date; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
 test -f "$source_dir/$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
 log="$source_dir/deploy-local-$(date +%Y%m%d-%H%M%S)-$$.log"
-temporary=$(mktemp -d /tmp/hai-deploy.XXXXXX)
+temporary=$(mktemp -d -t hai-deploy.XXXXXX)
 cleanup() { rm -rf -- "$temporary"; }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM

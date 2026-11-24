@@ -31,6 +31,16 @@ describe('haiDeployError', () => {
 })
 
 describe('deployConfigSchema', () => {
+  it.each(['docker', 'auto', 'podman'] as const)('按所选引擎校验 Rootless Docker 配置 %s', (runtime) => {
+    expect(DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime, dockerMode: 'rootless' },
+        expose: { hostPort: 18070 },
+      },
+    }).success).toBe(runtime === 'docker')
+  })
+
   it('应校验最小合法配置（仅 provider）', () => {
     const result = DeployConfigSchema.safeParse({
       provider: { type: 'vercel', token: 'vel_xxx' },

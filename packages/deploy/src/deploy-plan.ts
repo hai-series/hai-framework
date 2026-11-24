@@ -206,6 +206,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
             port: provider.ssh?.port,
             directory: remoteDirectory,
             runtime: provider.remote.runtime,
+            dockerMode: provider.remote.dockerMode,
             hostPort: provider.expose.hostPort,
             https: https
               ? { type: https.type, domain: https.domain, port: https.port }

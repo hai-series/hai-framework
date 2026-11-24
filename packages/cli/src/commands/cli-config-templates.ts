@@ -814,10 +814,11 @@ provider:
   remote:
     baseDir: /opt/hai/apps
     runtime: auto # 优先 Podman，其次 Docker
+    # Rootless Docker：将 runtime 改为 docker，再启用 dockerMode: rootless。
+    # baseDir 要由部署的 SSH 用户写入，例如 /home/deploy/hai-apps。
   expose:
     hostPort: 18080
     containerPort: 3000
-    # HTTPS 也可在 pnpm run deploy 的可选证书环节中配置。
     # https:
     #   type: files
     #   domain: app.example.com

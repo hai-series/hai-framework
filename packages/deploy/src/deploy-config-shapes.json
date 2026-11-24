@@ -5078,6 +5078,14 @@
                       "docker",
                       "podman"
                     ]
+                  },
+                  "dockerMode": {
+                    "description": "Docker 连接模式；rootless 需要 runtime=docker，省略使用现有本机引擎规则",
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "rootless"
+                    ]
                   }
                 }
               },
