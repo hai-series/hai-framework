@@ -6,6 +6,24 @@
 
 Core で `config/_cache.yml` を読み込み、キャッシュ設定を `cache.init()` に渡します。バックエンドを指定しない場合、テンプレートは `memory` を選び、`keyPrefix: 'hai:'` を設定します。生成される `.env.prod` では Redis を選びます。環境変数で上書きする場合は `HAI_CACHE_TYPE` や `HAI_CACHE_KEYPREFIX` のように `HAI_CACHE_` を使います。プロセス間で共有する状態には Redis を使います。メモリー方式の状態は一つのプロセスに限られます。
 
+## 設定一覧
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `type` | 必須 | `memory` または `redis` を選択。 |
+| `url` | 省略可 | 認証情報と論理データベース番号を含められる `redis://` または `rediss://` の URL。 |
+| `password` | 省略可 | 単体、Cluster、または Sentinel が検出したデータノードの認証パスワード。サーバーの環境変数に保持。 |
+| `host`, `port` | `localhost`, `6379` | 単体 Redis のアドレスとポート（1–65535 の整数）。 |
+| `db` | `0` | 単体の host/port 接続および Sentinel で使う論理データベース（0–15 の整数）。URL 接続では URL 内の番号、Cluster では 0 を使用。 |
+| `cluster` | 省略可 | 空でないノード一覧で Cluster を有効化。各ノードの `host` と `port`（1–65535）は必須。 |
+| `sentinel` | 省略可 | 監視対象の `name` と一つ以上のノードを含む `sentinels` が必須。各ノードで `host` と `port`（1–65535）を指定。 |
+| `connectTimeout` | `10000` | 接続タイムアウト（ミリ秒）。 |
+| `commandTimeout` | `5000` | 通常コマンドのタイムアウト（ミリ秒）。`blpop` と `brpop` の Redis 側の待機時間は呼び出し時の `timeout` で指定。 |
+| `keyPrefix` | 省略可 | アプリのキーを区分する接頭辞。検索パターンはアプリのキーを指定。 |
+| `tls` | `false` | TLS を有効化。 |
+| `readOnly` | `false` | 単体または Sentinel が検出したデータノードへの接続時に Redis の `READONLY` を送信。書き込み権限は Redis ACL が管理。Cluster ではノードの役割に応じてこの設定を管理し、既定でプライマリから読み取る。 |
+| `maxRetries`, `retryDelay` | `3`, `50` | 再試行上限と待機時間の基準値（ミリ秒）。いずれも非負の整数で、接続の再試行時は基準値に試行回数を掛ける。 |
+
 ## 設定例
 
 各 YAML はそれぞれ `config/_cache.yml` として使えます。デプロイ先に合った例を選んでください。
@@ -79,24 +97,6 @@ db: 1
 password: '${HAI_CACHE_PASSWORD}'
 ```
 
-## 設定項目
-
-| 項目 | 既定値・必須条件 | 用途 |
-| --- | --- | --- |
-| `type` | 必須 | `memory` または `redis` を選択。 |
-| `url` | 省略可 | 認証情報と論理データベース番号を含められる `redis://` または `rediss://` の URL。 |
-| `password` | 省略可 | 単体、Cluster、または Sentinel が検出したデータノードの認証パスワード。サーバーの環境変数に保持。 |
-| `host`, `port` | `localhost`, `6379` | 単体 Redis のアドレスとポート（1–65535 の整数）。 |
-| `db` | `0` | 単体の host/port 接続および Sentinel で使う論理データベース（0–15 の整数）。URL 接続では URL 内の番号、Cluster では 0 を使用。 |
-| `cluster` | 省略可 | 空でないノード一覧で Cluster を有効化。各ノードの `host` と `port`（1–65535）は必須。 |
-| `sentinel` | 省略可 | 監視対象の `name` と一つ以上のノードを含む `sentinels` が必須。各ノードで `host` と `port`（1–65535）を指定。 |
-| `connectTimeout` | `10000` | 接続タイムアウト（ミリ秒）。 |
-| `commandTimeout` | `5000` | 通常コマンドのタイムアウト（ミリ秒）。`blpop` と `brpop` の Redis 側の待機時間は呼び出し時の `timeout` で指定。 |
-| `keyPrefix` | 省略可 | アプリのキーを区分する接頭辞。検索パターンはアプリのキーを指定。 |
-| `tls` | `false` | TLS を有効化。 |
-| `readOnly` | `false` | 単体または Sentinel が検出したデータノードへの接続時に Redis の `READONLY` を送信。書き込み権限は Redis ACL が管理。Cluster ではノードの役割に応じてこの設定を管理し、既定でプライマリから読み取る。 |
-| `maxRetries`, `retryDelay` | `3`, `50` | 再試行上限と待機時間の基準値（ミリ秒）。いずれも非負の整数で、接続の再試行時は基準値に試行回数を掛ける。 |
-
-## 設定の反映と確認
+### 設定の反映と確認
 
 接続先は空でない `url`、空でない `cluster`、`sentinel`、`host`/`port` の順に選びます。URL 接続では URL 内の認証情報を使います。接続先やキーの接頭辞を変更したら Cache を再初期化し、読み書きが意図したバックエンドに届くことを確認してください。

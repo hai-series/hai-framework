@@ -70,35 +70,84 @@ The table has one id:1 row. revision changes during coordination; it is neither 
 
 ### Database tables
 
-Use shared RelDB so nodes agree on ownership and deadlines. Times are Unix milliseconds; writes use the database clock. The table below uses the RelDB field types before backend-specific mapping.
+Runner keeps tasks, resource limits and execution events in shared [RelDB](reldb.en.md). Nodes use the database clock to check deadlines.
+
+The module uses 3 tables.
+
+| Table | Purpose |
+| --- | --- |
+| [`hai_runner_executions`](#table-hai-runner-executions) | Track job state, ownership, resource limits and results. |
+| [`hai_runner_events`](#table-hai-runner-events) | Read progress and output in order, including after reconnecting. |
+| [`hai_runner_gate`](#table-hai-runner-gate) | Coordinate transactions that check shared capacity. |
+
+<a id="table-hai-runner-executions"></a>
 
 #### `hai_runner_executions`
 
-| Field or table | Shape and meaning |
-| --- | --- |
-| `id`, `scope_key`, `kind` | Required text; execution primary key, authorization scope and registered job kind. |
-| `request_key`, `reuse_key` | Text request fingerprint and optional unique deduplication key. |
-| `request_json`, `environment_key` | JSON snapshot of validated input, scope, environment, limits and timeout; optional text environment ID. |
-| `state`, `reason` | Required text state and nullable reason. |
-| `owner_node`, `owner_generation`, `owner_process_json` | Nullable text node and generation plus JSON process identity. |
-| `pinned_node`, `pinned_generation`, `parent_id` | Nullable text: required node/generation for the task and the parent execution ID. |
-| `leased_until`, `queue_until`, `run_until` | Required integer deadlines for the lease, queue and run. |
-| `event_sequence`, `event_bytes` | Required integers: event cursor and stored bytes. `event_bytes` has SQL default `0`. |
-| `cpu_milli`, `memory_mib`, `pids`, `scratch_mib` | Required integer resource budgets: millicores, RAM in MiB, processes and scratch MiB. |
-| `result_json`, `container_json`, `reconciliation_json` | Nullable JSON result, container identity/state and operator reconciliation record. |
-| `created_at`, `updated_at`, `reconciled_at` | Integer timestamps; reconciliation time may be null. |
-| `capacity_class`, `concurrency_key`, `concurrency_limit` | Required text capacity class, nullable text concurrency group, required integer limit. |
-| `pool_fingerprint`, `pool_limit`, `warm_state` | Optional pool identity (text), capacity (integer) and readiness (text). |
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Execution primary key. | `execution-42` |
+| `scope_key` | `TEXT` | No | — | Key of the job's authorization scope. | `<scope-key>` |
+| `reuse_key` | `TEXT` | Yes | — | Unique reuse key that lets repeated submissions find the existing execution. | `NULL` |
+| `request_key` | `TEXT` | No | — | Key used to verify the request parameters. | `<request-key>` |
+| `kind` | `TEXT` | No | — | Registered job type. | `hai.tools.example.v1` |
+| `request_json` | `JSON` | Yes | — | Job input, scope, environment, resources and timeout. The example is an excerpt. | `{"input":{"orderId":"order-42"}}` |
+| `environment_key` | `TEXT` | Yes | — | Execution environment selected for a container job. | `NULL` |
+| `state` | `TEXT` | No | — | Current execution state. | `queued` |
+| `reason` | `TEXT` | Yes | — | Reason a job failed or stopped. | `NULL` |
+| `owner_node` | `TEXT` | Yes | — | ID of the node holding the execution lease. | `null` |
+| `owner_generation` | `TEXT` | Yes | — | Identifies the node startup that holds the lease. | `null` |
+| `owner_process_json` | `JSON` | Yes | — | Identity of the local process that owns the job. | `NULL` |
+| `pinned_node` | `TEXT` | Yes | — | Specific node required to run the job. | `NULL` |
+| `pinned_generation` | `TEXT` | Yes | — | Specific node startup required to run the job. | `NULL` |
+| `parent_id` | `TEXT` | Yes | — | Parent execution ID. | `NULL` |
+| `leased_until` | `BIGINT` | No | — | Deadline for the current execution lease. | `0` |
+| `queue_until` | `BIGINT` | No | — | Deadline for claiming the queued job. | `1794873660000` |
+| `run_until` | `BIGINT` | No | — | Deadline once the job starts running. | `0` |
+| `event_sequence` | `BIGINT` | No | — | Latest event sequence, starting at `0` before any events. | `0` |
+| `event_bytes` | `BIGINT` | No | `0` | Bytes used by stored events. | `0` |
+| `cpu_milli` | `BIGINT` | No | — | CPU limit in millicores. | `1000` |
+| `memory_mib` | `BIGINT` | No | — | Memory limit in MiB. | `256` |
+| `pids` | `BIGINT` | No | — | Maximum process count. | `64` |
+| `scratch_mib` | `BIGINT` | No | — | Temporary storage limit in MiB. | `64` |
+| `result_json` | `JSON` | Yes | — | Execution output. A successful result is stored under `value`. | `NULL` |
+| `created_at` | `BIGINT` | No | — | Time the execution was queued. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time of the execution record. | `1794873600000` |
+| `container_json` | `JSON` | Yes | — | Container identity used for cleanup and reconciliation. | `NULL` |
+| `reconciliation_json` | `JSON` | Yes | — | Outcome recorded after reconciliation. | `NULL` |
+| `reconciled_at` | `BIGINT` | Yes | — | Time reconciliation was recorded. | `NULL` |
+| `capacity_class` | `TEXT` | No | — | Class of capacity the job uses. | `tool` |
+| `concurrency_key` | `TEXT` | Yes | — | Group key used for concurrency limits. | `NULL` |
+| `concurrency_limit` | `BIGINT` | No | — | Maximum concurrent jobs in that group. | `1` |
+| `pool_fingerprint` | `TEXT` | Yes | — | Fingerprint used to match the warm pool. | `NULL` |
+| `pool_limit` | `BIGINT` | Yes | — | Warm pool capacity limit. | `NULL` |
+| `warm_state` | `TEXT` | Yes | — | Whether the warm container is ready or transferred to a job. | `NULL` |
 
-Queues, leases, scope/capacity, concurrency, parent execution, deadlines and cleanup each have indexes. SQL defaults apply only where listed.
+Times are Unix milliseconds. Indexes support queues, node leases, scope and capacity, concurrency groups, parent executions, cleanup and deadlines.
 
 <a id="events"></a>
 
-### Events, capacity and cleanup
+<a id="table-hai-runner-events"></a>
 
-| Field or table | Shape and meaning |
-| --- | --- |
-| `hai_runner_events` | String primary key `id` and execution `execution_id`; integer `sequence_number` and `created_at`; JSON `event_json`. Indexed by execution and sequence. |
-| `hai_runner_gate` | Integer primary key `id=1` and integer `revision` (seeded to `0`). Resource updates change the revision inside the shared transaction. |
+#### `hai_runner_events`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Event primary key. | `event-42` |
+| `execution_id` | `TEXT` | No | — | Execution that emitted the event. | `execution-42` |
+| `sequence_number` | `BIGINT` | No | — | Event sequence within the execution. | `1` |
+| `event_json` | `JSON` | Yes | — | Event data emitted by the job, stored under `value`. | `{"value":{"type":"progress"}}` |
+| `created_at` | `BIGINT` | No | — | Time the event was written. | `1794873600000` |
+
+Indexed by execution ID and sequence number.
+
+<a id="table-hai-runner-gate"></a>
+
+#### `hai_runner_gate`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | No | — | Fixed primary key for the one row inserted on initialization. | `1` |
+| `revision` | `BIGINT` | No | — | The initial row gets `0`. Capacity transactions update the value to coordinate concurrent checks. | `1` |
 
 Completed records normally expire after 7 days. When it is unclear whether the original job completed, records remain until reconciliation. There are no Redis keys: the running node owns local process/container objects; other nodes read the database.

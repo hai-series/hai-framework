@@ -49,16 +49,32 @@ enc:v2: 是格式前缀，后面只是示意占位，不能用来真实解密；
 
 ## 字段、存储与清理参考
 
-### 数据库与缓存
+### 数据库
 
-模块没有自己的 SQL 表。会话、审计和对象结构由 [IAM](iam.md)、[audit](audit.md) 和 [storage](storage.md) 管理。
+Kit 不建数据库表。会话、审计和对象由 [IAM](iam.md)、[Audit](audit.md) 和 [Storage](storage.md) 持有。
 
-### 缓存与 Cookie
+### 缓存键
 
-| 逻辑键                         | 值                                                                                                                                           | 默认值与有效期                                                                                                               |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `hai:kit:ratelimit:{<digest>}` | `count` 是本段时间内已计数的请求数，`resetAt` 是响应中使用的重置时间（毫秒）。键里的 digest 由应用命名范围、统计时长和被限流对象一起计算得出 | 第一条请求记为 1，记录在 `windowMs` 毫秒后过期。每次递增都沿用已有的过期时间。写入 Redis 时会加上 cache 设置的 `keyPrefix`   |
-| `hai_access_token`             | kit 认证 Cookie，值为 access token，可配置键名                                                                                               | Path 为 `/`，带 HttpOnly、SameSite=Lax，生产标记下启用 Secure。Max-Age 取登录返回的有效期，读取优先使用 Authorization Bearer |
-| 应用选中加密处理的 Cookie      | 加密后的 Cookie 值带 `enc:v2:` 前缀                                                                                                          | 有效期沿用对应 Cookie，密钥和防重放记录见 [crypto](crypto.md)                                                                |
+应用选择共享限流存储时，Kit 使用 1 类键。键中的 `digest` 是命名空间、`windowMs` 和被限流对象的 SHA-256 摘要。Redis 会加上 Cache 的 `keyPrefix`。多个实例共用 Redis 时读取同一份计数，进程内模式各进程分别计数。
 
-多个应用实例连接同一个 Redis 时，同一个限流对象共用一份计数。并发修改会核对旧值，避免请求数被覆盖。开发或测试可以显式启用进程内限流，各进程仍分别计数。
+| 键或类别 | 用途 | 默认有效期与清理 |
+| --- | --- | --- |
+| [`hai:kit:ratelimit:{<digest>}`](#cache-kit-rate-limit) | 限制同一访问者或业务范围的请求频率。 | 从第一次请求起 `windowMs` 毫秒。递增时保留现有期限，过期后下一次请求重新计数。 |
+
+<a id="cache-kit-rate-limit"></a>
+
+#### `hai:kit:ratelimit:{<digest>}`
+
+| 值字段 | 类型 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| `count` | `integer` | — | 本轮请求计数，第一次写入为 `1`。 | `2` |
+| `resetAt` | `number` | — | 首次请求时间加窗口时长，以 Unix 毫秒记录。响应头用此值估算剩余时间。 | `1794873660000` |
+
+### Cookie
+
+浏览器持有的 Cookie 随请求提交。
+
+| Cookie | 值与保留时间 |
+| --- | --- |
+| `hai_access_token` | `hai_access_token` 默认保存 access token，键名可配置。`Path=/`，启用 `HttpOnly`、`SameSite=Lax`，生产启用 `Secure`。`Max-Age` 使用签发的有效期。请求同时带 Bearer 时优先读取 Bearer。 |
+| 应用选中加密的 Cookie | 密文以 `enc:v2:` 开头，有效期沿用原 Cookie。密钥和传输状态见 [Crypto](crypto.md)。 |

@@ -8,52 +8,6 @@
 
 `hai deploy` 读取项目根目录的 `hai.json`，使用 `deploy` 中设置的主机和容器参数。用 `deploy.environment` 或 `--env` 选环境。例如发布到 `prod` 时，可以把 SSH 凭据对应的 `HAI_DEPLOY_` 变量放在本机的 `.env.prod.local`。如果用 TypeScript 自己运行部署任务，把相同结构的配置传给 `deploy.init()`。[CLI 配置](cli.md)
 
-## 配置示例
-
-```yaml schema=@h-ai/deploy:DeployConfigSchema
-provider:
-  type: docker-ssh
-  ssh:
-    host: staging.example.com
-    username: deployer
-  expose:
-    hostPort: 8080
-```
-
-### 将服务的 3000 端口发布到主机的 8080
-
-这是项目根目录 `hai.json` 的完整外层结构。目标主机已安装容器运行环境，部署账号具备相应权限。SSH 私钥通过部署机的私有环境提供；`expose` 只设置入口端口，不会让任意业务接口绕过认证。
-
-```json
-{
-  "deploy": {
-    "environment": "staging",
-    "provider": {
-      "type": "docker-ssh",
-      "ssh": { "host": "staging.example.com", "username": "deployer" },
-      "expose": { "hostPort": 8080 }
-    }
-  }
-}
-```
-
-### 使用不同的发布环境文件
-
-将 `environment` 改为 `prod` 后，CLI 按 prod 模式读取环境文件，私有值可以保存在 `.env.prod.local`。主机地址和账号只是示例；运行前核对实际目标，不能只改环境名而沿用错误主机。
-
-```json
-{
-  "deploy": {
-    "environment": "prod",
-    "provider": {
-      "type": "docker-ssh",
-      "ssh": { "host": "production.example.com", "username": "deployer" },
-      "expose": { "hostPort": 8080 }
-    }
-  }
-}
-```
-
 <a id="configuration-fields"></a>
 
 ## 配置清单
@@ -152,6 +106,52 @@ provider:
 | `container.compose.services.web.extra_hosts`         | 可省略      | 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名                                   |
 | `container.compose.services.web.extra_hosts.<名称>`  | 必填        | 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。可填字符串，IPv4 或 字符串，IPv6 |
 
+## 配置示例
+
+```yaml schema=@h-ai/deploy:DeployConfigSchema
+provider:
+  type: docker-ssh
+  ssh:
+    host: staging.example.com
+    username: deployer
+  expose:
+    hostPort: 8080
+```
+
+### 将服务的 3000 端口发布到主机的 8080
+
+这是项目根目录 `hai.json` 的完整外层结构。目标主机已安装容器运行环境，部署账号具备相应权限。SSH 私钥通过部署机的私有环境提供；`expose` 只设置入口端口，不会让任意业务接口绕过认证。
+
+```json
+{
+  "deploy": {
+    "environment": "staging",
+    "provider": {
+      "type": "docker-ssh",
+      "ssh": { "host": "staging.example.com", "username": "deployer" },
+      "expose": { "hostPort": 8080 }
+    }
+  }
+}
+```
+
+### 使用不同的发布环境文件
+
+将 `environment` 改为 `prod` 后，CLI 按 prod 模式读取环境文件，私有值可以保存在 `.env.prod.local`。主机地址和账号只是示例；运行前核对实际目标，不能只改环境名而沿用错误主机。
+
+```json
+{
+  "deploy": {
+    "environment": "prod",
+    "provider": {
+      "type": "docker-ssh",
+      "ssh": { "host": "production.example.com", "username": "deployer" },
+      "expose": { "hostPort": 8080 }
+    }
+  }
+}
+```
+
 <a id="rootless-docker-external-https"></a>
 
 ### 用 Rootless Docker 发布到现有 HTTPS 网关
@@ -177,6 +177,6 @@ provider:
 
 网关配置好 DNS 和证书，并覆盖 Host、客户端地址和协议头。在 `trustedEdgeProxies` 填写部署侧实际看到的可信对端地址，特别是 rootless 端口转发后的地址。先用 `hai deploy --env prod --plan` 核对两层地址，再全量发布。换域名或监听地址时重新生成全量包，按[网关配置与验收](delivery.md#外部-https-网关)检查登录、跳转和探活。
 
-## 生效与核对
+### 生效与核对
 
 `docker-ssh` 使用本机 OpenSSH。未填写 `ssh` 时可用于生成离线交付物，远端 SSH 发布需要连接参数。配置验证通过后仍需验证目标身份、容器运行时和端口，并实际访问健康检查。HTTPS、离线和增量回滚见[部署场景](delivery.md)。

@@ -1,7 +1,5 @@
 # @h-ai/ai Data structures
 
-<!-- translation: partial -->
-
 [Chinese source](ai.md) · [Configuration](../configuration/ai.en.md) · [API reference](../function/ai.en.md)
 
 <a id="example-data"></a>
@@ -17,7 +15,7 @@ AI records share `id`, `version`, `data` and timestamps, with business content i
 ```json
 {
   "id": "session-42",
-  "version": "version-42",
+  "version": "6fdb3344-5197-490b-a36d-2d43ce7cc3ba",
   "data": {
     "sessionId": "session-42",
     "objectId": "user-42",
@@ -31,7 +29,7 @@ AI records share `id`, `version`, `data` and timestamps, with business content i
 }
 ```
 
-This stores user-42’s session-42. version-42 detects intervening edits. SQLite stores the JSON as text.
+This stores `user-42`’s `session-42`. Its `version` lets an update detect intervening changes.
 
 ### History of one model call
 
@@ -523,17 +521,429 @@ There is one id:1 row. marker:0 is an initial marker, not memory text or a proce
 
 ## Field, storage and cleanup reference
 
-AI uses the caller-supplied `storeProvider` or the initialized RelDB and VecDB integrations. The built-in relational store uses a string `id`, a write `version`, JSON `data`, and Unix millisecond timestamps. Feature tables optionally index `object_id`, `session_id`, `status` or `ref_id`.
+<a id="data-fields"></a>
 
-| Table, key or artifact | Shape and ownership |
+### Database tables
+
+The built-in RelDB store can create up to 30 tables. It creates the three A2A tables only with A2A configured. Choosing Mem0 omits the built-in memory tables. You can also supply your own store via `ai.init(config, { storeProvider })`. An in-memory store loses its records when the process stops.
+
+| Table | Purpose |
 | --- | --- |
-| `hai_ai_chat_records`, `hai_ai_sessions`, `hai_ai_context`, `hai_ai_persona` | Chat requests and replies, session ownership and metadata, context turns/summaries, and persona prompts. Deletion markers prevent stale re-creation. |
-| `hai_ai_llm_models`, `hai_ai_audio_models`, `hai_ai_image_models`, `hai_ai_mcp_servers`, `hai_ai_retrieval_sources` | Runtime resource registrations. Explicit writes by ID override startup values; deletion markers can suppress them. |
-| `hai_ai_memory`, `hai_ai_memory_vector_outbox`, `hai_ai_memory_vector_namespace`, `hai_ai_memory_vector_scan` | Memory records, pending vector updates, ownership binding and scan cursor. The current relational record controls visible vector versions. |
-| `hai_ai_knowledge_documents`, `hai_ai_knowledge_collections` | Document content and chunks are versioned by collection and generation. Read only the published document version. |
-| `hai_ai_acp_*`, `hai_ai_a2a_*` | Workspace/session and managed request/approval state for ACP, and context/journal/messages for A2A. |
-| `hai_ai_knowledge`, `hai_ai_memory` (VecDB) | Default knowledge and memory vector collections. Binding a memory namespace can change the actual collection. |
+| [`hai_ai_chat_records`](#table-hai-ai-chat-records) | Look up model requests, replies and usage. |
+| [`hai_ai_sessions`](#table-hai-ai-sessions) | List a user's conversations. |
+| [`hai_ai_context`](#table-hai-ai-context) | Restore context for the next model reply. |
+| [`hai_ai_persona`](#table-hai-ai-persona) | Read selectable personas and prompts. |
+| [`hai_ai_llm_models`](#table-hai-ai-llm-models) | Register chat models at runtime. |
+| [`hai_ai_audio_models`](#table-hai-ai-audio-models) | Register audio models at runtime. |
+| [`hai_ai_image_models`](#table-hai-ai-image-models) | Register image models at runtime. |
+| [`hai_ai_mcp_servers`](#table-hai-ai-mcp-servers) | Look up registered external tool servers. |
+| [`hai_ai_retrieval_sources`](#table-hai-ai-retrieval-sources) | Look up sources available for retrieval. |
+| [`hai_ai_memory`](#table-hai-ai-memory) | Keep information that should survive across conversations. |
+| [`hai_ai_memory_vector_outbox`](#table-hai-ai-memory-vector-outbox) | Find memory vectors that need updates or cleanup. |
+| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | Track the app's memory vector collection and migration progress. |
+| [`hai_ai_memory_vector_scan`](#table-hai-ai-memory-vector-scan) | Resume the last vector index scan. |
+| [`hai_ai_knowledge_documents`](#table-hai-ai-knowledge-documents) | Find the published version of a knowledge document. |
+| [`hai_ai_knowledge_collections`](#table-hai-ai-knowledge-collections) | Look up a knowledge collection's dimensions, generation and visibility. |
+| [`hai_ai_a2a_journal`](#table-hai-ai-a2a-journal) | Recover agent task progress, events and message receipts. |
+| [`hai_ai_a2a_contexts`](#table-hai-ai-a2a-contexts) | Check who owns an agent conversation. |
+| [`hai_ai_a2a_messages`](#table-hai-ai-a2a-messages) | Read messages submitted as part of a task. |
+| [`hai_ai_acp_workspaces`](#table-hai-ai-acp-workspaces) | Find projects and repositories available to agents. |
+| [`hai_ai_acp_agents`](#table-hai-ai-acp-agents) | Find agents that can start and how they connect. |
+| [`hai_ai_acp_sessions`](#table-hai-ai-acp-sessions) | Find session project, native ID and runtime resources. |
+| [`hai_ai_acp_locks`](#table-hai-ai-acp-locks) | Coordinate changes to the same session resources. |
+| [`hai_ai_acp_managed_sessions`](#table-hai-ai-acp-managed-sessions) | Link the application session to its worker. |
+| [`hai_ai_acp_managed_requests`](#table-hai-ai-acp-managed-requests) | Recognize repeated submissions. |
+| [`hai_ai_acp_managed_approvals`](#table-hai-ai-acp-managed-approvals) | Find operations awaiting approval. |
+| [`hai_ai_acp_managed_grants`](#table-hai-ai-acp-managed-grants) | Look up reusable permissions and their deadlines. |
+| [`hai_ai_acp_managed_receipts`](#table-hai-ai-acp-managed-receipts) | Check the original caller and worker scopes during recovery. |
+| [`hai_ai_memory_write_gate`](#table-hai-ai-memory-write-gate) | Coordinate memory writes across nodes. |
+| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | Coordinate updates to vector collection ownership and migration. |
+| [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | Coordinate updates to the vector scan cursor. |
 
-The session record keeps the framework session ID and its current native ID. An explicit reopen updates the native ID after the new native session opens successfully.
+<a id="table-hai-ai-chat-records"></a>
 
-Still untranslated: individual record fields and schema/index details for memory, knowledge, A2A and ACP. Read the [Chinese source section](ai.md#data-fields).
+#### `hai_ai_chat_records`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `chat-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `request` holds model input. `response` holds the reply, tool calls and usage. | [Business data example](#history-of-one-model-call) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+| `session_id` | `TEXT` | Yes | — | Session identifier. Indexed on its own and with the subject. | `session-42` |
+
+<a id="table-hai-ai-sessions"></a>
+
+#### `hai_ai_sessions`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `<session-key>` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `sessionId` and `objectId` link a session to its owner. `title` and `metadata` supply display details. `deleted` prevents a stale write from restoring a deleted session. | [Business data example](#the-users-conversation-list) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+
+<a id="table-hai-ai-context"></a>
+
+#### `hai_ai_context`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `<session-key>` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `scope` marks ownership. `messages`, `summaries` and `turns` hold the conversation and start empty. `epoch` identifies the reset generation. `active` can track a turn in progress or awaiting a save. | [Business data example](#context-for-the-next-model-reply) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+| `session_id` | `TEXT` | Yes | — | Session identifier. Indexed on its own and with the subject. | `session-42` |
+
+<a id="table-hai-ai-persona"></a>
+
+#### `hai_ai_persona`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `persona-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `name`, `systemPrompt` and `traits` store the name, system prompt and style. `metadata` can hold extra details. | [Business data example](#a-reusable-ai-persona) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+
+<a id="table-hai-ai-llm-models"></a>
+
+#### `hai_ai_llm_models`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `chat-model` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `id` identifies the model. Other fields hold protocol, model name and connection settings. | [Business data example](#registered-conversation-models) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-audio-models"></a>
+
+#### `hai_ai_audio_models`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `audio-model` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Transcription or synthesis model definition, with ID and connection settings. | [Business data example](#registered-speech-models) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-image-models"></a>
+
+#### `hai_ai_image_models`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `image-model` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Image model ID, service connection and defaults. | [Business data example](#registered-image-models) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-mcp-servers"></a>
+
+#### `hai_ai_mcp_servers`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `tools-server` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Transport, address and call settings for an external MCP server. | [Business data example](#external-tool-services-that-may-be-connected) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-retrieval-sources"></a>
+
+#### `hai_ai_retrieval_sources`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `support-source` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Retrieval source ID, type and connection settings. | [Business data example](#sources-available-for-retrieval) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+If an ID exists in startup configuration and in the database, the startup definition wins. The `__deleted` flag removes a runtime registration. Credentials stay server-side.
+
+<a id="table-hai-ai-memory"></a>
+
+#### `hai_ai_memory`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `memory-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `content`, `type` and `importance` describe the memory. The record can also hold scope, access counts, vector and vector version. | [Business data example](#information-remembered-across-chats) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+
+Memory search uses the vector referenced by the current relational record. PostgreSQL indexes memory scope with JSONB GIN. MySQL indexes a nullable generated `VARCHAR(512)` column, `memory_vector_key`, based on `data.vectorId`. With older rows that have a vector and no vector ID, it uses `id`.
+
+<a id="table-hai-ai-memory-vector-outbox"></a>
+
+#### `hai_ai_memory_vector_outbox`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `memory-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `memoryId`, `updatedAt` and `attempts` track the work. Optional `token`, `retireUntil` and `cooldown` cover claims, postponement and throttling. | [Business data example](#memories-awaiting-search-index-updates) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-memory-vector-namespace"></a>
+
+#### `hai_ai_memory_vector_namespace`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `namespace` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `namespace` and `owner` identify the collection, with an optional migration cursor and completion flag. | [Business data example](#which-vector-namespace-owns-these-memories) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-memory-vector-scan"></a>
+
+#### `hai_ai_memory_vector_scan`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `scan` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Holds the collection, cursor and claim state. `updatedAt` marks the next claim time or the current claim's deadline. | [Business data example](#where-index-inspection-stopped) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-knowledge-documents"></a>
+
+#### `hai_ai_knowledge_documents`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `<document-key>` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `current` holds published text, chunks and entities. `pending` holds a version awaiting publication. `garbage` tracks versions to remove from the external index. | [Business data example](#the-published-version-of-one-knowledge-document) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Knowledge collection. Indexed for collection lookup. | `hai_ai_knowledge` |
+| `session_id` | `TEXT` | Yes | — | Collection generation. Indexed with the collection name. | `generation-42` |
+
+<a id="table-hai-ai-knowledge-collections"></a>
+
+#### `hai_ai_knowledge_collections`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `hai_ai_knowledge` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `collection` and `dimension` record the name and dimensions. `generation` and `deleted` determine visibility. | [Business data example](#the-collection-containing-knowledge-documents) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-a2a-journal"></a>
+
+#### `hai_ai_a2a_journal`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `task-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `owner`, `executionId`, `leasedUntil` and `deadline` track who can run and until when. Task data, events, receipts, message and result capture progress. | [Business data example](#progress-of-an-agent-task) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+| `ref_id` | `TEXT` | Yes | — | Related context ID. Indexed for task lookup. | `context-42` |
+
+A2A uses the shared storage clock for deadlines and checks the record version when saving events. Completed message receipts have no automatic expiry.
+
+<a id="table-hai-ai-a2a-contexts"></a>
+
+#### `hai_ai_a2a_contexts`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `context-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `owner` is the trusted principal for this context. | [Business data example](#ownership-of-an-agent-conversation) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-a2a-messages"></a>
+
+#### `hai_ai_a2a_messages`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `message-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Message ID, task, optional context, sender role, parts and creation time. | [Business data example](#messages-exchanged-in-an-agent-task) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+| `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
+| `status` | `TEXT` | Yes | — | Status of the related task. Indexed for filtering. | `completed` |
+
+<a id="table-hai-ai-acp-workspaces"></a>
+
+#### `hai_ai_acp_workspaces`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `project` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Workspace definition, including storage location and available repositories. | [Business data example](#workspaces-an-agent-may-use) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-acp-agents"></a>
+
+#### `hai_ai_acp_agents`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `coder` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Agent definition, including mode, adapter, models and allowed environments. | [Business data example](#agent-definitions-that-may-be-started) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-acp-sessions"></a>
+
+#### `hai_ai_acp_sessions`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `session-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | Agent, workspace, repository, branch, model, MCP bindings and current container. A successful explicit reopen updates `nativeId`. | [Business data example](#project-and-resources-bound-to-one-agent-session) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-acp-locks"></a>
+
+#### `hai_ai_acp_locks`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `session-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `owner` identifies the current resource operation's owner and can be null. | [Business data example](#avoid-concurrent-session-resource-changes) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+<a id="table-hai-ai-acp-managed-sessions"></a>
+
+#### `hai_ai_acp_managed_sessions`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `session-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `scope`, `workerScope` and `workerId` bind the caller and worker. `request`, `mode` and optional history or flags describe execution. | [Business data example](#connect-an-app-session-to-its-worker) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-acp-managed-requests"></a>
+
+#### `hai_ai_acp_managed_requests`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `<request-key>` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `fingerprint` checks that a reused request ID identifies the same request. | [Business data example](#recognize-the-same-submission) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-acp-managed-approvals"></a>
+
+#### `hai_ai_acp_managed_approvals`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `approval-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `scope` and `sessionId` identify ownership. `deadline` is the approval deadline and `decision` holds the result. | [Business data example](#an-operation-awaiting-human-approval) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-acp-managed-grants"></a>
+
+#### `hai_ai_acp_managed_grants`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `grant-42` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `id`, `scopeKey` and `summary` identify the grant. Optional `sessionId` limits it to a session. `expires` and `revoked` control validity. | [Business data example](#a-reusable-granted-permission) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-acp-managed-receipts"></a>
+
+#### `hai_ai_acp_managed_receipts`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Primary key of this record. | `<execution-key>` |
+| `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | No | — | `scope` and `workerScope` retain the original caller and worker scopes. | [Business data example](#check-original-scopes-during-recovery) |
+| `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
+| `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
+
+Background workers page by the `(updated_at, id)` index.
+
+<a id="table-hai-ai-memory-write-gate"></a>
+
+#### `hai_ai_memory_write_gate`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
+| `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
+
+<a id="table-hai-ai-memory-vector-namespace-write-gate"></a>
+
+#### `hai_ai_memory_vector_namespace_write_gate`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
+| `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
+
+<a id="table-hai-ai-memory-vector-scan-write-gate"></a>
+
+#### `hai_ai_memory_vector_scan_write_gate`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
+| `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
+
+### Vector collections and cache
+
+Knowledge vectors use the `hai_ai_knowledge` [VecDB](vecdb.en.md) collection by default. Search reads only published document versions. Built-in memory defaults to `hai_ai_memory` or the collection assigned to a bound namespace. Mem0 manages its own vectors. [Runner](runner.en.md) owns ACP execution and event tables.
+
+AI creates no Redis keys. It rebuilds process-local model connections, tool connections and execution objects after restart. [IAM](iam.en.md) owns tickets for browser connections to live audio.

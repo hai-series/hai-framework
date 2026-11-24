@@ -167,37 +167,141 @@ evidence 为空表示此例尚无已缓存证据，expiresAt 是5分钟后的截
 
 服务端收到提交后，把反馈、关联证据和需要执行的任务一起写入共享 [reldb](reldb.md)。这几项通过一次数据库事务全部保存，或在失败时一起回滚。除列出的 SQL 默认值外，字段由模块写入，选填字段缺失时为 NULL。时间字段以 Unix 毫秒记录。
 
+模块使用 6 张表。
+
+| 表名 | 用途 |
+| --- | --- |
+| [`hai_feedback_reports`](#table-hai-feedback-reports) | 查问题、提交人和当前处理进度。 |
+| [`hai_feedback_evidence`](#table-hai-feedback-evidence) | 按来源和顺序查采集到的事件。 |
+| [`hai_feedback_attachments`](#table-hai-feedback-attachments) | 查附件对象位置、状态，校验文件是否完整。 |
+| [`hai_feedback_history`](#table-hai-feedback-history) | 查谁在什么时候改变了反馈状态。 |
+| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 领取证据采集、通知或导出等后台任务。 |
+| [`hai_feedback_quotas`](#table-hai-feedback-quotas) | 提交或导出前核对条数、字节和次数预算。 |
+
 <a id="reports"></a>
+
+<a id="table-hai-feedback-reports"></a>
 
 #### `hai_feedback_reports`
 
-| 字段                                                 | 含义与约束                                                                                         |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `id`、`number`                                       | 反馈主键、展示编号                                                                                 |
-| `scope_id`、`user_id`、`app_id`                      | 由服务端确定的业务范围、用户 ID 和应用 ID                                                          |
-| `app_version`、`summary`                             | 可空应用版本、反馈摘要（缺失时写空字符串）                                                         |
-| `submission_key`、`submission_hash`                  | 用于认出同一次提交的唯一键，以及用来核对重试内容是否一致的请求摘要                                 |
-| `status`、`collection_status`、`notification_status` | 管理处理、证据采集和通知的各自状态；受理时前两项为 `pending`、`collecting`，通知状态取决于通知配置 |
-| `created_at`、`updated_at`                           | 创建与更新时间                                                                                     |
-| `version`、`revision`                                | 反馈版本、采集和快照使用的修订号，均从 1 开始                                                      |
-| `evidence_count`、`evidence_bytes`                   | 已关联证据条数、字节数，登记时为 0                                                                 |
-| `collect_deadline`、`expires_at`                     | 采集截止、反馈保留截止。反馈默认保留 30 天                                                         |
-| `payload`                                            | 结构化 JSON，保存问题描述、当时所在页面等提交详情                                                  |
-| `deleting`                                           | 删除流程标记，登记时为 0                                                                           |
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 反馈主键。 | `feedback-42` |
+| `scope_id` | `TEXT` | 否 | — | 反馈所属的业务范围。 | `team-1` |
+| `user_id` | `TEXT` | 否 | — | 提交人 ID。 | `user-42` |
+| `app_id` | `TEXT` | 否 | — | 提交反馈的应用 ID。 | `orders` |
+| `number` | `TEXT` | 否 | — | 供用户或客服查找的编号。 | `FB-EXAMPLE-42` |
+| `app_version` | `TEXT` | 是 | — | 用户提交时的应用版本。 | `1.4.2` |
+| `summary` | `TEXT` | 否 | — | 简短的问题描述。 | `Example problem` |
+| `submission_key` | `TEXT` | 否 | — | 唯一的提交标识，相同提交可安全重试。 | `<submission-key>` |
+| `submission_hash` | `TEXT` | 否 | — | 提交内容摘要，用于核对重试是否为同一请求。 | `<request-digest>` |
+| `status` | `TEXT` | 否 | — | 反馈处理状态。 | `pending` |
+| `collection_status` | `TEXT` | 否 | — | 证据采集状态。 | `collecting` |
+| `notification_status` | `TEXT` | 否 | — | 反馈通知的处理状态。 | `pending` |
+| `created_at` | `BIGINT` | 否 | — | 提交时间。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
+| `version` | `INTEGER` | 否 | — | 主单版本，用于检查并发修改。 | `1` |
+| `revision` | `INTEGER` | 否 | — | 证据修订号，用于关联同一份证据快照。 | `1` |
+| `evidence_count` | `INTEGER` | 否 | — | 当前关联的证据条数。 | `0` |
+| `evidence_bytes` | `BIGINT` | 否 | — | 当前证据占用的字节数。 | `0` |
+| `collect_deadline` | `BIGINT` | 否 | — | 接受补充证据的截止时间。 | `1794873630000` |
+| `expires_at` | `BIGINT` | 否 | — | 反馈的保留截止时间。 | `1797465600000` |
+| `payload` | `JSON` | 否 | — | 分类和问题详情等业务资料，示例只展示分类。 | `{"category":"bug"}` |
+| `deleting` | `INTEGER` | 否 | — | 进入删除流程时为 `1`，普通查询只读 `0` 的记录。 | `0` |
 
 按 `(scope_id, created_at)`、`(scope_id, status, created_at)` 建索引，支持范围内查询。
 
+<a id="table-hai-feedback-evidence"></a>
+
+#### `hai_feedback_evidence`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 证据主键。 | `evidence-42` |
+| `report_id` | `TEXT` | 是 | — | 关联的反馈 ID。暂未关联时为空。 | `feedback-42` |
+| `scope_id` | `TEXT` | 否 | — | 证据的业务范围。 | `team-1` |
+| `user_id` | `TEXT` | 否 | — | 证据关联的用户 ID。 | `user-42` |
+| `app_id` | `TEXT` | 否 | — | 证据来源应用的 ID。 | `orders` |
+| `source` | `TEXT` | 否 | — | 证据来源。 | `browser` |
+| `sequence` | `BIGINT` | 否 | — | 同一来源中事件的顺序。 | `1` |
+| `kind` | `TEXT` | 否 | — | 采集事件的类别。 | `error` |
+| `timestamp` | `BIGINT` | 否 | — | 事件发生时间。 | `1794873600000` |
+| `request_id` | `TEXT` | 是 | — | 关联请求 ID。 | `req-42` |
+| `error_id` | `TEXT` | 是 | — | 关联错误 ID。 | `err-42` |
+| `revision` | `INTEGER` | 否 | — | 证据所在的修订版本。 | `1` |
+| `bytes` | `INTEGER` | 否 | — | 证据占用的字节。 | `24` |
+| `expires_at` | `BIGINT` | 否 | — | 到期后可清理。 | `1797465600000` |
+| `payload` | `JSON` | 否 | — | 脱敏后的事件内容节选。 | `{"message":"Request failed"}` |
+
+<a id="table-hai-feedback-attachments"></a>
+
+#### `hai_feedback_attachments`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 附件主键。 | `attachment-42` |
+| `client_id` | `TEXT` | 否 | — | 客户端为同一个附件提交的标识。 | `client-file-42` |
+| `report_id` | `TEXT` | 否 | — | 所属反馈 ID。 | `feedback-42` |
+| `scope_id` | `TEXT` | 否 | — | 附件所属的业务范围。 | `team-1` |
+| `object_key` | `TEXT` | 否 | — | 模块生成的私有文件对象键。 | `feedback/<scope-digest>/feedback-42/attachment-42` |
+| `status` | `TEXT` | 否 | — | 文件能否用于读取或导出。 | `available` |
+| `size` | `BIGINT` | 否 | — | 文件大小，单位是字节。 | `5` |
+| `checksum` | `TEXT` | 否 | — | 用于校验文件是否完整的摘要。 | `<checksum:redacted>` |
+| `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
+| `payload` | `JSON` | 否 | — | 供用户查看的附件信息节选。 | `{"name":"error.txt"}` |
+
+<a id="table-hai-feedback-history"></a>
+
+#### `hai_feedback_history`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 处理记录主键。 | `history-42` |
+| `report_id` | `TEXT` | 否 | — | 所属反馈 ID。 | `feedback-42` |
+| `payload` | `JSON` | 否 | — | 处理人、处理时间和变更前后的状态。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
+
 <a id="jobs"></a>
 
-#### 证据、附件、记录和异步任务
+<a id="table-hai-feedback-jobs"></a>
 
-| 表                         | 字段、默认值和约束                                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hai_feedback_evidence`    | `id` 是证据主键；`report_id` 指向反馈主键，未关联反馈的临时证据可为空。`scope_id`、`user_id`、`app_id` 标识隔离范围；`source`、`sequence`、`kind` 保存来源、顺序和类别；`timestamp` 是事件时间；可空 `request_id`、`error_id` 用于关联；`revision`、`bytes`、`expires_at` 为修订号、大小、到期；`payload` 保存脱敏内容                                                                                               |
-| `hai_feedback_attachments` | `id` 是附件主键；`client_id` 为客户端附件标识，`report_id`、`scope_id` 为所属反馈和范围。`object_key` 由服务端生成，`status` 表示可用等状态，`size`、`checksum` 用于核对字节与校验摘要，`updated_at` 为更新时间，`payload` 保存展示信息                                                                                                                                                                              |
-| `hai_feedback_history`     | `id` 是处理历史主键，`report_id` 为关联反馈，`payload` 保存处理人、时间及状态变更等 JSON                                                                                                                                                                                                                                                                                                                             |
-| `hai_feedback_jobs`        | `id` 是任务主键，`app_id`、`report_id`、`scope_id` 为归属。可空 `snapshot_revision`、`snapshot_version` 标记对应快照。`kind`、`status` 是类型与状态，可空的 `token` 指任务领取者的令牌，`lease_until` 是该领取者可以继续处理的截止时间，`attempts` 为尝试次数，`next_run_at` 为可再次领取时间。`created_at`、`updated_at` 为登记与更新时间，可空 `last_error` 是最后错误，`payload` 为入参，可空 `result` 为完成结果 |
-| `hai_feedback_quotas`      | `id` 是唯一计量范围记录，`app_id`、`scope_id`、`user_id` 为计量归属，`period` 为日配额周期、范围计量（0）或单反馈计量（-1），`report_count` 为条数，`reserved_bytes` 为预留字节，`report_bytes` 为单反馈字节预算（SQL 默认 0），`export_limit` 为单反馈导出次数预算（SQL 默认 0），`updated_at` 是更新时间                                                                                                           |
+#### `hai_feedback_jobs`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 任务主键。 | `job-42` |
+| `app_id` | `TEXT` | 否 | — | 所属应用 ID。 | `orders` |
+| `snapshot_revision` | `INTEGER` | 是 | — | 任务对应的证据修订号。 | `1` |
+| `snapshot_version` | `INTEGER` | 是 | — | 任务对应的反馈版本。 | `1` |
+| `report_id` | `TEXT` | 否 | — | 关联反馈 ID。 | `feedback-42` |
+| `scope_id` | `TEXT` | 否 | — | 任务所属的业务范围。 | `team-1` |
+| `kind` | `TEXT` | 否 | — | 后台任务的类型。 | `export` |
+| `status` | `TEXT` | 否 | — | 任务是否在等待、执行或已经结束。 | `pending` |
+| `token` | `TEXT` | 是 | — | 当前领取者的令牌。 | `null` |
+| `lease_until` | `BIGINT` | 否 | — | 当前领取的截止时间，`0` 表示尚未领取。 | `0` |
+| `attempts` | `INTEGER` | 否 | — | 执行了多少次。 | `0` |
+| `next_run_at` | `BIGINT` | 否 | — | 最早可以再次领取的时间。 | `1794873600000` |
+| `created_at` | `BIGINT` | 否 | — | 登记时间。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
+| `last_error` | `TEXT` | 是 | — | 最近一次处理失败的错误信息。 | `NULL` |
+| `payload` | `JSON` | 否 | — | 任务执行所需的输入。 | `{}` |
+| `result` | `JSON` | 是 | — | 任务完成后记录的结果。 | `NULL` |
+
+<a id="table-hai-feedback-quotas"></a>
+
+#### `hai_feedback_quotas`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 配额记录主键。 | `quota-42` |
+| `app_id` | `TEXT` | 否 | — | 计量的应用 ID。 | `orders` |
+| `scope_id` | `TEXT` | 否 | — | 计量的业务范围。 | `team-1` |
+| `user_id` | `TEXT` | 否 | — | 计量的用户 ID。 | `user-42` |
+| `period` | `BIGINT` | 否 | — | 日配额周期，或者范围累计 `0`、单反馈 `-1`。 | `0` |
+| `report_count` | `BIGINT` | 否 | — | 已计入的反馈条数。 | `1` |
+| `reserved_bytes` | `BIGINT` | 否 | — | 已预留的字节数。 | `1024` |
+| `report_bytes` | `BIGINT` | 否 | `0` | 单条反馈的字节预算。 | `0` |
+| `export_limit` | `INTEGER` | 否 | `0` | 单条反馈的导出次数预算。 | `0` |
+| `updated_at` | `BIGINT` | 否 | — | 配额最近更新时间。 | `1794873600000` |
 
 证据按反馈、来源和顺序查询，也按应用、关联状态和过期时间回收。附件和历史建 `report_id` 索引。任务按 `(app_id, status, next_run_at)` 领取、按 `(report_id, snapshot_revision, snapshot_version)` 定位快照，计量记录按 `(app_id, period)` 索引。任务领取后默认可以处理 30 秒，最多尝试 5 次。
 
@@ -207,6 +311,36 @@ evidence 为空表示此例尚无已缓存证据，expiresAt 是5分钟后的截
 
 模块不创建 Redis 键。附件、导出和截图通过私有 [storage](storage.md) 管理，业务表记录附件校验和与状态。对象路径使用 `feedback/<范围 SHA-256 前 16 位>/<反馈 ID>/` 前缀，后接附件 ID、`business/<行 ID>-<校验和>` 或 `exports/<任务 ID>.zip`。ZIP 含 `manifest.json`、反馈、证据和处理历史，以及允许导出的附件。导出对象默认保留 24 小时。
 
-浏览器在 IndexedDB 的 `hai-feedback-v1` 数据库（版本 1）中新建 `drafts` 对象存储，每个应用和身份组合可以保存一份待发送的草稿。键 `<隔离键>:checkpoint` 另存现场信息 `evidence` 和到期时间 `expiresAt`，有效期 5 分钟。重新打开反馈页面时只读取尚未过期的草稿。成功提交后，客户端删除草稿及相应记录。
+#### 浏览器草稿和采集检查点
+
+浏览器在 IndexedDB 数据库 `hai-feedback-v1`（版本 1）的 `drafts` 中使用 2 类键。启用草稿持久化时，`<scope-key>` 由应用 ID 和宿主提供的身份隔离键组成，例如 `orders:team-1:user-42`。提交成功后清除草稿和检查点。
+
+| 键 | 用途 | 有效期 |
+| --- | --- | --- |
+| `<scope-key>` | 待发送的反馈草稿 | 24 小时 |
+| `<scope-key>:checkpoint` | 打开反馈页前暂存的证据 | 5 分钟 |
+
+##### `<scope-key>`
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| `submissionId` | `string` | 本次草稿的提交标识。 | `submission-42` |
+| `anchorTime` | `number` | 开始反馈或出错时间，Unix 毫秒。 | `1794873600000` |
+| `anchorKind` | `string` | 打开反馈时的来源，可为 feedback 或 error。 | `feedback` |
+| `errorId` | `string` | 可选的错误 ID。 | `err-42` |
+| `evidence` | `object[]` | 已经捕获的证据。 | `[]` |
+| `attachments` | `object[]` | 待传附件和字节内容。 | `[]` |
+| `missing` | `string[]` | 无法收集的材料及原因。 | `[]` |
+| `expiresAt` | `number` | 草稿截止时间，Unix 毫秒。读取过期草稿时删除。 | `1794960000000` |
+| `report` | `object` | 可选的服务器反馈记录。 | `{…}` |
+| `submission` | `object` | 首次提交的入参，通信中断后可按原内容重试。 | `{…}` |
+| `userInputFingerprint` | `string` | 用来辨认用户是否更改了本次重试的表单。 | `<fingerprint>` |
+
+##### `<scope-key>:checkpoint`
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| `evidence` | `object[]` | 打开反馈前暂存的证据。 | `[]` |
+| `expiresAt` | `number` | 检查点截止时间，Unix 毫秒。只恢复未过期的证据。 | `1794873900000` |
 
 表结构和索引见 [Feedback 表定义](../../../packages/feedback/src/feedback-repository.ts)。

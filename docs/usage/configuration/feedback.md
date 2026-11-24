@@ -10,39 +10,6 @@
 
 服务端保存报告、执行后台任务并发送通知。应用要把自己的业务日志一并附在报告中时，可以在 `feedback.init(config, { collectEvidence })` 中传入收集函数。同一次部署的页面和服务端应使用同一构建标识，便于把用户反馈对应到具体版本。
 
-## 配置示例
-
-```yaml schema=@h-ai/feedback:FeedbackConfigSchema
-appId: orders
-notificationMode: console
-consoleContent: metadata
-```
-
-### 把反馈通知发给值班邮箱
-
-写入 `config/_feedback.yml`。`email` 必须是已经初始化、能够真实投递的 Reach 渠道名；Console 渠道只会打印日志。`adminUrl` 是通知里的管理页链接，配置它不会创建页面或授予访问权限。
-
-```yaml schema=@h-ai/feedback:FeedbackConfigSchema
-appId: orders
-notificationMode: reach
-notificationProvider: email
-recipients: [support@example.com]
-adminUrl: https://admin.example.com/feedback
-```
-
-### 限制附件大小并缩短保存时间
-
-每个附件最多 2 MiB，每个用户每天最多受理 10 份反馈，反馈保存 7 天，导出的 ZIP 保存 12 小时。设为 `disabled` 只关闭通知，仍会保存反馈；到期对象由后台清理任务回收，需要让后台任务保持运行。
-
-```yaml schema=@h-ai/feedback:FeedbackConfigSchema
-appId: orders
-notificationMode: disabled
-maxAttachmentBytes: 2097152
-maxReportsPerUserDay: 10
-retentionDays: 7
-exportRetentionHours: 12
-```
-
 <a id="configuration-fields"></a>
 
 ## 配置清单
@@ -80,6 +47,39 @@ exportRetentionHours: 12
 | `maxEvidenceBytes`            | `4194304`     | 单份反馈累计证据允许的最大字节数。可填整数，1024–4194304                                                         |
 | `maxEvidenceCount`            | `2000`        | 单份反馈累计证据允许的最大条数。可填整数，1–10000                                                                |
 
-## 生效与核对
+## 配置示例
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: console
+consoleContent: metadata
+```
+
+### 把反馈通知发给值班邮箱
+
+写入 `config/_feedback.yml`。`email` 必须是已经初始化、能够真实投递的 Reach 渠道名；Console 渠道只会打印日志。`adminUrl` 是通知里的管理页链接，配置它不会创建页面或授予访问权限。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: reach
+notificationProvider: email
+recipients: [support@example.com]
+adminUrl: https://admin.example.com/feedback
+```
+
+### 限制附件大小并缩短保存时间
+
+每个附件最多 2 MiB，每个用户每天最多受理 10 份反馈，反馈保存 7 天，导出的 ZIP 保存 12 小时。设为 `disabled` 只关闭通知，仍会保存反馈；到期对象由后台清理任务回收，需要让后台任务保持运行。
+
+```yaml schema=@h-ai/feedback:FeedbackConfigSchema
+appId: orders
+notificationMode: disabled
+maxAttachmentBytes: 2097152
+maxReportsPerUserDay: 10
+retentionDays: 7
+exportRetentionHours: 12
+```
+
+### 生效与核对
 
 开发可用 `console` 在日志中记下反馈编号等信息。用 `reach` 时，需要填收件人，并提供实际能投递的邮件、短信或 API 渠道。填入 `webhookUrl` 后，服务端还会调用该地址。回调密钥在服务端读取。修改容量限制后，提交一份带附件的测试报告，再核对是否能在管理端查询和导出。[反馈通知、采集和保留](operations.md#feedback通知采集和保留)

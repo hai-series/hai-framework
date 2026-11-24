@@ -2,7 +2,18 @@
 
 [Chinese source](payment.md) · [Data structures](../data/payment.en.md) · [API reference](../function/payment.en.md)
 
+## Configuration entry
+
 Enable only channels you use in `_payment.yml` and initialize Payment on the server. Keep signing keys and webhook credentials in private environment variables.
+
+## Configuration reference
+
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
+| `wechat` | Optional | Requires `mchId`, `appId`, `apiV3Key`, `serialNo`, `privateKey` and `platformKeys`. Map each platform key name to its real public key. |
+| `alipay` | Optional | Requires `appId`, `sellerId`, `privateKey`, `alipayPublicKey` and `returnUrl`. `signType` defaults to `RSA2`, `sandbox` to false. |
+| `stripe` | Optional | Requires `secretKey`, `webhookSecret` and `successUrl`. `cancelUrl` is optional, and `webhookToleranceSeconds` defaults to 300. |
 
 ## Configuration examples
 
@@ -57,12 +68,3 @@ wechat:
 ```
 
 This enables the `wechat` channel; it does not create an order or register a notification route. Supply the current user's OpenID and the actual notification URL when creating an order. Preserve the raw notification body and protocol headers for `payment.handleNotify()` to verify. After success, check the business order, amount and handling state before updating the order or delivering goods.
-
-## Configuration reference
-
-
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `wechat` | Optional | Requires `mchId`, `appId`, `apiV3Key`, `serialNo`, `privateKey` and `platformKeys`. Map each platform key name to its real public key. |
-| `alipay` | Optional | Requires `appId`, `sellerId`, `privateKey`, `alipayPublicKey` and `returnUrl`. `signType` defaults to `RSA2`, `sandbox` to false. |
-| `stripe` | Optional | Requires `secretKey`, `webhookSecret` and `successUrl`. `cancelUrl` is optional, and `webhookToleranceSeconds` defaults to 300. |

@@ -47,9 +47,32 @@ enc:v2: identifies the format. The placeholder cannot decrypt, is not a request-
 
 ## Field, storage and cleanup reference
 
-Kit owns request handling. Session persistence belongs to IAM, and encrypted transport state belongs to Crypto.
+### Database
 
-| Table, key or artifact | Shape and ownership |
+Kit creates no SQL tables. [IAM](iam.en.md), [Audit](audit.en.md) and [Storage](storage.en.md) own sessions, audit and objects.
+
+### Cache keys
+
+Kit uses one key family when the application selects shared rate-limit storage. `digest` is the SHA-256 digest of the namespace, `windowMs` and rate-limited subject. Redis adds Cache's `keyPrefix`. Shared Redis gives instances a common count. With in-process storage, each process counts separately.
+
+| Key or family | Purpose | Default expiry and cleanup |
+| --- | --- | --- |
+| [`hai:kit:ratelimit:{<digest>}`](#cache-kit-rate-limit) | Limit request frequency for one subject or business scope. | `windowMs` milliseconds from the first request. Increments preserve expiry. The next request after expiry starts a new count. |
+
+<a id="cache-kit-rate-limit"></a>
+
+#### `hai:kit:ratelimit:{<digest>}`
+
+| Value field | Type | Default | Meaning | Example |
+| --- | --- | --- | --- | --- |
+| `count` | `integer` | — | Requests counted in this window. The first write stores `1`. | `2` |
+| `resetAt` | `number` | — | First request time plus the window duration in Unix milliseconds. Used to estimate remaining time for response headers. | `1794873660000` |
+
+### Cookies
+
+The browser holds cookies and sends them with requests.
+
+| Cookie | Value and retention |
 | --- | --- |
-| `hai:kit:ratelimit:{<digest>}` | Counter value holds `count` and `resetAt` in milliseconds. The digest binds application namespace, window and subject. Use the shared Redis adapter across server instances. |
-| `hai_access_token` | Configurable authentication cookie containing the access token. |
+| `hai_access_token` | `hai_access_token` holds the access token by default and has a configurable name. It uses `Path=/`, `HttpOnly` and `SameSite=Lax`, with `Secure` in production. `Max-Age` follows the issued lifetime. Bearer takes priority if supplied. |
+| Application cookie selected for encryption | The encrypted value starts with `enc:v2:` and keeps the original cookie expiry. See [Crypto](crypto.en.md) for keys and transport state. |

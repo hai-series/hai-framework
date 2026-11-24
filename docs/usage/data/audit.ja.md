@@ -92,30 +92,68 @@ failed-login から security 宛の例です。取得済みでも人への配達
 
 ### データベースのテーブル
 
-`reldb.init()` の後に `audit.init()` を呼び出し、その接続先にテーブルを準備します。任意項目を省略すると NULL になり、特記のない値は書き込み側が設定します。
+`reldb.init()` で接続し、`audit.init()` で監査テーブルを準備します。
+
+モジュールは 3 テーブルを使用します。
+
+| テーブル | 用途 |
+| --- | --- |
+| [`hai_audit_logs`](#table-hai-audit-logs) | 誰がいつどの対象に何をしたか確認します。 |
+| [`hai_audit_policy`](#table-hai-audit-policy) | データベースが最短保持期間を守るために使います。 |
+| [`hai_audit_alert_claims`](#table-hai-audit-alert-claims) | 同じルール・宛先・時間枠を一つのインスタンスが取得します。 |
+
+<a id="table-hai-audit-logs"></a>
 
 #### `hai_audit_logs`
 
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `id` | 文字列の主キー。自動生成する ID は `audit_` で始まります。 |
-| `action`, `resource` | 必須の文字列。操作名とリソースの種類です。 |
-| `created_at` | データベースの時計で記録する日時です。MySQL ではミリ秒精度の `DATETIME(3)` を使用します。 |
-| `user_id`, `resource_id`, `ip_address`, `user_agent` | 操作者、個別リソース、送信元 IP、ユーザーエージェント。NULL を許す文字列です。 |
-| `category`, `outcome`, `severity` | イベントの分類、結果、重大度。NULL を許す文字列です。 |
-| `request_id`, `trace_id`, `scope_id` | リクエスト、トレース、業務範囲を示す、NULL を許す文字列です。 |
-| `details`, `actor_snapshot` | イベント詳細と発生時点の操作者情報。NULL を許す JSON です。 |
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | イベントの主キー。Audit が発行する値は `audit_` で始まります。 | `audit_example-42` |
+| `user_id` | `TEXT` | 可 | — | 操作した利用者の ID。 | `user-42` |
+| `action` | `TEXT` | 不可 | — | 実行した操作。 | `read` |
+| `resource` | `TEXT` | 不可 | — | 対象の種類。 | `orders` |
+| `resource_id` | `TEXT` | 可 | — | 対象の ID。 | `order-42` |
+| `details` | `JSON` | 可 | — | 調査に使う業務の詳細。 | `{"fields":["status"]}` |
+| `ip_address` | `TEXT` | 可 | — | リクエスト元 IP アドレス。 | `192.0.2.10` |
+| `user_agent` | `TEXT` | 可 | — | クライアントのユーザーエージェント。 | `Example Browser` |
+| `category` | `TEXT` | 可 | — | 絞り込みに使うイベント分類。 | `security` |
+| `outcome` | `TEXT` | 可 | — | 操作の成功、失敗、拒否の区別。 | `success` |
+| `severity` | `TEXT` | 可 | — | イベントの重要度。 | `info` |
+| `request_id` | `TEXT` | 可 | — | 関連するリクエスト ID。 | `req-42` |
+| `trace_id` | `TEXT` | 可 | — | 関連するトレース ID。 | `trace-42` |
+| `scope_id` | `TEXT` | 可 | — | イベントが属する業務範囲。 | `team-1` |
+| `actor_snapshot` | `JSON` | 可 | — | 操作時点の実行者情報。 | `{"id":"user-42"}` |
+| `created_at` | `TIMESTAMP` | 可 | — | Audit の書き込み時にデータベース時計から取得するイベント時刻。 | `2026-11-17T00:00:00.000Z` |
 
-`created_at` には期間検索と保持処理用のインデックスがあります。アプリのトランザクション内で記録した監査ログは、そのトランザクションとともに確定またはロールバックされます。
+`created_at` のインデックスを期間検索と保持期限後の削除に使います。アプリのトランザクション内で作成したログは、そのトランザクションとともに確定またはロールバックされます。
+
+<a id="table-hai-audit-policy"></a>
+
+#### `hai_audit_policy`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | 不可 | — | 初期化時に挿入する一行の固定主キー。 | `1` |
+| `enabled` | `INTEGER` | 不可 | — | `1` は最短保持を有効化、`0` は無効化。初期値として `0` を書き込みます。 | `1` |
+| `min_days` | `INTEGER` | 不可 | — | 最短保持日数。初期値として `90` を書き込みます。 | `90` |
+
+<a id="table-hai-audit-alert-claims"></a>
+
+#### `hai_audit_alert_claims`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `VARCHAR(64)` | 不可 | — | ルール・宛先・時間枠から計算するダイジェスト。主キー。 | `<claim-digest>` |
+| `rule_id` | `VARCHAR(64)` | 不可 | — | アラートルール ID。 | `failed-login` |
+| `target_id` | `VARCHAR(64)` | 不可 | — | アラートの通知先 ID。 | `security` |
+| `window_start` | `BIGINT` | 不可 | — | アラート時間枠の開始。Unix ミリ秒。 | `1794873600000` |
+| `status` | `VARCHAR(16)` | 不可 | — | 取得後の処理状態。 | `claimed` |
+| `queue_id` | `VARCHAR(64)` | 可 | — | キューに入った場合の Reach キュー ID。 | `notification-42` |
+| `error_code` | `VARCHAR(128)` | 可 | — | 失敗時の調査用エラーコード。 | `NULL` |
 
 <a id="policy"></a>
 
-### 保持ポリシーとアラートの取得
-
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `hai_audit_policy` | 整数の主キーは `id=1`。必須の整数 `enabled`（最短保持を適用するか）と `min_days`（日数）の初期値は `0` と `90` です。 |
-| `hai_audit_alert_claims` | ルール、通知先、時間枠から文字列主キー `id` を作ります。必須は文字列の `rule_id`、`target_id`、`status` と整数の `window_start`。任意の `queue_id` は Reach の処理、`error_code` は失敗理由を示します。 |
+#### 保持ポリシーとアラートの取得
 
 データベースは保護対象の監査ログの更新や、最短保持期間に達していないログの削除を防ぎます。通知の取得は取得テーブルで調整し、実際の送信記録は Reach が保存します。
 

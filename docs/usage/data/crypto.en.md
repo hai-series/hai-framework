@@ -13,11 +13,26 @@ Encryption, decryption, signing and hashing do not need saved records. HTTP tran
 
 These examples follow one client connecting to a service. They contain fictional IDs and a public key, never a private key. Keys shown here are the names passed to Cache; Redis also adds the application's `keyPrefix`.
 
+HTTP transport encryption uses the four cache families below. Client and request IDs come from key exchange and encrypted requests. Nodes sharing a backend and prefix see the same records.
+
+| Key or family | Purpose | Default expiry and cleanup |
+| --- | --- | --- |
+| [`hai:crypto:transport:cache:client:<clientId>`](#cache-crypto-client) | Find a public key to verify requests and encrypt replies. | Defaults to 3600 seconds. Reads leave expiry unchanged. Exchange keys again after expiry. |
+| [`hai:crypto:transport:cache:request:<clientId>:<requestId>`](#cache-crypto-request) | Mark a request ID as consumed. | Expires at `issuedAt + 660000` milliseconds. |
+| [`hai:crypto:transport:cache:quota:register`](#cache-crypto-registration) | Check remaining new-key registrations. | 60 seconds from the first write. Increments preserve expiry. |
+| [`hai:crypto:transport:cache:quota:request`](#cache-crypto-request-quota) | Check remaining admissions for new requests. | 60 seconds from the first write. Increments preserve expiry. |
+
+<a id="cache-crypto-client"></a>
+
 ### 1. Client public key: recognize requests and encrypt replies for that client
 
 Key exchange registers the client's public key and assigns a `clientId`. The server uses this ID to find the key, verify request signatures and encrypt responses for the client.
 
 The key is `hai:crypto:transport:cache:client:<clientId>` and the value is a public-key string:
+
+| Value field | Type | Default | Meaning | Example |
+| --- | --- | --- | --- | --- |
+| whole value | `string` | — | Client public key string. The full value is shown below. | `<SM2 public key>` |
 
 ```json
 {
@@ -27,11 +42,17 @@ The key is `hai:crypto:transport:cache:client:<clientId>` and the value is a pub
 
 This means `c_example-42` is registered with this SM2 key. The sample is the publicly known SM2 curve generator; real clients generate their own key pairs. Registration lasts one hour by default, configurable to 1–86400 seconds. Reading it does not extend the lifetime. On expiry the client performs key exchange again. This does not log the user out: IAM manages login sessions separately.
 
+<a id="cache-crypto-request"></a>
+
 ### 2. Used request ID: stop the same encrypted request executing again
 
 The client creates a fresh `requestId` for each request. After checking the signature, contents and time, the server records that the ID has been used. Only a request that successfully creates this marker reaches business code. A later request with the same client and ID is rejected. Even when two servers receive it together, only one can create the marker.
 
 The key is `hai:crypto:transport:cache:request:<clientId>:<requestId>`. Its value is simply `true`: only existence matters, so the request body is not stored.
+
+| Value field | Type | Default | Meaning | Example |
+| --- | --- | --- | --- | --- |
+| whole value | `boolean` | — | Writes `true` after successfully claiming the request ID. | `true` |
 
 ```json
 {
@@ -43,9 +64,16 @@ This says client `c_example-42` has already used request `0123456789abcdef012345
 
 A request issued at 00:00 keeps its marker until 00:11 (`issuedAt + 660000` ms). The marker covers the time during which that request could still be accepted. Afterwards the request itself is too old, so the marker can expire. Including permitted future clock skew, a new marker may live for at most another 16 minutes. Removing it early to free space could allow a used request through. A fresh submission with a new ID still needs business duplicate protection, such as an order idempotency key.
 
+<a id="cache-crypto-registration"></a>
+
 ### 3. New-key counter: stop repeated key exchanges filling the cache
 
 All servers share the one key `hai:crypto:transport:cache:quota:register`. Each new registration reserves one slot:
+
+| Value field | Type | Default | Meaning | Example |
+| --- | --- | --- | --- | --- |
+| `used` | `number` | — | Registrations already admitted. The first write stores `1`. | `1` |
+| `limit` | `number` | `10000` | Maximum keys admitted in one window. Default comes from the store factory. | `10000` |
 
 ```json
 {
@@ -58,9 +86,16 @@ All servers share the one key `hai:crypto:transport:cache:quota:register`. Each 
 
 `used: 1` means one slot has been reserved in this window; `limit: 10000` allows at most 10000. A failed later write can still consume a slot, so this is an admission counter, not the number of live public keys. The first reservation starts a 60-second window; it does not reset on the clock's minute boundary. When full, Serv/Kit reject new key exchanges with HTTP 503. Existing registrations remain valid.
 
+<a id="cache-crypto-request-quota"></a>
+
 ### 4. New-request counter: stop used-ID records growing too quickly
 
 All servers share `hai:crypto:transport:cache:quota:request` to limit newly admitted request IDs:
+
+| Value field | Type | Default | Meaning | Example |
+| --- | --- | --- | --- | --- |
+| `used` | `number` | — | Requests already admitted in the window. The first write stores `1`. | `1` |
+| `limit` | `number` | `100000` | Maximum requests admitted in one window. Default comes from the store factory. | `100000` |
 
 ```json
 {

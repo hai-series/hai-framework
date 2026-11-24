@@ -94,15 +94,64 @@ id:1 是唯一策略，enabled:1 表示启用，min_days:90 要求至少保留90
 
 ### 数据库
 
-应用先调用 `reldb.init()` 连接 SQLite、PostgreSQL 或 MySQL，再用 `audit.init()` 在该数据库准备审计表。下表的可空字段在未提供时存为 NULL。除列出的默认值外，写入代码负责提供字段值。
+先用 `reldb.init()` 连接数据库，再调用 `audit.init()` 准备审计表。
 
-| 表                       | 字段与约束                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hai_audit_logs`         | `id` 为事件主键，由模块生成时以 `audit_` 开头。必填 `action` 为操作、`resource` 为资源类别。`created_at` 为事件时间，模块写入时使用数据库时钟。可空 `user_id` 为操作者、`resource_id` 为资源标识、`details` 为 JSON 详情、`ip_address` 为来源 IP、`user_agent` 为客户端信息、`category` 为事件分类、`outcome` 为操作结果、`severity` 为严重度、`request_id` 为请求编号、`trace_id` 为链路编号、`scope_id` 为业务范围、`actor_snapshot` 为当时的操作者 JSON 快照。按 `created_at` 建索引 |
-| `hai_audit_policy`       | `id` 是单行主键，初始化写 1。`enabled` 表示是否强制最短保留期，初始 0。`min_days` 表示最低保留天数，初始 90。修改保留期配置后，模块会更新这行策略                                                                                                                                                                                                                                                                                                                                       |
-| `hai_audit_alert_claims` | `id` 为按告警规则、目标和时间段生成的唯一标识，用于防止多个实例重复领取同一告警。`rule_id` 为规则、`target_id` 为告警目标、`window_start` 为告警窗口起点、`status` 为领取处理状态。可空 `queue_id` 关联 Reach 队列，`error_code` 保存可用于排查的失败码                                                                                                                                                                                                                                 |
+模块使用 3 张表。
 
-`hai_audit_logs` 的 `details` 和 `actor_snapshot` 是 JSON，`created_at` 是时间戳（MySQL 存为毫秒精度的 `DATETIME(3)`），其余是字符串。策略表的三个字段是整数。告警表的 `window_start` 是整数，其余为字符串。
+| 表名 | 用途 |
+| --- | --- |
+| [`hai_audit_logs`](#table-hai-audit-logs) | 查谁在什么时候对什么资源做了什么。 |
+| [`hai_audit_policy`](#table-hai-audit-policy) | 数据库据此阻止过早删除审计记录。 |
+| [`hai_audit_alert_claims`](#table-hai-audit-alert-claims) | 同一规则、目标和时间段只由一个实例领取。 |
+
+<a id="table-hai-audit-logs"></a>
+
+#### `hai_audit_logs`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 事件主键，模块生成的值以 `audit_` 开头。 | `audit_example-42` |
+| `user_id` | `TEXT` | 是 | — | 操作者的用户 ID。 | `user-42` |
+| `action` | `TEXT` | 否 | — | 执行的操作。 | `read` |
+| `resource` | `TEXT` | 否 | — | 资源类型。 | `orders` |
+| `resource_id` | `TEXT` | 是 | — | 资源的具体 ID。 | `order-42` |
+| `details` | `JSON` | 是 | — | 排查问题时可查的业务详情。 | `{"fields":["status"]}` |
+| `ip_address` | `TEXT` | 是 | — | 请求来源地址。 | `192.0.2.10` |
+| `user_agent` | `TEXT` | 是 | — | 请求的客户端标识。 | `Example Browser` |
+| `category` | `TEXT` | 是 | — | 事件类别，用于筛选。 | `security` |
+| `outcome` | `TEXT` | 是 | — | 操作是否成功、失败或被拒绝。 | `success` |
+| `severity` | `TEXT` | 是 | — | 事件严重程度。 | `info` |
+| `request_id` | `TEXT` | 是 | — | 关联请求 ID。 | `req-42` |
+| `trace_id` | `TEXT` | 是 | — | 关联链路 ID。 | `trace-42` |
+| `scope_id` | `TEXT` | 是 | — | 事件所属的业务范围。 | `team-1` |
+| `actor_snapshot` | `JSON` | 是 | — | 事件发生时的操作者资料快照。 | `{"id":"user-42"}` |
+| `created_at` | `TIMESTAMP` | 是 | — | 事件发生的时间，模块写入时以数据库时钟为准。 | `2026-11-17T00:00:00.000Z` |
+
+按 `created_at` 建索引，用于时间范围查询和清理。
+
+<a id="table-hai-audit-policy"></a>
+
+#### `hai_audit_policy`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | 否 | — | 固定主键，初始化插入一行。 | `1` |
+| `enabled` | `INTEGER` | 否 | — | `1` 启用最短保留期，`0` 停用。初始写入 `0`。 | `1` |
+| `min_days` | `INTEGER` | 否 | — | 最少保留天数，初始写入 `90`。 | `90` |
+
+<a id="table-hai-audit-alert-claims"></a>
+
+#### `hai_audit_alert_claims`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `VARCHAR(64)` | 否 | — | 按规则、目标和时间窗口计算的摘要主键。 | `<claim-digest>` |
+| `rule_id` | `VARCHAR(64)` | 否 | — | 告警规则 ID。 | `failed-login` |
+| `target_id` | `VARCHAR(64)` | 否 | — | 告警通知的目标 ID。 | `security` |
+| `window_start` | `BIGINT` | 否 | — | 告警窗口开始时间，Unix 毫秒。 | `1794873600000` |
+| `status` | `VARCHAR(16)` | 否 | — | 领取后的处理状态。 | `claimed` |
+| `queue_id` | `VARCHAR(64)` | 是 | — | 已排队时关联 Reach 的队列 ID。 | `notification-42` |
+| `error_code` | `VARCHAR(128)` | 是 | — | 失败时用于排查的错误码。 | `NULL` |
 
 <a id="policy"></a>
 

@@ -26,10 +26,28 @@
 
 ## 項目・保存・削除のリファレンス
 
+### データベースのテーブル
+
 注文、提供状況、コールバックの処理記録はアプリで管理します。組み込みの Stripe チャネルだけが操作テーブルを作成します。
 
-| テーブル・キー・成果物 | 形式と管理元 |
+組み込みの Stripe チャネルは 1 テーブルを使用します。
+
+| テーブル | 用途 |
 | --- | --- |
-| `hai_payment_stripe_operations` | `id` はアカウント、モード、操作、業務 ID から生成した主キー。`request_hash` は入力内容を固定。`result_json` と `payment_intent` は NULL 可で確定結果と Stripe ID を記録。`created_at` はデータベースの Unix 秒で、23 時間の安全な再試行期間の起点。 |
+| [`hai_payment_stripe_operations`](#table-hai-payment-stripe-operations) | 再試行リクエストを照合し、Stripe の確認済み結果を保存します。 |
+
+<a id="table-hai-payment-stripe-operations"></a>
+
+#### `hai_payment_stripe_operations`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 同じ業務操作で再利用するダイジェスト。主キー。 | `<operation-digest>` |
+| `request_hash` | `TEXT` | 不可 | — | 再試行時に同じパラメーターか確認するリクエストのダイジェスト。 | `<request-digest>` |
+| `result_json` | `JSON` | 可 | — | 決済手段の確認済み結果。NULL は結果がまだ不明。 | `null` |
+| `payment_intent` | `TEXT` | 可 | — | Stripe から受け取った PaymentIntent ID。 | `null` |
+| `created_at` | `BIGINT` | 不可 | — | 登録時のデータベース時刻。Unix 秒で、安全に再試行できる期限を判断します。 | `1794873600` |
+
+### キャッシュ
 
 Redis キーはありません。同じ決済手段を扱うインスタンスでは RelDB を共有します。

@@ -2,7 +2,18 @@
 
 [原文（中国語）](payment.md) · [データ構造](../data/payment.ja.md) · [API リファレンス](../function/payment.ja.md)
 
+## 設定の読み込み
+
 `_payment.yml` では使用する決済手段を有効にし、Payment をサーバーで初期化します。署名鍵と Webhook の認証情報は非公開の環境変数に置きます。
+
+## 設定一覧
+
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `wechat` | 省略可 | `mchId`、`appId`、`apiV3Key`、`serialNo`、`privateKey`、`platformKeys` が必要。プラットフォーム鍵の名前と公開鍵を対応付ける。 |
+| `alipay` | 省略可 | `appId`、`sellerId`、`privateKey`、`alipayPublicKey`、`returnUrl` が必要。`signType` は `RSA2`、`sandbox` は false が既定。 |
+| `stripe` | 省略可 | `secretKey`、`webhookSecret`、`successUrl` が必要。`cancelUrl` は任意で、`webhookToleranceSeconds` の既定は 300。 |
 
 ## 設定例
 
@@ -57,12 +68,3 @@ wechat:
 ```
 
 `wechat` チャネルを有効にする設定で、注文作成や通知ルートの登録は行いません。注文作成時に対象ユーザーの OpenID と実際の通知 URL を渡します。通知の元の本文とプロトコルヘッダーを保持し、`payment.handleNotify()` で署名を確認します。成功後も業務側の注文、金額、処理済み状態を確認してから、注文を更新し商品を提供します。
-
-## 設定一覧
-
-
-| 項目 | 既定値・必須条件 | 用途 |
-| --- | --- | --- |
-| `wechat` | 省略可 | `mchId`、`appId`、`apiV3Key`、`serialNo`、`privateKey`、`platformKeys` が必要。プラットフォーム鍵の名前と公開鍵を対応付ける。 |
-| `alipay` | 省略可 | `appId`、`sellerId`、`privateKey`、`alipayPublicKey`、`returnUrl` が必要。`signType` は `RSA2`、`sandbox` は false が既定。 |
-| `stripe` | 省略可 | `secretKey`、`webhookSecret`、`successUrl` が必要。`cancelUrl` は任意で、`webhookToleranceSeconds` の既定は 300。 |

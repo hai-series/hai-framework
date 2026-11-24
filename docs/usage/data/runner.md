@@ -72,38 +72,85 @@ event-42 是 execution-42 的第1条事件记录；event_json 是实际消息，
 
 ### 数据库
 
-Runner 把任务、资源配额和执行事件保存在共享 [reldb](reldb.md)。多个执行节点使用数据库时钟判断截止时间。未列默认值的字段由写入代码设置。
+Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 中。节点用数据库时钟判断截止时间。
+
+模块使用 3 张表。
+
+| 表名 | 用途 |
+| --- | --- |
+| [`hai_runner_executions`](#table-hai-runner-executions) | 读写任务状态、领取资格、资源预算和结果。 |
+| [`hai_runner_events`](#table-hai-runner-events) | 客户端按顺序读取进度和输出，断开后可以继续读。 |
+| [`hai_runner_gate`](#table-hai-runner-gate) | 多节点检查同一份容量预算时，用这条记录协调事务。 |
+
+<a id="table-hai-runner-executions"></a>
 
 #### `hai_runner_executions`
 
-| 字段                                                     | 含义与约束                                                                                              |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `id`                                                     | 执行主键                                                                                                |
-| `scope_key`、`kind`                                      | 权限范围标识、已注册的执行类型                                                                          |
-| `request_key`、`reuse_key`                               | 请求内容的核对标识，以及可为空的唯一去重键。提交同一次任务时可用同一去重键找到之前的执行                |
-| `request_json`、`environment_key`                        | JSON 保存服务端认可的任务参数、范围、环境、资源上限和执行超时。第二列可为空，有值时标明使用哪个容器环境 |
-| `state`、`reason`                                        | 状态与可空失败原因                                                                                      |
-| `owner_node`、`owner_generation`、`owner_process_json`   | 可空。保存哪个节点、该节点的哪次启动和哪个进程领取了任务                                                |
-| `pinned_node`、`pinned_generation`、`parent_id`          | 可空。记录任务只能由哪个节点或哪次节点启动处理，以及上级任务的 ID                                       |
-| `leased_until`、`queue_until`、`run_until`               | 租约、排队和运行截止时间                                                                                |
-| `event_sequence`、`event_bytes`                          | 事件游标和已写入字节数，后者 SQL 默认 0                                                                 |
-| `cpu_milli`、`memory_mib`、`pids`、`scratch_mib`         | CPU 毫核、内存 MiB、进程数和临时空间 MiB 的额度                                                         |
-| `result_json`、`container_json`                          | 可空结果和容器身份/运行信息                                                                             |
-| `created_at`、`updated_at`                               | 创建和更新时间                                                                                          |
-| `reconciliation_json`、`reconciled_at`                   | 可空人工裁定内容和时间                                                                                  |
-| `capacity_class`、`concurrency_key`、`concurrency_limit` | 记录任务占用哪类资源、归入哪组并发统计及该组上限。并发组可为空，上限为必填整数                                    |
-| `pool_fingerprint`、`pool_limit`、`warm_state`           | 可空。记录提前启动容器所用的预热池标识、容量上限和准备状态                                              |
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 执行主键。 | `execution-42` |
+| `scope_key` | `TEXT` | 否 | — | 任务所属的权限范围标识。 | `<scope-key>` |
+| `reuse_key` | `TEXT` | 是 | — | 唯一复用键，重提同一任务时可找回已有执行。 | `NULL` |
+| `request_key` | `TEXT` | 否 | — | 核对请求参数的标识。 | `<request-key>` |
+| `kind` | `TEXT` | 否 | — | 已登记的任务类型。 | `hai.tools.example.v1` |
+| `request_json` | `JSON` | 是 | — | 任务入参、范围、环境、资源和超时。示例节选。 | `{"input":{"orderId":"order-42"}}` |
+| `environment_key` | `TEXT` | 是 | — | 容器任务选择的运行环境。 | `NULL` |
+| `state` | `TEXT` | 否 | — | 当前执行状态。 | `queued` |
+| `reason` | `TEXT` | 是 | — | 任务失败或中止时的原因。 | `NULL` |
+| `owner_node` | `TEXT` | 是 | — | 当前领取任务的节点 ID。 | `null` |
+| `owner_generation` | `TEXT` | 是 | — | 领取时的节点启动标识。 | `null` |
+| `owner_process_json` | `JSON` | 是 | — | 领取任务的本机进程身份。 | `NULL` |
+| `pinned_node` | `TEXT` | 是 | — | 任务限定的执行节点。 | `NULL` |
+| `pinned_generation` | `TEXT` | 是 | — | 任务限定的节点启动批次。 | `NULL` |
+| `parent_id` | `TEXT` | 是 | — | 上级执行的 ID。 | `NULL` |
+| `leased_until` | `BIGINT` | 否 | — | 当前领取者的执行权截止时间。 | `0` |
+| `queue_until` | `BIGINT` | 否 | — | 任务可以等待领取到什么时候。 | `1794873660000` |
+| `run_until` | `BIGINT` | 否 | — | 任务开始运行后的截止时间。 | `0` |
+| `event_sequence` | `BIGINT` | 否 | — | 最近一条事件的顺序编号，从 `0` 开始。 | `0` |
+| `event_bytes` | `BIGINT` | 否 | `0` | 已写入的事件占用多少字节。 | `0` |
+| `cpu_milli` | `BIGINT` | 否 | — | CPU 上限，单位是毫核。 | `1000` |
+| `memory_mib` | `BIGINT` | 否 | — | 内存上限，单位是 MiB。 | `256` |
+| `pids` | `BIGINT` | 否 | — | 进程数量上限。 | `64` |
+| `scratch_mib` | `BIGINT` | 否 | — | 临时存储上限，单位是 MiB。 | `64` |
+| `result_json` | `JSON` | 是 | — | 执行输出，成功结果放在 `value` 中。 | `NULL` |
+| `created_at` | `BIGINT` | 否 | — | 入队时间。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 执行记录最近修改时间。 | `1794873600000` |
+| `container_json` | `JSON` | 是 | — | 供清理和核对使用的容器身份。 | `NULL` |
+| `reconciliation_json` | `JSON` | 是 | — | 人工或业务核对后记录的处理结果。 | `NULL` |
+| `reconciled_at` | `BIGINT` | 是 | — | 核对结果写入的时间。 | `NULL` |
+| `capacity_class` | `TEXT` | 否 | — | 任务占用哪类运行容量。 | `tool` |
+| `concurrency_key` | `TEXT` | 是 | — | 并发限制所使用的分组键。 | `NULL` |
+| `concurrency_limit` | `BIGINT` | 否 | — | 这个并发组可以同时运行多少任务。 | `1` |
+| `pool_fingerprint` | `TEXT` | 是 | — | 预热池的匹配标识。 | `NULL` |
+| `pool_limit` | `BIGINT` | 是 | — | 预热池容量上限。 | `NULL` |
+| `warm_state` | `TEXT` | 是 | — | 容器是否已预热好，或已转交给任务。 | `NULL` |
 
-时间字段是 Unix 毫秒。除可空字段外，计时与配额使用整数；JSON 列保存任务输入、执行或核验结果。索引覆盖排队状态、节点及租约、范围及容量、并发组、父执行、清理游标以及三类超时。
+时间字段以 Unix 毫秒记录。索引覆盖排队状态、节点和租约、范围和容量、并发组、父执行、清理游标及排队、租约、运行截止时间。
 
 <a id="events"></a>
 
-#### 执行事件与容量闸门
+<a id="table-hai-runner-events"></a>
 
-| 表                  | 字段与用途                                                                                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hai_runner_events` | `id` 是事件主键，`execution_id` 是执行编号，`sequence_number` 是可续读顺序，`event_json` 保存事件，`created_at` 是写入时间。按执行和顺序建索引 |
-| `hai_runner_gate`   | `id` 是容量事务的单行主键 1，`revision` 初始为 0，随事务更新，用于协调共享资源预算                                                             |
+#### `hai_runner_events`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 事件主键。 | `event-42` |
+| `execution_id` | `TEXT` | 否 | — | 产生事件的执行 ID。 | `execution-42` |
+| `sequence_number` | `BIGINT` | 否 | — | 同一执行内的事件顺序。 | `1` |
+| `event_json` | `JSON` | 是 | — | 任务发出的事件数据，存放在 `value` 中。 | `{"value":{"type":"progress"}}` |
+| `created_at` | `BIGINT` | 否 | — | 事件写入时间。 | `1794873600000` |
+
+按执行 ID 和事件顺序建索引。
+
+<a id="table-hai-runner-gate"></a>
+
+#### `hai_runner_gate`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | 否 | — | 固定主键，初始化只写一行。 | `1` |
+| `revision` | `BIGINT` | 否 | — | 初始化写入 `0`，容量事务更新此值来协调并发。 | `1` |
 
 通常在记录满 7 天后清理。无法确认任务是否已在容器中执行完成时，数据库会保留相关记录，待人工或业务核对结果后再进入清理流程。
 

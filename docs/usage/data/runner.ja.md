@@ -70,35 +70,84 @@ id:1 の1行だけで、revision は実行件数や永久所有者を表しま�
 
 ### データベースのテーブル
 
-ノード間で担当と期限を共有するため、共通の RelDB を使います。時刻は Unix ミリ秒で書き込みにはデータベースの時計を使います。型はバックエンド変換前の RelDB の定義です。
+Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.ja.md) に保存します。各ノードはデータベースの時計で期限を判断します。
+
+モジュールは 3 テーブルを使用します。
+
+| テーブル | 用途 |
+| --- | --- |
+| [`hai_runner_executions`](#table-hai-runner-executions) | タスクの状態、担当、資源上限、結果を管理します。 |
+| [`hai_runner_events`](#table-hai-runner-events) | 進捗と出力を順番に読み、再接続後も続きを取得できます。 |
+| [`hai_runner_gate`](#table-hai-runner-gate) | 共有容量を確認するトランザクションを調整します。 |
+
+<a id="table-hai-runner-executions"></a>
 
 #### `hai_runner_executions`
 
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `id`, `scope_key`, `kind` | 必須のテキスト。実行の主キー、認可の範囲、登録済みタスク種別。 |
-| `request_key`, `reuse_key` | テキストのリクエスト照合値と、NULL を許す一意の再利用キー。 |
-| `request_json`, `environment_key` | 検証済み入力、範囲、環境、上限、タイムアウトの JSON スナップショットと、任意のテキスト環境 ID。 |
-| `state`, `reason` | 必須のテキスト状態と、NULL を許す理由。 |
-| `owner_node`, `owner_generation`, `owner_process_json` | 担当ノードと起動世代（テキスト）、プロセス識別情報（JSON）。いずれも NULL 可。 |
-| `pinned_node`, `pinned_generation`, `parent_id` | タスクの実行を限定するノードと起動世代、親実行 ID。NULL を許すテキストです。 |
-| `leased_until`, `queue_until`, `run_until` | 必須の整数。リース、待機、実行の期限。 |
-| `event_sequence`, `event_bytes` | 必須の整数。イベント位置と記録済みのバイト数。`event_bytes` の SQL 既定値は `0`。 |
-| `cpu_milli`, `memory_mib`, `pids`, `scratch_mib` | 必須の整数。CPU ミリコア、メモリ MiB、プロセス数、一時領域の MiB。 |
-| `result_json`, `container_json`, `reconciliation_json` | 結果、コンテナの識別情報と状態、運用者の照合記録。NULL を許す JSON です。 |
-| `created_at`, `updated_at`, `reconciled_at` | 整数の作成・更新・照合時刻。照合時刻は NULL 可。 |
-| `capacity_class`, `concurrency_key`, `concurrency_limit` | 必須のテキスト容量区分、NULL を許すテキスト並列グループ、必須の整数上限。 |
-| `pool_fingerprint`, `pool_limit`, `warm_state` | 任意の予備コンテナプール ID（テキスト）、容量（整数）、準備状態（テキスト）。 |
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 実行の主キー。 | `execution-42` |
+| `scope_key` | `TEXT` | 不可 | — | タスクが属する権限範囲のキー。 | `<scope-key>` |
+| `reuse_key` | `TEXT` | 可 | — | 同じタスクを再提出したときに既存の実行を探す一意の再利用キー。 | `NULL` |
+| `request_key` | `TEXT` | 不可 | — | リクエストのパラメーターを照合するキー。 | `<request-key>` |
+| `kind` | `TEXT` | 不可 | — | 登録済みのタスク種別。 | `hai.tools.example.v1` |
+| `request_json` | `JSON` | 可 | — | タスクの入力、範囲、環境、資源、期限。例は抜粋。 | `{"input":{"orderId":"order-42"}}` |
+| `environment_key` | `TEXT` | 可 | — | コンテナタスクに選択した実行環境。 | `NULL` |
+| `state` | `TEXT` | 不可 | — | 現在の実行状態。 | `queued` |
+| `reason` | `TEXT` | 可 | — | 失敗または中止の理由。 | `NULL` |
+| `owner_node` | `TEXT` | 可 | — | 実行を取得したノードの ID。 | `null` |
+| `owner_generation` | `TEXT` | 可 | — | 実行を取得したノードの起動を識別する値。 | `null` |
+| `owner_process_json` | `JSON` | 可 | — | タスクを担当するローカルプロセスの識別情報。 | `NULL` |
+| `pinned_node` | `TEXT` | 可 | — | タスクを実行できる指定ノード。 | `NULL` |
+| `pinned_generation` | `TEXT` | 可 | — | タスクを実行できる指定ノードの起動世代。 | `NULL` |
+| `parent_id` | `TEXT` | 可 | — | 親実行の ID。 | `NULL` |
+| `leased_until` | `BIGINT` | 不可 | — | 現在の実行リースの期限。 | `0` |
+| `queue_until` | `BIGINT` | 不可 | — | キュー内のタスクを取得できる期限。 | `1794873660000` |
+| `run_until` | `BIGINT` | 不可 | — | 実行開始後の期限。 | `0` |
+| `event_sequence` | `BIGINT` | 不可 | — | 最新イベントの順序番号。未発生時は `0`。 | `0` |
+| `event_bytes` | `BIGINT` | 不可 | `0` | 保存済みイベントのバイト数。 | `0` |
+| `cpu_milli` | `BIGINT` | 不可 | — | CPU 上限。単位はミリコア。 | `1000` |
+| `memory_mib` | `BIGINT` | 不可 | — | メモリー上限。単位は MiB。 | `256` |
+| `pids` | `BIGINT` | 不可 | — | プロセス数の上限。 | `64` |
+| `scratch_mib` | `BIGINT` | 不可 | — | 一時領域の上限。単位は MiB。 | `64` |
+| `result_json` | `JSON` | 可 | — | 実行出力。成功時の結果は `value` に保存します。 | `NULL` |
+| `created_at` | `BIGINT` | 不可 | — | キュー登録時刻。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 不可 | — | 実行記録の最終更新時刻。 | `1794873600000` |
+| `container_json` | `JSON` | 可 | — | 削除や照合に使うコンテナの識別情報。 | `NULL` |
+| `reconciliation_json` | `JSON` | 可 | — | 照合後に記録した処理結果。 | `NULL` |
+| `reconciled_at` | `BIGINT` | 可 | — | 照合結果の記録時刻。 | `NULL` |
+| `capacity_class` | `TEXT` | 不可 | — | タスクが使用する実行容量の種別。 | `tool` |
+| `concurrency_key` | `TEXT` | 可 | — | 並列制限に使うグループキー。 | `NULL` |
+| `concurrency_limit` | `BIGINT` | 不可 | — | グループで同時に実行できるタスク数。 | `1` |
+| `pool_fingerprint` | `TEXT` | 可 | — | 事前起動プールの照合用識別子。 | `NULL` |
+| `pool_limit` | `BIGINT` | 可 | — | 事前起動プールの容量上限。 | `NULL` |
+| `warm_state` | `TEXT` | 可 | — | 事前起動コンテナの準備状態とタスクへの引き渡し状況。 | `NULL` |
 
-キュー、リース、範囲と容量、並列グループ、親実行、期限、削除処理用のインデックスがあります。SQL の既定値は記載した項目にのみあります。
+時刻は Unix ミリ秒です。キュー、ノードのリース、範囲と容量、並列グループ、親実行、削除、各期限にインデックスがあります。
 
 <a id="events"></a>
 
-### イベント・容量・削除処理
+<a id="table-hai-runner-events"></a>
 
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `hai_runner_events` | 文字列の主キー `id` と実行 ID `execution_id`、整数の `sequence_number` と `created_at`、JSON `event_json`。実行 ID と連番で索引を持ちます。 |
-| `hai_runner_gate` | 整数の単一主キー `id=1` と整数 `revision`（初期 `0`）。共有リソースを更新するトランザクション内で revision が変わります。 |
+#### `hai_runner_events`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | イベントの主キー。 | `event-42` |
+| `execution_id` | `TEXT` | 不可 | — | イベントを発行した実行の ID。 | `execution-42` |
+| `sequence_number` | `BIGINT` | 不可 | — | 同じ実行内でのイベントの順序。 | `1` |
+| `event_json` | `JSON` | 可 | — | タスクが発行したイベントデータ。`value` に保存します。 | `{"value":{"type":"progress"}}` |
+| `created_at` | `BIGINT` | 不可 | — | イベントの書き込み時刻。 | `1794873600000` |
+
+実行 ID とイベントの順序で検索できます。
+
+<a id="table-hai-runner-gate"></a>
+
+#### `hai_runner_gate`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | 不可 | — | 初期化時に書き込む一行の固定主キー。 | `1` |
+| `revision` | `BIGINT` | 不可 | — | 初期値として `0` が入り、容量のトランザクションが同時確認を調整するために更新します。 | `1` |
 
 完了記録は通常 7 日後に削除します。元のジョブが完了したか分からない場合は照合まで保存します。Redis キーは作りません。実行ノードはローカルのプロセスやコンテナを管理し、他ノードはデータベースを参照します。

@@ -10,40 +10,6 @@
 
 审计记录写进 RelDB。应用启动代码先调用 `reldb.init()`。启用备份时把已初始化的 `storage` 作为 `storage` 传给 `audit.init()`，启用告警时把已初始化的 `reach` 作为 `reach` 传进去。要定时执行，应用还需把 `audit.schedulerPlan()` 给出的任务交给 Scheduler。
 
-## 配置示例
-
-```yaml schema=@h-ai/audit:AuditInitConfigSchema
-capture:
-  enabled: true
-  includeReads: false
-```
-
-### 保护最近 90 天的审计记录
-
-写入 `config/_audit.yml`。这会阻止保护期内的记录被修改或删除，不会在第 91 天自动删除。清理仍由应用另行安排；去掉这一段也不会解除已保存到共享数据库的保护设置。
-
-```yaml schema=@h-ai/audit:AuditInitConfigSchema
-capture:
-  enabled: true
-  includeReads: false
-retention:
-  enabled: true
-  minDays: 90
-```
-
-### 查询操作也留记录，并隐藏客户手机号
-
-开启 `includeReads` 后，已经接入审计采集的成功查询也会留下记录，日志量会增加。`customerPhone` 是业务详情中的字段名，写入时隐藏；密码和令牌始终由模块隐藏，不依赖这个列表。
-
-```yaml schema=@h-ai/audit:AuditInitConfigSchema
-capture:
-  enabled: true
-  includeReads: true
-privacy:
-  enabled: true
-  fields: [customerPhone]
-```
-
 <a id="configuration-fields"></a>
 
 ## 配置清单
@@ -130,6 +96,40 @@ privacy:
 | ---------------- | ------------ | ---------------------------- |
 | `userNameColumn` | `"username"` | 用于写入身份快照的用户名列名 |
 
-## 生效与核对
+## 配置示例
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: false
+```
+
+### 保护最近 90 天的审计记录
+
+写入 `config/_audit.yml`。这会阻止保护期内的记录被修改或删除，不会在第 91 天自动删除。清理仍由应用另行安排；去掉这一段也不会解除已保存到共享数据库的保护设置。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: false
+retention:
+  enabled: true
+  minDays: 90
+```
+
+### 查询操作也留记录，并隐藏客户手机号
+
+开启 `includeReads` 后，已经接入审计采集的成功查询也会留下记录，日志量会增加。`customerPhone` 是业务详情中的字段名，写入时隐藏；密码和令牌始终由模块隐藏，不依赖这个列表。
+
+```yaml schema=@h-ai/audit:AuditInitConfigSchema
+capture:
+  enabled: true
+  includeReads: true
+privacy:
+  enabled: true
+  fields: [customerPhone]
+```
+
+### 生效与核对
 
 先执行一次已接入审核的写操作，再用 `audit.list()` 确认出现新记录。开启成功读取采集后，查询操作也会写记录。开启保护期后，保护期内的记录不会被清理。定时设置中的 `enabled` 只决定 Scheduler 是否自动执行告警检查或备份。部署示例见[反馈、通知、审计与任务](operations.md#audit采集保留保护归档与告警)。

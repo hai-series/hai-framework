@@ -12,45 +12,6 @@
 
 只负责提交或查询任务的 API 服务可以设为 `executor: false`。实际运行任务的服务需要配置普通任务和工具任务的资源上限。多个服务需要连接同一个关系数据库，并登记一致的任务类型与执行环境，才能从同一队列分派任务。
 
-## 配置示例
-
-```yaml schema=@h-ai/runner:RunnerConfigSchema
-nodeId: api-east
-executor: false
-```
-
-### 给执行节点设置资源和排队上限
-
-写入 `config/_runner.yml`。普通任务合计最多使用 2 核 CPU、2 GiB 内存和 1 GiB 临时空间，同时最多运行 4 个。不是每个任务都获得这份总额度；单任务申请还须在剩余额度内。节点必须与提交任务的服务共用数据库和任务定义。
-
-```yaml schema=@h-ai/runner:RunnerConfigSchema
-nodeId: worker-east
-executor: true
-capacity:
-  cpu: 2
-  memoryMiB: 2048
-  pids: 256
-  scratchMiB: 1024
-maxRunning: 4
-maxRunningPerScope: 2
-maxQueued: 1000
-```
-
-### 为工具任务另留一份资源
-
-普通任务和工具任务分别计算资源。本例给工具任务总计 1 核 CPU、1 GiB 内存，最多同时运行两项；机器的实际总容量须同时容纳 `capacity` 和 `toolCapacity`。这段配置不会注册工具，应用仍需登记真实工具处理程序。
-
-```yaml schema=@h-ai/runner:RunnerConfigSchema
-nodeId: tools-east
-executor: true
-toolCapacity:
-  cpu: 1
-  memoryMiB: 1024
-  pids: 128
-  scratchMiB: 512
-toolMaxRunning: 2
-```
-
 <a id="configuration-fields"></a>
 
 ## 配置清单
@@ -96,6 +57,45 @@ toolMaxRunning: 2
 | `environments[].networkPolicy`        | `"offline"`                                        | `offline` 隔离网络。`internal` 限制在指定的隔离网络。可填 `"offline"`、`"internal"`                       |
 | `environments[].network`              | 可省略                                             | `internal` 时必填，必须是预先配置的内部网络名称。可填字符串，1–100 个字符                                 |
 
-## 生效与核对
+## 配置示例
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: api-east
+executor: false
+```
+
+### 给执行节点设置资源和排队上限
+
+写入 `config/_runner.yml`。普通任务合计最多使用 2 核 CPU、2 GiB 内存和 1 GiB 临时空间，同时最多运行 4 个。不是每个任务都获得这份总额度；单任务申请还须在剩余额度内。节点必须与提交任务的服务共用数据库和任务定义。
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: worker-east
+executor: true
+capacity:
+  cpu: 2
+  memoryMiB: 2048
+  pids: 256
+  scratchMiB: 1024
+maxRunning: 4
+maxRunningPerScope: 2
+maxQueued: 1000
+```
+
+### 为工具任务另留一份资源
+
+普通任务和工具任务分别计算资源。本例给工具任务总计 1 核 CPU、1 GiB 内存，最多同时运行两项；机器的实际总容量须同时容纳 `capacity` 和 `toolCapacity`。这段配置不会注册工具，应用仍需登记真实工具处理程序。
+
+```yaml schema=@h-ai/runner:RunnerConfigSchema
+nodeId: tools-east
+executor: true
+toolCapacity:
+  cpu: 1
+  memoryMiB: 1024
+  pids: 128
+  scratchMiB: 512
+toolMaxRunning: 2
+```
+
+### 生效与核对
 
 为执行服务设置独立且稳定的 `nodeId`，并给每个容器环境填写固定的镜像摘要和网络权限。举例来说，容器环境的内存上限为 512 MiB 时，应用不能为单个任务申请 1 GiB。部署后提交一个测试任务，从同一队列查询该任务是否由执行服务领取。[ACP 接入与模型能力](ai.md#acp-接入与模型能力)

@@ -4,7 +4,37 @@
 
 [Chinese source](deploy.md) · [Data structures](../data/deploy.en.md) · [API reference](../function/deploy.en.md)
 
+## Configuration entry
+
 Set deployment options in `hai.json.deploy`, and select environment overrides for each target. Configure credentials outside the public application files.
+
+## Configuration reference
+
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
+| `environment`, `provider.type` | Optional | Select deployment environment and backend (`vercel` or `docker-ssh`). |
+
+<a id="provider"></a>
+
+### Deployment providers
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
+| `provider.token`, `provider.ssh` | See backend | Vercel access token or SSH host, user, verification and authentication settings. |
+| `provider.remote`, `provider.expose` | See backend | Remote release directory and container runtime, port mapping and HTTPS configuration. |
+| `provider.remote.dockerMode` | Optional | `rootless` requires `runtime: docker` and selects the SSH user’s local socket. Omit it or use `default` for the regular local engine rules. |
+| `provider.expose.hostAddress`, `provider.expose.publicUrl` | Set together for an external gateway | Bind to a specific host IPv4/IPv6 address and register the public HTTPS origin. The artifact supplies the application path. Select either this pair or Hai-managed `provider.expose.https`. |
+
+<a id="services"></a>
+
+### Services
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
+| `services.db`, `services.cache`, `services.storage` | Optional | Optional provisioned services. Supply the provider and its credentials when enabled. |
+
+Still untranslated: the full provider, HTTPS, SSH and middleware options. Read the [Chinese source section](deploy.md#configuration-fields).
 
 ## Configuration examples
 
@@ -51,34 +81,6 @@ With `environment: prod`, the CLI loads the prod environment layers, including p
   }
 }
 ```
-
-## Configuration reference
-
-
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `environment`, `provider.type` | Optional | Select deployment environment and backend (`vercel` or `docker-ssh`). |
-
-<a id="provider"></a>
-
-## Deployment providers
-
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `provider.token`, `provider.ssh` | See backend | Vercel access token or SSH host, user, verification and authentication settings. |
-| `provider.remote`, `provider.expose` | See backend | Remote release directory and container runtime, port mapping and HTTPS configuration. |
-| `provider.remote.dockerMode` | Optional | `rootless` requires `runtime: docker` and selects the SSH user’s local socket. Omit it or use `default` for the regular local engine rules. |
-| `provider.expose.hostAddress`, `provider.expose.publicUrl` | Set together for an external gateway | Bind to a specific host IPv4/IPv6 address and register the public HTTPS origin. The artifact supplies the application path. Select either this pair or Hai-managed `provider.expose.https`. |
-
-<a id="services"></a>
-
-## Services
-
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `services.db`, `services.cache`, `services.storage` | Optional | Optional provisioned services. Supply the provider and its credentials when enabled. |
-
-Still untranslated: the full provider, HTTPS, SSH and middleware options. Read the [Chinese source section](deploy.md#configuration-fields).
 
 <a id="rootless-docker-external-https"></a>
 

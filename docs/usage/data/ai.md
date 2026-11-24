@@ -17,7 +17,7 @@ AI 的多种记录都有 `id`、`version`、`data` 和时间字段，具体业�
 ```json
 {
   "id": "session-42",
-  "version": "version-42",
+  "version": "6fdb3344-5197-490b-a36d-2d43ce7cc3ba",
   "data": {
     "sessionId": "session-42",
     "objectId": "user-42",
@@ -31,7 +31,7 @@ AI 的多种记录都有 `id`、`version`、`data` 和时间字段，具体业�
 }
 ```
 
-此例保存 user-42 的 session-42；version-42 用来检查更新前记录有没有被别人改过。JSON 对象在 SQLite 中实际存为文本。
+此例保存 `user-42` 的 `session-42`。应用更新这条记录时可用 `version` 检查期间是否有人改过它。
 
 ### 一次模型调用的历史
 
@@ -527,68 +527,425 @@ grant-42 允许摘要所述的读取项目文件操作，expires 后不再使用
 
 ### 数据库
 
-调用 `ai.init(config, options)` 时传入 `options.storeProvider`，AI 就用该对象读写数据。省略该选项时，AI 尝试使用已初始化的 [reldb](reldb.md) 和 [vecdb](vecdb.md)，分别存记录和向量。开发和测试可用进程内存储，进程结束后其中的数据会消失。生产环境的应用实例需要共享同一份数据。下表描述 AI 内置的关系库表，自定义存储可使用自己的结构。
+使用内置 RelDB 存储时，AI 最多创建 30 张表。启用 A2A 才会创建对应的三张表。选择 Mem0 时，AI 不再创建内置记忆相关表。应用也可以通过 `ai.init(config, { storeProvider })` 接入自己的存储。在使用进程内存储的环境中，记录随应用停止而消失。
 
-#### 公共字段
+| 表名 | 用途 |
+| --- | --- |
+| [`hai_ai_chat_records`](#table-hai-ai-chat-records) | 查询模型调用的请求、回复和用量。 |
+| [`hai_ai_sessions`](#table-hai-ai-sessions) | 列出用户的会话。 |
+| [`hai_ai_context`](#table-hai-ai-context) | 为模型下一轮回复恢复上下文。 |
+| [`hai_ai_persona`](#table-hai-ai-persona) | 读取用户可选的角色和提示语。 |
+| [`hai_ai_llm_models`](#table-hai-ai-llm-models) | 运行时登记对话模型。 |
+| [`hai_ai_audio_models`](#table-hai-ai-audio-models) | 运行时登记语音模型。 |
+| [`hai_ai_image_models`](#table-hai-ai-image-models) | 运行时登记图片模型。 |
+| [`hai_ai_mcp_servers`](#table-hai-ai-mcp-servers) | 查允许连接的外部工具服务。 |
+| [`hai_ai_retrieval_sources`](#table-hai-ai-retrieval-sources) | 查可以从哪里检索资料。 |
+| [`hai_ai_memory`](#table-hai-ai-memory) | 保存跨会话要记住的信息。 |
+| [`hai_ai_memory_vector_outbox`](#table-hai-ai-memory-vector-outbox) | 找出需要补写或清理的记忆向量。 |
+| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | 记住当前应用的记忆向量集合和迁移进度。 |
+| [`hai_ai_memory_vector_scan`](#table-hai-ai-memory-vector-scan) | 记住索引巡检上次的进度。 |
+| [`hai_ai_knowledge_documents`](#table-hai-ai-knowledge-documents) | 找到知识文档的已发布版本。 |
+| [`hai_ai_knowledge_collections`](#table-hai-ai-knowledge-collections) | 查知识集合的维度、代次和可见性。 |
+| [`hai_ai_a2a_journal`](#table-hai-ai-a2a-journal) | 恢复智能体任务进度、事件和消息回执。 |
+| [`hai_ai_a2a_contexts`](#table-hai-ai-a2a-contexts) | 根据对话编号核对归属。 |
+| [`hai_ai_a2a_messages`](#table-hai-ai-a2a-messages) | 读取任务中提交的消息。 |
+| [`hai_ai_acp_workspaces`](#table-hai-ai-acp-workspaces) | 查可以交给智能体处理的项目及仓库。 |
+| [`hai_ai_acp_agents`](#table-hai-ai-acp-agents) | 查可启动的编码智能体和连接方式。 |
+| [`hai_ai_acp_sessions`](#table-hai-ai-acp-sessions) | 按会话找项目、原生会话和运行资源。 |
+| [`hai_ai_acp_locks`](#table-hai-ai-acp-locks) | 避免同时修改同一个会话资源。 |
+| [`hai_ai_acp_managed_sessions`](#table-hai-ai-acp-managed-sessions) | 将应用会话关联到实际运行的会话。 |
+| [`hai_ai_acp_managed_requests`](#table-hai-ai-acp-managed-requests) | 核对是不是同一次提交。 |
+| [`hai_ai_acp_managed_approvals`](#table-hai-ai-acp-managed-approvals) | 找到仍需人工批准的操作。 |
+| [`hai_ai_acp_managed_grants`](#table-hai-ai-acp-managed-grants) | 查可复用的授权范围和期限。 |
+| [`hai_ai_acp_managed_receipts`](#table-hai-ai-acp-managed-receipts) | 恢复时核对原调用方和执行者的权限范围。 |
+| [`hai_ai_memory_write_gate`](#table-hai-ai-memory-write-gate) | 协调多个节点改写记忆正文。 |
+| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | 协调向量集合归属和迁移写入。 |
+| [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | 协调索引巡检进度写入。 |
 
-| 字段                                          | 类型与默认值                                                                                                |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `id`                                          | 字符串主键，按各功能的业务标识生成                                                                          |
-| `version`                                     | 每次写入都生成新的版本值。按版本更新时，如果其他进程已改过该记录，这次写入便不会覆盖它                      |
-| `data`                                        | 必填业务记录。PostgreSQL 使用 JSONB，MySQL 使用 JSON，SQLite 使用存放 JSON 的 TEXT                          |
-| `created_at`、`updated_at`                    | 必填 Unix 毫秒创建和更新时间，优先取记录中的业务时间，缺省时取写入时间                                      |
-| `object_id`、`session_id`、`status`、`ref_id` | 下表列出的可选索引列分别表示主体、会话、状态或引用，省略值时为 NULL。组合了主体及会话的表还建二者的联合索引 |
+<a id="table-hai-ai-chat-records"></a>
 
-#### 会话、上下文和资源
+#### `hai_ai_chat_records`
 
-| 表                         | 附加列                    | `data` 的内容                                                                                                                                                                                                            |
-| -------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `hai_ai_chat_records`      | `object_id`、`session_id` | `id`、`objectId`、`sessionId` 定位调用。`request` 保存模型和消息，`response` 保存正文、工具调用、结束原因与用量，`createdAt`、`duration` 保存创建时间及调用耗时                                                          |
-| `hai_ai_sessions`          | `object_id`               | `sessionId`、`objectId` 标识会话和归属，`title`、`metadata` 是可空展示数据，`createdAt`、`updatedAt` 是时间，`deleted` 是阻止重建的删除标记                                                                              |
-| `hai_ai_context`           | `object_id`、`session_id` | `scope` 记录用户与会话的范围，`messages`、`summaries`、`turns` 保存消息、压缩摘要和轮次，初始为空数组。`epoch` 标记当前会话代次，`active` 记录可选的生成中或待保存轮次，`deleted` 是可选删除标记，`updatedAt` 是存储时间 |
-| `hai_ai_persona`           | `object_id`               | `id`、`objectId` 定位角色及归属，`name`、`systemPrompt`、`traits` 保存显示名、系统提示和风格，`metadata` 为扩展属性，`createdAt`、`updatedAt` 记录时间                                                                   |
-| `hai_ai_llm_models`        | 无                        | LLM 模型登记                                                                                                                                                                                                             |
-| `hai_ai_audio_models`      | 无                        | 音频模型登记                                                                                                                                                                                                             |
-| `hai_ai_image_models`      | 无                        | 图像模型登记                                                                                                                                                                                                             |
-| `hai_ai_mcp_servers`       | 无                        | 外部 MCP 服务登记                                                                                                                                                                                                        |
-| `hai_ai_retrieval_sources` | 无                        | 检索信源登记                                                                                                                                                                                                             |
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `chat-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `request` 保存发给模型的消息，`response` 保存回复、工具调用和用量。 | [业务数据示例](#一次模型调用的历史) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
+| `session_id` | `TEXT` | 是 | — | 所属会话，用于按会话和主体查询。 | `session-42` |
 
-这五个表的 `data` 字段采用对应资源的配置结构。启动配置登记一个 ID 后，应用运行时写入相同 ID 的设置会优先使用。删除标记 `__deleted` 可以让启动配置中的同 ID 项不再生效。涉及账号、密钥和会话正文的记录只供服务端读取。
+<a id="table-hai-ai-sessions"></a>
 
-#### 记忆和知识
+#### `hai_ai_sessions`
 
-| 表                               | 附加列或索引                                                                                      | `data` 的内容                                                                                                                                                                                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hai_ai_memory`                  | `object_id`；向量键索引，PostgreSQL 另有作用域 JSONB GIN。MySQL 用生成列 `memory_vector_key` 索引 | `id`、`content`、`type`、`importance` 为记忆标识、正文、类型和重要度。可选 `objectId`、`scope`、`metadata`、`vector`、`vectorId` 为所属主体、范围、扩展数据、向量和向量版本标识。`createdAt`、`lastAccessedAt`、`accessCount` 记录创建、最后访问时间与次数 |
-| `hai_ai_memory_vector_outbox`    | `(updated_at, id)` 索引                                                                           | `memoryId`、`updatedAt`、`attempts` 记录待同步的记忆、调度时间和次数。`token`、`retireUntil`、`cooldown` 为可选领取令牌和延期/节流状态                                                                                                                     |
-| `hai_ai_memory_vector_namespace` | 无                                                                                                | 以 `namespace` 为固定记录键保存集合命名空间、所有者、可选迁移游标与完成标记、更新时间                                                                                                                                                                      |
-| `hai_ai_memory_vector_scan`      | 无                                                                                                | 以 `scan` 为固定记录键保存可选集合、游标和租约标记；`updatedAt` 表示下次领取时间或现有租约截止                                                                                                                                                             |
-| `hai_ai_knowledge_documents`     | `object_id`、`session_id`                                                                         | `key` 是集合、代际和文档 ID 摘要。`collection`、`generation`、`documentId` 定位逻辑文档；可选 `current` 是已发布正文、分块和实体，`pending` 为待发布版本及截止，`garbage` 保存外部索引待清理版本                                                           |
-| `hai_ai_knowledge_collections`   | 无                                                                                                | `collection`、`dimension` 为集合名和维度，`generation`、`deleted` 决定集合代际与可见性                                                                                                                                                                     |
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `<session-key>` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `sessionId` 和 `objectId` 关联会话与用户。`title`、`metadata` 用于展示，`deleted` 阻止删除的会话被旧写入恢复。 | [业务数据示例](#用户的会话列表) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
 
-`hai_ai_memory_write_gate`、`hai_ai_memory_vector_namespace_write_gate`、`hai_ai_memory_vector_scan_write_gate` 的 `id` 为单行主键 1，`marker` 初始为 0。多个实例通过事务锁协调对这些状态的读写。查询某条记忆时，以关系表当前记录指向的向量版本为准，过时的向量即使尚未从索引清除也不用于返回结果。
+<a id="table-hai-ai-context"></a>
 
-AI 把知识向量写入 [vecdb](vecdb.md)。默认集合名为 `hai_ai_knowledge`，可通过配置修改。文档更新后，搜索使用已经发布的新版本。使用 AI 自带的记忆功能时，向量保存在独立集合，默认名为 `hai_ai_memory`。如果应用配置并绑定了记忆命名空间，则使用绑定生成的集合名。选择 Mem0 时，由 Mem0 和它连接的向量数据库存储记忆。
+#### `hai_ai_context`
 
-#### A2A 与 ACP
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `<session-key>` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `scope` 标记归属，`messages`、`summaries`、`turns` 保存对话，初始为空数组。`epoch` 标记重置代次，`active` 可记录生成中或待保存的轮次。 | [业务数据示例](#下一次回复要带给模型的上下文) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
+| `session_id` | `TEXT` | 是 | — | 所属会话，用于按会话和主体查询。 | `session-42` |
 
-| 表                             | 附加列或索引            | `data` 的内容                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hai_ai_a2a_journal`           | `object_id`、`ref_id`   | `owner`、`executionId`、`leasedUntil`、`deadline` 为拥有者、执行代际、租约和绝对期限；`task`、`events`、`receipts`、`message`、`result` 为任务、事件、稳定消息回执、当前消息和可选结果；`finished`、`cancelRequested`、`interrupted` 为运行状态                                                                                                 |
-| `hai_ai_a2a_contexts`          | 无                      | `owner` 保存 context 主体归属                                                                                                                                                                                                                                                                                                                   |
-| `hai_ai_a2a_messages`          | `object_id`、`status`   | `id`、`taskId`、可选 `contextId` 用于关联，`role` 是 user 或 agent，`parts` 为消息内容，可选 `caller` 为调用方，`createdAt` 为写入时间                                                                                                                                                                                                          |
-| `hai_ai_acp_workspaces`        | 无                      | 工作区及仓库登记，可用 `__deleted` 屏蔽初始条目                                                                                                                                                                                                                                                                                                 |
-| `hai_ai_acp_agents`            | 无                      | 智能体类型、运行和连接定义，可用 `__deleted` 屏蔽初始条目                                                                                                                                                                                                                                                                                       |
-| `hai_ai_acp_sessions`          | 无                      | `id`、`agentId`、`workspaceId`、`repositoryId` 记录会话归属；`cwd`、`newWorktree`、`branch`、`workspace`、`worktreeStatus` 描述工作目录、分支和回收。`modelId`、`modelSignature` 保存模型约束，`nativeId` 保存当前原生会话 ID，显式重开成功后更新，`status` 为会话状态，`agent` 是智能体定义快照，`mcpServers`、`mcpServerIds` 记录 MCP 绑定，`resource` 是当前容器引用 |
-| `hai_ai_acp_locks`             | 无                      | `owner` 为 ACP 资源操作的所有者，可为空                                                                                                                                                                                                                                                                                                         |
-| `hai_ai_acp_managed_sessions`  | `(updated_at, id)` 索引 | `scope`、`workerScope`、`workerId` 绑定调用范围和执行资源，`request`、`mode` 保存请求和执行模式，`historySummary`、`closed`、`singleTurn` 为可选历史摘要和状态                                                                                                                                                                                  |
-| `hai_ai_acp_managed_requests`  | 同上                    | `fingerprint` 比对同一请求登记是否一致                                                                                                                                                                                                                                                                                                          |
-| `hai_ai_acp_managed_approvals` | 同上                    | `scope`、`sessionId` 标记归属，`deadline` 是审批截止，`decision` 是有结果后的审批决定                                                                                                                                                                                                                                                           |
-| `hai_ai_acp_managed_grants`    | 同上                    | `id`、`scopeKey`、`summary` 为授权 ID、范围和摘要；`sessionId` 可选，`expires` 为到期时间，`revoked` 为可选撤销状态                                                                                                                                                                                                                             |
-| `hai_ai_acp_managed_receipts`  | 同上                    | `scope` 与 `workerScope` 保留原调用方和执行范围，供恢复时核对                                                                                                                                                                                                                                                                                   |
+<a id="table-hai-ai-persona"></a>
 
-A2A 使用共享存储的时钟判断任务的时间限制。提交事件时会比较记录版本，避免某个进程覆盖其他进程刚写的内容。事件保存后，订阅者才能读到。完成消息的回执没有自动过期时间。ACP 运行任务和保存事件时使用的表见 [runner](runner.md)。
+#### `hai_ai_persona`
 
-### 缓存
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `persona-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `name`、`systemPrompt`、`traits` 保存名称、系统提示和风格，`metadata` 可保存扩展资料。 | [业务数据示例](#可反复选择的-ai-角色) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
 
-AI 内置存储不创建 Redis 键。模型连接、工具连接和当前执行所用的对象留在进程内，重启后需要重新建立。对话、A2A 回执和已发布知识可从配置的共享存储读取。浏览器连接实时音频时使用的票据由 [IAM](iam.md) 签发，并在使用时注销。
+<a id="table-hai-ai-llm-models"></a>
+
+#### `hai_ai_llm_models`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `chat-model` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `id` 标识模型，其他字段保存协议、模型名和连接参数。 | [业务数据示例](#运行时登记的对话模型) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-audio-models"></a>
+
+#### `hai_ai_audio_models`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `audio-model` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 语音转文字或合成模型的配置，含模型 ID 和连接参数。 | [业务数据示例](#运行时登记的语音模型) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-image-models"></a>
+
+#### `hai_ai_image_models`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `image-model` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 图片模型 ID、服务连接和默认参数。 | [业务数据示例](#运行时登记的图像模型) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-mcp-servers"></a>
+
+#### `hai_ai_mcp_servers`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `tools-server` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 外部 MCP 服务的连接方式、地址和调用设置。 | [业务数据示例](#允许连接的外部工具服务) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-retrieval-sources"></a>
+
+#### `hai_ai_retrieval_sources`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `support-source` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 检索信源的 ID、类型和连接设置。 | [业务数据示例](#可以从哪里检索资料) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+同一 ID 同时出现在启动配置和数据库时，使用配置中的定义。数据库里的 `__deleted` 标记删除了某条运行时登记。认证信息只供服务端使用。
+
+<a id="table-hai-ai-memory"></a>
+
+#### `hai_ai_memory`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `memory-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `content`、`type`、`importance` 保存记忆内容、类别和重要度。还可记录作用域、访问次数、向量和向量版本。 | [业务数据示例](#跨对话仍要记住的内容) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
+
+记忆检索使用关系表当前版本指向的向量。PostgreSQL 用 JSONB GIN 加速作用域查询。MySQL 通过生成列 `memory_vector_key`（`VARCHAR(512)`，可能为空）给向量键建索引。此列从 `data.vectorId` 取值，旧记录有向量而缺少此字段时取 `id`。
+
+<a id="table-hai-ai-memory-vector-outbox"></a>
+
+#### `hai_ai_memory_vector_outbox`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `memory-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `memoryId`、`updatedAt`、`attempts` 记录记忆、调度时间和次数，可选 `token`、`retireUntil`、`cooldown` 记录领取、延期及节流。 | [业务数据示例](#哪些记忆还需要同步到搜索索引) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-memory-vector-namespace"></a>
+
+#### `hai_ai_memory_vector_namespace`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `namespace` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `namespace` 和 `owner` 定位集合，记录可选的迁移游标和完成标记。 | [业务数据示例](#这批记忆应写到哪个向量空间) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-memory-vector-scan"></a>
+
+#### `hai_ai_memory_vector_scan`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `scan` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 保存集合、游标和领取状态。`updatedAt` 表示下次领取时间或本次领取期限。 | [业务数据示例](#索引巡检上次查到了哪里) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-knowledge-documents"></a>
+
+#### `hai_ai_knowledge_documents`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `<document-key>` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `current` 保存已发布正文、分块和实体，`pending` 保存待发布版本，`garbage` 保存外部索引中待清理的版本。 | [业务数据示例](#一篇知识文档当前发布到哪一版) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属知识集合，按集合查询。 | `hai_ai_knowledge` |
+| `session_id` | `TEXT` | 是 | — | 所属集合代次，与集合名联合查询。 | `generation-42` |
+
+<a id="table-hai-ai-knowledge-collections"></a>
+
+#### `hai_ai_knowledge_collections`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `hai_ai_knowledge` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `collection` 和 `dimension` 记录名称与维度，`generation`、`deleted` 决定读取哪个代次。 | [业务数据示例](#一组知识文档属于哪个集合) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-a2a-journal"></a>
+
+#### `hai_ai_a2a_journal`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `task-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `owner`、`executionId`、`leasedUntil`、`deadline` 约束谁能继续处理及期限，`task`、`events`、`receipts`、`message`、`result` 保存过程与结果。 | [业务数据示例](#智能体任务已经处理到哪一步) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
+| `ref_id` | `TEXT` | 是 | — | 关联的上下文编号，用于查询任务。 | `context-42` |
+
+A2A 以共享存储的时钟判断任务期限，保存事件时会比较记录版本。完成消息的回执没有自动过期时间。
+
+<a id="table-hai-ai-a2a-contexts"></a>
+
+#### `hai_ai_a2a_contexts`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `context-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `owner` 是该 context 的可信主体。 | [业务数据示例](#这段智能体对话属于谁) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-a2a-messages"></a>
+
+#### `hai_ai_a2a_messages`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `message-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 消息 ID、任务、可选上下文、发送角色、消息分段和创建时间。 | [业务数据示例](#智能体任务之间传递的消息) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+| `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
+| `status` | `TEXT` | 是 | — | 消息所关联任务的状态，用于筛选。 | `completed` |
+
+<a id="table-hai-ai-acp-workspaces"></a>
+
+#### `hai_ai_acp_workspaces`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `project` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 工作区定义，含保存位置和可访问的仓库。 | [业务数据示例](#允许智能体工作的项目空间) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-acp-agents"></a>
+
+#### `hai_ai_acp_agents`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `coder` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 智能体定义，含运行模式、适配器、模型和环境范围。 | [业务数据示例](#可以启动哪一种编码智能体) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-acp-sessions"></a>
+
+#### `hai_ai_acp_sessions`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `session-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | 会话绑定的智能体、工作区、仓库、分支、模型、MCP 和当前容器。显式重开成功后更新 `nativeId`。 | [业务数据示例](#一次智能体会话绑定的项目和资源) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-acp-locks"></a>
+
+#### `hai_ai_acp_locks`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `session-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `owner` 是当前资源操作的领取者，可以为空。 | [业务数据示例](#避免同时改动同一会话资源) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+<a id="table-hai-ai-acp-managed-sessions"></a>
+
+#### `hai_ai_acp_managed_sessions`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `session-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `scope`、`workerScope`、`workerId` 保存调用范围和执行资源，`request`、`mode` 保存请求与执行方式，还可保留历史摘要和会话状态。 | [业务数据示例](#把应用会话接到实际执行会话) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-acp-managed-requests"></a>
+
+#### `hai_ai_acp_managed_requests`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `<request-key>` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `fingerprint` 用于核对同一请求登记的参数是否一致。 | [业务数据示例](#辨认是不是同一次提交) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-acp-managed-approvals"></a>
+
+#### `hai_ai_acp_managed_approvals`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `approval-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `scope`、`sessionId` 标记归属，`deadline` 是审批期限，`decision` 保存结论。 | [业务数据示例](#哪项操作还在等人批准) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-acp-managed-grants"></a>
+
+#### `hai_ai_acp_managed_grants`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `grant-42` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `id`、`scopeKey`、`summary` 标识授权，`sessionId` 可限制会话，`expires` 和 `revoked` 影响有效性。 | [业务数据示例](#已经允许之后仍可复用的操作范围) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-acp-managed-receipts"></a>
+
+#### `hai_ai_acp_managed_receipts`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 否 | — | 这条记录的主键。 | `<execution-key>` |
+| `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
+| `data` | `JSON` | 否 | — | `scope` 和 `workerScope` 记录原调用范围和执行范围。 | [业务数据示例](#恢复时核对原来的调用范围) |
+| `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
+
+按 `(updated_at, id)` 建索引，供后台按时间翻页。
+
+<a id="table-hai-ai-memory-write-gate"></a>
+
+#### `hai_ai_memory_write_gate`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | 否 | — | 固定单行主键，初始化插入。 | `1` |
+| `marker` | `INTEGER` | 否 | — | 初始写入 `0`，后续在 `0` 和 `1` 之间切换来锁定该行。 | `0` |
+
+<a id="table-hai-ai-memory-vector-namespace-write-gate"></a>
+
+#### `hai_ai_memory_vector_namespace_write_gate`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | 否 | — | 固定单行主键，初始化插入。 | `1` |
+| `marker` | `INTEGER` | 否 | — | 初始写入 `0`，后续在 `0` 和 `1` 之间切换来锁定该行。 | `0` |
+
+<a id="table-hai-ai-memory-vector-scan-write-gate"></a>
+
+#### `hai_ai_memory_vector_scan_write_gate`
+
+| 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | 否 | — | 固定单行主键，初始化插入。 | `1` |
+| `marker` | `INTEGER` | 否 | — | 初始写入 `0`，后续在 `0` 和 `1` 之间切换来锁定该行。 | `0` |
+
+### 向量集合与缓存
+
+知识向量默认写到 [VecDB](vecdb.md) 的 `hai_ai_knowledge` 集合，搜索只用已发布的文档版本。内置记忆默认使用 `hai_ai_memory`。配置并绑定记忆命名空间后会使用绑定的集合。选用 Mem0 时由 Mem0 管理其向量存储。ACP 执行和事件的表由 [Runner](runner.md) 管理。
+
+AI 不创建 Redis 键。模型连接、工具连接和执行对象只留在本进程，重启后需重建。浏览器连接实时音频时用的票据由 [IAM](iam.md) 管理。

@@ -92,30 +92,68 @@ This is only a header, not a restorable archive. cutoff is the endpoint; null fr
 
 ### Database tables
 
-Call `reldb.init()` first. `audit.init()` prepares the tables on that connection. Missing optional values are NULL; the writer supplies the values unless stated otherwise.
+Call `reldb.init()` first. `audit.init()` prepares the tables on that connection.
+
+The module uses 3 tables.
+
+| Table | Purpose |
+| --- | --- |
+| [`hai_audit_logs`](#table-hai-audit-logs) | Find who acted on a resource and when. |
+| [`hai_audit_policy`](#table-hai-audit-policy) | Enforce the minimum retention period. |
+| [`hai_audit_alert_claims`](#table-hai-audit-alert-claims) | Let one instance claim a rule, destination and time window. |
+
+<a id="table-hai-audit-logs"></a>
 
 #### `hai_audit_logs`
 
-| Field or table | Shape and meaning |
-| --- | --- |
-| `id` | String primary key. Generated IDs start with `audit_`. |
-| `action`, `resource` | Required strings: action and resource category. |
-| `created_at` | Timestamp written using the database clock. MySQL stores millisecond precision in `DATETIME(3)`. |
-| `user_id`, `resource_id`, `ip_address`, `user_agent` | Nullable strings: actor, resource instance, source IP and user agent. |
-| `category`, `outcome`, `severity` | Nullable strings: event category, result and severity. |
-| `request_id`, `trace_id`, `scope_id` | Nullable strings for request, trace and business scope. |
-| `details`, `actor_snapshot` | Nullable JSON: event details and the actor as recorded at the time. |
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Event primary key. IDs issued by Audit start with `audit_`. | `audit_example-42` |
+| `user_id` | `TEXT` | Yes | — | ID of the user who acted. | `user-42` |
+| `action` | `TEXT` | No | — | Action performed. | `read` |
+| `resource` | `TEXT` | No | — | Type of resource. | `orders` |
+| `resource_id` | `TEXT` | Yes | — | ID of the affected resource. | `order-42` |
+| `details` | `JSON` | Yes | — | Business details available for investigation. | `{"fields":["status"]}` |
+| `ip_address` | `TEXT` | Yes | — | Request source IP address. | `192.0.2.10` |
+| `user_agent` | `TEXT` | Yes | — | Client user agent. | `Example Browser` |
+| `category` | `TEXT` | Yes | — | Event category used for filtering. | `security` |
+| `outcome` | `TEXT` | Yes | — | Whether the action succeeded, failed or was denied. | `success` |
+| `severity` | `TEXT` | Yes | — | Event severity. | `info` |
+| `request_id` | `TEXT` | Yes | — | Related request ID. | `req-42` |
+| `trace_id` | `TEXT` | Yes | — | Related trace ID. | `trace-42` |
+| `scope_id` | `TEXT` | Yes | — | Business scope of the event. | `team-1` |
+| `actor_snapshot` | `JSON` | Yes | — | Snapshot of the actor at the time of the event. | `{"id":"user-42"}` |
+| `created_at` | `TIMESTAMP` | Yes | — | Event time from the database clock when Audit writes it. | `2026-11-17T00:00:00.000Z` |
 
-`created_at` has an index for time-based searches and retention. Audit entries written inside an application transaction commit or roll back with it.
+The `created_at` index supports time ranges and retention cleanup. Entries written in an application transaction commit or roll back with it.
+
+<a id="table-hai-audit-policy"></a>
+
+#### `hai_audit_policy`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `INTEGER` | No | — | Fixed primary key of the row inserted at initialization. | `1` |
+| `enabled` | `INTEGER` | No | — | `1` enforces minimum retention, `0` disables it. Audit initially writes `0`. | `1` |
+| `min_days` | `INTEGER` | No | — | Minimum days to retain records. Audit initially writes `90`. | `90` |
+
+<a id="table-hai-audit-alert-claims"></a>
+
+#### `hai_audit_alert_claims`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `VARCHAR(64)` | No | — | Digest of the rule, destination and window. Primary key. | `<claim-digest>` |
+| `rule_id` | `VARCHAR(64)` | No | — | Alert rule ID. | `failed-login` |
+| `target_id` | `VARCHAR(64)` | No | — | Alert destination ID. | `security` |
+| `window_start` | `BIGINT` | No | — | Start of the alert window in Unix milliseconds. | `1794873600000` |
+| `status` | `VARCHAR(16)` | No | — | Processing state after the claim. | `claimed` |
+| `queue_id` | `VARCHAR(64)` | Yes | — | Reach queue ID once the alert is queued. | `notification-42` |
+| `error_code` | `VARCHAR(128)` | Yes | — | Diagnostic error code if the alert fails. | `NULL` |
 
 <a id="policy"></a>
 
-### Retention and alert claims
-
-| Field or table | Shape and meaning |
-| --- | --- |
-| `hai_audit_policy` | Integer primary key `id=1`. `enabled` (enforce minimum retention) and `min_days` (days) are required integers seeded to `0` and `90`. |
-| `hai_audit_alert_claims` | `id` is a string primary key derived from rule, target and window. Required fields: `rule_id`, `target_id`, `status` (strings) and `window_start` (integer). Nullable `queue_id` links Reach work; nullable `error_code` identifies delivery failure. |
+#### Retention and alert claims
 
 The database prevents updates to protected audit records and prevents deletion before the minimum retention period. The claim table coordinates delivery; delivery records belong to Reach.
 

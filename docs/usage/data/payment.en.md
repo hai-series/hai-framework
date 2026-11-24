@@ -26,10 +26,28 @@ Null result_json and payment_intent mean no confirmed result, so do not fulfill 
 
 ## Field, storage and cleanup reference
 
+### Database tables
+
 The application owns orders, fulfillment and callback processing records. Only the built-in Stripe channel creates a relational operations table.
 
-| Table, key or artifact | Shape and ownership |
+The built-in Stripe channel uses one table.
+
+| Table | Purpose |
 | --- | --- |
-| `hai_payment_stripe_operations` | `id` is a PK derived from account, mode, operation and business ID. `request_hash` binds request content. Nullable `result_json` and `payment_intent` record confirmed results and Stripe ID. `created_at` is Unix seconds from the database and starts the 23-hour safe retry window. |
+| [`hai_payment_stripe_operations`](#table-hai-payment-stripe-operations) | Check retry requests and keep confirmed Stripe results. |
+
+<a id="table-hai-payment-stripe-operations"></a>
+
+#### `hai_payment_stripe_operations`
+
+| Column | Type | Nullable | Default | Meaning | Example |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | No | — | Operation digest and primary key reused for the same operation. | `<operation-digest>` |
+| `request_hash` | `TEXT` | No | — | Request digest used to confirm that a retry uses the same parameters. | `<request-digest>` |
+| `result_json` | `JSON` | Yes | — | Confirmed provider result. NULL means the result is still unknown. | `null` |
+| `payment_intent` | `TEXT` | Yes | — | Stripe PaymentIntent ID recorded after the provider returns it. | `null` |
+| `created_at` | `BIGINT` | No | — | Database time at registration in Unix seconds. Used to check the safe retry window. | `1794873600` |
+
+### Cache
 
 There are no Redis keys. Share the RelDB backend between service instances that handle the same channel.

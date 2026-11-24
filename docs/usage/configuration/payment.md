@@ -10,6 +10,35 @@
 
 应用按需配置微信支付、支付宝和 Stripe。收到渠道的支付通知时，服务端把原始通知交给 `payment.handleNotify()` 验签，确认成功后再更新业务订单。更新时检查订单号和已处理状态，避免渠道重复通知导致重复发货。
 
+## 配置清单
+
+例如，只填写 `stripe` 时，微信支付和支付宝没有启用。启用 Stripe 时必须填写 `stripe.secretKey`、`stripe.webhookSecret` 及 `stripe.successUrl`。
+
+| 配置项                           | 默认值/必填 | 说明                                                                                           |
+| -------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `wechat`                         | 可省略      | 微信支付渠道的商户配置与验签参数                                                               |
+| `wechat.mchId`                   | 必填        | wechat：微信支付商户号。可填字符串，至少 1 个字符                                              |
+| `wechat.apiV3Key`                | 必填        | wechat：微信支付 API v3 密钥。可填字符串，至少 1 个字符                                        |
+| `wechat.serialNo`                | 必填        | wechat：商户 API 证书序列号。可填字符串，至少 1 个字符                                         |
+| `wechat.privateKey`              | 必填        | wechat：商户签名私钥（PEM）。可填字符串，至少 1 个字符                                         |
+| `wechat.platformKeys`            | 必填        | 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识                            |
+| `wechat.platformKeys.<名称>`     | 必填        | 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。可填字符串，至少 1 个字符 |
+| `wechat.appId`                   | 必填        | wechat：商户应用 ID。可填字符串，至少 1 个字符                                                 |
+| `alipay`                         | 可省略      | 支付宝渠道的商户配置与验签参数                                                                 |
+| `alipay.appId`                   | 必填        | alipay：商户应用 ID。可填字符串，至少 1 个字符                                                 |
+| `alipay.sellerId`                | 必填        | alipay：支付宝卖家 ID，通知 seller_id 必须与之匹配。可填字符串，至少 1 个字符                  |
+| `alipay.privateKey`              | 必填        | alipay：商户签名私钥（PEM）。可填字符串，至少 1 个字符                                         |
+| `alipay.alipayPublicKey`         | 必填        | alipay：支付宝平台公钥，用于验签。可填字符串，至少 1 个字符                                    |
+| `alipay.returnUrl`               | 必填        | 手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。可填字符串，URL         |
+| `alipay.signType`                | `"RSA2"`    | alipay：请求和通知允许的签名算法。可填 `"RSA2"`、`"RSA"`                                       |
+| `alipay.sandbox`                 | `false`     | alipay：是否使用沙箱网关                                                                       |
+| `stripe`                         | 可省略      | Stripe渠道的商户配置与验签参数                                                                 |
+| `stripe.secretKey`               | 必填        | stripe：Stripe 服务端密钥                                                                      |
+| `stripe.webhookSecret`           | 必填        | stripe：Stripe Webhook 验签密钥。可填字符串，至少 1 个字符                                     |
+| `stripe.successUrl`              | 必填        | 托管 Checkout 完成后的可信跳转地址，可含 {CHECKOUT_SESSION_ID}。可填字符串，URL                |
+| `stripe.cancelUrl`               | 可省略      | 托管 Checkout 取消按钮的可信跳转地址；省略时不显示返回按钮。可填字符串，URL                    |
+| `stripe.webhookToleranceSeconds` | `300`       | stripe：Webhook 时间戳允许偏差，单位秒。正整数                                                 |
+
 ## 配置示例
 
 ```yaml schema=@h-ai/payment:PaymentConfigSchema
@@ -64,35 +93,6 @@ wechat:
 
 此配置启用 `wechat` 渠道，不会自动创建订单或注册通知路由。下单时由应用提供当前用户的 OpenID 和实际通知地址；通知处理保留原始请求体及协议头，交给 `payment.handleNotify()` 验签。成功后仍须核对业务订单、金额及处理状态，再更新订单或发货。
 
-## 配置清单
-
-例如，只填写 `stripe` 时，微信支付和支付宝没有启用。启用 Stripe 时必须填写 `stripe.secretKey`、`stripe.webhookSecret` 及 `stripe.successUrl`。
-
-| 配置项                           | 默认值/必填 | 说明                                                                                           |
-| -------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `wechat`                         | 可省略      | 微信支付渠道的商户配置与验签参数                                                               |
-| `wechat.mchId`                   | 必填        | wechat：微信支付商户号。可填字符串，至少 1 个字符                                              |
-| `wechat.apiV3Key`                | 必填        | wechat：微信支付 API v3 密钥。可填字符串，至少 1 个字符                                        |
-| `wechat.serialNo`                | 必填        | wechat：商户 API 证书序列号。可填字符串，至少 1 个字符                                         |
-| `wechat.privateKey`              | 必填        | wechat：商户签名私钥（PEM）。可填字符串，至少 1 个字符                                         |
-| `wechat.platformKeys`            | 必填        | 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识                            |
-| `wechat.platformKeys.<名称>`     | 必填        | 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。可填字符串，至少 1 个字符 |
-| `wechat.appId`                   | 必填        | wechat：商户应用 ID。可填字符串，至少 1 个字符                                                 |
-| `alipay`                         | 可省略      | 支付宝渠道的商户配置与验签参数                                                                 |
-| `alipay.appId`                   | 必填        | alipay：商户应用 ID。可填字符串，至少 1 个字符                                                 |
-| `alipay.sellerId`                | 必填        | alipay：支付宝卖家 ID，通知 seller_id 必须与之匹配。可填字符串，至少 1 个字符                  |
-| `alipay.privateKey`              | 必填        | alipay：商户签名私钥（PEM）。可填字符串，至少 1 个字符                                         |
-| `alipay.alipayPublicKey`         | 必填        | alipay：支付宝平台公钥，用于验签。可填字符串，至少 1 个字符                                    |
-| `alipay.returnUrl`               | 必填        | 手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。可填字符串，URL         |
-| `alipay.signType`                | `"RSA2"`    | alipay：请求和通知允许的签名算法。可填 `"RSA2"`、`"RSA"`                                       |
-| `alipay.sandbox`                 | `false`     | alipay：是否使用沙箱网关                                                                       |
-| `stripe`                         | 可省略      | Stripe渠道的商户配置与验签参数                                                                 |
-| `stripe.secretKey`               | 必填        | stripe：Stripe 服务端密钥                                                                      |
-| `stripe.webhookSecret`           | 必填        | stripe：Stripe Webhook 验签密钥。可填字符串，至少 1 个字符                                     |
-| `stripe.successUrl`              | 必填        | 托管 Checkout 完成后的可信跳转地址，可含 {CHECKOUT_SESSION_ID}。可填字符串，URL                |
-| `stripe.cancelUrl`               | 可省略      | 托管 Checkout 取消按钮的可信跳转地址；省略时不显示返回按钮。可填字符串，URL                    |
-| `stripe.webhookToleranceSeconds` | `300`       | stripe：Webhook 时间戳允许偏差，单位秒。正整数                                                 |
-
-## 生效与核对
+### 生效与核对
 
 渠道密钥和回调密钥都由服务端保管。使用测试渠道验证下单，再使用签名正确的测试回调验证业务状态更新。渠道环境与支付例子见[支付渠道配置](experience.md#支付渠道配置)。

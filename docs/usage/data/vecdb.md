@@ -35,15 +35,60 @@ doc-42 的向量有3个数，所以集合维度必须是3；metadata 说明正�
 
 ### 数据库与集合
 
-调用 `vecdb.collection.create()` 时指定集合名与向量维度，也可指定比较向量的方法。新集合默认使用余弦相似度（`cosine`）。修改默认设置后，已有集合仍采用创建时的方法。每个文档包含 `id`（集合内标识）、`vector`（指定维度的数值数组）、可选 `content`（正文）与可选 `metadata`（业务属性）。
+创建集合时指定名称和维度，新集合默认用余弦相似度（`cosine`）。已有集合沿用创建时的度量。下表按后端列出每个集合的存储结构。
 
-| 后端     | 物理结构与默认值                                                                                                                                                                                                                                                                                                                                |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pgvector | 每集合一张 `<tablePrefix><collection>` 表，前缀默认 `vec_`。`id TEXT` 为主键，`vector vector(dimension)` 保存向量，`content TEXT` 为正文，`metadata JSONB` 的 SQL 默认值为 `{}`。写入未提供正文或属性时分别使用空字符串和空对象。按度量建立向量索引，默认 HNSW，可选 IVFFlat（lists 默认 100）。`vector` 列注释保存 `hai.vecdb.metric=<metric>` |
-| Qdrant   | 每个文档写成一条 Qdrant point。点的附加数据（payload）保存文档 ID `_id`、正文 `_content` 和应用传入的其他属性。向量维度与比较方法保存在集合设置中                                                                                                                                                                                               |
-| LanceDB  | 以集合名保存 Arrow 表。向量列为固定长度，schema metadata 中的 `hai.vecdb.metric` 保存相似度类型。表 schema 保存 ID、向量、正文和属性                                                                                                                                                                                                            |
-| Chroma   | collection 保存 ID、embeddings、文档和元数据，`hai_dimension` 与 `hnsw:space` 分别保存维度和距离度量                                                                                                                                                                                                                                            |
+| 后端 | 结构 | 数量与用途 |
+| --- | --- | --- |
+| [pgvector](#pgvector) | `<tablePrefix><collection>` | 每个集合一张表，前缀默认 `vec_`。 |
+| [qdrant](#qdrant) | `point` | 每份文档保存为集合中的一个 point。 |
+| [lancedb](#lancedb) | `Arrow` | 每个集合对应一张同名 Arrow 表。 |
+| [chroma](#chroma) | `collection` | 每个集合保存文档、向量和业务属性。 |
+
+#### pgvector
+
+| 字段 | 类型 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| `id` | `TEXT` | — | 集合内主键。 | `doc-42` |
+| `vector` | `vector(dimension)` | — | 用来计算相似度的向量，长度须与建表维度相同。 | `[0.1,0.2,0.3]` |
+| `content` | `TEXT` | — | 文档正文。调用向量写入接口省略正文时写空字符串。 | `Example shipping policy` |
+| `metadata` | `JSONB` | `{}` | 应用自定的属性，省略时为空对象。 | `{"source":"policy.txt"}` |
+
+只有 `id` 不可空，`metadata` 的 SQL 默认值是 `{}`。默认向量索引为 HNSW，可选 IVFFlat（`lists` 默认 100）。`vector` 列注释保存 `hai.vecdb.metric=<metric>`。
+
+#### qdrant
+
+| 字段 | 类型 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| `id` | `UUID` | — | 由文档 ID 计算出的稳定编号。 | `<point-uuid>` |
+| `vector` | `number[]` | — | 文档向量，长度与集合维度相同。 | `[0.1,0.2,0.3]` |
+| `payload._id` | `string` | — | 调用方提供的原始文档 ID。 | `doc-42` |
+| `payload._content` | `string` | `""` | 可以检索的原始正文。 | `Example shipping policy` |
+| `payload.*` | `JSON` | `{}` | 应用属性写在 payload 里，不能覆盖上面的保留字段。 | `{"source":"policy.txt"}` |
+
+集合设置保存维度和度量。已有 ID 的 `insert` 会覆盖对应 point。
+
+#### lancedb
+
+| 字段 | 类型 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| `id` | `string` | — | 新表的非空主键。 | `doc-42` |
+| `vector` | `fixed-size list` | — | 固定长度的文档向量。 | `[0.1,0.2,0.3]` |
+| `content` | `string` | `""` | 文档正文。 | `Example shipping policy` |
+| `metadata` | `JSON` | `{}` | 应用属性。新表使用非空 Arrow JSON 字段。 | `{"source":"policy.txt"}` |
+
+维度由向量列长度决定，`hai.vecdb.metric` 保存在 Arrow schema 元数据中。
+
+#### chroma
+
+| 字段 | 类型 | 默认值 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| `ids` | `string[]` | — | 写入批次中的文档 ID。 | `["doc-42"]` |
+| `embeddings` | `number[][]` | — | 与 ID 顺序一致的向量，每条符合指定维度。 | `[[0.1,0.2,0.3]]` |
+| `documents` | `string[]` | `[""]` | 与 ID 对应的文档正文。默认每项为空字符串。 | `["Example shipping policy"]` |
+| `metadatas` | `object[]` | — | 业务属性加上保留的 `_content`。取值须能通过 Chroma SDK 校验。 | `[{"source":"policy.txt","_content":"Example shipping policy"}]` |
+
+集合元数据的 `hai_dimension` 和 `hnsw:space` 分别记录维度和距离度量。
 
 ### 缓存
 
-模块不创建 Redis 键。查询直接从已连接的向量数据库读取。应用要把一页结果返回的游标保存下来，在同一个数据库、同一个集合的下一次查询中传回。
+VecDB 不创建 Redis 键。查询直接读取对应向量库。分页时，应用需在同一个数据库和集合的下一次查询中传回上次的游标。

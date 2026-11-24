@@ -10,46 +10,6 @@
 
 `type` 选择 LanceDB、pgvector、Qdrant 或 Chroma。连接成功后，再用 `vecdb.collection.create()` 设置集合名、每条向量的数字个数和计算相似度的方法。共用数据库的多个应用应为各自的数据使用不同的集合名。
 
-## 配置示例
-
-```yaml schema=@h-ai/vecdb:VecdbConfigSchema
-type: lancedb
-path: ./data/vectors
-```
-
-### 多个 API 实例共用 Qdrant
-
-写入 `config/_vecdb.yml`。所有实例连接同一个服务，才能查询同一批向量。API Key 由服务端私有环境提供。集合名、向量维度和距离算法仍在创建集合时指定。
-
-```yaml schema=@h-ai/vecdb:VecdbConfigSchema
-type: qdrant
-url: https://vectors.example.com
-apiKey: ${HAI_VECDB_APIKEY}
-```
-
-### 使用已安装 pgvector 的 PostgreSQL
-
-先由数据库管理员安装 pgvector 扩展，再让服务连接 `knowledge` 数据库。本例使用 HNSW 索引；更改此处不会自动重建已有集合的索引。
-
-```yaml schema=@h-ai/vecdb:VecdbConfigSchema
-type: pgvector
-host: postgres.internal
-port: 5432
-database: knowledge
-user: knowledge_app
-password: ${HAI_VECDB_PASSWORD}
-indexType: hnsw
-```
-
-### 连接独立的 Chroma 服务
-
-此例使用已有 Chroma 服务，不把向量写到当前进程的本地目录。连接后创建一个测试集合并写入、检索向量，确认所部署版本支持应用使用的接口。
-
-```yaml schema=@h-ai/vecdb:VecdbConfigSchema
-type: chroma
-url: http://chroma.internal:8000
-```
-
 ## 配置清单
 
 选 `type: qdrant` 时，省略 `url` 会连接 `http://localhost:6333`；使用远程服务时填写实际地址，其他后端的连接字段不适用。需要记录向量操作时，可以填写 `operationLog`，例如 `operationLog: { write: true }` 会打开写入日志，读取日志仍关闭。
@@ -103,6 +63,46 @@ url: http://chroma.internal:8000
 | `operationLog.maxLength` | `type=chroma`   | `1000`                    | 安全摘要的最大字符数，0 省略摘要。非负整数                                                      |
 | `operationLog.level`     | `type=chroma`   | `"debug"`                 | 操作日志的输出级别。可填 `"info"`、`"debug"`、`"trace"`                                         |
 
-## 生效与核对
+## 配置示例
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: lancedb
+path: ./data/vectors
+```
+
+### 多个 API 实例共用 Qdrant
+
+写入 `config/_vecdb.yml`。所有实例连接同一个服务，才能查询同一批向量。API Key 由服务端私有环境提供。集合名、向量维度和距离算法仍在创建集合时指定。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: qdrant
+url: https://vectors.example.com
+apiKey: ${HAI_VECDB_APIKEY}
+```
+
+### 使用已安装 pgvector 的 PostgreSQL
+
+先由数据库管理员安装 pgvector 扩展，再让服务连接 `knowledge` 数据库。本例使用 HNSW 索引；更改此处不会自动重建已有集合的索引。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: pgvector
+host: postgres.internal
+port: 5432
+database: knowledge
+user: knowledge_app
+password: ${HAI_VECDB_PASSWORD}
+indexType: hnsw
+```
+
+### 连接独立的 Chroma 服务
+
+此例使用已有 Chroma 服务，不把向量写到当前进程的本地目录。连接后创建一个测试集合并写入、检索向量，确认所部署版本支持应用使用的接口。
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: chroma
+url: http://chroma.internal:8000
+```
+
+### 生效与核对
 
 向量后端只保存调用方提供的向量。切换嵌入模型或集合参数时，先核对维度和历史索引兼容性，再以一条已知文档验证写入和检索。[向量存储](ai.md#向量存储)

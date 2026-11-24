@@ -1,7 +1,5 @@
 # @h-ai/feedback データ構造
 
-<!-- translation: partial -->
-
 [原文（中国語）](feedback.md) · [設定](../configuration/feedback.ja.md) · [API リファレンス](../function/feedback.ja.md)
 
 <a id="example-data"></a>
@@ -169,30 +167,139 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 
 サービスは報告、関連証拠、必要な作業を一つのトランザクションで保存します。時間は Unix ミリ秒です。特記がなければ任意項目の欠損は NULL です。
 
+モジュールは 6 テーブルを使用します。
+
+| テーブル | 用途 |
+| --- | --- |
+| [`hai_feedback_reports`](#table-hai-feedback-reports) | 問題票、提出者、処理状況を確認します。 |
+| [`hai_feedback_evidence`](#table-hai-feedback-evidence) | 出所と順序で収集済みイベントを確認します。 |
+| [`hai_feedback_attachments`](#table-hai-feedback-attachments) | 添付の保存先、状態、完全性を確認します。 |
+| [`hai_feedback_history`](#table-hai-feedback-history) | 誰がいつ問題票の状態を変更したか確認します。 |
+| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 証拠収集、通知、出力などの裏側の作業を取得します。 |
+| [`hai_feedback_quotas`](#table-hai-feedback-quotas) | 報告数、バイト数、出力回数の上限を確認します。 |
+
+<a id="table-hai-feedback-reports"></a>
+
 #### `hai_feedback_reports`
 
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `id`, `number`, `scope_id`, `user_id`, `app_id` | テキストの主キー、表示番号、サーバーで決めた範囲、利用者とアプリ。 |
-| `app_version`, `summary`, `payload` | 任意のアプリ版、摘要（未指定時は空文字列）、投稿内容の JSON。 |
-| `submission_key`, `submission_hash` | 一意の投稿キーと内容のダイジェスト。同じ投稿を再試行するときは元の内容と一致させます。 |
-| `status`, `collection_status`, `notification_status` | 処理、収集、通知の状態。登録時は `pending`、`collecting`、通知設定に応じた値です。 |
-| `version`, `revision`, `evidence_count`, `evidence_bytes`, `deleting` | 版とリビジョンは 1 から、証拠件数・バイト数・削除フラグは 0 から始まります。 |
-| `created_at`, `updated_at`, `collect_deadline`, `expires_at` | 作成・更新時刻、収集期限、保持期限。報告は既定で 30 日保持します。 |
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 問題票の主キー。 | `feedback-42` |
+| `scope_id` | `TEXT` | 不可 | — | 問題票が属する業務範囲。 | `team-1` |
+| `user_id` | `TEXT` | 不可 | — | 提出者 ID。 | `user-42` |
+| `app_id` | `TEXT` | 不可 | — | 問題票を受け付けたアプリの ID。 | `orders` |
+| `number` | `TEXT` | 不可 | — | 利用者とサポート向けの問い合わせ番号。 | `FB-EXAMPLE-42` |
+| `app_version` | `TEXT` | 可 | — | 提出時のアプリのバージョン。 | `1.4.2` |
+| `summary` | `TEXT` | 不可 | — | 問題の短い説明。 | `Example problem` |
+| `submission_key` | `TEXT` | 不可 | — | 安全に再試行するための一意の投稿キー。 | `<submission-key>` |
+| `submission_hash` | `TEXT` | 不可 | — | 同じ内容の再試行かを確認するダイジェスト。 | `<request-digest>` |
+| `status` | `TEXT` | 不可 | — | 問題票の処理状態。 | `pending` |
+| `collection_status` | `TEXT` | 不可 | — | 証拠の収集状態。 | `collecting` |
+| `notification_status` | `TEXT` | 不可 | — | 通知の処理状態。 | `pending` |
+| `created_at` | `BIGINT` | 不可 | — | 提出時刻。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
+| `version` | `INTEGER` | 不可 | — | 同時変更を検出する問題票のバージョン。 | `1` |
+| `revision` | `INTEGER` | 不可 | — | スナップショットを識別する証拠のリビジョン。 | `1` |
+| `evidence_count` | `INTEGER` | 不可 | — | 関連する証拠の件数。 | `0` |
+| `evidence_bytes` | `BIGINT` | 不可 | — | 証拠が使用するバイト数。 | `0` |
+| `collect_deadline` | `BIGINT` | 不可 | — | 追加の証拠を受け付ける期限。 | `1794873630000` |
+| `expires_at` | `BIGINT` | 不可 | — | 問題票の保持期限。 | `1797465600000` |
+| `payload` | `JSON` | 不可 | — | 分類や問題の詳細などの業務データ。例は分類のみ。 | `{"category":"bug"}` |
+| `deleting` | `INTEGER` | 不可 | — | 削除処理中は `1`。通常の検索は `0` の行を対象とします。 | `0` |
 
 `(scope_id, created_at)` と `(scope_id, status, created_at)` にインデックスがあります。
 
+<a id="table-hai-feedback-evidence"></a>
+
+#### `hai_feedback_evidence`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 証拠の主キー。 | `evidence-42` |
+| `report_id` | `TEXT` | 可 | — | 関連する問題票 ID。紐付け前は NULL。 | `feedback-42` |
+| `scope_id` | `TEXT` | 不可 | — | 証拠が属する業務範囲。 | `team-1` |
+| `user_id` | `TEXT` | 不可 | — | 証拠に関連する利用者 ID。 | `user-42` |
+| `app_id` | `TEXT` | 不可 | — | 証拠の発生元アプリ ID。 | `orders` |
+| `source` | `TEXT` | 不可 | — | 証拠の出所。 | `browser` |
+| `sequence` | `BIGINT` | 不可 | — | 同じ出所内でのイベントの順序。 | `1` |
+| `kind` | `TEXT` | 不可 | — | 収集したイベントの種類。 | `error` |
+| `timestamp` | `BIGINT` | 不可 | — | イベントの発生時刻。 | `1794873600000` |
+| `request_id` | `TEXT` | 可 | — | 関連するリクエスト ID。 | `req-42` |
+| `error_id` | `TEXT` | 可 | — | 関連するエラー ID。 | `err-42` |
+| `revision` | `INTEGER` | 不可 | — | このイベントを含む証拠のリビジョン。 | `1` |
+| `bytes` | `INTEGER` | 不可 | — | 証拠のバイト数。 | `24` |
+| `expires_at` | `BIGINT` | 不可 | — | 証拠を削除できる時刻。 | `1797465600000` |
+| `payload` | `JSON` | 不可 | — | 機微情報を除いたイベント内容。例は抜粋。 | `{"message":"Request failed"}` |
+
+<a id="table-hai-feedback-attachments"></a>
+
+#### `hai_feedback_attachments`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 添付の主キー。 | `attachment-42` |
+| `client_id` | `TEXT` | 不可 | — | クライアントが指定する添付の ID。 | `client-file-42` |
+| `report_id` | `TEXT` | 不可 | — | 所属する問題票の ID。 | `feedback-42` |
+| `scope_id` | `TEXT` | 不可 | — | 添付が属する業務範囲。 | `team-1` |
+| `object_key` | `TEXT` | 不可 | — | モジュールが生成する非公開ファイルのオブジェクトキー。 | `feedback/<scope-digest>/feedback-42/attachment-42` |
+| `status` | `TEXT` | 不可 | — | 添付を取得・出力できるかを示す状態。 | `available` |
+| `size` | `BIGINT` | 不可 | — | ファイルのバイト数。 | `5` |
+| `checksum` | `TEXT` | 不可 | — | ファイルの完全性確認用ダイジェスト。 | `<checksum:redacted>` |
+| `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
+| `payload` | `JSON` | 不可 | — | 画面に表示する添付情報。例は抜粋。 | `{"name":"error.txt"}` |
+
+<a id="table-hai-feedback-history"></a>
+
+#### `hai_feedback_history`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | 対応履歴の主キー。 | `history-42` |
+| `report_id` | `TEXT` | 不可 | — | 関連する問題票の ID。 | `feedback-42` |
+| `payload` | `JSON` | 不可 | — | 操作した利用者、時刻、変更前後の状態。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
+
 <a id="jobs"></a>
 
-### 証拠・添付・タスク
+<a id="table-hai-feedback-jobs"></a>
 
-| フィールドまたはテーブル | 構造と意味 |
-| --- | --- |
-| `hai_feedback_evidence` | 主キー `id`、未紐付け時に NULL の `report_id`。範囲・利用者・アプリは `scope_id`、`user_id`、`app_id`。出所、順番、種類、時刻は `source`、`sequence`、`kind`、`timestamp`。`request_id` と `error_id` は NULL 可。`revision`、`bytes`、`expires_at` は版・サイズ・期限、JSON `payload` はマスク済みです。 |
-| `hai_feedback_attachments` | 主キー `id`、クライアント ID `client_id`、`report_id` / `scope_id`、非公開 `object_key`、`status`、`size`、`checksum`、`updated_at`、表示用 JSON `payload`。 |
-| `hai_feedback_history` | 主キー `id`、`report_id` と、操作者・日時・状態遷移を保存した JSON `payload`。 |
-| `hai_feedback_jobs` | 主キー `id`、`app_id`、`report_id`、`scope_id`、任意の `snapshot_revision` / `snapshot_version`、`kind`、`status`、NULL 可の担当 `token` と `last_error`。`lease_until`、`attempts`、`next_run_at`、`created_at`、`updated_at` で進捗を管理します。JSON の `payload` は必須で `result` は NULL 可。 |
-| `hai_feedback_quotas` | 主キー `id`、`app_id`、`scope_id`、`user_id`、`period`（日ごと、範囲は 0、報告単体は -1）、`report_count`、`reserved_bytes`、`report_bytes` と `export_limit`（両方の SQL 既定値は 0）、`updated_at`。 |
+#### `hai_feedback_jobs`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | ジョブの主キー。 | `job-42` |
+| `app_id` | `TEXT` | 不可 | — | ジョブが属するアプリの ID。 | `orders` |
+| `snapshot_revision` | `INTEGER` | 可 | — | ジョブが使う証拠のリビジョン。 | `1` |
+| `snapshot_version` | `INTEGER` | 可 | — | ジョブが使う問題票のバージョン。 | `1` |
+| `report_id` | `TEXT` | 不可 | — | 関連する問題票の ID。 | `feedback-42` |
+| `scope_id` | `TEXT` | 不可 | — | ジョブが属する業務範囲。 | `team-1` |
+| `kind` | `TEXT` | 不可 | — | 裏側の作業の種類。 | `export` |
+| `status` | `TEXT` | 不可 | — | ジョブの待機・実行・終了状態。 | `pending` |
+| `token` | `TEXT` | 可 | — | ジョブを取得した処理のトークン。 | `null` |
+| `lease_until` | `BIGINT` | 不可 | — | 現在のリース期限。`0` は未取得。 | `0` |
+| `attempts` | `INTEGER` | 不可 | — | これまでの試行回数。 | `0` |
+| `next_run_at` | `BIGINT` | 不可 | — | 次に取得できる最も早い時刻。 | `1794873600000` |
+| `created_at` | `BIGINT` | 不可 | — | 登録時刻。 | `1794873600000` |
+| `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
+| `last_error` | `TEXT` | 可 | — | 直近の失敗時のエラー情報。 | `NULL` |
+| `payload` | `JSON` | 不可 | — | ジョブの入力。 | `{}` |
+| `result` | `JSON` | 可 | — | ジョブ完了後の結果。 | `NULL` |
+
+<a id="table-hai-feedback-quotas"></a>
+
+#### `hai_feedback_quotas`
+
+| 項目 | 型 | NULL | 既定値 | 用途 | 例 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `TEXT` | 不可 | — | クォータ記録の主キー。 | `quota-42` |
+| `app_id` | `TEXT` | 不可 | — | 計測対象のアプリ ID。 | `orders` |
+| `scope_id` | `TEXT` | 不可 | — | 計測対象の業務範囲。 | `team-1` |
+| `user_id` | `TEXT` | 不可 | — | 計測対象の利用者 ID。 | `user-42` |
+| `period` | `BIGINT` | 不可 | — | 日次クォータの期間。範囲累計は `0`、単一の問題票は `-1`。 | `0` |
+| `report_count` | `BIGINT` | 不可 | — | クォータに計上した問題票数。 | `1` |
+| `reserved_bytes` | `BIGINT` | 不可 | — | 予約済みのバイト数。 | `1024` |
+| `report_bytes` | `BIGINT` | 不可 | `0` | 問題票一件あたりのバイト上限。 | `0` |
+| `export_limit` | `INTEGER` | 不可 | `0` | 問題票一件あたりの出力回数上限。 | `0` |
+| `updated_at` | `BIGINT` | 不可 | — | クォータの最終更新時刻。 | `1794873600000` |
 
 証拠は報告・出所・順番を索引にし、削除用にアプリ・紐付けの有無・期限でも検索します。添付と履歴は `report_id` が索引です。タスクの取得は `(app_id, status, next_run_at)`、スナップショットの検索は `(report_id, snapshot_revision, snapshot_version)` を使います。クォータの索引は `(app_id, period)`。リースは既定で 30 秒、通常の試行は最大 5 回です。
 
@@ -202,6 +309,36 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 
 Feedback は Redis キーを作りません。非公開 Storage の `feedback/<範囲の SHA-256 の先頭16桁>/<報告ID>/` に添付 ID、`business/<行ID>-<チェックサム>` または `exports/<タスクID>.zip` を付けます。ZIP には `manifest.json`、報告、証拠、履歴、許可された添付が入ります。エクスポートは既定で 24 時間保持します。
 
-ブラウザーは IndexedDB データベース `hai-feedback-v1`（版 1）のストア `drafts` に、アプリと利用者ごとに下書きを一件保存します。別キー `<範囲キー>:checkpoint` には `evidence` と `expiresAt` を保存し、5 分間有効です。期限内だけ復元し、投稿成功後に下書きとチェックポイントを削除します。
+#### ブラウザー下書きと収集チェックポイント
 
-未翻訳のデータベース型と制約は、[中国語の原文](feedback.md)および[ソースのテーブル定義](../../../packages/feedback/src/feedback-repository.ts)を参照してください。
+IndexedDB の `hai-feedback-v1` データベース（版 1）の `drafts` に 2 種類のキーを保存します。下書きの保存を有効にすると、`<scope-key>` はアプリ ID とホストの識別範囲で構成されます。例は `orders:team-1:user-42` です。投稿に成功すると両方を削除します。
+
+| キー | 用途 | 期限 |
+| --- | --- | --- |
+| `<scope-key>` | 提出待ちの下書き | 24 時間 |
+| `<scope-key>:checkpoint` | 問題票を開く前に捕捉した証拠 | 5 分 |
+
+##### `<scope-key>`
+
+| 項目 | 型 | 用途 | 例 |
+| --- | --- | --- | --- |
+| `submissionId` | `string` | この下書きの投稿 ID。 | `submission-42` |
+| `anchorTime` | `number` | 問題票開始またはエラー時刻。Unix ミリ秒。 | `1794873600000` |
+| `anchorKind` | `string` | 開始の種類。feedback または error。 | `feedback` |
+| `errorId` | `string` | 任意の関連エラー ID。 | `err-42` |
+| `evidence` | `object[]` | 捕捉済みの証拠。 | `[]` |
+| `attachments` | `object[]` | 未送信の添付とバイトデータ。 | `[]` |
+| `missing` | `string[]` | 収集できなかった資料。 | `[]` |
+| `expiresAt` | `number` | 下書きの期限。Unix ミリ秒。期限切れの読み取り時に削除します。 | `1794960000000` |
+| `report` | `object` | サーバーから返された任意の問題票。 | `{…}` |
+| `submission` | `object` | 初回の投稿内容。応答を失った場合に同じ内容で再試行します。 | `{…}` |
+| `userInputFingerprint` | `string` | 再試行前のフォーム変更を検出するための値。 | `<fingerprint>` |
+
+##### `<scope-key>:checkpoint`
+
+| 項目 | 型 | 用途 | 例 |
+| --- | --- | --- | --- |
+| `evidence` | `object[]` | 問題票フォームを開く前に一時保存した証拠。 | `[]` |
+| `expiresAt` | `number` | チェックポイントの期限。Unix ミリ秒。期限内の証拠だけを復元します。 | `1794873900000` |
+
+詳細は[ソースのテーブル定義](../../../packages/feedback/src/feedback-repository.ts)を参照してください。
