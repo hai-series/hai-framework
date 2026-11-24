@@ -1,529 +1,14 @@
 # @h-ai/ai Data structures
 
-[Chinese source](ai.md) · [Configuration](../configuration/ai.en.md) · [API reference](../function/ai.en.md)
+[简体中文](ai.md) · [日本語](ai.ja.md)
 
-<a id="example-data"></a>
+[Data reference index](README.en.md) · [Configuration](../configuration/ai.en.md) · [API reference](../function/ai.en.md)
 
-## What these records are for
-
-### Record ID, version and content in the database
-
-Structure: shared fields in the built-in relational tables.
-
-AI records share `id`, `version`, `data` and timestamps, with business content inside `data`. This excerpt shows a session record; creation and update times are Unix milliseconds.
-
-```json
-{
-  "id": "session-42",
-  "version": "6fdb3344-5197-490b-a36d-2d43ce7cc3ba",
-  "data": {
-    "sessionId": "session-42",
-    "objectId": "user-42",
-    "title": "Shipping question",
-    "createdAt": 1794873600000,
-    "updatedAt": 1794873600000
-  },
-  "object_id": "user-42",
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000
-}
-```
-
-This stores `user-42`’s `session-42`. Its `version` lets an update detect intervening changes.
-
-### History of one model call
-
-Structure: `hai_ai_chat_records`.
-
-Keep a model request and response for history, usage and diagnosis, separately from active context.
-
-```json
-{
-  "id": "chat-42",
-  "objectId": "user-42",
-  "sessionId": "session-42",
-  "createdAt": 1794873600000,
-  "duration": 25
-}
-```
-
-chat-42 belongs to user-42/session-42 and took 25 ms. Request/response contents are omitted for privacy.
-
-### The user’s conversation list
-
-Structure: `hai_ai_sessions`.
-
-Store ownership, title and dates so users can reopen previous conversations.
-
-```json
-{
-  "sessionId": "session-42",
-  "objectId": "user-42",
-  "title": "Shipping question",
-  "createdAt": 1794873600000,
-  "updatedAt": 1794873600000
-}
-```
-
-session-42 belongs to user-42 and is titled Shipping question. This directory entry is not the full transcript.
-
-### Context for the next model reply
-
-Structure: `hai_ai_context`.
-
-Keep active messages, summaries and turns for continuation across nodes and protection against stale writes after reset.
-
-```json
-{
-  "messages": [],
-  "summaries": [],
-  "turns": [],
-  "epoch": "epoch-42",
-  "updatedAt": 1794873600000
-}
-```
-
-Empty arrays mean no saved context yet. epoch-42 identifies the current conversation generation, not a message count.
-
-### A reusable AI persona
-
-Structure: `hai_ai_persona`.
-
-Store a subject’s persona instructions for authorized reuse in conversations.
-
-```json
-{
-  "id": "persona-42",
-  "objectId": "user-42",
-  "name": "Support",
-  "systemPrompt": "Explain the shipping policy.",
-  "createdAt": 1794873600000,
-  "updatedAt": 1794873600000
-}
-```
-
-persona-42 belongs to user-42, is named Support and asks for shipping-policy explanations. Saving it does not call a model.
-
-### Registered conversation models
-
-Structure: `hai_ai_llm_models`.
-
-Store connection settings and options behind a shared conversation-model ID.
-
-```json
-{
-  "id": "chat-model"
-}
-```
-
-chat-model is the registration ID; connection and secret fields are omitted, so this ID alone cannot connect to a provider.
-
-### Registered speech models
-
-Structure: `hai_ai_audio_models`.
-
-Register speech recognition or synthesis models for selection by operation.
-
-```json
-{
-  "id": "speech-model"
-}
-```
-
-speech-model is an example ID. Supported operations and connection settings are omitted from this excerpt.
-
-### Registered image models
-
-Structure: `hai_ai_image_models`.
-
-Register image generation or editing models for server-approved selection.
-
-```json
-{
-  "id": "image-model"
-}
-```
-
-image-model is a registration ID, not a generated image or stored image bytes.
-
-### External tool services that may be connected
-
-Structure: `hai_ai_mcp_servers`.
-
-Register MCP endpoints whose transport and credentials are used by the server.
-
-```json
-{
-  "id": "mcp-docs"
-}
-```
-
-mcp-docs identifies a service. Credentials are omitted and must not be exposed with tool listings.
-
-### Sources available for retrieval
-
-Structure: `hai_ai_retrieval_sources`.
-
-Register retrieval sources used to obtain external information.
-
-```json
-{
-  "id": "docs-source"
-}
-```
-
-docs-source identifies a source, not retrieved text. Its full record holds the actual address and options.
-
-### Information remembered across chats
-
-Structure: `hai_ai_memory`.
-
-Store permitted facts or preferences for later conversations with the same subject.
-
-```json
-{
-  "id": "memory-42",
-  "objectId": "user-42",
-  "content": "Prefers concise answers",
-  "importance": 0.7,
-  "createdAt": 1794873600000,
-  "lastAccessedAt": 1794873600000,
-  "accessCount": 0
-}
-```
-
-memory-42 says user-42 prefers concise answers, with importance 0.7 and no accesses yet. It is not a full transcript.
-
-### Memories awaiting search-index updates
-
-Structure: `hai_ai_memory_vector_outbox`.
-
-Persist index-update work when text updates and vector storage may fail separately.
-
-```json
-{
-  "memoryId": "memory-42",
-  "updatedAt": 1794873600000,
-  "attempts": 0
-}
-```
-
-memory-42 awaits sync with zero attempts. The work item is cleared after completion; it is not a second copy of the memory.
-
-### Which vector namespace owns these memories
-
-Structure: `hai_ai_memory_vector_namespace`.
-
-Track vector ownership and migration progress so deployments do not accidentally share incompatible indexes.
-
-```json
-{
-  "updatedAt": 1794873600000,
-  "namespace": "orders",
-  "owner": "namespace-owner-42",
-  "migrated": true
-}
-```
-
-namespace orders and its owner identify the index; migrated:true means migration completed. updatedAt is a coordination timestamp.
-
-### Where index inspection stopped
-
-Structure: `hai_ai_memory_vector_scan`.
-
-Save progress for bounded index inspection instead of rescanning from the beginning on every node.
-
-```json
-{
-  "updatedAt": 1794873600000,
-  "collection": "hai_ai_memory",
-  "cursor": "memory-42",
-  "leased": true
-}
-```
-
-collection and cursor locate the next page. With leased:true, updatedAt is the worker’s claim deadline, not a memory edit time.
-
-### The published version of one knowledge document
-
-Structure: `hai_ai_knowledge_documents`.
-
-Track publication of text, chunks and vectors so retrieval sees one complete version.
-
-```json
-{
-  "collection": "hai_ai_knowledge",
-  "generation": "generation-42",
-  "documentId": "doc-42"
-}
-```
-
-This identifies doc-42 in generation-42. current/pending are omitted; row existence alone does not mean publication completed.
-
-### The collection containing knowledge documents
-
-Structure: `hai_ai_knowledge_collections`.
-
-Keep dimensions and generation so rebuilding or deleting separates stale writes and results.
-
-```json
-{
-  "collection": "hai_ai_knowledge",
-  "dimension": 3,
-  "generation": "generation-42",
-  "deleted": false
-}
-```
-
-hai_ai_knowledge is live at generation-42 with dimension 3. A new generation invalidates older results even under the same name.
-
-### Progress of an agent task
-
-Structure: `hai_ai_a2a_journal`.
-
-Keep task state, delivered events and receipts for recovery without blindly repeating external actions.
-
-```json
-{
-  "owner": "user-42",
-  "executionId": "execution-42",
-  "leasedUntil": 1794873630000,
-  "deadline": 1794873660000,
-  "events": [],
-  "finished": false
-}
-```
-
-execution-42 is unfinished; leasedUntil limits ownership and deadline limits total time. No events are shown yet.
-
-### Ownership of an agent conversation
-
-Structure: `hai_ai_a2a_contexts`.
-
-Bind a context to a trusted subject so knowing its ID cannot expose another user’s task.
-
-```json
-{
-  "owner": "user-42"
-}
-```
-
-owner:user-42 records ownership, not chat content or permission for other users.
-
-### Messages exchanged in an agent task
-
-Structure: `hai_ai_a2a_messages`.
-
-Store user or agent messages linked to their task for processing and inspection.
-
-```json
-{
-  "id": "message-42",
-  "taskId": "task-42",
-  "role": "user",
-  "parts": [
-    {
-      "kind": "text",
-      "text": "Shipping policy?"
-    }
-  ],
-  "createdAt": 1794873600000
-}
-```
-
-message-42 is a user message for task-42 asking about shipping policy. createdAt is its write time.
-
-### Workspaces an agent may use
-
-Structure: `hai_ai_acp_workspaces`.
-
-Register host-approved workspaces and repositories instead of accepting arbitrary model-supplied host paths.
-
-```json
-{
-  "id": "workspace-42"
-}
-```
-
-workspace-42 is a workspace ID; project settings are omitted. It is not a session or running process.
-
-### Agent definitions that may be started
-
-Structure: `hai_ai_acp_agents`.
-
-Store agent type and launch/connection settings for authorized server-side tasks.
-
-```json
-{
-  "id": "agent-42"
-}
-```
-
-agent-42 is a definition ID; commands are omitted. Registering it does not start an execution.
-
-### Project and resources bound to one agent session
-
-Structure: `hai_ai_acp_sessions`.
-
-Bind an agent session to its workspace and resources for reconnecting to the same environment.
-
-```json
-{
-  "id": "acp-session-42",
-  "agentId": "agent-42",
-  "workspaceId": "workspace-42",
-  "cwd": "/workspace/orders"
-}
-```
-
-acp-session-42 uses agent-42 in workspace-42 at /workspace/orders. The path is inside the managed environment, not a public file URL.
-
-### Avoid concurrent session-resource changes
-
-Structure: `hai_ai_acp_locks`.
-
-Record temporary ownership while starting, recovering or releasing a session resource.
-
-```json
-{
-  "owner": null
-}
-```
-
-owner:null means no registered operation owner, not user authorization or proof of deletion.
-
-### Connect an app session to its worker
-
-Structure: `hai_ai_acp_managed_sessions`.
-
-Store caller/worker scopes and references so later app requests find the right execution session.
-
-```json
-{
-  "workerId": "worker-42",
-  "mode": "shared"
-}
-```
-
-worker-42 is the execution-side ID in shared mode. Full records also check both scopes; an ID alone grants no access.
-
-### Recognize the same submission
-
-Structure: `hai_ai_acp_managed_requests`.
-
-Store a normalized-request digest to detect retries that reuse an ID with different input.
-
-```json
-{
-  "fingerprint": "<request-digest>"
-}
-```
-
-fingerprint is a digest placeholder, not prompt or response text. A mismatch must not continue as the original request.
-
-### An operation awaiting human approval
-
-Structure: `hai_ai_acp_managed_approvals`.
-
-Persist pending approval and its deadline so another node can inspect or decide it.
-
-```json
-{
-  "sessionId": "acp-session-42",
-  "deadline": 1794873660000
-}
-```
-
-The session has no decision yet. Passing deadline does not approve anything; waiting is not consent.
-
-### A reusable granted permission
-
-Structure: `hai_ai_acp_managed_grants`.
-
-Persist a scoped permission after an ongoing approval, checking subject, session and expiry on use.
-
-```json
-{
-  "id": "grant-42",
-  "scopeKey": "scope-42",
-  "summary": "Read project files",
-  "expires": 1794873660000
-}
-```
-
-grant-42 covers the described project-file read until expires. It is not permanent permission for arbitrary paths or commands.
-
-### Check original scopes during recovery
-
-Structure: `hai_ai_acp_managed_receipts`.
-
-Keep caller and worker scope evidence so recovery still checks the original caller.
-
-```json
-{
-  "scope": {
-    "tenantId": "team-1",
-    "userId": "user-42"
-  },
-  "workerScope": {
-    "tenantId": "team-1",
-    "userId": "user-42"
-  }
-}
-```
-
-Both scopes are user-42 in team-1. Knowing the execution ID does not let another subject read its result.
-
-### Coordinate memory writes
-
-Structure: `hai_ai_memory_write_gate`.
-
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
-
-```json
-{
-  "id": 1,
-  "marker": 0
-}
-```
-
-There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
-
-### Coordinate index ownership updates
-
-Structure: `hai_ai_memory_vector_namespace_write_gate`.
-
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
-
-```json
-{
-  "id": 1,
-  "marker": 0
-}
-```
-
-There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
-
-### Coordinate inspection progress
-
-Structure: `hai_ai_memory_vector_scan_write_gate`.
-
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
-
-```json
-{
-  "id": 1,
-  "marker": 0
-}
-```
-
-There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
-
-## Field, storage and cleanup reference
+When a user reopens a conversation, AI uses the user and session IDs to load its metadata and history, then assembles the context for the next reply. Relational storage keeps those records across restarts. The configured vector backend stores memory and knowledge indexes.
 
 <a id="data-fields"></a>
 
-### Database tables
+## Database
 
 The built-in RelDB store can create up to 30 tables. It creates the three A2A tables only with A2A configured. Choosing Mem0 omits the built-in memory tables. You can also supply your own store via `ai.init(config, { storeProvider })`. An in-memory store loses its records when the process stops.
 
@@ -560,9 +45,34 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | Coordinate updates to vector collection ownership and migration. |
 | [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | Coordinate updates to the vector scan cursor. |
 
+<a id="example-data"></a>
+
+### Record ID, version and content in the database
+
+AI records share `id`, `version`, `data` and timestamps, with business content inside `data`. This excerpt shows a session record; creation and update times are Unix milliseconds.
+
+```json
+{
+  "id": "session-42",
+  "version": "6fdb3344-5197-490b-a36d-2d43ce7cc3ba",
+  "data": {
+    "sessionId": "session-42",
+    "objectId": "user-42",
+    "title": "Shipping question",
+    "createdAt": 1794873600000,
+    "updatedAt": 1794873600000
+  },
+  "object_id": "user-42",
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000
+}
+```
+
+This stores `user-42`’s `session-42`. Its `version` lets an update detect intervening changes.
+
 <a id="table-hai-ai-chat-records"></a>
 
-#### `hai_ai_chat_records`
+### `hai_ai_chat_records`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -574,9 +84,27 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 | `session_id` | `TEXT` | Yes | — | Session identifier. Indexed on its own and with the subject. | `session-42` |
 
+<a id="history-of-one-model-call"></a>
+
+#### Example · History of one model call
+
+Keep a model request and response for history, usage and diagnosis, separately from active context.
+
+```json
+{
+  "id": "chat-42",
+  "objectId": "user-42",
+  "sessionId": "session-42",
+  "createdAt": 1794873600000,
+  "duration": 25
+}
+```
+
+chat-42 belongs to user-42/session-42 and took 25 ms. Request/response contents are omitted for privacy.
+
 <a id="table-hai-ai-sessions"></a>
 
-#### `hai_ai_sessions`
+### `hai_ai_sessions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -587,9 +115,27 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 
+<a id="the-users-conversation-list"></a>
+
+#### Example · The user’s conversation list
+
+Store ownership, title and dates so users can reopen previous conversations.
+
+```json
+{
+  "sessionId": "session-42",
+  "objectId": "user-42",
+  "title": "Shipping question",
+  "createdAt": 1794873600000,
+  "updatedAt": 1794873600000
+}
+```
+
+session-42 belongs to user-42 and is titled Shipping question. This directory entry is not the full transcript.
+
 <a id="table-hai-ai-context"></a>
 
-#### `hai_ai_context`
+### `hai_ai_context`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -601,9 +147,27 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 | `session_id` | `TEXT` | Yes | — | Session identifier. Indexed on its own and with the subject. | `session-42` |
 
+<a id="context-for-the-next-model-reply"></a>
+
+#### Example · Context for the next model reply
+
+Keep active messages, summaries and turns for continuation across nodes and protection against stale writes after reset.
+
+```json
+{
+  "messages": [],
+  "summaries": [],
+  "turns": [],
+  "epoch": "epoch-42",
+  "updatedAt": 1794873600000
+}
+```
+
+Empty arrays mean no saved context yet. epoch-42 identifies the current conversation generation, not a message count.
+
 <a id="table-hai-ai-persona"></a>
 
-#### `hai_ai_persona`
+### `hai_ai_persona`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -614,9 +178,28 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 
+<a id="a-reusable-ai-persona"></a>
+
+#### Example · A reusable AI persona
+
+Store a subject’s persona instructions for authorized reuse in conversations.
+
+```json
+{
+  "id": "persona-42",
+  "objectId": "user-42",
+  "name": "Support",
+  "systemPrompt": "Explain the shipping policy.",
+  "createdAt": 1794873600000,
+  "updatedAt": 1794873600000
+}
+```
+
+persona-42 belongs to user-42, is named Support and asks for shipping-policy explanations. Saving it does not call a model.
+
 <a id="table-hai-ai-llm-models"></a>
 
-#### `hai_ai_llm_models`
+### `hai_ai_llm_models`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -626,9 +209,23 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="registered-conversation-models"></a>
+
+#### Example · Registered conversation models
+
+Store connection settings and options behind a shared conversation-model ID.
+
+```json
+{
+  "id": "chat-model"
+}
+```
+
+chat-model is the registration ID; connection and secret fields are omitted, so this ID alone cannot connect to a provider.
+
 <a id="table-hai-ai-audio-models"></a>
 
-#### `hai_ai_audio_models`
+### `hai_ai_audio_models`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -638,9 +235,23 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="registered-speech-models"></a>
+
+#### Example · Registered speech models
+
+Register speech recognition or synthesis models for selection by operation.
+
+```json
+{
+  "id": "speech-model"
+}
+```
+
+speech-model is an example ID. Supported operations and connection settings are omitted from this excerpt.
+
 <a id="table-hai-ai-image-models"></a>
 
-#### `hai_ai_image_models`
+### `hai_ai_image_models`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -650,9 +261,23 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="registered-image-models"></a>
+
+#### Example · Registered image models
+
+Register image generation or editing models for server-approved selection.
+
+```json
+{
+  "id": "image-model"
+}
+```
+
+image-model is a registration ID, not a generated image or stored image bytes.
+
 <a id="table-hai-ai-mcp-servers"></a>
 
-#### `hai_ai_mcp_servers`
+### `hai_ai_mcp_servers`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -662,9 +287,23 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="external-tool-services-that-may-be-connected"></a>
+
+#### Example · External tool services that may be connected
+
+Register MCP endpoints whose transport and credentials are used by the server.
+
+```json
+{
+  "id": "mcp-docs"
+}
+```
+
+mcp-docs identifies a service. Credentials are omitted and must not be exposed with tool listings.
+
 <a id="table-hai-ai-retrieval-sources"></a>
 
-#### `hai_ai_retrieval_sources`
+### `hai_ai_retrieval_sources`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -676,9 +315,23 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 
 If an ID exists in startup configuration and in the database, the startup definition wins. The `__deleted` flag removes a runtime registration. Credentials stay server-side.
 
+<a id="sources-available-for-retrieval"></a>
+
+#### Example · Sources available for retrieval
+
+Register retrieval sources used to obtain external information.
+
+```json
+{
+  "id": "docs-source"
+}
+```
+
+docs-source identifies a source, not retrieved text. Its full record holds the actual address and options.
+
 <a id="table-hai-ai-memory"></a>
 
-#### `hai_ai_memory`
+### `hai_ai_memory`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -691,9 +344,29 @@ If an ID exists in startup configuration and in the database, the startup defini
 
 Memory search uses the vector referenced by the current relational record. PostgreSQL indexes memory scope with JSONB GIN. MySQL indexes a nullable generated `VARCHAR(512)` column, `memory_vector_key`, based on `data.vectorId`. With older rows that have a vector and no vector ID, it uses `id`.
 
+<a id="information-remembered-across-chats"></a>
+
+#### Example · Information remembered across chats
+
+Store permitted facts or preferences for later conversations with the same subject.
+
+```json
+{
+  "id": "memory-42",
+  "objectId": "user-42",
+  "content": "Prefers concise answers",
+  "importance": 0.7,
+  "createdAt": 1794873600000,
+  "lastAccessedAt": 1794873600000,
+  "accessCount": 0
+}
+```
+
+memory-42 says user-42 prefers concise answers, with importance 0.7 and no accesses yet. It is not a full transcript.
+
 <a id="table-hai-ai-memory-vector-outbox"></a>
 
-#### `hai_ai_memory_vector_outbox`
+### `hai_ai_memory_vector_outbox`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -705,9 +378,25 @@ Memory search uses the vector referenced by the current relational record. Postg
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="memories-awaiting-search-index-updates"></a>
+
+#### Example · Memories awaiting search-index updates
+
+Persist index-update work when text updates and vector storage may fail separately.
+
+```json
+{
+  "memoryId": "memory-42",
+  "updatedAt": 1794873600000,
+  "attempts": 0
+}
+```
+
+memory-42 awaits sync with zero attempts. The work item is cleared after completion; it is not a second copy of the memory.
+
 <a id="table-hai-ai-memory-vector-namespace"></a>
 
-#### `hai_ai_memory_vector_namespace`
+### `hai_ai_memory_vector_namespace`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -717,9 +406,26 @@ Background workers page by the `(updated_at, id)` index.
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="which-vector-namespace-owns-these-memories"></a>
+
+#### Example · Which vector namespace owns these memories
+
+Track vector ownership and migration progress so deployments do not accidentally share incompatible indexes.
+
+```json
+{
+  "updatedAt": 1794873600000,
+  "namespace": "orders",
+  "owner": "namespace-owner-42",
+  "migrated": true
+}
+```
+
+namespace orders and its owner identify the index; migrated:true means migration completed. updatedAt is a coordination timestamp.
+
 <a id="table-hai-ai-memory-vector-scan"></a>
 
-#### `hai_ai_memory_vector_scan`
+### `hai_ai_memory_vector_scan`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -729,9 +435,26 @@ Background workers page by the `(updated_at, id)` index.
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="where-index-inspection-stopped"></a>
+
+#### Example · Where index inspection stopped
+
+Save progress for bounded index inspection instead of rescanning from the beginning on every node.
+
+```json
+{
+  "updatedAt": 1794873600000,
+  "collection": "hai_ai_memory",
+  "cursor": "memory-42",
+  "leased": true
+}
+```
+
+collection and cursor locate the next page. With leased:true, updatedAt is the worker’s claim deadline, not a memory edit time.
+
 <a id="table-hai-ai-knowledge-documents"></a>
 
-#### `hai_ai_knowledge_documents`
+### `hai_ai_knowledge_documents`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -743,9 +466,25 @@ Background workers page by the `(updated_at, id)` index.
 | `object_id` | `TEXT` | Yes | — | Knowledge collection. Indexed for collection lookup. | `hai_ai_knowledge` |
 | `session_id` | `TEXT` | Yes | — | Collection generation. Indexed with the collection name. | `generation-42` |
 
+<a id="the-published-version-of-one-knowledge-document"></a>
+
+#### Example · The published version of one knowledge document
+
+Track publication of text, chunks and vectors so retrieval sees one complete version.
+
+```json
+{
+  "collection": "hai_ai_knowledge",
+  "generation": "generation-42",
+  "documentId": "doc-42"
+}
+```
+
+This identifies doc-42 in generation-42. current/pending are omitted; row existence alone does not mean publication completed.
+
 <a id="table-hai-ai-knowledge-collections"></a>
 
-#### `hai_ai_knowledge_collections`
+### `hai_ai_knowledge_collections`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -755,9 +494,26 @@ Background workers page by the `(updated_at, id)` index.
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="the-collection-containing-knowledge-documents"></a>
+
+#### Example · The collection containing knowledge documents
+
+Keep dimensions and generation so rebuilding or deleting separates stale writes and results.
+
+```json
+{
+  "collection": "hai_ai_knowledge",
+  "dimension": 3,
+  "generation": "generation-42",
+  "deleted": false
+}
+```
+
+hai_ai_knowledge is live at generation-42 with dimension 3. A new generation invalidates older results even under the same name.
+
 <a id="table-hai-ai-a2a-journal"></a>
 
-#### `hai_ai_a2a_journal`
+### `hai_ai_a2a_journal`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -771,9 +527,28 @@ Background workers page by the `(updated_at, id)` index.
 
 A2A uses the shared storage clock for deadlines and checks the record version when saving events. Completed message receipts have no automatic expiry.
 
+<a id="progress-of-an-agent-task"></a>
+
+#### Example · Progress of an agent task
+
+Keep task state, delivered events and receipts for recovery without blindly repeating external actions.
+
+```json
+{
+  "owner": "user-42",
+  "executionId": "execution-42",
+  "leasedUntil": 1794873630000,
+  "deadline": 1794873660000,
+  "events": [],
+  "finished": false
+}
+```
+
+execution-42 is unfinished; leasedUntil limits ownership and deadline limits total time. No events are shown yet.
+
 <a id="table-hai-ai-a2a-contexts"></a>
 
-#### `hai_ai_a2a_contexts`
+### `hai_ai_a2a_contexts`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -783,9 +558,23 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="ownership-of-an-agent-conversation"></a>
+
+#### Example · Ownership of an agent conversation
+
+Bind a context to a trusted subject so knowing its ID cannot expose another user’s task.
+
+```json
+{
+  "owner": "user-42"
+}
+```
+
+owner:user-42 records ownership, not chat content or permission for other users.
+
 <a id="table-hai-ai-a2a-messages"></a>
 
-#### `hai_ai_a2a_messages`
+### `hai_ai_a2a_messages`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -797,9 +586,32 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 | `status` | `TEXT` | Yes | — | Status of the related task. Indexed for filtering. | `completed` |
 
+<a id="messages-exchanged-in-an-agent-task"></a>
+
+#### Example · Messages exchanged in an agent task
+
+Store user or agent messages linked to their task for processing and inspection.
+
+```json
+{
+  "id": "message-42",
+  "taskId": "task-42",
+  "role": "user",
+  "parts": [
+    {
+      "kind": "text",
+      "text": "Shipping policy?"
+    }
+  ],
+  "createdAt": 1794873600000
+}
+```
+
+message-42 is a user message for task-42 asking about shipping policy. createdAt is its write time.
+
 <a id="table-hai-ai-acp-workspaces"></a>
 
-#### `hai_ai_acp_workspaces`
+### `hai_ai_acp_workspaces`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -809,9 +621,23 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="workspaces-an-agent-may-use"></a>
+
+#### Example · Workspaces an agent may use
+
+Register host-approved workspaces and repositories instead of accepting arbitrary model-supplied host paths.
+
+```json
+{
+  "id": "workspace-42"
+}
+```
+
+workspace-42 is a workspace ID; project settings are omitted. It is not a session or running process.
+
 <a id="table-hai-ai-acp-agents"></a>
 
-#### `hai_ai_acp_agents`
+### `hai_ai_acp_agents`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -821,9 +647,23 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="agent-definitions-that-may-be-started"></a>
+
+#### Example · Agent definitions that may be started
+
+Store agent type and launch/connection settings for authorized server-side tasks.
+
+```json
+{
+  "id": "agent-42"
+}
+```
+
+agent-42 is a definition ID; commands are omitted. Registering it does not start an execution.
+
 <a id="table-hai-ai-acp-sessions"></a>
 
-#### `hai_ai_acp_sessions`
+### `hai_ai_acp_sessions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -833,9 +673,26 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="project-and-resources-bound-to-one-agent-session"></a>
+
+#### Example · Project and resources bound to one agent session
+
+Bind an agent session to its workspace and resources for reconnecting to the same environment.
+
+```json
+{
+  "id": "acp-session-42",
+  "agentId": "agent-42",
+  "workspaceId": "workspace-42",
+  "cwd": "/workspace/orders"
+}
+```
+
+acp-session-42 uses agent-42 in workspace-42 at /workspace/orders. The path is inside the managed environment, not a public file URL.
+
 <a id="table-hai-ai-acp-locks"></a>
 
-#### `hai_ai_acp_locks`
+### `hai_ai_acp_locks`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -845,9 +702,23 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
+<a id="avoid-concurrent-session-resource-changes"></a>
+
+#### Example · Avoid concurrent session-resource changes
+
+Record temporary ownership while starting, recovering or releasing a session resource.
+
+```json
+{
+  "owner": null
+}
+```
+
+owner:null means no registered operation owner, not user authorization or proof of deletion.
+
 <a id="table-hai-ai-acp-managed-sessions"></a>
 
-#### `hai_ai_acp_managed_sessions`
+### `hai_ai_acp_managed_sessions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -859,9 +730,24 @@ A2A uses the shared storage clock for deadlines and checks the record version wh
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="connect-an-app-session-to-its-worker"></a>
+
+#### Example · Connect an app session to its worker
+
+Store caller/worker scopes and references so later app requests find the right execution session.
+
+```json
+{
+  "workerId": "worker-42",
+  "mode": "shared"
+}
+```
+
+worker-42 is the execution-side ID in shared mode. Full records also check both scopes; an ID alone grants no access.
+
 <a id="table-hai-ai-acp-managed-requests"></a>
 
-#### `hai_ai_acp_managed_requests`
+### `hai_ai_acp_managed_requests`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -873,9 +759,23 @@ Background workers page by the `(updated_at, id)` index.
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="recognize-the-same-submission"></a>
+
+#### Example · Recognize the same submission
+
+Store a normalized-request digest to detect retries that reuse an ID with different input.
+
+```json
+{
+  "fingerprint": "<request-digest>"
+}
+```
+
+fingerprint is a digest placeholder, not prompt or response text. A mismatch must not continue as the original request.
+
 <a id="table-hai-ai-acp-managed-approvals"></a>
 
-#### `hai_ai_acp_managed_approvals`
+### `hai_ai_acp_managed_approvals`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -887,9 +787,24 @@ Background workers page by the `(updated_at, id)` index.
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="an-operation-awaiting-human-approval"></a>
+
+#### Example · An operation awaiting human approval
+
+Persist pending approval and its deadline so another node can inspect or decide it.
+
+```json
+{
+  "sessionId": "acp-session-42",
+  "deadline": 1794873660000
+}
+```
+
+The session has no decision yet. Passing deadline does not approve anything; waiting is not consent.
+
 <a id="table-hai-ai-acp-managed-grants"></a>
 
-#### `hai_ai_acp_managed_grants`
+### `hai_ai_acp_managed_grants`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -901,9 +816,26 @@ Background workers page by the `(updated_at, id)` index.
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="a-reusable-granted-permission"></a>
+
+#### Example · A reusable granted permission
+
+Persist a scoped permission after an ongoing approval, checking subject, session and expiry on use.
+
+```json
+{
+  "id": "grant-42",
+  "scopeKey": "scope-42",
+  "summary": "Read project files",
+  "expires": 1794873660000
+}
+```
+
+grant-42 covers the described project-file read until expires. It is not permanent permission for arbitrary paths or commands.
+
 <a id="table-hai-ai-acp-managed-receipts"></a>
 
-#### `hai_ai_acp_managed_receipts`
+### `hai_ai_acp_managed_receipts`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -915,34 +847,100 @@ Background workers page by the `(updated_at, id)` index.
 
 Background workers page by the `(updated_at, id)` index.
 
+<a id="check-original-scopes-during-recovery"></a>
+
+#### Example · Check original scopes during recovery
+
+Keep caller and worker scope evidence so recovery still checks the original caller.
+
+```json
+{
+  "scope": {
+    "tenantId": "team-1",
+    "userId": "user-42"
+  },
+  "workerScope": {
+    "tenantId": "team-1",
+    "userId": "user-42"
+  }
+}
+```
+
+Both scopes are user-42 in team-1. Knowing the execution ID does not let another subject read its result.
+
 <a id="table-hai-ai-memory-write-gate"></a>
 
-#### `hai_ai_memory_write_gate`
+### `hai_ai_memory_write_gate`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
 | `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
+
+<a id="coordinate-memory-writes"></a>
+
+#### Example · Coordinate memory writes
+
+Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+
+```json
+{
+  "id": 1,
+  "marker": 0
+}
+```
+
+There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
 
 <a id="table-hai-ai-memory-vector-namespace-write-gate"></a>
 
-#### `hai_ai_memory_vector_namespace_write_gate`
+### `hai_ai_memory_vector_namespace_write_gate`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
 | `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
+
+<a id="coordinate-index-ownership-updates"></a>
+
+#### Example · Coordinate index ownership updates
+
+Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+
+```json
+{
+  "id": 1,
+  "marker": 0
+}
+```
+
+There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
 
 <a id="table-hai-ai-memory-vector-scan-write-gate"></a>
 
-#### `hai_ai_memory_vector_scan_write_gate`
+### `hai_ai_memory_vector_scan_write_gate`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | No | — | Fixed primary key for the row inserted at initialization. | `1` |
 | `marker` | `INTEGER` | No | — | Initially `0`. Writes toggle `0` and `1` to lock the row. | `0` |
 
-### Vector collections and cache
+<a id="coordinate-inspection-progress"></a>
+
+#### Example · Coordinate inspection progress
+
+Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+
+```json
+{
+  "id": 1,
+  "marker": 0
+}
+```
+
+There is one id:1 row. marker:0 is an initial marker, not memory text or a processed-item count.
+
+## Vector collections
 
 Knowledge vectors use the `hai_ai_knowledge` [VecDB](vecdb.en.md) collection by default. Search reads only published document versions. Built-in memory defaults to `hai_ai_memory` or the collection assigned to a bound namespace. Mem0 manages its own vectors. [Runner](runner.en.md) owns ACP execution and event tables.
 

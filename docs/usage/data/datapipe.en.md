@@ -1,14 +1,22 @@
 # Datapipe data
 
-[Data reference](README.en.md) · [Datapipe options](../configuration/datapipe.en.md) · [Datapipe APIs](../function/datapipe.en.md)
+[简体中文](datapipe.md) · [日本語](datapipe.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/datapipe.en.md) · [API reference](../function/datapipe.en.md)
+
+When an application imports a document, Datapipe returns ordered chunks and processing statistics. The caller chooses where to store or index the chunks.
+
+<a id="response-data"></a>
+
+## Request and response data
+
+Datapipe creates no SQL tables, Redis keys, or disk cache. A call returns the processed text or chunks. The application can save them in a [knowledge base](ai.en.md) or its own storage.
+
+`PipelineResult.text` contains the text after all steps. `chunks` comes from the most recent chunk step and can be changed by subsequent chunk transforms. The calling application can associate its own source URL, file name, or content type with the result and manage deduplication and history across calls.
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### Cleaned and split text
-
-Structure: `PipelineResult`.
 
 Clean input and split it into smaller pieces for retrieval or model input. Datapipe returns the result without storing it.
 
@@ -46,13 +54,3 @@ This is `data` from a successful `datapipe.chunk` call. The source is `# Q\r\nab
 ```
 
 Both chunks belong to the level 1 heading `Q`. `subChunk` indicates that the section produced multiple chunks and is omitted for a single chunk. Text before any heading has an empty title and level `0`.
-
-## Field, storage and cleanup reference
-
-### Database and cache
-
-Datapipe creates no SQL tables, Redis keys, or disk cache. A call returns the processed text or chunks. The application can save them in a [knowledge base](ai.md) or its own storage.
-
-### Input and output
-
-`PipelineResult.text` contains the text after all steps. `chunks` comes from the most recent chunk step and can be changed by subsequent chunk transforms. The calling application can associate its own source URL, file name, or content type with the result and manage deduplication and history across calls.

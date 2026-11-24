@@ -1,14 +1,24 @@
 # @h-ai/api-client Data structures
 
-[Chinese source](api-client.md) · [Configuration](../configuration/api-client.en.md) · [API reference](../function/api-client.en.md)
+[简体中文](api-client.md) · [日本語](api-client.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/api-client.en.md) · [API reference](../function/api-client.en.md)
+
+When an access token expires, API Client uses the refresh credential to get a replacement and retry the request. The selected token storage adapter manages credentials, and the caller consumes the API result.
+
+## Credential storage
+
+The client owns local credential storage; IAM persists server-side sessions.
+
+| Table, key or artifact | Shape and ownership |
+| --- | --- |
+| `apiClient.tokenStorage.httpOnlyCookie()` | Default adapter. Access tokens begin empty and expire from memory on reload. The browser sends the server-set refresh cookie. |
+| `apiClient.tokenStorage.memory()` | Both tokens start empty and live until cleared or the instance is discarded. Isolate each SSR request. |
+| `TokenStorage` | Application-supplied adapter. A native app can use the platform secure store. The default browser adapter does not use localStorage. |
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### Login credentials held by a client
-
-Structure: `TokenStorage`.
 
 The client sends an access token and may use a refresh token to renew credentials.
 
@@ -21,9 +31,11 @@ The client sends an access token and may use a refresh token to renew credential
 
 This is a redacted inspection view. The default browser refresh token stays in an HttpOnly cookie, unreadable to page code, and must not be copied into localStorage.
 
-### One API call result
+<a id="response-data"></a>
 
-Structure: `HaiResult<T>`.
+## Request and response data
+
+### One API call result
 
 An API result tells the client whether business processing succeeded. Check success before reading data.
 
@@ -38,13 +50,3 @@ An API result tells the client whether business processing succeeded. Check succ
 ```
 
 The server created order-42. This result is not a cache entry and does not persist across page reloads automatically.
-
-## Field, storage and cleanup reference
-
-The client owns local credential storage; IAM persists server-side sessions.
-
-| Table, key or artifact | Shape and ownership |
-| --- | --- |
-| `apiClient.tokenStorage.httpOnlyCookie()` | Default adapter. Access tokens begin empty and expire from memory on reload. The browser sends the server-set refresh cookie. |
-| `apiClient.tokenStorage.memory()` | Both tokens start empty and live until cleared or the instance is discarded. Isolate each SSR request. |
-| `TokenStorage` | Application-supplied adapter. A native app can use the platform secure store. The default browser adapter does not use localStorage. |

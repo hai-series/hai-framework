@@ -4,73 +4,13 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/runner.md) · [功能说明](../function/runner.md)
 
-<a id="example-data"></a>
-
-## 这些数据用来做什么
-
-### 一次待运行或运行中的任务
-
-对应结构：`hai_runner_executions`。
-
-记录一次真实执行要做什么、谁领取、资源上限和当前状态，让多个节点协作而不各执行一份。
-
-```json
-{
-  "id": "execution-42",
-  "kind": "hai.tools.example.v1",
-  "state": "queued",
-  "owner_node": null,
-  "owner_generation": null,
-  "cpu_milli": 1000,
-  "memory_mib": 256,
-  "pids": 64,
-  "scratch_mib": 64,
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000,
-  "event_sequence": 0,
-  "event_bytes": 0
-}
-```
-
-这是任务记录的字段节选。`execution-42` 仍在 `queued`，所以 `owner_node` 为空；资源上限是 1 核、256 MiB 内存、64 个进程、64 MiB 临时空间，还没有事件。`created_at` 和 `updated_at` 是 Unix 毫秒。
-
-### 任务运行中留下的顺序消息
-
-对应结构：`hai_runner_events`。
-
-把进度或输出按顺序保存，客户端断线后可从上次读到的位置继续取，不必重新执行任务。
-
-```json
-{
-  "id": "event-42",
-  "execution_id": "execution-42",
-  "sequence_number": 1,
-  "created_at": 1794873600000
-}
-```
-
-event-42 是 execution-42 的第1条事件记录；event_json 是实际消息，本例只展示关联和顺序字段。
-
-### 多个节点一起核对剩余资源
-
-对应结构：`hai_runner_gate`。
-
-多个节点同时领取任务时，先围绕这条记录协调资源检查，避免每台都认为还有同一份空闲容量。
-
-```json
-{
-  "id": 1,
-  "revision": 1
-}
-```
-
-整张表只有 id:1 这一条，revision 随协调更新；1 不是已运行任务总数，也不表示某个节点永久持锁。
-
-## 字段、存储与清理参考
+提交容器任务后，Runner 保存任务状态、执行资源预算和进度事件。客户端断开重连时，可以用原执行编号继续读取事件。
 
 <a id="tables"></a>
 
-### 数据库
+<a id="database"></a>
+
+## 数据库
 
 Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 中。节点用数据库时钟判断截止时间。
 
@@ -84,7 +24,7 @@ Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 
 
 <a id="table-hai-runner-executions"></a>
 
-#### `hai_runner_executions`
+### `hai_runner_executions`
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- | --- |
@@ -127,11 +67,39 @@ Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 
 
 时间字段以 Unix 毫秒记录。索引覆盖排队状态、节点和租约、范围和容量、并发组、父执行、清理游标及排队、租约、运行截止时间。
 
+<a id="example-data"></a>
+
+<a id="一次待运行或运行中的任务"></a>
+
+#### 示例 · 一次待运行或运行中的任务
+
+记录一次真实执行要做什么、谁领取、资源上限和当前状态，让多个节点协作而不各执行一份。
+
+```json
+{
+  "id": "execution-42",
+  "kind": "hai.tools.example.v1",
+  "state": "queued",
+  "owner_node": null,
+  "owner_generation": null,
+  "cpu_milli": 1000,
+  "memory_mib": 256,
+  "pids": 64,
+  "scratch_mib": 64,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000,
+  "event_sequence": 0,
+  "event_bytes": 0
+}
+```
+
+这是任务记录的字段节选。`execution-42` 仍在 `queued`，所以 `owner_node` 为空；资源上限是 1 核、256 MiB 内存、64 个进程、64 MiB 临时空间，还没有事件。`created_at` 和 `updated_at` 是 Unix 毫秒。
+
 <a id="events"></a>
 
 <a id="table-hai-runner-events"></a>
 
-#### `hai_runner_events`
+### `hai_runner_events`
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- | --- |
@@ -143,9 +111,26 @@ Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 
 
 按执行 ID 和事件顺序建索引。
 
+<a id="任务运行中留下的顺序消息"></a>
+
+#### 示例 · 任务运行中留下的顺序消息
+
+把进度或输出按顺序保存，客户端断线后可从上次读到的位置继续取，不必重新执行任务。
+
+```json
+{
+  "id": "event-42",
+  "execution_id": "execution-42",
+  "sequence_number": 1,
+  "created_at": 1794873600000
+}
+```
+
+event-42 是 execution-42 的第1条事件记录；event_json 是实际消息，本例只展示关联和顺序字段。
+
 <a id="table-hai-runner-gate"></a>
 
-#### `hai_runner_gate`
+### `hai_runner_gate`
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- | --- |
@@ -154,6 +139,19 @@ Runner 把任务、资源配额和执行事件保存在共享 [RelDB](reldb.md) 
 
 通常在记录满 7 天后清理。无法确认任务是否已在容器中执行完成时，数据库会保留相关记录，待人工或业务核对结果后再进入清理流程。
 
-### 缓存
+<a id="多个节点一起核对剩余资源"></a>
+
+#### 示例 · 多个节点一起核对剩余资源
+
+多个节点同时领取任务时，先围绕这条记录协调资源检查，避免每台都认为还有同一份空闲容量。
+
+```json
+{
+  "id": 1,
+  "revision": 1
+}
+```
+
+整张表只有 id:1 这一条，revision 随协调更新；1 不是已运行任务总数，也不表示某个节点永久持锁。
 
 模块没有 Redis 键。只有启动任务的节点持有本机进程和容器对象。其他节点通过数据库查询执行状态、检查是否已被领取，或者记录核对后的结果。

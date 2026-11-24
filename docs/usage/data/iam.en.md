@@ -1,252 +1,12 @@
 # @h-ai/iam Data structures
 
-[Chinese source](iam.md) · [Configuration](../configuration/iam.en.md) · [API reference](../function/iam.en.md)
+[简体中文](iam.md) · [日本語](iam.ja.md)
 
-<a id="example-data"></a>
+[Data reference index](README.en.md) · [Configuration](../configuration/iam.en.md) · [API reference](../function/iam.en.md)
 
-## What these records are for
+When a user signs in or requests protected data, IAM checks accounts, roles, and permissions in the database. It caches sessions, codes, and read results with lifetimes. Authorization uses the new permission version after changes.
 
-### The user account
-
-Structure: `hai_iam_users`.
-
-Store identity and whether the account may be used; login and authorization check it.
-
-```json
-{
-  "id": "user-42",
-  "username": "example-user",
-  "email": null,
-  "password_hash": null,
-  "account_type": "permanent",
-  "account_status": "active",
-  "must_change_password": false,
-  "login_failed_count": 0
-}
-```
-
-user-42 is an active permanent account. Null email/password_hash means absent, not permission to sign in with an empty password.
-
-### Roles assignable to users
-
-Structure: `hai_iam_roles`.
-
-Name a set of responsibilities so several users can receive the same permissions.
-
-```json
-{
-  "id": "role-reader",
-  "code": "reader",
-  "name": "Reader",
-  "is_system": false
-}
-```
-
-role-reader has code reader, display name Reader and is not a system role.
-
-### Individual application permissions
-
-Structure: `hai_iam_permissions`.
-
-Give a protected operation a stable permission code checked by the server.
-
-```json
-{
-  "id": "permission-read",
-  "code": "orders.read",
-  "name": "Read orders",
-  "resource": "orders",
-  "action": "read"
-}
-```
-
-orders.read means reading orders. Creating this row alone grants nobody that permission.
-
-### Which user has which role
-
-Structure: `hai_iam_user_roles`.
-
-Link users to roles without duplicating all role details in each user row.
-
-```json
-{
-  "user_id": "user-42",
-  "role_id": "role-reader"
-}
-```
-
-user-42 receives role-reader; the pair is unique.
-
-### Which role includes which permission
-
-Structure: `hai_iam_role_permissions`.
-
-Link roles to permissions when calculating what a user may do.
-
-```json
-{
-  "role_id": "role-reader",
-  "permission_id": "permission-read"
-}
-```
-
-role-reader includes permission-read; with the user-role link, user-42 gains orders.read.
-
-### Credentials for programmatic calls
-
-Structure: `hai_iam_api_keys`.
-
-Allow a script to call limited APIs for a user, storing a digest for verification.
-
-```json
-{
-  "id": "apikey-42",
-  "user_id": "user-42",
-  "name": "Example API",
-  "key_hash": "<hash:redacted>",
-  "key_prefix": "<prefix:redacted>",
-  "enabled": true,
-  "expires_at": null,
-  "scopes": [
-    "orders.read"
-  ]
-}
-```
-
-apikey-42 belongs to user-42 and allows orders.read only. Redacted digest/prefix cannot recover the original key, returned only at issue time.
-
-### Bind a directory entry to a local account
-
-`hai_iam_ldap_identities` is the source of truth for LDAP sign-in and offline imports. `directory_id` and `entry_id` uniquely identify a directory entry. `user_id` references a local user and is unique within the directory. Deleting the user removes the binding. The example keeps the entry linked to `user-42` even after a rename.
-
-```json
-{
-  "directory_id": "company-directory",
-  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
-  "user_id": "user-42"
-}
-```
-
-### The user’s active login sessions
-
-Structure: `hai:iam:sessions:{<scope-digest>}`.
-
-Store token-backed sessions for verification, renewal and logout; concurrent updates must not restore old sessions.
-
-```json
-{
-  "revision": "revision-42",
-  "sessions": {
-    "<access-token:redacted>": {
-      "session": {
-        "userId": "user-42",
-        "username": "example-user",
-        "roles": [
-          "reader"
-        ],
-        "permissions": [
-          "orders.read"
-        ],
-        "createdAt": "2026-11-17T00:00:00.000Z",
-        "expiresAt": "2026-11-18T00:00:00.000Z"
-      },
-      "refreshExpiresAt": 1795478400000,
-      "refreshToken": "<refresh-token:redacted>"
-    }
-  }
-}
-```
-
-The token belongs to user-42. Access expires at 2026-11-18 00:00 UTC; refresh may last longer, with `refreshExpiresAt` in Unix milliseconds. `revision` changes with updates. Tokens are redacted.
-
-### One-time code and resend delay
-
-Structure: `hai:iam:otp:example@example.invalid`.
-
-Track the current code for one identity, failed attempts and when another may be sent.
-
-```json
-{
-  "version": "otp-version-42",
-  "code": "<otp:redacted>",
-  "attempts": 0,
-  "expiresAt": 1794873900000,
-  "cooldownUntil": 1794873660000
-}
-```
-
-Assuming issue at 2026-11-17 00:00 UTC, this code has no failed attempts, lasts five minutes and has a 60-second resend delay. `expiresAt` and `cooldownUntil` are Unix milliseconds. The redacted code cannot be reused after success.
-
-### Server record for a CAPTCHA challenge
-
-Structure: `hai:iam:captcha:<id>`.
-
-Keep the challenge and server secrets to check the intended operation and one-time use.
-
-```json
-{
-  "operation": "login",
-  "signatureSecret": "<secret:redacted>",
-  "keySecret": "<secret:redacted>"
-}
-```
-
-operation:login restricts it to login. Secrets are redacted and challenge details omitted; never send the whole private record to a page.
-
-### A short-lived one-use ticket
-
-The key is `hai:iam:ticket:sha256:<ticket digest>`. The client holds the original ticket, and the key contains only its hexadecimal SHA-256 digest. Updated instances still accept old tickets until they expire. When deploying to several instances, switch consumers together because older instances cannot redeem newly issued tickets.
-
-After checking the purpose and expiration, redemption atomically removes the matching record and returns its subject and authorization parameters.
-
-```json
-{
-  "subjectId": "user-42",
-  "purpose": "ai-audio",
-  "grant": {
-    "operation": "transcribe"
-  },
-  "expiresAt": 1794873630000
-}
-```
-
-user-42 may transcribe through ai-audio. Assuming issue at 2026-11-17 00:00 UTC, the ticket expires 30 seconds later; `expiresAt` is Unix milliseconds. A second connection with the same ticket fails.
-
-### Whether cached permissions remain current
-
-Structure: `hai:iam:read_cache:revision`.
-
-A shared marker lets readers avoid stale cache during account or permission writes.
-
-```json
-{
-  "epoch": "epoch-42",
-  "writers": 0
-}
-```
-
-writers:0 means no registered write is in progress; epoch-42 identifies the cache generation. This marker contains no permissions and does not expire.
-
-### Briefly reuse a fetched account
-
-Structure: `hai:iam:read_cache:epoch-42:user:v2:user-42`.
-
-Reduce repeated database reads while avoiding older cache generations after changes.
-
-```json
-{
-  "value": {
-    "id": "user-42",
-    "username": "example-user"
-  }
-}
-```
-
-value is a user-42 excerpt, normally expiring after 60 seconds. epoch-42 must still match the current marker.
-
-## Field, storage and cleanup reference
-
-### Database tables
+## Database
 
 Identity data belongs to RelDB and revocable session state uses a shared Cache in production. Keep credentials and authorization state on the server.
 
@@ -264,7 +24,7 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 
 <a id="table-hai-iam-users"></a>
 
-#### `hai_iam_users`
+### `hai_iam_users`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -296,9 +56,32 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 | `reset_expires_at` | `BIGINT` | Yes | — | Reset credential expiry in Unix milliseconds. | `1794874500000` |
 | `reset_attempts` | `INTEGER` | No | `0` | Number of attempts to verify the current reset credential. | `0` |
 
+<a id="example-data"></a>
+
+<a id="the-user-account"></a>
+
+#### Example · The user account
+
+Store identity and whether the account may be used; login and authorization check it.
+
+```json
+{
+  "id": "user-42",
+  "username": "example-user",
+  "email": null,
+  "password_hash": null,
+  "account_type": "permanent",
+  "account_status": "active",
+  "must_change_password": false,
+  "login_failed_count": 0
+}
+```
+
+user-42 is an active permanent account. Null email/password_hash means absent, not permission to sign in with an empty password.
+
 <a id="table-hai-iam-roles"></a>
 
-#### `hai_iam_roles`
+### `hai_iam_roles`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -310,9 +93,26 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 | `created_at` | `TIMESTAMP` | No | — | Role creation time. | `2026-11-17T00:00:00Z` |
 | `updated_at` | `TIMESTAMP` | No | — | Role's last update time. | `2026-11-17T00:00:00Z` |
 
+<a id="roles-assignable-to-users"></a>
+
+#### Example · Roles assignable to users
+
+Name a set of responsibilities so several users can receive the same permissions.
+
+```json
+{
+  "id": "role-reader",
+  "code": "reader",
+  "name": "Reader",
+  "is_system": false
+}
+```
+
+role-reader has code reader, display name Reader and is not a system role.
+
 <a id="table-hai-iam-permissions"></a>
 
-#### `hai_iam_permissions`
+### `hai_iam_permissions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -327,27 +127,75 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 | `created_at` | `TIMESTAMP` | No | — | Permission creation time. | `2026-11-17T00:00:00Z` |
 | `updated_at` | `TIMESTAMP` | No | — | Permission's last update time. | `2026-11-17T00:00:00Z` |
 
+<a id="individual-application-permissions"></a>
+
+#### Example · Individual application permissions
+
+Give a protected operation a stable permission code checked by the server.
+
+```json
+{
+  "id": "permission-read",
+  "code": "orders.read",
+  "name": "Read orders",
+  "resource": "orders",
+  "action": "read"
+}
+```
+
+orders.read means reading orders. Creating this row alone grants nobody that permission.
+
 <a id="table-hai-iam-user-roles"></a>
 
-#### `hai_iam_user_roles`
+### `hai_iam_user_roles`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `user_id` | `TEXT` | No | — | User ID in the unique user-role pair. Indexed for lookup. | `user-42` |
 | `role_id` | `TEXT` | No | — | Granted role ID in the unique pair with `user_id`. | `role-reader` |
 
+<a id="which-user-has-which-role"></a>
+
+#### Example · Which user has which role
+
+Link users to roles without duplicating all role details in each user row.
+
+```json
+{
+  "user_id": "user-42",
+  "role_id": "role-reader"
+}
+```
+
+user-42 receives role-reader; the pair is unique.
+
 <a id="table-hai-iam-role-permissions"></a>
 
-#### `hai_iam_role_permissions`
+### `hai_iam_role_permissions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `role_id` | `TEXT` | No | — | Role ID in the unique role-permission pair. Indexed for lookup. | `role-reader` |
 | `permission_id` | `TEXT` | No | — | Granted permission ID in the unique pair with `role_id`. | `permission-read` |
 
+<a id="which-role-includes-which-permission"></a>
+
+#### Example · Which role includes which permission
+
+Link roles to permissions when calculating what a user may do.
+
+```json
+{
+  "role_id": "role-reader",
+  "permission_id": "permission-read"
+}
+```
+
+role-reader includes permission-read; with the user-role link, user-42 gains orders.read.
+
 <a id="table-hai-iam-api-keys"></a>
 
-#### `hai_iam_api_keys`
+### `hai_iam_api_keys`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -362,9 +210,32 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 | `last_used_at` | `TIMESTAMP` | Yes | — | Last used time. | `NULL` |
 | `scopes` | `JSON` | Yes | — | Scopes available to the API key. | `["orders.read"]` |
 
+<a id="credentials-for-programmatic-calls"></a>
+
+#### Example · Credentials for programmatic calls
+
+Allow a script to call limited APIs for a user, storing a digest for verification.
+
+```json
+{
+  "id": "apikey-42",
+  "user_id": "user-42",
+  "name": "Example API",
+  "key_hash": "<hash:redacted>",
+  "key_prefix": "<prefix:redacted>",
+  "enabled": true,
+  "expires_at": null,
+  "scopes": [
+    "orders.read"
+  ]
+}
+```
+
+apikey-42 belongs to user-42 and allows orders.read only. Redacted digest/prefix cannot recover the original key, returned only at issue time.
+
 <a id="table-hai-iam-ldap-identities"></a>
 
-#### `hai_iam_ldap_identities`
+### `hai_iam_ldap_identities`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -374,9 +245,23 @@ IAM uses seven tables in total. It creates the LDAP and API Key tables only when
 
 IAM returns the original API key only when issuing it. Update accounts, roles, and permissions through APIs such as `iam.user` and `iam.authz` so IAM can update the related sessions and cache.
 
+<a id="bind-a-directory-entry-to-a-local-account"></a>
+
+#### Example · Bind a directory entry to a local account
+
+`hai_iam_ldap_identities` is the source of truth for LDAP sign-in and offline imports. `directory_id` and `entry_id` uniquely identify a directory entry. `user_id` references a local user and is unique within the directory. Deleting the user removes the binding. The example keeps the entry linked to `user-42` even after a rename.
+
+```json
+{
+  "directory_id": "company-directory",
+  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
+  "user_id": "user-42"
+}
+```
+
 <a id="data-fields"></a>
 
-### Cache keys
+## Cache
 
 IAM writes six cache record families. These are logical keys. Redis adds `keyPrefix` if configured. Sessions, codes, tickets and authorization state stay server-side.
 
@@ -391,7 +276,7 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 
 <a id="cache-iam-sessions"></a>
 
-#### `hai:iam:sessions:{<scope-digest>}`
+### `hai:iam:sessions:{<scope-digest>}`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
@@ -420,9 +305,41 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `session.maxAge` | `number` | `86400` | Access lifetime in seconds. Creation can override it. The session keeps that lifetime. | `86400` |
 | `session.data` | JSON object | — | Optional application data. | `{"theme":"dark"}` |
 
+<a id="the-users-active-login-sessions"></a>
+
+#### Example · The user’s active login sessions
+
+Store token-backed sessions for verification, renewal and logout; concurrent updates must not restore old sessions.
+
+```json
+{
+  "revision": "revision-42",
+  "sessions": {
+    "<access-token:redacted>": {
+      "session": {
+        "userId": "user-42",
+        "username": "example-user",
+        "roles": [
+          "reader"
+        ],
+        "permissions": [
+          "orders.read"
+        ],
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "expiresAt": "2026-11-18T00:00:00.000Z"
+      },
+      "refreshExpiresAt": 1795478400000,
+      "refreshToken": "<refresh-token:redacted>"
+    }
+  }
+}
+```
+
+The token belongs to user-42. Access expires at 2026-11-18 00:00 UTC; refresh may last longer, with `refreshExpiresAt` in Unix milliseconds. `revision` changes with updates. Tokens are redacted.
+
 <a id="cache-iam-otp"></a>
 
-#### `hai:iam:otp:<identifier>`
+### `hai:iam:otp:<identifier>`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
@@ -432,9 +349,27 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `expiresAt` | `number` | — | Expiry time of the code in Unix milliseconds. | `1794873900000` |
 | `cooldownUntil` | `number` | — | Earliest resend time in Unix milliseconds. | `1794873660000` |
 
+<a id="one-time-code-and-resend-delay"></a>
+
+#### Example · One-time code and resend delay
+
+Track the current code for one identity, failed attempts and when another may be sent.
+
+```json
+{
+  "version": "otp-version-42",
+  "code": "<otp:redacted>",
+  "attempts": 0,
+  "expiresAt": 1794873900000,
+  "cooldownUntil": 1794873660000
+}
+```
+
+Assuming issue at 2026-11-17 00:00 UTC, this code has no failed attempts, lasts five minutes and has a 60-second resend delay. `expiresAt` and `cooldownUntil` are Unix milliseconds. The redacted code cannot be reused after success.
+
 <a id="cache-iam-captcha"></a>
 
-#### `hai:iam:captcha:<id>`
+### `hai:iam:captcha:<id>`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
@@ -443,9 +378,25 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `signatureSecret` | `string` | — | Server-only secret for the challenge signature. | `<secret:redacted>` |
 | `keySecret` | `string` | — | Server-only secret for the derived key signature. | `<secret:redacted>` |
 
+<a id="server-record-for-a-captcha-challenge"></a>
+
+#### Example · Server record for a CAPTCHA challenge
+
+Keep the challenge and server secrets to check the intended operation and one-time use.
+
+```json
+{
+  "operation": "login",
+  "signatureSecret": "<secret:redacted>",
+  "keySecret": "<secret:redacted>"
+}
+```
+
+operation:login restricts it to login. Secrets are redacted and challenge details omitted; never send the whole private record to a page.
+
 <a id="cache-iam-ticket"></a>
 
-#### `hai:iam:ticket:sha256:<digest>`
+### `hai:iam:ticket:sha256:<digest>`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
@@ -454,21 +405,74 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `grant` | JSON object | `{}` | Allowed operations, models, sessions or other parameters at issuance. | `{"operation":"transcribe"}` |
 | `expiresAt` | `number` | — | Ticket deadline in Unix milliseconds. | `1794873630000` |
 
+<a id="a-short-lived-one-use-ticket"></a>
+
+#### Example · A short-lived one-use ticket
+
+The key is `hai:iam:ticket:sha256:<ticket digest>`. The client holds the original ticket, and the key contains only its hexadecimal SHA-256 digest. Updated instances still accept old tickets until they expire. When deploying to several instances, switch consumers together because older instances cannot redeem newly issued tickets.
+
+After checking the purpose and expiration, redemption atomically removes the matching record and returns its subject and authorization parameters.
+
+```json
+{
+  "subjectId": "user-42",
+  "purpose": "ai-audio",
+  "grant": {
+    "operation": "transcribe"
+  },
+  "expiresAt": 1794873630000
+}
+```
+
+user-42 may transcribe through ai-audio. Assuming issue at 2026-11-17 00:00 UTC, the ticket expires 30 seconds later; `expiresAt` is Unix milliseconds. A second connection with the same ticket fails.
+
 <a id="cache-iam-revision"></a>
 
-#### `hai:iam:read_cache:revision`
+### `hai:iam:read_cache:revision`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
 | `epoch` | `string` | — | Cache generation used to form query cache keys. | `epoch-42` |
 | `writers` | `integer` | — | Number of unconfirmed writes. The initial value is `0`. | `0` |
 
+<a id="whether-cached-permissions-remain-current"></a>
+
+#### Example · Whether cached permissions remain current
+
+A shared marker lets readers avoid stale cache during account or permission writes.
+
+```json
+{
+  "epoch": "epoch-42",
+  "writers": 0
+}
+```
+
+writers:0 means no registered write is in progress; epoch-42 identifies the cache generation. This marker contains no permissions and does not expire.
+
 <a id="cache-iam-result"></a>
 
-#### `hai:iam:read_cache:<epoch>:<query>`
+### `hai:iam:read_cache:<epoch>:<query>`
 
 | Value field | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
 | `value` | JSON | — | Wraps a successful query result. Example key: `hai:iam:read_cache:epoch-42:user:v2:user-42`. | `{"id":"user-42","username":"example-user"}` |
 
 After credentials change, IAM compares `credentialVersion` and refuses old sessions. While accounts or permissions are being written, IAM reads from the database. The next `epoch` bypasses old read entries, which expire on schedule.
+
+<a id="briefly-reuse-a-fetched-account"></a>
+
+#### Example · Briefly reuse a fetched account
+
+Reduce repeated database reads while avoiding older cache generations after changes.
+
+```json
+{
+  "value": {
+    "id": "user-42",
+    "username": "example-user"
+  }
+}
+```
+
+value is a user-42 excerpt, normally expiring after 60 seconds. epoch-42 must still match the current marker.

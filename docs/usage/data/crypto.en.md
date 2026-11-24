@@ -9,7 +9,7 @@ Encryption, decryption, signing and hashing do not need saved records. HTTP tran
 <a id="transport-state"></a>
 <a id="example-data"></a>
 
-## What the four records are for
+## Cache
 
 These examples follow one client connecting to a service. They contain fictional IDs and a public key, never a private key. Keys shown here are the names passed to Cache; Redis also adds the application's `keyPrefix`.
 
@@ -24,7 +24,7 @@ HTTP transport encryption uses the four cache families below. Client and request
 
 <a id="cache-crypto-client"></a>
 
-### 1. Client public key: recognize requests and encrypt replies for that client
+### Client public key: recognize requests and encrypt replies for that client
 
 Key exchange registers the client's public key and assigns a `clientId`. The server uses this ID to find the key, verify request signatures and encrypt responses for the client.
 
@@ -44,7 +44,7 @@ This means `c_example-42` is registered with this SM2 key. The sample is the pub
 
 <a id="cache-crypto-request"></a>
 
-### 2. Used request ID: stop the same encrypted request executing again
+### Used request ID: stop the same encrypted request executing again
 
 The client creates a fresh `requestId` for each request. After checking the signature, contents and time, the server records that the ID has been used. Only a request that successfully creates this marker reaches business code. A later request with the same client and ID is rejected. Even when two servers receive it together, only one can create the marker.
 
@@ -66,7 +66,7 @@ A request issued at 00:00 keeps its marker until 00:11 (`issuedAt + 660000` ms).
 
 <a id="cache-crypto-registration"></a>
 
-### 3. New-key counter: stop repeated key exchanges filling the cache
+### New-key counter: stop repeated key exchanges filling the cache
 
 All servers share the one key `hai:crypto:transport:cache:quota:register`. Each new registration reserves one slot:
 
@@ -88,7 +88,7 @@ All servers share the one key `hai:crypto:transport:cache:quota:register`. Each 
 
 <a id="cache-crypto-request-quota"></a>
 
-### 4. New-request counter: stop used-ID records growing too quickly
+### New-request counter: stop used-ID records growing too quickly
 
 All servers share `hai:crypto:transport:cache:quota:request` to limit newly admitted request IDs:
 

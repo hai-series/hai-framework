@@ -1,169 +1,14 @@
 # @h-ai/feedback Data structures
 
-[Chinese source](feedback.md) · [Configuration](../configuration/feedback.en.md) · [API reference](../function/feedback.en.md)
+[简体中文](feedback.md) · [日本語](feedback.ja.md)
 
-<a id="example-data"></a>
+[Data reference index](README.en.md) · [Configuration](../configuration/feedback.en.md) · [API reference](../function/feedback.en.md)
 
-## What these records are for
-
-### The submitted feedback report
-
-Structure: `hai_feedback_reports`.
-
-Store the report, submitter and handling state as the entry point for evidence and history.
-
-```json
-{
-  "id": "feedback-42",
-  "number": "FB-EXAMPLE-42",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "app_id": "orders",
-  "summary": "Example problem",
-  "status": "pending",
-  "collection_status": "collecting",
-  "version": 1,
-  "revision": 1,
-  "evidence_count": 0,
-  "evidence_bytes": 0,
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000
-}
-```
-
-This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
-
-The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`, and excludes expired reports and reports being deleted.
-
-### Evidence of what happened
-
-Structure: `hai_feedback_evidence`.
-
-Link logs, errors or page evidence by source and order to reconstruct a problem.
-
-```json
-{
-  "id": "evidence-42",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "app_id": "orders",
-  "sequence": 1,
-  "timestamp": 1794873600000,
-  "revision": 1,
-  "bytes": 24
-}
-```
-
-evidence-42 is sequence 1 for feedback-42, 24 bytes. timestamp is the event time in Unix milliseconds; the redacted payload is not expanded here.
-
-### Where an attachment is and whether it matches
-
-Structure: `hai_feedback_attachments`.
-
-Keep the private object location, size and checksum instead of file bytes in SQL.
-
-```json
-{
-  "id": "attachment-42",
-  "client_id": "client-file-42",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "object_key": "feedback/<scope-digest>/feedback-42/attachment-42",
-  "size": 5,
-  "checksum": "<checksum:redacted>"
-}
-```
-
-attachment-42 refers to a 5-byte object for feedback-42. Its checksum is redacted, and object_key is not a public download grant.
-
-### Who changed the feedback state
-
-Structure: `hai_feedback_history`.
-
-Keep each handling change and note so staff can follow the report history.
-
-```json
-{
-  "id": "history-42",
-  "report_id": "feedback-42",
-  "payload": {
-    "id": "history-42",
-    "feedbackId": "feedback-42",
-    "userId": "user-42",
-    "from": "pending",
-    "to": "handled",
-    "timestamp": 1794873660000
-  }
-}
-```
-
-user-42 changed feedback-42 from pending to handled; timestamp is the handling time, not original submission.
-
-### Background work after submission
-
-Structure: `hai_feedback_jobs`.
-
-Persist asynchronous collection, notification or export work for claims and retries.
-
-```json
-{
-  "id": "job-42",
-  "app_id": "orders",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "attempts": 0,
-  "token": null,
-  "lease_until": 0,
-  "next_run_at": 1794873600000
-}
-```
-
-job-42 has no attempt or owner token yet. next_run_at is the earliest start, not a promised completion time.
-
-### Feedback capacity already reserved
-
-Structure: `hai_feedback_quotas`.
-
-Check report, byte and export budgets before admission so one scope cannot consume unbounded storage.
-
-```json
-{
-  "id": "quota-42",
-  "app_id": "orders",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "period": 0,
-  "report_count": 1,
-  "reserved_bytes": 1024,
-  "report_bytes": 0,
-  "export_limit": 0,
-  "updated_at": 1794873600000
-}
-```
-
-period:0 measures scope totals: one report and 1024 reserved bytes. This is accounting, not report content.
-
-### Briefly retain unsent evidence
-
-Structure: `IndexedDB checkpoint`.
-
-Temporarily keep captured evidence while opening or refreshing feedback, not as server history.
-
-```json
-{
-  "evidence": [],
-  "expiresAt": 1794873900000
-}
-```
-
-The empty evidence list has nothing cached yet; expiresAt is five minutes later. Expired snapshots are not restored; submission clears them.
-
-## Field, storage and cleanup reference
+After a user reports a problem, Feedback stores the report, evidence, and follow-up jobs. Operators can use the same report ID to check progress. Attachments live in object storage, and pending drafts can stay in the browser.
 
 <a id="reports"></a>
 
-### Reports and related tables
+## Database
 
 The service stores the report, related evidence and scheduled work in one transaction. Times are Unix milliseconds. Optional values are NULL unless stated otherwise.
 
@@ -180,7 +25,7 @@ The module uses 6 tables.
 
 <a id="table-hai-feedback-reports"></a>
 
-#### `hai_feedback_reports`
+### `hai_feedback_reports`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -209,9 +54,42 @@ The module uses 6 tables.
 
 Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 
+<a id="example-data"></a>
+
+<a id="the-submitted-feedback-report"></a>
+
+#### Example · The submitted feedback report
+
+Store the report, submitter and handling state as the entry point for evidence and history.
+
+```json
+{
+  "id": "feedback-42",
+  "number": "FB-EXAMPLE-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "summary": "Example problem",
+  "status": "pending",
+  "collection_status": "collecting",
+  "version": 1,
+  "revision": 1,
+  "evidence_count": 0,
+  "evidence_bytes": 0,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000
+}
+```
+
+This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
+
+The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`, and excludes expired reports and reports being deleted.
+
 <a id="table-hai-feedback-evidence"></a>
 
-#### `hai_feedback_evidence`
+### `hai_feedback_evidence`
+
+Indexes support reading evidence by report, source, and sequence and cleaning up by app, link state, and expiry.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -231,9 +109,33 @@ Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 | `expires_at` | `BIGINT` | No | — | Time after which the evidence can be removed. | `1797465600000` |
 | `payload` | `JSON` | No | — | Sanitized event content. The example shows an excerpt. | `{"message":"Request failed"}` |
 
+<a id="evidence-of-what-happened"></a>
+
+#### Example · Evidence of what happened
+
+Link logs, errors or page evidence by source and order to reconstruct a problem.
+
+```json
+{
+  "id": "evidence-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "sequence": 1,
+  "timestamp": 1794873600000,
+  "revision": 1,
+  "bytes": 24
+}
+```
+
+evidence-42 is sequence 1 for feedback-42, 24 bytes. timestamp is the event time in Unix milliseconds; the redacted payload is not expanded here.
+
 <a id="table-hai-feedback-attachments"></a>
 
-#### `hai_feedback_attachments`
+### `hai_feedback_attachments`
+
+Look up attachments by `report_id` and retrieve their bytes from object storage by `object_key`.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -248,9 +150,31 @@ Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 | `updated_at` | `BIGINT` | No | — | Last update time. | `1794873600000` |
 | `payload` | `JSON` | No | — | Attachment details for display. The example shows an excerpt. | `{"name":"error.txt"}` |
 
+<a id="where-an-attachment-is-and-whether-it-matches"></a>
+
+#### Example · Where an attachment is and whether it matches
+
+Keep the private object location, size and checksum instead of file bytes in SQL.
+
+```json
+{
+  "id": "attachment-42",
+  "client_id": "client-file-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "object_key": "feedback/<scope-digest>/feedback-42/attachment-42",
+  "size": 5,
+  "checksum": "<checksum:redacted>"
+}
+```
+
+attachment-42 refers to a 5-byte object for feedback-42. Its checksum is redacted, and object_key is not a public download grant.
+
 <a id="table-hai-feedback-history"></a>
 
-#### `hai_feedback_history`
+### `hai_feedback_history`
+
+Look up the processing history by `report_id`.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -258,11 +182,36 @@ Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 | `report_id` | `TEXT` | No | — | Related report ID. | `feedback-42` |
 | `payload` | `JSON` | No | — | Actor, change time and previous and new status. | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
 
+<a id="who-changed-the-feedback-state"></a>
+
+#### Example · Who changed the feedback state
+
+Keep each handling change and note so staff can follow the report history.
+
+```json
+{
+  "id": "history-42",
+  "report_id": "feedback-42",
+  "payload": {
+    "id": "history-42",
+    "feedbackId": "feedback-42",
+    "userId": "user-42",
+    "from": "pending",
+    "to": "handled",
+    "timestamp": 1794873660000
+  }
+}
+```
+
+user-42 changed feedback-42 from pending to handled; timestamp is the handling time, not original submission.
+
 <a id="jobs"></a>
 
 <a id="table-hai-feedback-jobs"></a>
 
-#### `hai_feedback_jobs`
+### `hai_feedback_jobs`
+
+Claim jobs by `(app_id, status, next_run_at)` and locate snapshots by `(report_id, snapshot_revision, snapshot_version)`. The default lease is 30 seconds and the normal attempt limit is five.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -284,9 +233,32 @@ Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 | `payload` | `JSON` | No | — | Input to the job. | `{}` |
 | `result` | `JSON` | Yes | — | Recorded outcome when the job finishes. | `NULL` |
 
+<a id="background-work-after-submission"></a>
+
+#### Example · Background work after submission
+
+Persist asynchronous collection, notification or export work for claims and retries.
+
+```json
+{
+  "id": "job-42",
+  "app_id": "orders",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "attempts": 0,
+  "token": null,
+  "lease_until": 0,
+  "next_run_at": 1794873600000
+}
+```
+
+job-42 has no attempt or owner token yet. next_run_at is the earliest start, not a promised completion time.
+
 <a id="table-hai-feedback-quotas"></a>
 
-#### `hai_feedback_quotas`
+### `hai_feedback_quotas`
+
+Find usage by `(app_id, period)`.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -301,15 +273,36 @@ Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
 | `export_limit` | `INTEGER` | No | `0` | Export budget for one report. | `0` |
 | `updated_at` | `BIGINT` | No | — | Most recent quota update time. | `1794873600000` |
 
-Evidence is indexed by report, source and order, and by app, attachment state and expiry for cleanup. Attachments and history are indexed by `report_id`. Jobs are claimed by `(app_id, status, next_run_at)` and snapshots located by `(report_id, snapshot_revision, snapshot_version)`. Quotas are indexed by `(app_id, period)`. The job lease defaults to 30 seconds; the normal attempt limit is 5.
+<a id="feedback-capacity-already-reserved"></a>
+
+#### Example · Feedback capacity already reserved
+
+Check report, byte and export budgets before admission so one scope cannot consume unbounded storage.
+
+```json
+{
+  "id": "quota-42",
+  "app_id": "orders",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "period": 0,
+  "report_count": 1,
+  "reserved_bytes": 1024,
+  "report_bytes": 0,
+  "export_limit": 0,
+  "updated_at": 1794873600000
+}
+```
+
+period:0 measures scope totals: one report and 1024 reserved bytes. This is accounting, not report content.
 
 <a id="storage"></a>
 
-### Object keys and browser drafts
+## Object storage
 
 Feedback creates no Redis keys. Private Storage uses `feedback/<first-16-scope-SHA-256-chars>/<report-id>/` plus an attachment ID, `business/<row-id>-<checksum>` or `exports/<job-id>.zip`. The ZIP contains `manifest.json`, the report, evidence, history and allowed attachments. Export objects expire after 24 hours by default.
 
-#### Browser drafts and evidence checkpoints
+## Browser storage
 
 The browser uses two key families in the `drafts` store of IndexedDB database `hai-feedback-v1` (version 1). With draft persistence enabled, `<scope-key>` combines the app ID and the host's identity scope, such as `orders:team-1:user-42`. Submission success removes both entries.
 
@@ -318,7 +311,7 @@ The browser uses two key families in the `drafts` store of IndexedDB database `h
 | `<scope-key>` | Draft awaiting submission | 24 hours |
 | `<scope-key>:checkpoint` | Evidence captured before opening the feedback form | 5 minutes |
 
-##### `<scope-key>`
+### `<scope-key>`
 
 | Column | Type | Meaning | Example |
 | --- | --- | --- | --- |
@@ -334,7 +327,7 @@ The browser uses two key families in the `drafts` store of IndexedDB database `h
 | `submission` | `object` | Original submission input, reused if a response is lost. | `{…}` |
 | `userInputFingerprint` | `string` | Fingerprint used to detect form changes before a retry. | `<fingerprint>` |
 
-##### `<scope-key>:checkpoint`
+### `<scope-key>:checkpoint`
 
 | Column | Type | Meaning | Example |
 | --- | --- | --- | --- |
@@ -342,3 +335,16 @@ The browser uses two key families in the `drafts` store of IndexedDB database `h
 | `expiresAt` | `number` | Checkpoint deadline in Unix milliseconds. Restore evidence only before this time. | `1794873900000` |
 
 See the [table definitions in the source](../../../packages/feedback/src/feedback-repository.ts).
+
+### Briefly retain unsent evidence
+
+Temporarily keep captured evidence while opening or refreshing feedback, not as server history.
+
+```json
+{
+  "evidence": [],
+  "expiresAt": 1794873900000
+}
+```
+
+The empty evidence list has nothing cached yet; expiresAt is five minutes later. Expired snapshots are not restored; submission clears them.

@@ -4,13 +4,17 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/api-contract.md) · [功能说明](../function/api-contract.md)
 
+登录表单通过契约知道要发送哪些字段，并从公开配置响应读取当前允许的登录方式。端点和结构定义随应用代码发布，用户会话和业务记录由相应模块保存。
+
+<a id="response-data"></a>
+
+## 接口数据
+
+一条接口定义包含 HTTP 方法、路径，以及路径参数、查询参数、请求正文和响应的校验规则。TypeScript 类型、API 文档和客户端代码从同一份定义读取这些信息。省略请求字段时，按该字段的接口规则填默认值。数据库列的默认值由 [IAM](iam.md) 等写入业务数据的模块定义。
+
 <a id="example-data"></a>
 
-## 这些数据用来做什么
-
 ### 接口承诺返回的业务数据
-
-对应结构：`HaiResult<T>`。
 
 契约规定订单接口成功后有哪些字段，让前后端对同一结果有一致理解。
 
@@ -25,46 +29,6 @@
 ```
 
 示例成功返回 order-42 和 totalCents:1200；这个数按接口约定以分为单位，不是数据库整行。
-
-### 登录页面可以看到的策略
-
-对应结构：`IamPublicConfig`。
-
-服务端把允许公开的登录策略返回给页面，页面据此显示注册、登录和验证码入口。
-
-```json
-{
-  "captcha": {
-    "enabled": false
-  },
-  "register": {
-    "enabled": true
-  },
-  "login": {
-    "password": true,
-    "otp": false,
-    "ldap": false,
-    "email": true,
-    "sms": false
-  },
-  "session": {
-    "maxAge": 86400,
-    "endOnPageHide": false
-  }
-}
-```
-
-此例开放注册、允许密码登录、未启用验证码；只展示部分字段。它不含密钥，也不代替服务端再次执行登录限制。
-
-## 字段、存储与清理参考
-
-### 数据库与缓存
-
-业务模块各自保存数据库表、缓存和会话。接口定义描述客户端可以发哪些请求，服务端成功时返回哪些数据，失败时返回怎样的错误内容。
-
-### 契约数据
-
-一条接口定义包含 HTTP 方法、路径，以及路径参数、查询参数、请求正文和响应的校验规则。TypeScript 类型、API 文档和客户端代码从同一份定义读取这些信息。省略请求字段时，按该字段的接口规则填默认值。数据库列的默认值由 [IAM](iam.md) 等写入业务数据的模块定义。
 
 <a id="public-settings"></a>
 
@@ -93,3 +57,33 @@
 #### 使用与核对
 
 标准登录页可调用 `apiClient.iam.auth.publicConfig()`，把成功返回的 `data` 交给 `AuthPanel` 的 `config` 属性。例如关闭 IAM 注册后，登录页应随响应隐藏注册入口，服务端也应拒绝该注册请求。[IAM 服务端配置](../configuration/iam.md) · [API 客户端配置](../configuration/api-client.md)
+
+<a id="登录页面可以看到的策略"></a>
+
+#### 示例 · 登录页面可以看到的策略
+
+服务端把允许公开的登录策略返回给页面，页面据此显示注册、登录和验证码入口。
+
+```json
+{
+  "captcha": {
+    "enabled": false
+  },
+  "register": {
+    "enabled": true
+  },
+  "login": {
+    "password": true,
+    "otp": false,
+    "ldap": false,
+    "email": true,
+    "sms": false
+  },
+  "session": {
+    "maxAge": 86400,
+    "endOnPageHide": false
+  }
+}
+```
+
+此例开放注册、允许密码登录、未启用验证码；只展示部分字段。它不含密钥，也不代替服务端再次执行登录限制。

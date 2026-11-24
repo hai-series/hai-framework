@@ -1,14 +1,24 @@
 # @h-ai/serv Data structures
 
-[Chinese source](serv.md) · [Configuration](../configuration/serv.en.md) · [API reference](../function/serv.en.md)
+[简体中文](serv.md) · [日本語](serv.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/serv.en.md) · [API reference](../function/serv.en.md)
+
+Serv passes the authenticated identity and trace ID to the route handling a request. When refresh cookies are enabled, the browser keeps the credential for the next refresh.
+
+<a id="runtime-data"></a>
+
+## In-process data
+
+Serv creates request-scoped context rather than an application database. The business modules own persistence.
+
+| Table, key or artifact | Shape and ownership |
+| --- | --- |
+| Request context | Trusted request and client context lives only for the request. IAM owns tokens and sessions, and Crypto owns the transport registry. |
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### User identity and request ID passed to a handler
-
-Structure: `ServContext`.
 
 Handlers use context to identify the user, permissions and request to investigate.
 
@@ -32,9 +42,13 @@ Handlers use context to identify the user, permissions and request to investigat
 
 request-42 is a diagnostic ID; verified user-42 can read orders. Request and logger objects are omitted. Never trust client-supplied roles as session data.
 
-### Cookie for renewing browser login
+## Browser storage
 
-Structure: `hai_refresh_token`.
+| Key | When it is written and for how long |
+| --- | --- |
+| `hai_refresh_token` | When enabled, the server sets a refresh cookie scoped to the API refresh path. Default duration is 30 days. HttpOnly and SameSite=Strict; Secure follows its environment or explicit setting. |
+
+### Cookie for renewing browser login
 
 Browsers automatically send the refresh cookie to renew tokens; page scripts cannot read it.
 
@@ -43,12 +57,3 @@ Browsers automatically send the refresh cookie to renew tokens; page scripts can
 ```
 
 Redacted; defaults are 30 days, HttpOnly, SameSite=Strict and the refresh route’s Path. A surviving cookie cannot revive an invalid server token.
-
-## Field, storage and cleanup reference
-
-Serv creates request-scoped context rather than an application database. The business modules own persistence.
-
-| Table, key or artifact | Shape and ownership |
-| --- | --- |
-| `hai_refresh_token` | When enabled, the server sets a refresh cookie scoped to the API refresh path. Default duration is 30 days. HttpOnly and SameSite=Strict; Secure follows its environment or explicit setting. |
-| Request context / リクエスト情報 | Trusted request and client context lives only for the request. IAM owns tokens and sessions, and Crypto owns the transport registry. |

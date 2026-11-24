@@ -1,14 +1,27 @@
 # Core data
 
-[简体中文](core.md) · [日本語](core.ja.md) · [Core settings](../configuration/core.en.md) · [Configuration API](../function/core.en.md#config-api)
+[简体中文](core.md) · [日本語](core.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/core.en.md) · [API reference](../function/core.en.md)
+
+A server request can use loaded configuration, shared trace information, and operation results. Core manages these runtime values in the process. The logging backend controls where records are written.
+
+<a id="runtime-data"></a>
+
+## In-process data
+
+Core keeps the data below in the running process. It creates no database tables, Redis keys or disk cache. Each Node process loads the configuration it needs.
+
+| Data                        | Meaning                                                                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration               | Loaded values are stored under a name such as `core` and read using `core.config.get('core')`. The schema determines the defaults used during validation |
+| Logs                        | Level, time and structured context. The logging backend controls output and retention                                                                    |
+| Module runtime              | Tracks modules started by the application, their dependencies and their current status. A new process must start them again                              |
+| Request context and results | Trace information shared within one request and the success value or error returned by an operation                                                      |
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### Successful result
-
-Structure: `success`.
 
 Callers use this result to read a completed operation.
 
@@ -25,8 +38,6 @@ Callers use this result to read a completed operation.
 Order order-42 was created; data contains its business result.
 
 ### Failed result
-
-Structure: `failure`.
 
 A failure tells callers to stop or show an error.
 
@@ -45,8 +56,6 @@ When success is false, read error; the sample message is illustrative, while rea
 
 ### Settings loaded in this process
 
-Structure: `loaded configuration`.
-
 Read validated settings from memory instead of disk on every operation.
 
 ```json
@@ -60,8 +69,6 @@ Read validated settings from memory instead of disk on every operation.
 This is part of core settings. Reloading is application-controlled; another process does not share this memory automatically.
 
 ### A traceable log entry
-
-Structure: `LogRecord`.
 
 Record an event with a request ID connecting related messages.
 
@@ -80,8 +87,6 @@ This log records the order creation. `timestamp` is Unix milliseconds, correspon
 
 ### Diagnostic scope for one request
 
-Structure: `RequestContext`.
-
 Carry the same request and scope through service steps without manually threading log IDs.
 
 ```json
@@ -95,8 +100,6 @@ Carry the same request and scope through service steps without manually threadin
 This request is for user-42 in team-1. Correlation data contains no token and grants no permission by itself.
 
 ### Whether application dependencies started
-
-Structure: `ModuleRuntime`.
 
 Start dependencies in order and close in reverse, avoiding duplicate startup or premature use.
 
@@ -117,14 +120,3 @@ Jobs and replies belong to their in-process pool. The owner closes the pool to r
   "code": 0
 }
 ```
-
-## Field, storage and cleanup reference
-
-Core keeps the data below in the running process. It creates no database tables, Redis keys or disk cache. Each Node process loads the configuration it needs.
-
-| Data                        | Meaning                                                                                                                                                  |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Configuration               | Loaded values are stored under a name such as `core` and read using `core.config.get('core')`. The schema determines the defaults used during validation |
-| Logs                        | Level, time and structured context. The logging backend controls output and retention                                                                    |
-| Module runtime              | Tracks modules started by the application, their dependencies and their current status. A new process must start them again                              |
-| Request context and results | Trace information shared within one request and the success value or error returned by an operation                                                      |

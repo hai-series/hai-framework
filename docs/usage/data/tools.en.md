@@ -1,14 +1,37 @@
 # @h-ai/tools data structures
 
-[Features](../function/tools.en.md) · [Configuration](../configuration/tools.en.md)
+[简体中文](tools.md) · [日本語](tools.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/tools.en.md) · [API reference](../function/tools.en.md)
+
+After submitting a server-side tool, a client uses its receipt to check progress and an artifact reference to read the file or page produced. Runner persists executions, and the host checks artifact access.
+
+<a id="runtime-data"></a>
+
+## In-process data
+
+Tools owns no database tables, cache keys or persistent leases. Lightweight definitions and registries live in the current process and disappear on `clear()` or exit. Server tasks reuse Runner storage without new queues or execution-state tables.
+
+| Data | Owner and lifecycle |
+| --- | --- |
+| Implementations, Schemas, titles, examples and groups | Assembled by the host on each node; not shared task state |
+| Enablement and authorization | Trusted host configuration; rechecked at submission and execution |
+| Tasks, idempotency keys, leases, status and events | [Runner](runner.en.md); kind `hai.tools.<id>.v1` |
+| File and artifact bytes | [Storage](storage.en.md); host callbacks read and publish |
+| Document versions, ownership and conflicts | Business service; `baseVersion` guards the final write |
+| MCP service list and Broker | [AI](ai.en.md) and host; not duplicated in Tools |
+
+<a id="runtime-tasks"></a>
+
+## Tasks and receipts
+
+`ToolRun` includes `receipt: { id, key }`, Runner `status`, optional `output/failure`, `events` and incremental cursor `next`. Use `inspect(receipt, context, { after })` to continue reading. Retain the entire receipt: each node checks service and principal ownership rather than accepting a task ID alone.
+
+`queued/running/cancelling` are nonterminal. Cancellation requests a stop; Runner records actual completion, failure and cleanup. `service.close()` neither deletes tasks nor proves they stopped.
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### Progress and result of a tool run
-
-Structure: `ToolRun`.
 
 Keep the receipt to query progress or more events without resubmitting the task.
 
@@ -29,44 +52,9 @@ Keep the receipt to query progress or more events without resubmitting the task.
 
 execution-42 succeeded and references artifact-42. No events are shown, so next is 0. A receipt does not grant public access.
 
-### Reference a generated file or page
+<a id="artifact-access"></a>
 
-Structure: `ToolArtifactReference`.
-
-Return an artifact ID and display metadata while the host stores bytes and checks read permissions.
-
-```json
-{
-  "id": "artifact-42",
-  "title": "Order preview",
-  "kind": "html",
-  "version": "version-1",
-  "mediaType": "text/html"
-}
-```
-
-artifact-42 is an HTML preview at version-1, used to check later edits. HTML bytes are not included.
-
-## Field, storage and cleanup reference
-
-Tools owns no database tables, cache keys or persistent leases. Lightweight definitions and registries live in the current process and disappear on `clear()` or exit. Server tasks reuse Runner storage without new queues or execution-state tables.
-
-| Data | Owner and lifecycle |
-| --- | --- |
-| Implementations, Schemas, titles, examples and groups | Assembled by the host on each node; not shared task state |
-| Enablement and authorization | Trusted host configuration; rechecked at submission and execution |
-| Tasks, idempotency keys, leases, status and events | [Runner](runner.md); kind `hai.tools.<id>.v1` |
-| File and artifact bytes | [Storage](storage.md); host callbacks read and publish |
-| Document versions, ownership and conflicts | Business service; `baseVersion` guards the final write |
-| MCP service list and Broker | [AI](ai.md) and host; not duplicated in Tools |
-
-### Tasks and receipts
-
-`ToolRun` includes `receipt: { id, key }`, Runner `status`, optional `output/failure`, `events` and incremental cursor `next`. Use `inspect(receipt, context, { after })` to continue reading. Retain the entire receipt: each node checks service and principal ownership rather than accepting a task ID alone.
-
-`queued/running/cancelling` are nonterminal. Cancellation requests a stop; Runner records actual completion, failure and cleanup. `service.close()` neither deletes tasks nor proves they stopped.
-
-### Artifact access contract
+## Artifact access contract
 
 The host implements `ToolArtifactAccess` and checks the current principal and final commit conditions for every operation.
 
@@ -89,6 +77,22 @@ website_video capture, script, editable storyboard, per-shot audio, subtitles, c
 
 `preview_build` reads only an authorized ZIP and publishes a new self-contained HTML reference. The ZIP, sources and HTML use the same ownership checks. Build directories are temporary task data cleaned by Runner, without a persistent build service. Expanded input is limited to 8 MiB, each source and final HTML to 1 MiB, and the fixed build command to 60 seconds; these tighter limits take precedence over generic file budgets. A failed build creates no new preview artifact.
 
-### Size and retention
+### Reference a generated file or page
 
-ToolService inherits Runner's 512 KiB JSON limit independently for submission, each event and final output. Job file/artifact bytes are limited to 50 MiB; container input totals also respect scratchMiB, using the smaller bound. These limits are not interchangeable; pass authorized references for file bodies. [Runner](runner.md) owns total event bytes/count and task/idempotency retention. Settled tasks default to seven days. After cleanup, find succeeds with data: undefined, which does not prove a request was never accepted or was cancelled. The host owns any longer-lived business deduplication.
+Return an artifact ID and display metadata while the host stores bytes and checks read permissions.
+
+```json
+{
+  "id": "artifact-42",
+  "title": "Order preview",
+  "kind": "html",
+  "version": "version-1",
+  "mediaType": "text/html"
+}
+```
+
+artifact-42 is an HTML preview at version-1, used to check later edits. HTML bytes are not included.
+
+## Size and retention
+
+ToolService inherits Runner's 512 KiB JSON limit independently for submission, each event and final output. Job file/artifact bytes are limited to 50 MiB; container input totals also respect scratchMiB, using the smaller bound. These limits are not interchangeable; pass authorized references for file bodies. [Runner](runner.en.md) owns total event bytes/count and task/idempotency retention. Settled tasks default to seven days. After cleanup, find succeeds with data: undefined, which does not prove a request was never accepted or was cancelled. The host owns any longer-lived business deduplication.

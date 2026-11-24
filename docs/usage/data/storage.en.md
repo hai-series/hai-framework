@@ -1,14 +1,27 @@
 # @h-ai/storage Data structures
 
-[Chinese source](storage.md) · [Configuration](../configuration/storage.en.md) · [API reference](../function/storage.en.md)
+[简体中文](storage.md) · [日本語](storage.ja.md)
+
+[Data reference index](README.en.md) · [Configuration](../configuration/storage.en.md) · [API reference](../function/storage.en.md)
+
+After uploading an invoice, the application uses the object key to fetch the file and inspect size, content type, or business metadata. The selected backend owns the bytes and their lifecycle.
+
+## Object storage
+
+Objects live on the backend under caller-supplied keys. Storage creates no SQL tables or Redis keys.
+
+| Table, key or artifact | Shape and ownership |
+| --- | --- |
+| `key` | Object path, at most 1024 UTF-8 bytes. |
+| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. An S3 upload receipt records when the application received the successful response. |
+| `etag` | Cache validator. Local storage builds it from size and modification time; S3 returns it. Use `storage.checksum` for content verification. |
+| `metadata` | Optional string-to-string attributes on upload. |
+
+With S3, file contents, MIME type and custom attributes are stored in the configured bucket. Bucket settings control retention and old versions. S3 can generate access links with a specified lifetime. The local file and metadata paths are shown below; internal metadata and temporary upload files are not listed as application objects.
 
 <a id="example-data"></a>
 
-## What these records are for
-
 ### Information about a file
-
-Structure: `FileMetadata`.
 
 Listings and file details describe location, size and type without downloading contents.
 
@@ -52,16 +65,3 @@ After replacing an object, Storage tries to delete the replaced file's metadata 
 When restoring a filesystem snapshot, retain both the contents and `.hai-storage-meta/`, preserving all five values above. A regular copy may change them even when the metadata directory is copied too, so `file.head()` may fail to find the matching file. To migrate between filesystems, pause source writes, read the type and custom attributes with `file.head()`, and read the contents with `file.getStream()`. Use `file.put()` on the destination to write the object and create a new metadata file.
 
 On Windows, a local read briefly creates a hard link named `<random-id>.upload.tmp` in the same directory, opens it and immediately removes the link. The link is another name for the same file; it does not copy the contents. An opened stream keeps reading the original file while another request can replace the original key. The filesystem must support hard links, and the service account needs permission to create and delete temporary files in the object directory. Temporary links are excluded from object listings.
-
-## Field, storage and cleanup reference
-
-Objects live on the backend under caller-supplied keys. Storage creates no SQL tables or Redis keys.
-
-| Table, key or artifact | Shape and ownership |
-| --- | --- |
-| `key` | Object path, at most 1024 UTF-8 bytes. |
-| `size`, `contentType`, `lastModified` | Size in bytes, MIME type and provider-reported modification time. An S3 upload receipt records when the application received the successful response. |
-| `etag` | Cache validator. Local storage builds it from size and modification time; S3 returns it. Use `storage.checksum` for content verification. |
-| `metadata` | Optional string-to-string attributes on upload. |
-
-With S3, file contents, MIME type and custom attributes are stored in the configured bucket. Bucket settings control retention and old versions. S3 can generate access links with a specified lifetime. The example above shows local file and metadata paths; internal metadata and temporary upload files are not listed as application objects.

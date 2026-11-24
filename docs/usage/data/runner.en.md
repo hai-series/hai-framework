@@ -1,74 +1,14 @@
 # @h-ai/runner Data structures
 
-[Chinese source](runner.md) · [Configuration](../configuration/runner.en.md) · [API reference](../function/runner.en.md)
+[简体中文](runner.md) · [日本語](runner.ja.md)
 
-<a id="example-data"></a>
+[Data reference index](README.en.md) · [Configuration](../configuration/runner.en.md) · [API reference](../function/runner.en.md)
 
-## What these records are for
-
-### One queued or running job
-
-Structure: `hai_runner_executions`.
-
-Track work, owner, resource budget and state so nodes coordinate one execution.
-
-```json
-{
-  "id": "execution-42",
-  "kind": "hai.tools.example.v1",
-  "state": "queued",
-  "owner_node": null,
-  "owner_generation": null,
-  "cpu_milli": 1000,
-  "memory_mib": 256,
-  "pids": 64,
-  "scratch_mib": 64,
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000,
-  "event_sequence": 0,
-  "event_bytes": 0
-}
-```
-
-This excerpt shows a queued `execution-42` with no owner. Its resource limits are one CPU, 256 MiB RAM, 64 processes and 64 MiB scratch space; no events have been recorded. `created_at` and `updated_at` are Unix milliseconds.
-
-### Ordered messages from a job
-
-Structure: `hai_runner_events`.
-
-Persist ordered progress or output so a reconnecting client can resume reading without rerunning work.
-
-```json
-{
-  "id": "event-42",
-  "execution_id": "execution-42",
-  "sequence_number": 1,
-  "created_at": 1794873600000
-}
-```
-
-event-42 is execution-42’s first event. event_json holds its actual message, omitted from this linkage excerpt.
-
-### Coordinate shared capacity checks
-
-Structure: `hai_runner_gate`.
-
-Coordinate capacity checks before concurrent claims so nodes do not all spend the same spare capacity.
-
-```json
-{
-  "id": 1,
-  "revision": 1
-}
-```
-
-The table has one id:1 row. revision changes during coordination; it is neither a run count nor permanent ownership.
-
-## Field, storage and cleanup reference
+After a container job is submitted, Runner stores its state, resource budget, and progress events. A reconnecting client can resume reading events with the original execution ID.
 
 <a id="tables"></a>
 
-### Database tables
+## Database
 
 Runner keeps tasks, resource limits and execution events in shared [RelDB](reldb.en.md). Nodes use the database clock to check deadlines.
 
@@ -82,7 +22,7 @@ The module uses 3 tables.
 
 <a id="table-hai-runner-executions"></a>
 
-#### `hai_runner_executions`
+### `hai_runner_executions`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -125,11 +65,39 @@ The module uses 3 tables.
 
 Times are Unix milliseconds. Indexes support queues, node leases, scope and capacity, concurrency groups, parent executions, cleanup and deadlines.
 
+<a id="example-data"></a>
+
+<a id="one-queued-or-running-job"></a>
+
+#### Example · One queued or running job
+
+Track work, owner, resource budget and state so nodes coordinate one execution.
+
+```json
+{
+  "id": "execution-42",
+  "kind": "hai.tools.example.v1",
+  "state": "queued",
+  "owner_node": null,
+  "owner_generation": null,
+  "cpu_milli": 1000,
+  "memory_mib": 256,
+  "pids": 64,
+  "scratch_mib": 64,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000,
+  "event_sequence": 0,
+  "event_bytes": 0
+}
+```
+
+This excerpt shows a queued `execution-42` with no owner. Its resource limits are one CPU, 256 MiB RAM, 64 processes and 64 MiB scratch space; no events have been recorded. `created_at` and `updated_at` are Unix milliseconds.
+
 <a id="events"></a>
 
 <a id="table-hai-runner-events"></a>
 
-#### `hai_runner_events`
+### `hai_runner_events`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -141,9 +109,26 @@ Times are Unix milliseconds. Indexes support queues, node leases, scope and capa
 
 Indexed by execution ID and sequence number.
 
+<a id="ordered-messages-from-a-job"></a>
+
+#### Example · Ordered messages from a job
+
+Persist ordered progress or output so a reconnecting client can resume reading without rerunning work.
+
+```json
+{
+  "id": "event-42",
+  "execution_id": "execution-42",
+  "sequence_number": 1,
+  "created_at": 1794873600000
+}
+```
+
+event-42 is execution-42’s first event. event_json holds its actual message, omitted from this linkage excerpt.
+
 <a id="table-hai-runner-gate"></a>
 
-#### `hai_runner_gate`
+### `hai_runner_gate`
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -151,3 +136,18 @@ Indexed by execution ID and sequence number.
 | `revision` | `BIGINT` | No | — | The initial row gets `0`. Capacity transactions update the value to coordinate concurrent checks. | `1` |
 
 Completed records normally expire after 7 days. When it is unclear whether the original job completed, records remain until reconciliation. There are no Redis keys: the running node owns local process/container objects; other nodes read the database.
+
+<a id="coordinate-shared-capacity-checks"></a>
+
+#### Example · Coordinate shared capacity checks
+
+Coordinate capacity checks before concurrent claims so nodes do not all spend the same spare capacity.
+
+```json
+{
+  "id": 1,
+  "revision": 1
+}
+```
+
+The table has one id:1 row. revision changes during coordination; it is neither a run count nor permanent ownership.

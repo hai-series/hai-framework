@@ -1,169 +1,16 @@
 # @h-ai/feedback データ構造
 
-[原文（中国語）](feedback.md) · [設定](../configuration/feedback.ja.md) · [API リファレンス](../function/feedback.ja.md)
+[简体中文](feedback.md) · [English](feedback.en.md)
 
-<a id="example-data"></a>
+[データ構造一覧](README.ja.md) · [設定](../configuration/feedback.ja.md) · [API リファレンス](../function/feedback.ja.md)
 
-## それぞれの記録の役割
-
-### 利用者が提出した問題票
-
-対応する構造：`hai_feedback_reports`。
-
-問題内容・提出者・処理状態を持つ中心の票です。
-
-```json
-{
-  "id": "feedback-42",
-  "number": "FB-EXAMPLE-42",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "app_id": "orders",
-  "summary": "Example problem",
-  "status": "pending",
-  "collection_status": "collecting",
-  "version": 1,
-  "revision": 1,
-  "evidence_count": 0,
-  "evidence_bytes": 0,
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000
-}
-```
-
-問題票の項目の抜粋です。`feedback-42` は `team-1` の `user-42` が提出し、未処理かつ収集中で、この時点の証拠は0件です。後続例とは別の段階です。`created_at` と `updated_at` は Unix ミリ秒です。
-
-カテゴリは既存の報告の `payload.category` に保存されます。例は `"bug"` です。本人一覧は `scope_id` と `user_id` などで対象を限定し、期限切れや削除中の報告を除外します。
-
-### 発生経緯を確認する証拠
-
-対応する構造：`hai_feedback_evidence`。
-
-ログや画面などを出典と順序付きで票に関連付けます。
-
-```json
-{
-  "id": "evidence-42",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "app_id": "orders",
-  "sequence": 1,
-  "timestamp": 1794873600000,
-  "revision": 1,
-  "bytes": 24
-}
-```
-
-feedback-42 の順序1、24バイトの例です。timestamp は発生時刻を Unix ミリ秒で記録します。実際の秘匿済み内容は payload に入ります。
-
-### 添付の保存先と完全性
-
-対応する構造：`hai_feedback_attachments`。
-
-大きな本体は保存せず、私有オブジェクトの場所・サイズ・検査値を記録します。
-
-```json
-{
-  "id": "attachment-42",
-  "client_id": "client-file-42",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "object_key": "feedback/<scope-digest>/feedback-42/attachment-42",
-  "size": 5,
-  "checksum": "<checksum:redacted>"
-}
-```
-
-5バイトの添付例です。object_key は公開ダウンロード権ではありません。
-
-### 誰が問題票の状態を変えたか
-
-対応する構造：`hai_feedback_history`。
-
-処理時の変更と備考を残して経過を確認します。
-
-```json
-{
-  "id": "history-42",
-  "report_id": "feedback-42",
-  "payload": {
-    "id": "history-42",
-    "feedbackId": "feedback-42",
-    "userId": "user-42",
-    "from": "pending",
-    "to": "handled",
-    "timestamp": 1794873660000
-  }
-}
-```
-
-user-42 が pending から handled に変更した例で、時刻は提出時ではなく変更時です。
-
-### 提出後に進める裏側の作業
-
-対応する構造：`hai_feedback_jobs`。
-
-収集・通知・出力などを別処理で進めるための作業記録です。
-
-```json
-{
-  "id": "job-42",
-  "app_id": "orders",
-  "report_id": "feedback-42",
-  "scope_id": "team-1",
-  "attempts": 0,
-  "token": null,
-  "lease_until": 0,
-  "next_run_at": 1794873600000
-}
-```
-
-job-42 は未試行・未取得で、next_run_at は開始可能時刻であり完了保証ではありません。
-
-### 予約済みの問題票容量
-
-対応する構造：`hai_feedback_quotas`。
-
-件数・サイズ・出力枠を確認し、無制限の消費を防ぎます。
-
-```json
-{
-  "id": "quota-42",
-  "app_id": "orders",
-  "scope_id": "team-1",
-  "user_id": "user-42",
-  "period": 0,
-  "report_count": 1,
-  "reserved_bytes": 1024,
-  "report_bytes": 0,
-  "export_limit": 0,
-  "updated_at": 1794873600000
-}
-```
-
-period:0 は範囲の累計で、1件・1024バイト予約済みです。問題の本文ではありません。
-
-### 未提出の現場情報を短期保持
-
-対応する構造：`IndexedDB checkpoint`。
-
-画面遷移や再読み込みで現場情報をすぐ失わないための一時保存です。
-
-```json
-{
-  "evidence": [],
-  "expiresAt": 1794873900000
-}
-```
-
-証拠が空の例で5分後に失効します。サーバーの長期履歴ではありません。
-
-## 項目・保存・削除のリファレンス
+ユーザーが問題を送信すると、Feedback は報告、証拠、後続ジョブを保存します。管理者は同じ報告 ID で進捗を確認できます。添付はオブジェクトストレージ、未送信の下書きはブラウザーに保存できます。
 
 <a id="reports"></a>
 
-### 報告と関連するテーブル
+<a id="database"></a>
+
+## データベース
 
 サービスは報告、関連証拠、必要な作業を一つのトランザクションで保存します。時間は Unix ミリ秒です。特記がなければ任意項目の欠損は NULL です。
 
@@ -180,7 +27,7 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 
 <a id="table-hai-feedback-reports"></a>
 
-#### `hai_feedback_reports`
+### `hai_feedback_reports`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -209,9 +56,42 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 
 `(scope_id, created_at)` と `(scope_id, status, created_at)` にインデックスがあります。
 
+<a id="example-data"></a>
+
+<a id="利用者が提出した問題票"></a>
+
+#### 例 · 利用者が提出した問題票
+
+問題内容・提出者・処理状態を持つ中心の票です。
+
+```json
+{
+  "id": "feedback-42",
+  "number": "FB-EXAMPLE-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "summary": "Example problem",
+  "status": "pending",
+  "collection_status": "collecting",
+  "version": 1,
+  "revision": 1,
+  "evidence_count": 0,
+  "evidence_bytes": 0,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000
+}
+```
+
+問題票の項目の抜粋です。`feedback-42` は `team-1` の `user-42` が提出し、未処理かつ収集中で、この時点の証拠は0件です。後続例とは別の段階です。`created_at` と `updated_at` は Unix ミリ秒です。
+
+カテゴリは既存の報告の `payload.category` に保存されます。例は `"bug"` です。本人一覧は `scope_id` と `user_id` などで対象を限定し、期限切れや削除中の報告を除外します。
+
 <a id="table-hai-feedback-evidence"></a>
 
-#### `hai_feedback_evidence`
+### `hai_feedback_evidence`
+
+報告・出所・順番による証拠の検索と、アプリ・紐付け状態・有効期限による削除に索引を使います。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -231,9 +111,33 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 | `expires_at` | `BIGINT` | 不可 | — | 証拠を削除できる時刻。 | `1797465600000` |
 | `payload` | `JSON` | 不可 | — | 機微情報を除いたイベント内容。例は抜粋。 | `{"message":"Request failed"}` |
 
+<a id="発生経緯を確認する証拠"></a>
+
+#### 例 · 発生経緯を確認する証拠
+
+ログや画面などを出典と順序付きで票に関連付けます。
+
+```json
+{
+  "id": "evidence-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "sequence": 1,
+  "timestamp": 1794873600000,
+  "revision": 1,
+  "bytes": 24
+}
+```
+
+feedback-42 の順序1、24バイトの例です。timestamp は発生時刻を Unix ミリ秒で記録します。実際の秘匿済み内容は payload に入ります。
+
 <a id="table-hai-feedback-attachments"></a>
 
-#### `hai_feedback_attachments`
+### `hai_feedback_attachments`
+
+`report_id` で添付を検索し、`object_key` でオブジェクトストレージの内容を取得します。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -248,9 +152,31 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 | `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
 | `payload` | `JSON` | 不可 | — | 画面に表示する添付情報。例は抜粋。 | `{"name":"error.txt"}` |
 
+<a id="添付の保存先と完全性"></a>
+
+#### 例 · 添付の保存先と完全性
+
+大きな本体は保存せず、私有オブジェクトの場所・サイズ・検査値を記録します。
+
+```json
+{
+  "id": "attachment-42",
+  "client_id": "client-file-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "object_key": "feedback/<scope-digest>/feedback-42/attachment-42",
+  "size": 5,
+  "checksum": "<checksum:redacted>"
+}
+```
+
+5バイトの添付例です。object_key は公開ダウンロード権ではありません。
+
 <a id="table-hai-feedback-history"></a>
 
-#### `hai_feedback_history`
+### `hai_feedback_history`
+
+`report_id` で処理履歴を検索します。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -258,11 +184,36 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 | `report_id` | `TEXT` | 不可 | — | 関連する問題票の ID。 | `feedback-42` |
 | `payload` | `JSON` | 不可 | — | 操作した利用者、時刻、変更前後の状態。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
 
+<a id="誰が問題票の状態を変えたか"></a>
+
+#### 例 · 誰が問題票の状態を変えたか
+
+処理時の変更と備考を残して経過を確認します。
+
+```json
+{
+  "id": "history-42",
+  "report_id": "feedback-42",
+  "payload": {
+    "id": "history-42",
+    "feedbackId": "feedback-42",
+    "userId": "user-42",
+    "from": "pending",
+    "to": "handled",
+    "timestamp": 1794873660000
+  }
+}
+```
+
+user-42 が pending から handled に変更した例で、時刻は提出時ではなく変更時です。
+
 <a id="jobs"></a>
 
 <a id="table-hai-feedback-jobs"></a>
 
-#### `hai_feedback_jobs`
+### `hai_feedback_jobs`
+
+`(app_id, status, next_run_at)` でタスクを取得し、`(report_id, snapshot_revision, snapshot_version)` でスナップショットを検索します。既定のリースは 30 秒で、通常は最大 5 回試行します。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -284,9 +235,32 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 | `payload` | `JSON` | 不可 | — | ジョブの入力。 | `{}` |
 | `result` | `JSON` | 可 | — | ジョブ完了後の結果。 | `NULL` |
 
+<a id="提出後に進める裏側の作業"></a>
+
+#### 例 · 提出後に進める裏側の作業
+
+収集・通知・出力などを別処理で進めるための作業記録です。
+
+```json
+{
+  "id": "job-42",
+  "app_id": "orders",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "attempts": 0,
+  "token": null,
+  "lease_until": 0,
+  "next_run_at": 1794873600000
+}
+```
+
+job-42 は未試行・未取得で、next_run_at は開始可能時刻であり完了保証ではありません。
+
 <a id="table-hai-feedback-quotas"></a>
 
-#### `hai_feedback_quotas`
+### `hai_feedback_quotas`
+
+`(app_id, period)` で使用量を調べます。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -301,15 +275,40 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 | `export_limit` | `INTEGER` | 不可 | `0` | 問題票一件あたりの出力回数上限。 | `0` |
 | `updated_at` | `BIGINT` | 不可 | — | クォータの最終更新時刻。 | `1794873600000` |
 
-証拠は報告・出所・順番を索引にし、削除用にアプリ・紐付けの有無・期限でも検索します。添付と履歴は `report_id` が索引です。タスクの取得は `(app_id, status, next_run_at)`、スナップショットの検索は `(report_id, snapshot_revision, snapshot_version)` を使います。クォータの索引は `(app_id, period)`。リースは既定で 30 秒、通常の試行は最大 5 回です。
+<a id="予約済みの問題票容量"></a>
+
+#### 例 · 予約済みの問題票容量
+
+件数・サイズ・出力枠を確認し、無制限の消費を防ぎます。
+
+```json
+{
+  "id": "quota-42",
+  "app_id": "orders",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "period": 0,
+  "report_count": 1,
+  "reserved_bytes": 1024,
+  "report_bytes": 0,
+  "export_limit": 0,
+  "updated_at": 1794873600000
+}
+```
+
+period:0 は範囲の累計で、1件・1024バイト予約済みです。問題の本文ではありません。
 
 <a id="storage"></a>
 
-### オブジェクトキーとブラウザーの下書き
+<a id="object-storage"></a>
+
+## オブジェクトストレージ
 
 Feedback は Redis キーを作りません。非公開 Storage の `feedback/<範囲の SHA-256 の先頭16桁>/<報告ID>/` に添付 ID、`business/<行ID>-<チェックサム>` または `exports/<タスクID>.zip` を付けます。ZIP には `manifest.json`、報告、証拠、履歴、許可された添付が入ります。エクスポートは既定で 24 時間保持します。
 
-#### ブラウザー下書きと収集チェックポイント
+<a id="browser-storage"></a>
+
+## ブラウザーのストレージ
 
 IndexedDB の `hai-feedback-v1` データベース（版 1）の `drafts` に 2 種類のキーを保存します。下書きの保存を有効にすると、`<scope-key>` はアプリ ID とホストの識別範囲で構成されます。例は `orders:team-1:user-42` です。投稿に成功すると両方を削除します。
 
@@ -318,7 +317,7 @@ IndexedDB の `hai-feedback-v1` データベース（版 1）の `drafts` に 2 
 | `<scope-key>` | 提出待ちの下書き | 24 時間 |
 | `<scope-key>:checkpoint` | 問題票を開く前に捕捉した証拠 | 5 分 |
 
-##### `<scope-key>`
+### `<scope-key>`
 
 | 項目 | 型 | 用途 | 例 |
 | --- | --- | --- | --- |
@@ -334,7 +333,7 @@ IndexedDB の `hai-feedback-v1` データベース（版 1）の `drafts` に 2 
 | `submission` | `object` | 初回の投稿内容。応答を失った場合に同じ内容で再試行します。 | `{…}` |
 | `userInputFingerprint` | `string` | 再試行前のフォーム変更を検出するための値。 | `<fingerprint>` |
 
-##### `<scope-key>:checkpoint`
+### `<scope-key>:checkpoint`
 
 | 項目 | 型 | 用途 | 例 |
 | --- | --- | --- | --- |
@@ -342,3 +341,16 @@ IndexedDB の `hai-feedback-v1` データベース（版 1）の `drafts` に 2 
 | `expiresAt` | `number` | チェックポイントの期限。Unix ミリ秒。期限内の証拠だけを復元します。 | `1794873900000` |
 
 詳細は[ソースのテーブル定義](../../../packages/feedback/src/feedback-repository.ts)を参照してください。
+
+### 未提出の現場情報を短期保持
+
+画面遷移や再読み込みで現場情報をすぐ失わないための一時保存です。
+
+```json
+{
+  "evidence": [],
+  "expiresAt": 1794873900000
+}
+```
+
+証拠が空の例で5分後に失効します。サーバーの長期履歴ではありません。

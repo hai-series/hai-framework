@@ -1,74 +1,16 @@
 # @h-ai/runner データ構造
 
-[原文（中国語）](runner.md) · [設定](../configuration/runner.ja.md) · [API リファレンス](../function/runner.ja.md)
+[简体中文](runner.md) · [English](runner.en.md)
 
-<a id="example-data"></a>
+[データ構造一覧](README.ja.md) · [設定](../configuration/runner.ja.md) · [API リファレンス](../function/runner.ja.md)
 
-## それぞれの記録の役割
-
-### 待機中・実行中の作業
-
-対応する構造：`hai_runner_executions`。
-
-作業内容・担当・資源・状態を保存してノード間で協調します。
-
-```json
-{
-  "id": "execution-42",
-  "kind": "hai.tools.example.v1",
-  "state": "queued",
-  "owner_node": null,
-  "owner_generation": null,
-  "cpu_milli": 1000,
-  "memory_mib": 256,
-  "pids": 64,
-  "scratch_mib": 64,
-  "created_at": 1794873600000,
-  "updated_at": 1794873600000,
-  "event_sequence": 0,
-  "event_bytes": 0
-}
-```
-
-タスクレコードの項目の抜粋です。`execution-42` は `queued` のため担当は未定で、資源上限は 1 CPU、256 MiB RAM、64 プロセス、64 MiB 一時領域です。イベントはまだ記録されていません。`created_at` と `updated_at` は Unix ミリ秒です。
-
-### 作業中の順序付きメッセージ
-
-対応する構造：`hai_runner_events`。
-
-進捗や出力を順に保存し、切断後も続きから読めるようにします。
-
-```json
-{
-  "id": "event-42",
-  "execution_id": "execution-42",
-  "sequence_number": 1,
-  "created_at": 1794873600000
-}
-```
-
-execution-42 の第1イベントです。本文 event_json は省略しています。
-
-### 複数ノードの資源確認を調整
-
-対応する構造：`hai_runner_gate`。
-
-同じ空き容量を各ノードが重複使用しないよう確認を調整します。
-
-```json
-{
-  "id": 1,
-  "revision": 1
-}
-```
-
-id:1 の1行だけで、revision は実行件数や永久所有者を表しません。
-
-## 項目・保存・削除のリファレンス
+コンテナジョブを送信すると、Runner は状態、実行リソースの予算、進捗イベントを保存します。クライアントは再接続後も元の実行 ID で続きを取得できます。
 
 <a id="tables"></a>
 
-### データベースのテーブル
+<a id="database"></a>
+
+## データベース
 
 Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.ja.md) に保存します。各ノードはデータベースの時計で期限を判断します。
 
@@ -82,7 +24,7 @@ Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.j
 
 <a id="table-hai-runner-executions"></a>
 
-#### `hai_runner_executions`
+### `hai_runner_executions`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -125,11 +67,39 @@ Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.j
 
 時刻は Unix ミリ秒です。キュー、ノードのリース、範囲と容量、並列グループ、親実行、削除、各期限にインデックスがあります。
 
+<a id="example-data"></a>
+
+<a id="待機中実行中の作業"></a>
+
+#### 例 · 待機中・実行中の作業
+
+作業内容・担当・資源・状態を保存してノード間で協調します。
+
+```json
+{
+  "id": "execution-42",
+  "kind": "hai.tools.example.v1",
+  "state": "queued",
+  "owner_node": null,
+  "owner_generation": null,
+  "cpu_milli": 1000,
+  "memory_mib": 256,
+  "pids": 64,
+  "scratch_mib": 64,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000,
+  "event_sequence": 0,
+  "event_bytes": 0
+}
+```
+
+タスクレコードの項目の抜粋です。`execution-42` は `queued` のため担当は未定で、資源上限は 1 CPU、256 MiB RAM、64 プロセス、64 MiB 一時領域です。イベントはまだ記録されていません。`created_at` と `updated_at` は Unix ミリ秒です。
+
 <a id="events"></a>
 
 <a id="table-hai-runner-events"></a>
 
-#### `hai_runner_events`
+### `hai_runner_events`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -141,9 +111,26 @@ Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.j
 
 実行 ID とイベントの順序で検索できます。
 
+<a id="作業中の順序付きメッセージ"></a>
+
+#### 例 · 作業中の順序付きメッセージ
+
+進捗や出力を順に保存し、切断後も続きから読めるようにします。
+
+```json
+{
+  "id": "event-42",
+  "execution_id": "execution-42",
+  "sequence_number": 1,
+  "created_at": 1794873600000
+}
+```
+
+execution-42 の第1イベントです。本文 event_json は省略しています。
+
 <a id="table-hai-runner-gate"></a>
 
-#### `hai_runner_gate`
+### `hai_runner_gate`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -151,3 +138,18 @@ Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.j
 | `revision` | `BIGINT` | 不可 | — | 初期値として `0` が入り、容量のトランザクションが同時確認を調整するために更新します。 | `1` |
 
 完了記録は通常 7 日後に削除します。元のジョブが完了したか分からない場合は照合まで保存します。Redis キーは作りません。実行ノードはローカルのプロセスやコンテナを管理し、他ノードはデータベースを参照します。
+
+<a id="複数ノードの資源確認を調整"></a>
+
+#### 例 · 複数ノードの資源確認を調整
+
+同じ空き容量を各ノードが重複使用しないよう確認を調整します。
+
+```json
+{
+  "id": 1,
+  "revision": 1
+}
+```
+
+id:1 の1行だけで、revision は実行件数や永久所有者を表しません。

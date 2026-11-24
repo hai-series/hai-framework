@@ -1,252 +1,14 @@
 # @h-ai/iam データ構造
 
-[原文（中国語）](iam.md) · [設定](../configuration/iam.ja.md) · [API リファレンス](../function/iam.ja.md)
+[简体中文](iam.md) · [English](iam.en.md)
 
-<a id="example-data"></a>
+[データ構造一覧](README.ja.md) · [設定](../configuration/iam.ja.md) · [API リファレンス](../function/iam.ja.md)
 
-## それぞれの記録の役割
+ユーザーのログインや保護対象へのアクセス時に、IAM はデータベースでアカウント、ロール、権限を確認します。セッション、確認コード、読み取り結果は有効期限付きでキャッシュし、権限更新後は新しいバージョンで判定します。
 
-### 利用者のアカウント
+<a id="database"></a>
 
-対応する構造：`hai_iam_users`。
-
-身元と利用可否を保存し、認証・認可時に確認します。
-
-```json
-{
-  "id": "user-42",
-  "username": "example-user",
-  "email": null,
-  "password_hash": null,
-  "account_type": "permanent",
-  "account_status": "active",
-  "must_change_password": false,
-  "login_failed_count": 0
-}
-```
-
-user-42 は有効な常設アカウントです。メールとハッシュの null は未登録で、空パスワード認証を許す意味ではありません。
-
-### 利用者に割り当てる役割
-
-対応する構造：`hai_iam_roles`。
-
-複数利用者に共通の権限を配るための役割です。
-
-```json
-{
-  "id": "role-reader",
-  "code": "reader",
-  "name": "Reader",
-  "is_system": false
-}
-```
-
-role-reader のコードは reader、表示名は Reader で、システム役割ではありません。
-
-### アプリが確認する個別権限
-
-対応する構造：`hai_iam_permissions`。
-
-保護する操作に安定した権限コードを付けます。
-
-```json
-{
-  "id": "permission-read",
-  "code": "orders.read",
-  "name": "Read orders",
-  "resource": "orders",
-  "action": "read"
-}
-```
-
-orders.read は注文参照です。この行を作るだけでは誰にも付与されません。
-
-### 誰がどの役割を持つか
-
-対応する構造：`hai_iam_user_roles`。
-
-利用者と役割を関連付けます。
-
-```json
-{
-  "user_id": "user-42",
-  "role_id": "role-reader"
-}
-```
-
-user-42 に role-reader が割り当てられ、同じ組合せは一度だけ保存します。
-
-### 役割に含まれる権限
-
-対応する構造：`hai_iam_role_permissions`。
-
-役割と個別権限を結び、最終的な操作可否を求めます。
-
-```json
-{
-  "role_id": "role-reader",
-  "permission_id": "permission-read"
-}
-```
-
-前の利用者関連と合わせ、user-42 は orders.read を得ます。
-
-### プログラム用 API 認証情報
-
-対応する構造：`hai_iam_api_keys`。
-
-スクリプトなどに限定した操作を許し、検証用ダイジェストを保存します。
-
-```json
-{
-  "id": "apikey-42",
-  "user_id": "user-42",
-  "name": "Example API",
-  "key_hash": "<hash:redacted>",
-  "key_prefix": "<prefix:redacted>",
-  "enabled": true,
-  "expires_at": null,
-  "scopes": [
-    "orders.read"
-  ]
-}
-```
-
-user-42 の注文参照専用です。秘匿した値から元のキーは復元できません。
-
-### ディレクトリエントリーをローカル利用者に関連付ける
-
-`hai_iam_ldap_identities` は LDAP ログインとオフライン取り込みが参照する関連付けです。`directory_id` と `entry_id` の組は一意で、`user_id` はディレクトリ内で一意のローカル利用者を参照します。利用者を削除すると関連付けも削除されます。例のエントリーは名前を変更しても同じ `user-42` に対応します。
-
-```json
-{
-  "directory_id": "company-directory",
-  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
-  "user_id": "user-42"
-}
-```
-
-### 利用者の有効なログイン状態
-
-対応する構造：`hai:iam:sessions:{<scope-digest>}`。
-
-検証・更新・ログアウトで共通利用し、古い状態の復活を防ぎます。
-
-```json
-{
-  "revision": "revision-42",
-  "sessions": {
-    "<access-token:redacted>": {
-      "session": {
-        "userId": "user-42",
-        "username": "example-user",
-        "roles": [
-          "reader"
-        ],
-        "permissions": [
-          "orders.read"
-        ],
-        "createdAt": "2026-11-17T00:00:00.000Z",
-        "expiresAt": "2026-11-18T00:00:00.000Z"
-      },
-      "refreshExpiresAt": 1795478400000,
-      "refreshToken": "<refresh-token:redacted>"
-    }
-  }
-}
-```
-
-user-42 の例で、アクセスの期限は 2026-11-18 00:00 UTC です。更新用はより長く保持でき、`refreshExpiresAt` は Unix ミリ秒です。`revision` は変更ごとに更新します。トークンは伏せてあります。
-
-### 使い捨てコードと再送待ち
-
-対応する構造：`hai:iam:otp:example@example.invalid`。
-
-現在のコード・失敗回数・再送可能時刻を保存します。
-
-```json
-{
-  "version": "otp-version-42",
-  "code": "<otp:redacted>",
-  "attempts": 0,
-  "expiresAt": 1794873900000,
-  "cooldownUntil": 1794873660000
-}
-```
-
-2026-11-17 00:00 UTC に発行した例です。失敗はまだなく、5 分間有効で、再送は 60 秒待ちます。`expiresAt` と `cooldownUntil` は Unix ミリ秒です。コードは伏せてあり、成功後は再利用できません。
-
-### 今回の CAPTCHA の検証情報
-
-対応する構造：`hai:iam:captcha:<id>`。
-
-用途と一度限りの利用を確認するため、挑戦と秘密を保存します。
-
-```json
-{
-  "operation": "login",
-  "signatureSecret": "<secret:redacted>",
-  "keySecret": "<secret:redacted>"
-}
-```
-
-login 専用の例で、秘密と挑戦詳細は省略しています。記録全体を画面に送りません。
-
-### 短時間だけ使える一回券
-
-キーの構造は `hai:iam:ticket:sha256:<チケットのダイジェスト>` です。クライアントが元のチケットを保持し、キーには SHA-256 の十六進ダイジェストだけを保存します。更新後も期限内の旧チケットを使えます。複数インスタンスでは利用側を同時に切り替えてください。旧版では新版が発行したチケットを利用できません。
-
-用途と有効期限を確認し、一致した記録を原子的に削除してから、主体と権限の関連情報を返します。
-
-```json
-{
-  "subjectId": "user-42",
-  "purpose": "ai-audio",
-  "grant": {
-    "operation": "transcribe"
-  },
-  "expiresAt": 1794873630000
-}
-```
-
-user-42 の音声文字起こし用です。2026-11-17 00:00 UTC に発行した場合、30 秒後に期限切れになります。`expiresAt` は Unix ミリ秒です。同じチケットでの再接続は拒否します。
-
-### 権限キャッシュが現在も使えるか
-
-対応する構造：`hai:iam:read_cache:revision`。
-
-権限などの変更中に古いキャッシュを使わないための共有印です。
-
-```json
-{
-  "epoch": "epoch-42",
-  "writers": 0
-}
-```
-
-writers:0 は書き込み中なし、epoch-42 は世代で、この印自体は失効しません。
-
-### 取得した利用者情報の短期再利用
-
-対応する構造：`hai:iam:read_cache:epoch-42:user:v2:user-42`。
-
-短期間の同じ読み取りを再利用し、変更後の古い世代は使いません。
-
-```json
-{
-  "value": {
-    "id": "user-42",
-    "username": "example-user"
-  }
-}
-```
-
-value は user-42 の抜粋で、既定60秒、epoch の一致も必要です。
-
-## 項目・保存・削除のリファレンス
-
-### データベースのテーブル
+## データベース
 
 認証データは RelDB に保存し、取り消し可能なセッション状態は本番環境で Cache を共有します。認証情報と権限状態はサーバーに保持します。
 
@@ -264,7 +26,7 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 
 <a id="table-hai-iam-users"></a>
 
-#### `hai_iam_users`
+### `hai_iam_users`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -296,9 +58,32 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 | `reset_expires_at` | `BIGINT` | 可 | — | 再設定用認証情報の期限。Unix ミリ秒。 | `1794874500000` |
 | `reset_attempts` | `INTEGER` | 不可 | `0` | 現在の再設定用認証情報の検証試行回数。 | `0` |
 
+<a id="example-data"></a>
+
+<a id="利用者のアカウント"></a>
+
+#### 例 · 利用者のアカウント
+
+身元と利用可否を保存し、認証・認可時に確認します。
+
+```json
+{
+  "id": "user-42",
+  "username": "example-user",
+  "email": null,
+  "password_hash": null,
+  "account_type": "permanent",
+  "account_status": "active",
+  "must_change_password": false,
+  "login_failed_count": 0
+}
+```
+
+user-42 は有効な常設アカウントです。メールとハッシュの null は未登録で、空パスワード認証を許す意味ではありません。
+
 <a id="table-hai-iam-roles"></a>
 
-#### `hai_iam_roles`
+### `hai_iam_roles`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -310,9 +95,26 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 | `created_at` | `TIMESTAMP` | 不可 | — | ロールの作成時刻。 | `2026-11-17T00:00:00Z` |
 | `updated_at` | `TIMESTAMP` | 不可 | — | ロールの最終更新時刻。 | `2026-11-17T00:00:00Z` |
 
+<a id="利用者に割り当てる役割"></a>
+
+#### 例 · 利用者に割り当てる役割
+
+複数利用者に共通の権限を配るための役割です。
+
+```json
+{
+  "id": "role-reader",
+  "code": "reader",
+  "name": "Reader",
+  "is_system": false
+}
+```
+
+role-reader のコードは reader、表示名は Reader で、システム役割ではありません。
+
 <a id="table-hai-iam-permissions"></a>
 
-#### `hai_iam_permissions`
+### `hai_iam_permissions`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -327,27 +129,75 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 | `created_at` | `TIMESTAMP` | 不可 | — | 権限の作成時刻。 | `2026-11-17T00:00:00Z` |
 | `updated_at` | `TIMESTAMP` | 不可 | — | 権限の最終更新時刻。 | `2026-11-17T00:00:00Z` |
 
+<a id="アプリが確認する個別権限"></a>
+
+#### 例 · アプリが確認する個別権限
+
+保護する操作に安定した権限コードを付けます。
+
+```json
+{
+  "id": "permission-read",
+  "code": "orders.read",
+  "name": "Read orders",
+  "resource": "orders",
+  "action": "read"
+}
+```
+
+orders.read は注文参照です。この行を作るだけでは誰にも付与されません。
+
 <a id="table-hai-iam-user-roles"></a>
 
-#### `hai_iam_user_roles`
+### `hai_iam_user_roles`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
 | `user_id` | `TEXT` | 不可 | — | 付与先の利用者 ID。一意の組の一部で、検索用に索引があります。 | `user-42` |
 | `role_id` | `TEXT` | 不可 | — | 付与したロール ID。`user_id` と一意の組になります。 | `role-reader` |
 
+<a id="誰がどの役割を持つか"></a>
+
+#### 例 · 誰がどの役割を持つか
+
+利用者と役割を関連付けます。
+
+```json
+{
+  "user_id": "user-42",
+  "role_id": "role-reader"
+}
+```
+
+user-42 に role-reader が割り当てられ、同じ組合せは一度だけ保存します。
+
 <a id="table-hai-iam-role-permissions"></a>
 
-#### `hai_iam_role_permissions`
+### `hai_iam_role_permissions`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
 | `role_id` | `TEXT` | 不可 | — | 権限を含むロール ID。一意の組の一部で、検索用に索引があります。 | `role-reader` |
 | `permission_id` | `TEXT` | 不可 | — | ロールが付与する権限 ID。`role_id` と一意の組になります。 | `permission-read` |
 
+<a id="役割に含まれる権限"></a>
+
+#### 例 · 役割に含まれる権限
+
+役割と個別権限を結び、最終的な操作可否を求めます。
+
+```json
+{
+  "role_id": "role-reader",
+  "permission_id": "permission-read"
+}
+```
+
+前の利用者関連と合わせ、user-42 は orders.read を得ます。
+
 <a id="table-hai-iam-api-keys"></a>
 
-#### `hai_iam_api_keys`
+### `hai_iam_api_keys`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -362,9 +212,32 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 | `last_used_at` | `TIMESTAMP` | 可 | — | 最終利用時刻。 | `NULL` |
 | `scopes` | `JSON` | 可 | — | API Key に許可する範囲。 | `["orders.read"]` |
 
+<a id="プログラム用-api-認証情報"></a>
+
+#### 例 · プログラム用 API 認証情報
+
+スクリプトなどに限定した操作を許し、検証用ダイジェストを保存します。
+
+```json
+{
+  "id": "apikey-42",
+  "user_id": "user-42",
+  "name": "Example API",
+  "key_hash": "<hash:redacted>",
+  "key_prefix": "<prefix:redacted>",
+  "enabled": true,
+  "expires_at": null,
+  "scopes": [
+    "orders.read"
+  ]
+}
+```
+
+user-42 の注文参照専用です。秘匿した値から元のキーは復元できません。
+
 <a id="table-hai-iam-ldap-identities"></a>
 
-#### `hai_iam_ldap_identities`
+### `hai_iam_ldap_identities`
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -374,9 +247,25 @@ IAM のテーブルは全部で 7 つです。LDAP と API Key の各テーブ�
 
 API Key の元の値は発行時だけ返ります。アカウント、ロール、権限の変更には `iam.user` や `iam.authz` などの公開 API を使います。IAM が関連するセッションやキャッシュを更新します。
 
+<a id="ディレクトリエントリーをローカル利用者に関連付ける"></a>
+
+#### 例 · ディレクトリエントリーをローカル利用者に関連付ける
+
+`hai_iam_ldap_identities` は LDAP ログインとオフライン取り込みが参照する関連付けです。`directory_id` と `entry_id` の組は一意で、`user_id` はディレクトリ内で一意のローカル利用者を参照します。利用者を削除すると関連付けも削除されます。例のエントリーは名前を変更しても同じ `user-42` に対応します。
+
+```json
+{
+  "directory_id": "company-directory",
+  "entry_id": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76",
+  "user_id": "user-42"
+}
+```
+
 <a id="data-fields"></a>
 
-### キャッシュキー
+<a id="cache"></a>
+
+## キャッシュ
 
 IAM は 6 種類のキャッシュに書き込みます。以下は論理キーです。`keyPrefix` があれば Redis で接頭辞が付きます。セッション、コード、チケット、権限情報はサーバー側に保持します。
 
@@ -391,7 +280,7 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 
 <a id="cache-iam-sessions"></a>
 
-#### `hai:iam:sessions:{<scope-digest>}`
+### `hai:iam:sessions:{<scope-digest>}`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
@@ -420,9 +309,41 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `session.maxAge` | `number` | `86400` | アクセスの有効期間。単位は秒。作成時に上書きでき、その後は発行時の値を使います。 | `86400` |
 | `session.data` | JSON object | — | 任意の追加データ。 | `{"theme":"dark"}` |
 
+<a id="利用者の有効なログイン状態"></a>
+
+#### 例 · 利用者の有効なログイン状態
+
+検証・更新・ログアウトで共通利用し、古い状態の復活を防ぎます。
+
+```json
+{
+  "revision": "revision-42",
+  "sessions": {
+    "<access-token:redacted>": {
+      "session": {
+        "userId": "user-42",
+        "username": "example-user",
+        "roles": [
+          "reader"
+        ],
+        "permissions": [
+          "orders.read"
+        ],
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "expiresAt": "2026-11-18T00:00:00.000Z"
+      },
+      "refreshExpiresAt": 1795478400000,
+      "refreshToken": "<refresh-token:redacted>"
+    }
+  }
+}
+```
+
+user-42 の例で、アクセスの期限は 2026-11-18 00:00 UTC です。更新用はより長く保持でき、`refreshExpiresAt` は Unix ミリ秒です。`revision` は変更ごとに更新します。トークンは伏せてあります。
+
 <a id="cache-iam-otp"></a>
 
-#### `hai:iam:otp:<identifier>`
+### `hai:iam:otp:<identifier>`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
@@ -432,9 +353,27 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `expiresAt` | `number` | — | コードの期限。Unix ミリ秒。 | `1794873900000` |
 | `cooldownUntil` | `number` | — | 再送できる最も早い時刻。Unix ミリ秒。 | `1794873660000` |
 
+<a id="使い捨てコードと再送待ち"></a>
+
+#### 例 · 使い捨てコードと再送待ち
+
+現在のコード・失敗回数・再送可能時刻を保存します。
+
+```json
+{
+  "version": "otp-version-42",
+  "code": "<otp:redacted>",
+  "attempts": 0,
+  "expiresAt": 1794873900000,
+  "cooldownUntil": 1794873660000
+}
+```
+
+2026-11-17 00:00 UTC に発行した例です。失敗はまだなく、5 分間有効で、再送は 60 秒待ちます。`expiresAt` と `cooldownUntil` は Unix ミリ秒です。コードは伏せてあり、成功後は再利用できません。
+
 <a id="cache-iam-captcha"></a>
 
-#### `hai:iam:captcha:<id>`
+### `hai:iam:captcha:<id>`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
@@ -443,9 +382,25 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `signatureSecret` | `string` | — | チャレンジ署名用のサーバー秘密値。 | `<secret:redacted>` |
 | `keySecret` | `string` | — | 派生キーの署名用のサーバー秘密値。 | `<secret:redacted>` |
 
+<a id="今回の-captcha-の検証情報"></a>
+
+#### 例 · 今回の CAPTCHA の検証情報
+
+用途と一度限りの利用を確認するため、挑戦と秘密を保存します。
+
+```json
+{
+  "operation": "login",
+  "signatureSecret": "<secret:redacted>",
+  "keySecret": "<secret:redacted>"
+}
+```
+
+login 専用の例で、秘密と挑戦詳細は省略しています。記録全体を画面に送りません。
+
 <a id="cache-iam-ticket"></a>
 
-#### `hai:iam:ticket:sha256:<digest>`
+### `hai:iam:ticket:sha256:<digest>`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
@@ -454,21 +409,74 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `grant` | JSON object | `{}` | 発行時に許可した操作、モデル、セッションなど。 | `{"operation":"transcribe"}` |
 | `expiresAt` | `number` | — | チケットの期限。Unix ミリ秒。 | `1794873630000` |
 
+<a id="短時間だけ使える一回券"></a>
+
+#### 例 · 短時間だけ使える一回券
+
+キーの構造は `hai:iam:ticket:sha256:<チケットのダイジェスト>` です。クライアントが元のチケットを保持し、キーには SHA-256 の十六進ダイジェストだけを保存します。更新後も期限内の旧チケットを使えます。複数インスタンスでは利用側を同時に切り替えてください。旧版では新版が発行したチケットを利用できません。
+
+用途と有効期限を確認し、一致した記録を原子的に削除してから、主体と権限の関連情報を返します。
+
+```json
+{
+  "subjectId": "user-42",
+  "purpose": "ai-audio",
+  "grant": {
+    "operation": "transcribe"
+  },
+  "expiresAt": 1794873630000
+}
+```
+
+user-42 の音声文字起こし用です。2026-11-17 00:00 UTC に発行した場合、30 秒後に期限切れになります。`expiresAt` は Unix ミリ秒です。同じチケットでの再接続は拒否します。
+
 <a id="cache-iam-revision"></a>
 
-#### `hai:iam:read_cache:revision`
+### `hai:iam:read_cache:revision`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
 | `epoch` | `string` | — | 検索キャッシュのキーを組み立てる現在の世代。 | `epoch-42` |
 | `writers` | `integer` | — | 完了未確認の書き込み数。初期値は `0`。 | `0` |
 
+<a id="権限キャッシュが現在も使えるか"></a>
+
+#### 例 · 権限キャッシュが現在も使えるか
+
+権限などの変更中に古いキャッシュを使わないための共有印です。
+
+```json
+{
+  "epoch": "epoch-42",
+  "writers": 0
+}
+```
+
+writers:0 は書き込み中なし、epoch-42 は世代で、この印自体は失効しません。
+
 <a id="cache-iam-result"></a>
 
-#### `hai:iam:read_cache:<epoch>:<query>`
+### `hai:iam:read_cache:<epoch>:<query>`
 
 | 値の項目 | 型 | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- |
 | `value` | JSON | — | 成功時の検索結果。キーの例は `hai:iam:read_cache:epoch-42:user:v2:user-42` です。 | `{"id":"user-42","username":"example-user"}` |
 
 認証情報を変更したときは `credentialVersion` を比較し、古いセッションを拒否します。アカウントや権限の書き込み中はデータベースから読みます。新しい `epoch` に切り替わると旧キャッシュは使われず、もとの期限で削除されます。
+
+<a id="取得した利用者情報の短期再利用"></a>
+
+#### 例 · 取得した利用者情報の短期再利用
+
+短期間の同じ読み取りを再利用し、変更後の古い世代は使いません。
+
+```json
+{
+  "value": {
+    "id": "user-42",
+    "username": "example-user"
+  }
+}
+```
+
+value は user-42 の抜粋で、既定60秒、epoch の一致も必要です。
