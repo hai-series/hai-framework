@@ -45,7 +45,7 @@ describe('anthropic provider chat', () => {
 
   it('标准全局环境变量用于 Anthropic 默认协议，混合模型不继承 OpenAI 端点', async () => {
     vi.stubEnv('HAI_AI_LLM_APIKEY', 'test-anthropic-key')
-    vi.stubEnv('HAI_AI_LLM_BASEURL', 'https://anthropic-proxy.example')
+    vi.stubEnv('HAI_AI_LLM_BASEURL', 'https://anthropic-proxy.example///')
     fetchMock.mockImplementation(async () => jsonResponse({
       id: 'msg_env',
       model: 'claude-test',

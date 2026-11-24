@@ -409,7 +409,11 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const globalBaseUrl = config.llm.protocol === 'anthropic'
       ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined)
       : undefined
-    const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
+    const configuredBaseUrl = tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL
+    let baseUrlEnd = configuredBaseUrl.length
+    while (baseUrlEnd > 0 && configuredBaseUrl[baseUrlEnd - 1] === '/')
+      baseUrlEnd--
+    const baseUrl = configuredBaseUrl.slice(0, baseUrlEnd)
     return core.ok({
       apiKey,
       baseUrl,
