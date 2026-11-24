@@ -22,6 +22,7 @@ const DEFAULT_LEASE_MS = 10 * 60 * 1000
  * @param provider - 对应已连接Provider。
  * @param repo - 共享数据库仓库。
  * @param leaseMs - 领取期限毫秒数。
+ * @param mayStart - 生命周期和免打扰检查；进入外部调用前可以安全退回领取。
  * @returns 已提交或明确失败/unknown；旧owner迟到不能覆盖新状态。
  *
  * @example 模块内部上下文
@@ -44,7 +45,17 @@ export async function deliverClaimedMessage(
   provider: ReachProvider,
   repo: SendLogRepository,
   leaseMs = DEFAULT_LEASE_MS,
+  mayStart = () => true,
 ): Promise<HaiResult<void>> {
+  const returnToQueue = async () => {
+    const released = await repo.cancelUnsentClaim(row, owner)
+    return released.success
+      ? core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
+      : released
+  }
+  if (!mayStart())
+    return returnToQueue()
+
   const retrySafe = provider.supportsIdempotency
   if (!row.queueId || (row.retrySafe && !retrySafe)) {
     await repo.markUnknown(row.id, owner)
@@ -69,7 +80,6 @@ export async function deliverClaimedMessage(
       extra: row.extraJson
         ? JSON.parse(row.extraJson) as Record<string, unknown>
         : undefined,
-      idempotencyKey: row.queueId,
     }
   }
   catch (cause) {
@@ -79,6 +89,8 @@ export async function deliverClaimedMessage(
   }
 
   const started = await repo.beginDelivery(row.id, owner, retrySafe, leaseMs)
+  if (!mayStart())
+    return returnToQueue()
   if (!started.success)
     return started
 
@@ -106,7 +118,7 @@ export async function deliverClaimedMessage(
 
   let outcome: HaiResult<SendResult>
   try {
-    outcome = await provider.send(message)
+    outcome = await provider.send(message, { mayDispatch: mayStart, requestId: row.queueId })
   }
   catch (cause) {
     outcome = core.err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), cause)
@@ -116,6 +128,9 @@ export async function deliverClaimedMessage(
     clearTimeout(timer)
     await renewing
   }
+
+  if (!outcome.success && outcome.error.code === HaiReachError.DND_BLOCKED.code)
+    return returnToQueue()
 
   if (lost) {
     if (!retrySafe)

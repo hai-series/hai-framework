@@ -5,10 +5,10 @@
  * @module reach-provider-aliyun-sms
  */
 
-import type { HaiError, HaiResult } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
-import type { ReachGatewayHook, ReachMessage, SendResult } from '../reach-types.js'
+import type { ReachGatewayHook, SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
 import { createHmac, randomUUID } from 'node:crypto'
 import { addAbortListener } from 'node:events'
@@ -21,18 +21,8 @@ import { HaiReachError } from '../reach-types.js'
 const logger = core.logger.child({ module: 'reach', scope: 'provider-aliyun-sms' })
 const ISO_MILLISECONDS_SUFFIX_REGEX = /\.\d{3}Z$/
 const RFC3986_RESERVED_CHARACTERS_REGEX = /[!'()*]/g
-const GATEWAY_TIMEOUT_MS = 10_000
-const GATEWAY_RESPONSE_LIMIT_BYTES = 64 * 1024
-
-/**
- * 将异常包装为 ReachError
- */
-function toReachError(): HaiError {
-  return {
-    ...HaiReachError.SEND_FAILED,
-    message: reachM('reach_smsSendFailed'),
-  }
-}
+const SMS_TIMEOUT_MS = 10_000
+const SMS_RESPONSE_LIMIT_BYTES = 64 * 1024
 
 /**
  * 对字符串做 RFC 3986 编码
@@ -120,32 +110,31 @@ async function prepareGatewayRequest(gateway: NonNullable<AliyunSmsProviderConfi
   }
 }
 
-/** 只接受有界的阿里云成功回执，拒绝网关自己的空成功响应。 */
-async function readGatewayResponse(response: Response): Promise<HaiResult<SendResult>> {
-  if (response.ok && response.body) {
-    let bytes = 0
-    const stream = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        bytes += chunk.byteLength
-        if (bytes > GATEWAY_RESPONSE_LIMIT_BYTES)
-          throw new Error('SMS gateway response exceeded the size limit')
-        controller.enqueue(chunk)
-      },
-    }))
-    const body: unknown = await new Response(stream).json()
-    if (body && typeof body === 'object' && 'Code' in body && body.Code === 'OK') {
-      const messageId = 'BizId' in body
-        ? body.BizId
-        : undefined
-      if (messageId === undefined || (typeof messageId === 'string' && messageId.length <= 255))
-        return core.ok({ success: true, messageId })
-    }
-  }
-  else {
+/** 直连与网关都须返回有界的阿里云成功回执。 */
+async function readSmsAcknowledgement(response: Response): Promise<SendResult | null> {
+  if (!response.ok || !response.body) {
     await response.body?.cancel()
+    return null
   }
-  logger.warn('SMS gateway returned an unsuccessful receipt', { status: response.status })
-  return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
+  let bytes = 0
+  const stream = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      bytes += chunk.byteLength
+      if (bytes > SMS_RESPONSE_LIMIT_BYTES)
+        throw new Error('SMS response exceeded the size limit')
+      controller.enqueue(chunk)
+    },
+  }))
+  const body: unknown = await new Response(stream).json()
+  if (!body || typeof body !== 'object' || !('Code' in body) || body.Code !== 'OK')
+    return null
+
+  const messageId = 'BizId' in body
+    ? body.BizId
+    : undefined
+  if (messageId !== undefined && (typeof messageId !== 'string' || messageId.length > 255))
+    return null
+  return { success: true, messageId }
 }
 
 /**
@@ -198,7 +187,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
       return smsConfig !== null
     },
 
-    async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
+    async send(message, options): Promise<HaiResult<SendResult>> {
       const config = smsConfig
       if (!config) {
         return core.err(
@@ -207,10 +196,15 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
         )
       }
 
-      const templateCode = message.extra?.templateCode as string | undefined
-      if (!config.gateway)
-        logger.debug('Sending SMS', { templateCode })
+      const mappedTemplateCode = message.template && config.templateCodes && Object.hasOwn(config.templateCodes, message.template)
+        ? config.templateCodes[message.template]
+        : undefined
+      const templateCode = message.extra?.templateCode ?? mappedTemplateCode
+      const gateway = config.gateway
+      if (!gateway && (typeof templateCode !== 'string' || !templateCode.trim()))
+        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_smsTemplateCodeRequired'))
 
+      const failureMessage = reachM(gateway ? 'reach_smsGatewayFailed' : 'reach_smsSendFailed')
       try {
         const params: Record<string, string> = {
           AccessKeyId: config.accessKeyId,
@@ -221,7 +215,9 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           SignatureMethod: 'HMAC-SHA1',
           SignatureNonce: randomUUID(),
           SignatureVersion: '1.0',
-          TemplateCode: templateCode ?? '',
+          TemplateCode: typeof templateCode === 'string'
+            ? templateCode
+            : '',
           Timestamp: new Date().toISOString().replace(ISO_MILLISECONDS_SUFFIX_REGEX, 'Z'),
           Version: '2017-05-25',
         }
@@ -230,56 +226,44 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           params.TemplateParam = JSON.stringify(message.vars)
         }
 
-        params.Signature = signRequest(params, config.accessKeySecret, config.gateway ? 'POST' : 'GET')
+        params.Signature = signRequest(params, config.accessKeySecret, gateway ? 'POST' : 'GET')
 
         const queryString = Object.entries(params)
           .map(([k, v]) => `${percentEncode(k)}=${percentEncode(v)}`)
           .join('&')
 
-        if (config.gateway) {
-          const deadline = performance.now() + GATEWAY_TIMEOUT_MS
-          const signal = AbortSignal.timeout(GATEWAY_TIMEOUT_MS)
-          const url = `${new URL(config.gateway.url).href}?${queryString}`
-          const request = await prepareGatewayRequest(config.gateway, url, signal, gatewayHook)
-          signal.throwIfAborted()
-          if (smsConfig !== config || performance.now() >= deadline)
-            return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
-          if (message.sensitive && message.expiresAt !== undefined && Date.now() >= message.expiresAt)
-            return core.err(HaiReachError.MESSAGE_EXPIRED, reachM('reach_messageExpired'))
-          return await readGatewayResponse(await fetch(url, request))
+        const deadline = performance.now() + SMS_TIMEOUT_MS
+        const signal = AbortSignal.timeout(SMS_TIMEOUT_MS)
+        const url = gateway
+          ? `${new URL(gateway.url).href}?${queryString}`
+          : `https://${config.endpoint}/?${queryString}`
+        const request: RequestInit = gateway
+          ? await prepareGatewayRequest(gateway, url, signal, gatewayHook)
+          : { method: 'GET', redirect: 'error', signal }
+        signal.throwIfAborted()
+        if (smsConfig !== config || performance.now() >= deadline)
+          return core.err(HaiReachError.SEND_FAILED, failureMessage)
+        if (options?.mayDispatch && !options.mayDispatch())
+          return core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
+
+        const response = await fetch(url, request)
+        const acknowledgement = await readSmsAcknowledgement(response)
+        if (!acknowledgement) {
+          logger.warn('SMS provider returned an unsuccessful receipt', {
+            status: response.status,
+            gateway: Boolean(gateway),
+          })
+          return core.err(HaiReachError.SEND_FAILED, failureMessage)
         }
-
-        const url = `https://${config.endpoint}/?${queryString}`
-        const response = await fetch(url)
-        const body = await response.json() as { Code: string, Message: string, BizId?: string }
-
-        if (body.Code !== 'OK') {
-          // 阿里云签名错误的描述可能回显包含短信变量的原始签名参数。
-          logger.warn('SMS send returned non-OK status', { code: body.Code })
-          return core.err(
-            HaiReachError.SEND_FAILED,
-            reachM('reach_smsSendFailed'),
-          )
-        }
-
-        logger.info('SMS sent', { bizId: body.BizId })
-        return core.ok({ success: true, messageId: body.BizId })
+        logger.info('SMS provider accepted the message', { hasMessageId: acknowledgement.messageId !== undefined })
+        return core.ok(acknowledgement)
       }
       catch (error) {
-        if (config.gateway) {
-          logger.warn('SMS gateway request failed', {
-            causeName: error instanceof Error
-              ? error.name
-              : undefined,
-          })
-          return core.err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
-        }
-        logger.warn('SMS send failed', {
-          causeName: error instanceof Error
-            ? error.name
-            : undefined,
+        logger.warn('SMS provider request failed', {
+          gateway: Boolean(gateway),
+          timedOut: error instanceof DOMException && error.name === 'TimeoutError',
         })
-        return core.err(toReachError())
+        return core.err(HaiReachError.SEND_FAILED, failureMessage)
       }
     },
   }

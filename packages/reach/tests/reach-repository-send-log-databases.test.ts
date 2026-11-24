@@ -113,6 +113,29 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       }
     })
 
+    it('为已有日志表补建队列索引，保留已入队消息', async () => {
+      const id = await insertPending()
+      const indexes = ['hai_reach_send_log_status_lock_idx', 'hai_reach_send_log_status_created_idx']
+      for (const name of indexes)
+        expect((await reldb.ddl.dropIndex(name, false)).success).toBe(true)
+      resetSendLogRepoSingleton()
+      const restored = await createSendLogRepository(reldb)
+      expect(restored.success).toBe(true)
+      if (!restored.success)
+        return
+      expect(await restored.data.findById(id)).toMatchObject({
+        success: true,
+        data: { status: 'pending' },
+      })
+      for (const name of indexes)
+        expect((await reldb.ddl.dropIndex(name, false)).success).toBe(true)
+      resetSendLogRepoSingleton()
+      const repaired = await createSendLogRepository(reldb)
+      expect(repaired.success).toBe(true)
+      if (repaired.success)
+        repository = repaired.data
+    })
+
     it('四项队列时间列均使用可容纳毫秒的 BIGINT', async () => {
       if (type === 'sqlite') {
         const columns = await reldb.sql.query<{ name: string, type: string }>(`PRAGMA table_info(${table})`)

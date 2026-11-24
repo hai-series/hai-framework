@@ -66,7 +66,7 @@ afterAll(() => {
   }
 })
 
-it.each(['same-origin', 'https', 'http'] as const)('可信 TLS 接收端可受理，重定向到 %s 的敏感正文不被转发', async (destination) => {
+it.each(['same-origin', 'https', 'http'] as const)('可信 TLS 接收端可受理，默认不转发到 %s 的重定向请求', async (destination) => {
   let forwarded = 0
   let location = ''
   const handler: RequestListener = (request, response) => {
@@ -133,9 +133,6 @@ it.each(['same-origin', 'https', 'http'] as const)('可信 TLS 接收端可受�
     provider: 'secure',
     to: 'fixture',
     body: 'synthetic',
-    sensitive: true,
-    idempotencyKey: destination,
-    expiresAt: Date.now() + 60000,
   })).success).toBe(false)
   expect(forwarded).toBe(1)
 })

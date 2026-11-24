@@ -17,7 +17,6 @@ import { core } from '@h-ai/core'
 import { ReachQueueConfigSchema } from './reach-config.js'
 import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
-import { sendSensitive } from './reach-send-sensitive.js'
 import { renderTemplate } from './reach-template.js'
 import {
   HaiReachError,
@@ -93,15 +92,14 @@ export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date())
  * ```
  */
 export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
-  const endMin = parseTimeToMinutes(dnd.end)
-  const currentMin = now.getHours() * 60 + now.getMinutes()
-  const currentSec = now.getSeconds()
-
-  let diffMin = endMin - currentMin
-  if (diffMin <= 0) {
-    diffMin += 24 * 60
+  const [hours, minutes] = dnd.end.split(':').map(Number)
+  const end = new Date(now)
+  end.setHours(hours, minutes, 0, 0)
+  if (end.getTime() <= now.getTime()) {
+    end.setDate(end.getDate() + 1)
+    end.setHours(hours, minutes, 0, 0)
   }
-  return diffMin * 60 * 1000 - currentSec * 1000
+  return end.getTime() - now.getTime()
 }
 
 // ─── 消息预处理 ───
@@ -209,166 +207,118 @@ async function saveSendRecord(
   }
 }
 
-// ─── DND 恢复定时任务 ───
+// ─── 持久发送恢复 ───
 
-/** 定时器引用 */
-let dndTimer: ReturnType<typeof setTimeout> | null = null
-
-/** 保存调度器参数，用于循环调度 */
-let schedulerContext: { dndConfig: DndConfig, providers: Map<string, ReachProvider>, repo: SendLogRepository | null } | null = null
+const RECOVERY_INTERVAL_MS = 60 * 1000
 
 /**
- * 内部启动本机扫描计时器；业务队列状态由共享数据库持有，本机计时器不决定投递所有权。
- * DND外立即扫描遗留消息，之后按分钟有界恢复；仅delay策略启用。
- * @param dndConfig - 已校验DND配置。
- * @param providers - 当前已连接Provider路由表。
- * @param repo - 真实持久队列；null不产生可靠入队能力。
- *
+ * 当前本机恢复循环的配置、依赖、计时器和在途任务。
+ * @example 模块内部上下文
+ * ```ts
+ * function createContext(dndConfig: DndConfig, providers: Map<string, ReachProvider>, repo: SendLogRepository): SendSchedulerContext {
+ *   return { dndConfig, providers, repo }
+ * }
+ * ```
+ */
+interface SendSchedulerContext {
+  dndConfig: DndConfig
+  providers: Map<string, ReachProvider>
+  repo: SendLogRepository
+  timer?: ReturnType<typeof setTimeout>
+  active?: Promise<void>
+}
+
+let schedulerContext: SendSchedulerContext | undefined
+
+/**
+ * delay 启用时启动队列恢复循环，免打扰时段外尝试投递。
  * @example 模块内部上下文
  * ```ts
  * function start(config: DndConfig, providers: Map<string, ReachProvider>, repository: SendLogRepository) {
  *   startDndScheduler(config, providers, repository)
- *   // 生命周期结束调用resetSendState，不把停止计时器当作撤销外部投递。
+ *   // 生命周期结束后等待 stopDndScheduler 完成在途提交。
  * }
  * ```
  */
 export function startDndScheduler(
-  dndConfig: DndConfig,
+  dndConfig: DndConfig | undefined,
   providers: Map<string, ReachProvider>,
   repo: SendLogRepository | null,
 ): void {
-  stopDndScheduler()
-
-  if (!dndConfig.enabled || dndConfig.strategy !== 'delay') {
+  const closing = schedulerContext
+    ? stopDndScheduler()
+    : undefined
+  if (!repo || !dndConfig?.enabled || dndConfig.strategy !== 'delay')
     return
-  }
-
-  schedulerContext = { dndConfig, providers, repo }
-  const context = schedulerContext
-
-  // 如果当前不在 DND 时段，不需要启动定时器
-  if (!isDndBlocked(dndConfig)) {
-    // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
-    flushPendingMessages(providers, repo).catch((error) => {
-      logger.warn('Failed to flush pending messages on init', { error })
-    }).finally(() => {
-      if (schedulerContext === context)
-        scheduleDndCheck()
-    })
-    return
-  }
-
-  scheduleFlushAtDndEnd()
+  const context: SendSchedulerContext = { dndConfig, providers, repo }
+  schedulerContext = context
+  if (closing)
+    void closing.then(() => runScheduledRecovery(context))
+  else
+    runScheduledRecovery(context)
 }
 
-/**
- * 在 DND 结束时触发 flush 并重新调度
- */
-function scheduleFlushAtDndEnd(): void {
-  if (!schedulerContext)
+function runScheduledRecovery(context: SendSchedulerContext): void {
+  if (schedulerContext !== context)
     return
-  const context = schedulerContext
   const { dndConfig, providers, repo } = context
-
-  const delayMs = msUntilDndEnd(dndConfig)
-  logger.info('DND scheduler started', { delayMs, dndEnd: dndConfig.end })
-
-  dndTimer = setTimeout(() => {
+  const mayStart = () => schedulerContext === context && !isDndBlocked(dndConfig)
+  context.active = (async () => {
+    // 仅维护一次，后续逐条领取不会重复扫过期状态和历史。
+    const recovered = await repo.recoverExpired()
+    if (!recovered.success) {
+      logger.warn('Failed to recover expired delivery records', { errorCode: recovered.error.code })
+      return
+    }
+    if (mayStart())
+      await flushPendingMessages(providers, repo, mayStart)
+  })().catch((error: unknown) => {
+    logger.warn('Failed to recover queued messages', { error })
+  }).finally(() => {
     if (schedulerContext !== context)
       return
-    logger.info('DND period ended, flushing pending messages')
-    flushPendingMessages(providers, repo)
-      .catch((error) => {
-        logger.error('Failed to flush pending messages', { error })
-      })
-      .finally(() => {
-        // 重新调度：等待下一个 DND 周期
-        if (schedulerContext === context)
-          scheduleDndCheck()
-      })
-  }, delayMs)
+    const wait = isDndBlocked(dndConfig)
+      ? Math.min(RECOVERY_INTERVAL_MS, msUntilDndEnd(dndConfig))
+      : RECOVERY_INTERVAL_MS
+    context.timer = setTimeout(runScheduledRecovery, wait, context)
+    context.timer.unref()
+  })
 }
 
 /**
- * 定期检查是否进入 DND 时段，进入后切换到 flush 调度
+ * 即时停止新一轮及本轮的新领取，等待已开始的外部调用按原 owner 提交结果。
+ * @example 模块内部上下文
+ * ```ts
+ * await stopDndScheduler()
+ * ```
  */
-function scheduleDndCheck(): void {
-  if (!schedulerContext)
-    return
+export async function stopDndScheduler(): Promise<void> {
   const context = schedulerContext
-  const { dndConfig, providers, repo } = context
-
-  // 每分钟检查一次是否进入 DND
-  const CHECK_INTERVAL = 60 * 1000
-  dndTimer = setTimeout(() => {
-    if (schedulerContext !== context)
-      return
-    if (isDndBlocked(dndConfig)) {
-      scheduleFlushAtDndEnd()
-    }
-    else {
-      // DND 时段外持续恢复遗留任务，避免节点启动时租约未过期就要等到下一天。
-      flushPendingMessages(providers, repo)
-        .catch(error => logger.warn('Failed to recover pending messages', { error }))
-        .finally(() => {
-          if (schedulerContext === context)
-            scheduleDndCheck()
-        })
-    }
-  }, CHECK_INTERVAL)
-}
-
-/**
- * 内部清除当前本机计时器；不清数据库、不停止已开始的外部Provider调用。
- * 完整生命周期关闭通过resetSendState同时废弃调度上下文。
- *
- * @example 模块内部上下文
- * ```ts
- * stopDndScheduler()
- * ```
- */
-export function stopDndScheduler(): void {
-  if (dndTimer !== null) {
-    clearTimeout(dndTimer)
-    dndTimer = null
-  }
-}
-
-/**
- * 内部关闭时清除计时器并废弃旧调度上下文，迟到finally不会再排下一轮；不撤销在途外部请求。
- *
- * @example 模块内部上下文
- * ```ts
- * resetSendState()
- * ```
- */
-export function resetSendState(): void {
-  stopDndScheduler()
-  schedulerContext = null
+  schedulerContext = undefined
+  clearTimeout(context?.timer)
+  await context?.active
 }
 
 /**
  * 一轮最多100次逐条领取，固定eligibleBefore让退避消息留给下轮，坏消息不在满批循环自旋。
  * 缓存锁只减少扫描；资格由数据库owner/租约/sending门闩决定，外部效果依赖幂等或unknown隔离。
  * @param providers - 当前已连接路由表。
- * @param repo - 持久队列；缺省无可靠待发送队列。
+ * @param repo - 持久队列。
+ * @param mayStart - 同一生命周期仍有效且当前在免打扰时段外。
  *
  * @example 模块内部上下文
  * ```ts
  * async function flush(providers: Map<string, ReachProvider>, repository: SendLogRepository) {
- *   await flushPendingMessages(providers, repository)
+ *   await flushPendingMessages(providers, repository, () => true)
  *   // 生命周期调度负责下一轮；不在此函数外无界while重试。
  * }
  * ```
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
-  repo: SendLogRepository | null,
+  repo: SendLogRepository,
+  mayStart: () => boolean,
 ): Promise<void> {
-  if (!repo) {
-    return
-  }
-
   // 分布式锁：防止多节点同时 flush
   // 注意：这里的锁主要用于减少惊群和重复扫描；真正的行级正确性由 repo.claimPendingBatch 的 claim 事务保证。
   let lockOwner: string | null = null
@@ -397,40 +347,41 @@ async function flushPendingMessages(
       return
     }
     const eligibleBefore = clock.data
-    for (let processed = 0; processed < FLUSH_BATCH_SIZE; processed += 1) {
+    for (let processed = 0; processed < FLUSH_BATCH_SIZE && mayStart(); processed += 1) {
       // 按实际执行逐条领取，避免后排消息排队等待时耗尽租约；单轮处理数量有界。
       const claimResult = await repo.claimPendingBatch(flushOwner, {
         limit: 1,
         lockMs: FLUSH_CLAIM_LOCK_MS,
         eligibleBefore,
+        skipRecovery: true,
       })
       if (!claimResult.success) {
         logger.warn('Failed to claim pending messages', { error: claimResult.error.message })
         return
       }
 
-      if (claimResult.data.length === 0) {
+      const row = claimResult.data[0]
+      if (!row)
+        return
+      if (!mayStart()) {
+        const cancelled = await repo.cancelUnsentClaim(row, flushOwner)
+        if (!cancelled.success)
+          logger.warn('Failed to return unstarted pending message', { id: row.id, errorCode: cancelled.error.code })
         return
       }
 
-      logger.debug('Flushing pending messages', { count: claimResult.data.length })
-
-      for (const row of claimResult.data) {
-        // 缺少 Provider 可由配置修复，但也必须消耗重试预算并退避，不能原地自旋。
-        const provider = providers.get(row.provider)
-        if (!provider) {
-          logger.warn('Provider not found for pending message, releasing claim', { provider: row.provider, id: row.id })
-          const releaseResult = await repo.failClaim(row, flushOwner, 'provider_unavailable')
-          if (!releaseResult.success) {
-            logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
-          }
-          continue
-        }
-
-        const sent = await deliverClaimedMessage(row, flushOwner, provider, repo, FLUSH_CLAIM_LOCK_MS)
-        if (!sent.success)
-          logger.warn('Pending message delivery did not commit', { id: row.id, code: sent.error.code })
+      // 缺少 Provider 可由配置修复，但也必须消耗重试预算并退避，不能原地自旋。
+      const provider = providers.get(row.provider)
+      if (!provider) {
+        const releaseResult = await repo.failClaim(row, flushOwner, 'provider_unavailable')
+        if (!releaseResult.success)
+          logger.warn('Failed to release pending message claim', { id: row.id, errorCode: releaseResult.error.code })
+        continue
       }
+
+      const sent = await deliverClaimedMessage(row, flushOwner, provider, repo, FLUSH_CLAIM_LOCK_MS, mayStart)
+      if (!sent.success)
+        logger.warn('Pending message delivery did not commit', { id: row.id, errorCode: sent.error.code })
     }
   }
   finally {
@@ -505,11 +456,7 @@ export async function executeSend(
     )
   }
 
-  if (preprocessed.data.sensitive)
-    return sendSensitive(preprocessed.data, providers.get(providerName)!, repo, isDndBlocked(dndConfig))
-
-  // DND 检查
-  if (isDndBlocked(dndConfig)) {
+  if (preprocessed.data.ignoreDnd !== true && isDndBlocked(dndConfig)) {
     if (message.deferPolicy === 'reject')
       return core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
     const strategy = dndConfig?.strategy ?? 'discard'

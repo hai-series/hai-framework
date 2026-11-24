@@ -98,16 +98,32 @@ function tests() {
       await reach.close()
     }
   })
-  it('reach 标准模板自动接入短信重置，通知异常不暴露内部详情', async () => {
+  it('reach 标准模板为短信 OTP 和手机重置使用对应的阿里云模板编码，通知异常不暴露内部详情', async () => {
     expect((await reach.init({
       providers: [
-        { name: 'sms', type: 'console' },
+        {
+          name: 'sms',
+          type: 'aliyun-sms',
+          accessKeyId: 'fixture',
+          accessKeySecret: 'fixture',
+          signName: 'fixture',
+          templateCodes: { otp_sms: 'SMS_OTP', password_reset_sms: 'SMS_RESET' },
+        },
       ],
       templates: [
+        { name: 'otp_sms', provider: 'sms', body: 'OTP: {code}' },
         { name: 'password_reset_sms', provider: 'sms', body: 'Reset: {token}' },
       ],
     })).success).toBe(true)
     const sent = vi.spyOn(reach, 'send')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const code = new URL(String(input)).searchParams.get('TemplateCode')
+      return Response.json({
+        Code: code === 'SMS_OTP' || code === 'SMS_RESET'
+          ? 'OK'
+          : 'MissingTemplateCode',
+      })
+    })
     try {
       const iam = await initIam({
         reach,
@@ -119,7 +135,9 @@ function tests() {
       })
       expect(iam.publicConfig?.passwordReset).toEqual({ enabled: true, mode: 'phone' })
       expect((await iam.user.register({ username: 'phone-reset', password: TEST_PASSWORD, phone: '13800138000' })).success).toBe(true)
+      expect((await iam.auth.sendOtp('13800138000')).success).toBe(true)
       expect((await iam.user.requestPasswordReset('13800138000')).success).toBe(true)
+      expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).searchParams.get('TemplateCode'))).toEqual(['SMS_OTP', 'SMS_RESET'])
       const notification = sent.mock.calls.at(-1)?.[0]
       expect(notification?.template).toBe('password_reset_sms')
       expect(notification?.to).toBe('13800138000')
@@ -130,7 +148,107 @@ function tests() {
     }
     finally {
       sent.mockRestore()
+      fetchMock.mockRestore()
       await reach.close()
+    }
+  })
+  it('内置验证码、密码重置和初始设密邀请夜间立即发送并写入普通发送历史', async () => {
+    const quietNight = new Date()
+    quietNight.setDate(quietNight.getDate() + 1)
+    quietNight.setHours(23, 10, 0, 0)
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    vi.setSystemTime(quietNight)
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ messageId: 'provider-accepted' }))
+    try {
+      expect(await reach.init({
+        providers: [
+          { name: 'notify', type: 'api', url: 'https://notify.example.invalid/messages' },
+        ],
+        templates: [
+          { name: 'otp_email', provider: 'notify', body: 'OTP: {code}' },
+          { name: 'otp_sms', provider: 'notify', body: 'OTP: {code}' },
+          { name: 'password_reset', provider: 'notify', body: 'Reset: {resetUrl}' },
+        ],
+        dnd: {
+          enabled: true,
+          strategy: 'delay',
+          start: '22:00',
+          end: '08:00',
+        },
+      })).toMatchObject({ success: true })
+      const iam = await initIam({
+        reach,
+        otp: {},
+        passwordReset: { mode: 'email', resetUrl: 'https://accounts.example.invalid/reset' },
+        initialCredentials: { enabled: true },
+      })
+      const email = 'night-code@example.invalid'
+      const phone = '13900139001'
+      const accountEmail = 'night-reset@example.invalid'
+      const inviteEmail = 'night-invite@example.invalid'
+      expect((await iam.auth.sendOtp(email)).success).toBe(true)
+      expect((await iam.auth.sendOtp(phone)).success).toBe(true)
+      expect((await iam.user.register({ username: 'night-reset', password: TEST_PASSWORD, email: accountEmail })).success).toBe(true)
+      expect((await iam.user.requestPasswordReset(accountEmail)).success).toBe(true)
+      expect((await iam.user.inviteUser({ username: 'night-invite', email: inviteEmail })).success).toBe(true)
+
+      const delivered = fetchMock.mock.calls.map(([, request]) => JSON.parse(String(request?.body)))
+      expect(delivered).toMatchObject([
+        {
+          template: 'otp_email',
+          to: email,
+          vars: {
+            code: expect.stringMatching(/^\d+$/),
+          },
+        },
+        {
+          template: 'otp_sms',
+          to: phone,
+          vars: {
+            code: expect.stringMatching(/^\d+$/),
+          },
+        },
+        {
+          template: 'password_reset',
+          to: accountEmail,
+          vars: {
+            resetUrl: expect.stringContaining('https://accounts.example.invalid/reset?token='),
+          },
+        },
+        {
+          template: 'password_reset',
+          to: inviteEmail,
+          vars: {
+            resetUrl: expect.stringContaining('https://accounts.example.invalid/reset?token='),
+          },
+        },
+      ])
+      await vi.waitFor(async () => {
+        const rows = await reldb.sql.query<{ to_addr: string, body: string, vars_json: string, status: string, queue_id: string | null }>(
+          'SELECT to_addr, body, vars_json, status, queue_id FROM hai_reach_send_log WHERE provider = ? ORDER BY id',
+          ['notify'],
+        )
+        expect(rows.success).toBe(true)
+        if (rows.success) {
+          expect(rows.data.map(row => ({
+            ...row,
+            vars_json: JSON.parse(row.vars_json),
+          }))).toEqual(delivered.map(message => ({
+            to_addr: message.to,
+            body: message.body,
+            vars_json: message.vars,
+            status: 'sent',
+            queue_id: null,
+          })))
+        }
+      })
+    }
+    finally {
+      fetchMock.mockRestore()
+      await reach.close()
+      vi.useRealTimers()
     }
   })
   it('验证码有真实缓存 TTL，重置令牌按数据库有效期拒绝到期使用', async () => {

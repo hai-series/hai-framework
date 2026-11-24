@@ -131,6 +131,72 @@ afterEach(async () => {
 })
 
 describe('delivery ownership and external effects', { concurrent: false }, () => {
+  it.each(['关闭', '进入免打扰'] as const)('%s期间允许已开始的投递提交，但不领取下一条', async (boundary) => {
+    const started = deferred<void>()
+    const respond = deferred<void>()
+    let requests = 0
+    const endpoint = await receiver((_request, response) => {
+      requests += 1
+      started.resolve()
+      void respond.promise.then(() => response.writeHead(204).end())
+    })
+    await reach.close()
+    const config = {
+      providers: [
+        { name: 'job', type: 'api' as const, url: endpoint.url },
+      ],
+      queue: { maxAttempts: 1 },
+      dnd: {
+        enabled: true,
+        strategy: 'delay' as const,
+        start: '22:00',
+        end: '08:00',
+      },
+    }
+    expect((await reach.init(config)).success).toBe(true)
+    const first = await reach.send({ provider: 'job', to: 'first@example.invalid' })
+    const second = await reach.send({ provider: 'job', to: 'second@example.invalid' })
+    if (!first.success || !first.data.deferred || !second.success || !second.data.deferred)
+      throw new Error('Expected two queued notifications')
+    await reach.close()
+    vi.mocked(Date.prototype.getHours).mockReturnValue(21)
+    expect((await reach.init(config)).success).toBe(true)
+
+    try {
+      await started.promise
+      if (boundary === '关闭') {
+        const closing = reach.close()
+        const refused = await reach.send({ provider: 'job', to: 'new@example.invalid' })
+        expect(refused).toMatchObject({
+          success: false,
+          error: { code: HaiReachError.NOT_INITIALIZED.code },
+        })
+        respond.resolve()
+        await closing
+      }
+      else {
+        vi.mocked(Date.prototype.getHours).mockReturnValue(22)
+        respond.resolve()
+      }
+      const read = (id: string) => reldb.sql.get('SELECT status, attempt_count FROM hai_reach_send_log WHERE queue_id = ?', [id])
+      await vi.waitFor(async () => {
+        expect(await read(first.data.queueId)).toMatchObject({
+          success: true,
+          data: { status: 'sent', attempt_count: 1 },
+        })
+      })
+      expect(await read(second.data.queueId)).toMatchObject({
+        success: true,
+        data: { status: 'pending', attempt_count: 0 },
+      })
+      expect(requests).toBe(1)
+    }
+    finally {
+      respond.resolve()
+      await reach.close()
+    }
+  })
+
   it.each([
     400,
     401,

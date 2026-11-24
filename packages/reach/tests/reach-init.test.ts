@@ -62,6 +62,16 @@ describe('reach.init', { concurrent: false }, () => {
     }
   })
 
+  it('格式错误的 API URL 返回初始化配置错误', async () => {
+    const result = await reach.init({
+      providers: [
+        { name: 'webhook', type: 'api', url: 'invalid-url' },
+      ],
+    })
+    expect(result).toMatchObject({ success: false, error: HaiReachError.CONFIG_ERROR })
+    expect(reach.isInitialized).toBe(false)
+  })
+
   it('api provider 配置快照隐藏任意自定义认证头的值', async () => {
     const result = await reach.init({
       providers: [

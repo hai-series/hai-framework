@@ -228,9 +228,11 @@ describe('reach.send (Aliyun SMS)', () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await reach.close()
+    await reldb.close()
   })
 
-  it('短信模板变量中的保留字符应按阿里云 RPC 规则编码和签名', async () => {
+  it('显式编码优先于模板映射，短信参数按阿里云 RPC 规则编码和签名', async () => {
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
     const initialized = await reach.init({
       providers: [
         {
@@ -239,7 +241,11 @@ describe('reach.send (Aliyun SMS)', () => {
           accessKeyId: 'test-ak',
           accessKeySecret: 'test-sk',
           signName: '测试签名',
+          templateCodes: { verification: 'SMS_MAPPED' },
         },
+      ],
+      templates: [
+        { name: 'verification', provider: 'sms', body: 'Hello {value}' },
       ],
     })
     expect(initialized.success).toBe(true)
@@ -250,6 +256,7 @@ describe('reach.send (Aliyun SMS)', () => {
     const result = await reach.send({
       provider: 'sms',
       to: '13800138000',
+      template: 'verification',
       extra: { templateCode: 'SMS_123456' },
       vars: { value: '!\'()*~' },
     })
@@ -260,6 +267,7 @@ describe('reach.send (Aliyun SMS)', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.searchParams.get('TemplateCode')).toBe('SMS_123456')
     expect(url.search).toContain('TemplateParam=%7B%22value%22%3A%22%21%27%28%29%2A~%22%7D')
 
     const signedParams = url.search.slice(1).split('&').filter(param => !param.startsWith('Signature='))
@@ -353,6 +361,44 @@ describe('reach.send (DND)', { concurrent: false }, () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.deferred).toBe(true)
+    }
+  })
+
+  it.each(['delay', 'discard'] as const)('免打扰策略为 %s 时，可以只对本次发送跳过免打扰', async (strategy) => {
+    vi.setSystemTime(new Date('2026-01-01T23:10:00'))
+    expect(await reach.init({
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+      dnd: {
+        enabled: true,
+        strategy,
+        start: '22:00',
+        end: '08:00',
+      },
+    })).toMatchObject({ success: true })
+
+    const message = {
+      provider: 'email',
+      to: 'user@example.invalid',
+      body: 'Order received',
+      deferPolicy: 'reject' as const,
+    }
+    expect(await reach.send({ ...message, ignoreDnd: false })).toMatchObject({
+      success: false,
+      error: { code: HaiReachError.DND_BLOCKED.code },
+    })
+    const sent = await reach.send({ ...message, ignoreDnd: true })
+    expect(sent).toMatchObject({
+      success: true,
+      data: {
+        success: true,
+        messageId: expect.stringMatching(/^console-/),
+      },
+    })
+    if (sent.success) {
+      expect(sent.data.deferred).not.toBe(true)
+      expect(sent.data.queueId).toBeUndefined()
     }
   })
 

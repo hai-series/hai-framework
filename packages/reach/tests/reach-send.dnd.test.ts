@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { isDndBlocked, msUntilDndEnd } from '../src/reach-send.js'
 
 describe('reach-send: isDndBlocked', () => {
@@ -108,6 +108,29 @@ describe('reach-send: isDndBlocked', () => {
 })
 
 describe('reach-send: msUntilDndEnd', () => {
+  it.each([
+    ['2026-03-08T00:00:00-05:00', 7],
+    ['2026-11-01T00:00:00-04:00', 9],
+  ])('跨本地夏令时切换从 %s 到 08:00 需要 %i 小时', (start, elapsed) => {
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      const dnd = {
+        enabled: true,
+        strategy: 'delay' as const,
+        start: '22:00',
+        end: '08:00',
+      }
+      const now = new Date(start)
+      const duration = msUntilDndEnd(dnd, now)
+      expect(duration).toBe(elapsed * 60 * 60 * 1000)
+      expect(isDndBlocked(dnd, new Date(now.getTime() + duration - 1))).toBe(true)
+      expect(isDndBlocked(dnd, new Date(now.getTime() + duration))).toBe(false)
+    }
+    finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('应计算到 DND 结束的毫秒数', () => {
     const dnd = {
       enabled: true,

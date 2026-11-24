@@ -8,9 +8,8 @@
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ApiProviderConfig, ProviderConfig } from '../reach-config.js'
 
-import type { ReachMessage, SendResult } from '../reach-types.js'
+import type { SendResult } from '../reach-types.js'
 import type { ReachProvider } from './reach-provider-types.js'
-import process from 'node:process'
 import { core } from '@h-ai/core'
 
 import { reachM } from '../reach-i18n.js'
@@ -156,7 +155,7 @@ export function createApiProvider(): ReachProvider {
       return apiConfig !== null
     },
 
-    async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
+    async send(message, options): Promise<HaiResult<SendResult>> {
       if (!apiConfig) {
         return core.err(
           HaiReachError.NOT_INITIALIZED,
@@ -168,11 +167,8 @@ export function createApiProvider(): ReachProvider {
         endpoint: getSafeEndpoint(apiConfig.url),
       })
 
-      const requireHttps = apiConfig.requireHttps ?? (message.sensitive === true && core.module.requiresSharedState(process.env))
-      if (requireHttps && new URL(apiConfig.url).protocol !== 'https:')
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
-
       try {
+        const idempotencyKey = options?.requestId ?? crypto.randomUUID()
         const payload = {
           to: message.to,
           subject: message.subject,
@@ -180,8 +176,7 @@ export function createApiProvider(): ReachProvider {
           template: message.template,
           vars: message.vars,
           extra: message.extra,
-          idempotencyKey: message.idempotencyKey,
-          expiresAt: message.expiresAt,
+          idempotencyKey,
         }
 
         const controller = new AbortController()
@@ -189,16 +184,15 @@ export function createApiProvider(): ReachProvider {
 
         try {
           const headers = new Headers({ 'Content-Type': 'application/json', ...apiConfig.headers })
-          if (message.idempotencyKey)
-            headers.set('Idempotency-Key', message.idempotencyKey)
+          headers.set('Idempotency-Key', idempotencyKey)
           const response = await fetch(apiConfig.url, {
             method: apiConfig.method,
             headers,
             body: JSON.stringify(payload),
             signal: controller.signal,
-            redirect: message.sensitive || apiConfig.redirect !== 'follow'
-              ? 'manual'
-              : 'follow',
+            redirect: apiConfig.redirect === 'follow'
+              ? 'follow'
+              : 'manual',
           })
 
           if (!response.ok) {

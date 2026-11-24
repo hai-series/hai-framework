@@ -1,4 +1,4 @@
-/** 管理端初始凭据采用独立随机秘密和一次性邀请，明文不返回或持久化。 */
+/** 管理端初始设密邀请短期单用，IAM 用户表保存凭据散列。 */
 import type { User } from '../src/index.js'
 import { reldb } from '@h-ai/reldb'
 import { expect, it } from 'vitest'

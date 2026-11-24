@@ -1,10 +1,9 @@
 import type { RequestListener, Server } from 'node:http'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
-import { reach } from '../src/index.js'
+import { HaiReachError, reach } from '../src/index.js'
 
 const servers: Server[] = []
 const message = { provider: 'notify', to: 'fixture@example.invalid', body: 'SYNTHETIC_BUSINESS_BODY' }
@@ -18,29 +17,20 @@ afterEach(async () => {
   }
 })
 
-it('生产敏感发送默认在请求前拒绝 HTTP，显式内网豁免才允许', async () => {
+it('渠道开启 HTTPS 要求时拒绝初始化 HTTP 地址', async () => {
   let received = 0
   const url = await receiver((request, response) => {
     received++
     request.resume()
     response.end('{}')
   })
-  expect((await initialize(url)).success).toBe(true)
-  // 只验证 API 传输策略；生产共享数据库要求由独立状态测试覆盖。
-  const production = vi.spyOn(core.module, 'requiresSharedState').mockReturnValue(true)
-  const sensitive = {
-    ...message,
-    sensitive: true,
-    expiresAt: Date.now() + 60000,
-    idempotencyKey: 'https-required',
-  }
-  expect((await reach.send(sensitive)).success).toBe(false)
+  expect(await initialize(url, { requireHttps: true })).toMatchObject({
+    success: false,
+    error: { code: HaiReachError.CONFIG_ERROR.code },
+  })
   expect(received).toBe(0)
-  await reach.close()
-  production.mockReturnValue(false)
   expect((await initialize(url, { requireHttps: false })).success).toBe(true)
-  production.mockReturnValue(true)
-  expect((await reach.send({ ...sensitive, idempotencyKey: 'trusted-internal-network' })).success).toBe(true)
+  expect((await reach.send(message)).success).toBe(true)
   expect(received).toBe(1)
 })
 
@@ -110,7 +100,7 @@ it.each([
   }
 })
 
-it.each([301, 302, 303, 307, 308])('默认拒绝 %i，敏感发送即使配置 follow 也不转发正文和私有头', async (status) => {
+it.each([301, 302, 303, 307, 308])('默认拒绝 %i 请求，不转发正文和私有头', async (status) => {
   let forwarded = 0
   const target = await receiver((request, response) => {
     forwarded++
@@ -124,19 +114,30 @@ it.each([301, 302, 303, 307, 308])('默认拒绝 %i，敏感发送即使配置 f
   expect((await initialize(source)).success).toBe(true)
   expect((await reach.send(message)).success).toBe(false)
   expect(forwarded).toBe(0)
-  await reach.close()
-  expect((await initialize(source, { redirect: 'follow' })).success).toBe(true)
-  const sensitive = {
-    ...message,
-    sensitive: true,
-    idempotencyKey: `sensitive-${status}`,
-    expiresAt: Date.now() + 60000,
-  }
-  expect((await reach.send(sensitive)).success).toBe(false)
-  expect((await reach.send(sensitive)).success).toBe(false)
-  expect(forwarded).toBe(0)
   const rows = await reldb.sql.query('SELECT * FROM hai_reach_send_log')
-  expect(JSON.stringify(rows)).not.toContain(message.body)
+  expect(rows).toMatchObject({ success: true, data: [] })
+})
+
+it('每次直发自动分配请求编号，并在请求头和 JSON 中使用同一个值', async () => {
+  const received: Array<{ header: string | string[] | undefined, body: string }> = []
+  const url = await receiver((request, response) => {
+    let body = ''
+    request.setEncoding('utf8')
+    request.on('data', chunk => body += chunk)
+    request.on('end', () => {
+      received.push({ header: request.headers['idempotency-key'], body })
+      response.writeHead(204).end()
+    })
+  })
+  expect((await initialize(url)).success).toBe(true)
+  expect((await reach.send(message)).success).toBe(true)
+  expect((await reach.send(message)).success).toBe(true)
+  expect(received).toHaveLength(2)
+  for (const { header, body } of received) {
+    expect(header).toMatch(/^[\da-f-]{36}$/i)
+    expect(JSON.parse(body)).toMatchObject({ idempotencyKey: header })
+  }
+  expect(received[0]?.header).not.toBe(received[1]?.header)
 })
 
 it('普通消息可显式允许重定向，HTTPS 策略在发出请求前校验', async () => {

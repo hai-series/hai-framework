@@ -73,6 +73,11 @@ export const AliyunSmsProviderConfigSchema = z.object({
   accessKeySecret: z.string().min(1, reachM('reach_config_accessKeySecretRequired')),
   /** 短信签名 */
   signName: z.string().min(1, reachM('reach_config_signNameRequired')),
+  /** 按 Reach 模板名配置审核通过的阿里云短信模板编码；消息中的 extra.templateCode 优先。 */
+  templateCodes: z.record(
+    z.string().min(1, reachM('reach_config_templateNameRequired')),
+    z.string().trim().min(1, reachM('reach_smsTemplateCodeRequired')),
+  ).optional(),
   /** 直连 API 端点（默认 dysmsapi.aliyuncs.com）；配置网关时使用网关 URL。 */
   endpoint: z.string().default('dysmsapi.aliyuncs.com'),
   /** 可选的短信隔离网关，以 POST 请求转发已签名的查询参数。 */
@@ -94,20 +99,19 @@ export const ApiProviderConfigSchema = z.object({
   name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('api'),
   /** 回调 URL */
-  url: z.string()
-    .url(reachM('reach_config_urlRequired'))
-    .refine(value => ['http:', 'https:'].includes(new URL(value).protocol), {
-      message: reachM('reach_config_urlRequired'),
-    }),
+  url: z.url({
+    protocol: /^https?$/,
+    error: reachM('reach_config_urlRequired'),
+  }),
   /** HTTP 方法（默认 POST） */
   method: z.enum(['POST', 'PUT']).default('POST'),
   /** 自定义请求头 */
   headers: z.record(z.string(), z.string()).optional(),
   /** 请求超时毫秒数（默认 10000） */
   timeout: z.number().int().min(0).default(10000),
-  /** HTTP 重定向策略；默认拒绝。敏感发送始终拒绝，即使普通发送显式允许。 */
+  /** HTTP 重定向策略，默认拒绝。requireHttps 为 true 时也禁止跟随重定向。 */
   redirect: z.enum(['error', 'follow']).default('error'),
-  /** 强制 HTTPS；省略时生产敏感发送要求 HTTPS，显式 false 仅用于受信内网传输。 */
+  /** 为 true 时只允许 HTTPS 地址。 */
   requireHttps: z.boolean().optional(),
   /** 接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。 */
   idempotent: z.boolean().default(false),

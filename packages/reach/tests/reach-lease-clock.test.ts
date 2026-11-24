@@ -4,6 +4,7 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
+import { HaiReachError } from '../src/index.js'
 import { createSendLogRepository, resetSendLogRepoSingleton } from '../src/repositories/reach-repository-send-log.js'
 
 let environment: Awaited<ReturnType<typeof postgresEnv>> | undefined
@@ -31,7 +32,12 @@ afterAll(async () => {
   }
 })
 
-it('pG 行锁真实等待跨过截止时间后，Reach 旧 owner 续租应失败', async () => {
+it.each([
+  'beginDelivery',
+  'renewClaim',
+  'failClaim',
+  'markSent',
+] as const)('pG 纯行锁等待跨过截止时间后，旧 owner 的 %s 应失败', async (operation) => {
   const created = await createSendLogRepository(reldb)
   expect(created.success).toBe(true)
   if (!created.success)
@@ -51,17 +57,13 @@ it('pG 行锁真实等待跨过截止时间后，Reach 旧 owner 续租应失败
   if (!claimed.success || !claimed.data[0])
     throw new Error('Review fixture did not claim a row')
   const row = claimed.data[0]
-  expect((await repository.beginDelivery(row.id, 'review-old-owner', true, 10000)).success).toBe(true)
+  if (operation !== 'beginDelivery' && operation !== 'failClaim')
+    expect((await repository.beginDelivery(row.id, 'review-old-owner', true, 10000)).success).toBe(true)
+  const shortLease = await reldb.sql.execute('UPDATE hai_reach_send_log SET locked_until = (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint) + 1000 WHERE id = ?', [row.id])
+  expect(shortLease.success).toBe(true)
 
   let held: DmlWithTxOperations | undefined
-  let renewal: ReturnType<typeof repository.renewClaim> | undefined
-  const requested = Promise.withResolvers<void>()
-  const execute = reldb.sql.execute
-  const spy = vi.spyOn(reldb.sql, 'execute').mockImplementation((sql, params) => {
-    if (sql.includes('SET locked_until =') && sql.includes('processing_owner = ?'))
-      requested.resolve()
-    return execute(sql, params)
-  })
+  let pending: ReturnType<typeof repository.renewClaim> | undefined
   try {
     const begun = await reldb.tx.begin()
     expect(begun.success).toBe(true)
@@ -69,37 +71,39 @@ it('pG 行锁真实等待跨过截止时间后，Reach 旧 owner 续租应失败
       return
     held = begun.data
     expect((await held.get('SELECT id FROM hai_reach_send_log WHERE id = ? FOR UPDATE', [row.id])).success).toBe(true)
-    expect((await held.execute('UPDATE hai_reach_send_log SET locked_until = (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint) + 600 WHERE id = ?', [row.id])).success).toBe(true)
-    const expiry = await held.get<{ deadline: string }>('SELECT locked_until AS deadline FROM hai_reach_send_log WHERE id = ?', [row.id])
+    const expiry = await held.get<{ deadline: string, pid: number }>('SELECT locked_until AS deadline, pg_backend_pid() AS pid FROM hai_reach_send_log WHERE id = ?', [row.id])
     expect(expiry.success && expiry.data).toBeTruthy()
     if (!expiry.success || !expiry.data)
       return
-    renewal = repository.renewClaim(row.id, 'review-old-owner', 10000)
-    const controller = new AbortController()
-    try {
-      await Promise.race([
-        requested.promise,
-        delay(5000, undefined, { signal: controller.signal }).then(() => {
-          throw new Error('Renewal did not reach SQL')
-        }),
-      ])
+    const { deadline, pid } = expiry.data
+    const owner = 'review-old-owner'
+    const operations = {
+      beginDelivery: () => repository.beginDelivery(row.id, owner, true, 10000),
+      renewClaim: () => repository.renewClaim(row.id, owner, 10000),
+      failClaim: () => repository.failClaim(row, owner, 'transient_failure'),
+      markSent: () => repository.markSent(row.id, owner),
     }
-    finally {
-      controller.abort()
-    }
-    await delay(1200)
-    const elapsed = await reldb.sql.get<{ now: string }>('SELECT (FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint) AS now')
-    expect(elapsed.success && elapsed.data && Number(elapsed.data.now) > Number(expiry.data.deadline)).toBe(true)
+    pending = operations[operation]()
+    await vi.waitFor(async () => {
+      const blocked = await reldb.sql.get('SELECT pid FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))', [pid])
+      expect(blocked.success && blocked.data).toBeTruthy()
+    }, { timeout: 900, interval: 15 })
+    const blockedAt = await repository.currentTime()
+    expect(blockedAt.success && blockedAt.data < Number(deadline)).toBe(true)
+    if (!blockedAt.success)
+      return
+    await delay(Number(deadline) - blockedAt.data + 20)
     expect((await held.commit()).success).toBe(true)
     held = undefined
-    // 最终 SQL 必须拒绝等待行锁期间已经过期的旧领取。
-    expect((await renewal).success).toBe(false)
+    expect(await pending).toMatchObject({
+      success: false,
+      error: { code: HaiReachError.SEND_FAILED.code },
+    })
   }
   finally {
     if (held)
       await held.rollback()
-    await renewal
-    spy.mockRestore()
+    await pending
   }
 })
 

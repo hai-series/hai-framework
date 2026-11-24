@@ -5,9 +5,9 @@ import { createHmac } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { core } from '@h-ai/core'
-import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { HaiReachError, reach } from '../src/index.js'
+import { AliyunSmsProviderConfigSchema, HaiReachError, reach } from '../src/index.js'
+import { createAliyunSmsProvider } from '../src/providers/reach-provider-aliyun-sms.js'
 
 interface ReceivedRequest {
   method: string | undefined
@@ -63,7 +63,6 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await reach.close()
-  await reldb.close()
   server?.closeAllConnections()
   await new Promise<void>((resolve) => {
     if (server)
@@ -161,9 +160,10 @@ it('只补充请求头时保留静态正文，省略正文时发送无正文请�
     headers: { 'content-type': 'application/json', 'x-trace': 'fixture' },
   })
   expect((await initialize()).success).toBe(true)
-  expect((await reach.send(message)).success).toBe(true)
+  expect((await reach.send({ provider: message.provider, to: message.to })).success).toBe(true)
   expect(requests[1].body).toBe('')
   expect(requests[1].headers['x-trace']).toBeUndefined()
+  expect(new URL(requests[1].path, gatewayUrl).searchParams.get('TemplateCode')).toBe('')
 })
 
 it.each([
@@ -275,26 +275,6 @@ it('异步函数超时即返回，迟到结果不触发发送', async () => {
   expect(requests).toHaveLength(0)
 })
 
-it('凭据在等待函数期间过期时不发请求', async () => {
-  expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  const expiresAt = Date.now() + 60_000
-  expect((await initialize({}, () => {
-    vi.spyOn(Date, 'now').mockReturnValue(expiresAt)
-    return { body: {} }
-  })).success).toBe(true)
-  const result = await reach.send({
-    ...message,
-    sensitive: true,
-    expiresAt,
-    idempotencyKey: 'gateway-expired',
-  })
-  expect(result).toMatchObject({
-    success: false,
-    error: { code: HaiReachError.SEND_FAILED.code },
-  })
-  expect(requests).toHaveLength(0)
-})
-
 it('关闭 Provider 后，在途函数返回也不发请求', async () => {
   const started = Promise.withResolvers<void>()
   const finished = Promise.withResolvers<{ body: string }>()
@@ -311,6 +291,33 @@ it('关闭 Provider 后，在途函数返回也不发请求', async () => {
     error: { code: HaiReachError.SEND_FAILED.code },
   })
   expect(requests).toHaveLength(0)
+})
+
+it('队列许可在等待网关函数期间失效时不发送 HTTP 请求', async () => {
+  const started = Promise.withResolvers<void>()
+  const finished = Promise.withResolvers<{ body: string }>()
+  const sms = createAliyunSmsProvider(() => {
+    started.resolve()
+    return finished.promise
+  })
+  const mayDispatch = vi.fn(() => true)
+  const fetchMock = vi.spyOn(globalThis, 'fetch')
+  try {
+    expect((await sms.connect(AliyunSmsProviderConfigSchema.parse({
+      ...provider,
+      gateway: { url: gatewayUrl, allowInsecureHttp: true },
+    }))).success).toBe(true)
+    const sending = sms.send(message, { mayDispatch })
+    await started.promise
+    mayDispatch.mockReturnValue(false)
+    finished.resolve({ body: 'prepared' })
+    expect(await sending).toMatchObject({ success: false, error: HaiReachError.DND_BLOCKED })
+    expect(fetchMock).not.toHaveBeenCalled()
+  }
+  finally {
+    finished.resolve({ body: '' })
+    await sms.close()
+  }
 })
 
 it.each([

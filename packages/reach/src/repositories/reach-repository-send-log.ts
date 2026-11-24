@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { CrudPageOptions, CrudQueryOptions, DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { CrudPageOptions, CrudQueryOptions, DmlOperations, DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { ReachQueueFailure, ReachQueueStatus, ReachUnknownResolution } from '../reach-types.js'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
@@ -43,6 +43,8 @@ export interface SendLogClaimOptions {
   eligibleBefore?: number
   /** claim 锁持续时间（毫秒） */
   lockMs?: number
+  /** 本轮已完成一次到期维护时跳过重复扫描。 */
+  skipRecovery?: boolean
 }
 
 /**
@@ -142,8 +144,6 @@ export interface StoredSendLog {
  * ```
  */
 export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
-  /** 只结算无载荷的凭据回执；不覆盖已恢复或人工裁定的状态。 */
-  settleSensitive: (queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string) => Promise<HaiResult<void>>
   /**
    * 获取所有待发送记录（按创建时间升序）
    * @param tx - 可选受控数据库事务。
@@ -162,6 +162,10 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
   findPending: (tx?: DmlWithTxOperations) => Promise<HaiResult<StoredSendLog[]>>
   /** 只供扫描批次冻结资格截止点；租约授权仍在最终 SQL 内判断。 */
   currentTime: () => Promise<HaiResult<number>>
+  /** 每轮有界隔离到期投递和耗尽预算的记录。 */
+  recoverExpired: (cutoff?: number) => Promise<HaiResult<void>>
+  /** 仅在本次领取尚未启动外部调用时使用，退回领取次数并保留原退避策略。 */
+  cancelUnsentClaim: (row: StoredSendLog, owner: string) => Promise<HaiResult<void>>
 
   /**
    * 按创建时间顺序 claim 一批待发送记录。
@@ -334,6 +338,16 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 const TABLE_NAME = 'hai_reach_send_log'
 const DEFAULT_CLAIM_BATCH_SIZE = 100
 const DEFAULT_CLAIM_LOCK_MS = 10 * 60 * 1000
+const QUEUE_INDEXES = [
+  {
+    name: 'hai_reach_send_log_status_lock_idx',
+    columns: ['status', 'locked_until'],
+  },
+  {
+    name: 'hai_reach_send_log_status_created_idx',
+    columns: ['status', 'created_at', 'id'],
+  },
+]
 function claimableWhere(clock: string): string {
   return `(attempt_count < max_attempts AND ((status = ? AND next_attempt_at <= ?) OR (status = ? AND updated_at < ? AND (locked_until IS NULL OR locked_until <= ${clock})) OR (status = ? AND updated_at < ? AND retry_safe = TRUE AND locked_until <= ${clock})))`
 }
@@ -639,8 +653,12 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
   if (sendLogRepoInstance && sendLogRepoSqlOps === db.sql)
     return core.ok(sendLogRepoInstance)
 
+  const columns = Object.fromEntries(SEND_LOG_FIELDS.map(field => [field.columnName, field.def]))
+  const created = await db.prepareSchema('hai:reach:send-log-schema', ({ ddl }) => ddl.createTable(TABLE_NAME, columns, true))
   const repo = new DbSendLogRepository(db)
-  const initResult = await repo.ready()
+  const initResult = created.success
+    ? await repo.ready()
+    : created
   if (!initResult.success) {
     return core.err(
       HaiReachError.SEND_FAILED,
@@ -672,9 +690,41 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
         : await this.db.sql.get('SELECT i.indexrelid FROM pg_index i JOIN pg_class t ON t.oid=i.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=i.indkey[0] WHERE t.relname=? AND n.nspname=current_schema() AND i.indisunique AND i.indisvalid AND i.indpred IS NULL AND i.indnkeyatts=1 AND a.attname=?', [TABLE_NAME, 'queue_id'])
     if (!index.success)
       return index
-    return index.data
+    if (!index.data)
+      return core.err(HaiReachError.SEND_FAILED, reachM('reach_sendLogIndexRequired'))
+
+    return this.db.prepareSchema('hai:reach:send-log-indexes', async ({ ddl, sql }) => {
+      for (const { name, columns } of QUEUE_INDEXES) {
+        const created = type === 'mysql'
+          ? await this.ensureMysqlIndex(sql, ddl, name, columns)
+          : await ddl.createIndex(TABLE_NAME, name, { columns })
+        if (!created.success)
+          return created
+      }
+      return core.ok(undefined)
+    })
+  }
+
+  // MySQL 没有 CREATE INDEX IF NOT EXISTS；失败后核对另一个节点是否已创建所需索引。
+  private async ensureMysqlIndex(sql: DmlOperations, ddl: ReldbFunctions['ddl'], name: string, columns: string[]): Promise<HaiResult<void>> {
+    const read = () => sql.query<{ name: string }>(
+      'SELECT column_name AS name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND index_name=? ORDER BY seq_in_index',
+      [TABLE_NAME, name],
+    )
+    let existing = await read()
+    if (!existing.success)
+      return existing
+    if (existing.data.length === 0) {
+      const created = await ddl.createIndex(TABLE_NAME, name, { columns })
+      if (created.success)
+        return created
+      existing = await read()
+      if (!existing.success || existing.data.length === 0)
+        return created
+    }
+    return existing.data.length === columns.length && existing.data.every((field, index) => field.name === columns[index])
       ? core.ok(undefined)
-      : core.err(HaiReachError.SEND_FAILED, reachM('reach_sendLogIndexRequired'))
+      : buildSendLogError(reachM('reach_sendLogIndexRequired'))
   }
 
   /** 共享后端取真正执行时钟；本地 SQLite 保留可控的单进程测试时钟。 */
@@ -693,21 +743,77 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       : buildSendLogError(reachM('reach_claimLost'))
   }
 
-  async settleSensitive(queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string): Promise<HaiResult<void>> {
-    const settled = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, locked_until = NULL, updated_at = ? WHERE queue_id = ? AND status = 'sending' AND body IS NULL AND vars_json IS NULL AND retry_safe = FALSE`,
+  async recoverExpired(cutoff?: number): Promise<HaiResult<void>> {
+    if (cutoff === undefined) {
+      const time = await this.currentTime()
+      if (!time.success)
+        return time
+      cutoff = time.data
+    }
+    const clock = this.clockSql(cutoff)
+    const unknownWhere = (now: string) => `status = 'sending' AND retry_safe = FALSE AND (locked_until IS NULL OR locked_until <= ${now})`
+    const exhaustedWhere = (now: string) => `attempt_count >= max_attempts AND (status = 'pending' OR (status = 'processing' AND (locked_until IS NULL OR locked_until <= ${now}))
+      OR (status = 'sending' AND retry_safe = TRUE AND locked_until <= ${now}))`
+    const eligibleBy = cutoff
+    const recover = async (sql: DmlOperations): Promise<HaiResult<void>> => {
+      const unknown = await this.recoverExpiredRows(sql, unknownWhere, 'unknown', clock, eligibleBy)
+      if (!unknown.success)
+        return unknown
+      return this.recoverExpiredRows(sql, exhaustedWhere, 'dead', clock, eligibleBy)
+    }
+    return this.db.config?.type === 'sqlite'
+      ? recover(this.sql())
+      : this.db.tx.wrapResult(recover)
+  }
+
+  private async recoverExpiredRows(sql: DmlOperations, where: (clock: string) => string, status: 'unknown' | 'dead', clock: string, cutoff: number): Promise<HaiResult<void>> {
+    const update = `UPDATE ${TABLE_NAME}
+      SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
+        ${status === 'dead'
+          ? ', last_failure = \'attempts_exhausted\''
+          : ''}`
+    if (this.db.config?.type === 'sqlite') {
+      const result = await sql.execute(
+        `${update} WHERE id IN (SELECT id FROM ${TABLE_NAME} WHERE ${where(clock)} LIMIT ?)`,
+        [status, DEFAULT_CLAIM_BATCH_SIZE],
+      )
+      return result.success
+        ? core.ok(undefined)
+        : result
+    }
+    // 先不加锁地按固定时间筛选候选，避免 MySQL 锁定被扫描但不匹配的索引区间。
+    const cutoffParams = Array.from({
+      length: status === 'dead'
+        ? 2
+        : 1,
+    }).fill(cutoff)
+    const selected = await sql.query<{ id: string | number }>(
+      `SELECT id FROM ${TABLE_NAME} WHERE ${where('?')} LIMIT ?`,
+      [...cutoffParams, DEFAULT_CLAIM_BATCH_SIZE],
+    )
+    if (!selected.success)
+      return selected
+    if (selected.data.length === 0)
+      return core.ok(undefined)
+    const candidates = selected.data.map(row => row.id)
+    const locked = await sql.query<{ id: string | number }>(
+      `SELECT id FROM ${TABLE_NAME} WHERE id IN (${candidates.map(() => '?').join(', ')}) FOR UPDATE SKIP LOCKED`,
+      candidates,
+    )
+    if (!locked.success)
+      return locked
+    if (locked.data.length === 0)
+      return core.ok(undefined)
+    const result = await sql.execute(
+      `${update} WHERE id IN (${locked.data.map(() => '?').join(', ')}) AND ${where(clock)}`,
       [
         status,
-        messageId ?? null,
-        Date.now(),
-        queueId,
+        ...locked.data.map(row => row.id),
       ],
     )
-    if (!settled.success)
-      return settled
-    return settled.data.changes === 1
+    return result.success
       ? core.ok(undefined)
-      : buildSendLogError(reachM('reach_sensitiveDeliveryUnconfirmed'))
+      : result
   }
 
   constructor(db: ReldbFunctions) {
@@ -716,7 +822,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       fields: SEND_LOG_FIELDS,
       idColumn: 'id',
       idField: 'id',
-      createTableIfNotExists: true,
+      createTableIfNotExists: false,
     })
   }
 
@@ -788,7 +894,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       `SELECT id
        FROM ${TABLE_NAME}
        WHERE ${claimableWhere(clock)}
-       ORDER BY created_at ASC
+       ORDER BY created_at ASC, id ASC
        LIMIT ?
        FOR UPDATE SKIP LOCKED`,
       [
@@ -850,7 +956,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const candidatesResult = await this.findAll({
       where: claimableWhere(clock),
       params: claimableParams(eligibleBefore),
-      orderBy: 'created_at ASC',
+      orderBy: 'created_at ASC, id ASC',
       limit,
     }, tx)
     if (!candidatesResult.success) {
@@ -888,7 +994,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const claimedRowsResult = await this.findAll({
       where: `id IN (${placeholders})`,
       params: ids,
-      orderBy: 'created_at ASC',
+      orderBy: 'created_at ASC, id ASC',
     }, tx)
     if (!claimedRowsResult.success) {
       throw claimedRowsResult.error
@@ -910,6 +1016,12 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const eligibleBefore = Math.min(now, options?.eligibleBefore ?? now)
     const dbType = this.db.config?.type
 
+    if (!options?.skipRecovery) {
+      const recovered = await this.recoverExpired(now)
+      if (!recovered.success)
+        return recovered
+    }
+
     const txResult = await this.db.tx.begin()
     if (!txResult.success) {
       return buildSendLogError(txResult.error.message, txResult.error)
@@ -918,31 +1030,6 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const tx = txResult.data
 
     try {
-      // 可能已产生不可去重的外部副作用：租约过期只能转 unknown，不能被新节点自动重发。
-      const unknown = await tx.execute(
-        `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
-         WHERE status = ? AND retry_safe = FALSE AND (locked_until IS NULL OR locked_until <= ${clock})`,
-        ['unknown', 'sending'],
-      )
-      if (!unknown.success)
-        throw unknown.error
-      // 最后一次领取后崩溃也不能无限接管；有效租约仍须等待到期，非幂等 sending 已先隔离。
-      const exhausted = await tx.execute(
-        `UPDATE ${TABLE_NAME}
-         SET status = ?, last_failure = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
-         WHERE attempt_count >= max_attempts
-           AND (status = ? OR (status = ? AND (locked_until IS NULL OR locked_until <= ${clock}))
-             OR (status = ? AND retry_safe = TRUE AND locked_until <= ${clock}))`,
-        [
-          'dead',
-          'attempts_exhausted',
-          'pending',
-          'processing',
-          'sending',
-        ],
-      )
-      if (!exhausted.success)
-        throw exhausted.error
       const claimedIds = dbType === 'postgresql' || dbType === 'mysql'
         ? await this.claimPendingIdsWithRowLocks(tx, owner, clock, lockMs, limit, eligibleBefore)
         : await this.claimPendingIdsWithConditionalUpdates(tx, owner, clock, lockMs, limit, eligibleBefore)
@@ -972,6 +1059,49 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     }
   }
 
+  async cancelUnsentClaim(row: StoredSendLog, owner: string): Promise<HaiResult<void>> {
+    const retrySafe = row.retrySafe === true
+    const result = await this.sql().execute(
+      `UPDATE ${TABLE_NAME}
+       SET status = 'pending', retry_safe = ?, attempt_count = attempt_count - 1, processing_owner = NULL, locked_until = NULL, updated_at = ${this.clockSql()}
+       WHERE id = ? AND processing_owner = ? AND attempt_count = ? AND status IN ('processing', 'sending')`,
+      [
+        this.db.config?.type === 'postgresql'
+          ? retrySafe
+          : Number(retrySafe),
+        row.id,
+        owner,
+        row.attemptCount,
+      ],
+    )
+    return this.claimUpdateResult(result)
+  }
+
+  private claimUpdateResult(result: Awaited<ReturnType<DmlOperations['execute']>>): HaiResult<void> {
+    if (!result.success)
+      return buildSendLogError(reachM('reach_claimLost'), result.error)
+    return result.data.changes === 1
+      ? core.ok(undefined)
+      : buildSendLogError(reachM('reach_claimLost'))
+  }
+
+  // PostgreSQL 可能在等待未改写元组的行锁之前求值 WHERE；必须在持锁后重新以数据库时钟判断。
+  private withClaimLock(id: number, update: (sql: DmlOperations) => Promise<HaiResult<void>>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
+    if (this.db.config?.type === 'sqlite')
+      return update(this.sql(tx))
+    const lockedUpdate = async (transaction: DmlWithTxOperations): Promise<HaiResult<void>> => {
+      const locked = await transaction.get(`SELECT id FROM ${TABLE_NAME} WHERE id = ? FOR UPDATE`, [id])
+      if (!locked.success)
+        return buildSendLogError(reachM('reach_claimLost'), locked.error)
+      if (!locked.data)
+        return buildSendLogError(reachM('reach_claimLost'))
+      return update(transaction)
+    }
+    return tx
+      ? lockedUpdate(tx)
+      : this.db.tx.wrapResult(lockedUpdate)
+  }
+
   /** 显式取消未完成的领取；仍按失败退避，避免调用方绕过自动重试预算。 */
   async releaseClaim(id: number, owner: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const row = await this.getById(id, tx)
@@ -982,36 +1112,32 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** 失败提交与 owner、次数和有效租约同时比较，旧 worker 不能更改新领取的退避策略。 */
   async failClaim(row: StoredSendLog, owner: string, reason: ReachQueueFailure, permanent = false, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const clock = this.clockSql()
     const dead = permanent || row.attemptCount >= row.maxAttempts
     const delay = Math.min(row.maxRetryDelayMs, row.retryDelayMs * 2 ** Math.min(row.attemptCount - 1, 30))
-    const result = await this.sql(tx).execute(
-      `UPDATE ${TABLE_NAME}
+    return this.withClaimLock(row.id, async (sql) => {
+      const clock = this.clockSql()
+      const result = await sql.execute(
+        `UPDATE ${TABLE_NAME}
        SET status = ?, last_failure = ?, next_attempt_at = ${dead
           ? '0'
           : `${clock} + ?`}, processing_owner = NULL, locked_until = NULL, updated_at = ${clock}
        WHERE id = ? AND processing_owner = ? AND locked_until > ${clock} AND attempt_count = ?
          AND (status = ? OR (status = ? AND retry_safe = TRUE))`,
-      [
-        dead ? 'dead' : 'pending',
-        reason,
-        ...dead
-          ? []
-          : [delay],
-        row.id,
-        owner,
-        row.attemptCount,
-        'processing',
-        'sending',
-      ],
-    )
-    if (!result.success) {
-      return buildSendLogError(result.error.message, result.error)
-    }
-    if (result.data.changes === 0) {
-      return buildSendLogError(reachM('reach_claimLost'))
-    }
-    return core.ok(undefined)
+        [
+          dead ? 'dead' : 'pending',
+          reason,
+          ...dead
+            ? []
+            : [delay],
+          row.id,
+          owner,
+          row.attemptCount,
+          'processing',
+          'sending',
+        ],
+      )
+      return this.claimUpdateResult(result)
+    }, tx)
   }
 
   /** 仅当前 dead 版本可以恢复；保留 queueId，迟到的幂等 API 请求仍使用同一键。 */
@@ -1034,44 +1160,44 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** 发送前持久化门闩；仅有效租约可从 processing 进入 sending。 */
   async beginDelivery(id: number, owner: string, retrySafe: boolean, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
-    const clock = this.clockSql()
     const flag = this.db.config?.type === 'postgresql'
       ? retrySafe
       : Number(retrySafe)
-    const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ${clock} + ?, updated_at = ${clock}
+    return this.withClaimLock(id, async (sql) => {
+      const clock = this.clockSql()
+      const result = await sql.execute(
+        `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ${clock} + ?, updated_at = ${clock}
        WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
-      [
-        'sending',
-        flag,
-        lockMs,
-        id,
-        'processing',
-        owner,
-      ],
-    )
-    return result.success && result.data.changes === 1
-      ? core.ok(undefined)
-      : buildSendLogError(reachM('reach_claimLost'))
+        [
+          'sending',
+          flag,
+          lockMs,
+          id,
+          'processing',
+          owner,
+        ],
+      )
+      return this.claimUpdateResult(result)
+    })
   }
 
   /** 续租不接受已经过期的 owner，防止暂停的旧进程恢复后重新取得发送权。 */
   async renewClaim(id: number, owner: string, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
-    const clock = this.clockSql()
-    const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET locked_until = ${clock} + ?, updated_at = ${clock}
+    return this.withClaimLock(id, async (sql) => {
+      const clock = this.clockSql()
+      const result = await sql.execute(
+        `UPDATE ${TABLE_NAME} SET locked_until = ${clock} + ?, updated_at = ${clock}
        WHERE id = ? AND processing_owner = ? AND status IN (?, ?) AND locked_until > ${clock}`,
-      [
-        lockMs,
-        id,
-        owner,
-        'processing',
-        'sending',
-      ],
-    )
-    return result.success && result.data.changes === 1
-      ? core.ok(undefined)
-      : buildSendLogError(reachM('reach_claimLost'))
+        [
+          lockMs,
+          id,
+          owner,
+          'processing',
+          'sending',
+        ],
+      )
+      return this.claimUpdateResult(result)
+    })
   }
 
   /** 未知结果只能停止自动处理，不推断外部副作用已撤销。 */
@@ -1110,25 +1236,21 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** 只有仍持有 sending 有效租约的 owner 可以确认投递。 */
   async markSent(id: number, owner: string, messageId?: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const clock = this.clockSql()
-    const result = await this.sql(tx).execute(
-      `UPDATE ${TABLE_NAME}
+    return this.withClaimLock(id, async (sql) => {
+      const clock = this.clockSql()
+      const result = await sql.execute(
+        `UPDATE ${TABLE_NAME}
        SET status = ?, message_id = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
        WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
-      [
-        'sent',
-        messageId ?? null,
-        id,
-        'sending',
-        owner,
-      ],
-    )
-    if (!result.success) {
-      return buildSendLogError(result.error.message, result.error)
-    }
-    if (result.data.changes === 0) {
-      return buildSendLogError(reachM('reach_claimLost'))
-    }
-    return core.ok(undefined)
+        [
+          'sent',
+          messageId ?? null,
+          id,
+          'sending',
+          owner,
+        ],
+      )
+      return this.claimUpdateResult(result)
+    }, tx)
   }
 }

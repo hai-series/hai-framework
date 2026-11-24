@@ -48,6 +48,7 @@ describe('reach config', () => {
           accessKeyId: 'AK',
           accessKeySecret: 'SK',
           signName: '签名',
+          templateCodes: { otp_sms: 'SMS_OTP', password_reset_sms: 'SMS_RESET' },
         },
         { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
       ],
@@ -55,6 +56,9 @@ describe('reach config', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.providers).toHaveLength(3)
+      expect(result.data.providers[1]).toMatchObject({
+        templateCodes: { otp_sms: 'SMS_OTP', password_reset_sms: 'SMS_RESET' },
+      })
     }
   })
 
@@ -107,10 +111,10 @@ describe('reach config', () => {
     }
   })
 
-  it('api 配置应拒绝非 HTTP(S) 回调地址', () => {
+  it.each(['file:///etc/passwd', 'not-a-url'])('api 配置应安全拒绝无效回调地址 %s', (url) => {
     const result = ReachConfigSchema.safeParse({
       providers: [
-        { name: 'webhook', type: 'api', url: 'file:///etc/passwd' },
+        { name: 'webhook', type: 'api', url },
       ],
     })
 

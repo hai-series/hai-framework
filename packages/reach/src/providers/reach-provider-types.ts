@@ -21,7 +21,7 @@ import type { ReachMessage, SendResult } from '../reach-types.js'
 export interface ReachProvider {
   /** Provider 名称 */
   readonly name: string
-  /** 外部Provider的true必须按message.idempotencyKey持久去重；console仅标记开发日志可重试，不提供真实投递保证。 */
+  /** 外部渠道设为 true 时，接收端按请求编号持久去重。Console 的本地输出可重复执行。 */
   readonly supportsIdempotency: boolean
   /**
    * 连接/初始化 Provider
@@ -41,6 +41,9 @@ export interface ReachProvider {
   /**
    * 发送消息
    * @param message - 实际操作输入，按本方法约束校验。
+   * @param options - 队列发送的内部选项。
+   * @param options.mayDispatch - 外发前重查许可。
+   * @param options.requestId - 此次队列投递复用的队列编号。
    * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
    *
    * @example 模块内部上下文
@@ -52,7 +55,7 @@ export interface ReachProvider {
    * }
    * ```
    */
-  send: (message: ReachMessage) => Promise<HaiResult<SendResult>>
+  send: (message: ReachMessage, options?: { mayDispatch?: () => boolean, requestId?: string }) => Promise<HaiResult<SendResult>>
   /**
    * 关闭连接
    *

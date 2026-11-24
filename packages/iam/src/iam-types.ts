@@ -110,7 +110,7 @@ export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
 // ─── 初始化配置 ───
 
 /**
- * 已成功发布的认证通知上下文；发送服务必须按幂等键持久化去重。
+ * 自定义发送回调收到的认证通知上下文，可用签发编号识别同一次操作。
  * 回调抛错代表送达结果未知；IAM 不自动重发，也不回滚已经发布的凭据。
  * @example
  * ```ts
@@ -143,6 +143,7 @@ export interface IamConfigInput extends IamConfigSettingsInput {
   /**
    * 可选、已初始化的触达模块；由应用安装并注入，IAM 不导入或关闭该模块。
    * 自动使用 otp_email、otp_sms、password_reset、password_reset_sms 模板；显式发送回调优先。
+   * 内置验证码、密码重置和初始设密邀请均跳过 Reach 免打扰时段，尝试立即发送。
    */
   reach?: ReachFunctions
   /** LDAP 客户端工厂（可选）；启用 LDAP 且未注入时才加载应用安装的 ldapts。 */

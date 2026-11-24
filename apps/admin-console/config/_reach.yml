@@ -19,8 +19,10 @@ providers:
     # 说明：后端或功能类型，按枚举选择
     # 取值：字符串；取值：console | smtp | aliyun-sms | api
     type: ${HAI_REACH_PROVIDERS_1_TYPE:console}
+    # 改用 aliyun-sms 直连时，补齐连接配置并将示例换成 otp_sms 对应的已审核编码。
+    # templateCodes: # 说明：按 Reach 模板名配置审核通过的阿里云短信模板编码；消息中的 extra.templateCode 优先。；取值：配置块（填写下方缩进字段）
+    #   otp_sms: SMS_100000001
 
-# 模板配置
 # 说明：模板配置（通过配置文件注册）
 # 取值：列表（每项以 - 开头）
 templates:

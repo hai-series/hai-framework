@@ -1,5 +1,5 @@
 /** 将已初始化 Reach 的标准模板接入 IAM，显式回调可覆盖默认发送。 */
-import type { IamConfigInput, IamNotificationContext } from './iam-types.js'
+import type { IamConfigInput } from './iam-types.js'
 import { iamM } from './iam-i18n.js'
 
 /**
@@ -27,28 +27,23 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
   const templates = await reach.template.list()
   if (!templates.success)
     throw new Error(iamM('iam_securityStateFailed'))
-  const configured = new Map(templates.data.map(template => [template.name, template.provider]))
-  async function send(template: string, to: string, vars: Record<string, string>, context: IamNotificationContext) {
-    const provider = configured.get(template)
-    if (!reach?.isInitialized || !provider || !to)
+  const configured = new Set(templates.data.map(template => template.name))
+  async function send(template: string, to: string, vars: Record<string, string>) {
+    if (!reach?.isInitialized || !to)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
-    // Reach 的返回结果与投递状态都必须成功，不能把 HTTP/调用完成当作通知送达。
     const result = await reach.send({
-      provider,
       to,
       template,
       vars,
-      idempotencyKey: context.idempotencyKey,
-      sensitive: true,
-      expiresAt: context.expiresAt.getTime(),
+      ignoreDnd: true,
     })
-    if (!result.success || !result.data.success)
+    if (!result.success || !result.data.success || result.data.deferred)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
   }
   if (needsEmail && configured.has('otp_email'))
-    callbacks.onOtpSendEmail = (email, code, context) => send('otp_email', email, { code }, context)
+    callbacks.onOtpSendEmail = (email, code) => send('otp_email', email, { code })
   if (needsSms && configured.has('otp_sms'))
-    callbacks.onOtpSendSms = (phone, code, context) => send('otp_sms', phone, { code }, context)
+    callbacks.onOtpSendSms = (phone, code) => send('otp_sms', phone, { code })
   const resetTemplate = input.passwordReset?.mode === 'phone'
     ? 'password_reset_sms'
     : 'password_reset'
@@ -65,7 +60,7 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
       }
       return send(resetTemplate, input.passwordReset?.mode === 'phone'
         ? user.phone ?? ''
-        : user.email ?? '', vars, context)
+        : user.email ?? '', vars)
     }
   }
   return callbacks

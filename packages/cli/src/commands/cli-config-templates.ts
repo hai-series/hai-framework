@@ -929,6 +929,9 @@ providers:
   #   accessKeySecret: \${HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
+  #   templateCodes: # 将示例编码替换为各本地模板对应的阿里云已审核编码
+  #     otp_sms: SMS_100000001
+  #     password_reset_sms: SMS_100000002
   #   gateway: # 可选；配置后向完整 URL 发送 POST
   #     url: https://sms-gateway.example.com/dx
   #     headers:
@@ -965,7 +968,7 @@ templates: []
 #     provider: sms
 #     body: "Reset your password: {resetUrl}. Expires at {expiresAt}."
 
-# 免打扰（可选）
+# 免打扰（可选）。IAM 内置验证码、重置和设密邀请会跳过免打扰。
 # dnd:
 #   enabled: true
 #   strategy: delay

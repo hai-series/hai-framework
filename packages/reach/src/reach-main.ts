@@ -23,7 +23,7 @@ import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
 import { ReachConfigSchema, ReachDeadRequeueSchema, ReachQueueIdSchema, ReachQueueListSchema, ReachUnknownResolutionSchema } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
-import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
+import { executeSend, startDndScheduler, stopDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
 import {
   HaiReachError,
@@ -158,7 +158,15 @@ async function doClose(): Promise<void> {
 
   logger.info('Closing reach module')
 
-  for (const [name, provider] of providers.entries()) {
+  const closingProviders = providers
+  providers = new Map()
+  currentConfig = null
+  dndConfig = undefined
+  templateRegistry = createTemplateRegistry()
+  sendLogRepo = null
+
+  await stopDndScheduler()
+  for (const [name, provider] of closingProviders.entries()) {
     try {
       await provider.close()
     }
@@ -167,14 +175,8 @@ async function doClose(): Promise<void> {
     }
   }
 
-  providers = new Map()
-  currentConfig = null
-  dndConfig = undefined
-  templateRegistry = createTemplateRegistry()
-  sendLogRepo = null
   resetSendLogRepoSingleton()
   resetTemplateRepoSingleton()
-  resetSendState()
 
   logger.info('Reach module closed')
 }
@@ -270,10 +272,7 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
     sendLogRepo = candidateSendLogRepo
     published = true
 
-    // 启动 DND 恢复定时器
-    if (dndConfig) {
-      startDndScheduler(dndConfig, providers, sendLogRepo)
-    }
+    startDndScheduler(dndConfig, providers, sendLogRepo)
 
     const providerNames = parsed.providers.map(p => p.name)
     logger.info('Reach module initialized', { providers: providerNames })
@@ -457,10 +456,7 @@ export const reach: ReachFunctions = {
       return notInitialized.result()
     }
 
-    const send = () => executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
-    return message.sensitive
-      ? core.context.run({ suppressLogObservers: true }, send)
-      : send()
+    return executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
   },
 
   get template(): ReachTemplateRegistry {
@@ -497,7 +493,8 @@ export const reach: ReachFunctions = {
     if (closeInProgress)
       return closeInProgress
     closeInProgress = (async () => {
-      await initCompletion
+      if (initCompletion)
+        await initCompletion
       await doClose()
     })()
     try {

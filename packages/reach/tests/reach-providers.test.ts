@@ -452,8 +452,7 @@ describe('api provider', () => {
       template: 'tpl1',
       vars: { key: 'value' },
       extra: { custom: true },
-      idempotencyKey: 'stable-queue-receipt',
-    })
+    }, { requestId: 'stable-queue-receipt' })
 
     expect(capturedMethod).toBe('POST')
     expect(capturedHeaders.get('Authorization')).toBe('Bearer test-token')

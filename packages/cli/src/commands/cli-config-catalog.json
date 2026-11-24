@@ -6011,7 +6011,7 @@
     "name": "HAI_REACH_PROVIDERS_0_REDIRECT",
     "module": "reach",
     "path": "reach.providers.0.redirect",
-    "description": "HTTP 重定向策略；默认拒绝。敏感发送始终拒绝，即使普通发送显式允许。",
+    "description": "HTTP 重定向策略，默认拒绝。requireHttps 为 true 时也禁止跟随重定向。",
     "value": "error",
     "constraint": "字符串；取值：error | follow"
   },
@@ -6019,7 +6019,7 @@
     "name": "HAI_REACH_PROVIDERS_0_REQUIREHTTPS",
     "module": "reach",
     "path": "reach.providers.0.requireHttps",
-    "description": "强制 HTTPS；省略时生产敏感发送要求 HTTPS，显式 false 仅用于受信内网传输。",
+    "description": "为 true 时只允许 HTTPS 地址。",
     "value": "",
     "constraint": "true | false"
   },
@@ -6038,6 +6038,14 @@
     "description": "短信签名",
     "value": "",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_TEMPLATECODES",
+    "module": "reach",
+    "path": "reach.providers.0.templateCodes",
+    "description": "按 Reach 模板名配置审核通过的阿里云短信模板编码；消息中的 extra.templateCode 优先。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_REACH_PROVIDERS_0_TIMEOUT",
