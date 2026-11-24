@@ -7,7 +7,7 @@ Hai Framework 的静态官网与使用手册，使用 `@h-ai/ui`、公共主题�
 - 顶栏提供浅色、深色和液态玻璃主题。打开首页或手册深链接时会恢复已保存的选择。
 - 首页提供功能特点、四类 CLI 模板实际截图、快速上手、按职责阅读入口与 GitHub 入口。每项能力可进入对应使用指南，模板截图可打开原图。中文手册的 `/docs/` 地址继续使用，英文和日文手册分别位于 `/docs/en/` 和 `/docs/ja/`。切换语言会打开同一章，目标译文含同一个锚点时也保留所读小节。
 - 文档正文直接读取人工维护的 [docs/usage](../../docs/usage/README.md)，目录直接读取 [navigation.json](../../docs/usage/navigation.json)。左侧按章折叠，默认展开当前章，搜索和跨章导航后跟随更新，当前页突出显示。修改正文或目录后重新构建即可，不再维护另一份说明。
-- 相对文档和图片链接映射到 `/hai-framework/` 下的静态页面和截图；仓库源码、规范链接指向 GitHub。
+- 相对文档和图片链接分别映射到 `/docs/` 和 `/guide-images/` 下的静态页面和截图。仓库源码和规范链接指向 GitHub。
 - 每种语言有自己的全文索引。缺译文的搜索结果会标明中文来源，点开后仍使用当前语言的目录。索引加载失败通过公共 Toast 提示，用户可在搜索窗口重新加载。
 - 使用文档截图和流程图由 Vite 从 `docs/usage/images` 输出，每次构建只包含当前图片。Kit 静态资源目录为 `public/`，包含网站图标与模板预览原图。PNG 与 SVG 的宽高在构建时读取，预留布局空间，保证文档锚点跳转稳定。
 - 文档代码块保留语言标识，公共 `MarkdownRenderer` 安全重建高亮和复制按钮；`schema=...` 只用于示例校验。配置说明使用可复制的文字和代码，截图保留实际界面与操作状态，不发布终端结果表格图。
@@ -48,9 +48,9 @@ pnpm --filter framework-website compile:pages
 pnpm --filter framework-website start
 ```
 
-构建命令也可以使用 `pnpm --filter framework-website build`，通过框架 `hai build` 调用本应用的 `compile` 脚本。产物目录为 `apps/framework-website/build`，静态适配器完整预渲染所有页面，含 `.nojekyll`。预览地址为 `http://127.0.0.1:4297/hai-framework/`。缺少构建首页时，预览器立即退出并提示先执行 `pnpm build`，避免启动后持续返回 404。`start:test` 和 `start:prod` 使用同一个静态预览器；它们不会启动 Node 应用后端。
+构建命令也可以使用 `pnpm --filter framework-website build`，通过框架 `hai build` 调用本应用的 `compile` 脚本。产物目录为 `apps/framework-website/build`，静态适配器完整预渲染所有页面，含 `.nojekyll`。预览地址为 `http://127.0.0.1:4297/`。缺少构建首页时，预览器立即退出并提示先执行 `pnpm build`，避免启动后持续返回 404。`start:test` 和 `start:prod` 使用同一个静态预览器；它们不会启动 Node 应用后端。
 
-GitHub Pages 目标地址为 `https://hai-series.github.io/hai-framework/`。仓库子路径固定在 `vite.config.ts` 的 SvelteKit 插件，发布工作流上传上述构建目录。更新根 `package.json` 的版本后需要重新构建，页面仅公开读取其中的版本字段。文档、导航和版本文件均属于应用构建缓存输入。
+GitHub Pages 发布到 `https://framework.hai-infra.com/` 的根路径。`vite.config.ts` 中 SvelteKit 的 `paths.base` 为空字符串，发布工作流上传上述构建目录。更新根 `package.json` 的版本后需要重新构建，页面仅公开读取其中的版本字段。文档、导航和版本文件均属于应用构建缓存输入。
 
 本应用只维护静态文件与 GitHub Pages 发布流程，未提供 Dockerfile、镜像构建或后端服务部署配置。`hai.json` 保留空对象；`hai build` 的默认 compile 流程直接调用 package.json 的 `compile` 脚本，不需要镜像声明。`start`、`start:test`、`start:prod` 仅用于本机静态预览，不是生产服务部署命令。
 

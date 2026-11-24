@@ -103,7 +103,7 @@ pnpm run deploy --env prod --services web
 
 ## 请求访问策略
 
-Serv/SvelteKit 后端的策略快照、只读挂载、环境覆盖、代理信任和增量保留见[请求访问配置手册](https://hai-series.github.io/hai-framework/docs/configuration/request-access/)，也可读取工程交付的 `hai-core/request-access.md`；纯客户端由实际后端管理这些设置。默认快照模式通过新包更新，恢复使用原成功发布文件，不覆盖旧发布目录。需要运维文件重启加载时，先按变更方案确认流程说明启动方式和优先级变化；独立外部文件需另行备份，SDK 回滚不恢复它。
+Serv/SvelteKit 后端的策略快照、只读挂载、环境覆盖、代理信任和增量保留见[请求访问配置手册](https://framework.hai-infra.com/docs/configuration/request-access/)，也可读取工程交付的 `hai-core/request-access.md`；纯客户端由实际后端管理这些设置。默认快照模式通过新包更新，恢复使用原成功发布文件，不覆盖旧发布目录。需要运维文件重启加载时，先按变更方案确认流程说明启动方式和优先级变化；独立外部文件需另行备份，SDK 回滚不恢复它。
 
 ## 自建对象存储直连
 

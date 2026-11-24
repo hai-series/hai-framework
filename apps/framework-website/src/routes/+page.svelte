@@ -93,7 +93,7 @@
   <meta name='description' content={m.site_description()} />
   <meta property='og:title' content='hai-framework' />
   <meta property='og:description' content={m.site_description()} />
-  <link rel='canonical' href='https://hai-series.github.io/hai-framework/' />
+  <link rel='canonical' href='https://framework.hai-infra.com/' />
 </svelte:head>
 
 <div class='home-shell'>

@@ -7,10 +7,10 @@
 [![npm 最新版](https://img.shields.io/npm/v/%40h-ai%2Fcli?label=npm%20latest)](https://www.npmjs.com/package/@h-ai/cli)
 [![CI](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml)
-[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
+[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://framework.hai-infra.com/)
 [![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-[官网与模板预览](https://hai-series.github.io/hai-framework/) · [使用指南](docs/usage/README.md) · [配置手册](docs/usage/configuration/README.md) · [发布记录](https://github.com/hai-series/hai-framework/releases/latest)
+[官网与模板预览](https://framework.hai-infra.com/) · [使用指南](docs/usage/README.md) · [配置手册](docs/usage/configuration/README.md) · [发布记录](https://github.com/hai-series/hai-framework/releases/latest)
 
 hai-framework 是面向 AI 时代的全栈应用研发与交付框架。它以统一、可组合的 TypeScript 技术体系连接 AI、数据、安全、界面与工程工具，让开发者与 AI 助手共用契约、配置、规范和验证流程，贯通从应用构建、多端交付到持续演进的完整过程。智能能力既融入开发过程，也成为应用本身的一部分。
 
@@ -86,7 +86,7 @@ CLI 默认安装依赖并初始化 Git。首次使用 `admin` 登录，随机初
 | Website     | 企业官网、产品站与静态文档站         | `--type website`                   |
 | H5 / Mobile | 移动网页或 Capacitor 应用            | `--type h5` / `--type mobile-app`  |
 
-[官网提供 Fullstack、Website、Admin、Mobile 四类模板的实际页面预览](https://hai-series.github.io/hai-framework/#template-previews)。Website 默认 SSR，静态托管需按[静态构建说明](docs/usage/configuration/delivery.md#静态website与github-pages)配置；原生安装包需要对应平台工具链。
+[官网提供 Fullstack、Website、Admin、Mobile 四类模板的实际页面预览](https://framework.hai-infra.com/#template-previews)。Website 默认 SSR，静态托管需按[静态构建说明](docs/usage/configuration/delivery.md#静态website与github-pages)配置；原生安装包需要对应平台工具链。
 
 ### 构建与发布
 

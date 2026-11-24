@@ -12,7 +12,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'pnpm build && pnpm start',
-    url: 'http://127.0.0.1:4297/hai-framework/',
+    url: 'http://127.0.0.1:4297/',
     reuseExistingServer: false,
     timeout: 180_000,
   },

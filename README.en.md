@@ -7,10 +7,10 @@
 [![npm latest](https://img.shields.io/npm/v/%40h-ai%2Fcli?label=npm%20latest)](https://www.npmjs.com/package/@h-ai/cli)
 [![CI](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml)
-[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
+[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://framework.hai-infra.com/)
 [![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-[Website and template previews](https://hai-series.github.io/hai-framework/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.en.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
+[Website and template previews](https://framework.hai-infra.com/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.en.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
 
 hai-framework is a full-stack application development and delivery framework for the AI era. Its unified, composable TypeScript foundation connects AI, data, security, interfaces and engineering tools. Developers and AI assistants share contracts, configuration, project guidance and validation workflows, from building applications to delivery across platforms and continued evolution. AI becomes part of both the development process and the applications themselves.
 
@@ -84,7 +84,7 @@ The installation version follows [npm's latest tag](https://www.npmjs.com/packag
 | Website     | Corporate, product and static documentation sites     | `--type website`                   |
 | H5 / Mobile | Mobile web or Capacitor application                   | `--type h5` / `--type mobile-app`  |
 
-[Explore real Fullstack, Website, Admin and Mobile previews](https://hai-series.github.io/hai-framework/#template-previews). Website uses SSR by default; follow the [static build instructions](docs/usage/configuration/delivery.md#静态website与github-pages) for static hosting. Native packages require the platform toolchain.
+[Explore real Fullstack, Website, Admin and Mobile previews](https://framework.hai-infra.com/#template-previews). Website uses SSR by default; follow the [static build instructions](docs/usage/configuration/delivery.md#静态website与github-pages) for static hosting. Native packages require the platform toolchain.
 
 ### Build and release
 

@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-test('官网在仓库子路径呈现，模板预览、导航、全文搜索与深链刷新可用', async ({ page, request }, testInfo) => {
+test('官网在根路径呈现，模板预览、导航、全文搜索与深链刷新可用', async ({ page, request }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto('/hai-framework/')
+  await page.goto('/')
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://framework.hai-infra.com/')
   await expect(page.getByRole('heading', { level: 1 })).toContainText('从一个想法')
   const previews = page.locator('[data-template-preview]')
   await expect(previews).toHaveCount(4)
@@ -15,7 +16,7 @@ test('官网在仓库子路径呈现，模板预览、导航、全文搜索与�
     const href = await preview.getByRole('link').getAttribute('href')
     const target = new URL(href!, page.url())
     expect(target.origin).toBe(new URL(page.url()).origin)
-    expect(target.pathname).toMatch(/^\/hai-framework\/(?:guide-images|template-previews)\//)
+    expect(target.pathname).toMatch(/^\/(?:guide-images|template-previews)\//)
     expect((await request.get(target.href)).status()).toBe(200)
   }
   for (const link of await page.locator('.feature-card > a').all()) {
@@ -35,14 +36,14 @@ test('官网在仓库子路径呈现，模板预览、导航、全文搜索与�
   const originalPage = page.waitForEvent('popup')
   await previews.first().getByRole('link').click()
   const original = await originalPage
-  await expect(original).toHaveURL(/\/hai-framework\/template-previews\/fullstack-users\.png$/)
+  await expect(original).toHaveURL('/template-previews/fullstack-users.png')
   await original.close()
   await page.getByRole('button', { name: '搜索文档', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('searchbox').fill('maxAge')
   await expect(dialog.locator('.search-results a').first()).toBeVisible()
   await dialog.locator('.search-results a').filter({ hasText: '登录、密码' }).first().click()
-  await expect(page).toHaveURL(/\/hai-framework\/docs\/configuration\/identity\//)
+  await expect(page).toHaveURL(url => url.pathname === '/docs/configuration/identity/')
   await page.reload()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('登录、密码')
   const sidebar = page.locator('.documentation-sidebar')
@@ -75,7 +76,7 @@ test('官网在仓库子路径呈现，模板预览、导航、全文搜索与�
 })
 
 test('三语首页和深色主题可切换并保留选择', async ({ page }, testInfo) => {
-  await page.goto('/hai-framework/')
+  await page.goto('/')
   await page.getByRole('button', { name: /语言|language|言語/i }).click()
   await page.getByRole('button', { name: /English/ }).click()
   await expect(page.getByRole('link', { name: 'Quick start', exact: true })).toBeVisible()
@@ -108,7 +109,7 @@ test('三语首页和深色主题可切换并保留选择', async ({ page }, tes
 })
 
 test('液态玻璃主题刷新后保留，文档搜索浮层可用', async ({ page }, testInfo) => {
-  await page.goto('/hai-framework/')
+  await page.goto('/')
   const themeSelector = page.getByRole('button', { name: '选择主题' })
   await themeSelector.click()
   await page.getByRole('button', { name: '液态玻璃' }).click()
@@ -121,7 +122,7 @@ test('液态玻璃主题刷新后保留，文档搜索浮层可用', async ({ pa
     path: testInfo.outputPath('website-home-liquid-glass.png'),
   })
 
-  await page.goto('/hai-framework/docs/configuration/runtime/')
+  await page.goto('/docs/configuration/runtime/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'liquid-glass')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.screenshot({
@@ -148,7 +149,7 @@ test('液态玻璃主题刷新后保留，文档搜索浮层可用', async ({ pa
 })
 
 test('文档切换保留章节与共享锚点，目录和搜索使用当前语言', async ({ page, request }) => {
-  const docs = '/hai-framework/docs'
+  const docs = '/docs'
   const english = await request.get(`${docs}/en/function/core/`)
   expect(await english.text()).toContain('lang="en-US"')
   await page.goto(`${docs}/function/core/#config-api`)
@@ -193,12 +194,12 @@ test('文档切换保留章节与共享锚点，目录和搜索使用当前语�
 })
 
 test('三级配置目录、接口配置代码与账号操作图在桌面和手机可读', async ({ page }, testInfo) => {
-  await page.goto('/hai-framework/docs/configuration/http/')
+  await page.goto('/docs/configuration/http/')
   const sidebar = page.locator('.documentation-sidebar')
   const policyLink = sidebar.getByRole('link', { name: '请求来源、时段与接口加密', exact: true })
   await expect(policyLink).toBeVisible()
   await policyLink.click()
-  await expect(page).toHaveURL(/\/hai-framework\/docs\/configuration\/request-access\/$/)
+  await expect(page).toHaveURL('/docs/configuration/request-access/')
   await expect(policyLink).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('article code').filter({ hasText: 'days: [1], start:' }).first()).toHaveText('days: [1], start: \'22:00\', end: \'02:00\'')
   await expect(sidebar.locator('[data-doc-section="configuration"]')).toHaveAttribute('open')
@@ -238,7 +239,7 @@ test('三级配置目录、接口配置代码与账号操作图在桌面和手�
 
 test('代码示例高亮，复制保留空行和缩进，深色主题和窄屏可读', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.goto('/hai-framework/docs/configuration/runtime/')
+  await page.goto('/docs/configuration/runtime/')
   const yaml = page.locator('.hai-md-code-block').filter({
     has: page.locator('code.language-yaml'),
   }).first()
@@ -261,7 +262,7 @@ test('代码示例高亮，复制保留空行和缩进，深色主题和窄屏�
   await page.screenshot({
     path: testInfo.outputPath('website-yaml-highlight-dark.png'),
   })
-  await page.goto('/hai-framework/docs/configuration/delivery/')
+  await page.goto('/docs/configuration/delivery/')
   const powershell = page.locator('code.language-powershell').first()
   await powershell.scrollIntoViewIfNeeded()
   await expect(powershell.locator('span[style*="color:"]').first()).toBeAttached()
@@ -272,7 +273,7 @@ test('代码示例高亮，复制保留空行和缩进，深色主题和窄屏�
     path: testInfo.outputPath('website-command-highlight-mobile.png'),
   })
 
-  await page.goto('/hai-framework/docs/function/core/')
+  await page.goto('/docs/function/core/')
   const typescript = page.locator('article .hai-md-code-block').filter({
     has: page.locator('code.language-ts'),
     hasText: 'const runtime = core.module.createRuntime([',
@@ -285,7 +286,7 @@ test('代码示例高亮，复制保留空行和缩进，深色主题和窄屏�
 })
 
 test('配置流程图可加载、保留比例，手机端可以打开原图阅读', async ({ page }) => {
-  await page.goto('/hai-framework/docs/configuration/data/')
+  await page.goto('/docs/configuration/data/')
   const diagram = page.locator('article img[src$="storage-private-download.svg"]')
   // Markdown 水合可能换掉预渲染节点，每次检查都定位当前图片并触发懒加载。
   await expect.poll(() => diagram.evaluate((element) => {
@@ -298,12 +299,12 @@ test('配置流程图可加载、保留比例，手机端可以打开原图阅�
   expect(await diagram.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(390)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   await diagram.locator('..').click()
-  await expect(page).toHaveURL(/\/hai-framework\/guide-images\/storage-private-download\.svg$/)
+  await expect(page).toHaveURL('/guide-images/storage-private-download.svg')
 })
 
 test('390像素官网预览和文档可操作，不出现整页横向溢出', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/hai-framework/docs/configuration/delivery/')
+  await page.goto('/docs/configuration/delivery/')
   await page.getByText('文档目录', { exact: true }).click()
   await page.locator('.mobile-doc-navigation').getByRole('link', { name: '数据库、缓存、文件与文本' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('数据库、缓存')
@@ -314,7 +315,7 @@ test('390像素官网预览和文档可操作，不出现整页横向溢出', as
     path: testInfo.outputPath('website-mobile.png'),
     fullPage: false,
   })
-  await page.goto('/hai-framework/')
+  await page.goto('/')
   for (const screenshot of await page.locator('[data-template-preview] img').all()) {
     await screenshot.scrollIntoViewIfNeeded()
     await expect(screenshot).toHaveJSProperty('complete', true)
@@ -342,7 +343,7 @@ test('搜索索引故障只提示一次，明确重试后恢复', async ({ page 
     else
       await route.continue()
   })
-  await page.goto('/hai-framework/')
+  await page.goto('/')
   await page.getByRole('button', { name: '搜索文档', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(page.getByRole('alert')).toContainText('文档搜索暂时不可用')

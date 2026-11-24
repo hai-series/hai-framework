@@ -73,7 +73,7 @@ export default defineConfig(({ mode, command }) => {
         files: { assets: 'public' },
         env: { dir: './.svelte-kit' },
         adapter: adapter({ pages: 'build', assets: 'build', strict: true }),
-        paths: { base: '/hai-framework', relative: false },
+        paths: { base: '', relative: false },
       }),
       tailwindcss(),
       paraglideVitePlugin({

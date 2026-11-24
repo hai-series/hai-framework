@@ -58,11 +58,11 @@ it('畸形路径返回400且预览继续服务，链接目录不能暴露构建�
         response.on('end', () => resolve({ status: response.statusCode, body }))
       }).on('error', reject)
     })
-    expect(await request('/hai-framework/%')).toEqual({ status: 400, body: '' })
-    expect(await request('/hai-framework/')).toEqual({ status: 200, body: '<h1>owned preview</h1>' })
-    expect(await request('/hai-framework/linked/secret.txt')).toEqual({ status: 404, body: '' })
-    expect(await request('/hai-framework/linked-secret.txt')).toEqual({ status: 404, body: '' })
-    expect(await request('/hai-framework/')).toEqual({ status: 200, body: '<h1>owned preview</h1>' })
+    expect(await request('/%')).toEqual({ status: 400, body: '' })
+    expect(await request('/')).toEqual({ status: 200, body: '<h1>owned preview</h1>' })
+    expect(await request('/linked/secret.txt')).toEqual({ status: 404, body: '' })
+    expect(await request('/linked-secret.txt')).toEqual({ status: 404, body: '' })
+    expect(await request('/')).toEqual({ status: 200, body: '<h1>owned preview</h1>' })
   }
   finally {
     child?.kill()

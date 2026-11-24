@@ -42,11 +42,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(400).end()
     return
   }
-  if (!pathname.startsWith('/hai-framework/')) {
-    response.writeHead(404).end()
-    return
-  }
-  let file = path.resolve(root, `.${pathname.slice('/hai-framework'.length)}`)
+  let file = path.resolve(root, `.${pathname}`)
   if (!file.startsWith(`${root}${path.sep}`) && file !== root) {
     response.writeHead(403).end()
     return

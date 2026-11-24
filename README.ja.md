@@ -7,10 +7,10 @@
 [![npm 最新版](https://img.shields.io/npm/v/%40h-ai%2Fcli?label=npm%20latest)](https://www.npmjs.com/package/@h-ai/cli)
 [![CI](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml)
-[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
+[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://framework.hai-infra.com/)
 [![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-[公式サイトとテンプレート](https://hai-series.github.io/hai-framework/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.ja.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
+[公式サイトとテンプレート](https://framework.hai-infra.com/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.ja.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
 
 hai-framework は AI 時代のフルスタックアプリ開発と配布を支えるフレームワークです。統一された組み合わせ可能な TypeScript 基盤で、AI、データ、セキュリティ、画面、開発ツールをつなぎます。開発者と AI は契約、設定、規約、検証手順を共有し、アプリの構築から複数プラットフォームへの配布、継続的な進化までを進められます。AI を開発プロセスとアプリ自体の双方に組み込めます。
 
@@ -84,7 +84,7 @@ CLI は既定で依存関係をインストールし、Git を初期化します
 | Website      | 企業サイト、製品紹介、静的ドキュメント                 | `--type website`                   |
 | H5 / Mobile  | モバイル Web または Capacitor アプリ                   | `--type h5` / `--type mobile-app`  |
 
-[公式サイトで Fullstack、Website、Admin、Mobile の実際の画面を確認](https://hai-series.github.io/hai-framework/#template-previews)できます。Website の既定は SSR です。静的公開には[静的ビルド設定](docs/usage/configuration/delivery.md#静态website与github-pages)が必要で、ネイティブパッケージには対象 OS のツールチェーンが必要です。
+[公式サイトで Fullstack、Website、Admin、Mobile の実際の画面を確認](https://framework.hai-infra.com/#template-previews)できます。Website の既定は SSR です。静的公開には[静的ビルド設定](docs/usage/configuration/delivery.md#静态website与github-pages)が必要で、ネイティブパッケージには対象 OS のツールチェーンが必要です。
 
 ### ビルドと公開
 

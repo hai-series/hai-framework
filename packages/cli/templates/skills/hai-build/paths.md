@@ -1,6 +1,6 @@
 # 网站挂载目录
 
-部署地址含`/yyy/`等目录时，先识别SvelteKit与Vite，再检查资源、路由、API及服务器守卫。配置说明与当前运行截图见[网站构建与部署手册](https://hai-series.github.io/hai-framework/docs/configuration/delivery/)。
+部署地址含`/yyy/`等目录时，先识别SvelteKit与Vite，再检查资源、路由、API及服务器守卫。配置说明与当前运行截图见[网站构建与部署手册](https://framework.hai-infra.com/docs/configuration/delivery/)。
 
 ## SvelteKit
 
