@@ -60,6 +60,7 @@
   "iam_parseSessionDataFailed": "セッションデータの解析に失敗しました",
   "iam_roleAlreadyExist": "ロールは既に存在します",
   "iam_roleNotExist": "ロールが存在しません",
+  "iam_rolePermissionsChanged": "ロール権限が変更されました。再取得してからやり直してください。",
   "iam_cannotDeleteSystemRole": "システムロールは削除できません",
   "iam_permissionAlreadyExist": "権限は既に存在します",
   "iam_permissionNotExist": "権限が存在しません",

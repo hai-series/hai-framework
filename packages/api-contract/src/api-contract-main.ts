@@ -23,6 +23,7 @@ import { aiContract } from './ai/ai-contract.js'
 import { paginatedSchema } from './common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from './common/result-schemas.js'
 import { pathOf, route } from './common/route.js'
+import { contractExtensions } from './composition/contract-extensions.js'
 import { createApiContract } from './composition/create-api-contract.js'
 import { resolveFeedbackBudget } from './feedback/feedback-budget.js'
 import { feedbackContract } from './feedback/feedback-contract.js'
@@ -57,6 +58,9 @@ export const apiContract = {
   route,
   /** 从单个端点定义读取已声明的业务路径模板。 */
   pathOf,
+
+  /** 宿主按需装配的领域操作。 */
+  extensions: contractExtensions,
 
   // 领域 contract（框架内置）
   /** IAM 领域 contract（认证 / 用户 / 角色 / 权限）。 */

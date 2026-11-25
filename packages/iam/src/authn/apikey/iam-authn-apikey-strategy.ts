@@ -100,9 +100,9 @@ function toApiKey(stored: { id: string, userId: string, name: string, keyPrefix:
     name: stored.name,
     keyPrefix: stored.keyPrefix,
     enabled: stored.enabled,
-    expiresAt: stored.expiresAt,
+    expiresAt: stored.expiresAt ?? null,
     createdAt: stored.createdAt,
-    lastUsedAt: stored.lastUsedAt,
+    lastUsedAt: stored.lastUsedAt ?? null,
     scopes: stored.scopes,
   }
 }

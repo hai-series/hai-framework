@@ -177,7 +177,15 @@ export function createAiProcedures(deps: AiProcedureDeps) {
     .build()
 }
 
-function toChatCompletionRequest(input: AiChatCompletionInput): ChatCompletionRequest {
+/**
+ * 将默认与流式补全共用的输入转为 SDK 请求。
+ * @example 模块内部上下文
+ * ```ts
+ * const request = toChatCompletionRequest({ messages: [{ role: 'user', content: 'Hello' }] })
+ * void request
+ * ```
+ */
+export function toChatCompletionRequest(input: AiChatCompletionInput): ChatCompletionRequest {
   return {
     // Schema 已按角色校验完整消息，直接传递以保留 name、图片、tool_calls 和工具结果。
     messages: input.messages,

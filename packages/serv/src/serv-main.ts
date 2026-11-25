@@ -11,9 +11,14 @@
 import type { ServFunctions } from './serv-types.js'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
+import { createAiExtensionProcedures } from './features/serv-feature-ai-extension.js'
 import { createAiProcedures } from './features/serv-feature-ai.js'
+import { createAuditProcedures } from './features/serv-feature-audit.js'
 import { createFeedbackProcedures } from './features/serv-feature-feedback.js'
+import { createIamExtensionProcedures } from './features/serv-feature-iam-extension.js'
 import { createIamProcedures } from './features/serv-feature-iam.js'
+import { createPaymentExtensionProcedures } from './features/serv-feature-payment-extension.js'
+import { createStorageExtensionProcedures } from './features/serv-feature-storage-extension.js'
 import { createStorageProcedures } from './features/serv-feature-storage.js'
 import {
   WILDCARD_PERMISSION,
@@ -60,6 +65,11 @@ export type {
  * ```
  */
 export const serv: ServFunctions = {
+  createAiExtensionProcedures,
+  createAuditProcedures,
+  createIamExtensionProcedures,
+  createPaymentExtensionProcedures,
+  createStorageExtensionProcedures,
   createAiProcedures,
   createFeedbackProcedures,
   createIamProcedures,

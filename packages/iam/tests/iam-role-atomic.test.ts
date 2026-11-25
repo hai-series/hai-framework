@@ -1,4 +1,5 @@
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
@@ -137,6 +138,67 @@ describe('iam atomic role permission replacement', () => {
         },
       ],
     })
+  })
+
+  it('rejects a stale permission snapshot without writing metadata into the caller transaction', async () => {
+    const permission = await iam.authz.createPermission({ code: 'atomic:newer', name: 'Newer permission' })
+    const role = await iam.authz.createRole({ code: 'atomic-snapshot', name: 'Unchanged' })
+    if (!permission.success || !role.success)
+      throw new Error('Missing permission or role fixture')
+    expect((await iam.authz.assignPermissionToRole(role.data.id, permission.data.id)).success).toBe(true)
+
+    const committed = await reldb.tx.wrapResult(async (tx) => {
+      const replaced = await iam.authz.updateRole(role.data.id, {
+        name: 'Stale update',
+        permissionIds: [],
+        expectedPermissionIds: [],
+      }, tx)
+      expect(replaced).toMatchObject({
+        success: false,
+        error: { code: HaiIamError.CONFLICT.code },
+      })
+      return core.ok(undefined)
+    })
+    expect(committed.success).toBe(true)
+    expect(await iam.authz.getRole(role.data.id)).toMatchObject({
+      success: true,
+      data: { name: 'Unchanged' },
+    })
+    expect(await iam.authz.getRolePermissions(role.data.id)).toMatchObject({
+      success: true,
+      data: [
+        { id: permission.data.id },
+      ],
+    })
+  })
+
+  it.each([
+    { isSystem: true },
+    { code: 'super_admin' },
+  ])('rejects snapshot replacement after the role gains protection %j', async (protection) => {
+    const permission = await iam.authz.createPermission({ code: 'atomic:protected', name: 'Protected permission' })
+    if (!permission.success)
+      throw new Error('Missing permission fixture')
+    const role = await iam.authz.createRole({
+      code: 'atomic-protection',
+      name: 'Originally editable',
+      permissionIds: [permission.data.id],
+    })
+    if (!role.success)
+      throw new Error('Missing role fixture')
+    const snapshot = await iam.authz.getRolePermissions(role.data.id)
+    if (!snapshot.success)
+      throw new Error('Unable to read the original permissions')
+
+    expect((await iam.authz.updateRole(role.data.id, protection)).success).toBe(true)
+    expect(await iam.authz.updateRole(role.data.id, {
+      permissionIds: [],
+      expectedPermissionIds: snapshot.data.map(item => item.id),
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.FORBIDDEN.code },
+    })
+    expect(await iam.authz.getRolePermissions(role.data.id)).toEqual(snapshot)
   })
 
   it('commits profile, lifecycle and roles together and revokes the old credential generation only on success', async () => {

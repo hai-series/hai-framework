@@ -1,3 +1,5 @@
 export * from './ai-audio-ws-schemas.js'
 export * from './ai-contract.js'
+export { AiChatStreamEventSchema } from './ai-extension-contract.js'
+export type { AiChatStreamEvent, AiExtensionContract } from './ai-extension-contract.js'
 export * from './ai-schemas.js'

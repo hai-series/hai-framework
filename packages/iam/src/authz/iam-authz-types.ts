@@ -261,10 +261,10 @@ export interface AuthzOperations {
    * 更新角色
    *
    * @param roleId - 角色 ID
-   * @param data - 要更新的字段；permissionIds 在同一事务内全量替换，未传则保持权限不变
-   * @returns 成功返回更新后的角色；角色不存在返回 ROLE_NOT_FOUND
+   * @param data - 要更新的字段。permissionIds 在同一事务内全量替换；此时可用 expectedPermissionIds 校验先前授权的权限快照。
+   * @returns 成功返回更新后的角色。角色不存在返回 ROLE_NOT_FOUND；权限快照变化返回 CONFLICT。
    */
-  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>> & { permissionIds?: string[] }, tx?: DmlWithTxOperations) => Promise<HaiResult<Role>>
+  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>> & { permissionIds?: string[], expectedPermissionIds?: readonly string[] }, tx?: DmlWithTxOperations) => Promise<HaiResult<Role>>
 
   /**
    * 删除角色

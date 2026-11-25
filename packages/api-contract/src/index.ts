@@ -12,10 +12,14 @@
 export * from './ai/ai-audio-ws-schemas.js'
 
 export type { AiContract } from './ai/ai-contract.js'
+export { AiChatStreamEventSchema } from './ai/ai-extension-contract.js'
+export type { AiChatStreamEvent, AiExtensionContract } from './ai/ai-extension-contract.js'
 // Schemas（含运行时 schema 常量 + 推导类型）。
 export * from './ai/ai-schemas.js'
 // 扁平命名空间——所有 functionality 通过 `apiContract.*` 调用。
 export { apiContract } from './api-contract-main.js'
+export type { AuditContract } from './audit/audit-contract.js'
+export * from './audit/audit-schemas.js'
 export { PaginationQuerySchema } from './common/pagination-schemas.js'
 export * from './common/response-schemas.js'
 // result-schema：仅保留 HaiErrorSchema；工厂与 void 常量走 `apiContract.haiResultSchema` / `apiContract.voidResultSchema`。
@@ -29,11 +33,21 @@ export * from './feedback/feedback-schemas.js'
 
 export type { IamContract } from './iam/iam-contract.js'
 
+export {
+  IamApiKeySchema,
+  IamCreateApiKeyInputSchema,
+  IamListApiKeysInputSchema,
+  IamReplaceRolePermissionsInputSchema,
+} from './iam/iam-extension-contract.js'
+export type { IamExtensionContract } from './iam/iam-extension-contract.js'
 export * from './iam/iam-schemas.js'
 export type { PaymentContract } from './payment/payment-contract.js'
+export type { PaymentExtensionContract } from './payment/payment-extension-contract.js'
 export * from './payment/payment-schemas.js'
 export type { StorageContract } from './storage/storage-contract.js'
 
+export { STORAGE_PROXY_MAX_FILE_BYTES, StorageUploadFileInputSchema } from './storage/storage-extension-contract.js'
+export type { StorageExtensionContract } from './storage/storage-extension-contract.js'
 export * from './storage/storage-schemas.js'
 
 // 保留推导 contract 声明所需的上游公共类型，避免应用引用依赖内部路径。

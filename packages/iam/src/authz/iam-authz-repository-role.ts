@@ -29,6 +29,8 @@ import { HaiIamError } from '../iam-types.js'
  * ```
  */
 export interface RoleRepository extends ReldbCrudRepository<Role> {
+  /** 持有角色行锁并返回最新保护属性；SQLite 在读前取得写事务。 */
+  lock: (roleId: string, tx: DmlWithTxOperations) => Promise<HaiResult<Pick<Role, 'code' | 'isSystem'> | null>>
   /** 权限单独更新时锁定角色行并推进更新时间，避免并发替换交错 */
   touch: (roleId: string, tx: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
   /**
@@ -159,6 +161,23 @@ export async function createDbRoleRepository(): Promise<RoleRepository> {
  * 继承 BaseReldbCrudRepository，提供按 code 查找角色的能力。
  */
 class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepository {
+  async lock(roleId: string, tx: DmlWithTxOperations): Promise<HaiResult<Pick<Role, 'code' | 'isSystem'> | null>> {
+    const sqlite = reldb.config?.type === 'sqlite'
+    if (sqlite) {
+      const locked = await tx.execute(`UPDATE ${TABLE_NAME} SET id = id WHERE id = ?`, [roleId])
+      if (!locked.success)
+        return locked
+    }
+    const suffix = sqlite ? '' : ' FOR UPDATE'
+    const result = await tx.get<{ code: string, is_system: boolean | number | null }>(`SELECT code, is_system FROM ${TABLE_NAME} WHERE id = ?${suffix}`, [roleId])
+    if (!result.success)
+      return result
+    return core.ok(result.data && {
+      code: result.data.code,
+      isSystem: Boolean(result.data.is_system),
+    })
+  }
+
   async touch(roleId: string, tx: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     return tx.execute(`UPDATE ${TABLE_NAME} SET updated_at = ? WHERE id = ?`, [
       new Date().toISOString(),

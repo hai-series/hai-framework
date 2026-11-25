@@ -40,6 +40,16 @@ export interface ServFunctions {
   createIamProcedures: typeof import('./features/serv-feature-iam.js').createIamProcedures
   /** 装配存储 procedures；对象授权仍由宿主提供。 */
   createStorageProcedures: typeof import('./features/serv-feature-storage.js').createStorageProcedures
+  /** 装配由宿主配置授权的 ai-extension procedures。 */
+  createAiExtensionProcedures: typeof import('./features/serv-feature-ai-extension.js').createAiExtensionProcedures
+  /** 装配由宿主配置授权的 audit procedures。 */
+  createAuditProcedures: typeof import('./features/serv-feature-audit.js').createAuditProcedures
+  /** 装配由宿主配置授权的 iam-extension procedures。 */
+  createIamExtensionProcedures: typeof import('./features/serv-feature-iam-extension.js').createIamExtensionProcedures
+  /** 装配由宿主配置授权的 payment-extension procedures。 */
+  createPaymentExtensionProcedures: typeof import('./features/serv-feature-payment-extension.js').createPaymentExtensionProcedures
+  /** 装配由宿主配置授权的 storage-extension procedures。 */
+  createStorageExtensionProcedures: typeof import('./features/serv-feature-storage-extension.js').createStorageExtensionProcedures
   createApp: typeof createApp
   parseRequestContext: (input: CreateServContextInput) => ServContext
   buildAuthContextFactory: (verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>) => CreateServContext
@@ -85,8 +95,8 @@ export type { CreateServContext, CreateServContextInput, ServContext, ServIam, S
 export type { NativeRefreshTokenTransportConfig, RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'
 export type { ServCorsConfig } from './serv-cors.js'
 export type { GenerateOpenAPISpecOptions } from './serv-openapi.js'
+export type { ServTransportRoute } from './serv-route-transport.js'
 export type { ServRuntimeSecurityPolicy, ServRuntimeSecurityPolicyInput } from './serv-runtime-security.js'
 export type { ServStorageAssetsConfig } from './serv-storage-assets.js'
-export type { ServTransportRoute } from './serv-route-transport.js'
 export type { ServTransportConfig } from './serv-transport.js'
 export type { ServValidationFailureBody } from './serv-validation.js'

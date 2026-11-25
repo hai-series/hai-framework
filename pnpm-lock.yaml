@@ -2485,6 +2485,9 @@ importers:
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../iam
+      '@h-ai/payment':
+        specifier: workspace:*
+        version: link:../payment
       '@h-ai/reldb':
         specifier: workspace:*
         version: link:../reldb

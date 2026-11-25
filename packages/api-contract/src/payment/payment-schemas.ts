@@ -106,6 +106,30 @@ export const PaymentQueryOrderInputSchema = z.object({
 })
 
 /**
+ * 关单请求中的商户订单号及客户端声明的渠道。服务端须与可信订单记录核对。
+ * @example
+ * ```ts
+ * import { PaymentCloseOrderInputSchema } from '@h-ai/api-contract'
+ *
+ * const input = PaymentCloseOrderInputSchema.parse({ provider: 'stripe', orderNo: 'order_1' })
+ * ```
+ */
+export const PaymentCloseOrderInputSchema = PaymentQueryOrderInputSchema.extend({
+  provider: PaymentProviderSchema,
+}).strict()
+
+/**
+ * 关闭待支付订单的请求参数。
+ * @example
+ * ```ts
+ * import type { PaymentCloseOrderInput } from '@h-ai/api-contract'
+ *
+ * const input: PaymentCloseOrderInput = { provider: 'stripe', orderNo: 'order_1' }
+ * ```
+ */
+export type PaymentCloseOrderInput = z.infer<typeof PaymentCloseOrderInputSchema>
+
+/**
  * 支付订单业务数据 Schema。
  * @example
  * ```ts

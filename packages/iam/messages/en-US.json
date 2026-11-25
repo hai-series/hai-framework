@@ -60,6 +60,7 @@
   "iam_parseSessionDataFailed": "Failed to parse session data",
   "iam_roleAlreadyExist": "Role already exists",
   "iam_roleNotExist": "Role does not exist",
+  "iam_rolePermissionsChanged": "Role permissions changed. Reload them before retrying.",
   "iam_cannotDeleteSystemRole": "Cannot delete system role",
   "iam_permissionAlreadyExist": "Permission already exists",
   "iam_permissionNotExist": "Permission does not exist",

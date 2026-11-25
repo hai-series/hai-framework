@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
 import { core } from '@h-ai/core'
@@ -21,13 +22,12 @@ import { HaiIamError } from '../iam-types.js'
  * @internal
  * @example 模块内部上下文
  * ```ts
- * const repository = await createDbRolePermissionRepository()
- * if (!repository.success)
- *   return repository
- * const result = await repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
- * if (!result.success)
- *   return result
- * return result.data
+ * async function read(repository: RolePermissionRepository) {
+ *   const result = await repository.getPermissionCodesForRoles(['role-1', 'role-2'])
+ *   if (!result.success)
+ *     return result
+ *   return result.data
+ * }
  * ```
  */
 export interface RolePermissionRepository {
@@ -45,6 +45,9 @@ export interface RolePermissionRepository {
    * 获取角色的所有权限
    */
   getPermissions: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<Permission[]>>
+
+  /** 读取角色的当前权限 ID；非 SQLite 事务中同时锁住现有关联。 */
+  getPermissionIds: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<string[]>>
 
   /**
    * 批量获取多个角色的权限代码（去重）
@@ -171,20 +174,20 @@ const ROLE_PERMISSION_SCHEMA = {
  *
  * 自动创建关联表和索引，提供分配/移除/查询权限能力。
  *
+ * @param permissions - 已初始化的权限仓储，用于将关联记录映射成业务权限对象。
  * @returns 角色-权限关联存储接口实现（失败返回 IamError）
  * @internal
  * @example 模块内部上下文
  * ```ts
- * const repository = await createDbRolePermissionRepository()
- * if (!repository.success)
- *   return repository
- * const result = await repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
- * if (!result.success)
- *   return result
- * return result.data
+ * async function read(permissions: PermissionRepository) {
+ *   const repository = await createDbRolePermissionRepository(permissions)
+ *   if (!repository.success)
+ *     return repository
+ *   return repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
+ * }
  * ```
  */
-export async function createDbRolePermissionRepository(): Promise<HaiResult<RolePermissionRepository>> {
+export async function createDbRolePermissionRepository(permissions: PermissionRepository): Promise<HaiResult<RolePermissionRepository>> {
   // 确保表存在
   const initResult = await reldb.prepareSchema('hai:iam:role-permissions:schema', async ({ ddl }) => {
     const result = await ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
@@ -238,8 +241,11 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
    */
   async function getPermissionIdsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
     const runner = tx ?? reldb.sql
+    const lock = tx && reldb.config?.type !== 'sqlite'
+      ? ' FOR UPDATE'
+      : ''
     const result = await runner.query<{ permission_id: string }>(
-      `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
+      `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?${lock}`,
       [roleId],
     )
 
@@ -257,6 +263,8 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
   }
 
   return core.ok({
+    getPermissionIds: getPermissionIdsInternal,
+
     async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
@@ -307,10 +315,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
 
       const placeholders = idsResult.data.map(() => '?').join(', ')
-      const result = await reldb.sql.query<Permission>(
-        `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${placeholders})`,
-        idsResult.data,
-      )
+      const result = await permissions.findAll({ where: `id IN (${placeholders})`, params: idsResult.data }, tx)
       if (!result.success) {
         return core.err(
           HaiIamError.REPOSITORY_ERROR,
@@ -433,10 +438,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         ...new Set(relationsResult.data.map(r => r.permission_id)),
       ]
       const permPlaceholders = uniquePermIds.map(() => '?').join(', ')
-      const permsResult = await reldb.sql.query<Permission>(
-        `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${permPlaceholders})`,
-        uniquePermIds,
-      )
+      const permsResult = await permissions.findAll({ where: `id IN (${permPlaceholders})`, params: uniquePermIds })
       if (!permsResult.success) {
         return core.err(
           HaiIamError.REPOSITORY_ERROR,

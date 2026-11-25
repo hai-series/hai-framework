@@ -53,6 +53,7 @@
     "@h-ai/ai": "workspace:*",
     "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
+    "@h-ai/payment": "workspace:*",
     "@h-ai/storage": "workspace:*"
   },
   "peerDependenciesMeta": {
@@ -63,6 +64,9 @@
       "optional": true
     },
     "@h-ai/iam": {
+      "optional": true
+    },
+    "@h-ai/payment": {
       "optional": true
     },
     "@h-ai/storage": {
@@ -90,6 +94,7 @@
     "@h-ai/cache": "workspace:*",
     "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
+    "@h-ai/payment": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",

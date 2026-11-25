@@ -75,7 +75,7 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
     const roleRepository = await createDbRoleRepository()
     const permissionRepository = await createDbPermissionRepository()
 
-    const rolePermResult = await createDbRolePermissionRepository()
+    const rolePermResult = await createDbRolePermissionRepository(permissionRepository)
     if (!rolePermResult.success) {
       return rolePermResult
     }
@@ -351,6 +351,30 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     return core.ok(undefined)
   }
 
+  async function updateRolePermission(
+    roleId: string,
+    permissionId: string,
+    write: RolePermissionRepository['assign'] | RolePermissionRepository['remove'],
+    tx?: DmlWithTxOperations,
+  ): Promise<HaiResult<void>> {
+    const run = async (transaction: DmlWithTxOperations): Promise<HaiResult<void>> => {
+      const role = await roleRepository.lock(roleId, transaction)
+      if (!role.success)
+        return mapRepositoryError('iam_queryRoleFailed', role.error.message)
+      if (!role.data)
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+      const permission = await permissionRepository.findById(permissionId, transaction)
+      if (!permission.success)
+        return mapRepositoryError('iam_queryPermissionFailed', permission.error.message)
+      if (!permission.data)
+        return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+      return write(roleId, permissionId, transaction)
+    }
+    return tx
+      ? run(tx)
+      : reldb.tx.wrapResult(run)
+  }
+
   async function getUserAuthorization(userId: string): ReturnType<AuthzOperations['getUserAuthorization']> {
     return readIamCache(`authorization:${userId}`, async () => {
       const rows = await reldb.sql.query<{ role_code: string, permission_code: string | null }>('SELECT r.code AS role_code, p.code AS permission_code FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id LEFT JOIN hai_iam_role_permissions rp ON rp.role_id = r.id LEFT JOIN hai_iam_permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?', [userId])
@@ -602,7 +626,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     },
 
     async updateRole(roleId, data, tx?: DmlWithTxOperations): Promise<HaiResult<Role>> {
-      const { permissionIds, ...metadata } = data
+      const { permissionIds, expectedPermissionIds, ...metadata } = data
       // 使用调用方事务或创建新事务，保证 update+findById 原子性
       const ownTx = !tx
       if (!tx) {
@@ -614,6 +638,33 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       try {
+        if (permissionIds !== undefined && expectedPermissionIds !== undefined) {
+          const locked = await roleRepository.lock(roleId, tx)
+          if (!locked.success || !locked.data) {
+            if (ownTx)
+              await tx.rollback()
+            return locked.success
+              ? core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+              : mapRepositoryError('iam_queryRoleFailed', locked.error.message)
+          }
+          if (locked.data.isSystem || locked.data.code === rbacConfig.superAdminRole) {
+            if (ownTx)
+              await tx.rollback()
+            return core.err(HaiIamError.FORBIDDEN, core.i18n.coreM('core_errorForbidden'))
+          }
+          const current = await rolePermissionRepository.getPermissionIds(roleId, tx)
+          if (!current.success) {
+            if (ownTx)
+              await tx.rollback()
+            return current
+          }
+          const expected = new Set(expectedPermissionIds)
+          if (current.data.length !== expected.size || current.data.some(id => !expected.has(id))) {
+            if (ownTx)
+              await tx.rollback()
+            return core.err(HaiIamError.CONFLICT, iamM('iam_rolePermissionsChanged'))
+          }
+        }
         const updateResult = Object.values(metadata).some(value => value !== undefined)
           ? await roleRepository.updateById(roleId, metadata, tx)
           : await roleRepository.touch(roleId, tx)
@@ -964,27 +1015,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     },
 
     async assignPermissionToRole(roleId, permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      // 检查角色和权限是否存在
-      const [roleResult, permResult] = await Promise.all([
-        roleRepository.existsById(roleId, tx),
-        permissionRepository.findById(permissionId, tx),
-      ])
-
-      if (!roleResult.success) {
-        return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
-      }
-      if (!roleResult.data) {
-        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      }
-
-      if (!permResult.success) {
-        return mapRepositoryError('iam_queryPermissionFailed', permResult.error.message) as HaiResult<void>
-      }
-      if (!permResult.data) {
-        return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
-      }
-
-      const assignResult = await rolePermissionRepository.assign(roleId, permissionId, tx)
+      const assignResult = await updateRolePermission(roleId, permissionId, rolePermissionRepository.assign, tx)
       if (assignResult.success) {
         logger.info('Permission assigned to role', { roleId, permissionId })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
@@ -996,30 +1027,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     },
 
     async removePermissionFromRole(roleId, permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      // 检查角色和权限是否存在
-      const [roleResult, permResult] = await Promise.all([
-        roleRepository.existsById(roleId, tx),
-        permissionRepository.findById(permissionId, tx),
-      ])
-
-      if (!roleResult.success) {
-        return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
-      }
-      if (!roleResult.data) {
-        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      }
-
-      if (!permResult.success) {
-        return mapRepositoryError('iam_queryPermissionFailed', permResult.error.message) as HaiResult<void>
-      }
-      if (!permResult.data) {
-        return core.err(
-          HaiIamError.PERMISSION_NOT_FOUND,
-          iamM('iam_permissionNotExist'),
-        )
-      }
-
-      const removeResult = await rolePermissionRepository.remove(roleId, permissionId, tx)
+      const removeResult = await updateRolePermission(roleId, permissionId, rolePermissionRepository.remove, tx)
       if (removeResult.success) {
         logger.info('Permission removed from role', { roleId, permissionId })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）

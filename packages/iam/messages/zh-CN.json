@@ -60,6 +60,7 @@
   "iam_parseSessionDataFailed": "解析会话数据失败",
   "iam_roleAlreadyExist": "角色已存在",
   "iam_roleNotExist": "角色不存在",
+  "iam_rolePermissionsChanged": "角色权限已变更，请重新读取后重试",
   "iam_cannotDeleteSystemRole": "不能删除系统角色",
   "iam_permissionAlreadyExist": "权限已存在",
   "iam_permissionNotExist": "权限不存在",

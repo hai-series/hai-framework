@@ -1,4 +1,5 @@
 // 功能子路径复用根入口的服务对象，并提供本功能的输入类型。
 export { serv } from '../serv-main.js'
 
+export type { IamExtensionAccessRequest, IamExtensionProcedureDeps } from './serv-feature-iam-extension.js'
 export type { IamProcedureDeps, TokenPair } from './serv-feature-iam.js'
