@@ -80,6 +80,7 @@
   let listboxRef: HTMLUListElement | undefined = $state()
   let isDropdownOpen = $state(false)
   let filterText = $state('')
+  let activeOptionKey = $state<string>()
   let isHovered = $state(false)
   // 下拉层定位样式（portal 到 body，用 fixed 逃逸 overflow/stacking）
   let dropdownStyle = $state('')
@@ -117,6 +118,12 @@
       opt.label.toLowerCase().includes(filterText.toLowerCase()),
     )
   })
+  const activeOptionIndex = $derived(filteredOptions().findIndex(option =>
+    !option.disabled && String(option.value) === activeOptionKey,
+  ))
+  const activeOptionId = $derived(isDropdownOpen && activeOptionIndex >= 0
+    ? `${controlId}-option-${activeOptionIndex}`
+    : undefined)
 
   const wrapperClass = $derived(
     cn(
@@ -148,10 +155,8 @@
       const target = e.target as Node
       const inTrigger = dropdownRef?.contains(target) ?? false
       const inListbox = listboxRef?.contains(target) ?? false
-      if (!inTrigger && !inListbox) {
-        isDropdownOpen = false
-        filterText = ''
-      }
+      if (!inTrigger && !inListbox)
+        closeDropdown()
     }
 
     if (isDropdownOpen) {
@@ -220,44 +225,77 @@
     if (disabled)
       return
 
-    if (!isDropdownOpen) {
-      isDropdownOpen = true
-    }
+    isDropdownOpen = true
+    inputRef?.focus()
+  }
 
-    if (filterable) {
-      // filterable 模式下点击后始终聚焦输入框，保持下拉可筛状态
-      setTimeout(() => inputRef?.focus(), 0)
-    }
+  function closeDropdown() {
+    isDropdownOpen = false
+    filterText = ''
+    activeOptionKey = undefined
   }
 
   function handleOptionSelect(optionValue: T, optionDisabled?: boolean) {
-    if (optionDisabled)
+    if (disabled || optionDisabled)
       return
     value = optionValue
-    isDropdownOpen = false
-    filterText = ''
+    closeDropdown()
     onchange?.(optionValue)
   }
 
   function handleFilterInput(e: Event & { currentTarget: HTMLInputElement }) {
     filterText = e.currentTarget.value
-    if (!isDropdownOpen) {
-      isDropdownOpen = true
-    }
+    activeOptionKey = undefined
+    isDropdownOpen = true
+  }
+
+  async function moveOption(direction: 1 | -1) {
+    isDropdownOpen = true
+    const enabled = filteredOptions().filter(option => !option.disabled)
+    if (!enabled.length)
+      return
+
+    const focused = enabled.findIndex(option => String(option.value) === activeOptionKey)
+    const current = focused >= 0
+      ? focused
+      : enabled.findIndex(option => option.value === value)
+    const next = current < 0
+      ? (direction === 1
+        ? 0
+        : enabled.length - 1)
+      : (current + direction + enabled.length) % enabled.length
+    activeOptionKey = String(enabled[next].value)
+    await tick()
+    if (activeOptionId)
+      inputRef?.ownerDocument.getElementById(activeOptionId)?.scrollIntoView?.({ block: 'nearest' })
   }
 
   function handleInputKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      isDropdownOpen = false
-      filterText = ''
-      inputRef?.blur()
+    if (disabled || e.isComposing)
+      return
+
+    if (e.key === 'Escape' && isDropdownOpen) {
+      e.preventDefault()
+      closeDropdown()
     }
-    else if (e.key === 'Enter') {
-      // 回车选中第一个匹配项
-      const opts = filteredOptions()
-      if (opts.length > 0 && !opts[0].disabled) {
-        handleOptionSelect(opts[0].value)
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      void moveOption(e.key === 'ArrowDown'
+        ? 1
+        : -1)
+    }
+    else if (e.key === 'Enter' || (!filterable && e.key === ' ')) {
+      e.preventDefault()
+      if (!isDropdownOpen) {
+        isDropdownOpen = true
+        return
       }
+      const options = filteredOptions()
+      const option = options[activeOptionIndex]
+        ?? options.find(option => !option.disabled && option.value === value)
+        ?? options.find(option => !option.disabled)
+      if (option)
+        handleOptionSelect(option.value)
     }
     else if (e.key === 'Backspace' && filterText === '' && clearable && value) {
       value = undefined as T
@@ -280,8 +318,7 @@
       return
     if (nativeSelect)
       validation.validate(nativeSelect)
-    isDropdownOpen = false
-    filterText = ''
+    closeDropdown()
   }
 
   // 判断是否显示清除按钮
@@ -323,12 +360,6 @@
     class={wrapperClass}
     bind:this={triggerRef}
     onclick={handleWrapperClick}
-    onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault()
-        handleWrapperClick()
-      }
-    }}
     role='presentation'
   >
     {#if filterable}
@@ -360,6 +391,7 @@
         aria-haspopup='listbox'
         aria-autocomplete='list'
         aria-controls='{controlId}-listbox'
+        aria-activedescendant={activeOptionId}
         aria-expanded={isDropdownOpen}
       />
     {:else}
@@ -388,6 +420,7 @@
         role='combobox'
         aria-haspopup='listbox'
         aria-controls='{controlId}-listbox'
+        aria-activedescendant={activeOptionId}
         aria-expanded={isDropdownOpen}
       />
     {/if}
@@ -429,17 +462,22 @@
         role='listbox'
         onfocusout={handleFocusOut}
       >
-        {#each filteredOptions() as option (String(option.value))}
+        {#each filteredOptions() as option, index (String(option.value))}
           <li
+            id='{controlId}-option-{index}'
             class={cn(
               'flex cursor-pointer items-center rounded-lg px-3 py-2.5 transition-all duration-150',
               optionTextClass,
-              option.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-base-content/5 active:bg-base-content/8',
+              option.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-base-content/5 active:bg-base-content/8 data-[active]:bg-base-content/5',
               value === option.value && 'bg-primary/10 text-primary font-semibold',
             )}
             role='option'
             aria-selected={value === option.value}
             aria-disabled={option.disabled}
+            data-active={activeOptionIndex === index
+              ? ''
+              : undefined}
+            onmousedown={event => event.preventDefault()}
             onclick={(e) => {
               e.stopPropagation()
               handleOptionSelect(option.value, option.disabled)
@@ -450,9 +488,7 @@
                 handleOptionSelect(option.value, option.disabled)
               }
             }}
-            tabindex={option.disabled
-              ? -1
-              : 0}
+            tabindex='-1'
           >
             {option.label}
           </li>
