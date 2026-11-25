@@ -36,9 +36,9 @@
 | `details` | `JSON` | 可 | — | 調査に使う業務の詳細。 | `{"fields":["status"]}` |
 | `ip_address` | `TEXT` | 可 | — | リクエスト元 IP アドレス。 | `192.0.2.10` |
 | `user_agent` | `TEXT` | 可 | — | クライアントのユーザーエージェント。 | `Example Browser` |
-| `category` | `TEXT` | 可 | — | 絞り込みに使うイベント分類。 | `security` |
-| `outcome` | `TEXT` | 可 | — | 操作の成功、失敗、拒否の区別。 | `success` |
-| `severity` | `TEXT` | 可 | — | イベントの重要度。 | `info` |
+| `category` | `TEXT` | 不可 | — | 絞り込みに使うイベント分類。 | `business` |
+| `outcome` | `TEXT` | 不可 | — | 操作の成功、失敗、拒否の区別。 | `success` |
+| `severity` | `TEXT` | 不可 | — | イベントの重要度。 | `info` |
 | `request_id` | `TEXT` | 可 | — | 関連するリクエスト ID。 | `req-42` |
 | `trace_id` | `TEXT` | 可 | — | 関連するトレース ID。 | `trace-42` |
 | `scope_id` | `TEXT` | 可 | — | イベントが属する業務範囲。 | `team-1` |
@@ -73,7 +73,7 @@
 
 user-42 が order-42 の status を読みました。時刻は DB が記録した UTC 表示です。
 
-範囲とイベントを絞り込むと、`audit.countByOutcome` は集計を返します。`{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` には結果が未分類の履歴が 1 件含まれます。既存の監査行を読み取り、ページ番号と並べ替えは集計に影響しません。
+範囲とイベントを絞り込むと、`audit.countByOutcome` は成功、失敗、拒否の件数を返します。`{ total: 4, success: 2, failure: 1, denied: 1 }` の形式で返します。既存の監査行を読み取り、ページ番号と並べ替えは集計に影響しません。
 
 <a id="table-hai-audit-policy"></a>
 
@@ -109,7 +109,7 @@ DB が守る最短保持期間を保存します。
 | --- | --- | --- | --- | --- | --- |
 | `id` | `VARCHAR(64)` | 不可 | — | ルール・宛先・時間枠から計算するダイジェスト。主キー。 | `<claim-digest>` |
 | `rule_id` | `VARCHAR(64)` | 不可 | — | アラートルール ID。 | `failed-login` |
-| `target_id` | `VARCHAR(64)` | 不可 | — | アラートの通知先 ID。 | `security` |
+| `target_id` | `VARCHAR(64)` | 不可 | — | アラートの通知先 ID。 | `business` |
 | `window_start` | `BIGINT` | 不可 | — | アラート時間枠の開始。Unix ミリ秒。 | `1794873600000` |
 | `status` | `VARCHAR(16)` | 不可 | — | 取得後の処理状態。 | `claimed` |
 | `queue_id` | `VARCHAR(64)` | 可 | — | キューに入った場合の Reach キュー ID。 | `notification-42` |

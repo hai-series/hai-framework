@@ -27,7 +27,7 @@ const AUDIT_TABLE = 'hai_audit_logs'
  * 原始 SQL 与基类映射的日期、JSON 返回值可能不同，在审计边界统一。
  * @example 模块内部上下文
  * ```ts
- * const row: AuditReadRow = { id: 'audit_example', userId: null, action: 'login', resource: 'auth', resourceId: null, details: { source: 'web' }, ipAddress: null, userAgent: null, createdAt: Date.now() }
+ * const row: AuditReadRow = { id: 'audit_example', userId: null, action: 'login', resource: 'auth', resourceId: null, details: { source: 'web' }, ipAddress: null, userAgent: null, createdAt: Date.now(), category: 'system', outcome: 'success', severity: 'info' }
  * const record = normalizeAuditLog(row)
  * ```
  */
@@ -37,8 +37,17 @@ type AuditReadRow = Omit<AuditLog, 'details' | 'createdAt' | 'actorSnapshot'> & 
   createdAt: Date | string | number
 }
 
+function isAuditOutcome(outcome: unknown): outcome is AuditLog['outcome'] {
+  return outcome === 'success' || outcome === 'failure' || outcome === 'denied'
+}
+
 /** 保持公开审计契约：Date、JSON 字符串和显式 null。 */
 function normalizeAuditLog(row: AuditReadRow): AuditLog {
+  if ((row.category !== 'system' && row.category !== 'business')
+    || !isAuditOutcome(row.outcome)
+    || (row.severity !== 'info' && row.severity !== 'warning' && row.severity !== 'error' && row.severity !== 'critical')) {
+    throw new Error(auditM('audit_invalidStoredClassification'))
+  }
   return {
     ...row,
     actorSnapshot: readAuditActor(row.actorSnapshot),
@@ -178,7 +187,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         {
           fieldName: 'category',
           columnName: 'category',
-          def: { type: 'TEXT' },
+          def: { type: 'TEXT', notNull: true },
           select: true,
           create: true,
           update: false,
@@ -186,7 +195,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         {
           fieldName: 'outcome',
           columnName: 'outcome',
-          def: { type: 'TEXT' },
+          def: { type: 'TEXT', notNull: true },
           select: true,
           create: true,
           update: false,
@@ -194,7 +203,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         {
           fieldName: 'severity',
           columnName: 'severity',
-          def: { type: 'TEXT' },
+          def: { type: 'TEXT', notNull: true },
           select: true,
           create: true,
           update: false,
@@ -248,7 +257,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       this.mysqlTable = this.db.ddl.raw(`CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
         id VARCHAR(255) NOT NULL PRIMARY KEY, user_id VARCHAR(255), action VARCHAR(255) NOT NULL,
         resource VARCHAR(255) NOT NULL, resource_id VARCHAR(255), details JSON, ip_address VARCHAR(255),
-        user_agent VARCHAR(255), category VARCHAR(255), outcome VARCHAR(255), severity VARCHAR(255),
+        user_agent VARCHAR(255), category VARCHAR(255) NOT NULL, outcome VARCHAR(255) NOT NULL, severity VARCHAR(255) NOT NULL,
         request_id VARCHAR(255), trace_id VARCHAR(255), scope_id VARCHAR(255), actor_snapshot JSON,
         created_at DATETIME(3)
       )`)
@@ -359,7 +368,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @param input.userAgent - 客户端 User-Agent（可选）
    * @returns 成功时返回创建的 AuditLog；失败时返回 LOG_FAILED
    */
-  async log(input: CreateAuditLogInput, tx?: DmlWithTxOperations): Promise<HaiResult<AuditLog>> {
+  async log(input: CreateAuditLogInput & Pick<AuditLog, 'category' | 'outcome' | 'severity'>, tx?: DmlWithTxOperations): Promise<HaiResult<AuditLog>> {
     logger.trace('Recording audit log', { action: input.action, resource: input.resource })
 
     const id = core.id.withPrefix('audit_')
@@ -368,9 +377,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       return time
     const now = time.data
     const context = {
-      category: input.category ?? null,
-      outcome: input.outcome ?? null,
-      severity: input.severity ?? null,
+      category: input.category,
+      outcome: input.outcome,
+      severity: input.severity,
       requestId: input.requestId ?? null,
       traceId: input.traceId ?? null,
       scopeId: input.scopeId ?? null,
@@ -706,16 +715,14 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       success: 0,
       failure: 0,
       denied: 0,
-      unclassified: 0,
     }
     for (const { outcome, count: rawCount } of grouped.data) {
       const count = Number(rawCount)
       if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(counts.total + count))
         return core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
-      const bucket = outcome === 'success' || outcome === 'failure' || outcome === 'denied'
-        ? outcome
-        : 'unclassified'
-      counts[bucket] += count
+      if (!isAuditOutcome(outcome))
+        return core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStoredClassification'))
+      counts[outcome] += count
       counts.total += count
     }
     return core.ok(counts)

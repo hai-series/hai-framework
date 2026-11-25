@@ -98,16 +98,19 @@ describe('audit.getStats', () => {
     }
   })
 
-  it('按列表筛选统计结果，并计入未分类的历史记录', async () => {
+  it('按列表筛选统计三种结果，省略结果时记录成功', async () => {
     const filters = { action: 'publish', scopeId: 'space-a', requestId: 'publish-a' }
     for (const outcome of ['success', 'failure'] as const) {
       expect((await audit.log({ ...filters, resource: 'deployment', outcome })).success).toBe(true)
     }
-    const legacy = await audit.log({ ...filters, resource: 'deployment' })
-    expect(legacy.success).toBe(true)
-    if (!legacy.success)
-      return
-    expect((await reldb.sql.execute('UPDATE hai_audit_logs SET outcome = NULL WHERE id = ?', [legacy.data.id])).success).toBe(true)
+    const written = await audit.log({ ...filters, resource: 'deployment' })
+    expect(written).toMatchObject({
+      success: true,
+      data: { category: 'business', outcome: 'success', severity: 'info' },
+    })
+    if (!written.success)
+      throw new Error(written.error.message)
+    expect((await reldb.sql.execute('UPDATE hai_audit_logs SET outcome = NULL WHERE id = ?', [written.data.id])).success).toBe(false)
     expect((await audit.log({
       ...filters,
       requestId: 'publish-b',
@@ -118,10 +121,9 @@ describe('audit.getStats', () => {
       success: true,
       data: {
         total: 3,
-        success: 1,
+        success: 2,
         failure: 1,
         denied: 0,
-        unclassified: 1,
       },
     })
     expect(await audit.countByOutcome({ ...filters, outcome: 'failure' })).toMatchObject({
@@ -131,7 +133,6 @@ describe('audit.getStats', () => {
         success: 0,
         failure: 1,
         denied: 0,
-        unclassified: 0,
       },
     })
     expect(await audit.countByOutcome({
@@ -159,7 +160,8 @@ describe('audit.cleanup', () => {
     // 直接插入一条“旧”记录（时间戳为 2 天前）
     const oldTime = Date.now() - 2 * 86400000
     await reldb.sql.execute(
-      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      `INSERT INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity)
+       VALUES (?, ?, ?, ?, 'business', 'success', 'info')`,
       ['audit_old_1', 'test', 'test', oldTime],
     )
 
@@ -192,7 +194,8 @@ describe('audit.cleanup', () => {
   it('应正确返回删除的记录数', async () => {
     const oldTime = Date.now() - 2 * 86400000
     await reldb.sql.execute(
-      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      `INSERT INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity)
+       VALUES (?, ?, ?, ?, 'business', 'success', 'info')`,
       [
         'audit_old_1',
         'test1',
@@ -201,7 +204,8 @@ describe('audit.cleanup', () => {
       ],
     )
     await reldb.sql.execute(
-      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      `INSERT INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity)
+       VALUES (?, ?, ?, ?, 'business', 'success', 'info')`,
       [
         'audit_old_2',
         'test2',

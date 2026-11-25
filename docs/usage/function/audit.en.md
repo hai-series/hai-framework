@@ -259,7 +259,7 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
-// Apply the same login filter as the list and count each outcome, including unclassified records. Return the original error on failure.
+// Apply the same login filter as the list and count successful, failed, and denied events. Return the original error on failure.
 const outcomesResult = await audit.countByOutcome({ action: 'login' })
 if (!outcomesResult.success)
   return outcomesResult

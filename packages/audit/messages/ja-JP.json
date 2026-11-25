@@ -14,6 +14,7 @@
   "audit_cleanupFailed": "監査ログのクリーンアップに失敗しました: {error}",
   "audit_statsFailed": "監査統計の取得に失敗しました: {error}",
   "audit_invalidStatCount": "監査件数が有効範囲を超えているため、安全に表示できません",
+  "audit_invalidStoredClassification": "保存済みの監査イベントのカテゴリ、結果、または重要度が無効です",
   "audit_configError": "監査設定の検証に失敗しました: {error}",
   "audit_initInProgress": "監査モジュールの初期化は既に実行中です",
   "audit_invalidInput": "{field}の監査入力が無効です: {reason}",

@@ -38,9 +38,9 @@
 | `details` | `JSON` | 是 | — | 排查问题时可查的业务详情。 | `{"fields":["status"]}` |
 | `ip_address` | `TEXT` | 是 | — | 请求来源地址。 | `192.0.2.10` |
 | `user_agent` | `TEXT` | 是 | — | 请求的客户端标识。 | `Example Browser` |
-| `category` | `TEXT` | 是 | — | 事件类别，用于筛选。 | `security` |
-| `outcome` | `TEXT` | 是 | — | 操作是否成功、失败或被拒绝。 | `success` |
-| `severity` | `TEXT` | 是 | — | 事件严重程度。 | `info` |
+| `category` | `TEXT` | 否 | — | 事件类别，用于筛选。 | `business` |
+| `outcome` | `TEXT` | 否 | — | 操作是否成功、失败或被拒绝。 | `success` |
+| `severity` | `TEXT` | 否 | — | 事件严重程度。 | `info` |
 | `request_id` | `TEXT` | 是 | — | 关联请求 ID。 | `req-42` |
 | `trace_id` | `TEXT` | 是 | — | 关联链路 ID。 | `trace-42` |
 | `scope_id` | `TEXT` | 是 | — | 事件所属的业务范围。 | `team-1` |
@@ -75,7 +75,7 @@
 
 user-42 读取了 order-42；details 只记录查看 status 字段。created_at 是数据库确认的事件时间，以 UTC 日期展示。
 
-筛选空间和事件后，`audit.countByOutcome` 返回结果投影。例如 `{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` 表示其中一条历史记录缺少结果分类。聚合读取现有审计行，排序和分页不影响统计。
+筛选空间和事件后，`audit.countByOutcome` 返回成功、失败和拒绝的数量。例如 `{ total: 4, success: 2, failure: 1, denied: 1 }`。聚合读取现有审计行，排序和分页不影响统计。
 
 <a id="table-hai-audit-policy"></a>
 
@@ -111,7 +111,7 @@ id:1 是唯一策略，enabled:1 表示启用，min_days:90 要求至少保留90
 | --- | --- | --- | --- | --- | --- |
 | `id` | `VARCHAR(64)` | 否 | — | 按规则、目标和时间窗口计算的摘要主键。 | `<claim-digest>` |
 | `rule_id` | `VARCHAR(64)` | 否 | — | 告警规则 ID。 | `failed-login` |
-| `target_id` | `VARCHAR(64)` | 否 | — | 告警通知的目标 ID。 | `security` |
+| `target_id` | `VARCHAR(64)` | 否 | — | 告警通知的目标 ID。 | `business` |
 | `window_start` | `BIGINT` | 否 | — | 告警窗口开始时间，Unix 毫秒。 | `1794873600000` |
 | `status` | `VARCHAR(16)` | 否 | — | 领取后的处理状态。 | `claimed` |
 | `queue_id` | `VARCHAR(64)` | 是 | — | 已排队时关联 Reach 的队列 ID。 | `notification-42` |

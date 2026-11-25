@@ -284,7 +284,7 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // 记录列表、总数与分页信息
-// 使用列表相同的 login 过滤条件，返回成功、失败、拒绝和旧记录未分类的总数，统计失败时返回原错误。
+// 使用列表相同的 login 过滤条件，返回成功、失败和拒绝的数量及总数，统计失败时返回原错误。
 const outcomesResult = await audit.countByOutcome({ action: 'login' })
 if (!outcomesResult.success)
   return outcomesResult

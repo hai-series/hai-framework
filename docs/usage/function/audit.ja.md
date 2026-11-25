@@ -263,7 +263,7 @@ const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data // items, total, pagination
-// 一覧と同じ login 条件で結果別に集計する。未分類も含め、失敗時には元のエラーを返す。
+// 一覧と同じ login 条件で成功、失敗、拒否を集計する。失敗時には元のエラーを返す。
 const outcomesResult = await audit.countByOutcome({ action: 'login' })
 if (!outcomesResult.success)
   return outcomesResult

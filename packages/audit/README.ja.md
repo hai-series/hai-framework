@@ -22,7 +22,7 @@
 
 [API 一覧](../../docs/usage/function/audit.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
-`audit.countByOutcome(filters)` で一覧の成功、失敗、拒否、未分類を集計します。直近一週間の操作の傾向は `getStats(7)` で確認できます。
+`audit.countByOutcome(filters)` で一覧の成功、失敗、拒否を集計します。直近一週間の操作の傾向は `getStats(7)` で確認できます。
 
 ## データ構造
 

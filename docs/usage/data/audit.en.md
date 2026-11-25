@@ -34,9 +34,9 @@ The module uses 3 tables.
 | `details` | `JSON` | Yes | — | Business details available for investigation. | `{"fields":["status"]}` |
 | `ip_address` | `TEXT` | Yes | — | Request source IP address. | `192.0.2.10` |
 | `user_agent` | `TEXT` | Yes | — | Client user agent. | `Example Browser` |
-| `category` | `TEXT` | Yes | — | Event category used for filtering. | `security` |
-| `outcome` | `TEXT` | Yes | — | Whether the action succeeded, failed or was denied. | `success` |
-| `severity` | `TEXT` | Yes | — | Event severity. | `info` |
+| `category` | `TEXT` | No | — | Event category used for filtering. | `business` |
+| `outcome` | `TEXT` | No | — | Whether the action succeeded, failed or was denied. | `success` |
+| `severity` | `TEXT` | No | — | Event severity. | `info` |
 | `request_id` | `TEXT` | Yes | — | Related request ID. | `req-42` |
 | `trace_id` | `TEXT` | Yes | — | Related trace ID. | `trace-42` |
 | `scope_id` | `TEXT` | Yes | — | Business scope of the event. | `team-1` |
@@ -71,7 +71,7 @@ Record actor, resource and outcome for investigation and audit retention.
 
 user-42 read order-42; details says only status was viewed. created_at shows the database event timestamp in UTC.
 
-After filtering by scope and event, `audit.countByOutcome` returns a projection. For example, `{ total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }` includes a historical event without an outcome. The query counts existing logs independently of pagination and ordering.
+After filtering by scope and event, `audit.countByOutcome` counts successful, failed, and denied events. For example, `{ total: 4, success: 2, failure: 1, denied: 1 }`. The query counts existing logs independently of pagination and ordering.
 
 <a id="table-hai-audit-policy"></a>
 
@@ -107,7 +107,7 @@ The single id:1 policy is enabled and requires 90 days. It is not a daily policy
 | --- | --- | --- | --- | --- | --- |
 | `id` | `VARCHAR(64)` | No | — | Digest of the rule, destination and window. Primary key. | `<claim-digest>` |
 | `rule_id` | `VARCHAR(64)` | No | — | Alert rule ID. | `failed-login` |
-| `target_id` | `VARCHAR(64)` | No | — | Alert destination ID. | `security` |
+| `target_id` | `VARCHAR(64)` | No | — | Alert destination ID. | `business` |
 | `window_start` | `BIGINT` | No | — | Start of the alert window in Unix milliseconds. | `1794873600000` |
 | `status` | `VARCHAR(16)` | No | — | Processing state after the claim. | `claimed` |
 | `queue_id` | `VARCHAR(64)` | Yes | — | Reach queue ID once the alert is queued. | `notification-42` |

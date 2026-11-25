@@ -101,10 +101,13 @@ export interface AuditEventFields {
  * @example
  * ```ts
  * import type { AuditLog } from '@h-ai/audit'
- * const record: AuditLog = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date() }
+ * const record: AuditLog = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date(), category: 'business', outcome: 'success', severity: 'info' }
  * ```
  */
 export interface AuditLog extends AuditEventFields {
+  category: NonNullable<AuditEventFields['category']>
+  outcome: NonNullable<AuditEventFields['outcome']>
+  severity: NonNullable<AuditEventFields['severity']>
   /** 审计日志 ID，格式为 `audit_` 前缀 + 随机串 */
   id: string
   /** 操作用户 ID；系统操作时为 null */
@@ -132,7 +135,7 @@ export interface AuditLog extends AuditEventFields {
  * @example
  * ```ts
  * import type { AuditLogWithUser } from '@h-ai/audit'
- * const record: AuditLogWithUser = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date() , username: 'alice' }
+ * const record: AuditLogWithUser = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date(), category: 'business', outcome: 'success', severity: 'info', username: 'alice' }
  * ```
  */
 export interface AuditLogWithUser extends AuditLog {
@@ -218,11 +221,11 @@ export interface AuditStatItem {
 }
 
 /**
- * 按列表筛选统计的审计结果。没有有效结果分类的历史日志计入 unclassified。
+ * 按列表筛选统计成功、失败和拒绝事件。
  * @example
  * ```ts
  * import type { AuditOutcomeCounts } from '@h-ai/audit'
- * const counts: AuditOutcomeCounts = { total: 4, success: 2, failure: 1, denied: 0, unclassified: 1 }
+ * const counts: AuditOutcomeCounts = { total: 4, success: 2, failure: 1, denied: 1 }
  * void counts
  * ```
  */
@@ -231,7 +234,6 @@ export interface AuditOutcomeCounts {
   success: number
   failure: number
   denied: number
-  unclassified: number
 }
 
 /**

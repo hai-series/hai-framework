@@ -280,7 +280,7 @@ function tests() {
       ? ' ON CONFLICT(id) DO UPDATE SET action=EXCLUDED.action'
       : ''
     const now = new Date()
-    expect((await reldb.sql.execute(`${overwrite} INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)${conflict}`, [
+    expect((await reldb.sql.execute(`${overwrite} INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity) VALUES (?, ?, ?, ?, 'system', 'success', 'info')${conflict}`, [
       ids[1],
       'overwritten',
       'audit',
