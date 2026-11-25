@@ -1,6 +1,6 @@
-import type { AiChatCompletionInput } from '../src/ai/ai-schemas.js'
+import type { AiChatCompletionInput } from '../src/ai/index.js'
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { AiChatCompletionInputSchema, AiChatMessageSchema } from '../src/ai/ai-schemas.js'
+import { AiChatCompletionInputSchema, AiChatMessageSchema } from '../src/ai/index.js'
 
 describe('ai completion schema', () => {
   it('公开类型只允许非流式请求，运行时不静默裁剪 stream', () => {

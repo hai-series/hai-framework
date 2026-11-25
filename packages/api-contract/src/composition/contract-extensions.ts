@@ -1,4 +1,4 @@
-import { aiExtensionContract } from '../ai/ai-extension-contract.js'
+import { aiOptionalContract } from '../ai/ai-contract.js'
 import { auditContract } from '../audit/audit-contract.js'
 import { iamExtensionContract } from '../iam/iam-extension-contract.js'
 import { paymentExtensionContract } from '../payment/payment-extension-contract.js'
@@ -15,7 +15,7 @@ import { storageExtensionContract } from '../storage/storage-extension-contract.
  * ```
  */
 export const contractExtensions = {
-  ai: aiExtensionContract,
+  ai: aiOptionalContract,
   audit: auditContract,
   iam: iamExtensionContract,
   payment: paymentExtensionContract,

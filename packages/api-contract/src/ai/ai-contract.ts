@@ -1,29 +1,13 @@
 /**
- * @h-ai/api-contract — AI 领域 contract
- *
- * 定义 AI 功能相关 API 的接口边界：聊天补全、记忆管理与会话管理。
- * 聊天补全使用 OpenAI 兼容结构（`messages` 数组 + `choices` 数组）。
- * 所有接口均需 Bearer Token 认证（由 `@h-ai/serv` 的 feature 层强制）。
- * 默认绑定认证用户的 objectId；其它主体和会话的访问须经过服务端资源授权。
+ * 将 AI 各子模块的端点装配成默认契约和单独挂载的可选契约。
  * @module ai-contract
  */
 
-import { haiResultSchema } from '../common/result-schemas.js'
-import { route } from '../common/route.js'
-import {
-  AiChatCompletionDataSchema,
-  AiChatCompletionInputSchema,
-  AiChatHistoryDataSchema,
-  AiChatHistoryInputSchema,
-  AiMemoryListDataSchema,
-  AiMemoryListInputSchema,
-  AiMemoryRecallDataSchema,
-  AiMemoryRecallInputSchema,
-  AiSendMessageDataSchema,
-  AiSendMessageInputSchema,
-  AiSessionListDataSchema,
-  AiSessionListInputSchema,
-} from './ai-schemas.js'
+import { aiAudioContract } from './audio/ai-audio-contract.js'
+import { aiChatContract, aiChatStreamingContract } from './chats/ai-chat-contract.js'
+import { aiImageContract } from './images/ai-image-contract.js'
+import { aiMemoryReadContract, aiMemoryWriteContract } from './memories/ai-memory-contract.js'
+import { aiSessionContract } from './sessions/ai-session-contract.js'
 
 /**
  * AI 领域 oRPC contract。
@@ -36,66 +20,9 @@ import {
  * ```
  */
 export const aiContract = {
-  chats: {
-    createCompletion: route({
-      method: 'POST',
-      path: '/ai/chats/completions',
-      operationId: 'ai.chats.createCompletion',
-      summary: 'Create non-streaming chat completion with function tools',
-      tags: ['ai', 'chats'],
-    })
-      .input(AiChatCompletionInputSchema)
-      .output(haiResultSchema(AiChatCompletionDataSchema)),
-    sendMessage: route({
-      method: 'POST',
-      path: '/ai/chats/messages',
-      operationId: 'ai.chats.sendMessage',
-      summary: 'Send a single chat message',
-      tags: ['ai', 'chats'],
-    })
-      .input(AiSendMessageInputSchema)
-      .output(haiResultSchema(AiSendMessageDataSchema)),
-    listHistory: route({
-      method: 'POST',
-      path: '/ai/chats/history',
-      operationId: 'ai.chats.listHistory',
-      summary: 'List chat history',
-      tags: ['ai', 'chats'],
-    })
-      .input(AiChatHistoryInputSchema)
-      .output(haiResultSchema(AiChatHistoryDataSchema)),
-  },
-  memories: {
-    recall: route({
-      method: 'POST',
-      path: '/ai/memories/recall',
-      operationId: 'ai.memories.recall',
-      summary: 'Recall relevant memories',
-      tags: ['ai', 'memories'],
-    })
-      .input(AiMemoryRecallInputSchema)
-      .output(haiResultSchema(AiMemoryRecallDataSchema)),
-    list: route({
-      method: 'POST',
-      path: '/ai/memories/list',
-      operationId: 'ai.memories.list',
-      summary: 'List memories',
-      tags: ['ai', 'memories'],
-    })
-      .input(AiMemoryListInputSchema)
-      .output(haiResultSchema(AiMemoryListDataSchema)),
-  },
-  sessions: {
-    list: route({
-      method: 'POST',
-      path: '/ai/sessions/list',
-      operationId: 'ai.sessions.list',
-      summary: 'List sessions',
-      tags: ['ai', 'sessions'],
-    })
-      .input(AiSessionListInputSchema)
-      .output(haiResultSchema(AiSessionListDataSchema)),
-  },
+  chats: aiChatContract,
+  memories: aiMemoryReadContract,
+  sessions: aiSessionContract,
 }
 
 /**
@@ -110,3 +37,32 @@ export const aiContract = {
  * ```
  */
 export type AiContract = typeof aiContract
+
+/**
+ * AI 可选路由。应用将需要的路由与默认 AI 契约按分组组合。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const path = apiContract.pathOf(apiContract.extensions.ai.chats.streamCompletion)
+ * void path
+ * ```
+ */
+export const aiOptionalContract = {
+  chats: aiChatStreamingContract,
+  memories: aiMemoryWriteContract,
+  audio: aiAudioContract,
+  images: aiImageContract,
+}
+
+/**
+ * AI 可选 HTTP 路由树。
+ * @example
+ * ```ts
+ * import { type AiExtensionContract, apiContract } from '@h-ai/api-contract'
+ *
+ * const extensions: AiExtensionContract = apiContract.extensions.ai
+ * void extensions
+ * ```
+ */
+export type AiExtensionContract = typeof aiOptionalContract

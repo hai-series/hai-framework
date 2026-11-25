@@ -1,11 +1,4 @@
-/**
- * @h-ai/api-contract — AI 领域 Schema
- *
- * 包含聊天补全、消息占位、记忆召回与历史会话相关的 input/output Zod Schema。
- * 默认聊天补全为非流式 JSON，支持 function tool calling；未声明字段在边界拒绝。
- * 仅保留跨接口、跨层复用的数据结构；一次性输出包装在 contract 中内联。
- * @module ai-schemas
- */
+/** 聊天请求、响应、历史记录及流式事件的 schema。 */
 
 import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
@@ -388,206 +381,6 @@ export const AiSendMessageDataSchema = z.object({
 })
 
 /**
- * 记忆类型 Schema。
- * @example
- * ```ts
- * import { AiMemoryTypeSchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryTypeSchema.parse('fact')
- * void value
- * ```
- */
-export const AiMemoryTypeSchema = z.enum([
-  'fact',
-  'preference',
-  'event',
-  'entity',
-  'instruction',
-])
-
-/**
- * 记忆条目 Schema。
- * @example
- * ```ts
- * import { AiMemoryEntrySchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryEntrySchema.parse({
- *   id: 'example-1',
- *   content: 'Hello',
- *   type: 'fact',
- *   importance: 0,
- *   createdAt: 0,
- *   lastAccessedAt: 0,
- *   accessCount: 0
- * })
- * void value
- * ```
- */
-export const AiMemoryEntrySchema = z.object({
-  id: z.string(),
-  content: z.string(),
-  type: AiMemoryTypeSchema,
-  importance: z.number(),
-  objectId: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  createdAt: z.number(),
-  lastAccessedAt: z.number(),
-  accessCount: z.number(),
-})
-
-/**
- * 记忆检索入参 Schema。
- * @example
- * ```ts
- * import { AiMemoryRecallInputSchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryRecallInputSchema.parse({
- *   query: 'example'
- * })
- * void value
- * ```
- */
-export const AiMemoryRecallInputSchema = z.object({
-  query: z.string().min(1),
-  topK: z.number().int().min(1).optional(),
-  types: z.array(AiMemoryTypeSchema).optional(),
-  minImportance: z.number().min(0).max(1).optional(),
-  objectId: z.string().min(1).optional(),
-})
-
-/**
- * 记忆检索业务数据 Schema。
- * @example
- * ```ts
- * import { AiMemoryRecallDataSchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryRecallDataSchema.parse({
- *   items: [
- *     {
- *       id: 'example-1',
- *       content: 'Hello',
- *       type: 'fact',
- *       importance: 0,
- *       createdAt: 0,
- *       lastAccessedAt: 0,
- *       accessCount: 0
- *     }
- *   ]
- * })
- * void value
- * ```
- */
-export const AiMemoryRecallDataSchema = z.object({
-  items: z.array(AiMemoryEntrySchema),
-})
-
-/**
- * 记忆列表入参 Schema。
- * @example
- * ```ts
- * import { AiMemoryListInputSchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryListInputSchema.parse({})
- * void value
- * ```
- */
-export const AiMemoryListInputSchema = z.object({
-  types: z.array(AiMemoryTypeSchema).optional(),
-  objectId: z.string().min(1).optional(),
-  offset: z.number().int().min(0).optional(),
-  limit: z.number().int().min(1).max(100).optional(),
-})
-
-/**
- * 记忆列表业务数据 Schema。
- * @example
- * ```ts
- * import { AiMemoryListDataSchema } from '@h-ai/api-contract'
- *
- * const value = AiMemoryListDataSchema.parse({
- *   items: [
- *     {
- *       id: 'example-1',
- *       content: 'Hello',
- *       type: 'fact',
- *       importance: 0,
- *       createdAt: 0,
- *       lastAccessedAt: 0,
- *       accessCount: 0
- *     }
- *   ],
- *   total: 0
- * })
- * void value
- * ```
- */
-export const AiMemoryListDataSchema = z.object({
-  items: z.array(AiMemoryEntrySchema),
-  total: z.number(),
-})
-
-/**
- * 会话信息 Schema。
- * @example
- * ```ts
- * import { AiSessionInfoSchema } from '@h-ai/api-contract'
- *
- * const value = AiSessionInfoSchema.parse({
- *   objectId: 'example',
- *   sessionId: 'example',
- *   createdAt: 0,
- *   updatedAt: 0
- * })
- * void value
- * ```
- */
-export const AiSessionInfoSchema = z.object({
-  objectId: z.string(),
-  sessionId: z.string(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-})
-
-/**
- * 会话列表入参 Schema。
- * @example
- * ```ts
- * import { AiSessionListInputSchema } from '@h-ai/api-contract'
- *
- * const value = AiSessionListInputSchema.parse({})
- * void value
- * ```
- */
-export const AiSessionListInputSchema = z.object({
-  /** 省略时由服务端绑定认证用户，不能据客户端参数推断身份。 */
-  objectId: z.string().min(1).optional(),
-})
-
-/**
- * 会话列表业务数据 Schema。
- * @example
- * ```ts
- * import { AiSessionListDataSchema } from '@h-ai/api-contract'
- *
- * const value = AiSessionListDataSchema.parse({
- *   items: [
- *     {
- *       objectId: 'example',
- *       sessionId: 'example',
- *       createdAt: 0,
- *       updatedAt: 0
- *     }
- *   ]
- * })
- * void value
- * ```
- */
-export const AiSessionListDataSchema = z.object({
-  items: z.array(AiSessionInfoSchema),
-})
-
-/**
  * 对话记录 Schema。
  * @example
  * ```ts
@@ -830,44 +623,7 @@ export type AiSendMessageData = z.infer<typeof AiSendMessageDataSchema>
  * ```
  */
 export type AiSendMessageOutput = HaiResult<AiSendMessageData>
-/**
- * 按主体和条件检索记忆的请求。
- * @example
- * ```ts
- * import type { AiMemoryRecallInput } from '@h-ai/api-contract'
- * import { AiMemoryRecallInputSchema } from '@h-ai/api-contract'
- *
- * const value: AiMemoryRecallInput = AiMemoryRecallInputSchema.parse({
- *   query: 'example'
- * })
- * void value
- * ```
- */
-export type AiMemoryRecallInput = z.infer<typeof AiMemoryRecallInputSchema>
-/**
- * 按主体查询记忆列表的分页请求。
- * @example
- * ```ts
- * import type { AiMemoryListInput } from '@h-ai/api-contract'
- * import { AiMemoryListInputSchema } from '@h-ai/api-contract'
- *
- * const value: AiMemoryListInput = AiMemoryListInputSchema.parse({})
- * void value
- * ```
- */
-export type AiMemoryListInput = z.infer<typeof AiMemoryListInputSchema>
-/**
- * 按主体列出会话的分页请求。
- * @example
- * ```ts
- * import type { AiSessionListInput } from '@h-ai/api-contract'
- * import { AiSessionListInputSchema } from '@h-ai/api-contract'
- *
- * const value: AiSessionListInput = AiSessionListInputSchema.parse({})
- * void value
- * ```
- */
-export type AiSessionListInput = z.infer<typeof AiSessionListInputSchema>
+
 /**
  * 读取指定会话历史的请求。
  * @example
@@ -918,3 +674,69 @@ export type AiChatHistoryInput = z.infer<typeof AiChatHistoryInputSchema>
  * ```
  */
 export type AiChatRecord = z.infer<typeof AiChatRecordSchema>
+
+const streamToolCall = z.object({
+  index: z.number().int().nonnegative(),
+  id: z.string().optional(),
+  type: z.literal('function').optional(),
+  function: z.object({
+    name: z.string().optional(),
+    arguments: z.string().optional(),
+  }).optional(),
+})
+const usage = z.object({
+  prompt_tokens: z.number().int().nonnegative(),
+  completion_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative(),
+})
+
+/**
+ * 聊天流事件。delta 可能只包含分片工具参数或用量，done 标记完整结束。
+ * @example
+ * ```ts
+ * import { AiChatStreamEventSchema } from '@h-ai/api-contract'
+ *
+ * const event = AiChatStreamEventSchema.parse({ type: 'done' })
+ * void event
+ * ```
+ */
+export const AiChatStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('delta'),
+    id: z.string(),
+    model: z.string(),
+    created: z.number().int().nonnegative(),
+    choices: z.array(z.object({
+      index: z.number().int().nonnegative(),
+      delta: z.object({
+        role: z.literal('assistant').optional(),
+        content: z.string().nullable().optional(),
+        tool_calls: z.array(streamToolCall).optional(),
+      }),
+      finish_reason: z.enum([
+        'stop',
+        'length',
+        'tool_calls',
+        'content_filter',
+        'function_call',
+      ]).nullable(),
+    })),
+    usage: usage.nullable().optional(),
+  }),
+  z.object({
+    type: z.literal('done'),
+  }),
+])
+
+/**
+ * 聊天流中的单条事件，用 type 区分增量与完成。
+ * @example
+ * ```ts
+ * import type { AiChatStreamEvent } from '@h-ai/api-contract'
+ *
+ * function isDone(event: AiChatStreamEvent) {
+ *   return event.type === 'done'
+ * }
+ * ```
+ */
+export type AiChatStreamEvent = z.infer<typeof AiChatStreamEventSchema>

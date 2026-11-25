@@ -9,13 +9,12 @@
  */
 
 // 领域 contract 类型（用于推导客户端类型签名）。
-export * from './ai/ai-audio-ws-schemas.js'
-
-export type { AiContract } from './ai/ai-contract.js'
-export { AiChatStreamEventSchema } from './ai/ai-extension-contract.js'
-export type { AiChatStreamEvent, AiExtensionContract } from './ai/ai-extension-contract.js'
+export type { AiContract, AiExtensionContract } from './ai/ai-contract.js'
 // Schemas（含运行时 schema 常量 + 推导类型）。
-export * from './ai/ai-schemas.js'
+export * from './ai/audio/ai-audio-ws-schemas.js'
+export * from './ai/chats/ai-chat-schemas.js'
+export * from './ai/memories/ai-memory-schemas.js'
+export * from './ai/sessions/ai-session-schemas.js'
 // 扁平命名空间——所有 functionality 通过 `apiContract.*` 调用。
 export { apiContract } from './api-contract-main.js'
 export type { AuditContract } from './audit/audit-contract.js'
