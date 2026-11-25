@@ -533,7 +533,7 @@
   "feedback_replay": "Page replay",
   "feedback_replay_play": "Play",
   "feedback_replay_pause": "Pause",
-  "feedback_replay_hint": "Replay captured pages and interactions. Input values are masked; external assets may be missing.",
+  "feedback_replay_hint": "Replay captured pages and interactions. Input values are masked. Replay does not fetch network resources.",
   "feedback_replay_empty": "No page replay is available. Recording starts only when replay is enabled. You can also review screenshots or screen recordings.",
   "feedback_record": "Record screen",
   "feedback_record_start": "Start recording",

@@ -533,7 +533,7 @@
   "feedback_replay": "ページ再生",
   "feedback_replay_play": "再生",
   "feedback_replay_pause": "一時停止",
-  "feedback_replay_hint": "収集した画面と操作を再生します。入力内容は隠され、外部リソースは表示されない場合があります。",
+  "feedback_replay_hint": "収集した画面と操作を再生します。入力内容は隠され、再生中にネットワークからリソースを取得しません。",
   "feedback_replay_empty": "再生できる操作記録がありません。有効化後の操作のみ記録されます。画像や録画も確認できます。",
   "feedback_record": "画面録画",
   "feedback_record_start": "録画を開始",

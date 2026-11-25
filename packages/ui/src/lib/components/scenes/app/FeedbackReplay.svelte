@@ -1,4 +1,4 @@
-<!-- 按需加载回放引擎；仅接受宿主已脱敏的页面事件，不执行原应用脚本。 -->
+<!-- 先建立禁止网络访问的文档，再在其内部重建已脱敏的页面事件。 -->
 <script lang='ts'>
   import type { Replayer } from '@rrweb/replay'
   import type { FeedbackEvidenceView } from './feedback-types.js'
@@ -15,16 +15,23 @@
    * ```
    */
   type ReplayEvent = Exclude<ConstructorParameters<typeof Replayer>[0][number], string>
+  // 回放引擎会替换内层快照文档，限制在外层文档设定并由其子文档继承。
+  const replayDocument = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src about:; base-uri 'none'; form-action 'none'"><style>body{margin:0;overflow:hidden}iframe{border:0}</style></head><body></body></html>`
   let viewport = $state<HTMLDivElement>()
-  let target = $state<HTMLDivElement>()
+  let sandboxFrame = $state<HTMLIFrameElement>()
+  let target = $state.raw<HTMLElement>()
   let player = $state.raw<Replayer>()
   let loading = $state(true)
   let error = $state('')
   let playing = $state(false)
   let position = $state(0)
   let duration = $state(0)
-  let scale = $state(1)
-  let height = $state(400)
+  let viewportWidth = $state(0)
+  let replayWidth = $state(1024)
+  let replayHeight = $state(768)
+  const scale = $derived(viewportWidth
+    ? Math.min(1, viewportWidth / replayWidth)
+    : 1)
   let frame = 0
   let events: ReplayEvent[] = []
   let snapshotOffset = 0
@@ -33,24 +40,31 @@
     return value !== null && typeof value === 'object' && 'timestamp' in value && typeof value.timestamp === 'number'
       && 'type' in value && typeof value.type === 'number' && Number.isInteger(value.type) && value.type >= 0 && value.type <= 6 && 'data' in value
   }
-  function construct() {
-    if (!player || !target)
-      return
-    const Player = player.constructor as typeof Replayer
-    player.destroy()
-    player = new Player(events, {
-      root: target,
+  function createPlayer(Player: typeof Replayer, root: HTMLElement) {
+    const current = new Player(events, {
+      root,
       showWarning: false,
       showDebug: false,
       loadTimeout: 1000,
     })
+    current.on('resize', () => {
+      if (player === current) {
+        replayWidth = Number(current.iframe.width) || 1024
+        replayHeight = Number(current.iframe.height) || 768
+      }
+    })
+    return current
   }
   function seek(value: number) {
+    if (!player || !target)
+      return
     playing = false
     cancelAnimationFrame(frame)
-    construct()
+    const Player = player.constructor as typeof Replayer
+    player.destroy()
+    player = createPlayer(Player, target)
     position = Math.max(0, Math.min(duration, value))
-    player?.pause(Math.max(position, snapshotOffset) + 1)
+    player.pause(Math.max(position, snapshotOffset) + 1)
   }
   function update() {
     if (!playing || !player)
@@ -85,11 +99,11 @@
     if (!root || !container)
       return
     let active = true
+    let styles: HTMLStyleElement | undefined
     const observer = new ResizeObserver(() => {
-      const width = Number(player?.iframe.width) || 1024
-      scale = Math.min(1, container.clientWidth / width)
-      height = (Number(player?.iframe.height) || 768) * scale
+      viewportWidth = container.clientWidth
     })
+    observer.observe(container)
     void (async () => {
       try {
         const records = await load()
@@ -99,20 +113,19 @@
         const snapshot = events.find(event => event.type === 2)
         if (!snapshot || events.length < 2)
           return
-        const { Replayer: Player } = await import('@rrweb/replay')
-        await import('@rrweb/replay/dist/style.css')
+        const [{ Replayer: Player }, { default: replayStyles }] = await Promise.all([
+          import('@rrweb/replay'),
+          import('@rrweb/replay/dist/style.css?inline'),
+        ])
         if (!active)
           return
+        styles = root.ownerDocument.createElement('style')
+        styles.textContent = replayStyles
+        root.ownerDocument.head.append(styles)
         duration = Math.max(0, events.at(-1)!.timestamp - events[0]!.timestamp)
         snapshotOffset = Math.max(0, snapshot.timestamp - events[0]!.timestamp)
-        player = new Player(events, {
-          root,
-          showWarning: false,
-          showDebug: false,
-          loadTimeout: 1000,
-        })
+        player = createPlayer(Player, root)
         player.pause(snapshotOffset + 1)
-        observer.observe(container)
       }
       catch (cause) {
         if (active)
@@ -129,6 +142,7 @@
       observer.disconnect()
       player?.destroy()
       player = undefined
+      styles?.remove()
     }
   })
   useToastFeedback(() => error)
@@ -139,9 +153,25 @@
   {#if loading}<p role='status'>{uiM('feedback_loading')}</p>
   {:else if !player}<p class='rounded bg-base-200 p-4 text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
   <div bind:this={viewport} class='relative w-full overflow-hidden rounded-lg bg-base-200' style:height={player
-    ? `${height}px`
+    ? `${replayHeight * scale}px`
     : '0'}>
-    <div bind:this={target} class='origin-top-left' style:transform={`scale(${scale})`}></div>
+    <iframe
+      bind:this={sandboxFrame}
+      title={uiM('feedback_replay')}
+      srcdoc={replayDocument}
+      sandbox='allow-same-origin'
+      tabindex='-1'
+      class='origin-top-left border-0 pointer-events-none'
+      width={replayWidth}
+      height={replayHeight}
+      style:transform={`scale(${scale})`}
+      onload={() => {
+        const replay = sandboxFrame?.contentDocument
+        target = replay?.URL === 'about:srcdoc'
+          ? replay.body
+          : undefined
+      }}
+    ></iframe>
   </div>
   {#if player}
     <div class='flex flex-wrap items-center gap-2'>

@@ -533,7 +533,7 @@
   "feedback_replay": "页面回放",
   "feedback_replay_play": "播放",
   "feedback_replay_pause": "暂停",
-  "feedback_replay_hint": "回放已采集的页面与操作。输入内容已遮挡，外部资源可能缺失。",
+  "feedback_replay_hint": "回放已采集的页面与操作。输入内容已遮挡，回放不会联网加载资源。",
   "feedback_replay_empty": "没有可用的页面回放。仅在启用回放采集后记录操作；也可查看截图或录屏。",
   "feedback_record": "录屏",
   "feedback_record_start": "开始录屏",
