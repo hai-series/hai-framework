@@ -24,6 +24,8 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 [查 API 清单](../../docs/usage/function/ui.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+从[组件图鉴](../../docs/usage/function/ui.md#component-catalog)浏览每个公开组件的用途、Svelte 用法和截图。
+
 [主题切换](../../docs/usage/function/ui.md#theme)支持通过现有选择器应用浅色液态玻璃主题（`liquid-glass`）并保存偏好。宿主可通过 `ThemeSelector` 的 `themeIds` 限定可选的内置主题。
 
 [工具与产物工作台](../../docs/usage/function/ui.md#工具与产物工作台)提供参数表单、示例、任务进度、文档编辑、版本冲突与媒体预览；应用只需连接已授权的读写和执行回调。

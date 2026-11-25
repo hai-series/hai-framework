@@ -24,6 +24,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 
 [Browse the API list](../../docs/usage/function/ui.en.md#api-reference) for entry points, inputs, results and examples.
 
+Open the [component gallery](../../docs/usage/function/ui.en.md#component-catalog) for the purpose, Svelte usage and screenshot of every public component.
+
 [Switch themes](../../docs/usage/function/ui.en.md#theme) to apply the light Liquid Glass theme (`liquid-glass`) through the existing selector and save that preference. Set `ThemeSelector`’s `themeIds` prop to limit the built-in choices.
 
 [Tool and artifact workspaces](../../docs/usage/function/ui.en.md#tool-workspaces) provide parameter forms, examples, task progress, document editing, version conflicts, and media previews. Applications connect authorized read, write, and execution callbacks.
