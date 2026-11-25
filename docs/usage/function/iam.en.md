@@ -4,11 +4,9 @@
 
 [Chinese source](iam.md) · [Configuration](../configuration/iam.en.md) · [Data structures](../data/iam.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -21,6 +19,8 @@
 | `@h-ai/reach` | Sends verification codes, password resets, and initial password setup invitations using standard templates. | Install when Reach handles delivery. The application can also supply its own delivery callbacks. | Initialize Reach first, then pass it to `iam.init({ ...config, reach })`. |
 | LDAP directory and `ldapts` | Connects to a directory for LDAP sign-in. | LDAP sign-in requires a reachable directory. Install `ldapts` to use the default client. | Pass directory settings to IAM. To use a custom client, pass `ldapClientFactory`. |
 | `altcha`, `zod` | Create and verify CAPTCHA challenges and validate configuration and input. | Installed with IAM. ALTCHA is used when CAPTCHA is enabled. | IAM invokes these libraries according to the configuration. |
+
+## Quick start
 
 ### Example
 

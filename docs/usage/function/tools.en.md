@@ -15,13 +15,9 @@ Use `tools` to define, register and execute business tools. Ordinary business co
 
 The lightweight entry works in browsers, but a trusted server must still verify server-side access. Keep `/server` out of frontend imports.
 
-<a id="quick-start"></a>
-
-## Minimal integration
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -29,6 +25,10 @@ The lightweight entry works in browsers, but a trusted server must still verify 
 | `@h-ai/runner` | Execute and resume recoverable tool runs and background jobs | When using server-side `createService()` or `createJobTools()` | The host initializes Runner and passes it to the factory. Register handlers before submitting jobs |
 | Runner container environments | Provide the engine and images for document, OCR, browser, and other standalone jobs | When using the corresponding `createJobTools()` jobs | Prepare execution nodes, then pass configured environment IDs to the factory |
 | Host file access interface | Read tool artifacts or provide file access to background jobs | When using `createArtifactTools()` or `createJobTools()` | Pass `files` restricted to the authenticated identity and scope when creating the tools |
+
+<a id="quick-start"></a>
+
+## Minimal integration
 
 ### Example
 

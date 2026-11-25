@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/vecdb/README.md) · [配置清单](../configuration/vecdb.md) · [数据结构](../data/vecdb.md) · [数据服务接入](../development/data.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -21,6 +17,10 @@
 | PostgreSQL（pgvector 扩展、`pg`） | 连接共享 PostgreSQL 并执行向量搜索 | 使用 `type: "pgvector"` 时 | 准备驱动、数据库和扩展，直接调用 `vecdb.init()` |
 | Qdrant | 通过 HTTP 访问向量数据库 | 使用 `type: "qdrant"` 时 | 准备服务地址和所需凭据，再调用 `vecdb.init()` |
 | Chroma（`chromadb`） | 连接远程 Chroma 或启动本地服务 | 使用 `type: "chroma"` 时 | 准备驱动。远程连接需服务地址，本地 `path` 模式需 `serverCommand` 指定的命令可用（默认 `chroma`）。然后调用 `vecdb.init()` |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

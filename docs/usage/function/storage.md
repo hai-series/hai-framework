@@ -8,13 +8,9 @@ Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.s
 
 [模块 README](../../../packages/storage/README.md) · [配置清单](../configuration/storage.md) · [数据结构](../data/storage.md) · [存储接入](../development/data.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -23,6 +19,10 @@ Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.s
 | 可写本地目录 | 存放本地文件和元数据 | `type: 'local'` 时 | 为应用进程准备目录或父目录的读写权限，再传入 `root` 初始化 |
 | S3 兼容存储 | 存放对象并签发预签名 URL | `type: 's3'` 时。AWS SDK 随 Storage 安装 | 准备桶和凭据后初始化。也可授权并开启 `createBucket`，由 Storage 创建缺失的桶 |
 | 签名服务和存储端 CORS | 支持浏览器直传对象存储 | 从浏览器调用 `@h-ai/storage/client` 时 | 配置存储端 CORS，由服务端校验访问权限后签发 URL。前端可用 `@h-ai/api-client` 取得 URL，再交给上传方法 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### Node.js 服务端
 

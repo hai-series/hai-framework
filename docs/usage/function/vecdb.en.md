@@ -2,13 +2,9 @@
 
 [Chinese source](vecdb.md) · [Configuration](../configuration/vecdb.en.md) · [Data structures](../data/vecdb.en.md)
 
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -17,6 +13,8 @@
 | PostgreSQL (pgvector extension, `pg`) | Connect to shared PostgreSQL for vector search | With `type: "pgvector"` | Prepare the driver, database, and extension, then call `vecdb.init()` directly |
 | Qdrant | Access the vector database over HTTP | With `type: "qdrant"` | Prepare the service URL and any credentials before `vecdb.init()` |
 | Chroma (`chromadb`) | Connect to a remote Chroma server or start one locally | With `type: "chroma"` | Prepare the driver. Remote connections need a service URL. Local `path` mode needs the command set by `serverCommand` (default: `chroma`). Then call `vecdb.init()` |
+
+## Quick start
 
 ### Example
 
@@ -266,8 +264,6 @@ Suppose `doc-1` already stores the text `Install`, and a second `insert` call se
 Use `upsert` to update existing documents. See the [Chroma `add` contract](https://docs.trychroma.com/docs/collections/add-data#behaviors) for its behavior on existing IDs.
 
 To build a LanceDB collection from existing documents, see [how to import them](../data/vecdb.en.md#lancedb-import-documents).
-
-<a id="chroma-metadata-replacement"></a>
 
 ##### Chroma metadata replacement
 

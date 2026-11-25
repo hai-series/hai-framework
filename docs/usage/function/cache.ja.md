@@ -4,19 +4,19 @@
 
 [モジュール README](../../../packages/cache/README.ja.md) · [設定](../configuration/cache.ja.md) · [データ構造](../data/cache.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
 | Node.js と `@h-ai/core` | サーバー側でのキャッシュの読み書き、Core のログと結果型 | Cache は Node.js 上で動作します。Core は Cache と同時にインストールされます | `cache.init()` に設定を渡し、成功を確認してからキャッシュを利用するモジュールを起動します |
 | Redis と `ioredis` | 値、カウンター、ロックをプロセス間で共有します。Redis ドライバーは Cache と同時にインストールされます | `type: 'redis'` では Redis が必要です。本番環境で状態の共有が必要な場合は Redis を使用します | Redis を起動するか、マネージドインスタンスの接続設定を準備して `cache.init()` を呼びます |
 | プロセスメモリー | 単一プロセス内でキャッシュの保管と期限切れ処理 | ローカル開発やテストで `type: 'memory'` を選ぶとき | `cache.init({ type: 'memory' })` を呼びます |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

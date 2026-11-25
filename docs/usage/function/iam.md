@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/iam/README.md) · [配置清单](../configuration/iam.md) · [数据结构](../data/iam.md) · [身份认证接入](../development/authentication.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -25,6 +21,10 @@
 | `@h-ai/reach` | 通过标准模板发送验证码、密码重置及初始设密邀请。 | 使用 Reach 发送时安装。应用也可以提供自己的发送回调。 | 先初始化 Reach，再传给 `iam.init({ ...config, reach })`。 |
 | LDAP 目录与 `ldapts` | 连接目录执行 LDAP 登录。 | 启用 LDAP 需要可访问的目录。使用默认客户端时安装 `ldapts`。 | 初始化 IAM 时传目录配置。使用自定义客户端时传 `ldapClientFactory`。 |
 | `altcha`、`zod` | 生成与验证验证码挑战，校验配置与输入。 | 随 IAM 安装。ALTCHA 用于开启人机验证的场景。 | IAM 按配置调用。 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 安装
 

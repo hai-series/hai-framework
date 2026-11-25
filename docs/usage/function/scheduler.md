@@ -6,19 +6,19 @@
 
 Scheduler 在 Node.js 服务中定时或手动运行任务。执行方式有三种：调用 HTTP 接口、运行受信任的 JavaScript，或调用应用的 `onTaskExecute`。各节点通过共享 RelDB 数据库协调。
 
-<a id="quick-start"></a>
-
-## 快速开始
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | 保存任务和执行记录，协调多节点领取 | 必需。本地开发可用 SQLite，生产使用共享 PostgreSQL 或 MySQL | 先初始化 RelDB，再调用 `scheduler.init()` |
 | `@h-ai/core`、`croner` | 提供日志、统一结果和 Cron 表达式解析 | 随 Scheduler 安装 | 应用使用 Core 配置中心时先初始化 Core。Cron 解析器无需单独初始化 |
 | 应用执行回调或外部服务 | 按任务定义执行应用回调、调用 HTTP 接口或运行受信任的 JavaScript | 按所选任务类型准备 | 初始化时传入所需的回调和配置。使用定时调度时，初始化后调用 `scheduler.start()` |
+
+<a id="quick-start"></a>
+
+## 快速开始
 
 ### 接入示例
 

@@ -8,19 +8,19 @@ SM2 の暗号化・署名、SM3 のダイジェストと HMAC、SM4 の暗号化
 
 [README](../../../packages/crypto/README.ja.md) · [設定](../configuration/crypto.ja.md) · [データ構造](../data/crypto.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
 | Node.js またはブラウザー | 暗号アルゴリズムと通信暗号化ヘルパーを実行 | どちらも `@h-ai/crypto` をインポートします。非同期パスワードハッシュには Node.js が必要です | アルゴリズムの実行や通信クライアント、サーバーの作成前に `crypto.init()` を呼びます |
 | `@h-ai/core` | ログ、結果型、エラー処理 | Crypto と同時にインストールされます | Crypto の API からアルゴリズムを実行します |
 | `@h-ai/cache` と Redis | クライアント公開鍵の保存、リプレイ防止用のリクエスト ID の登録、割り当て量の集計 | Cache は任意インストールの依存パッケージです。`crypto.transport.createKeyStore({ cache })` を使用する場合に必要です。本番環境で共有状態が必要な場合は Redis を使用します | Cache を導入し、選択したバックエンドの設定で `cache.init()` を呼びます。鍵ストアの作成後に `crypto.transport.createServer()` へ渡します |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/feedback/README.md) · [配置清单](../configuration/feedback.md) · [数据结构](../data/feedback.md) · [反馈运维](../operations/feedback.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -25,6 +21,10 @@
 | `@tauri-apps/plugin-dialog`、`@tauri-apps/plugin-fs` | 在 Tauri 中选位置并保存离线诊断包 | 使用 Tauri 导出入口时 | 安装并注册插件，配置文件权限，再调用导出适配器 |
 
 浏览器调用 `@h-ai/feedback/client` 或离线工具调用 `@h-ai/feedback/bundle` 时，可直接使用对应入口。只有服务端需要初始化数据库和存储。
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

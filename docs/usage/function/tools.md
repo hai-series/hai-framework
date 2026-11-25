@@ -13,13 +13,9 @@
 
 浏览器可导入轻量入口，但服务端权限仍由可信服务端验证。不要把 `/server` 导入前端。
 
-<a id="quick-start"></a>
-
-## 最小接入
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -27,6 +23,10 @@
 | `@h-ai/runner` | 为可恢复的工具服务和后台作业提供执行及恢复能力 | 使用服务端的 `createService()` 或 `createJobTools()` 时 | 宿主先初始化 Runner，再传给工厂，在提交任务前完成处理器注册 |
 | Runner 容器环境 | 为文档、OCR、浏览器等独立作业提供引擎和镜像 | 使用相应的 `createJobTools()` 作业时 | 先准备执行节点，再将已配置的环境 ID 传给工厂 |
 | 宿主的文件访问接口 | 读取工具产物，或为后台作业提供文件访问 | 使用 `createArtifactTools()` 或 `createJobTools()` 时 | 创建工具时传入受身份和作用域约束的 `files` |
+
+<a id="quick-start"></a>
+
+## 最小接入
 
 ### 接入示例
 

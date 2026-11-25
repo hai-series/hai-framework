@@ -4,11 +4,9 @@
 
 [Chinese source](reldb.md) · [Configuration](../configuration/reldb.en.md) · [Data structures](../data/reldb.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -16,6 +14,8 @@
 | SQLite and `better-sqlite3` | Open a local database file or an in-memory database. The native driver is installed with RelDB | When using `type: 'sqlite'` | Make sure the driver loads on the target Node.js version and operating system. Prepare a writable path for a database file |
 | PostgreSQL and `pg` | Connect to PostgreSQL. The driver is an optional package dependency | When using `type: 'postgresql'` | Prepare a reachable database and connection settings. Enable optional dependencies during installation and make sure `pg` is available before initialization |
 | MySQL and `mysql2` | Connect to MySQL. The driver is an optional package dependency | When using `type: 'mysql'` | Prepare a reachable database and connection settings. Enable optional dependencies during installation and make sure `mysql2` is available before initialization |
+
+## Quick start
 
 ### Example
 

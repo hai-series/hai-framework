@@ -2,13 +2,9 @@
 
 [原文（中国語）](capacitor.md) · [設定](../configuration/capacitor.ja.md) · [データ構造](../data/capacitor.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -18,6 +14,10 @@
 | `@capacitor/camera`、`@capacitor/push-notifications`、`@capacitor/status-bar` | カメラ、プッシュ通知、ステータスバーを操作 | 使う機能に応じて導入 | プラグインを同期し、権限とプッシュサービスを設定してから初期化して呼び出す |
 | `@aparajita/capacitor-secure-storage` | 安全なネイティブストレージでトークンを読み書き | `capacitor.createTokenStorage()` のアダプターを使う場合 | Android または iOS プロジェクトにプラグインを同期。アダプターはそのまま作成可能 |
 | `@h-ai/core`、`@h-ai/api-client` | 結果型とトークン保存のインターフェースを提供 | モジュールとともにインストール。フレームワークの HTTP API を呼び出す場合は API Client を直接利用 | ネイティブのトークン保存を使う場合はアダプターを `auth.storage` として `apiClient.init()` に渡す |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

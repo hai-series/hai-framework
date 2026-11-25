@@ -6,19 +6,19 @@
 
 [模块 README](../../../packages/cache/README.md) · [配置清单](../configuration/cache.md) · [数据结构](../data/cache.md) · [数据服务接入](../development/data.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
 | Node.js、`@h-ai/core` | 在服务端读写缓存，使用 Core 的日志和结果类型 | 缓存服务在 Node.js 运行，安装 Cache 会一起安装 Core | 传入配置调用 `cache.init()`，成功后再启动依赖缓存的模块 |
 | Redis 和 `ioredis` | 跨进程共享键值、计数和锁。Redis 驱动随 Cache 安装 | 使用 `type: 'redis'` 时需要 Redis。生产环境需要共享状态时使用 Redis | 先启动 Redis 或准备托管实例的连接信息，再调用 `cache.init()` |
 | 进程内存 | 进程内存储和过期处理 | 本地开发和测试使用 `type: 'memory'` 时 | 直接调用 `cache.init({ type: 'memory' })` |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/runner/README.md) · [配置清单](../configuration/runner.md) · [数据结构](../data/runner.md) · [Agent 与 Runner 接入](../development/agent.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -20,6 +16,10 @@
 | `@h-ai/core` | 提供日志和统一结果 | 随 Runner 安装 | 应用使用 Core 配置中心时先初始化 Core |
 | Node.js | 运行服务端 API 和可信应用处理器 | 运行 Runner 的节点 | 初始化 Runner 后，在执行节点注册处理器，再提交相应任务 |
 | Podman 或 Docker | 运行隔离任务和预热容器 | 使用容器的执行节点 | 启动 Runner 执行节点前准备引擎和镜像，详见隔离执行示例 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

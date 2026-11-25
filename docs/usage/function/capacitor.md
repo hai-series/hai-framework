@@ -8,13 +8,9 @@
 
 [模块 README](../../../packages/capacitor/README.md) · [配置清单](../configuration/capacitor.md) · [数据结构](../data/capacitor.md) · [构建和原生交付](../getting-started/build.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -24,6 +20,10 @@
 | `@capacitor/camera`、`@capacitor/push-notifications`、`@capacitor/status-bar` | 提供相机、推送和状态栏功能 | 按所用功能安装 | 同步插件并配置所需平台权限及推送服务，再初始化并调用 |
 | `@aparajita/capacitor-secure-storage` | 在原生端安全读写令牌 | 使用 `capacitor.createTokenStorage()` 返回的适配器读写令牌时 | 在 Android 或 iOS 项目同步插件。适配器可直接创建 |
 | `@h-ai/core`、`@h-ai/api-client` | 提供结果类型和令牌存储契约 | 随模块安装。应用调用框架 HTTP 接口时可直接使用 API Client | 使用原生令牌存储时，将适配器作为 `auth.storage` 传给 `apiClient.init()` |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

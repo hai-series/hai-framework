@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/deploy/README.md) · [配置清单](../configuration/deploy.md) · [数据结构](../data/deploy.md) · [部署操作](../operations/deployment.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -21,6 +17,10 @@
 | Docker 或 Podman | 准备、导入和核对容器镜像 | 执行相应的 `docker-ssh` 镜像操作时 | 先在执行相应操作的机器安装并启动引擎 |
 | OpenSSH、Linux 和 Compose | 通过 SSH 发布，或在 Linux 上执行离线包 | 直接远程发布需要本机 OpenSSH。执行容器部署需要目标 Linux、支持 `--pull never` 的 Compose 实现和部署账户权限 | 发布前配置 SSH 认证、目标引擎与 Compose，并按[交付说明](../configuration/delivery.md#离线交付与服务器条件)准备主机工具 |
 | Vercel 账户、访问令牌和预构建产物 | 将构建产物发布到 Vercel | 选择 `vercel` 时 | 先准备令牌与符合 Vercel Build Output API 的目录，再初始化和部署 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

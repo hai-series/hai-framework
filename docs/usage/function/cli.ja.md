@@ -4,13 +4,9 @@
 
 [原文（中国語）](cli.md) · [設定](../configuration/cli.ja.md) · [データ構造](../data/cli.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -20,6 +16,10 @@
 | `@h-ai/deploy` | プロジェクトのデプロイ機能 | `hai deploy` を実行するとき | プロジェクト生成時にデプロイ機能を有効にするか、プロジェクトで `hai add deploy` を実行します |
 | Docker または Podman | イメージのビルド、コンテナ内での Android ビルド | `hai build --target image` を実行するか、Android のコンテナビルドを選ぶとき | ビルド前にローカルエンジンを導入して起動します |
 | プラットフォーム SDK と Rust | ネイティブインストーラーのビルド | ローカルで Android、iOS、デスクトップ向けにビルドするとき | [ネイティブビルドガイド](../getting-started/build.ja.md)に従って SDK を準備します。Tauri のデスクトップビルドには Rust も必要です |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

@@ -2,11 +2,9 @@
 
 [Chinese source](capacitor.md) · [Configuration](../configuration/capacitor.en.md) · [Data structures](../data/capacitor.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -16,6 +14,8 @@
 | `@capacitor/camera`, `@capacitor/push-notifications`, `@capacitor/status-bar` | Supply camera, push, and status bar operations | Install the plugins for the features you use | Sync plugins and configure the required platform permissions and push services before initializing and calling them |
 | `@aparajita/capacitor-secure-storage` | Read and write credentials in native secure storage | When using the adapter returned by `capacitor.createTokenStorage()` | Sync the plugin into the Android or iOS project. Create the adapter directly |
 | `@h-ai/core`, `@h-ai/api-client` | Supply result types and the token storage contract | Installed with the module. Import API Client directly when calling framework HTTP endpoints | To use native credential storage, pass the adapter as `auth.storage` to `apiClient.init()` |
+
+## Quick start
 
 ### Example
 
@@ -236,8 +236,6 @@ Use the native status-bar plugin to configure style and overlay, then show or hi
 | `capacitor.statusBar.configure(config)` | Apply only the supplied native status bar settings | Required `config` object with optional `style`, `backgroundColor`, and `overlay`. See [status bar options](#status-bar-options). | `Promise<HaiResult<void>>` | `await capacitor.statusBar.configure({ style: 'dark' })` |
 | `capacitor.statusBar.show()` | Show the native status bar | None | `Promise<HaiResult<void>>` | `await capacitor.statusBar.show()` |
 | `capacitor.statusBar.hide()` | Hide the native status bar | None | `Promise<HaiResult<void>>` | `await capacitor.statusBar.hide()` |
-
-<a id="status-bar-options"></a>
 
 #### Status bar options
 

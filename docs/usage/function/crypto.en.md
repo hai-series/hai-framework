@@ -8,17 +8,17 @@ Use SM2 for encryption and signatures, SM3 for digests and HMAC, SM4 for content
 
 [Module README](../../../packages/crypto/README.en.md) · [Configuration](../configuration/crypto.en.md) · [Data structures](../data/crypto.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
 | Node.js or a browser | Run cryptographic algorithms and transport encryption helpers | Both runtimes import `@h-ai/crypto`. Asynchronous password hashing uses Node.js | Call `crypto.init()` before using algorithms or creating a transport client or server |
 | `@h-ai/core` | Logging, result types and error handling | Installed with Crypto | Call the algorithms through Crypto |
 | `@h-ai/cache` and Redis | Store client public keys, claim request IDs for replay protection and track quotas | Cache is an optional package dependency. It is required when using `crypto.transport.createKeyStore({ cache })`. Use Redis when production requires shared state | Install Cache and call `cache.init()` with the selected backend. Create the key store and pass it to `crypto.transport.createServer()` |
+
+## Quick start
 
 ### Example
 

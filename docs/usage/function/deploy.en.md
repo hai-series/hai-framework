@@ -4,11 +4,9 @@
 
 [Chinese source](deploy.md) · [Configuration](../configuration/deploy.en.md) · [Data structures](../data/deploy.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -17,6 +15,8 @@
 | Docker or Podman | Prepare, import and verify container images | For the corresponding `docker-ssh` image operations | Install and start the engine on the machine performing the operation |
 | OpenSSH, Linux and Compose | Deploy over SSH or apply an offline bundle on Linux | Remote delivery requires local OpenSSH. Applying a container release requires a Linux target, a Compose implementation supporting `--pull never` and deployment account permissions | Set up SSH authentication, the target engine and Compose. See the [host tools list](../configuration/delivery.md#离线交付与服务器条件) |
 | Vercel account, access token and prebuilt artifact | Publish a build to Vercel | When selecting `vercel` | Prepare a token and a Vercel Build Output API directory before initialization and deployment |
+
+## Quick start
 
 ### Example
 

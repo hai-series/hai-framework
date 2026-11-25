@@ -4,13 +4,9 @@
 
 [原文（中国語）](serv.md) · [設定](../configuration/serv.ja.md) · [データ構造](../data/serv.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -22,6 +18,10 @@
 | `@h-ai/crypto` | HTTP リクエストとレスポンスを暗号化 | Serv とともにインストール。`transport` を有効にする場合に必要 | Crypto を初期化し、キーリングと共有の鍵登録ストアを用意してから `serv.createApp()` に渡す |
 | `@h-ai/iam` | IAM ルート、トークン検証、セッション更新を提供 | 標準 IAM ルートまたは IAM による検証や更新を使う場合 | IAM を初期化してから `serv.createIamProcedures()` または `serv.createApp()` に渡す |
 | `@h-ai/storage`、`@h-ai/ai`、`@h-ai/feedback` | 各機能の組み込みルートを提供。AI は音声処理も提供 | 公開する機能に応じて選択 | 選択したサービスを初期化してから各ルートのファクトリーに渡す。音声は `serv.createApp()` の `audio` オプションで有効にする |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

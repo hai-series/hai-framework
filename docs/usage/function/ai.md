@@ -8,13 +8,9 @@
 
 [模块 README](../../../packages/ai/README.md) · [配置清单](../configuration/ai.md) · [数据结构](../data/ai.md) · [AI 接入](../development/ai.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -24,6 +20,10 @@
 | `@h-ai/core`、`@h-ai/api-contract`、`@h-ai/datapipe`、`@h-ai/tools` | 提供基础能力、语音协议、文档处理和工具注册 | 随 AI 安装。自定义工具时可创建工具注册表并接入 AI | 应用使用 Core 配置中心时先初始化 Core。工具注册表可按需创建 |
 | 应用 HTTP 或 WebSocket 入口 | 为浏览器提供聊天或语音能力 | 从浏览器调用 AI 时 | 先在服务端装配 AI 和认证。聊天走应用 HTTP 接口，语音客户端连接 WebSocket 并提供 `getTicket` |
 | `pdfjs-dist`、`mammoth` | 原生解析 PDF、DOCX | 使用相应原生解析能力时 | 使用前安装该格式对应的包 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 开发 LLM-only（零数据库依赖）
 

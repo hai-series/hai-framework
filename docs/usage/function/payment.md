@@ -10,13 +10,9 @@
 
 [微信公众号 JSAPI 付款](#wechat-jsapi-flow) · [支付宝手机网站付款](#alipay-wap-flow)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -25,6 +21,10 @@
 | `@h-ai/reldb` | 保存 Stripe 渠道映射和幂等结果 | 随 Payment 安装，启用 Stripe 时必须连接数据库 | 先执行 `reldb.init()` 并检查结果，再执行 `payment.init()`。生产环境使用共享数据库 |
 | `@h-ai/audit` | 记录成功的下单、通知、退款和关单操作 | 随 Payment 安装，需要持久化支付审计时启用 | 先执行 `reldb.init()` 和 `audit.init()`，再处理支付业务 |
 | 微信支付、支付宝或 Stripe | 创建渠道订单、收款与验证通知 | 配置了对应渠道时 | 准备商户凭据。接收渠道通知前配置应用的通知端点。客户端调起条件见下方渠道示例 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

@@ -4,13 +4,9 @@
 
 [原文（中国語）](kit.md) · [設定](../configuration/kit.ja.md) · [データ構造](../data/kit.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -24,6 +20,10 @@
 | `@h-ai/audit` | フックが捕捉した監査イベントを記録 | Kit とともにインストール。監査を有効にする場合に初期化 | リクエストの受付前に `capture` を指定して Audit を初期化 |
 | `@h-ai/cache` と Redis | レート制限の共有カウンターを提供 | 組み込みの Redis レート制限ストアを使う場合 | Redis に接続し、`kit.middleware.createCacheRateLimitStore()` でストアを作成してフックへ渡す |
 | `@h-ai/feedback` | フィードバックの REST ルートを処理 | `kit.createFeedbackHandler()` を使う場合 | Feedback を初期化し、信頼できるコンテキスト解決関数とともにハンドラーに渡す |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

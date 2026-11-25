@@ -6,13 +6,9 @@
 
 [Module README](../../../packages/api-contract/README.en.md) · [Configuration](../configuration/api-contract.en.md) · [Data structures](../data/api-contract.en.md)
 
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -23,6 +19,8 @@
 | `@h-ai/api-client` | Infer client call inputs and outputs. | For the [typed client](#use-with-client). | Make the service reachable, initialize the client, and close the instance after use. |
 
 oRPC, Core, and the Storage schemas are installed as dependencies of the contract package. A built-in domain needs its runtime module when the application mounts and runs its business implementation.
+
+## Quick start
 
 <a id="example"></a>
 

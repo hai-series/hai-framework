@@ -6,13 +6,9 @@
 
 [モジュール README](../../../packages/audit/README.ja.md) · [設定一覧](../configuration/audit.ja.md) · [データ構造](../data/audit.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -25,6 +21,10 @@
 | `@h-ai/scheduler` | バックアップとアラートの確認を定期実行します。 | バックアップまたはアラート確認を定期実行する場合にインストールします。 | Audit の起動後に `audit.schedulerPlan` のタスクとフックを Scheduler に渡します。終了時は Scheduler を先に閉じます。 |
 
 自動収集を使う場合は、IAM の起動や Kit・Serv のリクエスト受付より先に Audit を起動します。Payment の監査連携を使う場合は決済処理より先に起動します。終了時はそれらの処理を止めてから Audit を閉じます。[収集の起点](../configuration/audit.ja.md#audit-capture)を参照してください。
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/serv/README.md) · [配置清单](../configuration/serv.md) · [数据结构](../data/serv.md) · [前后端接入](../development/frontend-backend.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -24,6 +20,10 @@
 | `@h-ai/crypto` | 加密 HTTP 请求和响应 | 随 Serv 安装。设置 `transport` 时需要 | 初始化 Crypto，准备密钥环和共享登记存储，再传入 `serv.createApp()` |
 | `@h-ai/iam` | 提供 IAM 路由、令牌验证和会话刷新 | 使用标准 IAM 路由或 IAM 验证和刷新时 | 初始化 IAM 后传给 `serv.createIamProcedures()` 或 `serv.createApp()` |
 | `@h-ai/storage`、`@h-ai/ai`、`@h-ai/feedback` | 提供各自的预置业务路由。AI 还提供音频服务 | 按挂载的功能选择 | 初始化所选服务后传给对应的路由工厂。音频通过 `serv.createApp()` 的 `audio` 选项接入 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

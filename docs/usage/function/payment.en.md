@@ -6,11 +6,9 @@
 
 [WeChat JSAPI payment](#wechat-jsapi-flow) · [Alipay mobile web payment](#alipay-wap-flow)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -19,6 +17,8 @@
 | `@h-ai/reldb` | Stores Stripe provider references and idempotency results | Installed with Payment. A database connection is required when Stripe is enabled | Call `reldb.init()` and check the result before `payment.init()`. Use a shared database in production |
 | `@h-ai/audit` | Records successful order creation, notification handling, refunds and order closures | Installed with Payment. Initialize it to persist payment audit events | Call `reldb.init()` and `audit.init()` before handling payments |
 | WeChat Pay, Alipay or Stripe | Create provider orders, collect payments and verify notifications | When configuring the corresponding provider | Obtain merchant credentials. Set up an application endpoint before receiving provider notifications. See the provider examples below for browser requirements |
+
+## Quick start
 
 ### Example
 
@@ -156,8 +156,6 @@ Creating a Stripe order with `amount: 100, currency: "USD", tradeType: "h5"` ret
 `queryOrder('wechat', orderNo)` verifies the response signature and checks the app ID, merchant ID, and order number. Unpaid or closed orders can omit the amount, in which case `OrderStatus.amount` is `undefined`. Read your business order to obtain the expected total. A paid result requires a valid amount and transaction ID. WeChat’s `REFUND` is returned as `refund_started`. Check the individual refund for its outcome.
 
 `payment.closeOrder('wechat', orderNo)` requires a valid signature for the HTTP 204 response and its empty body. Other statuses, a signature failure, or a network error return `CLOSE_ORDER_FAILED`.
-
-<a id="stripe-amounts"></a>
 
 ##### Stripe amounts
 

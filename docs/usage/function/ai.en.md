@@ -4,15 +4,9 @@
 
 [Chinese source](ai.md) · [Configuration](../configuration/ai.en.md) · [Data structures](../data/ai.en.md)
 
-For browser-facing chat, memory, and media HTTP calls, see the [API Client AI operations](api-client.en.md#ai-requests).
-
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -22,6 +16,10 @@ For browser-facing chat, memory, and media HTTP calls, see the [API Client AI op
 | `@h-ai/core`, `@h-ai/api-contract`, `@h-ai/datapipe`, `@h-ai/tools` | Provide framework utilities, audio protocols, document processing, and tool registration | Installed with AI. Create a tool registry to integrate custom tools as needed | Initialize Core first if the app uses its configuration service. Create a tool registry when needed |
 | Application HTTP or WebSocket endpoint | Provide chat or speech access for browsers | When calling AI from a browser | Configure AI and authentication on the server first. Call the app’s HTTP API for chat. Connect the audio client to WebSocket and provide `getTicket` |
 | `pdfjs-dist`, `mammoth` | Parse PDF and DOCX natively | When using the native parser for the corresponding format | Install the package for that format before use |
+
+For browser-facing chat, memory, and media HTTP calls, see the [API Client AI operations](api-client.en.md#ai-requests).
+
+## Quick start
 
 ### Example
 

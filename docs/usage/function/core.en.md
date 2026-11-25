@@ -4,11 +4,9 @@
 
 [中文完整参考](core.md) · [日本語](core.ja.md) · [Core settings](../configuration/core.en.md) · [Core data](../data/core.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -16,6 +14,8 @@
 | `yaml`, `pino`, `loglevel` | Parse YAML and write logs in Node.js, and write logs in browsers. | Installed with Core by default. Keep the packages required by your runtime entry. | Core loads them through the selected entry. |
 | `pino-pretty` | Formats Node.js logs as readable text. | Install separately for `pretty` text output. Core falls back to JSON if the package is absent. | Install before startup and select the format through `logging.format`. |
 | `zod` | Validates configuration and form inputs. | Installed with Core. Declare it as a direct dependency if application code imports Zod to define schemas. | Define application schemas and use Core to validate them as needed. |
+
+## Quick start
 
 ### Example
 

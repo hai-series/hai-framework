@@ -6,13 +6,9 @@
 
 [Browse every component, example and screenshot](#component-catalog) · [Configuration entry](../configuration/ui.en.md#configuration-fields) · [Browser storage](../data/ui.en.md#browser-storage)
 
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -20,6 +16,8 @@
 | `tailwindcss` 4, `daisyui` 5 | Generate component styles and themes | When using the supplied styles | Configure the CSS entry and component scanning before building. See the [styles example](#styles) |
 | `@tailwindcss/vite` | Process Tailwind CSS in a Vite build | When using Tailwind's Vite integration | Register the plugin in the Vite configuration before building |
 | `@h-ai/core` | Supply built-in messages and result types | Installed with UI | Import the components directly |
+
+## Quick start
 
 ### Example
 
@@ -707,8 +705,6 @@ const markdown = ui.resolveDocumentMarkdownContent('const count = 42', 'code', '
 ```
 
 The custom action creates one menu entry with a `RAW` badge. Raw code becomes a language-tagged Markdown code block before export.
-
-<a id="markdown-parse-options"></a>
 
 ##### Markdown parse options
 

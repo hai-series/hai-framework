@@ -4,11 +4,9 @@
 
 [Chinese source](storage.md) · [Configuration](../configuration/storage.en.md) · [Data structures](../data/storage.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -17,6 +15,8 @@
 | Writable local directory | Store local files and metadata | When `type: 'local'` | Give the app read and write access to the directory or its parent before initializing with `root` |
 | S3-compatible storage | Store objects and issue presigned URLs | When `type: 's3'`. The AWS SDK is installed with Storage | Prepare the bucket and credentials before initializing. To create a missing bucket, grant permission and enable `createBucket` |
 | Signing endpoint and storage CORS | Allow browsers to upload directly to object storage | When calling `@h-ai/storage/client` from a browser | Configure storage CORS and authorize the key on the server before issuing a URL. The browser can request the URL through `@h-ai/api-client` and pass it to the upload helper |
+
+## Quick start
 
 ### Example
 

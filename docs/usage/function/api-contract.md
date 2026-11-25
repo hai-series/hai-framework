@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/api-contract/README.md) · [配置清单](../configuration/api-contract.md) · [数据结构](../data/api-contract.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -23,6 +19,10 @@
 | `@h-ai/api-client` | 根据契约推导客户端参数和返回值。 | 选择 [typed client](#use-with-client) 时。 | 先提供可访问的 HTTP 服务，再初始化客户端。调用结束后关闭本次创建的客户端。 |
 
 契约包依赖的 oRPC、Core 和 Storage Schema 随包安装。选择 Storage 等内置契约后，只有实际挂载并调用该领域的业务实现才需要相应的模块运行环境。
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 定义一个可共享的端点
 

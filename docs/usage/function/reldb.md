@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/reldb/README.md) · [配置清单](../configuration/reldb.md) · [数据结构](../data/reldb.md) · [数据服务接入](../development/data.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -20,6 +16,10 @@
 | SQLite 和 `better-sqlite3` | 打开本地数据库文件或内存数据库。原生驱动随 RelDB 安装 | 使用 `type: 'sqlite'` 时 | 使用 SQLite 前确保驱动能在当前 Node.js 与系统上加载。文件模式须准备可写的路径 |
 | PostgreSQL 和 `pg` | 连接 PostgreSQL 服务。驱动为可选安装依赖 | 使用 `type: 'postgresql'` 时 | 准备可访问的数据库和连接配置。安装时启用可选依赖，确认 `pg` 可用后再初始化 |
 | MySQL 和 `mysql2` | 连接 MySQL 服务。驱动为可选安装依赖 | 使用 `type: 'mysql'` 时 | 准备可访问的数据库和连接配置。安装时启用可选依赖，确认 `mysql2` 可用后再初始化 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

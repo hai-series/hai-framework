@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/audit/README.md) · [配置清单](../configuration/audit.md) · [数据结构](../data/audit.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -25,6 +21,10 @@
 | `@h-ai/scheduler` | 定期执行备份和告警检查。 | 配置自动备份或自动告警检查时安装。 | Audit 就绪后，把 `audit.schedulerPlan` 的任务和钩子交给 Scheduler。关闭时先停 Scheduler。 |
 
 启用框架自动采集时，在 IAM 启动、Kit 或 Serv 接收请求前启动 Audit。使用 Payment 的审计集成时，在处理支付前启动 Audit。应用停止处理这些操作后再关闭 Audit。见[采集触发条件](../configuration/audit.md#audit-capture)。
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

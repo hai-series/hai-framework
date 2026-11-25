@@ -4,11 +4,9 @@
 
 [Chinese source](kit.md) · [Configuration](../configuration/kit.en.md) · [Data structures](../data/kit.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -22,6 +20,8 @@
 | `@h-ai/audit` | Record audit events captured by request hooks | Installed with Kit. Initialize it when enabling auditing | Initialize Audit with the desired `capture` settings before serving requests |
 | `@h-ai/cache` with Redis | Supply shared atomic rate-limit counters | When using the built-in Redis rate-limit store adapter | Connect to Redis, create the store with `kit.middleware.createCacheRateLimitStore()`, then pass it into the hook |
 | `@h-ai/feedback` | Handle feedback REST routes | When using `kit.createFeedbackHandler()` | Initialize Feedback before passing it and a trusted context resolver to the handler |
+
+## Quick start
 
 ### Example
 

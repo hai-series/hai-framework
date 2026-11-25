@@ -6,19 +6,19 @@
 
 Scheduler runs timed and manual jobs in Node.js. A task can call an HTTP endpoint, run trusted JavaScript, or invoke the application's `onTaskExecute` hook. Nodes coordinate through shared RelDB.
 
-<a id="quick-start"></a>
-
-## Quick start with hooks
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | Store tasks and execution records and coordinate claims across nodes | Required. Use SQLite locally and shared PostgreSQL or MySQL in production | Initialize RelDB before `scheduler.init()` |
 | `@h-ai/core`, `croner` | Provide logging, common result handling, and cron parsing | Installed with Scheduler | Initialize Core first if the app uses its configuration service. Cron parsing needs no separate initialization |
 | Application callback or external service | Run an app callback, make an HTTP request, or execute trusted JavaScript as defined by the task | Prepare what the selected task type requires | Pass any callbacks and settings at initialization. For scheduled execution, call `scheduler.start()` afterward |
+
+<a id="quick-start"></a>
+
+## Quick start with hooks
 
 ### Example
 

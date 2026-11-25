@@ -6,13 +6,9 @@ Record who did what, the outcome, and the request ID on the server. Query, count
 
 [Module README](../../../packages/audit/README.en.md) · [Configuration](../configuration/audit.en.md) · [Data reference](../data/audit.en.md)
 
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -25,6 +21,8 @@ Record who did what, the outcome, and the request ID on the server. Query, count
 | `@h-ai/scheduler` | Runs periodic backups and alert checks. | Install for scheduled backups or alert checks. | Start Audit, then give Scheduler the tasks and hooks in `audit.schedulerPlan`. Close Scheduler first. |
 
 For automatic capture, start Audit before IAM starts or before Kit or Serv receives requests. If you use Payment’s audit integration, start Audit before handling payments. Stop those operations before closing Audit. See [what triggers capture](../configuration/audit.en.md#audit-capture).
+
+## Quick start
 
 ### Example
 

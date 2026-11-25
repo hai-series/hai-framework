@@ -6,13 +6,9 @@
 
 [模块 README](../../../packages/core/README.md) · [配置清单](../configuration/core.md) · [数据结构](../data/core.md) · [应用开发](../getting-started/develop.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -20,6 +16,10 @@
 | `yaml`、`pino`、`loglevel` | 在 Node.js 解析 YAML 和写日志，在浏览器写日志。 | 按默认选项安装 Core 时一并安装，保留当前运行入口所需的包。 | Core 通过对应运行入口加载。 |
 | `pino-pretty` | 将 Node.js 日志格式化为易阅读的文本。 | 需要 `pretty` 文本输出时单独安装。缺少时输出 JSON。 | 启动前安装，通过 `logging.format` 选用。 |
 | `zod` | 校验配置和表单输入。 | 随 Core 安装。应用直接导入 Zod 来定义 Schema 时，将它列为直接依赖。 | 定义自己的 Schema 后可交给 Core 校验。 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

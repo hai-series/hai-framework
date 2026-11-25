@@ -6,19 +6,19 @@
 
 [模块 README](../../../packages/datapipe/README.md) · [配置清单](../configuration/datapipe.md) · [数据结构](../data/datapipe.md) · [AI 与文档处理](../development/ai.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
 | Node.js | 执行文本处理并支持管线使用工作线程。 | 所有 Datapipe 功能。 | 导入 `datapipe` 后可直接调用。模块按需运行工作线程。 |
 | `@h-ai/core` | 提供结果、消息和管线的工作线程池。 | 随 Datapipe 安装。 | Datapipe 在内部使用。应用可按需配置 Core 的日志和语言。 |
 | `zod` | 校验清洗、分块等处理选项。 | 随 Datapipe 安装。 | Datapipe 在接收选项时完成校验。 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

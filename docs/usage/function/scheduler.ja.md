@@ -6,19 +6,19 @@
 
 Scheduler は Node.js サービスでタスクを定期実行または手動実行します。タスクは HTTP API、信頼できる JavaScript、またはアプリの `onTaskExecute` を使って処理できます。複数のノードは RelDB のデータベースを共有します。
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | タスクと実行記録を保存し、ノード間の実行権取得を調整 | 必須。ローカルでは SQLite、本番では共有 PostgreSQL または MySQL を使用 | RelDB を初期化してから `scheduler.init()` |
 | `@h-ai/core`、`croner` | ログ、共通の結果型、Cron 式の解析を提供 | Scheduler とともにインストール | Core の設定機能を使う場合は先に Core を初期化。Cron 解析の個別初期化は不要 |
 | アプリケーションのコールバックまたは外部サービス | タスク定義に沿ってコールバック、HTTP リクエスト、信頼済み JavaScript を実行 | 選択したタスク種別に応じて準備 | 初期化時に必要なコールバックと設定を渡す。定期実行する場合は初期化後に `scheduler.start()` |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

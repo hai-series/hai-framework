@@ -8,13 +8,9 @@
 
 [浏览全部组件的用途、示例和截图](#component-catalog) · [配置入口](../configuration/ui.md#configuration-fields) · [浏览器存储](../data/ui.md#browser-storage)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -22,6 +18,10 @@
 | `tailwindcss` 4、`daisyui` 5 | 生成组件样式和主题 | 使用预置样式时 | 构建前按[样式接入示例](#styles)配置 CSS 入口及组件扫描 |
 | `@tailwindcss/vite` | 在 Vite 构建中处理 Tailwind CSS | 使用 Tailwind 的 Vite 集成时 | 构建前在 Vite 配置中注册插件 |
 | `@h-ai/core` | 提供内置文案和结果类型 | 随 UI 安装 | 组件可直接导入 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 接入示例
 

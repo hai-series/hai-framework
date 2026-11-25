@@ -4,13 +4,9 @@
 
 [原文（中国語）](feedback.md) · [設定](../configuration/feedback.ja.md) · [データ構造](../data/feedback.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -23,6 +19,10 @@
 | `@tauri-apps/plugin-dialog`、`@tauri-apps/plugin-fs` | Tauri で保存先を選び、オフライン診断バンドルを保存 | Tauri エクスポートを使う場合 | プラグインを導入・登録し、ファイルのアクセス権限を設定してからエクスポート用アダプターを呼び出す |
 
 ブラウザーでは `@h-ai/feedback/client`、オフラインツールでは `@h-ai/feedback/bundle` を直接利用できます。データベースとストレージの初期化はサーバー側で行います。
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

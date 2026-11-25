@@ -6,13 +6,9 @@
 
 [モジュール README](../../../packages/api-contract/README.ja.md) · [設定一覧](../configuration/api-contract.ja.md) · [データ構造](../data/api-contract.ja.md)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -23,6 +19,10 @@
 | `@h-ai/api-client` | 契約から引数と戻り値の型を推論する。 | [型付きクライアント](#use-with-client)を使う場合。 | 接続できる HTTP サービスを用意してからクライアントを初期化し、利用後にそのインスタンスを閉じます。 |
 
 oRPC、Core、Storage の Schema は契約パッケージの依存関係としてインストールされます。Storage などの組み込み契約は、ドメインの実装を HTTP サービスで登録して呼び出す段階で、対応するモジュールの実行環境が必要です。
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 共有するエンドポイントを定義する
 

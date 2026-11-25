@@ -4,11 +4,9 @@
 
 [Chinese source](serv.md) · [Configuration](../configuration/serv.en.md) · [Data structures](../data/serv.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -20,6 +18,8 @@
 | `@h-ai/crypto` | Encrypt HTTP requests and responses | Installed with Serv. Needed when `transport` is enabled | Initialize Crypto and prepare a key ring and shared registration store before calling `serv.createApp()` |
 | `@h-ai/iam` | Supply IAM routes, token verification, and session refresh | For built-in IAM routes or IAM-backed verification and refresh | Initialize IAM before passing it to `serv.createIamProcedures()` or `serv.createApp()` |
 | `@h-ai/storage`, `@h-ai/ai`, `@h-ai/feedback` | Supply built-in routes for each feature. AI also provides audio | Choose the features you mount | Initialize each selected service before calling its procedure factory. Enable audio through the `audio` option of `serv.createApp()` |
+
+## Quick start
 
 ### Example
 

@@ -8,13 +8,9 @@ SvelteKit 的服务端和浏览器代码都可以导入 `kit`。请求校验和�
 
 [模块 README](../../../packages/kit/README.md) · [配置清单](../configuration/kit.md) · [数据结构](../data/kit.md) · [前后端接入](../development/frontend-backend.md)
 
-<a id="quick-start"></a>
-
-## 最小接入示例
-
 <a id="module-dependencies"></a>
 
-### 依赖
+## 依赖
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
@@ -28,6 +24,10 @@ SvelteKit 的服务端和浏览器代码都可以导入 `kit`。请求校验和�
 | `@h-ai/audit` | 记录由 Hook 捕获的审计事件 | 随 Kit 安装。应用启用审计时需要初始化 | 开始处理请求前初始化 Audit 并设置 `capture` |
 | `@h-ai/cache` 与 Redis | 提供共享的原子限流计数 | 使用内置 Redis 限流存储适配器时需要 | 先连接 Redis，再用 `kit.middleware.createCacheRateLimitStore()` 创建存储并传给 Hook |
 | `@h-ai/feedback` | 处理反馈 REST 路由 | 使用 `kit.createFeedbackHandler()` 时需要 | 初始化 Feedback，再将服务和可信上下文解析函数传给处理器 |
+
+<a id="quick-start"></a>
+
+## 最小接入示例
 
 ### 安装
 

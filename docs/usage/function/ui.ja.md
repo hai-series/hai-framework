@@ -6,13 +6,9 @@
 
 [全コンポーネントの用途・利用例・スクリーンショット](#component-catalog) · [設定の読み込み](../configuration/ui.ja.md#configuration-fields) · [ブラウザーの保存領域](../data/ui.ja.md#browser-storage)
 
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -20,6 +16,10 @@
 | `tailwindcss` 4、`daisyui` 5 | コンポーネントのスタイルとテーマを生成 | 標準スタイルを使う場合 | ビルド前に [スタイルの導入例](#styles) に沿って CSS エントリーとコンポーネントのスキャンを設定 |
 | `@tailwindcss/vite` | Vite のビルドで Tailwind CSS を処理 | Tailwind の Vite 統合を使う場合 | ビルド前に Vite の設定にプラグインを登録 |
 | `@h-ai/core` | 組み込みメッセージと結果型を提供 | UI とともにインストール | コンポーネントをそのままインポート可能 |
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

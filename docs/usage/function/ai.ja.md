@@ -4,15 +4,9 @@
 
 [原文（中国語）](ai.md) · [設定](../configuration/ai.ja.md) · [データ構造](../data/ai.ja.md)
 
-ブラウザー向けのチャット・記憶・メディア HTTP 操作は [API Client の AI 操作一覧](api-client.ja.md#ai-requests)を参照してください。
-
-<a id="quick-start"></a>
-
-## クイックスタート
-
 <a id="module-dependencies"></a>
 
-### 依存関係
+## 依存関係
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
@@ -22,6 +16,12 @@
 | `@h-ai/core`、`@h-ai/api-contract`、`@h-ai/datapipe`、`@h-ai/tools` | 基盤機能、音声プロトコル、文書処理、ツール登録を提供 | AI とともにインストール。カスタムツールは必要に応じてレジストリを作って連携 | Core の設定機能を使う場合は先に Core を初期化。ツールレジストリは必要に応じて作成 |
 | アプリケーションの HTTP または WebSocket エンドポイント | ブラウザーにチャットや音声機能を提供 | ブラウザーから AI を使う場合 | サーバー側で AI と認証を先に設定。チャットはアプリの HTTP API、音声は WebSocket に接続して `getTicket` を渡す |
 | `pdfjs-dist`、`mammoth` | PDF・DOCX をネイティブ解析 | 対応する形式のネイティブ解析を使う場合 | 利用前に対象形式のパッケージをインストール |
+
+ブラウザー向けのチャット・記憶・メディア HTTP 操作は [API Client の AI 操作一覧](api-client.ja.md#ai-requests)を参照してください。
+
+<a id="quick-start"></a>
+
+## クイックスタート
 
 ### 利用例
 

@@ -6,13 +6,9 @@ Use Reach on the server to send a sign-in code or tell the warehouse about a new
 
 [Chinese source](reach.md) · [Configuration](../configuration/reach.en.md) · [Data structures](../data/reach.en.md)
 
-<a id="quick-start"></a>
-
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -20,6 +16,8 @@ Use Reach on the server to send a sign-in code or tell the warehouse about a new
 | [`@h-ai/reldb`](../configuration/reldb.en.md) | Persist templates, delivery history, and delayed messages | When using persistent templates, delivery history, or the `delay` do-not-disturb strategy | Initialize RelDB before `reach.init()` |
 | `@h-ai/cache` | Provide a distributed lock for delayed-queue scans | Optional when multiple nodes need to reduce duplicate scans | When using a shared cache, initialize Cache before `reach.init()` |
 | Notification service (SMTP, SMS, or HTTP) | Deliver messages through an external channel | When using that channel. SMTP requires the optional `nodemailer` driver | Prepare the endpoint, any credentials, and any driver the channel needs before `reach.init()` |
+
+## Quick start
 
 ### Try one send locally
 

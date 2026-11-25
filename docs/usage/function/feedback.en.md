@@ -4,11 +4,9 @@
 
 [Chinese source](feedback.md) · [Configuration](../configuration/feedback.en.md) · [Data structures](../data/feedback.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -21,6 +19,8 @@
 | `@tauri-apps/plugin-dialog`, `@tauri-apps/plugin-fs` | Choose a destination and save offline diagnostic bundles in Tauri | When using the Tauri export entry point | Install and register the plugins, grant file permissions, and call the export adapter |
 
 Browser code can use `@h-ai/feedback/client` directly, and offline tools can use `@h-ai/feedback/bundle` directly. The database and storage initialization applies to the server.
+
+## Quick start
 
 ### Example
 

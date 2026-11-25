@@ -4,11 +4,9 @@
 
 [Chinese source](cli.md) · [Configuration](../configuration/cli.en.md) · [Data structures](../data/cli.en.md)
 
-## Quick start
-
 <a id="module-dependencies"></a>
 
-### Dependencies
+## Dependencies
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
@@ -18,6 +16,8 @@
 | `@h-ai/deploy` | Provides delivery support in the project | When running `hai deploy` | Keep deployment support during scaffolding or run `hai add deploy` from the project |
 | Docker or Podman | Builds images and runs containerized Android builds | When running `hai build --target image` or selecting a containerized Android build | Install and start a local engine before the build |
 | Platform SDKs and Rust | Build native installers | For local Android, iOS or desktop builds | Follow the [native build guide](../getting-started/build.en.md) for target SDKs. Tauri desktop builds also require Rust |
+
+## Quick start
 
 ### Example
 
