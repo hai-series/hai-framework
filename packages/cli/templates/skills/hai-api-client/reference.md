@@ -62,7 +62,7 @@ export async function loadAuthPolicy(baseUrl: string) {
 
 `client.auth.setTokens(tokens)` 和 `client.auth.clear()` 等待适配器完成，适配器失败时 Promise 拒绝。成功登录和注册可用认证动作自动提交。若直接调用 `client.iam.auth.login(input)`，应用先检查结果，再把 `data.tokens` 交给 `client.auth.setTokens(tokens)`。退出时先请求 IAM 撤销会话并清除 Cookie，再清理客户端的本地凭据。 `close()` 结束运行期、清理订阅和等待在途的凭据操作，宿主保存并按自身策略清理注入的适配器。
 
-`TokenPair` 包含用于 Bearer 请求头的 `accessToken`、内存或原生存储使用的可选 `refreshToken`、以秒为单位的 `expiresIn`，以及固定的 `tokenType: 'Bearer'`。适配器实现 `getAccessToken()`、`setAccessToken(token)`、`getRefreshToken()`、`setRefreshToken(token)`、`clear()`。存储缺值时读取返回 `null`，读写故障拒绝 Promise。管理器可传空字符串废弃旧刷新值。内置 Cookie 适配器由服务端管理 Cookie。
+`TokenPair` 包含用于 Bearer 请求头的 `accessToken`、内存或原生存储使用的可选 `refreshToken`、以秒为单位的 `expiresIn`，以及固定的 `tokenType: 'Bearer'`。适配器实现 `getAccessToken()`、`setAccessToken(token)`、`getRefreshToken()`、`setRefreshToken(token)`、`clear()`。存储缺值时读取返回 `null`，读写故障拒绝 Promise。替换令牌时管理器先清理旧凭据，再写入新响应实际提供的值。内置 Cookie 适配器由服务端管理 Cookie。
 
 `auth.refreshPath` 默认 `/auth/refresh`，刷新超时默认 10000 毫秒。只有明确的会话认证拒绝才触发刷新或恢复。刷新端点返回 401 时按失效处理，限流、暂时性失败和网络超时保留原凭据。设置 `auth.recoverSession` 时，在恢复期间记录当前用户 ID，用 `expectedUserId` 约束登录，并在新凭据提交后返回 `true`。客户端重新核对身份、取消状态与运行期，再决定是否重试原调用。配合 `ui.createSessionRecovery` 时，退出或卸载可用 `recovery.cancel()` 停止界面恢复流程。
 

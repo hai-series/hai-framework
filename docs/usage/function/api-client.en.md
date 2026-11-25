@@ -2,77 +2,93 @@
 
 [简体中文](api-client.md) · [日本語](api-client.ja.md)
 
-`apiClient` sends HTTP requests using the routes and types in a shared API contract. Create a client for the domains your server exposes, initialize its endpoint, then call a procedure such as `client.iam.auth.publicConfig()`. You can enable credential refresh, transport encryption, or request observation as the integration requires.
+Import `apiClient` to call the standard IAM, Storage, and AI endpoints. It is both the default client and the place to create a separate client. Use `apiClient.iam.auth.currentUser()` with the default client. In a snippet that declares `const client = apiClient.create(contract)`, `client` is the name given to that new instance. See [when to create a separate client](#client-lifecycle).
 
 [Module README](../../../packages/api-client/README.en.md) · [Configuration](../configuration/api-client.en.md) · [Data structures](../data/api-client.en.md)
+
+<a id="module-dependencies"></a>
+
+## Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/api-client` | Bind an HTTP client to the application contract. | Whenever an application calls typed endpoints. | Initialize the default client with the API address. |
+| `@h-ai/api-contract` | Supply the same procedure definitions used by the server. | Install it explicitly when you create a client from an imported contract. | Select the server's domains before creating the client. |
+| HTTP service and Fetch | Supply mounted routes and send HTTP requests. | The caller needs a matching Serv or SvelteKit service and a Fetch-compatible runtime. | Make the service available at its mounted prefix. Native bridges and test doubles can supply `fetch`. |
+| `@h-ai/crypto` | Negotiate a transport session and encrypt requests. | Install and import it explicitly when the application enables [transport encryption](#encrypted-requests). | Initialize Crypto before the client. Close the client before closing Crypto. |
 
 <a id="quick-start"></a>
 
 ## Minimal setup
 
-<a id="module-dependencies"></a>
-
-### Dependencies
-
-| Dependency | Purpose | When required | Setup order |
-| --- | --- | --- | --- |
-| `@h-ai/api-client` | Bind an HTTP client to the application contract. | Whenever an application calls typed endpoints. | Create an instance, initialize its address, then call the API. |
-| `@h-ai/api-contract` | Supply the same procedure definitions used by the server. | Install it explicitly when the application imports it, as below. | Select the server's domains before creating the client. |
-| HTTP service and Fetch | Supply mounted routes and send HTTP requests. | The caller needs a matching Serv or SvelteKit service and a Fetch-compatible runtime. | Make the service available at its mounted prefix. Native bridges and test doubles can supply `fetch`. |
-| `@h-ai/crypto` | Negotiate a transport session and encrypt requests. | Install and import it explicitly when the application enables [transport encryption](#encrypted-requests). | Initialize Crypto before the client. Close the client before closing Crypto. |
-
 ### Installation
 
 ```sh
-pnpm add @h-ai/api-client @h-ai/api-contract
+pnpm add @h-ai/api-client
 ```
 
 <a id="example"></a>
+### Sign in, read your profile, and sign out in a browser
 
-### Read public sign-in settings
+This example connects a browser account page to the standard IAM routes at `/api/v1`. The web app and API share an origin. Mount the [standard IAM routes](api-contract.en.md#serv-iam-wiring) and enable the server's [refresh Cookie](serv.en.md#authentication) before running the example. Use a test account that can sign in to that server. The page submits the values from its form.
 
-Start a server that mounts [the standard IAM endpoints](api-contract.en.md#serv-iam-wiring) at `/api/v1`. In Node.js, pass `http://127.0.0.1:3000/api/v1` when the service listens on that port. In a same-origin browser app, use `/api/v1`.
+Put the following in the module that owns your browser app's account session, for example `src/lib/account-api.ts`. Call `startAccountSession()` once when the app starts. Pass a `showSignIn` function that displays the sign-in view when the refresh credential is gone.
 
 ```ts
-import { apiClient } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
+import { apiClient, type IamAuthLoginInput } from '@h-ai/api-client'
 
-export async function loadAuthPolicy(baseUrl: string) {
-  // Select the server's IAM router, then create an isolated client from that contract.
-  const contract = apiContract.create({ iam: apiContract.iam })
-  const client = apiClient.create(contract)
-  // The public settings endpoint needs only the API address. An invalid address fails initialization.
-  const initialized = await client.init({ baseUrl })
-  if (!initialized.success)
-    return initialized
+export async function startAccountSession(showSignIn: () => void) {
+  const ready = await apiClient.init({
+    baseUrl: '/api/v1',
+    auth: { onRefreshFailed: showSignIn },
+  })
+  if (!ready.success)
+    return ready
 
-  try {
-    // Read the settings before opening the sign-in form. Success data may be null.
-    const result = await client.iam.auth.publicConfig()
-    if (!result.success)
-      return result
-    return result
-  }
-  finally {
-    await client.close()
+  const defaultClient = apiClient
+  const actions = apiClient.createAuthActions(defaultClient)
+  return {
+    success: true as const,
+    data: {
+      readSignInPolicy: () => apiClient.iam.auth.publicConfig(),
+      // The login action saves credentials before the page asks for the profile.
+      async signIn(input: IamAuthLoginInput) {
+        const login = await actions.login(input)
+        if (!login.success)
+          return login
+        return apiClient.iam.auth.currentUser()
+      },
+      // Use this when opening the profile page or restoring the view after reload.
+      readProfile: () => apiClient.iam.auth.currentUser(),
+      async signOut() {
+        // Let the server revoke the session and expire the browser's refresh Cookie.
+        try {
+          return await apiClient.iam.auth.logout({}, { context: { autoRefresh: false } })
+        }
+        finally {
+          await apiClient.auth.clear()
+        }
+      },
+      close: () => apiClient.close(),
+    },
   }
 }
 ```
 
-The call sends `GET /api/v1/auth/config` to the running service. Check `success`, then use the settings in `data` to show the permitted sign-in methods. See [public settings](../data/api-contract.en.md#public-settings) for the response fields. Handle `null` as an absent public policy. On a request failure, present the error without assuming any sign-in method is available.
+Check the startup result and use `data` when it succeeds. Connect `signIn(input)` to the form. A successful result contains the profile. On a business failure, use `error.message` and let the user try again. Connect `signOut()` to the sign-out button. The example clears the local credentials either way. Report a failed result as an unconfirmed server sign-out. Call `close()` when the whole browser app releases its client. Keep the app's client open as the user moves between pages.
+
+If the sign-in page needs to know which forms to show, call `data.readSignInPolicy()` after startup. It sends `GET /api/v1/auth/config` without requiring sign-in. Check `success` before reading `data`. A successful response can have `data: null` when no public policy is available. [Public settings fields](../data/api-contract.en.md#public-settings)
 
 <a id="api-reference"></a>
 
 ## Features
 
-The default instance contains IAM, Storage, and AI. Create a client with [the application contract shared with the server](api-contract.en.md#use-with-client) when it exposes different domains.
-
 <a id="client-lifecycle"></a>
-<a id="prepare-isolated-clients-apiclient"></a>
-
 ### Create an isolated client with `apiClient.create(contract)`
 
-Create an instance for an application contract, a separate server, or an SSR request. Each instance owns its request observation, authentication state, and optional transport session. An optional domain omitted from a contract is absent at runtime. Keep the top-level lifecycle member names and the promise key `then` available to the client.
+The imported `apiClient` already supports IAM, Storage, and AI. Both it and an instance returned by `apiClient.create(contract)` have `init`, `close`, `auth`, and the endpoints defined by their contract. If the contract includes IAM, either can call the same `iam.auth.currentUser()` endpoint.
+
+Use the default instance for one browser app connected to one API. Create a separate instance when the contract is different, when the app connects to a second API, or when a server-side render needs to keep each incoming user's credentials separate. Each instance has its own authentication and observation state and can start its own encrypted session. An optional domain omitted from the contract is absent at runtime. Keep the top-level lifecycle member names and the promise key `then` available to the client.
 
 #### Interface list
 
@@ -80,31 +96,25 @@ Create an instance for an application contract, a separate server, or an SSR req
 | --- | --- | --- | --- | --- |
 | `apiClient.create(contract)` | Create an isolated instance. | Required `contract`, the route object shared with the server, for example the object returned by `apiContract.create({ iam: apiContract.iam })`. | `ApiClient<TContract>`. Call `init` before making requests. | `apiClient.create(contract)` |
 
-<a id="scenario-prepare-isolated-clients"></a>
-
 #### Scenario: Create a client for one server request
 
-The [minimal setup](#quick-start) creates an IAM-only instance, uses public endpoints and closes it after the read. For a request that needs credentials, create its instance with the same contract and initialize it with a request-local memory adapter as shown below.
+For example, an SSR route can create an IAM-only client for each incoming request. The [address example](#client-integration) shows how to create, configure, and close the instance. The [Node or native example](#manual-token-storage) signs in and reads the profile.
 
 <a id="client-integration"></a>
-<a id="client-addresses-deadlines-and-recovery"></a>
+### Configure the API address with `apiClient.init(config)`
 
-### Initialize, inspect and close the client with `client.init(config)`
-
-Initialize the selected client before calling its procedures. Read the effective address when checking the instance's setup. Close it when the instance owner finishes using it.
+Use `apiClient.init` for the default client, as in the browser example. A separate instance you create has the same lifecycle methods. Each client has its own API address and lifetime.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `client.init(config)` | Prepare the default `apiClient` or a created instance. | Required `config` with `baseUrl`. Optional fields follow. | `Promise<HaiResult<void>>`. Invalid settings or a second initialization while ready return `CONFIG_ERROR`. | `await client.init({ baseUrl })` |
-| `client.isInitialized` | Check readiness. | Read-only property. | `boolean`. | `client.isInitialized` |
-| `client.config` | Inspect the effective settings. | Read-only property. Sensitive values are redacted. | Redacted snapshot or `null` outside an initialized lifetime. | `client.config?.baseUrl` |
-| `client.close()` | End the client lifetime and release local resources. | No arguments. | `Promise<void>`. Clears listeners and destroys the client transport session. | `await client.close()` |
+| `apiClient.init(config)` | Prepare the default client. | Required `config` with `baseUrl`. Optional fields follow. | `Promise<HaiResult<void>>`. Invalid settings or a second initialization while ready return `CONFIG_ERROR`. | `await apiClient.init({ baseUrl: '/api/v1' })` |
+| `apiClient.isInitialized` | Check readiness. | Read-only property. | `boolean`. | `apiClient.isInitialized` |
+| `apiClient.config` | Inspect the effective settings. | Read-only property. Sensitive values are redacted. | Redacted snapshot or `null` outside an initialized lifetime. | `apiClient.config?.baseUrl` |
+| `apiClient.close()` | End the client lifetime and release local resources. | No arguments. | `Promise<void>`. Clears listeners and destroys the client transport session. | `await apiClient.close()` |
 
 <a id="call-options"></a>
-<a id="call-arguments-and-integration-options"></a>
-
 ##### Endpoint and request options
 
 | Field in `ApiClientConfig` | Type, requirement, or default | Effect |
@@ -152,11 +162,9 @@ finally {
 Only the client created in this example is affected. A separate request can use its own instance and token store.
 
 <a id="credentials"></a>
-<a id="store-and-refresh-credentials-apiclientauth-tokenstorage"></a>
+### Choose credential storage and renew sign-in
 
-### Store and refresh credentials with `client.auth` and `apiClient.tokenStorage`
-
-Initialize with `auth` before saving credentials. The token manager reads credentials from the selected adapter, sends an access token as a Bearer token, and can refresh it after an eligible rejection. The server still authenticates the token and authorizes each protected operation. The [data reference](../data/api-client.en.md#browser-storage) describes credential ownership and lifetime.
+`apiClient.auth` manages the tokens on the default client. `apiClient.iam.auth` calls IAM endpoints, such as the login and profile endpoints, on the server. Enable `auth` at startup to have the client attach the access token to requests and refresh it when appropriate. [Credential data and ownership](../data/api-client.en.md#browser-storage)
 
 #### Interface list
 
@@ -164,16 +172,56 @@ Initialize with `auth` before saving credentials. The token manager reads creden
 | --- | --- | --- | --- | --- |
 | `apiClient.tokenStorage.httpOnlyCookie()` | Create browser-oriented storage. | No arguments. This adapter is selected when `auth.storage` is omitted. | `TokenStorage`. Fetch includes the server-managed cookie. | `apiClient.tokenStorage.httpOnlyCookie()` |
 | `apiClient.tokenStorage.memory()` | Create independent in-memory storage. | No arguments. Both token values start empty. | `TokenStorage`. Values are held by that instance only. | `apiClient.tokenStorage.memory()` |
-| `client.auth.setTokens(tokens)` | Commit credentials issued by the server. | Required `TokenPair`. `expiresIn` uses seconds. `refreshToken` is optional for cookie mode. | `Promise<void>`. Storage failure rejects. | `await client.auth.setTokens(result.data.tokens)` |
-| `client.auth.clear()` | Clear local credentials and invalidate old refresh work. | No arguments. | `Promise<void>`. Storage failure rejects. Server logout remains a separate call. | `await client.auth.clear()` |
-| `client.auth.onTokenRefreshed(callback)` | Subscribe to completed refresh writes. | Required synchronous `callback(tokens)`. | Unsubscribe function. Without `auth` the returned function is a no-op. | `client.auth.onTokenRefreshed(tokens => updateLifetime(tokens.expiresIn))` |
+| `apiClient.auth.setTokens(tokens)` | Commit credentials issued by the server. | Required `TokenPair`. `expiresIn` uses seconds. `refreshToken` is optional for cookie mode. | `Promise<void>`. Storage failure rejects. | `await apiClient.auth.setTokens(result.data.tokens)` |
+| `apiClient.auth.clear()` | Clear local credentials and invalidate old refresh work. | No arguments. | `Promise<void>`. Storage failure rejects. Server logout remains a separate call. | `await apiClient.auth.clear()` |
+| `apiClient.auth.onTokenRefreshed(callback)` | Subscribe to completed refresh writes. | Required synchronous `callback(tokens)`. | Unsubscribe function. Without `auth` the returned function is a no-op. | `apiClient.auth.onTokenRefreshed(tokens => updateLifetime(tokens.expiresIn))` |
+
+<a id="storage-modes"></a>
+##### Choose where the two tokens live
+
+The access token goes into the `Authorization: Bearer …` header on protected API calls. The refresh token is used to get a new access token after the old one stops working. Here is where the built-in adapters keep each token.
+
+| Question | `apiClient.tokenStorage.httpOnlyCookie()` | `apiClient.tokenStorage.memory()` |
+| --- | --- | --- |
+| Access token | In this adapter's JavaScript memory. | In this adapter's JavaScript memory. |
+| Refresh token | In the browser's HttpOnly Cookie store. Frontend JavaScript cannot read the Cookie's value. | In this adapter's JavaScript memory. The API must issue it in the response body. |
+| What the refresh endpoint receives | The browser attaches the Cookie to the refresh request. | The client passes the token in a JSON body as `{ refreshToken }`. |
+| After a browser reload | The access token in memory is gone. If the browser still has a usable Cookie, an eligible 401 can trigger refresh and restore access. | Both tokens are gone. The app must obtain credentials again. |
+| Where to use it | A browser app with server-side refresh Cookie support. Enable it with `auth: {}` or select it explicitly with `auth: { storage: apiClient.tokenStorage.httpOnlyCookie() }`. | An isolated Node.js job or SSR request, for example `auth: { storage: apiClient.tokenStorage.memory() }`. A new adapter starts empty each time. |
+
+If you omit `auth` entirely, the client does not manage tokens. For a native app that should stay signed in across restarts, inject a platform secure store and configure the server to accept a refresh token in the JSON body. Each auth mode uses the matching channel on the server.
+
+Call `apiClient.close()` to release the default client's runtime and refresh work. Call `apiClient.auth.clear()` while the client is initialized to remove the credentials it holds. If the adapter uses Cookie mode, local cleanup clears only the access token. The service's logout response expires the refresh Cookie.
+
+<a id="cookie-credentials"></a>
+
+##### What Fetch does with `credentials: 'include'`
+
+In Cookie mode the client sets `credentials: 'include'` for you. When sign-in succeeds, the server replies with `Set-Cookie` so the browser can store the refresh token. On `POST /api/v1/auth/refresh`, the browser can send that Cookie back in the `Cookie` header, and the server can rotate it with a new `Set-Cookie`. When logout succeeds, the server sends `Set-Cookie` again with an expiration instruction. The browser handles this exchange, including the HttpOnly value, outside application JavaScript.
+
+The flag lets Fetch use eligible Cookies even for a request to a different origin. An origin includes the scheme, host, and port. For instance, `https://app.example.com` and `https://api.example.com` are different origins. For a credentialed request, configure the API's CORS response to return the page's exact origin and allow credentials. The browser rejects `*` for those responses. The Cookie still has to match the destination and request under its domain, path, `Secure`, `SameSite`, and browser rules. Different origins can be on the same site. Serv uses `SameSite=Strict`, so a truly cross-site request cannot carry that Cookie just by setting `credentials: 'include'`. For a same-origin app such as the quick start, serve or proxy the API under the page's origin.
+
+<a id="terminal-type"></a>
+
+##### Which `terminalType` to set
+
+Set `auth.terminalType` to describe where a login comes from. It goes in the `X-Hai-Terminal` request header. IAM uses it to place sessions in a group for login limits.
+
+| Value | Example caller |
+| --- | --- |
+| `web` | A browser app. This is the default. |
+| `app` | A native mobile app. |
+| `desktop` | A desktop app. |
+| `api` | A backend worker or service client. |
+
+The same token storage can be used with different terminal groups. Server-side authentication establishes identity, and authorization policy determines permissions. With server settings such as `session.terminalLimits: { web: 2, app: 1 }`, a user can have up to two browser sessions and one mobile session, subject to the global session limit and single-device policy. With a nonempty list, unlisted groups such as `desktop` and `api` cannot open new sessions. At a group limit, `session.terminalLimitMode: 'reject'` (the default) refuses the new login. `'replace'` makes room by removing the earliest sessions of the same group in ordinary multi-device mode. An empty `terminalLimits` object disables per-group limits. [IAM session configuration](../configuration/iam.en.md#session)
 
 ##### Authentication options
 
 | Field | Type and default | Effect |
 | --- | --- | --- |
-| `auth.storage` | Optional `TokenStorage`. Default `apiClient.tokenStorage.httpOnlyCookie()`. | Owns the local access and refresh credential slots. Create a separate memory store per Node request. For native clients, inject a platform secure store. |
-| `auth.terminalType` | `web`, `app`, `desktop`, or `api`. Default `web`. | Sends the selected group in `X-Hai-Terminal`. Match an allowed server group. The server verifies session credentials and enforces its terminal policy. |
+| `auth.storage` | Optional `TokenStorage`. Default `apiClient.tokenStorage.httpOnlyCookie()`. | See [where the tokens live](#storage-modes) before choosing. |
+| `auth.terminalType` | `web`, `app`, `desktop`, or `api`. Default `web`. | Selects a [group for session limits](#terminal-type). |
 | `auth.refreshPath` | Optional string relative to `baseUrl`. Default `/auth/refresh`. | Selects the mounted refresh endpoint. The default becomes `/api/v1/auth/refresh` when `baseUrl` ends in `/api/v1`. |
 | `auth.refreshTimeoutMs` | Optional number in milliseconds. Default `10000`. | Limits the refresh Fetch independently of the business request timeout. A timeout or other transient failure preserves credentials. |
 | `auth.onTokenRefreshed` | Optional synchronous `(tokens: TokenPair) => void`. | Runs after automatic refresh successfully commits the replacement credentials. For example, copy `expiresIn` to a session indicator. Keep token strings out of logs. |
@@ -194,52 +242,39 @@ Each adapter method is asynchronous. A getter returns `null` for a missing value
 | `storage.setRefreshToken(token)` | The refresh token string from the trusted service, if the service uses the response-body channel. | Resolves when the value is stored. In cookie mode, the server writes the refresh cookie through `Set-Cookie`. |
 | `storage.clear()` | None. | Removes the values the adapter owns. The built-in cookie adapter clears its in-memory access token. Use the logout endpoint to expire the server's HttpOnly cookie. |
 
-A successful IAM authentication supplies a `TokenPair`. `accessToken` is the short-lived Bearer token, `expiresIn` reports its lifetime in seconds, and `tokenType` is `'Bearer'`. `refreshToken` is optional because the cookie channel may omit it. A client-managed store receives the replacement pair through `client.auth.setTokens(tokens)`. When a replacement omits its refresh token, the client clears any prior locally stored refresh credential.
+A successful IAM authentication supplies a `TokenPair`. `accessToken` is the short-lived Bearer token, `expiresIn` reports its lifetime in seconds, and `tokenType` is `'Bearer'`. `refreshToken` is optional because the cookie channel may omit it. Pass the pair to `apiClient.auth.setTokens(tokens)` on the default client, or call `auth.setTokens` on the instance that received it. This clears the previous pair and then saves the new access token and any refresh token the server supplied.
 
-##### Credential ownership by runtime
-
-- **Browser.** Use the built-in cookie adapter with the host's refresh cookie support. The client keeps the current access token in memory. Fetch manages the server-issued HttpOnly cookie. Call the service logout endpoint to revoke the session and expire the cookie, then clear the local credential state.
-- **Node.js and SSR.** Create an independent client and memory adapter for each request or trusted server job that needs credentials. Node.js Fetch does not bring a browser cookie jar. The server application is responsible for any explicit request-scoped cookie forwarding.
-- **Native applications.** Supply the platform's secure `TokenStorage`. Match the server's approved refresh body channel and terminal group. The `refreshToken` travels in JSON when the selected adapter supplies it directly.
-
-<a id="browser-refresh"></a>
-
-#### Scenario: Initialize a Web session, sign in, and sign out
-
-Use a browser instance scoped to the signed-in layout. Mount the IAM routes at `/api/v1` and enable the refresh cookie on the service. In a same-origin browser, use `baseUrl: '/api/v1'`. For a separate API origin supply its absolute address, allow the app's exact origin and credentials in CORS, and align the cookie's `Secure`, `SameSite` and `Path` settings with the deployment. [Serv authentication](serv.en.md#authentication) · [Kit authentication](kit.en.md#auth)
+To test storage itself, create an unattached memory adapter. The following test helper exercises both setters, getters, and cleanup using supplied test values. It returns booleans so the test does not print tokens.
 
 ```ts
-import { apiClient, type IamAuthLoginInput } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
 
-export async function openBrowserSession(baseUrl: string, showLogin: () => void) {
-  const client = apiClient.create({ iam: apiContract.iam })
-  const ready = await client.init({
-    baseUrl,
-    auth: { onRefreshFailed: showLogin },
-  })
-  if (!ready.success)
-    return ready
-
-  const actions = apiClient.createAuthActions(client)
+export async function verifyMemoryStorage(testAccessToken: string, testRefreshToken: string) {
+  const storage = apiClient.tokenStorage.memory()
+  let saved = false
+  try {
+    await storage.setAccessToken(testAccessToken)
+    await storage.setRefreshToken(testRefreshToken)
+    saved = await storage.getAccessToken() === testAccessToken
+      && await storage.getRefreshToken() === testRefreshToken
+  }
+  finally {
+    await storage.clear()
+  }
   return {
-    // Pass the form submission here. IAM checks it before the action saves the access token.
-    signIn: (input: IamAuthLoginInput) => actions.login(input),
-    currentUser: () => client.iam.auth.currentUser(),
-    async signOut() {
-      const result = await client.iam.auth.logout({}, { context: { autoRefresh: false } })
-      await client.auth.clear()
-      return result
-    },
-    close: () => client.close(),
+    saved,
+    cleared: await storage.getAccessToken() === null && await storage.getRefreshToken() === null,
   }
 }
 ```
 
-Check the sign-in result before showing the signed-in view. After a reload, a new layout can read `currentUser()`. On an eligible rejection, the client can refresh using the browser-managed cookie and retry the read. If refresh is definitively rejected, the example calls `showLogin`. Check sign-out before telling the user that the service confirmed revocation. Call `close()` when the layout releases its instance.
-
-<a id="scenario-store-and-refresh-credentials"></a>
+<a id="browser-refresh"></a>
 <a id="detailed-workflow"></a>
+
+#### Scenario: Restore the profile after a browser reload
+
+Use [the browser account example](#example) with a test account and a working refresh Cookie. Sign in, reload the page, initialize the client again, and call `data.readProfile()`. The old access token was in JavaScript memory, so the protected request may receive a 401 first. The client sends the refresh request with the Cookie. If the server accepts it, the client saves the new access token and retries the profile read once. If refresh is definitively rejected, the example invokes `showSignIn`. Transient refresh failures, such as a network timeout, preserve the stored credentials for future attempts.
+
 <a id="recover-session"></a>
 
 #### Scenario: Recover an expired session
@@ -350,74 +385,62 @@ export async function loadProfileAfterPasswordLogin(
 Supply values from the sign-in form or the trusted server flow. Once the adapter is attached, update credentials through `client.auth` so stale refreshes cannot overwrite them. Use `client.auth.clear()` when ending the local session. Closing the client releases its request state, while a durable adapter preserves the values it owns until they are cleared.
 
 <a id="auth-actions"></a>
-<a id="drive-authentication-forms-apiclientcreateauthactions"></a>
 
-### Connect sign-in and account forms with `apiClient.createAuthActions`
+### Authentication actions for forms
 
-Create the actions for a ready client that includes the standard IAM authentication procedures and has `auth` configured. The actions adapt form arguments to the relevant IAM endpoint. Successful `login` and `register` finish saving credentials on that client before returning.
+`apiClient.createAuthActions(apiClient)` is valid. The first `apiClient` exposes the factory. The argument selects the initialized instance that the resulting actions use. Give that argument a name such as `defaultClient` when the two roles need to be explicit. To bind an independent instance, pass the variable returned by `apiClient.create(contract)` instead.
+
+| Entry point | When to use it | Who saves the tokens |
+| --- | --- | --- |
+| `actions.login(form)` or `actions.register(form)` | A browser form chooses a sign-in method and uses the SDK's standard token storage flow. | The action stores the credentials on the bound client before returning success. |
+| [`apiClient.iam.auth` endpoints](#iam-requests) | Application code selects one specific HTTP endpoint and controls how its result is used. | Direct login and registration return the credentials. The caller can pass `data.tokens` to `apiClient.auth.setTokens()`. |
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `apiClient.createAuthActions(client)` | Bind a form to the IAM endpoints and credential store. | A ready client with standard IAM authentication procedures and `auth`. | An actions object with the methods below. | `apiClient.createAuthActions(client)` |
-| `actions.publicConfig()` | Read the server's public authentication policy. | No arguments. | `HaiResult` containing the policy or `null`. | `await actions.publicConfig()` |
-| `actions.createCaptcha(input)` | Fetch a self-hosted challenge for an action. | `{ operation }`, one of `login`, `register`, `sendOtp`, `passwordReset`, or `renewPassword`. | `HaiResult` containing the challenge. Solve it in the UI, then send the proof as `captcha`. | `await actions.createCaptcha({ operation: 'login' })` |
-| `actions.login(input)` | Sign in and save credentials. | `identifier`, `password`, optional `method` (`password` by default, `ldap`, `email`, or `sms`), `code`, `captcha`, and `expectedUserId`. Use `password: ''` and pass `code` for OTP sign-in. | `HaiResult` containing the IAM authentication data after the local save. | `await actions.login({ identifier, password })` |
-| `actions.register(input)` | Register an account and save its credentials. | `username`, `password`, optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. | `HaiResult` containing the IAM authentication data after the local save. | `await actions.register({ username, password })` |
-| `actions.sendOtp(identifier, options?)` | Request an email or SMS code for the address or number supplied. | `identifier` and optional `{ captcha }`. | `HaiResult` containing `expiresAt`. | `await actions.sendOtp(identifier)` |
-| `actions.requestPasswordReset(identifier, options?)` | Request a reset for the supplied account identifier. | `identifier` and optional `{ captcha }`. | `HaiResult<void>`. | `await actions.requestPasswordReset(identifier)` |
-| `actions.confirmPasswordReset(token, newPassword)` | Set a new password using the server-issued reset token. | Required reset `token` and `newPassword`. | `HaiResult<void>`. | `await actions.confirmPasswordReset(token, newPassword)` |
-| `actions.renewPassword(input)` | Change the initial or expired password. | `identifier`, `password`, `newPassword`, optional `captcha`. | `HaiResult<void>`. Sign in again when required by the application flow. | `await actions.renewPassword({ identifier, password, newPassword })` |
-| `actions.reauthenticate(password, operation)` | Verify the current password for one protected operation. | Current `password` and the service's exact `operation` identifier. | `HaiResult` containing `ticket` and `expiresAt`. | `await actions.reauthenticate(password, operation)` |
-| `actions.bindPageExit(options?)` | Bind the current layout lifetime to browser page exit. | Optional `{ enabled }`, off when omitted. Use the public policy's `session.endOnPageHide`. | A cleanup function. The handler ignores page-cache transitions and sends a best-effort server session close with `keepalive: true` and `autoRefresh: false`. | `const unbind = actions.bindPageExit({ enabled })` |
+| `apiClient.createAuthActions(client)` | Bind form actions to a client. | An instance with the standard IAM contract. Initialize it with `auth` to save credentials. | A bound actions object. | `apiClient.createAuthActions(defaultClient)` |
+| `actions.login(input)` | Select the sign-in method, then save successful credentials. | `identifier` and `password`. The optional `method` defaults to `password` and can be `ldap`, `email`, or `sms`. For OTP use `password: ''` and the one-time `code`. Supply `captcha` when required and `expectedUserId` when recovering a session. | A `HaiResult` containing the user and credentials. Storage failure rejects the promise. | `await actions.login({ identifier, password })` |
+| `actions.register(input)` | Register a user and save successful credentials. | Required `username` and `password`. Optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. | A `HaiResult` containing the user and credentials. Storage failure rejects the promise. | `await actions.register({ username, password })` |
+| `actions.bindPageExit(options?)` | Request session revocation when the browser leaves the document. | `options.enabled` defaults to `false`. Pass the value from `session.endOnPageHide` in the public policy. | A listener cleanup function. | `actions.bindPageExit({ enabled: policy.session.endOnPageHide })` |
 
-For explicit sign-out, call `client.iam.auth.logout({})`, inspect its result, then call `await client.auth.clear()` when ending the local session. If remote sign-out fails and the user still leaves locally, report that the remote session was unconfirmed. Leaving a page uses `closeSession` so a delayed page-exit request cannot clear a newer login cookie. Call the cleanup returned by `bindPageExit` when the layout is destroyed.
+The same object also offers wrappers for the [IAM endpoints](#iam-requests). `actions.publicConfig()` and `actions.createCaptcha(input)` forward their arguments directly. `actions.sendOtp(identifier, { captcha })` and `actions.requestPasswordReset(identifier, { captcha })` turn the form values into an input object. `actions.confirmPasswordReset(token, newPassword)` and `actions.renewPassword(input)` submit password changes. The `actions.reauthenticate(password, operation)` wrapper forwards to the [same reauthentication endpoint](#reauthentication).
 
-For a sensitive request, supply a proof by using `context.reauthentication` or prompt via `context.reauthorize`. Keep the proof scoped to the operation that requested it. For example, Serv uses the operation identifier `iam.users.delete` for user deletion. See [request options](#request-options) for callback outcomes.
+#### Scenario: Sign in from a browser form
 
-<a id="scenario-drive-authentication-forms"></a>
+The [browser setup](#example) initializes the default client and returns a `signIn(input)` function. Pass `{ identifier, password }` from a password form, or `{ identifier, password: '', method: 'email', code }` from an email-code form. Read the public policy to choose the method. Where the policy requires a CAPTCHA, solve the challenge for that operation and add its proof in `captcha`. On success, the page can load the profile with the stored credentials.
 
-#### Scenario: Submit a password sign-in form
+<a id="page-exit"></a>
 
-A browser app uses the standard IAM handlers and a ready client configured for browser cookies. The sign-in form selects an enabled method from the public policy and supplies the solved challenge when the policy requires it. The application owns the shared client's lifetime.
+#### Scenario: Revoke the session when the browser leaves the account document
+
+Add this function to the authenticated layout of the [browser example](#example). Call it once after signing in. The public policy supplies the opt-in flag. If reading the policy fails, the function returns the failure and leaves the listener unbound.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
 import { apiClient } from '@h-ai/api-client'
 
-export async function submitPassword(
-  client: ApiClient<{ iam: typeof apiContract.iam }>,
-  identifier: string,
-  password: string,
-  captcha?: string,
-) {
-  const actions = apiClient.createAuthActions(client)
-  const result = await actions.login({ identifier, password, captcha })
-  if (!result.success)
-    return { ok: false as const, error: result.error }
-  return { ok: true as const, user: result.data.user }
+export async function bindAccountPageExit() {
+  const defaultClient = apiClient
+  const actions = apiClient.createAuthActions(defaultClient)
+  const policy = await actions.publicConfig()
+  if (!policy.success)
+    return policy
+
+  const stop = actions.bindPageExit({
+    enabled: policy.data?.session.endOnPageHide ?? false,
+  })
+  return { success: true as const, data: { stop } }
 }
 ```
 
-When the result succeeds, use the returned user to enter the signed-in view. On failure, keep the form available and show the returned error. A rejected custom storage write should be handled by the form's error boundary.
+Save `data.stop` on success. Call it before signing out and in the layout's teardown. A normal browser `pagehide` then requests `iam.auth.closeSession({})` with `keepalive: true` and `autoRefresh: false`. This skips pages entering the back-forward cache. The browser may end the request before delivery. An explicit [sign-out](#logout) still revokes the session and clears local credentials.
 
 <a id="request-options"></a>
+### Per-call request options
 
-### Control one request with `client.<domain>.<group>.<operation>(input, options?)`
+Start with a real API you already use. After the [browser setup](#example) initializes the default client, `apiClient.iam.auth.currentUser()` reads the signed-in user's profile. To let the profile page cancel the same read, add an option to that call. `currentUser` takes no business input, so put `undefined` in the first argument and pass `{ signal }` second. For a call that takes input, such as `apiClient.iam.users.list({ page: 1 }, { signal })`, put the actual input first. These options only affect that call.
 
-Set a cancellation signal, supply proof for a sensitive operation, or adjust refresh for a single call.
-
-#### Interface list
-
-| API | Purpose | Parameters and defaults | Return or failure | Example call |
-| --- | --- | --- | --- | --- |
-| `procedure(input, options?)` | Set options for one business request. | The contract's input followed by optional request options. | The contract's response, or a client failure. | `await client.iam.users.list({ page: 1 }, { signal })` |
-
-##### Per-call request options
-
-Pass the options after the procedure input. For a procedure without input, pass `undefined` first, as in `client.iam.auth.currentUser(undefined, { signal })`.
+#### Request option fields
 
 | Field | Type and default | Effect |
 | --- | --- | --- |
@@ -430,26 +453,17 @@ Pass the options after the procedure input. For a procedure without input, pass 
 
 #### Scenario: Cancel a profile read when leaving the page
 
-An authenticated view uses a ready IAM client and supplies its page lifetime signal. Its cleanup calls the abort function to stop waiting for the read.
+The profile view uses the default `apiClient` already initialized by the [browser app](#example). Call `startProfileRead()` when the view opens. Render the user or show the error when its `result` settles. Call `cancel()` in the view's unmount handler and ignore results after it has left. The app still owns the shared client.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
 
-export function startProfileRead(client: ApiClient<{ iam: typeof apiContract.iam }>) {
+export function startProfileRead() {
   const controller = new AbortController()
-  // Read the signed-in user's profile with a signal managed by this view.
-  async function read() {
-    const result = await client.iam.auth.currentUser(undefined, { signal: controller.signal })
-    if (!result.success)
-      return { ok: false as const, error: result.error }
-    return { ok: true as const, user: result.data }
-  }
-  return { result: read(), cancel: () => controller.abort() }
+  const result = apiClient.iam.auth.currentUser(undefined, { signal: controller.signal })
+  return { result, cancel: () => controller.abort() }
 }
 ```
-
-Render the user or the error while the view is active. When the view has gone away, abort and discard its result. The client remains owned by the application.
 
 <a id="request-authorization"></a>
 
@@ -457,61 +471,42 @@ Render the user or the error while the view is active. When the view has gone aw
 
 **Authentication** establishes who made the request. The client sends the Bearer token it obtained at sign-in or refresh, and IAM verifies the current session at the server. A protected request can return HTTP 401 for a missing, expired, or invalid session. The client can try refresh for an eligible authentication failure. If the final result still reports 401, follow the application's sign-in flow.
 
-**Authorization** determines whether that verified session can execute this operation on this resource. For example, the service can require `user:list` for a user listing and independently check that a report belongs to the requester's permitted organization. Call `client.iam.auth.currentUser()` to read the current user's `roles` and `permissions` for rendering menus and controls. Serv or Kit and the application handler enforce authorization on every request. A valid session with insufficient permission or resource access normally receives HTTP 403. Display the denial and retain its public error for diagnostics. Automatic refresh applies to eligible authentication failures.
+**Authorization** determines whether that verified session can execute this operation on this resource. For example, the service can require `user:list` for a user listing and independently check that a report belongs to the requester's permitted organization. In the browser example, call `apiClient.iam.auth.currentUser()` to read the current user's `roles` and `permissions` for rendering menus and controls. Serv or Kit and the application handler enforce authorization on every request. A valid session with insufficient permission or resource access normally receives HTTP 403. Display the denial and retain its public error for diagnostics. Automatic refresh applies to eligible authentication failures.
 
-For an operation that requires fresh password verification in addition to authorization, call `actions.reauthenticate(password, operation)` and pass the returned `data.ticket` as `context.reauthentication` on that operation. For example, use the exact server operation name `iam.users.delete` when deleting a user on the standard Serv endpoint. The ticket proves a fresh check for that operation. The server still verifies the session and authorizes the target. [Sensitive user deletion](#scenario-confirm-a-protected-user-deletion) · [Serv authentication](serv.en.md#authentication) · [Kit authorization guards](kit.en.md#auth) · [IAM authorization](iam.en.md#authorization)
+If an authorized operation also requires a fresh password check, use the [reauthentication ticket workflow](#reauthentication). · [Serv authentication](serv.en.md#authentication) · [Kit authorization guards](kit.en.md#auth) · [IAM authorization](iam.en.md#authorization)
 
 <a id="iam-requests"></a>
-<a id="call-identity-and-administration-apis-apiclientiam"></a>
+### IAM authentication and session endpoints
 
-### Call identity and session procedures with `client.iam.auth`
-
-Use a client whose contract contains `apiContract.iam`. These methods call the mounted service directly and accept [per-call request options](#request-options). Form helpers handle credential persistence and selection between sign-in procedures. The service evaluates the caller's identity and access for protected procedures.
+`apiClient.iam.auth` is the standard IAM endpoint group on the default client. For example, `apiClient.iam.auth.currentUser()` makes an HTTP request to the API. `apiClient.auth` is the local token manager for that same client. Use [sign-in actions](#auth-actions) to save credentials automatically. If you call `apiClient.iam.auth.login(input)` directly, check the result and pass its tokens to `apiClient.auth.setTokens(result.data.tokens)` yourself. A separate client created with an IAM contract has the same endpoint group. Each endpoint also accepts [per-call options](#request-options).
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `auth.publicConfig(input?, options?)` | Read the public authentication policy. | Omit the input or pass `undefined` before options. | `HaiResult`, with nullable policy data. | `await client.iam.auth.publicConfig()` |
-| `auth.createCaptcha(input, options?)` | Create an authentication challenge. | `{ operation }`. | `HaiResult` containing the challenge. | `await client.iam.auth.createCaptcha({ operation: 'login' })` |
-| `auth.login(input, options?)` | Sign in with a password. | `identifier`, `password`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await client.iam.auth.login({ identifier, password })` |
-| `auth.loginWithLdap(input, options?)` | Sign in through LDAP. | `username`, `password`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await client.iam.auth.loginWithLdap({ username, password })` |
-| `auth.loginWithOtp(input, options?)` | Sign in using a delivered code. | `identifier`, `code`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await client.iam.auth.loginWithOtp({ identifier, code })` |
-| `auth.register(input, options?)` | Register and start an IAM session. | `username`, `password`, optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. | `HaiResult` containing user and credentials. | `await client.iam.auth.register({ username, password })` |
-| `auth.sendOtp(input, options?)` | Request delivery of an OTP. | `identifier` and optional `captcha`. | `HaiResult` containing `expiresAt`. | `await client.iam.auth.sendOtp({ identifier })` |
-| `auth.requestPasswordReset(input, options?)` | Start password reset. | `identifier` and optional `captcha`. | `HaiResult<void>`. | `await client.iam.auth.requestPasswordReset({ identifier })` |
-| `auth.confirmPasswordReset(input, options?)` | Finish password reset. | `token` and `newPassword`. | `HaiResult<void>`. | `await client.iam.auth.confirmPasswordReset({ token, newPassword })` |
-| `auth.renewPassword(input, options?)` | Replace an initial or expired password. | `identifier`, `password`, `newPassword`, optional `captcha`. | `HaiResult<void>`. | `await client.iam.auth.renewPassword({ identifier, password, newPassword })` |
-| `auth.logout(input, options?)` | End the current session and clear service-set cookies. | Optional `accessToken` inside the input object. | `HaiResult<void>`. | `await client.iam.auth.logout({})` |
-| `auth.closeSession(input, options?)` | Revoke a departing session for the page-exit flow. | Optional `accessToken` inside the input object. | `HaiResult<void>`. A newer browser login cookie is preserved. | `await client.iam.auth.closeSession({})` |
-| `auth.refresh(input, options?)` | Exchange a refresh credential explicitly. | Required `refreshToken` inside the input object. | `HaiResult` containing the renewed credentials. | `await client.iam.auth.refresh({ refreshToken })` |
-| `auth.currentUser(input?, options?)` | Read the current identity and access scope. | Omit the input or pass `undefined` before options. | `HaiResult` containing the user record with `roles` and `permissions` arrays. | `await client.iam.auth.currentUser()` |
-| `auth.changePassword(input, options?)` | Change the authenticated user's password. | `oldPassword` and `newPassword`. | `HaiResult<void>`. | `await client.iam.auth.changePassword({ oldPassword, newPassword })` |
-| `auth.updateCurrentUser(input, options?)` | Edit the caller's profile. | Optional `username`, `displayName`, `avatarUrl`, `email`, `phone`, and `metadata`. | `HaiResult` containing the updated user. | `await client.iam.auth.updateCurrentUser({ displayName })` |
-| `auth.reauthenticate(input, options?)` | Obtain proof for a sensitive operation. | `password` and `operation`. | `HaiResult` containing the short-lived proof. | `await client.iam.auth.reauthenticate({ password, operation })` |
+| `apiClient.iam.auth.publicConfig(input?, options?)` | Read the public authentication policy. | Omit the input or pass `undefined` before options. | `HaiResult`, with nullable policy data. | `await apiClient.iam.auth.publicConfig()` |
+| `apiClient.iam.auth.createCaptcha(input, options?)` | Create an authentication challenge. | `{ operation }`. | `HaiResult` containing the challenge. | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
+| `apiClient.iam.auth.login(input, options?)` | Sign in with a password. | `identifier`, `password`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await apiClient.iam.auth.login({ identifier, password })` |
+| `apiClient.iam.auth.loginWithLdap(input, options?)` | Sign in through LDAP. | `username`, `password`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
+| `apiClient.iam.auth.loginWithOtp(input, options?)` | Sign in using a delivered code. | `identifier`, `code`, optional `captcha` and `expectedUserId`. | `HaiResult` containing user and credentials. | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
+| `apiClient.iam.auth.register(input, options?)` | Register and start an IAM session. | `username`, `password`, optional `email`, `phone`, `displayName`, `metadata`, and `captcha`. | `HaiResult` containing user and credentials. | `await apiClient.iam.auth.register({ username, password })` |
+| `apiClient.iam.auth.sendOtp(input, options?)` | Request delivery of an OTP. | `identifier` and optional `captcha`. | `HaiResult` containing `expiresAt`. | `await apiClient.iam.auth.sendOtp({ identifier })` |
+| `apiClient.iam.auth.requestPasswordReset(input, options?)` | Start password reset. | `identifier` and optional `captcha`. | `HaiResult<void>`. | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
+| `apiClient.iam.auth.confirmPasswordReset(input, options?)` | Finish password reset. | `token` and `newPassword`. | `HaiResult<void>`. | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `apiClient.iam.auth.renewPassword(input, options?)` | Replace an initial or expired password. | `identifier`, `password`, `newPassword`, optional `captcha`. | `HaiResult<void>`. | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `apiClient.iam.auth.logout(input, options?)` | End the current session and clear service-set cookies. | Optional `accessToken` inside the input object. | `HaiResult<void>`. | `await apiClient.iam.auth.logout({})` |
+| `apiClient.iam.auth.closeSession(input, options?)` | Revoke a departing session for the page-exit flow. | Optional `accessToken` inside the input object. | `HaiResult<void>`. A newer browser login cookie is preserved. | `await apiClient.iam.auth.closeSession({})` |
+| `apiClient.iam.auth.refresh(input, options?)` | Exchange a refresh token explicitly when the server accepts it in the body. | Required `refreshToken` inside the input object. For the HttpOnly Cookie, use automatic refresh. | `HaiResult` containing the renewed credentials. | `await apiClient.iam.auth.refresh({ refreshToken })` |
+| `apiClient.iam.auth.currentUser(input?, options?)` | Read the current identity and access scope. | Omit the input or pass `undefined` before options. | `HaiResult` containing the user record with `roles` and `permissions` arrays. | `await apiClient.iam.auth.currentUser()` |
+| `apiClient.iam.auth.changePassword(input, options?)` | Change the authenticated user's password. | `oldPassword` and `newPassword`. | `HaiResult<void>`. | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `apiClient.iam.auth.updateCurrentUser(input, options?)` | Edit the caller's profile. | Optional `username`, `displayName`, `avatarUrl`, `email`, `phone`, and `metadata`. | `HaiResult` containing the updated user. | `await apiClient.iam.auth.updateCurrentUser({ displayName })` |
+| `apiClient.iam.auth.reauthenticate(input, options?)` | Obtain proof for a sensitive operation. | `password` and `operation`. | `HaiResult` containing the short-lived proof. | `await apiClient.iam.auth.reauthenticate({ password, operation })` |
 
 <a id="logout"></a>
 
 #### Scenario: Sign out of the current session
 
-Use the signed-in IAM client to request service logout, then clear local credentials. If the service returns a failure, the local sign-out can complete while revocation of the remote session remains unconfirmed.
-
-```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
-
-export async function signOut(client: ApiClient<{ iam: typeof apiContract.iam }>) {
-  // Revoke the current session at the service. A failed result leaves remote sign-out unconfirmed.
-  const result = await client.iam.auth.logout({}, { context: { autoRefresh: false } })
-  // End the local session. A storage failure rejects this operation.
-  await client.auth.clear()
-  if (!result.success)
-    return result
-  return result
-}
-```
-
-The browser can then return to the sign-in view. Keep local and remote failure state distinct if the action only completes in one place.
+The sign-out button in the [browser example](#example) calls `apiClient.iam.auth.logout({})`. Check the result to confirm the server revoked the session and expired the refresh Cookie. Whether the remote request succeeds or fails, `apiClient.auth.clear()` clears the local credentials. If the remote request failed, the view can return to sign-in and let the user know the server revocation was unconfirmed.
 
 <a id="http-contract-extensions"></a>
 
@@ -566,56 +561,50 @@ See the endpoint and service setup in [API Contract](api-contract.en.md#http-con
 
 <a id="iam-admin-inputs"></a>
 
-### Manage users, roles and permissions with `client.iam`
+### Manage users, roles and permissions with `apiClient.iam`
 
-Use the IAM administration groups with a caller that holds the relevant server permissions. Each procedure accepts optional [per-call request options](#request-options).
+The administration page calls the `users`, `roles`, and `permissions` groups on the default client. It uses the browser session already initialized in [the account example](#example). Sign in as an account with the relevant server permissions. Each call accepts optional [request options](#request-options).
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `users.list(input, options?)` | Search and page through users. | Pagination and filters described below. | `HaiResult` containing a page of users. | `await client.iam.users.list({ page: 1, pageSize: 20 })` |
-| `users.get(input, options?)` | Find a user by ID. | `{ id }`. | `HaiResult` containing a user or `null`. | `await client.iam.users.get({ id })` |
-| `users.create(input, options?)` | Create a user with supplied initial credentials. | Required `username` and `password`, plus optional profile and account fields. | `HaiResult` containing the created user. | `await client.iam.users.create({ username, password })` |
-| `users.invite(input, options?)` | Create a user with a one-time setup invitation. | Required `username`, plus optional account and profile fields. `accountStatus` may only be `active`. | `HaiResult` containing the invited user. | `await client.iam.users.invite({ username, email })` |
-| `users.update(input, options?)` | Edit user details, status, or roles. | Required `id`, plus optional fields described below. | `HaiResult` containing the updated user. | `await client.iam.users.update({ id, displayName })` |
-| `users.delete(input, options?)` | Delete a user. | `{ id }`. | `HaiResult<void>`. | `await client.iam.users.delete({ id })` |
-| `users.resetPassword(input, options?)` | Reset a user's password administratively. | `id` and `newPassword`. | `HaiResult<void>`. | `await client.iam.users.resetPassword({ id, newPassword })` |
-| `roles.list(input?, options?)` | Read the role list. | Omit the input or pass `undefined` before options. | `HaiResult` containing a page of roles. | `await client.iam.roles.list()` |
-| `roles.get(input, options?)` | Find a role by ID. | `{ id }`. | `HaiResult` containing a role or `null`. | `await client.iam.roles.get({ id })` |
-| `roles.create(input, options?)` | Create a role. | `code`, `name`, optional `description` and `isSystem`. | `HaiResult` containing the created role. | `await client.iam.roles.create({ code, name })` |
-| `roles.update(input, options?)` | Edit a role's name or description. | `id`, optional `name` and `description`. | `HaiResult` containing the updated role. | `await client.iam.roles.update({ id, name })` |
-| `roles.delete(input, options?)` | Delete a role. | `{ id }`. | `HaiResult<void>`. | `await client.iam.roles.delete({ id })` |
-| `permissions.list(input, options?)` | Search and page through permissions. | Pagination, optional `search` and `type`. | `HaiResult` containing a page of permissions. | `await client.iam.permissions.list({ type: 'api' })` |
-| `permissions.get(input, options?)` | Find a permission by ID. | `{ id }`. | `HaiResult` containing a permission or `null`. | `await client.iam.permissions.get({ id })` |
-| `permissions.create(input, options?)` | Create a permission. | `code`, `name`, optional `description`, `resource`, `action`, `type`, and `sensitiveOperations`, which defaults to `[]`. | `HaiResult` containing the created permission. | `await client.iam.permissions.create({ code, name })` |
-| `permissions.setSensitiveOperations(input, options?)` | Replace a permission's sensitive operation list. | `id` and `sensitiveOperations`, up to 1,000 identifiers. | `HaiResult<void>`. | `await client.iam.permissions.setSensitiveOperations({ id, sensitiveOperations })` |
-| `permissions.delete(input, options?)` | Delete a permission. | `{ id }`. | `HaiResult<void>`. | `await client.iam.permissions.delete({ id })` |
+| `apiClient.iam.users.list(input, options?)` | Search and page through users. | Pagination and filters described below. | `HaiResult` containing a page of users. | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
+| `apiClient.iam.users.get(input, options?)` | Find a user by ID. | `{ id }`. | `HaiResult` containing a user or `null`. | `await apiClient.iam.users.get({ id })` |
+| `apiClient.iam.users.create(input, options?)` | Create a user with supplied initial credentials. | Required `username` and `password`, plus optional profile and account fields. | `HaiResult` containing the created user. | `await apiClient.iam.users.create({ username, password })` |
+| `apiClient.iam.users.invite(input, options?)` | Create a user with a one-time setup invitation. | Required `username`, plus optional account and profile fields. `accountStatus` may only be `active`. | `HaiResult` containing the invited user. | `await apiClient.iam.users.invite({ username, email })` |
+| `apiClient.iam.users.update(input, options?)` | Edit user details, status, or roles. | Required `id`, plus optional fields described below. | `HaiResult` containing the updated user. | `await apiClient.iam.users.update({ id, displayName })` |
+| `apiClient.iam.users.delete(input, options?)` | Delete a user. | `{ id }`. | `HaiResult<void>`. | `await apiClient.iam.users.delete({ id })` |
+| `apiClient.iam.users.resetPassword(input, options?)` | Reset a user's password administratively. | `id` and `newPassword`. | `HaiResult<void>`. | `await apiClient.iam.users.resetPassword({ id, newPassword })` |
+| `apiClient.iam.roles.list(input?, options?)` | Read the role list. | Omit the input or pass `undefined` before options. | `HaiResult` containing a page of roles. | `await apiClient.iam.roles.list()` |
+| `apiClient.iam.roles.get(input, options?)` | Find a role by ID. | `{ id }`. | `HaiResult` containing a role or `null`. | `await apiClient.iam.roles.get({ id })` |
+| `apiClient.iam.roles.create(input, options?)` | Create a role. | `code`, `name`, optional `description` and `isSystem`. | `HaiResult` containing the created role. | `await apiClient.iam.roles.create({ code, name })` |
+| `apiClient.iam.roles.update(input, options?)` | Edit a role's name or description. | `id`, optional `name` and `description`. | `HaiResult` containing the updated role. | `await apiClient.iam.roles.update({ id, name })` |
+| `apiClient.iam.roles.delete(input, options?)` | Delete a role. | `{ id }`. | `HaiResult<void>`. | `await apiClient.iam.roles.delete({ id })` |
+| `apiClient.iam.permissions.list(input, options?)` | Search and page through permissions. | Pagination, optional `search` and `type`. | `HaiResult` containing a page of permissions. | `await apiClient.iam.permissions.list({ type: 'api' })` |
+| `apiClient.iam.permissions.get(input, options?)` | Find a permission by ID. | `{ id }`. | `HaiResult` containing a permission or `null`. | `await apiClient.iam.permissions.get({ id })` |
+| `apiClient.iam.permissions.create(input, options?)` | Create a permission. | `code`, `name`, optional `description`, `resource`, `action`, `type`, and `sensitiveOperations`, which defaults to `[]`. | `HaiResult` containing the created permission. | `await apiClient.iam.permissions.create({ code, name })` |
+| `apiClient.iam.permissions.setSensitiveOperations(input, options?)` | Replace a permission's sensitive operation list. | `id` and `sensitiveOperations`, up to 1,000 identifiers. | `HaiResult<void>`. | `await apiClient.iam.permissions.setSensitiveOperations({ id, sensitiveOperations })` |
+| `apiClient.iam.permissions.delete(input, options?)` | Delete a permission. | `{ id }`. | `HaiResult<void>`. | `await apiClient.iam.permissions.delete({ id })` |
 
 ##### IAM administration fields
 
 | Input | Fields and defaults |
 | --- | --- |
-| `users.list` | `page` starts at 1 and defaults to 1. `pageSize` defaults to 20 and is capped at 100. Optional `search`, `roleCode`, `accountStatus` (`active`, `dormant`, `closed`), `sortBy` (`username`, `email`, `displayName`, `accountStatus`, `createdAt`), and `sortDirection` (`asc` or `desc`). |
-| `users.create` and `users.invite` | Optional `email`, `phone`, `displayName`, `metadata`, `roleIds`, `accountType` (`permanent` or `temporary`), `accountStatus`, and `accountExpiresAt`. Create accepts `password`. Invitation uses a one-time setup flow and accepts only `active` for `accountStatus`. |
-| `users.update` | Required `id`. Optional `username`, `email`, `phone`, `displayName`, `avatarUrl`, `metadata`, `roleIds`, `accountType`, `accountStatus`, and `accountExpiresAt`. Pass `null` for `accountExpiresAt` to remove a stored expiry when allowed by IAM. |
-| `permissions.list` and `permissions.create` | `type` is `menu`, `api`, or `button`. List accepts the common pagination fields. |
-
-<a id="scenario-call-identity-and-administration-apis"></a>
+| `apiClient.iam.users.list` | `page` starts at 1 and defaults to 1. `pageSize` defaults to 20 and is capped at 100. Optional `search`, `roleCode`, `accountStatus` (`active`, `dormant`, `closed`), `sortBy` (`username`, `email`, `displayName`, `accountStatus`, `createdAt`), and `sortDirection` (`asc` or `desc`). |
+| `apiClient.iam.users.create` and `users.invite` | Optional `email`, `phone`, `displayName`, `metadata`, `roleIds`, `accountType` (`permanent` or `temporary`), `accountStatus`, and `accountExpiresAt`. Create accepts `password`. Invitation uses a one-time setup flow and accepts only `active` for `accountStatus`. |
+| `apiClient.iam.users.update` | Required `id`. Optional `username`, `email`, `phone`, `displayName`, `avatarUrl`, `metadata`, `roleIds`, `accountType`, `accountStatus`, and `accountExpiresAt`. Pass `null` for `accountExpiresAt` to remove a stored expiry when allowed by IAM. |
+| `apiClient.iam.permissions.list` and `permissions.create` | `type` is `menu`, `api`, or `button`. List accepts the common pagination fields. |
 
 #### Scenario: List users assigned to an administrative role
 
-Pass an already initialized IAM client with permission to list users. The application supplies the signal to cancel the view's request. Inspect the result before reading the current page.
+On an admin screen, open the auditor tab to load the first 20 users with the `auditor` role. Pass the tab's cancellation signal if navigating away should cancel the read.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
 
-export async function listAuditors(
-  client: ApiClient<{ iam: typeof apiContract.iam }>,
-  signal?: AbortSignal,
-) {
-  const result = await client.iam.users.list({
+export async function listAuditors(signal?: AbortSignal) {
+  const result = await apiClient.iam.users.list({
     page: 1,
     pageSize: 20,
     roleCode: 'auditor',
@@ -628,7 +617,7 @@ export async function listAuditors(
 }
 ```
 
-Render the returned page or display the failure. The application that provided the client closes it at the end of its lifetime.
+Render the returned page of auditors or display the failure. The account module keeps the default client available for later calls.
 
 <a id="iam-management-extensions"></a>
 
@@ -669,40 +658,36 @@ export async function issueReportKey(client: ProjectClient, userId: string, pass
 }
 ```
 
+<a id="reauthentication"></a>
+
 #### Scenario: Confirm a protected user deletion
 
 In an authorized Serv administration view, take the target ID from a successful list response and ask for the signed-in operator's current password. Obtain a proof for `iam.users.delete` and attach the returned ticket only to that call.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
 import { apiClient } from '@h-ai/api-client'
 
-export async function deleteUser(
-  client: ApiClient<{ iam: typeof apiContract.iam }>,
-  id: string,
-  password: string,
-) {
+export async function deleteUser(id: string, password: string) {
   // Ask IAM for a single-operation proof. A failure stops before attempting deletion.
-  const proof = await apiClient.createAuthActions(client).reauthenticate(password, 'iam.users.delete')
+  const proof = await apiClient.iam.auth.reauthenticate({ password, operation: 'iam.users.delete' })
   if (!proof.success)
     return { ok: false as const, error: proof.error }
 
   // Delete the selected user using this proof. The result says whether the service accepted it.
-  const deleted = await client.iam.users.delete({ id }, { context: { reauthentication: proof.data.ticket } })
+  const deleted = await apiClient.iam.users.delete({ id }, { context: { reauthentication: proof.data.ticket } })
   if (!deleted.success)
     return { ok: false as const, error: deleted.error }
   return { ok: true as const, id }
 }
 ```
 
-In the source, follow the `headers` callback in `buildRawClient()` in `packages/api-client/src/api-client-link.ts`, the `users.delete` handler and `sensitive()` in `packages/serv/src/features/serv-feature-iam.ts`, and `checkSensitiveOperation()` in `packages/iam/src/authn/iam-authn-functions.ts`. In Kit, `requireSensitive()` in `packages/kit/src/guards/kit-sensitive.ts` reads the header.
+The optional `context.reauthentication` is a string on the second argument to the typed call. The API Client's OpenAPI link copies it to `X-Hai-Reauthentication` for that request. The first argument `{ id }` remains the business input. For the standard Serv delete route, the permission guard checks `iam.users.write` and the handler forwards the header, the current access token, and `iam.users.delete` to `iam.auth.checkSensitiveOperation()`. IAM consumes the one-time ticket and checks its user, action, current session version, and credential version. In a Kit route, apply the usual permission and resource checks, then call `kit.guard.requireSensitive(iam, event, operation)` before the write. [Serv authentication](serv.en.md#authentication) · [Kit authorization](kit.en.md#auth)
 
 Check the returned result before removing that user from the view. The application's initialized client stays available to reload the list.
 
-<a id="storage-requests"></a>
-<a id="call-file-and-ai-apis-apiclientstorage-apiclientai"></a>
+In the source, follow the `headers` callback in `buildRawClient()` in `packages/api-client/src/api-client-link.ts`, the `users.delete` handler and `sensitive()` in `packages/serv/src/features/serv-feature-iam.ts`, and `checkSensitiveOperation()` in `packages/iam/src/authn/iam-authn-functions.ts`. In Kit, `requireSensitive()` in `packages/kit/src/guards/kit-sensitive.ts` reads the header.
 
+<a id="storage-requests"></a>
 ### Access object storage with `client.storage`
 
 Use the mounted Storage endpoints to manage objects. Signed URLs send the browser directly to the storage backend. For small-file transfers through the application, use the [application client](#http-contract-extensions) and enable the corresponding HTTPS routes. This also works with local storage that does not support signed URLs.
@@ -721,8 +706,6 @@ Use the mounted Storage endpoints to manage objects. Signed URLs send the browse
 | `client.storage.files.download(input, options?)` | Download an attachment through the application server | Required object `key` with read access. The service caps downloads at 5 MiB. | `File` on success or the failure branch of `HaiResult<never>`. | `await client.storage.files.download({ key })` |
 
 Use the returned URL directly for the object transfer. For a signed upload, use the signed method and matching content type. The signing procedure and the object transfer have separate outcomes.
-
-<a id="scenario-call-file-and-ai-apis"></a>
 
 #### Scenario: Upload a PDF with a signed URL
 
@@ -790,12 +773,12 @@ Once the service mounts the AI routes, the default client supports JSON chat com
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `chats.createCompletion(input, options?)` | Request a non-streaming chat completion. | Required nonempty `messages`. Generation controls, tools, and ownership fields follow. | `HaiResult` containing completion choices and model metadata. | `await client.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
-| `chats.sendMessage(input, options?)` | Send one message to a session. | `message`, optional `sessionId` (defaults to `default`), `objectId`, `systemPrompt`, `model`, and `temperature` (0–2). | `HaiResult` containing reply content, model, and optional usage. | `await client.ai.chats.sendMessage({ message, sessionId })` |
-| `chats.listHistory(input, options?)` | Read the history of a session. | `sessionId`, optional `objectId`, `limit` (1–200), and `order` (`asc` or `desc`). | `HaiResult` containing chat records. | `await client.ai.chats.listHistory({ sessionId, limit: 20 })` |
-| `memories.recall(input, options?)` | Search for memories by query. | `query`, optional `topK` (at least 1), `types`, `minImportance` (0–1), and `objectId`. | `HaiResult` containing matching memories. | `await client.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
-| `memories.list(input, options?)` | List memories for an authorized owner. | Pass an object, using `{}` for defaults. Optional `types`, `objectId`, zero-based `offset`, and `limit` (1–100). | `HaiResult` containing memory entries. | `await client.ai.memories.list({ limit: 20 })` |
-| `sessions.list(input, options?)` | List AI sessions. | Pass `{}` for the signed-in owner, or supply an authorized `objectId`. | `HaiResult` containing session entries. | `await client.ai.sessions.list({})` |
+| `apiClient.ai.chats.createCompletion(input, options?)` | Request a non-streaming chat completion. | Required nonempty `messages`. Generation controls, tools, and ownership fields follow. | `HaiResult` containing completion choices and model metadata. | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
+| `apiClient.ai.chats.sendMessage(input, options?)` | Send one message to a session. | `message`, optional `sessionId` (defaults to `default`), `objectId`, `systemPrompt`, `model`, and `temperature` (0–2). | `HaiResult` containing reply content, model, and optional usage. | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
+| `apiClient.ai.chats.listHistory(input, options?)` | Read the history of a session. | `sessionId`, optional `objectId`, `limit` (1–200), and `order` (`asc` or `desc`). | `HaiResult` containing chat records. | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `apiClient.ai.memories.recall(input, options?)` | Search for memories by query. | `query`, optional `topK` (at least 1), `types`, `minImportance` (0–1), and `objectId`. | `HaiResult` containing matching memories. | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `apiClient.ai.memories.list(input, options?)` | List memories for an authorized owner. | Pass an object, using `{}` for defaults. Optional `types`, `objectId`, zero-based `offset`, and `limit` (1–100). | `HaiResult` containing memory entries. | `await apiClient.ai.memories.list({ limit: 20 })` |
+| `apiClient.ai.sessions.list(input, options?)` | List AI sessions. | Pass `{}` for the signed-in owner, or supply an authorized `objectId`. | `HaiResult` containing session entries. | `await apiClient.ai.sessions.list({})` |
 | `client.ai.chats.streamCompletion(input, options?)` | Receive model output incrementally | Uses the same input as `createCompletion`. Pass a `signal` as a per-call option. | An async iterable on success, a result failure before setup, and an iteration error after setup. | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
 | `client.ai.memories.add(input, options?)` | Save a memory | Required `content` (1–5000 characters) and `type`. Optional `importance` (0–1) and authorized `objectId`. | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.add({ content, type: 'preference' })` |
 | `client.ai.memories.update(input, options?)` | Edit a memory | Required `id` and at least one of `content`, `type`, or `importance`. Optional `objectId`. | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.update({ id: memoryId, content })` |
@@ -819,29 +802,64 @@ Once the service mounts the AI routes, the default client supports JSON chat com
 | `temperature`, `top_p`, `max_tokens` | Optional temperature (0–2), sampling probability (0–1), and positive integer token limit. Omission uses the model settings. |
 | `tools` and `tool_choice` | An optional nonempty tool list. Each tool has `type: 'function'` and `function.name`, with optional description, JSON Schema parameters, and strict mode. Choice accepts `auto`, `none`, `required`, or `{ type: 'function', function: { name } }`. Required or named selection needs corresponding tools. |
 
-#### Scenario: Send a new message in the selected conversation
+#### Scenario: Open a saved conversation and send a message
 
-Use an initialized AI client and the session ID for the selected conversation. The signed-in user must have access to that session.
+The chat page has an initialized, signed-in default client. Populate the conversation selector with the `sessionId` from each item in `listChatSessions()`'s successful result. After a user selects a session, call `readChatHistory()` and render each record's messages and `response.content`. Pass the same `sessionId` and the text from the editor to `sendChatMessage()`. Check `success` before appending the returned `data.content` as the assistant reply.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
-import type { apiContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
 
-export async function sendChatMessage(
-  client: ApiClient<{ ai: typeof apiContract.ai }>,
-  sessionId: string,
-  message: string,
-  signal?: AbortSignal,
-) {
-  // Send the user's text to this session. Failure leaves the submitted text available to the caller.
-  const result = await client.ai.chats.sendMessage({ sessionId, message }, { signal })
-  if (!result.success)
-    return { ok: false as const, error: result.error }
-  return { ok: true as const, content: result.data.content }
+export function listChatSessions(signal?: AbortSignal) {
+  return apiClient.ai.sessions.list({}, { signal })
+}
+
+export function readChatHistory(sessionId: string, signal?: AbortSignal) {
+  return apiClient.ai.chats.listHistory({ sessionId, limit: 20, order: 'asc' }, { signal })
+}
+
+export function sendChatMessage(sessionId: string, message: string, signal?: AbortSignal) {
+  return apiClient.ai.chats.sendMessage({ sessionId, message }, { signal })
 }
 ```
 
-Render the returned text on success. The application owns the initialized client and can cancel the call through the supplied signal.
+#### Scenario: Generate a support-reply draft
+
+Use `createCompletion()` when the page supplies the message sequence. The support team sets the instruction and the user supplies the request. The browser-only SDK forwards those messages to the server's model and waits for the JSON result. The function returns the first assistant text and the count of tokens used. Let an agent review the draft before sending it to a customer.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+export async function draftSupportReply(request: string, signal?: AbortSignal) {
+  const result = await apiClient.ai.chats.createCompletion({
+    messages: [
+      { role: 'system', content: 'Draft a concise customer support reply.' },
+      { role: 'user', content: request },
+    ],
+  }, { signal })
+  if (!result.success)
+    return result
+  return {
+    success: true as const,
+    data: { text: result.data.choices[0]?.message.content ?? null, tokenCount: result.data.usage.total_tokens },
+  }
+}
+```
+
+#### Scenario: List and search a signed-in user’s saved preferences
+
+Use `listPreferences(offset)` for the account page's paged list. Render `data.items` and use `data.total` to decide whether another page is available. Use `recallPreferences(query)` for the search box, for example with the query `preferred language`, and show the returned matches in `data.items`. Both calls use the signed-in user when `objectId` is omitted.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+export function listPreferences(offset: number) {
+  return apiClient.ai.memories.list({ types: ['preference'], offset, limit: 20 })
+}
+
+export function recallPreferences(query: string) {
+  return apiClient.ai.memories.recall({ query, topK: 5, types: ['preference'] })
+}
+```
 
 #### Scenario: Display the first response as it streams
 
@@ -1070,8 +1088,6 @@ Use HTTPS to authenticate the service that responds to the key exchange. For bro
 
 <a id="plain-https-requests"></a>
 
-<a id="scenario-call-a-route-that-accepts-ordinary-https"></a>
-
 #### Scenario: Read the health endpoint over HTTPS
 
 Configure the server route with `encryption: 'disabled'` or use server-side `transport.excludePaths` for a path without a required encryption rule. The list matches an exact path and its descendants. For a typed route, use a separate client initialized with the ordinary HTTPS settings. The encrypted client sends transport headers on its requests.
@@ -1091,8 +1107,6 @@ export async function checkHealth(origin: string) {
 The health request uses the server's HTTPS policy for that route. A route requiring encrypted transport needs the encrypted instance.
 
 <a id="transport-observation"></a>
-<a id="encrypt-transport-and-observe-outcomes-apiclient"></a>
-
 ### Observe request outcomes with `client.observeRequests`
 
 Use observations to match a failure to its procedure, elapsed time, and request ID. Refresh or replay can contribute additional attempts to the same logical call. The final record includes the method and sanitized URL only when available. The URL retains the actual request path and omits its query and fragment. Record handling should account for identifiers that the application places in a path. Fields exclude request and response bodies and headers.
@@ -1104,8 +1118,6 @@ Use observations to match a failure to its procedure, elapsed time, and request 
 | `client.observeRequests(observer)` | Subscribe to settled logical request outcomes. | Required synchronous `observer(record: ApiRequestRecord)`. | Unsubscribe function. Close also removes subscriptions. Observer errors do not alter the request result. | `const unsubscribe = client.observeRequests(record => collect(record))` |
 
 The record has `requestId`, `procedure`, `timestamp` (Unix milliseconds), `duration` (milliseconds), `success`, and `attempts`. It may also contain `errorCode`, `method`, `url`, and HTTP `status`. A request with zero attempts or no available HTTP response can omit `status`. An HTTP 200 carrying a failed `HaiResult` reports `success: false`. For a stream, the outcome describes stream setup.
-
-<a id="scenario-encrypt-transport-and-observe-outcomes"></a>
 
 #### Scenario: Capture the outcome of a public policy request
 
@@ -1208,61 +1220,129 @@ export async function exportReport(
 Pass `{ reportId: 'r-42', format: 'pdf' }` to send `POST /api/v1/reports/r-42/exports` with `{ "format": "pdf" }` as its JSON body. For a service fixture where the same verified user may export `r-42` but cannot access `r-99`, the former returns an export ID and the latter returns the `forbidden` branch. Use the ID to track the accepted export. The server issues the same authorization decision regardless of how the browser renders the button. Closing the client releases local runtime resources. Use [sign-out](#logout) to end the server session at the user's request.
 
 <a id="custom-response-results"></a>
-<a id="scenario-read-a-custom-value-and-an-sse-response"></a>
 
-### Read custom JSON and SSE values
+### Server-sent events for a report export
 
-A typed client uses the output defined by each [custom contract](api-contract.en.md#use-with-client). Plain JSON and server-sent events can each return a client failure during the HTTP call or stream setup. Narrow the result before consuming the successful value. The client checks outputs when their Zod shapes can be converted to JSON Schema. An output mismatch returns `VALIDATION_FAILED`. Validation preserves wire values such as ISO date strings.
+A successful [export submission](#custom-business-client) returns an `exportId`. The report page sends it to `GET /reports/exports/{exportId}/progress`. Server-Sent Events (SSE) let the server deliver several progress updates in the same HTTP response. The page displays the completed and total counts and enables download when the export reports `ready`.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
-| `client.count(input?, options?)` | Read a number from the custom contract below. | No input. Pass the optional page signal to cancel the response. | A number or a failed `HaiResult<never>`. | `await client.count(undefined, { signal })` |
-| `client.events(input?, options?)` | Start the custom progress stream below. | No input. Pass the optional page signal to cancel the stream. | An async iterator or a failed `HaiResult<never>` during setup. Iteration can later reject. | `await client.events(undefined, { signal })` |
+| `eventIterator(schema)` | Declare an event stream. | Import from `@orpc/contract` and pass the schema for one event. | The client receives an asynchronous iterator. | `.output(eventIterator(ExportProgressSchema))` |
+| `progressClient.reports.exports.watchProgress(input, options?)` | Subscribe to one export job. | Pass `{ exportId }` from the export response and optionally the request `signal`. | A failure result if setup fails or an asynchronous iterator if it succeeds. | `await progressClient.reports.exports.watchProgress({ exportId }, { signal })` |
 
-#### Scenario: Read initial progress and subscribe to updates
+The custom contract below adds this endpoint. A route can also declare a bare JSON value, such as a number. The client returns the value on success or a failure branch on error. JSON Schema-compatible Zod output is validated while preserving wire representations such as ISO date strings.
 
-The example needs a service that mounts the shared routes in `progressContract` and returns a number from `/status/count` and events with a numeric `completed` field from `/status/events`. The application's initialized client uses that exact contract. Pass the page's cancellation signal and a callback that renders the current progress.
+#### Scenario: Verify progress from export acceptance to download
 
-```sh
-pnpm add @h-ai/api-client @h-ai/api-contract @orpc/contract zod
-```
+Install `@h-ai/api-client`, `@h-ai/api-contract`, `@orpc/contract`, and `zod` directly. Run `runReportProgressDemo()` using its Fetch test double. It simulates the accepted job `exp-42` and emits `0/3`, `2/3`, and `3/3` in order.
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
+import { apiClient, type ApiClientConfig } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { eventIterator } from '@orpc/contract'
 import { z } from 'zod'
 
-export const progressContract = {
-  count: apiContract.route({ method: 'GET', path: '/status/count' }).output(z.number()),
-  events: apiContract.route({ method: 'GET', path: '/status/events' })
-    .output(eventIterator(z.object({ completed: z.number() }))),
+const ExportProgressSchema = z.object({
+  completed: z.number().int().nonnegative(),
+  total: z.number().int().positive(),
+  state: z.enum(['running', 'ready']),
+})
+type ExportProgress = z.infer<typeof ExportProgressSchema>
+
+const progressContract = {
+  reports: {
+    exports: {
+      watchProgress: apiContract.route({
+        method: 'GET',
+        path: '/reports/exports/{exportId}/progress',
+      })
+        .input(z.object({ exportId: z.string().min(1) }))
+        .output(eventIterator(ExportProgressSchema)),
+    },
+  },
 }
 
-export async function readProgress(
-  client: ApiClient<typeof progressContract>,
-  signal: AbortSignal,
-  update: (completed: number) => void,
-) {
-  // The first call returns a bare number on success or a client failure before streaming.
-  const count = await client.count(undefined, { signal })
-  if (typeof count !== 'number')
-    return { ok: false as const, error: count.error }
-  update(count)
+function demoEndpoint(request: Request): Response {
+  const url = new URL(request.url)
+  if (request.method !== 'GET' || url.pathname !== '/api/v1/reports/exports/exp-42/progress')
+    return new Response(null, { status: 404 })
 
-  // The second call returns an async iterator after setup. Check before consuming it.
-  const events = await client.events(undefined, { signal })
-  if (!(Symbol.asyncIterator in events))
-    return { ok: false as const, error: events.error }
-  for await (const event of events)
-    update(event.completed)
-  return { ok: true as const }
+  const events: ExportProgress[] = [
+    { completed: 0, total: 3, state: 'running' },
+    { completed: 2, total: 3, state: 'running' },
+    { completed: 3, total: 3, state: 'ready' },
+  ]
+  const encoder = new TextEncoder()
+  let canceled = false
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      if (canceled)
+        return
+      const progress = events.shift()
+      if (!progress) {
+        controller.close()
+        return
+      }
+
+      // Format an SSE message for the oRPC client and finish after the final event.
+      controller.enqueue(encoder.encode(`event: message\ndata: ${JSON.stringify(progress)}\n\n`))
+      if (progress.state === 'ready')
+        controller.close()
+    },
+    cancel() {
+      canceled = true
+    },
+  })
+  return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
+}
+
+export async function watchReportExport(
+  config: ApiClientConfig,
+  exportId: string,
+  signal: AbortSignal,
+  render: (progress: ExportProgress) => void,
+) {
+  const progressClient = apiClient.create(progressContract)
+  const ready = await progressClient.init(config)
+  if (!ready.success)
+    return ready
+
+  try {
+    const events = await progressClient.reports.exports.watchProgress({ exportId }, { signal })
+    if (!(Symbol.asyncIterator in events))
+      return events
+    for await (const progress of events) {
+      render(progress)
+      if (progress.state === 'ready')
+        return { success: true as const, data: progress }
+    }
+    throw new Error('The connection closed before the export was ready')
+  }
+  finally {
+    await progressClient.close()
+  }
+}
+
+export async function runReportProgressDemo() {
+  const controller = new AbortController()
+  const config: ApiClientConfig = {
+    baseUrl: 'https://reports.example.test/api/v1',
+    fetch: async (input, init) => demoEndpoint(new Request(input, init)),
+  }
+  const snapshots: string[] = []
+  const result = await watchReportExport(config, 'exp-42', controller.signal, ({ completed, total }) => {
+    snapshots.push(`${completed}/${total}`)
+  })
+  if (!result.success)
+    return result
+  return { success: true as const, data: { snapshots, downloadEnabled: result.data.state === 'ready' } }
 }
 ```
 
-After setup, errors while reading an SSE stream can reject iteration. The caller handles that rejection and aborts its signal when the view is destroyed. Its client owner closes the instance when no other request needs it.
+Expected results are `data.snapshots: ['0/3', '2/3', '3/3']` and `downloadEnabled: true`. Change the ID to `exp-99` to check a 404 before the stream starts. In production, the GET handler checks the session and the job's ownership, then sends progress events in the same frame format. Add the progress procedure to the report contract to share the signed-in reporting client. On unmount, call `abort()` to stop reading. Failures or cancellation after setup propagate through iteration. The service still owns the export job.
 
 <a id="errors"></a>
 <a id="error-handling"></a>
