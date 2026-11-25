@@ -135,6 +135,35 @@ describe('feedback 离线问题包', () => {
     }), { maxFileBytes: 100 })).success).toBe(false)
   })
 
+  it('带常规注释的 ZIP 可混合读取存储与压缩条目，并按目录限制总量', async () => {
+    const created = await feedback.createBundle({
+      report: { id: 'fb-zip-comment' },
+      evidence: [],
+    })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const files = unzipSync(created.data)
+    const zip = zipSync({
+      ...files,
+      'summary.md': [
+        files['summary.md']!,
+        { level: 0, comment: 'Notes' },
+      ],
+    })
+    const note = strToU8('Feedback package comment')
+    const commented = new Uint8Array(zip.length + note.length)
+    commented.set(zip)
+    commented.set(note, zip.length)
+    new DataView(commented.buffer).setUint16(zip.length - 2, note.length, true)
+
+    const parsed = await feedback.readBundle(commented)
+    expect(parsed.success && parsed.data.report.id).toBe('fb-zip-comment')
+    expect(parsed.success && parsed.data.files['summary.md']).toEqual(files['summary.md'])
+    expect((await feedback.readBundle(commented, { maxFiles: Object.keys(files).length - 1 })).success).toBe(false)
+    const originalBytes = Object.values(files).reduce((total, file) => total + file.byteLength, 0)
+    expect((await feedback.readBundle(commented, { maxBytes: originalBytes - 1 })).success).toBe(false)
+  })
+
   it('附件 checksum 不符或名称被用于逃逸时不会生成问题包', async () => {
     const attachment = {
       id: 'screen-1',
@@ -292,6 +321,50 @@ describe('feedback 离线问题包', () => {
     expect(page.items.map(item => item.timestamp)).toEqual([17, 19, 21])
     expect(feedback.summarizeBundle(read.data)).toContain('用户的解释')
     expect(feedback.summarizeBundle(read.data)).toContain('Screenshot unavailable')
+  })
+
+  it('可按失败请求的错误号找到原请求和同源日志窗口', async () => {
+    const created = await feedback.createBundle({
+      report: { id: 'fb-request-anchor' },
+      evidence: [
+        {
+          source: 'browser',
+          kind: 'log',
+          timestamp: 10,
+          sequence: 1,
+          requestId: 'request-1',
+        },
+        {
+          source: 'browser',
+          kind: 'request',
+          timestamp: 20,
+          sequence: 2,
+          requestId: 'request-1',
+          errorId: 'failed-request',
+        },
+        {
+          source: 'browser',
+          kind: 'log',
+          timestamp: 30,
+          sequence: 3,
+          requestId: 'request-1',
+        },
+        {
+          source: 'other',
+          kind: 'log',
+          timestamp: 30,
+          sequence: 3,
+          requestId: 'request-1',
+        },
+      ],
+    })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const parsed = await feedback.readBundle(created.data)
+    if (!parsed.success)
+      throw new Error(parsed.error.message)
+    const window = feedback.queryBundle(parsed.data, { errorId: 'failed-request' })
+    expect(window.items.map(item => item.kind)).toEqual(['log', 'request', 'log'])
   })
 
   it('查看器代码内置且无外链、用户内容只用 textContent 显示', () => {

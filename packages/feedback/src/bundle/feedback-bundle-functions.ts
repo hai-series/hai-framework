@@ -398,15 +398,16 @@ export function queryFeedbackBundle(bundle: FeedbackBundle, query: FeedbackBundl
     : 20
   let candidates = bundle.evidence
   if (query.errorId) {
-    const anchor = candidates.find(item => item.kind === 'error' && item.errorId === query.errorId)
+    const anchor = candidates.find(item => (item.kind === 'error' || item.kind === 'request') && item.errorId === query.errorId)
     if (!anchor)
       return { items: [], total: 0, page, pageSize }
     const anchorSequence = anchor.sequence ?? anchor.timestamp
     const context = candidates.filter(item => item.source === anchor.source && item.requestId === anchor.requestId && ['log', 'error'].includes(item.kind))
-    const before = context.filter(item => (item.sequence ?? item.timestamp) <= anchorSequence).sort((left, right) => (right.sequence ?? right.timestamp) - (left.sequence ?? left.timestamp)).slice(0, 101)
+    const before = context.filter(item => (item.sequence ?? item.timestamp) < anchorSequence).sort((left, right) => (right.sequence ?? right.timestamp) - (left.sequence ?? left.timestamp)).slice(0, 100)
     const after = context.filter(item => (item.sequence ?? item.timestamp) > anchorSequence).sort((left, right) => (left.sequence ?? left.timestamp) - (right.sequence ?? right.timestamp)).slice(0, 100)
     const window = new Set([
       ...before,
+      anchor,
       ...after,
     ])
     candidates = candidates.filter(item => window.has(item))
