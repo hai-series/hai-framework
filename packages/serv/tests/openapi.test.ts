@@ -31,6 +31,47 @@ describe('generateSpec', () => {
     expect(spec.servers).toBeUndefined()
   })
 
+  it('describes public IAM operations without bearer while retaining generated schemas', async () => {
+    const spec = await generateSpec(testContract)
+    const auth = apiContract.iam.auth
+    const paths = spec.paths
+
+    expect(paths?.[apiContract.pathOf(auth.publicConfig)]?.get?.security).toEqual([])
+    for (const procedure of [
+      auth.createCaptcha,
+      auth.renewPassword,
+      auth.loginWithLdap,
+      auth.requestPasswordReset,
+      auth.confirmPasswordReset,
+      auth.login,
+      auth.loginWithOtp,
+      auth.refresh,
+      auth.sendOtp,
+      auth.register,
+    ]) {
+      expect(paths?.[apiContract.pathOf(procedure)]?.post?.security).toEqual([])
+    }
+
+    const bearer = [
+      { bearerAuth: [] },
+    ]
+    expect(spec.security).toEqual(bearer)
+    for (const operation of [
+      paths?.[apiContract.pathOf(auth.currentUser)]?.get,
+      paths?.[apiContract.pathOf(auth.logout)]?.post,
+      paths?.[apiContract.pathOf(auth.closeSession)]?.post,
+    ]) {
+      expect(operation).toBeDefined()
+      expect(operation?.security ?? spec.security).toEqual(bearer)
+    }
+    for (const procedure of [auth.login, auth.refresh]) {
+      const operation = paths?.[apiContract.pathOf(procedure)]?.post
+      const jsonSchemaPath = ['content', 'application/json', 'schema']
+      expect(operation?.requestBody).toHaveProperty(jsonSchemaPath)
+      expect(operation?.responses?.[200]).toHaveProperty(jsonSchemaPath)
+    }
+  })
+
   it('creates docs page that points to local Scalar route by default', async () => {
     const spec = await generateSpec(testContract, { title: 'docs-test' })
     const html = createDocsPage(spec)

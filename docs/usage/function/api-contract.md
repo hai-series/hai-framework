@@ -71,7 +71,7 @@ export const appContract = {
 
 | 字段 | 默认值或必填 | 作用与生效条件 |
 | --- | --- | --- |
-| `options[domain]` | 必填对象；域可省略 | 键是业务域名，值是契约 router 或 procedure。值为 `false` 或 `undefined` 时，从组合结果中排除该域。 |
+| `options[domain]` | 必填对象；域可省略 | 键是业务域名，值是契约 router 或 procedure。固定启用的具名领域为必填，固定禁用的领域被排除，条件启用的领域为可选。运行时仅包含已启用的领域。 |
 | `route.method / route.path` | 可填；建议显式声明 HTTP 入口 | `method` 是 HTTP 方法，`path` 是以 `/` 开头的路径。`pathOf` 要求已声明路径。 |
 | `route.operationId` | 默认由 router 路径段连接而成 | 覆盖 OpenAPI 操作标识。 |
 | `route.summary / route.description / route.deprecated / route.tags` | 可省略 | OpenAPI 的摘要、说明、弃用标记和分类标签。 |
@@ -106,13 +106,36 @@ apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 
 本包声明接口和校验结构，不发送请求，也没有 init/close。表中 Schema 是校验器本身；调用 safeParse 后检查其 success。业务响应中的 HaiResult.success 与校验器的 success 属于不同层，不能混用。路由的输入/输出 Schema 由应用挂载到 Serv 或客户端后实际使用。
 
-- 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
+- 普通 JSON 业务接口使用 `HaiResult<T>`。支付宝异步通知按渠道协议返回 HTTP 200 和纯文本 `success`，接入见[支付宝通知回执](./payment.md#alipay-notification-ack)。
 - IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
 - IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
 
 支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../../../packages/payment/README.md)。
 
 用户列表支持 `sortBy`（username/email/displayName/accountStatus/createdAt）和 `sortDirection`（asc/desc），供列头排序在分页前执行。
+
+<a id="conditional-domains"></a>
+
+#### 场景：按配置启用可选领域
+
+应用启动时从自己的配置读取支付开关。用 `satisfies` 保留具体域名与条件类型。支付关闭时 `contract.payment` 为 `undefined`，客户端同名域也为 `undefined`，可用 `?.` 访问。
+
+```ts
+import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+
+function buildContract(enablePayment: boolean) {
+  const domains = {
+    iam: apiContract.iam,
+    payment: enablePayment ? apiContract.payment : false,
+  } satisfies CreateApiContractOptions
+  // 固定启用 IAM，按开关决定是否包含支付领域。
+  const contract = apiContract.create(domains)
+  const get = contract.payment?.orders.get
+  // 启用时返回订单查询业务路径，关闭时返回 undefined。
+  const queryPath = get ? apiContract.pathOf(get) : undefined
+  return { contract, queryPath }
+}
+```
 
 #### 场景：把同一份契约交给服务端与客户端
 
@@ -160,6 +183,29 @@ const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1' 
 const response = await app.request('/api/v1/ping')
 const body = await response.json() // { success: true, data: { ready: true } }
 ```
+
+<a id="serv-iam-wiring"></a>
+
+#### 场景：把 IAM 契约接入 Serv
+
+宿主初始化 IAM 和所需依赖后，使用同一个 IAM 实例创建 procedure 并配置 `serv.createApp`。前一处提供业务处理函数，后一处让 Serv 验证 Bearer 令牌并为认证守卫填充会话。
+
+```ts
+import type { IamFunctions } from '@h-ai/iam'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+
+function mountIamApi(iam: IamFunctions) {
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const procedures = { iam: serv.createIamProcedures({ iam }) }
+  // 使用初始化后的 IAM 装配 /api/v1 下的接口，返回可处理请求的 HTTP 应用。
+  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+}
+```
+
+用测试账号登录后，把返回的访问令牌以 `Authorization: Bearer <accessToken>` 发送到 `GET /api/v1/auth/me`。有效会话得到 `success: true` 及用户资料、角色和权限。省略令牌时，该接口返回未认证的失败结果。
+
+OpenAPI 为公开 IAM 入口声明 `security: []`。这些入口包括 `createCaptcha`、`publicConfig`、`renewPassword`、`loginWithLdap`、`requestPasswordReset`、`confirmPasswordReset`、`login`、`loginWithOtp`、`refresh`、`sendOtp` 和 `register`。它们可在没有 Bearer 令牌的情况下调用，各自按服务端的策略校验输入或凭据。`currentUser` 等受保护的操作沿用服务的 Bearer 要求。
 
 <a id="response-schemas"></a>
 
@@ -247,7 +293,7 @@ const standard = apiContract.create({
 
 `FeedbackJob.type` 与 `FeedbackRetryInput.target` 支持独立 `webhook` 任务；状态、尝试次数和安全错误码见详情 jobs。业务采集函数与回调配置仅在可信服务端注册，不接受 HTTP 输入指定。正文与 ZIP/GZIP 通过既有证据/附件接口取得，接入见 [feedback](../../../packages/feedback/README.md)。
 
-`apiContract.feedback` 包含 reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection 与 attachments.upload/get。最小提交仅需 submissionId/appId，不要求描述或异常；身份、权限、S3 key 与邮件收件人不接受客户端输入。按需通过 `@h-ai/api-contract/feedback` 导入同一组 schema 与类型。
+`apiContract.feedback` 包含 `reports.policy/submit/list/listMine/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection` 与 `attachments.upload/get`。客户端通过 `reports.policy({})` 读取有效容量，普通用户通过 `reports.listMine({ page: 1 })` 查询自己的报告，管理列表使用 `reports.list`。最小提交仅需 submissionId/appId，不要求描述或异常；身份、权限、S3 key 与邮件收件人不接受客户端输入。按需通过 `@h-ai/api-contract/feedback` 导入同一组 schema 与类型。
 
 追加证据返回 acknowledged/evidenceRevision，客户端只释放已确认的块。setStatus 需要 expectedVersion；export 固定证据修订，getExport 读取已完成问题包。附件 base64 输入限制原始 5 MiB，服务端仍须验证实际字节、类型与 SHA-256。Report.appVersion 是应用版本，Report.version 是乐观锁计数。
 

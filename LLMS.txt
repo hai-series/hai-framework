@@ -44,10 +44,10 @@
 | @h-ai/audit | [审计记录、按筛选统计、保留、归档与告警](packages/cli/templates/skills/hai-audit/SKILL.md) |
 | @h-ai/scheduler | [定时与手动任务、HTTP/JS/Hook 执行和共享回执](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
 | @h-ai/crypto | [SM2/SM3/SM4、Node.js 异步密码哈希、缓存传输状态与共享配额](packages/cli/templates/skills/hai-crypto/SKILL.md) |
-| @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) |
+| @h-ai/api-contract | [HTTP 契约、条件领域与 OpenAPI](packages/cli/templates/skills/hai-api-contract/SKILL.md)，[条件领域示例](docs/usage/function/api-contract.md#conditional-domains) |
 | @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫、ServFunctions 公开类型](packages/cli/templates/skills/hai-serv/SKILL.md) |
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response、服务端/浏览器命名空间类型](packages/cli/templates/skills/hai-kit/SKILL.md) |
-| @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) |
+| @h-ai/api-client | [typed API、身份绑定、凭据刷新与恢复](packages/cli/templates/skills/hai-api-client/SKILL.md)，[自定义 JSON 与 SSE 结果](docs/usage/function/api-client.md#custom-response-results) |
 | @h-ai/capacitor | [原生设备、推送、安全存储与 Android 打包](packages/cli/templates/skills/hai-capacitor/SKILL.md) |
 | @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[Rootless Docker 与外部 HTTPS](docs/usage/configuration/deploy.md#rootless-docker-external-https)、[构建回执与分步核验](docs/usage/function/deploy.md#programmatic-release-verification)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md)、[下载排查](docs/usage/configuration/data.md#下载链接无法访问) |
 | @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md)、[代码工作区](packages/cli/templates/skills/hai-ui/reference.md#代码工作区)、[图片策略与源码选区](docs/usage/function/ui.md#private-document-media)、[调度输入](docs/usage/function/ui.md#schedule-input) |

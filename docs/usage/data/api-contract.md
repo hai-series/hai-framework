@@ -18,19 +18,20 @@
 
 ### 接口承诺返回的业务数据
 
-契约规定订单接口成功后有哪些字段，让前后端对同一结果有一致理解。
+登录表单调用 `apiContract.iam.auth.sendOtp` 对应的 `POST /auth/otp/send` 后，用成功响应的到期时间更新输入区。HTTP JSON 使用 UTC 日期时间字符串。
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "order-42",
-    "totalCents": 1200
+    "expiresAt": "2026-05-20T10:05:00.000Z"
   }
 }
 ```
 
-示例成功返回 order-42 和 totalCents:1200；这个数按接口约定以分为单位，不是数据库整行。
+示例中服务端接受了发送请求，验证码的到期时间为 10:05 UTC。会话登录还要调用 OTP 登录接口，由 IAM 校验用户输入的验证码。
+
+用户、角色、权限的 `createdAt` / `updatedAt` 和 OTP 的 `expiresAt` 都是必填日期。Zod Schema 接受有效 `Date` 或带时区的 ISO 日期时间字符串，`null` 校验失败。服务端发送 JSON 时这些值为 ISO 字符串，API Client 校验后仍保留字符串。用户的可空 `accountExpiresAt` 在更新时可用 `null` 清除期限。
 
 <a id="public-settings"></a>
 

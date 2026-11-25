@@ -8,6 +8,6 @@
 
 ## Configuration entry
 
-This module has no standalone configuration file. Its runtime arguments belong to the API reference and are not YAML fields.
+This module has no standalone configuration file. At startup, the application passes the API address, authentication mode and transport options to `apiClient.init(config)`. The application reads any environment variables for those values. When browsers use a refresh cookie, the server also enables `serv.createApp({ iam, refreshCookie: {} })`. See [Serv application setup](../function/serv.en.md#host-options) for the server options.
 
 See arguments, defaults and examples in [Call arguments and integration options](../function/api-client.en.md#call-options).

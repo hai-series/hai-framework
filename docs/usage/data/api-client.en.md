@@ -4,11 +4,13 @@
 
 [Data reference index](README.en.md) · [Configuration](../configuration/api-client.en.md) · [API reference](../function/api-client.en.md)
 
-When an access token expires, API Client uses the refresh credential to get a replacement and retry the request. The selected token storage adapter manages credentials, and the caller consumes the API result.
+When an application enables `auth`, the client can renew an expired access token with the refresh credential. The application uses its selected `TokenStorage` for local credentials and reads the API result to determine the business outcome.
+
+<a id="browser-storage"></a>
 
 ## Credential storage
 
-The client owns local credential storage; IAM persists server-side sessions.
+The client creates no SQL tables or Redis keys. [IAM](iam.en.md) persists sessions on the server. Calling `client.close()` releases client resources. The host still owns the supplied storage. The logout endpoint revokes the server session and clears the browser's refresh cookie through its response. The application then uses `client.auth.clear()` for local credentials.
 
 | Table, key or artifact | Shape and ownership |
 | --- | --- |
@@ -37,16 +39,21 @@ This is a redacted inspection view. The default browser refresh token stays in a
 
 ### One API call result
 
-An API result tells the client whether business processing succeeded. Check success before reading data.
+After saving the access token, the sign-in page can call `client.iam.auth.currentUser()` to load the account. Check `success`, then use `data` to display the profile or `error` to handle the failure.
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "order-42",
-    "status": "created"
+    "id": "u-42",
+    "username": "alice",
+    "accountStatus": "active",
+    "createdAt": "2026-05-20T10:00:00.000Z",
+    "updatedAt": "2026-05-20T10:15:00.000Z",
+    "roles": ["member"],
+    "permissions": []
   }
 }
 ```
 
-The server created order-42. This result is not a cache entry and does not persist across page reloads automatically.
+This excerpt shows the current user's profile, roles and permissions. The client preserves ISO date strings after validation. The application can display them in the user's time zone. Reloading the page requires fetching the profile again, and the server checks permissions on each request. Custom endpoints can return a bare JSON value or SSE. Check for a failed `HaiResult` before using those results. See [custom responses](../function/api-client.en.md#custom-response-results).

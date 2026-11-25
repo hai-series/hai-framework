@@ -5,11 +5,13 @@
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/205/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/205/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，资源访问仍由服务端检查 IAM 权限。
+
+对服务端通过 `encryption: disabled` 或 `transport.excludePaths` 允许普通 HTTPS 的路径，用普通 `fetch`（如 GET `/health`），或为已声明契约的路由创建独立 typed client，并在 `init` 中省略 `transport`。开启 `transport` 的实例以加密方式发送它的全部请求。若使用 `kit.client`，可用其 `excludePaths` 与服务端匹配。
 
 ## 使用步骤
 
-`client.close()` 使旧刷新失效并等待已开始的凭据写入，但不清除宿主 TokenStorage。关闭完成后可复用同一存储重新 init；迟到刷新不能覆盖新身份。请求 timeout 覆盖响应头、完整 JSON 和所有失败响应正文（包括 HTML）；超时或取消不启动刷新。自定义流按需读取，以调用方 signal 取消正文。内置 Cookie 适配器的登录和刷新包含跨域凭据，服务端须配置明确 Origin；内存/原生存储保留原请求凭据策略。
+`client.close()` 结束当前客户端运行期并等待已开始的凭据写入。宿主保留注入的 `TokenStorage`，之后可重新 init。请求 timeout 覆盖响应头、完整 JSON 和所有失败响应正文（包括 HTML）。自定义流按需读取，以调用方 signal 取消正文。内置 Cookie 适配器的登录和刷新包含跨域凭据，服务端须配置明确 Origin。内存或原生存储沿用原请求凭据策略。
 
 ### 1. 初始化
 
@@ -137,7 +139,9 @@ Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cooki
 
 启用 `transport` 时，登录、业务请求以及 401 后的自动刷新都会复用同一个加密 fetch 链路；不要在业务代码中手写明文 `/auth/refresh` 请求。
 
-自动刷新识别真实 HTTP 401（`Response.status`），以及 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`），成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 排除自动刷新，403/500 等其它失败也不刷新。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终 `success/error.code` 并处理刷新失败后的登录失效。
+一次逻辑请求绑定发起时的客户端运行期和身份。只有明确的认证拒绝可触发自动重试，例如真实 HTTP 401，或 HTTP 200 中具备 401 语义的有效失败 `HaiResult`。客户端进一步核对 IAM 会话错误码。内置认证入口及配置的 `auth.refreshPath` 排除在自动刷新之外。只有仍在运行且恢复到原身份的请求可重试一次，敏感操作按需重新取得用途票据。超时、取消和结果未知的写入交给调用方处理。
+
+`auth.recoverSession` 用于明确的会话失效。配合 UI 的 `ui.createSessionRecovery` 时，把 `recovery.recover` 配到客户端，关闭恢复弹窗、退出或销毁布局时调用 `recovery.cancel()`。单个调用可通过 `AbortSignal` 停止等待和重试。
 
 刷新端点报告 401 时清理凭据并通知。429、408、409 等其他失败、网络异常和超时保留原凭据。HTTP 200 的有效失败 HaiResult 使用 error.httpStatus 分类，后续业务请求可继续触发刷新。
 
@@ -172,7 +176,7 @@ if (login.success) {
 | `apiClient.create(contract)` | 创建自定义 typed client |
 | `apiClient.tokenStorage.{memory,httpOnlyCookie}()` | TokenStorage 工厂 |
 
-退出/换账号使用 `auth.clear()` / `auth.setTokens()`，不直接写 storage。方法立即取消旧刷新，并按顺序提交异步存储操作；迟到的成功/401 不会恢复旧身份、覆盖新账号或触发旧回调。该保证针对同一个客户端的认证管理器，SSR 仍须按请求隔离实例。
+退出或换账号通过 `auth.clear()` / `auth.setTokens()` 更新本地凭据。方法使旧刷新失效，并按顺序提交本地存储操作。旧登录动作和刷新结果不能覆盖新的本地身份。Cookie 模式下先调用应用的退出接口撤销服务端会话并清除浏览器 Cookie，再清理本地凭据。SSR 按请求隔离含用户凭据的实例。
 
 ### Transport 配置
 
@@ -189,7 +193,9 @@ CLI 独立 mobile 模板在选择 IAM/crypto 时安装前端 crypto 并默认启
 ## 常见模式
 
 - 浏览器可将同源根路径（如 `/api/v1`）作为 `baseUrl`。Node.js 和没有浏览器来源的设备使用 HTTP(S) 绝对地址。地址无效时，`init()` 返回 `CONFIG_ERROR`。初始化时将同源路径锚定到浏览器的来源（协议、主机和端口）。业务请求、刷新与加密握手都使用同一生效地址。地址中省略用户信息、查询参数和片段，协议相对地址（如 `//example.com`）会在初始化时报错。
-- 业务错误不 throw，统一判断 `HaiResult.success`。
+- 标准业务错误通过 `HaiResult.success` 判断。自定义裸 JSON 值或 SSE 在调用失败时返回 `HaiResult<never>` 的失败分支。若成功值为数字，先用 `typeof result === 'number'` 确认识别成功值；对象可根据契约字段区分成功结果和 `success: false`。SSE 先检查 `Symbol.asyncIterator in result` 再迭代，流建立后沿用正常的迭代异常和取消行为。
+- HTTP JSON 输出可转换为 Zod JSON Schema 时校验契约。响应不符返回 `VALIDATION_FAILED`，校验保留 ISO 字符串等线上数据。
+- 动态领域可用 `client.payment?.orders` 访问。`then` 是保留属性，客户端及其领域对象可作为普通值通过 `await` 传递。
 - 客户端不导入服务端 `procedures` 或 `@h-ai/serv`。
 - 客户端不导入 `@h-ai/crypto` 的内部 transport 工厂，只通过 `transport: { crypto }` 装配。
 - 前端只依赖 `@h-ai/api-client` 和 contract 类型，不依赖业务模块实现。

@@ -1,5 +1,7 @@
 # @h-ai/api-contract API Reference
 
+<!-- translation: partial -->
+
 [Chinese source](api-contract.md) · [Configuration](../configuration/api-contract.en.md) · [Data structures](../data/api-contract.en.md)
 
 ## Quick start
@@ -67,7 +69,7 @@ These fields define the contract and HTTP mapping. The example combines `{ statu
 
 | Field | Default or required | Effect and conditions |
 | --- | --- | --- |
-| `options[domain]` | Required object; domains may be omitted | Each key names a domain. A router or procedure includes it, and `false` or `undefined` excludes it from the composed contract. |
+| `options[domain]` | Required object; domains may be omitted | Each key names a router or procedure. Always-enabled named domains are required, always-disabled domains are omitted, and conditionally enabled domains are optional. The runtime object contains the enabled domains. |
 | `route.method / route.path` | Optional; set explicitly for HTTP endpoints | `method` is the HTTP method and `path` starts with `/`. `pathOf` requires a declared path. |
 | `route.operationId` | Defaults to joining the router segments | Overrides the OpenAPI operation identifier. |
 | `route.summary / route.description / route.deprecated / route.tags` | Optional | OpenAPI summary, description, deprecation flag, and grouping tags. |
@@ -100,7 +102,55 @@ apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 
 Inputs are a GET /status builder and selected modules. The output is still a contract, not a listening HTTP server; use Serv or Kit to serve it.
 
+Ordinary JSON business endpoints use `HaiResult<T>`. Alipay notifications require HTTP 200 with the plain-text body `success`. See [Alipay notification acknowledgement](./payment.en.md#alipay-notification-ack).
+
 [Detailed parameters and workflows](api-contract.md#routes)
+
+<a id="conditional-domains"></a>
+
+#### Scenario: Enable an optional domain from configuration
+
+Read the payment switch from application configuration at startup. Use `satisfies` to preserve the named domains and their conditional types. With payment disabled, `contract.payment` and the client's `payment` domain are `undefined`. Use `?.` to access an optional domain.
+
+```ts
+import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+
+function buildContract(enablePayment: boolean) {
+  const domains = {
+    iam: apiContract.iam,
+    payment: enablePayment ? apiContract.payment : false,
+  } satisfies CreateApiContractOptions
+  // Include IAM in all cases and payment when configured.
+  const contract = apiContract.create(domains)
+  const get = contract.payment?.orders.get
+  // Return the order lookup path when enabled, or undefined when disabled.
+  const queryPath = get ? apiContract.pathOf(get) : undefined
+  return { contract, queryPath }
+}
+```
+
+<a id="serv-iam-wiring"></a>
+
+#### Scenario: Mount the IAM contract in Serv
+
+After the host initializes IAM and its dependencies, pass the same IAM instance to the procedure builder and `serv.createApp`. The first call supplies the handlers. The app uses IAM to verify Bearer tokens and populate the session for route guards.
+
+```ts
+import type { IamFunctions } from '@h-ai/iam'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+
+function mountIamApi(iam: IamFunctions) {
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const procedures = { iam: serv.createIamProcedures({ iam }) }
+  // Mount the initialized IAM service under /api/v1 and return the HTTP app.
+  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+}
+```
+
+Sign in with a test account, then send `Authorization: Bearer <accessToken>` to `GET /api/v1/auth/me`. A valid session produces `success: true` with the user profile, roles and permissions. Omitting the token produces an unauthenticated failure result.
+
+OpenAPI declares `security: []` for the public IAM operations `createCaptcha`, `publicConfig`, `renewPassword`, `loginWithLdap`, `requestPasswordReset`, `confirmPasswordReset`, `login`, `loginWithOtp`, `refresh`, `sendOtp` and `register`. These calls can start without a Bearer token. Each operation applies its own server-side input and credential checks. Protected operations such as `currentUser` inherit the service's Bearer requirement.
 
 <a id="response-schemas"></a>
 
@@ -170,6 +220,6 @@ const standard = apiContract.create({
 // standard has these five routers; no business operation runs during composition
 ```
 
-Five existing routers become a composed route tree without executing business work. Authentication, challenges, feedback and page-exit behavior follow below.
+The five routers form the app contract. For feedback, `reports.policy({})` returns the effective capacity, `reports.listMine({ page: 1 })` lists the signed-in author's reports, and `reports.list` serves the administrative list.
 
-[Detailed parameters and workflows](api-contract.md#domains)
+[Authentication settings, challenges, feedback schemas and page-exit behavior in Chinese](api-contract.md#domains)

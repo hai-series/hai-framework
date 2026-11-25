@@ -14,7 +14,7 @@
 - 组合多个领域 contract 为应用级 contract
 - 向 `@h-ai/serv` 提供 contract（装配为 HTTP API）
 - 向 `@h-ai/api-client` 提供 contract（生成类型安全客户端）
-- 复用内置领域 contract（iam/storage/ai/payment）
+- 复用内置领域 contract（iam/storage/ai/payment/feedback）
 - 复用公共 Schema 工厂（`apiContract.haiResultSchema`、分页 Schema）
 
 ## 使用步骤
@@ -120,7 +120,12 @@ export const appContract = apiContract.create({
 
 ### 5. 传给 `@h-ai/serv`（服务端）
 
+先初始化 IAM 和所需依赖。将同一个 IAM 实例传给 `serv.createIamProcedures` 和 `serv.createApp`，让业务处理函数和请求认证使用同一个会话来源。登录后，将访问令牌作为 Bearer 令牌发送到 `GET /api/v1/auth/me`，有效会话返回用户资料、角色和权限。
+
+OpenAPI 为 IAM 公开配置、挑战、登录、注册、验证码、续密、找回密码和令牌刷新声明 `security: []`。这些操作可以在没有 Bearer 令牌的情况下启动，并由业务处理函数校验各自的输入和凭据。`currentUser` 等受保护接口沿用服务的 Bearer 要求。
+
 ```typescript
+import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { appContract } from './app-contract.js'
 import { createMyProcedures } from './procedures/widget.js'
@@ -133,6 +138,7 @@ const app = serv.createApp({
     iam: serv.createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
+  iam, // Serv 验证 Bearer 令牌并填充守卫使用的会话。
   http: { apiPrefix: '/api/v1' },
 })
 ```
@@ -150,7 +156,24 @@ const contract = apiContract.create({
   storage: false,            // 禁用：不出现在 OpenAPI spec 中
   custom: myContract,        // 自定义领域
 })
-// 类型自动收窄，被禁用的 key 不出现在 contract 类型中
+// 固定禁用的 storage 从类型和运行时对象中移除。
+```
+
+开关来自运行时配置时，使用 `satisfies CreateApiContractOptions` 保留具体键名。条件启用的领域为可选，用 `?.` 读取它。
+
+```typescript
+import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+
+function readPaymentRoute(enablePayment: boolean) {
+  const domains = {
+    iam: apiContract.iam,
+    payment: enablePayment ? apiContract.payment : false,
+  } satisfies CreateApiContractOptions
+  // 固定启用 IAM；开关关闭时 payment 为 undefined。
+  const contract = apiContract.create(domains)
+  const get = contract.payment?.orders.get
+  return get ? apiContract.pathOf(get) : undefined
+}
 ```
 
 ### 内置领域 contract
@@ -160,7 +183,8 @@ const contract = apiContract.create({
 | `apiContract.iam` | IAM | auth（登录/登出/OTP/刷新/注册/改密码）、users、roles、permissions Admin CRUD |
 | `apiContract.storage` | Storage | presignedUrls（上传/下载/批量）、files（元数据查询/删除） |
 | `apiContract.ai` | AI | chats（非流式补全/消息/历史）、memories（召回/列表）、sessions（列表） |
-| `apiContract.payment` | Payment | orders、subscriptions |
+| `apiContract.payment` | Payment | orders、notifications |
+| `apiContract.feedback` | Feedback | reports、attachments；`reports.policy` 提供有效容量，`reports.listMine` 查询本人报告 |
 
 ### 内置 contract 路径示例
 
@@ -183,7 +207,7 @@ myContract.ai.chats.createCompletion  // POST /ai/chats/completions，非流式 
 
 ### `apiContract.haiResultSchema(dataSchema)` — 标准输出包装
 
-所有 HTTP 输出必须通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `core.ok()/err()` 返回结构一致：
+普通 JSON 业务接口通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `core.ok()/err()` 返回结构一致。支付渠道的通知按对应协议响应，例如支付宝异步通知使用 HTTP 200 和纯文本 `success`。
 
 ```typescript
 import { apiContract } from '@h-ai/api-contract'
@@ -223,11 +247,13 @@ middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，
 | `HaiErrorSchema` | HaiError 公共字段 Schema |
 | `PaginationQuerySchema` | 分页参数 Schema（可选 page/pageSize，pageSize 上限 100；默认值由服务端处理） |
 
+IAM 用户、角色、权限的必填 `createdAt` / `updatedAt` 和 OTP 的 `expiresAt` 接受有效 `Date` 或带时区的 ISO 日期时间字符串。`null` 校验失败。HTTP JSON 中这些值为 ISO 字符串，API Client 校验后保留线上格式。
+
 ## Contract 定义规范
 
 ### 必须遵循
 
-- **输出必须包装为 `apiContract.haiResultSchema`** — 客户端依赖 `success` 判断成功/失败
+- **普通 JSON 业务输出使用 `apiContract.haiResultSchema` 或 `apiContract.voidResultSchema`**，客户端按 `success` 判断业务结果。支付通知等渠道回调按其协议定义响应。
 - **业务 path 直接写在对应 `*-contract.ts`** — 禁止新增 `*-routes.ts` 或业务路径常量
 - **一次性 `*OutputSchema` 直接内联** — 不在 schemas 文件声明或导出
 - **同一 contract 内重复使用的输出可设私有常量** — 不得为复用扩大公共导出

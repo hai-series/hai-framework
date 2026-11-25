@@ -20,6 +20,8 @@ This module has no standalone runtime configuration file. See [file ownership](.
 
 [Browse the API list](../../docs/usage/function/api-contract.en.md#api-reference) for entry points, inputs, results and examples.
 
+See [conditional domains](../../docs/usage/function/api-contract.en.md#conditional-domains) and [IAM contracts and OpenAPI](../../docs/usage/function/api-contract.en.md#serv-iam-wiring).
+
 ## Data Structures
 
 The module creates no database tables of its own.

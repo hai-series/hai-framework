@@ -11,6 +11,7 @@ export default defineConfig({
     '@orpc/client',
     '@orpc/contract',
     '@orpc/openapi-client',
+    '@orpc/zod/zod4',
     'zod',
   ],
 })

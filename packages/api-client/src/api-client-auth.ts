@@ -181,6 +181,7 @@ export function createTokenManager(
   let generation = 0
   let disposed = false
   let sessionInvalid = false
+  let committedGeneration: number | undefined
   let storageMutation: Promise<void> = Promise.resolve()
 
   /**
@@ -423,29 +424,49 @@ export function createTokenManager(
       await storageMutation
     },
     get generation() { return generation },
+    get committedGeneration() { return committedGeneration },
     get sessionInvalid() { return sessionInvalid },
+    async readAccessToken(expectedGeneration: number | undefined): Promise<string | null | undefined> {
+      await storageMutation
+      if (disposed || generation !== expectedGeneration)
+        return undefined
+      const token = await storage.getAccessToken()
+      return !disposed && generation === expectedGeneration
+        ? token
+        : undefined
+    },
     refresh,
-    async setTokens(tokens: TokenPair) {
+    async setTokens(tokens: TokenPair): Promise<boolean> {
+      if (disposed)
+        return false
       const previousController = invalidateRefresh()
       sessionInvalid = false
       const mutationGeneration = generation
       const pending = mutateStorage(async () => {
         if (mutationGeneration !== generation)
-          return
+          return false
         // 替换完整凭据：新账号未提供 refresh token 时不能继续使用旧账号的值。
         await storage.clear()
         if (mutationGeneration !== generation)
-          return
+          return false
         await storage.setAccessToken(tokens.accessToken)
         if (tokens.refreshToken && mutationGeneration === generation)
           await storage.setRefreshToken(tokens.refreshToken)
+        if (mutationGeneration !== generation) {
+          // 本次写入中途作废时，先清除半对凭据，再让队列提交较新的身份。
+          await storage.clear()
+          return false
+        }
+        committedGeneration = mutationGeneration
+        return true
       })
       // 先排好新身份写入，再触发 abort 事件；可重入的监听器只能读取新操作后的存储。
       previousController?.abort()
-      await pending
+      return await pending && mutationGeneration === generation
     },
     async clear() {
       const previousController = invalidateRefresh()
+      sessionInvalid = false
       const pending = mutateStorage(() => storage.clear())
       previousController?.abort()
       await pending

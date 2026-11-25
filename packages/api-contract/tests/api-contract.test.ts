@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import type { AnyContractRouter } from '@orpc/contract'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import {
   apiContract,
@@ -28,6 +29,27 @@ describe('@h-ai/api-contract', () => {
     expect(contract.storage.files.list).toBeDefined()
     expect(contract.ai.chats.createCompletion).toBeDefined()
     expect('payment' in contract).toBe(false)
+  })
+
+  it('apiContract.create 按条件启用领域，类型保留可选性及 oRPC router 兼容', () => {
+    const compose = (enablePayment: boolean, ai: typeof apiContract.ai | undefined) => apiContract.create({
+      iam: apiContract.iam,
+      payment: enablePayment ? apiContract.payment : false,
+      ai,
+      storage: false,
+      feedback: undefined,
+    })
+    const enabled = compose(true, apiContract.ai)
+    const disabled = compose(false, undefined)
+
+    expectTypeOf(enabled).toExtend<AnyContractRouter>()
+    expectTypeOf(enabled.iam).toEqualTypeOf<typeof apiContract.iam>()
+    expectTypeOf(enabled.payment).toEqualTypeOf<typeof apiContract.payment | undefined>()
+    expectTypeOf(enabled.ai).toEqualTypeOf<typeof apiContract.ai | undefined>()
+    expectTypeOf<Extract<'storage' | 'feedback', keyof typeof enabled>>().toEqualTypeOf<never>()
+    expect(enabled.payment).toBe(apiContract.payment)
+    expect(enabled.ai).toBe(apiContract.ai)
+    expect(Object.keys(disabled)).toEqual(['iam'])
   })
 
   it('iam 登录输入和 token pair Schema 可校验', () => {
@@ -71,8 +93,8 @@ describe('@h-ai/api-contract', () => {
       id: 'u1',
       username: 'alice',
       accountStatus: 'active',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }).success).toBe(false)
   })
 

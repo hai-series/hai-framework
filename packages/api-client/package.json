@@ -40,6 +40,7 @@
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/openapi-client": "catalog:",
+    "@orpc/zod": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -53,7 +53,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
+Import the module as in the quick start. Scenarios using an existing client run after initialization and before closure. Check `HaiResult.success` before reading data from standard business calls. See [custom responses](#custom-response-results) for bare values and streams. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="client-lifecycle"></a>
 
@@ -91,7 +91,7 @@ Initialization resolves a root path against the browser origin, including its sc
 | `auth.refreshPath` | `/auth/refresh` | Endpoint relative to the base URL. |
 | `auth.refreshTimeoutMs` | `10000` | Refresh deadline in milliseconds. Keep existing credentials on timeout. |
 | `auth.terminalType` | `web` | Allowed IAM terminal type: `web`, `app`, `desktop`, or `api`. |
-| `auth.recoverSession` | Optional | Restore the same session after a definitive refresh failure. Returning true retries the original request once. |
+| `auth.recoverSession` | Optional | Restore the same user after a definitive refresh failure. A successful recovery permits one retry if the request is active and still bound to that user and client lifetime. |
 | `auth.onTokenRefreshed` | May be omitted | Called after a successful refresh. Use it to update signed-in state. |
 | `auth.onRefreshFailed` | May be omitted | Called after a definitive failure. Use it to prompt the user to sign in. |
 | `transport` | `undefined` | Pass an object to enable application-level request encryption. |
@@ -135,9 +135,9 @@ finally {
 }
 ```
 
-Replace the address with a deployed test service. create sends nothing; initialize before calls. Closing only releases the client and does not log out server-side.
+Replace the address with a deployed test service. `create` returns an isolated client. Initialize it before sending requests. `then` is a reserved property, so clients and domain groups pass through `await` or `Promise.resolve` as ordinary values. Access a conditional domain with `client.payment?.orders`. See [conditional domains](api-contract.en.md#conditional-domains) for composition.
 
-Refresh credentials are distinct from server logout. Use the IAM logout endpoint to invalidate the server session. Recovery after refresh failure must restore the same user.
+Use the application's logout endpoint to revoke the server session and let the browser receive the response that clears the refresh cookie. Then use `client.auth.clear()` to remove local credentials. `client.close()` ends that client lifetime and waits for active credential writes. The host can reuse its supplied storage afterwards.
 
 <a id="credentials"></a>
 
@@ -166,7 +166,9 @@ This expands the session-expiry branch for business requests. Login, registratio
 
 ![When an authenticated request may retry](../images/function-api-client-recovery.en.svg)
 
-Concurrent refreshes share one attempt. A single retry requires new credentials, an active request and unchanged identity; sensitive operations require a new authorization ticket. Network failures are not proof of an invalid session. Failed recovery or a failed retry is returned to the caller.
+Each logical request is bound to the client lifetime and identity active when it starts. The client checks that binding while resolving headers, sending, refreshing or recovering. Concurrent refreshes share one attempt. A definite authentication rejection can lead to one retry with fresh credentials for the same identity. A sensitive operation may need a fresh ticket. After sign-out, an account change or closure, requests already sent can still return their original responses. These requests cannot trigger recovery or retries, and stale refresh or sign-in results cannot update local credentials. Cancellation, timeout, network failure and writes with unknown outcomes are returned to the caller.
+
+To restore a session in place, bind `auth.recoverSession` to `recovery.recover` from `ui.createSessionRecovery` and use the standard auth actions in `SessionRecoveryDialog`. Bind the dialog to the original user and public IAM settings. Call `recovery.cancel()` when dismissing the recovery dialog, signing out or disposing the layout. Pass an `AbortSignal` to cancel an individual request. Return `true` from recovery only after the same client saves the replacement credentials once. The IAM sign-in input `expectedUserId` binds the recovery to the original user.
 
 Input is a trusted login token pair. Storage failures reject; finally removes the observer and clears local credentials. Server logout is a separate operation.
 
@@ -228,7 +230,7 @@ Give UI the public policy and invoke login, registration, OTP, password recovery
 
 #### Scenario: Drive authentication forms
 
-The form supplies inputs and actions await credential persistence. Each handler below belongs to a separate user flow; do not invoke them in sequence against a live account. AuthPanel supplies captcha when required.
+The form supplies inputs and actions await credential persistence. If the user signs out, switches identity or closes the client before a sign-in or sign-up completes, the action returns `HaiApiClientError.UNAUTHORIZED` (`hai:api-client:004`). Each handler below belongs to a separate user flow. AuthPanel supplies captcha when required.
 
 ```ts
 // Fragment inside an async application function; return failed results to its caller.
@@ -367,7 +369,7 @@ Pass the contract input first. For a procedure with no business input, pass `und
 | `context.autoRefresh` | Inherits the client's refresh policy | `false` disables credential refresh for this call, for example while the application handles its own recovery. The client still sends the current access token according to its configuration. |
 | `context.keepalive` | Uses Fetch defaults | `true` sets Fetch `keepalive`. Browser limits still apply, and delivery after page exit is best effort. |
 | `context.reauthentication` | Sends no operation credential | Sends an operation credential obtained from an authentication action in `X-Hai-Reauthentication` for this request. |
-| `context.reauthorize` | Obtains no new credential on retry | Optional asynchronous callback for an eligible retry that requires reauthorization. Return the new credential string, `null` to cancel, or `undefined` to allow the retry without the header. |
+| `context.reauthorize` | Obtains no new credential on retry | Optional asynchronous callback for an eligible retry after a definite rejection of the session or operation credential. Return the new credential string, `null` to cancel, or `undefined` to allow the retry without the header. |
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -503,4 +505,89 @@ finally {
 
 Input is an observer; output is its unsubscribe function. Records omit raw tokens; refresh or retry internals do not imply multiple business successes. HTTP and capacity boundaries follow.
 
+<a id="encrypted-requests"></a>
+
+#### Scenario: Enable transport encryption
+
+First mount the IAM routes and configure `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` on the server. Run this example in a separate process so it can initialize and close its local crypto instance. Replace the API base URL with your test server's HTTPS address.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { crypto } from '@h-ai/crypto'
+
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+
+const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+try {
+  // Use the initialized crypto instance. The default key exchange path is /api/v1/_hai/key-exchange.
+  const ready = await client.init({ baseUrl: 'https://api.example.com/api/v1', transport: { crypto } })
+  if (!ready.success)
+    throw new Error(ready.error.message)
+
+  // The first request performs key exchange and fetches the public IAM settings.
+  const config = await client.iam.auth.publicConfig()
+  if (!config.success)
+    throw new Error(config.error.message)
+}
+finally {
+  await client.close()
+  await crypto.close()
+}
+```
+
+For cross-origin encrypted calls, allow the `X-Hai-Transport` request header and expose the response header of the same name in the server's CORS settings. HTTPS authenticates the server that supplies the key exchange public key. The server still checks IAM permissions for resource access.
+
+<a id="plain-https-requests"></a>
+
+#### Scenario: Call a route that accepts ordinary HTTPS
+
+Set the server route's `encryption` to `disabled`, or add a route that does not require encryption to the server's `transport.excludePaths`. For example, exclude the enabled `/health` endpoint and call it with `fetch`. For routes included in the app contract, you can also create a separate typed client and omit `transport` from its `init` configuration. Enabling `transport` applies to every request sent through that client instance.
+
+```ts
+// The service accepts ordinary HTTPS for GET /health. Replace api.example.com with its deployed host.
+const response = await fetch('https://api.example.com/health')
+if (!response.ok)
+  throw new Error(`Health check failed (HTTP ${response.status})`)
+const health = await response.json() // { status: 'ok' }
+```
+
 [Detailed parameters and workflows](api-client.md#transport-observation)
+
+<a id="custom-response-results"></a>
+
+#### Scenario: Read a custom value and an SSE response
+
+Custom endpoints can return a bare JSON value or SSE. On success, the client preserves the declared value or async iterator. If the call or stream setup fails, it returns the failure branch of `HaiResult<never>`. HTTP JSON outputs with a convertible Zod JSON Schema are checked. A mismatch returns `HaiApiClientError.VALIDATION_FAILED` (`hai:api-client:007`). Validation preserves wire values such as ISO date strings. After SSE setup, iteration and cancellation follow the stream's normal behavior.
+
+Create the client from this shared contract. The test service returns a number from `/status/count` and progress events from `/status/events`. Pass the initialized client and the page's cancellation signal to `readProgress`.
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { eventIterator } from '@orpc/contract'
+import { z } from 'zod'
+
+const contract = {
+  count: apiContract.route({ method: 'GET', path: '/status/count' }).output(z.number()),
+  events: apiContract.route({ method: 'GET', path: '/status/events' })
+    .output(eventIterator(z.object({ completed: z.number() }))),
+}
+
+async function readProgress(client: ApiClient<typeof contract>, signal: AbortSignal, update: (completed: number) => void) {
+  // A successful call returns the number. Return a failure with its original error.
+  const count = await client.count(undefined, { signal })
+  if (typeof count !== 'number')
+    return count
+  update(count)
+
+  // Check that a stream was established before iterating. Use signal to cancel the stream.
+  const events = await client.events(undefined, { signal })
+  if (!(Symbol.asyncIterator in events))
+    return events
+  for await (const event of events)
+    update(event.completed)
+}
+```

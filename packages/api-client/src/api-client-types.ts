@@ -8,7 +8,8 @@
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { CryptoFunctions } from '@h-ai/crypto'
-import type { AnyContractRouter, ContractRouterClient } from '@orpc/contract'
+import type { Client } from '@orpc/client'
+import type { AnyContractProcedure, AnyContractRouter, ContractRouterClient } from '@orpc/contract'
 import type { JsonifiedClient } from '@orpc/openapi-client'
 import { core } from '@h-ai/core'
 
@@ -177,7 +178,7 @@ export interface TokenStorage {
  * ```
  */
 export interface AuthConfig {
-  /** refresh明确失效后原地恢复同一用户会话，成功时只重试原请求一次；取消/结果不明不得返回true。 */
+  /** 刷新明确失效后原地恢复同一用户。仅在本客户端成功提交一次新凭据后返回 true，原请求最多重试一次。 */
   readonly recoverSession?: () => Promise<boolean>
   /** 登录会话终端分组；默认web，可选app/desktop/api。服务端必须允许该类；不代表物理设备证明。 */
   readonly terminalType?: 'web' | 'app' | 'desktop' | 'api'
@@ -486,8 +487,41 @@ export interface ApiRequestRecord {
 export type ApiRequestObserver = (record: ApiRequestRecord) => void
 
 /**
+ * 原始输出以外的客户端失败分支，沿用公共 HaiError。
+ * @example 模块内部上下文
+ * ```ts
+ * const failure: ClientFailure = { success: false, error: { code: HaiApiClientError.NETWORK_ERROR.code, message: 'Network request failed' } }
+ * ```
+ */
+type ClientFailure = Extract<HaiResult<never>, { success: false }>
+
+/**
+ * 保留 oRPC 调用参数及 JSON 输出类型，为裸值和流补齐客户端失败分支。
+ * @example 模块内部上下文
+ * ```ts
+ * type HealthCall = ApiClientProcedure<ReturnType<typeof import('@h-ai/api-contract').apiContract.route>>
+ * ```
+ */
+type ApiClientProcedure<T extends AnyContractProcedure>
+  = JsonifiedClient<ContractRouterClient<T>> extends Client<infer Context, infer Input, infer Output, infer Failure>
+    ? Client<Context, Input, [ClientFailure] extends [Output] ? Output : Output | ClientFailure, Failure>
+    : never
+
+/**
+ * 按领域保留契约键的可选性；then 由代理保留，以免被 Promise 当作异步值。
+ * @example 模块内部上下文
+ * ```ts
+ * type IamCalls = ApiClientRoutes<typeof import('@h-ai/api-contract').apiContract.iam>
+ * ```
+ */
+type ApiClientRoutes<T extends AnyContractRouter> = T extends AnyContractProcedure
+  ? ApiClientProcedure<T>
+  : { [K in keyof T as K extends 'then' ? never : K]: ApiClientRoutes<NonNullable<T[K]>> }
+
+/**
  * 由 oRPC 契约推导的 JSON typed client，与生命周期组合；procedure 的输入/输出由契约决定。
- * 调用先检查初始化和业务 HaiResult；自定义契约不能覆盖 init/close/config/isInitialized/auth 顶层成员。
+ * 直接返回数据或流的 procedure 也可能返回客户端失败，使用结果前应先缩窄类型。
+ * 动态领域缺席时对应属性为 undefined。then 为保留属性，契约顶层不得覆盖生命周期成员。
  *
  * @example
  * ```ts
@@ -506,4 +540,4 @@ export type ApiRequestObserver = (record: ApiRequestRecord) => void
  * ```
  */
 export type ApiClient<TContract extends AnyContractRouter>
-  = ApiClientLifecycle & JsonifiedClient<ContractRouterClient<TContract>>
+  = ApiClientLifecycle & ApiClientRoutes<TContract>

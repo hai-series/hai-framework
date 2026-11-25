@@ -2,8 +2,6 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-Requests and token refresh use the current `core.i18n` locale as `Accept-Language`, so server errors follow the interface language. Set this header in `headers` to override it.
-
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md)
 
 A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent API calls and token management across Web, apps, and mini programs.
@@ -20,9 +18,13 @@ This module has no standalone runtime configuration file. See [file ownership](.
 
 ## Features
 
+Requests and token refresh use the current `core.i18n` locale for `Accept-Language`. The application can override it in `headers`.
+
 In browsers, `baseUrl` can be a same-origin root path such as `/api/v1`. Use an absolute HTTP(S) URL in Node.js and in clients without a browser origin. `init()` returns `CONFIG_ERROR` for invalid addresses.
 
 [Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples.
+
+Requests stay bound to their starting identity and client lifetime. See [credential refresh and recovery](../../docs/usage/function/api-client.en.md#credentials) and [custom JSON and SSE results](../../docs/usage/function/api-client.en.md#custom-response-results).
 
 Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../../docs/usage/function/crypto.en.md#transport-capacity).
 

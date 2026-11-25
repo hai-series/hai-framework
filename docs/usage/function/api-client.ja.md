@@ -55,7 +55,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
+モジュールの import は入門例と同じです。既存のクライアントを使う例は初期化成功後、終了前に実行します。標準の業務 API では `HaiResult.success` を確認してから `data` を読みます。JSON 値やストリームを直接受け取る場合は[独自のレスポンス](#custom-response-results)を参照してください。関数宣言のない例はアプリの非同期業務関数内の断片です。
 
 <a id="client-lifecycle"></a>
 
@@ -93,7 +93,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 | `auth.refreshPath` | `/auth/refresh` | ベース URL からの相対パス。 |
 | `auth.refreshTimeoutMs` | `10000` | 更新の期限（ミリ秒）。タイムアウトでは認証情報を保持。 |
 | `auth.terminalType` | `web` | IAM が許可する端末種別。 `web`、`app`、`desktop`、`api`。 |
-| `auth.recoverSession` | 省略可 | 更新の確定失敗後に同じセッションを復元。true を返すと元のリクエストを一回再試行。 |
+| `auth.recoverSession` | 省略可 | 更新が明示的に拒否された後、同じ利用者を復旧します。リクエストが有効で元の利用者とクライアントの実行期間に属する場合に、一度だけ再試行できます。 |
 | `auth.onTokenRefreshed` | 省略可 | 更新の成功後に呼ぶ。表示中のログイン状態を更新できる。 |
 | `auth.onRefreshFailed` | 省略可 | 更新できないことが確定したときに呼ぶ。再ログインを案内できる。 |
 | `transport` | `undefined` | オブジェクトを指定するとアプリ層の通信暗号化が有効。 |
@@ -137,9 +137,7 @@ finally {
 }
 ```
 
-実際のテストサービスの URL に置き換えます。create は通信せず、使用前に初期化します。close はサーバーのログアウトではありません。
-
-ローカルトークンの削除とサーバー側のログアウトは別の操作です。サーバーで無効化するには IAM のログアウトを呼び出します。認証の復旧では同じ利用者のセッションを復元してください。
+実際のテストサービスの URL に置き換えます。`create` は独立したクライアントを返します。リクエストを送る前に初期化します。`then` は予約済みなので、クライアントとドメインは `await` や `Promise.resolve` に通常の値として渡せます。条件付きドメインは `client.payment?.orders` で参照できます。組合せ方は[条件付きドメイン](api-contract.ja.md#conditional-domains)を参照してください。
 
 未翻訳：既定の各 API、認証フォーム用操作、更新処理の詳細。[中国語の該当節](api-client.md#detailed-workflow)を参照してください。
 
@@ -170,7 +168,11 @@ finally {
 
 ![認証付き要求を回復して再試行する条件](../images/function-api-client-recovery.ja.svg)
 
-並行する更新は 1 回の refresh を共有します。新しい資格情報、未中止の要求、同じ本人状態が必要で、機密操作は再度の証明も必要です。通信障害を会話失効とみなさず、回復や再試行の失敗は呼び出し元へ返します。
+各リクエストは開始時のクライアントの実行期間と利用者にひも付きます。ヘッダーの準備、送信、更新、復旧のときに、この対応を確認します。並行する更新は 1 回の refresh を共有します。サーバーが認証を明示的に拒否した場合、同じ利用者の新しい資格情報で一度だけ再試行できます。機密操作では新しい証明が必要になる場合があります。ログアウト、アカウント切り替え、クライアントの終了後も、送信済みのリクエストには元の応答が届くことがあります。そのリクエストから復旧や再試行は行わず、遅れて届いた更新やログインの結果はローカルの資格情報に反映されません。取り消し、タイムアウト、通信障害、結果不明の書き込みは呼び出し元で扱います。
+
+その場でセッションを復旧するには、`auth.recoverSession` に `ui.createSessionRecovery` の `recovery.recover` を設定し、`SessionRecoveryDialog` で標準の認証アクションを使います。ダイアログには元の利用者と公開 IAM 設定を渡します。ダイアログを閉じるとき、ログアウト時、レイアウト破棄時に `recovery.cancel()` を呼び出します。個々のリクエストは `AbortSignal` で取り消せます。同じクライアントが新しい資格情報を一度保存できたら、復旧結果として `true` を返します。IAM のログイン引数 `expectedUserId` で復旧を元の利用者に限定します。
+
+ログアウト時はアプリのログアウト API でサーバー側のセッションを取り消し、更新 Cookie を削除する応答をブラウザーに受け取らせます。その後 `client.auth.clear()` でローカルの資格情報を削除します。`client.close()` はクライアントの実行期間を終了し、進行中の資格情報の書き込みを待ちます。ホストが渡したストレージは後で再利用できます。
 
 信頼できるログインのトークンを入力。保存失敗は拒否し、finally で購読と端末の認証情報を消します。サーバーのログアウトは別操作です。
 
@@ -232,7 +234,7 @@ async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setToken
 
 #### 利用例：認証フォームの接続
 
-フォーム入力を受け、actions が保存完了を待ちます。以下の関数は別々の操作用で、実アカウントに順次実行しません。必要な captcha は AuthPanel が渡します。
+フォーム入力を受け、actions が保存完了を待ちます。ログインや登録の完了前にログアウト、アカウント切り替え、クライアントの終了が起きた場合は、`HaiApiClientError.UNAUTHORIZED`（`hai:api-client:004`）が返ります。以下の関数は別々の操作用です。必要な captcha は AuthPanel が渡します。
 
 ```ts
 // アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
@@ -371,7 +373,7 @@ unbind() // call when this page is destroyed
 | `context.autoRefresh` | クライアントの更新方針を継承 | `false` でこの呼び出しからの認証情報の更新を停止します。現在のアクセストークンはクライアント設定に従って送信します。 |
 | `context.keepalive` | Fetch の既定値 | `true` で Fetch の `keepalive` を有効にします。ブラウザーの制限があり、ページ離脱後の送信は保証されません。 |
 | `context.reauthentication` | 操作用の証明を送信しない | 認証操作から得た証明を、このリクエストの `X-Hai-Reauthentication` ヘッダーに設定します。 |
-| `context.reauthorize` | 再試行用の証明を取得しない | 再承認が必要な再試行の前に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
+| `context.reauthorize` | 再試行用の証明を取得しない | セッションまたは用途証明が明示的に拒否され、再試行可能な場合に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -507,4 +509,89 @@ finally {
 
 監視関数を入力して解除関数を得ます。記録に生のトークンは含めません。更新・再試行の内部段階を複数の業務成功と数えません。
 
+<a id="encrypted-requests"></a>
+
+#### 利用例：トランスポート暗号化を有効にする
+
+サーバー側で IAM ルートを登録し、`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` を設定します。この例はローカルの crypto インスタンスを初期化して終了するため、独立したプロセスで実行します。API のベース URL をテストサーバーの HTTPS アドレスに置き換えます。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { crypto } from '@h-ai/crypto'
+
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+
+const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+try {
+  // 初期化済みの crypto を使います。既定の鍵交換パスは /api/v1/_hai/key-exchange です。
+  const ready = await client.init({ baseUrl: 'https://api.example.com/api/v1', transport: { crypto } })
+  if (!ready.success)
+    throw new Error(ready.error.message)
+
+  // 最初のリクエストで鍵を交換し、公開 IAM 設定を取得します。
+  const config = await client.iam.auth.publicConfig()
+  if (!config.success)
+    throw new Error(config.error.message)
+}
+finally {
+  await client.close()
+  await crypto.close()
+}
+```
+
+クロスオリジンの暗号化通信では、サーバーの CORS 設定で `X-Hai-Transport` リクエストヘッダーを許可し、同名のレスポンスヘッダーを公開します。HTTPS で鍵交換の公開鍵を提供するサーバーの身元を確認し、リソースへのアクセス権はサーバー側で IAM により検証します。
+
+<a id="plain-https-requests"></a>
+
+#### 利用例：通常の HTTPS を受け付けるルートを呼び出す
+
+サーバーのルートに `encryption: disabled` を設定するか、暗号化が必須でないルートをサーバーの `transport.excludePaths` に追加します。たとえば、有効なヘルスチェック `/health` を除外し、通常の `fetch` で呼び出します。アプリの契約内にあるルートには、専用の型付きクライアントを作り、`init` の設定で `transport` を省略することもできます。`transport` を有効にしたクライアントでは、そのインスタンスのすべてのリクエストに暗号化が適用されます。
+
+```ts
+// GET /health は通常の HTTPS を受け付けます。api.example.com を稼働中のホストに置き換えます。
+const response = await fetch('https://api.example.com/health')
+if (!response.ok)
+  throw new Error(`Health check failed (HTTP ${response.status})`)
+const health = await response.json() // { status: 'ok' }
+```
+
 [引数と手順の詳細](api-client.md#transport-observation)
+
+<a id="custom-response-results"></a>
+
+#### 利用例：独自の戻り値と SSE 応答を読み取る
+
+独自のエンドポイントは JSON 値や SSE を返せます。成功時は契約で宣言した値または非同期イテレーターが返ります。呼び出しやストリームの確立に失敗した場合は `HaiResult<never>` の失敗分岐が返ります。JSON Schema に変換できる Zod の HTTP JSON 出力は検証され、一致しなければ `HaiApiClientError.VALIDATION_FAILED`（`hai:api-client:007`）が返ります。ISO 日付文字列など、受信した JSON の値は保持されます。SSE が確立した後は、イテレーターの通常のエラー処理と取り消しが適用されます。
+
+サーバーと共有する次の契約でクライアントを作ります。テストサーバーの `/status/count` は数値を、`/status/events` は進捗ストリームを返します。初期化済みのクライアントとページの取り消しシグナルを `readProgress` に渡します。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { eventIterator } from '@orpc/contract'
+import { z } from 'zod'
+
+const contract = {
+  count: apiContract.route({ method: 'GET', path: '/status/count' }).output(z.number()),
+  events: apiContract.route({ method: 'GET', path: '/status/events' })
+    .output(eventIterator(z.object({ completed: z.number() }))),
+}
+
+async function readProgress(client: ApiClient<typeof contract>, signal: AbortSignal, update: (completed: number) => void) {
+  // 成功時は数値です。失敗時はエラーを含む結果をそのまま返します。
+  const count = await client.count(undefined, { signal })
+  if (typeof count !== 'number')
+    return count
+  update(count)
+
+  // ストリームの確立を確認してから読み取ります。取り消しには signal を使います。
+  const events = await client.events(undefined, { signal })
+  if (!(Symbol.asyncIterator in events))
+    return events
+  for await (const event of events)
+    update(event.completed)
+}
+```

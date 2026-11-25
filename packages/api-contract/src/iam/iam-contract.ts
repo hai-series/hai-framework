@@ -11,6 +11,7 @@
  * @module iam-contract
  */
 
+import type { Route } from '@orpc/contract'
 import { paginatedSchema } from '../common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
@@ -56,6 +57,9 @@ const authResultOutputSchema = haiResultSchema(IamAuthResultSchema)
 const userOutputSchema = haiResultSchema(IamUserSchema)
 const roleOutputSchema = haiResultSchema(IamRoleSchema)
 
+// 公开操作覆盖全局 Bearer 声明，保留自动生成的输入与响应描述。
+const withoutBearer: Route['spec'] = operation => ({ ...operation, security: [] })
+
 /**
  * IAM 领域 oRPC contract。
  * @example
@@ -74,6 +78,7 @@ export const iamContract = {
       operationId: 'iam.auth.createCaptcha',
       summary: 'Create self-hosted security challenge',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamCreateCaptchaInputSchema)
       .output(haiResultSchema(IamCaptchaChallengeSchema)),
@@ -92,6 +97,7 @@ export const iamContract = {
       operationId: 'iam.auth.publicConfig',
       summary: 'Public authentication configuration',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .output(haiResultSchema(IamPublicConfigSchema.nullable())),
     renewPassword: route({
@@ -100,6 +106,7 @@ export const iamContract = {
       operationId: 'iam.auth.renewPassword',
       summary: 'Change initial or expired password',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamRenewPasswordInputSchema)
       .output(HaiVoidResultSchema),
@@ -109,6 +116,7 @@ export const iamContract = {
       operationId: 'iam.auth.loginWithLdap',
       summary: 'LDAP login',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamLdapLoginInputSchema)
       .output(authResultOutputSchema),
@@ -118,6 +126,7 @@ export const iamContract = {
       operationId: 'iam.auth.requestPasswordReset',
       summary: 'Request password reset',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamRequestPasswordResetInputSchema)
       .output(HaiVoidResultSchema),
@@ -127,6 +136,7 @@ export const iamContract = {
       operationId: 'iam.auth.confirmPasswordReset',
       summary: 'Confirm password reset',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamConfirmPasswordResetInputSchema)
       .output(HaiVoidResultSchema),
@@ -136,6 +146,7 @@ export const iamContract = {
       operationId: 'iam.auth.login',
       summary: 'Password login',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamLoginInputSchema)
       .output(authResultOutputSchema),
@@ -145,6 +156,7 @@ export const iamContract = {
       operationId: 'iam.auth.loginWithOtp',
       summary: 'OTP login',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamOtpLoginInputSchema)
       .output(authResultOutputSchema),
@@ -180,6 +192,7 @@ export const iamContract = {
       operationId: 'iam.auth.refresh',
       summary: 'Refresh access token',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamRefreshTokenInputSchema)
       .output(haiResultSchema(IamRefreshTokenDataSchema)),
@@ -189,6 +202,7 @@ export const iamContract = {
       operationId: 'iam.auth.sendOtp',
       summary: 'Send OTP',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamSendOtpInputSchema)
       .output(haiResultSchema(IamSendOtpDataSchema)),
@@ -198,6 +212,7 @@ export const iamContract = {
       operationId: 'iam.auth.register',
       summary: 'Register and login',
       tags: ['iam', 'auth'],
+      spec: withoutBearer,
     })
       .input(IamRegisterInputSchema)
       .output(authResultOutputSchema),

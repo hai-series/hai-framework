@@ -21,19 +21,20 @@ The contract stores endpoint metadata in code. Database columns, cache values an
 
 ### Business data promised by an endpoint
 
-A contract defines the successful endpoint fields so server and client agree.
+After calling `POST /auth/otp/send` from `apiContract.iam.auth.sendOtp`, the sign-in form uses the expiry from the successful response. The HTTP JSON body carries a UTC date-time string.
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "order-42",
-    "totalCents": 1200
+    "expiresAt": "2026-05-20T10:05:00.000Z"
   }
 }
 ```
 
-The sample returns order-42 with totalCents:1200 in minor currency units; it is not a full database row.
+In this example the server accepted the send request and the code expires at 10:05 UTC. The OTP sign-in endpoint still asks IAM to verify the code entered by the user.
+
+The `createdAt` and `updatedAt` fields on users, roles and permissions, and `expiresAt` on an OTP response are required dates. The Zod schemas accept valid `Date` objects or ISO date-time strings with a time zone. `null` fails validation. The server sends ISO strings in JSON, and API Client preserves those strings after validation. Use `null` in the separate nullable `accountExpiresAt` field on user updates to clear the expiry.
 
 <a id="public-settings"></a>
 

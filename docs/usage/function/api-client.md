@@ -10,7 +10,7 @@
 
 ## 最小接入示例
 
-`apiClient.close()` 停止旧的凭据刷新，并等正在写入的凭据存储操作结束。应用传入的 `TokenStorage` 会保留原有凭据，之后可以交给新的客户端使用。要退出登录，先调用应用的退出接口，再清除本地凭据。
+`apiClient.close()` 使当前客户端运行期失效，并等待已经开始的凭据存储操作结束。宿主可在之后把注入的 `TokenStorage` 交给新的客户端。退出登录时，先调用应用的退出接口撤销服务端会话并让浏览器接收 Cookie 清除响应，再调用 `client.auth.clear()` 清理本地凭据。
 
 `timeout` 包含等待响应头、读完整的 JSON 正文及读取所有失败响应正文的时间，例如代理返回的 HTML 错误页。请求超时或被取消后，客户端不会再为它刷新令牌。需要取消自定义流时，传入 `AbortSignal` 并用它停止读取。
 
@@ -59,7 +59,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+下面使用既有客户端的场景在初始化成功后、关闭前运行。创建客户端的场景会自行初始化。标准业务调用先检查 `HaiResult.success`，成功后再读取 `data`。自定义裸值或流见[自定义响应](#custom-response-results)。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据。
 
 <a id="client-lifecycle"></a>
 
@@ -101,7 +101,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 | `auth.refreshPath`            | `/auth/refresh`                           | 相对于 `baseUrl` 的服务端刷新路径                                                                                                                                   |
 | `auth.refreshTimeoutMs`       | `10000`                                   | 刷新请求超时毫秒数，超时保留已有凭据供后续重试                                                                                                                      |
 | `auth.terminalType`           | `web`                                     | 会话终端类别，也可用 `app`、`desktop`、`api`。需与 IAM 允许的类别一致                                                                                               |
-| `auth.recoverSession`         | 可省略                                    | 刷新明确失效后尝试恢复同一用户会话。返回 `true` 时自动重试原请求一次                                                                                                |
+| `auth.recoverSession`         | 可省略                                    | 刷新明确失效后尝试恢复同一用户会话。恢复后仍需核对身份、客户端运行期与请求取消状态，才可重试原请求一次。 |
 | `auth.onTokenRefreshed`       | 可省略                                    | 刷新成功时调用此函数。应用可用它更新页面上的登录状态                                                                                                                |
 | `auth.onRefreshFailed`        | 可省略                                    | 刷新明确失败时调用此函数。应用可用它提示重新登录                                                                                                                    |
 | `transport`                   | 不启用加密                                | 传入对象启用端到端应用层传输加密                                                                                                                                    |
@@ -160,7 +160,7 @@ finally {
 }
 ```
 
-输入地址必须替换成已部署测试服务；create 不发送请求，init 后才能调用。close 仅释放客户端，不等于服务端注销。
+输入地址必须替换成已部署测试服务。`create` 返回独立实例，`init` 成功后可调用。`then` 是保留属性，客户端和领域分组可作为普通值传给 `await` 或 `Promise.resolve`。条件启用的领域可用 `client.payment?.orders` 读取，组合方式见[条件领域](api-contract.md#conditional-domains)。
 
 开始调用前先检查 `apiClient.init()` 成功。表中的变量由应用提供并校验，例如订单 ID、登录参数或回调函数。收到 `HaiResult` 时先检查 `success`。凭据保存和清除直接返回 `Promise<void>`，失败会抛出异常。登录界面应等写入完成再显示登录成功。
 
@@ -210,7 +210,7 @@ if (!initialized.success)
 
 ![业务请求何时允许恢复并重试](../images/function-api-client-recovery.svg)
 
-并发刷新共用一次 refresh。只有拿到新凭据，且请求未取消、用户身份未切换时，才允许重试一次；敏感操作还要重新取得有效票据。网络故障或结果未知不会自动当成会话失效，恢复失败或第二次失败交给调用方。
+一次逻辑请求绑定发起时的客户端运行期和身份，组装请求头、发送、刷新或恢复时均检查这次绑定。并发刷新共用一次 refresh。服务端明确拒绝本次认证时，取得同一身份的有效新凭据后才可重试一次。敏感操作还需重新取得用途票据。退出、换账号或关闭后，已经发出的请求仍可收到原响应，但不会再发起认证恢复或重试。旧刷新和迟到的登录结果不能写回当前客户端。请求超时、主动取消、网络故障及结果未知的写入交给调用方判断。
 
 输入参数来自可信登录响应，读写操作失败拒绝 Promise；finally 移除订阅并清理。clear 只清本地凭据，服务端会话由退出接口撤销。
 
@@ -296,7 +296,7 @@ createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射
 
 #### 场景：驱动认证表单
 
-从页面取得表单字段，通过 actions 等待凭据保存，再把结果交给 UI。下面返回的处理函数分别对应用户选择的流程，不要连续调用它们来测试真实账号。验证码开启时由 AuthPanel 求解并传递 captcha。
+从页面取得表单字段，通过 actions 等待凭据保存，再把结果交给 UI。登录或注册返回时，如果已经退出、改用其他身份或关闭了这次客户端运行期，动作返回 `HaiApiClientError.UNAUTHORIZED`（`hai:api-client:004`）。下面的处理函数分别对应用户选择的流程。验证码开启时由 AuthPanel 求解并传递 captcha。
 
 ```ts
 // 以下为应用异步业务函数体片段；失败时返回原结果。
@@ -369,7 +369,7 @@ unbind() // call when this page is destroyed
 
 #### 原地恢复过期会话
 
-配置 `auth.recoverSession` 回调可在服务端明确拒绝会话时原地重新登录并保留页面输入。使用 `@h-ai/ui` 的 `ui.createSessionRecovery` / `SessionRecoveryDialog`：根布局绑定公开配置与原用户，回调设为 `recovery.recover`，弹窗使用标准认证 actions，销毁时 `cancel()`。登录的 `expectedUserId` 由 IAM 限定原主体；常规验证码、锁定、改密和登录限制照常执行。只对明确未认证拒绝的原请求续接一次；取消、5xx、超时和结果不明的网络写入不重放。敏感操作证明绑定旧会话时可能需要再次确认，不复用到新会话。未传回调保持原处理方式；配置回调后由恢复流程处理，不再立即调用 onRefreshFailed 导航离开。终端分组通过 auth.terminalType（web/app/desktop/api，默认 web）传入；它不是硬件身份认证。
+配置 `auth.recoverSession` 回调可在服务端明确拒绝会话时保留页面输入并引导原用户重新登录。使用 `@h-ai/ui` 的 `ui.createSessionRecovery` / `SessionRecoveryDialog` 时，根布局绑定公开配置与原用户，回调设为 `recovery.recover`，弹窗使用标准认证 actions。关闭弹窗、退出或销毁布局时调用 `recovery.cancel()`，取消等待中的恢复。单次请求的取消通过其 `AbortSignal` 传入。恢复回调在本客户端成功保存一次新凭据后才返回 `true`。登录的 `expectedUserId` 由 IAM 限定原主体，常规验证码、锁定、改密和登录限制照常执行。恢复成功后，符合条件的请求可续接一次，敏感操作按需重新获取用途票据。未配置恢复回调时，应用可用 `onRefreshFailed` 提示会话失效。通过 `auth.terminalType`（`web`、`app`、`desktop`、`api`，默认 `web`）选择服务端会话分组。
 
 #### 页面离开会话策略
 
@@ -453,7 +453,7 @@ unbind() // call when this page is destroyed
 | `context.autoRefresh` | 沿用客户端的自动刷新策略 | `false` 禁止此调用触发凭据刷新，例如应用正在自行恢复会话时。当前访问令牌仍按客户端配置发送。 |
 | `context.keepalive` | 沿用 Fetch 默认设置 | `true` 将 Fetch 的 `keepalive` 设为 `true`。浏览器仍可限制正文大小，也不保证离页后提交。 |
 | `context.reauthentication` | 不附加用途凭据 | 将本次操作的凭据写入 `X-Hai-Reauthentication` 请求头。凭据从认证动作取得。 |
-| `context.reauthorize` | 不为重试取得新凭据 | 可选异步回调，在明确需要重新授权且可重试时调用。返回新的凭据字符串、`null` 取消重试、`undefined` 允许本次重试不附带凭据。 |
+| `context.reauthorize` | 不为重试取得新凭据 | 可选异步回调，仅在服务端明确拒绝本次认证或用途凭据且调用仍可重试时执行。返回新的凭据字符串、`null` 取消重试、`undefined` 允许本次重试不附带凭据。 |
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -623,35 +623,40 @@ finally {
 
 输入是观察函数；输出取消函数，用完必须调用。记录不包含原始 Token，刷新或重试的内部步骤不应误报为多次业务成功。HTTP 能力与容量限制见本节。
 
-#### 启用传输加密
+<a id="encrypted-requests"></a>
+<a id="启用传输加密"></a>
 
-服务端需先启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
+#### 场景：启用传输加密
+
+服务端需先启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 并挂载 IAM 接口。下面是独立进程中的示例，由示例初始化并关闭本地 crypto 实例。将 API 基址替换为测试服务的 HTTPS 地址。
 
 服务端必须注入受管 serverKeyRing 和共享 registry；客户端只接收 serverKeyId/公钥，并在密文请求带回版本。密钥环/私钥不进入客户端配置。旧版本撤销后，销毁 transport 会话并重新协商；不要自动重放非幂等业务。
 
 ```ts
-// import 放在模块顶部；其余片段位于应用的异步业务函数体内，失败时返回原结果。
 import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
 import { crypto } from '@h-ai/crypto'
 
-// Initialize crypto with defaults for the transport handshake. Return the failed result if initialization fails.
-const initResult = await crypto.init()
-if (!initResult.success)
-  return initResult
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
-// Configure the HTTPS client with the initialized crypto transport. Return the failed result on a failed initialization.
-const initResult2 = await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {},
-  transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
-})
-if (!initResult2.success)
-  return initResult2
+const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+try {
+  // 用运行中的 crypto 装配客户端。默认协商路径为 /api/v1/_hai/key-exchange。
+  const ready = await client.init({ baseUrl: 'https://api.example.com/api/v1', transport: { crypto } })
+  if (!ready.success)
+    throw new Error(ready.error.message)
 
-// Close the API client and its transport before releasing its crypto dependency.
-await apiClient.close()
-// Close the crypto instance after the client. Await completion before exiting.
-await crypto.close()
+  // 首次请求执行密钥协商。成功返回服务端公开的认证设置，失败报告本次请求的错误。
+  const config = await client.iam.auth.publicConfig()
+  if (!config.success)
+    throw new Error(config.error.message)
+}
+finally {
+  await client.close()
+  await crypto.close()
+}
 ```
 
 加密传输使用 v2 格式。客户端为请求随机选取 SM4-CBC 密钥和 HMAC-SM3 密钥，用 SM2 将密钥加密。客户端用自己的私钥签名请求，服务端用请求选中的服务端密钥版本签名响应。接收端先验签，再核对消息认证码（MAC），最后解密。
@@ -662,7 +667,21 @@ await crypto.close()
 
 没有正文的 POST 仍需要认证。GET、HEAD 以及 204、205、304 等无正文响应，把认证数据放在 `X-Hai-Transport` 头。其他请求或响应把密文放在 JSON 正文，并设置 `X-Encrypted: true`。客户端收到加密响应会用原请求和实际状态码验证。标记丢失、格式过旧或认证失败时，客户端底层传输拒绝该响应，业务调用返回失败 HaiResult。
 
-如果某个接口必须接收普通 HTTPS 正文，服务端把该路由设为 `encryption: disabled` 或加入 `excludePaths`。浏览器请求同一路由时也应配置客户端的 `excludePaths`。跨域接入还须允许并公开 `X-Hai-Transport` 请求头和响应头。使用 HTTPS 可以验证握手接收的公钥确实来自目标服务器。访问资源前，服务端仍需检查当前用户的 IAM 权限。
+跨域加密请求须在服务端 CORS 设置中允许 `X-Hai-Transport` 请求头，并公开同名响应头。使用 HTTPS 可以验证握手公钥来自目标服务器。资源访问仍由服务端检查 IAM 权限。
+
+<a id="plain-https-requests"></a>
+
+#### 场景：调用服务端允许普通 HTTPS 的路由
+
+给无需应用层加密的路由配置服务端 `encryption: disabled`，或将未标记为必须加密的路由加入服务端 `transport.excludePaths`。例如将开启的 `/health` 健康检查列为排除路径，再用普通 `fetch` 请求它。若路由已定义为应用契约的一部分，也可为这组路由创建独立 typed client，在 `init` 中省略 `transport`。同一实例启用 `transport` 后，所有通过该实例发送的请求都使用加密传输。
+
+```ts
+// 目标服务已允许 GET /health 使用普通 HTTPS；用部署地址替换 api.example.com。
+const response = await fetch('https://api.example.com/health')
+if (!response.ok)
+  throw new Error(`Health check failed (HTTP ${response.status})`)
+const health = await response.json() // { status: 'ok' }
+```
 
 #### 逻辑请求观察
 
@@ -680,9 +699,45 @@ const unsubscribe = apiClient.observeRequests((record) => {
 unsubscribe()
 ```
 
+<a id="custom-response-results"></a>
+
+#### 场景：读取自定义裸值与 SSE 响应
+
+应用可以为自定义端点声明裸 JSON 值或 SSE。成功时保留契约声明的值或异步迭代器。调用或建立流失败时，返回 `HaiResult<never>` 的失败分支。HTTP JSON 输出采用可转换的 Zod JSON Schema 校验，响应与声明不符时返回 `HaiApiClientError.VALIDATION_FAILED`（`hai:api-client:007`）。校验保留线上 JSON 值，例如 ISO 日期字符串。SSE 建立后沿用迭代器的错误与取消行为。
+
+下面从应用与服务端共享的契约创建客户端。测试服务返回 `/status/count` 的数字和 `/status/events` 的进度流。将运行中的客户端和页面的取消信号传给 `readProgress`。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { eventIterator } from '@orpc/contract'
+import { z } from 'zod'
+
+const contract = {
+  count: apiContract.route({ method: 'GET', path: '/status/count' }).output(z.number()),
+  events: apiContract.route({ method: 'GET', path: '/status/events' })
+    .output(eventIterator(z.object({ completed: z.number() }))),
+}
+
+async function readProgress(client: ApiClient<typeof contract>, signal: AbortSignal, update: (completed: number) => void) {
+  // 裸值成功时是数字，失败时保留可供调用方处理的 error。
+  const count = await client.count(undefined, { signal })
+  if (typeof count !== 'number')
+    return count
+  update(count)
+
+  // 先判断流是否建立，再逐条读取。signal 用来取消流；迭代中的错误由调用方处理。
+  const events = await client.events(undefined, { signal })
+  if (!(Symbol.asyncIterator in events))
+    return events
+  for await (const event of events)
+    update(event.completed)
+}
+```
+
 ## 错误处理
 
-业务 API 返回 `HaiResult<T>`：
+标准业务 API 返回 `HaiResult<T>`：
 
 ```ts
 // Request the current user's profile without explicit arguments. Success includes roles and permissions. Failure exposes a structured error.
@@ -699,7 +754,7 @@ else {
 
 服务端以非 2xx HTTP 状态返回合法的失败 `HaiResult` 时，客户端保留业务错误码、消息和 `traceId`，例如 409 冲突仍可提示刷新后重试。`httpStatus` 以真实 HTTP 响应为准；5xx 的内部诊断仍被隐藏，正文不能通过声称 400 绕过脱敏。非框架响应继续使用客户端错误映射。
 
-自动刷新在真实 HTTP 401（`Response.status`）或 HTTP 200 的有效失败 HaiResult（`success=false`、`error.code/message` 为字符串且 `error.httpStatus=401`）后触发，刷新成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 不触发自动刷新，403/500 等其它失败也不会触发。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终结果的 `success` 与 `error.code`，并处理刷新失败后的登录失效。
+自动刷新只处理明确的会话认证拒绝，由真实 HTTP 401 或 HTTP 200 中具备 401 语义的有效失败 `HaiResult` 表达。客户端会进一步核对 IAM 错误是否属于会话失效。登录、注册等认证入口和配置的 `auth.refreshPath` 排除在自动刷新之外。业务调用应检查最终的 `success` 与 `error.code`。
 
 刷新端点的失败状态决定凭据处理。`401` 清理存储并通知会话失效，`429`、`408`、`409` 等其他失败以及网络超时保留原凭据。若端点以 HTTP 200 返回有效的失败 `HaiResult`，使用其中的 `error.httpStatus`。限流后可由下一次业务请求触发刷新。
 

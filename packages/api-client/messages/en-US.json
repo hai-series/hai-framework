@@ -3,6 +3,7 @@
   "apiClient_timeout": "Request timeout",
   "apiClient_serverError": "Server error ({status})",
   "apiClient_unauthorized": "Unauthorized, please log in again",
+  "apiClient_authChanged": "The sign-in state changed and this request was cancelled",
   "apiClient_forbidden": "Access forbidden",
   "apiClient_notFound": "Resource not found",
   "apiClient_validationFailed": "Request validation failed",

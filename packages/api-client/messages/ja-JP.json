@@ -3,6 +3,7 @@
   "apiClient_timeout": "リクエストがタイムアウトしました",
   "apiClient_serverError": "サーバーエラー（{status}）",
   "apiClient_unauthorized": "認証されていません。再度ログインしてください",
+  "apiClient_authChanged": "ログイン状態が変わったため、このリクエストはキャンセルされました",
   "apiClient_forbidden": "アクセスが拒否されました",
   "apiClient_notFound": "リソースが見つかりません",
   "apiClient_validationFailed": "リクエストの検証に失敗しました",

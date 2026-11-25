@@ -20,6 +20,8 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 [API 一覧](../../docs/usage/function/api-contract.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+[条件付きドメイン](../../docs/usage/function/api-contract.ja.md#conditional-domains)と [IAM 契約・OpenAPI](../../docs/usage/function/api-contract.ja.md#serv-iam-wiring)を参照してください。
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

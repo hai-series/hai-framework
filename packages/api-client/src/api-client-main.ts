@@ -53,7 +53,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { TransportClient } from '@h-ai/crypto'
-import type { AnyContractRouter, ContractRouterClient } from '@orpc/contract'
+import type { AnyContractProcedure, AnyContractRouter, ContractRouterClient } from '@orpc/contract'
 import type { JsonifiedClient } from '@orpc/openapi-client'
 import type { TokenManager } from './api-client-auth.js'
 import type {
@@ -68,6 +68,7 @@ import { apiContract, HaiErrorSchema, IamSessionErrorCodeSchema } from '@h-ai/ap
 import { core } from '@h-ai/core'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
+import { getContractRouter, isContractProcedure } from '@orpc/contract'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
   createHttpOnlyCookieTokenStorage,
@@ -75,7 +76,8 @@ import {
   createTokenManager,
 } from './api-client-auth.js'
 import { apiClientM } from './api-client-i18n.js'
-import { clearIamPageExitBindings, createIamAuthActions } from './api-client-iam.js'
+import { clearIamPageExitBindings, createIamAuthActions, iamAuthCommits } from './api-client-iam.js'
+import { conformsToResponseSchema } from './api-client-response.js'
 import { HaiApiClientError } from './api-client-types.js'
 
 const DEFAULT_TIMEOUT = 30_000
@@ -91,6 +93,7 @@ const AUTH_ENTRY_PATHS = [
 ]
 const TRAILING_SLASHES_REGEX = /\/+$/
 const REQUEST_OBSERVATION = Symbol('hai.api-client.request-observation')
+const REQUEST_AUTH_GENERATION = Symbol('hai.api-client.auth-generation')
 /**
  * 内部构造的可变摘要，不对消费者暴露写入能力。
  * @example 模块内部上下文
@@ -160,6 +163,17 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       return state.tokenManager?.onTokenRefreshed(callback) ?? (() => {})
     },
   }
+  iamAuthCommits.set(auth, () => {
+    const { rawClient, tokenManager } = state
+    const generation = tokenManager?.generation
+    return async (tokens) => {
+      if (state.rawClient !== rawClient || tokenManager?.generation !== generation)
+        return false
+      return tokenManager
+        ? tokenManager.setTokens(tokens)
+        : true
+    }
+  })
 
   let closePromise: Promise<void> | null = null
   let initPromise: Promise<HaiResult<void>> | null = null
@@ -185,7 +199,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           const effectiveConfig = { ...config, baseUrl }
           nextTransport = buildTransportSession(effectiveConfig)
           const nextTokenManager = buildTokenManager(effectiveConfig, nextTransport)
-          const nextRawClient = buildRawClient(contract, effectiveConfig, nextTokenManager, nextTransport)
+          const nextRawClient = buildRawClient(contract, effectiveConfig, nextTokenManager, nextTransport, (): boolean => state.rawClient === nextRawClient)
 
           // 所有可能失败的构建步骤完成后再提交状态，避免调用方看到半初始化 client。
           state.config = effectiveConfig
@@ -225,11 +239,12 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       clearIamPageExitBindings(auth)
       state.observers.clear()
       const manager = state.tokenManager
-      state.transport?.destroy()
+      const transport = state.transport
       state.config = null
       state.rawClient = null
       state.tokenManager = undefined
       state.transport = undefined
+      transport?.destroy()
       closePromise = manager?.dispose() ?? Promise.resolve()
       try {
         await closePromise
@@ -253,30 +268,23 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     },
   }
 
-  // 生命周期成员优先，其余属性只记录真实契约路径，末端调用才交给 rawClient。
-  // 契约顶层不能与 init/close/config/isInitialized/auth 重名；此处不提供额外路由注册。
+  // 生命周期成员优先，缺席的契约节点保留 undefined。
   return new Proxy({}, {
     get(_target, property) {
-      // Proxy 的属性键不一定是 string，也可能是 Symbol（例如某些运行时内部探测）。
-      // 本 client 只处理字符串路径；非字符串键直接忽略，避免把 Symbol 误当成 API 路径的一部分。
-      if (typeof property !== 'string')
+      // Promise 会探测 then；客户端代理不能被当作 thenable。
+      if (typeof property !== 'string' || property === 'then')
         return undefined
 
-      // 顶层字段命中 lifecycle 时，直接返回真实成员。
-      // 例如：
-      // - property === 'init'  → 返回 init 函数
-      // - property === 'auth'  → 返回 auth 对象
-      // 这样 `client.init()` / `client.auth.clear()` 就能像普通对象一样工作。
-      if (property in lifecycle) {
+      if (Object.hasOwn(lifecycle, property)) {
         return Reflect.get(lifecycle, property)
       }
 
-      // 走到这里，说明它不是生命周期字段，那就把它当成 contract 路径的第一段。
-      // 例如访问 `client.iam` 时，这里会创建一个 path = ['iam'] 的嵌套 Proxy。
-      // 后续如果继续访问 `.auth.login`，path 会逐步变成：
-      // ['iam', 'auth'] → ['iam', 'auth', 'login']
-      // 最终在函数调用时再映射到真正的 rawClient.iam.auth.login(...args)。
-      return createProcedureProxy(state, [property])
+      const node = Object.hasOwn(contract, property)
+        ? getContractRouter(contract, [property])
+        : undefined
+      return node
+        ? createProcedureProxy(state, node, [property])
+        : undefined
     },
   // 这里的返回值在运行时是一个 Proxy，但从“可用能力”上看，它符合 `ApiClient<TContract>`：
   // - 一部分成员来自 lifecycle
@@ -377,33 +385,40 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
  * @param state - 当前 rawClient，可在 close 后变为 null。
  * @param state.rawClient - 当前 oRPC 客户端；未初始化或关闭后为 null。
  * @param state.observers - 本实例逻辑请求订阅集合。
+ * @param node - 当前契约节点；只代理实际存在的子节点。
  * @param path - 已访问的 contract 属性路径。
  * @returns 动态代理；由契约公开类型约束调用路径，不对外承诺任意字符串 API。
  *
  * @example 模块内部上下文
  * ```ts
- * const proxy = createProcedureProxy({ rawClient: null }, ['iam'])
+ * const proxy = createProcedureProxy({ rawClient: null }, apiContract.iam, ['iam'])
  * // 直到 apply 才调用 callProcedure；未初始化返回失败 HaiResult。
  * ```
  */
 function createProcedureProxy<TContract extends AnyContractRouter>(
   state: { rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null, observers?: Set<ApiRequestObserver> },
+  node: AnyContractRouter,
   path: string[],
 ): unknown {
   return new Proxy(() => undefined, {
     get(_t, property) {
-      if (typeof property !== 'string')
+      if (typeof property !== 'string' || property === 'then' || !Object.hasOwn(node, property))
         return undefined
-      return createProcedureProxy(state, [...path, property])
+      const child = getContractRouter(node, [property])
+      return child
+        ? createProcedureProxy(state, child, [...path, property])
+        : undefined
     },
     apply(_t, _thisArg, args) {
-      return callObservedProcedure(state.rawClient, path, args, state.observers)
+      if (isContractProcedure(node))
+        return callObservedProcedure(state.rawClient, node, path, args, state.observers)
+      return core.err(HaiApiClientError.UNKNOWN, apiClientM('apiClient_unknown'))
     },
   })
 }
 
 /** 不复制业务入参；通过 oRPC 每次调用的 context 将同一关联传给传输层。 */
-async function callObservedProcedure(rawClient: unknown, path: string[], args: unknown[], observers?: ReadonlySet<ApiRequestObserver>): Promise<unknown> {
+async function callObservedProcedure(rawClient: unknown, procedure: AnyContractProcedure, path: string[], args: unknown[], observers?: ReadonlySet<ApiRequestObserver>): Promise<unknown> {
   const record: MutableRequestRecord = {
     requestId: core.context.get().requestId ?? core.id.uuid(),
     procedure: path.join('.'),
@@ -422,10 +437,10 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
     ...provided,
     context: { ...providedContext, [REQUEST_OBSERVATION]: record },
   }
-  let result = await callProcedure(rawClient, path, [args[0], options])
+  let result = await callProcedure(rawClient, procedure, path, [args[0], options])
   record.duration = Math.max(0, Date.now() - record.timestamp)
   record.success = !(result && typeof result === 'object' && 'success' in result && result.success === false)
-  if (result && typeof result === 'object' && 'error' in result && result.error && typeof result.error === 'object' && 'code' in result.error) {
+  if (!record.success && result && typeof result === 'object' && 'error' in result && result.error && typeof result.error === 'object' && 'code' in result.error) {
     record.errorCode = String(result.error.code)
     if ('message' in result.error && typeof result.error.message === 'string') {
       const error = result.error as Parameters<typeof core.error.toPublic>[0]
@@ -500,18 +515,20 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
 /**
  * 解析真实 rawClient 中的 procedure 并调用，将调用异常映射为标准 HaiResult 失败。
  * @param rawClient - 已构建的 oRPC client；缺省时返回 NOT_INITIALIZED。
+ * @param procedure - 当前契约操作及其响应 Schema。
  * @param path - 契约层级路径。
  * @param args - 原始 procedure 参数。
  * @returns 原契约结果或客户端失败，不把失败改成成功。
  *
  * @example 模块内部上下文
  * ```ts
- * const result = await callProcedure(null, ['iam', 'auth', 'currentUser'], [])
+ * const result = await callProcedure(null, apiContract.iam.auth.currentUser, ['iam', 'auth', 'currentUser'], [])
  * // 实际得到 NOT_INITIALIZED；返回值为 unknown，外部类型来自真实契约。
  * ```
  */
 async function callProcedure(
   rawClient: unknown,
+  procedure: AnyContractProcedure,
   path: string[],
   args: unknown[],
 ): Promise<unknown> {
@@ -532,7 +549,10 @@ async function callProcedure(
   }
 
   try {
-    return await (target as (...a: unknown[]) => Promise<unknown>)(...args)
+    const output = await (target as (...a: unknown[]) => Promise<unknown>)(...args)
+    return conformsToResponseSchema(procedure['~orpc'].outputSchema, output)
+      ? output
+      : core.err(HaiApiClientError.VALIDATION_FAILED, apiClientM('apiClient_responseValidationFailed'))
   }
   catch (error) {
     return mapClientError(error)
@@ -617,6 +637,7 @@ function buildTransportSession(config: ApiClientConfig): TransportClient | undef
  * @param config - 目标地址与平台 fetch。
  * @param tokenManager - 可选 Token 管理器。
  * @param transport - 可选加密会话。
+ * @param isActive - 本运行期是否仍接受发送或重试。
  * @returns oRPC JSON client；模块外层代理将调用异常映射为失败 HaiResult。
  *
  * @example 模块内部上下文
@@ -631,11 +652,18 @@ function buildRawClient<TContract extends AnyContractRouter>(
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
+  isActive: () => boolean = () => true,
 ): JsonifiedClient<ContractRouterClient<TContract>> {
   const link = new OpenAPILink<Record<PropertyKey, unknown>>(contract, {
     url: config.baseUrl,
+    interceptors: [
+      ({ next, ...options }) => next({
+        ...options,
+        context: { ...options.context, [REQUEST_AUTH_GENERATION]: tokenManager?.generation },
+      }),
+    ],
     headers: async (options) => {
-      const headers = await buildHeaders(config, tokenManager, getObservation(options.context)?.requestId)
+      const headers = await buildHeaders(config, tokenManager, options.context, options.signal)
       // 单次操作凭据只附加到本次调用，不能放进跨并发请求共享的默认 header。
       if (typeof options.context.reauthentication === 'string')
         headers['x-hai-reauthentication'] = options.context.reauthentication
@@ -665,9 +693,11 @@ function buildRawClient<TContract extends AnyContractRouter>(
       const authenticatedRequest = tokenManager?.usesCookieCredentials
         ? new Request(request, { credentials: 'include' })
         : request
-      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, options.context.autoRefresh === false
-        ? undefined
-        : tokenManager, transport, record, reauthorize)
+      const generation = options.context[REQUEST_AUTH_GENERATION]
+      const authentication = tokenManager && typeof generation === 'number'
+        ? { tokenManager, generation, autoRefresh: options.context.autoRefresh !== false }
+        : undefined
+      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, authentication, transport, record, { isActive, reauthorize })
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
@@ -692,6 +722,8 @@ function getObservation(context: Record<PropertyKey, unknown>): MutableRequestRe
  * 合并静态/动态配置头与客户端标识，读取可用 access token 后设置 Bearer 头。
  * @param config - 用户请求头与客户端标识。
  * @param tokenManager - 可选管理器；读取安全存储失败向上游传播。
+ * @param context - 本次调用的内部凭据代际与关联信息。
+ * @param signal - 取消头部准备时的异步等待。
  * @returns 单次请求的头快照，不改变调用方配置对象。
  *
  * @example 模块内部上下文
@@ -703,20 +735,31 @@ function getObservation(context: Record<PropertyKey, unknown>): MutableRequestRe
 async function buildHeaders(
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
-  requestId?: string,
+  context: Record<PropertyKey, unknown> = {},
+  signal?: AbortSignal,
 ): Promise<Record<string, string>> {
-  const configured = typeof config.headers === 'function'
-    ? await config.headers()
-    : config.headers ?? {}
+  const configuredHeaders = config.headers
+  const configured = typeof configuredHeaders === 'function'
+    ? await waitForRequest(signal, async () => configuredHeaders())
+    : configuredHeaders ?? {}
   const headers = new Headers(configured)
   headers.set('x-hai-terminal', config.auth?.terminalType ?? 'web')
   if (!headers.has('accept-language'))
     headers.set('accept-language', core.i18n.getGlobalLocale())
-  const accessToken = await tokenManager?.storage.getAccessToken()
+  const capturedGeneration = context[REQUEST_AUTH_GENERATION]
+  const generation = typeof capturedGeneration === 'number'
+    ? capturedGeneration
+    : undefined
+  const accessToken = tokenManager && await waitForRequest(signal, () => tokenManager.readAccessToken(generation))
+  if (tokenManager && (accessToken === undefined || tokenManager.generation !== generation)) {
+    throw new ORPCError('UNAUTHORIZED', {
+      message: apiClientM('apiClient_authChanged'),
+    })
+  }
   return {
     ...Object.fromEntries(headers),
     'x-request-client': config.clientName ?? DEFAULT_CLIENT_NAME,
-    'x-request-id': requestId ?? core.context.get().requestId ?? core.id.uuid(),
+    'x-request-id': getObservation(context)?.requestId ?? core.context.get().requestId ?? core.id.uuid(),
     ...(accessToken
       ? { authorization: `Bearer ${accessToken}` }
       : {}),
@@ -742,6 +785,28 @@ function normalizeBaseUrl(value: string): string | undefined {
   }
 }
 
+/** 取消只结束本次等待，凭据刷新等共享任务可继续服务其它调用。 */
+async function waitForRequest<T>(signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
+  if (!signal)
+    return operation()
+  signal.throwIfAborted()
+  let abort = () => {}
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason)
+    signal.addEventListener('abort', abort, { once: true })
+  })
+  try {
+    const pending = Promise.resolve().then(() => {
+      signal.throwIfAborted()
+      return operation()
+    })
+    return await Promise.race([pending, cancelled])
+  }
+  finally {
+    signal.removeEventListener('abort', abort)
+  }
+}
+
 /**
  * 发送前克隆一次性请求体；HTTP 401 或有效失败包络的 401 才尝试刷新并最多重试一次。
  * 登录/注册/找回密码与 refresh 入口保留原始失败，不递归刷新；重试保留 body 并替换 Bearer 头。
@@ -750,8 +815,12 @@ function normalizeBaseUrl(value: string): string | undefined {
  * @param init.redirect - 可选的 fetch 重定向策略，原样传给首次请求及重试。
  * @param init.keepalive - 页面离开请求保持存活的浏览器提示，原样传递。
  * @param config - 请求与刷新配置。
- * @param tokenManager - 缺省时直接返回首次响应。
+ * @param authentication - 本请求出发时的凭据代际与刷新开关。
  * @param transport - 刷新与重试共用的可选加密会话。
+ * @param observation - 本次逻辑调用的可选摘要。
+ * @param retry - 运行期校验与敏感操作的再鉴别回调。
+ * @param retry.isActive - 核对原客户端运行期是否仍有效。
+ * @param retry.reauthorize - 为同一操作取得新凭据。
  * @returns 最终 HTTP Response；不保证远端非幂等副作用没有发生。
  *
  * @example 模块内部上下文
@@ -765,41 +834,53 @@ async function fetchWithRefresh(
   request: Request,
   init: { redirect?: Request['redirect'], keepalive?: boolean },
   config: ApiClientConfig,
-  tokenManager: TokenManager | undefined,
+  authentication: { tokenManager: TokenManager, generation: number, autoRefresh: boolean } | undefined,
   transport: TransportClient | undefined,
   observation?: MutableRequestRecord,
-  reauthorize?: () => Promise<string | null | undefined>,
+  retry: { isActive?: () => boolean, reauthorize?: () => Promise<string | null | undefined> } = {},
 ): Promise<Response> {
+  const tokenManager = authentication?.tokenManager
+  const generation = authentication?.generation
+  const { reauthorize, isActive = () => true } = retry
+  const isCurrent = (expectedGeneration: number | undefined) => isActive() && tokenManager?.generation === expectedGeneration
+  request.signal.throwIfAborted()
+  if (!isCurrent(generation)) {
+    throw new ORPCError('UNAUTHORIZED', {
+      message: apiClientM('apiClient_authChanged'),
+    })
+  }
   // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
-  const retryRequest = tokenManager || reauthorize
+  const retryRequest = authentication?.autoRefresh || reauthorize
     ? request.clone()
     : undefined
-  const identityGeneration = tokenManager?.generation
   if (observation)
     observation.attempts++
   const response = await fetchWithTimeout(request, init, config, transport)
   request.signal.throwIfAborted()
-  if (!retryRequest)
+  if (!retryRequest || !isCurrent(generation))
     return response
 
-  async function retryAuthorized(accessToken?: string): Promise<Response> {
-    if (!retryRequest || retryRequest.signal.aborted)
+  async function retryAuthorized(expectedGeneration: number | undefined, requireAccessToken = false): Promise<Response> {
+    request.signal.throwIfAborted()
+    if (!retryRequest || !isCurrent(expectedGeneration))
       return response
-    const generation = tokenManager?.generation
     const headers = new Headers(retryRequest.headers)
     if (headers.has('x-hai-reauthentication') || reauthorize) {
       if (!reauthorize)
         return response
-      const ticket = await reauthorize()
-      if (ticket === null || retryRequest.signal.aborted || tokenManager?.generation !== generation)
+      const ticket = await waitForRequest(request.signal, async () => isCurrent(expectedGeneration)
+        ? reauthorize()
+        : null)
+      if (ticket === null || !isCurrent(expectedGeneration))
         return response
       headers.delete('x-hai-reauthentication')
       if (ticket)
         headers.set('x-hai-reauthentication', ticket)
     }
-    const currentToken = accessToken ?? await tokenManager?.storage.getAccessToken()
-    if (tokenManager?.generation !== generation)
+    const currentToken = tokenManager && await waitForRequest(request.signal, () => tokenManager.readAccessToken(expectedGeneration))
+    request.signal.throwIfAborted()
+    if (!isCurrent(expectedGeneration) || (requireAccessToken && !currentToken))
       return response
     if (currentToken)
       headers.set('authorization', `Bearer ${currentToken}`)
@@ -827,39 +908,43 @@ async function fetchWithRefresh(
     ? failureError.code
     : undefined
   const failed = failure && typeof failure === 'object' && 'success' in failure && failure.success === false
-  if (failed && code === 'hai:iam:027' && reauthorize)
-    return retryAuthorized()
-  if (!tokenManager)
+  const parsed = failed
+    ? HaiErrorSchema.safeParse(failureError)
+    : undefined
+  const failureStatus = parsed?.success ? parsed.data.httpStatus : undefined
+  const unauthorized = response.status === 401
+    || (response.status === 200 && typeof code === 'string' && failureStatus === 401)
+  request.signal.throwIfAborted()
+  if (!unauthorized || !isCurrent(generation))
     return response
-  const unauthorized = response.status === 200 && failed && failureError && typeof code === 'string'
-    && 'message' in failureError && typeof failureError.message === 'string'
-    && 'httpStatus' in failureError && failureError.httpStatus === 401
-  if (response.status !== 401 && !unauthorized)
+  if (code === 'hai:iam:027') {
+    return reauthorize && parsed?.success && (failureStatus === undefined || failureStatus === 401)
+      ? retryAuthorized(generation)
+      : response
+  }
+  if (!tokenManager || !authentication?.autoRefresh)
     return response
   if (typeof code === 'string' && code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(code).success) {
     return response
   }
-  if (tokenManager.generation !== identityGeneration)
+  const tokens = await waitForRequest(request.signal, async () => isCurrent(generation)
+    ? tokenManager.refresh()
+    : null)
+  if (!isCurrent(generation))
     return response
-
-  request.signal.throwIfAborted()
-  const tokens = await tokenManager.refresh()
-  if (tokenManager.generation !== identityGeneration)
-    return response
-  let accessToken = tokens?.accessToken
+  if (tokens?.accessToken)
+    return retryAuthorized(generation, true)
   // refresh网络/上游故障会保留凭据，不能误判为会话失效弹窗，更不能重放结果不明的写入。
-  if (!accessToken && config.auth?.recoverSession && tokenManager.sessionInvalid) {
-    if (await config.auth.recoverSession()) {
-      const restoredGeneration = tokenManager.generation
-      accessToken = await tokenManager.storage.getAccessToken() ?? undefined
-      if (tokenManager.generation !== restoredGeneration)
-        return response
-    }
-  }
-  if (!accessToken)
+  const recover = config.auth?.recoverSession
+  if (!recover || !tokenManager.sessionInvalid)
     return response
-
-  return retryAuthorized(accessToken)
+  const recovered = await waitForRequest(request.signal, async () => isCurrent(generation) && tokenManager.sessionInvalid && await recover())
+  if (!recovered)
+    return response
+  const restoredGeneration = authentication.generation + 1
+  if (tokenManager.committedGeneration !== restoredGeneration)
+    return response
+  return retryAuthorized(restoredGeneration, true)
 }
 
 /**

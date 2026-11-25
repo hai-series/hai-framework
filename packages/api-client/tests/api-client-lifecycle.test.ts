@@ -1,6 +1,6 @@
 import { apiContract } from '@h-ai/api-contract'
 import { eventIterator } from '@orpc/contract'
-import { expect, it, vi } from 'vitest'
+import { expect, expectTypeOf, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
 
@@ -140,7 +140,8 @@ it('a custom stream yields before EOF and caller cancellation releases its body'
       },
     })).success).toBe(true)
     const stream = await client.events(undefined, { signal: controller.signal })
-    expect(Symbol.asyncIterator in stream).toBe(true)
+    if (!(Symbol.asyncIterator in stream))
+      throw new Error(stream.error.message)
     const iterator = stream[Symbol.asyncIterator]()
     expect(await iterator.next()).toMatchObject({
       done: false,
@@ -155,6 +156,135 @@ it('a custom stream yields before EOF and caller cancellation releases its body'
     detach()
     await client.close()
   }
+})
+
+it('从异步工厂返回客户端和路由组时不触发伪请求', async () => {
+  const client = apiClient.create({ catalog: contract })
+  const fetch = vi.fn(async () => Response.json({
+    success: true,
+    data: { value: 'ok' },
+  }))
+  expect((await client.init({ baseUrl: 'https://api.test', fetch })).success).toBe(true)
+  try {
+    const create = async () => client
+    const returned = await create()
+    const group = await Promise.resolve(returned.catalog)
+    expect(returned).toBe(client)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(await group.check()).toEqual({
+      success: true,
+      data: { value: 'ok' },
+    })
+    expect(fetch).toHaveBeenCalledOnce()
+  }
+  finally { await client.close() }
+})
+
+it.each([true, false])('动态领域启用=%s 时客户端属性与契约一致', async (enabled) => {
+  const combined = apiContract.create({
+    catalog: enabled ? contract : false,
+  })
+  const client = apiClient.create(combined)
+  expectTypeOf<Extract<typeof client.catalog, undefined>>().toEqualTypeOf<undefined>()
+  const fetch = vi.fn(async () => Response.json({
+    success: true,
+    data: { value: 'ok' },
+  }))
+  expect((await client.init({ baseUrl: 'https://api.test', fetch })).success).toBe(true)
+  try {
+    const result = await client.catalog?.check()
+    expect(result).toEqual(enabled
+      ? {
+          success: true,
+          data: { value: 'ok' },
+        }
+      : undefined)
+    expect(fetch).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  }
+  finally { await client.close() }
+})
+
+it('自定义流在建立前返回可识别的客户端失败', async () => {
+  const client = apiClient.create({
+    events: apiContract.route({ method: 'GET', path: '/events' }).output(eventIterator(z.string())),
+  })
+  try {
+    expect(await client.events()).toMatchObject({
+      success: false,
+      error: { code: HaiApiClientError.NOT_INITIALIZED.code },
+    })
+    expect((await client.init({
+      baseUrl: 'https://api.test',
+      fetch: async () => { throw new TypeError('Test connection closed') },
+    })).success).toBe(true)
+    expect(await client.events()).toMatchObject({
+      success: false,
+      error: { code: HaiApiClientError.NETWORK_ERROR.code },
+    })
+  }
+  finally { await client.close() }
+})
+
+it('校验业务包络和裸响应，保留线上 ISO 时间字符串', async () => {
+  const client = apiClient.create({
+    ...contract,
+    record: apiContract.route({ method: 'GET', path: '/record' }).output(z.object({
+      sentAt: z.date(),
+    })),
+  })
+  const sentAt = '2026-05-20T10:00:00.000Z'
+  expect((await client.init({
+    baseUrl: 'https://api.test',
+    fetch: async (input) => {
+      const request = new Request(input)
+      return new URL(request.url).pathname === '/record'
+        ? Response.json({ sentAt })
+        : Response.json({
+            success: true,
+            data: { value: 42 },
+          })
+    },
+  })).success).toBe(true)
+  try {
+    expect(await client.record()).toEqual({ sentAt })
+    expect(await client.check()).toMatchObject({
+      success: false,
+      error: { code: HaiApiClientError.VALIDATION_FAILED.code },
+    })
+  }
+  finally { await client.close() }
+})
+
+it('jSON 接口拒绝非契约页面，文件接口仍返回原始文件', async () => {
+  const client = apiClient.create({
+    ...contract,
+    report: apiContract.route({ method: 'GET', path: '/report' }).output(z.file()),
+  })
+  expect((await client.init({
+    baseUrl: 'https://api.test',
+    fetch: async (input) => {
+      const request = new Request(input)
+      if (new URL(request.url).pathname === '/report') {
+        return new Response('example report', {
+          headers: { 'content-type': 'application/octet-stream' },
+        })
+      }
+      return new Response('<html><title>Gateway</title></html>', {
+        headers: { 'content-type': 'text/html' },
+      })
+    },
+  })).success).toBe(true)
+  try {
+    expect(await client.check()).toMatchObject({
+      success: false,
+      error: { code: HaiApiClientError.VALIDATION_FAILED.code },
+    })
+    const report = await client.report()
+    if (!(report instanceof File))
+      throw new TypeError(report.error.message)
+    expect(await report.text()).toBe('example report')
+  }
+  finally { await client.close() }
 })
 
 it.each([

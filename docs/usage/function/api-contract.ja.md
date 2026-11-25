@@ -1,5 +1,7 @@
 # @h-ai/api-contract API リファレンス
 
+<!-- translation: partial -->
+
 [原文（中国語）](api-contract.md) · [設定](../configuration/api-contract.ja.md) · [データ構造](../data/api-contract.ja.md)
 
 <a id="quick-start"></a>
@@ -69,7 +71,7 @@ export const appContract = {
 
 | 項目 | 既定値または必須 | 動作と適用条件 |
 | --- | --- | --- |
-| `options[domain]` | オブジェクトは必須。ドメインは任意 | 各キーはドメイン名です。ルーターや procedure を渡すと追加し、`false` や `undefined` を渡すと除外します。 |
+| `options[domain]` | オブジェクトは必須。ドメインは任意 | 各キーはルーターまたは procedure の名前です。常に有効な名前付きドメインは必須、常に無効なドメインは除外、条件付きで有効なドメインは省略可能です。実行時には有効なドメインが含まれます。 |
 | `route.method / route.path` | 任意。HTTP 入口では明示を推奨 | `method` は HTTP メソッド、`path` は `/` から始まるパス。`pathOf` には宣言済みのパスが必要です。 |
 | `route.operationId` | 既定はルーターのパス要素の連結 | OpenAPI の操作識別子を上書きします。 |
 | `route.summary / route.description / route.deprecated / route.tags` | 省略可 | OpenAPI の要約、説明、非推奨フラグと分類タグです。 |
@@ -102,7 +104,55 @@ apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
 
 GET /status と使用するモジュールを入力して契約オブジェクトを得ます。HTTP サーバーの起動は Serv/Kit で行います。
 
+通常の JSON 業務 API は `HaiResult<T>` を使います。Alipay の非同期通知には HTTP 200 とプレーンテキストの本文 `success` を返します。[Alipay の通知応答](./payment.ja.md#alipay-notification-ack)を参照してください。
+
 [引数と手順の詳細](api-contract.md#routes)
+
+<a id="conditional-domains"></a>
+
+#### 利用例：設定に応じて任意のドメインを有効にする
+
+アプリの起動時に設定から決済の有効・無効を読み取ります。`satisfies` で名前付きドメインと条件付きの型を保持します。決済が無効な場合、`contract.payment` とクライアントの `payment` は `undefined` になります。任意のドメインには `?.` でアクセスできます。
+
+```ts
+import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+
+function buildContract(enablePayment: boolean) {
+  const domains = {
+    iam: apiContract.iam,
+    payment: enablePayment ? apiContract.payment : false,
+  } satisfies CreateApiContractOptions
+  // IAM は常に登録し、決済は設定に応じて登録します。
+  const contract = apiContract.create(domains)
+  const get = contract.payment?.orders.get
+  // 決済が有効なら注文照会のパスを、無効なら undefined を返します。
+  const queryPath = get ? apiContract.pathOf(get) : undefined
+  return { contract, queryPath }
+}
+```
+
+<a id="serv-iam-wiring"></a>
+
+#### 利用例：IAM 契約を Serv に登録する
+
+ホストで IAM と必要な依存モジュールを初期化した後、同じ IAM インスタンスを procedure の作成と `serv.createApp` の両方に渡します。procedure は処理関数を提供します。アプリは IAM で Bearer トークンを検証し、ルートの認証ガードにセッションを渡します。
+
+```ts
+import type { IamFunctions } from '@h-ai/iam'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+
+function mountIamApi(iam: IamFunctions) {
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const procedures = { iam: serv.createIamProcedures({ iam }) }
+  // 初期化済みの IAM を /api/v1 配下に組み込み、HTTP アプリを返します。
+  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+}
+```
+
+テスト用アカウントでログインした後、`GET /api/v1/auth/me` に `Authorization: Bearer <accessToken>` を送信します。セッションが有効なら `success: true` と利用者情報、ロール、権限が返ります。トークンを省略すると未認証の失敗結果が返ります。
+
+OpenAPI は、公開 IAM 操作の `createCaptcha`、`publicConfig`、`renewPassword`、`loginWithLdap`、`requestPasswordReset`、`confirmPasswordReset`、`login`、`loginWithOtp`、`refresh`、`sendOtp`、`register` に `security: []` を設定します。Bearer トークンなしで呼び出せます。個々の操作の入力や資格情報はサーバー側で検証されます。`currentUser` など保護された操作にはサービスの Bearer 要件が適用されます。
 
 <a id="response-schemas"></a>
 
@@ -172,6 +222,6 @@ const standard = apiContract.create({
 // standard has these five routers; no business operation runs during composition
 ```
 
-五つの既存ルーターから木構造を作り、業務は実行しません。認証・チャレンジ・フィードバック・離脱時の境界を以下に示します。
+五つのルーターでアプリの契約を構成します。フィードバックでは `reports.policy({})` で有効な容量を取得し、`reports.listMine({ page: 1 })` でログイン中の利用者本人の報告を取得します。管理用の一覧には `reports.list` を使います。
 
-[引数と手順の詳細](api-contract.md#domains)
+[認証設定、チャレンジ、フィードバックの Schema とページ離脱時の動作（中国語）](api-contract.md#domains)

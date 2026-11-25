@@ -8,6 +8,6 @@
 
 ## Configuration entry
 
-API Contract defines contracts in code and has no configuration file. Public authentication settings are response data; IAM owns the underlying file settings.
+This module has no standalone configuration file. The application selects the API contracts to compose in code. The server builds the policy used by the sign-in page from its IAM configuration, including CAPTCHA and enabled sign-in methods. Change those policies in the [IAM configuration](iam.en.md) loaded by the server.
 
 See arguments, defaults and examples in [Public settings response](../data/api-contract.en.md#public-settings).

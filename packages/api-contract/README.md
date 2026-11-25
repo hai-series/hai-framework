@@ -20,6 +20,8 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 [查 API 清单](../../docs/usage/function/api-contract.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+参阅[按配置启用领域](../../docs/usage/function/api-contract.md#conditional-domains)及 [IAM 契约与 OpenAPI](../../docs/usage/function/api-contract.md#serv-iam-wiring)。
+
 ## 数据结构
 
 模块没有自建数据库表。

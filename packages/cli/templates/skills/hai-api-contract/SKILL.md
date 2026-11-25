@@ -21,7 +21,7 @@ description: "新增、组合或修改共享 HTTP 接口的路径与输入输出
 
 1. 查当前公开 exports 与已有领域 contract，确认业务路径唯一来源。
 2. 在 contract 中声明 method/path 与输入输出 Schema；只导出真正跨接口或跨层复用的 Schema。
-3. 用 `apiContract.create` 组合领域；不把服务实现、私有配置或传输前缀写进 contract。
+3. 用 `apiContract.create` 组合领域。用 `satisfies CreateApiContractOptions` 保留条件领域的类型，经 `?.` 访问；服务实现、私有配置与传输前缀由宿主配置。
 4. 同步 serv procedures、typed client、调用方与失败/校验测试；普通业务输出按当前 HaiResult 契约。
 5. 独立 contract 包实际执行声明构建。推导需要的上游公共类型 `ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput`、`Schema` 已由本包转出；显式类型从公开入口 `import type`，不引用依赖内部路径。
 

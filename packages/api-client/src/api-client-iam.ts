@@ -2,11 +2,23 @@
 import type { apiContract, IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 
 import type { HaiResult } from '@h-ai/core'
-import type { ApiClient } from './api-client-types.js'
+import type { ApiClient, TokenPair } from './api-client-types.js'
 import { core } from '@h-ai/core'
+import { apiClientM } from './api-client-i18n.js'
+import { HaiApiClientError } from './api-client-types.js'
 
 // 仅持有本机 DOM 监听器；业务会话真值仍由服务端撤销与超时决定。
 const pageExitBindings = new WeakMap<object, Set<() => void>>()
+/**
+ * 真实客户端通过本地凭据提交门面绑定认证动作，不增加公开成员。
+ * @example 模块内部上下文
+ * ```ts
+ * const auth = {}
+ * const begin = iamAuthCommits.get(auth)
+ * void begin
+ * ```
+ */
+export const iamAuthCommits = new WeakMap<object, () => (tokens: TokenPair) => Promise<boolean>>()
 
 /**
  * 客户端关闭时清理本实例安装的页面监听器，不清理其它实例。
@@ -35,7 +47,7 @@ export type IamAuthLoginInput = IamLoginInput & { method?: 'password' | 'ldap' |
 
 /**
  * 将含标准 IAM 契约的客户端绑定为认证表单动作；包用户通过 apiClient.createAuthActions 调用。
- * 登录/注册成功后等待 client.auth.setTokens，失败 HaiResult 原样返回；存储失败拒绝 Promise，不能据服务端成功就显示已登录。
+ * 登录/注册成功后等待凭据保存；已废弃的认证动作返回 HaiResult 失败，存储失败拒绝 Promise。
  * 调用方必须先 init 并启用 auth；未启用 auth 时客户端 setTokens 不会建立 Token 管理器。
  * @param client - 具有标准 IAM procedure 与 setTokens 能力的已初始化客户端。
  * @param client.iam - 标准 IAM 契约的领域分组。
@@ -61,21 +73,29 @@ export function createIamAuthActions(client: {
   iam: { auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['iam']['auth'], 'publicConfig' | 'createCaptcha' | 'closeSession' | 'login' | 'loginWithLdap' | 'loginWithOtp' | 'register' | 'sendOtp' | 'requestPasswordReset' | 'confirmPasswordReset' | 'renewPassword' | 'reauthenticate'> }
   auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['auth'], 'setTokens'>
 }) {
+  function beginAuthentication() {
+    return iamAuthCommits.get(client.auth)?.() ?? (async (tokens: TokenPair) => {
+      await client.auth.setTokens(tokens)
+      return true
+    })
+  }
+
   /**
    * 认证成功后等待凭据保存；失败 HaiResult 不写存储，写入失败向调用方拒绝。
    * @param result - 标准 IAM 登录/注册结果，成功数据含 TokenPair。
-   * @returns 同一结果；不能把服务端成功与本地安全存储成功混为一谈。
+   * @param commit - 在认证动作开始时绑定的凭据提交操作。
+   * @returns 原始结果，或身份变更后废弃此次认证的失败。
    *
    * @example 模块内部上下文
    * ```ts
    * const failure = { success: false as const, error: { code: 'test:denied', message: 'Denied', httpStatus: 401 } }
-   * const result = await save(failure)
+   * const result = await save(failure, beginAuthentication())
    * if (!result.success) { const message = result.error.message }
    * ```
    */
-  async function save<T extends { tokens: Parameters<typeof client.auth.setTokens>[0] }>(result: HaiResult<T>) {
-    if (result.success)
-      await client.auth.setTokens(result.data.tokens)
+  async function save<T extends { tokens: TokenPair }>(result: HaiResult<T>, commit: ReturnType<typeof beginAuthentication>): Promise<HaiResult<T>> {
+    if (result.success && !await commit(result.data.tokens))
+      return core.err(HaiApiClientError.UNAUTHORIZED, apiClientM('apiClient_authChanged'))
     return result
   }
   return {
@@ -111,6 +131,7 @@ export function createIamAuthActions(client: {
     publicConfig: () => client.iam.auth.publicConfig(),
     createCaptcha: (input: Parameters<typeof client.iam.auth.createCaptcha>[0]) => client.iam.auth.createCaptcha(input),
     login: async (input: IamAuthLoginInput) => {
+      const commit = beginAuthentication()
       const result = input.method === 'ldap'
         ? await client.iam.auth.loginWithLdap({
             username: input.identifier,
@@ -131,9 +152,12 @@ export function createIamAuthActions(client: {
               captcha: input.captcha,
               expectedUserId: input.expectedUserId,
             })
-      return save(result)
+      return save(result, commit)
     },
-    register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),
+    register: async (input: IamRegisterInput) => {
+      const commit = beginAuthentication()
+      return save(await client.iam.auth.register(input), commit)
+    },
     sendOtp: (identifier: string, options?: { captcha?: string }) => client.iam.auth.sendOtp({ identifier, ...options }),
     requestPasswordReset: (identifier: string, options?: { captcha?: string }) => client.iam.auth.requestPasswordReset({ identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => client.iam.auth.confirmPasswordReset({ token, newPassword }),

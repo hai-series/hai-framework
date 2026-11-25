@@ -11,6 +11,10 @@ import { z } from 'zod'
 import { PaginationQuerySchema } from '../common/pagination-schemas.js'
 
 const captchaProofSchema = z.string().min(1).max(4096).optional()
+const iamDateSchema = z.union([
+  z.date(),
+  z.iso.datetime({ offset: true }),
+]).pipe(z.coerce.date())
 
 /**
  * 交互挑战生成入参，证明只能用于指定入口。
@@ -70,8 +74,8 @@ export const IamCaptchaChallengeSchema = z.object({
  *   id: 'example-1',
  *   username: 'alice',
  *   accountStatus: 'active',
- *   createdAt: null,
- *   updatedAt: null
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z'
  * })
  * void value
  * ```
@@ -90,8 +94,8 @@ export const IamUserSchema = z.object({
   mustChangePassword: z.boolean().optional(),
   emailVerified: z.boolean().optional(),
   phoneVerified: z.boolean().optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
+  createdAt: iamDateSchema,
+  updatedAt: iamDateSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -150,8 +154,8 @@ export const IamAgreementDisplaySchema = z.object({
  *     id: 'example-1',
  *     username: 'alice',
  *     accountStatus: 'active',
- *     createdAt: null,
- *     updatedAt: null
+ *     createdAt: '2027-01-01T00:00:00.000Z',
+ *     updatedAt: '2027-01-01T00:00:00.000Z'
  *   },
  *   tokens: {
  *     accessToken: 'example-only-access',
@@ -180,8 +184,8 @@ export const IamAuthResultSchema = z.object({
  *   id: 'example-1',
  *   username: 'alice',
  *   accountStatus: 'active',
- *   createdAt: null,
- *   updatedAt: null,
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z',
  *   roles: [
  *     'example'
  *   ],
@@ -493,13 +497,13 @@ export const IamSendOtpInputSchema = z.object({
  * import { IamSendOtpDataSchema } from '@h-ai/api-contract'
  *
  * const value = IamSendOtpDataSchema.parse({
- *   expiresAt: null
+ *   expiresAt: '2027-01-01T00:00:00.000Z'
  * })
  * void value
  * ```
  */
 export const IamSendOtpDataSchema = z.object({
-  expiresAt: z.coerce.date(),
+  expiresAt: iamDateSchema,
 })
 
 /**
@@ -740,8 +744,8 @@ export const IamAdminResetPasswordInputSchema = z.object({
  *   id: 'example-1',
  *   code: 'example-1',
  *   name: 'Example',
- *   createdAt: null,
- *   updatedAt: null
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z'
  * })
  * void value
  * ```
@@ -752,8 +756,8 @@ export const IamRoleSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   isSystem: z.boolean().optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
+  createdAt: iamDateSchema,
+  updatedAt: iamDateSchema,
 })
 
 /**
@@ -816,8 +820,8 @@ export const IamPermissionTypeSchema = z.enum(['menu', 'api', 'button'])
  *   id: 'example-1',
  *   code: 'example-1',
  *   name: 'Example',
- *   createdAt: null,
- *   updatedAt: null
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z'
  * })
  * void value
  * ```
@@ -831,8 +835,8 @@ export const IamPermissionSchema = z.object({
   type: IamPermissionTypeSchema.optional(),
   resource: z.string().optional(),
   action: z.string().optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
+  createdAt: iamDateSchema,
+  updatedAt: iamDateSchema,
 })
 
 /**
@@ -1007,8 +1011,8 @@ export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>
  *     id: 'example-1',
  *     username: 'alice',
  *     enabled: true,
- *     createdAt: null,
- *     updatedAt: null
+ *     createdAt: '2027-01-01T00:00:00.000Z',
+ *     updatedAt: '2027-01-01T00:00:00.000Z'
  *   },
  *   tokens: {
  *     accessToken: 'example-only-access',
@@ -1031,8 +1035,8 @@ export type IamAuthResultOutput = HaiResult<z.infer<typeof IamAuthResultSchema>>
  *   id: 'example-1',
  *   username: 'alice',
  *   enabled: true,
- *   createdAt: null,
- *   updatedAt: null,
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z',
  *   roles: [
  *     'example'
  *   ],
@@ -1056,8 +1060,8 @@ export type IamCurrentUser = z.infer<typeof IamCurrentUserSchema>
  *   id: 'example-1',
  *   username: 'alice',
  *   enabled: true,
- *   createdAt: null,
- *   updatedAt: null,
+ *   createdAt: '2027-01-01T00:00:00.000Z',
+ *   updatedAt: '2027-01-01T00:00:00.000Z',
  *   roles: [
  *     'example'
  *   ],

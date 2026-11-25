@@ -21,19 +21,20 @@
 
 ### エンドポイントが返す業務データ
 
-契約で成功応答の項目をそろえます。
+ログインフォームは `apiContract.iam.auth.sendOtp` に対応する `POST /auth/otp/send` を呼び出し、成功応答の有効期限を入力欄に反映します。HTTP の JSON 本文では UTC の日時文字列を使います。
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "order-42",
-    "totalCents": 1200
+    "expiresAt": "2026-05-20T10:05:00.000Z"
   }
 }
 ```
 
-order-42 と totalCents:1200 を返す例で、金額は補助単位、DB の全行ではありません。
+この例ではサーバーが送信要求を受け付け、コードの有効期限は UTC の 10:05 です。OTP ログイン時には、ユーザーが入力したコードを IAM が照合します。
+
+ユーザー、ロール、権限の `createdAt` と `updatedAt`、および OTP 応答の `expiresAt` は必須の日付です。Zod Schema は有効な `Date` オブジェクト、またはタイムゾーン付きの ISO 日時文字列を受け付けます。`null` は検証エラーになります。サーバーは JSON で ISO 文字列を返し、API Client は検証後も文字列を保持します。別項目の `accountExpiresAt` は、ユーザー更新時に `null` を指定して期限を解除できます。
 
 <a id="public-settings"></a>
 
