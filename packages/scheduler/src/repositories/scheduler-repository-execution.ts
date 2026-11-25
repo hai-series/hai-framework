@@ -373,17 +373,13 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
   }
 
   /** 成功账本同时是一次性定义的失效记录；即使定义尚未清除，也禁止再次运行。 */
-  async completedDefinition(task: ExecutionTaskSnapshot, registeredAt?: number): Promise<HaiResult<boolean>> {
+  async completedDefinition(task: ExecutionTaskSnapshot): Promise<HaiResult<boolean>> {
     try {
       const expected: unknown = JSON.parse(JSON.stringify(task))
-      const { definitionRowId, ...definition } = task
-      const legacy: unknown = registeredAt === undefined || definitionRowId === undefined
-        ? undefined
-        : JSON.parse(JSON.stringify(definition))
       let sequence = 0
       for (;;) {
-        const rows = await this.db.sql.query<{ sequence: number | string, snapshot: unknown, created_at: number | string }>(
-          `SELECT sequence, snapshot, created_at FROM ${TABLE} WHERE task_id = ? AND status = ? AND sequence > ? ORDER BY sequence LIMIT 100`,
+        const rows = await this.db.sql.query<{ sequence: number | string, snapshot: unknown }>(
+          `SELECT sequence, snapshot FROM ${TABLE} WHERE task_id = ? AND status = ? AND sequence > ? ORDER BY sequence LIMIT 100`,
           [task.id, 'success', sequence],
         )
         if (!rows.success)
@@ -393,9 +389,6 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
             ? JSON.parse(row.snapshot)
             : row.snapshot
           if (isDeepStrictEqual(snapshot, expected))
-            return core.ok(true)
-          // 旧成功记录没有定义行号。只接受当前定义登记后的同内容记录。
-          if (legacy !== undefined && registeredAt !== undefined && Number(row.created_at) >= registeredAt && isDeepStrictEqual(snapshot, legacy))
             return core.ok(true)
           const next = Number(row.sequence)
           if (!Number.isSafeInteger(next) || next <= sequence)

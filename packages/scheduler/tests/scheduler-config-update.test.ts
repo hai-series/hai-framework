@@ -153,7 +153,7 @@ it.each([false, true])('atomically checks the executed definition at database de
     expect(scheduler.tasks.get('atomic-delete')?.name).toBe('Replacement')
 })
 
-it.each([false, true])('prevents a second execution when cleanup fails after a one-time success (old journal=%s)', async (legacy) => {
+it('prevents a second execution when cleanup fails after a one-time success', async () => {
   const task = {
     id: 'cleanup-failed',
     name: 'One-time',
@@ -175,9 +175,6 @@ it.each([false, true])('prevents a second execution when cleanup fails after a o
     data: { status: 'success' },
   })
   expect(scheduler.tasks.has(task.id)).toBe(true)
-  if (legacy) {
-    expect((await sql('UPDATE hai_scheduler_executions SET snapshot = json_remove(snapshot, ?) WHERE task_id = ?', ['$.definitionRowId', task.id])).success).toBe(true)
-  }
   await scheduler.close()
   failing.mockRestore()
   expect((await scheduler.init(config)).success).toBe(true)

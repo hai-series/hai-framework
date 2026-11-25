@@ -105,7 +105,7 @@ daily-report は UTC 毎日0時です。idempotent:true だけで外部副作用
 | `snapshot` | `JSON` | 不可 | — | 最初の取得時のタスク定義。永続化された定義には内部行 ID も入り、削除後に同じタスク ID で再登録した定義を区別します。 | `{"id":"daily-report"}` |
 | `trigger_json` | `JSON` | 不可 | — | 起動方法と出所。例は抜粋。 | `{"type":"scheduled","source":null,"minute":29914560}` |
 | `log_json` | `JSON` | 可 | — | 確定した受領情報。再試行待ちの間は DB 時刻で最短の再試行時刻を保存します。 | `{"retryAt":1794873665000}` |
-| `logs_json` | `JSON` | 可 | — | 完了した試行のログ。引き継ぎ時にも保持し、最終確定後にログテーブルを補完できます。 | `NULL` |
+| `logs_json` | `JSON` | 可 | — | 完了した試行のログ。各ログは `result` を持ち、記録できる結果がない場合は `null` を保存します。引き継ぎ時にもログを保持し、最終確定後にログテーブルを補完できます。 | `NULL` |
 | `log_persistence` | `TEXT` | 不可 | — | 実行ログの永続化状態。 | `unconfirmed` |
 | `leased_until` | `BIGINT` | 不可 | — | 現在の取得者が処理できる期限。 | `1794873630000` |
 | `attempt_count` | `BIGINT` | 不可 | — | これまでの試行回数。 | `1` |

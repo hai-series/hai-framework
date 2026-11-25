@@ -107,7 +107,7 @@ daily-report 每天 UTC 零点执行，参数指向 report-42。idempotent:true 
 | `snapshot` | `JSON` | 否 | — | 首次领取时的任务定义。持久定义还带内部行号，用于区分删除后重新注册的同名任务。 | `{"id":"daily-report"}` |
 | `trigger_json` | `JSON` | 否 | — | 触发方式和来源。示例节选。 | `{"type":"scheduled","source":null,"minute":29914560}` |
 | `log_json` | `JSON` | 是 | — | 终态回执；等待重试时保存 DB 时间的最早重试点。 | `{"retryAt":1794873665000}` |
-| `logs_json` | `JSON` | 是 | — | 已完成尝试的日志。接管会保留这些记录，终态确认后可按它们补写日志表。 | `NULL` |
+| `logs_json` | `JSON` | 是 | — | 已完成尝试的日志。每条日志包含 `result`，没有可记录的结果时写入 `null`。接管会保留这些记录，终态确认后可补写日志表。 | `NULL` |
 | `log_persistence` | `TEXT` | 否 | — | 日志是否已经持久化。 | `unconfirmed` |
 | `leased_until` | `BIGINT` | 否 | — | 当前领取者的处理截止时间。 | `1794873630000` |
 | `attempt_count` | `BIGINT` | 否 | — | 已经执行的尝试次数。 | `1` |

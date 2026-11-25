@@ -60,8 +60,7 @@ const publishedLogSchema = z.object({
     'interrupted',
     'unknown',
   ]),
-  // 旧版本可能省略无 JSON 表示的 result；补写时恢复 nullable 契约。
-  result: z.string().nullable().default(null),
+  result: z.string().nullable(),
   error: z.string().nullable(),
   startedAt: z.number().safe(),
   finishedAt: z.number().safe(),
@@ -557,7 +556,7 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
       task = latest
       executedDefinition = definitionSnapshot(task, repository)
       if (task.deleteAfterRun && row.attemptCount === 0) {
-        const completed = await executionRepo.completedDefinition(executedDefinition, repository?.definitionCreatedAt(task))
+        const completed = await executionRepo.completedDefinition(executedDefinition)
         if (!completed.success || completed.data) {
           log = await interrupted(completed.success
             ? schedulerM('scheduler_occurrenceHandled', {

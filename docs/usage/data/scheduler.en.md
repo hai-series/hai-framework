@@ -103,7 +103,7 @@ Renewal, retry, and completion take `row.occurrenceId` from the claimed record a
 | `snapshot` | `JSON` | No | — | Task definition at first claim. Persisted definitions also carry an internal row ID to distinguish a later registration with the same task ID. | `{"id":"daily-report"}` |
 | `trigger_json` | `JSON` | No | — | Trigger type and source. The example shows an excerpt. | `{"type":"scheduled","source":null,"minute":29914560}` |
 | `log_json` | `JSON` | Yes | — | Final receipt, or the earliest retry time on the database clock while waiting. | `{"retryAt":1794873665000}` |
-| `logs_json` | `JSON` | Yes | — | Logs for completed attempts. Takeover preserves them and log repair can publish them after the final commit. | `NULL` |
+| `logs_json` | `JSON` | Yes | — | Logs for completed attempts. Each log has a `result`, set to `null` when there is no recordable result. Takeover preserves these logs for repair after the final commit. | `NULL` |
 | `log_persistence` | `TEXT` | No | — | Whether the execution log has been persisted. | `unconfirmed` |
 | `leased_until` | `BIGINT` | No | — | Processing deadline for the current lease holder. | `1794873630000` |
 | `attempt_count` | `BIGINT` | No | — | Number of attempts so far. | `1` |

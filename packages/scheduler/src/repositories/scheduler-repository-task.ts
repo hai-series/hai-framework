@@ -103,14 +103,10 @@ interface TaskRow {
  * ```
  */
 export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
-  private readonly rows = new WeakMap<TaskDefinition, Pick<TaskRow, 'id' | 'createdAt'>>()
+  private readonly definitionIds = new WeakMap<TaskDefinition, number>()
 
   definitionRowId(task: TaskDefinition): number | undefined {
-    return this.rows.get(task)?.id
-  }
-
-  definitionCreatedAt(task: TaskDefinition): number | undefined {
-    return this.rows.get(task)?.createdAt?.getTime()
+    return this.definitionIds.get(task)
   }
 
   ready(): Promise<HaiResult<void>> {
@@ -553,10 +549,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
             ? { handler: handlerResult.data }
             : {}),
         }
-        this.rows.set(task, {
-          id: Number(row.id),
-          createdAt: row.createdAt,
-        })
+        this.definitionIds.set(task, Number(row.id))
         tasks.push(task)
       }
 
