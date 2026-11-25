@@ -91,6 +91,7 @@ export function buildTransportSession(config: ApiClientConfig): TransportClient 
  * @param tokenManager - 可选 Token 管理器。
  * @param transport - 可选加密会话。
  * @param isActive - 本运行期是否仍接受发送或重试。
+ * @param responseSignal - 客户端关闭时结束已建立的流式响应。
  * @returns oRPC JSON client；模块外层代理将调用异常映射为失败 HaiResult。
  *
  * @example 模块内部上下文
@@ -107,6 +108,7 @@ export function buildRawClient<TContract extends AnyContractRouter>(
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
   isActive: () => boolean = () => true,
+  responseSignal?: AbortSignal,
 ): JsonifiedClient<ContractRouterClient<TContract>> {
   const link = new OpenAPILink<Record<PropertyKey, unknown>>(contract, {
     url: config.baseUrl,
@@ -151,7 +153,7 @@ export function buildRawClient<TContract extends AnyContractRouter>(
       const authentication = tokenManager && typeof generation === 'number'
         ? { tokenManager, generation, autoRefresh: options.context.autoRefresh !== false }
         : undefined
-      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, authentication, transport, record, { isActive, reauthorize })
+      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, authentication, transport, record, { isActive, reauthorize, responseSignal })
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')

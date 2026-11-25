@@ -100,6 +100,7 @@ export async function waitForRequest<T>(signal: AbortSignal | undefined, operati
  * @param retry - 运行期校验与敏感操作的再鉴别回调。
  * @param retry.isActive - 核对原客户端运行期是否仍有效。
  * @param retry.reauthorize - 为同一操作取得新凭据。
+ * @param retry.responseSignal - 关闭客户端时释放已建立的流式响应。
  * @returns 最终 HTTP Response；不保证远端非幂等副作用没有发生。
  *
  * @example 模块内部上下文
@@ -116,11 +117,11 @@ export async function fetchWithRefresh(
   authentication: { tokenManager: TokenManager, generation: number, autoRefresh: boolean } | undefined,
   transport: TransportClient | undefined,
   observation?: MutableRequestRecord,
-  retry: { isActive?: () => boolean, reauthorize?: () => Promise<string | null | undefined> } = {},
+  retry: { isActive?: () => boolean, reauthorize?: () => Promise<string | null | undefined>, responseSignal?: AbortSignal } = {},
 ): Promise<Response> {
   const tokenManager = authentication?.tokenManager
   const generation = authentication?.generation
-  const { reauthorize, isActive = () => true } = retry
+  const { reauthorize, isActive = () => true, responseSignal } = retry
   const isCurrent = (expectedGeneration: number | undefined) => isActive() && tokenManager?.generation === expectedGeneration
   request.signal.throwIfAborted()
   if (!isCurrent(generation)) {
@@ -135,7 +136,7 @@ export async function fetchWithRefresh(
     : undefined
   if (observation)
     observation.attempts++
-  const response = await fetchWithTimeout(request, init, config, transport)
+  const response = await fetchWithTimeout(request, init, config, transport, responseSignal)
   request.signal.throwIfAborted()
   if (!retryRequest || !isCurrent(generation))
     return response
@@ -165,7 +166,7 @@ export async function fetchWithRefresh(
       headers.set('authorization', `Bearer ${currentToken}`)
     if (observation)
       observation.attempts++
-    return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
+    return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport, responseSignal)
   }
 
   // 登录失败必须保留原始错误；refresh 本身也不能再次触发自动刷新。
@@ -234,6 +235,7 @@ export async function fetchWithRefresh(
  * @param init.keepalive - 页面离开请求保持存活的浏览器提示，原样传递。
  * @param config - 超时与 fetch 配置。
  * @param transport - 可选加密 fetch，优先于原始 fetch。
+ * @param responseSignal - 客户端关闭时结束成功响应的流式正文。
  * @returns HTTP 响应；超时/取消异常由外层 procedure 映射，不能视为远端回滚。
  *
  * @example 模块内部上下文
@@ -248,6 +250,7 @@ async function fetchWithTimeout(
   init: { redirect?: Request['redirect'], keepalive?: boolean },
   config: ApiClientConfig,
   transport: TransportClient | undefined,
+  responseSignal?: AbortSignal,
 ): Promise<Response> {
   // 启用传输加密时，用 encryptedFetch 作为实际 fetch；
   // 它会首次请求前自动完成密钥协商，后续请求复用会话。
@@ -266,12 +269,14 @@ async function fetchWithTimeout(
     const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
     const json = contentType.endsWith('/json') || contentType.endsWith('+json')
     // JSON 与错误响应正文都纳入同一预算，避免非 JSON 401 在刷新/协议解析时无限等待。
-    // 成功的自定义流保持按需消费，原生管道管理调用方取消与监听释放。
+    // 成功的非 JSON 正文按需消费，取消须继续传到实际 fetch 的信号。
     const body = response.body === null
       ? null
       : json || !response.ok
         ? await response.arrayBuffer()
-        : response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), { signal: userSignal })
+        : relayResponseBody(response.body, controller, responseSignal
+            ? AbortSignal.any([userSignal, responseSignal])
+            : userSignal)
     return new Response(body, {
       status: response.status,
       statusText: response.statusText,
@@ -282,4 +287,55 @@ async function fetchWithTimeout(
     clearTimeout(timeoutId)
     userSignal.removeEventListener('abort', abort)
   }
+}
+
+function relayResponseBody(
+  body: ReadableStream<Uint8Array>,
+  request: AbortController,
+  signal: AbortSignal,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader()
+  let detach = () => {}
+  async function cancel(reason: unknown): Promise<void> {
+    detach()
+    // 先取消正文，再终止真实请求。上游可能正在等待请求信号，不能等待 reader.cancel() 后才通知它。
+    const ending = reader.cancel(reason)
+    reader.releaseLock()
+    request.abort(reason)
+    await ending
+  }
+  return new ReadableStream({
+    start(output) {
+      const abort = () => {
+        output.error(signal.reason)
+        void cancel(signal.reason).catch(() => {})
+      }
+      if (signal.aborted) {
+        abort()
+      }
+      else {
+        signal.addEventListener('abort', abort, { once: true })
+        detach = () => signal.removeEventListener('abort', abort)
+      }
+    },
+    async pull(output) {
+      try {
+        const step = await reader.read()
+        if (step.done) {
+          output.close()
+          detach()
+          reader.releaseLock()
+        }
+        else {
+          output.enqueue(step.value)
+        }
+      }
+      catch (error) {
+        output.error(error)
+        detach()
+        reader.releaseLock()
+      }
+    },
+    cancel,
+  }, { highWaterMark: 0 })
 }

@@ -117,6 +117,7 @@ it('a custom stream yields before EOF and caller cancellation releases its body'
   })
   const cancel = vi.fn()
   const controller = new AbortController()
+  let upstreamSignal: AbortSignal | undefined
   let detach = () => {}
   try {
     expect((await client.init({
@@ -126,6 +127,7 @@ it('a custom stream yields before EOF and caller cancellation releases its body'
         const request = input instanceof Request
           ? input
           : new Request(input)
+        upstreamSignal = request.signal
         return new Response(new ReadableStream<Uint8Array>({
           start(body) {
             body.enqueue(new TextEncoder().encode('event: message\ndata: {"value":"first"}\n\n'))
@@ -150,10 +152,59 @@ it('a custom stream yields before EOF and caller cancellation releases its body'
     controller.abort()
     await expect(iterator.next()).rejects.toMatchObject({ name: 'AbortError' })
     expect(cancel).toHaveBeenCalledOnce()
+    expect(upstreamSignal?.aborted).toBe(true)
   }
   finally {
     controller.abort()
     detach()
+    await client.close()
+  }
+})
+
+it.each(['return', 'close'] as const)('a custom stream releases its response and request signal on %s', async (action) => {
+  const client = apiClient.create({
+    events: apiContract.route({ method: 'GET', path: '/events' }).output(eventIterator(z.string())),
+  })
+  const cancel = vi.fn()
+  let upstreamSignal: AbortSignal | undefined
+  vi.useFakeTimers()
+  try {
+    expect((await client.init({
+      baseUrl: 'https://api.test',
+      timeout: 50,
+      fetch: async (input) => {
+        upstreamSignal = input instanceof Request
+          ? input.signal
+          : new Request(input).signal
+        return new Response(new ReadableStream<Uint8Array>({
+          start(body) {
+            body.enqueue(new TextEncoder().encode('event: message\ndata: "first"\n\n'))
+          },
+          cancel,
+        }), {
+          headers: { 'content-type': 'text/event-stream' },
+        })
+      },
+    })).success).toBe(true)
+    const stream = await client.events()
+    if (!(Symbol.asyncIterator in stream))
+      throw new Error(stream.error.message)
+    const iterator = stream[Symbol.asyncIterator]()
+    expect(await iterator.next()).toMatchObject({ done: false, value: 'first' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(upstreamSignal?.aborted).toBe(false)
+    if (action === 'return') {
+      await iterator.return?.()
+    }
+    else {
+      await client.close()
+      await expect(iterator.next()).rejects.toMatchObject({ name: 'AbortError' })
+    }
+    expect(upstreamSignal?.aborted).toBe(true)
+    expect(cancel).toHaveBeenCalledOnce()
+  }
+  finally {
+    vi.useRealTimers()
     await client.close()
   }
 })

@@ -48,12 +48,14 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null
     tokenManager: TokenManager | undefined
     transport: TransportClient | undefined
+    responseLifetime: AbortController | undefined
     observers: Set<ApiRequestObserver>
   } = {
     config: null,
     rawClient: null,
     tokenManager: undefined,
     transport: undefined,
+    responseLifetime: undefined,
     observers: new Set(),
   }
 
@@ -100,12 +102,21 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           const effectiveConfig = { ...config, baseUrl }
           nextTransport = buildTransportSession(effectiveConfig)
           const nextTokenManager = buildTokenManager(effectiveConfig, nextTransport)
-          const nextRawClient = buildRawClient(contract, effectiveConfig, nextTokenManager, nextTransport, (): boolean => state.rawClient === nextRawClient)
+          const responseLifetime = new AbortController()
+          const nextRawClient = buildRawClient(
+            contract,
+            effectiveConfig,
+            nextTokenManager,
+            nextTransport,
+            (): boolean => state.rawClient === nextRawClient,
+            responseLifetime.signal,
+          )
 
           // 所有可能失败的构建步骤完成后再提交状态，避免调用方看到半初始化 client。
           state.config = effectiveConfig
           state.transport = nextTransport
           state.tokenManager = nextTokenManager
+          state.responseLifetime = responseLifetime
           state.rawClient = nextRawClient
           return core.ok(undefined)
         }
@@ -116,6 +127,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           state.rawClient = null
           state.tokenManager = undefined
           state.transport = undefined
+          state.responseLifetime = undefined
           return core.err(
             HaiApiClientError.CONFIG_ERROR,
             apiClientM('apiClient_configError', {
@@ -141,10 +153,13 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       state.observers.clear()
       const manager = state.tokenManager
       const transport = state.transport
+      const responseLifetime = state.responseLifetime
       state.config = null
       state.rawClient = null
       state.tokenManager = undefined
       state.transport = undefined
+      state.responseLifetime = undefined
+      responseLifetime?.abort()
       transport?.destroy()
       closePromise = manager?.dispose() ?? Promise.resolve()
       try {
