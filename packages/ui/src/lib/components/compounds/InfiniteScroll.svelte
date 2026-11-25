@@ -42,7 +42,7 @@
     onloadmore?: () => Promise<void>
     /** 是否还有更多数据 */
     hasMore?: boolean
-    /** 触发距离（距底部 px） */
+    /** 滚动时距列表末尾的触发距离（px）。 */
     threshold?: number
     /** 是否禁用 */
     disabled?: boolean
@@ -72,27 +72,59 @@
   let loading = $state(false)
   let containerRef: HTMLDivElement | undefined = $state()
 
-  async function checkAndLoad() {
+  async function checkAndLoad(event: Event) {
     if (loading || disabled || !hasMore || !containerRef || !onloadmore)
       return
 
+    const document = containerRef.ownerDocument
+    const scroller = event.target
+    if (scroller !== document && !(scroller instanceof Element && scroller.contains(containerRef)))
+      return
+
     const { scrollTop, scrollHeight, clientHeight } = containerRef
-    if (scrollHeight - scrollTop - clientHeight < threshold) {
-      loading = true
-      try {
-        await onloadmore()
+    if (scrollHeight - scrollTop - clientHeight > threshold)
+      return
+
+    if (scroller !== containerRef) {
+      const view = document.defaultView
+      if (!view)
+        return
+
+      const { top, bottom } = containerRef.getBoundingClientRect()
+      let visibleTop = 0
+      let visibleBottom = view.innerHeight
+      if (scroller instanceof Element) {
+        const scrollTopEdge = scroller.getBoundingClientRect().top + scroller.clientTop
+        visibleTop = Math.max(0, scrollTopEdge)
+        visibleBottom = Math.min(visibleBottom, scrollTopEdge + scroller.clientHeight)
       }
-      finally {
-        loading = false
-      }
+      if (bottom <= visibleTop || top >= visibleBottom || bottom - visibleBottom > threshold)
+        return
+    }
+
+    loading = true
+    try {
+      await onloadmore()
+    }
+    finally {
+      loading = false
     }
   }
+
+  $effect(() => {
+    if (!containerRef || disabled || !hasMore || !onloadmore)
+      return
+
+    // 元素滚动事件不冒泡，捕获阶段同时覆盖列表本身、父容器和文档。
+    const document = containerRef.ownerDocument
+    document.addEventListener('scroll', checkAndLoad, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', checkAndLoad, true)
+  })
 </script>
 
 <div {...dataAttributes}
      bind:this={containerRef}
      class={cn('overflow-y-auto', className)}
-     onscroll={checkAndLoad}
      role='feed'
 >
   {@render children()}
