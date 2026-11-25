@@ -28,13 +28,3 @@ GitHub Pages 从本目录的 Markdown 生成正文，从 `navigation.json` 读�
 以实际安装版本的公开API为准。Beta使用npm beta标签或精确版本，先确认registry；源码main与工作区版本不等于已发布。示例、截图和外部环境的适用范围见[验证说明](governance/verification.md)。
 
 正文人工编写，校验脚本不生成说明。框架仓库可运行`pnpm check:usage-examples`检查配置例子，生成应用按自己的scripts验证。
-
-<a id="使用入门"></a>
-<a id="1-准备开发环境"></a>
-<a id="2-创建项目"></a>
-<a id="3-配置环境再开始开发"></a>
-<a id="4-编译源码与打包产物"></a>
-<a id="5-把构建产物部署到环境"></a>
-<a id="6-更新框架保留自己的应用"></a>
-
-旧单页章节已拆分，原链接到达此处后可从[首次交付](getting-started/README.md)或[部署运行](operations/README.md)继续。

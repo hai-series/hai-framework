@@ -43,14 +43,6 @@ function docChapterLink(chapter: string, base: string, locale: DocLocale): strin
     : ''}`
 }
 
-export const legacyDocSlugs = ['en', 'ja'].flatMap(language => [
-  'README',
-  'getting-started/workflow',
-  'configuration/core',
-  'data/core',
-  'function/core',
-].map(chapter => `${chapter}.${language}`))
-
 export function parseDocSlug(slug: string): DocChapter {
   const [prefix, ...segments] = slug.replace(/\/$/, '').split('/')
   const locale = localeForPrefix(prefix)
@@ -58,13 +50,6 @@ export function parseDocSlug(slug: string): DocChapter {
     return {
       slug: segments.join('/'),
       locale,
-    }
-  }
-  if (legacyDocSlugs.includes(slug)) {
-    const file = `${slug}.md`
-    return {
-      slug: docSlug(file, 'zh-CN'),
-      locale: docFileLocale(file),
     }
   }
   return { slug, locale: 'zh-CN' }

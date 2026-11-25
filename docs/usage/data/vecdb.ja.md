@@ -72,10 +72,6 @@ pgvector はテーブル作成、索引作成、距離尺度の記録を 1 つ�
 
 次元はベクトル列の長さで決まります。距離尺度は Arrow スキーマのメタデータ `hai.vecdb.metric` に保存します。フレームワークの `insert` と `upsert` は LanceDB の merge を使って ID の競合を処理します。ネイティブの `add` で直接追加すると ID が重複することがあります。
 
-<a id="lancedb-upgrade"></a>
-
-<a id="既存の-lancedb-コレクションを更新する"></a>
-
 <a id="lancedb-import-documents"></a>
 
 #### 既存の文書を LanceDB コレクションに取り込む

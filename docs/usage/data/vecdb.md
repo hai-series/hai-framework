@@ -74,10 +74,6 @@ pgvector 在同一事务内建表、建索引并保存度量。三项在提交�
 
 维度由向量列长度决定，`hai.vecdb.metric` 保存在 Arrow schema 元数据中。框架的 `insert` 和 `upsert` 使用 LanceDB 的 merge 写入按 ID 处理冲突。通过原生 `add` 直接追加可能产生重复 ID。
 
-<a id="lancedb-upgrade"></a>
-
-<a id="升级已有-lancedb-集合"></a>
-
 <a id="lancedb-import-documents"></a>
 
 #### 将现有文档导入 LanceDB 集合

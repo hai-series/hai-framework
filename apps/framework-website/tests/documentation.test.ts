@@ -56,14 +56,15 @@ describe('公开手册的静态阅读契约', () => {
     expect(new Set(entries.map(entry => entry.href)).size).toBe(entries.length)
   })
 
-  it('三语地址对应同一章，中文和旧译文地址仍可访问', async () => {
+  it('三语使用各自的章节地址，旧译文地址找不到文档', async () => {
     expect(docLink('function/core.md', base)).toBe('/docs/function/core/')
     expect(docLink('function/core.md', base, 'en-US')).toBe('/docs/en/function/core/')
     expect(docLink('function/core.ja.md', base)).toBe('/docs/ja/function/core/')
     expect(docLink('getting-started/workflow.en.md', base)).toBe('/docs/en/getting-started/')
     const chapter = docChapter('/docs/en/function/core/', base)
     expect(chapter).toEqual({ slug: 'function/core', locale: 'en-US' })
-    expect(docChapter('/docs/function/core.en/', base)).toEqual(chapter)
+    const retiredChapter = docChapter('/docs/function/core.en/', base)
+    expect(await getDocumentPage(retiredChapter!, base)).toBeUndefined()
     expect(docChapter('/docsmith/', base)).toBeUndefined()
     const translated = await getDocumentPage(chapter!, base)
     expect(translated?.sourceLocale).toBe('en-US')

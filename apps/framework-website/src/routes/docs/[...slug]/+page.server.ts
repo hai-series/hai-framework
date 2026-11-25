@@ -1,6 +1,6 @@
 import { resolve } from '$app/paths'
 import { error } from '@sveltejs/kit'
-import { docLocales, docSlug, legacyDocSlugs, parseDocSlug } from '#lib/doc-links.js'
+import { docLocales, docSlug, parseDocSlug } from '#lib/doc-links.js'
 import { getDocumentPage, routeDocuments } from '#lib/server/docs.js'
 
 // Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
@@ -8,10 +8,7 @@ const base = resolve('/').replace(/\/$/, '')
 
 export async function entries() {
   const documents = (await routeDocuments()).flatMap(file => docLocales.map(locale => docSlug(file, locale)))
-  return [
-    ...documents,
-    ...legacyDocSlugs,
-  ].map(slug => ({ slug }))
+  return documents.map(slug => ({ slug }))
 }
 
 export async function load({ params }: { params: { slug?: string } }) {

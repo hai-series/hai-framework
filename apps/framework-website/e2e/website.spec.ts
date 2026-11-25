@@ -152,6 +152,8 @@ test('文档切换保留章节与共享锚点，目录和搜索使用当前语�
   const docs = '/docs'
   const english = await request.get(`${docs}/en/function/core/`)
   expect(await english.text()).toContain('lang="en-US"')
+  const retired = await request.get(`${docs}/function/core.en/`)
+  expect(retired.status()).toBe(404)
   await page.goto(`${docs}/function/core/#config-api`)
   const picker = page.getByRole('button', { name: /语言|language|言語/i })
   await picker.click()

@@ -70,10 +70,6 @@ Collection settings store dimension and metric. `insert` with an existing ID rep
 
 The vector column fixes the dimension. Arrow schema metadata records `hai.vecdb.metric`. The framework uses LanceDB merge writes in `insert` and `upsert` to handle conflicts by ID. Appending directly with native `add` can create duplicate IDs.
 
-<a id="lancedb-upgrade"></a>
-
-<a id="upgrade-an-existing-lancedb-collection"></a>
-
 <a id="lancedb-import-documents"></a>
 
 #### Import existing documents into a LanceDB collection
