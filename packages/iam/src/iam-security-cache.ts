@@ -1,6 +1,8 @@
+import type { PasswordConfig } from './iam-config.js'
 import type { UserRepository } from './user/iam-user-repository-user.js'
 import { core } from '@h-ai/core'
 import { readIamCache } from './iam-cache.js'
+import { checkPasswordState, isUserActive } from './user/iam-user-utils.js'
 
 /**
  * 缓存只包含验证会话所需的非秘密状态；期限每次按当前时间核验。
@@ -51,4 +53,38 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
           }
         : null)
     : found
+}
+
+/**
+ * 读取签发和验证会话使用的凭据代际与账号状态。
+ * @param repository - 当前运行期的用户仓库。
+ * @param password - 已解析的口令策略，省略时使用默认检查。
+ * @param userId - 当前会话所关联的用户 ID。
+ * @returns 凭据代际、账号可用状态和公开资料；用户缺失时返回 null，账号口令受限时返回失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function credentialVersion(repository: UserRepository) {
+ *   const result = await readIamSessionCredential(repository, undefined, 'user-1')
+ *   if (!result.success) return result
+ *   return result.data?.version
+ * }
+ * ```
+ */
+export async function readIamSessionCredential(repository: UserRepository, password: PasswordConfig | undefined, userId: string) {
+  const found = await readIamUserSecurity(repository, userId)
+  if (!found.success)
+    return found
+  if (found.data) {
+    const passwordState = checkPasswordState(found.data, password)
+    if (!passwordState.success)
+      return passwordState
+  }
+  return core.ok(found.data
+    ? {
+        version: found.data.credentialVersion ?? '',
+        available: isUserActive(found.data),
+        profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl },
+      }
+    : null)
 }

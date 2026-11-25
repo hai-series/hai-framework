@@ -5,27 +5,21 @@
  * @module core-main.node
  */
 
-import type { CoreOptions, HaiError, HaiResult, LogContext, NodeCoreFunctions } from './core-types.js'
+import type { CoreOptions, NodeCoreFunctions } from './core-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { Buffer } from 'node:buffer'
-import { timingSafeEqual } from 'node:crypto'
-import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { YAMLParseError } from 'yaml'
-import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
 import { access } from './functions/core-function-access.node.js'
-import { config, loadConfigStructure } from './functions/core-function-config.node.js'
+import { config, loadStartupConfig } from './functions/core-function-config.node.js'
 import { installRequestContext } from './functions/core-function-context.js'
 import { logger } from './functions/core-function-logger.node.js'
 import { worker } from './functions/core-function-worker.node.js'
 import { installRequestLocales } from './i18n/core-i18n-utils.js'
+import { constantTimeEqual } from './utils/core-util-string.node.js'
 
 // 请求语言跨 await 保持隔离，避免并行 SSR 修改另一个请求的默认语言。
 installRequestLocales(new AsyncLocalStorage())
 installRequestContext(new AsyncLocalStorage())
 
-const YAML_EXTENSION_REGEX = /\.ya?ml$/
 // ─── Core 实例 ───
 
 /**
@@ -54,21 +48,7 @@ function createNodeCore(): NodeCoreFunctions {
     worker,
     string: {
       ...baseCore.string,
-      /**
-       * Node 凭证比较使用原生恒时原语；不同长度直接失败，长度本身不受保护。
-       * UTF-16LE 保留孤立代理项，避免 UTF-8 替换字符把两个不同字符串误判为相等。
-       * @param a - 第一个原始字符串，不做 Unicode 归一化。
-       * @param b - 第二个原始字符串，不做 Unicode 归一化。
-       * @returns 字符串的 UTF-16 单元是否完全一致。
-       * @example
-       * ```ts
-       * import { core } from '@h-ai/core'
-       * const matches = core.string.constantTimeEqual('example-only', 'example-only')
-       * ```
-       */
-      constantTimeEqual(a: string, b: string): boolean {
-        return a.length === b.length && timingSafeEqual(Buffer.from(a, 'utf16le'), Buffer.from(b, 'utf16le'))
-      },
+      constantTimeEqual,
     },
     /** Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享）。 */
     zodValidation: baseCore.zodValidation,
@@ -91,78 +71,6 @@ function createNodeCore(): NodeCoreFunctions {
  * ```
  */
 export const core: NodeCoreFunctions = createNodeCore()
-
-// ─── Initialization ───
-
-/**
- * 配置加载项（描述单个待加载的配置文件）。
- * @example 模块内部上下文
- * ```ts
- * const item: ConfigLoadItem = { name: 'core', filePath: join('/srv/app', 'config', '_core.yml') }
- * const cacheName = item.name
- * ```
- */
-interface ConfigLoadItem {
-  /** 配置名称（用作缓存 key，如 'core'、'db'、'app'） */
-  name: string
-  /** 配置文件路径，与调用方传入的配置目录使用同一相对或绝对基准。 */
-  filePath: string
-}
-
-/**
- * 扫描配置目录并构建配置加载项列表。
- *
- * 约定：
- * - 以 `_` 开头的文件为内置模块配置（如 `_core.yml` → name='core'）
- * - 其他文件为业务配置（如 `app.yml` → name='app'）
- *
- * @param configDir - 配置目录路径
- * @returns 配置加载项列表；目录不存在时返回空数组并输出警告
- * @throws 目录存在但不可读取等文件系统异常会向调用方传播。
- *
- * @example 模块内部上下文
- * ```ts
- * const items = scanConfigDir('./config')
- * core.logger.debug('Runtime configs selected', { names: items.map(item => item.name) })
- * ```
- */
-function scanConfigDir(
-  configDir: string,
-): ConfigLoadItem[] {
-  const logger = core.logger
-  const items: ConfigLoadItem[] = []
-
-  if (!existsSync(configDir)) {
-    logger.warn(`[core] Config directory not found: ${configDir}`)
-    return items
-  }
-
-  const files = readdirSync(configDir).filter(f =>
-    f.endsWith('.yml') || f.endsWith('.yaml'),
-  )
-
-  for (const file of files) {
-    const filePath = join(configDir, file)
-    const baseName = file.replace(YAML_EXTENSION_REGEX, '')
-
-    // 判断是否为内置模块配置（以 _ 开头）
-    if (baseName.startsWith('_')) {
-      const moduleName = baseName.slice(1) // 去掉 _ 前缀
-      items.push({
-        name: moduleName,
-        filePath,
-      })
-    }
-    else {
-      // 业务配置（文件名作为配置名）
-      items.push({
-        name: baseName,
-        filePath,
-      })
-    }
-  }
-  return items
-}
 
 /**
  * 初始化 Core（内部实现，通过 `core.init()` 调用）。
@@ -189,79 +97,8 @@ function initCore(options: CoreOptions = {}): void {
   if (options.logging) {
     logger.configure(options.logging)
   }
-
-  const configItems = options.configDir
-    ? scanConfigDir(options.configDir)
-    : []
-
-  // 先应用 core 的日志配置，避免其它配置加载日志使用初始化前的级别与格式。
-  configItems.sort((left, right) => Number(right.name === 'core') - Number(left.name === 'core'))
-
-  const loadedItems: ConfigLoadItem[] = []
-  for (const item of configItems) {
-    let result: HaiResult<unknown>
-    if (item.name === 'core') {
-      const loaded = config.load(item.name, item.filePath, CoreConfigSchema)
-      if (loaded.success && !options.logging && loaded.data.logging)
-        logger.configure(loaded.data.logging)
-      result = loaded
-    }
-    else {
-      result = loadConfigStructure(item.name, item.filePath, options.configSchemas?.[item.name])
-    }
-    if (!result.success) {
-      logger.error(`[core] Config load failed: ${item.name}`, configDiagnostic(item, result.error))
-      continue
-    }
-    loadedItems.push(item)
-    logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
-  }
-
-  if (options.watchConfig) {
-    setupConfigWatch(loadedItems)
-  }
+  loadStartupConfig(options, logger)
 
   const duration = Date.now() - startTime
   logger.info(`[core] Initialized (${duration}ms)`)
-}
-
-/**
- * 保留配置失败的位置、错误码和关联编号。YAML 解析异常的消息与堆栈可能包含配置原文。
- * @param item - 正在加载或监听的配置项
- * @param error - 保留完整原因的内部错误结果
- * @returns 可记录的诊断字段
- */
-function configDiagnostic(item: ConfigLoadItem, error: HaiError): LogContext {
-  const position = error.cause instanceof YAMLParseError
-    ? error.cause.linePos?.[0]
-    : undefined
-  return {
-    filePath: item.filePath,
-    code: error.code,
-    traceId: error.traceId,
-    ...(position
-      ? { line: position.line, column: position.col }
-      : {}),
-  }
-}
-
-/**
- * 为成功加载的配置注册监听。重载只更新缓存，每次变更均记录结果。
- * @param configs - 本次启动加载成功的配置项列表
- */
-function setupConfigWatch(configs: ConfigLoadItem[]): void {
-  const logger = core.logger
-
-  for (const item of configs) {
-    config.watch(item.name, (_config, error) => {
-      if (error) {
-        logger.error(`[core] Config watch or reload failed: ${item.name}`, configDiagnostic(item, error))
-        return
-      }
-      logger.info(`[core] Config reloaded: ${item.name}`)
-    })
-
-    if (config.isWatching(item.name))
-      logger.debug(`[core] Config watch enabled: ${item.name}`)
-  }
 }

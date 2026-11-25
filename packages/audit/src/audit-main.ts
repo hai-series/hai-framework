@@ -5,7 +5,7 @@
  * @module audit-main
  */
 
-import type { HaiResult, PaginatedResult } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { AuditInitConfig, AuditInitConfigInput } from './audit-config.js'
 import type {
@@ -13,11 +13,7 @@ import type {
   AuditFunctions,
   AuditHelper,
   AuditLog,
-  AuditLogWithUser,
-  AuditOutcomeCounts,
-  AuditStatItem,
   CreateAuditLogInput,
-  ListAuditLogsOptions,
 } from './audit-types.js'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -27,7 +23,7 @@ import { AuditInitConfigSchema } from './audit-config.js'
 import { withAuditContext } from './audit-context.js'
 import { createHelper } from './audit-helper.js'
 import { auditM } from './audit-i18n.js'
-import { createAuditWriter, validAuditQuery } from './audit-log-functions.js'
+import { createAuditLogOperations, createAuditWriter } from './audit-log-functions.js'
 
 import { AuditLogRepository } from './audit-repository-log.js'
 import { initializeAuditStorage } from './audit-retention.js'
@@ -36,17 +32,6 @@ import {
 } from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'main' })
-
-// ─── 输入校验 ───
-
-/**
- * 判断值是否为非空字符串
- *
- * @param value - 待校验值
- */
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
-}
 
 // ─── 内部状态 ───
 
@@ -306,157 +291,14 @@ export const audit: AuditFunctions = {
     return trackAuditWrite(currentWriter!(input, tx))
   },
 
-  async capture(input, options): Promise<HaiResult<void>> {
-    if (!currentRepo)
-      return notInitialized.result()
-    if (input === null || typeof input !== 'object' || Array.isArray(input)) {
-      logger.error('Audit capture input rejected', { traceId: core.context.get().traceId })
-      return core.err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
-        params: {
-          field: 'event',
-          reason: auditM('audit_eventFieldsInvalid'),
-        },
-      }))
-    }
-    if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
-      return core.ok(undefined)
-    const written = await audit.log(input, options?.tx)
-    return written.success
-      ? core.ok(undefined)
-      : written
-  },
-
-  /**
-   * 分页查询审计日志列表，用户名来自事件时的身份快照。
-   *
-   * @param options - 过滤条件与分页参数
-   * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；未初始化时返回 NOT_INITIALIZED
-   */
-  list(options?: ListAuditLogsOptions): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
-    if (!currentRepo) {
-      return Promise.resolve(notInitialized.result())
-    }
-    if (!validAuditQuery(options)) {
-      return Promise.resolve(core.err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
-        params: {
-          field: 'query',
-          reason: auditM('audit_queryInvalid'),
-        },
-      })))
-    }
-
-    if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
-      return Promise.resolve(core.err(
-        HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', {
-          params: { field: 'dateRange', reason: 'startDate must be before endDate' },
-        }),
-      ))
-    }
-
-    return currentRepo.listWithUser(options)
-  },
-
-  countByOutcome(options?: ListAuditLogsOptions): Promise<HaiResult<AuditOutcomeCounts>> {
-    if (!currentRepo)
-      return Promise.resolve(notInitialized.result())
-    if (!validAuditQuery(options) || (options?.startDate && options.endDate && options.startDate > options.endDate)) {
-      return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
-        params: {
-          field: 'query',
-          reason: auditM('audit_queryInvalid'),
-        },
-      })))
-    }
-    return currentRepo.countByOutcome(options)
-  },
-
-  /**
-   * 获取指定用户的最近活动记录
-   *
-   * @param userId - 用户 ID
-   * @param limit - 最大返回条数，默认 10
-   * @returns 成功时返回 AuditLog 数组；未初始化时返回 NOT_INITIALIZED
-   */
-  getUserRecent(userId: string, limit?: number): Promise<HaiResult<AuditLog[]>> {
-    if (!currentRepo) {
-      return Promise.resolve(notInitialized.result())
-    }
-
-    if (!isNonEmptyString(userId)) {
-      return Promise.resolve(core.err(
-        HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', {
-          params: { field: 'userId', reason: 'must be non-empty string' },
-        }),
-      ))
-    }
-
-    if (typeof limit === 'number' && (!Number.isInteger(limit) || limit <= 0)) {
-      return Promise.resolve(core.err(
-        HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', {
-          params: { field: 'limit', reason: 'must be a positive integer' },
-        }),
-      ))
-    }
-
-    return currentRepo.getUserRecent(userId, limit)
-  },
-
-  /**
-   * 清理指定天数之前的旧日志
-   *
-   * @param olderThanDays - 保留天数，默认 90
-   * @returns 成功时返回删除的记录数；未初始化时返回 NOT_INITIALIZED
-   */
-  cleanup(olderThanDays?: number): Promise<HaiResult<number>> {
-    if (!currentRepo) {
-      return Promise.resolve(notInitialized.result())
-    }
-
-    if (typeof olderThanDays === 'number' && (!Number.isInteger(olderThanDays) || olderThanDays < 0)) {
-      return Promise.resolve(core.err(
-        HaiAuditError.CLEANUP_FAILED,
-        auditM('audit_invalidInput', {
-          params: { field: 'olderThanDays', reason: 'must be a non-negative integer' },
-        }),
-      ))
-    }
-
-    return trackAuditWrite(currentRepo.cleanupOld(olderThanDays))
-  },
-
-  /**
-   * 获取指定天数内的操作统计（按 action 分组计数）
-   *
-   * @param days - 统计天数，默认 7
-   * @returns 成功时返回 AuditStatItem 数组；未初始化时返回 NOT_INITIALIZED
-   */
-  getStats(days?: number, filters?: Pick<ListAuditLogsOptions, 'category' | 'outcome' | 'severity' | 'scopeId' | 'userId' | 'resource'>): Promise<HaiResult<AuditStatItem[]>> {
-    if (!currentRepo) {
-      return Promise.resolve(notInitialized.result())
-    }
-    if (!validAuditQuery(filters)) {
-      return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
-        params: {
-          field: 'query',
-          reason: auditM('audit_queryInvalid'),
-        },
-      })))
-    }
-
-    if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
-      return Promise.resolve(core.err(
-        HaiAuditError.STATS_FAILED,
-        auditM('audit_invalidInput', {
-          params: { field: 'days', reason: 'must be a non-negative integer' },
-        }),
-      ))
-    }
-
-    return currentRepo.getStats(days, filters)
-  },
+  ...createAuditLogOperations({
+    getRepository: () => currentRepo,
+    getCapturePolicy: () => capturePolicy,
+    write: (input, tx) => audit.log(input, tx),
+    trackAuditWrite,
+    unavailable: notInitialized.result,
+    captureLogger: logger,
+  }),
 
   /**
    * 便捷记录器

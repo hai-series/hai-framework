@@ -1,6 +1,9 @@
 /** 提供给认证页面的白名单配置；不含连接信息、密钥及安全状态。 */
+import type { HaiResult } from '@h-ai/core'
+import type { AuthzOperations } from './authz/iam-authz-types.js'
 import type { IamConfig } from './iam-config.js'
 import type { IamConfigInput } from './iam-types.js'
+import { core } from '@h-ai/core'
 import { AuthUiConfigSchema, OtpConfigSchema, PasswordConfigSchema, SessionConfigSchema } from './iam-config.js'
 
 /**
@@ -84,4 +87,49 @@ export function buildIamPublicConfig(config: IamConfig, runtime: IamConfigInput)
       enabled: Boolean(config.initialCredentials?.enabled && config.passwordReset?.enabled !== false && runtime.onPasswordResetRequest),
     },
   }
+}
+
+/**
+ * 在同一已发布配置快照中合并服务端当前的敏感操作。
+ * @param config - 已发布的公开配置。
+ * @param authorization - 当前运行期的授权操作。
+ * @param unavailable - 配置和授权尚未就绪时使用的失败结果工厂。
+ * @returns 公开配置快照，或敏感操作查询失败的 HaiResult。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function availableOperations(config: IamPublicConfig, authz: AuthzOperations, unavailable: () => HaiResult<IamPublicConfig>) {
+ *   const result = await readIamPublicConfig(config, authz, unavailable)
+ *   if (!result.success) return result
+ *   return result.data.reauthentication.operations
+ * }
+ * ```
+ */
+export async function readIamPublicConfig(
+  config: IamPublicConfig | null,
+  authorization: AuthzOperations | null,
+  unavailable: () => HaiResult<IamPublicConfig>,
+): Promise<HaiResult<IamPublicConfig>> {
+  const snapshot = config
+    ? structuredClone(config)
+    : null
+  if (!snapshot || !authorization)
+    return unavailable()
+  if (!snapshot.reauthentication.enabled)
+    return core.ok(snapshot)
+  const configured = await authorization.getSensitiveOperations()
+  if (!configured.success)
+    return configured
+  return core.ok({
+    ...snapshot,
+    reauthentication: {
+      ...snapshot.reauthentication,
+      operations: [
+        ...new Set([
+          ...snapshot.reauthentication.operations,
+          ...configured.data,
+        ]),
+      ].sort(),
+    },
+  })
 }

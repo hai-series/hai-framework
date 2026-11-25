@@ -1,7 +1,8 @@
-/** 审计写入的统一字段、身份、隐私及失败边界。 */
+/** 审计日志的采集、写入、查询和清理。 */
+import type { HaiResult, Logger, PaginatedResult } from '@h-ai/core'
 import type { AuditInitConfig } from './audit-config.js'
 import type { AuditLogRepository } from './audit-repository-log.js'
-import type { AuditActorSnapshot, AuditFunctions } from './audit-types.js'
+import type { AuditActorSnapshot, AuditFunctions, AuditLog, AuditLogWithUser, AuditOutcomeCounts, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { getAuditContext } from './audit-context.js'
@@ -63,7 +64,7 @@ const querySchema = z.object({
  * const valid = validAuditQuery({ category: 'system', sortBy: 'createdAt' })
  * ```
  */
-export function validAuditQuery(options: unknown): boolean {
+function validAuditQuery(options: unknown): boolean {
   return querySchema.safeParse(options === undefined
     ? {}
     : options).success
@@ -237,5 +238,199 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         },
       }), error)
     }
+  }
+}
+
+/**
+ * 判断值是否为非空字符串
+ *
+ * @param value - 待校验值
+ */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+/**
+ * 使用当前仓库和采集策略的统一日志操作。
+ * @param deps - 读取当前运行期的仓库和策略，复用入口的日志写入、在途跟踪和未初始化错误。
+ * @param deps.getRepository - 获取当前运行期的仓库。
+ * @param deps.getCapturePolicy - 获取当前运行期的采集策略。
+ * @param deps.write - 写入并跟踪本次采集的事件。
+ * @param deps.trackAuditWrite - 注册在途清理操作，供关闭时等待。
+ * @param deps.unavailable - 构造模块未初始化的失败。
+ * @param deps.captureLogger - 记录采集输入失败的诊断日志。
+ * @returns 捕获事件、查询及清理日志的方法；业务失败沿用原有 HaiResult。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function listRejectedEvents(deps: Parameters<typeof createAuditLogOperations>[0]) {
+ *   const result = await createAuditLogOperations(deps).list({ outcome: 'denied' })
+ *   if (!result.success) return result
+ *   return result.data.items
+ * }
+ * ```
+ */
+export function createAuditLogOperations(deps: {
+  getRepository: () => AuditLogRepository | null
+  getCapturePolicy: () => AuditInitConfig['capture'] | null
+  write: AuditFunctions['log']
+  trackAuditWrite: <T>(operation: Promise<HaiResult<T>>) => Promise<HaiResult<T>>
+  unavailable: <T>() => HaiResult<T>
+  captureLogger: Logger
+}): Pick<AuditFunctions, 'capture' | 'list' | 'countByOutcome' | 'getUserRecent' | 'cleanup' | 'getStats'> {
+  const { getRepository, getCapturePolicy, write, trackAuditWrite, unavailable, captureLogger } = deps
+  return {
+    async capture(input, options): Promise<HaiResult<void>> {
+      if (!getRepository())
+        return unavailable()
+      if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+        captureLogger.error('Audit capture input rejected', { traceId: core.context.get().traceId })
+        return core.err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'event',
+            reason: auditM('audit_eventFieldsInvalid'),
+          },
+        }))
+      }
+      const capturePolicy = getCapturePolicy()
+      if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
+        return core.ok(undefined)
+      const written = await write(input, options?.tx)
+      return written.success
+        ? core.ok(undefined)
+        : written
+    },
+
+    /**
+     * 分页查询审计日志列表，用户名来自事件时的身份快照。
+     *
+     * @param options - 过滤条件与分页参数
+     * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；未初始化时返回 NOT_INITIALIZED
+     */
+    list(options?: ListAuditLogsOptions): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
+      if (!getRepository()) {
+        return Promise.resolve(unavailable())
+      }
+      if (!validAuditQuery(options)) {
+        return Promise.resolve(core.err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'query',
+            reason: auditM('audit_queryInvalid'),
+          },
+        })))
+      }
+
+      if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
+        return Promise.resolve(core.err(
+          HaiAuditError.QUERY_FAILED,
+          auditM('audit_invalidInput', {
+            params: { field: 'dateRange', reason: 'startDate must be before endDate' },
+          }),
+        ))
+      }
+
+      return getRepository()!.listWithUser(options)
+    },
+
+    countByOutcome(options?: ListAuditLogsOptions): Promise<HaiResult<AuditOutcomeCounts>> {
+      if (!getRepository())
+        return Promise.resolve(unavailable())
+      if (!validAuditQuery(options) || (options?.startDate && options.endDate && options.startDate > options.endDate)) {
+        return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'query',
+            reason: auditM('audit_queryInvalid'),
+          },
+        })))
+      }
+      return getRepository()!.countByOutcome(options)
+    },
+
+    /**
+     * 获取指定用户的最近活动记录
+     *
+     * @param userId - 用户 ID
+     * @param limit - 最大返回条数，默认 10
+     * @returns 成功时返回 AuditLog 数组；未初始化时返回 NOT_INITIALIZED
+     */
+    getUserRecent(userId: string, limit?: number): Promise<HaiResult<AuditLog[]>> {
+      if (!getRepository()) {
+        return Promise.resolve(unavailable())
+      }
+
+      if (!isNonEmptyString(userId)) {
+        return Promise.resolve(core.err(
+          HaiAuditError.QUERY_FAILED,
+          auditM('audit_invalidInput', {
+            params: { field: 'userId', reason: 'must be non-empty string' },
+          }),
+        ))
+      }
+
+      if (typeof limit === 'number' && (!Number.isInteger(limit) || limit <= 0)) {
+        return Promise.resolve(core.err(
+          HaiAuditError.QUERY_FAILED,
+          auditM('audit_invalidInput', {
+            params: { field: 'limit', reason: 'must be a positive integer' },
+          }),
+        ))
+      }
+
+      return getRepository()!.getUserRecent(userId, limit)
+    },
+
+    /**
+     * 清理指定天数之前的旧日志
+     *
+     * @param olderThanDays - 保留天数，默认 90
+     * @returns 成功时返回删除的记录数；未初始化时返回 NOT_INITIALIZED
+     */
+    cleanup(olderThanDays?: number): Promise<HaiResult<number>> {
+      if (!getRepository()) {
+        return Promise.resolve(unavailable())
+      }
+
+      if (typeof olderThanDays === 'number' && (!Number.isInteger(olderThanDays) || olderThanDays < 0)) {
+        return Promise.resolve(core.err(
+          HaiAuditError.CLEANUP_FAILED,
+          auditM('audit_invalidInput', {
+            params: { field: 'olderThanDays', reason: 'must be a non-negative integer' },
+          }),
+        ))
+      }
+
+      return trackAuditWrite(getRepository()!.cleanupOld(olderThanDays))
+    },
+
+    /**
+     * 获取指定天数内的操作统计（按 action 分组计数）
+     *
+     * @param days - 统计天数，默认 7
+     * @returns 成功时返回 AuditStatItem 数组；未初始化时返回 NOT_INITIALIZED
+     */
+    getStats(days?: number, filters?: Pick<ListAuditLogsOptions, 'category' | 'outcome' | 'severity' | 'scopeId' | 'userId' | 'resource'>): Promise<HaiResult<AuditStatItem[]>> {
+      if (!getRepository()) {
+        return Promise.resolve(unavailable())
+      }
+      if (!validAuditQuery(filters)) {
+        return Promise.resolve(core.err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'query',
+            reason: auditM('audit_queryInvalid'),
+          },
+        })))
+      }
+
+      if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
+        return Promise.resolve(core.err(
+          HaiAuditError.STATS_FAILED,
+          auditM('audit_invalidInput', {
+            params: { field: 'days', reason: 'must be a non-negative integer' },
+          }),
+        ))
+      }
+
+      return getRepository()!.getStats(days, filters)
+    },
   }
 }

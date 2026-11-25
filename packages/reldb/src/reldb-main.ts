@@ -24,13 +24,14 @@ import { createMysqlProvider } from './providers/reldb-provider-mysql.js'
 
 import { createPostgresProvider } from './providers/reldb-provider-postgres.js'
 import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
+import { createConfigView } from './reldb-config-view.js'
 import { ReldbConfigSchema } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 
 import { createJsonOps, parseJsonPath } from './reldb-json.js'
 
 import { pagination } from './reldb-pagination.js'
-import { schemaColumns } from './reldb-schema.js'
+import { prepareProviderSchema, schemaColumns } from './reldb-schema.js'
 import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from './reldb-security.js'
 import { HaiReldbError } from './reldb-types.js'
 
@@ -327,25 +328,14 @@ export const reldb: ReldbFunctions = {
     const provider = currentProvider
     if (!provider?.isConnected())
       return notInitialized.result()
-    if (provider.prepareSchema)
-      return provider.prepareSchema(key, prepare)
-    try {
-      return await prepare({ ddl: provider.ddl, sql: provider.sql })
-    }
-    catch (error) {
-      return core.err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
-    }
+    return prepareProviderSchema(provider, key, prepare)
   },
 
   /** 获取当前脱敏后的配置快照（未初始化时为 null） */
   get config(): ReldbConfig | null {
-    if (!currentConfig)
-      return null
-    const snapshot = core.sanitize.sanitizeSensitiveFields(currentConfig)
-    // 通用敏感字段匹配不包含普通 key；TLS 客户端私钥必须在配置快照中单独遮蔽。
-    if ('ssl' in snapshot && snapshot.ssl && typeof snapshot.ssl === 'object' && 'key' in snapshot.ssl)
-      snapshot.ssl.key = core.sanitize.defaultSensitiveReplacement
-    return snapshot
+    return currentConfig
+      ? createConfigView(currentConfig)
+      : null
   },
 
   /** 检查是否已初始化 */

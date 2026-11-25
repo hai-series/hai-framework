@@ -22,6 +22,7 @@ import { createLancedbProvider } from './providers/vecdb-provider-lancedb.js'
 import { createPgvectorProvider } from './providers/vecdb-provider-pgvector.js'
 import { createQdrantProvider } from './providers/vecdb-provider-qdrant.js'
 import { VecdbConfigSchema } from './vecdb-config.js'
+import { getConnectionInfo } from './vecdb-connection-info.js'
 import { vecdbM } from './vecdb-i18n.js'
 import { HaiVecdbError } from './vecdb-types.js'
 
@@ -327,30 +328,7 @@ export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations 
   get rawConnection(): VecdbConnection | null {
     if (!currentConfig || closingPromise)
       return null
-    if (currentConfig.type === 'qdrant')
-      return { type: 'qdrant', url: currentConfig.url, apiKey: currentConfig.apiKey }
-    if (currentConfig.type === 'pgvector') {
-      return {
-        type: 'pgvector',
-        connectionString: currentConfig.url,
-        host: currentConfig.host,
-        port: currentConfig.port,
-        database: currentConfig.database,
-        user: currentConfig.user,
-        password: currentConfig.password,
-      }
-    }
-    if (currentConfig.type === 'chroma') {
-      return {
-        type: 'chroma',
-        url: currentConfig.url,
-        host: currentConfig.host,
-        port: currentConfig.port,
-        apiKey: currentConfig.apiKey,
-        path: currentConfig.path,
-      }
-    }
-    return { type: currentConfig.type, path: currentConfig.path }
+    return getConnectionInfo(currentConfig)
   },
 
   /** 检查是否已初始化 */

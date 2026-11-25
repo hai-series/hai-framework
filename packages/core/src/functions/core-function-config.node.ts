@@ -6,15 +6,16 @@ import type { ZodType } from 'zod'
  * @module core-function-config.node
  */
 
-import type { HaiError, HaiResult, WatchCallback } from '../core-types.js'
+import type { CoreLogger, CoreOptions, HaiError, HaiResult, LogContext, WatchCallback } from '../core-types.js'
 
-import { existsSync, readFileSync, watch } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, watch } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { parse } from 'yaml'
+import { parse, YAMLParseError } from 'yaml'
 
 // ─── 配置文件监听 ───
 
+import { CoreConfigSchema } from '../core-config.js'
 import { err, HaiCommonError, HaiConfigError, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 import { mergeEnv, parseEnvironment, resolveEnvironment, stringifyEnv, toEnv } from './core-function-environment.node.js'
@@ -706,4 +707,159 @@ export const config = {
   isWatching(name: string): boolean {
     return watchEntries.has(name)
   },
+}
+
+const YAML_EXTENSION_REGEX = /\.ya?ml$/
+
+/**
+ * 配置加载项（描述单个待加载的配置文件）。
+ * @example 模块内部上下文
+ * ```ts
+ * const item: ConfigLoadItem = { name: 'core', filePath: join('/srv/app', 'config', '_core.yml') }
+ * const cacheName = item.name
+ * ```
+ */
+interface ConfigLoadItem {
+  /** 配置名称（用作缓存 key，如 'core'、'db'、'app'） */
+  name: string
+  /** 配置文件路径，与调用方传入的配置目录使用同一相对或绝对基准。 */
+  filePath: string
+}
+
+/**
+ * 扫描配置目录并构建配置加载项列表。
+ *
+ * 约定：
+ * - 以 `_` 开头的文件为内置模块配置（如 `_core.yml` → name='core'）
+ * - 其他文件为业务配置（如 `app.yml` → name='app'）
+ *
+ * @param configDir - 配置目录路径
+ * @param logger - 用来报告缺失配置目录的日志入口。
+ * @returns 配置加载项列表；目录不存在时返回空数组并输出警告
+ * @throws 目录存在但不可读取等文件系统异常会向调用方传播。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * function readFiles(logger: CoreLogger) {
+ *   return scanConfigDir('./config', logger)
+ * }
+ * ```
+ */
+function scanConfigDir(
+  configDir: string,
+  logger: CoreLogger,
+): ConfigLoadItem[] {
+  const items: ConfigLoadItem[] = []
+
+  if (!existsSync(configDir)) {
+    logger.warn(`[core] Config directory not found: ${configDir}`)
+    return items
+  }
+
+  const files = readdirSync(configDir).filter(f =>
+    f.endsWith('.yml') || f.endsWith('.yaml'),
+  )
+
+  for (const file of files) {
+    const filePath = join(configDir, file)
+    const baseName = file.replace(YAML_EXTENSION_REGEX, '')
+
+    // 判断是否为内置模块配置（以 _ 开头）
+    if (baseName.startsWith('_')) {
+      const moduleName = baseName.slice(1) // 去掉 _ 前缀
+      items.push({
+        name: moduleName,
+        filePath,
+      })
+    }
+    else {
+      // 业务配置（文件名作为配置名）
+      items.push({
+        name: baseName,
+        filePath,
+      })
+    }
+  }
+  return items
+}
+
+/**
+ * 按启动选项加载 YAML，并为成功加载的配置注册监听。
+ * @example 模块内部上下文
+ * ```ts
+ * function loadAppConfigs(logger: CoreLogger) {
+ *   loadStartupConfig({ configDir: './config', watchConfig: true }, logger)
+ * }
+ * ```
+ */
+export function loadStartupConfig(options: CoreOptions, logger: CoreLogger): void {
+  const configItems = options.configDir
+    ? scanConfigDir(options.configDir, logger)
+    : []
+
+  // 先应用 core 的日志配置，避免其它配置加载日志使用初始化前的级别与格式。
+  configItems.sort((left, right) => Number(right.name === 'core') - Number(left.name === 'core'))
+
+  const loadedItems: ConfigLoadItem[] = []
+  for (const item of configItems) {
+    let result: HaiResult<unknown>
+    if (item.name === 'core') {
+      const loaded = config.load(item.name, item.filePath, CoreConfigSchema)
+      if (loaded.success && !options.logging && loaded.data.logging)
+        logger.configure(loaded.data.logging)
+      result = loaded
+    }
+    else {
+      result = loadConfigStructure(item.name, item.filePath, options.configSchemas?.[item.name])
+    }
+    if (!result.success) {
+      logger.error(`[core] Config load failed: ${item.name}`, configDiagnostic(item, result.error))
+      continue
+    }
+    loadedItems.push(item)
+    logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
+  }
+
+  if (options.watchConfig) {
+    setupConfigWatch(loadedItems, logger)
+  }
+}
+
+/**
+ * 保留配置失败的位置、错误码和关联编号。YAML 解析异常的消息与堆栈可能包含配置原文。
+ * @param item - 正在加载或监听的配置项
+ * @param error - 保留完整原因的内部错误结果
+ * @returns 可记录的诊断字段
+ */
+function configDiagnostic(item: ConfigLoadItem, error: HaiError): LogContext {
+  const position = error.cause instanceof YAMLParseError
+    ? error.cause.linePos?.[0]
+    : undefined
+  return {
+    filePath: item.filePath,
+    code: error.code,
+    traceId: error.traceId,
+    ...(position
+      ? { line: position.line, column: position.col }
+      : {}),
+  }
+}
+
+/**
+ * 为成功加载的配置注册监听。重载只更新缓存，每次变更均记录结果。
+ * @param configs - 本次启动加载成功的配置项列表
+ */
+function setupConfigWatch(configs: ConfigLoadItem[], logger: CoreLogger): void {
+  for (const item of configs) {
+    config.watch(item.name, (_config, error) => {
+      if (error) {
+        logger.error(`[core] Config watch or reload failed: ${item.name}`, configDiagnostic(item, error))
+        return
+      }
+      logger.info(`[core] Config reloaded: ${item.name}`)
+    })
+
+    if (config.isWatching(item.name))
+      logger.debug(`[core] Config watch enabled: ${item.name}`)
+  }
 }

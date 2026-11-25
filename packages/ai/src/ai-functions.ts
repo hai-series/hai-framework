@@ -1,4 +1,5 @@
 import type { McpServer } from '@agentclientprotocol/sdk'
+import type { HaiResult, Logger } from '@h-ai/core'
 import type { DatapipeFunctions } from '@h-ai/datapipe'
 import type { RunnerFunctions } from '@h-ai/runner'
 import type { z } from 'zod'
@@ -46,6 +47,7 @@ import type { RetrievalSource } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider, SessionInfo } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
+import process from 'node:process'
 import { core } from '@h-ai/core'
 import { createA2AStores } from './a2a/ai-a2a-functions.js'
 import { resolveEnvironment } from './acp/ai-acp-adapters.js'
@@ -88,6 +90,8 @@ import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js
 import { createResourceRegistry } from './registry/ai-registry-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
+import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
+import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
 import { createSummaryOperations } from './summary/ai-summary-functions.js'
 import { createTokenOperations } from './token/ai-token-functions.js'
 
@@ -577,4 +581,38 @@ export async function createAISubsystems(
     audio,
     image,
   }
+}
+
+/**
+ * 选择 AI 初始化实际使用的存储，并按部署环境核验共享状态要求。
+ * @param provided - 应用显式注入的后端；省略时优先使用已就绪的数据库，随后回退到内存。
+ * @param logger - AI 初始化日志。
+ * @returns 选中的存储后端；部署要求共享状态但后端只在进程内可见时返回配置失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function readStateScope(provider: AIStoreProvider, logger: Logger) {
+ *   const result = selectAIStoreProvider(provider, logger)
+ *   if (!result.success) return result
+ *   return result.data.stateScope
+ * }
+ * ```
+ */
+export function selectAIStoreProvider(provided: AIStoreProvider | undefined, logger: Logger): HaiResult<AIStoreProvider> {
+  // 注入存储 Provider：外部 Provider > 已初始化的 DB Provider > 进程内临时 Provider。
+  // 临时 Provider 让 LLM-only 场景零依赖启动；生产持久化仍应显式初始化 reldb + vecdb。
+  let storeProvider: AIStoreProvider
+  if (provided) {
+    storeProvider = provided
+  }
+  else if (isDbStoreAvailable()) {
+    storeProvider = createDbStoreProviderFromModules()
+  }
+  else {
+    storeProvider = createMemoryStoreProvider()
+    logger.warn('AI is using the ephemeral in-memory store; initialize reldb and vecdb before ai.init() for persistent data')
+  }
+  if (core.module.requiresSharedState(process.env) && storeProvider.stateScope !== 'shared')
+    return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_sharedBackendRequired'))
+  return core.ok(storeProvider)
 }

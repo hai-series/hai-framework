@@ -27,7 +27,6 @@ import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
-import process from 'node:process'
 import { core } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
 import { createA2ALazyProxy } from './a2a/ai-a2a-functions.js'
@@ -35,19 +34,17 @@ import { AgentEvent, Message, Part, SendMessageRequest, Task, TaskArtifactUpdate
 
 import { AIConfigSchema, ensureAudioCredential, resolveAudioModel, resolveImageModel, resolveModelApi, resolveModelEntry } from './ai-config.js'
 
-import { createAISubsystems } from './ai-functions.js'
+import { createAISubsystems, selectAIStoreProvider } from './ai-functions.js'
 
 import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
+import { notInitializedOperations, notInitializedResult } from './ai-uninitialized.js'
 import { serializePlayableAudio } from './audio/ai-audio-serialization.js'
-import { parseBoundedLocalFile } from './file/ai-file-functions.js'
 import { createJsonFieldPreview } from './llm/ai-llm-json-preview.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { adaptToolRegistry } from './llm/ai-llm-tool.js'
 import { createMcpServer, McpServer, SSEServerTransport, StdioServerTransport, StreamableHTTPServerTransport } from './mcp/ai-mcp-server.js'
 
-import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
-import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
 import { createBuiltinToolBroker } from './tools/ai-tools-broker.js'
 import { createBuiltinTools } from './tools/ai-tools-builtin.js'
 import { createMcpTools } from './tools/ai-tools-mcp.js'
@@ -110,161 +107,6 @@ let currentRegistriesClose: (() => Promise<void>) | null = null
 /** 当前存储 Provider（用于模块关闭时统一释放资源） */
 let currentStoreProvider: AIStoreProvider | null = null
 
-// ─── 未初始化占位 ───
-
-/** 创建未初始化错误工具（统一的 NOT_INITIALIZED 响应） */
-const notInitialized = core.module.createNotInitializedKit(
-  HaiAIError.NOT_INITIALIZED,
-  () => aiM('ai_notInitialized'),
-)
-
-/**
- * LLM 未初始化占位
- *
- * 异步方法返回 NOT_INITIALIZED HaiResult。
- * chatStream 是 async generator，无法返回 HaiResult，
- * 只能在迭代时抛出异常通知调用方。
- */
-const notInitializedLLM: ManagedLLMOperations = {
-  models: notInitialized.proxy<ManagedLLMOperations['models']>(),
-  chat: () => Promise.resolve(notInitialized.result()),
-  async* chatStream() {
-    throw notInitialized.error()
-  },
-  listModels: () => Promise.resolve(notInitialized.result()),
-  getHistory: () => Promise.resolve(notInitialized.result()),
-  listSessions: () => Promise.resolve(notInitialized.result()),
-  ask: () => Promise.resolve(notInitialized.result()),
-  async* askStream() {
-    throw notInitialized.error()
-  },
-  generateObject: () => Promise.resolve(notInitialized.result()),
-}
-
-/** ACP 未初始化占位；各层对象与其他子功能一样在模块顶层复用。 */
-const notInitializedACP: ACPOperations = {
-  scoped: () => ({
-    plan: () => Promise.resolve(notInitialized.result()),
-    run: () => Promise.resolve(notInitialized.result()),
-    agents: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['agents']>(),
-    approvals: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['approvals']>(),
-    tasks: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['tasks']>(),
-    sessions: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['sessions']>(),
-  }),
-  registerManagedExecutors: () => {},
-  agents: notInitialized.proxy<ACPOperations['agents']>(),
-  sessions: notInitialized.proxy<ACPOperations['sessions']>(),
-  workspaces: notInitialized.proxy<ACPOperations['workspaces']>(),
-  connect: () => Promise.resolve(notInitialized.result()),
-  close: async () => {},
-}
-
-/** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
-const notInitializedMCP: ManagedMCPOperations = {
-  servers: notInitialized.proxy<ManagedMCPOperations['servers']>(),
-  services: {
-    invoke: () => Promise.resolve(notInitialized.result()),
-    createBroker: () => notInitialized.result(),
-  },
-  registerTool: () => notInitialized.result(),
-  registerResource: () => notInitialized.result(),
-  registerPrompt: () => notInitialized.result(),
-  callTool: () => Promise.resolve(notInitialized.result()),
-  readResource: () => Promise.resolve(notInitialized.result()),
-  getPrompt: () => Promise.resolve(notInitialized.result()),
-}
-
-/** Embedding 未初始化占位 */
-const notInitializedEmbedding = notInitialized.proxy<EmbeddingOperations>()
-
-/** Reasoning 未初始化占位 */
-const notInitializedReasoning: ReasoningOperations = {
-  run: () => Promise.resolve(notInitialized.result()),
-  async* runStream() { throw notInitialized.error() },
-}
-
-/** Retrieval 未初始化占位 */
-const notInitializedRetrieval: ManagedRetrievalOperations = {
-  sources: notInitialized.proxy<ManagedRetrievalOperations['sources']>(),
-  addSource: () => Promise.resolve(notInitialized.result()),
-  removeSource: () => Promise.resolve(notInitialized.result()),
-  listSources: () => Promise.resolve([]),
-  retrieve: () => Promise.resolve(notInitialized.result()),
-}
-
-/** RAG 未初始化占位 */
-const notInitializedRag: RagOperations = {
-  query: () => Promise.resolve(notInitialized.result()),
-  async* queryStream() { throw notInitialized.error() },
-}
-
-/** Knowledge 未初始化占位 */
-const notInitializedKnowledge = notInitialized.proxy<KnowledgeOperations>()
-
-/** Memory 未初始化占位 */
-const notInitializedMemory = notInitialized.proxy<MemoryOperations>()
-
-/** Persona 未初始化占位 */
-const notInitializedPersona = notInitialized.proxy<PersonaOperations>()
-
-/**
- * Token 未初始化占位
- *
- * Token 方法返回原始 number 而非 HaiResult，无法通过 proxy 安全拦截。
- * 未初始化时直接抛出异常，避免静默返回 0 导致下游 Token 计算错误。
- */
-const notInitializedToken: TokenOperations = {
-  estimateText: () => { throw notInitialized.error() },
-  estimateMessages: () => { throw notInitialized.error() },
-}
-
-/** Summary 未初始化占位 */
-const notInitializedSummary = notInitialized.proxy<SummaryOperations>()
-
-/** Compress 未初始化占位 */
-const notInitializedCompress = notInitialized.proxy<CompressOperations>()
-
-/** Context 未初始化占位 */
-const notInitializedContext: ContextOperations = {
-  createManager: () => notInitialized.result(),
-  restoreManager: () => Promise.resolve(notInitialized.result()),
-  listSessions: () => Promise.resolve(notInitialized.result()),
-  renameSession: () => Promise.resolve(notInitialized.result()),
-  removeSession: () => Promise.resolve(notInitialized.result()),
-}
-
-/** Rerank 未初始化占位 */
-const notInitializedRerank = notInitialized.proxy<RerankOperations>()
-
-/** File 未初始化占位 */
-const notInitializedFile: FileOperations = {
-  parse: request => request.options?.mode === 'local'
-    ? parseBoundedLocalFile(request)
-    : Promise.resolve(notInitialized.result()),
-  parseText: () => Promise.resolve(notInitialized.result()),
-}
-
-/**
- * Audio 未初始化占位
- *
- * transcribe / synthesize 返回 NOT_INITIALIZED HaiResult；
- * 流式方法是 async generator，无法返回 HaiResult，只能在迭代时抛出异常。
- */
-const notInitializedAudio: ManagedAudioOperations = {
-  models: notInitialized.proxy<ManagedAudioOperations['models']>(),
-  transcribe: () => Promise.resolve(notInitialized.result()),
-  async* transcribeStream() { throw notInitialized.error() },
-  synthesize: () => Promise.resolve(notInitialized.result()),
-  async* synthesizeStream() { throw notInitialized.error() },
-  getCapabilities: () => notInitialized.result(),
-}
-
-/** Image 未初始化占位 */
-const notInitializedImage: ManagedImageOperations = {
-  models: notInitialized.proxy<ManagedImageOperations['models']>(),
-  generate: () => Promise.resolve(notInitialized.result()),
-}
-
 /** A2A 延迟初始化代理（委托给 a2a 模块的 createA2ALazyProxy） */
 const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   isInitialized: () => currentConfig !== null,
@@ -272,7 +114,7 @@ const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   getA2AImpl: () => currentA2AImpl,
   setA2AImpl: (impl) => { currentA2AImpl = impl },
   getStores: () => currentA2AStores,
-  notInitializedResult: () => notInitialized.result(),
+  notInitializedResult,
 })
 
 // ─── 内部辅助 ───
@@ -322,11 +164,11 @@ async function resetAllState(): Promise<void> {
 // ─── 纯函数操作（不依赖初始化） ───
 
 const toolsOperations: ToolsOperations = {
-  createMcpTools: options => createMcpTools(options, () => (currentMCP ?? notInitializedMCP).services),
+  createMcpTools: options => createMcpTools(options, () => (currentMCP ?? notInitializedOperations.mcp).services),
   createBuiltinTools: options => createBuiltinTools(options, {
-    image: () => currentImage ?? notInitializedImage,
-    audio: () => currentAudio ?? notInitializedAudio,
-    llm: () => currentLLM ?? notInitializedLLM,
+    image: () => currentImage ?? notInitializedOperations.image,
+    audio: () => currentAudio ?? notInitializedOperations.audio,
+    llm: () => currentLLM ?? notInitializedOperations.llm,
   }),
   createBroker: createBuiltinToolBroker,
   adapt: adaptToolRegistry,
@@ -420,21 +262,10 @@ export const ai: AIFunctions = {
       }
       const parsed = parseResult.data
 
-      // 注入存储 Provider：外部 Provider > 已初始化的 DB Provider > 进程内临时 Provider。
-      // 临时 Provider 让 LLM-only 场景零依赖启动；生产持久化仍应显式初始化 reldb + vecdb。
-      let storeProvider: AIStoreProvider
-      if (options?.storeProvider) {
-        storeProvider = options.storeProvider
-      }
-      else if (isDbStoreAvailable()) {
-        storeProvider = createDbStoreProviderFromModules()
-      }
-      else {
-        storeProvider = createMemoryStoreProvider()
-        logger.warn('AI is using the ephemeral in-memory store; initialize reldb and vecdb before ai.init() for persistent data')
-      }
-      if (core.module.requiresSharedState(process.env) && storeProvider.stateScope !== 'shared')
-        return core.err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_sharedBackendRequired'))
+      const selectedStore = selectAIStoreProvider(options?.storeProvider, logger)
+      if (!selectedStore.success)
+        return selectedStore
+      const storeProvider = selectedStore.data
       currentStoreProvider = storeProvider
 
       // 委托 ai-functions 组装所有子功能（含建表）
@@ -503,28 +334,28 @@ export const ai: AIFunctions = {
     }
   },
 
-  get llm(): ManagedLLMOperations { return currentLLM ?? notInitializedLLM },
+  get llm(): ManagedLLMOperations { return currentLLM ?? notInitializedOperations.llm },
   get acp(): ACPOperations {
-    return currentACP ?? notInitializedACP
+    return currentACP ?? notInitializedOperations.acp
   },
-  get mcp(): ManagedMCPOperations { return currentMCP ?? notInitializedMCP },
+  get mcp(): ManagedMCPOperations { return currentMCP ?? notInitializedOperations.mcp },
   get tools(): ToolsOperations { return toolsOperations },
   get stream(): StreamOperations { return streamOperations },
-  get embedding(): EmbeddingOperations { return currentEmbedding ?? notInitializedEmbedding },
-  get reasoning(): ReasoningOperations { return currentReasoning ?? notInitializedReasoning },
-  get retrieval(): ManagedRetrievalOperations { return currentRetrieval ?? notInitializedRetrieval },
-  get rag(): RagOperations { return currentRag ?? notInitializedRag },
-  get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
-  get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
-  get persona(): PersonaOperations { return currentPersona ?? notInitializedPersona },
-  get token(): TokenOperations { return currentToken ?? notInitializedToken },
-  get summary(): SummaryOperations { return currentSummary ?? notInitializedSummary },
-  get compress(): CompressOperations { return currentCompress ?? notInitializedCompress },
-  get context(): ContextOperations { return currentContext ?? notInitializedContext },
-  get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
-  get file(): FileOperations { return currentFile ?? notInitializedFile },
-  get audio(): ManagedAudioOperations { return currentAudio ?? notInitializedAudio },
-  get image(): ManagedImageOperations { return currentImage ?? notInitializedImage },
+  get embedding(): EmbeddingOperations { return currentEmbedding ?? notInitializedOperations.embedding },
+  get reasoning(): ReasoningOperations { return currentReasoning ?? notInitializedOperations.reasoning },
+  get retrieval(): ManagedRetrievalOperations { return currentRetrieval ?? notInitializedOperations.retrieval },
+  get rag(): RagOperations { return currentRag ?? notInitializedOperations.rag },
+  get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedOperations.knowledge },
+  get memory(): MemoryOperations { return currentMemory ?? notInitializedOperations.memory },
+  get persona(): PersonaOperations { return currentPersona ?? notInitializedOperations.persona },
+  get token(): TokenOperations { return currentToken ?? notInitializedOperations.token },
+  get summary(): SummaryOperations { return currentSummary ?? notInitializedOperations.summary },
+  get compress(): CompressOperations { return currentCompress ?? notInitializedOperations.compress },
+  get context(): ContextOperations { return currentContext ?? notInitializedOperations.context },
+  get rerank(): RerankOperations { return currentRerank ?? notInitializedOperations.rerank },
+  get file(): FileOperations { return currentFile ?? notInitializedOperations.file },
+  get audio(): ManagedAudioOperations { return currentAudio ?? notInitializedOperations.audio },
+  get image(): ManagedImageOperations { return currentImage ?? notInitializedOperations.image },
   get a2a(): A2AOperations { return a2aLazyOperations },
   get config() {
     return currentConfig

@@ -9,8 +9,8 @@ import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type { ReachFunctions, ReachGatewayHook, ReachInitOptions, ReachMessage, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
-import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
+import type { ReachFunctions, ReachGatewayHook, ReachInitOptions, ReachMessage, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 import process from 'node:process'
@@ -21,8 +21,10 @@ import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.j
 import { createApiProvider } from './providers/reach-provider-api.js'
 import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
-import { ReachConfigSchema, ReachDeadRequeueSchema, ReachQueueIdSchema, ReachQueueListSchema, ReachUnknownResolutionSchema } from './reach-config.js'
+import { reachConfigView } from './reach-config-view.js'
+import { ReachConfigSchema } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
+import { createReachQueueOperations } from './reach-queue-functions.js'
 import { executeSend, startDndScheduler, stopDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
 import {
@@ -309,33 +311,6 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
 // ─── 触达服务对象 ───
 
 /**
- * 把敏感日志实体投影成运维元数据，排除收件人、正文、vars/extra和owner凭据。
- * @param row - 已确认queueId非空且字段规范化的队列行。
- * @returns 对外可查询的元数据；不能据此替代运维授权。
- *
- * @example 模块内部上下文
- * ```ts
- * function safeEntry(row: StoredSendLog): ReachQueueEntry | null {
- *   if (!row.queueId) return null
- *   return queueEntry(row)
- * }
- * ```
- */
-function queueEntry(row: StoredSendLog): ReachQueueEntry {
-  return {
-    queueId: row.queueId!,
-    provider: row.provider,
-    status: row.status,
-    updatedAt: row.updatedAt,
-    messageId: row.messageId ?? undefined,
-    attemptCount: row.attemptCount,
-    maxAttempts: row.maxAttempts,
-    nextAttemptAt: row.nextAttemptAt,
-    lastFailure: row.lastFailure ?? undefined,
-  }
-}
-
-/**
  * 邮件/短信/API触达统一入口；先检查init与send的HaiResult，成功后还区分deferred和即时Provider结果。
  * 模板与delay队列使用已初始化数据库，生产共享后端；close停止本地调度/关闭Provider，不撤销已发外部请求。
  *
@@ -369,66 +344,11 @@ function queueEntry(row: StoredSendLog): ReachQueueEntry {
  * ```
  */
 export const reach: ReachFunctions = {
-  queue: {
-    async get(queueId) {
-      if (providers.size === 0)
-        return notInitialized.result()
-      if (!sendLogRepo)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
-      if (!ReachQueueIdSchema.safeParse(queueId).success)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
-      const rows = await sendLogRepo.findAll({
-        where: 'queue_id = ?',
-        params: [queueId],
-        limit: 1,
-      })
-      if (!rows.success)
-        return rows
-      const row = rows.data[0]
-      return core.ok(row
-        ? queueEntry(row)
-        : null)
-    },
-    async list(options) {
-      if (providers.size === 0)
-        return notInitialized.result()
-      if (!sendLogRepo)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
-      const parsed = ReachQueueListSchema.safeParse(options)
-      if (!parsed.success)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
-      const rows = await sendLogRepo.findAll({
-        where: 'status = ? AND queue_id IS NOT NULL',
-        params: [parsed.data.status],
-        orderBy: 'created_at ASC, id ASC',
-        limit: parsed.data.limit,
-        offset: parsed.data.offset,
-      })
-      return rows.success
-        ? core.ok(rows.data.map(queueEntry))
-        : rows
-    },
-    async requeueDead(queueId, options) {
-      if (providers.size === 0)
-        return notInitialized.result()
-      if (!sendLogRepo)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
-      const parsed = ReachDeadRequeueSchema.safeParse(options)
-      if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
-      return sendLogRepo.requeueDead(queueId, parsed.data.expectedUpdatedAt)
-    },
-    async resolveUnknown(queueId, resolution) {
-      if (providers.size === 0)
-        return notInitialized.result()
-      if (!sendLogRepo)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
-      const parsed = ReachUnknownResolutionSchema.safeParse(resolution)
-      if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
-        return core.err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
-      return sendLogRepo.resolveUnknown(queueId, parsed.data)
-    },
-  },
+  queue: createReachQueueOperations(
+    () => providers.size > 0,
+    () => sendLogRepo,
+    notInitialized.result,
+  ),
   async init(config: ReachConfigInput, options?: ReachInitOptions): Promise<HaiResult<void>> {
     if (initInProgress || closeInProgress) {
       logger.warn('Reach module init already in progress, skipping')
@@ -466,23 +386,7 @@ export const reach: ReachFunctions = {
   get config(): ReachConfig | null {
     if (!currentConfig)
       return null
-    const safeProviders = currentConfig.providers.map((provider) => {
-      if (provider.type === 'api' && provider.headers) {
-        return {
-          ...provider,
-          headers: Object.fromEntries(Object.keys(provider.headers).map(name => [name, core.sanitize.defaultSensitiveReplacement])),
-        }
-      }
-      if (provider.type !== 'aliyun-sms' || !provider.gateway)
-        return provider
-      const { url, allowInsecureHttp } = provider.gateway
-      // 自定义请求头和请求体可以使用任意字段名，诊断视图只保留路由配置。
-      return {
-        ...provider,
-        gateway: { url, allowInsecureHttp },
-      }
-    })
-    return core.sanitize.sanitizeSensitiveFields({ ...currentConfig, providers: safeProviders })
+    return reachConfigView(currentConfig)
   },
 
   get isInitialized(): boolean {

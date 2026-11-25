@@ -13,6 +13,7 @@ import { core } from '@h-ai/core'
 import { takePhoto } from './capacitor-camera.js'
 import { getAppVersion, getDeviceInfo } from './capacitor-device.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { isCapacitorAvailable, isNative, readPlatform } from './capacitor-platform.js'
 import { closePushListeners, listenPush, registerPush } from './capacitor-push.js'
 import { configureStatusBar, hideStatusBar, showStatusBar } from './capacitor-status-bar.js'
 import { createCapacitorTokenStorage, safeGetPreference, safeRemovePreference, safeSetPreference } from './capacitor-token-storage.js'
@@ -71,19 +72,6 @@ const preferencesOps: PreferencesOperations = {
   get: safeGetPreference,
   set: safeSetPreference,
   remove: safeRemovePreference,
-}
-
-// ─── 检测 Capacitor 是否可用（模块内部使用） ───
-
-function isCapacitorAvailable(): boolean {
-  try {
-    // window 上由 Capacitor 运行时注入 Capacitor 全局对象，lib.dom 未声明该属性，故强转为可查库的 Record
-    return typeof window !== 'undefined'
-      && (window as unknown as Record<string, unknown>).Capacitor !== undefined
-  }
-  catch {
-    return false
-  }
 }
 
 // ─── 服务对象 ───
@@ -189,28 +177,10 @@ export const capacitor: CapacitorFunctions = {
   },
 
   getPlatform(): string {
-    if (cachedPlatform) {
-      return cachedPlatform
-    }
-    try {
-      // 同 isCapacitorAvailable：Capacitor 全局仅在运行时由 native bridge 注入，需强转后读取
-      const cap = (window as unknown as Record<string, unknown>).Capacitor as { getPlatform?: () => string } | undefined
-      return cap?.getPlatform?.() ?? 'web'
-    }
-    catch {
-      return 'web'
-    }
+    return cachedPlatform || readPlatform()
   },
 
-  isNative(): boolean {
-    try {
-      const cap = (window as unknown as Record<string, unknown>).Capacitor as { isNativePlatform?: () => boolean } | undefined
-      return cap?.isNativePlatform?.() ?? false
-    }
-    catch {
-      return false
-    }
-  },
+  isNative,
 
   get isInitialized(): boolean {
     return initialized

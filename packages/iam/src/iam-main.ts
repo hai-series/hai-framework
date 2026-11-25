@@ -9,14 +9,14 @@ import type { HaiResult } from '@h-ai/core'
 import type { IamConfig } from './iam-config.js'
 import type { IamPublicConfig } from './iam-public-config.js'
 
-import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
+import type { ApiKeyOperations, AuthnOperations, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 
 import { resetApiKeyRepoSingleton } from './authn/apikey/iam-authn-apikey-repository.js'
-import { createAuthnOperations } from './authn/iam-authn-functions.js'
+import { createAuthnOperations, withIamRegistration } from './authn/iam-authn-functions.js'
 import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.js'
 import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
@@ -25,8 +25,8 @@ import { observeApiKeys, observeAuth, observeAuthorization, observeSessions, obs
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { resolveIamNotifications } from './iam-notifications.js'
-import { buildIamPublicConfig } from './iam-public-config.js'
-import { readIamUserSecurity } from './iam-security-cache.js'
+import { buildIamPublicConfig, readIamPublicConfig } from './iam-public-config.js'
+import { readIamSessionCredential } from './iam-security-cache.js'
 import { seedIamData } from './iam-seed.js'
 import {
 
@@ -35,11 +35,12 @@ import {
 } from './iam-types.js'
 import { createSessionOperations } from './session/iam-session-functions.js'
 import { createTicketOperations } from './ticket/iam-ticket-functions.js'
+import { createIamAccountScan } from './user/iam-user-account-scan.js'
 import { createUserOperations } from './user/iam-user-functions.js'
 import { createDbUserRepository, resetUserRepoSingleton } from './user/iam-user-repository-user.js'
-import { checkPasswordState, isUserActive } from './user/iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
+const accountScan = createIamAccountScan(logger)
 
 // ─── 内部状态 ───
 
@@ -53,8 +54,6 @@ let currentAuthz: AuthzOperations | null = null
 let currentSession: SessionOperations | null = null
 let currentApiKey: ApiKeyOperations | null = null
 let currentTicket: TicketOperations | null = null
-let accountScanTimer: ReturnType<typeof setInterval> | undefined
-let accountScanRunning: Promise<void> | undefined
 
 // ─── 未初始化占位 ───
 
@@ -191,23 +190,7 @@ export const iam: IamFunctions = {
       const credentialUsers = await createDbUserRepository()
       const sessionResult = await createSessionOperations({
         config: parsed,
-        readCredential: async (userId) => {
-          const found = await readIamUserSecurity(credentialUsers, userId)
-          if (!found.success)
-            return found
-          if (found.data) {
-            const passwordState = checkPasswordState(found.data, parsed.password)
-            if (!passwordState.success)
-              return passwordState
-          }
-          return core.ok(found.data
-            ? {
-                version: found.data.credentialVersion ?? '',
-                available: isUserActive(found.data),
-                profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl },
-              }
-            : null)
-        },
+        readCredential: userId => readIamSessionCredential(credentialUsers, parsed.password, userId),
       })
       if (!sessionResult.success) {
         return sessionResult
@@ -270,31 +253,8 @@ export const iam: IamFunctions = {
       // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
       currentTicket = createTicketOperations()
 
-      // 组合 auth：注入 registerAndLogin（依赖 user + auth 两个子功能）
-      const authn = authnResult.data.authn
-      currentAuth = observeAuth({
-        ...authn,
-        async registerAndLogin(options, context) {
-          const regResult = await currentUser!.register(options)
-          if (!regResult.success) {
-            return regResult as HaiResult<AuthResult>
-          }
-          return authnResult.data.loginRegisteredUser(regResult.data.user, context)
-        },
-      })
-      if ((parsed.accounts?.dormantAfterDays ?? 0) > 0) {
-        accountScanTimer = setInterval(() => {
-          if (accountScanRunning)
-            return
-          accountScanRunning = users.scanInactiveAccounts().then((result) => {
-            if (!result.success)
-              logger.error('Inactive account scan failed', { error: result.error })
-          }).catch((error: unknown) => {
-            logger.error('Inactive account scan failed', { error })
-          }).finally(() => { accountScanRunning = undefined })
-        }, (parsed.accounts?.scanIntervalSeconds ?? 3600) * 1000)
-        accountScanTimer.unref()
-      }
+      currentAuth = observeAuth(withIamRegistration(authnResult.data, () => currentUser!))
+      accountScan.start(users, parsed.accounts)
       logger.info('IAM module initialized')
       return core.ok(undefined)
     }
@@ -314,31 +274,7 @@ export const iam: IamFunctions = {
   get auth(): AuthnOperations {
     return currentAuth ?? notInitializedAuth
   },
-  async getPublicConfig() {
-    const snapshot = currentPublicConfig
-      ? structuredClone(currentPublicConfig)
-      : null
-    const authz = currentAuthz
-    if (!snapshot || !authz)
-      return notInitialized.result<IamPublicConfig>()
-    if (!snapshot.reauthentication.enabled)
-      return core.ok(snapshot)
-    const configured = await authz.getSensitiveOperations()
-    if (!configured.success)
-      return configured
-    return core.ok({
-      ...snapshot,
-      reauthentication: {
-        ...snapshot.reauthentication,
-        operations: [
-          ...new Set([
-            ...snapshot.reauthentication.operations,
-            ...configured.data,
-          ]),
-        ].sort(),
-      },
-    })
-  },
+  getPublicConfig: () => readIamPublicConfig(currentPublicConfig, currentAuthz, notInitialized.result),
   get user(): UserOperations {
     return currentUser ?? notInitializedUser
   },
@@ -378,9 +314,7 @@ export const iam: IamFunctions = {
     }
 
     logger.info('Closing IAM module')
-    clearInterval(accountScanTimer)
-    accountScanTimer = undefined
-    await accountScanRunning
+    await accountScan.stop()
 
     currentAuth = null
     currentUser = null

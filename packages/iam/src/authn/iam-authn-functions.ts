@@ -11,7 +11,7 @@ import type { IamConfig } from '../iam-config.js'
 import type { IamConfigInput } from '../iam-types.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
-import type { User } from '../user/iam-user-types.js'
+import type { User, UserOperations } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
 import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthRequestContext, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
@@ -610,6 +610,31 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
         return otpChallenge(identifier)
       },
+    },
+  }
+}
+
+/**
+ * 在注册成功后通过当前认证运行期建立会话。
+ * @param operations - 当前运行期建立会话的认证操作。
+ * @param currentUsers - 发起注册时获取该模块的用户操作。
+ * @returns 包含注册并登录的认证操作；注册失败时不建立会话。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function connectRegistration(operations: AuthnOperationsResult, users: UserOperations) {
+ *   return withIamRegistration(operations, () => users).registerAndLogin
+ * }
+ * ```
+ */
+export function withIamRegistration(operations: AuthnOperationsResult, currentUsers: () => UserOperations): AuthnOperations {
+  return {
+    ...operations.authn,
+    async registerAndLogin(options, context) {
+      const result = await currentUsers().register(options)
+      if (!result.success)
+        return result
+      return operations.loginRegisteredUser(result.data.user, context)
     },
   }
 }
