@@ -1,10 +1,11 @@
-import { iam } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - API Key 管理 API（列表 / 创建）
  * =============================================================================
  */
 
+import { IamApiKeySchema } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { CreateApiKeySchema, ListApiKeysQuerySchema } from '#lib/server/schemas/index.js'
 import { requireGrantablePermissions, requireManageableApiKeyOwner } from '#lib/server/security-roles.js'
@@ -39,7 +40,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
   }
 
   return kit.response.ok({
-    apiKeys: result.data.items,
+    apiKeys: IamApiKeySchema.array().parse(result.data.items),
     total: result.data.total,
     page: result.data.page,
     pageSize: result.data.pageSize,
@@ -72,5 +73,10 @@ export const POST = kit.handler(async ({ request, locals, cookies }) => {
     return kit.response.fromError(result.error)
   }
 
-  return kit.response.created(result.data)
+  const response = kit.response.created({
+    apiKey: IamApiKeySchema.parse(result.data.apiKey),
+    rawKey: result.data.rawKey,
+  })
+  response.headers.set('Cache-Control', 'no-store')
+  return response
 })

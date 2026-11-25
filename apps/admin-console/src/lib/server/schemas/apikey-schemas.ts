@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import { IamListApiKeysInputSchema } from '@h-ai/api-contract'
 import { PaginationQuerySchema } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -21,20 +22,7 @@ export const CreateApiKeySchema = z.object({
 
 /** API Key 列表查询参数 Schema（扩展通用分页参数 page/pageSize/search） */
 export const ListApiKeysQuerySchema = PaginationQuerySchema.extend({
+  ...IamListApiKeysInputSchema.pick({ enabled: true, sortBy: true, sortDirection: true }).shape,
   /** 用户 ID（必须） */
   userId: z.string().min(1),
-  /** 按启用状态过滤 */
-  enabled: z
-    .enum(['true', 'false'])
-    .transform(v => v === 'true')
-    .optional(),
-  /** 服务端排序字段 */
-  sortBy: z.enum([
-    'name',
-    'createdAt',
-    'lastUsedAt',
-    'expiresAt',
-  ]).optional(),
-  /** 服务端排序方向 */
-  sortDirection: z.enum(['asc', 'desc']).optional(),
 })

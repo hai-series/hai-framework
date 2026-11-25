@@ -1,5 +1,8 @@
-import { IamListUsersInputSchema, IamPermissionSchema } from '@h-ai/api-contract'
+import { AuditLogSchema, AuditLogStatsSchema, IamListUsersInputSchema, IamPermissionSchema } from '@h-ai/api-contract'
 import { z } from 'zod'
+
+export { AuditBackupReceiptSchema } from '@h-ai/api-contract'
+export type { AuditBackupReceipt } from '@h-ai/api-contract'
 
 /** 权限的敏感操作配置复用框架字段；职责授权仍由应用控制。 */
 export const AdminPermissionPolicySchema = IamPermissionSchema.pick({
@@ -107,44 +110,14 @@ export const AdminAuditInputSchema = AdminPageInputSchema.extend({
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 })
-export const AdminAuditLogSchema = z.object({
-  category: z.enum(['system', 'business']).nullish(),
-  outcome: z.enum(['success', 'failure', 'denied']).nullish(),
-  severity: z.enum(['info', 'warning', 'error', 'critical']).nullish(),
-  scopeId: z.string().nullish(),
-  requestId: z.string().nullish(),
-  traceId: z.string().nullish(),
-  actorSnapshot: z.object({
-    id: z.string(),
-    username: z.string().optional(),
-    displayName: z.string().optional(),
-    roles: z.array(z.string()).optional(),
-  }).nullish(),
-  id: z.string(),
-  userId: z.string().nullable(),
-  username: z.string().nullable(),
-  action: z.string(),
-  resource: z.string(),
-  resourceId: z.string().nullable(),
-  details: z.string().nullable(),
-  ipAddress: z.string().nullable(),
-  userAgent: z.string().nullable(),
-  createdAt: z.string().datetime(),
-})
-export const AuditBackupReceiptSchema = z.object({
-  id: z.string(),
-  key: z.string(),
-  recordCount: z.number(),
-  sha256: z.string(),
-  createdAt: z.string().datetime(),
-  cutoff: z.string().datetime(),
+export const AdminAuditLogSchema = AuditLogSchema.extend({
+  category: AuditLogSchema.shape.category.nullish(),
+  outcome: AuditLogSchema.shape.outcome.nullish(),
+  severity: AuditLogSchema.shape.severity.nullish(),
 })
 export const AdminAuditSchema = z.object({
   backupEnabled: z.boolean(),
-  stats: z.array(z.object({
-    action: z.string(),
-    count: z.number(),
-  })),
+  stats: AuditLogStatsSchema,
   items: z.array(AdminAuditLogSchema),
   total: z.number(),
   page: z.number(),
@@ -171,7 +144,6 @@ export const AvatarOutputSchema = z.object({
 export type AdminUser = z.infer<typeof AdminUserSchema>
 export type AdminRole = z.infer<typeof AdminRoleSchema>
 export type AdminRoleCode = z.infer<typeof AdminRoleCodeSchema>
-export type AuditBackupReceipt = z.infer<typeof AuditBackupReceiptSchema>
 export type AdminAuditLog = z.infer<typeof AdminAuditLogSchema>
 export type AdminInviteUser = z.infer<typeof AdminInviteUserSchema>
 export type AdminCreateUser = z.infer<typeof AdminCreateUserSchema>

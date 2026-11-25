@@ -1,10 +1,11 @@
-import { iam } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - 单个 API Key 管理 API（详情 / 吊销）
  * =============================================================================
  */
 
+import { IamApiKeySchema } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { requireManageableApiKeyOwner } from '#lib/server/security-roles.js'
 
@@ -27,7 +28,7 @@ export const GET = kit.handler(async ({ params, locals }) => {
     return kit.response.notFound('API Key not found')
   }
 
-  return kit.response.ok(result.data)
+  return kit.response.ok(IamApiKeySchema.parse(result.data))
 })
 
 /**
@@ -38,13 +39,12 @@ export const GET = kit.handler(async ({ params, locals }) => {
 export const DELETE = kit.handler(async ({ params, locals, request, cookies }) => {
   kit.guard.require(locals.session, 'apikey:delete')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.apiKeys.delete')
-  const key = await iam.apiKey.getApiKey(params.id ?? '')
+  const { id } = kit.validate.params(params, kit.validate.IdParamSchema)
+  const key = await iam.apiKey.getApiKey(id)
   if (!key.success)
     return kit.response.fromError(key.error)
   if (key.data)
     await requireManageableApiKeyOwner(locals.session, key.data.userId)
-
-  const { id } = kit.validate.params(params, kit.validate.IdParamSchema)
 
   const result = await iam.apiKey.revokeApiKey(id)
   if (!result.success) {

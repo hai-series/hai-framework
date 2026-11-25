@@ -1,4 +1,4 @@
-import { apiContract, IamAdminResetPasswordInputSchema } from '@h-ai/api-contract'
+import { apiContract, AuditBackupInputSchema, AuditBackupReceiptSchema, IamAdminResetPasswordInputSchema } from '@h-ai/api-contract'
 import { z } from 'zod'
 import {
   AdminAuditInputSchema,
@@ -12,7 +12,6 @@ import {
   AdminUserSchema,
   AdminUsersInputSchema,
   AdminUsersSchema,
-  AuditBackupReceiptSchema,
   AvatarOutputSchema,
   AvatarUploadSchema,
   BusinessSettingsSchema,
@@ -135,9 +134,7 @@ export const adminContract = {
       method: 'POST',
       path: '/admin/audit/backup',
       tags: ['admin'],
-    }).input(z.object({
-      id: z.uuid(),
-    }).strict()).output(apiContract.haiResultSchema(AuditBackupReceiptSchema)),
+    }).input(AuditBackupInputSchema).output(apiContract.haiResultSchema(AuditBackupReceiptSchema)),
     list: apiContract.route({
       method: 'POST',
       path: '/admin/audit/list',
