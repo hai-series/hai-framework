@@ -136,7 +136,7 @@
       try {
         const [{ default: MindElixir }] = await Promise.all([
           import('mind-elixir'),
-          import('mind-elixir/style'),
+          import('mind-elixir/style.css'),
         ])
         if (disposed)
           return
