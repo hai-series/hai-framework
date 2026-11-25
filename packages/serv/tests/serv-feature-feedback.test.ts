@@ -36,6 +36,16 @@ function fixture() {
     total: 1,
   }))
   const feedback: FeedbackFunctions = {
+    createBundle: unused,
+    getBundleViewerFiles: () => ({}),
+    queryBundle: () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    }),
+    readBundle: unused,
+    summarizeBundle: () => '',
     init: async () => core.ok(undefined),
     close: async () => core.ok(undefined),
     config: null,

@@ -88,16 +88,18 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     catch {
       return invalid(400)
     }
-    if (parts.length === 1 && parts[0] === 'policy' && event.request.method === 'GET')
+    const method = event.request.method
+    if (parts.length === 1 && parts[0] === 'policy' && method === 'GET')
       return ok(options.feedback.budget)
-    if (parts[0] !== 'reports' || parts.length > 4) {
+    const listMine = parts.length === 1 && parts[0] === 'my-reports' && method === 'GET'
+    if (!listMine && (parts[0] !== 'reports' || parts.length > 4)) {
       return fromError({
         ...HaiCommonError.NOT_FOUND,
         message: core.i18n.coreM('core_errorNotFound'),
       })
     }
     let body: unknown = {}
-    if (!['GET', 'HEAD'].includes(event.request.method)) {
+    if (!['GET', 'HEAD'].includes(method)) {
       if (event.request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json')
         return invalid(415)
       try {
@@ -121,7 +123,6 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         ? { id: parts[1] }
         : {}),
     }
-    const method = event.request.method
     const service = options.feedback
     async function execute<T>(schema: z.ZodType<T>, operation: (value: T) => Promise<HaiResult<unknown>>): Promise<Response> {
       const parsed = schema.safeParse(input)
@@ -140,6 +141,8 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         })
       }
     }
+    if (listMine)
+      return execute(FeedbackListInputSchema, value => service.listMine(value, actor))
     if (parts.length === 1) {
       if (method === 'POST')
         return execute(FeedbackSubmitInputSchema, value => service.submit(value, actor))

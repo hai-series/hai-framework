@@ -11,14 +11,32 @@ function fixture() {
     acknowledged: input.evidence.map(item => item.id),
     evidenceRevision: 2,
   }))
+  const list = vi.fn<FeedbackFunctions['list']>(async () => core.err(HaiCommonError.FORBIDDEN, 'Forbidden'))
+  const listMine = vi.fn<FeedbackFunctions['listMine']>(async input => core.ok({
+    items: [],
+    total: 0,
+    page: input.page ?? 1,
+    pageSize: input.pageSize ?? 20,
+  }))
   const feedback: FeedbackFunctions = {
+    createBundle: unused,
+    getBundleViewerFiles: () => ({}),
+    queryBundle: () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    }),
+    readBundle: unused,
+    summarizeBundle: () => '',
     init: async () => core.ok(undefined),
     close: async () => core.ok(undefined),
     config: null,
     budget: apiContract.resolveFeedbackBudget(),
     isInitialized: true,
     submit: unused,
-    list: unused,
+    list,
+    listMine,
     get: unused,
     getEvidence: unused,
     setStatus: unused,
@@ -38,14 +56,16 @@ function fixture() {
   }
   const resolveContext = vi.fn(() => actor)
   const handler = kit.createFeedbackHandler({ feedback, resolveContext })
-  const request = (path: string, body: unknown) => {
+  const request = (path: string, body?: unknown) => {
     const url = new URL(`https://app.test/api/feedback${path}`)
     return handler({
-      request: new Request(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
+      request: new Request(url, body === undefined
+        ? undefined
+        : {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          }),
       url,
       locals: {},
     } as RequestEvent)
@@ -53,12 +73,33 @@ function fixture() {
   return {
     request,
     appendEvidence,
+    list,
+    listMine,
     feedback,
     actor,
   }
 }
 
 describe('kit feedback catch-all', () => {
+  it('本人列表使用可信作者与分页筛选，管理列表仍独立鉴权', async () => {
+    const f = fixture()
+    expect(await (await f.request('/my-reports?page=2&pageSize=1&category=bug')).json()).toEqual({
+      success: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 2,
+        pageSize: 1,
+      },
+    })
+    expect(f.listMine).toHaveBeenCalledExactlyOnceWith({ page: 2, pageSize: 1, category: 'bug' }, f.actor)
+    expect(f.list).not.toHaveBeenCalled()
+    expect((await f.request('/my-reports?userId=untrusted')).status).toBe(400)
+    expect((await f.request('/my-reports', {})).status).toBe(404)
+    expect((await f.request('/reports')).status).toBe(403)
+    expect(f.list).toHaveBeenCalledExactlyOnceWith({}, f.actor)
+  })
+
   it('挂载目录只裁去尾部斜杠，中间连续斜杠保持字面路径', async () => {
     const f = fixture()
     const path = `/feedback/${'/'.repeat(120_000)}tenant`
