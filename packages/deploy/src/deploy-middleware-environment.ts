@@ -3,7 +3,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DeploymentEnvironment } from './deploy-environment.js'
 import type { MiddlewareBackend, MiddlewareField } from './deploy-middleware.js'
-import type { MiddlewareRequirement } from './deploy-types.js'
+import type { DeployAppOptions, MiddlewareRequirement, ProvisionResult, ScanResult } from './deploy-types.js'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { core } from '@h-ai/core'
@@ -13,6 +13,7 @@ import configurationShapes from './deploy-config-shapes.json' with { type: 'json
 import { saveDeploymentEnvironment } from './deploy-environment.js'
 import { deployM } from './deploy-i18n.js'
 import { readLocalFile, writeLocalFile } from './deploy-local-file.js'
+import { mergeManagedMiddlewareConfig } from './deploy-middleware-config.js'
 import { HaiDeployError } from './deploy-types.js'
 
 /**
@@ -295,4 +296,56 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
   catch {
     return core.err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))
   }
+}
+
+/**
+ * 合并 Provisioner 输出环境变量，并聚合 HAI_REACH_PROVIDERS 数组。
+ * @example 模块内部上下文
+ * ```ts
+ * const env = mergeProvisionEnv([{
+ *   serviceType: 'email',
+ *   provisionerName: 'resend',
+ *   resourceInfo: 'shop-mail',
+ *   resourceStatus: 'reused',
+ *   envVars: { HAI_REACH_PROVIDERS: '[]' },
+ * }])
+ * ```
+ */
+export function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, options?: DeployAppOptions): Record<string, string> {
+  const env: Record<string, string> = {}
+  const reachRequirements = scan?.middlewares?.filter(item => item.configName === 'reach') ?? []
+  const reachProviders: unknown[] = reachRequirements.map(item => item.config)
+  let hasReachOutput = false
+  for (const prov of results) {
+    if (prov.envVars.HAI_REACH_PROVIDERS) {
+      hasReachOutput = true
+      const supplied = JSON.parse(prov.envVars.HAI_REACH_PROVIDERS) as Record<string, unknown>[]
+      for (const provider of supplied) {
+        const targets = reachRequirements.filter((item) => {
+          const mode = options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.[item.service]
+          return item.service === prov.serviceType && (!mode || mode === 'default')
+        })
+        if (targets.length) {
+          for (const target of targets) {
+            reachProviders[reachRequirements.indexOf(target)] = {
+              ...mergeManagedMiddlewareConfig(target, provider),
+              name: target.config.name ?? provider.name,
+            }
+          }
+        }
+        else {
+          reachProviders.push(provider)
+        }
+      }
+    }
+    for (const [name, value] of Object.entries(prov.envVars)) {
+      const requirement = scan?.middlewares?.find(item => item.envPrefix === name)
+      env[name] = requirement
+        ? JSON.stringify(mergeManagedMiddlewareConfig(requirement, JSON.parse(value)))
+        : value
+    }
+  }
+  if (hasReachOutput)
+    env.HAI_REACH_PROVIDERS = JSON.stringify(reachProviders)
+  return env
 }

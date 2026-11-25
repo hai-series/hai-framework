@@ -2,23 +2,23 @@
  * @h-ai/scheduler — 定时任务服务主入口
  *
  * 本文件仅负责生命周期管理（init / close）与 API 编排；
- * 具体业务逻辑委托给 scheduler-functions.ts / scheduler-runner.ts。
+ * 任务管理与执行分别委托给内部功能模块。
  * @module scheduler-main
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { SchedulerConfig } from './scheduler-config.js'
-import type { LogQueryOptions, SchedulerFunctions, SchedulerInitInput, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput, TriggerTaskInput } from './scheduler-types.js'
+import type { LogQueryOptions, SchedulerFunctions, SchedulerInitInput, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput } from './scheduler-types.js'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { z } from 'zod'
 
-import { executionEntry, executionId, SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import { ExecutionResolutionSchema, SchedulerConfigSchema, TriggerTaskSchema } from './scheduler-config.js'
-import { cancelTaskDefinitionReads, clearHooks, drainTaskDefinitions, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
+import { SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
+import { SchedulerConfigSchema } from './scheduler-config.js'
+import { createExecutionOperations } from './scheduler-execution-functions.js'
+import { cancelTaskDefinitionReads, clearHooks, drainTaskDefinitions, getHooks, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
-import { configureExecution, drainRunner, isTimerRunning, repairExecutionLogs, replayTaskReceipt, resetRunner, runTask, setLogRepository, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
+import { configureExecution, drainRunner, isTimerRunning, resetRunner, setLogRepository, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
@@ -29,16 +29,18 @@ let closeInProgress: Promise<void> | null = null
 let taskRepo: SchedulerTaskRepository | null = null
 let logRepo: SchedulerLogRepository | null = null
 let executionRepo: SchedulerExecutionRepository | null = null
-const executionIdSchema = z.string().regex(/^[a-f\d]{64}$/)
-const executionListSchema = z.object({
-  limit: z.number().int().min(1).max(100).default(50),
-  offset: z.number().int().min(0).max(1_000_000).default(0),
-})
 
 const notInitialized = core.module.createNotInitializedKit(
   HaiSchedulerError.NOT_INITIALIZED,
   () => schedulerM('scheduler_notInitialized'),
 )
+
+const executionOperations = createExecutionOperations({
+  get config() { return currentConfig },
+  get executionRepo() { return executionRepo },
+  get taskRepo() { return taskRepo },
+  get closing() { return closeInProgress !== null },
+}, notInitialized.result)
 
 async function initDatabase() {
   if (!reldb.isInitialized) {
@@ -154,13 +156,6 @@ async function initializeScheduler(config: SchedulerInitInput | undefined, previ
   }
 }
 
-function normalizeTriggerInput(options?: TriggerTaskInput): { type: 'manual', source: string | null } {
-  return {
-    type: 'manual',
-    source: options?.source ?? null,
-  }
-}
-
 /**
  * 定时任务公共入口；先初始化共享 RelDB，再注册/触发/启动；关闭会排空任务和日志修复，宿主最后关闭数据库。
  *
@@ -194,57 +189,7 @@ function normalizeTriggerInput(options?: TriggerTaskInput): { type: 'manual', so
  * ```
  */
 export const scheduler: SchedulerFunctions = {
-  execution: {
-    async get(id) {
-      if (!currentConfig || !executionRepo)
-        return notInitialized.result()
-      if (!executionIdSchema.safeParse(id).success)
-        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-      const row = await executionRepo.byOccurrence(id)
-      return row.success
-        ? core.ok(row.data
-            ? executionEntry(row.data)
-            : null)
-        : row
-    },
-    async listUnknown(options) {
-      if (!currentConfig || !executionRepo)
-        return notInitialized.result()
-      const parsed = executionListSchema.safeParse(options ?? {})
-      if (!parsed.success)
-        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-      const rows = await executionRepo.unknown(parsed.data.limit, parsed.data.offset)
-      return rows.success
-        ? core.ok(rows.data.map(executionEntry))
-        : rows
-    },
-    async listLogFailures(options) {
-      if (!currentConfig || !executionRepo)
-        return notInitialized.result()
-      const parsed = executionListSchema.safeParse(options ?? {})
-      if (!parsed.success)
-        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-      const rows = await executionRepo.pendingLogs(parsed.data.limit, parsed.data.offset)
-      return rows.success
-        ? core.ok(rows.data.map(executionEntry))
-        : rows
-    },
-    async repairLog(id) {
-      if (!currentConfig || !executionRepo || closeInProgress)
-        return notInitialized.result()
-      if (!executionIdSchema.safeParse(id).success)
-        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-      return repairExecutionLogs(id)
-    },
-    async resolveUnknown(id, resolution) {
-      if (!currentConfig || !executionRepo)
-        return notInitialized.result()
-      const parsed = ExecutionResolutionSchema.safeParse(resolution)
-      if (!executionIdSchema.safeParse(id).success || !parsed.success)
-        return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-      return executionRepo.resolve(id, parsed.data.status, parsed.data.expectedUpdatedAt)
-    },
-  },
+  execution: executionOperations.execution,
   async init(config?: SchedulerInitInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Scheduler init already in progress, skipping concurrent call')
@@ -343,55 +288,7 @@ export const scheduler: SchedulerFunctions = {
     return core.ok(undefined)
   },
 
-  async trigger(taskId: string, options?: TriggerTaskInput): Promise<HaiResult<TaskExecutionLog>> {
-    if (!currentConfig || !executionRepo)
-      return notInitialized.result()
-    const parsed = TriggerTaskSchema.safeParse(options ?? {})
-    if (!parsed.success)
-      return core.err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
-
-    const config = currentConfig
-    const execution = executionRepo
-    const receipt = parsed.data.idempotencyKey
-      ? executionId(taskId, 'manual', parsed.data.idempotencyKey)
-      : undefined
-    if (receipt) {
-      const replay = await replayTaskReceipt(execution, receipt)
-      if (currentConfig !== config)
-        return notInitialized.result()
-      if (!replay.success)
-        return replay
-      if (replay.data)
-        return core.ok(replay.data)
-    }
-    const refreshed = await loadPersistedTasks(taskRepo)
-    if (!refreshed.success)
-      return refreshed
-    if (currentConfig !== config)
-      return notInitialized.result()
-
-    const task = getTask(taskId)
-    if (!task) {
-      if (receipt) {
-        const replay = await replayTaskReceipt(execution, receipt)
-        if (currentConfig !== config)
-          return notInitialized.result()
-        if (!replay.success)
-          return replay
-        if (replay.data)
-          return core.ok(replay.data)
-      }
-      return core.err(
-        HaiSchedulerError.TASK_NOT_FOUND,
-        schedulerM('scheduler_taskNotFound', {
-          params: { taskId },
-        }),
-      )
-    }
-
-    const log = await runTask(task, undefined, normalizeTriggerInput(parsed.data), parsed.data)
-    return core.ok(log)
-  },
+  trigger: executionOperations.trigger,
 
   async getLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
     if (!currentConfig)
