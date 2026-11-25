@@ -18,7 +18,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、�
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
 
-所有警告、错误和即时操作结果统一使用 `toast` / `ui.notifyError` 等，根布局只挂载一次 `ToastContainer`；默认右下角，使用主题语义色、浅色底、细色边及类型图标，可手工关闭，默认 3 秒消失（notifyError/notifyWarning 默认 5 秒）。FIFO 队列逐条展示，等待期间不计时；`ui.toast.add({ message, position, traceId })` 支持六个方位，`duration: 0` 需手动移除。traceId 无默认，正文不显示编号，容器自动分离已有格式；有编号才显示排查图标，展开可查看和复制。悬停、聚焦和展开时暂停，结束后继续剩余时间。状态层使用轻量 `@h-ai/ui/toast`。响应式安全文案使用 `ui.useToastFeedback`，同类、同文案、同编号合并，来源更新/清空时替换/移除其旧提示，卸载不撤销已发通知。字段保留错误标记与读屏关联，恢复动作留在原位；Alert 仅支持 info/success 持续信息。迁移旧 warning/error Alert 时改用 Toast，不新增行内错误段落。
+所有警告、错误和即时操作结果统一使用 `ui.toast` / `ui.notifyError` 等，根布局只挂载一次 `ToastContainer`；默认右下角，使用主题语义色、浅色底、细色边及类型图标，可手工关闭，默认 3 秒消失（notifyError/notifyWarning 默认 5 秒）。FIFO 队列逐条展示，等待期间不计时；`ui.toast.add({ message, position, traceId })` 支持六个方位，`duration: 0` 需手动移除。traceId 无默认，正文不显示编号，容器自动分离已有格式；有编号才显示排查图标，展开可查看和复制。悬停、聚焦和展开时暂停，结束后继续剩余时间。状态层从轻量 `@h-ai/ui/toast` 导入 `ui`。响应式安全文案使用 `ui.useToastFeedback`，同类、同文案、同编号合并，来源更新/清空时替换/移除其旧提示，卸载不撤销已发通知。字段保留错误标记与读屏关联，恢复动作留在原位；Alert 仅支持 info/success 持续信息。迁移旧 warning/error Alert 时改用 Toast，不新增行内错误段落。
 
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
 - 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。

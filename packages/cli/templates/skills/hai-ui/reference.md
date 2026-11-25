@@ -281,8 +281,8 @@ const p = ui.usePlatform()
 | `AppBar`         | `title`, `backHref`, `onback`, `fixed`, `transparent`, snippet `left`/`right` | 顶部导航栏       |
 | `BottomNav`      | `items: BottomNavItem[]`, `active`                                            | 底部导航栏，客户端挂载后启用按钮 |
 | `ActionSheet`    | `open`, `title`, `items: ActionSheetItem[]`, `cancelText`, `onselect`         | 底部弹出操作面板 |
-| `PullRefresh`    | `refreshing`, `onrefresh`, `threshold`, `pullText`, `releaseText`             | 下拉刷新         |
-| `InfiniteScroll` | `loading`, `finished`, `threshold`, `onload`, `loadingText`, `finishedText`   | 无限滚动加载     |
+| `PullRefresh`    | `onrefresh`, `threshold`, `pullText`, `releaseText` | 下拉刷新，失败后复位并可重试 |
+| `InfiniteScroll` | `hasMore`, `threshold`, `onloadmore`, `loadingText`, `noMoreText` | 页面或列表接近末尾时请求下一页 |
 | `SwipeCell`      | `leftActions`, `rightActions: SwipeCellAction[]`, `threshold`                 | 滑动操作单元格   |
 
 **移动端组件用法示例**：
@@ -302,8 +302,8 @@ const p = ui.usePlatform()
 <SafeArea top bottom>
   <!-- 显示首页标题栏。 -->
   <AppBar title="首页" />
-  <!-- 用户下拉时调用应用的 loadData，refreshing 绑定同步进行中的状态。 -->
-  <PullRefresh bind:refreshing onrefresh={loadData}>
+  <!-- 用户下拉时调用应用的异步 loadData，组件负责显示刷新状态。 -->
+  <PullRefresh onrefresh={loadData}>
     <main class="p-4">
       <!-- 页面内容 -->
     </main>
@@ -417,7 +417,9 @@ const p = ui.usePlatform()
 | `AvatarUpload` | `value`, `uploadHandler`, `size`, `fallback`      | 头像上传 |
 | `FileList`    | `files: FileItem[]`, `layout`, `showPreview`   | 文件列表 |
 
-上传协议属于应用 service：组件通过 `uploadHandler(file, { signal, onProgress })` 注入实现，并接收 `{ url?, response? }`。不要把 presign、认证头或 PUT/POST 细节塞进 UI 组件；图片与头像 handler 必须返回安全的 `url`。未提供 handler 时组件只负责文件选择或本地预览。
+上传协议属于应用 service：组件通过 `uploadHandler(file, { signal, onProgress })` 注入实现，并接收 `{ url?, response? }`。不要把 presign、认证头或 PUT/POST 细节塞进 UI 组件；图片与头像 handler 必须返回安全的 `url`。未提供 handler 时组件只负责文件选择或本地预览。宿主应把 `signal` 传给实际请求。清空列表、移除文件或卸载会停止相应的排队和在途上传，验证失败的文件不能重试。替换正在上传的图片或头像时，只采纳当前仍有效的请求结果。
+
+`FileList` 的内置 PDF 预览逐页绘制到画布，关闭时取消读取并释放渲染资源。传入已授权的同源 HTTP(S)、可经 CORS 读取的地址或同源 Blob URL。响应须声明 `application/pdf` 并包含有效的 PDF 文件头，文件上限 20 MiB。应用可通过 `onpreview(file)` 接管预览。
 
 #### AI 场景组件
 
@@ -426,7 +428,7 @@ const p = ui.usePlatform()
 | `MarkdownRenderer`   | Markdown 渲染（内置 Shiki 高亮，支持 `fontSize` / `allowHtmlTags`） |
 | `AiDocumentDownloadMenu` | AI 文档下载菜单              |
 | `AiDocumentEditor`   | AI 文档编辑器（支持 Mermaid、受控代码预览，以及 `fontSize` / `allowHtmlTags`） |
-| `AiTableEditor`      | AI 表格编辑器                    |
+| `AiTableEditor`      | 用 `tableData` 传入 `table_columns` 与 `table_rows`，通过 `ontablechange` 接收更新快照，通过 `ondownloadtable` 接管 CSV 下载 |
 | `AiMindMapEditor`    | mind/v1 脑图查看与编辑；支持布局切换、撤销重做、JSON 导入及 JSON/CSV/XLSX/XMind 导出 |
 
 > AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。`AiDocumentEditor` 默认只允许 Markdown 内置预览；HTML / JS / CSS 等高风险预览需要显式启用 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
@@ -544,10 +546,10 @@ form={
 
 ### 纯客户端控制器与惰性页签
 
-- 无 SvelteKit SSR 时用 `kit.crud.define` + `ui.createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
-- `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `ui.createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`。
+- 无 SvelteKit SSR 时用 `kit.crud.define` + `ui.createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。成功查询回填日期范围和排序，客户端未配置 `defaultPageSize` 时每页 10 条。删除前检查随本次确认取消而失效，删除请求失败时保留确认框。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
+- `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `ui.createCrudController(crud, { autoLoad: false })` 在页签首次可见时才 `load()`。
 - Toast 默认右下角浮动，由 UI 模块统一用主题语义色区分提示、成功、警告、错误，使用浅色底、细色边及类型图标，不占布局且可关闭，FIFO 队列逐条展示并从展示时计时；根布局只挂载一次 ToastContainer。六方位通过 toast.add 的 position 指定；登录、改密、保存、删除和上传等成功或失败结果均不使用行内 Alert。
-- 状态层从轻量 @h-ai/ui/toast 入口导入 toast/notify*/errorMessage/useToastFeedback，不加载组件及引导 CSS；ToastContainer 在根布局单次挂载。
+- 状态层从轻量 `@h-ai/ui/toast` 导入 `ui`，使用 `ui.toast`、`ui.notifySuccess`、`ui.notifyError`、`ui.notifyInfo`、`ui.notifyWarning`、`ui.errorMessage` 和 `ui.useToastFeedback`。在根布局单次挂载 `ToastContainer`。
 - Toast 已内置 `ui.notifySuccess` / `ui.notifyError(err, fallback?)` / `ui.notifyInfo` / `ui.notifyWarning`，业务应用无需自建 toast 工具文件。
 - `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件使用 `ui.useToastFeedback`，同类型、同内容、同编号合并；更新/清空时替换/移除该来源旧通知。所有警告和错误均交给 ToastContainer，字段只保留错误标记、读屏关联与恢复操作。默认隐藏 traceId，排查图标展开后显示编号、复制和联系支持的说明；悬停、聚焦或展开时暂停计时。普通 Error 即使自带 traceId 也使用兜底文案，编号不能证明原文可公开。
 

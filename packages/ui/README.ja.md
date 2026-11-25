@@ -32,6 +32,8 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 
 [実行日時入力](../../docs/usage/function/ui.ja.md#schedule-input)は日付ピッカーを再利用し、IANA タイムゾーン、分精度、5フィールドの Cron に対応します。
 
+[閲覧権限のあるファイルをプレビュー](../../docs/usage/function/ui.ja.md#file-preview)
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
@@ -42,6 +44,7 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 
 ```sh
 pnpm --filter @h-ai/ui typecheck
+pnpm --filter @h-ai/ui check
 pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test

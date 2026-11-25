@@ -36,6 +36,8 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 [调度输入](../../docs/usage/function/ui.md#schedule-input)复用日期选择器，支持 IANA 时区、分钟精度和五段 Cron。
 
+[预览已授权文件](../../docs/usage/function/ui.md#file-preview)
+
 ## 数据结构
 
 模块没有自建数据库表。
@@ -46,6 +48,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 ```sh
 pnpm --filter @h-ai/ui typecheck
+pnpm --filter @h-ai/ui check
 pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test

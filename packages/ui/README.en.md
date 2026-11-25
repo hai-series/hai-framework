@@ -32,6 +32,8 @@ Use the [image policy and Markdown source range](../../docs/usage/function/ui.en
 
 [Schedule input](../../docs/usage/function/ui.en.md#schedule-input) combines the date picker with IANA time zones, minute precision, and five-field cron.
 
+[Preview authorized files](../../docs/usage/function/ui.en.md#file-preview)
+
 ## Data Structures
 
 The module creates no database tables of its own.
@@ -42,6 +44,7 @@ See the [data reference](../../docs/usage/data/ui.en.md) for where themes, langu
 
 ```sh
 pnpm --filter @h-ai/ui typecheck
+pnpm --filter @h-ai/ui check
 pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test

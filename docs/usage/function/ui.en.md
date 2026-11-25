@@ -109,7 +109,7 @@ Keep field values in page state and update them through bindings. The applicatio
 | `<Input>` | Input updates name | `type` selects the input or display type. `value` supplies the current value and can be bound when supported. `size` sets the component size. `error` supplies an error message or state. `validationMessage` sets the text shown after validation fails. | Input updates name | `<Input bind:value={name} />` |
 | `<BareInput>` | Input updates name | `type` selects the input or display type. `class` adds CSS classes. `accept` limits file types offered by the picker. `multiple` allows multiple selections. | Input updates name | `<BareInput type='text' bind:value={name} />` |
 | `<Textarea>` | Multiline input updates notes | `value` supplies the current value and can be bound when supported. `rows` sets the initial visible line count. `size` sets the component size. `autoResize` adjusts height to the entered text. `error` supplies an error message or state. | Multiline input updates notes | `<Textarea bind:value={notes} rows={3} />` |
-| `<Select>` | Selection updates status | `options` supplies the choices available to the user. `value` supplies the current value and can be bound when supported. `placeholder` sets the hint shown before input or selection. `size` sets the component size. `clearable` adds a control to clear the current value. `filterable` lets users filter choices by typing. [choice fields](#choice-options). | Selection updates status | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<Select>` | Selection updates status | `options` supplies the choices available to the user. `value` supplies the current value and can be bound when supported. `placeholder` sets the hint shown before input or selection. `size` sets the component size. `clearable` adds a control to clear the current value. `filterable` lets users filter choices by typing. [choice fields](#choice-options). Use the arrow keys to move through choices, Enter to select, and Escape to collapse the list. Typing spaces works in the filter. | Selection updates status | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Checkbox>` | Toggle updates enabled | `checked` sets whether the control is checked. `label` sets the displayed label. `size` sets the component size. `indeterminate` displays a partially checked state. | Toggle updates enabled | `<Checkbox bind:checked={enabled} label='Enabled' />` |
 | `<Switch>` | Toggle updates enabled | `checked` sets whether the control is checked. `label` sets the displayed label. `size` sets the component size. | Toggle updates enabled | `<Switch bind:checked={enabled} label='Enabled' />` |
 | `<Radio>` | Selection updates status | `options` supplies the choices available to the user. `value` supplies the current value and can be bound when supported. `direction` sets horizontal or vertical layout. `size` sets the component size. [choice fields](#choice-options). | Selection updates status | `<Radio options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
@@ -231,7 +231,7 @@ Control dialogs, drawers and confirmation with open state; attach menus and hint
 | --- | --- | --- | --- | --- |
 | `<Modal>` | Open and close update open | `open` controls whether it is open. `title` sets the title. `size` sets the component size. `radius` sets the corner radius. `bodyOverflow` controls how overflowing content is handled. `showClose` toggles the close button. | Open and close update open | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
 | `<Drawer>` | Drawer with bound open state | `open` controls whether it is open. `position` sets placement. `title` sets the title. `size` sets the component size. `width` sets the displayed width. `resizable` allows resizing the drawer by dragging. `widthStorageKey` sets the storage key for remembering drawer width. | Drawer with bound open state | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
-| `<Confirm>` | Confirmation calls confirm | `open` controls whether it is open. `title` sets the title. `message` supplies the message body. `variant` selects the visual style or state. `onconfirm` runs when the user confirms. | Confirmation calls confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
+| `<Confirm>` | Confirmation calls confirm | `open` controls whether it is open. `title` sets the title. `message` supplies the message body. `variant` selects the visual style or state. `onconfirm` runs when the user confirms. `onconfirm` can return or resolve to `false` to keep the dialog open for another attempt. | Confirmation calls confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
 | `<Popover>` | Click opens; Escape closes | `open` controls whether it is open. `position` sets placement. `trigger` chooses the trigger content or interaction. `offset` sets the gap between the overlay and its trigger. `ui.portal` moves the overlay outside clipping containers. | Click opens; Escape closes | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
 | `<Dropdown>` | Action menu | `items` supplies the items in display order. `trigger` chooses the trigger content or interaction. `triggerClass` adds CSS classes to the trigger. `position` sets placement. | Action menu | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
 | `<Tooltip>` | Help on hover or focus | `content` supplies the body or snippet to render. `position` sets placement. `delay` sets the delay before the hint appears. `ui.portal` moves the overlay outside clipping containers. | Help on hover or focus | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
@@ -278,6 +278,8 @@ Pass loaded records and column definitions. Application callbacks load data when
 <a id="datatable-options"></a>
 
 #### Data table columns and sorting
+
+Numeric fields with a camel-case `At` or snake-case `_at` suffix are shown as millisecond timestamps. Other numeric values are shown as received. Use the column's `render` callback for custom formatting.
 
 | Field | Type | Default | Purpose and when it applies |
 | --- | --- | --- | --- |
@@ -342,7 +344,7 @@ Pass loaded records and column definitions. Application callbacks load data when
 
 ### Handle mobile interaction: mobile components
 
-Provide mobile navigation, action sheets and refresh gestures. Application callbacks perform the requests.
+Use mobile components to connect navigation, action sheets, refresh gestures and paginated lists to the application.
 
 #### Interface list
 
@@ -351,14 +353,14 @@ Provide mobile navigation, action sheets and refresh gestures. Application callb
 | `<ActionSheet>` | Selection calls selectAction | `open` controls whether it is open. `title` sets the title. `items` supplies the items in display order. `cancelText` sets the cancel button label. `onselect` receives the selected item. | Selection calls selectAction | `<ActionSheet bind:open={open} items={sheetItems} onselect={selectAction} />` |
 | `<AppBar>` | Title and back navigation | `title` sets the title. `backHref` sets the back link destination. `onback` handles the back action. `fixed` fixes the component to the viewport. `safeArea` reserves device safe-area space. | Title and back navigation | `<AppBar title='Orders' backHref='/orders' />` |
 | `<BottomNav>` | Navigation controls | `items` supplies the items in display order. `active` selects the active item. `centered` centers the navigation. `maxWidth` sets the maximum width. | Navigation controls | `<BottomNav items={navItems} active='home' />` |
-| `<InfiniteScroll>` | Boundary calls loadMore | `loading` shows a pending state. `finished` stops loading after all results are fetched. `threshold` sets the trigger threshold. `onload` requests more data when the scroll condition is met. | Boundary calls loadMore | `<InfiniteScroll loading={loading} finished={finished} onload={loadMore} />` |
-| `<PullRefresh>` | Pull gesture calls refresh | `refreshing` indicates that a refresh is in progress. `threshold` sets the trigger threshold. `onrefresh` requests a refresh when the pull gesture meets the threshold. | Pull gesture calls refresh | `<PullRefresh refreshing={loading} onrefresh={refresh}>Orders</PullRefresh>` |
+| `<InfiniteScroll>` | Load more items near the end of a list | `hasMore` defaults to `true` and indicates another page. `threshold` defaults to 100 px. `onloadmore` loads the next page asynchronously. `noMoreText` sets the end message. | Calls `loadMore` when the page or list scrolls near the end, with one request in flight | `<InfiniteScroll {hasMore} onloadmore={loadMore}>Orders</InfiniteScroll>` |
+| `<PullRefresh>` | Refresh with a pull gesture | `threshold` sets the gesture threshold. `onrefresh` runs the asynchronous refresh. The component manages the pending state. | On failure, shows an error and resets the indicator so the user can retry | `<PullRefresh onrefresh={refresh}>Orders</PullRefresh>` |
 | `<SafeArea>` | Safe-area padding | `top` reserves the top safe area. `bottom` reserves the bottom safe area. `left` reserves the left safe area. `right` reserves the right safe area. | Safe-area padding | `<SafeArea top bottom>Orders</SafeArea>` |
 | `<SwipeCell>` | Swipe reveals actions and reports selection | `leftActions` supplies actions revealed on the left. `rightActions` supplies actions revealed on the right. `threshold` sets the trigger threshold. `onaction` handles the selected swipe action. | Swipe reveals actions and reports selection | `<SwipeCell rightActions={swipeActions} onaction={selectAction}>Order 42</SwipeCell>` |
 
 #### Scenario: Handle mobile navigation, refresh and loading
 
-Provide mobile navigation, action sheets and refresh gestures. Application callbacks perform the requests. For extended examples, see the [Chinese walkthrough](ui.md#mobile).
+The application supplies entries for navigation, action sheets and swipe actions. Its `loadMore` callback appends the next page and sets `hasMore` to `false` after the last page. Its `refresh` callback reloads the first page. Loading can be triggered by scrolling either the page or a self-contained list.
 
 <a id="workspace"></a>
 
@@ -616,11 +618,19 @@ Call uploadHandler after selection; image controls update their URL on success. 
 | `<FileUpload>` | Selected files passed to upload | `accept` limits file types offered by the picker. `maxSize` limits each file’s size. `maxFiles` limits the number of selectable files. `multiple` allows multiple selections. `uploadHandler` performs the host upload and returns the result used to update the UI. | Selected files passed to upload | `<FileUpload accept='.txt' uploadHandler={upload} />` |
 | `<ImageUpload>` | Successful upload updates image URL | `value` supplies the current value and can be bound when supported. `accept` limits file types offered by the picker. `maxSize` limits each file’s size. `aspectRatio` sets the preview or crop aspect ratio. `uploadHandler` performs the host upload and returns the result used to update the UI. | Successful upload updates image URL | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
 | `<AvatarUpload>` | Successful upload updates avatar URL | `value` supplies the current value and can be bound when supported. `size` sets the component size. `maxSize` limits each file’s size. `fallback` supplies fallback content. `uploadHandler` performs the host upload and returns the result used to update the UI. | Successful upload updates avatar URL | `<AvatarUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
-| `<FileList>` | Displays supplied files | `files` supplies the files to display. `layout` selects the file layout. `showDelete` shows the delete control. `showDownload` shows the download control. | Displays supplied files | `<FileList files={files} />` |
+| `<FileList>` | Displays supplied files | `files` supplies the files to display. `layout` selects the file layout. `showDelete` shows the delete control. `showDownload` shows the download control. `onpreview(file)` can take over the built-in preview. | Displays supplied files | `<FileList files={files} />` |
 
 #### Scenario: Choose files and call an upload service
 
 Call uploadHandler after selection; image controls update their URL on success. The application owns file storage. For extended examples, see the [Chinese walkthrough](ui.md#uploads).
+
+A failed transfer can be retried. Size or type validation failures prevent retry. Clearing the list, removing a file or unmounting discards the corresponding queued uploads and signals cancellation to active handlers. Image and avatar controls accept results only from the current, uncanceled request.
+
+<a id="file-preview"></a>
+
+#### Scenario: Preview an authorized PDF
+
+Pass an authorized file record with `type: 'application/pdf'` and its URL to `FileList`. The built-in preview supports same-origin HTTP(S), cross-origin URLs readable through CORS, and same-origin Blob URLs. The response must declare `application/pdf` and contain a valid PDF header. The maximum file size is 20 MiB. The viewer paints pages on a canvas and releases the request and renderer when closed. Use `onpreview(file)` to hand the file to an application-managed preview when needed.
 
 <a id="crypto"></a>
 
@@ -662,7 +672,7 @@ Pass text, Markdown, tables or document data to viewers and connect editing, dow
 | `<MarkdownRenderer>` | Safe Markdown rendering | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showCopyButton` toggles the copy control. `enableHighlight` toggles syntax highlighting. | Safe Markdown rendering | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | Selection invokes download action | `actions` supplies available actions or action content. `ondownload` handles the requested download. [download fields](#document-download-options). | Selection invokes download action | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
 | `<AiDocumentEditor>` | Editing updates markdown | `content` supplies the body or snippet to render. `fontSize` sets the text size in the reading area. `allowHtmlTags` selects which HTML tags can be retained. `showRunButton` toggles the Run button. `showCodePreviewToggle` shows the control for switching code and preview. `allowUnsafeCodePreview` explicitly enables code preview for trusted content. `remoteImages` controls network image requests. `onrewrite` can receive a verified source range. | Editing updates markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
-| `<AiTableEditor>` | Displays cells and reports edits | `columns` defines the columns of the editable data. `rows` supplies the rows to show or edit. `editable` enables editing. `ondownload` handles the requested download. | Displays cells and reports edits | `<AiTableEditor {columns} {rows} editable />` |
+| `<AiTableEditor>` | Display and edit table cells | `tableData` supplies `table_columns` and `table_rows` and takes precedence over `content`. `editable` enables edits. `ontablechange` receives changes with `nextData`. `ondownloadtable` receives CSV and a suggested filename. | Displays cells and reports edits and downloads to the host | `<AiTableEditor {tableData} editable ontablechange={updateTable} />` |
 
 <a id="document-download-options"></a>
 
@@ -731,6 +741,29 @@ const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Mar
 await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
+<a id="edit-sales-table"></a>
+
+#### Scenario: Edit a sales table
+
+Start with a sales column and one record. Change the first row from 42 to 43. The `ontablechange` callback receives the full updated table, which the host can pass to its save service.
+
+```svelte
+<script lang='ts'>
+  import { AiTableEditor, type AiTableData, type AiTableEditorChangePayload } from '@h-ai/ui'
+
+  let tableData = $state<AiTableData>({
+    table_columns: [{ key: 'sales', label: 'Sales', type: 'number' }],
+    table_rows: [{ row_id: 'row-1', sales: 42 }],
+  })
+
+  function updateTable({ nextData }: AiTableEditorChangePayload) {
+    tableData = nextData
+  }
+</script>
+
+<AiTableEditor {tableData} editable ontablechange={updateTable} />
+```
+
 <a id="private-document-media"></a>
 
 #### Scenario: Restrict images and identify Markdown source selections
@@ -750,6 +783,8 @@ The rewrite callback receives a `sourceRange` when the selection can be verified
 ### Run tools and edit artifacts: workspaces
 
 The host supplies tool catalogs, submission callbacks and accessible artifacts; the workspace displays progress and results.
+
+While a save is pending, the user can apply an existing rewrite. The response advances the saved version and any newer edits remain in the draft. Manual status checks pause while cancellation is pending. If the run is still active once cancellation settles, the user can check its status or request cancellation again.
 
 #### Interface list
 
@@ -842,7 +877,7 @@ Resource definitions connect list, create, update and delete callbacks; controll
 | `<CrudFilterBar>` | Submits query criteria | `filterFields` sets which fields can be filtered. `searchValue` sets the current search text. `onsearch` receives search input or the submitted query. `onfilterchange` receives filter changes. `onreset` handles reset. | Submits query criteria | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
 | `<CrudDetailPanel>` | Displays selected record | `open` controls whether it is open. `item` supplies the record to display. `fields` selects the fields to display or collect. `variant` selects the visual style or state. `drawerWidth` sets the width in drawer mode. `modalSize` sets the size in modal mode. | Displays selected record | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
 | `<CrudEditPanel>` | Submits declared writable fields | `open` controls whether it is open. `fields` selects the fields to display or collect. `variant` selects the visual style or state. `drawerWidth` sets the width in drawer mode. `modalSize` sets the size in modal mode. `onsubmit` runs on form submission. | Submits declared writable fields | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
-| `<CrudDeleteConfirm>` | Confirmation calls remove | `open` controls whether it is open. `loading` shows a pending state. `onconfirm` runs when the user confirms. | Confirmation calls remove | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
+| `<CrudDeleteConfirm>` | Confirmation calls remove | `open` controls whether it is open. `loading` shows a pending state. `onconfirm` runs when the user confirms. Returning `false` keeps the confirmation open. | Confirmation calls remove | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
 
 <a id="crud-resource-options"></a>
 
@@ -892,6 +927,8 @@ Creation does not query. After `load()`, `controller.data.items` is `[{ id: "j1"
 
 This follows CrudPage with createCrudController. The component displays state while the controller calls the application-provided data service.
 
+The client controller sends both date-range bounds to the query and restores filters and sorting after success. With no resource page size configured, the initial client query uses 10 rows. Choosing 20 uses 20 for the request and the paginator. A delete check belongs to the pending confirmation. The user can dismiss the dialog while the check is pending, which discards its result. A delete request failure leaves the dialog open for retry.
+
 ![CRUD lists: query, previous data and latest response](../images/function-ui-crud-loading.en.svg)
 
 Editing filters alone does not query; submit with Search/Enter. Paging and sorting use committed filters. Only the latest response can update the controller. Initial failure shows retry; refresh failure retains old data by default. Empty state requires loaded and total=0.
@@ -933,7 +970,7 @@ Display source with a file list and lazy read callback. The host controls file a
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `<CodeWorkspace>` | Source workspace | `source` supplies the workspace source for reading and saving code. | Open README.md to display # Hello | `<CodeWorkspace {source} />` |
+| `<CodeWorkspace>` | Read-only source workspace | `source` supplies the file tree, on-demand reads and optional paginated search. | Open README.md to display # Hello | `<CodeWorkspace {source} />` |
 
 #### Scenario: Browse files and inspect code
 
@@ -1064,7 +1101,7 @@ Keep browser locale in page state and select server locale per request to preven
 | --- | --- | --- | --- | --- |
 | `ui.createLocaleStore(options?)` | Manage the browser page’s current language | Optional `options` chooses the default locale, supported locales, browser detection and storage key. See [call arguments](#call-options). | `locale store with current/set/isSupported` | `ui.createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
 | `ui.getGlobalLocale()` | Read the locale for the current context | No arguments. | `locale string from current context` | `ui.getGlobalLocale()` |
-| `ui.setGlobalLocale(locale)` | Set the current request or page locale | `locale` is the language tag to apply to global translation functions. | `void; use request context for SSR` | `ui.setGlobalLocale("en-US")` |
+| `ui.setGlobalLocale(locale)` | Set the UI locale in the browser | `locale` is the language tag used for built-in UI messages. | `void`. No effect during SSR | `ui.setGlobalLocale("en-US")` |
 | `ui.detectBrowserLocale(supportedLocales?)` | Choose a supported browser language | `supportedLocales` limits acceptable browser languages. It defaults to the framework list. | `supported locale or null` | `ui.detectBrowserLocale()` |
 | `ui.isLocaleSupported(locale, supportedLocales?)` | Check whether a locale is enabled | `locale` is the language to check. `supportedLocales` restricts matching and defaults to the framework list. | `boolean` | `ui.isLocaleSupported("ja-JP")` |
 | `ui.resolveLocale(locale, supportedLocales?, defaultLocale?)` | Resolve a supported locale or fallback | `locale` is the candidate. `supportedLocales` lists allowed languages. `defaultLocale` is tried when the candidate fails to match and defaults to the framework locale. | `supported locale` | `ui.resolveLocale("en")` |

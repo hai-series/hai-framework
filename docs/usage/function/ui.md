@@ -187,7 +187,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 | `<Input>` | 输入框 | `type` 选择组件的输入或显示类型；`value` 传入当前值，支持的场合可双向绑定；`size` 设置组件尺寸；`error` 设置错误信息或错误样式；`validationMessage` 设置字段校验不通过时的提示。 | 输入后更新 name | `<Input bind:value={name} />` |
 | `<BareInput>` | 无样式输入框 | `type` 选择组件的输入或显示类型；`class` 添加 CSS 类；`accept` 限制文件选择器可选的文件类型；`multiple` 允许同时选择多项。 | 输入后更新 name | `<BareInput type='text' bind:value={name} />` |
 | `<Textarea>` | 文本域 | `value` 传入当前值，支持的场合可双向绑定；`rows` 设置初始可见行数；`size` 设置组件尺寸；`autoResize` 按输入内容自动调整高度；`error` 设置错误信息或错误样式。 | 多行输入更新 notes | `<Textarea bind:value={notes} rows={3} />` |
-| `<Select>` | 下拉选择 | `options` 提供用户可选的项目；`value` 传入当前值，支持的场合可双向绑定；`placeholder` 设置未输入或未选择时的提示；`size` 设置组件尺寸；`clearable` 提供清除当前值的操作；`filterable` 允许按输入文字筛选候选项；[选择项字段](#choice-options)。 | 选择后更新 status | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<Select>` | 下拉选择 | `options` 提供用户可选的项目；`value` 传入当前值，支持的场合可双向绑定；`placeholder` 设置未输入或未选择时的提示；`size` 设置组件尺寸；`clearable` 提供清除当前值的操作；`filterable` 允许按输入文字筛选候选项；[选择项字段](#choice-options)。 按上下方向键移动候选项，Enter 确认，Escape 收起。筛选输入支持空格。 | 选择后更新 status | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Checkbox>` | 复选框 | `checked` 设置选中状态；`label` 指定显示的标签；`size` 设置组件尺寸；`indeterminate` 显示部分选中的状态。 | 勾选后更新 enabled | `<Checkbox bind:checked={enabled} label='Enabled' />` |
 | `<Switch>` | 开关 | `checked` 设置选中状态；`label` 指定显示的标签；`size` 设置组件尺寸。 | 切换后更新 enabled | `<Switch bind:checked={enabled} label='Enabled' />` |
 | `<Radio>` | 单选组 | `options` 提供用户可选的项目；`value` 传入当前值，支持的场合可双向绑定；`direction` 设置横排或竖排；`size` 设置组件尺寸；[选择项字段](#choice-options)。 | 选择后更新 status | `<Radio options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
@@ -395,7 +395,7 @@ Node 端可通过 `@h-ai/ui/components/compounds/schedule-input` 导入归一化
 | --- | --- | --- | --- | --- |
 | `<Modal>` | 模态框（语义标签、焦点约束与恢复） | `open` 控制组件是否打开；`title` 设置标题；`size` 设置组件尺寸；`radius` 设置圆角；`bodyOverflow` 控制内容超过可用空间时的行为；`showClose` 切换关闭按钮。 | 打开/关闭同步 open | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
 | `<Drawer>` | 抽屉 | `open` 控制组件是否打开；`position` 设置显示位置；`title` 设置标题；`size` 设置组件尺寸；`width` 设置显示宽度；`resizable` 允许拖动调整抽屉宽度；`widthStorageKey` 设置记忆抽屉宽度的存储键。 | 显示抽屉并同步 open | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
-| `<Confirm>` | 确认框 | `open` 控制组件是否打开；`title` 设置标题；`message` 提供显示给用户的正文；`variant` 选择视觉样式或状态；`onconfirm` 在用户确认时调用。 | 用户确认时调用 confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
+| `<Confirm>` | 确认框 | `open` 控制组件是否打开；`title` 设置标题；`message` 提供显示给用户的正文；`variant` 选择视觉样式或状态；`onconfirm` 在用户确认时调用。 `onconfirm` 返回或解析为 `false` 时保持对话框打开，供用户重试。 | 用户确认时调用 confirm | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
 | `<Popover>` | 弹出层 | `open` 控制组件是否打开；`position` 设置显示位置；`trigger` 指定触发内容或触发方式；`offset` 控制弹层与触发元素间距；`ui.portal` 将弹层放在裁剪容器之外。 | 点击打开面板，Escape 关闭 | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
 | `<Dropdown>` | 下拉菜单 | `items` 提供依次渲染的项目；`trigger` 指定触发内容或触发方式；`triggerClass` 为触发控件添加 CSS 类；`position` 设置显示位置。 | 显示可操作菜单 | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
 | `<Tooltip>` | 提示 | `content` 提供要渲染的正文或内容片段；`position` 设置显示位置；`delay` 控制提示出现前等待的时间；`ui.portal` 将弹层放在裁剪容器之外。 | 悬停/聚焦显示说明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
@@ -449,6 +449,8 @@ Node 端可通过 `@h-ai/ui/components/compounds/schedule-input` 导入归一化
 <a id="datatable-options"></a>
 
 #### 数据表列与排序字段
+
+数值列采用驼峰 `At` 或蛇形 `_at` 结尾时按毫秒时间戳显示，其他数值保持原值。需要按其他规则显示时使用列的 `render`。
 
 | 字段 | 类型 | 默认值 | 作用与生效条件 |
 | --- | --- | --- | --- |
@@ -528,14 +530,14 @@ Node 端可通过 `@h-ai/ui/components/compounds/schedule-input` 导入归一化
 | `<ActionSheet>` | 底部操作面板 | `open` 控制组件是否打开；`title` 设置标题；`items` 提供依次渲染的项目；`cancelText` 设置取消按钮文案；`onselect` 接收用户选中的项目。 | 选择操作后通知 selectAction | `<ActionSheet bind:open={open} items={sheetItems} onselect={selectAction} />` |
 | `<AppBar>` | 顶部导航栏 | `title` 设置标题；`backHref` 设置返回链接的地址；`onback` 接管返回操作；`fixed` 将组件固定到视口；`safeArea` 为设备安全区留出空间。 | 显示标题和返回入口 | `<AppBar title='Orders' backHref='/orders' />` |
 | `<BottomNav>` | 底部导航栏 | `items` 提供依次渲染的项目；`active` 指定当前选中的项目；`centered` 居中显示导航；`maxWidth` 限制最大宽度。 | 显示并触发导航 | `<BottomNav items={navItems} active='home' />` |
-| `<InfiniteScroll>` | 无限滚动 | `loading` 显示等待状态；`finished` 没有后续数据时停止加载；`threshold` 设置触发操作的阈值；`onload` 达到滚动条件时请求更多数据。 | 触底请求 loadMore | `<InfiniteScroll loading={loading} finished={finished} onload={loadMore} />` |
-| `<PullRefresh>` | 下拉刷新 | `refreshing` 表示刷新在进行中；`threshold` 设置触发操作的阈值；`onrefresh` 达到下拉条件时请求刷新。 | 下拉请求 refresh | `<PullRefresh refreshing={loading} onrefresh={refresh}>Orders</PullRefresh>` |
+| `<InfiniteScroll>` | 无限滚动 | `hasMore` 表示还有下一页，默认 `true`。`threshold` 是列表末端距可视区域底边的触发距离，默认 100 px。`onloadmore` 异步加载下一页，`noMoreText` 设置末尾说明。 | 页面或列表滚动接近末尾时调用 `loadMore`，请求完成前不重复调用 | `<InfiniteScroll {hasMore} onloadmore={loadMore}>订单列表</InfiniteScroll>` |
+| `<PullRefresh>` | 下拉刷新 | `threshold` 设置触发阈值，`onrefresh` 执行异步刷新。组件管理等待状态。 | 刷新失败时提示错误并重置指示器，可以再次下拉 | `<PullRefresh onrefresh={refresh}>订单</PullRefresh>` |
 | `<SafeArea>` | 安全区域容器 | `top` 为上侧安全区留空；`bottom` 为下侧安全区留空；`left` 为左侧安全区留空；`right` 为右侧安全区留空。 | 为内容保留安全区域 | `<SafeArea top bottom>Orders</SafeArea>` |
 | `<SwipeCell>` | 滑动操作单元 | `leftActions` 从左侧露出的操作；`rightActions` 从右侧露出的操作；`threshold` 设置触发操作的阈值；`onaction` 处理选择的滑动操作。 | 滑动展示操作并通知宿主 | `<SwipeCell rightActions={swipeActions} onaction={selectAction}>Order 42</SwipeCell>` |
 
 #### 场景：响应手机导航、刷新与加载操作
 
-navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项；loading/finished 是真实请求状态。loadMore、refresh 负责受权查询，selectAction 处理用户已选的操作。滑动和触底只发出事件，不自行请求网络；不要把它们当作有业务副作用的接口。
+应用为导航、底部操作面板和滑动单元格提供对应的操作项。`loadMore` 使下一页记录追加到列表，读取完最后一页后将 `hasMore` 设为 `false`。`refresh` 重新查询第一页。页面和独立列表都可以触底加载，异步查询由应用回调执行。
 
 
 
@@ -702,7 +704,7 @@ navItems、sheetItems、swipeActions 是应用按对应 Props 提供的操作项
 
 响应式组件可在初始化时调用 `ui.useToastFeedback(() => error)`，传入已完成安全映射和本地化的操作消息；队列中相同类型、相同消息合并，通知独立于来源组件生命周期。来源消息更新或清空时替换或移除该来源的旧通知；重复比较同时包含 traceId。`message` 入口也共用此队列、样式和关闭行为；`MessageContainer` 复用 `ToastContainer`，根布局只选择一个容器。
 
-状态层可从轻量入口 `@h-ai/ui/toast` 导入 `toast`、`ui.useToastFeedback`、`ui.notifySuccess` / `ui.notifyError` / `ui.notifyInfo` / `ui.notifyWarning` 和 `ui.errorMessage`，不会连带加载组件及引导 CSS；`ToastContainer` 仍从组件入口导入并在根布局挂载。
+状态层可从轻量入口 `@h-ai/ui/toast` 导入 `ui`，通过 `ui.toast`、`ui.useToastFeedback`、`ui.notifySuccess`、`ui.notifyError`、`ui.notifyInfo`、`ui.notifyWarning` 和 `ui.errorMessage` 使用通知，不会连带加载组件及引导 CSS；`ToastContainer` 仍从组件入口导入并在根布局挂载。
 
 默认不显示 traceId。可以传 `ui.toast.add({ message: m.retry(), variant: 'warning', traceId })`；已有安全文案中的 `(traceId: …)` 也会自动分离。小图标展开“问题追踪编号”、复制按钮及联系客户支持或开发人员时提供编号的说明。复制失败时可手动选择编号。悬停、聚焦或展开时暂停计时，结束后继续剩余时间；也可调用 `ui.toast.pause(id)` / `ui.toast.resume(id)`。warning/error 使用 Toast；字段的可见错误文案也由 Toast 统一展示，保留 aria-invalid、读屏描述和原位恢复操作。
 
@@ -965,11 +967,13 @@ AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生�
 | `<FileUpload>` | 文件上传 | `accept` 限制文件选择器可选的文件类型；`maxSize` 限制单个文件的大小；`maxFiles` 限制可选文件数量；`multiple` 允许同时选择多项；`uploadHandler` 由宿主实现实际上传，上传结果用于更新界面。 | 选中文件后调用 upload | `<FileUpload accept='.txt' uploadHandler={upload} />` |
 | `<ImageUpload>` | 图片上传 | `value` 传入当前值，支持的场合可双向绑定；`accept` 限制文件选择器可选的文件类型；`maxSize` 限制单个文件的大小；`aspectRatio` 设置预览或裁剪区域的宽高比；`uploadHandler` 由宿主实现实际上传，上传结果用于更新界面。 | 成功后写回图片 URL | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
 | `<AvatarUpload>` | 头像上传 | `value` 传入当前值，支持的场合可双向绑定；`size` 设置组件尺寸；`maxSize` 限制单个文件的大小；`fallback` 提供默认或无法显示时的替代内容；`uploadHandler` 由宿主实现实际上传，上传结果用于更新界面。 | 成功后写回头像 URL | `<AvatarUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
-| `<FileList>` | 文件列表 | `files` 提供要显示的文件列表；`layout` 切换文件的排列方式；`showDelete` 显示删除入口；`showDownload` 显示下载入口。 | 显示宿主传入的文件 | `<FileList files={files} />` |
+| `<FileList>` | 文件列表 | `files` 提供要显示的文件列表；`layout` 切换文件的排列方式；`showDelete` 显示删除入口；`showDownload` 显示下载入口。 `onpreview(file)` 可接管默认预览。 | 显示宿主传入的文件 | `<FileList files={files} />` |
 
 #### 场景：选择文件并交给上传服务
 
 表格的 files 来自已授权文件列表，upload/uploadImage 是应用上传服务。上传回调输入浏览器 File 及取消/进度选项，输出 { url?, response? }；图片/头像要返回可显示 URL。失败应拒绝 Promise，组件保留可重试的选择。具体上传往返见 [Storage 浏览器示例](storage.md#browser-files)。
+
+传输失败后可以重试，超过大小或类型限制的文件不能重试。清空列表、移除文件或卸载时，组件会移除相应的排队请求，并向正在进行的上传发出取消信号。图片和头像只采用未取消的当前请求结果。
 
 #### 场景：Storage 存储
 
@@ -978,6 +982,12 @@ AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生�
 #### 场景：输入约束与 HTTP 能力
 
 对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
+
+<a id="file-preview"></a>
+
+#### 场景：预览已授权的 PDF
+
+给 `FileList` 传入带 `type: 'application/pdf'` 和文件 URL 的已授权记录。默认预览接受同源 HTTP(S) 地址、允许当前页面读取的跨域地址以及同源 Blob URL。响应须声明 `application/pdf` 并包含有效的 PDF 文件头，文件上限为 20 MiB。预览逐页绘制到画布，关闭时释放读取和渲染资源。受限的文件可通过 `onpreview(file)` 交由应用自己的预览流程处理。
 
 <a id="crypto"></a>
 
@@ -1028,7 +1038,7 @@ plain/cipher 是页面 $state 字符串；digest、signature、publicKey 为服�
 | `<MarkdownRenderer>` | Markdown 渲染器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showCopyButton` 控制复制控件是否出现；`enableHighlight` 控制是否按语言高亮代码。 | 渲染安全 Markdown | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | 文档下载菜单 | `actions` 提供可用动作或操作区内容；`ondownload` 处理用户选择的下载；[下载字段表](#document-download-options)。 | 选择后调用下载动作 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
 | `<AiDocumentEditor>` | AI 文档编辑器 | `content` 提供要渲染的正文或内容片段；`fontSize` 设置阅读区的文字字号；`allowHtmlTags` 指定允许保留的 HTML 标签；`showRunButton` 切换运行按钮；`showCodePreviewToggle` 切换代码与预览的控件；`allowUnsafeCodePreview` 允许受信任内容显式启用代码预览。 `remoteImages` 控制是否请求外部图片，`onrewrite` 可接收已核对的源码区间。 | 编辑后写回 markdown | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
-| `<AiTableEditor>` | AI 表格编辑器 | `columns` 定义可编辑数据的列；`rows` 传入要显示或编辑的数据行；`editable` 允许修改内容；`ondownload` 处理用户选择的下载。 | 显示单元格并报告编辑 | `<AiTableEditor {columns} {rows} editable />` |
+| `<AiTableEditor>` | AI 表格编辑器 | `tableData` 提供 `table_columns` 与 `table_rows`，优先于 `content`。`editable` 允许编辑，`ontablechange` 接收含 `nextData` 的变更，`ondownloadtable` 接收 CSV 与建议文件名。 | 显示单元格，向宿主报告编辑和下载 | `<AiTableEditor {tableData} editable ontablechange={updateTable} />` |
 
 <a id="document-download-options"></a>
 
@@ -1114,8 +1124,7 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
 
 ```svelte
 <!-- Render the supplied Markdown at 1.125rem. Supported raw HTML still goes through sanitization. -->
-<MarkdownRenderer content={
-;(markdown} fontSize='1.125rem' allowHtmlTags />
+<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
 
 <!-- Render the editable proposal Markdown with tool controls and an 18px font. The outline pane is hidden. -->
 <AiDocumentEditor
@@ -1126,6 +1135,29 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
   showToolbar
   showOutline={false}
 />
+```
+
+<a id="edit-sales-table"></a>
+
+#### 场景：编辑销量表
+
+为表格传入一列销量和一条记录。将第一行的销量从 42 改为 43 时，`ontablechange` 返回完整的更新数据，宿主可以继续提交给自己的保存服务。
+
+```svelte
+<script lang='ts'>
+  import { AiTableEditor, type AiTableData, type AiTableEditorChangePayload } from '@h-ai/ui'
+
+  let tableData = $state<AiTableData>({
+    table_columns: [{ key: 'sales', label: '销量', type: 'number' }],
+    table_rows: [{ row_id: 'row-1', sales: 42 }],
+  })
+
+  function updateTable({ nextData }: AiTableEditorChangePayload) {
+    tableData = nextData
+  }
+</script>
+
+<AiTableEditor {tableData} editable ontablechange={updateTable} />
 ```
 
 <a id="private-document-media"></a>
@@ -1147,6 +1179,8 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
 ### 运行工具与编辑产物：工作台组件
 
 应用提供工具目录、提交回调和可访问的产物，工作台展示进度与结果。
+
+等待保存回执时仍可应用已有改写。回执更新已保存的版本，期间产生的修改仍保留为待保存草稿。工具取消请求进行中时，重新查询入口暂不可用。取消结算后，若任务仍在运行，可以重新查询或再次取消。
 
 #### 接口清单
 
@@ -1326,7 +1360,7 @@ const acceptedSubmission: ToolRun = {
 | `<CrudFilterBar>` | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields` 指定可筛选的字段；`searchValue` 设置当前搜索词；`onsearch` 接收搜索输入或发起的查询；`onfilterchange` 接收筛选条件的变更；`onreset` 处理清空条件。 | 提交查询条件 | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
 | `<CrudDetailPanel>` | 详情面板（抽屉/弹窗） | `open` 控制组件是否打开；`item` 传入要显示详情的记录；`fields` 指定显示或收集的字段；`variant` 选择视觉样式或状态；`drawerWidth` 抽屉模式下指定宽度；`modalSize` 弹窗模式下指定尺寸。 | 显示指定记录详情 | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
 | `<CrudEditPanel>` | 编辑面板（抽屉/弹窗） | `open` 控制组件是否打开；`fields` 指定显示或收集的字段；`variant` 选择视觉样式或状态；`drawerWidth` 抽屉模式下指定宽度；`modalSize` 弹窗模式下指定尺寸；`onsubmit` 收到表单提交时调用。 | 提交声明的可写字段 | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
-| `<CrudDeleteConfirm>` | 删除确认框 | `open` 控制组件是否打开；`loading` 显示等待状态；`onconfirm` 在用户确认时调用。 | 确认后调用 remove | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
+| `<CrudDeleteConfirm>` | 删除确认框 | `open` 控制组件是否打开；`loading` 显示等待状态；`onconfirm` 在用户确认时调用。 `onconfirm` 返回或解析为 `false` 时保持打开。 | 确认后调用 remove | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
 
 <a id="crud-resource-options"></a>
 
@@ -1375,6 +1409,8 @@ await controller.load()
 #### 场景：CRUD 场景
 
 下图对应 CrudPage 配合 createCrudController 的查询场景。组件显示状态，controller 调用应用提供的数据服务。
+
+客户端列表会向查询传递日期范围的起止键，成功后回填筛选和排序。省略资源默认页大小时，客户端首次查询每页 10 条。用户选择 20 条后，下一次查询与分页栏均使用 20 条。删除前检查受本次确认约束。检查期间可以取消，已取消的检查结果会丢弃。删除请求失败后，确认框保持打开，可在原处重试。
 
 ![CRUD 列表：查询、旧数据和最新响应](../images/function-ui-crud-loading.svg)
 
@@ -1475,7 +1511,7 @@ await controller.load()
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `<CodeWorkspace>` | 源码工作区 | `source` 提供工作区读取与保存代码的来源。 | 打开 README.md 显示 # Hello | `<CodeWorkspace {source} />` |
+| `<CodeWorkspace>` | 只读源码工作区 | `source` 提供文件树、按需读取和可选的分页搜索。 | 打开 README.md 显示 # Hello | `<CodeWorkspace {source} />` |
 
 #### 场景：浏览文件并查看代码
 
@@ -1691,7 +1727,7 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 | --- | --- | --- | --- | --- |
 | `ui.createLocaleStore(options?)` | 组件树语言状态 | `options` 可省略，可选默认语言、支持列表、浏览器检测和存储键。见[调用参数](#call-options)。 | `locale store with current/set/isSupported` | `ui.createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
 | `ui.getGlobalLocale()` | 读取当前语言 | 无参数。 | `locale string from current context` | `ui.getGlobalLocale()` |
-| `ui.setGlobalLocale(locale)` | 设置浏览器或启动语言 | `locale` 是要应用到全局翻译函数的语言标识。 | `void; use request context for SSR` | `ui.setGlobalLocale("en-US")` |
+| `ui.setGlobalLocale(locale)` | 设置浏览器中的 UI 语言 | `locale` 是内置 UI 翻译使用的语言标识。 | `void`，在 SSR 中无操作 | `ui.setGlobalLocale("en-US")` |
 | `ui.detectBrowserLocale(supportedLocales?)` | 识别浏览器语言 | `supportedLocales` 限定可接受的浏览器语言；省略时用框架支持列表。 | `supported locale or null` | `ui.detectBrowserLocale()` |
 | `ui.isLocaleSupported(locale, supportedLocales?)` | 校验支持语言 | `locale` 是待检查的语言；`supportedLocales` 限定匹配范围，默认用框架支持列表。 | `boolean` | `ui.isLocaleSupported("ja-JP")` |
 | `ui.resolveLocale(locale, supportedLocales?, defaultLocale?)` | 归一化语言 | `locale` 是候选语言；`supportedLocales` 是允许的语言列表；`defaultLocale` 是候选不匹配时优先尝试的语言，省略时用框架默认语言。 | `supported locale` | `ui.resolveLocale("en")` |
@@ -1746,7 +1782,7 @@ import { DEFAULT_LOCALE, DEFAULT_LOCALES, ui } from '@h-ai/ui/i18n'
 
 多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-设定请求语言后，`ui.setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
+在请求上下文中调用 `core.i18n.setGlobalLocale(locale)` 会更新本次请求的语言。启动阶段在请求上下文之外调用同一个 Core 方法可设置进程默认语言。`ui.setGlobalLocale(locale)` 仅同步浏览器中的 UI 语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 <a id="feedback"></a>
 

@@ -111,7 +111,7 @@ export default {
 | `<Input>` | 入力で name を更新 | `type` は入力または表示の種類。`value` は現在値を指定。対応時は双方向バインド可。`size` はコンポーネントのサイズ。`error` はエラーメッセージやエラー状態。`validationMessage` は入力検証に失敗したときの文言。 | 入力で name を更新 | `<Input bind:value={name} />` |
 | `<BareInput>` | 入力で name を更新 | `type` は入力または表示の種類。`class` はCSS クラスを追加。`accept` はファイル選択で許可する種類。`multiple` は複数選択を許可。 | 入力で name を更新 | `<BareInput type='text' bind:value={name} />` |
 | `<Textarea>` | 複数行入力で notes を更新 | `value` は現在値を指定。対応時は双方向バインド可。`rows` は最初に表示する行数。`size` はコンポーネントのサイズ。`autoResize` は入力に合わせて高さを調整。`error` はエラーメッセージやエラー状態。 | 複数行入力で notes を更新 | `<Textarea bind:value={notes} rows={3} />` |
-| `<Select>` | 選択で status を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`placeholder` は入力や選択がない場合のヒント。`size` はコンポーネントのサイズ。`clearable` は現在値を消す操作を表示。`filterable` は入力した文字で候補を絞る。[選択肢のフィールド](#choice-options)。 | 選択で status を更新 | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
+| `<Select>` | 選択で status を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`placeholder` は入力や選択がない場合のヒント。`size` はコンポーネントのサイズ。`clearable` は現在値を消す操作を表示。`filterable` は入力した文字で候補を絞る。[選択肢のフィールド](#choice-options)。 上下の矢印キーで候補を移動し、Enter で決定、Escape で閉じます。絞り込みの入力にはスペースも使用できます。 | 選択で status を更新 | `<Select options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
 | `<Checkbox>` | 選択で enabled を更新 | `checked` は選択状態。`label` は表示するラベル。`size` はコンポーネントのサイズ。`indeterminate` は一部選択の状態を表示。 | 選択で enabled を更新 | `<Checkbox bind:checked={enabled} label='Enabled' />` |
 | `<Switch>` | 切替で enabled を更新 | `checked` は選択状態。`label` は表示するラベル。`size` はコンポーネントのサイズ。 | 切替で enabled を更新 | `<Switch bind:checked={enabled} label='Enabled' />` |
 | `<Radio>` | 選択で status を更新 | `options` は利用者が選べる候補。`value` は現在値を指定。対応時は双方向バインド可。`direction` は横並びか縦並びかを指定。`size` はコンポーネントのサイズ。[選択肢のフィールド](#choice-options)。 | 選択で status を更新 | `<Radio options={[{ value: 'open', label: 'Open' }]} bind:value={status} />` |
@@ -233,7 +233,7 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 | --- | --- | --- | --- | --- |
 | `<Modal>` | 開閉で open を更新 | `open` は開閉状態。`title` はタイトル。`size` はコンポーネントのサイズ。`radius` は角の丸み。`bodyOverflow` はコンテンツがはみ出した場合の動作。`showClose` は閉じるボタンの表示を切り替え。 | 開閉で open を更新 | `<Modal bind:open={open} title='Details'>Order 42</Modal>` |
 | `<Drawer>` | 開閉をバインドしたドロワー | `open` は開閉状態。`position` は表示位置。`title` はタイトル。`size` はコンポーネントのサイズ。`width` は表示幅。`resizable` はドラッグによるドロワーの幅変更を許可。`widthStorageKey` はドロワーの幅を保存するキー。 | 開閉をバインドしたドロワー | `<Drawer bind:open={open} title='Details'>Order 42</Drawer>` |
-| `<Confirm>` | 確認で confirm を呼出 | `open` は開閉状態。`title` はタイトル。`message` は利用者に表示する本文。`variant` は外観や状態を選択。`onconfirm` は利用者が確認したときに呼び出す。 | 確認で confirm を呼出 | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
+| `<Confirm>` | 確認で confirm を呼出 | `open` は開閉状態。`title` はタイトル。`message` は利用者に表示する本文。`variant` は外観や状態を選択。`onconfirm` は利用者が確認したときに呼び出す。 `onconfirm` が `false` を返すか、非同期に `false` に解決するとダイアログを開いたままにします。 | 確認で confirm を呼出 | `<Confirm bind:open={open} message='Continue?' onconfirm={confirm} />` |
 | `<Popover>` | クリックで開き Escape で閉じる | `open` は開閉状態。`position` は表示位置。`trigger` は起点となる内容または操作。`offset` はオーバーレイと起点の間隔。`ui.portal` はオーバーレイをクリッピングの外に配置。 | クリックで開き Escape で閉じる | `<Popover>{#snippet trigger()}<Button>Open</Button>{/snippet}Details</Popover>` |
 | `<Dropdown>` | 操作メニュー | `items` は表示順の項目一覧。`trigger` は起点となる内容または操作。`triggerClass` は起点となるコントロールに CSS クラスを追加。`position` は表示位置。 | 操作メニュー | `<Dropdown items={menuItems}><Button>Actions</Button></Dropdown>` |
 | `<Tooltip>` | ホバー・フォーカスで説明 | `content` は表示する本文またはスニペット。`position` は表示位置。`delay` はヒントの表示まで待つ時間。`ui.portal` はオーバーレイをクリッピングの外に配置。 | ホバー・フォーカスで説明 | `<Tooltip content='Save order'><Button>Save</Button></Tooltip>` |
@@ -280,6 +280,8 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 <a id="datatable-options"></a>
 
 #### データテーブルの列と並べ替え
+
+キーが `At` または `_at` で終わる数値は、時刻を表すミリ秒値として表示します。その他の数値は受け取った値を表示します。独自の書式には列の `render` を使います。
 
 | フィールド | 型 | 既定値 | 用途と適用条件 |
 | --- | --- | --- | --- |
@@ -344,7 +346,7 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 
 ### モバイル操作：モバイル部品
 
-下部ナビゲーション、操作シート、更新ジェスチャーを提供します。通信処理はアプリのコールバックが実行します。
+移動、操作シート、更新ジェスチャー、ページ分割された一覧をモバイル画面に組み込みます。
 
 #### インターフェース一覧
 
@@ -353,14 +355,14 @@ open 状態でダイアログ、ドロワー、確認操作を制御し、ペー
 | `<ActionSheet>` | 選択で selectAction を呼出 | `open` は開閉状態。`title` はタイトル。`items` は表示順の項目一覧。`cancelText` はキャンセルボタンのラベル。`onselect` は選択した項目を受け取る。 | 選択で selectAction を呼出 | `<ActionSheet bind:open={open} items={sheetItems} onselect={selectAction} />` |
 | `<AppBar>` | タイトルと戻るリンク | `title` はタイトル。`backHref` は戻るリンクの移動先。`onback` は戻る操作を処理。`fixed` はビューポートに固定。`safeArea` は端末のセーフエリアの余白を確保。 | タイトルと戻るリンク | `<AppBar title='Orders' backHref='/orders' />` |
 | `<BottomNav>` | ナビゲーション | `items` は表示順の項目一覧。`active` は現在選択中の項目。`centered` はナビゲーションを中央に配置。`maxWidth` は最大幅。 | ナビゲーション | `<BottomNav items={navItems} active='home' />` |
-| `<InfiniteScroll>` | 末尾で loadMore を呼出 | `loading` は処理中の状態を表示。`finished` は後続データがない場合に読み込みを停止。`threshold` は操作を開始するしきい値。`onload` はスクロール条件に達したとき追加取得。 | 末尾で loadMore を呼出 | `<InfiniteScroll loading={loading} finished={finished} onload={loadMore} />` |
-| `<PullRefresh>` | プル操作で refresh を呼出 | `refreshing` は更新中と表示。`threshold` は操作を開始するしきい値。`onrefresh` はプル操作のしきい値に達したとき更新。 | プル操作で refresh を呼出 | `<PullRefresh refreshing={loading} onrefresh={refresh}>Orders</PullRefresh>` |
+| `<InfiniteScroll>` | 一覧の末尾付近で追加取得 | `hasMore` は次ページの有無で、既定値は `true`。`threshold` は発火距離で、既定値は 100 px。`onloadmore` は次ページを非同期で取得し、`noMoreText` は末尾の文言を指定します。 | ページまたは一覧を末尾付近までスクロールすると `loadMore` を呼び、取得中の重複呼び出しを防ぎます | `<InfiniteScroll {hasMore} onloadmore={loadMore}>注文一覧</InfiniteScroll>` |
+| `<PullRefresh>` | プル操作で更新 | `threshold` は操作のしきい値、`onrefresh` は非同期の更新処理です。更新中の状態はコンポーネントが管理します。 | 失敗時はエラーを通知して表示を元に戻し、再試行できます | `<PullRefresh onrefresh={refresh}>注文</PullRefresh>` |
 | `<SafeArea>` | セーフエリアの余白 | `top` は上側のセーフエリアの余白を確保。`bottom` は下側のセーフエリアの余白を確保。`left` は左側のセーフエリアの余白を確保。`right` は右側のセーフエリアの余白を確保。 | セーフエリアの余白 | `<SafeArea top bottom>Orders</SafeArea>` |
 | `<SwipeCell>` | スワイプで操作を表示 | `leftActions` は左側に表示する操作。`rightActions` は右側に表示する操作。`threshold` は操作を開始するしきい値。`onaction` は選択したスワイプ操作を処理。 | スワイプで操作を表示 | `<SwipeCell rightActions={swipeActions} onaction={selectAction}>Order 42</SwipeCell>` |
 
 #### 利用例：モバイルの移動・更新・読み込みを処理する
 
-下部ナビゲーション、操作シート、更新ジェスチャーを提供します。通信処理はアプリのコールバックが実行します。 詳細は[中国語の手順](ui.md#mobile)を参照してください。
+移動、操作シート、スワイプ操作の項目はアプリが提供します。`loadMore` は次ページを一覧に追加し、最終ページを取得したら `hasMore` を `false` にします。`refresh` は最初のページを取得し直します。ページ全体と独立した一覧のどちらでも、末尾付近で追加取得が始まります。
 
 <a id="workspace"></a>
 
@@ -618,11 +620,19 @@ const accepted = await ui.messageBox.confirm({
 | `<FileUpload>` | 選択ファイルを upload へ | `accept` はファイル選択で許可する種類。`maxSize` はファイル 1 件のサイズ上限。`maxFiles` は選べるファイルの件数上限。`multiple` は複数選択を許可。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 選択ファイルを upload へ | `<FileUpload accept='.txt' uploadHandler={upload} />` |
 | `<ImageUpload>` | 成功後画像 URL を更新 | `value` は現在値を指定。対応時は双方向バインド可。`accept` はファイル選択で許可する種類。`maxSize` はファイル 1 件のサイズ上限。`aspectRatio` はプレビューや切り抜き領域の縦横比。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 成功後画像 URL を更新 | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
 | `<AvatarUpload>` | 成功後アバター URL を更新 | `value` は現在値を指定。対応時は双方向バインド可。`size` はコンポーネントのサイズ。`maxSize` はファイル 1 件のサイズ上限。`fallback` は代替表示の内容。`uploadHandler` はホスト側で実際にアップロードし、表示更新用の結果を返す。 | 成功後アバター URL を更新 | `<AvatarUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
-| `<FileList>` | 指定ファイルを表示 | `files` は表示するファイル一覧。`layout` はファイルの並べ方。`showDelete` は削除ボタンを表示。`showDownload` はダウンロードボタンを表示。 | 指定ファイルを表示 | `<FileList files={files} />` |
+| `<FileList>` | 指定ファイルを表示 | `files` は表示するファイル一覧。`layout` はファイルの並べ方。`showDelete` は削除ボタンを表示。`showDownload` はダウンロードボタンを表示。 `onpreview(file)` で組み込みプレビューを差し替えられます。 | 指定ファイルを表示 | `<FileList files={files} />` |
 
 #### 利用例：ファイルを選んでアップロード処理に渡す
 
 ファイル選択後に uploadHandler を呼び、画像部品は成功時に URL を更新します。保存先はアプリが管理します。 詳細は[中国語の手順](ui.md#uploads)を参照してください。
+
+転送に失敗したファイルは再試行できます。サイズや種類の検証に失敗したファイルは再試行できません。一覧の消去、ファイルの削除、コンポーネントのアンマウントで該当する待機中の項目を取り除き、処理中のアップロードに取消シグナルを送ります。画像とアバターは、取り消されていない最新リクエストの結果を反映します。
+
+<a id="file-preview"></a>
+
+#### 利用例：閲覧権限のある PDF をプレビューする
+
+`FileList` に `type: 'application/pdf'` とファイル URL を含む認可済みのレコードを渡します。組み込みプレビューは同一オリジンの HTTP(S)、CORS で読み取れる URL、同一オリジンの Blob URL に対応します。応答には `application/pdf` と有効な PDF ヘッダーが必要です。ファイルの上限は 20 MiB です。ページを順にキャンバスに描画し、閉じると取得処理と描画リソースを解放します。アプリ独自のプレビューで表示する場合は `onpreview(file)` を使います。
 
 <a id="crypto"></a>
 
@@ -664,7 +674,7 @@ const accepted = await ui.messageBox.confirm({
 | `<MarkdownRenderer>` | 安全な Markdown 表示 | `content` は表示する本文またはスニペット。`fontSize` は本文の文字サイズ。`allowHtmlTags` は保持を許可する HTML タグ。`showCopyButton` はコピー操作用のボタンを切り替え。`enableHighlight` は構文強調表示を切り替え。 | 安全な Markdown 表示 | `<MarkdownRenderer content='# Hello' allowHtmlTags={false} />` |
 | `<AiDocumentDownloadMenu>` | 選択でダウンロードを呼出 | `actions` は利用可能な操作、または操作欄の内容。`ondownload` は選択したダウンロードを処理。[ダウンロードのフィールド](#document-download-options)。 | 選択でダウンロードを呼出 | `<AiDocumentDownloadMenu {actions} ondownload={download} />` |
 | `<AiDocumentEditor>` | 編集で markdown を更新 | `content` は表示する本文またはスニペット。`fontSize` は本文の文字サイズ。`allowHtmlTags` は保持を許可する HTML タグ。`showRunButton` は実行ボタンを切り替え。`showCodePreviewToggle` はコードとプレビューの切り替えボタンを表示。`allowUnsafeCodePreview` は信頼できる内容のコードプレビューを明示的に許可。 `remoteImages` で外部画像への通信を制御し、`onrewrite` で検証済みの原文範囲を受け取れます。 | 編集で markdown を更新 | `<AiDocumentEditor bind:content={markdown} showToolbar />` |
-| `<AiTableEditor>` | セル表示と編集通知 | `columns` は編集対象データの列を定義。`rows` は表示・編集する行データ。`editable` は編集を許可。`ondownload` は選択したダウンロードを処理。 | セル表示と編集通知 | `<AiTableEditor {columns} {rows} editable />` |
+| `<AiTableEditor>` | 表のセルを表示・編集 | `tableData` に `table_columns` と `table_rows` を渡すと `content` より優先されます。`editable` は編集を許可し、`ontablechange` は `nextData` を含む変更、`ondownloadtable` は CSV と推奨ファイル名を受け取ります。 | セルを表示し、編集やダウンロードをホストに通知 | `<AiTableEditor {tableData} editable ontablechange={updateTable} />` |
 
 <a id="document-download-options"></a>
 
@@ -733,6 +743,29 @@ const actions = ui.resolveDocumentDownloadActions([{ id: 'markdown', label: 'Mar
 await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename: 'hello.md' }) // browser download
 ```
 
+<a id="edit-sales-table"></a>
+
+#### 利用例：販売数を編集する
+
+販売数の列と1件のレコードを渡します。最初の行の販売数を42から43に変更すると、`ontablechange` に更新後の表全体が渡されます。ホストはそのデータを保存サービスに渡せます。
+
+```svelte
+<script lang='ts'>
+  import { AiTableEditor, type AiTableData, type AiTableEditorChangePayload } from '@h-ai/ui'
+
+  let tableData = $state<AiTableData>({
+    table_columns: [{ key: 'sales', label: '販売数', type: 'number' }],
+    table_rows: [{ row_id: 'row-1', sales: 42 }],
+  })
+
+  function updateTable({ nextData }: AiTableEditorChangePayload) {
+    tableData = nextData
+  }
+</script>
+
+<AiTableEditor {tableData} editable ontablechange={updateTable} />
+```
+
 <a id="private-document-media"></a>
 
 #### 利用例：画像を制限して Markdown 原文の範囲を取得する
@@ -752,6 +785,8 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
 ### ツール実行と成果物編集：ワークスペース
 
 ホストがツール一覧、送信処理、アクセス可能な成果物を渡し、ワークスペースが進行状況と結果を表示します。
+
+保存の応答を待つ間にも、取得済みの書き換え案を適用できます。応答で保存済みバージョンが進み、その間の変更は未保存の下書きとして残ります。取消リクエストの処理中は手動の再照会を一時停止します。処理後も実行中なら、再照会や再度の取消ができます。
 
 #### インターフェース一覧
 
@@ -844,7 +879,7 @@ await ui.downloadAiDocument({ actionId: 'markdown', content: '# Hello', filename
 | `<CrudFilterBar>` | 検索条件を送信 | `filterFields` は絞り込み対象のフィールド。`searchValue` は現在の検索文字列。`onsearch` は入力された検索文字列や検索操作を受け取る。`onfilterchange` は絞り込み条件の変更を受け取る。`onreset` は条件のリセットを処理。 | 検索条件を送信 | `<CrudFilterBar filterFields={filters} onsearch={search} />` |
 | `<CrudDetailPanel>` | 指定レコードの詳細 | `open` は開閉状態。`item` は詳細を表示するレコード。`fields` は表示・入力するフィールドを指定。`variant` は外観や状態を選択。`drawerWidth` はドロワーモードでの幅。`modalSize` はダイアログモードでのサイズ。 | 指定レコードの詳細 | `<CrudDetailPanel bind:open={open} item={selected} fields={fields} />` |
 | `<CrudEditPanel>` | 宣言した書込項目を送信 | `open` は開閉状態。`fields` は表示・入力するフィールドを指定。`variant` は外観や状態を選択。`drawerWidth` はドロワーモードでの幅。`modalSize` はダイアログモードでのサイズ。`onsubmit` はフォームの送信時に呼び出す。 | 宣言した書込項目を送信 | `<CrudEditPanel bind:open={open} fields={fields} onsubmit={save} />` |
-| `<CrudDeleteConfirm>` | 確認で remove を呼出 | `open` は開閉状態。`loading` は処理中の状態を表示。`onconfirm` は利用者が確認したときに呼び出す。 | 確認で remove を呼出 | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
+| `<CrudDeleteConfirm>` | 確認で remove を呼出 | `open` は開閉状態。`loading` は処理中の状態を表示。`onconfirm` は利用者が確認したときに呼び出す。 `onconfirm` が `false` を返す場合、ダイアログは開いたままです。 | 確認で remove を呼出 | `<CrudDeleteConfirm bind:open={open} onconfirm={remove} />` |
 
 <a id="crud-resource-options"></a>
 
@@ -894,6 +929,8 @@ await controller.load()
 
 CrudPage と createCrudController の検索です。コンポーネントが状態を表示し、controller がアプリのデータサービスを呼びます。
 
+クライアントコントローラーは日付範囲の両端を検索に渡し、取得後に絞り込みと並べ替えを画面に反映します。リソースのページサイズを省略すると、最初の取得は10件です。20件を選択すると、取得とページ表示の両方に20件を使います。削除前チェックはその確認操作に対して行われ、待機中に取り消すと結果を破棄します。削除リクエストが失敗した場合、確認ダイアログから再試行できます。
+
 ![CRUD 一覧：検索・前回データ・最新応答](../images/function-ui-crud-loading.ja.svg)
 
 条件の編集中は検索せず、検索／Enter で確定します。ページ・並べ替えは確定済み条件を使い、最新の応答だけを反映します。初回失敗は再試行を表示し、更新失敗では既存データを保持します。空表示は loaded かつ total=0 の時だけです。
@@ -935,7 +972,7 @@ CrudPage と createCrudController の検索です。コンポーネントが状�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `<CodeWorkspace>` | ソースワークスペース | `source` はコードの読み込み・保存に使うワークスペースのデータ源。 | README.md で # Hello を表示 | `<CodeWorkspace {source} />` |
+| `<CodeWorkspace>` | 読み取り専用のソースワークスペース | `source` はファイルツリー、必要に応じた読み込み、オプションのページ分割検索を提供します。 | README.md で # Hello を表示 | `<CodeWorkspace {source} />` |
 
 #### 利用例：ファイルとコードを閲覧する
 
@@ -1066,7 +1103,7 @@ import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 | --- | --- | --- | --- | --- |
 | `ui.createLocaleStore(options?)` | ブラウザーページの言語を管理 | `options` は省略可能です。既定の言語、対応言語、ブラウザーでの判定、保存キーを指定できます。[呼び出し引数](#call-options)を参照。 | `locale store with current/set/isSupported` | `ui.createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
 | `ui.getGlobalLocale()` | 現在のコンテキストの言語を取得 | 引数はありません。 | `locale string from current context` | `ui.getGlobalLocale()` |
-| `ui.setGlobalLocale(locale)` | 現在のリクエストまたはページの言語を設定 | `locale` はグローバル翻訳関数に適用する言語タグです。 | `void; use request context for SSR` | `ui.setGlobalLocale("en-US")` |
+| `ui.setGlobalLocale(locale)` | ブラウザーの UI 言語を設定 | `locale` は内蔵 UI メッセージに適用する言語タグです。 | `void`。SSR では処理を行いません | `ui.setGlobalLocale("en-US")` |
 | `ui.detectBrowserLocale(supportedLocales?)` | ブラウザーから対応言語を選択 | `supportedLocales` は受け付けるブラウザー言語の一覧で、省略するとフレームワークの対応一覧を使います。 | `supported locale or null` | `ui.detectBrowserLocale()` |
 | `ui.isLocaleSupported(locale, supportedLocales?)` | 有効な言語か確認 | `locale` は確認する言語です。`supportedLocales` は照合対象を限定し、既定ではフレームワークの対応一覧を使います。 | `boolean` | `ui.isLocaleSupported("ja-JP")` |
 | `ui.resolveLocale(locale, supportedLocales?, defaultLocale?)` | 対応言語または代替言語を取得 | `locale` は候補、`supportedLocales` は許可される言語一覧です。`defaultLocale` は候補が一致しない場合に優先し、省略時はフレームワークの既定言語を使います。 | `supported locale` | `ui.resolveLocale("en")` |
