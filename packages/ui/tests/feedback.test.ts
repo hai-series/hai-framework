@@ -737,6 +737,41 @@ describe('feedback collection', () => {
   })
 })
 
+it('未上传完的反馈保留原回执，允许先本地保存并显式开始新的反馈', async () => {
+  const target = document.createElement('div')
+  document.body.append(target)
+  const onexport = vi.fn(async () => true)
+  const onstartnew = vi.fn(async () => {})
+  const onsubmit = vi.fn(async () => {})
+  const component = mount(FeedbackForm, {
+    target,
+    props: {
+      pendingReceipt: { number: 'FB-previous', collectionStatus: 'collecting' },
+      onexport,
+      onstartnew,
+      onsubmit,
+    },
+  })
+  try {
+    flushSync()
+    expect(target.querySelector('[data-testid="feedback-receipt"]')?.textContent).toContain('FB-previous')
+    expect(target.textContent).toContain('上一份反馈还有材料未上传')
+    expect(target.querySelector('textarea')).toBeNull()
+    button(target, '保存反馈到本地').click()
+    await vi.waitFor(() => expect(onexport).toHaveBeenCalledOnce())
+    expect(onsubmit).not.toHaveBeenCalled()
+    expect(onstartnew).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(button(target, '开始新的反馈').disabled).toBe(false))
+    button(target, '开始新的反馈').click()
+    await vi.waitFor(() => expect(onstartnew).toHaveBeenCalledOnce())
+    expect(onsubmit).not.toHaveBeenCalled()
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
 describe('feedback management', () => {
   it('说明为空时表格展示服务端事实摘要', async () => {
     const target = document.createElement('div')

@@ -18,7 +18,7 @@
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale } from '#lib/paraglide/runtime.js'
   import { authActions } from '#lib/services/auth.js'
-  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '#lib/services/feedback.js'
+  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '#lib/services/feedback.js'
   import { sensitiveActions } from '#lib/services/sensitive-actions.svelte.js'
   import { sessionRecovery } from '#lib/services/session-recovery.svelte.js'
   import { setAdminTheme } from '#lib/theme-context.js'
@@ -84,7 +84,6 @@
   let feedbackPreparing = $state(false)
   let feedbackError = $state('')
   let feedbackMaterials = $state<Partial<Awaited<ReturnType<typeof prepareFeedback>>>>({ attachments: [], evidence: [], evidenceSummary: [] })
-  let feedbackResetKey = $state('')
 
   onMount(() => {
     if (data.feedbackEnabled)
@@ -101,7 +100,6 @@
     feedbackError = ''
     try {
       feedbackMaterials = await prepareFeedback()
-      feedbackResetKey = feedbackDraftId()
       feedbackOpen = true
     }
     catch (cause) {
@@ -506,7 +504,9 @@
   budget={feedbackMaterials.budget}
   evidenceSummary={feedbackMaterials.evidenceSummary}
   oncapture={async (id) => { feedbackMaterials = await captureFeedbackPage(id) }}
-  resetKey={feedbackResetKey}
+  resetKey={feedbackMaterials.submissionId}
+  pendingReceipt={feedbackMaterials.pendingReceipt}
+  onstartnew={async () => { feedbackMaterials = await prepareFeedback({ startNew: true }) }}
   onsubmit={submitFeedback}
   onexport={exportLocalFeedback}
   onannotate={async (input) => {

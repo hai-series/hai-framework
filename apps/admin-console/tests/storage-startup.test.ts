@@ -6,6 +6,10 @@ const state = vi.hoisted(() => ({
   storageInit: vi.fn(),
   iamInit: vi.fn(),
   feedbackInit: vi.fn(),
+  seedFeedbackPermissions: vi.fn(),
+}))
+vi.mock('#lib/server/feedback.js', () => ({
+  seedFeedbackPermissions: state.seedFeedbackPermissions,
 }))
 vi.mock('#lib/paraglide/messages.js', () => ({
   security_role_system: () => 'System',
@@ -132,6 +136,8 @@ beforeEach(() => {
   })
   state.iamInit.mockResolvedValue({ success: true })
   state.feedbackInit.mockResolvedValue({ success: true })
+  state.seedFeedbackPermissions.mockReset()
+  state.seedFeedbackPermissions.mockResolvedValue({ success: true })
 })
 
 describe('admin-console storage startup', () => {
@@ -173,4 +179,27 @@ it('反馈初始化失败保留必需业务模块，独立重试任务可完整�
     expect(state.feedbackInit).toHaveBeenCalledTimes(1)
   }
   finally { await closeApp() }
+})
+
+it('反馈授权失败不启动反馈服务，权限恢复后独立就绪且不重启业务', async () => {
+  vi.useFakeTimers()
+  state.config.feedback = { appId: 'optional-feedback' }
+  state.seedFeedbackPermissions.mockResolvedValueOnce({
+    success: false,
+    error: { code: 'test:feedback-permission', message: 'Feedback permission write unavailable' },
+  })
+  const { initApp, closeApp, isAppInitialized } = await import('../src/lib/server/init.js')
+  try {
+    await initApp()
+    expect(isAppInitialized()).toBe(true)
+    expect(state.feedbackInit).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(state.seedFeedbackPermissions).toHaveBeenCalledTimes(2)
+    expect(state.feedbackInit).toHaveBeenCalledOnce()
+    expect(state.iamInit).toHaveBeenCalledOnce()
+  }
+  finally {
+    await closeApp()
+    vi.useRealTimers()
+  }
 })

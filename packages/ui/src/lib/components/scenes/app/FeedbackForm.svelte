@@ -71,6 +71,10 @@
     /** 准备新现场后更新，关闭弹窗不会丢失未提交内容。 */
     resetKey?: string
     receipt?: FeedbackReceipt
+    /** 之前已受理、还有待上传材料的草稿回执，显示其本地备份与新建操作。 */
+    pendingReceipt?: FeedbackReceipt
+    /** 用户选择放下旧草稿后，由宿主准备新的反馈。 */
+    onstartnew?: () => Promise<void>
     class?: string
   }
 
@@ -90,6 +94,8 @@
     oncomplete,
     resetKey = '',
     receipt = $bindable(),
+    pendingReceipt,
+    onstartnew,
     columns = 1,
     labelPosition = 'top',
     labelWidth = '8rem',
@@ -109,10 +115,12 @@
   let staging = $state(false)
   let filesError = $state(false)
   let exporting = $state(false)
+  let startingNew = $state(false)
   let recording = $state(false)
   let expandedMaterials = $state<string[]>([])
   let error = $state('')
   let previousKey = $state(untrack(() => resetKey))
+  const activeReceipt = $derived(pendingReceipt ?? receipt)
   const visibleAttachments = $derived(attachments.filter(item => !removedAttachmentIds.includes(item.id)))
   const attachmentBytes = $derived(visibleAttachments.reduce((total, file) => total + (file.size ?? 0), 0))
   const recordingBytes = $derived(budget
@@ -158,6 +166,7 @@
       previousKey = resetKey
       description = ''
       contact = ''
+      feedbackType = 'bug'
       files = []
       filesError = false
       removedAttachmentIds = []
@@ -178,7 +187,7 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault()
-    if (loading || annotating || staging || exporting || recording || (onfileschange && filesError) || receipt)
+    if (loading || annotating || staging || exporting || recording || (onfileschange && filesError) || activeReceipt)
       return
     if (!onsubmit) {
       error = labels.errorSubmit ?? uiM('feedback_error_submit')
@@ -202,7 +211,7 @@
   }
 
   async function saveLocal() {
-    if (!onexport || exporting || annotating || staging)
+    if (!onexport || exporting || annotating || staging || startingNew)
       return
     exporting = true
     error = ''
@@ -215,6 +224,22 @@
     }
     finally {
       exporting = false
+    }
+  }
+
+  async function startNew() {
+    if (!onstartnew || startingNew || exporting)
+      return
+    startingNew = true
+    error = ''
+    try {
+      await onstartnew()
+    }
+    catch (cause) {
+      error = errorMessage(cause, uiM('feedback_action_failed'))
+    }
+    finally {
+      startingNew = false
     }
   }
 
@@ -289,11 +314,13 @@
         count: budget.maxAttachmentCount,
       })}</p>
     {/if}
-    {#if receipt}
+    {#if activeReceipt}
       <div data-testid='feedback-receipt' class='rounded-lg border border-base-content/10 bg-base-200/50 p-4 space-y-2 break-words'>
-        <p class='font-medium'>{uiM('feedback_accepted', { number: receipt.number })}</p>
-        <p>{collectionLabel(receipt.collectionStatus)}</p>
-        <p class='text-sm'>{uiM('feedback_accepted_hint')}</p>
+        <p class='font-medium'>{uiM('feedback_accepted', { number: activeReceipt.number })}</p>
+        <p>{collectionLabel(activeReceipt.collectionStatus)}</p>
+        <p class='text-sm'>{pendingReceipt
+          ? uiM('feedback_previous_upload_pending')
+          : uiM('feedback_accepted_hint')}</p>
       </div>
     {:else}
       <p class='text-sm text-base-content/65'>{labels.description ?? uiM('feedback_quick_hint')}</p>
@@ -382,10 +409,11 @@
     {/if}
   </div>
   <div class='shrink-0 flex flex-wrap justify-end gap-2 border-t border-base-content/10 bg-base-100 pt-4 pb-2'>
-    {#if onexport}<Button variant='ghost' loading={exporting} disabled={annotating || staging} onclick={saveLocal}>{uiM('feedback_local_export')}</Button>{/if}
-    {#if oncancel}<Button variant='ghost' onclick={oncancel}>{receipt
+    {#if onexport}<Button variant='ghost' loading={exporting} disabled={annotating || staging || startingNew} onclick={saveLocal}>{uiM('feedback_local_export')}</Button>{/if}
+    {#if oncancel}<Button variant='ghost' disabled={startingNew} onclick={oncancel}>{activeReceipt
       ? uiM('feedback_close')
       : labels.cancel ?? uiM('feedback_cancel')}</Button>{/if}
-    {#if !receipt}<Button type='submit' variant='primary' loading={loading || staging} disabled={annotating || exporting || recording || Boolean(onfileschange && filesError)}>{labels.submit ?? uiM('feedback_submit')}</Button>{/if}
+    {#if pendingReceipt && onstartnew}<Button variant='primary' loading={startingNew} disabled={exporting} onclick={startNew}>{uiM('feedback_start_new')}</Button>{/if}
+    {#if !activeReceipt}<Button type='submit' variant='primary' loading={loading || staging} disabled={annotating || exporting || recording || Boolean(onfileschange && filesError)}>{labels.submit ?? uiM('feedback_submit')}</Button>{/if}
   </div>
 </form>

@@ -464,6 +464,8 @@
   "feedback_local_export": "フィードバックをローカル保存",
   "feedback_accepted": "受理しました：{number}",
   "feedback_accepted_hint": "資料はバックグラウンドで収集されます。引き続き製品をご利用いただけます。",
+  "feedback_previous_upload_pending": "前回の報告には未送信の資料があります。新しい報告を始めると端末上の下書きが置き換わります。先にコピーを保存できます。",
+  "feedback_start_new": "新しい報告を始める",
   "feedback_collecting": "資料を収集中",
   "feedback_complete": "資料収集済み",
   "feedback_partial": "一部の資料がありません",

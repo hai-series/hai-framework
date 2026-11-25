@@ -74,6 +74,8 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
   for (const [code, codes] of Object.entries(ADMIN_DUTIES)) {
     const permissionIds: string[] = []
     for (const permissionCode of codes) {
+      if (permissionCode.startsWith('feedback:'))
+        continue
       let permission = await iam.authz.getPermissionByCode(permissionCode)
       if (!permission.success)
         return permission
@@ -107,7 +109,33 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
     }
     if (!role.data)
       return core.err(HaiCommonError.INTERNAL_ERROR)
-    const updated = await iam.authz.updateRole(role.data.id, { name: names[code as keyof typeof ADMIN_DUTIES], permissionIds })
+    const hasFeedbackPermissions = codes.some(permission => permission.startsWith('feedback:'))
+    if (hasFeedbackPermissions) {
+      const existing = await iam.authz.getRolePermissions(role.data.id)
+      if (!existing.success)
+        return existing
+      // 按差量更新基础权限，避免覆盖另一实例刚授予的反馈权限。
+      const allowed = new Set<string>(codes)
+      for (const permission of existing.data) {
+        if (!allowed.has(permission.code)) {
+          const removed = await iam.authz.removePermissionFromRole(role.data.id, permission.id)
+          if (!removed.success)
+            return removed
+        }
+      }
+      const existingIds = new Set(existing.data.map(permission => permission.id))
+      for (const permissionId of permissionIds) {
+        if (!existingIds.has(permissionId)) {
+          const assigned = await iam.authz.assignPermissionToRole(role.data.id, permissionId)
+          if (!assigned.success)
+            return assigned
+        }
+      }
+    }
+    const updated = await iam.authz.updateRole(role.data.id, {
+      name: names[code as keyof typeof ADMIN_DUTIES],
+      permissionIds: hasFeedbackPermissions ? undefined : permissionIds,
+    })
     if (!updated.success)
       return updated
   }

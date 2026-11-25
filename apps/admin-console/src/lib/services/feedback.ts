@@ -55,9 +55,9 @@ export async function initFeedbackBrowser(): Promise<void> {
   return initialize
 }
 
-export async function prepareFeedback() {
+export async function prepareFeedback(options?: { startNew?: boolean }) {
   await initFeedbackBrowser()
-  const result = await capture.prepare()
+  const result = await capture.prepare(options)
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
   return feedbackDraftView()
@@ -71,6 +71,8 @@ export function feedbackDraftView() {
   const draft = capture.getDraft()
   return {
     ...capture.getView(),
+    submissionId: draft?.submissionId,
+    pendingReceipt: draft?.report && { number: draft.report.number, collectionStatus: draft.report.collectionStatus },
     evidenceSummary: [
       {
         label: m.feedback_material_missing(),
@@ -117,14 +119,12 @@ export async function addFeedbackFiles(files: File[], removedAttachmentIds: read
 }
 
 export async function exportLocalFeedback(input: FeedbackFormData) {
-  const result = await capture.saveDraft({ ...input, category: input.type })
+  const result = await capture.saveDraft(capture.getDraft()?.report
+    ? undefined
+    : { ...input, category: input.type })
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
   return result.data.status !== 'cancelled'
-}
-
-export function feedbackDraftId() {
-  return capture.getDraft()?.submissionId ?? ''
 }
 
 export function feedbackListParameters(query: FeedbackListQuery): FeedbackListInput {

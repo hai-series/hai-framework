@@ -464,6 +464,8 @@
   "feedback_local_export": "保存反馈到本地",
   "feedback_accepted": "已受理：{number}",
   "feedback_accepted_hint": "您可以继续使用产品，材料将在后台汇集。",
+  "feedback_previous_upload_pending": "上一份反馈还有材料未上传。开始新的反馈将替换本地草稿，可以先保存到本地。",
+  "feedback_start_new": "开始新的反馈",
   "feedback_collecting": "材料收集中",
   "feedback_complete": "材料已收集",
   "feedback_partial": "部分材料缺失",

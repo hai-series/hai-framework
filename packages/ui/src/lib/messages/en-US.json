@@ -464,6 +464,8 @@
   "feedback_local_export": "Save feedback locally",
   "feedback_accepted": "Accepted: {number}",
   "feedback_accepted_hint": "You can keep using the product while materials are collected in the background.",
+  "feedback_previous_upload_pending": "The previous report still has materials to upload. Starting a new report will replace the local draft. You can save a copy first.",
+  "feedback_start_new": "Start a new report",
   "feedback_collecting": "Collecting materials",
   "feedback_complete": "Materials collected",
   "feedback_partial": "Some materials are missing",

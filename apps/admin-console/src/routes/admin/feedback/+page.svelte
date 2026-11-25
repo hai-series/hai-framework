@@ -71,16 +71,20 @@
   }
 
   async function view(report: Pick<FeedbackReportView, 'id'>) {
+    if (detail?.report.id !== report.id)
+      resetDetail()
     const generation = ++detailGeneration
     loading = true
     actionError = ''
     try {
       await initFeedbackBrowser()
-      const loaded = await feedbackApi.feedback.reports.get({ id: report.id })
-      if (!loaded.success)
-        throw new Error(loaded.error.message, { cause: loaded.error })
       if (generation !== detailGeneration)
         return
+      const loaded = await feedbackApi.feedback.reports.get({ id: report.id })
+      if (generation !== detailGeneration)
+        return
+      if (!loaded.success)
+        throw new Error(loaded.error.message, { cause: loaded.error })
       detail = loaded.data
       releaseUrls()
       attachments = loaded.data.attachments.map(item => ({
@@ -92,7 +96,6 @@
           ? undefined
           : m.feedback_attachment_pending()),
       }))
-      evidenceQuery = { page: 1, pageSize: 20 }
       await loadEvidence(evidenceQuery)
     }
     catch (cause) {
@@ -109,6 +112,7 @@
     if (!detail)
       return
     const id = detail.report.id
+    const reportGeneration = detailGeneration
     const generation = ++evidenceGeneration
     const result = await feedbackApi.feedback.reports.getEvidence({
       id,
@@ -118,33 +122,41 @@
       errorId: next.errorId || undefined,
       kind: next.kind as Parameters<typeof feedbackApi.feedback.reports.getEvidence>[0]['kind'],
     })
+    if (reportGeneration !== detailGeneration || generation !== evidenceGeneration || detail?.report.id !== id)
+      return
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
-    if (generation === evidenceGeneration && detail?.report.id === id)
-      evidence = result.data
+    evidence = result.data
   }
 
   async function status(input: FeedbackStatusChange) {
+    const generation = detailGeneration
     await initFeedbackBrowser()
     const changed = await feedbackApi.feedback.reports.setStatus(input)
     if (!changed.success)
       throw new Error(changed.error.message, { cause: changed.error })
-    if (detail?.report.id === input.id)
+    if (generation === detailGeneration && detail?.report.id === input.id)
       await view(reportView(changed.data))
     await refreshAll()
   }
 
   async function retry(report: FeedbackReportView) {
+    const generation = detailGeneration
     await initFeedbackBrowser()
     await retryFeedback(report.id)
-    await view(report)
+    if (generation === detailGeneration)
+      await view(report)
     await refreshAll()
   }
 
   async function attachment(item: FeedbackAttachmentView) {
     if (!detail)
       return
-    const result = await feedbackApi.feedback.attachments.get({ id: detail.report.id, attachmentId: item.id })
+    const id = detail.report.id
+    const generation = detailGeneration
+    const result = await feedbackApi.feedback.attachments.get({ id, attachmentId: item.id })
+    if (generation !== detailGeneration || detail?.report.id !== id)
+      return
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
     const bytes = feedbackBase64Bytes(result.data.dataBase64)
@@ -155,10 +167,16 @@
       'video/webm',
       'video/mp4',
     ].includes(result.data.contentType)) {
-      const url = feedbackBlobUrl(bytes, result.data.contentType)
-      attachments = attachments.map(value => value.id === item.id
-        ? { ...value, url }
-        : value)
+      attachments = attachments.map((value) => {
+        if (value.id !== item.id)
+          return value
+        if (value.url)
+          URL.revokeObjectURL(value.url)
+        return {
+          ...value,
+          url: feedbackBlobUrl(bytes, result.data.contentType),
+        }
+      })
       return
     }
     downloadFeedbackBytes(result.data.name, bytes, result.data.contentType)
@@ -170,11 +188,25 @@
         URL.revokeObjectURL(item.url)
     }
   }
-  async function closeDetail() {
-    releaseUrls()
-    detail = undefined
+  function resetDetail() {
     detailGeneration++
     evidenceGeneration++
+    releaseUrls()
+    detail = undefined
+    attachments = []
+    evidence = {
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    }
+    evidenceQuery = { page: 1, pageSize: 20 }
+    loading = false
+    actionError = ''
+  }
+
+  async function closeDetail() {
+    resetDetail()
     if (selectedFeedbackId) {
       try {
         await changeQuery(query)
@@ -184,7 +216,7 @@
       }
     }
   }
-  onDestroy(releaseUrls)
+  onDestroy(resetDetail)
 </script>
 
 <svelte:head><title>{m.feedback_title()} - {m.app_title()}</title></svelte:head>

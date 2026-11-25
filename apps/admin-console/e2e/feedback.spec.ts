@@ -876,3 +876,142 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     }
   }
 })
+
+test('本人反馈列表向普通作者开放且不返回其他作者或类别的报告', async ({ page, playwright, baseURL }) => {
+  const operator = await page.request.post('/api/auth/login', {
+    data: { identifier: dutyAccounts.operator.username, password: dutyAccounts.operator.password },
+  })
+  expect(operator.status()).toBe(200)
+  const category = uniqueUser('minecat').username
+  const foreign = await page.request.post('/api/feedback/reports', {
+    data: { submissionId: uniqueUser('fbother').username, appId: 'admin-console', category },
+  })
+  expect(foreign.ok()).toBe(true)
+  await page.request.post('/api/auth/logout')
+  const admin = await page.request.post('/api/auth/login', {
+    data: { identifier: 'admin', password: transportAdmin.password },
+  })
+  expect(admin.status()).toBe(200)
+  const roles: HaiResult<{ id: string, code: string }[]> = await (await page.request.get('/api/iam/roles')).json()
+  if (!roles.success)
+    throw new Error(roles.error.message)
+  const ordinaryRole = roles.data.find(role => role.code === 'user')
+  if (!ordinaryRole)
+    throw new Error('Existing ordinary user role is missing')
+  const member = await playwright.request.newContext({
+    baseURL,
+    extraHTTPHeaders: { Origin: baseURL! },
+  })
+  const user = uniqueUser('fbmine')
+  let userId: string | undefined
+  try {
+    expect((await member.get('/api/feedback/my-reports')).status()).toBe(401)
+    const registered = await registerViaApi(member, user)
+    const identity: HaiResult<{ user: { id: string } }> = await registered.json()
+    expect(identity.success).toBe(true)
+    if (!identity.success)
+      throw new Error(identity.error.message)
+    userId = identity.data.user.id
+    const assigned = await page.request.put(`/api/iam/users/${userId}`, {
+      data: {
+        roles: [ordinaryRole.id],
+      },
+    })
+    expect(assigned.ok()).toBe(true)
+    expect(await assigned.json()).toMatchObject({
+      success: true,
+      data: {
+        roles: ['user'],
+      },
+    })
+    const login = await member.post('/api/auth/login', {
+      data: { identifier: user.username, password: user.password },
+    })
+    expect(login.status()).toBe(200)
+    for (const reportCategory of [category, 'feature']) {
+      const accepted = await member.post('/api/feedback/reports', {
+        data: { submissionId: uniqueUser('fbself').username, appId: 'admin-console', category: reportCategory },
+      })
+      expect(accepted.status()).toBe(200)
+    }
+    const ownReports = await member.get('/api/feedback/my-reports', {
+      params: { category, page: 1, pageSize: 1 },
+    })
+    expect(ownReports.ok()).toBe(true)
+    expect(await ownReports.json()).toMatchObject({
+      success: true,
+      data: {
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        items: [
+          { category, userId },
+        ],
+      },
+    })
+    expect((await member.get('/api/feedback/reports')).status()).toBe(403)
+  }
+  finally {
+    await member.dispose()
+    if (userId)
+      expect((await page.request.delete(`/api/iam/users/${userId}`)).ok()).toBe(true)
+  }
+})
+
+test('切换反馈报告立即清空上一份证据，证据请求延迟或失败时也保持归属', async ({ page }) => {
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
+  const search = uniqueUser('fbdetail').username
+  async function createReport(label: string) {
+    const accepted = await page.request.post('/api/feedback/reports', {
+      data: {
+        submissionId: `${search}-${label}`,
+        appId: 'admin-console',
+        description: `${search} ${label}`,
+        evidence: [
+          {
+            id: label,
+            source: 'browser:fixture',
+            sequence: 1,
+            kind: 'log',
+            timestamp: Date.now(),
+            data: { label: `context-${label}` },
+          },
+        ],
+      },
+    })
+    const body: HaiResult<FeedbackReport> = await accepted.json()
+    expect(body.success).toBe(true)
+    if (!body.success)
+      throw new Error(body.error.message)
+    return body.data
+  }
+  const first = await createReport('first-evidence')
+  const second = await createReport('second-evidence')
+  await page.goto(`/admin/feedback?search=${search}`)
+  const detail = page.locator('.feedback-detail')
+  const open = (report: FeedbackReport) => page.getByRole('row').filter({ hasText: report.number }).getByRole('button', { name: '查看详情', exact: true }).click()
+  await open(first)
+  await detail.getByRole('tab', { name: '日志与请求', exact: true }).click()
+  await expect(detail).toContainText('context-first-evidence')
+  await detail.getByRole('button', { name: '关闭', exact: true }).click()
+  const evidenceRoute = `**/api/feedback/reports/${second.id}/evidence*`
+  const blocked = Promise.withResolvers<void>()
+  await page.route(evidenceRoute, async (route) => {
+    await blocked.promise
+    await route.abort()
+  })
+  try {
+    await open(second)
+    await expect(detail).toContainText(second.number)
+    await detail.getByRole('tab', { name: '日志与请求', exact: true }).click()
+    await expect(detail).not.toContainText('context-first-evidence')
+    await expect(detail.getByRole('status')).toContainText('正在读取材料')
+    blocked.resolve()
+    await expect(detail.getByRole('status')).toHaveCount(0)
+    await expect(detail).not.toContainText('context-first-evidence')
+  }
+  finally {
+    blocked.resolve()
+    await page.unrouteAll({ behavior: 'wait' })
+  }
+})

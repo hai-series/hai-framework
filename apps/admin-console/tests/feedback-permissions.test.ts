@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('admin feedback IAM integration', () => {
   it('沿用 business_operator/user 角色，业务操作员获得五项业务权限，普通用户仅可提交', async () => {
-    await seedFeedbackPermissions()
+    expect((await seedFeedbackPermissions()).success).toBe(true)
     expect(state.getRoleByCode.mock.calls.map(([code]) => code)).toEqual(['business_operator', 'user'])
     expect([
       ...state.permissions.keys(),
@@ -51,17 +51,20 @@ describe('admin feedback IAM integration', () => {
   })
 
   it('重复启动复用已注册权限，不重新创建权限记录', async () => {
-    await seedFeedbackPermissions()
-    await seedFeedbackPermissions()
+    expect((await seedFeedbackPermissions()).success).toBe(true)
+    expect((await seedFeedbackPermissions()).success).toBe(true)
     expect(state.createPermission).toHaveBeenCalledTimes(5)
   })
 
-  it('授权存储失败阻止初始化，不把未授权的入口标为成功', async () => {
+  it('反馈权限写入失败返回错误，由可选启动步骤独立重试', async () => {
     state.assignPermissionToRole.mockResolvedValueOnce({
       success: false,
-      error: { message: 'Permission assignment unavailable' },
+      error: { code: 'test:permission-write', message: 'Permission assignment unavailable' },
     })
-    await expect(seedFeedbackPermissions()).rejects.toThrow('Permission assignment unavailable')
+    expect(await seedFeedbackPermissions()).toMatchObject({
+      success: false,
+      error: { code: 'test:permission-write' },
+    })
   })
 
   it('从已验证 session 产生固定 scope，匿名无身份上下文', () => {

@@ -73,18 +73,26 @@ function startFeedback(): Promise<void> {
   feedbackClosing = false
   feedbackStarting = (async () => {
     try {
-      const result = await feedback.init({
-        ...core.config.getOrThrow<FeedbackConfigInput>('feedback'),
-        ...adminBuildMetadata,
-      })
+      const config = core.config.getOrThrow<FeedbackConfigInput>('feedback')
+      const permissions = await seedFeedbackPermissions()
+      const result = permissions.success
+        ? await feedback.init({
+            ...config,
+            ...adminBuildMetadata,
+          })
+        : permissions
       if (!result.success) {
-        if (feedbackFailure !== result.error.code)
-          core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
+        if (feedbackFailure !== result.error.code) {
+          core.logger.warn('Optional feedback unavailable; business runtime remains ready', {
+            module: 'feedback',
+            code: result.error.code,
+            traceId: result.error.traceId,
+          })
+        }
         feedbackFailure = result.error.code
       }
       else {
         feedbackFailure = undefined
-        await seedFeedbackPermissions()
       }
     }
     catch {
@@ -188,19 +196,11 @@ const runtime = core.module.createRuntime([
     close: () => scheduler.close(),
   },
   {
-    name: 'feedback',
-    enabled: () => Boolean(core.config.get('feedback')),
-    start: startFeedback,
-    close: closeFeedback,
-  },
-  {
     name: 'bootstrap',
     start: async () => {
       const businessSettings = await initBusinessSettings()
       if (!businessSettings.success)
         return businessSettings
-      if (feedback.isInitialized)
-        await seedFeedbackPermissions()
       const duties = await seedAdminDuties({
         admin: m.security_role_system(),
         audit_admin: m.security_role_audit(),
@@ -223,6 +223,12 @@ const runtime = core.module.createRuntime([
       core.logger.info('Application initialized.')
     },
     close: () => {},
+  },
+  {
+    name: 'feedback',
+    enabled: () => Boolean(core.config.get('feedback')),
+    start: startFeedback,
+    close: closeFeedback,
   },
 ])
 

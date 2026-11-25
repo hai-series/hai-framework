@@ -2,7 +2,7 @@
 {{#if features.feedback}}
 <script lang='ts'>
   import type { FeedbackDraft } from '@h-ai/feedback/client'
-  import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackFormData } from '@h-ai/ui'
+  import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackFormData, FeedbackReceipt } from '@h-ai/ui'
   import { Button, FeedbackModal, ui } from '@h-ai/ui'
   import { onDestroy } from 'svelte'
   import { browserFeedback } from '../api/feedback-client.js'
@@ -16,19 +16,25 @@
   let preparing = $state(false)
   let error = $state('')
   let draft = $state.raw<FeedbackDraft>()
+  let pendingReceipt = $state<FeedbackReceipt>()
   let attachments = $state<FeedbackAttachmentView[]>([])
   function refreshAttachments() {
     attachments = browserFeedback.getView().attachments
+  }
+  async function prepareDraft(options?: { startNew?: boolean }) {
+    const result = await browserFeedback.prepare(options)
+    if (!result.success)
+      throw new Error(result.error.message, { cause: result.error })
+    draft = result.data
+    const report = result.data.report
+    pendingReceipt = report && { number: report.number, collectionStatus: report.collectionStatus }
+    refreshAttachments()
   }
   async function prepare() {
     preparing = true
     error = ''
     try {
-      const result = await browserFeedback.prepare()
-      if (!result.success)
-        throw new Error(result.error.message, { cause: result.error })
-      draft = result.data
-      refreshAttachments()
+      await prepareDraft()
       open = true
     }
     catch (cause) {
@@ -74,7 +80,9 @@
     refreshAttachments()
   }
   async function exportLocal(data: FeedbackFormData) {
-    const result = await browserFeedback.saveDraft(input(data))
+    const result = await browserFeedback.saveDraft(browserFeedback.getDraft()?.report
+      ? undefined
+      : input(data))
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
     return result.data.status !== 'cancelled'
@@ -85,6 +93,7 @@
 
 <Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>
 <FeedbackModal bind:open {attachments} budget={browserFeedback.budget} resetKey={draft?.submissionId} onsubmit={submit} oncapture={capturePage} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
+  {pendingReceipt} onstartnew={() => prepareDraft({ startNew: true })}
   evidence={draft?.evidence ?? []}
   evidenceSummary={draft?.missing.length
 ? [

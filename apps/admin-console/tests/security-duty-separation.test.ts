@@ -4,6 +4,7 @@ import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { seedFeedbackPermissions } from '../src/lib/server/feedback.js'
 import { ADMIN_DUTIES, canGrantRole, requireAssignableRoles, requireManageableApiKeyOwner, requirePagePermission, seedAdminDuties } from '../src/lib/server/security-roles.js'
 import { load as dashboard } from '../src/routes/admin/+page.server.js'
 import { DELETE as deletePermission } from '../src/routes/api/iam/permissions/[id]/+server.js'
@@ -202,6 +203,8 @@ it('四类职责与基础用户权限互斥，重复初始化也不会把审计�
     user: 'Member',
   }
   expect((await seedAdminDuties(names)).success).toBe(true)
+  expect(await iam.authz.getPermissionByCode('feedback:read')).toMatchObject({ success: true, data: null })
+  expect((await seedFeedbackPermissions()).success).toBe(true)
   expect((await seedAdminDuties(names)).success).toBe(true)
   for (const [code, permissions] of Object.entries(ADMIN_DUTIES)) {
     const role = await iam.authz.getRoleByCode(code)
