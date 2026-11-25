@@ -24,8 +24,6 @@
 
 契约包依赖的 oRPC、Core 和 Storage Schema 随包安装。选择 Storage 等内置契约后，只有实际挂载并调用该领域的业务实现才需要相应的模块运行环境。
 
-<a id="接入示例"></a>
-
 ### 定义一个可共享的端点
 
 在服务端和客户端都能导入的目录新建 `shared/report-contract.ts`。示例用 `GET /reports/{id}` 查询报告状态，`id` 取自路径，格式为 `r-` 加数字。
@@ -61,9 +59,7 @@ export const reportRoutes = { get }
 
 ## 功能说明
 
-<a id="routes"></a>
 <a id="declare-routes"></a>
-<a id="定义与组合-http-契约apicontract"></a>
 
 ### 声明单个 HTTP 端点：`apiContract.route(route)`
 
@@ -78,7 +74,6 @@ export const reportRoutes = { get }
 | `builder.output(schema)` | 声明端点返回什么。 | 必填 `schema`，例如 `ReportResultSchema`。 | 包含输出 Schema 的端点定义，可放入路由组。 | `builder.output(ReportResultSchema)` |
 
 <a id="contract-route-options"></a>
-<a id="契约与路由字段"></a>
 
 ##### HTTP 路由字段
 
@@ -93,8 +88,6 @@ export const reportRoutes = { get }
 | `inputStructure` | 默认 `compact`，也可选 `detailed`。 | `compact` 合并路径参数与查询或正文。若 Schema 需要分别读取 `params`、`query`、`headers`、`body`，使用 `detailed`。 |
 | `outputStructure` | 默认 `compact`，也可选 `detailed`。 | `compact` 直接使用返回值作为正文。`detailed` 支持分开设置 `status`、`headers`、`body`，省略 `status` 时采用 `successStatus`。 |
 | `spec` | 可选 OpenAPI Operation Object 或回调。 | 对象替换整个生成操作。回调接收生成操作，可保留参数和响应 Schema 并仅补充所需字段。 |
-
-<a id="场景定义与组合-http-契约"></a>
 
 #### 场景：核对报告端点的输入与输出
 
@@ -132,7 +125,6 @@ import { reportRoutes } from './report-contract.js'
 export const contract = apiContract.create({ reports: reportRoutes })
 ```
 
-<a id="场景按配置启用可选领域"></a>
 <a id="conditional-domains"></a>
 
 #### 场景：按配置启用支付领域
@@ -184,7 +176,6 @@ const reportUrl = '/api/v1' + template.replace('{id}', encodeURIComponent('r-42'
 
 读取内置路径时同样传单个端点，例如 `apiContract.pathOf(apiContract.iam.auth.login)` 得到 `/auth/login`。typed client 会根据输入组装参数，直接调用 `client.reports.get({ id: 'r-42' })` 即可。
 
-<a id="场景把同一份契约交给服务端与客户端"></a>
 <a id="use-with-serv"></a>
 
 ### 在独立服务中挂载契约：`@h-ai/serv`
@@ -237,7 +228,6 @@ console.info(result.data.state) // ready
 
 换成 `r-99` 时，处理函数返回失败 `HaiResult`。Serv 的普通契约端点可用 HTTP 200 传递业务失败，调用方仍需检查 `success`。若换成 `invalid`，输入校验先返回 HTTP 400。此示例未创建监听端口。需要让其他进程发起 HTTP 请求时，按 [Serv 启动 HTTP 服务](serv.md#http-app)接入。
 
-<a id="场景把-iam-契约接入-serv"></a>
 <a id="serv-iam-wiring"></a>
 
 #### 场景：在同一 Serv 应用挂载 IAM
@@ -350,7 +340,6 @@ export async function readReport(baseUrl: string, id: string) {
 
 传 `r-42` 得到 `{ state: 'ready' }`。传 `r-99` 得到可显示的失败消息。HTTP 状态和业务 `success` 分别由宿主与结果结构表达。浏览器凭据、独立 SSR 实例和自定义响应的处理见 [API Client 功能说明](api-client.md#api-reference)。如果使用 Kit 的浏览器 `apiFetch`，则传拼好的 HTTP 路径，并用共享 `ReportResultSchema.safeParse` 检查读到的 JSON。
 
-<a id="校验结果与分页apicontractschema"></a>
 <a id="response-schemas"></a>
 
 ### 复用结果、分页与通用 Schema
@@ -367,8 +356,6 @@ export async function readReport(baseUrl: string, id: string) {
 | `PaginationQuerySchema` | 检查分页请求。 | 根包命名导出。可选 `page` 为大于等于 1 的整数，`pageSize` 为 1–100 的整数。数字字符串会转为数值。 | 省略字段时由业务服务选择默认值。 | `PaginationQuerySchema.safeParse({ page: '1', pageSize: '20' })` |
 | `IdParamSchema` | 检查通用路径编号。 | 根包命名导出。必填 `id` 为非空字符串。 | 带 `id` 的对象 Schema。 | `IdParamSchema.safeParse({ id: 'r-42' })` |
 | `HaiErrorSchema` | 校验公开错误数据。 | 根包命名导出。必填 `code` 与 `message`，其他字段见数据页。 | 失败分支 `error` 的 Schema。 | `HaiErrorSchema.safeParse({ code: 'reports:missing', message: 'Report not found' })` |
-
-<a id="场景校验结果与分页"></a>
 
 #### 场景：校验报告列表响应
 
@@ -403,7 +390,6 @@ console.info(parsed.data.data.total) // 1
 
 把示例中的 `items[0].state` 改成数字会使结构校验失败。合法的业务失败也能通过结构校验，随后由 `parsed.data.success` 识别。数据字段详见[数据结构](../data/api-contract.md#response-data)。
 
-<a id="选择标准业务接口apicontract"></a>
 <a id="domains"></a>
 
 ### 选用标准领域契约
@@ -419,13 +405,6 @@ console.info(parsed.data.data.total) // 1
 | `apiContract.ai` | JSON 聊天补全、消息、记忆与会话。 | 属性，无参数。 | AI 路由组。 | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | 订单与渠道通知。 | 属性，无参数。 | Payment 路由组。 | `apiContract.payment.orders.create` |
 | `apiContract.feedback` | 提交、查询、采集证据、附件和导出反馈。 | 属性，无参数。 | Feedback 路由组。 | `apiContract.feedback.reports.listMine` |
-
-<a id="场景选择标准业务接口"></a>
-<a id="场景由公开策略组织认证页面"></a>
-<a id="场景声明交互挑战"></a>
-<a id="场景在页面离开时关闭会话"></a>
-<a id="存储接口的输入约束"></a>
-<a id="场景接入反馈路由与校验输入"></a>
 
 #### 场景：选择领域与处理方式
 
@@ -455,8 +434,6 @@ console.info(parsed.data.data.total) // 1
 | `maxAttachmentBytes` | 正整数，默认 5 MiB。 | 单个附件的预算，受附件总预算限制。 |
 | `maxEvidenceBytes` | 正整数，默认 4 MiB。 | 单份证据的预算，最高为总量的八分之一。 |
 | `maxEvidenceCount` | 正整数，默认 2,000。 | 最多保留 2,000 条证据。 |
-
-<a id="场景计算反馈路由的传输预算"></a>
 
 #### 场景：从统一反馈配置推导传输预算
 

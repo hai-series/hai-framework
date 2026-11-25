@@ -30,8 +30,6 @@ At startup, the generated app reads `config/_storage.yml` with `core.config.get(
 
 After restarting the backend with new settings, try writing and reading an object. Verify a presigned link from the browser's actual entry point as well, especially when using a proxy.
 
-<a id="operation-logging"></a>
-
 ### Operation logging
 
 Local and S3 storage use the same logging settings. Storage logs write operations at `debug` even when `operationLog` is omitted. Set [Core's logging threshold](core.en.md#application-logging) to `debug` or `trace` to see these logs. Set `operationLog.write: false` to disable write logs for storage.

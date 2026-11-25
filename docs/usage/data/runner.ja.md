@@ -71,7 +71,6 @@ Runner はタスク、資源上限、実行イベントを共有 [RelDB](reldb.j
 
 <a id="example-data"></a>
 
-<a id="待機中実行中の作業"></a>
 
 #### 例 · 待機中・実行中の作業
 

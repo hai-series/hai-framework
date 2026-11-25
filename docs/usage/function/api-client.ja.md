@@ -809,7 +809,6 @@ export async function requestReportExport(
 
 `startReportClient('/api/v1')` に成功したら、そのインスタンスを `apiClient.createAuthActions(client)` に渡してログインします。たとえば `requestReportExport(client, { reportId: 'r-42', format: 'pdf' })` で選択したレポートを送信します。サーバーが受理すると `exportId` が得られるので、画面に受理済みと表示できます。認証済みの利用者にエクスポート権限がない場合は HTTP 403 が返り、画面には拒否理由を表示します。使い終えたら `client.close()` でインスタンスを解放します。
 
-<a id="business-requests"></a>
 <a id="storage-requests"></a>
 <a id="ファイルと-ai-apiapiclientstorageapiclientai"></a>
 

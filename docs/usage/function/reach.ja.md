@@ -55,7 +55,6 @@ finally {
 
 `local` は開発とテストで送信操作を記録します。`console-` で始まる `messageId` が返れば、ローカルの呼び出しは成功しています。`reach.isInitialized` で利用可能なチャネルを確認できます。`reach.config` は認証情報やヘッダー値を伏せた現在の設定を返します。ファイルで指定する方法は [ローカル送信の設定](../configuration/reach.ja.md#reach-example-local)を参照してください。
 
-<a id="api-一覧"></a>
 
 <a id="api-reference"></a>
 

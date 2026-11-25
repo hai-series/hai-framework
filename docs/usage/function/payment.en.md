@@ -77,7 +77,6 @@ export async function startPayment(orderData: PaymentOrder) {
 }
 ```
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 

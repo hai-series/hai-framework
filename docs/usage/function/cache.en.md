@@ -58,7 +58,6 @@ finally {
 - `kv.get<{ name: string }>('user:1')` reads the same key. The type argument describes the expected value. A hit returns `{ name: 'Alice' }` and the log shows `Alice`. An expired or missing key returns a successful `null`.
 - `close()` takes no arguments and releases the Redis connection. On success, `data` is `undefined`, and the key keeps its existing expiry. If cleanup fails, the example logs the error code.
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 

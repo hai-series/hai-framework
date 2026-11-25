@@ -20,8 +20,6 @@ Load `config/_vecdb.yml` and initialize the chosen backend. Choose a metric befo
 
 Provider names qualify the rows above. Fields are set directly inside the chosen configuration object.
 
-<a id="operation-logging"></a>
-
 ### Operation logging
 
 These settings apply to every backend. Enabled operation summaries use `debug` and are filtered by the [Core logging threshold](core.en.md#application-logging).

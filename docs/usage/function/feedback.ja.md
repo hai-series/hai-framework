@@ -50,7 +50,6 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 }
 ```
 
-<a id="api-一覧"></a>
 
 <a id="api-reference"></a>
 

@@ -44,7 +44,6 @@
 
 <a id="example-data"></a>
 
-<a id="stripe-操作有没有已确认的结果"></a>
 
 #### 示例 · Stripe 操作有没有已确认的结果
 

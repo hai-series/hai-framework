@@ -55,7 +55,6 @@ finally {
 
 `local` records the send in development and tests. A `messageId` starting with `console-` confirms the local call worked. Use `reach.isInitialized` to check whether the process has any providers and `reach.config` to read the active settings with credentials and header values masked. See the [local configuration example](../configuration/reach.en.md#reach-example-local) for the file version.
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 

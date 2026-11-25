@@ -16,9 +16,6 @@
 
 ## 配置清单
 
-<a id="配置示例"></a>
-
-<a id="生效与核对"></a>
 
 下文的 YAML 片段写入 `config/_audit.yml` 并与其他分组合并。同一分组的不同示例按需选用。修改后重启服务，再按示例核对实际结果。示例中的账号、收件地址和业务字段均为自定义值。
 
@@ -142,11 +139,8 @@ privacy:
 
 <a id="audit-user-mapping"></a>
 
-<a id="usertable"></a>
 
-<a id="useridcolumn"></a>
 
-<a id="usernamecolumn"></a>
 
 ### 用户字段映射
 
@@ -194,7 +188,6 @@ retention:
 
 <a id="change-retention"></a>
 
-<a id="将已启用的保护期延长至-120-天"></a>
 
 #### 示例：将已启用的保护期延长至 120 天
 

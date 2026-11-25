@@ -26,8 +26,6 @@ Set deployment options in `hai.json.deploy`, and select environment overrides fo
 | `provider.remote.dockerMode` | Optional | `rootless` requires `runtime: docker` and selects the SSH user’s local socket. Omit it or use `default` for the regular local engine rules. |
 | `provider.expose.hostAddress`, `provider.expose.publicUrl` | Set together for an external gateway | Bind to a specific host IPv4/IPv6 address and register the public HTTPS origin. The artifact supplies the application path. Select either this pair or Hai-managed `provider.expose.https`. |
 
-<a id="services"></a>
-
 ### Services
 
 | Field | Default or requirement | Meaning |

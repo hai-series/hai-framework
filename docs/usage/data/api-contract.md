@@ -43,7 +43,6 @@ API 契约在共享代码中定义每个 HTTP 操作以及它的请求和响应�
 ## 接口数据
 
 <a id="example-data"></a>
-<a id="接口承诺返回的业务数据"></a>
 
 ### JSON 请求与业务结果
 
@@ -121,12 +120,6 @@ API 契约在共享代码中定义每个 HTTP 操作以及它的请求和响应�
 `items` 是本页记录，`total` 是当前筛选条件下的总数，`page` 和 `pageSize` 是处理函数实际返回的页码和每页数量。示例中还有两条记录可继续翻页读取。对于 IAM 用户、角色和权限的必填 `createdAt`、`updatedAt` 和验证码回执的 `expiresAt`，服务端 Schema 接受有效的 `Date` 或带时区的 ISO 字符串，拒绝 `null`。通过 HTTP JSON 传输后客户端读取字符串。
 
 <a id="public-settings"></a>
-<a id="公开配置响应"></a>
-<a id="响应来源"></a>
-<a id="响应字段"></a>
-<a id="使用与核对"></a>
-<a id="示例--登录页面可以看到的策略"></a>
-<a id="登录页面可以看到的策略"></a>
 
 ### IAM 公开配置响应
 

@@ -700,7 +700,6 @@ In the source, follow the `headers` callback in `buildRawClient()` in `packages/
 
 Check the returned result before removing that user from the view. The application's initialized client stays available to reload the list.
 
-<a id="business-requests"></a>
 <a id="storage-requests"></a>
 <a id="call-file-and-ai-apis-apiclientstorage-apiclientai"></a>
 

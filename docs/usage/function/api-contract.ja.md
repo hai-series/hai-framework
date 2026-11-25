@@ -24,8 +24,6 @@
 
 oRPC、Core、Storage の Schema は契約パッケージの依存関係としてインストールされます。Storage などの組み込み契約は、ドメインの実装を HTTP サービスで登録して呼び出す段階で、対応するモジュールの実行環境が必要です。
 
-<a id="利用例"></a>
-
 ### 共有するエンドポイントを定義する
 
 サーバーとクライアントの両方からインポートできる場所に `shared/report-contract.ts` を作成します。この例では `GET /reports/{id}` でレポートの状態を取得します。パス引数の `id` は `r-` に数字を続けた形式です。
@@ -57,14 +55,11 @@ export const reportRoutes = { get }
 
 ルートグループと、個別にインポートできる Schema を定義できました。次に[アプリの契約を組み合わせ](#compose-domains)、サーバーへの接続方法を選びます。このページでは `r-42`（準備済みのレポート）、`r-99`（有効な形式だが存在しない ID）、`invalid`（無効な形式の ID）を使います。
 
-<a id="api-一覧"></a>
 <a id="api-reference"></a>
 
 ## 機能
 
-<a id="routes"></a>
 <a id="declare-routes"></a>
-<a id="http-契約の定義と組合せapicontract"></a>
 
 ### HTTP エンドポイントを宣言する：`apiContract.route(route)`
 
@@ -79,7 +74,6 @@ HTTP メタデータ、リクエストの Schema、レスポンスの Schema を
 | `builder.output(schema)` | エンドポイントが返す出力を宣言する。 | `schema` が必須。例では `ReportResultSchema`。 | 出力 Schema が設定されたエンドポイント定義。ルートグループに格納できます。 | `builder.output(ReportResultSchema)` |
 
 <a id="contract-route-options"></a>
-<a id="契約とルートの項目"></a>
 
 ##### HTTP ルートの項目
 
@@ -94,8 +88,6 @@ HTTP メタデータ、リクエストの Schema、レスポンスの Schema を
 | `inputStructure` | 既定値は `compact`。`detailed` も指定できます。 | `compact` はパス引数とクエリまたは本文をまとめます。Schema が `params`、`query`、`headers`、`body` を個別に受け取るなら `detailed` を使います。 |
 | `outputStructure` | 既定値は `compact`。`detailed` も指定できます。 | `compact` は戻り値をそのまま本文にします。`detailed` は `status`、`headers`、`body` を個別に指定でき、`status` の省略時は `successStatus` を使います。 |
 | `spec` | 省略可の OpenAPI Operation Object またはコールバック。 | オブジェクトは生成された操作全体を置き換えます。コールバックなら生成された引数やレスポンスの Schema を残して、必要な項目だけを追加できます。 |
-
-<a id="利用例http-契約の定義と組合せ"></a>
 
 #### 利用例：レポート取得の入力と出力を確認する
 
@@ -134,7 +126,6 @@ export const contract = apiContract.create({ reports: reportRoutes })
 ```
 
 <a id="conditional-domains"></a>
-<a id="利用例設定に応じて任意のドメインを有効にする"></a>
 
 #### 利用例：設定に応じて決済ドメインを有効にする
 
@@ -238,7 +229,6 @@ console.info(result.data.state) // ready
 `r-99` に変更すると、ハンドラーが失敗した `HaiResult` を返します。Serv の通常の契約エンドポイントでは業務上の失敗が HTTP 200 で返ることもあるので、呼び出し元で `success` を確認します。`invalid` に変更すると、入力の検証で先に HTTP 400 が返ります。この例はポートを開きません。他プロセスから HTTP リクエストを送る場合は [Serv で HTTP サービスを起動する手順](serv.ja.md#http-app)を参照してください。
 
 <a id="serv-iam-wiring"></a>
-<a id="利用例iam-契約を-serv-に登録する"></a>
 
 #### 利用例：同じ Serv アプリに IAM を登録する
 
@@ -351,7 +341,6 @@ export async function readReport(baseUrl: string, id: string) {
 `r-42` を渡すと `{ state: 'ready' }` が返り、`r-99` を渡すと画面に表示できる失敗メッセージが得られます。HTTP ステータスはホストが決め、業務の成否は結果の `success` に入ります。ブラウザーの資格情報、独立した SSR インスタンス、独自のレスポンスについては [API Client リファレンス](api-client.ja.md#api-reference)を参照してください。Kit のブラウザー向け `apiFetch` を使う場合は、組み立てた HTTP パスを渡し、読み取った JSON を共有の `ReportResultSchema.safeParse` で検証します。
 
 <a id="response-schemas"></a>
-<a id="結果とページの検証apicontractschema"></a>
 
 ### 業務結果、ページ情報、共通 Schema を再利用する
 
@@ -367,8 +356,6 @@ export async function readReport(baseUrl: string, id: string) {
 | `PaginationQuerySchema` | ページ情報付きのリクエストを検証する。 | ルートの名前付きエクスポート。`page` は 1 以上、`pageSize` は 1–100 の整数で、どちらも省略できます。数字の文字列は数値に変換します。 | 省略された項目の既定値は業務サービスが決めます。 | `PaginationQuerySchema.safeParse({ page: '1', pageSize: '20' })` |
 | `IdParamSchema` | 汎用のパス ID を検証する。 | ルートの名前付きエクスポート。空でない文字列 `id` が必須です。 | `id` を持つオブジェクトの Schema。 | `IdParamSchema.safeParse({ id: 'r-42' })` |
 | `HaiErrorSchema` | 公開エラーのデータを検証する。 | ルートの名前付きエクスポート。`code` と `message` が必須です。他の項目はデータ構造のページを参照してください。 | 失敗時の `error` の Schema。 | `HaiErrorSchema.safeParse({ code: 'reports:missing', message: 'Report not found' })` |
-
-<a id="利用例結果とページの検証"></a>
 
 #### 利用例：レポート一覧のレスポンスを検証する
 
@@ -404,7 +391,6 @@ console.info(parsed.data.data.total) // 1
 `items[0].state` を数値に変えると、構造の検証は失敗します。定義に合う業務エラーは構造の検証に成功し、`parsed.data.success` で判定できます。各フィールドについては[データ構造](../data/api-contract.ja.md#response-data)を参照してください。
 
 <a id="domains"></a>
-<a id="標準業務インターフェースの選択apicontract"></a>
 
 ### 標準ドメインの契約を選ぶ
 
@@ -419,8 +405,6 @@ console.info(parsed.data.data.total) // 1
 | `apiContract.ai` | JSON のチャット補完、メッセージ、メモリ、セッション。 | プロパティ。引数なし。 | AI ルートグループ。 | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | 注文と決済サービスからの通知。 | プロパティ。引数なし。 | Payment ルートグループ。 | `apiContract.payment.orders.create` |
 | `apiContract.feedback` | フィードバックの送信、取得、証拠収集、添付、エクスポート。 | プロパティ。引数なし。 | Feedback ルートグループ。 | `apiContract.feedback.reports.listMine` |
-
-<a id="利用例標準業務インターフェースの選択"></a>
 
 #### 利用例：ドメインと処理を選ぶ
 

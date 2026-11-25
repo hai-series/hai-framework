@@ -62,7 +62,6 @@ IAM 一共使用 7 张表。启用 LDAP 或 API Key 时，才创建对应的表�
 
 <a id="example-data"></a>
 
-<a id="账号本身"></a>
 
 #### 示例 · 账号本身
 

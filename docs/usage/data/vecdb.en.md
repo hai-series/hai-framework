@@ -6,8 +6,6 @@
 
 When an application indexes a document, it supplies an ID, embedding, content, and metadata to VecDB. The backend searches the selected collection by vector distance and returns matches.
 
-<a id="document-field-mapping"></a>
-
 ## Document field mapping
 
 Applications write documents to VecDB using the same `VectorDocument` fields on every backend. The table maps the fields in the [example document](#example-data) to each backend's storage fields.

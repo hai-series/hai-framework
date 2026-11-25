@@ -226,8 +226,6 @@ Reach uses **one kind of cache key** through `@h-ai/cache`. The node that gets t
 | --- | --- | --- | --- |
 | [Queue scan lock](#queue-scan-lock) | `hai:reach:flush-pending` | The lock token for one scan | When the deferred queue is enabled, sending is allowed, and Cache is initialized, it cuts down on duplicate queries |
 
-<a id="queue-scan-lock"></a>
-
 ### Queue scan lock
 
 | Item | Type | Default | Meaning | Example |

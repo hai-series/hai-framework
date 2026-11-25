@@ -6,8 +6,6 @@
 
 An API contract defines HTTP operations and their request and response schemas in shared code. The server uses these definitions to implement endpoints. The client uses them to determine what to send and what to read. For example, a file detail page sends an object key and reads the file size, media type and last modification time.
 
-<a id="data-ownership"></a>
-
 ## Data ownership
 
 This module creates no database tables, cache keys or data files. Contract definitions are built with the application. The HTTP host and caller handle each request and response, while domain modules own the persistent records.
@@ -19,8 +17,6 @@ This module creates no database tables, cache keys or data files. Contract defin
 | Users, sessions and permissions | IAM manages these records. Applications query them through authorized APIs. [IAM data structures](iam.en.md) |
 | File content and object metadata | The Storage backend holds these records. Applications query metadata or obtain download URLs through the Storage API. [Storage data structures](storage.en.md) |
 | Chats, payments and feedback | The configured AI storage, payment service and feedback service manage their own records. [AI](ai.en.md) · [Payment](payment.en.md) · [Feedback](feedback.en.md) |
-
-<a id="contract-metadata"></a>
 
 ## Contract metadata
 
@@ -119,9 +115,6 @@ For example, an admin client with `iam.users.read` requests `GET /iam/users?page
 `items` contains this page's records, `total` counts all matches for the current filter, and `page` and `pageSize` report the page and size returned by the handler. The sample shows one user with two more available on later pages. For required IAM response dates, including `createdAt` and `updatedAt` for users, roles and permissions and `expiresAt` on an OTP response, the server schema accepts a valid `Date` or ISO date-time string with a time zone and rejects `null`. The client receives strings over HTTP JSON.
 
 <a id="public-settings"></a>
-<a id="public-settings-response"></a>
-<a id="example--policy-visible-to-a-sign-in-page"></a>
-<a id="policy-visible-to-a-sign-in-page"></a>
 
 ### Public IAM settings response
 

@@ -74,7 +74,6 @@ finally {
 
 Manual triggering works before the scanner starts. A long-running service calls `start()` after initialization. On shutdown, await `scheduler.close()` before closing RelDB.
 
-<a id="api-list"></a>
 <a id="api-reference"></a>
 <a id="task-definitions"></a>
 

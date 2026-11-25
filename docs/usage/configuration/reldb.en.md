@@ -77,8 +77,6 @@ For PostgreSQL, `pg` passes the `ssl` options to Node.js TLS. Set `ssl.ca` to PE
 
 MySQL accepts its own `ssl` object. An empty object enables TLS with certificate-chain and DNS hostname checks. Set `ssl.ca` for a private CA. Configure TLS separately from the MySQL URL.
 
-<a id="operation-logging"></a>
-
 ### Operation logging
 
 These settings apply to every backend. Enabled operation summaries use `debug` and are filtered by the [Core logging threshold](core.en.md#application-logging).

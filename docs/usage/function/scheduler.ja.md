@@ -74,7 +74,6 @@ finally {
 
 定期スキャンの開始前でも手動実行できます。常駐サービスは初期化後に `start()` を呼びます。終了時は `scheduler.close()` を待ってから RelDB を閉じます。
 
-<a id="api-一覧"></a>
 <a id="api-reference"></a>
 <a id="task-definitions"></a>
 

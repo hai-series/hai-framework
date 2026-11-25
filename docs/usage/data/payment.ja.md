@@ -42,7 +42,6 @@
 
 <a id="example-data"></a>
 
-<a id="stripe-操作の結果を確認できたか"></a>
 
 #### 例 · Stripe 操作の結果を確認できたか
 

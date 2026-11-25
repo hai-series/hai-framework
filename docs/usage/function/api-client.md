@@ -726,7 +726,6 @@ export async function readAccessForUi(client: ApiClient<{ iam: typeof apiContrac
 <a id="调用文件与-ai-apiapiclientstorageapiclientai"></a>
 <a id="默认业务领域"></a>
 <a id="场景调用文件与-ai-api"></a>
-<a id="business-requests"></a>
 <a id="storage-requests"></a>
 
 ### 访问对象存储 `client.storage`

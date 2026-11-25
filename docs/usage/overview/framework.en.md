@@ -4,8 +4,6 @@
 
 hai-framework is a TypeScript framework for AI calls, identity and authorization, data, user interfaces, notifications, audit, and application delivery. Use an individual package or combine packages into an application. Check any external services the packages need before running the application.
 
-<a id="adopt-one-feature"></a>
-
 ## Adopt one feature
 
 For chat, start with the server-side AI API and a model credential on the server. Add a persistent store when you need conversation history. Add text processing, embeddings, and a vector store for knowledge retrieval. The UI package can render Markdown and edit documents independently of a model.

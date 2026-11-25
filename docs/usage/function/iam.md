@@ -309,8 +309,6 @@ export function loginWithDirectory(username: string, password: string) {
 
 应用启动时检查 `startDirectoryLogin()` 的 `success`。登录处理函数检查 `loginWithDirectory()` 返回的结果：成功时才能读取用户和令牌，目录不可用或凭据无效时按失败处理。服务退出时关闭 IAM，再关闭其依赖。
 
-<a id="使用可选-reach-自动发送"></a>
-
 <a id="ldap-identity-migration"></a>
 
 #### 迁移现有 LDAP 身份绑定
@@ -331,6 +329,8 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 ```
 
 `private-db.json` 是目标数据库的私有 RelDB JSON 配置，第一个命令只预检并报告新增和已存在的数量。核对后用 `--apply` 在同一事务中导入。重复导入相同绑定安全，冲突会停止整批。清单和数据库配置保留在受控环境。确认真实目录账号可用后再开放 LDAP 登录。`ldapSyncUser: false` 可用于只允许预绑定的部署。
+
+<a id="使用可选-reach-自动发送"></a>
 
 #### 场景：让 Reach 发送验证码与重置链接
 

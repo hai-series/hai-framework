@@ -16,8 +16,6 @@ Payment providers store their orders and transaction states. The application sto
 - **Alipay**. `payment.createOrder()` builds a signed WAP form on the server. Alipay can process the order after the browser submits the form to its gateway. The `alipay.trade.query` API takes the merchant order number `out_trade_no` directly, so the module needs no stored order mapping. [Alipay WAP payment flow](../function/payment.en.md#alipay-wap-flow)
 - **Stripe**. Queries also go to the payment provider. The module first looks up the stored Checkout Session ID by Stripe account, test or live mode, and business order number `orderNo`. It then queries Stripe by that Session ID. It also stores request digests and results for order creation and refunds so different instances can safely retry using the same idempotency key.
 
-<a id="database"></a>
-
 ## Database
 
 When you enable the built-in Stripe provider, `payment.init()` creates the table below. WeChat Pay and Alipay setups need no module-owned payment table.

@@ -6,8 +6,6 @@
 
 When a user returns to a page, the browser can restore the theme, language, guide progress and drawer width. UI creates no database tables, Redis keys or business files. The host application owns search, upload, authorization and business records.
 
-<a id="browser-storage"></a>
-
 ## Browser storage
 
 | Key | Location and value | Reader, writer and lifetime |

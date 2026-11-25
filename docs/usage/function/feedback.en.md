@@ -48,7 +48,6 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 }
 ```
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 

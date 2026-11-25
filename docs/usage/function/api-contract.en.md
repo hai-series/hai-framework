@@ -57,14 +57,11 @@ export const reportRoutes = { get }
 
 The module exports a route group and schemas that can be imported individually. Next, [compose an application contract](#compose-domains) and choose a server integration. The examples use `r-42` for a ready report, `r-99` for a valid ID with no matching report, and `invalid` for a malformed ID.
 
-<a id="api-list"></a>
 <a id="api-reference"></a>
 
 ## Features
 
-<a id="routes"></a>
 <a id="declare-routes"></a>
-<a id="define-and-compose-http-contracts-apicontract"></a>
 
 ### Declare an HTTP endpoint with `apiContract.route(route)`
 
@@ -79,7 +76,6 @@ Put the HTTP metadata and the input and output schemas in one definition. In the
 | `builder.output(schema)` | Describe the endpoint result. | Required `schema`, such as `ReportResultSchema`. | Endpoint definition with the output schema, ready to use in a route group. | `builder.output(ReportResultSchema)` |
 
 <a id="contract-route-options"></a>
-<a id="contract-and-route-fields"></a>
 
 ##### HTTP route fields
 
@@ -94,8 +90,6 @@ Put the HTTP metadata and the input and output schemas in one definition. In the
 | `inputStructure` | `compact` by default, or `detailed`. | `compact` merges path parameters with query data or the body. `detailed` uses separate `params`, `query`, `headers`, and `body` fields. |
 | `outputStructure` | `compact` by default, or `detailed`. | `compact` uses the result as the body. `detailed` supports separate `status`, `headers`, and `body` fields. Omitting `status` uses `successStatus`. |
 | `spec` | Optional OpenAPI Operation Object or callback. | An object replaces the operation. A callback receives the generated operation and can keep its schemas while adding fields. |
-
-<a id="scenario-define-and-compose-http-contracts"></a>
 
 #### Scenario: Check the report endpoint's input and output
 
@@ -133,7 +127,6 @@ import { reportRoutes } from './report-contract.js'
 export const contract = apiContract.create({ reports: reportRoutes })
 ```
 
-<a id="scenario-enable-an-optional-domain-from-configuration"></a>
 <a id="conditional-domains"></a>
 
 #### Scenario: Enable the payment domain from configuration
@@ -237,7 +230,6 @@ console.info(result.data.state) // ready
 
 With `r-99`, the handler returns a failed `HaiResult`. A standard Serv contract endpoint can carry a business failure in HTTP 200, so callers check `success`. With `invalid`, input validation returns HTTP 400 before the handler runs. The example uses an in-process request. Follow [Serv HTTP application setup](serv.en.md#http-app) to accept requests from another process.
 
-<a id="scenario-mount-the-iam-contract-in-serv"></a>
 <a id="serv-iam-wiring"></a>
 
 #### Scenario: Mount IAM in a Serv application
@@ -350,7 +342,6 @@ export async function readReport(baseUrl: string, id: string) {
 
 `r-42` returns `{ state: 'ready' }`. `r-99` returns a message the caller can display. The host determines the HTTP status, while the envelope carries business `success`. See the [API Client reference](api-client.en.md#api-reference) for credentials, SSR clients, and custom responses. With Kit's browser `apiFetch`, pass the assembled HTTP path and use the shared `ReportResultSchema.safeParse` on the JSON response.
 
-<a id="validate-results-and-pages-apicontractschema"></a>
 <a id="response-schemas"></a>
 
 ### Reuse result, pagination, and common schemas
@@ -367,8 +358,6 @@ Business endpoints can reuse result and page schemas while defining their own pa
 | `PaginationQuerySchema` | Validate a pagination query. | Named root export. Optional integer `page` starts at 1. Optional integer `pageSize` is 1–100. Numeric strings are coerced. | Parsed query. The service supplies defaults for omitted fields. | `PaginationQuerySchema.safeParse({ page: '1', pageSize: '20' })` |
 | `IdParamSchema` | Validate a generic resource ID. | Named root export. Required nonempty string `id`. | Object schema with `id`. | `IdParamSchema.safeParse({ id: 'r-42' })` |
 | `HaiErrorSchema` | Validate public error data. | Named root export. `code` and `message` are required. Additional fields are in the data reference. | Schema for the failure branch's `error`. | `HaiErrorSchema.safeParse({ code: 'reports:missing', message: 'Report not found' })` |
-
-<a id="scenario-validate-results-and-pages"></a>
 
 #### Scenario: Validate a report list response
 
@@ -403,7 +392,6 @@ console.info(parsed.data.data.total) // 1
 
 Changing `items[0].state` to a number fails structural validation. A well-formed business failure passes structural validation and is identified by `parsed.data.success`. See the [data reference](../data/api-contract.en.md#response-data) for the payload fields.
 
-<a id="select-standard-domains-apicontract"></a>
 <a id="domains"></a>
 
 ### Choose standard domain contracts
@@ -419,8 +407,6 @@ Select existing route groups from the root module. Each domain owns its business
 | `apiContract.ai` | JSON chat completions, messages, memory, and sessions. | Property with no parameters. | AI router. | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | Orders and payment-channel notifications. | Property with no parameters. | Payment router. | `apiContract.payment.orders.create` |
 | `apiContract.feedback` | Reports, evidence, attachments, and exports. | Property with no parameters. | Feedback router. | `apiContract.feedback.reports.listMine` |
-
-<a id="scenario-select-standard-domains"></a>
 
 #### Scenario: Select domains and their implementations
 

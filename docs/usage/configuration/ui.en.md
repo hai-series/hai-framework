@@ -39,8 +39,6 @@ After the root layout imports this stylesheet, `light` is the initial theme. Sel
 
 The Fullstack template reads `fullstack.theme.defaultTheme` and `fullstack.theme.themes` from the module options at generation time. The default is `light`. Without a list, the template supplies `light`, `dark`, `high-contrast`, `formal`, `eye-care` and `liquid-glass`. The default theme is included in the list. In a generated project, each frontend's `src/app.css` controls the compiled themes, and the shared theme store controls selectable themes and the fallback. [CLI generation](../function/cli.en.md)
 
-<a id="runtime-preferences"></a>
-
 ## Runtime preferences
 
 - **Theme.** Use `ui.getSavedTheme(fallback)` to read a saved theme ID and `ui.applyTheme(id)` to apply and save it. If the HTML shell needs to restore the theme before Svelte loads, use `ui.createThemeBootstrapScript(options)` with a separate storage key for its JSON preferences.

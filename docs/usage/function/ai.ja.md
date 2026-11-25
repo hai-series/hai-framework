@@ -57,7 +57,6 @@ finally {
 }
 ```
 
-<a id="api-一覧"></a>
 
 <a id="api-reference"></a>
 

@@ -29,7 +29,6 @@ pnpm run deploy --env prod --plan
 pnpm run deploy --env prod --build
 ```
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 

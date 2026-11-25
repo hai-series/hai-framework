@@ -106,7 +106,6 @@ finally {
 }
 ```
 
-<a id="api-list"></a>
 
 <a id="api-reference"></a>
 
