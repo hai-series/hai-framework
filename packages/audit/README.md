@@ -26,6 +26,8 @@
 
 用 `audit.countByOutcome(filters)` 统计当前列表命中的成功、失败和拒绝事件，仍可独立用 `getStats(7)` 查看最近一周的操作趋势。
 
+- 用共享 HTTP 契约分页查询、统计及手动归档。 [扩展 HTTP 契约](../../docs/usage/function/audit.md#http-contract-extensions)
+
 ## 数据结构
 
 RelDB 保存事件和告警领取，私有 Storage 保存归档。数据库触发器根据配置保护未到期的记录。数据库以 Unix 毫秒存储事件时间，接口返回 `Date`。参见[数据结构](../../docs/usage/data/audit.md)。

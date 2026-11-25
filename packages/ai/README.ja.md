@@ -27,6 +27,8 @@
 [API 一覧](../../docs/usage/function/ai.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 非公開ファイルは [Node のローカル解析](../../docs/usage/function/ai.ja.md#bounded-local-files)を使えます。構造化出力は指定した項目をプレビューでき、[ブラウザー録音](../../docs/usage/function/ai.ja.md#browser-recording)でマイク制御と上限付き WAV 変換を利用できます。
 
+- チャット配信、記憶の編集、画像生成、音声を共有 HTTP 契約で公開します。 [拡張 HTTP 契約](../../docs/usage/function/ai.ja.md#http-contract-extensions)
+
 ## データ構造
 
 内蔵 DB Store、ベクトルコレクション、ネイティブメモリの名前空間については[データ構造](../../docs/usage/data/ai.ja.md)を参照してください。

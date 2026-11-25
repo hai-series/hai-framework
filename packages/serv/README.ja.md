@@ -26,6 +26,8 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 [API 一覧](../../docs/usage/function/serv.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+- 必要な操作を登録し、multipart、ファイル、SSE の本文上限を設定します。 [拡張 HTTP 契約](../../docs/usage/function/serv.ja.md#http-contract-extensions)
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

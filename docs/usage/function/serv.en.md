@@ -247,6 +247,34 @@ The inputs are an English header and title=Order. Outputs are normalized locale 
 
 [Detailed parameters and workflows](serv.md#validation-locales)
 
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+This host mounts the chat stream after IAM and AI are initialized. Implement ordinary JSON with `handle()`. For custom multipart, `File`, or SSE endpoints, call `handleTransport(handler)` after `route(...).auth()` or a permission guard. The mount’s `procedure` is the exact contract endpoint. `maxRequestBytes` bounds the request body before decoding. Use `0` for a GET with no body.
+
+#### Scenario: Receive chat deltas in a browser
+
+```ts
+import { ai } from '@h-ai/ai'
+import { apiContract } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+const aiProcedures = serv.createAiExtensionProcedures({ ai })
+
+export const app = serv.createApp({
+  iam,
+  contract,
+  procedures: { ai: { chats: { streamCompletion: aiProcedures.chats.streamCompletion } } },
+  transportRoutes: [{ procedure: streamCompletion, maxRequestBytes: 64 * 1024 }],
+})
+```
+
+Publish these endpoints through HTTPS in production. If framework encryption is enabled, configure `encryption: 'disabled'` for each mounted method and path and use the corresponding HTTPS client. Authentication, permission checks, body limits, and resource authorization still apply.
+
 <a id="integrations"></a>
 <a id="audio-options"></a>
 

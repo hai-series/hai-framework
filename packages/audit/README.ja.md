@@ -26,6 +26,8 @@ Node.js サービスで監査イベントを記録、検索、削除、集計し
 
 `audit.countByOutcome(filters)` で一覧の成功、失敗、拒否を集計します。直近一週間の操作の傾向は `getStats(7)` で確認できます。
 
+- 共有 HTTP 契約でページ取得、集計、手動アーカイブを行います。 [拡張 HTTP 契約](../../docs/usage/function/audit.ja.md#http-contract-extensions)
+
 ## データ構造
 
 RelDB はイベントとアラートの取得状況を保持し、非公開 Storage がアーカイブを保存します。設定した最短保持期間はデータベーストリガーが適用します。イベント時刻は DB では Unix ミリ秒、API では `Date` です。[データ構造](../../docs/usage/data/audit.ja.md)を参照してください。

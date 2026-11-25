@@ -372,6 +372,12 @@ if (!report.success) return report
 
 `report.data.submitted` はプロバイダーが受理した件数、`queued` は Reach のキューに入った件数です。確認処理が成功しても `failed` に失敗件数が入る場合があります。`more: true` なら次の確認で未処理の宛先を試せます。未確定の状態は[アラート取得のデータ構造](../data/audit.ja.md#policy)を参照してください。
 
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+管理画面は監査ログのページ取得、操作別集計、手動アーカイブを利用できます。ホストが照会範囲を決めます。アーカイブには `audit:backup` 権限と `audit.backup` の再認証方針を適用します。 [エンドポイントと項目](api-contract.ja.md#http-contract-extensions)
+
 ## エラー処理
 
 業務メソッドは `HaiResult` を返します。失敗時は `result.error.code` と `result.error.traceId` で診断を検索します。アラート確認では報告の `failed` も確認します。

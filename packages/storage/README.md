@@ -38,6 +38,8 @@
 
 [存储输入约束与跨端能力](../../docs/usage/function/storage.md#存储输入约束与跨端能力)
 
+- 用共享 HTTP 契约中转并授权上传和下载。 [扩展 HTTP 契约](../../docs/usage/function/storage.md#http-contract-extensions)
+
 ## 数据结构
 
 模块没有自建数据库表。

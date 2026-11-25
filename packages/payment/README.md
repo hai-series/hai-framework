@@ -28,6 +28,8 @@
 
 微信与支付宝的同步 API 响应会验签。Stripe 通知还会核对共享数据库中的 Checkout Session。接入支付宝时，使用渠道要求的纯文本成功回执。[通知接入示例](../../docs/usage/function/payment.md#alipay-notification-ack)
 
+- 用共享 HTTP 契约关闭当前会话有权处理的待支付订单。 [扩展 HTTP 契约](../../docs/usage/function/payment.md#http-contract-extensions)
+
 ## 数据结构
 
 查看[数据结构](../../docs/usage/data/payment.md)，了解支付渠道状态、商户订单映射与通知幂等记录。

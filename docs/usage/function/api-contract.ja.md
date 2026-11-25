@@ -465,6 +465,45 @@ console.info(budget.maxTransportBytes) // 22435160 バイト
 
 `maxTransportBytes` を使って、フィードバックの資料を送るルートの上限を設定します。実際の添付データのバイト列、サイズ、ダイジェストはサーバーで検証します。[フィードバック設定](../configuration/feedback.ja.md)
 
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+公開する操作を `apiContract.extensions` から選び、対応する Serv の procedures を登録します。クライアントは同じアプリの契約から生成します。既存の操作と拡張を併用するときは、`chats`、`memories`、`roles`、`files`、`orders` など共通のグループ内で操作を結合します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `ai.chats.streamCompletion(input)` | 返信を逐次生成 · `POST /ai/chats/completions/stream` | `messages` と任意の対象、セッション、モデル、ツール、生成設定 | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `ai.memories.add(input)` | 記憶を追加 · `POST /ai/memories` | `content`、`type`、任意の `importance`、`objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | 記憶を変更 · `PATCH /ai/memories/{id}` | `id`、変更項目を一つ以上、任意の `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.remove(input)` | 記憶を削除 · `DELETE /ai/memories/{id}` | `id`、任意の `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
+| `ai.memories.clear(input)` | 認可範囲の記憶を消去 · `DELETE /ai/memories` | 任意の `objectId`、`types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
+| `ai.audio.getCapabilities(input)` | 音声機能を照会 · `GET /ai/audio/capabilities` | `operation`、任意の `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `ai.audio.issueTicket(input)` | 音声接続チケットを発行 · `POST /ai/audio/tickets` | `operation`、任意の `model` | `HaiResult<{ ticket, expiresAt }>` | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `ai.audio.transcribe(input)` | 録音を書き起こす · `POST /ai/audio/transcriptions` | WAV/MP3 の `audio` ファイル、任意の `language`、`model` | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `ai.audio.synthesize(input)` | テキストから音声を合成 · `POST /ai/audio/speech` | `text`、任意の `voice`、`format`、`model` | `File` (WAV/MP3) | `await client.ai.audio.synthesize({ text, format: 'wav' })` |
+| `ai.images.generate(input)` | 画像を生成 · `POST /ai/images/generations` | `prompt`、任意の `width` と `height` の組、任意の `referenceImages`、`model` | `File` | `await client.ai.images.generate({ prompt })` |
+| `iam.apiKeys.list(input)` | キーを一覧表示 · `GET /iam/api-keys` | `userId`、任意のページ、絞り込み、並び順 | `HaiResult` | `await client.iam.apiKeys.list({ userId, page: 1 })` |
+| `iam.apiKeys.create(input)` | キーを作成 · `POST /iam/api-keys` | `userId`、`name`、任意の `expirationDays`、`scopes` | `HaiResult<{ apiKey, rawKey }>` | `await client.iam.apiKeys.create({ userId, name })` |
+| `iam.apiKeys.get(input)` | キーのメタデータを取得 · `GET /iam/api-keys/{id}` | `id` | `HaiResult` | `await client.iam.apiKeys.get({ id })` |
+| `iam.apiKeys.revoke(input)` | キーを失効 · `DELETE /iam/api-keys/{id}` | `id` | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id }, options)` |
+| `iam.roles.listPermissions(input)` | ロール権限を照会 · `GET /iam/roles/{id}/permissions` | `id` | `HaiResult<IamPermission[]>` | `await client.iam.roles.listPermissions({ id })` |
+| `iam.roles.replacePermissions(input)` | ロール権限を一括置換 · `PUT /iam/roles/{id}/permissions` | `id`、`permissionIds` | `HaiResult<void>` | `await client.iam.roles.replacePermissions({ id, permissionIds }, options)` |
+| `storage.files.upload(input)` | オブジェクトをアップロード · `POST /storage/files/upload` | `key`、`file`（最大 5 MiB） | `HaiResult<StorageFileMetadata>` | `await client.storage.files.upload({ key, file })` |
+| `storage.files.download(input)` | オブジェクトをダウンロード · `GET /storage/files/download` | `key` | `File` | `await client.storage.files.download({ key })` |
+| `audit.logs.list(input)` | ログを照会 · `GET /audit/logs` | 任意のページ、分類、結果、期間、並び順 | `HaiResult` | `await client.audit.logs.list({ page: 1 })` |
+| `audit.logs.stats(input)` | 操作回数を集計 · `GET /audit/logs/stats` | 任意のフィルターと `days`（既定値 7） | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `audit.backup.run(input)` | 非公開アーカイブを作成 · `POST /audit/backup` | `id`（バックアップの UUID） | `HaiResult<AuditBackupReceipt>` | `await client.audit.backup.run({ id }, options)` |
+| `payment.orders.close(input)` | 未払い注文を終了 · `POST /payment/orders/{orderNo}/close` | `provider`、`orderNo` | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+JSON やストリーム開始の失敗は `success` を確認します。ファイルの成功時は `File` が返ります。開始済みのストリームは非同期反復で読み取ります。例の `options` には一回限りの再認証チケットを設定できます。
+
+#### シナリオ：ブラウザーでチャットの差分を受け取る
+
+[エンドポイントと項目 · Serv](serv.ja.md#http-contract-extensions) · [API Client](api-client.ja.md#http-contract-extensions)
+
 ## エラー処理
 
 `pathOf` はエンドポイントに HTTP パスが明示されていない場合にエラーをスローします。外部データの読み取りに Zod の `safeParse` を使うと、構造のエラーを扱えます。サーバーの業務上の拒否は `HaiResult` の失敗分岐で表します。Kit と Serv が HTTP ステータスを返す例は、各接続手順を参照してください。

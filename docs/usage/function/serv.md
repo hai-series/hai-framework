@@ -723,6 +723,34 @@ spec.servers?.[0]?.url // '/api/v1'，此选项只改变描述中的服务地址
 
 设定请求语言后，`ui.setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `ui.createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+在已初始化 IAM 和 AI 的宿主中，下面只挂载流式聊天。普通 JSON 操作用 `handle()`。自定义 multipart、`File` 和 SSE 契约在 `route(...).auth()` 或权限守卫后调用 `handleTransport(handler)`。配置中的 `procedure` 指向同一个端点节点，`maxRequestBytes` 限制解码前的请求体字节数。无请求体的 GET 填 `0`。
+
+#### 场景：在浏览器接收聊天增量
+
+```ts
+import { ai } from '@h-ai/ai'
+import { apiContract } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+const aiProcedures = serv.createAiExtensionProcedures({ ai })
+
+export const app = serv.createApp({
+  iam,
+  contract,
+  procedures: { ai: { chats: { streamCompletion: aiProcedures.chats.streamCompletion } } },
+  transportRoutes: [{ procedure: streamCompletion, maxRequestBytes: 64 * 1024 }],
+})
+```
+
+生产环境由宿主通过 HTTPS 发布这些端点。若启用了框架传输加密，为每个已挂载的方法和路径配置 `encryption: 'disabled'`，并使用对应 HTTPS 客户端。宿主仍执行认证、权限、请求字节上限与业务授权。
+
 <a id="integrations"></a>
 
 ### 接入加密、语音与反馈：`serv.createApp`

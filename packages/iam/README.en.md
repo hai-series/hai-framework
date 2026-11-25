@@ -32,6 +32,8 @@ Passwords and API keys share the Crypto worker pool for SM3. Stored hashes are s
 
 For an LDAP upgrade, follow [Migrate existing LDAP identity bindings](../../docs/usage/function/iam.en.md#ldap-identity-migration).
 
+- Manage API keys and role permissions through shared HTTP contracts. [Optional HTTP contracts](../../docs/usage/function/iam.en.md#http-contract-extensions)
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/iam.en.md) for accounts, roles, permissions, sessions and one-time credentials.

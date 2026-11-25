@@ -1485,3 +1485,9 @@ For `{ callerId: 'docs-reader', status: 'agent', limit: 10 }`, the page contains
 getAgentCard returns public capabilities; handleRequest maps protocol input to JSON/events, callRemoteAgent returns remote results and listMessages reads authorized task messages. Protocol construction grants no authorization.
 
 [Detailed parameters and workflows](ai.md#a2a)
+
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+The shared HTTP contracts support chat deltas, memory editing, image generation, transcription, and speech synthesis. Before opening a voice WebSocket, obtain a 30-second, single-use ticket with `audio.issueTicket`. [Endpoints and fields](api-contract.en.md#http-contract-extensions)

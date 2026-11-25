@@ -247,6 +247,34 @@ spec.servers?.[0]?.url // '/api/v1'。仕様上のサーバー URL。
 
 [引数と手順の詳細](serv.md#validation-locales)
 
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+IAM と AI を初期化したホストに、ストリーミングチャットを登録します。通常の JSON 操作には `handle()` を使います。multipart、`File`、SSE の操作は `route(...).auth()` または権限ガードに続けて `handleTransport(handler)` で実装します。登録する `procedure` には該当する契約ノードを渡します。`maxRequestBytes` はデコード前の本文上限です。本文のない GET は `0` にします。
+
+#### シナリオ：ブラウザーでチャットの差分を受け取る
+
+```ts
+import { ai } from '@h-ai/ai'
+import { apiContract } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+const aiProcedures = serv.createAiExtensionProcedures({ ai })
+
+export const app = serv.createApp({
+  iam,
+  contract,
+  procedures: { ai: { chats: { streamCompletion: aiProcedures.chats.streamCompletion } } },
+  transportRoutes: [{ procedure: streamCompletion, maxRequestBytes: 64 * 1024 }],
+})
+```
+
+本番環境では HTTPS 経由で公開します。フレームワークの伝送暗号化を使用する場合は、登録したメソッドとパスごとに `encryption: 'disabled'` を設定し、対応する HTTPS クライアントから呼び出します。認証、権限、本文サイズ、リソースの認可は引き続き適用されます。
+
 <a id="integrations"></a>
 <a id="audio-options"></a>
 

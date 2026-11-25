@@ -472,6 +472,45 @@ console.info(budget.maxTransportBytes) // 22435160 字节
 
 应用用 `maxTransportBytes` 设置需要承载反馈材料的接口上限。服务端仍对真实附件字节、大小和摘要做校验。[反馈配置](../configuration/feedback.md)
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+宿主从 `apiContract.extensions` 选取要发布的操作，并在 Serv 中挂载对应的 procedures。客户端用同一份项目契约创建实例。要同时发布基础操作和扩展操作，按 `chats`、`memories`、`roles`、`files` 或 `orders` 逐组展开，保留组内已有的端点。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `ai.chats.streamCompletion(input)` | 逐段生成聊天回复 · `POST /ai/chats/completions/stream` | `messages`，可选主体、会话、模型、工具及生成参数 | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `ai.memories.add(input)` | 新增记忆 · `POST /ai/memories` | `content`、`type`，可选 `importance`、`objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | 修改记忆 · `PATCH /ai/memories/{id}` | `id`、至少一个待修改字段，可选 `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.remove(input)` | 删除记忆 · `DELETE /ai/memories/{id}` | `id`、可选 `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
+| `ai.memories.clear(input)` | 清空授权范围的记忆 · `DELETE /ai/memories` | 可选 `objectId`、`types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
+| `ai.audio.getCapabilities(input)` | 查询语音能力 · `GET /ai/audio/capabilities` | `operation`、可选 `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `ai.audio.issueTicket(input)` | 签发语音连接票据 · `POST /ai/audio/tickets` | `operation`、可选 `model` | `HaiResult<{ ticket, expiresAt }>` | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `ai.audio.transcribe(input)` | 把录音转为文本 · `POST /ai/audio/transcriptions` | WAV/MP3 `audio` 文件，可选 `language`、`model` | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `ai.audio.synthesize(input)` | 把文本转为语音 · `POST /ai/audio/speech` | `text`，可选 `voice`、`format`、`model` | `File` (WAV/MP3) | `await client.ai.audio.synthesize({ text, format: 'wav' })` |
+| `ai.images.generate(input)` | 生成图像 · `POST /ai/images/generations` | `prompt`，可选成对的 `width`、`height`，可选 `referenceImages`、`model` | `File` | `await client.ai.images.generate({ prompt })` |
+| `iam.apiKeys.list(input)` | 列出密钥 · `GET /iam/api-keys` | `userId`、可选分页、筛选及排序 | `HaiResult` | `await client.iam.apiKeys.list({ userId, page: 1 })` |
+| `iam.apiKeys.create(input)` | 创建密钥 · `POST /iam/api-keys` | `userId`、`name`，可选 `expirationDays`、`scopes` | `HaiResult<{ apiKey, rawKey }>` | `await client.iam.apiKeys.create({ userId, name })` |
+| `iam.apiKeys.get(input)` | 读取密钥元数据 · `GET /iam/api-keys/{id}` | `id` | `HaiResult` | `await client.iam.apiKeys.get({ id })` |
+| `iam.apiKeys.revoke(input)` | 吊销密钥 · `DELETE /iam/api-keys/{id}` | `id` | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id }, options)` |
+| `iam.roles.listPermissions(input)` | 读取角色权限 · `GET /iam/roles/{id}/permissions` | `id` | `HaiResult<IamPermission[]>` | `await client.iam.roles.listPermissions({ id })` |
+| `iam.roles.replacePermissions(input)` | 整组替换角色权限 · `PUT /iam/roles/{id}/permissions` | `id`、`permissionIds` | `HaiResult<void>` | `await client.iam.roles.replacePermissions({ id, permissionIds }, options)` |
+| `storage.files.upload(input)` | 上传对象 · `POST /storage/files/upload` | `key`、`file`（最大 5 MiB） | `HaiResult<StorageFileMetadata>` | `await client.storage.files.upload({ key, file })` |
+| `storage.files.download(input)` | 下载对象 · `GET /storage/files/download` | `key` | `File` | `await client.storage.files.download({ key })` |
+| `audit.logs.list(input)` | 查询日志 · `GET /audit/logs` | 可选分页、分类、状态、时间范围和排序 | `HaiResult` | `await client.audit.logs.list({ page: 1 })` |
+| `audit.logs.stats(input)` | 统计操作次数 · `GET /audit/logs/stats` | 可选筛选项及 `days`，默认 7 | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `audit.backup.run(input)` | 生成私有归档 · `POST /audit/backup` | `id`，归档任务 UUID | `HaiResult<AuditBackupReceipt>` | `await client.audit.backup.run({ id }, options)` |
+| `payment.orders.close(input)` | 关闭待支付订单 · `POST /payment/orders/{orderNo}/close` | `provider`、`orderNo` | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+JSON 操作和连接建立失败的结果先检查 `success`。文件成功时返回 `File`，事件流建立后通过异步迭代读取。示例中的 `options` 可携带单次再认证票据。
+
+#### 场景：在浏览器接收聊天增量
+
+[查看端点与字段 · Serv](serv.md#http-contract-extensions) · [API Client](api-client.md#http-contract-extensions)
+
 ## 错误处理
 
 `pathOf` 在端点缺少显式 HTTP 路径时抛出定义错误。读取外部数据时，可用 Zod 的 `safeParse` 处理结构错误。服务端的业务拒绝通过 `HaiResult` 的失败分支表示。Kit 与 Serv 如何映射 HTTP 状态见各自接入示例。

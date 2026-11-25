@@ -710,3 +710,11 @@ async function rotateThenRevoke(refreshToken: string) {
 #### 利用例：一回用の証明の発行と消費
 
 issue は用途と関連付けを受け取りランダムな証明を返します。consume は期待する用途を検査し、成功時に関連データを返します。用途が一致しない要求は拒否され、元の用途ではチケットを引き続き利用できます。期限切れや使用済みのチケットは使えません。
+
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+管理サービスは API キー管理とロール権限の割り当てを登録できます。生のキーは作成時の応答だけに含まれます。ロール権限の一括置換は `iam.roles.replacePermissions` として再認証方針に登録します。 [エンドポイントと項目](api-contract.ja.md#http-contract-extensions)
+
+他の更新で権限のスナップショットが変わった場合、一括置換は HTTP 409 を返します。最新の権限を読み、方針に従って新しいチケットを取得してから再試行します。`iam.authz.updateRole()` を直接使う場合は `permissionIds` と `expectedPermissionIds` を渡すと、ロールのロック中にスナップショットを確認できます。

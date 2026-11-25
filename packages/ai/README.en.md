@@ -27,6 +27,8 @@ See the [configuration reference](../../docs/usage/configuration/ai.en.md) for c
 [Browse the API list](../../docs/usage/function/ai.en.md#api-reference) for entry points, inputs, results and examples.
 [Local parsing](../../docs/usage/function/ai.en.md#bounded-local-files) extracts private files in Node. Structured output supports a selected-field preview, and [browser recording](../../docs/usage/function/ai.en.md#browser-recording) shares microphone control and bounded WAV conversion.
 
+- Publish chat streaming, memory edits, image generation, and speech through shared HTTP contracts. [Optional HTTP contracts](../../docs/usage/function/ai.en.md#http-contract-extensions)
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/ai.en.md) for the built-in DB Store, vector collections and native memory namespaces.

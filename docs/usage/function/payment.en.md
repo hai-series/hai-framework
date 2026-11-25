@@ -432,3 +432,9 @@ export async function prepareAlipayPayment(
 ```
 
 Alipay posts a separate form notification to `notifyUrl`. The [Alipay acknowledgement example](#alipay-notification-ack) reads the original body and verifies the signature. The business transaction checks the order, 100-fen amount, currency and transaction identity, then commits the order state and unique job. After commit or duplicate detection, respond with HTTP 200 and the exact body `success`. If the app is still awaiting confirmation on return, the backend can call `payment.queryOrder('alipay', 'AL-20261124-01')`. Confirm `paid` against the order, amount and transaction ID before applying the same idempotent transition and fulfillment.
+
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+Call the shared close operation with `provider` and `orderNo`. The host authorizes the session and checks the provider and merchant order number against its order record. [Endpoints and fields](api-contract.en.md#http-contract-extensions)

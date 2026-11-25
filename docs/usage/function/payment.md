@@ -539,6 +539,12 @@ export async function prepareAlipayPayment(
 
 支付宝另行向 `notifyUrl` POST 表单。[支付宝通知回执示例](#alipay-notification-ack)读取原始正文并验签，应用事务核对订单、100 分金额、币种和交易身份，提交状态及履约任务。事务提交或确认重复后返回 HTTP 200，正文恰好为 `success`。回跳时订单仍待确认，可由应用后台调用 `payment.queryOrder('alipay', 'AL-20261124-01')`。拿到 `paid` 并核对订单、金额和交易号后，走同一条幂等入账和履约路径。
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+业务系统可通过共享关单操作传入 `provider` 和 `orderNo`。宿主先校验当前会话对订单的权限，再用可信订单记录核对渠道和商户订单号。 [查看端点与字段](api-contract.md#http-contract-extensions)
+
 ## 错误处理
 
 收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。

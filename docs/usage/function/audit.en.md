@@ -372,6 +372,12 @@ if (!report.success) return report
 
 `report.data.submitted` counts requests accepted by a provider, and `queued` counts Reach queue entries. A successful check can still report a positive `failed` count. With `more: true`, a later check can try remaining targets. See [alert claims](../data/audit.en.md#policy) for pending outcomes.
 
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+An admin UI can use paginated audit logs, counts by action, and manual archival. The host determines query scope. Archival requires `audit:backup` and the `audit.backup` reauthentication policy. [Endpoints and fields](api-contract.en.md#http-contract-extensions)
+
 ## Error handling
 
 Business methods return `HaiResult`. On failure, use `result.error.code` and `result.error.traceId` to find the diagnostics. For alerts, also check the report's `failed` count.

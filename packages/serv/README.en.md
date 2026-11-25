@@ -26,6 +26,8 @@ See the [configuration reference](../../docs/usage/configuration/serv.en.md) for
 
 [Browse the API list](../../docs/usage/function/serv.en.md#api-reference) for entry points, inputs, results and examples.
 
+- Mount optional operations and configure request limits for multipart, files, and SSE. [Optional HTTP contracts](../../docs/usage/function/serv.en.md#http-contract-extensions)
+
 ## Data Structures
 
 The module creates no database tables of its own.

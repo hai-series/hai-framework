@@ -372,6 +372,12 @@ if (!report.success) return report
 
 `report.data.submitted` 表示渠道接收，`queued` 表示进入 Reach 队列。即使检查成功，`failed` 仍可能大于零。`more: true` 表示后续可继续检查未尝试的目标。核对未决状态见[告警领取](../data/audit.md#policy)。
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+管理台可使用审计分页、按操作统计和手动归档接口。宿主决定可查询的审计范围，归档还需 `audit:backup` 权限与 `audit.backup` 再认证策略。 [查看端点与字段](api-contract.md#http-contract-extensions)
+
 ## 错误处理
 
 业务方法返回 `HaiResult`。失败时用 `result.error.code` 和 `result.error.traceId` 查找诊断。通知是否成功还需检查告警报告的 `failed`。

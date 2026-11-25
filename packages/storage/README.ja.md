@@ -30,6 +30,8 @@
 
 [API 一覧](../../docs/usage/function/storage.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
+- 共有 HTTP 契約でファイルのアップロードとダウンロードを認可し、中継します。 [拡張 HTTP 契約](../../docs/usage/function/storage.ja.md#http-contract-extensions)
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

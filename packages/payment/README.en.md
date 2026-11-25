@@ -28,6 +28,8 @@ See the [configuration reference](../../docs/usage/configuration/payment.en.md) 
 
 WeChat Pay and Alipay API responses are signature-verified. Stripe notifications are checked against the Checkout Session stored in the shared database. Use a plain-text acknowledgement for Alipay notifications. [Notification integration example](../../docs/usage/function/payment.en.md#alipay-notification-ack)
 
+- Close unpaid orders the current session can manage through the shared HTTP contract. [Optional HTTP contracts](../../docs/usage/function/payment.en.md#http-contract-extensions)
+
 ## Data Structures
 
 See the [data reference](../../docs/usage/data/payment.en.md) for provider state, merchant order mappings and notification idempotency.

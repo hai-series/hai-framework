@@ -26,6 +26,8 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 接入时按场景选择 [Serv 装配](../../docs/usage/function/api-contract.md#use-with-serv)、[Kit 文件路由](../../docs/usage/function/api-contract.md#use-with-kit)或 [API Client](../../docs/usage/function/api-contract.md#use-with-client)。
 
+- 选用流式聊天、AI 媒体、IAM 管理、Storage 文件、Audit 和 Payment 扩展契约。 [扩展 HTTP 契约](../../docs/usage/function/api-contract.md#http-contract-extensions)
+
 ## 数据结构
 
 模块没有自建数据库表。

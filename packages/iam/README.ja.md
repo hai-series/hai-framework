@@ -32,6 +32,8 @@ IAM の組み込みの確認コード、パスワード再設定、初期設定�
 
 LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/function/iam.ja.md#ldap-identity-migration)を参照してください。
 
+- API キーとロール権限を共有 HTTP 契約で管理します。 [拡張 HTTP 契約](../../docs/usage/function/iam.ja.md#http-contract-extensions)
+
 ## データ構造
 
 アカウント、ロール、権限、セッション、ワンタイム認証情報については[データ構造](../../docs/usage/data/iam.ja.md)を参照してください。

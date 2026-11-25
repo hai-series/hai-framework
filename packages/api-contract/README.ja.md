@@ -26,6 +26,8 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 [Serv](../../docs/usage/function/api-contract.ja.md#use-with-serv)、[Kit のファイルルート](../../docs/usage/function/api-contract.ja.md#use-with-kit)または [API Client](../../docs/usage/function/api-contract.ja.md#use-with-client)での利用方法を参照してください。
 
+- ストリーミングチャット、AI メディア、IAM 管理、Storage ファイル、Audit、Payment の拡張契約を選択します。 [拡張 HTTP 契約](../../docs/usage/function/api-contract.ja.md#http-contract-extensions)
+
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。

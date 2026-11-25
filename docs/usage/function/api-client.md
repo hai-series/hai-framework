@@ -596,6 +596,8 @@ export async function deleteSelectedUser(id: string, administratorPassword: stri
 }
 ```
 
+源码入口依次是 `packages/api-client/src/api-client-link.ts` 的 `buildRawClient()` 中的 `headers` 回调、`packages/serv/src/features/serv-feature-iam.ts` 的 `users.delete` 和 `sensitive()`、`packages/iam/src/authn/iam-authn-functions.ts` 的 `checkSensitiveOperation()`。如果应用使用 Kit，读请求头的是 `packages/kit/src/guards/kit-sensitive.ts` 中的 `requireSensitive()`。
+
 <a id="request-authorization"></a>
 
 ### 处理身份和权限拒绝 `client.iam.auth.currentUser()` 与业务操作
@@ -686,6 +688,8 @@ export async function uploadReport(key: string, file: File) {
 ### 调用聊天、记忆和会话接口 `client.ai`
 
 应用启用 AI 路由后，可发送会话消息、请求非流式补全、读取历史或检索记忆。应用根据用户身份使用对应的会话 ID。需要访问其他主体的数据时由服务端明确授权。
+默认客户端的 AI 操作返回 JSON。要在浏览器接收生成增量或调用媒体接口，使用[按需挂载的 HTTP 契约](#http-contract-extensions)。
+
 
 #### 接口清单
 
@@ -811,6 +815,57 @@ export async function checkHealth(origin: string) {
 <a id="传输加密与观察逻辑结果apiclient"></a>
 <a id="场景传输加密与观察逻辑结果"></a>
 <a id="逻辑请求观察"></a>
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+页面把当前会话的访问令牌和用户问题传给 `streamAnswer`。每次收到文本增量就更新答案，页面关闭时中止请求。建立连接前的失败通过结果返回，连接建立后的失败在异步迭代中抛出。生产环境调用 [Serv 已挂载的 HTTPS 路由](serv.md#http-contract-extensions)。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+
+export async function streamAnswer(
+  accessToken: string,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const client = apiClient.create(contract)
+  const initialized = await client.init({
+    baseUrl: 'https://api.example.com/api/v1',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+
+  try {
+    const events = await client.ai.chats.streamCompletion({
+      messages: [{ role: 'user', content: question }],
+    }, { signal })
+    if (!(Symbol.asyncIterator in events))
+      throw new Error(events.error.message)
+
+    for await (const event of events) {
+      if (event.type === 'done')
+        break
+      for (const { delta } of event.choices) {
+        if (delta.content)
+          onText(delta.content)
+      }
+    }
+  }
+  finally {
+    await client.close()
+  }
+}
+```
+
+[查看端点与字段](api-contract.md#http-contract-extensions)
+
 <a id="transport-observation"></a>
 
 ### 观察逻辑请求 `client.observeRequests(observer)`

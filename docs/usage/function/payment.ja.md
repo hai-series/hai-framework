@@ -434,3 +434,9 @@ export async function prepareAlipayPayment(
 ```
 
 Alipay は画面復帰とは別に `notifyUrl` へフォーム通知を POST します。[Alipay の通知応答例](#alipay-notification-ack)では、元の本文を読み込んで署名を検証します。業務トランザクションで注文、100 分の金額、通貨、取引情報を照合し、状態更新と一意な履行タスクを保存します。コミットまたは処理済みの確認後に HTTP 200 と本文 `success` を返します。画面復帰時に注文が確認待ちなら、バックエンドから `payment.queryOrder('alipay', 'AL-20261124-01')` を呼べます。`paid` の場合は注文、金額、取引番号を照合して、同じ冪等な状態更新と履行処理を行います。
+
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+共有の注文終了操作に `provider` と `orderNo` を渡します。ホストはセッションを認可し、チャネルと加盟店注文番号を信頼できる注文記録と照合します。 [エンドポイントと項目](api-contract.ja.md#http-contract-extensions)

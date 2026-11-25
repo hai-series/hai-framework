@@ -28,6 +28,8 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 WeChat Pay と Alipay の同期 API 応答を署名検証します。Stripe の通知は共有 DB の Checkout セッションと照合します。Alipay の通知にはプレーンテキストで受領を返します。[通知の連携例](../../docs/usage/function/payment.ja.md#alipay-notification-ack)
 
+- 現在のセッションに権限がある未払い注文を共有 HTTP 契約で終了します。 [拡張 HTTP 契約](../../docs/usage/function/payment.ja.md#http-contract-extensions)
+
 ## データ構造
 
 決済プロバイダーの状態、加盟店注文の対応、通知の冪等性については[データ構造](../../docs/usage/data/payment.ja.md)を参照してください。

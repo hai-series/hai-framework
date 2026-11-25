@@ -26,6 +26,8 @@ See the [configuration reference](../../docs/usage/configuration/audit.en.md) fo
 
 Use `audit.countByOutcome(filters)` to count successful, failed, and denied events in the filtered list. Use `getStats(7)` for the independent weekly activity trend.
 
+- Use shared HTTP contracts for paginated queries, statistics, and manual archival. [Optional HTTP contracts](../../docs/usage/function/audit.en.md#http-contract-extensions)
+
 ## Data Structures
 
 RelDB stores events and alert claims. Private Storage keeps archives. Database triggers enforce the configured minimum retention period. The database stores event times as Unix milliseconds and the API returns `Date`. See the [data reference](../../docs/usage/data/audit.en.md).

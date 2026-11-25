@@ -1498,6 +1498,14 @@ async function consumeAudioTicket(ticket: string) {
 
 特性：密码学安全随机值、TTL、原子单次消费（并发消费仅一个成功）、用途绑定（防跨用途重放）。
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+管理端可挂载 API Key 管理和角色权限关系。API Key 的原始密钥只出现在创建响应。角色权限整组替换使用操作 ID `iam.roles.replacePermissions`，接入应用的再认证策略。 [查看端点与字段](api-contract.md#http-contract-extensions)
+
+批量替换发现权限快照已被其他操作修改时返回 HTTP 409。重新读取权限，按策略取得新的一次性票据，再提交修改。服务端直接调用 `iam.authz.updateRole()` 时，可随 `permissionIds` 传入 `expectedPermissionIds`，在角色锁内检查读取时的权限 ID。
+
 ## 错误处理
 
 收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。

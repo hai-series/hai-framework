@@ -592,3 +592,9 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   return { extension, displayedSize, blob: downloaded.data }
 }
 ```
+
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+アプリケーションを経由するアップロードとダウンロードを登録できます。ファイルごとの上限は 5 MiB です。アップロードは新規オブジェクトを作成し、ダウンロードはホストが権限を確認した後に添付ファイルを返します。 [エンドポイントと項目](api-contract.ja.md#http-contract-extensions)

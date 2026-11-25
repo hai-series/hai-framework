@@ -147,6 +147,18 @@ const previewPath = '/api/v1' + apiContract.pathOf(widgetContract.preview)
 
 <a id="response-schemas"></a>
 
+### 选用 HTTP 扩展契约
+
+由宿主从 `apiContract.extensions` 选择端点，挂载相同形状的 Serv procedures，客户端通过 `apiClient.create(contract)` 生成调用入口。若同时选用基础与扩展端点，逐组展开 `chats`、`memories`、`roles`、`files` 或 `orders`，再将结果传给 `apiContract.create()`。
+
+| 领域 | 扩展操作 |
+| --- | --- |
+| AI | `chats.streamCompletion`、`memories.add/update/remove/clear`、`audio.getCapabilities/issueTicket/transcribe/synthesize`、`images.generate` |
+| IAM | `apiKeys.list/create/get/revoke`、`roles.listPermissions/replacePermissions` |
+| Storage | `files.upload/download` |
+| Audit | `logs.list/stats`、`backup.run` |
+| Payment | `orders.close` |
+
 ### 描述响应和分页
 
 #### 接口清单

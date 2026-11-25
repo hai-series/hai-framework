@@ -606,6 +606,8 @@ export async function deleteUser(
 }
 ```
 
+In the source, follow the `headers` callback in `buildRawClient()` in `packages/api-client/src/api-client-link.ts`, the `users.delete` handler and `sensitive()` in `packages/serv/src/features/serv-feature-iam.ts`, and `checkSensitiveOperation()` in `packages/iam/src/authn/iam-authn-functions.ts`. In Kit, `requireSensitive()` in `packages/kit/src/guards/kit-sensitive.ts` reads the header.
+
 Check the returned result before removing that user from the view. The application's initialized client stays available to reload the list.
 
 <a id="business-requests"></a>
@@ -673,6 +675,8 @@ Show the returned key after Storage accepts the upload. Handle a rejected Fetch 
 ### Call chat, memory and session procedures with `client.ai`
 
 Use the AI branch on a service that mounts the AI routes. Each procedure accepts optional [per-call request options](#request-options).
+The default AI client returns JSON. Use the [optional HTTP contracts](#http-contract-extensions) for streamed replies and media.
+
 
 #### Interface list
 
@@ -808,6 +812,57 @@ export async function checkHealth(origin: string) {
 ```
 
 The health request uses the server's HTTPS policy for that route. A route requiring encrypted transport needs the encrypted instance.
+
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+Pass the current session access token and the user’s question to `streamAnswer`. Append each text delta to the answer and abort on page exit. An HTTP failure before the stream opens returns a failure result. An error after streaming starts rejects the iterator. Use the [HTTPS route mounted by Serv](serv.en.md#http-contract-extensions).
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+
+export async function streamAnswer(
+  accessToken: string,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const client = apiClient.create(contract)
+  const initialized = await client.init({
+    baseUrl: 'https://api.example.com/api/v1',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+
+  try {
+    const events = await client.ai.chats.streamCompletion({
+      messages: [{ role: 'user', content: question }],
+    }, { signal })
+    if (!(Symbol.asyncIterator in events))
+      throw new Error(events.error.message)
+
+    for await (const event of events) {
+      if (event.type === 'done')
+        break
+      for (const { delta } of event.choices) {
+        if (delta.content)
+          onText(delta.content)
+      }
+    }
+  }
+  finally {
+    await client.close()
+  }
+}
+```
+
+[Endpoints and fields](api-contract.en.md#http-contract-extensions)
 
 <a id="transport-observation"></a>
 <a id="encrypt-transport-and-observe-outcomes-apiclient"></a>

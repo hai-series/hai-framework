@@ -588,3 +588,9 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
   return { extension, displayedSize, blob: downloaded.data }
 }
 ```
+
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+Mount upload and download to transfer files through the application. Each file has a 5 MiB limit. Uploads create new objects, and downloads return an attachment after the host verifies object access. [Endpoints and fields](api-contract.en.md#http-contract-extensions)

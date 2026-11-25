@@ -2337,6 +2337,12 @@ A2A 任务记录及其事件保存在同一处共享存储，可以在另一个�
 
 Task 与事件一次 CAS 持久化，任意节点可订阅；相同 message ID/内容重试仅返回同一轮结果，改变内容或重复旧轮消息失败。跨节点取消由真实执行 owner 调用 executor.cancelTask，取消未确认期间同一 Task 不接受新消息，避免迟到取消作用于新执行；input-required 可在节点重启后续接。DB 租约过期、绝对期限到达或执行器只返回 working 时标记 failed/interrupted，并设置 `metadata.haiExecution.requiresEffectReconciliation=true`；旧节点恢复不能写入，不自动重放未知外部效果。`a2a.execution` 默认 `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。单消息 1 MiB、journal 8 MiB、单轮 2048 事件、Task 256 回执、32 个 reference tasks，超限明确失败。外部副作用须使用稳定业务幂等键并核对未知结果；详细部署/验证边界见[共享状态能力表](../../../.agents/instructions/distributed-state.md)。
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+浏览器可以通过共享 HTTP 契约接收聊天增量、编辑记忆、生成图像、转写和合成语音。使用语音 WebSocket 时，先通过 `audio.issueTicket` 获取 30 秒的一次性票据。 [查看端点与字段](api-contract.md#http-contract-extensions)
+
 ## 错误处理
 
 ```ts

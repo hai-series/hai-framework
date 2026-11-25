@@ -732,6 +732,12 @@ const aiProcedures = serv.createAiProcedures({
 })
 ```
 
+### 文件与事件流端点
+
+内置扩展工厂是 `serv.createAiExtensionProcedures`、`serv.createIamExtensionProcedures`、`serv.createStorageExtensionProcedures`、`serv.createAuditProcedures` 和 `serv.createPaymentExtensionProcedures`。将选择的 procedures 和 `apiContract.extensions` 中对应节点挂到相同路由树，并传入可信的业务鉴权回调。
+
+自定义 multipart、文件和 SSE 端点通过 `route(...).auth().handleTransport(handler)` 实现。每项 `serv.createApp({ transportRoutes })` 包含 `procedure`（具体契约节点）和 `maxRequestBytes`（HTTP 请求体上限）。生产在 HTTPS 入口发布。若应用启用框架加密，为这些方法和路径显式配置 `encryption: 'disabled'`。其他 JSON 端点的加密策略继续由宿主配置。
+
 ## 常见模式
 
 ### 自定义领域 procedure

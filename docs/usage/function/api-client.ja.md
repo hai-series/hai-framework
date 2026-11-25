@@ -647,6 +647,8 @@ export async function deleteUser(client: ApiClient<{ iam: typeof apiContract.iam
 }
 ```
 
+ソースでは `packages/api-client/src/api-client-link.ts` の `buildRawClient()` にある `headers`、`packages/serv/src/features/serv-feature-iam.ts` の `users.delete` と `sensitive()`、`packages/iam/src/authn/iam-authn-functions.ts` の `checkSensitiveOperation()` の順に処理します。Kit では `packages/kit/src/guards/kit-sensitive.ts` の `requireSensitive()` がヘッダーを読み取ります。
+
 <a id="custom-business-client"></a>
 
 ### アプリ独自の保護 API を呼び出す：`apiClient.create(contract)`
@@ -770,6 +772,8 @@ export async function uploadReport(client: ApiClient<{ storage: typeof apiContra
 ### チャット、記憶、セッションの呼び出し：`client.ai`
 
 現在の認証主体を使用し、別の `objectId` で呼び出すときはホスト側で対象へのアクセス権を確認します。既定の呼び出しは JSON を返します。ストリーミングの例は[独自の戻り値と SSE](#custom-response-results)を参照してください。
+既定の AI クライアントは JSON を返します。[拡張 HTTP 契約](#http-contract-extensions) を使うと、回答の差分やメディアを受け取れます。
+
 
 #### インターフェース一覧
 
@@ -885,6 +889,57 @@ export async function checkHealth(origin: string) {
 ```
 
 成功時、Serv の応答は `{ status: 'ok' }` です。
+
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+現在のセッションのアクセストークンと質問を `streamAnswer` に渡します。受け取ったテキストを回答に追加し、画面を閉じるときに中止します。接続前の失敗は結果として返り、配信中の失敗は非同期反復で例外になります。[Serv で登録した HTTPS ルート](serv.ja.md#http-contract-extensions) を呼び出します。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { streamCompletion } = apiContract.extensions.ai.chats
+const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
+
+export async function streamAnswer(
+  accessToken: string,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const client = apiClient.create(contract)
+  const initialized = await client.init({
+    baseUrl: 'https://api.example.com/api/v1',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+
+  try {
+    const events = await client.ai.chats.streamCompletion({
+      messages: [{ role: 'user', content: question }],
+    }, { signal })
+    if (!(Symbol.asyncIterator in events))
+      throw new Error(events.error.message)
+
+    for await (const event of events) {
+      if (event.type === 'done')
+        break
+      for (const { delta } of event.choices) {
+        if (delta.content)
+          onText(delta.content)
+      }
+    }
+  }
+  finally {
+    await client.close()
+  }
+}
+```
+
+[エンドポイントと項目](api-contract.ja.md#http-contract-extensions)
 
 <a id="transport-observation"></a>
 <a id="通信の暗号化と結果の監視apiclient"></a>

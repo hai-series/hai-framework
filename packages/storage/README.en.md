@@ -30,6 +30,8 @@ See the [upload cancellation example](../../docs/usage/function/storage.en.md#ca
 
 [Browse the API list](../../docs/usage/function/storage.en.md#api-reference) for entry points, inputs, results and examples.
 
+- Authorize and proxy file uploads and downloads through shared HTTP contracts. [Optional HTTP contracts](../../docs/usage/function/storage.en.md#http-contract-extensions)
+
 ## Data Structures
 
 The module creates no database tables of its own.

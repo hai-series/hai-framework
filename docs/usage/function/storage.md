@@ -718,6 +718,12 @@ async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
 }
 ```
 
+<a id="http-contract-extensions"></a>
+
+### 按需启用 HTTP 契约
+
+通过应用服务中转文件时，可挂载上传与下载。每个文件最多 5 MiB。上传只创建新对象，下载在宿主校验对象归属后返回附件。 [查看端点与字段](api-contract.md#http-contract-extensions)
+
 ## 错误处理
 
 收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。

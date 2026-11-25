@@ -25,6 +25,8 @@
 
 [完整 API 清单](../../docs/usage/function/api-client.md#api-reference)
 
+- 从项目契约创建客户端，接收流式聊天事件或调用已启用的扩展操作。 [扩展 HTTP 契约](../../docs/usage/function/api-client.md#http-contract-extensions)
+
 ## 数据结构
 
 应用选择令牌存储，服务端保存会话与业务数据，调用方决定是否保存响应和观察记录。见[数据结构](../../docs/usage/data/api-client.md)。

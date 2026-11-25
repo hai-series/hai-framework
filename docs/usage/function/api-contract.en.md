@@ -465,6 +465,45 @@ console.info(budget.maxTransportBytes) // 22435160 bytes
 
 Use `maxTransportBytes` when setting a limit for endpoints that carry feedback material. The server verifies attachment bytes, sizes, and checksums. [Feedback configuration](../configuration/feedback.en.md)
 
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+Select the endpoints to publish from `apiContract.extensions`, mount the matching Serv procedures, and create the client from the same application contract. To publish both base and extension endpoints, merge the operations within each shared group, such as `chats`, `memories`, `roles`, `files`, or `orders`.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return or failure | Example call |
+| --- | --- | --- | --- | --- |
+| `ai.chats.streamCompletion(input)` | Stream a reply · `POST /ai/chats/completions/stream` | `messages` with optional owner, session, model, tools, and generation options | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `ai.memories.add(input)` | Add a memory · `POST /ai/memories` | `content`, `type`, optional `importance` and `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | Edit a memory · `PATCH /ai/memories/{id}` | `id`, at least one editable field, optional `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.remove(input)` | Remove a memory · `DELETE /ai/memories/{id}` | `id`, optional `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
+| `ai.memories.clear(input)` | Clear memories in an authorized scope · `DELETE /ai/memories` | Optional `objectId`, `types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
+| `ai.audio.getCapabilities(input)` | Read speech capabilities · `GET /ai/audio/capabilities` | `operation`, optional `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `ai.audio.issueTicket(input)` | Issue a voice connection ticket · `POST /ai/audio/tickets` | `operation`, optional `model` | `HaiResult<{ ticket, expiresAt }>` | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `ai.audio.transcribe(input)` | Transcribe a recording · `POST /ai/audio/transcriptions` | WAV/MP3 `audio` file, optional `language`, `model` | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `ai.audio.synthesize(input)` | Synthesize speech · `POST /ai/audio/speech` | `text`, optional `voice`, `format`, `model` | `File` (WAV/MP3) | `await client.ai.audio.synthesize({ text, format: 'wav' })` |
+| `ai.images.generate(input)` | Generate an image · `POST /ai/images/generations` | `prompt`, optional `width` and `height` together, optional `referenceImages`, `model` | `File` | `await client.ai.images.generate({ prompt })` |
+| `iam.apiKeys.list(input)` | List keys · `GET /iam/api-keys` | `userId`, optional pagination, filters, and sorting | `HaiResult` | `await client.iam.apiKeys.list({ userId, page: 1 })` |
+| `iam.apiKeys.create(input)` | Create a key · `POST /iam/api-keys` | `userId`, `name`, optional `expirationDays`, `scopes` | `HaiResult<{ apiKey, rawKey }>` | `await client.iam.apiKeys.create({ userId, name })` |
+| `iam.apiKeys.get(input)` | Read key metadata · `GET /iam/api-keys/{id}` | `id` | `HaiResult` | `await client.iam.apiKeys.get({ id })` |
+| `iam.apiKeys.revoke(input)` | Revoke a key · `DELETE /iam/api-keys/{id}` | `id` | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id }, options)` |
+| `iam.roles.listPermissions(input)` | List role permissions · `GET /iam/roles/{id}/permissions` | `id` | `HaiResult<IamPermission[]>` | `await client.iam.roles.listPermissions({ id })` |
+| `iam.roles.replacePermissions(input)` | Replace role permissions · `PUT /iam/roles/{id}/permissions` | `id`, `permissionIds` | `HaiResult<void>` | `await client.iam.roles.replacePermissions({ id, permissionIds }, options)` |
+| `storage.files.upload(input)` | Upload an object · `POST /storage/files/upload` | `key`, `file` (up to 5 MiB) | `HaiResult<StorageFileMetadata>` | `await client.storage.files.upload({ key, file })` |
+| `storage.files.download(input)` | Download an object · `GET /storage/files/download` | `key` | `File` | `await client.storage.files.download({ key })` |
+| `audit.logs.list(input)` | Query logs · `GET /audit/logs` | Optional pagination, category, outcome, date range, and sorting | `HaiResult` | `await client.audit.logs.list({ page: 1 })` |
+| `audit.logs.stats(input)` | Count actions · `GET /audit/logs/stats` | Optional filters and `days`, default 7 | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `audit.backup.run(input)` | Create a private archive · `POST /audit/backup` | `id`, the backup UUID | `HaiResult<AuditBackupReceipt>` | `await client.audit.backup.run({ id }, options)` |
+| `payment.orders.close(input)` | Close an unpaid order · `POST /payment/orders/{orderNo}/close` | `provider`, `orderNo` | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+Check `success` on JSON results and stream setup failures. A successful file response returns `File`. Read an open stream by using asynchronous iteration. In these examples, `options` can carry a one-time reauthentication ticket.
+
+#### Scenario: Receive chat deltas in a browser
+
+[Endpoints and fields · Serv](serv.en.md#http-contract-extensions) · [API Client](api-client.en.md#http-contract-extensions)
+
 ## Errors
 
 `pathOf` throws a definition error when the endpoint has no explicit HTTP path. Use Zod's `safeParse` to handle structural errors in external data. Business rejections use the failure branch of `HaiResult`. The Serv and Kit scenarios show how each host maps those results to HTTP status codes.

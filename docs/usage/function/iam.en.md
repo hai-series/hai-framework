@@ -706,3 +706,11 @@ Issue a short-lived ticket for a purpose and subject. Consume it with the expect
 #### Scenario: Issue and consume one-time proof
 
 issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. A purpose mismatch rejects the request and leaves the ticket available for its intended purpose. An expired or consumed ticket cannot be used.
+
+<a id="http-contract-extensions"></a>
+
+### Enable optional HTTP contracts
+
+Admin services can mount API key management and role permission assignments. The raw key appears only in the create response. Replacing role permissions uses the operation ID `iam.roles.replacePermissions` in the host’s reauthentication policy. [Endpoints and fields](api-contract.en.md#http-contract-extensions)
+
+Replacing permissions returns HTTP 409 if another write changed the permission snapshot. Read the current permissions and obtain a fresh ticket if required before retrying. Direct callers of `iam.authz.updateRole()` can pass `expectedPermissionIds` with `permissionIds` to check the snapshot under the role lock.

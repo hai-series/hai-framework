@@ -46,6 +46,10 @@ export async function loadAuthPolicy(baseUrl: string) {
 
 `timeout` 默认 30000 毫秒，覆盖等待响应头、完整 JSON 和失败响应正文。用调用方的 `signal` 停止读取已经建立的流。超时发生在写入操作时，先查询服务端结果再决定是否重试。
 
+### 调用按需发布的契约
+
+服务端发布 `apiContract.extensions` 中的操作后，用对应的项目契约调用 `apiClient.create(contract)`。流式聊天 `client.ai.chats.streamCompletion({ messages }, { signal })` 成功返回异步可迭代对象，建立失败返回 `HaiResult`，收到 `type: 'done'` 表示完整结束。上传传入 `File`，图像生成、语音合成和文件下载成功返回 `File`。调用为 SSE 或文件明确配置的 HTTPS 端点时，使用对应的 HTTPS 客户端配置。
+
 ## Token Storage 适配器
 
 | 工厂调用 | 存储位置 | 适用场景 |

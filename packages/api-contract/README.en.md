@@ -26,6 +26,8 @@ Use `route` to [declare one operation](../../docs/usage/function/api-contract.en
 
 Connect the contract to [Serv](../../docs/usage/function/api-contract.en.md#use-with-serv), a [Kit file route](../../docs/usage/function/api-contract.en.md#use-with-kit) or [API Client](../../docs/usage/function/api-contract.en.md#use-with-client).
 
+- Select optional streaming chat, AI media, IAM admin, Storage file, Audit, and Payment contracts. [Optional HTTP contracts](../../docs/usage/function/api-contract.en.md#http-contract-extensions)
+
 ## Data Structures
 
 The module creates no database tables of its own.

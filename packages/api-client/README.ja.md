@@ -25,6 +25,8 @@
 
 [API 全一覧](../../docs/usage/function/api-client.ja.md#api-reference)
 
+- プロジェクトの契約から、チャットイベントや公開済み拡張操作を呼ぶクライアントを作成します。 [拡張 HTTP 契約](../../docs/usage/function/api-client.ja.md#http-contract-extensions)
+
 ## データ構造
 
 トークンの保存先はアプリが選び、セッションと業務データはサーバーが保存します。応答と監視記録を保存するかどうかは呼び出し側が決めます。[データ構造](../../docs/usage/data/api-client.ja.md)を参照してください。

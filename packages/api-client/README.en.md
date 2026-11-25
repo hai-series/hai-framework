@@ -25,6 +25,8 @@ The application reads runtime settings and passes the API address and options to
 
 [Full API list](../../docs/usage/function/api-client.en.md#api-reference)
 
+- Create a client from the project contract to receive chat events or call mounted extensions. [Optional HTTP contracts](../../docs/usage/function/api-client.en.md#http-contract-extensions)
+
 ## Data Structures
 
 The application chooses token storage. The server stores sessions and business data. Callers decide whether to retain responses and observation records. See [data structures](../../docs/usage/data/api-client.en.md).

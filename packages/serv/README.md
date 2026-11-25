@@ -26,6 +26,8 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 
 [查 API 清单](../../docs/usage/function/serv.md#api-reference)，包含调用入口、输入、返回值和用法。
 
+- 按需挂载扩展 operations，并为 multipart、文件和 SSE 配置请求字节上限。 [扩展 HTTP 契约](../../docs/usage/function/serv.md#http-contract-extensions)
+
 ## 数据结构
 
 模块没有自建数据库表。

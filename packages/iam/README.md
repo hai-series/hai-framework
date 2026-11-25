@@ -39,6 +39,8 @@ IAM 通过 Reach 发内置验证码、密码重置和初始设密邀请时会跳
 
 [用 Reach 发送通知](../../docs/usage/function/iam.md#使用可选-reach-自动发送)
 
+- 用共享 HTTP 契约管理 API Key 及角色权限。 [扩展 HTTP 契约](../../docs/usage/function/iam.md#http-contract-extensions)
+
 ## 数据结构
 
 查看[数据结构](../../docs/usage/data/iam.md)，了解账号、角色、权限、会话和一次性凭据。

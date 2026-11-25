@@ -1487,3 +1487,9 @@ Agent Card と実行器を公開し、相手先・呼び出し主体・タスク
 getAgentCard は公開能力、handleRequest は JSON/イベント、callRemoteAgent は相手の結果、listMessages は許可済みメッセージです。オブジェクト作成だけで権限を得ません。
 
 [引数と手順の詳細](ai.md#a2a)
+
+<a id="http-contract-extensions"></a>
+
+### 必要な HTTP 契約を有効にする
+
+共有 HTTP 契約でチャットの差分、記憶の編集、画像生成、音声認識、音声合成を利用できます。音声 WebSocket を開く前に `audio.issueTicket` で有効期間 30 秒の一回限りのチケットを取得します。 [エンドポイントと項目](api-contract.ja.md#http-contract-extensions)
