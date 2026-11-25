@@ -151,7 +151,7 @@
   }
 
   async function refresh(signal?: AbortSignal) {
-    if (!run || !onstatus)
+    if (!run || !onstatus || cancelling || signal?.aborted)
       return
     if (!signal) {
       request?.abort()
@@ -281,10 +281,13 @@
     const current = new AbortController()
     request = current
     cancelling = true
+    // 被取消请求接管的状态查询不会再复位恢复标志。
+    restoring = false
     try {
       const result = await oncancel(run.id, current.signal)
       if (!current.signal.aborted) {
         run = result
+        disconnected = false
         schedule(current.signal)
       }
     }
@@ -413,7 +416,7 @@
     <section class='grid min-w-0 gap-3 rounded-lg border border-base-300 p-4' aria-label={uiM('tool_result')}>
       <div class='flex flex-wrap items-center gap-2' role='status'><span class='text-sm font-medium'>{uiM(`tool_status_${run.status}`)}</span>
         {#if run.message}<span class='min-w-0 text-sm break-words text-base-content/70'>{run.message}</span>{/if}
-        {#if (disconnected || run.status === 'unknown') && onstatus}<Button size='sm' disabled={restoring} loading={restoring} onclick={() => refresh()}>{uiM('tool_resume')}</Button>{/if}
+        {#if (disconnected || run.status === 'unknown') && onstatus}<Button size='sm' disabled={restoring || cancelling} loading={restoring} onclick={() => refresh()}>{uiM('tool_resume')}</Button>{/if}
         {#if run.status === 'unknown' && !restoring}<Button size='sm' variant='ghost' onclick={() => { confirmNewOperation = true }}>{uiM('tool_new_operation')}</Button>{/if}
       </div>
       {#if active}

@@ -79,6 +79,80 @@ it('恢复已知回执尚未返回时禁止换工具或提交，不清除唯一�
   }
 })
 
+it('状态查询失败后，取消处理期间不会重新查询或中止取消请求', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const pending = Promise.withResolvers<ToolRun>()
+  const onstatus = vi.fn(async () => {
+    throw new Error('Response channel unavailable')
+  })
+  const oncancel = vi.fn((_id: string, _signal: AbortSignal) => pending.promise)
+  const component = mount(ToolWorkspace, {
+    target,
+    props: {
+      tools: catalog,
+      initialRun: { id: 'existing-receipt', status: 'running' },
+      onrun: async () => { throw new Error('Recovery must not resubmit') },
+      onstatus,
+      oncancel,
+    },
+  })
+  const button = (key: string) => [
+    ...target.querySelectorAll('button'),
+  ].find(item => item.textContent?.trim() === uiM(key))!
+  try {
+    await vi.waitFor(() => expect(button('tool_resume')).toBeDefined())
+    button('tool_cancel').click()
+    flushSync()
+    expect(oncancel).toHaveBeenCalledOnce()
+    expect(button('tool_resume').disabled).toBe(true)
+    button('tool_resume').click()
+    expect(onstatus).toHaveBeenCalledOnce()
+    expect(oncancel.mock.calls[0]?.[1].aborted).toBe(false)
+
+    pending.resolve({ id: 'existing-receipt', status: 'cancelled' })
+    await vi.waitFor(() => expect(target.textContent).toContain(uiM('tool_status_cancelled')))
+    expect(target.querySelector('select')?.disabled).toBe(false)
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
+it('取消正在恢复的运行后，状态请求的迟到结果不锁住表单', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const pending = Promise.withResolvers<ToolRun>()
+  const onstatus = vi.fn((_id: string, _signal: AbortSignal) => pending.promise)
+  const component = mount(ToolWorkspace, {
+    target,
+    props: {
+      tools: catalog,
+      initialRun: { id: 'existing-receipt', status: 'running' },
+      onrun: async () => { throw new Error('Recovery must not resubmit') },
+      onstatus,
+      oncancel: async () => ({ id: 'existing-receipt', status: 'cancelled' }),
+    },
+  })
+  try {
+    await vi.waitFor(() => expect(onstatus).toHaveBeenCalledOnce())
+    const cancel = [
+      ...target.querySelectorAll('button'),
+    ].find(item => item.textContent?.trim() === uiM('tool_cancel'))!
+    cancel.click()
+    await vi.waitFor(() => expect(target.textContent).toContain(uiM('tool_status_cancelled')))
+    expect(onstatus.mock.calls[0]?.[1].aborted).toBe(true)
+    pending.resolve({ id: 'existing-receipt', status: 'running' })
+    await pending.promise
+    flushSync()
+    expect(target.textContent).toContain(uiM('tool_status_cancelled'))
+    expect(target.querySelector('select')?.disabled).toBe(false)
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
 it('仅有幂等键且服务确认尚无记录后，允许核对重填并沿用同一个键', async () => {
   const target = document.body.appendChild(document.createElement('div'))
   const onrun = vi.fn(async (_request: ToolRunRequest): Promise<ToolRun> => ({ id: 'new-receipt', status: 'succeeded' }))
