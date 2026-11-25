@@ -1,65 +1,13 @@
-import type { FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
-import type { FeedbackBrowserClient, FeedbackClientAttachment, FeedbackClientConfig, FeedbackClientSubmitInput, FeedbackDraft } from './feedback-client-types.js'
-import { apiContract, FeedbackBudgetSchema, FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema } from '@h-ai/api-contract/feedback'
+import type { FeedbackBrowserClient, FeedbackClientConfig } from './feedback-client-types.js'
+import { apiContract, FeedbackBudgetSchema } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
-import { feedbackClientEvidenceLimits } from '../feedback-evidence-budget.js'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
-import { saveFeedbackFile } from './feedback-client-files.js'
-import { annotateFeedbackImage, captureFeedbackScreenshot } from './feedback-client-image.js'
-import { collectFeedbackCookies, feedbackPageUrl, sanitizeFeedbackData, sanitizeFeedbackReplay, sanitizeFeedbackText } from './feedback-client-sanitize.js'
-import { deleteFeedbackDraft, restoreFeedbackCheckpoint, restoreFeedbackDraft, saveFeedbackCheckpoint, saveFeedbackDraft } from './feedback-client-store.js'
-
-/** 系统文件关联可能不提供 MIME；只对空值和通用二进制类型按受支持扩展名补齐。 */
-function feedbackFileContentType(file: File): string | undefined {
-  const type = file.type.split(';', 1)[0]?.trim().toLowerCase() ?? ''
-  const extensions = new Map([
-    ['png', 'image/png'],
-    ['jpg', 'image/jpeg'],
-    ['jpeg', 'image/jpeg'],
-    ['webp', 'image/webp'],
-    ['webm', 'video/webm'],
-    ['mp4', 'video/mp4'],
-    ['txt', 'text/plain'],
-    ['log', 'text/plain'],
-    ['json', 'application/json'],
-    ['pdf', 'application/pdf'],
-    ['zip', 'application/zip'],
-    ['gz', 'application/gzip'],
-    ['tgz', 'application/gzip'],
-  ])
-  if (!type || type === 'application/octet-stream')
-    return extensions.get(file.name.split('.').at(-1)?.toLowerCase() ?? '')
-  const aliases = new Map([
-    ['image/x-png', 'image/png'],
-    ['image/jpg', 'image/jpeg'],
-    ['image/pjpeg', 'image/jpeg'],
-    ['text/json', 'application/json'],
-    ['text/x-log', 'text/plain'],
-    ['application/x-pdf', 'application/pdf'],
-    ['application/x-zip-compressed', 'application/zip'],
-    ['application/x-gzip', 'application/gzip'],
-  ])
-  const normalized = aliases.get(type) ?? type
-  return [
-    ...extensions.values(),
-  ].includes(normalized)
-    ? normalized
-    : undefined
-}
-
-function sanitizeFeedbackJsonAttachment(raw: string): Uint8Array | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  }
-  catch {
-    // 原生 JSON 解析异常可能含有原始附件正文。
-    return undefined
-  }
-  return new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(parsed)))
-}
+import { createFeedbackAttachments } from './feedback-client-attachments.js'
+import { createFeedbackCapture } from './feedback-client-capture.js'
+import { createFeedbackDraftOperations } from './feedback-client-draft.js'
+import { createFeedbackClientSession, isFeedbackClientConfigSupported } from './feedback-client-session.js'
 
 /**
  * 创建独立浏览器采集会话；默认不持久化、不录制页面回放，不采集请求正文。
@@ -72,1244 +20,127 @@ function sanitizeFeedbackJsonAttachment(raw: string): Uint8Array | undefined {
  * ```
  */
 export function createFeedbackClient(): FeedbackBrowserClient {
-  let config: FeedbackClientConfig | undefined
-  let draft: FeedbackDraft | undefined
+  const session = createFeedbackClientSession()
   let sessionVersion = 0
-  let policyVerified = false
-  let preparedPage = ''
-  let budget = apiContract.resolveFeedbackBudget()
-  const previews = new Map<string, { checksum: string, url: string }>()
-  let discardOnClose = false
+  let initializing = false
+  let closePromise: Promise<void> | undefined
   let saveController = new AbortController()
 
-  function releasePreviews() {
-    for (const preview of previews.values()) URL.revokeObjectURL(preview.url)
-    previews.clear()
-  }
-
-  function getView() {
-    const files = draft?.attachments ?? []
-    for (const [id, preview] of previews) {
-      if (!files.some(file => file.id === id && file.checksum === preview.checksum)) {
-        URL.revokeObjectURL(preview.url)
-        previews.delete(id)
-      }
-    }
-    return {
-      attachments: files.map((file) => {
-        let preview = previews.get(file.id)
-        if (!preview) {
-          preview = {
-            checksum: file.checksum,
-            url: URL.createObjectURL(new Blob([new Uint8Array(file.bytes).buffer], { type: file.contentType })),
-          }
-          previews.set(file.id, preview)
-        }
-        return {
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          mimeType: file.contentType,
-          url: preview.url,
-        }
-      }),
-      evidence: draft?.evidence ?? [],
-      missing: draft?.missing ?? [],
-      budget: { ...budget },
-    }
-  }
-  let initializing = false
-  let sequence = 0
-  let buffer: FeedbackEvidenceInput[] = []
-  let bufferBytes = 0
-  let dropped = 0
-  let lastError: FeedbackEvidenceInput | undefined
-  let errorWindows: Array<{ anchor: FeedbackEvidenceInput, evidence: FeedbackEvidenceInput[], after: number, deadline: number, bytes: number }> = []
-  let afterCount = 0
-  let deadline = 0
-  let initialIds = new Set<string>()
-  const uploadedIds = new Set<string>()
-  let flushPromise: Promise<HaiResult<void>> | undefined
-  let flushFailures = 0
-  let nextBackgroundFlush = 0
-  let preparePromise: Promise<HaiResult<FeedbackDraft>> | undefined
-  let persistTimer: ReturnType<typeof setTimeout> | undefined
-  let flushTimer: ReturnType<typeof setInterval> | undefined
-  let stopReplay: (() => void) | undefined
-  let screenshotCaptures = 0
-  let captureTask: { promise: Promise<Uint8Array>, controller: AbortController, config: FeedbackClientConfig } | undefined
-  let replayRequested = false
-  let unsubscribeLogger: (() => void) | undefined
-  let source = ''
-  let keyScreenshots: Array<{ attachment: FeedbackClientAttachment, timestamp: number }> = []
-  let lastKeyScreenshot = 0
-  let keyScreenshotPromise: Promise<void> | undefined
-  let closing = false
-  let closePromise: Promise<void> | undefined
-  let collectionFinished = false
-  let collectionSealed = false
-  let draftBytes = 0
-  let storageKey = ''
-  const cleanups: Array<() => void> = []
-  const missing = new Set<string>()
-  let replayChunks: FeedbackEvidenceInput[][] = []
-
-  function failure(code: keyof typeof HaiFeedbackError = 'OPERATION_FAILED', cause?: unknown, message?: string) {
-    const key = code === 'NOT_INITIALIZED'
-      ? 'feedback_notInitialized'
-      : code === 'LIMIT_EXCEEDED'
-        ? 'feedback_limitExceeded'
-        : code === 'INVALID_INPUT'
-          ? 'feedback_invalidInput'
-          : 'feedback_operationFailed'
-    const traceId = core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
-    const error = {
-      ...HaiFeedbackError[code],
-      traceId,
-      message: message ?? feedbackM(key),
-      cause,
-    }
-    if (!(closing && code === 'NOT_INITIALIZED')) {
-      core.logger[cause === undefined
-        ? 'warn'
-        : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
-    }
-    return core.err({
-      ...error,
-      message: core.error.formatMessage(error),
-    })
-  }
-
-  function limits() {
-    const server = feedbackClientEvidenceLimits(budget)
-    return {
-      events: Math.min(config?.maxEvents ?? 1000, server.events),
-      bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, server.bytes),
-      age: config?.maxAgeMs ?? 300_000,
-      before: config?.beforeCount ?? 100,
-      after: config?.afterCount ?? 100,
-    }
-  }
-
-  function schedulePersist() {
-    if (!config?.persistDraft || persistTimer)
-      return
-    persistTimer = setTimeout(() => {
-      persistTimer = undefined
-      if (config && draft && !collectionFinished)
-        void saveFeedbackDraft(storageKey, draft).catch(() => missing.add('browser-persistence-unavailable'))
-      else if (config)
-        void saveFeedbackCheckpoint(storageKey, buffer).catch(() => missing.add('browser-persistence-unavailable'))
-    }, 200)
-  }
-
-  function record(event: { kind: FeedbackEvidenceInput['kind'], data: Record<string, unknown>, requestId?: string, errorId?: string }) {
-    if (!config || closing)
-      return
-    const entry = FeedbackEvidenceInputSchema.safeParse({
-      id: core.id.uuid(),
-      source,
-      sequence: ++sequence,
-      kind: event.kind,
-      timestamp: Date.now(),
-      requestId: event.requestId,
-      errorId: event.kind === 'error' || (event.kind === 'request' && event.data.success === false)
-        ? event.errorId ?? core.id.uuid()
-        : event.errorId,
-      data: sanitizeFeedbackData(event.data),
-    })
-    if (!entry.success)
-      return
-    const item = entry.data
-    const size = new TextEncoder().encode(JSON.stringify(item)).byteLength
-    const bounds = limits()
-    if (bounds.events === 0 || size > Math.min(bounds.bytes, 64 * 1024)) {
-      dropped++
-      missing.add('browser-draft-truncated')
-      if (draft && !collectionFinished && !collectionSealed && !draft.missing.includes('browser-draft-truncated'))
-        draft.missing.push('browser-draft-truncated')
-      return
-    }
-    buffer.push(item)
-    bufferBytes += size
-    while (buffer.length && (buffer.length > bounds.events || bufferBytes > bounds.bytes || buffer[0]!.timestamp < Date.now() - bounds.age)) {
-      const removed = buffer.shift()
-      if (removed)
-        bufferBytes -= new TextEncoder().encode(JSON.stringify(removed)).byteLength
-      dropped++
-    }
-    const logEntry = item.kind === 'log' || item.kind === 'error'
-    if (logEntry) {
-      for (const window of errorWindows) {
-        if (item.timestamp <= window.deadline && window.after < bounds.after) {
-          window.evidence.push(item)
-          window.after++
-          window.bytes += size
-        }
-      }
-    }
-    if (item.kind === 'error' || (item.kind === 'request' && item.data.success === false)) {
-      lastError = item
-      const before = buffer.filter(entry => (entry.kind === 'log' || entry.kind === 'error') && entry.id !== item.id)
-      const evidence = [
-        ...before.slice(Math.max(0, before.length - bounds.before)),
-        item,
-      ]
-      errorWindows.push({
-        anchor: item,
-        evidence,
-        after: 0,
-        deadline: item.timestamp + (config.afterTimeoutMs ?? 30_000),
-        bytes: new TextEncoder().encode(JSON.stringify(evidence)).byteLength,
-      })
-      void captureKeyScreenshot()
-    }
-    errorWindows = errorWindows.filter(window => window.anchor.timestamp >= Date.now() - bounds.age)
-    while (errorWindows.length > 10 || errorWindows.reduce((total, window) => total + window.evidence.length, 0) > bounds.events || errorWindows.reduce((total, window) => total + window.bytes, 0) > bounds.bytes) {
-      errorWindows.shift()
-      missing.add('browser-error-windows-truncated')
-    }
-    schedulePersist()
-    appendToDraft(item, size)
-  }
-
-  function appendToDraft(item: FeedbackEvidenceInput, size: number, snapshot = false) {
-    const bounds = limits()
-    if (!draft || collectionFinished || collectionSealed || (!snapshot && !(Date.now() <= deadline && afterCount < bounds.after) && item.kind !== 'environment'))
-      return
-    const addedBytes = size + (draft.evidence.length ? 1 : 0)
-    if (draft.evidence.length >= bounds.events || draftBytes + addedBytes > bounds.bytes) {
-      if (!draft.missing.includes('browser-draft-truncated'))
-        draft.missing.push('browser-draft-truncated')
-      return
-    }
-    draft.evidence.push(item)
-    draftBytes += addedBytes
-    if (item.kind === 'log' || item.kind === 'error')
-      afterCount++
-    schedulePersist()
-  }
-
-  function trimDraftEvidence(current: FeedbackDraft) {
-    const bounds = limits()
-    const encoder = new TextEncoder()
-    let bytes = encoder.encode(JSON.stringify(current.evidence)).byteLength
-    let removed = 0
-    while (removed < current.evidence.length && (current.evidence.length - removed > bounds.events || bytes > bounds.bytes)) {
-      bytes -= encoder.encode(JSON.stringify(current.evidence[removed])).byteLength + (removed + 1 < current.evidence.length
-        ? 1
-        : 0)
-      removed++
-    }
-    if (removed) {
-      current.evidence.splice(0, removed)
-      if (!current.missing.includes('browser-draft-truncated'))
-        current.missing.push('browser-draft-truncated')
-    }
-    draftBytes = bytes
-  }
-
-  function listen<K extends keyof WindowEventMap>(name: K, callback: (event: WindowEventMap[K]) => void) {
-    window.addEventListener(name, callback)
-    cleanups.push(() => window.removeEventListener(name, callback))
-  }
+  // 挂载浏览器监听前，将采集和附件事件绑定到同一个草稿保存调度器。
+  let schedulePersist: () => void
+  const attachments = createFeedbackAttachments(session, () => schedulePersist(), () => saveController.signal)
+  const capture = createFeedbackCapture(session, () => schedulePersist())
+  const drafts = createFeedbackDraftOperations(session, capture, attachments)
+  schedulePersist = drafts.schedulePersist
 
   async function init(input: FeedbackClientConfig): Promise<HaiResult<void>> {
     if (initializing)
       return core.err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
     initializing = true
     try {
-      if (config || closePromise)
+      if (session.config || closePromise)
         await close()
-      if (typeof window === 'undefined' || !input.appId || !input.actions || [
-        'submit',
-        'appendEvidence',
-        'completeCollection',
-        'upload',
-      ].some(key => typeof input.actions[key as keyof typeof input.actions] !== 'function')) {
-        return failure('INVALID_INPUT')
-      }
-      const numeric = [
-        input.maxEvents,
-        input.maxBytes,
-        input.maxAgeMs,
-        input.beforeCount,
-        input.afterCount,
-        input.afterTimeoutMs,
-        input.screenshotTimeoutMs,
-        input.maxKeyScreenshots,
-        input.keyScreenshotThrottleMs,
-      ]
-      if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)) || (input.persistDraft && !input.persistenceKey))
-        return failure('INVALID_INPUT')
-      if (input.replayStart !== undefined && !['init', 'prepare'].includes(input.replayStart))
-        return failure('INVALID_INPUT')
-      if (!FeedbackSubmitInputSchema.pick({
-        appId: true,
-        appVersion: true,
-        buildId: true,
-        commit: true,
-      }).safeParse({
-        appId: input.appId,
-        appVersion: input.appVersion,
-        buildId: input.buildId,
-        commit: input.commit,
-      }).success) {
-        return failure('INVALID_INPUT')
-      }
+      if (!isFeedbackClientConfigSupported(input))
+        return session.failure('INVALID_INPUT')
+
       const initVersion = sessionVersion
       const policy = input.actions.policy
-        ? await input.actions.policy().catch(() => failure('OPERATION_FAILED'))
+        ? await input.actions.policy().catch(() => session.failure('OPERATION_FAILED'))
         : core.ok(input.budget ?? apiContract.resolveFeedbackBudget())
       if (initVersion !== sessionVersion)
-        return failure('NOT_INITIALIZED')
-      policyVerified = policy.success
-      budget = FeedbackBudgetSchema.parse(policy.success
+        return session.failure('NOT_INITIALIZED')
+      session.policyVerified = policy.success
+      session.budget = FeedbackBudgetSchema.parse(policy.success
         ? policy.data
         : input.budget ?? apiContract.resolveFeedbackBudget())
       if (!policy.success)
-        missing.add('server-policy-unavailable')
-      config = input
+        session.missing.add('server-policy-unavailable')
+
+      session.config = input
       saveController = new AbortController()
-      closing = false
-      source = `browser:${core.id.uuid()}`
-      storageKey = `${input.appId}:${input.persistenceKey ?? ''}`
+      session.closing = false
+      capture.startSource()
+      session.storageKey = `${input.appId}:${input.persistenceKey ?? ''}`
       if (input.persistDraft) {
-        try {
-          const restored = await restoreFeedbackDraft(storageKey)
-          if (closing || config !== input)
-            return failure('NOT_INITIALIZED')
-          if (restored && Array.isArray(restored.evidence) && restored.evidence.every(item => FeedbackEvidenceInputSchema.safeParse(item).success)
-            && Array.isArray(restored.attachments) && restored.attachments.every(item => item.bytes instanceof Uint8Array)
-            && Array.isArray(restored.missing) && restored.missing.every(reason => typeof reason === 'string')
-            && (!restored.report || FeedbackReportSchema.safeParse(restored.report).success)
-            && (!restored.submission || FeedbackSubmitInputSchema.safeParse(restored.submission).success)) {
-            draft = restored
-            // 已确认的初始包络可直接恢复，不占用追加窗口或反复发送已 ACK 的证据。
-            if (restored.report)
-              initialIds = new Set(restored.submission?.evidence?.map(item => item.id))
-            if (!restored.report && !restored.submission)
-              trimDraftEvidence(restored)
-            else
-              draftBytes = new TextEncoder().encode(JSON.stringify(restored.evidence)).byteLength
-            missing.add('browser-session-interrupted')
-            deadline = Date.now()
-          }
-          else {
-            const checkpoint = await restoreFeedbackCheckpoint(storageKey)
-            if (closing || config !== input)
-              return failure('NOT_INITIALIZED')
-            if (checkpoint && typeof checkpoint === 'object' && 'evidence' in checkpoint && Array.isArray(checkpoint.evidence) && 'expiresAt' in checkpoint && typeof checkpoint.expiresAt === 'number' && checkpoint.expiresAt > Date.now()) {
-              const parsed = checkpoint.evidence.map(item => FeedbackEvidenceInputSchema.safeParse(item))
-              if (parsed.every(item => item.success)) {
-                buffer = parsed.filter(item => item.success).map(item => item.data)
-                bufferBytes = new TextEncoder().encode(JSON.stringify(buffer)).byteLength
-                sequence = Math.max(0, ...buffer.map(item => item.sequence))
-                lastError = buffer.filter(item => item.kind === 'error' || (item.kind === 'request' && item.data.success === false)).at(-1)
-                missing.add('browser-session-interrupted')
-                missing.add('previous-page-screenshot-unavailable')
-              }
-            }
-          }
-        }
-        catch {
-          if (closing || config !== input)
-            return failure('NOT_INITIALIZED')
-          missing.add('browser-persistence-unavailable')
-        }
+        const failure = await drafts.restore(input)
+        if (failure)
+          return failure
+        if (session.closing || session.config !== input)
+          return session.failure('NOT_INITIALIZED')
       }
-      unsubscribeLogger = core.logger.observe((entry) => {
-        if (entry.context.module === 'feedback' || entry.context.feedback === true)
-          return
-        record({
-          kind: ['error', 'fatal'].includes(entry.level)
-            ? 'error'
-            : 'log',
-          requestId: typeof entry.context.requestId === 'string'
-            ? entry.context.requestId
-            : typeof entry.context.traceId === 'string'
-              ? entry.context.traceId
-              : undefined,
-          data: { level: entry.level, message: entry.message, context: entry.context },
-        })
-      })
-      listen('error', event => record({
-        kind: 'error',
-        data: {
-          message: event.message,
-          stack: event.error instanceof Error
-            ? event.error.stack
-            : undefined,
-          filename: feedbackPageUrl(event.filename || location.href),
-          line: event.lineno,
-          column: event.colno,
-        },
-      }))
-      listen('unhandledrejection', event => record({
-        kind: 'error',
-        data: { reason: event.reason },
-      }))
-      const click = (event: MouseEvent) => {
-        if (!(event.target instanceof Element) || event.target.closest('[data-feedback-ignore]'))
-          return
-        const target = event.target.closest('[data-feedback-action],button,a')
-        if (target && !target.closest('[data-feedback-private]')) {
-          record({
-            kind: 'interaction',
-            data: { action: target.getAttribute('data-feedback-action') ?? target.tagName.toLowerCase(), route: location.pathname },
-          })
-          if (target.hasAttribute('data-feedback-action'))
-            void captureKeyScreenshot()
-        }
-      }
-      document.addEventListener('click', click, true)
-      cleanups.push(() => document.removeEventListener('click', click, true))
-      if (input.captureConsole) {
-        for (const level of ['debug', 'info', 'warn', 'error'] as const) {
-          const original = globalThis.console[level]
-          const wrapper: typeof original = (...args) => {
-            record({
-              kind: level === 'error'
-                ? 'error'
-                : 'log',
-              data: { channel: 'console', level, arguments: args },
-            })
-            original.apply(globalThis.console, args)
-          }
-          globalThis.console[level] = wrapper
-          cleanups.push(() => {
-            if (globalThis.console[level] === wrapper)
-              globalThis.console[level] = original
-          })
-        }
-      }
-      listen('pagehide', () => {
-        deadline = Date.now()
-        if (input.persistDraft && draft)
-          void saveFeedbackDraft(storageKey, draft).catch(() => missing.add('browser-persistence-unavailable'))
-        else if (input.persistDraft)
-          void saveFeedbackCheckpoint(storageKey, buffer).catch(() => missing.add('browser-persistence-unavailable'))
-        void flush()
-      })
-      replayRequested = input.replayStart === 'init'
-      if (input.replay && replayRequested)
-        await startReplay(input)
-      if (closing || config !== input)
-        return failure('NOT_INITIALIZED')
-      flushTimer = setInterval(() => {
-        if (draft && Date.now() > deadline && input.replayStart !== 'init') {
-          replayRequested = false
-          stopReplay?.()
-          stopReplay = undefined
-        }
-        if (draft?.report && !collectionFinished && Date.now() >= nextBackgroundFlush)
-          void runFlush()
-      }, 1000)
+
+      capture.attachListeners(input, () => drafts.onPageHide(input))
+      const replay = capture.requestReplay(input, input.replayStart === 'init')
+      if (replay)
+        await replay
+      if (session.closing || session.config !== input)
+        return session.failure('NOT_INITIALIZED')
+      drafts.startBackgroundFlush(input)
       return core.ok(undefined)
     }
     catch (cause) {
       await close()
-      return failure('OPERATION_FAILED', cause)
+      return session.failure('OPERATION_FAILED', cause)
     }
     finally {
       initializing = false
     }
   }
 
-  async function startReplay(activeConfig: FeedbackClientConfig) {
-    try {
-      const { record: start } = await import('@rrweb/record')
-      if (closing || config !== activeConfig || stopReplay)
-        return
-      if (screenshotCaptures) {
-        missing.add('replay-deferred-by-capture')
-        return
-      }
-      let firstEvent = true
-      stopReplay = start({
-        maskAllInputs: true,
-        maskTextSelector: '[data-feedback-private],.rr-mask',
-        blockSelector: '[data-feedback-ignore],[data-feedback-private],.rr-block,iframe,canvas,video',
-        // rrweb 内联跨域图像会修改原 img 的 crossOrigin，可能破坏带凭据的头像等资源。
-        inlineImages: false,
-        inlineStylesheet: true,
-        collectFonts: false,
-        checkoutEveryNms: 30_000,
-        emit: (event, isCheckout) => {
-          if (firstEvent || isCheckout || replayChunks.length === 0)
-            replayChunks.push([])
-          firstEvent = false
-          let payload: Record<string, unknown>
-          try {
-            payload = sanitizeFeedbackReplay(event)
-          }
-          catch {
-            missing.add('replay-snapshot-truncated')
-            return
-          }
-          const safe = FeedbackEvidenceInputSchema.safeParse({
-            id: core.id.uuid(),
-            source,
-            sequence: ++sequence,
-            kind: 'replay',
-            timestamp: Date.now(),
-            data: { event: payload },
-          })
-          if (!safe.success)
-            return
-          const bytes = new TextEncoder().encode(JSON.stringify(safe.data)).byteLength
-          if (bytes > Math.min(limits().bytes, 1024 * 1024)) {
-            missing.add('replay-snapshot-truncated')
-            return
-          }
-          replayChunks.at(-1)?.push(safe.data)
-          // 按需启动的当前页面快照属于本次准备材料，即使错误的后采窗口已结束也保留。
-          appendToDraft(safe.data, bytes, event.type === 2 || event.type === 4)
-          while (replayChunks.length > 2)
-            replayChunks.shift()
-          const count = replayChunks.reduce((total, chunk) => total + chunk.length, 0)
-          const totalBytes = new TextEncoder().encode(JSON.stringify(replayChunks)).byteLength
-          if (count > limits().events || totalBytes > limits().bytes) {
-            replayChunks = []
-            missing.add('replay-capacity-exceeded')
-          }
-        },
-      }) ?? undefined
-    }
-    catch {
-      if (!closing && config === activeConfig)
-        missing.add('replay-recorder-unavailable')
-    }
-  }
-
-  function captureKeyScreenshot(): Promise<void> {
-    if (!config || config.screenshot === false || config.keyScreenshots !== true || config.maxKeyScreenshots === 0 || keyScreenshotPromise || captureTask || Date.now() - lastKeyScreenshot < (config.keyScreenshotThrottleMs ?? 10_000))
-      return keyScreenshotPromise ?? Promise.resolve()
-    const activeConfig = config
-    lastKeyScreenshot = Date.now()
-    keyScreenshotPromise = (async () => {
-      try {
-        const bytes = await takeScreenshot(activeConfig)
-        if (closing || config !== activeConfig)
-          return
-        if (bytes.byteLength > budget.maxAttachmentBytes) {
-          missing.add('key-screenshot-size-limit-exceeded')
-          return
-        }
-        const image = await attachment(`operation-${lastKeyScreenshot}.png`, 'image/png', bytes)
-        if (closing || config !== activeConfig)
-          return
-        keyScreenshots.push({ attachment: image, timestamp: lastKeyScreenshot })
-        keyScreenshots = keyScreenshots.filter(item => item.timestamp >= Date.now() - limits().age).slice(-Math.min(activeConfig.maxKeyScreenshots ?? 3, 5))
-      }
-      catch {
-        if (!closing && config === activeConfig)
-          missing.add('key-screenshot-unavailable')
-      }
-    })().finally(() => {
-      keyScreenshotPromise = undefined
-    })
-    return keyScreenshotPromise
-  }
-
-  function takeScreenshot(activeConfig: FeedbackClientConfig): Promise<Uint8Array> {
-    if (captureTask) {
-      // 旧身份或已取消的底层任务不能复用；超时不代表 DOM 渲染已经停止。
-      if (captureTask.config !== activeConfig || captureTask.controller.signal.aborted)
-        return Promise.reject(new Error('Screenshot task is still stopping'))
-      return bounded(captureTask.promise, activeConfig.screenshotTimeoutMs ?? 3000, captureTask.controller)
-    }
-    const controller = new AbortController()
-    // rrweb 即使遮挡 iframe 也会观察其文档。暂停自己的记录器，避免采集 html2canvas 的克隆及样式变更。
-    screenshotCaptures++
-    stopReplay?.()
-    stopReplay = undefined
-    const captured = (async () => {
-      try {
-        const bytes = await (activeConfig.captureScreenshot?.({ signal: controller.signal }) ?? captureFeedbackScreenshot(controller.signal))
-        controller.signal.throwIfAborted()
-        return bytes
-      }
-      finally {
-        // 等待句柄登记完成，覆盖宿主截图函数同步抛错的路径。
-        await Promise.resolve()
-        screenshotCaptures--
-        captureTask = undefined
-        if (!screenshotCaptures && !closing && config?.replay && replayRequested)
-          await startReplay(config)
-      }
-    })()
-    captureTask = { promise: captured, controller, config: activeConfig }
-    return bounded(captured, activeConfig.screenshotTimeoutMs ?? 3000, controller)
-  }
-
-  async function doPrepare(options: { startNew?: boolean }): Promise<HaiResult<FeedbackDraft>> {
-    if (!config || closing)
-      return failure('NOT_INITIALIZED')
-    const activeConfig = config
-    // 先等上一轮补传退出，再收口本次窗口，避免复用收口前已完成的 Promise。
-    const pending = await flushPromise
-    if (closing || config !== activeConfig)
-      return failure('NOT_INITIALIZED')
-    if (draft?.report && !collectionFinished) {
-      // 已受理但材料未传完时仍允许打开旧草稿并保存；只有用户明确选择才停止补传并替换。
-      if (!options.startNew) {
-        if (Date.now() < deadline && afterCount < limits().after)
-          draft.missing.push('collection-ended-by-new-feedback')
-        deadline = Date.now()
-        if (pending?.success !== false)
-          await flush()
-        if (closing || config !== activeConfig)
-          return failure('NOT_INITIALIZED')
-        if (!collectionFinished) {
-          pause()
-          return core.ok(draft)
-        }
-      }
-      else {
-        collectionFinished = true
-        if (config.persistDraft)
-          await deleteFeedbackDraft(storageKey).catch(() => missing.add('browser-persistence-unavailable'))
-        if (closing || config !== activeConfig)
-          return failure('NOT_INITIALIZED')
-      }
-    }
-    if (draft && !collectionFinished) {
-      if (!draft.submission && config.screenshot !== false && preparedPage !== pageIdentity()) {
-        const captured = await captureScreenshot()
-        if (!captured.success)
-          return captured
-      }
-      replayRequested = true
-      if (config.replay && !stopReplay)
-        await startReplay(config)
-      return core.ok(draft)
-    }
-    collectionFinished = false
-    collectionSealed = false
-    initialIds.clear()
-    uploadedIds.clear()
-    const now = Date.now()
-    buffer = buffer.filter(item => item.timestamp >= now - limits().age)
-    bufferBytes = new TextEncoder().encode(JSON.stringify(buffer)).byteLength
-    errorWindows = errorWindows.filter(window => window.anchor.timestamp >= now - limits().age)
-    const frozenWindow = errorWindows.at(-1)
-    const anchor = frozenWindow?.anchor ?? (lastError && lastError.timestamp >= now - limits().age && buffer.some(item => item.id === lastError?.id)
-      ? lastError
-      : undefined)
-    const logs = buffer.filter(item => item.kind === 'log' || item.kind === 'error')
-    const anchorIndex = anchor
-      ? logs.findIndex(item => item.id === anchor.id)
-      : logs.length
-    const anchorIndexes = anchor
-      ? logs.map((item, index) => item.kind === 'error'
-          ? index
-          : -1).filter(index => index >= 0).slice(-10)
-      : []
-    const selectedIds = new Set<string>()
-    const selected = anchor
-      ? (errorWindows.length
-          ? errorWindows.flatMap(window => window.evidence)
-          : anchorIndexes.flatMap(index => logs.slice(Math.max(0, index - limits().before), index + 1 + limits().after))).filter((item) => {
-          if (selectedIds.has(item.id))
-            return false
-          selectedIds.add(item.id)
-          return true
-        }).sort((a, b) => a.sequence - b.sequence)
-      : logs.slice(Math.max(0, logs.length - limits().before))
-    const other = buffer.filter(item => item.kind !== 'log' && item.kind !== 'error' && !selectedIds.has(item.id)).slice(-100)
-    if (keyScreenshotPromise)
-      await keyScreenshotPromise
-    if (closing || config !== activeConfig)
-      return failure('NOT_INITIALIZED')
-    keyScreenshots = keyScreenshots.filter(item => item.timestamp >= now - limits().age)
-    draft = {
-      submissionId: core.id.uuid(),
-      anchorTime: anchor?.timestamp ?? now,
-      anchorKind: anchor ? 'error' : 'feedback',
-      errorId: anchor?.errorId,
-      evidence: [
-        ...selected,
-        ...other,
-        ...replayChunks.flat(),
-      ].sort((a, b) => a.sequence - b.sequence),
-      attachments: [],
-      missing: [...missing],
-      expiresAt: now + 86_400_000,
-    }
-    trimDraftEvidence(draft)
-    if (dropped)
-      draft.missing.push(`browser-buffer-truncated:${dropped}`)
-    afterCount = frozenWindow?.after ?? (anchor
-      ? Math.max(0, logs.length - anchorIndex - 1)
-      : 0)
-    deadline = (anchor?.timestamp ?? now) + (config.afterTimeoutMs ?? 30_000)
-    recordEnvironment()
-    if (config.screenshot !== false) {
-      const current = draft
-      const captured = await captureScreenshot(undefined, 'screenshot.png')
-      if (closing || config !== activeConfig || draft !== current)
-        return failure('NOT_INITIALIZED')
-      if (!captured.success) {
-        current.missing.push(captured.error.code === HaiFeedbackError.LIMIT_EXCEEDED.code
-          ? 'screenshot-size-limit-exceeded'
-          : 'screenshot-unavailable')
-        current.missing.push(`screenshot-error:${captured.error.message.slice(0, 300)}`)
-      }
-    }
-    // 当前页面优先占预算，历史关键帧只能使用剩余额度。
-    for (const { attachment: image } of keyScreenshots) {
-      if (image.size > budget.maxAttachmentBytes || draft.attachments.length >= budget.maxAttachmentCount || draft.attachments.reduce((sum, file) => sum + file.size, image.size) > budget.maxAttachmentsBytes)
-        draft.missing.push('key-screenshot-budget-exceeded')
-      else draft.attachments.push(image)
-    }
-    replayRequested = true
-    if (config.replay && !stopReplay)
-      await startReplay(config)
-    schedulePersist()
-    preparedPage = pageIdentity()
-    return core.ok(draft)
-  }
-
-  function prepare(options: { startNew?: boolean } = {}): Promise<HaiResult<FeedbackDraft>> {
-    preparePromise ??= doPrepare(options).finally(() => {
-      preparePromise = undefined
-    })
-    return preparePromise
-  }
-
-  function recordEnvironment() {
-    if (!config)
-      return
-    record({
-      kind: 'environment',
-      data: {
-        appId: config.appId,
-        appVersion: config.appVersion,
-        buildId: config.buildId,
-        commit: config.commit,
-        url: feedbackPageUrl(location.href),
-        browser: navigator.userAgent,
-        language: navigator.language,
-        timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
-        viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
-        online: navigator.onLine,
-        cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []),
-      },
-    })
-  }
-
-  /** Hash 路由只在会话内用于换页识别，不把片段中的参数写入诊断材料。 */
-  function pageIdentity() {
-    return `${location.origin}${location.pathname}${location.hash.startsWith('#/')
-      ? location.hash.split('?')[0]
-      : ''}`
-  }
-
-  async function captureScreenshot(attachmentId?: string, name?: string): Promise<HaiResult<void>> {
-    if (!config || !draft || closing)
-      return failure('NOT_INITIALIZED')
-    const current = draft
-    const activeConfig = config
-    const previous = attachmentId
-      ? current.attachments.find(item => item.id === attachmentId)
-      : undefined
-    const previousChecksum = previous?.checksum
-    if (current.submission)
-      return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-    if (attachmentId && (!previous || !previous.contentType.startsWith('image/')))
-      return failure('INVALID_INPUT')
-    if (!previous && current.attachments.length >= budget.maxAttachmentCount)
-      return failure('LIMIT_EXCEEDED')
-    try {
-      const bytes = await takeScreenshot(activeConfig)
-      if (bytes.byteLength > budget.maxAttachmentBytes)
-        return failure('LIMIT_EXCEEDED')
-      const previousName = previous && (/\.[^.]+$/.test(previous.name)
-        ? previous.name.replace(/\.[^.]+$/, '.png')
-        : `${previous.name}.png`)
-      const image = await attachment(name ?? previousName ?? `screenshot-${core.id.uuid()}.png`, 'image/png', bytes)
-      if (closing || config !== activeConfig || draft !== current || current.submission || (previous && (!current.attachments.includes(previous) || previous.checksum !== previousChecksum)))
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-      if (current.attachments.reduce((total, item) => total + (item === previous
-        ? 0
-        : item.size), image.size) > budget.maxAttachmentsBytes) {
-        return failure('LIMIT_EXCEEDED')
-      }
-      if (previous) {
-        current.attachments = current.attachments.map(item => item === previous
-          ? { ...image, id: previous.id }
-          : item)
-      }
-      else if (current.attachments.length < budget.maxAttachmentCount) {
-        current.attachments.unshift(image)
-      }
-      else {
-        return failure('LIMIT_EXCEEDED')
-      }
-      if (!name)
-        recordEnvironment()
-      preparedPage = pageIdentity()
-      schedulePersist()
-      return core.ok(undefined)
-    }
-    catch (cause) {
-      return failure('OPERATION_FAILED', cause)
-    }
-  }
-
-  async function submit(input: FeedbackClientSubmitInput = {}): Promise<HaiResult<FeedbackReport>> {
-    if (!config || closing)
-      return failure('NOT_INITIALIZED')
-    const activeConfig = config
-    const prepared = preparePromise
-      ? await preparePromise
-      : draft
-        ? core.ok(draft)
-        : await prepare()
-    if (!prepared.success)
-      return prepared
-    const current = prepared.data
-    try {
-      if (!policyVerified && activeConfig.actions.policy) {
-        const policy = await activeConfig.actions.policy()
-        if (closing || config !== activeConfig || draft !== current)
-          return failure('NOT_INITIALIZED')
-        if (!policy.success)
-          return policy
-        budget = FeedbackBudgetSchema.parse(policy.data)
-        policyVerified = true
-        missing.delete('server-policy-unavailable')
-        current.missing = current.missing.filter(reason => reason !== 'server-policy-unavailable')
-        if (!current.submission)
-          trimDraftEvidence(current)
-      }
-      const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({
-        description: sanitizeFeedbackData({ text: input.description ?? '' }).text,
-        category: input.category ?? '',
-        contact: sanitizeFeedbackData({ text: input.contact ?? '' }).text,
-        files: (input.files ?? []).map(item => ({ name: item.name, size: item.size, lastModified: item.lastModified })),
-        removed: [
-          ...(input.removedAttachmentIds ?? []),
-        ].sort(),
-      })))
-      if (closing || config !== activeConfig || draft !== current)
-        return failure('NOT_INITIALIZED')
-      if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
-      if (!current.submission) {
-        const added = await addFiles(input.files ?? [], input.removedAttachmentIds)
-        if (!added.success)
-          return added
-      }
-      if (closing || config !== activeConfig || draft !== current)
-        return failure('NOT_INITIALIZED')
-      if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
-      current.submission ??= FeedbackSubmitInputSchema.parse({
-        submissionId: current.submissionId,
-        appId: config.appId,
-        appVersion: config.appVersion,
-        buildId: config.buildId,
-        commit: config.commit,
-        description: typeof input.description === 'string'
-          ? String(sanitizeFeedbackData({ text: input.description }).text)
-          : undefined,
-        category: input.category,
-        contact: input.contact,
-        url: feedbackPageUrl(location.href),
-        anchor: { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId },
-        evidence: current.evidence.slice(0, 1000),
-        attachments: current.attachments.map(({ bytes: _bytes, ...metadata }) => metadata),
-      })
-      current.userInputFingerprint = fingerprint
-      schedulePersist()
-      const result = await activeConfig.actions.submit(current.submission)
-      if (!result.success)
-        return result
-      if (closing || config !== activeConfig || draft !== current)
-        return result
-      current.report = result.data
-      initialIds = new Set(current.submission.evidence?.map(item => item.id))
-      schedulePersist()
-      // 已受理立即返回；大附件和后续日志由可重试的后台 flush 续传。
-      void runFlush()
-      return result
-    }
-    catch (cause) {
-      return failure('OPERATION_FAILED', cause)
-    }
-  }
-
-  async function doFlush(): Promise<HaiResult<void>> {
-    if (!config || !draft?.report)
-      return failure('NOT_INITIALIZED')
-    if (collectionFinished)
-      return core.ok(undefined)
-    try {
-      for (const item of draft.attachments) {
-        if (discardOnClose)
-          return core.ok(undefined)
-        if (uploadedIds.has(item.id))
-          continue
-        const result = await config.actions.upload({
-          id: draft.report.id,
-          attachmentId: item.id,
-          dataBase64: base64(item.bytes),
-        })
-        if (!result.success)
-          return result
-        uploadedIds.add(item.id)
-      }
-      let drainPasses = 0
-      while (true) {
-        if (discardOnClose)
-          return core.ok(undefined)
-        if (closing || Date.now() >= deadline || afterCount >= limits().after)
-          collectionSealed = true
-        const pending = draft.evidence.filter(item => !initialIds.has(item.id)).slice(0, 200)
-        if (pending.length === 0)
-          break
-        const result = await config.actions.appendEvidence({ id: draft.report.id, evidence: pending })
-        if (!result.success)
-          return result
-        for (const id of result.data.acknowledged)
-          initialIds.add(id)
-        if (pending.some(item => !initialIds.has(item.id)))
-          return failure()
-        drainPasses++
-        if (drainPasses >= budget.maxAttachmentCount)
-          return core.ok(undefined)
-      }
-      if (collectionSealed && !discardOnClose) {
-        const result = await config.actions.completeCollection({
-          id: draft.report.id,
-          missing: [
-            ...new Set([
-              ...draft.missing,
-              ...missing,
-            ]),
-          ],
-        })
-        if (!result.success)
-          return result
-        collectionFinished = true
-        if (config.replayStart !== 'init')
-          pause()
-        const updatedReport = FeedbackReportSchema.safeParse(result.data)
-        if (updatedReport.success)
-          draft.report = updatedReport.data
-        if (config.persistDraft)
-          await deleteFeedbackDraft(storageKey)
-      }
-      schedulePersist()
-      return core.ok(undefined)
-    }
-    catch (cause) {
-      return failure('OPERATION_FAILED', cause)
-    }
-  }
-
-  function flush(): Promise<HaiResult<void>> {
-    // 用户重新打开/显式重试时恢复补传；沿用同一提交和附件 ID。
-    flushFailures = 0
-    nextBackgroundFlush = 0
-    return runFlush()
-  }
-
-  function runFlush(): Promise<HaiResult<void>> {
-    flushPromise ??= doFlush().then((result) => {
-      if (result.success) {
-        flushFailures = 0
-        nextBackgroundFlush = 0
-      }
-      else {
-        flushFailures++
-        const status = result.error.httpStatus
-        // 权限/输入/资源拒绝等待用户处理；临时故障最多再试五次，避免闲置页面持续刷错。
-        const rejected = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429
-        nextBackgroundFlush = rejected || flushFailures >= 6
-          ? Number.POSITIVE_INFINITY
-          : Date.now() + 1000 * 2 ** (flushFailures - 1)
-      }
-      return result
-    }).finally(() => {
-      flushPromise = undefined
-    })
-    return flushPromise
-  }
-
-  async function annotate(id: string, mark: Parameters<typeof annotateFeedbackImage>[1]): Promise<HaiResult<void>> {
-    if (!draft || closing)
-      return failure('NOT_INITIALIZED')
-    const current = draft
-    const item = current.attachments.find(value => value.id === id)
-    if (!item || current.submission)
-      return failure('INVALID_INPUT')
-    const originalBytes = item.bytes
-    try {
-      const bytes = await annotateFeedbackImage(originalBytes, mark)
-      const name = /\.[^.]+$/.test(item.name)
-        ? item.name.replace(/\.[^.]+$/, '.png')
-        : `${item.name}.png`
-      const updated = await attachment(name, 'image/png', bytes)
-      if (updated.size > budget.maxAttachmentBytes || current.attachments.reduce((sum, file) => sum + (file === item
-        ? 0
-        : file.size), updated.size) > budget.maxAttachmentsBytes) {
-        return failure('LIMIT_EXCEEDED')
-      }
-      // 渲染/摘要结束后再原子替换；提交、关闭、删除或另一标注不能被旧异步结果覆盖。
-      if (closing || draft !== current || current.submission || !current.attachments.includes(item) || item.bytes !== originalBytes)
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-      Object.assign(item, updated, { id })
-      schedulePersist()
-      return core.ok(undefined)
-    }
-    catch (cause) {
-      return failure('OPERATION_FAILED', cause)
-    }
-  }
-
-  async function addFiles(files: readonly File[], removedAttachmentIds: readonly string[] = []): Promise<HaiResult<void>> {
-    if (!draft)
-      return failure('NOT_INITIALIZED')
-    if (draft.submission && (files.length || removedAttachmentIds.length))
-      return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
-    const current = draft
-    const items: FeedbackClientAttachment[] = []
-    const newMissing: string[] = []
-    try {
-      for (const file of files) {
-        if (items.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
-          return failure('LIMIT_EXCEEDED')
-        const contentType = feedbackFileContentType(file)
-        if (!contentType)
-          return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
-        let bytes: Uint8Array | undefined
-        if (contentType.startsWith('text/') || contentType === 'application/json') {
-          const raw = await file.text()
-          if (contentType === 'application/json' && raw.length > 8192)
-            newMissing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
-          bytes = contentType === 'application/json'
-            ? sanitizeFeedbackJsonAttachment(raw)
-            : new TextEncoder().encode(sanitizeFeedbackText(raw))
-        }
-        else {
-          bytes = new Uint8Array(await file.arrayBuffer())
-        }
-        if (!bytes)
-          return failure('INVALID_INPUT')
-        if (bytes.byteLength > budget.maxAttachmentBytes)
-          return failure('LIMIT_EXCEEDED')
-        const item = await attachment(file.name, contentType, bytes)
-        if (!items.some(existing => existing.name === item.name && existing.checksum === item.checksum))
-          items.push(item)
-      }
-      // 读取/摘要计算期间草稿可能切换或冻结；失败批次不能留下附件或缺失标记。
-      if (draft !== current || closing)
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-      if (current.submission && (files.length || removedAttachmentIds.length))
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
-      // 在最新附件上合并，保留读取期间另一成功批次的新增项；最终校验与提交之间没有 await。
-      const merged = current.attachments.filter(file => !removedAttachmentIds.includes(file.id))
-      for (const item of items) {
-        if (!merged.some(existing => existing.name === item.name && existing.checksum === item.checksum))
-          merged.push(item)
-      }
-      if (merged.length > budget.maxAttachmentCount || merged.reduce((total, item) => total + item.size, 0) > budget.maxAttachmentsBytes)
-        return failure('LIMIT_EXCEEDED')
-      current.attachments = merged
-      current.missing.push(...newMissing)
-      schedulePersist()
-      return core.ok(undefined)
-    }
-    catch (cause) {
-      return failure('INVALID_INPUT', cause)
-    }
-  }
-
-  async function exportDraft(input: FeedbackClientSubmitInput = {}): Promise<HaiResult<Uint8Array>> {
-    const current = draft
-    const activeConfig = config
-    if (!current || !activeConfig || closing)
-      return failure('NOT_INITIALIZED')
-    try {
-      const { feedback: bundleFeedback } = await import('../bundle/index.js')
-      if (closing || draft !== current || config !== activeConfig)
-        return failure('NOT_INITIALIZED')
-      let attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
-      if (!current.submission) {
-        const added = await addFiles(input.files ?? [])
-        if (!added.success)
-          return added
-        attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
-      }
-      else {
-        // 离线兜底保留失败后新增的本地文件，但不改变已发送包络或后续上传队列。
-        for (const file of input.files ?? []) {
-          if (attachments.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
-            return failure('LIMIT_EXCEEDED')
-          const contentType = feedbackFileContentType(file)
-          if (!contentType)
-            return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
-          const bytes = contentType === 'application/json'
-            ? sanitizeFeedbackJsonAttachment(await file.text())
-            : contentType.startsWith('text/')
-              ? new TextEncoder().encode(sanitizeFeedbackText(await file.text()))
-              : new Uint8Array(await file.arrayBuffer())
-          if (!bytes)
-            return failure('INVALID_INPUT')
-          if (bytes.byteLength > budget.maxAttachmentBytes)
-            return failure('LIMIT_EXCEEDED')
-          const item = await attachment(file.name, contentType, bytes)
-          if (!attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
-            attachments.push(item)
-        }
-      }
-      if (closing || draft !== current || config !== activeConfig)
-        return failure('NOT_INITIALIZED')
-      if (attachments.reduce((total, item) => total + item.size, 0) > budget.maxAttachmentsBytes)
-        return failure('LIMIT_EXCEEDED')
-      const { submission, report } = current
-      const description = input.description ?? report?.description ?? submission?.description ?? ''
-      const category = input.category ?? report?.category ?? submission?.category
-      const contact = input.contact ?? report?.contact ?? submission?.contact
-      return bundleFeedback.createBundle({
-        maxBytes: budget.maxTotalBytes,
-        report: {
-          ...(report ?? {
-            id: current.submissionId,
-            appId: submission ? submission.appId : activeConfig.appId,
-            appVersion: submission ? submission.appVersion : activeConfig.appVersion,
-            buildId: submission ? submission.buildId : activeConfig.buildId,
-            commit: submission ? submission.commit : activeConfig.commit,
-            url: submission?.url ?? current.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url,
-            anchor: submission?.anchor ?? { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId },
-            evidenceRevision: 1,
-          }),
-          ...sanitizeFeedbackData({
-            description,
-            ...(category === undefined
-              ? {}
-              : { category }),
-            ...(contact === undefined
-              ? {}
-              : { contact }),
-          }),
-        },
-        evidence: current.evidence,
-        attachments,
-        missing: [
-          ...new Set([
-            ...current.missing,
-            ...missing,
-            'server-evidence-not-obtained',
-            ...(!report
-              ? ['feedback-not-yet-accepted']
-              : []),
-          ]),
-        ],
-      })
-    }
-    catch (cause) {
-      return failure('OPERATION_FAILED', cause)
-    }
-  }
-
   function close(options: { discard?: boolean } = {}): Promise<void> {
     sessionVersion++
-    discardOnClose ||= options.discard === true
+    session.discardOnClose ||= options.discard === true
     closePromise ??= doClose().finally(() => {
       closePromise = undefined
     })
     return closePromise
   }
 
-  function pause(): void {
-    replayRequested = false
-    stopReplay?.()
-    stopReplay = undefined
-    captureTask?.controller.abort()
-  }
-
   async function doClose(): Promise<void> {
-    closing = true
-    pause()
+    session.closing = true
+    capture.pause()
     saveController.abort()
-    unsubscribeLogger?.()
-    unsubscribeLogger = undefined
-    stopReplay?.()
-    stopReplay = undefined
-    for (const cleanup of cleanups.splice(0))
-      cleanup()
-    if (flushTimer)
-      clearInterval(flushTimer)
-    if (persistTimer)
-      clearTimeout(persistTimer)
-    flushTimer = undefined
-    persistTimer = undefined
-    // 截图有既定超时；等待采集退出后再清空草稿，避免旧回调复活会话。
-    await preparePromise
-    await keyScreenshotPromise
+    capture.detachListeners()
+    drafts.stopTimers()
+    // 等待采集退出后再清空草稿，避免旧回调复活会话。
+    await drafts.preparing
+    await capture.keyScreenshotPromise
     // 身份退出只等待已经开始的请求，不使用新身份凭据补传旧草稿。
-    if (discardOnClose)
-      await flushPromise
-    else if (draft?.report)
-      await flush()
-    if (discardOnClose && storageKey)
-      await deleteFeedbackDraft(storageKey).catch(() => undefined)
-    else if (config?.persistDraft && draft && !collectionFinished)
-      await saveFeedbackDraft(storageKey, draft).catch(() => undefined)
-    releasePreviews()
-    discardOnClose = false
-    config = undefined
-    preparedPage = ''
-    buffer = []
-    bufferBytes = 0
-    draft = undefined
-    lastError = undefined
-    errorWindows = []
-    replayChunks = []
-    replayRequested = false
-    keyScreenshots = []
-    lastKeyScreenshot = 0
-    initialIds.clear()
-    uploadedIds.clear()
-    missing.clear()
-    dropped = 0
-    collectionFinished = false
-    collectionSealed = false
-    flushFailures = 0
-    nextBackgroundFlush = 0
+    if (session.discardOnClose || session.draft?.report)
+      await drafts.finishUploadOnClose()
+    const persisted = drafts.persistOnClose()
+    if (persisted)
+      await persisted
+    attachments.releasePreviews()
+    session.discardOnClose = false
+    session.config = undefined
+    session.preparedPage = ''
+    session.draft = undefined
+    capture.reset()
+    drafts.reset()
+    session.missing.clear()
+    session.collectionFinished = false
+    session.collectionSealed = false
   }
 
   return {
     init,
-    prepare,
-    pause,
-    captureScreenshot,
-    submit,
-    flush,
-    record,
-    getDraft: () => draft,
-    getView,
-    releasePreviews,
-    annotate,
-    addFiles,
-    exportDraft,
-    async saveDraft(input) {
-      const session = config
-      const current = draft
-      const exported = await exportDraft(input)
-      if (!exported.success)
-        return exported
-      if (closing || !session || session !== config || current !== draft)
-        return failure('NOT_INITIALIZED')
-      return saveFeedbackFile(exported.data, `feedback-${current?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
-    },
+    prepare: drafts.prepare,
+    pause: capture.pause,
+    captureScreenshot: capture.captureScreenshot,
+    submit: drafts.submit,
+    flush: drafts.flush,
+    record: capture.record,
+    getDraft: () => session.draft,
+    getView: attachments.getView,
+    releasePreviews: attachments.releasePreviews,
+    annotate: attachments.annotate,
+    addFiles: attachments.addFiles,
+    exportDraft: attachments.exportDraft,
+    saveDraft: attachments.saveDraft,
     close,
     get budget() {
-      return { ...budget }
+      return { ...session.budget }
     },
   }
 }
@@ -1323,54 +154,3 @@ export function createFeedbackClient(): FeedbackBrowserClient {
  * ```
  */
 export const feedbackClient = createFeedbackClient()
-
-async function bounded<T>(promise: Promise<T>, ms: number, controller: AbortController): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let aborted: (() => void) | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_resolve, reject) => {
-        aborted = () => reject(new Error('Capture cancelled'))
-        if (controller.signal.aborted)
-          aborted()
-        else controller.signal.addEventListener('abort', aborted, { once: true })
-        timer = setTimeout(() => {
-          reject(new Error('Capture timed out'))
-          controller.abort()
-        }, ms)
-      }),
-    ])
-  }
-  finally {
-    clearTimeout(timer)
-    if (aborted)
-      controller.signal.removeEventListener('abort', aborted)
-  }
-}
-
-async function attachment(name: string, contentType: string, bytes: Uint8Array): Promise<FeedbackClientAttachment> {
-  const checksum = await digestHex(bytes)
-  return {
-    id: core.id.uuid(),
-    name: String(sanitizeFeedbackData({ text: name }).text).slice(0, 255),
-    contentType,
-    size: bytes.byteLength,
-    checksum,
-    bytes,
-  }
-}
-
-async function digestHex(bytes: Uint8Array): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new Uint8Array(bytes))
-  return [
-    ...new Uint8Array(digest),
-  ].map(value => value.toString(16).padStart(2, '0')).join('')
-}
-
-function base64(bytes: Uint8Array): string {
-  let value = ''
-  for (let offset = 0; offset < bytes.length; offset += 32_768)
-    value += String.fromCharCode(...bytes.subarray(offset, offset + 32_768))
-  return btoa(value)
-}
