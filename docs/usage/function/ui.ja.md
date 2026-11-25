@@ -632,7 +632,7 @@ const accepted = await ui.messageBox.confirm({
 
 #### 利用例：閲覧権限のある PDF をプレビューする
 
-`FileList` に `type: 'application/pdf'` とファイル URL を含む認可済みのレコードを渡します。組み込みプレビューは同一オリジンの HTTP(S)、CORS で読み取れる URL、同一オリジンの Blob URL に対応します。応答には `application/pdf` と有効な PDF ヘッダーが必要です。ファイルの上限は 20 MiB です。ページを順にキャンバスに描画し、閉じると取得処理と描画リソースを解放します。アプリ独自のプレビューで表示する場合は `onpreview(file)` を使います。
+`FileList` に `type: 'application/pdf'` とファイル URL を含む認可済みのレコードを渡します。組み込みプレビューは同一オリジンの HTTP(S)、CORS で読み取れる URL、同一オリジンの Blob URL に対応します。応答には `application/pdf` と有効な PDF ヘッダーが必要です。ファイルの上限は 20 MiB です。ファイルを直接返す URL を指定します。ページを順にキャンバスに描画し、閉じると取得処理と描画リソースを解放します。取得や描画に失敗した場合はプレビューを再試行できます。アプリ独自のプレビューで表示する場合は `onpreview(file)` を使います。
 
 <a id="crypto"></a>
 
@@ -1112,7 +1112,7 @@ import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 
 #### 利用例：ページの言語を選んで文言を整える
 
-ブラウザーではページの言語を保持し、サーバーではリクエストごとに言語を設定して他の利用者と混在させません。 詳細は[中国語の手順](ui.md#locale)を参照してください。
+サーバーでは `core.i18n.runWithLocale(locale, render)` で描画を囲みます。コールバックとその非同期処理で同じリクエストの言語を使います。`core.i18n.setGlobalLocale(locale)` は起動時にはプロセスの既定値を、リクエスト内ではそのリクエストの言語を設定します。UI の設定関数はブラウザーで使います。
 
 ```svelte
 <script>

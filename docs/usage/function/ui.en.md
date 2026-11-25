@@ -630,7 +630,7 @@ A failed transfer can be retried. Size or type validation failures prevent retry
 
 #### Scenario: Preview an authorized PDF
 
-Pass an authorized file record with `type: 'application/pdf'` and its URL to `FileList`. The built-in preview supports same-origin HTTP(S), cross-origin URLs readable through CORS, and same-origin Blob URLs. The response must declare `application/pdf` and contain a valid PDF header. The maximum file size is 20 MiB. The viewer paints pages on a canvas and releases the request and renderer when closed. Use `onpreview(file)` to hand the file to an application-managed preview when needed.
+Pass an authorized file record with `type: 'application/pdf'` and its URL to `FileList`. The built-in preview supports same-origin HTTP(S), cross-origin URLs readable through CORS, and same-origin Blob URLs. The response must declare `application/pdf` and contain a valid PDF header. The maximum file size is 20 MiB. Use a URL that serves the file directly. The viewer paints pages on a canvas and releases the request and renderer when closed. If loading or rendering fails, select Retry preview. Use `onpreview(file)` to hand the file to an application-managed preview when needed.
 
 <a id="crypto"></a>
 
@@ -1110,7 +1110,7 @@ Keep browser locale in page state and select server locale per request to preven
 
 #### Scenario: Choose a page language and interpolate text
 
-Keep browser locale in page state and select server locale per request to prevent cross-user changes. For extended examples, see the [Chinese walkthrough](ui.md#locale).
+On the server, wrap the render in `core.i18n.runWithLocale(locale, render)`. The callback and its asynchronous work share that request's locale. Use `core.i18n.setGlobalLocale(locale)` during process startup to set the default, or inside the request context to update that request. The UI setter is for browser use.
 
 ```svelte
 <script>

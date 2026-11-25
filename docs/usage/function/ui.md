@@ -987,7 +987,7 @@ AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生�
 
 #### 场景：预览已授权的 PDF
 
-给 `FileList` 传入带 `type: 'application/pdf'` 和文件 URL 的已授权记录。默认预览接受同源 HTTP(S) 地址、允许当前页面读取的跨域地址以及同源 Blob URL。响应须声明 `application/pdf` 并包含有效的 PDF 文件头，文件上限为 20 MiB。预览逐页绘制到画布，关闭时释放读取和渲染资源。受限的文件可通过 `onpreview(file)` 交由应用自己的预览流程处理。
+给 `FileList` 传入带 `type: 'application/pdf'` 和文件 URL 的已授权记录。默认预览接受同源 HTTP(S) 地址、允许当前页面读取的跨域地址以及同源 Blob URL。响应须声明 `application/pdf` 并包含有效的 PDF 文件头，文件上限为 20 MiB，URL 需直接返回文件。预览逐页绘制到画布，关闭时释放读取和渲染资源。读取或绘制失败时，可选择重新预览。受限的文件可通过 `onpreview(file)` 交由应用自己的预览流程处理。
 
 <a id="crypto"></a>
 
