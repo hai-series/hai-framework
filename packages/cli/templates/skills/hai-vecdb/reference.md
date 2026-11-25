@@ -136,7 +136,7 @@ pgvector 在同一个事务内建表、建向量索引并保存列的 metric 注
 
 通过 Chroma 原生接口创建的集合按服务端索引配置读取度量。`collection.info()` 在集合收到第一条向量前返回维度 0，首次写入后使用服务端保存的维度。删空文档后该维度仍保留。通过 VecDB 创建集合时显式传入 `options.dimension`。
 
-LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。旧表/外部表如缺少该定义，需要重建集合，不提供兼容推断。
+LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。导入已有文档时，先创建带完整维度和距离度量的集合。
 
 LanceDB 是嵌入式本地文件后端。只有访问相同持久目录、且底层文件系统支持 LanceDB 并发提交的进程才能共享数据；不同节点各自的同名本地路径互不共享。分布式服务优先选择 pgvector、Qdrant 或 Chroma 服务端。AI Knowledge 的 reldb 与 vecdb 都须持久化并指向同一业务数据集，替换 embedding 维度时须重建匹配的集合。
 
@@ -144,7 +144,7 @@ LanceDB 是嵌入式本地文件后端。只有访问相同持久目录、且底
 
 LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。新集合在初始 Arrow schema 声明 id 为非空的 Lance 非强制主键。insert/upsert 均使用原生 merge，按 id 处理键冲突。依据：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts)。
 
-LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。旧表需重建，不自动迁移或清空。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
+LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。导入记录时，选择带持久主键的目标集合。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
 
 LanceDB metadata 使用原生 JSON 字段，仍可保存嵌套 JSON 对象，搜索结果还原为对象；insert/upsert 明确使用 Arrow JSON schema 完成 JSONB 编码。旧 Utf8 metadata 表写入或过滤返回 CONFIG_ERROR，需要重建，不自动迁移。依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
 
@@ -218,7 +218,7 @@ Chroma 直连 `url` 仅支持 HTTP(S) 根端点，优先于 `host/port`；URL �
 
 直连初始化总截止为 5 秒，本地服务拉起使用 `startupTimeout`；超时中止候选 HTTP 请求。成功清除初始化 timer，不限制后续业务请求。
 
-框架对 Chroma 执行 `upsert` 时，在同一次请求中提交向量、正文和有效元数据键清单。已有旧记录可读。用 `upsert` 省略上次写入的键后，VecDB 搜索结果不会返回旧键，按旧值过滤也不会命中；通过 Chroma 原生接口仍可能看到旧值。保留字段 `_hai_vecdb_metadata_keys` 由框架维护，`insert` 和 `upsert` 会拒绝显式提供该键。服务需支持数组元数据及 `$contains`、`$not_contains`，已用 Chroma 1.5.5 验证。
+框架对 Chroma 执行 `upsert` 时，在同一次请求中提交向量、正文和有效元数据键清单。缺少有效键清单的记录按存储中的业务元数据读取。用 `upsert` 省略上次写入的键后，VecDB 搜索结果不会返回旧键，按旧值过滤也不会命中；通过 Chroma 原生接口仍可能看到旧值。保留字段 `_hai_vecdb_metadata_keys` 由框架维护，`insert` 和 `upsert` 会拒绝显式提供该键。服务需支持数组元数据及 `$contains`、`$not_contains`，已用 Chroma 1.5.5 验证。
 
 Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖；超时 30 秒覆盖完整响应体，响应超过 16 MiB 明确失败。仅支持未命名向量字段的 cosine/euclidean/dot；外部 named-vector/Manhattan 集合的 info/写入/搜索返回 CONFIG_ERROR，不猜测维度或 metric。Chroma 使用 `chromadb 3.5.0` 的真实类型及 metadata/filter 校验，非法输入返回操作错误，不丢弃过滤；content 可省略。各后端的 null 和复杂元数据语义不承诺统一。
 

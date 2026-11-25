@@ -58,8 +58,6 @@
 | `operationLog.write` | 布尔值 | `false` | 记录集合变更和向量写入、删除等操作。 |
 | `operationLog.maxLength` | 非负整数 | `1000` | 安全摘要的字符上限。`0` 省略摘要。 |
 
-旧配置请删除 `operationLog` 下的 `level` 字段。如果该字段引用了环境变量，应先删掉 YAML 中的引用，再删除对应的旧环境变量。
-
 ## 配置示例
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema

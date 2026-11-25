@@ -63,23 +63,29 @@ Collection settings store dimension and metric. `insert` with an existing ID rep
 
 | Column | Type | Default | Meaning | Example |
 | --- | --- | --- | --- | --- |
-| `id` | `string` | — | Non-null field declared as a Lance unenforced primary key in new tables. | `doc-42` |
+| `id` | `string` | — | Non-null field declared as a Lance unenforced primary key. | `doc-42` |
 | `vector` | `fixed-size list` | — | Fixed-length document vector. | `[0.1,0.2,0.3]` |
 | `content` | `string` | `""` | Document text. | `Example shipping policy` |
-| `metadata` | `JSON` | `{}` | Application attributes. New tables use a non-null Arrow JSON field. | `{"source":"policy.txt"}` |
+| `metadata` | `JSON` | `{}` | Application attributes in a non-null Arrow JSON field. | `{"source":"policy.txt"}` |
 
 The vector column fixes the dimension. Arrow schema metadata records `hai.vecdb.metric`. The framework uses LanceDB merge writes in `insert` and `upsert` to handle conflicts by ID. Appending directly with native `add` can create duplicate IDs.
 
 <a id="lancedb-upgrade"></a>
 
-#### Upgrade an existing LanceDB collection
+<a id="upgrade-an-existing-lancedb-collection"></a>
 
-When an older collection lacks a persisted dimension or metric, reading collection information, searching, and writing return `CONFIG_ERROR`. The framework rejects writes to a table without the new key declaration. A legacy Utf8 metadata column also prevents writes and metadata filtering. For the migration, use records from your document source or from a tool that can read the original format.
+<a id="lancedb-import-documents"></a>
 
-1. Pause writes to the old collection and back up the whole LanceDB directory before exporting the records. Record the collection's embedding model, dimension, and metric.
-2. Create a new collection such as `docs_v2` with `vecdb.collection.create()`. Use the original dimension and metric if you are reusing the vectors.
-3. Use `vecdb.vector.upsert()` in small batches to backfill stable IDs, vectors, text, and metadata objects. Resolve duplicate IDs in the exported records first. Check `success` after each batch and retain the backup while addressing any failure.
-4. Verify the definition and document count with `vecdb.collection.info()` and `vecdb.vector.count()`. Test search and metadata filtering with a known document. After verification, switch the application reads and writes to the new collection and resume writing. Keep the backup and old collection for your application's rollback period.
+#### Import existing documents into a LanceDB collection
+
+A collection needs a fixed-length vector column and a stored distance metric. If either is missing, collection information, search, and write operations return `CONFIG_ERROR`. Writes through VecDB also require a non-null `id` declared as the primary key and an Arrow JSON metadata column. Metadata filters also require the Arrow JSON column.
+
+If the source collection does not meet these requirements, import its documents into a collection created by VecDB.
+
+1. Pause writes to the source collection and back up the LanceDB directory. Export the records from the original document source or with a tool that can read the source format. Record the embedding model, vector dimension, and distance metric.
+2. Create a destination collection such as `policy_search` with `vecdb.collection.create()`. Match the source dimension and distance metric if you are reusing its vectors.
+3. Resolve duplicate IDs in the export first. Use `vecdb.vector.upsert()` in small batches to write stable IDs, vectors, text, and metadata objects. Check `success` after each batch and address failures before continuing.
+4. Verify the destination definition and document count with `vecdb.collection.info()` and `vecdb.vector.count()`. Test search and metadata filtering with a known document. Then switch the application reads and writes to the destination and resume writes. Keep the backup and source collection for the application's rollback period.
 
 ### chroma
 
@@ -92,7 +98,7 @@ When an older collection lacks a persisted dimension or metric, reading collecti
 
 Collections created through VecDB retain the framework's dimension and metric definitions. Collections created through native Chroma use the server index metric. Chroma records the dimension when the first vectors arrive and retains it after all records are deleted.
 
-VecDB stores the active application metadata keys in the reserved `_hai_vecdb_metadata_keys` field in the same `upsert` request. Search results and filters use this list. Older records without the list remain readable in their original format, and the next VecDB `upsert` sets the list. Direct Chroma reads may still show key values removed from the VecDB view. See the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement).
+VecDB stores the active application metadata keys in the reserved `_hai_vecdb_metadata_keys` field in the same `upsert` request. Search results and filters use this list. For records without an active-key list, VecDB reads the available application metadata directly. Direct Chroma reads may still show key values removed from the VecDB view. See the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement).
 
 VecDB creates no Redis keys. Search reads from the vector store. Pass the previous cursor when requesting another page from the same backend and collection.
 

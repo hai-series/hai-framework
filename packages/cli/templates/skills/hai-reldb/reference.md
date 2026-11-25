@@ -127,7 +127,7 @@ if (!closed.success) {
 
 `reldb.validateIdentifier(name)` 校验一个标识符，成功时 `data` 为原名称。`reldb.validateIdentifiers(names)` 校验名称数组。标识符先从应用白名单中选出，例如表名 `orders_archive`。校验只检查名称格式，动态值仍用绑定参数传入。
 
-SQLite 文本主键需显式设 `notNull: true`。旧表用 `PRAGMA table_info(table_name)` 检查 `pk` 和 `notnull`，并检查已有空 ID，由应用安排修数和迁移。MySQL 的 `addColumn()` 在同一次结构变更中添加列和 `references` 外键约束。MySQL 若有多个表使用同一个索引名，`dropIndex()` 返回 `DDL_FAILED` 并保留现有索引。
+SQLite 文本主键需显式设 `notNull: true`。对已有表可用 `PRAGMA table_info(table_name)` 核对 `pk` 和 `notnull`。MySQL 的 `addColumn()` 在同一次结构变更中添加列和 `references` 外键约束。MySQL 若有多个表使用同一个索引名，`dropIndex()` 返回 `DDL_FAILED` 并保留现有索引。
 
 `reldb.prepareSchema(key, prepare)` 在 SQLite、PostgreSQL 和 MySQL 上均可调用。PostgreSQL 按共同键加事务锁，回调内的 `ddl` 和 `sql` 在同一连接执行，失败时回滚。重复准备部分索引时会核对已有定义，定义不符或无法校验时报错，需要显式迁移。校验已有部分索引的谓词需要创建临时表的权限。SQLite 和 MySQL 直接运行回调并遵循各自的 DDL 规则，`key` 不参与加锁。
 
@@ -421,26 +421,51 @@ return tx.commit()
 
 ### 分页 — `reldb.pagination`
 
-| 方法        | 签名                                                  | 说明                                   |
-| ----------- | ----------------------------------------------------- | -------------------------------------- |
-| `normalize` | `(options?, overrides?) => NormalizedPagination`      | 规范化分页参数（含 offset/limit 计算） |
-| `build`     | `<T>(items, total, pagination) => PaginatedResult<T>` | 构建分页结果对象                       |
+常规列表优先调用 `reldb.sql.queryPage()` 或仓库的 `findPage()`。当应用自行编写计数和列表两条查询时，用 `normalize(options?, overrides?)` 把页码和每页条数换成 SQL 的 `limit`、`offset`，查询完成后用 `build(items, total, pagination)` 把本页数据、匹配总数和页码组成列表响应。
 
-这两个工具适合需要自行取得条目和总数的接口，无需初始化连接。`normalize()` 计算当前页所需的 `limit` 和 `offset`，默认页码为 1、每页 20 条，显式提供的每页条数最多 200。取到当前页后用 `build()` 组装响应，`total` 应是所有符合条件的记录数。
+以下订单列表在查询条目时关联明细，统计总数时只数已支付的订单。数据库已初始化。示例中 `orders` 有主键 `id` 和 `status`，`order_items` 有主键 `id` 和关联列 `order_id`。五张已支付订单按 ID 排为 `o1` 到 `o5`，其中 `o3` 有两条明细，`o4` 没有明细。
 
 ```ts
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-// 已筛选、已排序的结果共有三条，本次请求第 2 页，每页 2 条。
-const matched = [{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]
-const pagination = reldb.pagination.normalize({ page: 2, pageSize: 2 })
-// limit=2、offset=2。用这两个值从结果中取出当前页。
-const pageItems = matched.slice(pagination.offset, pagination.offset + pagination.limit)
-const response = reldb.pagination.build(pageItems, matched.length, pagination)
-// { items: [{ id: 'o3' }], total: 3, page: 2, pageSize: 2 }
-```
+async function listPaidOrders(page: number, pageSize: number) {
+  // 根据页面请求计算 SQL 要跳过和最多取出的行数。第 2 页每页 2 张时，offset 和 limit 都是 2。
+  const pagination = reldb.pagination.normalize({ page, pageSize })
+  const status = 'paid'
 
-固定 SQL 需要数据库分页时，可直接使用 `reldb.sql.queryPage()`，它会查询总数并取出当前页。
+  // 只统计符合条件的订单。测试数据返回 5，查询失败时把错误结果还给调用方。
+  const count = await reldb.sql.get<{ total: number | string }>(
+    'SELECT COUNT(*) AS total FROM orders WHERE status = ?',
+    [status],
+  )
+  if (!count.success)
+    return count
+
+  // 按订单统计明细，并绑定分页范围。没有明细的订单也出现在列表中。
+  const rows = await reldb.sql.query<{ id: string, item_count: number | string }>(`
+    SELECT o.id, COUNT(i.id) AS item_count
+    FROM orders AS o
+    LEFT JOIN order_items AS i ON i.order_id = o.id
+    WHERE o.status = ?
+    GROUP BY o.id
+    ORDER BY o.id
+    LIMIT ? OFFSET ?
+  `, [status, pagination.limit, pagination.offset])
+  if (!rows.success)
+    return rows
+
+  // 用本页数据、全部匹配数和实际页码组装响应。
+  const items = rows.data.map(row => ({ id: row.id, itemCount: Number(row.item_count) }))
+  return core.ok(reldb.pagination.build(items, Number(count.data?.total ?? 0), pagination))
+}
+
+const result = await listPaidOrders(2, 2)
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
+
+result.data // { items: [{ id: 'o3', itemCount: 2 }, { id: 'o4', itemCount: 0 }], total: 5, page: 2, pageSize: 2 }
+```
 
 ### JSON — `reldb.json`
 

@@ -75,10 +75,10 @@ When the application adds a note using a parameterized `UPDATE`, `reldb.sql.exec
 
 ### Check primary keys in existing SQLite tables
 
-For an existing SQLite orders table, check the `pk` and `notnull` values for the text column `id` with `PRAGMA table_info(orders)`. Use `SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` to check existing rows. For a new text column declared with `primaryKey: true, notNull: true`, both metadata values should be 1. A table created by an earlier release may still allow nulls. Decide how to handle those records before rebuilding the constraint, then read back the data to verify the migration.
+For an existing SQLite orders table, check the `pk` and `notnull` values for the text column `id` with `PRAGMA table_info(orders)`. Use `SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` to check existing rows. Both metadata values should be 1 for a text column declared with `primaryKey: true, notNull: true`. If the constraint is missing, decide how to handle any null IDs before rebuilding it, then read back the data to verify the result.
 
 ### Check existing MySQL constraints and PostgreSQL partial indexes
 
-In MySQL, if an earlier release added `order_id` with `addColumn()`, use `SHOW CREATE TABLE order_items` to verify that the foreign key references `orders(id)` and has the expected delete and update actions. If the key is missing, check for order items with no matching order before adding the constraint in an application migration. Run `SHOW INDEX FROM order_items` and `SHOW INDEX FROM orders` for tables that may use the same index name. Check the owning table, key column order, and uniqueness.
+In MySQL, use `SHOW CREATE TABLE order_items` to verify that the foreign key on `order_id` references `orders(id)` and has the expected delete and update actions. If the key is missing, check for order items with no matching order before adding the constraint in an application migration. Run `SHOW INDEX FROM order_items` and `SHOW INDEX FROM orders` for tables that may use the same index name. Check the owning table, key column order, and uniqueness.
 
 In PostgreSQL, use `SELECT pg_get_indexdef(to_regclass('public.orders_pending_idx'))` to read the existing index definition and its `WHERE` clause. Compare the actual predicate with the current `prepareSchema()` definition. If the predicate needs to change, migrate the index explicitly and run schema preparation again.

@@ -239,8 +239,8 @@ if (!rawResult.success)
 | `reldb.sql.execute(sql, params?)` | パラメーター付きで書き込み | `sql: string` 信頼できる SQL。実行時の値にはプレースホルダーを使用。`params?: unknown[]` プレースホルダー順に値を束縛。省略時は束縛なし | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
 | `reldb.sql.batch(statements)` | SQL を一括実行 | `statements` 順に実行する SQL 項目。各項目に sql と任意の params | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
 | `reldb.sql.queryPage(options)` | ページと総数を取得 | 必須の `options: PaginationQueryOptions`。[照会フィールド](#reldb-sql-page-options)を参照。 | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
-| `reldb.pagination.normalize(options?, overrides?)` | ページ指定を正規化 | 任意の `options: PaginationOptionsInput` と `overrides: PaginationOverrides`。[ページ指定](#reldb-sql-page-options)を参照。 | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
-| `reldb.pagination.build(items, total, pagination)` | ページ取得結果を作成 | `items: T[], total: number, pagination: PaginationOptions` 現在ページの行、全一致件数、ページ番号とページサイズ | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+| `reldb.pagination.normalize(options?, overrides?)` | クエリ前にページ指定を SQL の `LIMIT` と `OFFSET` に変換 | 任意の `options: PaginationOptionsInput` と `overrides: PaginationOverrides`。[ページ指定](#reldb-sql-page-options)を参照。 | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build(items, total, pagination)` | 取得済みの行と総件数からレスポンスを組み立てる | `items: T[], total: number, pagination: PaginationOptions` 現在ページの行、全一致件数、ページ番号とページサイズ | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
 <a id="reldb-sql-page-options"></a>
 
@@ -308,25 +308,55 @@ o1 はバインド値です。get の null は正常な該当なし、query は�
 
 <a id="pagination-utils"></a>
 
-#### 利用例：読み込み済みの注文一覧をページ分割する
+#### 利用例：注文の総件数と現在のページを別々に取得する
 
-注文一覧への指定は 2 ページ目、1 ページ当たり 50 件で、画面の上限は 2 件です。例では ID 順の注文 5 件を使います。2 つの関数にデータベース接続は不要で、キャッシュやメモリにあるデータをページ分割できます。
+支払い済み注文の一覧には、注文ごとの明細件数を表示します。ページの行を取得するときは明細を結合して集計し、**総件数には支払い済みの注文だけを数えます。** アプリケーションでこの 2 つの SQL を用意する場合は、`normalize()` で取得範囲を求め、クエリの結果を `build()` でレスポンスにまとめます。1 つの SELECT を総件数の計算とページの取得に使える場合は `reldb.sql.queryPage()`、CRUD リポジトリで取得する場合は `repository.findPage()` を使えます。どちらもページ情報をまとめた結果を返します。
+
+一覧は注文 ID 順に表示します。テスト用データベースでは、支払い済み注文は `o1` から `o5` までの 5 件です。`o3` には明細が 2 件あり、`o4` にはありません。画面は 1 ページ 2 件で 2 ページ目を要求します。`orders` は主キー `id` と `status` を、`order_items` は主キー `id` と注文を参照する `order_id` を持ちます。サンプルを実行する前に[データベースを初期化](../configuration/reldb.ja.md)します。
 
 ```ts
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
-// 指定を正規化し、3 件目から最大 2 件を取り出す設定を得ます。
-const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
-pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+async function listPaidOrders(page: number, pageSize: number) {
+  // 画面の指定から SQL の取得範囲を求めます。1 ページ 2 件の 2 ページ目では offset も limit も 2 です。
+  const pagination = reldb.pagination.normalize({ page, pageSize })
+  const status = 'paid'
 
-// 対象行を切り出し、現在の行と全件数、正規化済み設定から戻り値を作ります。
-const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
-const result = reldb.pagination.build(items, orders.length, pagination)
-result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
+  // 条件に合う注文を数えます。この例では 5 件で、失敗した場合はその結果を返します。
+  const count = await reldb.sql.get<{ total: number | string }>(
+    'SELECT COUNT(*) AS total FROM orders WHERE status = ?',
+    [status],
+  )
+  if (!count.success)
+    return count
+
+  // 注文ごとの明細件数を集計し、取得範囲をバインドします。明細のない注文も一覧に含めます。
+  const rows = await reldb.sql.query<{ id: string, item_count: number | string }>(`
+    SELECT o.id, COUNT(i.id) AS item_count
+    FROM orders AS o
+    LEFT JOIN order_items AS i ON i.order_id = o.id
+    WHERE o.status = ?
+    GROUP BY o.id
+    ORDER BY o.id
+    LIMIT ? OFFSET ?
+  `, [status, pagination.limit, pagination.offset])
+  if (!rows.success)
+    return rows
+
+  // 取得済みの行、該当する総件数、実際のページ情報をレスポンスにまとめます。
+  const items = rows.data.map(row => ({ id: row.id, itemCount: Number(row.item_count) }))
+  return core.ok(reldb.pagination.build(items, Number(count.data?.total ?? 0), pagination))
+}
+
+const result = await listPaidOrders(2, 2)
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
+
+result.data // { items: [{ id: 'o3', itemCount: 2 }, { id: 'o4', itemCount: 0 }], total: 5, page: 2, pageSize: 2 }
 ```
 
-`build` は渡された行と全件数を使います。絞り込み、ソート、対象行の切り出しは呼び出し前に行います。
+このデータではどのページも `total` は 5 なので、画面は全 3 ページと表示できます。最後のページを超えた場合、`items` は空の配列になり、`total` には件数クエリの結果が入ります。
 
 <a id="sql-identifiers"></a>
 

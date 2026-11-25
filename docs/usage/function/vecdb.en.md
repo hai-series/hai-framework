@@ -248,13 +248,13 @@ Suppose `doc-1` already stores the text `Install`, and a second `insert` call se
 
 Use `upsert` to update existing documents. See the [Chroma `add` contract](https://docs.trychroma.com/docs/collections/add-data#behaviors) for its behavior on existing IDs.
 
-For older LanceDB collections, check the storage format and [upgrade the collection](../data/vecdb.en.md#lancedb-upgrade) if needed.
+To build a LanceDB collection from existing documents, see [how to import them](../data/vecdb.en.md#lancedb-import-documents).
 
 <a id="chroma-metadata-replacement"></a>
 
 ##### Chroma metadata replacement
 
-The example below writes `doc-1` with `{ legacyTag: 'draft' }`, then upserts the same ID with `{ source: 'handbook' }`. On Chroma, VecDB search returns only the new application metadata. The filter `{ legacyTag: 'draft' }` no longer matches that document. The same `upsert` submits the active metadata keys, vector, and text. Older records remain readable as stored. Direct reads from Chroma may still show removed fields. VecDB reserves `_hai_vecdb_metadata_keys` and rejects `insert` or `upsert` calls that supply this key. See the [Chroma connection example](../configuration/vecdb.en.md#chroma-server) for server requirements.
+The example below writes `doc-1` with `{ legacyTag: 'draft' }`, then upserts the same ID with `{ source: 'handbook' }`. On Chroma, VecDB search returns only the new application metadata. The filter `{ legacyTag: 'draft' }` no longer matches that document. The same `upsert` submits the active metadata keys, vector, and text. For records without a valid metadata key list, VecDB reads the application metadata as stored. Direct reads from Chroma may still show removed fields. VecDB reserves `_hai_vecdb_metadata_keys` and rejects `insert` or `upsert` calls that supply this key. See the [Chroma connection example](../configuration/vecdb.en.md#chroma-server) for server requirements.
 
 <a id="qdrant-document-visibility"></a>
 

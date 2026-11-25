@@ -67,23 +67,29 @@ pgvector 在同一事务内建表、建索引并保存度量。三项在提交�
 
 | 字段 | 类型 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- |
-| `id` | `string` | — | 新表的非空字段，声明为 Lance 的非强制主键。 | `doc-42` |
+| `id` | `string` | — | 非空字段，声明为 Lance 的非强制主键。 | `doc-42` |
 | `vector` | `fixed-size list` | — | 固定长度的文档向量。 | `[0.1,0.2,0.3]` |
 | `content` | `string` | `""` | 文档正文。 | `Example shipping policy` |
-| `metadata` | `JSON` | `{}` | 应用属性。新表使用非空 Arrow JSON 字段。 | `{"source":"policy.txt"}` |
+| `metadata` | `JSON` | `{}` | 应用属性，使用非空 Arrow JSON 字段。 | `{"source":"policy.txt"}` |
 
 维度由向量列长度决定，`hai.vecdb.metric` 保存在 Arrow schema 元数据中。框架的 `insert` 和 `upsert` 使用 LanceDB 的 merge 写入按 ID 处理冲突。通过原生 `add` 直接追加可能产生重复 ID。
 
 <a id="lancedb-upgrade"></a>
 
-#### 升级已有 LanceDB 集合
+<a id="升级已有-lancedb-集合"></a>
 
-旧集合如果缺少持久化的维度或度量，查看集合信息、检索及写入会返回 `CONFIG_ERROR`。缺少新主键声明的表无法通过框架写入，旧的 Utf8 元数据列无法用于写入和过滤。迁移时从原始文档数据或能读取旧格式的工具取得历史记录。
+<a id="lancedb-import-documents"></a>
 
-1. 暂停旧集合写入并备份完整的 LanceDB 目录，再导出历史记录。记录旧集合使用的向量模型、维度和度量。
-2. 用 `vecdb.collection.create()` 创建一个新集合，例如 `docs_v2`。复用原向量时指定原维度和度量。
-3. 以小批次调用 `vecdb.vector.upsert()` 回填稳定 ID、向量、正文和元数据对象。先处理导出数据中的重复 ID。每个批次检查 `success`，失败时保留备份并处理失败原因。
-4. 调用 `vecdb.collection.info()` 和 `vecdb.vector.count()` 核对定义及文档数，并用一条已知文档检查检索结果和元数据过滤。校验通过后把读写配置切到新集合，再恢复写入。保留备份和旧集合，按应用的回退周期处理。
+#### 将现有文档导入 LanceDB 集合
+
+集合需要固定长度的向量列和已保存的距离度量。缺少任一项时，查看集合信息、搜索和写入均返回 `CONFIG_ERROR`。通过 VecDB 写入还要求将非空 `id` 声明为主键并使用 Arrow JSON 元数据列。需要按元数据过滤时，也应使用 Arrow JSON 列。
+
+如果来源集合的结构不满足这些要求，可以把现有文档导入由 VecDB 创建的集合。
+
+1. 暂停向来源集合写入，备份完整的 LanceDB 目录。通过文档原始数据或能读取来源格式的工具导出记录，并记录嵌入模型、向量维度和距离度量。
+2. 用 `vecdb.collection.create()` 创建目标集合，例如 `policy_search`。继续使用原向量时，指定与来源一致的维度和距离度量。
+3. 先处理导出数据中的重复 ID，再以小批次调用 `vecdb.vector.upsert()`，写入稳定 ID、向量、正文和元数据对象。每批检查 `success`，失败时处理原因后再继续。
+4. 用 `vecdb.collection.info()` 和 `vecdb.vector.count()` 核对目标集合的定义和文档数，并用一条已知文档验证搜索及元数据过滤。核对通过后切换应用的读写目标并恢复写入。按应用的回退周期保留备份和来源集合。
 
 ### chroma
 
@@ -96,7 +102,7 @@ pgvector 在同一事务内建表、建索引并保存度量。三项在提交�
 
 VecDB 创建的集合保留框架的维度和度量定义。通过 Chroma 原生接口创建的集合使用服务端的索引度量。其维度在收到第一批向量后由 Chroma 记录，删空文档不会清除这一维度。
 
-VecDB 在 `upsert` 时通过同一次请求把有效业务键清单保存到保留字段 `_hai_vecdb_metadata_keys`。搜索结果和过滤条件以该清单为准。没有清单的旧记录仍按旧格式读取，下次通过框架调用 `upsert` 时会写入清单。Chroma 原生接口可能仍能读到已从框架视图移除的键值。参见[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)。
+VecDB 在 `upsert` 时通过同一次请求把有效业务键清单保存到保留字段 `_hai_vecdb_metadata_keys`。搜索结果和过滤条件以该清单为准。记录没有有效键清单时，VecDB 直接读取已有的业务元数据。Chroma 原生接口可能仍能读到已从框架视图移除的键值。参见[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)。
 
 VecDB 不创建 Redis 键。查询直接读取对应向量库。分页时，应用需在同一个数据库和集合的下一次查询中传回上次的游标。
 

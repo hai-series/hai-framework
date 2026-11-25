@@ -250,13 +250,13 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 
 既存の文書を更新する場合は `upsert` を使います。Chroma の既存 ID の扱いは [`add` の仕様](https://docs.trychroma.com/docs/collections/add-data#behaviors)を参照してください。
 
-古い LanceDB コレクションを使う場合は保存形式を確認し、必要に応じて[コレクションを更新](../data/vecdb.ja.md#lancedb-upgrade)します。
+既存の文書から LanceDB コレクションを作成する場合は、[文書のインポート](../data/vecdb.ja.md#lancedb-import-documents)を参照してください。
 
 <a id="chroma-metadata-replacement"></a>
 
 ##### Chroma メタデータの置き換え
 
-次の例では、`doc-1` を `{ legacyTag: 'draft' }` で書き込んでから、同じ ID を `{ source: 'handbook' }` で upsert します。Chroma でも、VecDB の検索結果には新しいアプリの属性だけが含まれます。`{ legacyTag: 'draft' }` で絞り込んでもこの文書は一致しません。有効なメタデータのキー、ベクトル、本文は同じ `upsert` で送信します。古いレコードも保存済みの形式のまま読み取れます。Chroma から直接読み取ると、削除した属性が残って見えることがあります。`_hai_vecdb_metadata_keys` は VecDB の予約キーです。このキーを指定した `insert` や `upsert` は拒否されます。必要なサーバー機能は [Chroma の接続例](../configuration/vecdb.ja.md#chroma-server)を参照してください。
+次の例では、`doc-1` を `{ legacyTag: 'draft' }` で書き込んでから、同じ ID を `{ source: 'handbook' }` で upsert します。Chroma でも、VecDB の検索結果には新しいアプリの属性だけが含まれます。`{ legacyTag: 'draft' }` で絞り込んでもこの文書は一致しません。有効なメタデータのキー、ベクトル、本文は同じ `upsert` で送信します。有効なメタデータキーの一覧がないレコードは、保存されているアプリケーションのメタデータを読み取ります。Chroma から直接読み取ると、削除した属性が残って見えることがあります。`_hai_vecdb_metadata_keys` は VecDB の予約キーです。このキーを指定した `insert` や `upsert` は拒否されます。必要なサーバー機能は [Chroma の接続例](../configuration/vecdb.ja.md#chroma-server)を参照してください。
 
 <a id="qdrant-document-visibility"></a>
 

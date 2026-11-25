@@ -254,13 +254,13 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 
 要更新已存在的文档，请调用 `upsert`。Chroma 的已有 ID 行为来自其 [`add` 接口](https://docs.trychroma.com/docs/collections/add-data#behaviors)。
 
-使用早期 LanceDB 集合时，先核对其存储结构，再按需[升级集合](../data/vecdb.md#lancedb-upgrade)。
+要使用现有文档建立 LanceDB 集合，参见[导入现有文档](../data/vecdb.md#lancedb-import-documents)。
 
 <a id="chroma-metadata-replacement"></a>
 
 ##### Chroma 元数据替换
 
-下例先用 `{ legacyTag: 'draft' }` 写入 `doc-1`，再对同一个 ID 调用 `upsert` 并传入 `{ source: 'handbook' }`。在 Chroma 上，VecDB 搜索结果只返回新的业务属性，使用 `{ legacyTag: 'draft' }` 过滤时不会命中。有效字段清单与向量、正文通过同一次 `upsert` 提交。旧记录仍可直接读取。直接通过 Chroma 查看存储数据时，可能仍看到被移除的字段。框架保留 `_hai_vecdb_metadata_keys`，`insert` 和 `upsert` 会拒绝显式提供该键。部署版本的要求见 [Chroma 连接示例](../configuration/vecdb.md#chroma-server)。
+下例先用 `{ legacyTag: 'draft' }` 写入 `doc-1`，再对同一个 ID 调用 `upsert` 并传入 `{ source: 'handbook' }`。在 Chroma 上，VecDB 搜索结果只返回新的业务属性，使用 `{ legacyTag: 'draft' }` 过滤时不会命中。有效字段清单与向量、正文通过同一次 `upsert` 提交。缺少有效字段清单的记录按存储中的业务元数据读取。直接通过 Chroma 查看存储数据时，可能仍看到被移除的字段。框架保留 `_hai_vecdb_metadata_keys`，`insert` 和 `upsert` 会拒绝显式提供该键。部署版本的要求见 [Chroma 连接示例](../configuration/vecdb.md#chroma-server)。
 
 <a id="qdrant-document-visibility"></a>
 

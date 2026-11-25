@@ -33,8 +33,6 @@ These settings apply to every backend. Enabled operation summaries use `debug` a
 | `operationLog.write` | Boolean | `false` | Summarize collection changes, vector writes, and deletions. |
 | `operationLog.maxLength` | Nonnegative integer | `1000` | Maximum characters in a safe summary. Use `0` to omit the summary. |
 
-Remove the legacy `level` field under `operationLog`. If the field refers to an environment variable, remove the YAML reference before deleting the old variable.
-
 ## Configuration examples
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema

@@ -153,7 +153,7 @@ Use trusted table names, columns and definitions, and inspect destructive change
 
 On MySQL, `addColumn()` creates the column and its `references` constraint in one schema change. If the same index name appears on multiple tables, `dropIndex()` returns `DDL_FAILED` and preserves those indexes. `ifExists: true` skips only a missing index. To delete an index from a specific table in a migration, name the table explicitly in trusted SQL.
 
-Use `notNull: true` on a new SQLite text primary key to reject null values. For older tables, [verify the schema and existing rows](../data/reldb.en.md#schema-migration-checks). PostgreSQL `prepareSchema()` checks the definition of an existing partial index with the same name. A mismatched or unverifiable definition causes failure so the caller can migrate it explicitly. Repeated preparation of a partial index requires permission to create temporary tables.
+Use `notNull: true` on a new SQLite text primary key to reject null values. For an existing table, [check its schema and rows](../data/reldb.en.md#schema-migration-checks). PostgreSQL `prepareSchema()` checks the definition of an existing partial index with the same name. A mismatched or unverifiable definition causes failure so the caller can migrate it explicitly. Repeated preparation of a partial index requires permission to create temporary tables.
 
 <a id="reldb-ddl-fields"></a>
 
@@ -235,8 +235,8 @@ Pass dynamic values as parameters, distinguish query rows from execution counts 
 | `reldb.sql.execute(sql, params?)` | Execute a parameterized write | `sql: string` Trusted SQL with placeholders for runtime values. `params?: unknown[]` Bind values in placeholder order. Omit for no bindings | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
 | `reldb.sql.batch(statements)` | Execute a batch of statements | `statements` Ordered SQL entries, each containing sql and optional params | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
 | `reldb.sql.queryPage(options)` | Read a result page and total | Required `options: PaginationQueryOptions`. See [query fields](#reldb-sql-page-options). | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
-| `reldb.pagination.normalize(options?, overrides?)` | Normalize pagination values | Optional `options: PaginationOptionsInput` and `overrides: PaginationOverrides`. See [pagination fields](#reldb-sql-page-options). | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
-| `reldb.pagination.build(items, total, pagination)` | Build a paginated result | `items: T[], total: number, pagination: PaginationOptions` Current rows, total matches, and normalized page and page size | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+| `reldb.pagination.normalize(options?, overrides?)` | Convert the requested page and page size into SQL `LIMIT` and `OFFSET` before querying | Optional `options: PaginationOptionsInput` and `overrides: PaginationOverrides`. See [pagination fields](#reldb-sql-page-options). | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build(items, total, pagination)` | Assemble the response after the rows and count have been fetched | `items: T[], total: number, pagination: PaginationOptions` Current rows, total matches, and normalized page and page size | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
 <a id="reldb-sql-page-options"></a>
 
@@ -304,25 +304,55 @@ o1 is a bound value. get returns successful null when missing, query returns an 
 
 <a id="pagination-utils"></a>
 
-#### Scenario: Paginate an already loaded order list
+#### Scenario: Count orders and fetch page rows with separate queries
 
-An order list requests page 2 with 50 rows, and the screen caps the page size at 2. The example uses five orders sorted by ID. Both helpers work without a database connection and can paginate cached or in-memory data.
+An orders screen displays each paid order with its line-item count. The page query joins order items and groups them by order. **The total query only counts paid orders.** When your application supplies both queries, call `normalize()` to compute the row range, then call `build()` to assemble the response from the query results. If one SELECT serves both the count and the page query, use `reldb.sql.queryPage()`. For a CRUD repository, use `repository.findPage()`. Both methods return the assembled page.
+
+The screen sorts by order ID. The test database has five paid orders, `o1` through `o5`. Order `o3` has two items and `o4` has none. The screen requests page 2 with two orders per page. The `orders` table has an `id` primary key and a `status` column. The `order_items` table has an `id` primary key and an `order_id` column referencing its order. [Initialize the database](../configuration/reldb.en.md) before running the example.
 
 ```ts
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
-// Normalize the request to take two rows starting at the third order.
-const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
-pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+async function listPaidOrders(page: number, pageSize: number) {
+  // Convert the request to the SQL row range. Page 2 with two orders gives offset 2 and limit 2.
+  const pagination = reldb.pagination.normalize({ page, pageSize })
+  const status = 'paid'
 
-// Slice the page, then assemble the response from those rows, the total and the normalized page.
-const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
-const result = reldb.pagination.build(items, orders.length, pagination)
-result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
+  // Count matching orders, yielding 5 here. Pass the failure back if the query fails.
+  const count = await reldb.sql.get<{ total: number | string }>(
+    'SELECT COUNT(*) AS total FROM orders WHERE status = ?',
+    [status],
+  )
+  if (!count.success)
+    return count
+
+  // Count items for each order and bind the page range. Keep orders with no items in the list.
+  const rows = await reldb.sql.query<{ id: string, item_count: number | string }>(`
+    SELECT o.id, COUNT(i.id) AS item_count
+    FROM orders AS o
+    LEFT JOIN order_items AS i ON i.order_id = o.id
+    WHERE o.status = ?
+    GROUP BY o.id
+    ORDER BY o.id
+    LIMIT ? OFFSET ?
+  `, [status, pagination.limit, pagination.offset])
+  if (!rows.success)
+    return rows
+
+  // Assemble the response from the fetched rows, total matches, and actual page settings.
+  const items = rows.data.map(row => ({ id: row.id, itemCount: Number(row.item_count) }))
+  return core.ok(reldb.pagination.build(items, Number(count.data?.total ?? 0), pagination))
+}
+
+const result = await listPaidOrders(2, 2)
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
+
+result.data // { items: [{ id: 'o3', itemCount: 2 }, { id: 'o4', itemCount: 0 }], total: 5, page: 2, pageSize: 2 }
 ```
 
-`build` uses the items and total supplied by the caller. Filter, sort and slice the source data before calling it.
+With this data, each page reports a `total` of 5, so the screen can show three pages. A request past the last page returns an empty `items` array and still uses the count query for `total`.
 
 <a id="sql-identifiers"></a>
 

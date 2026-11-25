@@ -33,8 +33,6 @@
 | `operationLog.write` | 真偽値 | `false` | コレクションの変更やベクトルの書き込み・削除を記録します。 |
 | `operationLog.maxLength` | 非負整数 | `1000` | 安全な要約の最大文字数です。`0` で要約を省略します。 |
 
-旧設定から `operationLog` 配下の `level` を削除してください。環境変数を参照する場合は YAML 側の参照を先に削除し、その後で古い環境変数を削除します。
-
 ## 設定例
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema

@@ -77,10 +77,10 @@ RelDB 管理连接或连接池，以及当前进程借出的事务句柄。业�
 
 ### 核对现有 SQLite 表的主键
 
-应用已有 SQLite 订单表时，使用 `PRAGMA table_info(orders)` 检查文本主键 `id` 的 `pk` 和 `notnull` 列，再用 `SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` 检查已有记录。对于声明了 `primaryKey: true, notNull: true` 的新文本主键，预期 `pk` 和 `notnull` 均为 1。曾用旧版创建的表可能仍允许空值。迁移前由应用确定这些记录的处理方式，再重建约束并读回核对。
+应用已有 SQLite 订单表时，使用 `PRAGMA table_info(orders)` 检查文本主键 `id` 的 `pk` 和 `notnull` 列，再用 `SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` 检查已有记录。对声明了 `primaryKey: true, notNull: true` 的文本主键，预期 `pk` 和 `notnull` 均为 1。如果发现约束缺失，先确定如何处理已有空 ID，再重建约束并读回核对。
 
 ### 核对现有 MySQL 约束和 PostgreSQL 部分索引
 
-在 MySQL 中，如果旧版通过 `addColumn()` 增加了订单明细的 `order_id`，使用 `SHOW CREATE TABLE order_items` 检查外键是否指向 `orders(id)`，以及删除和更新动作是否符合应用定义。缺少外键时，先核对是否有明细指向不存在的订单，再由应用迁移添加约束。对可能使用同名索引的表分别执行 `SHOW INDEX FROM order_items` 和 `SHOW INDEX FROM orders`，核对索引所在表、列顺序及是否唯一。
+在 MySQL 中，使用 `SHOW CREATE TABLE order_items` 检查订单明细列 `order_id` 的外键是否指向 `orders(id)`，以及删除和更新动作是否符合应用定义。缺少外键时，先核对是否有明细指向不存在的订单，再由应用迁移添加约束。对可能使用同名索引的表分别执行 `SHOW INDEX FROM order_items` 和 `SHOW INDEX FROM orders`，核对索引所在表、列顺序及是否唯一。
 
 在 PostgreSQL 中，可用 `SELECT pg_get_indexdef(to_regclass('public.orders_pending_idx'))` 检查现有索引的完整定义和 `WHERE` 条件。将实际条件与当前的 `prepareSchema()` 定义对照。条件需要变更时，由应用显式迁移索引，再重新执行结构准备。

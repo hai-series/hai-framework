@@ -75,10 +75,10 @@ RelDB は接続や接続プールと、現在のプロセスで取得したト�
 
 ### 既存の SQLite テーブルの主キーを確認する
 
-既存の SQLite の注文テーブルでは、`PRAGMA table_info(orders)` でテキスト列 `id` の `pk` と `notnull` を確認し、`SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` で既存のレコードを調べます。`primaryKey: true, notNull: true` を指定した新しいテキスト列では、どちらの値も 1 になります。旧版で作成したテーブルには空値を許すものがあります。制約を再構築する前に該当レコードの扱いを決め、移行後にデータを読み戻して確認します。
+既存の SQLite の注文テーブルでは、`PRAGMA table_info(orders)` でテキスト列 `id` の `pk` と `notnull` を確認し、`SELECT COUNT(*) AS total FROM orders WHERE id IS NULL` で既存のレコードを調べます。`primaryKey: true, notNull: true` を指定したテキスト列では、どちらの値も 1 になります。制約が欠けている場合は、空の ID を持つレコードの扱いを決めてから制約を再構築し、データを読み戻して確認します。
 
 ### 既存の MySQL 制約と PostgreSQL 部分インデックスを点検する
 
-旧版の MySQL で `addColumn()` を使って注文明細に `order_id` を追加した場合は、`SHOW CREATE TABLE order_items` で外部キーが `orders(id)` を参照しているか、削除・更新時の動作が定義どおりかを確認します。制約が欠けている場合は、対応する注文が存在しない明細がないかを調べてから、アプリケーションの移行で制約を追加します。同名のインデックスを使用する可能性のあるテーブルでは、`SHOW INDEX FROM order_items` と `SHOW INDEX FROM orders` を個別に実行し、所属テーブル、キー列の順序、一意性を確認します。
+MySQL では、`SHOW CREATE TABLE order_items` で注文明細の `order_id` の外部キーが `orders(id)` を参照しているか、削除・更新時の動作が定義どおりかを確認します。制約が欠けている場合は、対応する注文が存在しない明細がないかを調べてから、アプリケーションの移行で制約を追加します。同名のインデックスを使用する可能性のあるテーブルでは、`SHOW INDEX FROM order_items` と `SHOW INDEX FROM orders` を個別に実行し、所属テーブル、キー列の順序、一意性を確認します。
 
 PostgreSQL では、`SELECT pg_get_indexdef(to_regclass('public.orders_pending_idx'))` で既存のインデックス定義と `WHERE` 句を確認できます。実際の条件を現在の `prepareSchema()` の定義と照合します。条件を変更する場合は、インデックスを明示的に移行してからスキーマ準備を再実行します。

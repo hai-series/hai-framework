@@ -114,9 +114,9 @@ if (!closed.success) {
 
 关闭会等待已借出的事务提交/回滚并释放句柄；应用必须结束事务才能完成关闭。SQLite 的 WAL 配置与 worker 握手也属于初始化资源链。PostgreSQL 空闲连接断开由连接池移除并在后续查询时替换，不使进程退出；日志仅记录安全错误标识，不输出驱动错误原文。
 
-初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+初始化成功后才能执行数据库读写和结构操作。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-table/column/index 名必须来自可信代码；sql 是可信语句，params 绑定业务值；steps 是模块迁移步骤，options 控制预检和分页。
+表名、列名和索引名从可信代码中选取。SQL 语句使用占位符绑定业务值。
 
 <a id="prepare-schema"></a>
 
@@ -177,7 +177,7 @@ if (!removed.success)
 
 在 MySQL 上用 `addColumn()` 添加外键列时，列和 `references` 约束在同一次结构变更中创建。只有某个索引名唯一定位一张表时，`dropIndex()` 才执行。如果多张表存在同名索引，返回 `DDL_FAILED` 并保留这些索引，`ifExists: true` 只跳过不存在的索引。迁移中需要删除指定表的索引时，可用可信静态 SQL 明确写出表名。
 
-SQLite 新建文本主键列时显式写 `notNull: true`，以拒绝空值。旧表需[检查已有结构和记录](../data/reldb.md#schema-migration-checks)。PostgreSQL 的 `prepareSchema()` 会检查已有同名部分索引的定义。如果定义不同或无法核对，返回失败，由调用方通过迁移处理。重复准备部分索引时，数据库账号需要创建临时表的权限。
+SQLite 新建文本主键列时显式写 `notNull: true`，以拒绝空值。已有表可[检查结构和记录](../data/reldb.md#schema-migration-checks)。PostgreSQL 的 `prepareSchema()` 会检查已有同名部分索引的定义。如果定义不同或无法核对，返回失败，由调用方通过迁移处理。重复准备部分索引时，数据库账号需要创建临时表的权限。
 
 <a id="reldb-ddl-fields"></a>
 
@@ -261,8 +261,8 @@ if (!rawResult.success)
 | `reldb.sql.execute(sql, params?)` | 参数化写入并读取影响行数 | `sql: string` 可信代码编写的 SQL，业务值用占位符。`params?: unknown[]` 按占位符顺序绑定值，省略时不绑定参数 | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
 | `reldb.sql.batch(statements)` | 批量执行语句 | `statements` 依次执行的 SQL 项数组，每项为 sql 与可选 params | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
 | `reldb.sql.queryPage(options)` | 查询分页数据与总数 | 必填 `options: PaginationQueryOptions`。见[查询字段](#reldb-sql-page-options)。 | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
-| `reldb.pagination.normalize(options?, overrides?)` | 规范化页码和每页条数 | 可省略 `options: PaginationOptionsInput` 和 `overrides: PaginationOverrides`。见[分页字段](#reldb-sql-page-options)。 | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
-| `reldb.pagination.build(items, total, pagination)` | 组合分页结果 | `items: T[], total: number, pagination: PaginationOptions` 当前页数据、匹配的总条数及页码/每页条数 | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+| `reldb.pagination.normalize(options?, overrides?)` | 在查询前把页码和每页条数换算成 SQL 的 `LIMIT` 和 `OFFSET` | 可省略 `options: PaginationOptionsInput` 和 `overrides: PaginationOverrides`。见[分页字段](#reldb-sql-page-options)。 | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build(items, total, pagination)` | 在查询后组装列表响应，带上匹配总数和实际页码 | `items: T[], total: number, pagination: PaginationOptions` 当前页数据、匹配的总条数及页码/每页条数 | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
 <a id="reldb-sql-page-options"></a>
 
@@ -328,25 +328,55 @@ getResult.data // null
 
 <a id="pagination-utils"></a>
 
-#### 场景：对已加载的订单独立分页
+#### 场景：订单列表单独查询总数和当前页
 
-列表页收到第 2 页、每页 50 条的请求，页面策略上限为每页 2 条。示例数据是按 ID 排序的 5 条订单。两个函数无需连接数据库，可用于对缓存或内存中的数据分页。
+订单列表要显示每张已支付订单的明细条数。页面查询需要关联明细并逐单汇总，**总数只需要数已支付的订单**。应用自行编写这两条 SQL 时，先用 `normalize()` 计算取数范围，再用 `build()` 把已查到的结果交给前端。如果同一条 SELECT 可以用来计数和取页，直接调用 `reldb.sql.queryPage()`。通过 CRUD 仓库分页时，直接调用 `repository.findPage()`。这两个入口都直接返回分页结果。
+
+列表按订单 ID 排序。测试库有五张已支付订单 `o1` 到 `o5`，`o3` 有两条明细，`o4` 没有明细。列表请求第 2 页、每页 2 张。`orders` 有主键 `id` 和 `status` 列，`order_items` 有主键 `id` 和关联订单的 `order_id` 列。运行前先[初始化数据库](../configuration/reldb.md)。
 
 ```ts
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
-// 规范化页码及每页条数，得到从第 3 条开始取 2 条。
-const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
-pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+async function listPaidOrders(page: number, pageSize: number) {
+  // 根据页面请求计算 SQL 要跳过和最多取出的行数。第 2 页每页 2 张时，offset 和 limit 都是 2。
+  const pagination = reldb.pagination.normalize({ page, pageSize })
+  const status = 'paid'
 
-// 显式截取当前页，再用该页记录、总数和页参数组装返回值。
-const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
-const result = reldb.pagination.build(items, orders.length, pagination)
-result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
+  // 只统计符合条件的订单。测试数据返回 5，查询失败时把错误结果还给调用方。
+  const count = await reldb.sql.get<{ total: number | string }>(
+    'SELECT COUNT(*) AS total FROM orders WHERE status = ?',
+    [status],
+  )
+  if (!count.success)
+    return count
+
+  // 按订单统计明细，并绑定分页范围。没有明细的订单也出现在列表中。
+  const rows = await reldb.sql.query<{ id: string, item_count: number | string }>(`
+    SELECT o.id, COUNT(i.id) AS item_count
+    FROM orders AS o
+    LEFT JOIN order_items AS i ON i.order_id = o.id
+    WHERE o.status = ?
+    GROUP BY o.id
+    ORDER BY o.id
+    LIMIT ? OFFSET ?
+  `, [status, pagination.limit, pagination.offset])
+  if (!rows.success)
+    return rows
+
+  // 用本页数据、全部匹配数和实际页码组装响应。
+  const items = rows.data.map(row => ({ id: row.id, itemCount: Number(row.item_count) }))
+  return core.ok(reldb.pagination.build(items, Number(count.data?.total ?? 0), pagination))
+}
+
+const result = await listPaidOrders(2, 2)
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
+
+result.data // { items: [{ id: 'o3', itemCount: 2 }, { id: 'o4', itemCount: 0 }], total: 5, page: 2, pageSize: 2 }
 ```
 
-`build` 直接使用传入的记录和总数。筛选、排序和截取应在调用前完成。
+在这组数据中，每页返回的 `total` 都是 5，前端可以据此显示一共有 3 页。请求超出末页时，`items` 为空数组，`total` 仍来自总数查询。
 
 <a id="sql-identifiers"></a>
 

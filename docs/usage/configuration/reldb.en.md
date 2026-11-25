@@ -83,8 +83,6 @@ MySQL accepts its own `ssl` object. An empty object enables TLS with certificate
 
 These settings apply to every backend. Enabled operation summaries use `debug` and are filtered by the [Core logging threshold](core.en.md#application-logging).
 
-Remove the legacy `level` field under `operationLog`. If the field refers to an environment variable, remove the YAML reference before deleting the old variable.
-
 | Field | Type | Requirement or default | Meaning |
 | --- | --- | --- | --- |
 | `operationLog` | Object | Optional | Omit it to disable the normal-operation summaries below. |
