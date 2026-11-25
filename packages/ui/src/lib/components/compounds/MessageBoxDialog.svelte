@@ -3,7 +3,7 @@
   单个 MessageBox 弹框，由 MessageBoxContainer 渲染。
   内部使用原生 <dialog>.showModal() 进入浏览器 top layer。
   行为对标 ElementUI MessageBox：
-    - 始终显示标题（默认"提示"）和右上角关闭按钮；
+    - 始终显示标题（默认"提示"），右上角关闭按钮由 showClose 控制；
     - 遮罩层点击可通过 closeOnClickModal 配置。
 
   @example
@@ -69,17 +69,19 @@
         onclick={handleBackdropClick}
 >
   <div class='hai-messagebox__panel'>
-    <!-- 标题栏：始终显示，右侧关闭按钮 -->
+    <!-- 标题栏与可选关闭按钮 -->
     <div class='hai-messagebox__header'>
       <h3 class='font-bold text-lg'>{item.title}</h3>
-      <button
-        type='button'
-        class='hai-messagebox__close'
-        aria-label={uiM('common_close')}
-        onclick={() => messageBox.handleClose(item)}
-      >
-        <span class='icon-[tabler--x] size-5'></span>
-      </button>
+      {#if item.showClose}
+        <button
+          type='button'
+          class='hai-messagebox__close'
+          aria-label={uiM('common_close')}
+          onclick={() => messageBox.handleClose(item)}
+        >
+          <span class='icon-[tabler--x] size-5'></span>
+        </button>
+      {/if}
     </div>
 
     <!-- 图标 + 消息内容同行 -->
