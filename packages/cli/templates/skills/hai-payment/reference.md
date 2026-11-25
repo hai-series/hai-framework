@@ -143,7 +143,7 @@ Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_
 
 接入应用应把“业务订单 pending→paid 的条件更新 + 唯一 eventId 记录 + 唯一履约 outbox”放进共享数据库同一个事务；所有 HaiResult 失败必须抛错使 reldb.tx.wrap 回滚，数据库提交后才应答渠道成功。条件须核对已存渠道、金额、币种和交易号，重复已支付通知或晚到 pending 不重复履约，已退款状态也不能倒退。订单号不得删除后复用，切换商户不能复用旧业务订单命名空间。外部发货等由 outbox 消费者携带稳定 outbox ID 幂等调用，不能在数据库事务中直接调用后宣称跨系统只执行一次。
 
-支付宝用原始表单的 POST 路由，验签后交给业务事务。事务提交或识别出已处理通知时返回 HTTP 200 和纯文本 `success`，验签或业务处理失败时用非 2xx 触发渠道重试。在 `serv.createApp` 的自定义中间件中挂载由 `apiContract.pathOf(apiContract.payment.notifications.alipay)` 取得的路径，并拼上应用 API 前缀。中间件读取一次原始 `c.req.raw.text()` 后调用 `payment.handleNotify('alipay', { body, headers })`。启用了传输加密时，把完整通知路径加入 `transport.excludePaths`，以便接收平台的原始表单并返回纯文本回执。
+支付宝用原始表单的 POST 路由，验签后交给业务事务。事务提交或识别出已处理通知时返回 HTTP 200 和纯文本 `success`，验签或业务处理失败时用非 2xx 触发渠道重试。把支付宝通知的单个操作节点 `apiContract.payment.notifications.alipay` 传给 `apiContract.pathOf`，取得 `/payment/notifications/alipay`。拼上应用 API 前缀后，在 `serv.createApp` 中把中间件挂到该路径。中间件读取一次原始 `c.req.raw.text()` 后调用 `payment.handleNotify('alipay', { body, headers })`。启用了传输加密时，把完整通知路径加入 `transport.excludePaths`，以便接收平台的原始表单并返回纯文本回执。
 
 ### 5. 查询订单
 

@@ -2,11 +2,9 @@
 
 [English](api-contract.en.md) · [日本語](api-contract.ja.md)
 
-通过 `apiContract` 定义前后端共享的 HTTP 方法、路径和参数格式。服务端用这些定义校验请求，并绑定实际处理函数。客户端使用同一份定义获得 TypeScript 类型。
+`apiContract` 用 TypeScript 声明 HTTP 接口的请求方法、路径、输入与输出。用 `route` 定义单个端点，用 `create` 组合应用提供的端点，用 `pathOf` 从端点定义读取路径。应用可以用 Serv 挂载契约，或在 SvelteKit 路由中通过 Kit 复用契约的 Schema。两种服务都可以由同一个 typed client 调用。
 
-组合 HTTP 契约用 `apiContract.create()`。各领域单独导出的 Schema 用于检查特定输入、输出或类型，下面分别注明这些依赖。
-
-[模块 README](../../../packages/api-contract/README.md) · [配置清单](../configuration/api-contract.md) · [数据结构](../data/api-contract.md) · [前后端接入](../development/frontend-backend.md)
+[模块 README](../../../packages/api-contract/README.md) · [配置清单](../configuration/api-contract.md) · [数据结构](../data/api-contract.md)
 
 <a id="quick-start"></a>
 
@@ -18,13 +16,19 @@
 
 | 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
-| `@h-ai/core` | 提供共用的结果和错误结构。 | 随 API Contract 安装。 | 可直接导入契约和 Schema。 |
-| `@h-ai/storage/schemas` | 为文件接口校验对象键、前缀和签名有效期。 | 由随 API Contract 安装的 `@h-ai/storage` 提供。 | 直接导入 Storage 契约即可使用 Schema。启用实际文件路由时由应用初始化 Storage。 |
-| `@orpc/contract`、`zod` | 定义路由契约和校验输入输出。 | 随 API Contract 安装。应用直接导入 Zod 等包时将其列为直接依赖。 | 导入后定义 Schema 和契约。可将组合后的契约交给客户端和服务端。 |
+| `@h-ai/api-contract` | 定义端点并组合领域。 | 契约的编写端与消费端。 | 描述接口后，将契约导出供宿主和客户端使用。 |
+| `zod` | 声明请求与响应 Schema。 | 应用自己定义 Schema 并直接导入 Zod 时。 | 先定义 Schema，再传给 `.input()` 和 `.output()`。 |
+| `@h-ai/serv`、`@h-ai/core` | 在独立 HTTP 服务中挂载端点并返回业务结果。 | 选择 [Serv 接入](#use-with-serv)时。下例的 Serv 处理函数直接导入 Core。 | 先实现契约，再装配应用。处理函数使用的业务模块应先初始化。 |
+| `@h-ai/kit`、SvelteKit | 在 SvelteKit 的 `+server.ts` 中校验请求并返回响应。 | 选择 [Kit 接入](#use-with-kit)时。 | 在已有 SvelteKit 项目内建立目录路由并导入共享 Schema。 |
+| `@h-ai/api-client` | 根据契约推导客户端参数和返回值。 | 选择 [typed client](#use-with-client) 时。 | 先提供可访问的 HTTP 服务，再初始化客户端。调用结束后关闭本次创建的客户端。 |
 
-### 接入示例
+契约包依赖的 oRPC、Core 和 Storage Schema 随包安装。选择 Storage 等内置契约后，只有实际挂载并调用该领域的业务实现才需要相应的模块运行环境。
 
-安装 `@h-ai/api-contract`。下面自定义契约的例子还直接导入了 Zod。
+<a id="接入示例"></a>
+
+### 定义一个可共享的端点
+
+在服务端和客户端都能导入的目录新建 `shared/report-contract.ts`。示例用 `GET /reports/{id}` 查询报告状态，`id` 取自路径，格式为 `r-` 加数字。
 
 ```sh
 pnpm add @h-ai/api-contract zod
@@ -32,330 +36,442 @@ pnpm add @h-ai/api-contract zod
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
-
-// Compose the built-in IAM and storage routers into contract. Passing false omits AI. This only defines the contract.
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: false,
-})
-```
-
-自定义应用 contract 也从本包定义路由，不依赖 `@h-ai/serv`：
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
-export const appContract = {
-  ping: apiContract
-    // Describe POST /app/ping with operation ID app.ping and the app tag. This returns a route builder.
-    .route({
-      method: 'POST',
-      path: '/app/ping',
-      operationId: 'app.ping',
-      tags: ['app']
-    })
-    // Use a boolean pong schema as the success data. The output builder also includes the HaiResult failure shape.
-    .output(apiContract.haiResultSchema(z.object({
-      pong: z.boolean()
-    }))),
-}
+export const ReportIdSchema = z.object({ id: z.string().regex(/^r-[0-9]+$/) })
+export const ReportDataSchema = z.object({ id: z.string(), state: z.enum(['pending', 'ready']) })
+
+// data 使用报告 Schema，失败分支携带标准 error。
+export const ReportResultSchema = apiContract.haiResultSchema(ReportDataSchema)
+
+// 声明 GET /reports/{id}，输入从路径参数取得，输出符合报告结果结构。
+const get = apiContract.route({
+  method: 'GET',
+  path: '/reports/{id}',
+  operationId: 'reports.get',
+  tags: ['reports'],
+}).input(ReportIdSchema).output(ReportResultSchema)
+
+export const reportRoutes = { get }
 ```
+
+此时已得到一个路由组和可分别导入的 Schema。接下来[组合应用契约](#compose-domains)，再选择一种服务端接入方式。本页的测试数据固定为 `r-42`（报告就绪）、`r-99`（编号有效但查不到报告）和 `invalid`（编号格式无效）。
 
 <a id="api-reference"></a>
 
 ## 功能说明
 
 <a id="routes"></a>
+<a id="declare-routes"></a>
+<a id="定义与组合-http-契约apicontract"></a>
 
-### 定义与组合 HTTP 契约：`apiContract`
+### 声明单个 HTTP 端点：`apiContract.route(route)`
 
-契约描述路径、输入和输出，不会发送请求；同一份契约交给服务端实现和客户端调用。
+把 HTTP 元数据、请求 Schema 和响应 Schema 定义在一起。示例的 `reportRoutes.get` 是单个端点定义。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.create(options)` | 组合应用接口 | `options: CreateApiContractOptions` 必填。对象键是业务域名称，值为契约 router；用 `false` 或 `undefined` 跳过该域。 见[契约与路由字段](#contract-route-options)。 | `{ iam: IamContract }` | `apiContract.create({ iam: apiContract.iam, payment: false })` |
-| `apiContract.route(route)` | 声明 HTTP 接口 | `route: Route` 必填。声明 HTTP 接口时用 `method` 指定方法、`path` 指定以 `/` 开头的业务路径；可加 `summary`、`description`、`tags` 等 OpenAPI 元数据。 见[契约与路由字段](#contract-route-options)。 | `ContractProcedureBuilder` | `apiContract.route({ method: "GET", path: "/status" })` |
-| `apiContract.pathOf(procedure)` | 取唯一业务路径 | `procedure: AnyContractProcedure` 必填，传入声明了 HTTP 路径的 procedure。 | `string: "/auth/login"` | `apiContract.pathOf(apiContract.iam.auth.login)` |
+| `apiContract.route(route)` | 创建端点构造器。 | 必填 `route: Route`，各字段见下表。 | oRPC contract procedure builder，可继续链式添加 Schema。 | `apiContract.route({ method: 'GET', path: '/reports/{id}' })` |
+| `builder.input(schema)` | 声明端点接收什么。 | 必填 `schema`，例如检查路径参数的 `ReportIdSchema`。省略整次调用则没有输入 Schema。 | 包含输入 Schema 的构造器。 | `builder.input(ReportIdSchema)` |
+| `builder.output(schema)` | 声明端点返回什么。 | 必填 `schema`，例如 `ReportResultSchema`。 | 包含输出 Schema 的端点定义，可放入路由组。 | `builder.output(ReportResultSchema)` |
 
 <a id="contract-route-options"></a>
+<a id="契约与路由字段"></a>
 
-##### 契约与路由字段
+##### HTTP 路由字段
 
-这些选项定义契约和 HTTP 映射。示例把 `{ status, iam: apiContract.iam, payment: false }` 组合成只含 `status` 与 `iam` 的对象，并读取路径 `/auth/login`。
-
-| 字段 | 默认值或必填 | 作用与生效条件 |
+| 字段 | 类型、默认值或必填条件 | 接入效果 |
 | --- | --- | --- |
-| `options[domain]` | 必填对象；域可省略 | 键是业务域名，值是契约 router 或 procedure。固定启用的具名领域为必填，固定禁用的领域被排除，条件启用的领域为可选。运行时仅包含已启用的领域。 |
-| `route.method / route.path` | 可填；建议显式声明 HTTP 入口 | `method` 是 HTTP 方法，`path` 是以 `/` 开头的路径。`pathOf` 要求已声明路径。 |
-| `route.operationId` | 默认由 router 路径段连接而成 | 覆盖 OpenAPI 操作标识。 |
-| `route.summary / route.description / route.deprecated / route.tags` | 可省略 | OpenAPI 的摘要、说明、弃用标记和分类标签。 |
-| `route.successStatus / route.successDescription` | `200` / `OK` | 成功响应的状态和说明，状态码范围 200–399。 |
-| `route.inputStructure` | `compact` | `compact` 合并路径参数与查询或正文。`detailed` 分开提供 `params`、`query`、`headers`、`body`。 |
-| `route.outputStructure` | `compact` | `compact` 将返回值直接当响应正文。`detailed` 支持 `status`、`headers`、`body`，省略 `status` 时使用 `successStatus`。 |
-| `route.spec` | 可省略，默认自动生成 | 可传 OpenAPI Operation Object，或接收当前 operation 并返回新对象的函数。 |
+| `method` | `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE`；oRPC 默认 `POST`。 | 决定请求方法，影响 compact 输入从查询参数还是正文提取数据。 |
+| `path` | 以 `/` 开头的业务路径；可省略。使用 `pathOf` 时必须显式声明。 | `/reports/{id}` 表示带 `id` 参数的路径模板。API 前缀由应用挂载时设置。 |
+| `operationId` | 字符串；默认由路由树中的键构成。 | 指定 OpenAPI 操作标识，例如 `reports.get`。 |
+| `summary`、`description` | 可选字符串。 | 提供端点简述和详细行为。 |
+| `tags`、`deprecated` | 可选字符串数组、可选布尔值。 | 为 OpenAPI 界面分组，或标记弃用。 |
+| `successStatus`、`successDescription` | 成功状态范围 `200–399`，默认 `200`；说明默认 `OK`。 | 设置成功响应的 HTTP 状态及其在 OpenAPI 中的说明。 |
+| `inputStructure` | 默认 `compact`，也可选 `detailed`。 | `compact` 合并路径参数与查询或正文。若 Schema 需要分别读取 `params`、`query`、`headers`、`body`，使用 `detailed`。 |
+| `outputStructure` | 默认 `compact`，也可选 `detailed`。 | `compact` 直接使用返回值作为正文。`detailed` 支持分开设置 `status`、`headers`、`body`，省略 `status` 时采用 `successStatus`。 |
+| `spec` | 可选 OpenAPI Operation Object 或回调。 | 对象替换整个生成操作。回调接收生成操作，可保留参数和响应 Schema 并仅补充所需字段。 |
 
-#### 场景：定义与组合 HTTP 契约
+<a id="场景定义与组合-http-契约"></a>
 
-契约对象本身不监听端口。下图按职责展示路由、Schema、服务端实现和 typed 客户端之间的关系。
+#### 场景：核对报告端点的输入与输出
 
-![同一份契约怎样连接前后端](../images/function-api-contract-boundaries.svg)
+最小接入中的 `get` 用默认 compact 结构。Serv 处理函数和 typed client 使用 `{ id: 'r-42' }`，SvelteKit 处理函数直接校验 `params`。输入不符合 `ReportIdSchema` 时，服务应在业务查询前拒绝。找到报告后，JSON 正文为 `{ "success": true, "data": { "id": "r-42", "state": "ready" } }`。找不到报告时，业务失败分支携带 `error`。
 
-修改同一份输入/输出定义后，服务端实现和客户端类型都据此检查。真正的身份验证、资源授权和业务副作用由服务端完成；构造契约或在浏览器通过 Schema 校验，都不能代替这些步骤。
+<a id="compose-domains"></a>
+
+### 组合应用契约：`apiContract.create(options)`
+
+给应用要公开的路由组分配名称。`reports` 对应 `contract.reports.get` 和 `client.reports.get()`。HTTP 路径仍来自各端点声明。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.create(options)` | 从选定的端点和路由组构建应用契约。 | 必填 `options: CreateApiContractOptions`，各键值见下表。 | `CreatedApiContract<typeof options>`，包含启用的键。 | `apiContract.create({ reports: reportRoutes })` |
+
+##### 组合选项
+
+| 输入 | 类型与默认值 | 返回对象中的值 |
+| --- | --- | --- |
+| `options` | 必填对象。可用空对象创建空契约。 | 新的应用路由树。 |
+| `options[domain]` | 键是应用选定的名称，值是已有路由组或单个端点。 | 以原键保留该路由组或端点。 |
+| `options[domain]` 为 `false`、`undefined`，或省略该键 | 用于关闭领域。 | 运行时省略该键。确定关闭时类型也省略；条件启用时该键在类型中为可选。 |
+
+#### 场景：为报告服务组合应用契约
+
+在 `shared/app-contract.ts` 中导入上一步的 `reportRoutes`。同一文件供 Serv 挂载和客户端推导使用。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
-import { z } from 'zod'
-// Create a route builder for GET /status. No handler runs while defining the route.
-const status = apiContract.route({ method: 'GET', path: '/status' })
-  // Set the output to HaiResult with a boolean ready field. Success data has ready and failures use the error shape.
-  .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() })))
-// Compose the local status route with IAM. Passing false leaves payment out.
-const contract = apiContract.create({ status, iam: apiContract.iam, payment: false })
-// Read the relative path of the built-in login procedure. It yields /auth/login.
-apiContract.pathOf(apiContract.iam.auth.login) // '/auth/login'
-// contract includes status and iam; payment is omitted
+import { reportRoutes } from './report-contract.js'
+
+// 以 reports 为键保存报告路由组。查询端点是 contract.reports.get。
+export const contract = apiContract.create({ reports: reportRoutes })
 ```
 
-输入为 GET /status 的构造器和要启用的模块。输出仍是契约对象，不是已监听的 HTTP 服务；服务接入见 Serv/Kit。
-
-本包声明接口和校验结构，不发送请求，也没有 init/close。表中 Schema 是校验器本身；调用 safeParse 后检查其 success。业务响应中的 HaiResult.success 与校验器的 success 属于不同层，不能混用。路由的输入/输出 Schema 由应用挂载到 Serv 或客户端后实际使用。
-
-- 普通 JSON 业务接口使用 `HaiResult<T>`。支付宝异步通知按渠道协议返回 HTTP 200 和纯文本 `success`，接入见[支付宝通知回执](./payment.md#alipay-notification-ack)。
-- IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
-- IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
-
-支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../../../packages/payment/README.md)。
-
-用户列表支持 `sortBy`（username/email/displayName/accountStatus/createdAt）和 `sortDirection`（asc/desc），供列头排序在分页前执行。
-
+<a id="场景按配置启用可选领域"></a>
 <a id="conditional-domains"></a>
 
-#### 场景：按配置启用可选领域
+#### 场景：按配置启用支付领域
 
-应用启动时从自己的配置读取支付开关。用 `satisfies` 保留具体域名与条件类型。支付关闭时 `contract.payment` 为 `undefined`，客户端同名域也为 `undefined`，可用 `?.` 访问。
+应用从自己的配置取得 `enablePayment`。使用 `satisfies` 检查组合输入并保留具体的领域键。假如提前将变量标注为宽索引 `CreateApiContractOptions`，TypeScript 无法按具体键推导哪些域可选。
 
 ```ts
 import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+import { reportRoutes } from './report-contract.js'
 
-function buildContract(enablePayment: boolean) {
-  const domains = {
-    iam: apiContract.iam,
+export function buildContract(enablePayment: boolean) {
+  const options = {
+    reports: reportRoutes,
     payment: enablePayment ? apiContract.payment : false,
   } satisfies CreateApiContractOptions
-  // 固定启用 IAM，按开关决定是否包含支付领域。
-  const contract = apiContract.create(domains)
-  const get = contract.payment?.orders.get
-  // 启用时返回订单查询业务路径，关闭时返回 undefined。
-  const queryPath = get ? apiContract.pathOf(get) : undefined
-  return { contract, queryPath }
+
+  // reports 始终存在。启用支付时保留 payment，否则省略。
+  return apiContract.create(options)
 }
 ```
 
-#### 场景：把同一份契约交给服务端与客户端
+调用方用 `contract.payment?.orders.get` 访问可选的端点定义。Serv 按同一开关选入对应的处理函数，客户端也会在领域关闭时读到 `client.payment === undefined`。
 
-独立 contract 包构建声明文件时，`ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput` 和 `Schema` 由本包按上游真实类型公开转出，保持自定义路由的输入输出推导。需要显式类型时从 `@h-ai/api-contract` 使用 `import type`，不要引用依赖的内部安装路径。
+<a id="read-route-path"></a>
+
+### 从端点定义读取路径：`apiContract.pathOf(procedure)`
+
+中间件、普通 Fetch 调用与测试可从契约读取路径模板。这里的 `procedure` 指路由树的**叶节点**，例如 `reportRoutes.get`、`contract.reports.get` 或 `apiContract.iam.auth.login`。它来自 `apiContract.route(...).input(...).output(...)`，或来自已经声明好的内置领域。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.pathOf(procedure)` | 读取端点声明的业务路径。 | 必填 `procedure: AnyContractProcedure`，传已声明 `path` 的单个端点。已知端点对象可直接传入，显式标注时可用 `Parameters<typeof apiContract.pathOf>[0]`。 | 返回以 `/` 开头的模板；端点省略 `path` 时抛出 `Error`。 | `apiContract.pathOf(reportRoutes.get)` 得到 `/reports/{id}`。 |
+
+#### 场景：生成报告链接
+
+应用已有 API 前缀 `/api/v1` 和经过校验的报告编号 `r-42`。传给 `pathOf` 的是 `contract.reports.get` 本身。路由组 `contract.reports` 包含多个定义，服务端处理函数和 `client.reports.get` 则负责执行或调用端点。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
+import { contract } from './app-contract.js'
 
-// Combine the selected built-in routers and return the app contract. This does not start their services.
-const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
-
-myContract.iam.auth.login
-myContract.storage.presignedUrls.createUpload
-myContract.ai.chats.createCompletion
+// 从单个端点取出 /reports/{id}。参数占位符和 API 前缀由使用方处理。
+const template = apiContract.pathOf(contract.reports.get)
+const reportUrl = '/api/v1' + template.replace('{id}', encodeURIComponent('r-42'))
+// reportUrl 是 /api/v1/reports/r-42。
 ```
 
-`ai.chats.createCompletion` 为 `POST /ai/chats/completions`，只返回非流式 `HaiResult<AiChatCompletionData>`；输入严格拒绝 `stream` 等未声明字段。function 工具保留完整嵌套 JSON Schema 和 `strict`，工具选择支持 `auto` / `none` / `required` / 已提供的函数名。消息按角色校验：system/assistant/tool 接收文本，user 另支持图片；工具结果必填非空 `tool_call_id`，助手必须包含内容或 `tool_calls`。默认工具调用由业务方授权与执行，流式能力由应用定义独立契约。
+读取内置路径时同样传单个端点，例如 `apiContract.pathOf(apiContract.iam.auth.login)` 得到 `/auth/login`。typed client 会根据输入组装参数，直接调用 `client.reports.get({ id: 'r-42' })` 即可。
 
-客户端通过 [API Client](api-client.md#quick-start) 调用同一份契约推导出的嵌套方法。
+<a id="场景把同一份契约交给服务端与客户端"></a>
+<a id="use-with-serv"></a>
 
-服务端为每个公开路由实现处理函数，再将契约和实现一起交给 `@h-ai/serv`。下面不启动监听，用 `app.request()` 请求本地应用验证结果：
+### 在独立服务中挂载契约：`@h-ai/serv`
+
+Serv 消费完整的契约和处理函数。在只读查询中，输入先按契约解析，处理函数返回约定的业务结果。服务端负责权限与数据访问。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `serv.implement(contract)` | 开始实现路由树。 | 必填 `contract`，传 `apiContract.create` 的结果。 | 可注册处理函数的构造器。 | `serv.implement(contract).context<ServContext>()` |
+| `builder.route(path, handler)` | 将端点键绑定到业务处理函数。 | 必填 `path` 为路由树中的键路径，例如 `reports.get`；必填 `handler` 接收校验后的 `input`。 | 继续注册其余端点；全部注册后可 `.build()`。 | `builder.route('reports.get', handler)` |
+| `serv.createApp(options)` | 将 HTTP 路径挂载到应用。 | 示例提供 `contract`、`procedures` 与 `http.apiPrefix`。 | HTTP 应用；组装缺失或不兼容时可能抛错。 | `serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1' } })` |
+
+#### 场景：在 Serv 中查询报告
+
+另安装 `@h-ai/serv` 与 `@h-ai/core`。处理函数中的 `reports.get` 是契约键路径，HTTP 请求则使用 `/api/v1/reports/r-42`。下图将共享声明、服务端执行和客户端调用分开，下面用进程内请求走通成功路径。
+
+![共享契约如何连接服务端处理函数和客户端](../images/function-api-contract-boundaries.svg)
+
+```sh
+pnpm add @h-ai/serv @h-ai/core
+```
 
 ```ts
-
-import { apiContract } from '@h-ai/api-contract'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { type ServContext, serv } from '@h-ai/serv'
-import { z } from 'zod'
+import { contract } from './shared/app-contract.js'
+import { ReportResultSchema } from './shared/report-contract.js'
 
-const contract = {
-  // Identify the app's GET /ping route. This only prepares the route definition.
-  ping: apiContract.route({ method: 'GET', path: '/ping' })
-    // Describe its output as HaiResult containing a boolean ready. The failure variant remains available.
-    .output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))),
-}
-// Start mapping the local contract and type each handler's context as ServContext.
+// 绑定 reports.get。有效输入由契约先校验，查不到记录时返回业务错误。
 const procedures = serv.implement(contract).context<ServContext>()
-  // Map ping to a handler that returns success data { ready: true }.
-  .route('ping', () => core.ok({ ready: true }))
-  // Finish the procedure map so createApp can bind it to the contract.
+  .route('reports.get', ({ input }) => input.id === 'r-42'
+    ? core.ok({ id: input.id, state: 'ready' as const })
+    : core.err(HaiCommonError.NOT_FOUND, 'Report not found'))
   .build()
-// Assemble contract and procedures under /api/v1. Incompatible app setup can fail.
+
+// 在 /api/v1 下挂载契约与处理函数，返回可直接接收请求的应用。
 const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1' } })
-// Send GET /api/v1/ping through the app and expect its successful HTTP response with ready data.
-const response = await app.request('/api/v1/ping')
-const body = await response.json() // { success: true, data: { ready: true } }
+
+// 进程内发送 GET 请求。先确认 HTTP 结果，再检查解码后的业务结果。
+const response = await app.request('/api/v1/reports/r-42')
+if (!response.ok)
+  throw new Error(`HTTP ${response.status}`)
+const result = ReportResultSchema.parse(await response.json())
+if (!result.success)
+  throw new Error(result.error.message)
+console.info(result.data.state) // ready
 ```
 
+换成 `r-99` 时，处理函数返回失败 `HaiResult`。Serv 的普通契约端点可用 HTTP 200 传递业务失败，调用方仍需检查 `success`。若换成 `invalid`，输入校验先返回 HTTP 400。此示例未创建监听端口。需要让其他进程发起 HTTP 请求时，按 [Serv 启动 HTTP 服务](serv.md#http-app)接入。
+
+<a id="场景把-iam-契约接入-serv"></a>
 <a id="serv-iam-wiring"></a>
 
-#### 场景：把 IAM 契约接入 Serv
+#### 场景：在同一 Serv 应用挂载 IAM
 
-宿主初始化 IAM 和所需依赖后，使用同一个 IAM 实例创建 procedure 并配置 `serv.createApp`。前一处提供业务处理函数，后一处让 Serv 验证 Bearer 令牌并为认证守卫填充会话。
+宿主先初始化 IAM 与其依赖。将同一个 IAM 实例交给端点实现和 Serv 应用，后者在受保护的请求中验证 Bearer 令牌并提供会话信息。
 
 ```ts
-import type { IamFunctions } from '@h-ai/iam'
 import { apiContract } from '@h-ai/api-contract'
+import type { IamFunctions } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 
-function mountIamApi(iam: IamFunctions) {
+export function mountIam(iam: IamFunctions) {
+  // 选入标准 IAM 端点，并将其交给负责同一会话的业务实现。
   const contract = apiContract.create({ iam: apiContract.iam })
   const procedures = { iam: serv.createIamProcedures({ iam }) }
-  // 使用初始化后的 IAM 装配 /api/v1 下的接口，返回可处理请求的 HTTP 应用。
+  // 使用初始化完毕的 IAM 验证请求身份，路由挂载到 /api/v1。
   return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
 }
 ```
 
-用测试账号登录后，把返回的访问令牌以 `Authorization: Bearer <accessToken>` 发送到 `GET /api/v1/auth/me`。有效会话得到 `success: true` 及用户资料、角色和权限。省略令牌时，该接口返回未认证的失败结果。
+生成的 OpenAPI 对登录、公开配置、验证码、注册、密码恢复与凭据刷新等无需 access Bearer 的 IAM 操作声明 `security: []`。这些操作仍按各自策略核对输入或凭据。访问受保护的 `GET /api/v1/auth/me` 时，携带已登录取得的 access token。
 
-OpenAPI 为公开 IAM 入口声明 `security: []`。这些入口包括 `createCaptcha`、`publicConfig`、`renewPassword`、`loginWithLdap`、`requestPasswordReset`、`confirmPasswordReset`、`login`、`loginWithOtp`、`refresh`、`sendOtp` 和 `register`。它们可在没有 Bearer 令牌的情况下调用，各自按服务端的策略校验输入或凭据。`currentUser` 等受保护的操作沿用服务的 Bearer 要求。
+<a id="use-with-kit"></a>
 
+### 在 SvelteKit 路由中复用 Schema：`@h-ai/kit`
+
+SvelteKit 通过目录、路径参数目录名和 HTTP 方法导出挂载端点。Kit 处理函数从契约模块导入共享 Schema，分别校验请求和组织响应。应用负责让目录路由匹配契约中的方法和路径。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `kit.handler(fn)` | 包装 `+server.ts` 的请求处理函数。 | 必填 `fn`，接收 SvelteKit 请求事件，返回 `Response` 或 `Promise<Response>`。 | 可作为 `GET`、`POST` 等导出的请求处理函数。 | `export const GET = kit.handler(fn)` |
+| `kit.validate.params(params, schema)` | 校验 SvelteKit 提供的路径参数。 | 必填 `params` 与路径参数 Schema。 | 返回校验后的参数；校验不通过抛 HTTP 400 响应，由 `kit.handler` 返回。 | `kit.validate.params(params, ReportIdSchema)` |
+| `kit.response.ok(data, requestId?)` | 返回标准 JSON 成功响应。 | 必填 `data`，可提供本次请求的 ID。 | HTTP 200 `Response`，正文含 `success: true` 和 `data`。 | `kit.response.ok(report)` |
+| `kit.response.notFound(message?, requestId?)` | 表示资源不存在。 | 可选用户提示和请求 ID。默认消息由 Kit 提供。 | HTTP 404 `Response`，正文含 `success: false` 和 `error`。 | `kit.response.notFound()` |
+
+#### 场景：在 SvelteKit 中提供同一个报告端点
+
+在既有 SvelteKit 项目安装 `@h-ai/kit`。把 `report-contract.ts` 放在 `src/lib/shared/`，在 `src/routes/api/v1/reports/[id]/+server.ts` 建立下列处理函数。`[id]` 对应契约的 `{id}`，导出的 `GET` 对应 `method: 'GET'`。
+
+```sh
+pnpm add @h-ai/kit
+```
+
+```ts
+import { kit } from '@h-ai/kit'
+import { ReportDataSchema, ReportIdSchema } from '$lib/shared/report-contract.js'
+
+export const GET = kit.handler(({ params }) => {
+  // 使用和契约相同的 Schema 校验 id。非 r-数字的参数由 Kit 返回 HTTP 400。
+  const { id } = kit.validate.params(params, ReportIdSchema)
+  if (id !== 'r-42')
+    return kit.response.notFound()
+
+  // 按共享成功数据结构组织正文，再返回 HTTP 200。
+  const report = ReportDataSchema.parse({ id, state: 'ready' })
+  return kit.response.ok(report)
+})
+```
+
+访问 `/api/v1/reports/r-42` 得到与 Serv 相同的成功正文。有效但不存在的 `r-99` 在此实现中返回 HTTP 404，错误仍使用 `HaiResult` 结构。Kit 复用共享 Schema；从契约自动挂载路由与生成 OpenAPI 的方式见 [Serv 接入](#use-with-serv)。更多请求校验和响应操作见 [Kit 功能说明](kit.md#api-reference)。
+
+<a id="use-with-client"></a>
+
+### 按契约推导调用：`@h-ai/api-client`
+
+安装 `@h-ai/api-client`，导入服务端和测试共用的 `contract`。Serv 或 Kit 只要提供匹配的 HTTP 方法、路径和正文，均可使用相同客户端调用。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.create(contract)` | 创建独立 typed client。 | 必填 `contract` 即应用契约。 | 按契约键和 Schema 推导出的方法及生命周期。 | `apiClient.create(contract)` |
+| `client.init(config)` | 配置 HTTP 服务地址。 | 示例传 `baseUrl`，其中已含 `/api/v1`。 | `HaiResult<void>`；成功后可调用接口。 | `client.init({ baseUrl })` |
+| `client.reports.get(input)` | 发送报告查询。 | 必填 `input.id`，使用契约声明的输入结构。 | `Promise<HaiResult<ReportData>>`，业务和客户端失败均可检查。 | `client.reports.get({ id: 'r-42' })` |
+| `client.close()` | 释放当前客户端运行状态。 | 无参数。 | `Promise<void>`。 | `await client.close()` |
+
+#### 场景：读取报告状态
+
+将已启动的本地 Serv 或 SvelteKit 服务传给 `readReport`。例如服务监听 `http://127.0.0.1:3000` 时，传入 `http://127.0.0.1:3000/api/v1`。浏览器同源部署时可用 `/api/v1`。
+
+```sh
+pnpm add @h-ai/api-client
+```
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { contract } from './shared/app-contract.js'
+
+export async function readReport(baseUrl: string, id: string) {
+  // 在独立实例中使用共享契约，并把前缀随 baseUrl 一起配置。
+  const client = apiClient.create(contract)
+  const initialized = await client.init({ baseUrl })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+
+  try {
+    // id 会填入 /reports/{id}。分别处理查询成功和业务或传输失败。
+    const result = await client.reports.get({ id })
+    if (!result.success)
+      return { message: result.error.message }
+    return { state: result.data.state }
+  }
+  finally {
+    await client.close()
+  }
+}
+```
+
+传 `r-42` 得到 `{ state: 'ready' }`。传 `r-99` 得到可显示的失败消息。HTTP 状态和业务 `success` 分别由宿主与结果结构表达。浏览器凭据、独立 SSR 实例和自定义响应的处理见 [API Client 功能说明](api-client.md#api-reference)。如果使用 Kit 的浏览器 `apiFetch`，则传拼好的 HTTP 路径，并用共享 `ReportResultSchema.safeParse` 检查读到的 JSON。
+
+<a id="校验结果与分页apicontractschema"></a>
 <a id="response-schemas"></a>
 
-### 校验结果与分页：`apiContract.*Schema`
+### 复用结果、分页与通用 Schema
 
-区分结构校验是否成功与业务结果是否成功；Schema 的 safeParse.success 不代表业务成功。
+业务接口可以复用通用包络和分页字段，再单独定义领域数据。Schema 的 `safeParse().success` 表示结构校验结果，业务 `success` 位于校验成功后取得的业务对象中。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.haiResultSchema(dataSchema)` | 校验成功或失败结果 | `dataSchema` 必填，传成功分支 `data` 的 Zod Schema。 | `ZodSchema<HaiResult<string>>` | `apiContract.haiResultSchema(z.string())` |
-| `apiContract.voidResultSchema` | 校验无业务数据的结果 | Schema 常量。示例用 `safeParse(input)` 校验无业务数据的结果。 | `ZodSchema<HaiResult<void>>` | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
-| `apiContract.paginatedSchema(itemSchema)` | 校验分页列表 | `itemSchema` 必填，传分页 `items` 数组中单条记录的 Zod Schema。 | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))` |
+| `apiContract.haiResultSchema(dataSchema)` | 为业务数据添加成功和失败分支。 | 必填 `dataSchema`，只描述成功分支的 `data`。 | 区分 `success: true` 与 `success: false` 的 Zod Schema。 | `apiContract.haiResultSchema(ReportDataSchema)` |
+| `apiContract.voidResultSchema` | 表达成功但无需返回数据的业务操作。 | 直接校验 JavaScript 成功对象时传 `data: undefined`；序列化成 HTTP JSON 时会省略该字段。 | `HaiResult<void>` 的 Schema。 | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
+| `apiContract.paginatedSchema(itemSchema)` | 声明列表和页信息。 | 必填 `itemSchema`，描述 `items` 中的一条记录。 | 含 `items`、`total`、`page`、`pageSize` 的 Schema。 | `apiContract.paginatedSchema(ReportDataSchema)` |
+| `PaginationQuerySchema` | 检查分页请求。 | 根包命名导出。可选 `page` 为大于等于 1 的整数，`pageSize` 为 1–100 的整数。数字字符串会转为数值。 | 省略字段时由业务服务选择默认值。 | `PaginationQuerySchema.safeParse({ page: '1', pageSize: '20' })` |
+| `IdParamSchema` | 检查通用路径编号。 | 根包命名导出。必填 `id` 为非空字符串。 | 带 `id` 的对象 Schema。 | `IdParamSchema.safeParse({ id: 'r-42' })` |
+| `HaiErrorSchema` | 校验公开错误数据。 | 根包命名导出。必填 `code` 与 `message`，其他字段见数据页。 | 失败分支 `error` 的 Schema。 | `HaiErrorSchema.safeParse({ code: 'reports:missing', message: 'Report not found' })` |
 
-#### 场景：校验结果与分页
+<a id="场景校验结果与分页"></a>
+
+#### 场景：校验报告列表响应
+
+应用从 HTTP 响应取得原始 JSON。单条报告沿用 `ReportDataSchema`，分页数据交给 `paginatedSchema`，完整响应再加业务包络。
 
 ```ts
-import { z } from 'zod'
+import { apiContract, PaginationQuerySchema } from '@h-ai/api-contract'
+import { ReportDataSchema } from './report-contract.js'
 
-// Build a result schema whose success data is a string. Its failure variant carries HaiError.
-const stringResult = apiContract.haiResultSchema(z.string())
-// Validate a ready success envelope. checked.success is true and checked.data contains that envelope.
-const checked = stringResult.safeParse({ success: true, data: 'ready' })
-// checked.success === true; checked.data is HaiResult<string>
-// Validate success with undefined data. This is valid for the void result schema.
-apiContract.voidResultSchema.safeParse({ success: true, data: undefined }).success // true
-// Build a paginated schema whose items each have a string id.
-const pageSchema = apiContract.paginatedSchema(z.object({ id: z.string() }))
-// Validate page 1 of one order at page size 20. The record fits the schema, so success is true.
-pageSchema.safeParse({ items: [{ id: 'o1' }], total: 1, page: 1, pageSize: 20 }).success // true
-// A numeric success value is invalid for the string schema, so success is false.
-stringResult.safeParse({ success: true, data: 42 }).success // false
+// 检查 URL 查询值；成功后 page 和 pageSize 为数字，服务可用于计算分页。
+const query = PaginationQuerySchema.safeParse({ page: '1', pageSize: '20' })
+if (!query.success)
+  throw query.error
+
+// 组合单条记录、页信息和业务包络。先检查结构，再检查业务结果。
+const responseSchema = apiContract.haiResultSchema(apiContract.paginatedSchema(ReportDataSchema))
+const parsed = responseSchema.safeParse({
+  success: true,
+  data: {
+    items: [{ id: 'r-42', state: 'ready' }],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  },
+})
+if (!parsed.success)
+  throw parsed.error
+if (!parsed.data.success)
+  throw new Error(parsed.data.error.message)
+console.info(parsed.data.data.total) // 1
 ```
 
-输入分别是字符串结果、无数据结果、订单页和错误类型的成功数据；输出是校验层的成功/失败，不能跳过内层业务 HaiResult.success。
+把示例中的 `items[0].state` 改成数字会使结构校验失败。合法的业务失败也能通过结构校验，随后由 `parsed.data.success` 识别。数据字段详见[数据结构](../data/api-contract.md#response-data)。
 
+<a id="选择标准业务接口apicontract"></a>
 <a id="domains"></a>
 
-### 选择标准业务接口：`apiContract`
+### 选用标准领域契约
 
-按应用实际能力组合标准业务领域；启用声明后仍需接入服务、身份和资源权限检查。
+从根入口选择已有路由组。接口所需的业务配置、授权规则及持久化由对应领域负责。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `apiContract.iam` | 认证与账号接口 | `—` | `iam contract router` | `apiContract.create({ iam: apiContract.iam })` |
-| `apiContract.storage` | 文件接口 | `—` | `storage contract router` | `apiContract.create({ storage: apiContract.storage })` |
-| `apiContract.ai` | AI 接口 | `—` | `ai contract router` | `apiContract.create({ ai: apiContract.ai })` |
-| `apiContract.payment` | 支付接口 | `—` | `payment contract router` | `apiContract.create({ payment: apiContract.payment })` |
-| `apiContract.feedback` | 反馈接口 | `—` | `feedback contract router` | `apiContract.create({ feedback: apiContract.feedback })` |
+| `apiContract.iam` | 认证、用户、角色和权限。 | 属性，无参数。 | IAM 路由组。 | `apiContract.iam.auth.login` |
+| `apiContract.storage` | 预签名地址、对象列表、元数据和删除。 | 属性，无参数。 | Storage 路由组。 | `apiContract.storage.presignedUrls.createUpload` |
+| `apiContract.ai` | JSON 聊天补全、消息、记忆与会话。 | 属性，无参数。 | AI 路由组。 | `apiContract.ai.chats.createCompletion` |
+| `apiContract.payment` | 订单与渠道通知。 | 属性，无参数。 | Payment 路由组。 | `apiContract.payment.orders.create` |
+| `apiContract.feedback` | 提交、查询、采集证据、附件和导出反馈。 | 属性，无参数。 | Feedback 路由组。 | `apiContract.feedback.reports.listMine` |
 
-##### 存储接口的输入约束
+<a id="场景选择标准业务接口"></a>
+<a id="场景由公开策略组织认证页面"></a>
+<a id="场景声明交互挑战"></a>
+<a id="场景在页面离开时关闭会话"></a>
+<a id="存储接口的输入约束"></a>
+<a id="场景接入反馈路由与校验输入"></a>
 
-对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
+#### 场景：选择领域与处理方式
 
-#### 场景：选择标准业务接口
+- **IAM**。登录表单从 `auth.publicConfig` 读公开策略，从各登录、验证码和找回密码接口执行操作。受保护访问见 [IAM 接入](#serv-iam-wiring)。[IAM 功能说明](iam.md#api-reference)
+- **Storage**。为上传选择预签名端点，为列表和元数据选择文件端点。对象键、前缀、删除与过期规则由 Storage 规定。[存储输入约束](storage.md#存储输入约束与跨端能力)
+- **AI**。`ai.chats.createCompletion` 返回非流式 JSON 结果。需要流时，应用为流声明独立端点。[AI 功能说明](ai.md#api-reference)
+- **Payment**。应用按服务端支持的渠道创建或查询订单。支付宝通知按渠道要求成功返回 HTTP 200 和纯文本 `success`。[支付宝通知回执](payment.md#alipay-notification-ack)
+- **Feedback**。普通用户通过 `reports.listMine` 读取自己的报告，管理端通过 `reports.list` 读取有权限的报告，`reports.policy` 返回当前有效容量。追加证据后按确认的修订号推进，导出读取指定修订。[反馈功能说明](feedback.md#api-reference)
 
-```ts
-// Compose the five supplied module routers into a new standard contract. No routes execute during assembly.
-const standard = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-  payment: apiContract.payment,
-  feedback: apiContract.feedback,
-})
-// standard has these five routers; no business operation runs during composition
-```
+<a id="feedback-budget"></a>
 
-输入为五个已有路由定义，输出为包含这些领域的路由树。下面按认证、挑战、反馈和页面离开场景说明真实 HTTP 边界。
+### 计算反馈容量：`apiContract.resolveFeedbackBudget(input?)`
 
-#### 场景：由公开策略组织认证页面
+用同一组配置为客户端反馈采集、服务端上传以及离线包计算预算。参数均按未压缩字节计算，证据条数除外。
 
-密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
+#### 接口清单
 
-服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.resolveFeedbackBudget(input?)` | 从反馈配置计算有效容量。 | 可选 `input`，默认使用 32 MiB 总量、5 MiB 单附件、4 MiB 单证据、2,000 条证据，实际单项会受总量限制。 | `FeedbackBudget`，输入导致预算超出范围时抛 Schema 校验错误。 | `apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })` |
 
-标准 IAM contract 新增 GET /auth/config、POST /auth/login/ldap、POST /auth/password-reset/request、POST /auth/password-reset/confirm。公开配置 Schema 是安全白名单。IamLdapLoginInput、IamPublicConfig 对调用方提供真实类型。密码长度以 IAM 运行时策略为准，contract 不固定注册密码最小长度。
+##### 容量参数
 
-[IAM 配置清单](../configuration/iam.md)
+| 参数 | 类型与默认值 | 作用 |
+| --- | --- | --- |
+| `maxTotalBytes` | 整数，范围 4–40 MiB，默认 32 MiB。 | 附件、证据与离线包的总预算，决定 HTTP 传输预算。 |
+| `maxAttachmentBytes` | 正整数，默认 5 MiB。 | 单个附件的预算，受附件总预算限制。 |
+| `maxEvidenceBytes` | 正整数，默认 4 MiB。 | 单份证据的预算，最高为总量的八分之一。 |
+| `maxEvidenceCount` | 正整数，默认 2,000。 | 最多保留 2,000 条证据。 |
 
-#### 场景：接入反馈路由与校验输入
+<a id="场景计算反馈路由的传输预算"></a>
 
-`FeedbackJob.type` 与 `FeedbackRetryInput.target` 支持独立 `webhook` 任务；状态、尝试次数和安全错误码见详情 jobs。业务采集函数与回调配置仅在可信服务端注册，不接受 HTTP 输入指定。正文与 ZIP/GZIP 通过既有证据/附件接口取得，接入见 [feedback](../../../packages/feedback/README.md)。
+#### 场景：从统一反馈配置推导传输预算
 
-`apiContract.feedback` 包含 `reports.policy/submit/list/listMine/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection` 与 `attachments.upload/get`。客户端通过 `reports.policy({})` 读取有效容量，普通用户通过 `reports.listMine({ page: 1 })` 查询自己的报告，管理列表使用 `reports.list`。最小提交仅需 submissionId/appId，不要求描述或异常；身份、权限、S3 key 与邮件收件人不接受客户端输入。按需通过 `@h-ai/api-contract/feedback` 导入同一组 schema 与类型。
-
-追加证据返回 acknowledged/evidenceRevision，客户端只释放已确认的块。setStatus 需要 expectedVersion；export 固定证据修订，getExport 读取已完成问题包。附件 base64 输入限制原始 5 MiB，服务端仍须验证实际字节、类型与 SHA-256。Report.appVersion 是应用版本，Report.version 是乐观锁计数。
-
-```ts
-import { FeedbackSubmitInputSchema, apiContract } from '@h-ai/api-contract'
-
-// Validate the submission ID and orders app ID. Invalid input throws a Zod error.
-const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
-// Create a contract containing only the built-in feedback router.
-const contract = apiContract.create({ feedback: apiContract.feedback })
-// Read the submission route's relative HTTP path from that contract.
-const path = apiContract.pathOf(contract.feedback.reports.submit)
-```
-
-#### 场景：声明交互挑战
-
-IamCreateCaptchaInputSchema / IamCaptchaChallengeSchema 定义 POST /auth/captcha 的用途与可公开挑战，交互鉴别输入允许最多4096字符的可选 captcha。IamPublicConfigSchema.captcha 仅含 enabled，缺省关闭。Schema 校验结构，证明有效期、用途和单次消费由服务端 IAM 执行。
-
-何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
-
-#### 场景：在页面离开时关闭会话
-
-`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
-
-浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
-
-浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
-
-#### 场景：计算反馈路由的传输预算
-
-`apiContract.feedback` 声明反馈路由的请求和响应格式。要计算单个附件、证据、ZIP 和全量 HTTP 请求能容纳的字节数，可在服务端或浏览器单独从 `@h-ai/api-contract/feedback` 导入 `apiContract.resolveFeedbackBudget()`，按同一组上限计算。
+反馈服务或生成离线包的客户端已取得 16 MiB 的总量配置。用包的反馈入口计算单项和全量 HTTP 预算。
 
 ```ts
-import { FeedbackBudgetSchema, apiContract } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 
-// Use the 16 MiB total limit to derive the effective feedback budgets, including transport overhead.
-const effective = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 }) // 输入 16 MiB 总量，返回派生的 FeedbackBudget。
-// Validate the effective budget object. An inconsistent shape yields schema issues.
-const validated = FeedbackBudgetSchema.safeParse(effective) // 校验结果结构，成功时 data 为预算对象。
-const maxRouteBytes = effective.maxTransportBytes // 读取反馈路由的明文预算，用于配置单独的上传/导出路由。
+// 从 16 MiB 的总量计算实际附件、证据和 HTTP 明文预算。
+const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
+console.info(budget.maxTransportBytes) // 22435160 字节
 ```
 
-详见[反馈配置](../configuration/feedback.md)和[补采及离线导出说明](./feedback.md)。
+应用用 `maxTransportBytes` 设置需要承载反馈材料的接口上限。服务端仍对真实附件字节、大小和摘要做校验。[反馈配置](../configuration/feedback.md)
 
 ## 错误处理
 
-Contract 只描述输入输出结构，业务错误由 procedure 返回 `HaiResult<T>` 表达。直接调用 Zod `parse()` 会在输入无效时抛校验异常；读取外部输入时可用 `safeParse()` 并检查其 `success`。这个校验结果与业务响应里的 `HaiResult.success` 分别处理。
+`pathOf` 在端点缺少显式 HTTP 路径时抛出定义错误。读取外部数据时，可用 Zod 的 `safeParse` 处理结构错误。服务端的业务拒绝通过 `HaiResult` 的失败分支表示。Kit 与 Serv 如何映射 HTTP 状态见各自接入示例。

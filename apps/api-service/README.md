@@ -38,7 +38,7 @@ pnpm --filter api-service preview
 ### API 契约
 
 本服务与桌面端共用的应用级 contract 已独立为 `@h-ai/api-service-contract`，禁止从 `apps/api-service/src` 跨应用导入。
-该包组合了框架通用领域契约（iam/storage/ai）与服务自有契约（`app.info` / `app.echo`）：
+该包用 `apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai, app: appContract })` 选择应用提供的领域。组合结果包含标准 IAM、Storage、AI 操作及本应用的 `app.info` 和 `app.echo`。
 
 ```ts
 import { apiServiceContract } from '@h-ai/api-service-contract'
@@ -50,28 +50,28 @@ apiServiceContract.app.info
 apiServiceContract.app.echo
 ```
 
-自定义路由通过 `apiContract.route(...)` 定义在契约包中，`@h-ai/serv` 只负责运行时挂载与 procedure 实现：
+#### 声明单个 HTTP 操作
+
+`appContract` 将多个操作放在同一领域。下例节选 `@h-ai/api-service-contract` 中的 `info` 操作。它声明 `POST /app/info`、OpenAPI 分组和成功数据。见[路由字段与 Schema](../../docs/usage/function/api-contract.md#declare-routes)。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
-import { AppInfoOutputDataSchema } from './app-schemas.js'
+import { AppInfoOutputDataSchema } from '@h-ai/api-service-contract'
 
-export const appContract = {
-  info: apiContract
-    // 声明 POST /app/info 的操作 ID 和文档分组，返回可继续附加 Schema 的路由。
-    .route({
-      method: 'POST',
-      path: '/app/info',
-      operationId: 'app.info',
-      tags: ['app']
-    })
-    // 将服务元信息 Schema 包成 HaiResult 成败结构，并作为路由输出。
-    .output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
-}
+const info = apiContract.route({
+  method: 'POST',
+  path: '/app/info',
+  operationId: 'app.info',
+  tags: ['app'],
+}).output(apiContract.haiResultSchema(AppInfoOutputDataSchema))
+
+// 从已声明的单个操作对象取得原始路径。应用前缀为 /api/v1 时，实际路径为 /api/v1/app/info。
+const infoPath = apiContract.pathOf(info)
 ```
 
-服务端实现位于 `src/server/procedures/app-procedures.ts`。公开过程直接注册 handler，
-需要登录的过程在同一条 route 链上声明 `.auth()`：
+#### 用 Serv 绑定实现
+
+服务端实现位于 `src/server/procedures/app-procedures.ts`。传给 `serv.implement(appContract)` 的是包含 `info` 和 `echo` 的领域契约。`.route('info', handler)` 使用契约对象内的键。需要登录的 `echo` 使用 `.route('echo').auth().handle(handler)`。见[用 Serv 装配契约](../../docs/usage/function/api-contract.md#use-with-serv)。
 
 ```ts
 import type { ServContext } from '@h-ai/serv'
@@ -79,67 +79,75 @@ import { appContract } from '@h-ai/api-service-contract'
 import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
-export const router = serv
-  // 以 appContract 为约束创建处理器构建器。
-  .implement(appContract)
-  // 声明处理器使用的服务端上下文类型，返回同一构建流程。
+const startedAt = Date.now()
+export const router = serv.implement(appContract)
   .context<ServContext>()
-  // 为 info 注册处理器，调用时将服务元信息包装为成功结果。
-  .route('info', () => core.ok({ /* 服务元信息 */ }))
-  // 选中 echo 路由，下一步为它设置鉴权和处理器。
+  // 无需登录，返回服务信息。生产实现从应用配置读取 name、version 和 transportEnabled。
+  .route('info', () => core.ok({
+    name: 'demo',
+    version: '1.0.0',
+    uptimeMs: Math.max(0, Date.now() - startedAt),
+    transportEnabled: true,
+  }))
   .route('echo')
-  // 启用当前路由的会话鉴权，未认证请求在进入处理器前被拒绝。
   .auth()
-  // 处理器接收经过校验的输入和请求上下文，返回回显、用户、请求号与时间。
+  // 认证后回显校验通过的消息和请求信息。未登录时不进入处理器。
   .handle(({ input, context }) => core.ok({
     message: input.message,
     userId: context.session.userId,
     requestId: context.requestId,
     timestamp: new Date().toISOString(),
   }))
-  // 完成此组路由，返回可交给服务端装配的处理器定义。
   .build()
 ```
 
-客户端用同一个 `apiServiceContract` 构造类型安全 client：
+#### 用共享契约创建客户端
+
+下面使用已启动的本机服务，并假定已有测试账号。把账号的登录输入传给 `callExampleService`。使用已由宿主管理的客户端时，由宿主统一初始化和关闭依赖。
 
 ```ts
+import type { IamLoginInput } from '@h-ai/api-contract'
 import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { crypto } from '@h-ai/crypto'
 
-// 无参数初始化加密模块；成功后客户端能使用其传输能力，失败结果应先处理。
-await crypto.init()
-// 根据 apiServiceContract 创建独立客户端，提供对应的端点方法。
-const client = apiClient.create(apiServiceContract)
-// 配置本机 /api/v1、加密传输和浏览器 Cookie 续期；成功后客户端可调用。
-await client.init({
-  baseUrl: 'http://localhost:3000/api/v1',
-  transport: { crypto },
-  auth: {}, // 浏览器默认 httpOnly refresh Cookie 模式
-})
+export async function callExampleService(credentials: IamLoginInput) {
+  // 先初始化加密依赖。失败时结束，避免发送未装配的请求。
+  const cryptography = await crypto.init()
+  if (!cryptography.success)
+    throw new Error(cryptography.error.message)
 
-// 公开端点
-// 无参数读取公开的服务元信息；成功 data 为服务信息。
-const info = await client.app.info()
+  const client = apiClient.create(apiServiceContract)
+  try {
+    // 使用本机服务的 API 前缀与浏览器 Cookie 续期配置。
+    const ready = await client.init({
+      baseUrl: 'http://localhost:3000/api/v1',
+      transport: { crypto },
+      auth: {},
+    })
+    if (!ready.success)
+      throw new Error(ready.error.message)
 
-// 鉴权端点：需先登录
-// 提交示例账号和密码；成功返回用户和 tokens，注册失败时终止后续鉴权步骤。
-const registration = await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
-if (!registration.success)
-  throw new Error(registration.error.message)
-// 使用注册返回的 tokens 更新此客户端的认证状态，无业务返回值。
-await client.auth.setTokens(registration.data.tokens)
-// 传入消息 hi；成功返回原消息及已认证用户、请求号和时间。
-const echoed = await client.app.echo({ message: 'hi' })
+    const info = await client.app.info()
+    if (!info.success)
+      throw new Error(info.error.message)
 
-void info
-void echoed
+    // 标准认证动作保存成功登录返回的凭据，后续调用可使用当前会话。
+    const actions = apiClient.createAuthActions(client)
+    const login = await actions.login(credentials)
+    if (!login.success)
+      throw new Error(login.error.message)
 
-// 无参数关闭客户端，释放认证及加密传输会话。
-await client.close()
-// 无参数释放加密模块，等待 Promise 完成。成功时无返回数据。
-await crypto.close()
+    const echoed = await client.app.echo({ message: 'hi' })
+    if (!echoed.success)
+      throw new Error(echoed.error.message)
+    return { info: info.data, echoed: echoed.data }
+  }
+  finally {
+    await client.close()
+    await crypto.close()
+  }
+}
 ```
 
 #### 原生与浏览器认证

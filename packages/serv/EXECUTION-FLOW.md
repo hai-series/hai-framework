@@ -23,10 +23,12 @@
 
 ### 最常见的外部接入方式
 
-1. 先在应用层组合 contract。
-2. 再注入业务模块实例，生成 procedures。
-3. 最后调用 `serv.createApp()` 装配 Hono app。
-4. Node 环境用 `serv.listen()` 启动；Fetch-first 运行时用 `serv.toFetch()` 导出。
+1. 通过 `apiContract.route(route)` 声明自定义 HTTP 操作。内置领域可直接导入。
+2. 用 `apiContract.create(options)` 组合应用要公开的领域，保留各操作声明的业务路径。
+3. 注入业务模块实例生成 procedures，或用 `serv.implement(contract).route(key, handler)` 给自定义操作绑定处理器。
+4. 调用 `serv.createApp()` 挂载契约和处理器，按宿主配置加上 API 前缀。Node 环境用 `serv.listen()` 启动；Fetch-first 运行时用 `serv.toFetch()` 导出。
+
+需要从声明中取得路径时，把单个操作节点传给 `apiContract.pathOf`，例如 `apiContract.iam.auth.login`。完整步骤见 [API 契约功能说明](../../docs/usage/function/api-contract.md#use-with-serv)。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -70,7 +72,7 @@ serv.listen(app, { onClose: closeApp })
 
 1. `createContext`：调用方完全接管上下文构造
 2. `verifyToken`：自定义 access token 校验
-3. `iam.session.verifyToken`：推荐方案，直接传顶层 `iam`
+3. `iam.auth.verifyToken`：推荐方案，直接传顶层 `iam`
 4. 都没有时：仅解析请求元数据，不注入 `session`
 
 这意味着：

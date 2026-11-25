@@ -37,8 +37,8 @@ import { storageContract } from './storage/storage-contract.js'
  * import { apiContract } from '@h-ai/api-contract'
  *
  * const contract = apiContract.create({ iam: apiContract.iam, payment: false })
- * const loginPath = apiContract.pathOf(contract.iam.auth.login)
- * void loginPath
+ * // 通过键访问已组合的 IAM 登录端点。
+ * void contract.iam.auth.login
  * ```
  */
 export const apiContract = {
@@ -55,7 +55,7 @@ export const apiContract = {
   paginatedSchema,
   /** 创建 oRPC contract 路由节点，供自定义 contract 定义 HTTP 元数据。 */
   route,
-  /** 从 contract procedure 读取其唯一业务路径。 */
+  /** 从单个端点定义读取已声明的业务路径模板。 */
   pathOf,
 
   // 领域 contract（框架内置）

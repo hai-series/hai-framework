@@ -16,13 +16,15 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 ## 設定一覧
 
-独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/api-contract.ja.md)と[引数・応答のリファレンス](../../docs/usage/data/api-contract.ja.md#public-settings)。
+アプリは契約をコードで宣言します。HTTP プレフィックスと通信設定はホストが読み込みます。[設定一覧](../../docs/usage/configuration/api-contract.ja.md)を参照してください。
 
 ## 機能
 
 [API 一覧](../../docs/usage/function/api-contract.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
-[条件付きドメイン](../../docs/usage/function/api-contract.ja.md#conditional-domains)と [IAM 契約・OpenAPI](../../docs/usage/function/api-contract.ja.md#serv-iam-wiring)を参照してください。
+`route` で[単一操作を宣言](../../docs/usage/function/api-contract.ja.md#declare-routes)し、`create` で[ドメインを組み合わせ](../../docs/usage/function/api-contract.ja.md#compose-domains)、`pathOf` で[操作のパスを読み取り](../../docs/usage/function/api-contract.ja.md#read-route-path)ます。
+
+[Serv](../../docs/usage/function/api-contract.ja.md#use-with-serv)、[Kit のファイルルート](../../docs/usage/function/api-contract.ja.md#use-with-kit)または [API Client](../../docs/usage/function/api-contract.ja.md#use-with-client)での利用方法を参照してください。
 
 ## データ構造
 

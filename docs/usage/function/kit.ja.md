@@ -113,6 +113,8 @@ createHandle と sequence から始め、初期化済み Cache を制限の保�
 
 ### 入力検証と応答：`kit.validate`・`kit.response`
 
+HTTP 契約を共用する場合は、SvelteKit の `+server.ts` で HTTP メソッドを名前付きエクスポートします。URL はファイルの配置で決まります。共有の Zod スキーマを `kit.validate.body`、`query`、`params` のいずれかに渡し、`kit.response` で契約に沿ったデータを返します。型付きクライアントから呼び出す場合は、HTTP メソッド、URL、応答を契約にそろえます。[Kit で契約を共用する](./api-contract.ja.md#use-with-kit)を参照してください。
+
 エンドポイントで入力を解析し、成功・本文なし・項目エラー・業務エラーを返します。
 
 #### インターフェース一覧

@@ -1,331 +1,285 @@
 # hai-api-contract 参考
 
-> `@h-ai/api-contract` 是 hai-framework 的公共 HTTP API 契约包，使用 oRPC contract + Zod v4 作为唯一接口真相源。本包只描述接口边界，不包含任何 procedure 实现。
+`@h-ai/api-contract` 定义 HTTP 操作的路径、方法及 Zod 输入输出。应用使用同一份定义装配服务或创建客户端。
 
 ## 运行环境
 
-独立 contract 包发布前验证实际声明构建。`ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput`、`Schema` 直接复用上游公共类型，由 `@h-ai/api-contract` 类型转出，供推导声明与显式 `import type` 使用；不手写仿造类型或导入 node_modules 内部路径。
+服务端、浏览器和测试可从 `@h-ai/api-contract` 导入契约和 Schema。只消费内置契约时安装此包即可。应用使用 `z` 声明自己的输入输出时，在共享契约包同时安装 `zod` v4。契约在导入时构造，无需调用 `init` 或 `close`。
 
-> ✅ **契约定义包，无服务端业务依赖；Zod/oRPC schema 构造仍有运行时代码。** 可在客户端、服务端、测试环境直接引用。
+独立契约包发布前验证实际声明构建。从公开入口导入 `ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput` 与 `Schema` 等推导所需的类型。
 
 ## 适用场景
 
-- 定义新领域的 oRPC contract（输入/输出 Schema + HTTP 路由元数据）
-- 组合多个领域 contract 为应用级 contract
-- 向 `@h-ai/serv` 提供 contract（装配为 HTTP API）
-- 向 `@h-ai/api-client` 提供 contract（生成类型安全客户端）
-- 复用内置领域 contract（iam/storage/ai/payment/feedback）
-- 复用公共 Schema 工厂（`apiContract.haiResultSchema`、分页 Schema）
+| 任务 | 入口 | 交付给谁 |
+| --- | --- | --- |
+| 声明一个 HTTP 操作 | [`apiContract.route(route)`](#declare-routes) | 应用开发者将操作放到领域对象里 |
+| 选择应用要提供的领域 | [`apiContract.create(options)`](#compose-domains) | Serv 服务或 typed client |
+| 获取已声明操作的业务路径 | [`apiContract.pathOf(procedure)`](#read-route-path) | 客户端、路由规则或测试 |
+| 提供统一的成功与失败形状 | [响应 Schema](#response-schemas) | 服务端输出与客户端结果判断 |
 
 ## 使用步骤
 
-### 1. 组合应用级 contract
-
-```typescript
-import { apiContract } from '@h-ai/api-contract'
-
-// 按需组合，传 false/undefined 的领域不会出现在 contract 或 OpenAPI spec 中
-// 组合 IAM、Storage 和 AI 路由，得到应用契约。payment 为 false，因此不包含支付路由。
-export const myContract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-  payment: false, // 禁用领域
-})
-
-// myContract.iam.auth.login
-// myContract.storage.presignedUrls.createUpload
-// myContract.ai.chats.createCompletion
-```
-
-### 2. 组合自定义 contract
-
-```typescript
-import { apiContract } from '@h-ai/api-contract'
-
-// 将启用的 IAM 和 Storage 路由组合为契约。构造阶段不调用服务。
-export const myContract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  payment: false, // 禁用领域（不会出现在 contract 或 OpenAPI spec 中）
-})
-```
-
-### 3. 定义新领域 contract
-
-```typescript
-import { apiContract } from '@h-ai/api-contract'
-import { z } from 'zod'
-
-// 输入 Schema
-const WidgetCreateInputSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-})
-
-// 同一 contract 内两个接口复用，因此保留为文件私有常量，不从 schemas 导出。
-// 声明成功数据中的 id、name、createdAt 字段和标准失败形状。
-const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
-  id: z.string(),
-  name: z.string(),
-  createdAt: z.string(),
-}))
-
-// 领域 contract
-export const widgetContract = {
-  widget: {
-    create: apiContract
-      // 建立 POST /widgets 的路由定义并指定操作 ID 和分组。
-      .route({
-        method: 'POST',
-        path: '/widgets',
-        operationId: 'widget.create',
-        summary: 'Create widget',
-        tags: ['widget'],
-      })
-      // 为创建请求绑定已有的 name 和可选 description 校验。
-      .input(WidgetCreateInputSchema)
-      // 声明创建接口闭合在同一 HaiResult 输出形状。
-      .output(WidgetOutputSchema),
-
-    getById: apiContract
-      .route({
-        // 建立 GET /widgets/{id} 的路由定义。
-        method: 'GET',
-        path: '/widgets/{id}',
-        operationId: 'widget.getById',
-        summary: 'Get widget by id',
-        tags: ['widget'],
-      })
-      // 将路径 id 绑定到输入的字符串字段。
-      .input(z.object({ id: z.string() }))
-      // 复用创建接口的同一成功及失败输出形状。
-      .output(WidgetOutputSchema),
-  },
-}
-```
-
-### 4. 将新 contract 挂入应用级 contract
-
-```typescript
-import { apiContract } from '@h-ai/api-contract'
-import { widgetContract } from './widget-contract.js'
-
-// 组合内置 IAM 和本地 widgetContract，返回应用路由契约。
-export const appContract = apiContract.create({
-  iam: apiContract.iam,
-  widget: widgetContract,
-})
-```
-
-### 5. 传给 `@h-ai/serv`（服务端）
-
-先初始化 IAM 和所需依赖。将同一个 IAM 实例传给 `serv.createIamProcedures` 和 `serv.createApp`，让业务处理函数和请求认证使用同一个会话来源。登录后，将访问令牌作为 Bearer 令牌发送到 `GET /api/v1/auth/me`，有效会话返回用户资料、角色和权限。
-
-OpenAPI 为 IAM 公开配置、挑战、登录、注册、验证码、续密、找回密码和令牌刷新声明 `security: []`。这些操作可以在没有 Bearer 令牌的情况下启动，并由业务处理函数校验各自的输入和凭据。`currentUser` 等受保护接口沿用服务的 Bearer 要求。
-
-```typescript
-import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { appContract } from './app-contract.js'
-import { createMyProcedures } from './procedures/widget.js'
-
-// 将应用契约及领域实现挂到 /api/v1，返回组装好的 HTTP App。
-const app = serv.createApp({
-  contract: appContract,
-  procedures: {
-    // 用已初始化的 IAM 服务创建认证和管理路由的处理器。
-    iam: serv.createIamProcedures({ iam }),
-    widget: createMyProcedures(),
-  },
-  iam, // Serv 验证 Bearer 令牌并填充守卫使用的会话。
-  http: { apiPrefix: '/api/v1' },
-})
-```
+1. 复用已有领域操作，或在应用共享契约包用 `route` 声明新操作。
+2. 把操作分组，再用 `create` 选择要装配的领域。
+3. [用 Serv](#use-with-serv) 注册处理器，或[用 Kit](#use-with-kit) 在 SvelteKit 文件路由复用 Schema。需要调用生成的 HTTP API 时，[把同一份应用契约传给 API Client](#use-with-client)。
+4. 从 `pathOf` 取得已声明操作的业务路径。只在使用方拼上实际的 API 前缀。
 
 ## 核心 API
 
-### `apiContract.create(options)` — 组合领域 contract
+<a id="declare-routes"></a>
 
-```typescript
-import { apiContract } from '@h-ai/api-contract'
+### 声明单个操作：`apiContract.route(route)`
 
-// 组合内置 IAM 和自定义领域，false 排除 Storage。
-const contract = apiContract.create({
-  iam: apiContract.iam,      // 启用：纳入 contract
-  storage: false,            // 禁用：不出现在 OpenAPI spec 中
-  custom: myContract,        // 自定义领域
-})
-// 固定禁用的 storage 从类型和运行时对象中移除。
-```
+传入一个操作的 HTTP 元数据，返回可继续调用 `.input(schema)` 和 `.output(schema)` 的构造器。声明结果可放进领域对象。
 
-开关来自运行时配置时，使用 `satisfies CreateApiContractOptions` 保留具体键名。条件启用的领域为可选，用 `?.` 读取它。
+#### 接口清单
 
-```typescript
-import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.route(route)` | 声明单个 HTTP 操作 | `route` 是 oRPC 的 HTTP 元数据对象。应用的公共接口应显式填写下表中的 `method`、`path`。 | oRPC 路由构造器，可绑定输入和输出 Schema。 | `apiContract.route({ method: 'POST', path: '/widgets/preview' })` |
 
-function readPaymentRoute(enablePayment: boolean) {
-  const domains = {
-    iam: apiContract.iam,
-    payment: enablePayment ? apiContract.payment : false,
-  } satisfies CreateApiContractOptions
-  // 固定启用 IAM；开关关闭时 payment 为 undefined。
-  const contract = apiContract.create(domains)
-  const get = contract.payment?.orders.get
-  return get ? apiContract.pathOf(get) : undefined
-}
-```
+##### 路由元数据
 
-### 内置领域 contract
-
-| 访问路径 | 领域 | 功能概述 |
+| 字段 | 参数与默认值 | 用途 |
 | --- | --- | --- |
-| `apiContract.iam` | IAM | auth（登录/登出/OTP/刷新/注册/改密码）、users、roles、permissions Admin CRUD |
-| `apiContract.storage` | Storage | presignedUrls（上传/下载/批量）、files（元数据查询/删除） |
-| `apiContract.ai` | AI | chats（非流式补全/消息/历史）、memories（召回/列表）、sessions（列表） |
-| `apiContract.payment` | Payment | orders、notifications |
-| `apiContract.feedback` | Feedback | reports、attachments；`reports.policy` 提供有效容量，`reports.listMine` 查询本人报告 |
+| `method` | `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE` | HTTP 方法。 |
+| `path` | 以 `/` 开头，无宿主前缀 | 路由路径，路径参数写成 `{id}` 并由输入 Schema 描述。 |
+| `operationId` | 可省略，OpenAPI 按路由键推导 | OpenAPI 操作标识。显式指定时应全局唯一。 |
+| `summary`、`description`、`deprecated`、`tags` | 均可省略 | OpenAPI 的说明、弃用标记和分组。 |
+| `successStatus`、`successDescription` | 成功状态默认 `200`，说明默认 `OK` | 描述成功 HTTP 响应。 |
+| `inputStructure` | `compact` 默认，或 `detailed` | 默认合并路径参数和查询参数或正文。详细模式分别声明 `params`、`query`、`headers`、`body`。 |
+| `outputStructure` | `compact` 默认，或 `detailed` | 默认直接返回正文。详细模式使用 `status`、`headers`、`body`。 |
+| `spec` | 可省略，接受 OpenAPI 操作对象或变换函数 | 调整生成的 OpenAPI 操作；例如公开接口使用 `spec: operation => ({ ...operation, security: [] })`。 |
 
-### 内置 contract 路径示例
+#### 场景：声明预览组件名称的 HTTP 操作
 
-```typescript
-// 组合三个内置领域，得到下面用于查找命名路由的契约。
-const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
+将下列代码放在共享契约包的 `widget-contract.ts`。这个操作读取 `name`，返回去除首尾空白后的名称。预览本身无持久化。
 
-// IAM
-myContract.iam.auth.login        // POST /auth/login
-myContract.iam.auth.logout       // POST /auth/logout
-myContract.iam.users.list        // GET  /iam/users
-myContract.iam.roles.create      // POST /iam/roles
-
-// Storage
-myContract.storage.presignedUrls.createUpload   // POST /storage/presigned-urls/upload
-
-// AI
-myContract.ai.chats.createCompletion  // POST /ai/chats/completions，非流式 JSON
-```
-
-### `apiContract.haiResultSchema(dataSchema)` — 标准输出包装
-
-普通 JSON 业务接口通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `core.ok()/err()` 返回结构一致。支付渠道的通知按对应协议响应，例如支付宝异步通知使用 HTTP 200 和纯文本 `success`。
-
-```typescript
+```ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
-const getWidget = apiContract
-  // 定义 GET /widgets/{id} 的路径及方法。
-  .route({ method: 'GET', path: '/widgets/{id}' })
-  // 用 Widget 的 id 和 name 声明成功数据，HaiResult 同时包含失败形状。
-  .output(apiContract.haiResultSchema(z.object({
-    id: z.string(),
-    name: z.string(),
-  })))
+// 契约和 Kit 文件路由共用这个输入 Schema。空名称校验失败。
+export const WidgetPreviewInputSchema = z.object({ name: z.string().trim().min(1) })
 
-// 等价于:
-// { success: true, data: { id: string, name: string } }
-// | { success: false, error: HaiError }
+// 此操作的路由对象将供服务端实现和客户端推导使用。
+export const widgetContract = {
+  preview: apiContract.route({
+    method: 'POST',
+    path: '/widgets/preview',
+    operationId: 'widgets.preview',
+    tags: ['widgets'],
+  })
+    .input(WidgetPreviewInputSchema)
+    .output(apiContract.haiResultSchema(z.object({ name: z.string() }))),
+}
 ```
 
-### `apiContract.pathOf(procedure)` — 读取业务路径
+<a id="compose-domains"></a>
 
-```typescript
-// 获取内置刷新操作的相对路径，结果为 /auth/refresh。
-const refreshPath = apiContract.pathOf(apiContract.iam.auth.refresh)
-// '/auth/refresh'
+### 组合应用领域：`apiContract.create(options)`
+
+`options` 的键是应用领域名称，值是一个已声明的操作或包含操作的路由对象。组合键供代码访问，并不会自动拼到已声明的 HTTP 路径前面。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.create(options)` | 组合要提供的领域 | 必填 `options`。键名由应用选择。某个值为 `false` 或 `undefined` 时，省略该领域。 | 应用契约对象。条件启用的具名领域在类型上可为空。 | `apiContract.create({ iam: apiContract.iam, storage: false })` |
+
+#### 场景：组合自定义操作和条件领域
+
+在共享包的 `app-contract.ts` 固定启用 Widgets。由应用配置传入是否启用支付；固定禁用的存储领域从结果中省略。用 `satisfies` 保留具体键名。
+
+```ts
+import { type CreateApiContractOptions, apiContract } from '@h-ai/api-contract'
+import { widgetContract } from './widget-contract.js'
+
+export function makeAppContract(enablePayment: boolean) {
+  const domains = {
+    widgets: widgetContract,
+    payment: enablePayment ? apiContract.payment : false,
+    storage: false,
+  } satisfies CreateApiContractOptions
+
+  // 返回可交给 Serv 或 API Client 的路由对象。
+  return apiContract.create(domains)
+}
 ```
 
-middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，不维护第二份 route 常量。服务端挂载时再与 `_serv.yml` 的 `http.apiPrefix` 拼接。
+开关关闭时，`makeAppContract(false).payment?.orders.get` 得到 `undefined`。挂载服务时，按同一个开关选择契约和处理器；可先在各领域实现该领域的操作，再合并已启用的实现。
 
-### 公共 Schema 工具
+<a id="read-route-path"></a>
 
-| 访问路径 | 说明 |
+### 读取已声明的路径：`apiContract.pathOf(procedure)`
+
+`procedure` 是一个声明了 HTTP 路径的操作节点。它可以是 `apiContract.route(...).input(...).output(...)` 链式调用的结果，也可以是 `apiContract.iam.auth.login` 或 `widgetContract.preview`。业务处理函数、路径字符串、领域对象与应用契约对象不属于这个参数的类型。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.pathOf(procedure)` | 读取操作的业务路径 | 必填一个已显式设置 `path` 的 oRPC `AnyContractProcedure` 节点。 | 以 `/` 开头的原始路径模板。未声明 `path` 时抛错。 | `apiContract.pathOf(apiContract.iam.auth.login)` |
+
+#### 场景：为请求规则或测试读取实际路径
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { widgetContract } from './widget-contract.js'
+
+// 读取内置登录操作的模板，得到 /auth/login。
+const loginPath = apiContract.pathOf(apiContract.iam.auth.login)
+// 读取自定义操作的模板。已知 Serv 前缀为 /api/v1，最终路径为 /api/v1/widgets/preview。
+const previewPath = '/api/v1' + apiContract.pathOf(widgetContract.preview)
+```
+
+返回值保留 `{id}` 等占位符。手工构造某次请求的 URL 时，替换占位符并编码该路径段；typed client 可从输入对象自动填入。宿主前缀由实际 Serv 或 SvelteKit 路由提供。
+
+### 内置领域契约
+
+| 访问路径 | 功能概述 |
 | --- | --- |
-| `apiContract.haiResultSchema(dataSchema)` | `HaiResult<T>` 输出包装 |
-| `apiContract.voidResultSchema` | `HaiResult<void>` 空结果包装 |
-| `apiContract.paginatedSchema(itemSchema)` | 分页列表输出 Schema |
-| `HaiErrorSchema` | HaiError 公共字段 Schema |
-| `PaginationQuerySchema` | 分页参数 Schema（可选 page/pageSize，pageSize 上限 100；默认值由服务端处理） |
+| `apiContract.iam` | 认证、会话、用户、角色和权限。 |
+| `apiContract.storage` | 上传与下载预签名 URL、文件查询、删除和批量删除。 |
+| `apiContract.ai` | 非流式聊天补全、消息与历史、记忆召回和会话列表。 |
+| `apiContract.payment` | 订单和支付通知。 |
+| `apiContract.feedback` | 反馈报告、证据和附件；`reports.policy` 提供有效容量，`reports.listMine` 查询本人报告。 |
 
-IAM 用户、角色、权限的必填 `createdAt` / `updatedAt` 和 OTP 的 `expiresAt` 接受有效 `Date` 或带时区的 ISO 日期时间字符串。`null` 校验失败。HTTP JSON 中这些值为 ISO 字符串，API Client 校验后保留线上格式。
+<a id="response-schemas"></a>
 
-## Contract 定义规范
+### 描述响应和分页
 
-### 必须遵循
+#### 接口清单
 
-- **普通 JSON 业务输出使用 `apiContract.haiResultSchema` 或 `apiContract.voidResultSchema`**，客户端按 `success` 判断业务结果。支付通知等渠道回调按其协议定义响应。
-- **业务 path 直接写在对应 `*-contract.ts`** — 禁止新增 `*-routes.ts` 或业务路径常量
-- **一次性 `*OutputSchema` 直接内联** — 不在 schemas 文件声明或导出
-- **同一 contract 内重复使用的输出可设私有常量** — 不得为复用扩大公共导出
-- **公共 HTTP 传输配置以配置文件为准** — API 前缀、健康检查、OpenAPI/docs、密钥协商路径与跨端 Header 放在 service 的 `_serv.yml`，不放 contract 包
-- **schemas 只保留真实复用结构** — 至少被多个接口或 contract/procedure 等不同层共同消费
-- **`operationId` 全局唯一** — 格式为 `domain.resource.action`，如 `iam.auth.login`
-- **`tags` 至少包含领域名** — 供 OpenAPI 文档分组
-- **输入 Schema 用 Zod v4** — 与 `@orpc/zod/zod4` 的 `ZodToJsonSchemaConverter` 配套
-- **Contract 不含业务逻辑** — 只有 Schema + 路由元数据，没有 `async function`
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiContract.haiResultSchema(dataSchema)` | 描述业务成功与失败 | 必填成功数据的 Zod `dataSchema` | 含 `success` 判别字段的响应 Schema。 | `apiContract.haiResultSchema(z.string())` |
+| `apiContract.voidResultSchema` | 描述成功时无业务数据 | 无参数 | 可用于 `.output(...)` 的 Schema。 | `.output(apiContract.voidResultSchema)` |
+| `apiContract.paginatedSchema(itemSchema)` | 描述分页数据 | 必填每条结果的 `itemSchema` | 含 `items`、`total`、`page`、`pageSize` 的 Schema。 | `apiContract.paginatedSchema(z.string())` |
+| `HaiErrorSchema` | 描述公共错误 | 从包根导入 | 可校验错误的 Schema。 | `HaiErrorSchema.safeParse(value)` |
+| `PaginationQuerySchema` | 校验分页查询 | `page`、`pageSize` 可省略，最小 1，`pageSize` 最大 100。默认页码和页大小由应用服务选择。 | 支持将查询字符串解析为数字。 | `PaginationQuerySchema.parse({ page: '2' })` |
 
-### 禁止
+普通业务响应按 `success` 区分结果。渠道回调按自身协议响应，例如支付宝异步通知成功返回 HTTP 200 和纯文本 `success`。IAM 用户、角色、权限的必填 `createdAt` / `updatedAt` 和 OTP 的 `expiresAt` 接受有效 `Date` 或带时区的 ISO 日期时间字符串。`null` 校验失败。HTTP JSON 中保留线上 ISO 字符串。
 
-- ❌ Contract 文件中 `import` 任何业务模块（`@h-ai/iam`、`@h-ai/storage` 等）
-- ❌ 在 contract 中使用 `z.any()` 或 `z.unknown()` 作为输出类型
-- ❌ 重复定义已存在的领域 contract
-- ❌ 导出只被单个 contract 接口使用的 `*OutputSchema`
-- ❌ 用独立 `*-routes.ts` 维护业务接口路径
+#### 场景：为列表接口复用分页约定
 
-### 文件职责
+创建组件列表操作时，从 `PaginationQuerySchema` 读取分页参数，用 `paginatedSchema` 描述成功数据。处理器可在省略页码或页大小时自行选择默认值。
 
-| 文件 | 只负责 |
-| --- | --- |
-| `*-contract.ts` | 业务接口 path、method、输入与输出边界 |
-| `*-schemas.ts` | 跨接口或跨层复用的输入、实体、数据结构 |
-| service `config/_serv.yml` | API 前缀、基础设施端点、跨端 Header 与加密 transport 配置 |
-
-## 常见模式
-
-### 带分页的列表接口
-
-```typescript
+```ts
 import { PaginationQuerySchema, apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })
-
-const listWidgets = apiContract
-  // 定义 Widget 列表的 GET 路径、操作 ID 和 OpenAPI 标签。
-  .route({ method: 'GET', path: '/widgets', operationId: 'widget.list', tags: ['widget'] })
-  // 沿用分页校验并加入可选关键词，无效输入由运行时校验拒绝。
-  .input(PaginationQuerySchema.extend({ keyword: z.string().optional() }))
-  // 将 Widget 条目及分页元数据包装进 HaiResult 输出，也允许标准错误。
+const list = apiContract.route({ method: 'GET', path: '/widgets' })
+  .input(PaginationQuerySchema)
   .output(apiContract.haiResultSchema(apiContract.paginatedSchema(WidgetSchema)))
+
+// 字符串页码可用于 GET 查询，校验后得到数字。页大小仍未指定。
+const query = PaginationQuerySchema.parse({ page: '2' })
+const rejected = PaginationQuerySchema.safeParse({ pageSize: '101' })
 ```
 
-### 路径参数
+将 `list` 放入领域对象后再装配。示例中的 `query.page` 为 `2`，`rejected.success` 为 `false`。
 
-```typescript
-// 路径中的 {id} 对应 input 中的 id 字段
-const getWidget = apiContract
-  // 定义按 id 获取 Widget 的 GET 路由。
-  .route({ method: 'GET', path: '/widgets/{id}', operationId: 'widget.getById', tags: ['widget'] })
-  // 声明路径参数 id 是字符串。
-  .input(z.object({ id: z.string() }))
-  // 声明 Widget 成功数据及标准失败输出。
-  .output(apiContract.haiResultSchema(WidgetSchema))
+## 常见模式
+
+<a id="use-with-serv"></a>
+
+### 用 Serv 挂载业务操作
+
+将以下代码放在 Serv 应用中。示例只启用 Widgets，因此无需初始化 IAM、DB 或缓存。请求正文由契约验证，处理器实现预览。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
+import { widgetContract } from './widget-contract.js'
+
+// 装配阶段所使用的领域组合。
+const contract = apiContract.create({ widgets: widgetContract })
+// 按操作键 preview 注册实现。input.name 已去除首尾空白。
+const widgets = serv.implement(widgetContract)
+  .context<ServContext>()
+  .route('preview', ({ input }) => core.ok({ name: input.name }))
+  .build()
+
+// API 前缀加到已经声明的业务路径上。
+const app = serv.createApp({ contract, procedures: { widgets }, http: { apiPrefix: '/api/v1' } })
+const response = await app.request('/api/v1/widgets/preview', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: '  demo  ' }),
+})
+// 预期 HTTP 200，JSON 为 { success: true, data: { name: 'demo' } }。
 ```
 
-### 无输入的端点
+使用内置 IAM 时，先初始化 IAM 和所需依赖。将同一实例同时传给 `serv.createIamProcedures({ iam })` 和 `serv.createApp({ ..., iam })`，使认证守卫能取得经校验的会话。公开 IAM 配置、登录、注册、验证码、找回密码和刷新等操作在 OpenAPI 中声明 `security: []`。实际凭据和访问权限仍由请求处理器校验。
 
-```typescript
-const versionContract = apiContract
-  // 定义系统版本 GET 路由并指定操作 ID 和分组。
-  .route({ method: 'GET', path: '/system/version', operationId: 'system.version', tags: ['system'] })
-  // 声明版本字符串的成功数据及标准错误形状。
-  .output(apiContract.haiResultSchema(z.object({ version: z.string() })))
+<a id="use-with-kit"></a>
+
+### 用 Kit 在 SvelteKit 文件路由复用 Schema
+
+在 SvelteKit 应用创建 `src/routes/api/widgets/preview/+server.ts`，并将示例共享契约放在 `src/lib/contracts/widget-contract.ts`。文件位置决定 URL，命名导出的 `POST` 决定方法。Kit 在 handler 中复用同一份请求 Schema。
+
+```ts
+import { kit } from '@h-ai/kit'
+import { WidgetPreviewInputSchema } from '$lib/contracts/widget-contract.js'
+
+export const POST = kit.handler(async ({ request }) => {
+  // 读取 JSON 或表单正文。无效名称返回 HTTP 400，后续处理不执行。
+  const { name } = await kit.validate.body(request, WidgetPreviewInputSchema)
+  // 有效名称返回 HTTP 200 和 HaiResult<{ name: string }>。
+  return kit.response.ok({ name })
+})
 ```
+
+若客户端和服务端位于不同应用，改从共享契约包的公开入口导入 Schema。根目录部署时浏览器可用 `@h-ai/kit/client` 的 `kit.client.create()` 创建同源客户端，再调用 `client.apiFetch('/api/widgets/preview', requestInit)`。它返回 Fetch `Response`，需要检查 HTTP 状态并读取 JSON。页面卸载时调用 `client.destroy()`。如需从应用契约推导方法与返回类型，参照下一节。
+
+<a id="use-with-client"></a>
+
+### 用 API Client 调用已部署的契约
+
+部署上面的 Serv 示例后，用同一份共享契约创建 typed client。API 地址包含 Serv 前缀。域名替换成实际测试服务。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { widgetContract } from './widget-contract.js'
+
+// 选择服务实际提供的领域，然后创建独立的客户端。
+const contract = apiContract.create({ widgets: widgetContract })
+const client = apiClient.create(contract)
+const ready = await client.init({ baseUrl: 'https://api.example.com/api/v1' })
+if (!ready.success)
+  throw new Error(ready.error.message)
+
+try {
+  // 传入待预览的名称。先判断 success，再读取返回的名称。
+  const result = await client.widgets.preview({ name: '  demo  ' })
+  if (!result.success)
+    throw new Error(result.error.message)
+  const name = result.data.name // 'demo'
+}
+finally {
+  await client.close()
+}
+```
+
+若同一契约描述的是 Kit 端点，客户端地址应使用对应的挂载前缀，例如 `/api`，且文件路由的 HTTP 方法、业务路径和响应需与契约匹配。自定义裸值和 SSE 还需处理建立调用时的失败分支。
+
+## Contract 定义规范
+
+- `*-contract.ts` 持有路由的方法、业务路径及输入输出。业务处理器在宿主项目注册。
+- 跨接口或跨层复用的 Schema 可放到 `*-schemas.ts`。只被一处使用的输出可以直接在 `.output(...)` 里定义。
+- 公共传输配置归宿主。Serv 的 HTTP 前缀和传输选项由应用读取并传入；Kit 的文件路由与 SvelteKit 部署前缀由其应用确定。
+- 定义与测试使用各包公开入口。同一 HTTP 方法与路径只注册一次，Web 与服务端共享同一份定义和版本。
 
 ## 测试
 
 ```bash
-pnpm --filter @h-ai/api-contract test
 pnpm --filter @h-ai/api-contract typecheck
 pnpm --filter @h-ai/api-contract lint
+pnpm --filter @h-ai/api-contract test
 ```
+
+在项目中用同一份预览输入验证两个分支。发送带空白的 `name` 后应读到规范化的名称，发送空字符串后应看到校验失败。构建应用的共享契约包后，从真实公开入口检查服务端装配和客户端推导。

@@ -33,6 +33,8 @@ pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/
 
 在应用启动时初始化 `core`、`iam`、`storage` 和 `ai`，加载并校验 `serv` 配置，再调用 `startApi(closeApp)`。`closeApp` 是应用提供的异步回调，负责按初始化的逆序释放业务资源。函数返回 Node 监听句柄。传入回调后，`serv.listen` 会在收到退出信号时先关闭监听，再调用该回调。只提供健康检查时，可以用空契约和空 procedures 创建 App。
 
+用 `apiContract.route(route)` 声明业务操作，再用 `apiContract.create(options)` 选出应用要挂载的领域。Serv 的 `serv.implement(contract).route(key, handler)` 绑定具体处理函数，`key` 是契约键或点分键，例如 `users.update`。HTTP 路径由契约声明，`http.apiPrefix` 由宿主提供。见[用 Serv 装配契约](./api-contract.md#use-with-serv)。
+
 ```ts
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'

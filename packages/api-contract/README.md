@@ -16,13 +16,15 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 ## 配置清单
 
-本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/api-contract.md)，调用参数或响应结构见[参考页](../../docs/usage/data/api-contract.md#public-settings)。
+应用通过代码声明契约。HTTP 前缀和传输设置由宿主读取，详情见[配置说明](../../docs/usage/configuration/api-contract.md)。
 
 ## 功能说明
 
 [查 API 清单](../../docs/usage/function/api-contract.md#api-reference)，包含调用入口、输入、返回值和用法。
 
-参阅[按配置启用领域](../../docs/usage/function/api-contract.md#conditional-domains)及 [IAM 契约与 OpenAPI](../../docs/usage/function/api-contract.md#serv-iam-wiring)。
+[声明单个操作](../../docs/usage/function/api-contract.md#declare-routes)、[组合应用领域](../../docs/usage/function/api-contract.md#compose-domains)和[读取操作路径](../../docs/usage/function/api-contract.md#read-route-path)分别使用 `route`、`create` 和 `pathOf`。
+
+接入时按场景选择 [Serv 装配](../../docs/usage/function/api-contract.md#use-with-serv)、[Kit 文件路由](../../docs/usage/function/api-contract.md#use-with-kit)或 [API Client](../../docs/usage/function/api-contract.md#use-with-client)。
 
 ## 数据结构
 

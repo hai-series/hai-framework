@@ -44,6 +44,8 @@ export const handle: Handle = haiHandle
 
 ### 2. SvelteKit API endpoint
 
+应用在 `+server.ts` 的命名导出里注册 HTTP 方法，文件位置决定 URL。复用共享契约的 Zod Schema 时，将 Schema 传给 `kit.validate.body(request, schema)`、`kit.validate.query(url, schema)` 或 `kit.validate.params(params, schema)`，并让端点输出符合契约。用 typed client 调用 Kit 端点时，还要核对 HTTP 方法、前缀与业务路径。示例见[用 Kit 在文件路由复用 Schema](../hai-api-contract/reference.md#use-with-kit)。
+
 业务失败用 `kit.response.fromResult/fromError`，保留安全字段错误、显式 `publicExt` 和 HTTP 状态。4xx 使用 `debug` 记录错误码、状态和追踪编号，5xx 使用 `error` 记录服务端异常诊断。请求日志仅记录查询参数数量。
 
 ```ts

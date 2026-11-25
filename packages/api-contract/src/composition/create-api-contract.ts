@@ -63,15 +63,15 @@ export type CreatedApiContract<T extends CreateApiContractOptions>
  * contract 只描述接口边界；具体的 procedure 实现由 `@h-ai/serv` 的 feature 模块或应用层提供。
  * 传入 `false` 或 `undefined` 的领域将从最终 contract 中移除。条件启用的具名领域可能缺席，访问前应判断是否存在。
  *
- * @param options - 各领域 contract（传 false/undefined 表示禁用该领域）
+ * @param options - 值为已有路由组或单个端点的对象。键决定应用契约的访问层级；`false`、`undefined` 或省略键表示禁用。
  * @returns 过滤后的应用级 oRPC contract router
  * @example
  * ```ts
  * import { apiContract } from '@h-ai/api-contract'
  *
  * const contract = apiContract.create({ iam: apiContract.iam, payment: false })
- * const loginPath = apiContract.pathOf(contract.iam.auth.login)
- * void loginPath
+ * // 应用契约包含 iam.auth.login；payment 已移除。HTTP 路径仍由端点本身声明。
+ * void contract.iam.auth.login
  * ```
  */
 export function createApiContract<const T extends CreateApiContractOptions>(options: T): CreatedApiContract<T> {

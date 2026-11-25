@@ -22,6 +22,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 ## 使用路径
 
 - 在满足包 Node API 依赖的宿主中选择 listen 或标准 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认 auto，普通宿主忽略转发头，仅受管私有 Compose 自动采用容器网段；自定义 context 传递完整 input 保留解析后的 ip。
+- 用 [共享契约](../hai-api-contract/reference.md) 单独声明 HTTP 操作与组合领域，再通过 `serv.implement(contract).route(key, handler)` 绑定处理函数。这里的 `key` 来自契约对象层级。
 - Storage 默认 procedures 必须注入 authorize 资源策略，使用可信 session 校验全部 key/prefix；缺失策略默认拒绝，混合批量全量授权后才执行。
 - AI 默认 feature 以可信 session.userId 绑定 objectId，所有读写和记忆按主体隔离；跨主体访问必须显式 authorizeObject，同名 sessionId 不代表同一用户。
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。

@@ -285,6 +285,8 @@ Alipay の通知はフォームリクエストです。処理をコミットし�
 
 `paid` のイベントだけ履行タスクを作成します。 サービスで `apiContract.payment` 全体を組み込む場合、元の本文を扱うミドルウェアを通らない Alipay procedure は失敗を返すようにします。注文ルートとアプリが実装する他の通知だけを組み込む方法もあります。
 
+`apiContract.payment.notifications.alipay` は一つの通知操作です。`apiContract.pathOf` に渡すと `/payment/notifications/alipay` を取得できます。先頭にアプリの API プレフィックスを連結してミドルウェアを配置します。[宣言済み操作のパスを読み取る](./api-contract.ja.md#read-route-path)を参照してください。
+
 ```ts
 import type { HaiResult } from '@h-ai/core'
 import type { PaymentNotifyResult } from '@h-ai/payment'
@@ -296,6 +298,7 @@ export function alipayNotification(
   apiPrefix: string,
   recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
 ): ServMiddlewareMount {
+  // 通知操作に宣言されたパスを読み、ホストのプレフィックスを連結する。
   const path = apiPrefix + apiContract.pathOf(apiContract.payment.notifications.alipay)
   return {
     path,

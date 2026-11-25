@@ -30,6 +30,8 @@ pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/
 Use Serv to mount a typed HTTP contract in a standalone Node server. Configure authentication, transport encryption and trusted request parsing before listening.
 The root `serv` object includes the built-in procedure factories for IAM, Storage, AI and Feedback.
 
+Use `apiContract.route(route)` to declare an operation and `apiContract.create(options)` to select the application domains. Bind a handler with `serv.implement(contract).route(key, handler)`. The key can be a single property or a dotted path such as `users.update`. The contract declares the business path and the host supplies `http.apiPrefix`. See [mount a contract with Serv](./api-contract.en.md#use-with-serv).
+
 ```ts
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'

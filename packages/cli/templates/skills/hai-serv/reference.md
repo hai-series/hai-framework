@@ -156,8 +156,7 @@ const app = serv.createApp({
 
 ### 3. 扩展应用自有 contract + procedures
 
-`apiContract.create({...})` 接受任意 key——除了框架提供的 `iam/storage/ai`，应用可以挂入自己的领域 contract，
-客户端通过 `client.<key>.<procedure>(...)` 调用，类型完全推导自同一份 contract。
+先用 `apiContract.route(route)` 声明 HTTP 方法、业务路径和输入输出，再用 `apiContract.create(options)` 组合要挂载的领域。领域键用于代码访问，例如 `app.echo`，HTTP URL 来自显式声明的 `path` 和宿主的 `http.apiPrefix`。以下示例分开声明操作、绑定处理器和装配服务。契约入参见[声明单个操作](../hai-api-contract/reference.md#declare-routes)与[组合应用领域](../hai-api-contract/reference.md#compose-domains)。
 
 ```typescript
 // apps/api-service-contract/src/app-contract.ts
@@ -357,35 +356,25 @@ const options: CreateServAppOptions<typeof contract, typeof procedures> = {
 const app = serv.createApp(options)
 ```
 
-### `apiContract.route` / `serv.implement` — contract 与运行时分层
+<a id="apicontractroute--servimplement--contract-与运行时分层"></a>
 
-应用代码不要直接 `import { oc } from '@orpc/contract'` 或 `import { implement } from '@orpc/server'`。
-contract 路由统一用 `@h-ai/api-contract` 定义，procedure 运行时统一用 `@h-ai/serv` 实现：
+### `serv.implement(contract)` — 给已声明的操作绑定处理器
 
-```typescript
-import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
+传入含 `preview` 操作的 `widgetContract`。该对象来自[共享契约示例](../hai-api-contract/reference.md#declare-routes)。`serv.implement(...).route('preview', handler)` 的参数是对象内的操作键；它绑定处理函数，业务 URL 仍由先前的 `apiContract.route({ method, path })` 声明。
 
-// 等价于 oc.route(...)，但不让应用感知 @orpc/contract
-// 创建 POST /x 路由的契约描述，指定操作 ID 和分组。
-const route = apiContract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
+```ts
+import { core } from '@h-ai/core'
+import { type ServContext, serv } from '@h-ai/serv'
+import { widgetContract } from './widget-contract.js'
 
-const procedures = serv
-  // 为应用契约创建过程构造器。
-  .implement(appContract)
-  // 将过程运行上下文指定为 ServContext。
+// 绑定 preview 操作。请求先经过契约输入校验，再返回规范化后的名称。
+const widgets = serv.implement(widgetContract)
   .context<ServContext>()
-  // 绑定 info 与应用提供的信息处理器。
-  .route('info', infoHandler)
-  // 选中 echo 过程，为其配置认证和实现。
-  .route('echo')
-  // 要求当前请求通过认证。失败时阻止后续回显。
-  .auth()
-  // 将调用转给应用提供的回显处理器。
-  .handle(echoHandler)
-  // 完成映射供 App 注册。
+  .route('preview', ({ input }) => core.ok({ name: input.name }))
   .build()
 ```
+
+把 `widgets` 传给 `serv.createApp` 的 `procedures.widgets`，并在应用契约中使用同名领域键。若需要中间件或测试所用的请求路径，调用 `apiContract.pathOf(widgetContract.preview)` 读取已声明的单个操作，随后添加宿主前缀。
 
 ### 传输加密
 
@@ -795,6 +784,8 @@ const app = serv.createApp({
     iam: serv.createIamProcedures({ iam }),
     widget: createMyProcedures(),
   },
+  // 应用从这个 IAM 服务派生请求认证上下文。
+  iam,
   http: { apiPrefix: '/api/v1' },
 })
 ```

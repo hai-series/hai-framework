@@ -16,13 +16,15 @@ Install with pnpm: `pnpm add @h-ai/api-contract`.
 
 ## Configuration Reference
 
-This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/api-contract.en.md); arguments or response structures are in the [reference](../../docs/usage/data/api-contract.en.md#public-settings).
+The application declares its contracts in code. The host reads the HTTP prefix and transport settings. See the [configuration reference](../../docs/usage/configuration/api-contract.en.md).
 
 ## Features
 
 [Browse the API list](../../docs/usage/function/api-contract.en.md#api-reference) for entry points, inputs, results and examples.
 
-See [conditional domains](../../docs/usage/function/api-contract.en.md#conditional-domains) and [IAM contracts and OpenAPI](../../docs/usage/function/api-contract.en.md#serv-iam-wiring).
+Use `route` to [declare one operation](../../docs/usage/function/api-contract.en.md#declare-routes), `create` to [compose domains](../../docs/usage/function/api-contract.en.md#compose-domains) and `pathOf` to [read an operation path](../../docs/usage/function/api-contract.en.md#read-route-path).
+
+Connect the contract to [Serv](../../docs/usage/function/api-contract.en.md#use-with-serv), a [Kit file route](../../docs/usage/function/api-contract.en.md#use-with-kit) or [API Client](../../docs/usage/function/api-contract.en.md#use-with-client).
 
 ## Data Structures
 

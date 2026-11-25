@@ -283,6 +283,8 @@ Alipay sends a form request. Return HTTP 200 with the exact text `success` when 
 
 Enqueue fulfillment only for a `paid` event. If the service composes the entire `apiContract.payment`, provide an Alipay procedure that fails closed when the raw middleware is absent. You can also compose only the order routes and the other notifications the app implements.
 
+Pass the Alipay notification operation `apiContract.payment.notifications.alipay` to `apiContract.pathOf` to get `/payment/notifications/alipay`. Prepend the application’s API prefix to mount the middleware. See [read an operation path](./api-contract.en.md#read-route-path).
+
 ```ts
 import type { HaiResult } from '@h-ai/core'
 import type { PaymentNotifyResult } from '@h-ai/payment'
@@ -294,6 +296,7 @@ export function alipayNotification(
   apiPrefix: string,
   recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
 ): ServMiddlewareMount {
+  // Read the notification operation’s business path and prepend the host prefix.
   const path = apiPrefix + apiContract.pathOf(apiContract.payment.notifications.alipay)
   return {
     path,

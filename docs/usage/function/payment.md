@@ -354,6 +354,8 @@ async function verifyNotification(providerName: string, request: Request) {
 
 只有 `paid` 事件可以产生履约任务。 如果将整个 `apiContract.payment` 组合进服务，仍须为支付宝 procedure 提供实现。用原始中间件处理平台通知，procedure 在未经过该挂载时返回失败。也可仅组合订单和由应用实际实现的其他通知。
 
+把支付宝通知的操作节点 `apiContract.payment.notifications.alipay` 传给 `apiContract.pathOf`，得到 `/payment/notifications/alipay`。再拼上应用的 API 前缀作为中间件挂载路径。见[读取已声明的业务路径](./api-contract.md#read-route-path)。
+
 ```ts
 import type { HaiResult } from '@h-ai/core'
 import type { PaymentNotifyResult } from '@h-ai/payment'
@@ -365,6 +367,7 @@ export function alipayNotification(
   apiPrefix: string,
   recordVerified: (notification: PaymentNotifyResult) => Promise<HaiResult<unknown>>,
 ): ServMiddlewareMount {
+  // 从单个通知操作读业务路径，再拼接宿主前缀。
   const path = apiPrefix + apiContract.pathOf(apiContract.payment.notifications.alipay)
   return {
     path,

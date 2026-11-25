@@ -218,6 +218,8 @@ export const handle: Handle = haiHandle
 
 ### 校验输入并返回响应：`kit.validate`、`kit.response`
 
+共用 HTTP 契约时，在 SvelteKit 的 `+server.ts` 命名导出请求方法。文件路径决定 URL。把共享包导出的 Zod Schema 传给 `kit.validate.body`、`query` 或 `params`，再用 `kit.response` 返回与契约一致的数据。若由 typed client 调用，方法、路径及响应结构须与契约吻合。见[用 Kit 复用契约和 Schema](./api-contract.md#use-with-kit)。
+
 在端点中先解析输入，再按成功、无内容、字段错误或领域失败构造 HTTP 响应。
 
 #### 接口清单

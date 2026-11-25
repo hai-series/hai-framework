@@ -32,6 +32,8 @@ pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/
 Serv は型付き HTTP 契約を独立した Node サーバーに配置します。待ち受けを始める前に、認証、通信暗号化、信頼できるリクエスト情報の取得を設定します。
 ルートから読み込んだ `serv` で IAM、Storage、AI、Feedback の標準ハンドラーを作成できます。
 
+`apiContract.route(route)` で操作を宣言し、`apiContract.create(options)` でアプリが公開するドメインを選びます。`serv.implement(contract).route(key, handler)` で実装を関連付けます。`key` は `users.update` のような契約内のキーです。業務パスは契約で宣言し、`http.apiPrefix` はホストが指定します。[Serv で契約を配置する](./api-contract.ja.md#use-with-serv)を参照してください。
+
 ```ts
 import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'

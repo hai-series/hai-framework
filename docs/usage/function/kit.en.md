@@ -109,6 +109,8 @@ The workflow starts with createHandle and sequence, using an application-initial
 
 ### Validate and respond: `kit.validate`, `kit.response`
 
+When reusing an HTTP contract, export the request method from the SvelteKit `+server.ts` file. Its location determines the URL. Pass the shared Zod schema to `kit.validate.body`, `query` or `params`, then return a matching payload with `kit.response`. A typed client needs the file route’s HTTP method, path and response to match the contract. See [reuse a contract with Kit](./api-contract.en.md#use-with-kit).
+
 Parse endpoint input before constructing success, no-content, validation or domain-error responses.
 
 #### Interface list
