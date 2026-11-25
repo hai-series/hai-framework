@@ -513,6 +513,57 @@ export async function signOut(client: ApiClient<{ iam: typeof apiContract.iam }>
 
 The browser can then return to the sign-in view. Keep local and remote failure state distinct if the action only completes in one place.
 
+<a id="http-contract-extensions"></a>
+
+### Create a client from the application contract with `apiClient.create(contract)`
+
+Save this example as `project-api.ts` to combine the base and optional operations. Share the application contract between client and server, and include the branches your service exposes. Merge operations within `roles`, `files`, `chats`, `memories`, and `orders` to preserve the base methods.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { extensions } = apiContract
+
+export const projectContract = apiContract.create({
+  iam: {
+    ...apiContract.iam,
+    apiKeys: extensions.iam.apiKeys,
+    roles: { ...apiContract.iam.roles, ...extensions.iam.roles },
+  },
+  storage: {
+    ...apiContract.storage,
+    files: { ...apiContract.storage.files, ...extensions.storage.files },
+  },
+  ai: {
+    ...apiContract.ai,
+    ...extensions.ai,
+    chats: { ...apiContract.ai.chats, ...extensions.ai.chats },
+    memories: { ...apiContract.ai.memories, ...extensions.ai.memories },
+  },
+  audit: extensions.audit,
+  payment: { orders: { ...apiContract.payment.orders, ...extensions.payment.orders } },
+  feedback: apiContract.feedback,
+})
+
+export async function connectProjectClient(baseUrl: string, accessToken: string) {
+  const client = apiClient.create(projectContract)
+  const ready = await client.init({
+    baseUrl,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!ready.success)
+    throw new Error(ready.error.message)
+  return { client }
+}
+
+export type ProjectClient = Awaited<ReturnType<typeof connectProjectClient>>['client']
+```
+
+Pass the current access token and the API URL including its server prefix. Use the returned `client` in the examples below and close it when its page or application owner exits. Use host-enabled HTTPS routes for streams and files. When other routes require framework transport encryption, create separate client instances for the two policies. Handle refusals as [authorization results](#request-authorization).
+
+See the endpoint and service setup in [API Contract](api-contract.en.md#http-contract-extensions) · [Serv](serv.en.md#http-contract-extensions)
+
 <a id="iam-admin-inputs"></a>
 
 ### Manage users, roles and permissions with `client.iam`
@@ -579,6 +630,45 @@ export async function listAuditors(
 
 Render the returned page or display the failure. The application that provided the client closes it at the end of its lifetime.
 
+<a id="iam-management-extensions"></a>
+
+#### Role permission assignments and API key management
+
+Use the [application client](#http-contract-extensions) for these six operations. Serv checks `iam.roles.read` / `iam.roles.write` or `iam.apiKeys.read` / `iam.apiKeys.write` and access to the target account or role. API key sort fields are `name`, `createdAt`, `lastUsedAt`, and `expiresAt`. Reauthentication operation IDs are `iam.roles.replacePermissions`, `iam.apiKeys.create`, and `iam.apiKeys.delete`. Pass the matching ticket in `options.context.reauthentication`. On a role update conflict, reload its permissions and obtain a fresh ticket as required.
+
+| API | Purpose | Parameters and defaults | Return or failure | Example call |
+| --- | --- | --- | --- | --- |
+| `client.iam.roles.listPermissions(input, options?)` | List direct role permissions | Required role `id` from the roles list. | `HaiResult` with an array of permission records. | `await client.iam.roles.listPermissions({ id: roleId })` |
+| `client.iam.roles.replacePermissions(input, options?)` | Replace all direct role permissions | Required role `id` and the full `permissionIds` array. Use `[]` to clear it. Supply a reauthentication ticket when required. | `HaiResult<void>`. A concurrent edit sets `error.httpStatus` to 409. | `await client.iam.roles.replacePermissions({ id: roleId, permissionIds }, options)` |
+| `client.iam.apiKeys.list(input, options?)` | List API keys for an account | Required `userId`. Optional `page`, `pageSize`, `search`, `enabled`, `sortBy`, and `sortDirection`. | `HaiResult` with `items`, `total`, `page`, and `pageSize`. | `await client.iam.apiKeys.list({ userId, page: 1, enabled: true })` |
+| `client.iam.apiKeys.create(input, options?)` | Issue an API key for an account | Required `userId` and `name`. Optional `scopes` and `expirationDays`. IAM supplies the expiry default. Use `0` for no expiry. | `HaiResult` with metadata in `data.apiKey` and the one-time secret in `data.rawKey`. | `await client.iam.apiKeys.create({ userId, name, expirationDays: 30 }, options)` |
+| `client.iam.apiKeys.get(input, options?)` | Read API key metadata | Required `id` from the list or the create response’s `apiKey.id`. | `HaiResult` with prefix, status, expiry, and scopes in the metadata. | `await client.iam.apiKeys.get({ id: keyId })` |
+| `client.iam.apiKeys.revoke(input, options?)` | Revoke an API key | Required key record `id`. Supply the ticket when the policy requires it. | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id: keyId }, options)` |
+
+#### Scenario: Issue a key for a report integration
+
+Select the target account’s `userId` and prompt for the current password when the server configures `iam.apiKeys.create` as sensitive. On success, hand the one-time `rawKey` to the integration during this action. List and detail screens show metadata. Keep the secret out of logs.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function issueReportKey(client: ProjectClient, userId: string, password: string) {
+  const proof = await client.iam.auth.reauthenticate({ password, operation: 'iam.apiKeys.create' })
+  if (!proof.success)
+    return proof
+
+  const issued = await client.iam.apiKeys.create({
+    userId,
+    name: 'Report reader',
+    expirationDays: 30,
+    scopes: ['reports:read'],
+  }, { context: { reauthentication: proof.data.ticket } })
+  if (!issued.success)
+    return issued
+  return { success: true as const, data: { id: issued.data.apiKey.id, rawKey: issued.data.rawKey } }
+}
+```
+
 #### Scenario: Confirm a protected user deletion
 
 In an authorized Serv administration view, take the target ID from a successful list response and ask for the signed-in operator's current password. Obtain a proof for `iam.users.delete` and attach the returned ticket only to that call.
@@ -616,7 +706,7 @@ Check the returned result before removing that user from the view. The applicati
 
 ### Access object storage with `client.storage`
 
-Use the Storage branch to request signed URLs or operate on object metadata. The service must mount the Storage routes and authorize the requested object key. Each procedure accepts optional [per-call request options](#request-options).
+Use the mounted Storage endpoints to manage objects. Signed URLs send the browser directly to the storage backend. For small-file transfers through the application, use the [application client](#http-contract-extensions) and enable the corresponding HTTPS routes. This also works with local storage that does not support signed URLs.
 
 #### Interface list
 
@@ -628,6 +718,8 @@ Use the Storage branch to request signed URLs or operate on object metadata. The
 | `files.getMetadata(input, options?)` | Read metadata for a known object key. | `{ key }` for an object the caller may read. | `HaiResult` containing size, content type, and other metadata. | `await client.storage.files.getMetadata({ key })` |
 | `files.delete(input, options?)` | Delete an object. | `{ key }` for an object the caller may delete. | `HaiResult<void>`. | `await client.storage.files.delete({ key })` |
 | `files.deleteMany(input, options?)` | Delete a batch of objects. | `{ keys }`, a nonempty array of up to 1,000 object keys. | `HaiResult` containing deletion progress. A partial failure can include the same structure in `error.ext.deleteMany`. | `await client.storage.files.deleteMany({ keys: [key] })` |
+| `client.storage.files.upload(input, options?)` | Upload through the application server | Required authorized object `key` and a nonempty `file: File` of at most 5 MiB. | `HaiResult` with file metadata. An existing object at the same key causes a failure. | `await client.storage.files.upload({ key, file })` |
+| `client.storage.files.download(input, options?)` | Download an attachment through the application server | Required object `key` with read access. The service caps downloads at 5 MiB. | `File` on success or the failure branch of `HaiResult<never>`. | `await client.storage.files.download({ key })` |
 
 Use the returned URL directly for the object transfer. For a signed upload, use the signed method and matching content type. The signing procedure and the object transfer have separate outcomes.
 
@@ -670,13 +762,30 @@ export async function uploadReport(
 
 Show the returned key after Storage accepts the upload. Handle a rejected Fetch promise as a transfer failure and request a new URL if the signature has expired. The application owns the initialized client.
 
+#### Scenario: Upload and read back a PDF through the application
+
+The file picker supplies the `File`, and the application assigns an object `key` the caller may write. Read the same file back using the receipt’s key. Offer a preview or download on success and show the returned error if either call fails.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function verifyUploadedPdf(client: ProjectClient, key: string, file: File) {
+  const uploaded = await client.storage.files.upload({ key, file })
+  if (!uploaded.success)
+    return uploaded
+
+  const downloaded = await client.storage.files.download({ key: uploaded.data.key })
+  if (!(downloaded instanceof File))
+    return downloaded
+  return { success: true as const, data: downloaded }
+}
+```
+
 <a id="ai-requests"></a>
 
-### Call chat, memory and session procedures with `client.ai`
+### Call chat, memory, and session endpoints with `client.ai`
 
-Use the AI branch on a service that mounts the AI routes. Each procedure accepts optional [per-call request options](#request-options).
-The default AI client returns JSON. Use the [optional HTTP contracts](#http-contract-extensions) for streamed replies and media.
-
+Once the service mounts the AI routes, the default client supports JSON chat completion, messages, history, memory queries, and session listing. Use the [application client](#http-contract-extensions) for streaming, memory writes, and media. The signed-in owner is the default. The host authorizes any explicit `objectId`.
 
 #### Interface list
 
@@ -688,6 +797,16 @@ The default AI client returns JSON. Use the [optional HTTP contracts](#http-cont
 | `memories.recall(input, options?)` | Search for memories by query. | `query`, optional `topK` (at least 1), `types`, `minImportance` (0–1), and `objectId`. | `HaiResult` containing matching memories. | `await client.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
 | `memories.list(input, options?)` | List memories for an authorized owner. | Pass an object, using `{}` for defaults. Optional `types`, `objectId`, zero-based `offset`, and `limit` (1–100). | `HaiResult` containing memory entries. | `await client.ai.memories.list({ limit: 20 })` |
 | `sessions.list(input, options?)` | List AI sessions. | Pass `{}` for the signed-in owner, or supply an authorized `objectId`. | `HaiResult` containing session entries. | `await client.ai.sessions.list({})` |
+| `client.ai.chats.streamCompletion(input, options?)` | Receive model output incrementally | Uses the same input as `createCompletion`. Pass a `signal` as a per-call option. | An async iterable on success, a result failure before setup, and an iteration error after setup. | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `client.ai.memories.add(input, options?)` | Save a memory | Required `content` (1–5000 characters) and `type`. Optional `importance` (0–1) and authorized `objectId`. | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.add({ content, type: 'preference' })` |
+| `client.ai.memories.update(input, options?)` | Edit a memory | Required `id` and at least one of `content`, `type`, or `importance`. Optional `objectId`. | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.update({ id: memoryId, content })` |
+| `client.ai.memories.remove(input, options?)` | Remove a memory | Required memory `id`. Optional authorized `objectId`. | `HaiResult<void>` | `await client.ai.memories.remove({ id: memoryId })` |
+| `client.ai.memories.clear(input, options?)` | Clear memories in an authorized scope | Pass `{}` for the default owner, or specify `objectId` and nonempty `types`. The host must authorize the clear operation. | `HaiResult<void>` | `await client.ai.memories.clear({ types: ['preference'] })` |
+| `client.ai.audio.getCapabilities(input, options?)` | Check audio capabilities for a model | Required `operation` of `transcribe` or `synthesize`. Optional model subject to host policy. | `HaiResult` with capability flags such as real-time input or streaming output. | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `client.ai.audio.issueTicket(input, options?)` | Obtain a voice WebSocket ticket | Required `operation` of `transcribe` or `synthesize`; optional `model`. | `HaiResult` with a one-time `ticket` and `expiresAt` in milliseconds. Valid for 30 seconds. | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `client.ai.audio.transcribe(input, options?)` | Transcribe a recording | Required WAV or MP3 `audio: File` up to 8 MiB. Optional `language` and `model`. | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `client.ai.audio.synthesize(input, options?)` | Synthesize speech from text | Required `text` (1–5000 characters). Optional `voice`, `model`, and `format` (`wav` by default, or `mp3`). | An audio `File` on success, or a failure result. | `await client.ai.audio.synthesize({ text, format: 'mp3' })` |
+| `client.ai.images.generate(input, options?)` | Generate one image from a prompt and optional references | Required `prompt` (1–5000 characters). Optional `model`, `width` and `height` together (1–2048 each), and up to four `referenceImages` totaling at most 10 MiB. | An image `File` on success, or a failure result. | `await client.ai.images.generate({ prompt, referenceImages })` |
 
 <a id="ai-input-fields"></a>
 
@@ -724,6 +843,165 @@ export async function sendChatMessage(
 ```
 
 Render the returned text on success. The application owns the initialized client and can cancel the call through the supplied signal.
+
+#### Scenario: Display the first response as it streams
+
+Create an `AbortController` before sending the question and pass its `signal`. Append each text delta to the displayed reply and finish at `done`. Abort on cancellation or navigation. Handle iteration errors in the page.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function streamAnswer(
+  client: ProjectClient,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const events = await client.ai.chats.streamCompletion({
+    messages: [{ role: 'user', content: question }],
+  }, { signal })
+  if (!(Symbol.asyncIterator in events))
+    throw new Error(events.error.message)
+
+  for await (const event of events) {
+    if (event.type === 'done')
+      return
+    const text = event.choices.find(choice => choice.index === 0)?.delta.content
+    if (text)
+      onText(text)
+  }
+}
+```
+
+#### Scenario: Transcribe a recording and create an audio preview
+
+Pass a WAV or MP3 recording from the page. If transcription yields text, synthesize it as MP3. The successful value is an audio file. An empty transcript returns `null` so the page can show that there is no text to synthesize.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function makeVoicePreview(client: ProjectClient, recording: File) {
+  const transcript = await client.ai.audio.transcribe({ audio: recording })
+  if (!transcript.success)
+    return transcript
+  if (!transcript.data.text.trim())
+    return { success: true as const, data: null }
+
+  const speech = await client.ai.audio.synthesize({ text: transcript.data.text, format: 'mp3' })
+  if (!(speech instanceof File))
+    return speech
+  return { success: true as const, data: speech }
+}
+```
+
+Audio and reference-image uploads use multipart. Use synthesized audio or a generated image directly as a `File`. Preview it with `URL.createObjectURL(file)` and revoke the URL after use. Real-time voice runs over WebSocket. Set the `@h-ai/ai/client` `getTicket` callback to call `client.ai.audio.issueTicket(request)` before each connection, return `data.ticket` on success, and surface failures before connecting.
+
+<a id="audit-requests"></a>
+
+### Query and archive audit logs with `client.audit`
+
+With `audit` in the [application contract](#http-contract-extensions), an admin console can query, summarize, and archive logs. The Serv permissions are `audit:read` and `audit:backup`. The host determines the data scope and whether `audit.backup` requires a fresh ticket. The archive receipt’s `key` identifies a private object.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return or failure | Example call |
+| --- | --- | --- | --- | --- |
+| `client.audit.logs.list(input, options?)` | List audit logs by page | Use `{}` for default paging. Optional pagination, category, outcome, severity, user, scope, resource, action, trace or request ID, ISO date range, and sort. | `HaiResult` with log entries in `data.items` and a count in `data.total`. | `await client.audit.logs.list({ page: 1, outcome: 'denied' })` |
+| `client.audit.logs.stats(input, options?)` | Count log entries by action | Optional `days` (0–365 days, default 7). Filters are `category`, `outcome`, `severity`, `scopeId`, `userId`, and `resource`. | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `client.audit.backup.run(input, options?)` | Write a private audit archive | Required operation UUID `id`. Reuse it when retrying the same operation. The host controls reauthentication. | `HaiResult` with archive `key`, `recordCount`, `sha256`, and timestamps. | `await client.audit.backup.run({ id: archiveId }, options)` |
+
+#### Scenario: Review denied actions from the past week
+
+When opening the audit view, use the same outcome filter for the log page and statistics. Show the records in a table and the seven-day counts by action in a summary. Update both together after success.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function loadDeniedAudit(client: ProjectClient) {
+  const recent = await client.audit.logs.list({ page: 1, pageSize: 20, outcome: 'denied' })
+  if (!recent.success)
+    return recent
+
+  const weekly = await client.audit.logs.stats({ days: 7, outcome: 'denied' })
+  if (!weekly.success)
+    return weekly
+  return { success: true as const, data: { recent: recent.data, weekly: weekly.data } }
+}
+```
+
+<a id="payment-requests"></a>
+
+### Start checkout and manage orders with `client.payment.orders`
+
+Use the [application’s order routes](#http-contract-extensions) to start payment, read its status, refund it, or close an unpaid order. The host authorizes the order and the caller. Use amounts consistent with the business and provider. Provider callbacks go to the Payment notification routes on the server.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return or failure | Example call |
+| --- | --- | --- | --- | --- |
+| `client.payment.orders.create(input, options?)` | Start checkout and obtain payment parameters | Required `provider`, integer `amount`, `description`, and `tradeType`. WeChat uses `jsapi` and requires a channel `userId`. Alipay and Stripe use `h5`. Optional `metadata`. | `HaiResult` with `clientParams` and optional `prepayId`. | `await client.payment.orders.create({ provider: 'stripe', tradeType: 'h5', amount, description })` |
+| `client.payment.orders.get(input, options?)` | Read an order’s status | Required `orderNo` from the application order record. | `HaiResult`. Read `status` on success. | `await client.payment.orders.get({ orderNo })` |
+| `client.payment.orders.refund(input, options?)` | Request a refund | Required `provider`, `orderNo`, `refundNo`, and integer `amount`. Optional `reason`. | `HaiResult` with `refundNo`, `refundId`, and refund status. | `await client.payment.orders.refund({ provider, orderNo, refundNo, amount })` |
+| `client.payment.orders.close(input, options?)` | Close an unpaid order | Required `provider` and `orderNo` from the order being closed. The host verifies order access and the provider. | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+#### Scenario: Close an unpaid order and reload its status
+
+Offer a close action to an authorized user when the order’s status is `pending`. On confirmation, pass the provider and merchant order number from the record. Reload the status after closing, or show the returned error.
+
+```ts
+import type { PaymentCloseOrderInput } from '@h-ai/api-contract'
+import type { ProjectClient } from './project-api'
+
+export async function closeUnpaidOrder(client: ProjectClient, order: PaymentCloseOrderInput) {
+  const closed = await client.payment.orders.close(order)
+  if (!closed.success)
+    return closed
+  return client.payment.orders.get({ orderNo: order.orderNo })
+}
+```
+
+<a id="feedback-requests"></a>
+
+### Submit and manage feedback with `client.feedback`
+
+Mount `apiContract.feedback` on the service and use it in the [application contract](#http-contract-extensions) for both the feedback form and admin console. Authors typically call `submit` and `listMine`. The host authorizes management, retry, and export. Read `reports.policy` for evidence and attachment limits.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return or failure | Example call |
+| --- | --- | --- | --- | --- |
+| `client.feedback.reports.policy(input, options?)` | Read feedback limits | Pass `{}`. | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
+| `client.feedback.reports.submit(input, options?)` | Submit a report | Required `submissionId` and `appId`. Optional description, contact, page, app version, error location, and evidence. Reuse the submission ID when retrying. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
+| `client.feedback.reports.listMine(input, options?)` | List the caller’s reports | Use `{}` for default pagination. Optional status, app, time, and other filters. | `HaiResult` with a page of reports. | `await client.feedback.reports.listMine({ page: 1 })` |
+| `client.feedback.reports.list(input, options?)` | List reports with administrative access | Pass `{}` or pagination, status, app, time, and other filters. | `HaiResult` with a page within the authorized scope. | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | Read report details | Required report `id`. | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.getEvidence(input, options?)` | Page through evidence | Required report `id`. Optional pagination, `source`, `kind`, `requestId`, `errorId`, and time range. | `HaiResult` with a page of evidence. | `await client.feedback.reports.getEvidence({ id, requestId })` |
+| `client.feedback.reports.setStatus(input, options?)` | Handle or reopen a report | Required `id`, `status` (`pending` or `handled`), and the last-read `expectedVersion`. Optional `note`. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
+| `client.feedback.reports.retry(input, options?)` | Retry a background job | Required `id` and `target` (`collect`, `notify`, `webhook`, `export`, or `attachment`). Optional `targetId`. | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
+| `client.feedback.reports.appendEvidence(input, options?)` | Append collected evidence | Required `id` and an `evidence` array of up to 1000 items. | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
+| `client.feedback.reports.completeCollection(input, options?)` | Complete evidence collection | Required `id`; optional `missing` lists unavailable material. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
+| `client.feedback.reports.export(input, options?)` | Create an export job | Required `id`. Optional `evidenceRevision` pins the evidence revision. | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
+| `client.feedback.reports.getExport(input, options?)` | Read a completed export | Required report `id` and export `jobId`. | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
+| `client.feedback.attachments.upload(input, options?)` | Upload a declared feedback attachment | Required report `id`, a declared `attachmentId`, and `dataBase64`. | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
+| `client.feedback.attachments.get(input, options?)` | Read an authorized attachment | Required report `id` and `attachmentId`. | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+
+#### Scenario: Open the report after submitting feedback
+
+Send the application’s `appId` and the form description. Generate and keep a `submissionId` for this submission, reusing it after a network failure. After acceptance, open the details using the returned report ID.
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function submitAndReadFeedback(
+  client: ProjectClient,
+  input: { submissionId: string, appId: string, description: string },
+) {
+  const submitted = await client.feedback.reports.submit(input)
+  if (!submitted.success)
+    return submitted
+  return client.feedback.reports.get({ id: submitted.data.id })
+}
+```
 
 <a id="encrypted-requests"></a>
 
@@ -812,57 +1090,6 @@ export async function checkHealth(origin: string) {
 ```
 
 The health request uses the server's HTTPS policy for that route. A route requiring encrypted transport needs the encrypted instance.
-
-<a id="http-contract-extensions"></a>
-
-### Enable optional HTTP contracts
-
-Pass the current session access token and the user’s question to `streamAnswer`. Append each text delta to the answer and abort on page exit. An HTTP failure before the stream opens returns a failure result. An error after streaming starts rejects the iterator. Use the [HTTPS route mounted by Serv](serv.en.md#http-contract-extensions).
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
-
-const { streamCompletion } = apiContract.extensions.ai.chats
-const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
-
-export async function streamAnswer(
-  accessToken: string,
-  question: string,
-  onText: (text: string) => void,
-  signal: AbortSignal,
-) {
-  const client = apiClient.create(contract)
-  const initialized = await client.init({
-    baseUrl: 'https://api.example.com/api/v1',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  try {
-    const events = await client.ai.chats.streamCompletion({
-      messages: [{ role: 'user', content: question }],
-    }, { signal })
-    if (!(Symbol.asyncIterator in events))
-      throw new Error(events.error.message)
-
-    for await (const event of events) {
-      if (event.type === 'done')
-        break
-      for (const { delta } of event.choices) {
-        if (delta.content)
-          onText(delta.content)
-      }
-    }
-  }
-  finally {
-    await client.close()
-  }
-}
-```
-
-[Endpoints and fields](api-contract.en.md#http-contract-extensions)
 
 <a id="transport-observation"></a>
 <a id="encrypt-transport-and-observe-outcomes-apiclient"></a>

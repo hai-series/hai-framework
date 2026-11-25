@@ -483,8 +483,8 @@ console.info(budget.maxTransportBytes) // 22435160 字节
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `ai.chats.streamCompletion(input)` | 逐段生成聊天回复 · `POST /ai/chats/completions/stream` | `messages`，可选主体、会话、模型、工具及生成参数 | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
-| `ai.memories.add(input)` | 新增记忆 · `POST /ai/memories` | `content`、`type`，可选 `importance`、`objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
-| `ai.memories.update(input)` | 修改记忆 · `PATCH /ai/memories/{id}` | `id`、至少一个待修改字段，可选 `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.add(input)` | 新增记忆 · `POST /ai/memories` | `content`、`type`，可选 `importance`、`objectId` | `HaiResult`，`data` 为记忆条目，含 `id`、`content` 和 `type`。 | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | 修改记忆 · `PATCH /ai/memories/{id}` | `id`、至少一个待修改字段，可选 `objectId` | `HaiResult`，`data` 为记忆条目，含 `id`、`content` 和 `type`。 | `await client.ai.memories.update({ id, content })` |
 | `ai.memories.remove(input)` | 删除记忆 · `DELETE /ai/memories/{id}` | `id`、可选 `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
 | `ai.memories.clear(input)` | 清空授权范围的记忆 · `DELETE /ai/memories` | 可选 `objectId`、`types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
 | `ai.audio.getCapabilities(input)` | 查询语音能力 · `GET /ai/audio/capabilities` | `operation`、可选 `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |

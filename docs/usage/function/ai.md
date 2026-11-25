@@ -124,7 +124,7 @@ finally {
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：独立浏览器 Audio WebSocket 客户端。
 
-`@h-ai/ai/client` 仅提供 `ai.createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。浏览器不导出 Node 单例 `ai`。
+`@h-ai/ai/client` 仅提供 `ai.createAudioClient({ url, getTicket })` 与 Audio 客户端类型。JSON 补全、流式聊天、记忆写入和媒体 HTTP 操作可由宿主挂载，通过 [API Client 的 AI 调用清单](api-client.md#ai-requests) 接入。A2A 使用独立的协议入口。浏览器不导出 Node 单例 `ai`。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

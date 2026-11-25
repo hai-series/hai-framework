@@ -476,8 +476,8 @@ Select the endpoints to publish from `apiContract.extensions`, mount the matchin
 | API | Purpose | Parameters and defaults | Return or failure | Example call |
 | --- | --- | --- | --- | --- |
 | `ai.chats.streamCompletion(input)` | Stream a reply · `POST /ai/chats/completions/stream` | `messages` with optional owner, session, model, tools, and generation options | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
-| `ai.memories.add(input)` | Add a memory · `POST /ai/memories` | `content`, `type`, optional `importance` and `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
-| `ai.memories.update(input)` | Edit a memory · `PATCH /ai/memories/{id}` | `id`, at least one editable field, optional `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.add(input)` | Add a memory · `POST /ai/memories` | `content`, `type`, optional `importance` and `objectId` | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | Edit a memory · `PATCH /ai/memories/{id}` | `id`, at least one editable field, optional `objectId` | `HaiResult` with a memory entry containing `id`, `content`, and `type`. | `await client.ai.memories.update({ id, content })` |
 | `ai.memories.remove(input)` | Remove a memory · `DELETE /ai/memories/{id}` | `id`, optional `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
 | `ai.memories.clear(input)` | Clear memories in an authorized scope · `DELETE /ai/memories` | Optional `objectId`, `types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
 | `ai.audio.getCapabilities(input)` | Read speech capabilities · `GET /ai/audio/capabilities` | `operation`, optional `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |

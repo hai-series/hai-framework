@@ -4,6 +4,8 @@
 
 [原文（中国語）](ai.md) · [設定](../configuration/ai.ja.md) · [データ構造](../data/ai.ja.md)
 
+ブラウザー向けのチャット・記憶・メディア HTTP 操作は [API Client の AI 操作一覧](api-client.ja.md#ai-requests)を参照してください。
+
 <a id="quick-start"></a>
 
 ## クイックスタート

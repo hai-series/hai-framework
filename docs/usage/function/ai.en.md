@@ -4,6 +4,8 @@
 
 [Chinese source](ai.md) · [Configuration](../configuration/ai.en.md) · [Data structures](../data/ai.en.md)
 
+For browser-facing chat, memory, and media HTTP calls, see the [API Client AI operations](api-client.en.md#ai-requests).
+
 <a id="quick-start"></a>
 
 ## Quick start

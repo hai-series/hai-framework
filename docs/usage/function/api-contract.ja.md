@@ -476,8 +476,8 @@ console.info(budget.maxTransportBytes) // 22435160 バイト
 | API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `ai.chats.streamCompletion(input)` | 返信を逐次生成 · `POST /ai/chats/completions/stream` | `messages` と任意の対象、セッション、モデル、ツール、生成設定 | SSE `AsyncIterable<AiChatStreamEvent>` | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
-| `ai.memories.add(input)` | 記憶を追加 · `POST /ai/memories` | `content`、`type`、任意の `importance`、`objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.add({ content, type: 'fact' })` |
-| `ai.memories.update(input)` | 記憶を変更 · `PATCH /ai/memories/{id}` | `id`、変更項目を一つ以上、任意の `objectId` | `HaiResult<AiMemoryEntry>` | `await client.ai.memories.update({ id, content })` |
+| `ai.memories.add(input)` | 記憶を追加 · `POST /ai/memories` | `content`、`type`、任意の `importance`、`objectId` | `HaiResult`。記憶の `id`、`content`、`type` が `data` に入る。 | `await client.ai.memories.add({ content, type: 'fact' })` |
+| `ai.memories.update(input)` | 記憶を変更 · `PATCH /ai/memories/{id}` | `id`、変更項目を一つ以上、任意の `objectId` | `HaiResult`。記憶の `id`、`content`、`type` が `data` に入る。 | `await client.ai.memories.update({ id, content })` |
 | `ai.memories.remove(input)` | 記憶を削除 · `DELETE /ai/memories/{id}` | `id`、任意の `objectId` | `HaiResult<void>` | `await client.ai.memories.remove({ id })` |
 | `ai.memories.clear(input)` | 認可範囲の記憶を消去 · `DELETE /ai/memories` | 任意の `objectId`、`types` | `HaiResult<void>` | `await client.ai.memories.clear({})` |
 | `ai.audio.getCapabilities(input)` | 音声機能を照会 · `GET /ai/audio/capabilities` | `operation`、任意の `model` | `HaiResult` | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |

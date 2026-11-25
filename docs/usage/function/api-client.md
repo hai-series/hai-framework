@@ -530,6 +530,57 @@ export async function signOut() {
 }
 ```
 
+<a id="http-contract-extensions"></a>
+
+### 用应用契约创建客户端 `apiClient.create(contract)`
+
+下例将基础操作和扩展操作组合成 `project-api.ts`。服务端、客户端共享应用的契约，按已部署的接口保留相应分支。合并 `roles`、`files`、`chats`、`memories` 和 `orders` 时展开组内操作，避免覆盖原来的方法。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { extensions } = apiContract
+
+export const projectContract = apiContract.create({
+  iam: {
+    ...apiContract.iam,
+    apiKeys: extensions.iam.apiKeys,
+    roles: { ...apiContract.iam.roles, ...extensions.iam.roles },
+  },
+  storage: {
+    ...apiContract.storage,
+    files: { ...apiContract.storage.files, ...extensions.storage.files },
+  },
+  ai: {
+    ...apiContract.ai,
+    ...extensions.ai,
+    chats: { ...apiContract.ai.chats, ...extensions.ai.chats },
+    memories: { ...apiContract.ai.memories, ...extensions.ai.memories },
+  },
+  audit: extensions.audit,
+  payment: { orders: { ...apiContract.payment.orders, ...extensions.payment.orders } },
+  feedback: apiContract.feedback,
+})
+
+export async function connectProjectClient(baseUrl: string, accessToken: string) {
+  const client = apiClient.create(projectContract)
+  const ready = await client.init({
+    baseUrl,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!ready.success)
+    throw new Error(ready.error.message)
+  return { client }
+}
+
+export type ProjectClient = Awaited<ReturnType<typeof connectProjectClient>>['client']
+```
+
+示例由页面传入当前访问令牌和 API 地址（包括服务端前缀），从返回对象取出 `client` 交给下面各场景。页面或应用退出时由实例所有者调用 `client.close()`。流式和文件传输使用宿主允许的 HTTPS 路由。如果部署同时要求其他接口使用框架传输加密，为两类路由分别创建匹配策略的实例。授权失败时按[调用结果](#request-authorization)处理。
+
+具体端点和服务端挂载方式见 [API Contract](api-contract.md#http-contract-extensions) · [Serv](serv.md#http-contract-extensions)。
+
 <a id="iam-管理字段"></a>
 <a id="场景调用认证与用户管理-api"></a>
 <a id="iam-admin-inputs"></a>
@@ -570,6 +621,45 @@ export async function signOut() {
 | `accountType`、`accountStatus`、`accountExpiresAt` | 创建或更新用户时可设置永久 `permanent` 或临时 `temporary` 账号、状态和期限；更新时 `null` 清除期限。邀请账号状态仅可为 `active`。 |
 | `email`、`phone`、`displayName`、`avatarUrl`、`metadata`、`roleIds` | 用户资料与角色分配字段。更新时可设置头像；`metadata` 是应用扩展对象，`roleIds` 来自角色操作的记录 ID。 |
 | `type`、`sensitiveOperations` | 权限类型可为 `menu`、`api` 或 `button`。敏感操作列表最多 1000 项，每项 1–128 字符；传 `[]` 清除。 |
+
+<a id="iam-management-extensions"></a>
+
+#### 角色权限关联与 API Key 管理
+
+用[应用契约创建的 `client`](#http-contract-extensions) 调用以下六个管理操作。Serv 检查 `iam.roles.read` / `iam.roles.write` 或 `iam.apiKeys.read` / `iam.apiKeys.write` 以及目标账号或角色。API Key 列表的 `sortBy` 支持 `name`、`createdAt`、`lastUsedAt`、`expiresAt`。再认证策略可使用 `iam.roles.replacePermissions`、`iam.apiKeys.create`、`iam.apiKeys.delete`，通过 `options.context.reauthentication` 传入对应票据。角色替换发生冲突时，重新读取该角色权限并按策略取得新票据后再提交。
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `client.iam.roles.listPermissions(input, options?)` | 查看角色的直接权限 | 必填 `id`，来自角色列表。 | `HaiResult` 的 `data` 是权限记录数组。 | `await client.iam.roles.listPermissions({ id: roleId })` |
+| `client.iam.roles.replacePermissions(input, options?)` | 整组替换角色的直接权限 | 必填角色 `id` 和完整 `permissionIds`；`[]` 清空关联。按策略传再认证票据。 | `HaiResult<void>`。并发修改时 `error.httpStatus` 为 409。 | `await client.iam.roles.replacePermissions({ id: roleId, permissionIds }, options)` |
+| `client.iam.apiKeys.list(input, options?)` | 查看指定账号的 API Key | 必填 `userId`。可选 `page`、`pageSize`、`search`、`enabled`、`sortBy`、`sortDirection`。 | `HaiResult`，包含 `items`、`total`、`page`、`pageSize`。 | `await client.iam.apiKeys.list({ userId, page: 1, enabled: true })` |
+| `client.iam.apiKeys.create(input, options?)` | 为账号签发 API Key | 必填 `userId` 和 `name`。可选 `scopes` 和 `expirationDays`，到期天数省略时用 IAM 配置，`0` 表示无期限。 | `HaiResult` 的 `data.apiKey` 是元数据，`data.rawKey` 仅在本次返回。 | `await client.iam.apiKeys.create({ userId, name, expirationDays: 30 }, options)` |
+| `client.iam.apiKeys.get(input, options?)` | 读取 API Key 元数据 | 必填 `id`，取列表项的 `id` 或创建响应的 `apiKey.id`。 | `HaiResult`，元数据含前缀、状态、有效期和权限范围。 | `await client.iam.apiKeys.get({ id: keyId })` |
+| `client.iam.apiKeys.revoke(input, options?)` | 吊销 API Key | 必填密钥记录 `id`。按策略传再认证票据。 | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id: keyId }, options)` |
+
+#### 场景：为报表集成签发一把密钥
+
+管理页选择目标账号的 `userId`，并在服务端已将 `iam.apiKeys.create` 配为敏感操作的情况下向管理员询问当前密码。成功后把 `rawKey` 在本次页面操作中交给集成方。后续列表和详情只显示密钥元数据，别把明文写进日志。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function issueReportKey(client: ProjectClient, userId: string, password: string) {
+  const proof = await client.iam.auth.reauthenticate({ password, operation: 'iam.apiKeys.create' })
+  if (!proof.success)
+    return proof
+
+  const issued = await client.iam.apiKeys.create({
+    userId,
+    name: 'Report reader',
+    expirationDays: 30,
+    scopes: ['reports:read'],
+  }, { context: { reauthentication: proof.data.ticket } })
+  if (!issued.success)
+    return issued
+  return { success: true as const, data: { id: issued.data.apiKey.id, rawKey: issued.data.rawKey } }
+}
+```
 
 <a id="敏感请求再认证"></a>
 #### 场景：用再认证票据删除用户
@@ -641,7 +731,7 @@ export async function readAccessForUi(client: ApiClient<{ iam: typeof apiContrac
 
 ### 访问对象存储 `client.storage`
 
-在已挂载 Storage 路由的应用中，客户端请求授权后的列表、元数据、删除结果或临时上传和下载地址。完成预签名后，按服务端配置直接访问对象存储。
+使用已挂载的 Storage 路由管理对象。预签名 URL 由业务端点签发，浏览器拿到地址后直接访问对象存储。小文件中转由应用服务收发文件，需用[应用契约创建的 `client`](#http-contract-extensions) 并启用对应的 HTTPS 路由。中转可用于不支持预签名的本地存储。
 
 #### 接口清单
 
@@ -653,6 +743,8 @@ export async function readAccessForUi(client: ApiClient<{ iam: typeof apiContrac
 | `client.storage.files.deleteMany(input, options?)` | 批量删除对象 | 必填 `input.keys` 为非空对象键数组，服务端检查每个键的删除权限。 | 删除结果，或带部分处理进度的失败 | `await client.storage.files.deleteMany({ keys: [key] })` |
 | `client.storage.presignedUrls.createUpload(input, options?)` | 签发上传地址 | 必填 `input.key`。可选 `contentType` 默认 `application/octet-stream`，`expiresIn` 默认 900 秒。 | 临时上传 URL 和对象键 | `await client.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
 | `client.storage.presignedUrls.createDownload(input, options?)` | 签发下载地址 | 必填 `input.key`。可选 `expiresIn` 为签名 URL 有效秒数，默认 900。 | 临时下载 URL 和对象键 | `await client.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `client.storage.files.upload(input, options?)` | 通过应用服务上传 | 必填授权对象 `key` 和浏览器 `file: File`。非空文件最大 5 MiB。 | `HaiResult`。成功时返回对象元数据。已有同名对象时失败。 | `await client.storage.files.upload({ key, file })` |
+| `client.storage.files.download(input, options?)` | 通过应用服务下载附件 | 必填有读取权限的对象 `key`，服务端限制为 5 MiB。 | 成功为 `File`，失败为 `HaiResult<never>` 的失败分支。 | `await client.storage.files.download({ key })` |
 
 如果批量删除只完成一部分，失败结果可能在 `error.ext.deleteMany` 提供已完成和失败的键。按这份结果更新列表并决定哪些对象需要重新处理。
 
@@ -682,14 +774,31 @@ export async function uploadReport(key: string, file: File) {
 }
 ```
 
+#### 场景：选择 PDF 后通过应用上传并回读
+
+文件选择器提供 `File`，应用为本次上传分配有写权限的对象 `key`。上传成功后使用回执里的键读取同一份文件。读取成功可下载或预览，任一步失败时用返回的错误提示用户。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function verifyUploadedPdf(client: ProjectClient, key: string, file: File) {
+  const uploaded = await client.storage.files.upload({ key, file })
+  if (!uploaded.success)
+    return uploaded
+
+  const downloaded = await client.storage.files.download({ key: uploaded.data.key })
+  if (!(downloaded instanceof File))
+    return downloaded
+  return { success: true as const, data: downloaded }
+}
+```
+
 <a id="文件聊天记忆与会话"></a>
 <a id="ai-requests"></a>
 
 ### 调用聊天、记忆和会话接口 `client.ai`
 
-应用启用 AI 路由后，可发送会话消息、请求非流式补全、读取历史或检索记忆。应用根据用户身份使用对应的会话 ID。需要访问其他主体的数据时由服务端明确授权。
-默认客户端的 AI 操作返回 JSON。要在浏览器接收生成增量或调用媒体接口，使用[按需挂载的 HTTP 契约](#http-contract-extensions)。
-
+服务端挂载 AI 路由后，默认实例可调用 JSON 聊天补全、消息、历史、记忆查询和会话列表。用[应用契约创建的 `client`](#http-contract-extensions) 调用流式聊天、记忆写入和媒体操作。提交 `objectId` 只在宿主允许操作目标主体时生效，省略时使用当前认证主体。
 
 #### 接口清单
 
@@ -701,6 +810,16 @@ export async function uploadReport(key: string, file: File) {
 | `client.ai.memories.list(input, options?)` | 查询记忆 | `input` 必填，可传 `{}`。可选 `objectId`、`types` 数组、从 0 起的 `offset` 与 `limit`（1–100）。 | 记忆列表 | `await client.ai.memories.list({ objectId, limit: 20 })` |
 | `client.ai.memories.recall(input, options?)` | 按内容检索记忆 | 必填 `input.query`。可选主体 `objectId`、结果数 `topK`（至少 1）、`types` 数组与 `minImportance`（0–1）。 | 召回的记忆项 | `await client.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
 | `client.ai.sessions.list(input, options?)` | 查询对象的会话 | `input` 必填，可传 `{}` 使用当前认证主体。`objectId` 可指定经授权的主体。 | 会话列表 | `await client.ai.sessions.list({ objectId })` |
+| `client.ai.chats.streamCompletion(input, options?)` | 逐段接收模型回复 | 与 `createCompletion` 使用相同输入；第二参数可传 `signal`。 | 成功为异步事件迭代器；建立前返回失败结果，建立后错误由迭代抛出。 | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `client.ai.memories.add(input, options?)` | 保存一条记忆 | 必填 `content`（1–5000 字符）和 `type`。可选 `importance`（0–1）及经授权的 `objectId`。 | `HaiResult`，`data` 为记忆条目，含 `id`、`content` 和 `type`。 | `await client.ai.memories.add({ content, type: 'preference' })` |
+| `client.ai.memories.update(input, options?)` | 编辑记忆 | 必填 `id`，并至少提交一个 `content`、`type` 或 `importance`。可选 `objectId`。 | `HaiResult`，`data` 为记忆条目，含 `id`、`content` 和 `type`。 | `await client.ai.memories.update({ id: memoryId, content })` |
+| `client.ai.memories.remove(input, options?)` | 删除一条记忆 | 必填记忆 `id`。可选经授权的 `objectId`。 | `HaiResult<void>` | `await client.ai.memories.remove({ id: memoryId })` |
+| `client.ai.memories.clear(input, options?)` | 清空已授权范围的记忆 | 传 `{}` 使用默认主体，也可传 `objectId` 和非空 `types`；宿主须明确批准清空。 | `HaiResult<void>` | `await client.ai.memories.clear({ types: ['preference'] })` |
+| `client.ai.audio.getCapabilities(input, options?)` | 查询模型的语音能力 | 必填 `operation` 为 `transcribe` 或 `synthesize`；可选经宿主授权的 `model`。 | `HaiResult`。按操作返回实时输入、流式输出等能力字段。 | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `client.ai.audio.issueTicket(input, options?)` | 为语音 WebSocket 申请票据 | 必填 `operation` 为 `transcribe` 或 `synthesize`；可选 `model`。 | `HaiResult`。返回一次性 `ticket` 和毫秒级 `expiresAt`，票据有效 30 秒。 | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `client.ai.audio.transcribe(input, options?)` | 将录音转为文本 | 必填 WAV 或 MP3 `audio: File`，最大 8 MiB；可选 `language`、`model`。 | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `client.ai.audio.synthesize(input, options?)` | 把文本合成为语音 | 必填 `text`（1–5000 字符）；可选 `voice`、`model`、`format`（默认 `wav`，也可用 `mp3`）。 | 成功为音频 `File`，失败为 `HaiResult<never>` 的失败分支。 | `await client.ai.audio.synthesize({ text, format: 'mp3' })` |
+| `client.ai.images.generate(input, options?)` | 从提示词和可选参考图生成一张图片 | 必填 `prompt`（1–5000 字符）。可选 `model`、成对的 `width`／`height`（各 1–2048）、最多 4 张 `referenceImages`（合计不超过 10 MiB）。 | 成功为图片 `File`，失败为 `HaiResult<never>` 的失败分支。 | `await client.ai.images.generate({ prompt, referenceImages })` |
 
 <a id="ai-input-fields"></a>
 
@@ -733,6 +852,165 @@ export async function sendChatMessage(sessionId: string, message: string) {
 
 <a id="输入约束与-http-能力"></a>
 <a id="场景启用传输加密"></a>
+#### 场景：在对话页面逐段显示第一条候选回复
+
+发送问题前由页面建立一个 `AbortController`，传入 `signal`。收到增量时通过 `onText` 更新本次回复，收到 `done` 时结束。取消或离页时中止请求。调用方捕获迭代异常并在页面显示失败。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function streamAnswer(
+  client: ProjectClient,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const events = await client.ai.chats.streamCompletion({
+    messages: [{ role: 'user', content: question }],
+  }, { signal })
+  if (!(Symbol.asyncIterator in events))
+    throw new Error(events.error.message)
+
+  for await (const event of events) {
+    if (event.type === 'done')
+      return
+    const text = event.choices.find(choice => choice.index === 0)?.delta.content
+    if (text)
+      onText(text)
+  }
+}
+```
+
+#### 场景：转写录音并生成试听文件
+
+录音页传入 WAV 或 MP3 文件。转写成功且内容非空时，用取得的文本生成 MP3。成功结果为音频文件。空转写结果返回 `null`，页面可提示没有可合成的文本。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function makeVoicePreview(client: ProjectClient, recording: File) {
+  const transcript = await client.ai.audio.transcribe({ audio: recording })
+  if (!transcript.success)
+    return transcript
+  if (!transcript.data.text.trim())
+    return { success: true as const, data: null }
+
+  const speech = await client.ai.audio.synthesize({ text: transcript.data.text, format: 'mp3' })
+  if (!(speech instanceof File))
+    return speech
+  return { success: true as const, data: speech }
+}
+```
+
+录音文件和参考图通过 multipart 上传，语音合成和图像生成的返回值直接作为 `File` 使用。浏览器用 `URL.createObjectURL(file)` 预览，用完释放。实时语音仍通过 WebSocket，`@h-ai/ai/client` 的 `getTicket` 回调在每次建立连接前调用 `client.ai.audio.issueTicket(request)`。成功时返回 `data.ticket` 给回调，失败时提示用户并终止这次连接。
+
+<a id="audit-requests"></a>
+
+### 查询和归档审计日志 `client.audit`
+
+在[应用契约](#http-contract-extensions)中挂载 `audit` 后，管理台可分页查询、汇总及归档。Serv 的读取权限为 `audit:read`，归档权限为 `audit:backup`。宿主决定可查询的数据范围以及是否为 `audit.backup` 检查再认证票据。归档回执中的 `key` 是私有存储键。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `client.audit.logs.list(input, options?)` | 分页查询日志 | 传 `{}` 使用默认分页。可选分页、分类、结果、级别、用户、范围、资源、操作、追踪编号、ISO 起止时间与排序。 | `HaiResult`，`data.items` 为日志，`data.total` 为总数。 | `await client.audit.logs.list({ page: 1, outcome: 'denied' })` |
+| `client.audit.logs.stats(input, options?)` | 按操作统计日志数量 | 可选 `days`（0–365 天，默认 7）。可按 `category`、`outcome`、`severity`、`scopeId`、`userId`、`resource` 过滤。 | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `client.audit.backup.run(input, options?)` | 将日志写入私有归档 | 必填本次归档的 UUID `id`；同一次操作重试时复用它。再认证按宿主策略。 | `HaiResult`，含归档 `key`、`recordCount`、`sha256` 和时间。 | `await client.audit.backup.run({ id: archiveId }, options)` |
+
+#### 场景：查看最近一周被拒绝的操作
+
+打开审计页时，使用相同结果筛选条件查询日志和统计。页面用日志分页展示详情，用统计绘制近七天按操作分组的计数。两次都成功后再更新这组视图数据。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function loadDeniedAudit(client: ProjectClient) {
+  const recent = await client.audit.logs.list({ page: 1, pageSize: 20, outcome: 'denied' })
+  if (!recent.success)
+    return recent
+
+  const weekly = await client.audit.logs.stats({ days: 7, outcome: 'denied' })
+  if (!weekly.success)
+    return weekly
+  return { success: true as const, data: { recent: recent.data, weekly: weekly.data } }
+}
+```
+
+<a id="payment-requests"></a>
+
+### 发起支付与处理订单 `client.payment.orders`
+
+订单页面用[应用契约中的订单操作](#http-contract-extensions)发起支付、查询状态、退款或关闭待支付订单。服务端校验订单和操作者，金额按业务和支付渠道约定提交。支付渠道的回调由服务端的 Payment 通知路由接收。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `client.payment.orders.create(input, options?)` | 发起支付并取得收银参数 | 必填 `provider`、整数 `amount`、`description`、`tradeType`。微信用 `jsapi` 且须传渠道用户标识 `userId`，支付宝和 Stripe 用 `h5`。可选 `metadata`。 | `HaiResult`，含 `clientParams` 和可选 `prepayId`。 | `await client.payment.orders.create({ provider: 'stripe', tradeType: 'h5', amount, description })` |
+| `client.payment.orders.get(input, options?)` | 查询订单状态 | 必填 `orderNo`，由业务订单记录提供。 | `HaiResult`。成功时可读 `status`。 | `await client.payment.orders.get({ orderNo })` |
+| `client.payment.orders.refund(input, options?)` | 发起退款 | 必填 `provider`、`orderNo`、`refundNo`、整数 `amount`。可选 `reason`。 | `HaiResult`，含 `refundNo`、`refundId` 和退款状态。 | `await client.payment.orders.refund({ provider, orderNo, refundNo, amount })` |
+| `client.payment.orders.close(input, options?)` | 关闭待支付订单 | 必填 `provider` 和 `orderNo`，取自待关闭业务订单。宿主核对订单归属及渠道。 | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+#### 场景：关闭待支付订单后重新读取状态
+
+订单详情中的状态为 `pending` 时，界面允许有权限的操作者确认关单。把业务记录中的渠道和商户订单号传给示例。关闭成功后重新查询状态再更新界面。失败时显示返回错误。
+
+```ts
+import type { PaymentCloseOrderInput } from '@h-ai/api-contract'
+import type { ProjectClient } from './project-api'
+
+export async function closeUnpaidOrder(client: ProjectClient, order: PaymentCloseOrderInput) {
+  const closed = await client.payment.orders.close(order)
+  if (!closed.success)
+    return closed
+  return client.payment.orders.get({ orderNo: order.orderNo })
+}
+```
+
+<a id="feedback-requests"></a>
+
+### 提交和处理反馈 `client.feedback`
+
+服务端挂载 `apiContract.feedback` 后，反馈表单和管理台可以从[应用契约](#http-contract-extensions)获得同一套类型化调用。作者常用 `submit` 和 `listMine`。管理、重试和导出按宿主权限执行，材料数量和容量以 `reports.policy` 为准。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `client.feedback.reports.policy(input, options?)` | 读取反馈容量 | 传 `{}`。 | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
+| `client.feedback.reports.submit(input, options?)` | 提交一份反馈 | 必填 `submissionId` 和 `appId`。可选说明、联系信息、页面、应用版本、错误定位和材料。同一提交重试沿用 `submissionId`。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
+| `client.feedback.reports.listMine(input, options?)` | 查看自己提交的反馈 | 传 `{}` 使用默认分页；可选分页、状态、应用和时间等过滤条件。 | `HaiResult`，反馈分页。 | `await client.feedback.reports.listMine({ page: 1 })` |
+| `client.feedback.reports.list(input, options?)` | 按管理权限查询反馈 | 传 `{}` 或分页、状态、应用和时间等过滤参数。 | `HaiResult`，授权范围内的反馈分页。 | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | 打开反馈详情 | 必填报告 `id`。 | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.getEvidence(input, options?)` | 分页查看证据 | 必填报告 `id`。可选分页、`source`、`kind`、`requestId`、`errorId` 和时间窗口。 | `HaiResult`，证据分页。 | `await client.feedback.reports.getEvidence({ id, requestId })` |
+| `client.feedback.reports.setStatus(input, options?)` | 处理或重新打开反馈 | 必填 `id`、`status`（`pending` 或 `handled`）及当前详情的 `expectedVersion`。可选 `note`。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
+| `client.feedback.reports.retry(input, options?)` | 重试后台任务 | 必填 `id` 和 `target`（`collect`、`notify`、`webhook`、`export` 或 `attachment`）。可选 `targetId`。 | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
+| `client.feedback.reports.appendEvidence(input, options?)` | 补充已采集的证据 | 必填 `id` 与 `evidence` 数组（最多 1000 项）。 | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
+| `client.feedback.reports.completeCollection(input, options?)` | 结束本轮采集 | 必填 `id`。可选 `missing` 说明未收集材料。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
+| `client.feedback.reports.export(input, options?)` | 创建导出任务 | 必填 `id`，可选 `evidenceRevision` 指定证据修订。 | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
+| `client.feedback.reports.getExport(input, options?)` | 读取已生成的导出内容 | 必填报告 `id` 与导出任务 `jobId`。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
+| `client.feedback.attachments.upload(input, options?)` | 上传已声明的反馈附件 | 必填报告 `id`、反馈提交时已声明的 `attachmentId` 与 `dataBase64`。 | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
+| `client.feedback.attachments.get(input, options?)` | 读取有权限的附件数据 | 必填报告 `id` 和 `attachmentId`。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+
+#### 场景：提交反馈后打开已受理详情
+
+表单填好后传入应用的 `appId` 和说明。为此次提交生成并保存一个 `submissionId`，遇到网络中断重试时使用同一个 ID。提交成功后用服务端返回的报告编号打开详情。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function submitAndReadFeedback(
+  client: ProjectClient,
+  input: { submissionId: string, appId: string, description: string },
+) {
+  const submitted = await client.feedback.reports.submit(input)
+  if (!submitted.success)
+    return submitted
+  return client.feedback.reports.get({ id: submitted.data.id })
+}
+```
+
 <a id="encrypted-requests"></a>
 <a id="启用传输加密"></a>
 
@@ -815,57 +1093,6 @@ export async function checkHealth(origin: string) {
 <a id="传输加密与观察逻辑结果apiclient"></a>
 <a id="场景传输加密与观察逻辑结果"></a>
 <a id="逻辑请求观察"></a>
-<a id="http-contract-extensions"></a>
-
-### 按需启用 HTTP 契约
-
-页面把当前会话的访问令牌和用户问题传给 `streamAnswer`。每次收到文本增量就更新答案，页面关闭时中止请求。建立连接前的失败通过结果返回，连接建立后的失败在异步迭代中抛出。生产环境调用 [Serv 已挂载的 HTTPS 路由](serv.md#http-contract-extensions)。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
-
-const { streamCompletion } = apiContract.extensions.ai.chats
-const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
-
-export async function streamAnswer(
-  accessToken: string,
-  question: string,
-  onText: (text: string) => void,
-  signal: AbortSignal,
-) {
-  const client = apiClient.create(contract)
-  const initialized = await client.init({
-    baseUrl: 'https://api.example.com/api/v1',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  try {
-    const events = await client.ai.chats.streamCompletion({
-      messages: [{ role: 'user', content: question }],
-    }, { signal })
-    if (!(Symbol.asyncIterator in events))
-      throw new Error(events.error.message)
-
-    for await (const event of events) {
-      if (event.type === 'done')
-        break
-      for (const { delta } of event.choices) {
-        if (delta.content)
-          onText(delta.content)
-      }
-    }
-  }
-  finally {
-    await client.close()
-  }
-}
-```
-
-[查看端点与字段](api-contract.md#http-contract-extensions)
-
 <a id="transport-observation"></a>
 
 ### 观察逻辑请求 `client.observeRequests(observer)`

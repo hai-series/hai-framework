@@ -565,6 +565,57 @@ export async function signOut(client: ApiClient<{ iam: typeof apiContract.iam }>
 }
 ```
 
+<a id="http-contract-extensions"></a>
+
+### アプリの契約からクライアントを作成：`apiClient.create(contract)`
+
+基本操作と拡張操作をまとめる `project-api.ts` の例です。サーバーとクライアントでアプリの契約を共有し、公開済みの分岐を含めます。`roles`、`files`、`chats`、`memories`、`orders` はグループ内で展開して既存の操作を引き継ぎます。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const { extensions } = apiContract
+
+export const projectContract = apiContract.create({
+  iam: {
+    ...apiContract.iam,
+    apiKeys: extensions.iam.apiKeys,
+    roles: { ...apiContract.iam.roles, ...extensions.iam.roles },
+  },
+  storage: {
+    ...apiContract.storage,
+    files: { ...apiContract.storage.files, ...extensions.storage.files },
+  },
+  ai: {
+    ...apiContract.ai,
+    ...extensions.ai,
+    chats: { ...apiContract.ai.chats, ...extensions.ai.chats },
+    memories: { ...apiContract.ai.memories, ...extensions.ai.memories },
+  },
+  audit: extensions.audit,
+  payment: { orders: { ...apiContract.payment.orders, ...extensions.payment.orders } },
+  feedback: apiContract.feedback,
+})
+
+export async function connectProjectClient(baseUrl: string, accessToken: string) {
+  const client = apiClient.create(projectContract)
+  const ready = await client.init({
+    baseUrl,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!ready.success)
+    throw new Error(ready.error.message)
+  return { client }
+}
+
+export type ProjectClient = Awaited<ReturnType<typeof connectProjectClient>>['client']
+```
+
+現在のアクセストークンと、サーバー側の接頭辞を含む API の URL を渡します。返された `client` を以下の例で使い、所有する画面やアプリの終了時に `client.close()` を呼びます。ストリームとファイルにはホストが許可した HTTPS ルートを使います。別のルートにフレームワークの伝送暗号化が必要なら、ポリシーごとにクライアントを用意します。拒否時は [認証・認可の結果](#request-authorization) に従います。
+
+エンドポイントと登録方法： [API Contract](api-contract.ja.md#http-contract-extensions) · [Serv](serv.ja.md#http-contract-extensions)
+
 <a id="iam-admin-inputs"></a>
 
 ### 利用者、ロール、権限を管理する：`client.iam.users`、`client.iam.roles`、`client.iam.permissions`
@@ -622,6 +673,45 @@ export async function loadUsers(client: ApiClient<{ iam: typeof apiContract.iam 
 ```
 
 成功時は `items` に表示可能な利用者、`total` に該当件数を取得します。失敗時は元の `error` を返します。詳細や更新で必要な ID には、この一覧などで取得した対象の値を使用します。
+
+<a id="iam-management-extensions"></a>
+
+#### ロールの権限割り当てと API キー管理
+
+[アプリのクライアント](#http-contract-extensions) で以下の 6 操作を呼び出します。Serv は `iam.roles.read` / `iam.roles.write` または `iam.apiKeys.read` / `iam.apiKeys.write` と対象アカウント／ロールへの権限を確認します。API キーの並べ替え項目は `name`、`createdAt`、`lastUsedAt`、`expiresAt` です。再認証の操作 ID は `iam.roles.replacePermissions`、`iam.apiKeys.create`、`iam.apiKeys.delete` です。対応するチケットを `options.context.reauthentication` に渡します。ロールの置換で競合した場合は、権限を再取得し、必要な新しいチケットを用意して再実行します。
+
+| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.iam.roles.listPermissions(input, options?)` | ロールに直接割り当てた権限を一覧取得 | ロール一覧で取得した `id` が必須。 | `HaiResult` の `data` は権限レコードの配列。 | `await client.iam.roles.listPermissions({ id: roleId })` |
+| `client.iam.roles.replacePermissions(input, options?)` | 直接付与された権限を一括置換 | ロールの `id`、変更後の全 `permissionIds` が必須。空配列で割り当てを解除。ポリシーに従い再認証チケットを渡す。 | `HaiResult<void>`。同時更新時は `error.httpStatus` が 409。 | `await client.iam.roles.replacePermissions({ id: roleId, permissionIds }, options)` |
+| `client.iam.apiKeys.list(input, options?)` | 指定アカウントの API キー一覧 | `userId` が必須。`page`、`pageSize`、`search`、`enabled`、`sortBy`、`sortDirection` は任意。 | `HaiResult` は `items`、`total`、`page`、`pageSize` を返す。 | `await client.iam.apiKeys.list({ userId, page: 1, enabled: true })` |
+| `client.iam.apiKeys.create(input, options?)` | アカウントの API キーを発行 | `userId`、`name` が必須。`scopes`、`expirationDays` は任意。有効日数の既定値は IAM 設定、`0` は無期限。 | `HaiResult` の `data.apiKey` がメタデータ、`data.rawKey` が今回限りのキー本体。 | `await client.iam.apiKeys.create({ userId, name, expirationDays: 30 }, options)` |
+| `client.iam.apiKeys.get(input, options?)` | API キーのメタデータを取得 | 一覧の項目 ID または作成結果の `apiKey.id` を `id` に指定。 | `HaiResult` は接頭辞、状態、有効期限、スコープを返す。 | `await client.iam.apiKeys.get({ id: keyId })` |
+| `client.iam.apiKeys.revoke(input, options?)` | API キーを失効 | キーのレコード `id` が必須。必要に応じ再認証チケットを渡す。 | `HaiResult<void>` | `await client.iam.apiKeys.revoke({ id: keyId }, options)` |
+
+#### 利用例：レポート連携用のキーを発行する
+
+対象の `userId` を選び、サーバーが `iam.apiKeys.create` を機密操作として設定している場合に現在のパスワードを入力します。成功時に今回だけ返る `rawKey` を連携先に渡します。後の一覧と詳細にはメタデータを表示し、キー本体はログに残さないでください。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function issueReportKey(client: ProjectClient, userId: string, password: string) {
+  const proof = await client.iam.auth.reauthenticate({ password, operation: 'iam.apiKeys.create' })
+  if (!proof.success)
+    return proof
+
+  const issued = await client.iam.apiKeys.create({
+    userId,
+    name: 'Report reader',
+    expirationDays: 30,
+    scopes: ['reports:read'],
+  }, { context: { reauthentication: proof.data.ticket } })
+  if (!issued.success)
+    return issued
+  return { success: true as const, data: { id: issued.data.apiKey.id, rawKey: issued.data.rawKey } }
+}
+```
 
 #### 利用例：再認証チケットを使って利用者を削除する
 
@@ -725,7 +815,7 @@ export async function requestReportExport(
 
 ### オブジェクトストレージへのアクセス：`client.storage`
 
-アプリに Storage と AI のルートが登録されている場合は、対応するドメインをクライアントから使用できます。既定の `apiClient` には IAM、Storage、AI が含まれます。Feedback、Payment、独自のドメインを呼び出す場合は、[ホストと共有する契約](api-contract.ja.md#use-with-client)からクライアントを作ります。以下の手続きは任意の[呼び出しオプション](#request-options)を受け取り、`HaiResult` を返します。
+登録済みの Storage 操作でオブジェクトを管理します。署名付き URL を取得した場合、ブラウザーはストレージに直接アクセスします。アプリケーション経由で小さいファイルを転送するときは [アプリのクライアント](#http-contract-extensions) と対応する HTTPS ルートを使います。署名付き URL に対応しないローカルストレージでも利用できます。
 
 #### インターフェース一覧
 
@@ -737,6 +827,8 @@ export async function requestReportExport(
 | `client.storage.files.deleteMany(input, options?)` | オブジェクトをまとめて削除 | `keys` は空でないキーの配列。ホストが各キーを確認 | 削除結果。部分失敗は `error.ext.deleteMany` に進捗が入る場合がある | `await client.storage.files.deleteMany({ keys: [key] })` |
 | `client.storage.presignedUrls.createUpload(input, options?)` | 署名付きアップロード URL を発行 | `key` が必須。任意の `contentType` は既定 `application/octet-stream`、`expiresIn` は既定 900 秒 | 一時 URL とオブジェクトキー | `await client.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
 | `client.storage.presignedUrls.createDownload(input, options?)` | 署名付きダウンロード URL を発行 | `key` が必須。任意の `expiresIn` は有効秒数、既定 900 | 一時 URL とオブジェクトキー | `await client.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `client.storage.files.upload(input, options?)` | アプリケーション経由でアップロード | 認可されたオブジェクトの `key` と空でない `file: File` が必須。最大 5 MiB。 | `HaiResult` にメタデータが入る。同じキーに既存のオブジェクトがある場合は失敗。 | `await client.storage.files.upload({ key, file })` |
+| `client.storage.files.download(input, options?)` | アプリケーション経由で添付ファイルをダウンロード | 読み取りが許可されたオブジェクトの `key` が必須。サーバーの上限は 5 MiB。 | 成功時は `File`、失敗時は `HaiResult<never>` の失敗分岐。 | `await client.storage.files.download({ key })` |
 
 <a id="利用例ファイルと-ai-api"></a>
 
@@ -767,13 +859,30 @@ export async function uploadReport(client: ApiClient<{ storage: typeof apiContra
 }
 ```
 
+#### 利用例：選択した PDF をアプリ経由で保存して読み直す
+
+ファイル選択画面から `File` を受け取り、アプリは書き込みを許可したオブジェクトの `key` を割り当てます。成功時は結果のキーから同じファイルを取得します。成功時にプレビューや保存を提示し、どちらかが失敗したら結果のエラーを表示します。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function verifyUploadedPdf(client: ProjectClient, key: string, file: File) {
+  const uploaded = await client.storage.files.upload({ key, file })
+  if (!uploaded.success)
+    return uploaded
+
+  const downloaded = await client.storage.files.download({ key: uploaded.data.key })
+  if (!(downloaded instanceof File))
+    return downloaded
+  return { success: true as const, data: downloaded }
+}
+```
+
 <a id="ai-requests"></a>
 
-### チャット、記憶、セッションの呼び出し：`client.ai`
+### チャット・記憶・セッションの API を呼ぶ：`client.ai`
 
-現在の認証主体を使用し、別の `objectId` で呼び出すときはホスト側で対象へのアクセス権を確認します。既定の呼び出しは JSON を返します。ストリーミングの例は[独自の戻り値と SSE](#custom-response-results)を参照してください。
-既定の AI クライアントは JSON を返します。[拡張 HTTP 契約](#http-contract-extensions) を使うと、回答の差分やメディアを受け取れます。
-
+サービスが AI ルートを登録すると、既定クライアントで JSON のチャット補完、メッセージ、履歴、記憶の取得、セッション一覧を利用できます。配信、記憶の書き込み、メディア操作には [アプリのクライアント](#http-contract-extensions) を使います。主体の既定値はログイン中の利用者で、指定した `objectId` はホストの認可に従います。
 
 #### インターフェース一覧
 
@@ -785,6 +894,16 @@ export async function uploadReport(client: ApiClient<{ storage: typeof apiContra
 | `client.ai.memories.list(input, options?)` | 記憶を一覧表示 | `input` は必須、`{}` 可。任意の `objectId`、`types` 配列、0 からの `offset`、`limit`（1～100） | 記憶の一覧 | `await client.ai.memories.list({ objectId, limit: 20 })` |
 | `client.ai.memories.recall(input, options?)` | 内容で記憶を検索 | 必須の `query`。任意の `objectId`、`topK`（1 以上）、`types` 配列、`minImportance`（0～1） | 該当する記憶 | `await client.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
 | `client.ai.sessions.list(input, options?)` | セッションを一覧表示 | `input` 必須。`{}` は現在の認証主体、`objectId` は許可された主体 | セッションの一覧 | `await client.ai.sessions.list({})` |
+| `client.ai.chats.streamCompletion(input, options?)` | モデルの応答を順次受信 | `createCompletion` と同じ入力。単一呼び出しのオプションに `signal` を指定可能。 | 成功時は非同期イテレーター。開始前の失敗は結果、開始後は反復処理の例外。 | `await client.ai.chats.streamCompletion({ messages }, { signal })` |
+| `client.ai.memories.add(input, options?)` | 記憶を一件保存 | `content`（1～5000 文字）、`type` が必須。`importance`（0～1）と認可された `objectId` は任意。 | `HaiResult`。記憶の `id`、`content`、`type` が `data` に入る。 | `await client.ai.memories.add({ content, type: 'preference' })` |
+| `client.ai.memories.update(input, options?)` | 記憶を編集 | `id` と `content`、`type`、`importance` のいずれか一つ以上が必須。`objectId` は任意。 | `HaiResult`。記憶の `id`、`content`、`type` が `data` に入る。 | `await client.ai.memories.update({ id: memoryId, content })` |
+| `client.ai.memories.remove(input, options?)` | 記憶を一件削除 | 記憶の `id` が必須。認可された `objectId` は任意。 | `HaiResult<void>` | `await client.ai.memories.remove({ id: memoryId })` |
+| `client.ai.memories.clear(input, options?)` | 認可範囲の記憶を一括削除 | 既定の主体には `{}` を渡す。`objectId` と空でない `types` を指定可能。ホストによる明示的な認可が必要。 | `HaiResult<void>` | `await client.ai.memories.clear({ types: ['preference'] })` |
+| `client.ai.audio.getCapabilities(input, options?)` | モデルの音声機能を確認 | `operation` に `transcribe` または `synthesize` を指定。`model` はホストの認可に従う。 | `HaiResult` はリアルタイム入力やストリーム出力など、操作別の機能を返す。 | `await client.ai.audio.getCapabilities({ operation: 'transcribe' })` |
+| `client.ai.audio.issueTicket(input, options?)` | 音声 WebSocket チケットを取得 | `operation` は `transcribe` または `synthesize` が必須。`model` は任意。 | `HaiResult` に一回限りの `ticket` とミリ秒の `expiresAt` が入る。有効期間は 30 秒。 | `await client.ai.audio.issueTicket({ operation: 'synthesize' })` |
+| `client.ai.audio.transcribe(input, options?)` | 録音を書き起こす | WAV または MP3 の `audio: File`（最大 8 MiB）が必須。`language`、`model` は任意。 | `HaiResult<{ text, language?, durationMs? }>` | `await client.ai.audio.transcribe({ audio })` |
+| `client.ai.audio.synthesize(input, options?)` | テキストから音声を合成 | `text`（1～5000 文字）が必須。`voice`、`model`、`format`（既定 `wav`、または `mp3`）は任意。 | 成功時に音声 `File`、失敗時に失敗結果。 | `await client.ai.audio.synthesize({ text, format: 'mp3' })` |
+| `client.ai.images.generate(input, options?)` | プロンプトと任意の参照画像から一枚生成 | `prompt`（1～5000 文字）が必須。`model`、`width` と `height` の組（各 1～2048）、最大 4 枚・合計 10 MiB の `referenceImages` は任意。 | 成功時に画像 `File`、失敗時に失敗結果。 | `await client.ai.images.generate({ prompt, referenceImages })` |
 
 <a id="ai-input-fields"></a>
 
@@ -812,6 +931,165 @@ export async function sendChatMessage(client: ApiClient<{ ai: typeof apiContract
   if (!result.success)
     return result
   return { content: result.data.content, model: result.data.model }
+}
+```
+
+#### 利用例：会話画面で最初の候補を順に表示する
+
+質問の送信前に `AbortController` を作り、その `signal` を渡します。`onText` で回答に差分を追加し、`done` で完了します。中止や画面離脱でリクエストを取り消し、反復中の例外は画面側で処理します。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function streamAnswer(
+  client: ProjectClient,
+  question: string,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) {
+  const events = await client.ai.chats.streamCompletion({
+    messages: [{ role: 'user', content: question }],
+  }, { signal })
+  if (!(Symbol.asyncIterator in events))
+    throw new Error(events.error.message)
+
+  for await (const event of events) {
+    if (event.type === 'done')
+      return
+    const text = event.choices.find(choice => choice.index === 0)?.delta.content
+    if (text)
+      onText(text)
+  }
+}
+```
+
+#### 利用例：録音を書き起こして試聴ファイルを作る
+
+画面から WAV または MP3 を渡します。書き起こしにテキストがあれば MP3 を合成します。成功時は音声ファイルを返します。書き起こしが空なら `null` を返し、画面で合成できるテキストがないことを表示できます。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function makeVoicePreview(client: ProjectClient, recording: File) {
+  const transcript = await client.ai.audio.transcribe({ audio: recording })
+  if (!transcript.success)
+    return transcript
+  if (!transcript.data.text.trim())
+    return { success: true as const, data: null }
+
+  const speech = await client.ai.audio.synthesize({ text: transcript.data.text, format: 'mp3' })
+  if (!(speech instanceof File))
+    return speech
+  return { success: true as const, data: speech }
+}
+```
+
+音声と参照画像のアップロードは multipart を使います。合成音声と生成画像は `File` として扱い、`URL.createObjectURL(file)` でプレビューした後に URL を解放します。リアルタイム音声は WebSocket を使います。`@h-ai/ai/client` の `getTicket` で接続のたびに `client.ai.audio.issueTicket(request)` を呼び出します。成功時は `data.ticket` を返し、失敗時は利用者に知らせて接続を中止します。
+
+<a id="audit-requests"></a>
+
+### 監査ログを照会・保存：`client.audit`
+
+[アプリの契約](#http-contract-extensions) に `audit` があると、管理画面で照会、集計、アーカイブができます。Serv の権限は `audit:read` と `audit:backup` です。対象範囲と `audit.backup` の再認証はホストが決めます。受領情報の `key` は非公開ストレージのキーです。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.audit.logs.list(input, options?)` | 監査ログをページ取得 | 既定のページには `{}` を渡す。ページ、分類、結果、重大度、利用者、範囲、リソース、操作、追跡 ID、ISO 日時の期間、並び順は任意。 | `HaiResult` の `data.items` にログ、`data.total` に総数が入る。 | `await client.audit.logs.list({ page: 1, outcome: 'denied' })` |
+| `client.audit.logs.stats(input, options?)` | 操作ごとの件数を集計 | `days` は 0～365 日、既定 7 日。分類、結果、重大度、範囲、利用者、リソースで絞り込み可能。 | `HaiResult<{ action, count }[]>` | `await client.audit.logs.stats({ days: 7 })` |
+| `client.audit.backup.run(input, options?)` | 監査ログを非公開アーカイブに保存 | 操作の UUID `id` が必須。同じ操作の再試行では再利用。再認証はホストの方針に従う。 | `HaiResult` にアーカイブの `key`、`recordCount`、`sha256` と日時が入る。 | `await client.audit.backup.run({ id: archiveId }, options)` |
+
+#### 利用例：直近 1 週間の拒否された操作を確認する
+
+監査画面を開いたら、ログのページと統計に同じ結果フィルターを適用します。ログの内容を表で、直近 7 日間の件数を操作別の集計で表示します。両方が成功してから画面を更新します。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function loadDeniedAudit(client: ProjectClient) {
+  const recent = await client.audit.logs.list({ page: 1, pageSize: 20, outcome: 'denied' })
+  if (!recent.success)
+    return recent
+
+  const weekly = await client.audit.logs.stats({ days: 7, outcome: 'denied' })
+  if (!weekly.success)
+    return weekly
+  return { success: true as const, data: { recent: recent.data, weekly: weekly.data } }
+}
+```
+
+<a id="payment-requests"></a>
+
+### 支払いと注文を操作：`client.payment.orders`
+
+[アプリの注文ルート](#http-contract-extensions) で支払いの開始、状態の確認、返金、未払い注文の終了ができます。ホストが注文と操作者を認可し、金額は業務と決済サービスの取り決めに従います。決済サービスのコールバックはサーバーの通知ルートが受信します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.payment.orders.create(input, options?)` | 注文の支払いパラメーターを取得 | `provider`、整数の `amount`、`description`、`tradeType` が必須。WeChat は `jsapi` とチャネルの `userId` が必要。Alipay と Stripe は `h5`。`metadata` は任意。 | `HaiResult` は `clientParams` と任意の `prepayId` を返す。 | `await client.payment.orders.create({ provider: 'stripe', tradeType: 'h5', amount, description })` |
+| `client.payment.orders.get(input, options?)` | 注文の状態を確認 | 業務の注文レコードから得た `orderNo` が必須。 | `HaiResult`。成功時に `status` を確認できる。 | `await client.payment.orders.get({ orderNo })` |
+| `client.payment.orders.refund(input, options?)` | 返金を依頼 | `provider`、`orderNo`、`refundNo`、整数の `amount` が必須。`reason` は任意。 | `HaiResult` に `refundNo`、`refundId` と返金状態が入る。 | `await client.payment.orders.refund({ provider, orderNo, refundNo, amount })` |
+| `client.payment.orders.close(input, options?)` | 未払い注文を終了 | 対象注文の `provider` と `orderNo` が必須。ホストが注文への権限とチャネルを照合。 | `HaiResult<void>` | `await client.payment.orders.close({ provider, orderNo })` |
+
+#### 利用例：未払い注文を終了して状態を再取得する
+
+注文が `pending` のとき、権限のある操作者に終了を確認します。確認後に記録のチャネルと加盟店注文番号を渡し、成功後に状態を再取得します。失敗時は結果のエラーを表示します。
+
+```ts
+import type { PaymentCloseOrderInput } from '@h-ai/api-contract'
+import type { ProjectClient } from './project-api'
+
+export async function closeUnpaidOrder(client: ProjectClient, order: PaymentCloseOrderInput) {
+  const closed = await client.payment.orders.close(order)
+  if (!closed.success)
+    return closed
+  return client.payment.orders.get({ orderNo: order.orderNo })
+}
+```
+
+<a id="feedback-requests"></a>
+
+### フィードバックを送信・処理：`client.feedback`
+
+サービスに `apiContract.feedback` を登録し、[アプリの契約](#http-contract-extensions) からフィードバックフォームと管理画面で同じ型付き操作を使います。投稿者は主に `submit` と `listMine` を使います。管理、再試行、エクスポートにはホストの権限が必要です。資料数と容量は `reports.policy` で確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.feedback.reports.policy(input, options?)` | フィードバック容量を取得 | `{}` を渡す。 | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
+| `client.feedback.reports.submit(input, options?)` | フィードバックを送信 | `submissionId` と `appId` が必須。説明、連絡先、ページ、アプリの版、エラー位置、資料は任意。同じ送信の再試行では ID を再利用。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
+| `client.feedback.reports.listMine(input, options?)` | 自分のフィードバックを一覧取得 | 既定ページには `{}`。状態、アプリ、期間などで絞り込み可能。 | `HaiResult` にフィードバックのページが入る。 | `await client.feedback.reports.listMine({ page: 1 })` |
+| `client.feedback.reports.list(input, options?)` | 管理権限でフィードバックを一覧取得 | `{}` またはページ、状態、アプリ、期間などの条件を渡す。 | `HaiResult` に認可範囲内のページが入る。 | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | フィードバックの詳細を取得 | フィードバックの `id` が必須。 | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.getEvidence(input, options?)` | 証拠をページ取得 | フィードバックの `id` が必須。ページ、`source`、`kind`、`requestId`、`errorId`、期間は任意。 | `HaiResult` に証拠のページが入る。 | `await client.feedback.reports.getEvidence({ id, requestId })` |
+| `client.feedback.reports.setStatus(input, options?)` | フィードバックを処理済みにする、または再開 | `id`、`status`（`pending` または `handled`）、最後に読んだ `expectedVersion` が必須。`note` は任意。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
+| `client.feedback.reports.retry(input, options?)` | バックグラウンドジョブを再試行 | `id` と `target`（`collect`、`notify`、`webhook`、`export`、`attachment`）が必須。`targetId` は任意。 | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
+| `client.feedback.reports.appendEvidence(input, options?)` | 取得済みの証拠を追加 | `id` と最大 1000 項目の `evidence` 配列が必須。 | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
+| `client.feedback.reports.completeCollection(input, options?)` | 証拠の収集を完了 | `id` が必須。`missing` で収集できなかった資料を指定可能。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
+| `client.feedback.reports.export(input, options?)` | エクスポートジョブを作成 | `id` が必須。`evidenceRevision` で証拠の版を固定可能。 | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
+| `client.feedback.reports.getExport(input, options?)` | 生成済みエクスポートを取得 | フィードバックの `id` とエクスポートの `jobId` が必須。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
+| `client.feedback.attachments.upload(input, options?)` | 宣言済みの添付データをアップロード | フィードバックの `id`、宣言済みの `attachmentId`、`dataBase64` が必須。 | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
+| `client.feedback.attachments.get(input, options?)` | 認可された添付データを取得 | フィードバックの `id` と `attachmentId` が必須。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+
+#### 利用例：フィードバックを送信して受理済みの詳細を開く
+
+フォームの説明とアプリの `appId` を渡します。今回の `submissionId` を生成して保存し、ネットワーク障害で再試行するときは同じ ID を使います。受理後、返された ID で詳細を開きます。
+
+```ts
+import type { ProjectClient } from './project-api'
+
+export async function submitAndReadFeedback(
+  client: ProjectClient,
+  input: { submissionId: string, appId: string, description: string },
+) {
+  const submitted = await client.feedback.reports.submit(input)
+  if (!submitted.success)
+    return submitted
+  return client.feedback.reports.get({ id: submitted.data.id })
 }
 ```
 
@@ -889,57 +1167,6 @@ export async function checkHealth(origin: string) {
 ```
 
 成功時、Serv の応答は `{ status: 'ok' }` です。
-
-<a id="http-contract-extensions"></a>
-
-### 必要な HTTP 契約を有効にする
-
-現在のセッションのアクセストークンと質問を `streamAnswer` に渡します。受け取ったテキストを回答に追加し、画面を閉じるときに中止します。接続前の失敗は結果として返り、配信中の失敗は非同期反復で例外になります。[Serv で登録した HTTPS ルート](serv.ja.md#http-contract-extensions) を呼び出します。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
-
-const { streamCompletion } = apiContract.extensions.ai.chats
-const contract = apiContract.create({ ai: { chats: { streamCompletion } } })
-
-export async function streamAnswer(
-  accessToken: string,
-  question: string,
-  onText: (text: string) => void,
-  signal: AbortSignal,
-) {
-  const client = apiClient.create(contract)
-  const initialized = await client.init({
-    baseUrl: 'https://api.example.com/api/v1',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  try {
-    const events = await client.ai.chats.streamCompletion({
-      messages: [{ role: 'user', content: question }],
-    }, { signal })
-    if (!(Symbol.asyncIterator in events))
-      throw new Error(events.error.message)
-
-    for await (const event of events) {
-      if (event.type === 'done')
-        break
-      for (const { delta } of event.choices) {
-        if (delta.content)
-          onText(delta.content)
-      }
-    }
-  }
-  finally {
-    await client.close()
-  }
-}
-```
-
-[エンドポイントと項目](api-contract.ja.md#http-contract-extensions)
 
 <a id="transport-observation"></a>
 <a id="通信の暗号化と結果の監視apiclient"></a>
