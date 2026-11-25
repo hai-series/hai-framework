@@ -25,7 +25,7 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | [`hai_ai_retrieval_sources`](#table-hai-ai-retrieval-sources) | Look up sources available for retrieval. |
 | [`hai_ai_memory`](#table-hai-ai-memory) | Keep information that should survive across conversations. |
 | [`hai_ai_memory_vector_outbox`](#table-hai-ai-memory-vector-outbox) | Find memory vectors that need updates or cleanup. |
-| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | Track the app's memory vector collection and migration progress. |
+| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | Record ownership of the app's dedicated memory vector collection. |
 | [`hai_ai_memory_vector_scan`](#table-hai-ai-memory-vector-scan) | Resume the last vector index scan. |
 | [`hai_ai_knowledge_documents`](#table-hai-ai-knowledge-documents) | Find the published version of a knowledge document. |
 | [`hai_ai_knowledge_collections`](#table-hai-ai-knowledge-collections) | Look up a knowledge collection's dimensions, generation and visibility. |
@@ -42,7 +42,7 @@ The built-in RelDB store can create up to 30 tables. It creates the three A2A ta
 | [`hai_ai_acp_managed_grants`](#table-hai-ai-acp-managed-grants) | Look up reusable permissions and their deadlines. |
 | [`hai_ai_acp_managed_receipts`](#table-hai-ai-acp-managed-receipts) | Check the original caller and worker scopes during recovery. |
 | [`hai_ai_memory_write_gate`](#table-hai-ai-memory-write-gate) | Coordinate memory writes across nodes. |
-| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | Coordinate updates to vector collection ownership and migration. |
+| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | Coordinate registration of vector collection ownership. |
 | [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | Coordinate updates to the vector scan cursor. |
 
 <a id="example-data"></a>
@@ -342,7 +342,7 @@ docs-source identifies a source, not retrieved text. Its full record holds the a
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 | `object_id` | `TEXT` | Yes | — | Owning subject. Indexed for subject lookup. | `user-42` |
 
-Memory search uses the vector referenced by the current relational record. PostgreSQL indexes memory scope with JSONB GIN. MySQL indexes a nullable generated `VARCHAR(512)` column, `memory_vector_key`, based on `data.vectorId`. With older rows that have a vector and no vector ID, it uses `id`.
+Memory search uses the vector referenced by the current relational record. PostgreSQL indexes memory scope with JSONB GIN. MySQL indexes a nullable generated `VARCHAR(512)` column, `memory_vector_key`, based on `data.vectorId`. Records with a vector but no revision ID use the memory key `id`.
 
 <a id="information-remembered-across-chats"></a>
 
@@ -402,7 +402,7 @@ memory-42 awaits sync with zero attempts. The work item is cleared after complet
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | No | — | Primary key of this record. | `namespace` |
 | `version` | `VARCHAR(36)` | No | — | Version assigned to this write. Compare it to detect intervening writes. | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
-| `data` | `JSON` | No | — | `namespace` and `owner` identify the collection, with an optional migration cursor and completion flag. | [Business data example](#which-vector-namespace-owns-these-memories) |
+| `data` | `JSON` | No | — | `namespace` and `owner` identify the app's dedicated vector collection. | [Business data example](#which-vector-namespace-owns-these-memories) |
 | `created_at` | `BIGINT` | No | — | Creation time in Unix milliseconds. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time in Unix milliseconds. | `1794873600000` |
 
@@ -410,18 +410,16 @@ memory-42 awaits sync with zero attempts. The work item is cleared after complet
 
 #### Example · Which vector namespace owns these memories
 
-Track vector ownership and migration progress so deployments do not accidentally share incompatible indexes.
+A relational database holds one collection binding that all instances of the app reuse.
 
 ```json
 {
-  "updatedAt": 1794873600000,
   "namespace": "orders",
-  "owner": "namespace-owner-42",
-  "migrated": true
+  "owner": "688b8ef73cac470fbea1e0bfcbf0eed0"
 }
 ```
 
-namespace orders and its owner identify the index; migrated:true means migration completed. updatedAt is a coordination timestamp.
+This record identifies the collection `hai_m_orders_688b8ef73cac470fbea1e0bfcbf0eed0`. Another app with the same namespace and a separate relational database receives a different `owner`.
 
 <a id="table-hai-ai-memory-vector-scan"></a>
 
@@ -881,7 +879,7 @@ Both scopes are user-42 in team-1. Knowing the execution ID does not let another
 
 #### Example · Coordinate memory writes
 
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+Nodes lock this row within the transaction before committing memory writes.
 
 ```json
 {
@@ -905,7 +903,7 @@ There is one id:1 row. marker:0 is an initial marker, not memory text or a proce
 
 #### Example · Coordinate index ownership updates
 
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+During first startup, instances lock this row so they reuse the same collection binding.
 
 ```json
 {
@@ -929,7 +927,7 @@ There is one id:1 row. marker:0 is an initial marker, not memory text or a proce
 
 #### Example · Coordinate inspection progress
 
-Coordinate transactions changing this shared memory state so nodes do not overwrite one another.
+Nodes lock this row when committing updates to the scan cursor.
 
 ```json
 {

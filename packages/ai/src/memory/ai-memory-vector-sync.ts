@@ -44,7 +44,7 @@ function backoff(attempts: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.min(Math.max(attempts - 1, 0), 5))
 }
 
-/** 从保存的修订 ID 或已有记录使用的原始 ID 取得向量键。 */
+/** 优先使用向量修订 ID，未分配修订 ID 时使用记忆业务 ID。 */
 function vectorId(memory: StoredMemory): string {
   return memory.vectorId ?? memory.id
 }

@@ -447,30 +447,25 @@ describe.each([
       releaseDatabase = release
       const setup = await startNode(children, config, gateway.url, 'setup', 2)
       const bob = value(await call<HaiResult<MemoryEntry>>(setup, 'add', { owner: 'bob', content: 'Keep Bob’s memory' }))
-      const legacyId = 'mem_1700000000000_legacy'
-      value(await call<HaiResult<unknown>>(setup, 'seedLegacyMemory', { id: legacyId }))
+      const alice = value(await call<HaiResult<MemoryEntry>>(setup, 'add', { owner: 'alice', content: 'Keep Alice’s memory' }))
       await expect.poll(() => ownerPoints(gateway, 'bob').length, poll).toBe(1)
+      await expect.poll(() => ownerPoints(gateway, 'alice').length, poll).toBe(1)
       const [bobPoint] = ownerPoints(gateway, 'bob')
+      const [alicePoint] = ownerPoints(gateway, 'alice')
       await expect.poll(async () => value(await call<HaiResult<number>>(setup, 'countVectorJobs')), poll).toBe(0)
       await stop(setup)
 
-      // 模拟已上线版本未携带新元数据的向量，以及在私有集合中误写的外部 ID。
+      // 模拟失去关系归属的向量，以及在私有集合中误写的外部 ID。
       const rawId = 'ffffffff-ffff-4fff-bfff-ffffffffffff'
-      const legacyPoint = {
-        id: qdrantId(legacyId),
-        payload: { objectId: 'alice', _id: legacyId },
-        vector: [1, 0],
-      }
       const stale = [
         '3e83ab22-0b55-4c3d-8551-54097d84389c',
         'fc306710-eaf2-4fbc-9b66-f6e3cc8cc9a2',
-        'mem_1700000000000_deleted',
+        'fd306710-eaf2-4fbc-9b66-f6e3cc8cc9a2',
       ].map(id => ({
         id: qdrantId(id),
         payload: { objectId: 'alice', _id: id },
         vector: [1, 0],
       }))
-      gateway.points.set(legacyPoint.id, legacyPoint)
       gateway.points.set(rawId, {
         id: rawId,
         payload: { objectId: 'external', _id: 'external-unmanaged' },
@@ -503,7 +498,7 @@ describe.each([
       gateway.setUnavailable(false)
       await expect.poll(() => [
         ...gateway.points.keys(),
-      ].sort(), { ...poll, timeout: 15_000 }).toEqual([bobPoint.id, legacyPoint.id, rawId].sort())
+      ].sort(), { ...poll, timeout: 15_000 }).toEqual([bobPoint.id, alicePoint.id, rawId].sort())
       expect(gateway.writes).toContainEqual(expect.objectContaining({
         node: failed.node === 'restart-a'
           ? 'restart-b'
@@ -516,11 +511,11 @@ describe.each([
         success: true,
         data: { content: 'Keep Bob’s memory' },
       })
-      expect(await call(survivor, 'get', { owner: 'alice', id: legacyId })).toMatchObject({
+      expect(await call(survivor, 'get', { owner: 'alice', id: alice.id })).toMatchObject({
         success: true,
-        data: { content: 'Legacy Alice memory' },
+        data: { content: alice.content },
       })
-      expect(await call(survivor, 'get', { owner: 'bob', id: legacyId })).toMatchObject(unavailableOwner)
+      expect(await call(survivor, 'get', { owner: 'bob', id: alice.id })).toMatchObject(unavailableOwner)
       expect(await call<HaiResult<number>>(survivor, 'countVectorJobs')).toMatchObject({ success: true, data: 0 })
       expect(await call<HaiResult<number>>(survivor, 'countVectorScans')).toMatchObject({ success: true, data: 1 })
     }

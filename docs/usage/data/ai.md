@@ -29,7 +29,7 @@
 | [`hai_ai_retrieval_sources`](#table-hai-ai-retrieval-sources) | 查可以从哪里检索资料。 |
 | [`hai_ai_memory`](#table-hai-ai-memory) | 保存跨会话要记住的信息。 |
 | [`hai_ai_memory_vector_outbox`](#table-hai-ai-memory-vector-outbox) | 找出需要补写或清理的记忆向量。 |
-| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | 记住当前应用的记忆向量集合和迁移进度。 |
+| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | 保存当前应用的记忆向量集合归属。 |
 | [`hai_ai_memory_vector_scan`](#table-hai-ai-memory-vector-scan) | 记住索引巡检上次的进度。 |
 | [`hai_ai_knowledge_documents`](#table-hai-ai-knowledge-documents) | 找到知识文档的已发布版本。 |
 | [`hai_ai_knowledge_collections`](#table-hai-ai-knowledge-collections) | 查知识集合的维度、代次和可见性。 |
@@ -46,7 +46,7 @@
 | [`hai_ai_acp_managed_grants`](#table-hai-ai-acp-managed-grants) | 查可复用的授权范围和期限。 |
 | [`hai_ai_acp_managed_receipts`](#table-hai-ai-acp-managed-receipts) | 恢复时核对原调用方和执行者的权限范围。 |
 | [`hai_ai_memory_write_gate`](#table-hai-ai-memory-write-gate) | 协调多个节点改写记忆正文。 |
-| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | 协调向量集合归属和迁移写入。 |
+| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | 协调向量集合归属的登记。 |
 | [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | 协调索引巡检进度写入。 |
 
 <a id="example-data"></a>
@@ -346,7 +346,7 @@ docs-source 是一项信源编号，不是已经检索到的正文；实际地�
 | `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
 | `object_id` | `TEXT` | 是 | — | 所属主体，用于按主体查询。 | `user-42` |
 
-记忆检索使用关系表当前版本指向的向量。PostgreSQL 用 JSONB GIN 加速作用域查询。MySQL 通过生成列 `memory_vector_key`（`VARCHAR(512)`，可能为空）给向量键建索引。此列从 `data.vectorId` 取值，旧记录有向量而缺少此字段时取 `id`。
+记忆检索使用关系表当前版本指向的向量。PostgreSQL 用 JSONB GIN 加速作用域查询。MySQL 通过生成列 `memory_vector_key`（`VARCHAR(512)`，可能为空）给向量键建索引。此列从 `data.vectorId` 取值，未分配向量修订 ID 的记录使用记忆业务键 `id`。
 
 <a id="跨对话仍要记住的内容"></a>
 
@@ -406,7 +406,7 @@ memory-42 正等待同步，attempts:0 表示还没尝试；完成后相应待�
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | 否 | — | 这条记录的主键。 | `namespace` |
 | `version` | `VARCHAR(36)` | 否 | — | 本次写入的版本，用于检查记录是否被别人改过。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
-| `data` | `JSON` | 否 | — | `namespace` 和 `owner` 定位集合，记录可选的迁移游标和完成标记。 | [业务数据示例](#这批记忆应写到哪个向量空间) |
+| `data` | `JSON` | 否 | — | `namespace` 和 `owner` 定位应用的专用向量集合。 | [业务数据示例](#这批记忆应写到哪个向量空间) |
 | `created_at` | `BIGINT` | 否 | — | 创建时间，Unix 毫秒。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 否 | — | 更新时间，Unix 毫秒。 | `1794873600000` |
 
@@ -414,18 +414,16 @@ memory-42 正等待同步，attempts:0 表示还没尝试；完成后相应待�
 
 #### 示例 · 这批记忆应写到哪个向量空间
 
-记录记忆向量属于哪个应用空间，以及迁移已进行到哪里，避免不同部署误用同一批索引。
+每个关系库登记一份集合归属，供同一应用的所有服务节点复用。
 
 ```json
 {
-  "updatedAt": 1794873600000,
   "namespace": "orders",
-  "owner": "namespace-owner-42",
-  "migrated": true
+  "owner": "688b8ef73cac470fbea1e0bfcbf0eed0"
 }
 ```
 
-示例 namespace 是 orders，owner 标识这一批索引的归属，migrated:true 表示已完成迁移；updatedAt 是协调时间。
+此记录对应物理集合 `hai_m_orders_688b8ef73cac470fbea1e0bfcbf0eed0`。即使其他应用使用同名命名空间，其独立关系库也会登记不同的 `owner`。
 
 <a id="table-hai-ai-memory-vector-scan"></a>
 
@@ -885,7 +883,7 @@ grant-42 允许摘要所述的读取项目文件操作，expires 后不再使用
 
 #### 示例 · 协调记忆写入
 
-多个节点要修改同一类记忆状态时，围绕这条固定记录协调事务，避免各自覆盖别人的新结果。
+各节点在事务中锁定同一行，再提交记忆写入。
 
 ```json
 {
@@ -905,11 +903,11 @@ grant-42 允许摘要所述的读取项目文件操作，expires 后不再使用
 | `id` | `INTEGER` | 否 | — | 固定单行主键，初始化插入。 | `1` |
 | `marker` | `INTEGER` | 否 | — | 初始写入 `0`，后续在 `0` 和 `1` 之间切换来锁定该行。 | `0` |
 
-<a id="协调索引归属和迁移写入"></a>
+<a id="协调索引归属登记"></a>
 
-#### 示例 · 协调索引归属和迁移写入
+#### 示例 · 协调索引归属登记
 
-多个节点要修改同一类记忆状态时，围绕这条固定记录协调事务，避免各自覆盖别人的新结果。
+多个节点首次启动时锁定这一行，确保它们复用同一份集合归属。
 
 ```json
 {
@@ -933,7 +931,7 @@ grant-42 允许摘要所述的读取项目文件操作，expires 后不再使用
 
 #### 示例 · 协调巡检进度写入
 
-多个节点要修改同一类记忆状态时，围绕这条固定记录协调事务，避免各自覆盖别人的新结果。
+各节点通过锁定这一行协调巡检游标的写入。
 
 ```json
 {

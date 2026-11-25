@@ -38,6 +38,8 @@ describe('browser WAV conversion', () => {
       })
     })
     const blob = new Blob(['encoded'])
+    // @ts-expect-error 采样率必须放在选项对象中。
+    await expect(ai.blobToWav(blob, 8_000)).rejects.toThrow(RangeError)
     await expect(ai.blobToWav(blob, { maxInputBytes: 4 })).rejects.toThrow(RangeError)
     expect(decode).not.toHaveBeenCalled()
     await expect(ai.blobToWav(blob, { maxDurationSeconds: 30 })).rejects.toThrow(RangeError)
@@ -51,8 +53,8 @@ describe('browser WAV conversion', () => {
     expect(data.getUint32(24, true)).toBe(16_000)
     expect([44, 46].map(offset => data.getInt16(offset, true))).toEqual([-32768, 32767])
     expect(close).toHaveBeenCalledTimes(2)
-    const oldCall = await ai.blobToWav(blob, 8_000)
-    expect(new DataView(await oldCall.arrayBuffer()).getUint32(24, true)).toBe(8_000)
+    const resampled = await ai.blobToWav(blob, { sampleRate: 8_000 })
+    expect(new DataView(await resampled.arrayBuffer()).getUint32(24, true)).toBe(8_000)
   })
 })
 

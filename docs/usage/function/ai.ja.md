@@ -1135,7 +1135,7 @@ run は問題と設定から結果、runStream はイベントを返します。
 | 一括合成のみ | `targetDurationMs`、`durationToleranceMs` | 目標時間は正の整数ミリ秒。許容差は非負の整数ミリ秒で目標時間が必要。目標時間と `speed` は同時指定不可で、モデルの対応が必要 |
 | 認識・合成オプション | `model`、`strictCapabilities`、`signal` | モデルの省略時は操作別の設定を使う。厳格モードは既定で無効。有効時は非対応の高度な機能を要求すると送信前に失敗する。信号で取消可能 |
 | `AudioCapabilitiesRequest` と `models` リソース | `operation`、`model`、定義と版 | 照会では `transcribe` または `synthesize` を選び、モデルを指定できる。登録・更新項目は [AI の設定](../configuration/ai.ja.md)を参照。版はモデル一覧から取得した値 |
-| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.blobToWav` | Convert browser audio | `blob: Blob, options?: AudioWavOptions` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
 | `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 準備済みの音声で `{ timestampGranularities: ['word'], strictCapabilities: true }` を指定します。対応モデルでは単語の開始・終了時刻をミリ秒で取得でき、非対応モデルでは送信前に機能エラーが返ります。
@@ -1179,7 +1179,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-Blob のサイズはデコード前に、時間はデコード後に確認します。`ai.blobToWav(recorded, 16000)` の数値引数は引き続き使えます。時間を超えた場合の既定値はエラーです。`overflow: "truncate"` を指定すると先頭部分を保持します。サーバーでもアップロード済み音声を検証します。
+Blob のサイズはデコード前に、時間はデコード後に確認します。既定のサンプリングレートは 16000 Hz です。8000 Hz は `ai.blobToWav(recorded, { sampleRate: 8000 })` で指定します。時間を超えた場合の既定値はエラーです。`overflow: "truncate"` を指定すると先頭部分を保持します。サーバーでもアップロード済み音声を検証します。
 
 #### 利用例：保存済み定義を管理
 

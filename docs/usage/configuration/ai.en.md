@@ -49,6 +49,12 @@ acp:
           mainBranch: trunk
 ```
 
+<a id="shared-qdrant"></a>
+
+### Apps sharing Qdrant
+
+Use a separate relational database per app and set `memory.vectorNamespace` for native memory. Instances of one app share their relational database, Qdrant backend and namespace. The relational database records collection ownership, and the first vector write creates the collection. [Namespace and recovery settings in Chinese](ai.md#shared-qdrant)
+
 <a id="knowledge"></a>
 
 ### Knowledge ingestion

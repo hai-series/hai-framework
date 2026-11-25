@@ -114,7 +114,6 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   readonly withWriteLock?: AIRelStore<T>['withWriteLock']
   readonly withRelatedWriteLock?: AIRelStore<T>['withRelatedWriteLock']
   readonly getMemoryVectorIds?: AIRelStore<T>['getMemoryVectorIds']
-  readonly readMemoryVectorPage?: AIRelStore<T>['readMemoryVectorPage']
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions, tx?: TxManager) {
     this.connection = sql
@@ -149,17 +148,6 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         if (dbType === 'sqlite' && tx)
           return requireSqlSuccess(await tx.wrap(readIds)).data
         return readIds(this.sql)
-      }
-      this.readMemoryVectorPage = async (afterId, limit) => {
-        if (!Number.isInteger(limit) || limit < 1 || limit > 128)
-          throw new RangeError('Invalid memory vector rebuild page size')
-        const readPage = async (connection: DmlOperations) => requireSqlSuccess(await connection.query<{ data: unknown }>(
-          `SELECT data FROM ${table} WHERE id > ? AND ${key} IS NOT NULL ORDER BY id ASC LIMIT ?`,
-          [afterId, limit],
-        )).data.map(row => this.decodeData(row.data))
-        if (dbType === 'sqlite' && tx)
-          return requireSqlSuccess(await tx.wrap(readPage)).data
-        return readPage(this.sql)
       }
     }
     if (options?.serializeWrites && tx) {
@@ -282,7 +270,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.createMysqlMemoryVectorIndex(this.memoryVectorKey)
   }
 
-  /** MySQL 在新表中直接创建生成列，已有表在首次升级时添加该列。 */
+  /** MySQL 在建表时声明生成列，供向量键索引查询使用。 */
   private mysqlMemoryVectorColumn(key: string): string {
     return `${key} VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin GENERATED ALWAYS AS (
       CASE WHEN JSON_TYPE(JSON_EXTRACT(data, '$.vector')) = 'ARRAY'
@@ -290,23 +278,14 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     ) VIRTUAL`
   }
 
-  /** 索引覆盖旧记录，无需逐条回写。MySQL 查询使用命名生成列以命中索引。 */
+  /** 核验生成列后创建索引。MySQL 查询使用命名生成列以命中索引。 */
   private async createMysqlMemoryVectorIndex(key: string): Promise<void> {
     const name = `idx_${this.table}_vector_key`
-    const read = async () => requireSqlSuccess(await this.sql.get<{ extra: string }>(
+    const column = requireSqlSuccess(await this.sql.get<{ extra: string }>(
       'SELECT EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
       [this.table, key],
     )).data
-    if (!(await read())) {
-      try {
-        await this.sql.execute(`ALTER TABLE ${this.table} ADD COLUMN ${this.mysqlMemoryVectorColumn(key)}`)
-      }
-      catch (error) {
-        if (!isMysqlError(error, 'ER_DUP_FIELDNAME', 1060))
-          throw error
-      }
-    }
-    if ((await read())?.extra !== 'VIRTUAL GENERATED')
+    if (column?.extra !== 'VIRTUAL GENERATED')
       throw new Error(aiM('ai_storeIndexMismatch'))
     await this.createMysqlIndex(name, key)
   }

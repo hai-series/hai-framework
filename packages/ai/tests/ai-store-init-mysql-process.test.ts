@@ -3,7 +3,6 @@
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -132,7 +131,6 @@ async function withDatabase(operation: (context: {
   database: string
   node: (config?: MysqlConfigInput, barrier?: boolean) => ReturnType<typeof start>
   account: (user: string) => void
-  vectorUrl: string
 }) => Promise<void>): Promise<void> {
   const env = mysql
   let vectors: Awaited<ReturnType<typeof acquireQdrantContainer>> | undefined
@@ -173,7 +171,6 @@ async function withDatabase(operation: (context: {
         return child
       },
       account: user => accounts.push(user),
-      vectorUrl: vectors.url,
     })
   }
   catch (error) {
@@ -226,6 +223,20 @@ it('真实空 MySQL 两进程同时读到无索引再放行 DDL，均成功且�
       expect(indexes.data.every(row => Number(row.non_unique) === 1 && row.sub_part === null && row.index_type === 'BTREE' && row.collation === 'A' && row.is_visible === 'YES')).toBe(true)
       expect(new Set(indexes.data.map(row => row.index_name)).size).toBe(3)
     }
+    expect(await reldb.sql.get(
+      'SELECT EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+      [database, 'hai_ai_memory', 'memory_vector_key'],
+    )).toMatchObject({
+      success: true,
+      data: { extra: 'VIRTUAL GENERATED' },
+    })
+    expect(await reldb.sql.get(
+      'SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?',
+      [database, 'hai_ai_memory', 'idx_hai_ai_memory_vector_key'],
+    )).toMatchObject({
+      success: true,
+      data: { column_name: 'memory_vector_key' },
+    })
   })
 }, 180000)
 
@@ -251,127 +262,5 @@ it('真实 INDEX 权限不足仍失败，补齐权限后可在部分建表库中
     expect(denied.driverErrors).toContainEqual(expect.objectContaining({ code: 'ER_TABLEACCESS_DENIED_ERROR', errno: 1142 }))
     expect((await reldb.sql.execute(`GRANT INDEX ON ${database}.* TO '${username}'@'%'`)).success).toBe(true)
     expect(await node({ ...config, user: username, password }).wait('result')).toMatchObject({ success: true, initialized: true })
-  })
-}, 180000)
-
-it('真实 MySQL 旧记忆表经 ALTER 升级后重建两种有效向量并保留旧集合', async () => {
-  await withDatabase(async ({ node, config, database, account, vectorUrl }) => {
-    const username = `ai_init_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`
-    const password = crypto.randomUUID().replaceAll('-', '')
-    account(username)
-    expect((await reldb.sql.execute(`CREATE USER '${username}'@'%' IDENTIFIED BY '${password}'`)).success).toBe(true)
-    expect((await reldb.sql.execute(`GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX ON ${database}.* TO '${username}'@'%'`)).success).toBe(true)
-    expect((await reldb.sql.execute('CREATE TABLE hai_ai_memory (id VARCHAR(512) PRIMARY KEY, object_id VARCHAR(255), version VARCHAR(36) NOT NULL, data JSON NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL)')).success).toBe(true)
-
-    const olderId = 'mem_1700000000000_legacy'
-    const revisedId = 'mem_fc306710-eaf2-4fbc-9b66-f6e3cc8cc9a2'
-    const revision = '3e83ab22-0b55-4c3d-8551-54097d84389c'
-    const orphan = 'mem_1700000000000_deleted'
-    const vector = [1, 0]
-    const active = [
-      {
-        id: olderId,
-        objectId: 'alice',
-        content: 'Legacy memory',
-        type: 'fact',
-        vector,
-      },
-      {
-        id: revisedId,
-        objectId: 'bob',
-        content: 'Revised memory',
-        type: 'fact',
-        vector,
-        vectorId: revision,
-      },
-    ]
-    for (const memory of active) {
-      expect((await reldb.sql.execute(
-        'INSERT INTO hai_ai_memory (id, object_id, version, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [
-          memory.id,
-          memory.objectId,
-          'migration-fixture',
-          JSON.stringify(memory),
-          1,
-          1,
-        ],
-      )).success).toBe(true)
-    }
-
-    const collection = `${vectorUrl}/collections/hai_ai_memory_vectors`
-    const qdrant = async (url: string, method: 'PUT' | 'POST', data: object) => {
-      const response = await fetch(url, {
-        method,
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      expect(response.ok).toBe(true)
-      return response.json() as Promise<{ result: Array<{ id: string }> }>
-    }
-    await qdrant(collection, 'PUT', {
-      vectors: { size: vector.length, distance: 'Cosine' },
-    })
-    const points = [olderId, revision, orphan].map((key) => {
-      const hash = createHash('sha256').update(key).digest('hex')
-      const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
-      return {
-        id,
-        vector,
-        payload: { _id: key },
-      }
-    })
-    await qdrant(`${collection}/points?wait=true`, 'PUT', { points })
-
-    const credentials = { ...config, user: username, password }
-    expect(await node(credentials).wait('result')).toMatchObject({ success: false, initialized: false, code: 'hai:ai:011' })
-    expect(await reldb.sql.get('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?', [database, 'hai_ai_memory', 'memory_vector_key']))
-      .toMatchObject({ success: true, data: null })
-
-    expect((await reldb.sql.execute(`GRANT ALTER ON ${database}.hai_ai_memory TO '${username}'@'%'`)).success).toBe(true)
-    expect(await node(credentials).wait('result')).toMatchObject({ success: true, initialized: true })
-    expect(await reldb.sql.query('SELECT id, memory_vector_key FROM hai_ai_memory ORDER BY id')).toMatchObject({
-      success: true,
-      data: [
-        { id: olderId, memory_vector_key: olderId },
-        { id: revisedId, memory_vector_key: revision },
-      ],
-    })
-    expect(await reldb.sql.get('SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?', [database, 'hai_ai_memory', 'idx_hai_ai_memory_vector_key']))
-      .toMatchObject({
-        success: true,
-        data: { column_name: 'memory_vector_key' },
-      })
-
-    const activePointIds = points.slice(0, 2).map(point => point.id).sort()
-    const namespace = await reldb.sql.get<{ owner: string }>(
-      'SELECT JSON_UNQUOTE(JSON_EXTRACT(data, \'$.owner\')) AS owner FROM hai_ai_memory_vector_namespace WHERE id = ?',
-      ['namespace'],
-    )
-    expect(namespace.success).toBe(true)
-    if (!namespace.success || !namespace.data?.owner)
-      throw new Error('Native memory vector namespace unavailable')
-    const target = `${vectorUrl}/collections/hai_m_default_${namespace.data.owner}`
-    await expect.poll(async () => {
-      const response = await fetch(`${target}/points`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ids: points.map(point => point.id),
-        }),
-      })
-      if (response.status === 404)
-        return []
-      expect(response.ok).toBe(true)
-      const { result } = await response.json() as { result: Array<{ id: string }> }
-      return result.map(point => point.id).sort()
-    }, { timeout: 10_000 }).toEqual(activePointIds)
-    const old = await qdrant(`${collection}/points`, 'POST', {
-      ids: points.map(point => point.id),
-    })
-    expect(old.result.map(point => point.id).sort()).toEqual(points.map(point => point.id).sort())
-
-    expect((await reldb.sql.execute(`REVOKE ALTER ON ${database}.hai_ai_memory FROM '${username}'@'%'`)).success).toBe(true)
-    expect(await node(credentials).wait('result')).toMatchObject({ success: true, initialized: true })
   })
 }, 180000)

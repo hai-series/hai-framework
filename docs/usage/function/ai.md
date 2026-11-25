@@ -192,7 +192,7 @@ if (failures.length)
   throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
-多个服务节点首次连接同一 PostgreSQL 时，或部署包含新表结构的版本时，都可以调用 `ai.init()`。数据库锁会让各节点按顺序建表、建索引或准备写入控制记录。失败时回滚数据库事务，修复权限或结构后可以重试。事务提交后，后台再重建向量索引。某个服务节点退出时，其他节点继续处理剩余工作。
+多个服务节点首次连接同一 PostgreSQL 时可同时调用 `ai.init()`。数据库锁会让各节点按顺序建表、建索引和准备写入控制记录。失败时回滚数据库事务，修复权限或结构后可以重试。原生记忆首次写入向量时创建应用的专用集合。
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
@@ -1677,7 +1677,7 @@ run 输入问题和选项输出推理结果，runStream 对同类请求输出事
 | 仅完整合成 | `targetDurationMs`、`durationToleranceMs` | 目标时长是正整数毫秒。容差为非负整数毫秒，提供时要求目标时长。目标时长与 `speed` 互斥，模型须支持目标时长 |
 | 识别和合成选项 | `model`、`strictCapabilities`、`signal` | 模型省略按识别或合成场景选择。严格模式默认关闭；开启时，不支持请求的高级能力会提前失败。信号可取消调用 |
 | `AudioCapabilitiesRequest`、`models` 资源方法 | `operation`、`model`、模型定义及版本 | 能力查询必须传 `transcribe` 或 `synthesize`，可指定模型。模型注册、更新字段见 [AI 配置](../configuration/ai.md)，版本使用模型目录读回的值 |
-| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.blobToWav` | Convert browser audio | `blob: Blob, options?: AudioWavOptions` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
 | `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 例如用 `{ timestampGranularities: ['word'], strictCapabilities: true }` 识别已准备好的音频。支持词级时间轴时，可读取词的起止毫秒；所选模型不支持时，会在发请求前返回能力错误。
@@ -1865,7 +1865,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-浏览器先检查 Blob 大小、再解码并检查时长。`ai.blobToWav(recorded, 16000)` 仍接受数值采样率。设置 `maxDurationSeconds` 时超过上限默认拒绝，显式使用 `overflow: "truncate"` 才保留开头。服务端仍须校验上传数据。
+浏览器先检查 Blob 大小、再解码并检查时长。默认采样率为 16000 Hz，可通过 `ai.blobToWav(recorded, { sampleRate: 8000 })` 指定 8000 Hz。超过 `maxDurationSeconds` 默认拒绝。设置 `overflow: "truncate"` 可保留开头。服务端仍须校验上传数据。
 
 #### 场景：维护数据库中的定义
 

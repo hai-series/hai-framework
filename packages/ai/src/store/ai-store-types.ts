@@ -261,10 +261,8 @@ export interface AIRelStore<T> {
   withWriteLock?: <R>(write: (store: AIRelStore<T>) => Promise<R>) => Promise<R>
   /** 持同一个写锁，在同一事务中提交当前和另一个关系 Store 的改动。 */
   withRelatedWriteLock?: <U, R>(related: AIRelStore<U>, write: (store: AIRelStore<T>, related: AIRelStore<U>) => Promise<R>) => Promise<R>
-  /** 核对有向量的记忆版本 ID，包含仍用业务 ID 存储向量的旧记录。 */
+  /** 核对有向量的记忆键：使用向量修订 ID，未分配修订 ID 时使用记忆业务 ID。 */
   getMemoryVectorIds?: (ids: string[]) => Promise<string[]>
-  /** 从已提交的关系记录按不可变主键读取一批需重建索引的记忆，读取失败须抛错。 */
-  readMemoryVectorPage?: (afterId: string, limit: number) => Promise<T[]>
   /** 按更新时间和主键升序获取小批记录键，避免加载业务 JSON。 */
   queryKeys?: (filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) => Promise<Array<{ id: string, updatedAt: number, version: string }>>
   /** 只删除指定版本，防止过期维护删除同时更新的记录。 */

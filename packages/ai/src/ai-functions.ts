@@ -79,7 +79,7 @@ import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMCPServiceOperations } from './mcp/ai-mcp-services.js'
 import { createMemoryOperations } from './memory/ai-memory-facade.js'
-import { bindMemoryVectorNamespace, createMemoryVectorRebuild } from './memory/ai-memory-vector-namespace.js'
+import { bindMemoryVectorNamespace } from './memory/ai-memory-vector-namespace.js'
 import { createMem0MemoryOperations } from './memory/providers/ai-memory-provider-mem0.js'
 import { assembleNativeMemory } from './memory/providers/ai-memory-provider-native.js'
 import { createPersonaOperations } from './persona/ai-persona-functions.js'
@@ -347,10 +347,6 @@ export async function createAISubsystems(
   const memoryVectorStore = memoryCollection
     ? storeProvider.createVectorStore(memoryCollection)
     : undefined
-  const memoryVectorRebuild = memoryStore && memoryNamespace && memoryVectorQueue?.queryKeys
-    && memoryVectorScan && memoryVectorStore?.scan && memoryVectorStore.removeMany
-    ? createMemoryVectorRebuild(memoryStore, memoryNamespace, memoryVectorStore)
-    : undefined
 
   const llmFunctions = createAILLMFunctions(config, {
     recordStore: chatRecordStore,
@@ -554,16 +550,12 @@ export async function createAISubsystems(
     services: mcpServices.operations,
   })
   nativeMemory?.sync?.start()
-  memoryVectorRebuild?.start()
 
   return {
     closeRegistries: async () => {
       mcpServices.close()
       registriesOpen = false
-      await Promise.all([
-        nativeMemory?.sync?.close(),
-        memoryVectorRebuild?.close(),
-      ])
+      await nativeMemory?.sync?.close()
     },
     a2aStores,
     llm,

@@ -27,7 +27,7 @@
 | [`hai_ai_retrieval_sources`](#table-hai-ai-retrieval-sources) | 検索できる情報源を確認します。 |
 | [`hai_ai_memory`](#table-hai-ai-memory) | 会話をまたいで覚えておく情報を保存します。 |
 | [`hai_ai_memory_vector_outbox`](#table-hai-ai-memory-vector-outbox) | 更新や削除が必要な記憶ベクトルを見つけます。 |
-| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | アプリの記憶ベクトルコレクションと移行進捗を追跡します。 |
+| [`hai_ai_memory_vector_namespace`](#table-hai-ai-memory-vector-namespace) | アプリ専用の記憶ベクトルコレクションの所属を保存します。 |
 | [`hai_ai_memory_vector_scan`](#table-hai-ai-memory-vector-scan) | 前回のベクトル索引点検を再開します。 |
 | [`hai_ai_knowledge_documents`](#table-hai-ai-knowledge-documents) | ナレッジ文書の公開版を確認します。 |
 | [`hai_ai_knowledge_collections`](#table-hai-ai-knowledge-collections) | ナレッジコレクションの次元、世代、公開状態を確認します。 |
@@ -44,7 +44,7 @@
 | [`hai_ai_acp_managed_grants`](#table-hai-ai-acp-managed-grants) | 再利用できる許可範囲と期限を確認します。 |
 | [`hai_ai_acp_managed_receipts`](#table-hai-ai-acp-managed-receipts) | 復旧時に元の呼び出し側と実行側の範囲を確認します。 |
 | [`hai_ai_memory_write_gate`](#table-hai-ai-memory-write-gate) | ノード間で記憶の更新を調整します。 |
-| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | ベクトルコレクションの所有と移行の更新を調整します。 |
+| [`hai_ai_memory_vector_namespace_write_gate`](#table-hai-ai-memory-vector-namespace-write-gate) | ベクトルコレクションの所属の登録を調整します。 |
 | [`hai_ai_memory_vector_scan_write_gate`](#table-hai-ai-memory-vector-scan-write-gate) | ベクトル索引点検のカーソル更新を調整します。 |
 
 <a id="example-data"></a>
@@ -344,7 +344,7 @@ docs-source は信源 ID で、取得済み本文ではありません。接続�
 | `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。Unix ミリ秒。 | `1794873600000` |
 | `object_id` | `TEXT` | 可 | — | 所有主体。主体別の検索索引があります。 | `user-42` |
 
-記憶の検索には関係テーブルの現在の版が指すベクトルを使います。PostgreSQL は範囲を JSONB GIN で索引化します。MySQL は `data.vectorId` から生成する NULL 許容の `VARCHAR(512)` 列 `memory_vector_key` に索引を設定します。ベクトル ID がない旧レコードにベクトルがあれば `id` を使います。
+記憶の検索には関係テーブルの現在の版が指すベクトルを使います。PostgreSQL は範囲を JSONB GIN で索引化します。MySQL は `data.vectorId` から生成する NULL 許容の `VARCHAR(512)` 列 `memory_vector_key` に索引を設定します。ベクトルがありリビジョン ID がないレコードは、記憶の業務キー `id` を使います。
 
 <a id="会話をまたいで覚える内容"></a>
 
@@ -404,7 +404,7 @@ memory-42 は同期待ち・未試行で、記憶本文の複製ではありま�
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | 不可 | — | このレコードの主キー。 | `namespace` |
 | `version` | `VARCHAR(36)` | 不可 | — | 今回の書き込み版。間に他の更新があったか確認します。 | `6fdb3344-5197-490b-a36d-2d43ce7cc3ba` |
-| `data` | `JSON` | 不可 | — | `namespace` と `owner` でコレクションを特定します。移行カーソルと完了フラグを保持できます。 | [業務データの例](#記憶を書き込むベクトル空間) |
+| `data` | `JSON` | 不可 | — | `namespace` と `owner` でアプリ専用のベクトルコレクションを特定します。 | [業務データの例](#記憶を書き込むベクトル空間) |
 | `created_at` | `BIGINT` | 不可 | — | 作成時刻。Unix ミリ秒。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。Unix ミリ秒。 | `1794873600000` |
 
@@ -412,18 +412,16 @@ memory-42 は同期待ち・未試行で、記憶本文の複製ではありま�
 
 #### 例 · 記憶を書き込むベクトル空間
 
-所属空間と移行進捗を保存し、別の展開で索引を取り違えないようにします。
+関係データベースにコレクションの所属を一件登録し、アプリの全インスタンスが共有します。
 
 ```json
 {
-  "updatedAt": 1794873600000,
   "namespace": "orders",
-  "owner": "namespace-owner-42",
-  "migrated": true
+  "owner": "688b8ef73cac470fbea1e0bfcbf0eed0"
 }
 ```
 
-orders の所属情報で、migrated:true は移行完了です。
+このレコードは `hai_m_orders_688b8ef73cac470fbea1e0bfcbf0eed0` を特定します。同じ名前空間でも、別の関係データベースを使うアプリは異なる `owner` を登録します。
 
 <a id="table-hai-ai-memory-vector-scan"></a>
 
@@ -883,7 +881,7 @@ decision がないので未承認で、期限経過も同意を意味しませ�
 
 #### 例 · 記憶書き込みを調整
 
-同じ状態への変更を調整して他ノードの結果を上書きしないための印です。
+各ノードはトランザクション内でこの行をロックしてから記憶の書き込みを確定します。
 
 ```json
 {
@@ -903,11 +901,11 @@ id:1 の1行で、marker:0 は初期値です。本文や処理件数ではあ�
 | `id` | `INTEGER` | 不可 | — | 初期化で挿入する一行の固定主キー。 | `1` |
 | `marker` | `INTEGER` | 不可 | — | 初期値は `0`。書き込み時に `0` と `1` を切り替えて行をロックします。 | `0` |
 
-<a id="索引所属と移行の更新を調整"></a>
+<a id="索引の所属の登録を調整"></a>
 
-#### 例 · 索引所属と移行の更新を調整
+#### 例 · 索引の所属の登録を調整
 
-同じ状態への変更を調整して他ノードの結果を上書きしないための印です。
+初回起動時にこの行をロックし、各ノードが同じコレクションの所属を使います。
 
 ```json
 {
@@ -931,7 +929,7 @@ id:1 の1行で、marker:0 は初期値です。本文や処理件数ではあ�
 
 #### 例 · 点検進捗の更新を調整
 
-同じ状態への変更を調整して他ノードの結果を上書きしないための印です。
+各ノードは点検カーソルを更新する際にこの行をロックします。
 
 ```json
 {

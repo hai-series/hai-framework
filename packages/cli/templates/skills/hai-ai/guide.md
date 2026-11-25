@@ -82,7 +82,7 @@ if (!vectorsClosed.success)
 return await reldb.close()
 ```
 
-使用默认 PostgreSQL Store 时，空库首次部署和旧库升级可以并发启动。节点自动等待表和索引准备完成，结构事务失败后可修正原因并重试 `ai.init`。查看 [存储初始化边界](reference.md) 了解 PostgreSQL 和 MySQL 的失败行为。
+使用默认 PostgreSQL Store 首次部署到空库时，各节点可以并发启动。节点自动等待表和索引准备完成，结构事务失败后可修正原因并重试 `ai.init`。查看 [存储初始化边界](reference.md) 了解 PostgreSQL 和 MySQL 的失败行为。
 
 自定义存储：
 
@@ -522,7 +522,7 @@ export const POST = kit.handler(async ({ request }) => {
 - A2A 任务与事件只有共享 journal 一套权威，不装配旧 TaskStore；push notification 配置和 authenticated extended card RPC 返回 SDK 标准不支持/未配置错误。应用通过公开 executor 接口接入，不导入内部 handler/Store 装配类型。
 - Context 的 flush 会报告本节点后台提取异常及失败 HaiResult；同轮并发调用共享一次报告，返回即确认该批，后续只观察新任务。save/reset(waitForMemoryTasks)/consolidate 传播失败并停止后续写入，pendingMemoryTasks=0 不代表成功，不自动重试未知副作用。
 
-A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`，不接收旧版方法名。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。远端调用自定义头按大小写不敏感的同名字段覆盖，并拒绝 HTTP 重定向，避免把认证头转发到其它目标。
+A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。远端调用自定义头按大小写不敏感的同名字段覆盖，并拒绝 HTTP 重定向，避免把认证头转发到其它目标。
 
 Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额外 SDK。固定 REST 请求使用 `query`，路径段编码；30 秒超时覆盖完整响应体，响应超过 16 MiB 明确失败。写入和删除等待 `wait=true` 的实际完成回执。列表和条件清理最多核对每主体 1000 条原始候选（包括过期项），超限返回 `MEMORY_LIST_INCOMPLETE`，不执行部分条件删除；仅按主体清理不受此列表上限限制。
 

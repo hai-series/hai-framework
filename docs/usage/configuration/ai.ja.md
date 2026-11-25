@@ -49,6 +49,12 @@ acp:
           mainBranch: trunk
 ```
 
+<a id="shared-qdrant"></a>
+
+### Qdrant を共有するアプリ
+
+アプリごとに別の関係データベースを使い、ネイティブメモリーの `memory.vectorNamespace` を設定します。同じアプリの各インスタンスは関係データベース、Qdrant、名前空間を共有します。関係データベースにコレクションの所属が登録され、最初のベクトル書き込み時にコレクションが作成されます。[名前空間と復旧の設定（中国語）](ai.md#shared-qdrant)
+
 <a id="knowledge"></a>
 
 ### ナレッジの取り込み

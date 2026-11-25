@@ -32,7 +32,7 @@ export interface AudioWavOptions {
  * 将任意浏览器可解码的音频 Blob（如 MediaRecorder 的 webm）转换为单声道 16bit PCM WAV。
  *
  * @param blob - 录制得到的原始音频
- * @param options - 目标采样率（兼容旧调用）或含转换上限的配置
+ * @param options - 可选的目标采样率和转换上限
  * @throws 配置无效、输入超限、解码失败或超时长且未指定截断时抛错
  * @returns `audio/wav` 类型的 Blob
  * @example
@@ -44,11 +44,10 @@ export interface AudioWavOptions {
  * }
  * ```
  */
-export async function blobToWav(blob: Blob, options: number | AudioWavOptions = ASR_SAMPLE_RATE): Promise<Blob> {
-  const { sampleRate = ASR_SAMPLE_RATE, maxInputBytes, maxDurationSeconds, overflow = 'reject' }
-    = typeof options === 'number'
-      ? { sampleRate: options }
-      : options
+export async function blobToWav(blob: Blob, options: AudioWavOptions = {}): Promise<Blob> {
+  if (options === null || typeof options !== 'object' || Array.isArray(options))
+    throw new RangeError('Invalid WAV conversion limits')
+  const { sampleRate = ASR_SAMPLE_RATE, maxInputBytes, maxDurationSeconds, overflow = 'reject' } = options
   if (!Number.isSafeInteger(sampleRate) || sampleRate <= 0
     || (maxInputBytes !== undefined && (!Number.isSafeInteger(maxInputBytes) || maxInputBytes <= 0))
     || (maxDurationSeconds !== undefined && (!Number.isFinite(maxDurationSeconds) || Math.floor(maxDurationSeconds * sampleRate) < 1))) {

@@ -6,7 +6,7 @@
 
 开发/显式测试未初始化 reldb/vecdb 时使用临时 Store；两者就绪时使用 DB Provider。`NODE_ENV` 或 `HAI_CORE_ENV=production` 要求 stateScope 为 shared，内置实现必须为 PostgreSQL/MySQL + 网络 vecdb；本地后端初始化失败，自定义 Provider 必须兑现存储时钟、CAS 与最终截止条件。
 
-使用默认 PostgreSQL Store 时，空库首次部署和旧库升级允许所有节点同时调用 `ai.init`。结构准备由事务级锁串行协调，失败整笔回滚，修正权限或结构后重试。向量重建在结构提交后异步推进，其他节点可从已保存的游标接手。
+使用默认 PostgreSQL Store 首次部署到空库时，各节点可同时调用 `ai.init`。结构准备由事务级锁串行协调，失败整笔回滚，修正权限或结构后重试。
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
@@ -116,7 +116,7 @@ Memory 后端通过 `memory.provider` 选择：
 
 - `native`（默认）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding。`extract` 采用 Mem0 式批量合并（ADD/UPDATE/DELETE/NONE + `category`）；`maxEntriesPerObject`（单主体配额）/`maxEntriesGlobal`（全局上限）/`recencyDecay`/`embeddingEnabled`/`writebackRelatedTopK` 作用于此后端；淘汰按 `objectId` 分区。
 - 默认关系数据库 Store 在同一事务提交原生记忆和待同步操作。`add`、`update`、`remove` 成功即关系数据已生效，向量后台同步。向量服务失败后分批重试，进程重启或其他共享节点接手时继续处理。检索只使用当前关系记录，已删除的记录立即不可见。应用无需为向量同步再次提交业务写入，关闭时先 `await ai.close()` 再关闭 RelDB 和 VecDB。
-- 原生记忆通过 `memory.vectorNamespace`（默认 `default`）绑定关系库和专用向量集合。共用 Qdrant 的独立应用各自使用关系库，同应用各节点共享两种存储和同一命名空间。已有关系库升级后自动分页重建向量索引，旧的 `hai_ai_memory_vectors` 原样保留。后台只核对专用集合，支持迟到旧点回收和断点续扫。关系库备份若用于启动独立副本，应另配向量后端。
+- 原生记忆通过 `memory.vectorNamespace`（默认 `default`）绑定关系库和专用向量集合。共用 Qdrant 的独立应用各自使用关系库，同应用各节点共享两种存储和同一命名空间。首次写入向量时创建专用集合。后台在专用集合中清理失去关系归属的向量，并在重启时恢复同步和巡检。关系库备份若用于启动独立副本，应另配向量后端。
 - **`mem0`（数据格式适配）**：框架负责提取与 Embedding，通过原生 HTTP 读写 Qdrant 的 Mem0 UUID/payload 格式，可读取既有数据；不运行完整上游引擎、遥测或历史数据库。仅映射带完整连接参数的 Qdrant。生产（`NODE_ENV` 或 `HAI_CORE_ENV=production`）拒绝临时回退；开发或明确 E2E 可显式使用 `memory.allowEphemeralFallback: true`。其它持久化后端选择 `native`。
 - 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后直接写入格式存储（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间。候选扫描有界：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用后端过滤删除，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
 
@@ -322,7 +322,7 @@ JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内�
 
 SSE：Node 的 ai.stream 解码器支持跨片 LF/CRLF/CR、多行 data，只去冒号后一个空格；无 data 块不派发，空或缺省事件名按 message，id/retry 继承最近有效值，reset 清空连接状态，EOF 不补空行。encodeSSE 允许合法 data 换行并规范化，id/event 换行、id 的 NUL、非负安全整数以外的 retry 显式抛 TypeError/RangeError。真实 Anthropic/MiMo 使用同一内部 UTF-8 reader，退出/取消/协议结束/错误均取消正文并释放 reader；无自动重连/副作用重放。Anthropic 总 timeout 覆盖正文，MiMo 保留每请求独立 timeout。
 
-A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`，不接收旧版方法名。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。
+A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。
 
 Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额外 SDK。固定 REST 请求使用 `query`，路径段编码；30 秒超时覆盖完整响应体，响应超过 16 MiB 明确失败。写入和删除等待 `wait=true` 的实际完成回执。列表和条件清理最多核对每主体 1000 条原始候选（包括过期项），超限返回 `MEMORY_LIST_INCOMPLETE`，不执行部分条件删除；仅按主体清理不受此列表上限限制。
 

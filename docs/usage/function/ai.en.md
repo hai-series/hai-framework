@@ -1131,7 +1131,7 @@ Inspect model capabilities before choosing complete or streaming audio. Browser 
 | Full synthesis only | `targetDurationMs`, `durationToleranceMs` | Target is a positive integer in ms. Tolerance is a nonnegative integer in ms and requires a target. Target is mutually exclusive with `speed` and requires model support |
 | Transcription and synthesis options | `model`, `strictCapabilities`, `signal` | Omitted model uses the operation’s configuration. Strict mode is off by default. With it on, unsupported advanced capabilities fail before the request. Pass a signal to cancel |
 | `AudioCapabilitiesRequest` and `models` resources | `operation`, `model`, definition, and version | Choose `transcribe` or `synthesize` for capability queries, with optional model. See [AI settings](../configuration/ai.en.md) for model definition fields. Use the version read from the model registry |
-| `ai.blobToWav` | Convert browser audio | `Blob, sampleRate or limits` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
+| `ai.blobToWav` | Convert browser audio | `blob: Blob, options?: AudioWavOptions` | `Promise<Blob>`, audio/wav; rejects on invalid input | `ai.blobToWav(blob, { maxDurationSeconds: 30 })` |
 | `ai.createAudioRecorder` | Manage microphone recording | `audio?, encoding?, timesliceMs?, maxDurationSeconds?, maxInputBytes?, onStop, onError?` | Browser recorder with `start/stop/snapshot/close` | `ai.createAudioRecorder({ onStop })` |
 
 For example, transcribe prepared audio with `{ timestampGranularities: ['word'], strictCapabilities: true }`. A supporting model can return word times in milliseconds. An unsupported model returns a capability error before dispatch.
@@ -1175,7 +1175,7 @@ function setupRecording(onReady: (wav: Blob) => void, onError: (error: unknown) 
 }
 ```
 
-The browser checks Blob size before decoding and duration after decoding. The numeric sample-rate argument to `ai.blobToWav(recorded, 16000)` remains supported. A duration limit rejects by default. Set `overflow: "truncate"` to keep the beginning. Validate uploaded audio on the server.
+The browser checks Blob size before decoding and duration after decoding. The default sample rate is 16000 Hz. Use `ai.blobToWav(recorded, { sampleRate: 8000 })` to select 8000 Hz. A duration limit rejects by default. Set `overflow: "truncate"` to keep the beginning. Validate uploaded audio on the server.
 
 #### Scenario: Maintain a stored definition
 
