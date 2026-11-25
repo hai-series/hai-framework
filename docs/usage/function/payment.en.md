@@ -148,7 +148,7 @@ Creating a Stripe order with `amount: 100, currency: "USD", tradeType: "h5"` ret
 
 ##### Stripe amounts
 
-Order creation, refunds, queries, and notifications use the business currency’s smallest unit. USD 100 is one US dollar and JPY 100 is 100 yen. Supply whole units for ISK and UGX. For example, pass `amount: 10000, currency: 'ISK'` for 10,000 ISK. The module sends 1,000,000 to Stripe and converts query and notification amounts back to 10,000. Follow [legacy data reconciliation](../data/payment.en.md#stripe-legacy-amounts) for ISK or UGX orders and unconfirmed operations created before the fix. [Stripe currency rules](https://docs.stripe.com/currencies#special-cases)
+Order creation, refunds, queries, and notifications use the business currency’s smallest unit. USD 100 is one US dollar and JPY 100 is 100 yen. Supply whole units for ISK and UGX. For example, pass `amount: 10000, currency: 'ISK'` for 10,000 ISK. The module sends 1,000,000 to Stripe and converts query and notification amounts back to 10,000. [Stripe currency rules](https://docs.stripe.com/currencies#special-cases)
 
 ##### Stripe Checkout and closing an order
 

@@ -193,7 +193,7 @@ finally {
 
 ##### Stripe 金额
 
-下单、退款、查单和通知都使用业务币种的最小单位。USD 100 表示 1 美元，JPY 100 表示 100 日元。ISK 和 UGX 的调用方传整单位，例如订单金额为 10,000 ISK 时传 `amount: 10000, currency: 'ISK'`。模块向 Stripe 发送 1,000,000，查询和通知转换回 10,000。部署修复前创建的 ISK/UGX 订单和未确认操作须按[旧数据核对步骤](../data/payment.md#stripe-legacy-amounts)处理。[Stripe 币种规则](https://docs.stripe.com/currencies#special-cases)
+下单、退款、查单和通知都使用业务币种的最小单位。USD 100 表示 1 美元，JPY 100 表示 100 日元。ISK 和 UGX 的调用方传整单位，例如订单金额为 10,000 ISK 时传 `amount: 10000, currency: 'ISK'`。模块向 Stripe 发送 1,000,000，查询和通知转换回 10,000。[Stripe 币种规则](https://docs.stripe.com/currencies#special-cases)
 
 ##### Stripe 托管 Checkout 与主动关单
 

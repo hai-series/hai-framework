@@ -1,6 +1,6 @@
 /** Stripe 持久映射、幂等键和未知结果恢复：真实 SQLite + 渠道 HTTP 替身。 */
 import type { CreateOrderInput } from '../src/payment-types'
-import { createHash, createHmac } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { reldb } from '@h-ai/reldb'
@@ -54,15 +54,6 @@ function notification(session: TestSession) {
     body,
     headers: { 'stripe-signature': `t=${timestamp},v1=${signature}` },
   }
-}
-
-/** 旧版本摘要只使用路径和规范渠道表单，没有金额表示区分项。 */
-function legacyRequestHash(path: string, body: URLSearchParams) {
-  body.sort()
-  return createHash('sha256').update(JSON.stringify([
-    path,
-    [...body],
-  ])).digest('hex')
 }
 
 describe('stripe persistent operations', () => {
@@ -202,92 +193,29 @@ describe('stripe persistent operations', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it.each(['unknown', 'open', 'paid'])('旧 ISK 订单仍绑定原键且不允许重发，状态 %s', async (state) => {
-    const input = { ...orderInput, currency: 'ISK' }
-    expect((await payment.createOrder('stripe', input)).success).toBe(true)
-    const session = sessions.get('cs_1')!
-    const previousPost = fetchMock.mock.calls.find(([, request]) => request.method === 'POST')
-    const form = new URLSearchParams(String(previousPost?.[1].body))
-    form.set('line_items[0][price_data][unit_amount]', '100')
-    session.amount_total = 100
-    const legacyResult = {
-      orderNo: input.orderNo,
-      amount: 100,
-      currency: 'ISK',
-      session,
-    }
-    expect((await reldb.sql.execute('UPDATE hai_payment_stripe_operations SET request_hash = ?, result_json = ?', [
-      legacyRequestHash('/checkout/sessions', form),
-      state === 'unknown'
-        ? null
-        : JSON.stringify(legacyResult),
-    ])).success).toBe(true)
-
-    // 新业务金额 1 和旧表示的渠道金额碰巧产生相同表单，仍必须保留旧预留。
-    expect(await payment.createOrder('stripe', { ...input, amount: 1 })).toMatchObject({
-      success: false,
-      error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code },
-    })
-    expect(fetchMock.mock.calls.filter(([, request]) => request.method === 'POST')).toHaveLength(1)
-    if (state !== 'unknown') {
-      if (state === 'paid')
-        Object.assign(session, { status: 'complete', payment_status: 'paid', payment_intent: 'pi_order_1' })
-      expect(await payment.queryOrder('stripe', input.orderNo)).toMatchObject({
-        success: false,
-        error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
-      })
-      expect(await payment.handleNotify('stripe', notification(session))).toMatchObject({
-        success: false,
-        error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code },
-      })
-      if (state === 'open') {
-        expect(await payment.closeOrder('stripe', input.orderNo)).toMatchObject({ success: true })
-      }
-      else {
-        expect(await payment.refund('stripe', { orderNo: input.orderNo, refundNo: 'LEGACY-REFUND', amount: 1 })).toMatchObject({
-          success: false,
-          error: { code: HaiPaymentError.REFUND_FAILED.code },
-        })
-        expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/v1/refunds'))).toHaveLength(0)
-      }
-    }
-  })
-
-  it('旧退款预留即使渠道表单相同也不再次发起退款', async () => {
-    expect((await payment.createOrder('stripe', { ...orderInput, currency: 'UGX' })).success).toBe(true)
-    Object.assign(sessions.get('cs_1')!, { status: 'complete', payment_status: 'paid', payment_intent: 'pi_order_1' })
-    const input = { orderNo: orderInput.orderNo, refundNo: 'REFUND-1', amount: 50 }
-    expect((await payment.refund('stripe', input)).success).toBe(true)
-    const refundRequest = fetchMock.mock.calls.find(([url]) => url.endsWith('/v1/refunds'))
-    const previousForm = new URLSearchParams(String(refundRequest?.[1].body))
-    expect((await reldb.sql.execute('UPDATE hai_payment_stripe_operations SET request_hash = ?, result_json = NULL WHERE id LIKE \'hai-payment-refund-%\'', [
-      legacyRequestHash('/refunds', previousForm),
-    ])).success).toBe(true)
-
-    expect(await payment.refund('stripe', input)).toMatchObject({
-      success: false,
-      error: { code: HaiPaymentError.REFUND_FAILED.code },
-    })
-    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/v1/refunds'))).toHaveLength(1)
-  })
-
-  it('旧 USD 映射继续使用原订单编号和金额', async () => {
+  it('持久映射缺渠道金额时拒绝重放、查单和通知', async () => {
     expect((await payment.createOrder('stripe', orderInput)).success).toBe(true)
     const session = sessions.get('cs_1')!
-    const legacyResult = {
+    const incompleteMapping = {
       orderNo: orderInput.orderNo,
       amount: orderInput.amount,
-      currency: 'USD',
+      currency: orderInput.currency,
       session,
     }
     expect((await reldb.sql.execute('UPDATE hai_payment_stripe_operations SET result_json = ?', [
-      JSON.stringify(legacyResult),
+      JSON.stringify(incompleteMapping),
     ])).success).toBe(true)
-
-    expect((await payment.createOrder('stripe', orderInput)).success).toBe(true)
+    expect(await payment.createOrder('stripe', orderInput)).toMatchObject({
+      success: false,
+      error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code },
+    })
+    expect(await payment.queryOrder('stripe', orderInput.orderNo)).toMatchObject({
+      success: false,
+      error: { code: HaiPaymentError.QUERY_ORDER_FAILED.code },
+    })
     expect(await payment.handleNotify('stripe', notification(session))).toMatchObject({
-      success: true,
-      data: { transactionId: session.id, amount: orderInput.amount },
+      success: false,
+      error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code },
     })
     expect(createdOrders).toBe(1)
   })

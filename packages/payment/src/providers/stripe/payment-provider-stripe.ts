@@ -35,7 +35,7 @@ const StripeCreatedSessionSchema = z.object({
 const StripeOrderMappingSchema = z.object({
   orderNo: z.string().min(1),
   amount: z.number().int().positive(),
-  stripeAmount: z.number().int().positive().optional(),
+  stripeAmount: z.number().int().positive(),
   currency: z.string().regex(/^[A-Z]{3}$/),
   session: StripeCreatedSessionSchema,
 })
@@ -69,20 +69,20 @@ function toStripeAmount(amount: number, currency: string): number {
   return stripeAmount
 }
 
-/** 旧 ISK/UGX 映射没有新表示的金额，不能作为已足额支付的依据。 */
+/** 持久映射的渠道金额须与业务金额和币种匹配。 */
 function verifiedBusinessAmount(mapping: z.infer<typeof StripeOrderMappingSchema>): number {
-  if ((mapping.stripeAmount ?? mapping.amount) !== toStripeAmount(mapping.amount, mapping.currency))
+  if (mapping.stripeAmount !== toStripeAmount(mapping.amount, mapping.currency))
     throw new Error('Stripe order amount encoding requires reconciliation')
   return mapping.amount
 }
 
-/** 仅确认持久映射指定的 Checkout Session，历史映射保留其原始渠道金额。 */
+/** 核对持久映射指定的 Checkout Session、订单号、渠道金额和币种。 */
 function assertMappedSession(
   mapping: z.infer<typeof StripeOrderMappingSchema>,
   session: Pick<z.infer<typeof StripeRetrievedSessionSchema>, 'id' | 'metadata' | 'amount_total' | 'currency'>,
 ): void {
   if (session.id !== mapping.session.id || session.metadata.orderNo !== mapping.orderNo
-    || session.amount_total !== (mapping.stripeAmount ?? mapping.amount)
+    || session.amount_total !== mapping.stripeAmount
     || session.currency.toUpperCase() !== mapping.currency) {
     throw new Error('Stripe Session does not match the persisted order')
   }

@@ -150,7 +150,7 @@ Stripe で `amount: 100, currency: "USD", tradeType: "h5"` を指定すると、
 
 ##### Stripe の金額
 
-作成、返金、照会、通知では業務通貨の最小単位を使用します。USD の 100 は 1 米ドル、JPY の 100 は 100 円です。ISK と UGX は整数の通貨単位を指定します。たとえば 10,000 ISK は `amount: 10000, currency: 'ISK'` と指定します。モジュールから Stripe に 1,000,000 を送り、照会と通知の金額は 10,000 に戻して返します。修正前に作成した ISK または UGX の注文や未確定操作は[旧データの照合手順](../data/payment.ja.md#stripe-legacy-amounts)を確認してください。[Stripe の通貨ルール](https://docs.stripe.com/currencies#special-cases)
+作成、返金、照会、通知では業務通貨の最小単位を使用します。USD の 100 は 1 米ドル、JPY の 100 は 100 円です。ISK と UGX は整数の通貨単位を指定します。たとえば 10,000 ISK は `amount: 10000, currency: 'ISK'` と指定します。モジュールから Stripe に 1,000,000 を送り、照会と通知の金額は 10,000 に戻して返します。[Stripe の通貨ルール](https://docs.stripe.com/currencies#special-cases)
 
 ##### Stripe Checkout と注文のクローズ
 

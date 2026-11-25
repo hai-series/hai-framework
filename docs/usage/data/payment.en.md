@@ -80,14 +80,6 @@ This is the `result_json` column of a confirmed order operation, with the URL an
 
 `amount` uses the business currency’s smallest unit and `stripeAmount` uses Stripe’s API encoding. A newly created Checkout Session can have no PaymentIntent. A later confirmed read fills the table’s `payment_intent` column. The persisted mapping prevents retries from creating another session. The module checks the current session state and URL before returning a replayed Checkout result. Expired sessions keep their operation rows.
 
-<a id="stripe-legacy-amounts"></a>
-
-#### Reconcile legacy ISK and UGX records
-
-An ISK or UGX mapping created before the currency fix has no `stripeAmount`. The old code used the business integer directly as the Stripe API amount, so first reconcile the actual funds. Before deployment, stop the previous version from accepting new requests in those currencies, and upgrade all order and notification handlers. After upgrading, create replays, queries, notifications, and refunds for legacy mappings fail. A known unpaid session can still be closed after checking its original channel amount. Unconfirmed legacy creates or refunds keep the original reservation, whose old request digest prevents a retry with the new amount encoding.
-
-Check the actual amount and state in the Stripe dashboard using the saved Session ID or business order number. Reconcile the order, close the session, or arrange any refund or balance adjustment through the business process. If the customer needs to pay after confirmed closure, create a new traceable payment identifier. Keep the original operation and event records for reconciliation.
-
 ## Runtime and business records
 
 An unpaid WeChat query can return just `orderNo` and `status: 'pending'`. Read the expected amount from the application order. Alipay and Stripe queries can return the provider-confirmed amount. WeChat `refund_started` records that the order entered the refund flow. Use the provider’s individual refund record for its amount and outcome.
