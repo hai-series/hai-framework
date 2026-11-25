@@ -19,6 +19,15 @@ import { loadConfigText } from './helpers/config.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it('生成的 Audit 配置省略留存策略，环境示例仍可显式开启保护', () => {
+    const config = generateConfigFile('audit')
+    expect(parse(config)).not.toHaveProperty('retention')
+    expect(configEnvironmentVariables('audit', config)).toContainEqual(expect.objectContaining({
+      name: 'HAI_AUDIT_RETENTION_ENABLED',
+      optional: true,
+    }))
+  })
+
   it.each(['unset', 'yaml', 'environment'])('禁用 LDAP 后再次构建的配置仍有效，并保留已有连接：%s', (source) => {
     const directory = mkdtempSync(join(tmpdir(), 'hai-optional-ldap-'))
     try {

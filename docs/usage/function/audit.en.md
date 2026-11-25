@@ -1,57 +1,46 @@
 # @h-ai/audit API Reference
 
-<!-- translation: partial -->
+[简体中文](audit.md) · [日本語](audit.ja.md)
 
-[Chinese source](audit.md) · [Configuration](../configuration/audit.en.md) · [Data structures](../data/audit.en.md)
+Record who did what, the outcome, and the request ID on the server. Query, count, clean up, or archive events, and notify people when a rule reaches its threshold.
+
+[Module README](../../../packages/audit/README.en.md) · [Configuration](../configuration/audit.en.md) · [Data reference](../data/audit.en.md)
+
+<a id="quick-start"></a>
 
 ## Quick start
 
-Initialize Audit on the server. Pass trusted actor, request and resource identifiers in the context. Write explicit entries for caller-defined events and use capture around business operations.
-
-This example uses an in-memory SQLite database. Initialize RelDB, then Audit. Record a login and query for that action; `logs.items` contains the entry you just wrote. When the example finishes, close Audit before RelDB. Run it in a development environment (for example, `NODE_ENV=development`). Production mode requires a database shared across nodes.
+Run `pnpm add @h-ai/audit @h-ai/reldb` in the project directory. Run this script in a Node.js development environment. It uses in-memory SQLite to write an order-creation event and find it again. Use shared RelDB in production.
 
 ```ts
-// Standalone startup/shutdown script: throw the original error at this boundary; HaiResult business functions should return failed results.
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-// Open the in-memory SQLite database for audit tables. Success has no data. Connection throw the original error at this script boundary on failure.
-const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
-if (!initResult.success)
-  throw new Error(initResult.error.message, { cause: initResult.error })
+// Open the test SQLite connection. Stop if it fails.
+const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!database.success) throw new Error(database.error.message, { cause: database.error })
 
 try {
-  // Borrow the open database and use default audit settings. Success enables logging; throw the original error at this script boundary on failure.
-  const initResult2 = await audit.init()
-  if (!initResult2.success)
-    throw new Error(initResult2.error.message, { cause: initResult2.error })
-  try {
-    // Write the auth login event for demo-user. Success returns the record with its ID; throw the original error at this script boundary on failure.
-    const logResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
-    if (!logResult.success)
-      throw new Error(logResult.error.message, { cause: logResult.error })
-    const saved = logResult.data
-    // Query login events in pages of up to 20. In the fresh database the page contains the new event. Query throw the original error at this script boundary on failure.
-    const listResult = await audit.list({ action: 'login', pageSize: 20 })
-    if (!listResult.success)
-      throw new Error(listResult.error.message, { cause: listResult.error })
-    const logs = listResult.data
-    // 新数据库中，查询到的第一条记录就是刚写入的那条。
-    if (logs.items[0]?.id !== saved.id)
-      throw new Error('Expected the new login event')
-  }
-  finally {
-    // Close audit state without arguments. Success has no data; cleanup throw the original error at this script boundary on failure.
-    const closeResult = await audit.close()
-    if (!closeResult.success)
-      throw new Error(closeResult.error.message, { cause: closeResult.error })
-  }
+  // Prepare tables using default settings. Stop on initialization failure.
+  const ready = await audit.init()
+  if (!ready.success) throw new Error(ready.error.message, { cause: ready.error })
+
+  // Record the order creation and get its event ID.
+  const written = await audit.log({ action: 'create', resource: 'orders', resourceId: 'order-42' })
+  if (!written.success) throw new Error(written.error.message, { cause: written.error })
+
+  // Filter by action and resource, then verify the event is present.
+  const found = await audit.list({ action: 'create', resource: 'orders' })
+  if (!found.success) throw new Error(found.error.message, { cause: found.error })
+  if (!found.data.items.some(event => event.id === written.data.id))
+    throw new Error('Expected the new audit event')
 }
 finally {
-  // Close SQLite after audit shuts down. Success has no data; cleanup throw the original error at this script boundary on failure.
-  const closeResult2 = await reldb.close()
-  if (!closeResult2.success)
-    throw new Error(closeResult2.error.message, { cause: closeResult2.error })
+  // Close Audit before the RelDB connection it borrows.
+  const stopped = await audit.close()
+  if (!stopped.success) throw new Error(stopped.error.message, { cause: stopped.error })
+  const closed = await reldb.close()
+  if (!closed.success) throw new Error(closed.error.message, { cause: closed.error })
 }
 ```
 
@@ -61,166 +50,149 @@ finally {
 
 ## Features
 
-Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
-
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
+Run the fragments in async server functions after Audit has started. Unless noted otherwise, tables list the successful `HaiResult.data` type. Each fragment returns the original failed result to its caller.
 
 <a id="lifecycle"></a>
 
 ### Prepare audit services: `audit`
 
-Connect RelDB before Audit and close them in reverse order.
+Follow the [quick start](#quick-start) to open and close the services. Read `audit.isInitialized` to check readiness. Closure waits for active audit writes, cleanup, backups, and alert checks.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.init(config?)` | Prepare audit tables using initialized RelDB | `config?` | `void` | `await audit.init()` |
-| `audit.close()` | Release the module without closing borrowed services | None | `void` | `await audit.close()` |
+| `audit.init(config?)` | Prepare audit tables using initialized RelDB | Optional `config: AuditInitConfigInput`. See the [configuration reference](../configuration/audit.en.md#configuration-fields). | `Promise<HaiResult<void>>`. An incompatible table returns `CONFIG_ERROR`. | `await audit.init()` |
+| `audit.close()` | Cancel pending initialization and wait for operations to drain | None | `Promise<HaiResult<void>>` | `await audit.close()` |
 | `audit.isInitialized` | Check whether audit is ready | Read-only property; no arguments | `boolean` | `audit.isInitialized` |
+| `audit.schedulerPlan` | Read the backup and alert schedule | Read-only property with no arguments | The plan contains `tasks` and `hooks` if a scheduled task is enabled, or `null` | `const plan = audit.schedulerPlan` |
 
 #### Scenario: Prepare audit services
 
-```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Use default settings with the initialized RelDB. Success prepares tables. Return the failed result on failure.
-const initResult = await audit.init()
-if (!initResult.success)
-  return initResult
-// audit tables are ready
-// Read readiness. It is true here once the audit tables are ready.
-audit.isInitialized // true
-// Stop audit without arguments. Success leaves the borrowed database open and has no data. Return the failed result on failure.
-const closeResult = await audit.close()
-if (!closeResult.success)
-  return closeResult
-// the borrowed RelDB remains open
-```
-
-Omitting input uses current defaults. Reinitialize before continuing; close leaves the borrowed database open.
-
-Outputs are successful HaiResult.data, except withContext, which returns exactly what its callback returns.
-
-Pass a transaction to audit.log when the audit record must commit with a business change. A backup is not itself a deletion.
-
-[Detailed parameters and workflows](audit.md#lifecycle)
+Closing during startup waits for database preparation already underway and prevents that initialization from publishing the service.
 
 <a id="events"></a>
 
 ### Record actions and identity: `audit.log`, `audit.helper`
 
-Record events using server-derived identities and request IDs. Helpers cover common authentication and CRUD events.
+Call `audit.log()` in application code after an order changes from `pending` to `confirmed`, and supply the order ID and the status change. Integrated framework entry points call `audit.capture()` after events such as a sign-in or HTTP request. The `capture.enabled` and `capture.includeReads` settings govern whether those events are stored. Application code can still use `audit.log()` when automatic capture is off. Both APIs write to the same audit log table. See [capture settings and triggers](../configuration/audit.en.md#audit-capture).
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `audit.log(input, tx?)` | Save an explicit audit event | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `tx?: DmlWithTxOperations` Optional existing transaction to commit the log with the business operation | `AuditLog` | `await audit.log(event)` |
-| `audit.capture(input, options?)` | Capture according to the configured policy | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `options?` Read flag and transaction. See [capture fields](#audit-event-fields) | `void` | `await audit.capture(event)` |
+| `audit.log(input, tx?)` | Save an explicit audit event | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `tx?: DmlWithTxOperations` Optional existing transaction to commit the log with the business operation | `Promise<HaiResult<AuditLog>>` with the event ID on success | `await audit.log(event)` |
+| `audit.capture(input, options?)` | Store the event when the capture policy allows it | `input: CreateAuditLogInput` Required event. See [event fields](#audit-event-fields). `options?` Read flag and transaction. See [capture fields](#audit-event-fields) | `Promise<HaiResult<void>>` with no data on write or skip. A write failure returns an error | `await audit.capture(event)` |
 | `audit.withContext(context, operation)` | Bind trusted actor and request context | `context: AuditContext` Trusted async context. See [identity fields](#audit-event-fields). `operation: () => T` Run in the context and return its original value | `T` | `audit.withContext(trustedContext, () => saveOrder())` |
 | `audit.helper.login(userId, ip?, ua?)` | Record a login | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.login(userId)` |
 | `audit.helper.logout(userId, ip?, ua?)` | Record a logout | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.logout(userId)` |
 | `audit.helper.register(userId, ip?, ua?)` | Record registration | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.register(userId)` |
 | `audit.helper.passwordResetRequest(email, ip?, ua?)` | Record a password reset request | `email: string` Email requesting the reset. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.passwordResetRequest(email)` |
-| `audit.helper.passwordResetComplete(userId, ip?, ua?)` | Record a completed password reset | `userId: string` Trusted user ID from the session. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.passwordResetComplete(userId)` |
-| `audit.helper.crud(input)` | Record a CRUD operation | `input: CrudAuditInput` Required action (create, read, update, or delete) and resource. Optional resourceId, details, userId, ip, ua and [event fields](#audit-event-fields) | `void` | `await audit.helper.crud(event)` |
+| `audit.helper.passwordResetComplete(userId, ip?, ua?)` | Record a completed password reset | `userId: string \| null` Trusted user ID from the session. Pass `null` for an anonymous reset. `ip?: string, ua?: string` Optional client IP and User-Agent | `void` | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud(input)` | Record a CRUD operation | `input: CrudAuditInput` Required action (create, read, update, or delete) and resource. Optional resourceId, details, userId, ip, ua and [event fields](#audit-event-fields) | `Promise<HaiResult<void>>` with no data on success | `await audit.helper.crud(event)` |
 
 <a id="audit-event-fields"></a>
 
-**Event, context, and capture fields**
+##### Event, context, and capture options
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
-| `CreateAuditLogInput.action / resource` | `string` | Required | Action and resource type, such as update and orders. |
-| `CreateAuditLogInput.userId / resourceId` | `string \| null` | Optional | Actor and affected resource identifiers. A system event can have no user. |
+| `CreateAuditLogInput.action / resource` | `string` | Required | Action and resource type, such as update and orders, with length 1–256 after trimming. |
+| `CreateAuditLogInput.userId / resourceId` | `string \| null` | Optional | Actor and affected resource identifiers, each up to 256. A system event can have no user. |
 | `CreateAuditLogInput.details` | `Record<string, unknown> \| null` | Optional | JSON details to persist, redacted before writing. |
 | `category` | `'system' \| 'business' \| null` | Optional | Event category. AuditContext can also supply the default for the current operation. |
 | `outcome` | `'success' \| 'failure' \| 'denied' \| null` | Optional | Record the outcome of the operation. |
 | `severity` | `'info' \| 'warning' \| 'error' \| 'critical' \| null` | Optional | Mark event severity. |
-| `requestId / traceId / scopeId` | `string` | Optional | Trusted request, trace, and scope IDs in the event or context. Event inputs also accept null. |
-| `ipAddress / userAgent` | `string` | Optional | Trusted client address and User-Agent. Event inputs also accept null. |
+| `requestId / traceId / scopeId` | `string` | Optional | Trusted request, trace, and scope IDs in the event or context, each up to 256. Event inputs also accept null. |
+| `ipAddress / userAgent` | `string` | Optional | Trusted client address of up to 256 and User-Agent of up to 4096. Event inputs also accept null. |
 | `actorSnapshot / AuditContext.actor` | `AuditActorSnapshot \| null` | Optional | Capture the actor’s identity at event time. The object requires id and can include username, displayName, and roles. |
 | `capture.options.read` | `boolean` | `false` | Mark a read. If read capture is disabled, successful reads are skipped, while failures and denials can still be recorded. |
 | `capture.options.tx` | `DmlWithTxOperations` | Optional | Use the business transaction so its audit write can roll back with the business operation. |
 
-With automatic capture enabled but read capture disabled, `{ read: true }` skips the write for `outcome: "success"` and records it for `outcome: "denied"`.
+Audit masks `details` according to the [privacy settings](../configuration/audit.en.md#configuration-fields). `actorSnapshot` stores identity as it was when the event occurred. With just `userId`, Audit can look up the name using the configured mapping. The ID of an explicit snapshot must match the actor.
 
 #### Scenario: Record actions and identity
 
-If business data must never commit without an audit event, explicitly use the same RelDB transaction and inspect audit.log.
-
-![Required audit: commit business data and event together](../images/function-audit-transaction.en.svg)
-
-Both business writes and audit.log(input, tx) use tx; a failed step makes the caller abort and roll back. Automatic HTTP capture reports failure without undoing completed business work. Record a rollback failure event after the original transaction finishes rolling back.
+For that order update, bind the acting user from the authenticated session and the server request ID in an audit context, then record the status change.
 
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Save an explicit login using the user, action, and resource. Success returns the record with ID and creation time. Return the failed result on failure.
-const savedResult = await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' })
-if (!savedResult.success)
-  return savedResult
-const saved = savedResult.data
-// saved includes its generated id and createdAt
-// Pass safe read-event fields for demo-user and orders to automatic capture. Writing or skipping returns no data. Return the failed result on failure.
-const captureResult = await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })
-if (!captureResult.success)
-  return captureResult
-// Bind the trusted actor ID to the async operation. Return the event ID produced by the callback and propagate its errors.
-const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
-  // Write an orders update with the actor inherited from context. Success returns the saved record; write failure ends this callback below.
-  const recordResult = await audit.log({ action: 'update', resource: 'orders' })
-  // withContext returns ordinary callback data; throw here so a write failure is not mistaken for a saved record.
-  if (!recordResult.success)
-    throw new Error(recordResult.error.message, { cause: recordResult.error })
-  const record = recordResult.data
-  return record.id
-}) // id is the callback's returned record id
-// Record registration for demo-user. Success has no data; return the original failed result on failure.
-const registerResult = await audit.helper.register('demo-user')
-if (!registerResult.success)
-  return registerResult
-// Record a login for demo-user. Success has no data; return the original failed result on failure.
-const loginResult = await audit.helper.login('demo-user')
-if (!loginResult.success)
-  return loginResult
-// Record logout for demo-user. Success has no data; return the original failed result on failure.
-const logoutResult = await audit.helper.logout('demo-user')
-if (!logoutResult.success)
-  return logoutResult
-// Record a password reset request for the sample email. Success has no data; return the original failed result on failure.
-const passwordResetRequestResult = await audit.helper.passwordResetRequest('demo@example.com')
-if (!passwordResetRequestResult.success)
-  return passwordResetRequestResult
-// Record a completed reset for demo-user. Success has no data; return the original failed result on failure.
-const passwordResetCompleteResult = await audit.helper.passwordResetComplete('demo-user')
-if (!passwordResetCompleteResult.success)
-  return passwordResetCompleteResult
-// helper calls succeed with undefined; query their saved events using audit.list
+// Use the authenticated actor and a server-generated request ID.
+const written = await audit.withContext({
+  actor: { id: 'demo-user', username: 'order-operator' },
+  requestId: 'request-42',
+}, () => {
+  // Record the status change to order-42. Return the stored event on success or the original error on failure.
+  return audit.log({
+    action: 'update',
+    resource: 'orders',
+    resourceId: 'order-42',
+    details: { before: { status: 'pending' }, after: { status: 'confirmed' } },
+  })
+})
+if (!written.success) return written
 ```
 
-The application supplies authenticated IDs; these IDs are fictional. log returns the saved record, capture and helpers have no business data, and withContext preserves the callback result. A CRUD example follows.
+On success, the [audit log table](../data/audit.en.md#table-hai-audit-logs) gets one row. The table below shows selected columns. The `details` and `actor_snapshot` values show the stored JSON.
 
-[Detailed parameters and workflows](audit.md#events)
+| Database column | Stored value |
+| --- | --- |
+| `id` | Generated event ID with the prefix `audit_`. Read it from `written.data.id`. |
+| `user_id` | `demo-user` |
+| `actor_snapshot` | `{"id":"demo-user","username":"order-operator"}` |
+| `request_id` | `request-42` |
+| `action` | `update` |
+| `resource` | `orders` |
+| `resource_id` | `order-42` |
+| `details` | `{"before":{"status":"pending"},"after":{"status":"confirmed"}}` |
+| `category` / `outcome` / `severity` | `business` / `success` / `info` |
+| `created_at` | Unix milliseconds from the database clock. |
+
+The same request may also produce a framework-generated `request.execute` event. For example, an integrated Kit handler records the HTTP method and response status for the request that updated the order. The request event and the order-status change are separate rows and can share a request ID.
+
+#### Scenario: Save a business change and its audit event together
+
+When an order change requires an audit record, pass the same transaction to the business write and to `audit.log()`. This example assumes a pending `order-42` in the `orders` table.
+
+![The order update and audit event use the same transaction. Failure rolls both back.](../images/function-audit-transaction.en.svg)
+
+```ts
+const updated = await reldb.tx.wrapResult(async (tx) => {
+  // Update the order in the transaction. wrapResult rolls back on failure.
+  const order = await tx.execute('UPDATE orders SET status = ? WHERE id = ?', ['confirmed', 'order-42'])
+  if (!order.success) return order
+
+  // Write the audit event in the same transaction. Failure rolls back the order change.
+  return audit.log({ action: 'confirm', resource: 'orders', resourceId: 'order-42' }, tx)
+})
+if (!updated.success) return updated
+```
+
+On success, the order status and audit record commit together, and `updated.data.id` identifies the event. On failure, return the original error.
 
 #### Scenario: Record an order update
 
-Pass a trusted actor, resource name and order ID. Success has no business data; audit.list can read the saved event.
+Use `audit.helper.crud()` to record a completed operation with a standard CRUD action. TypeScript restricts `action` to `create`, `read`, `update`, and `delete`. The helper also accepts `ip` and `ua` and maps them to `ipAddress` and `userAgent`. Application code supplies the order ID and status change.
 
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Record demo-user updating order-42 in orders. Success has no data. Return the failed result on failure.
-const crudResult = await audit.helper.crud({
-  userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
+// Write the CRUD audit event. Success carries no data. Return the original error on failure.
+const recorded = await audit.helper.crud({
+  userId: 'demo-user',
+  requestId: 'request-42',
+  action: 'update',
+  resource: 'orders',
+  resourceId: 'order-42',
+  details: { before: { status: 'pending' }, after: { status: 'confirmed' } },
 })
-if (!crudResult.success)
-  return crudResult
+if (!recorded.success) return recorded
 ```
+
+The example below shows another way to record that same update in `hai_audit_logs`. The result is `HaiResult<void>`. Use `audit.log()` when you need the event ID, need to supply a business transaction, or want an action name such as `order.confirm`.
 
 <a id="queries"></a>
 
 ### Query and clean old records: `audit`
 
-Investigate by user, action and time, then clean records according to retention policy.
+Use the same filters for event pages and outcome counts. Run `audit.cleanup()` in a separate maintenance task.
 
 #### Interface list
 
@@ -228,13 +200,13 @@ Investigate by user, action and time, then clean records according to retention 
 | --- | --- | --- | --- | --- |
 | `audit.list(options?)` | Filter and paginate events | Optional `options: ListAuditLogsOptions`. See [filter and pagination fields](#audit-list-options). | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
 | `audit.getUserRecent(userId, limit?)` | Read recent user activity | Required `userId: string` selects the user. Optional `limit: number` defaults to 10 results. | `AuditLog[]` | `await audit.getUserRecent(userId, 10)` |
-| `audit.getStats(days?, filters?)` | Aggregate operations over recent days | Optional `days: number` defaults to seven days. Optional `filters` takes category, outcome, severity, scopeId, userId, and resource from the [list fields](#audit-list-options). | `AuditStatItem[]` | `await audit.getStats(7)` |
-| `audit.countByOutcome` | Count outcomes using the list filters | `options?`, all records by default | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
-| `audit.cleanup(olderThanDays?)` | Delete old events under the retention policy | `olderThanDays?: number` Defaults to 90 days. Deletes events older than the cutoff | `number` | `await audit.cleanup(90)` |
+| `audit.getStats(days?, filters?)` | Aggregate operations over recent days | `days?: number` is a nonnegative integer and defaults to 7. Optional `filters` takes category, outcome, severity, scopeId, userId, and resource from the [list fields](#audit-list-options). | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.countByOutcome(options?)` | Count outcomes using the list filters | Optional `options: ListAuditLogsOptions`. Omit it to count all records. | `AuditOutcomeCounts` | `await audit.countByOutcome({ action: 'login' })` |
+| `audit.cleanup(olderThanDays?)` | Delete old events under the retention policy | `olderThanDays?: number` is a nonnegative integer and defaults to 90. Cleanup uses the greater of this value and the enabled minimum retention period. | `number` | `await audit.cleanup(90)` |
 
 <a id="audit-list-options"></a>
 
-**ListAuditLogsOptions**
+##### Filters and pagination
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
@@ -248,48 +220,46 @@ Investigate by user, action and time, then clean records according to retention 
 | `sortDirection` | `'asc' \| 'desc'` | `desc` | Set the sort direction. |
 | `page / pageSize` | `number` | Page 1, 20 rows | Set the page and rows per page. |
 
-For example, `{ resource: "orders", outcome: "denied", sortDirection: "asc", pageSize: 5 }` returns only denied order events, oldest first, with at most five on page one.
-
 #### Scenario: Query and clean old records
 
+To investigate order permissions, find denied order events in `shop-a`. Pass the same filters to the outcome count. Sorting and pagination do not affect the count.
+
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Filter login events and read up to 20 from page 1. The result has items and totals; query return the original failed result on failure.
-const pageResult = await audit.list({ action: 'login', page: 1, pageSize: 20 })
-if (!pageResult.success)
-  return pageResult
-const page = pageResult.data // items, total, pagination
-// Apply the same login filter as the list and count successful, failed, and denied events. Return the original error on failure.
-const outcomesResult = await audit.countByOutcome({ action: 'login' })
-if (!outcomesResult.success)
-  return outcomesResult
-const outcomes = outcomesResult.data
-// Read up to 20 recent records for the user ID. The result is an array; query return the original failed result on failure.
-const recentResult = await audit.getUserRecent('demo-user', 20)
-if (!recentResult.success)
-  return recentResult
-const recent = recentResult.data // up to 20 AuditLog records
-// Aggregate the last seven days by action. The result is grouped counts; return the original failed result on failure.
-const statsResult = await audit.getStats(7)
-if (!statsResult.success)
-  return statsResult
-const stats = statsResult.data // action statistics for the last seven days
-// Keep 90 days of records and return the number deleted. Cleanup return the original failed result on failure.
-const removedResult = await audit.cleanup(90)
-if (!removedResult.success)
-  return removedResult
-const removed = removedResult.data // count of records older than 90 days
+const filters = { scopeId: 'shop-a', resource: 'orders', outcome: 'denied' } as const
+// Read up to 20 events on the first page, or return the original error.
+const page = await audit.list({ ...filters, page: 1 })
+if (!page.success) return page
+// Count outcomes across all matching events, or return the original error.
+const outcomes = await audit.countByOutcome(filters)
+if (!outcomes.success) return outcomes
+
+// Get the latest ten events for demo-user.
+const recent = await audit.getUserRecent('demo-user')
+if (!recent.success) return recent
+// Group order events from the past seven days by action.
+const stats = await audit.getStats(7, { resource: 'orders' })
+if (!stats.success) return stats
 ```
 
-Results depend on saved history. Empty pages, empty statistics and zero deletions can all be successful. Run destructive cleanup examples only in a test database.
+`page.data.items` contains the page and `outcomes.data.denied` contains the full count. `recent.data` contains the user's latest events and `stats.data` groups events by action. Empty arrays and zero counts are valid results.
 
-[Detailed parameters and workflows](audit.md#queries)
+#### Scenario: Remove events past their retention period
+
+Verify deletion in a test database first. This example requests a 90-day window. [Retention settings](../configuration/audit.en.md#change-retention) determine the effective cutoff. With `retention.enabled`, database triggers reject changes, deletions, and overwrites during the protection period. Cleanup uses the longer of the requested duration and `retention.minDays`. With a 120-day minimum, `audit.cleanup(90)` removes only events older than 120 days.
+
+```ts
+// Calculate the cutoff using the database clock. Return the deletion count or the original failed result.
+const removed = await audit.cleanup(90)
+if (!removed.success) return removed
+```
+
+`removed.data === 0` means no events matched.
 
 <a id="backups"></a>
 
 ### Archive and verify backups: `audit.backup`
 
-Archive history to private object storage and verify it before applying retention to the source.
+Archive events to private Storage and verify the format, record count, and SHA-256 hash. See the [archive data reference](../data/audit.en.md#backups) for the output fields.
 
 #### Interface list
 
@@ -300,51 +270,69 @@ Archive history to private object storage and verify it before applying retentio
 
 <a id="audit-backup-options"></a>
 
-**Backup and verification options**
+##### Archive options
 
 | Field | Type | Required and default | Purpose and when it applies |
 | --- | --- | --- | --- |
 | `AuditBackupOptions.id` | `string` | Random UUID | Use a stable ID for the same archival run. A matching existing archive is checked and reused. A conflict fails. |
-| `AuditBackupOptions.from` | `Date` | No lower bound | Start of the archived interval. |
-| `AuditBackupOptions.to` | `Date` | Database clock at archive start | Cannot be after archive start or before from. |
+| `AuditBackupOptions.from` | `Date` | No lower bound | Inclusive start of the archive range, copied at call time. |
+| `AuditBackupOptions.to` | `Date` | Database clock at archive start | Inclusive upper bound, copied at call time. It must be between `from` and archive start. |
 | `signal` | `AbortSignal` | Optional | Both run and verify accept cancellation. |
 
-Retry the same archive using the same `{ id: "daily-audit", from, to }`. If complete, it returns a receipt for the same object key.
-
-#### Scenario: Archive and verify backups
-
-Below, run takes archive filters and returns AuditBackupInfo. Pass its object key to verify for checked archive information; the archive is not a public download.
-
-[Detailed parameters and workflows](audit.md#backups)
+<a id="scenario-archive-and-verify-backups"></a>
 
 #### Scenario: Create and verify an archive
 
-Initialize with private Storage and backup enabled. Supply an archive ID and range, then pass the returned key to verify. The second result describes the verified archive.
+Inject private Storage and [enable backups](../configuration/audit.en.md#configuration-fields) when initializing Audit. Keep the same ID and time range when retrying the same export.
 
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Pass the archive ID and UTC interval. Success returns the private archive key and manifest information; return the original failed result on failure.
-const archiveResult = await audit.backup.run({
-  id: 'demo-login-archive',
+// Export the UTC interval in the fixture. Success returns a receipt with a private object key.
+const archive = await audit.backup.run({
+  id: 'daily-audit-2026-01-01',
   from: new Date('2026-01-01T00:00:00Z'),
   to: new Date('2026-01-02T00:00:00Z'),
 })
-if (!archiveResult.success)
-  return archiveResult
-const archive = archiveResult.data
-// Verify the archive using archive.key from the prior step. Success returns verified archive information; corruption or read return the original failed result on failure.
-const verifiedArchiveResult = await audit.backup.verify(archive.key)
-if (!verifiedArchiveResult.success)
-  return verifiedArchiveResult
-const verifiedArchive = verifiedArchiveResult.data
-// verifiedArchive identifies the same private archive; its contents passed verification.
+if (!archive.success) return archive
+
+// Verify the archive using the receipt key. Return the original failed result on error.
+const verified = await audit.backup.verify(archive.data.key)
+if (!verified.success) return verified
 ```
+
+Use `verified.data.recordCount` and `verified.data.sha256` to confirm integrity. Keep the object key private. The checksum checks the contents and does not establish who supplied them.
+
+<a id="scheduled-audit"></a>
+
+#### Scenario: Schedule audit backups and alert checks
+
+Enable scheduled backups or alerts in the [configuration file](../configuration/audit.en.md#configuration-fields). Put the following in the server startup routine when Audit provides all Scheduler tasks.
+
+```ts
+import { audit } from '@h-ai/audit'
+import { type SchedulerConfigInput, scheduler } from '@h-ai/scheduler'
+
+async function startAuditSchedule(settings: SchedulerConfigInput) {
+  // Skip registration when no schedule is enabled.
+  const plan = audit.schedulerPlan
+  if (!plan) return
+
+  // Register the tasks and hooks. Stop startup on failure.
+  const ready = await scheduler.init({ ...settings, ...plan })
+  if (!ready.success) throw new Error(ready.error.message, { cause: ready.error })
+
+  // Start Scheduler so tasks follow their cron settings.
+  const running = scheduler.start()
+  if (!running.success) throw new Error(running.error.message, { cause: running.error })
+}
+```
+
+If the application already has scheduled tasks, append the Audit tasks and route each execution hook by task ID. Check the results in Scheduler's execution history and close Scheduler first on shutdown.
 
 <a id="alerts"></a>
 
 ### Check anomalies and notify: `audit.checkAlerts`
 
-Check rules that currently meet their thresholds; use Scheduler for recurring checks.
+Check committed events in the current and previous fixed windows. Attempt a notification once a rule reaches its threshold.
 
 #### Interface list
 
@@ -352,19 +340,36 @@ Check rules that currently meet their thresholds; use Scheduler for recurring ch
 | --- | --- | --- | --- | --- |
 | `audit.checkAlerts(options?)` | Evaluate thresholds and attempt notifications | `options?: { signal?: AbortSignal }` Optionally cancel the check or notification. Omit to use the configured behavior | `AuditAlertReport` | `await audit.checkAlerts()` |
 
+<a id="scenario-notify-after-matching-failures-cross-a-threshold"></a>
+
 #### Scenario: Check anomalies and notify
 
+Configure a rule for failed or denied `auth.login` events, then inject initialized Reach. See [alert configuration](../configuration/audit.en.md#configuration-fields).
+
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Check configured windows without arguments. The report counts submitted, queued, and failed notifications. Check return the original failed result on failure.
-const reportResult = await audit.checkAlerts()
-if (!reportResult.success)
-  return reportResult
-const report = reportResult.data // AuditAlertReport for this check
+// Check the configured windows and notification targets. Return the original error if the check fails.
+const report = await audit.checkAlerts()
+if (!report.success) return report
 ```
 
-With no arguments, current rules apply. The report describes this check and notification attempts; inspect actual outcomes rather than assuming delivery.
+`report.data.submitted` counts requests accepted by a provider, and `queued` counts Reach queue entries. A successful check can still report a positive `failed` count. With `more: true`, a later check can try remaining targets. See [alert claims](../data/audit.en.md#policy) for pending outcomes.
 
-Reach API receivers can deduplicate alerts by `extra.alertId` in the JSON payload. It matches `resourceId` in the corresponding audit events.
+## Error handling
 
-[Detailed parameters and workflows](audit.md#alerts)
+Business methods return `HaiResult`. On failure, use `result.error.code` and `result.error.traceId` to find the diagnostics. For alerts, also check the report's `failed` count.
+
+| Error | Code | Meaning |
+| --- | --- | --- |
+| `HaiAuditError.LOG_FAILED` | `hai:audit:001` | Write failed |
+| `HaiAuditError.QUERY_FAILED` | `hai:audit:002` | Query failed |
+| `HaiAuditError.CLEANUP_FAILED` | `hai:audit:003` | Cleanup failed |
+| `HaiAuditError.STATS_FAILED` | `hai:audit:004` | Statistics failed |
+| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | Initialization in progress |
+| `HaiAuditError.NOT_INITIALIZED` | `hai:audit:010` | Module unavailable |
+| `HaiAuditError.CONFIG_ERROR` | `hai:audit:012` | Invalid configuration |
+| `HaiAuditError.BACKUP_DISABLED` | `hai:audit:020` | Backup disabled |
+| `HaiAuditError.BACKUP_FAILED` | `hai:audit:021` | Backup or verification failed |
+| `HaiAuditError.BACKUP_INVALID` | `hai:audit:022` | Invalid backup input |
+| `HaiAuditError.BACKUP_CONFLICT` | `hai:audit:023` | Archive ID and export conditions conflict |
+| `HaiAuditError.ALERTS_DISABLED` | `hai:audit:024` | Alerts disabled |
+| `HaiAuditError.ALERTS_FAILED` | `hai:audit:025` | Alert check failed |

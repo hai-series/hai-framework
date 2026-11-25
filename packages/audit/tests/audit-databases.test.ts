@@ -124,6 +124,7 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         await simultaneous(config)
         const count = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM hai_audit_logs')
         expect(count.success && Number(count.data?.total)).toBe(2)
+        expect((await reldb.sql.execute('DELETE FROM hai_audit_logs')).success).toBe(false)
       }
       if (type === 'postgresql') {
         expect((await reldb.ddl.dropIndex('hai_audit_event_time_idx')).success).toBe(true)

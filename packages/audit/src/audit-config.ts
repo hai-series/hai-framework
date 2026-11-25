@@ -12,9 +12,19 @@ import { z } from 'zod'
 // ─── 初始化配置 ───
 
 /**
+ * 告警规则窗口的共享上限（秒），同时约束配置和领取保留期。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const maximumWindowMilliseconds = AUDIT_ALERT_MAX_WINDOW_SECONDS * 1000
+ * ```
+ */
+export const AUDIT_ALERT_MAX_WINDOW_SECONDS = 86400
+
+/**
  * 审计模块初始化配置 Schema（Zod）
  *
- * 所有字段均有默认值，可直接调用 `audit.init()` 无需传参。
+ * 可直接调用 `audit.init()`；省略的保留字段使用本配置的默认值。
  * @example
  * ```ts
  * import { AuditInitConfigSchema } from '@h-ai/audit'
@@ -46,7 +56,7 @@ export const AuditInitConfigSchema = z.object({
       /** 同一窗口内累计达到此次数才通知；与 IAM 登录失败锁定阈值分别配置。 */
       threshold: z.number().int().min(1).max(1000000000).default(1),
       /** 固定计数窗口长度，单位秒；例如 300 表示按五分钟窗口统计，不追补长期停机历史。 */
-      windowSeconds: z.number().int().min(60).max(86400).default(300),
+      windowSeconds: z.number().int().min(60).max(AUDIT_ALERT_MAX_WINDOW_SECONDS).default(300),
       /** 通知接收目标；每个目标独立记录投递结果，渠道受理不等于人员已读。 */
       targets: z.array(z.object({
         /** 本规则内稳定且唯一的目标编号，用于防止多节点重复投递。 */
@@ -102,13 +112,13 @@ export const AuditInitConfigSchema = z.object({
     /** 是否也采集成功读取事件；开启可追溯查询行为，但会显著增加日志量与存储开销。 */
     includeReads: z.boolean().default(false),
   }).default({ enabled: true, includeReads: false }),
-  /** 未传时沿用数据库保留设置；显式关闭才解除保护。 */
+  /** 数据库写入和清理共用本次初始化指定的保留策略。 */
   retention: z.object({
-    /** 是否启用共享数据库的审计修改/删除/覆盖保护；配置会持久化，移除配置不会解除已有保护。 */
+    /** 是否保护近期事件，默认关闭；变更后重新初始化 Audit。 */
     enabled: z.boolean().default(false),
-    /** 保护期天数；例如 90 天内 cleanup(0) 也不能删除，到期不会自动清理日志。 */
+    /** 启用时保护的最低天数，默认 90 天，每天按 24 小时计算。 */
     minDays: z.number().int().min(1).max(36500).default(90),
-  }).optional(),
+  }).default({ enabled: false, minDays: 90 }),
   /** 凭据始终脱敏；此开关仅控制业务隐私字段。 */
   privacy: z.object({
     /** 是否对业务隐私字段脱敏；关闭也不会暴露密码、token 等凭据，脱敏前的内容不会恢复。 */

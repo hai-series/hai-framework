@@ -4,7 +4,7 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
+统一审计日志模块，在 Node.js 服务端记录、查询、清理与统计审计事件。Audit 使用 `@h-ai/reldb` 持久化数据，可按需接入私有归档与告警。
 
 ## 快速开始
 
@@ -14,7 +14,7 @@
 
 ## 配置清单
 
-生成的项目在 `config/_audit.yml` 中设置审计采集、保留期限、备份和告警设置。应用启动代码读取该文件，把配置对象传给 `audit.init(config)`。
+生成的项目在 `config/_audit.yml` 中设置审计采集、保留期限、备份和告警。应用启动时把配置传给 `audit.init(config)`。共享数据库的实例使用相同的留存配置，修改后协调重启。
 
 在[模块配置清单](../../docs/usage/configuration/audit.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -26,7 +26,7 @@
 
 ## 数据结构
 
-查看[数据结构](../../docs/usage/data/audit.md)，了解审计日志、字段映射、归档对象和告警去重。
+RelDB 保存事件和告警领取，私有 Storage 保存归档。数据库触发器根据配置保护未到期的记录。数据库以 Unix 毫秒存储事件时间，接口返回 `Date`。参见[数据结构](../../docs/usage/data/audit.md)。
 
 ## 开发测试
 

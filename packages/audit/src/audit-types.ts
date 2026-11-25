@@ -77,7 +77,7 @@ export interface AuditContext {
 }
 
 /**
- * 分类、结果、等级及事件身份；旧记录升级前未知的值保持 null。
+ * 分类、结果、等级及事件身份；缺失的字段表示为 null。
  * @example
  * ```ts
  * import type { AuditEventFields } from '@h-ai/audit'
@@ -380,8 +380,8 @@ export interface AuditFunctions {
   /**
    * 初始化审计模块
    *
-   * @param config - 初始化配置（可选，所有字段均有默认值）
-   * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
+   * @param config - 可选初始化配置；保留策略由本次生效的配置决定。
+   * @returns 成功时返回 ok(undefined)；启动失败或起停冲突时返回对应错误。
    */
   init: (config?: AuditInitConfigInput) => Promise<HaiResult<void>>
   /**

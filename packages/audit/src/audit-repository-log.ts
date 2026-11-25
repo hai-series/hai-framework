@@ -10,10 +10,9 @@ import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { AuditActorSnapshot, AuditLog, AuditLogWithUser, AuditOutcomeCounts, AuditStatItem, CreateAuditLogInput, ListAuditLogsOptions } from './audit-types.js'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-import { readAuditTime } from './audit-database-time.js'
+import { auditClockSql, readAuditTime } from './audit-database-time.js'
 import { auditM } from './audit-i18n.js'
-import { readAuditActor } from './audit-log-functions.js'
-import { auditRetentionDays } from './audit-retention.js'
+import { readAuditActorUsername, readStoredAuditActor } from './audit-log-functions.js'
 import { HaiAuditError } from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'repository' })
@@ -22,9 +21,26 @@ const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 
 /** 审计日志表名（固定值） */
 const AUDIT_TABLE = 'hai_audit_logs'
+const DAY_MS = 86_400_000
+const mysqlAuditCollation = 'utf8mb4_0900_bin'
+const mysqlTextColumns = [
+  ['id', 255, ' NOT NULL PRIMARY KEY'],
+  ['user_id', 256, ''],
+  ['action', 256, ' NOT NULL'],
+  ['resource', 256, ' NOT NULL'],
+  ['resource_id', 256, ''],
+  ['ip_address', 256, ''],
+  ['user_agent', 4096, ''],
+  ['category', 255, ' NOT NULL'],
+  ['outcome', 255, ' NOT NULL'],
+  ['severity', 255, ' NOT NULL'],
+  ['request_id', 256, ''],
+  ['trace_id', 256, ''],
+  ['scope_id', 256, ''],
+] as const
 
 /**
- * 原始 SQL 与基类映射的日期、JSON 返回值可能不同，在审计边界统一。
+ * 底层驱动可能以数值或字符串返回 Unix 毫秒，JSON 也在审计边界统一。
  * @example 模块内部上下文
  * ```ts
  * const row: AuditReadRow = { id: 'audit_example', userId: null, action: 'login', resource: 'auth', resourceId: null, details: { source: 'web' }, ipAddress: null, userAgent: null, createdAt: Date.now(), category: 'system', outcome: 'success', severity: 'info' }
@@ -34,7 +50,7 @@ const AUDIT_TABLE = 'hai_audit_logs'
 type AuditReadRow = Omit<AuditLog, 'details' | 'createdAt' | 'actorSnapshot'> & {
   details: unknown
   actorSnapshot?: unknown
-  createdAt: Date | string | number
+  createdAt: string | number | bigint
 }
 
 function isAuditOutcome(outcome: unknown): outcome is AuditLog['outcome'] {
@@ -48,10 +64,17 @@ function normalizeAuditLog(row: AuditReadRow): AuditLog {
     || (row.severity !== 'info' && row.severity !== 'warning' && row.severity !== 'error' && row.severity !== 'critical')) {
     throw new Error(auditM('audit_invalidStoredClassification'))
   }
+  const epoch = typeof row.createdAt === 'string' && !/^\d+$/.test(row.createdAt)
+    ? Number.NaN
+    : Number(row.createdAt ?? Number.NaN)
+  const createdAt = new Date(epoch)
+  if (!Number.isSafeInteger(epoch) || epoch < 0 || !Number.isFinite(createdAt.getTime()))
+    throw new Error('Invalid stored audit event time')
+  const userId = row.userId ?? null
   return {
     ...row,
-    actorSnapshot: readAuditActor(row.actorSnapshot),
-    userId: row.userId ?? null,
+    actorSnapshot: readStoredAuditActor(row.actorSnapshot, userId, row.id),
+    userId,
     resourceId: row.resourceId ?? null,
     details: row.details == null
       ? null
@@ -60,9 +83,7 @@ function normalizeAuditLog(row: AuditReadRow): AuditLog {
         : JSON.stringify(row.details) ?? null,
     ipAddress: row.ipAddress ?? null,
     userAgent: row.userAgent ?? null,
-    createdAt: row.createdAt instanceof Date
-      ? row.createdAt
-      : new Date(row.createdAt),
+    createdAt,
   }
 }
 
@@ -70,7 +91,7 @@ function normalizeAuditLog(row: AuditReadRow): AuditLog {
  * 审计仓储内部的用户表关联映射；由已校验的初始化配置构造。
  * @example 模块内部上下文
  * ```ts
- * const config: AuditRepositoryConfig = { userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username' }
+ * const config: AuditRepositoryConfig = { userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username', minimumRetentionDays: 90 }
  * const userTable = config.userTable
  * ```
  */
@@ -81,6 +102,21 @@ interface AuditRepositoryConfig {
   userIdColumn: string
   /** 用户表用户名列名 */
   userNameColumn: string
+  /** 本次初始化的最低保留天数；关闭保护时为 0。 */
+  minimumRetentionDays: number
+}
+
+/**
+ * 用户映射的原始返回。PostgreSQL 可选映射失败携带 SQLSTATE，不破坏事务。
+ * @example 模块内部上下文
+ * ```ts
+ * const mapped: ActorLookupRow = { username: 'operator', sql_state: null }
+ * const username = readAuditActorUsername(mapped.username)
+ * ```
+ */
+interface ActorLookupRow {
+  username: unknown
+  sql_state?: string | null
 }
 
 // ─── 仓库 ───
@@ -95,7 +131,7 @@ interface AuditRepositoryConfig {
  * @example 模块内部上下文
  * ```ts
  * // 共享 reldb 已初始化，连接生命周期由创建者管理。
- * const repository = new AuditLogRepository({ userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username' })
+ * const repository = new AuditLogRepository({ userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username', minimumRetentionDays: 0 })
  * const ready = await repository.ready()
  * if (ready.success) {
  *   const stats = await repository.getStats(7)
@@ -103,9 +139,8 @@ interface AuditRepositoryConfig {
  * }
  * ```
  */
-export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
+export class AuditLogRepository extends BaseReldbCrudRepository<AuditReadRow> {
   private readonly repoConfig: AuditRepositoryConfig
-  private readonly isSqlite: boolean
   private readonly mysqlTable?: Promise<HaiResult<void>>
   private readonly readiness: Promise<HaiResult<void>>
 
@@ -243,7 +278,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         {
           fieldName: 'createdAt',
           columnName: 'created_at',
-          def: { type: 'TIMESTAMP' },
+          def: { type: 'BIGINT', notNull: true },
           select: true,
           create: true,
           update: false,
@@ -251,16 +286,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       ],
     })
     this.repoConfig = config
-    this.isSqlite = this.db.config?.type === 'sqlite'
     if (mysql) {
-      // 审计事件需要毫秒精度，MySQL 表直接使用 DATETIME(3)。
+      const text = mysqlTextColumns.map(([column, width, constraints]) => `${column} VARCHAR(${width})${constraints}`).join(', ')
       this.mysqlTable = this.db.ddl.raw(`CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
-        id VARCHAR(255) NOT NULL PRIMARY KEY, user_id VARCHAR(255), action VARCHAR(255) NOT NULL,
-        resource VARCHAR(255) NOT NULL, resource_id VARCHAR(255), details JSON, ip_address VARCHAR(255),
-        user_agent VARCHAR(255), category VARCHAR(255) NOT NULL, outcome VARCHAR(255) NOT NULL, severity VARCHAR(255) NOT NULL,
-        request_id VARCHAR(255), trace_id VARCHAR(255), scope_id VARCHAR(255), actor_snapshot JSON,
-        created_at DATETIME(3)
-      )`)
+        ${text}, details JSON, actor_snapshot JSON, created_at BIGINT NOT NULL
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE ${mysqlAuditCollation}`)
     }
     this.readiness = this.validateSchema()
   }
@@ -281,48 +311,74 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
   private async validateSchema(): Promise<HaiResult<void>> {
     const schema = await this.ensureSchema()
-    if (!schema.success || !this.mysqlTable)
+    if (!schema.success)
       return schema
-    const column = await this.db.sql.get<{ digits: number }>('SELECT DATETIME_PRECISION AS digits FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?', [AUDIT_TABLE, 'created_at'])
-    if (!column.success)
-      return column
-    return Number(column.data?.digits) >= 3
-      ? core.ok(undefined)
-      : core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
-  }
-
-  /**
-   * 将 Date 转为适合当前数据库类型的 SQL 参数
-   *
-   * 与基类写入保持一致：SQLite 使用毫秒，其他数据库由驱动转换 Date。
-   *
-   * @param date - 要转换的日期
-   * @returns SQLite 返回毫秒时间戳，其他返回 Date
-   */
-  private toDateParam(date: Date): number | Date {
-    return this.isSqlite
-      ? date.getTime()
-      : date
+    if (this.db.config?.type === 'sqlite') {
+      const columns = await this.db.sql.query<{ name: string, type: string, notnull: number }>(`PRAGMA table_info(${AUDIT_TABLE})`)
+      if (!columns.success)
+        return columns
+      const createdAt = columns.data.find(({ name }) => name === 'created_at')
+      return createdAt?.type.toUpperCase() === 'INTEGER' && createdAt.notnull === 1
+        ? core.ok(undefined)
+        : core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
+    }
+    const schemaName = this.mysqlTable ? 'DATABASE()' : 'current_schema()'
+    const columns = await this.db.sql.query<{ name: string, kind: string, nullable: string, width: number | string | null, collation: string | null }>(
+      `SELECT column_name AS name, data_type AS kind, is_nullable AS nullable, character_maximum_length AS width,
+         collation_name AS collation FROM information_schema.columns WHERE table_schema=${schemaName} AND table_name=?`,
+      [AUDIT_TABLE],
+    )
+    if (!columns.success)
+      return columns
+    const createdAt = columns.data.find(({ name }) => name === 'created_at')
+    if (createdAt?.kind !== 'bigint' || createdAt.nullable !== 'NO')
+      return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
+    if (this.mysqlTable) {
+      const correctText = mysqlTextColumns.every(([name, width]) => {
+        const column = columns.data.find(candidate => candidate.name === name)
+        return column?.kind === 'varchar' && Number(column.width) === width && column.collation === mysqlAuditCollation
+      })
+      if (!correctText)
+        return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_mysqlLogSchemaInvalid'))
+    }
+    return core.ok(undefined)
   }
 
   /** 身份映射可选；名称读失败仍写入明确缺少名称的身份，并留下可观察诊断。 */
-  async captureActor(userId: string, tx?: DmlWithTxOperations): Promise<AuditActorSnapshot> {
-    const quote = this.db.config?.type === 'mysql'
+  async captureActor(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<AuditActorSnapshot>> {
+    const type = this.db.config?.type
+    const quote = type === 'mysql'
       ? '`'
       : '"'
     const identifier = (name: string) => `${quote}${name}${quote}`
     const { userTable, userIdColumn, userNameColumn } = this.repoConfig
-    const result = await this.sql(tx).get<{ username: string | null }>(`SELECT ${identifier(userNameColumn)} AS username FROM ${identifier(userTable)} WHERE ${identifier(userIdColumn)}=?`, [userId])
+    // PostgreSQL 用同一连接上的数据库函数隔离可选查询失败，避免中止调用方的事务。
+    const sql = this.sql(tx)
+    const result = type === 'postgresql'
+      ? await sql.get<ActorLookupRow>('SELECT username, sql_state FROM hai_audit_lookup_actor(?, ?, ?, ?)', [
+          userTable,
+          userIdColumn,
+          userNameColumn,
+          userId,
+        ])
+      : await sql.get<ActorLookupRow>(`SELECT ${identifier(userNameColumn)} AS username FROM ${identifier(userTable)} WHERE ${identifier(userIdColumn)}=?`, [userId])
     if (!result.success) {
-      logger.warn('Audit actor name unavailable', { userId, errorCode: result.error.code, traceId: result.error.traceId })
-      return { id: userId }
+      if (type === 'postgresql' && tx)
+        return result
+      logger.warn('Audit actor name unavailable', { errorCode: result.error.code, traceId: result.error.traceId })
+      return core.ok({ id: userId })
     }
-    return {
-      id: userId,
-      ...(result.data?.username
-        ? { username: result.data.username }
-        : {}),
+    if (result.data?.sql_state) {
+      logger.warn('Audit actor name unavailable', { sqlState: result.data.sql_state, traceId: core.context.get().traceId })
+      return core.ok({ id: userId })
     }
+    const value = result.data?.username
+    const username = readAuditActorUsername(value)
+    if (value != null && value !== '' && !username)
+      logger.warn('Audit actor name does not match snapshot contract', { traceId: core.context.get().traceId })
+    return core.ok(username
+      ? { id: userId, username }
+      : { id: userId })
   }
 
   private filters(options: ListAuditLogsOptions): { conditions: string[], params: unknown[] } {
@@ -346,11 +402,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     }
     if (options.startDate) {
       conditions.push('a.created_at >= ?')
-      params.push(this.toDateParam(options.startDate))
+      params.push(options.startDate.getTime())
     }
     if (options.endDate) {
       conditions.push('a.created_at <= ?')
-      params.push(this.toDateParam(options.endDate))
+      params.push(options.endDate.getTime())
     }
     return { conditions, params }
   }
@@ -395,7 +451,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       details: input.details ?? null,
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
-      createdAt: now,
+      createdAt: now.getTime(),
     }
 
     try {
@@ -563,11 +619,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     ].map(([column, alias]) => `${column} AS ${quote}${alias}${quote}`).join(', ')
     const conditions = ['created_at <= ?']
     const params: unknown[] = [
-      this.toDateParam(options.cutoff),
+      options.cutoff.getTime(),
     ]
     if (options.from) {
       conditions.push('created_at >= ?')
-      params.push(this.toDateParam(options.from))
+      params.push(options.from.getTime())
     }
     if (options.afterId) {
       conditions.push('id > ?')
@@ -599,7 +655,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       const result = await this.findAll({
         where: 'user_id = ?',
         params: [userId],
-        orderBy: 'created_at DESC',
+        orderBy: 'created_at DESC, id DESC',
         limit,
       })
 
@@ -640,20 +696,14 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const ready = await this.ready()
     if (!ready.success)
       return ready
-    const minimum = await auditRetentionDays()
-    if (!minimum.success)
-      return minimum
-    olderThanDays = Math.max(olderThanDays, minimum.data)
-    logger.debug('Cleaning up old audit logs', { olderThanDays })
-
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - olderThanDays)
+    const days = Math.max(olderThanDays, this.repoConfig.minimumRetentionDays)
+    logger.debug('Cleaning up old audit logs', { olderThanDays: days })
 
     try {
       const result = await this.sql().execute(
-        `DELETE FROM ${AUDIT_TABLE} WHERE created_at < ?`,
+        `DELETE FROM ${AUDIT_TABLE} WHERE created_at < (SELECT ${auditClockSql()}) - ?`,
         [
-          this.toDateParam(cutoff),
+          Math.min(days * DAY_MS, Number.MAX_SAFE_INTEGER),
         ],
       )
 
@@ -670,9 +720,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       const deleted = result.data.changes
       if (deleted > 0)
-        logger.info('Audit logs cleaned up', { olderThanDays, deleted })
+        logger.info('Audit logs cleaned up', { olderThanDays: days, deleted })
       else
-        logger.trace('Audit cleanup found no expired records', { olderThanDays, deleted })
+        logger.trace('Audit cleanup found no expired records', { olderThanDays: days, deleted })
       return core.ok(deleted)
     }
     catch (error) {
@@ -740,9 +790,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       return ready
     logger.debug('Getting audit statistics', { days })
 
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - days)
-    const { conditions, params } = this.filters({ ...filters, startDate: cutoff })
+    const { conditions, params } = this.filters(filters ?? {})
+    const clock = auditClockSql()
+    conditions.push(`a.created_at >= (SELECT ${clock}) - ?`)
+    params.push(Math.min(days * DAY_MS, Number.MAX_SAFE_INTEGER))
 
     try {
       const result = await this.sql().query<{ action: string, count: number | string | bigint }>(

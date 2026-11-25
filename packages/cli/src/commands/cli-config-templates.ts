@@ -1025,11 +1025,10 @@ capture:
   enabled: true
   includeReads: false
 
-# enabled=true 后，最近 minDays 天的记录不能修改或删除；超过保护期也不会自动删除。
-# 保护设置会存入数据库，删掉这一段会沿用已有设置；明确 enabled=false 才关闭保护。
-retention:
-  enabled: false
-  minDays: 90
+# 默认关闭保留保护。取消下面三行注释并重启，可保护最近 90 天的事件。
+# retention:
+#   enabled: true
+#   minDays: 90
 
 # fields 填额外的隐私字段名，例如 [customerPhone, idCard]，不区分大小写。
 # 密码、令牌等凭据始终遮盖；enabled 只控制这里补充的业务字段，不恢复历史原文。

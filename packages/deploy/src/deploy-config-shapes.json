@@ -4833,6 +4833,10 @@
         }
       },
       "retention": {
+        "default": {
+          "enabled": false,
+          "minDays": 90
+        },
         "type": "object",
         "properties": {
           "enabled": {

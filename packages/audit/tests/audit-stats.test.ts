@@ -5,7 +5,7 @@
  */
 
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
@@ -98,6 +98,24 @@ describe('audit.getStats', () => {
     }
   })
 
+  it('从 JavaScript 传入无效对象时返回对应的审计结果', async () => {
+    expect(await Reflect.apply(audit.list, audit, [null])).toMatchObject({
+      success: false,
+      error: { code: HaiAuditError.QUERY_FAILED.code },
+    })
+    expect(await Reflect.apply(audit.countByOutcome, audit, [null])).toMatchObject({
+      success: false,
+      error: { code: HaiAuditError.STATS_FAILED.code },
+    })
+    expect(await Reflect.apply(audit.capture, audit, [
+      null,
+      { read: true },
+    ])).toMatchObject({
+      success: false,
+      error: { code: HaiAuditError.LOG_FAILED.code },
+    })
+  })
+
   it('按列表筛选统计三种结果，省略结果时记录成功', async () => {
     const filters = { action: 'publish', scopeId: 'space-a', requestId: 'publish-a' }
     for (const outcome of ['success', 'failure'] as const) {
@@ -188,6 +206,26 @@ describe('audit.cleanup', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe(0)
+    }
+  })
+
+  it('清理与近七天统计使用数据库时钟，不受应用时钟偏差影响', async () => {
+    expect((await audit.log({ action: 'database-clock', resource: 'test' })).success).toBe(true)
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    try {
+      vi.setSystemTime(Date.now() + 91 * 86400000)
+      expect(await audit.getStats()).toMatchObject({
+        success: true,
+        data: [
+          { action: 'database-clock', count: 1 },
+        ],
+      })
+      expect(await audit.cleanup()).toEqual({ success: true, data: 0 })
+    }
+    finally {
+      vi.useRealTimers()
     }
   })
 

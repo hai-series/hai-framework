@@ -8,7 +8,6 @@ function tests() {
   beforeEach(async () => {
     for (const table of [
       'hai_audit_logs',
-      'hai_audit_policy',
       'hai_iam_users',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)

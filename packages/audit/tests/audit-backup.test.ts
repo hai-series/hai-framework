@@ -15,7 +15,6 @@ function tests() {
   beforeEach(async () => {
     for (const table of [
       'hai_audit_logs',
-      'hai_audit_policy',
       'hai_iam_users',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
@@ -222,6 +221,31 @@ function tests() {
     finally {
       vi.useRealTimers()
     }
+  })
+
+  it('调用时固定归档日期，修改传入对象不会改变扫描范围和重试凭据', async () => {
+    const event = await audit.log({ action: 'archive-range', resource: 'orders' })
+    if (!event.success)
+      throw new Error(event.error.message)
+    const eventTime = event.data.createdAt.getTime()
+    const from = new Date(eventTime - 1000)
+    const to = new Date(eventTime - 1)
+    const pending = audit.backup.run({ id: 'range-snapshot', from, to })
+    from.setTime(eventTime - 500)
+    to.setTime(eventTime)
+    const archived = await pending
+    expect(archived).toMatchObject({
+      success: true,
+      data: {
+        cutoff: new Date(eventTime - 1),
+        recordCount: 0,
+      },
+    })
+    expect(await audit.backup.run({
+      id: 'range-snapshot',
+      from: new Date(eventTime - 1000),
+      to: new Date(eventTime - 1),
+    })).toEqual(archived)
   })
 
   it('关闭会取消并等待备份，不关闭宿主存储或复活旧操作对象', async () => {

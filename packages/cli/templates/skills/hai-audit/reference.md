@@ -2,10 +2,10 @@
 
 统一审计日志模块，基于 `@h-ai/reldb` 实现持久化，提供审计日志的记录、分页查询、清理与统计。
 
-SQLite、PostgreSQL、MySQL 均返回 `createdAt: Date`、`details: string | null`（JSON 字符串），缺失可空字段为 `null`。日期筛选与写入保持同一驱动转换；`getStats()` 数量为安全整数，超出范围返回 `STATS_FAILED`，不要把底层驱动 JSON 对象或时间戳当成公开审计结果。
+SQLite 的 `INTEGER` 与 PostgreSQL/MySQL 的 `BIGINT` 时间列均使用 Unix 毫秒，API 返回 `createdAt: Date`、`details: string | null`（JSON 字符串），缺失的可空字段为 `null`。日期筛选使用毫秒。清理和相对统计使用数据库执行时钟，每天按 24 小时计算。基本字符串筛选精确匹配，包括大小写、重音和末尾空格。`getStats()` 在数量超出安全整数范围时返回 `STATS_FAILED`。
 
 
-`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
+`audit.init()` 等待当前表结构、索引和配置对应的触发器就绪。`audit.close()` 等待已开始的工作，取消的初始化不会发布仓库。关闭成功后再关闭共享 RelDB。
 
 ## 运行环境
 
@@ -24,7 +24,7 @@ SQLite、PostgreSQL、MySQL 均返回 `createdAt: Date`、`details: string | nul
 
 ### 1. 配置
 
-审计模块依赖已初始化的 `@h-ai/reldb` 单例，无需独立配置文件。审计日志固定存储在 `hai_audit_logs` 表中。
+审计模块依赖已初始化的 `@h-ai/reldb` 单例，审计日志固定写入 `hai_audit_logs`。生成的项目在 `config/_audit.yml` 设置 Audit，启动时将配置对象传给 `audit.init()`。留存按本次配置生效，省略时保护关闭，启用后的默认期限为 90 天。
 
 ### 2. 初始化
 
@@ -32,27 +32,29 @@ SQLite、PostgreSQL、MySQL 均返回 `createdAt: Date`、`details: string | nul
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-// 先初始化依赖
 // 以 ./data.db 打开 SQLite 连接。成功后可准备审计表，失败时应停止启动并读取 error。
-await reldb.init({ type: 'sqlite', database: './data.db' })
+const dbReady = await reldb.init({ type: 'sqlite', database: './data.db' })
+if (!dbReady.success)
+  throw new Error(dbReady.error.message, { cause: dbReady.error })
 
 // 再初始化审计模块（自动使用已初始化的 reldb 单例）
 // 借用已连接的 RelDB 和默认配置准备审计表。成功无 data，失败读取 error。
 const result = await audit.init()
-if (!result.success) {
-  // 处理错误
-}
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
 ```
 
 自定义用户表映射：
 
 ```ts
 // 使用下方 IAM 表、ID 列和用户名列配置审计。表准备成功时无 data，配置或建表失败读取 error。
-await audit.init({
+const configured = await audit.init({
   userTable: 'hai_iam_users',
   userIdColumn: 'id',
   userNameColumn: 'username',
 })
+if (!configured.success)
+  throw new Error(configured.error.message, { cause: configured.error })
 ```
 
 ### 3. 关闭
@@ -67,15 +69,15 @@ if (!closeResult.success) {
 
 ### 事件身份与保留保护
 
-`category/outcome/severity` 分别表示系统或业务类别、成功或失败/拒绝、异常等级。`requestId/traceId/scopeId` 用于关联，`actorSnapshot` 保留事件时 id/username/displayName/roles，不能当授权依据。`audit.withContext(context,operation)` 保持异步隔离，可信入口应传入已验证的身份及客户端地址。只传 userId 时尝试捕获映射用户名，失败输出诊断并保留明确缺少名称的身份。旧记录不会补造身份快照；其用户名 JOIN 只用于兼容展示。
+`category`、`outcome`、`severity` 表示事件类别、结果和等级。`requestId`、`traceId`、`scopeId` 用于关联。`actorSnapshot` 保留事件时的身份。`audit.withContext(context, operation)` 由可信入口提供已验证的身份及客户端地址。只传 `userId` 时尝试查找用户名。可选查询失败会记录诊断并仅保存 ID，PostgreSQL 在调用者事务内隔离该查询错误。历史名称不符合约束时可以只返回 ID 并记录诊断，保留数据库原行。MySQL 的字段容量覆盖事件输入，例如 `action` 和 `resource` 最多 256，User-Agent 最多 4096。
 
 `capture:{enabled:true,includeReads:false}` 控制框架自动事件：IAM 关键变更及鉴别失败、Serv/Kit 写请求与失败/拒绝。可信入口自动绑定身份、地址和请求关联；业务语义仍须显式 audit.log。成功读取可选，关闭 capture 不影响显式 log。先初始化 audit 再初始化 IAM，关闭反序。任务/CLI 应通过 withContext 提供可信操作身份。
 
 `audit.log(input,tx)`、`audit.capture(input,{tx})` 可使用调用者现有 RelDB 事务，事件和变更一并提交或回滚；失败尝试须在回滚后由入口记录。自动记录失败输出诊断并保留已生效业务结果；强制审计的业务检查同事务显式 log 的 HaiResult 后再提交。list 支持 requestId/traceId 关联筛选。
 
-`retention:{enabled:true,minDays:90}` 启用共享最低保留，cleanup(0) 不能绕过。触发器拒绝保护期内改删及冲突覆盖；未传 retention 的重初始化沿用已有策略，只有显式可信配置能关闭。默认清理90天不等于不可变保护，首次未配置时不强制启用。DB 所有者 DDL、权限与独立归档需部署侧控制。`audit.init()` 校验当前表结构。用户名取自事件时的身份快照。`audit.close()` 等待已开始的写入。
+`retention: { enabled: true, minDays: 90 }` 启用共享最低保留。触发器拒绝保护期内更新、删除及冲突覆盖。将配置改为 `retention: { enabled: true, minDays: 120 }` 并重启后，`audit.cleanup(0)` 和触发器都遵守 120 天的下限。省略 `retention` 或设为 `enabled: false` 会在重新初始化后关闭保护。同库实例使用相同配置，并统一重启。数据库所有者的 DDL、权限与独立归档由部署方管理。
 
-`backup.enabled` 默认关闭；开启后注入已初始化的私有 StorageFunctions。backup.run({id?,from?,to?,signal?}) 流式条件创建 JSONL，返回记录数/SHA-256/截止时间；稳定 ID 只复用完整且条件相同的归档，不覆盖。backup.verify(key) 有界核对；batchSize/maxRecordBytes 控制内存，超限不截断证据。AUDIT_BACKUP_PREFIX 固定为 hai-private/audit-backups/，公开读取入口只允许指定资源，关闭备份不解除私有边界；已配置公开 publicUrl 的 S3 不能启用备份。
+`backup.enabled` 默认关闭；开启后注入已初始化的私有 StorageFunctions。`backup.run({ id?, from?, to?, signal? })` 在调用时复制 `from` 和 `to`，之后的修改不会改变本次扫描和同 ID 输入比对。流式条件创建 JSONL，返回记录数、SHA-256 和截止时间，稳定 ID 只复用完整且条件相同的归档。`backup.verify(key)` 有界核对，`batchSize` 和 `maxRecordBytes` 控制内存。`AUDIT_BACKUP_PREFIX` 是 `hai-private/audit-backups/`，由宿主限制对象的读取权限。已配置公开 `publicUrl` 的 S3 不能启用备份。
 
 backup.schedule 配置开关、五字段 cron、IANA timezone；audit.schedulerPlan 返回供宿主显式合并到 scheduler.init 的 tasks/hooks，没有自动任务时为 null。回调复用共享 occurrenceId/取消信号，失败抛错让 Scheduler 正确失败。关闭 Scheduler 后再关闭 IAM/Audit/Storage/RelDB，audit 只取消/排空自己的备份。配置计划不隐式启动模块，也不劫持已有全局 hooks。
 
@@ -85,7 +87,9 @@ backup.schedule 配置开关、五字段 cron、IANA timezone；audit.schedulerP
 
 审计 createdAt、归档截止与窗口以数据库时钟为准；Scheduler 计划中的任务依赖稳定归档 ID/共享通知领取声明幂等，失败不能误锁后续检查。
 
-alerts 默认关闭，启用须注入已初始化 Reach，并配置规则 id/actions/resource/outcomes/minimumSeverity/threshold/windowSeconds/severity 与 targets(id/provider/to)。audit.checkAlerts({signal?}) 仅统计已提交事件的当前和前一固定窗口；默认300秒，60–86400秒，不补发更旧停机历史。共享 DB 先领取每个规则/目标/窗口的一次通知尝试，最终 SQL 校验存储端时钟。maxNotificationsPerCheck 默认100，more 提示后续继续。通知只含编号/等级/计数/窗口，submitted 不等于人员收到，queued 仅为 Reach 持久入队；核验 queueId。失败/崩溃保留 unknown/sending/claimed，禁止自动重发未知外部效果；结合 audit.alert 事件和 hai_audit_alert_claims 对照通知端处理。规则/目标语义改变可产生新通知。
+`alerts` 默认关闭。启用时注入已初始化的 Reach，并配置规则 `id`、`actions`、`resource`、`outcomes`、`minimumSeverity`、`threshold`、`windowSeconds`、`severity` 及 `targets`（`id`、`provider`、`to`）。`audit.checkAlerts({ signal? })` 统计当前和前一固定窗口内已提交的事件。窗口默认 300 秒，范围 60–86400 秒。`maxNotificationsPerCheck` 默认 100，`more` 提示后续继续。规则或通知目标发生语义变化时可产生新的通知。
+
+发送前先锁定领取，再用数据库执行时钟校验期限。`sending` 持久化后检查是否已取消，确认后才调用 Reach。`submitted` 表示通道受理，`queued` 表示 Reach 持久入队，由 `queueId` 关联后续记录。告警检查只清理窗口开始时间超过 72 小时的 `submitted` 和 `queued`，此期限对所有窗口配置一致。`unknown`、`sending`、`claimed` 保留供核验，先将 `audit.alert` 和 `hai_audit_alert_claims` 与通知端记录对照，再决定如何处理外部效果。
 
 alerts.schedule 控制定时开关/cron/timezone；audit.schedulerPlan 统一备份和告警计划，没有自动任务时才为 null。宿主显式装配 Scheduler，失败或 report.failed>0 必须失败；先关闭 Scheduler，再关闭 Audit/Reach，Audit 排空自有操作但不关闭 Reach。业务返回 HaiResult 失败须检查；成功检查报告仍须查看 failed。规则无需引入通用策略引擎。
 
@@ -126,6 +130,8 @@ alerts.schedule 控制定时开关/cron/timezone；audit.schedulerPlan 统一备
 | `audit.helper.passwordResetComplete(userId, ip?, ua?)`                         | 密码重置完成 |
 | `audit.helper.crud(input)` | CRUD 操作    |
 
+`audit.helper.crud()` 将动作名限定为 `create`、`read`、`update`、`delete`，并把 `ip`、`ua` 映射到事件的 `ipAddress`、`userAgent`。业务代码提供资源 ID 和变化详情。需要审计事件 ID、业务事务或自定义动作名时用 `audit.log()`。
+
 > `audit.log()` / `audit.helper.*()` 中的 `details` 始终隐藏凭据（如 `password` / `token` / `secret`）；默认也隐藏邮箱、手机号等业务隐私，privacy.enabled 可关闭业务隐私，privacy.fields 可追加字段名，自由文本需指定整个字段隐藏。
 
 ## 错误码
@@ -141,6 +147,8 @@ alerts.schedule 控制定时开关/cron/timezone；audit.schedulerPlan 统一备
 | `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012`  | 配置错误     |
 | `HaiAuditError.ALERTS_DISABLED` | `hai:audit:024` | 告警未启用 |
 | `HaiAuditError.ALERTS_FAILED` | `hai:audit:025` | 告警检查或通知失败 |
+
+JavaScript 调用方传入无效日数或选项时检查对应的 `HaiResult` 错误，例如字符串日数会使清理返回 `CLEANUP_FAILED`、统计返回 `STATS_FAILED`，无效列表筛选返回 `QUERY_FAILED`。
 
 ## 常见模式
 

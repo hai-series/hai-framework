@@ -30,7 +30,7 @@ import { auditM } from './audit-i18n.js'
 import { createAuditWriter, validAuditQuery } from './audit-log-functions.js'
 
 import { AuditLogRepository } from './audit-repository-log.js'
-import { configureAuditRetention, initializeAuditStorage } from './audit-retention.js'
+import { initializeAuditStorage } from './audit-retention.js'
 import {
   HaiAuditError,
 } from './audit-types.js'
@@ -57,15 +57,16 @@ let capturePolicy: AuditInitConfig['capture'] | null = null
 let currentBackup: ReturnType<typeof createAuditBackup> | null = null
 let currentAlerts: ReturnType<typeof createAuditAlerts> | null = null
 /** 只追踪当前进程在途操作，安全记录真值仍在共享数据库。 */
-const inFlightWrites = new Set<Promise<HaiResult<AuditLog>>>()
+const inFlightWrites = new Set<Promise<HaiResult<unknown>>>()
 
 /** 缓存的便捷记录器实例；init 时创建，close 时置 null */
 let currentHelper: AuditHelper | null = null
 
-/** 并发初始化防护标志 */
-let initInProgress = false
+/** 初始化和关闭互斥，并发关闭共用同一完成屏障。 */
+let initializing: Promise<void> | null = null
+let closing: Promise<HaiResult<void>> | null = null
 
-/** close使尚未完成DDL的初始化失效，防止迟到发布。 */
+/** close 使正在准备的初始化失效，旧代次在发布和更新策略前重新检查。 */
 let lifecycleGeneration = 0
 
 // ─── 未初始化占位 ───
@@ -86,6 +87,33 @@ const notInitialized = core.module.createNotInitializedKit(
 /** 未初始化时的便捷记录器占位 */
 const notInitializedHelper = notInitialized.proxy<AuditHelper>()
 const notInitializedBackup = notInitialized.proxy<AuditBackupOperations>()
+
+/** 登记本代次的写入或清理，供停机和重新初始化等待。 */
+function trackAuditWrite<T>(operation: Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+  inFlightWrites.add(operation)
+  const finished = () => {
+    inFlightWrites.delete(operation)
+  }
+  void operation.then(finished, finished)
+  return operation
+}
+
+/** 阻止本代次接受新操作，并等待已开始的写入、告警及归档。 */
+async function drainCurrentAudit(): Promise<void> {
+  currentRepo = null
+  currentWriter = null
+  capturePolicy = null
+  currentHelper = null
+  const backup = currentBackup
+  currentBackup = null
+  const alerts = currentAlerts
+  currentAlerts = null
+  await Promise.allSettled([
+    alerts?.close(),
+    backup?.close(),
+    ...inFlightWrites,
+  ])
+}
 
 // ─── 审计服务对象 ───
 
@@ -134,8 +162,8 @@ export const audit: AuditFunctions = {
    * 等待 AuditLogRepository / BaseReldbCrudRepository 完成建表后才发布实例。
    * 依赖 @h-ai/reldb 已初始化。
    *
-   * @param config - 初始化配置（可选，所有字段均有默认值）
-   * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
+   * @param config - 可选初始化配置；保留策略由本次生效的配置决定。
+   * @returns 成功时返回 ok(undefined)；启动失败或起停冲突时返回对应错误。
    *
    * @example
    * ```ts
@@ -147,31 +175,27 @@ export const audit: AuditFunctions = {
    */
   async init(config?: AuditInitConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
-    if (initInProgress) {
+    if (initializing || closing) {
       logger.warn('Audit init already in progress, skipping concurrent call')
       return core.err(
         HaiAuditError.INIT_IN_PROGRESS,
         auditM('audit_initInProgress'),
       )
     }
-    initInProgress = true
+    let finishInitialization!: () => void
+    initializing = new Promise<void>((resolve) => {
+      finishInitialization = resolve
+    })
     const generation = ++lifecycleGeneration
+    const isCurrent = () => generation === lifecycleGeneration
 
     try {
       if (currentRepo) {
         logger.warn('Audit module is already initialized, reinitializing')
-        currentRepo = null
-        currentWriter = null
-        capturePolicy = null
-        currentHelper = null
-        const closingBackup = currentBackup
-        currentBackup = null
-        const closingAlerts = currentAlerts
-        currentAlerts = null
-        await closingAlerts?.close()
-        await closingBackup?.close()
-        await Promise.allSettled([...inFlightWrites])
+        await drainCurrentAudit()
       }
+      if (!isCurrent())
+        return notInitialized.result()
 
       logger.info('Initializing audit module')
 
@@ -210,21 +234,23 @@ export const audit: AuditFunctions = {
         userTable: parsed.userTable,
         userIdColumn: parsed.userIdColumn,
         userNameColumn: parsed.userNameColumn,
+        minimumRetentionDays: parsed.retention.enabled
+          ? parsed.retention.minDays
+          : 0,
       })
       const ready = await candidate.ready()
+      if (!isCurrent())
+        return notInitialized.result()
       if (!ready.success) {
         return core.err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', {
           params: { error: ready.error.message },
         }), ready.error)
       }
-      const protection = await initializeAuditStorage()
+      const protection = await initializeAuditStorage(parsed.retention, isCurrent)
+      if (!isCurrent())
+        return notInitialized.result()
       if (!protection.success)
         return protection
-      const configured = await configureAuditRetention(parsed.retention)
-      if (!configured.success)
-        return configured
-      if (generation !== lifecycleGeneration)
-        return core.err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized'))
       // 候选仓库只拥有schema就绪Promise，不拥有共享reldb连接；成功屏障后才发布。
       currentRepo = candidate
       currentWriter = createAuditWriter(candidate, parsed)
@@ -256,7 +282,8 @@ export const audit: AuditFunctions = {
       )
     }
     finally {
-      initInProgress = false
+      initializing = null
+      finishInitialization()
     }
   },
 
@@ -276,15 +303,21 @@ export const audit: AuditFunctions = {
       return Promise.resolve(notInitialized.result())
     }
 
-    const operation = currentWriter!(input, tx)
-    inFlightWrites.add(operation)
-    void operation.then(() => inFlightWrites.delete(operation), () => inFlightWrites.delete(operation))
-    return operation
+    return trackAuditWrite(currentWriter!(input, tx))
   },
 
   async capture(input, options): Promise<HaiResult<void>> {
     if (!currentRepo)
       return notInitialized.result()
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+      logger.error('Audit capture input rejected', { traceId: core.context.get().traceId })
+      return core.err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+        params: {
+          field: 'event',
+          reason: auditM('audit_eventFieldsInvalid'),
+        },
+      }))
+    }
     if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
       return core.ok(undefined)
     const written = await audit.log(input, options?.tx)
@@ -391,7 +424,7 @@ export const audit: AuditFunctions = {
       ))
     }
 
-    return currentRepo.cleanupOld(olderThanDays)
+    return trackAuditWrite(currentRepo.cleanupOld(olderThanDays))
   },
 
   /**
@@ -472,21 +505,20 @@ export const audit: AuditFunctions = {
   /**
    * 关闭审计模块，释放内部状态
    */
-  async close(): Promise<HaiResult<void>> {
+  close(): Promise<HaiResult<void>> {
+    if (closing)
+      return closing
     lifecycleGeneration++
     logger.info('Closing audit module')
-    currentRepo = null
-    currentWriter = null
-    capturePolicy = null
-    currentHelper = null
-    const closingBackup = currentBackup
-    currentBackup = null
-    const closingAlerts = currentAlerts
-    currentAlerts = null
-    await closingAlerts?.close()
-    await closingBackup?.close()
-    await Promise.allSettled([...inFlightWrites])
-    logger.info('Audit module closed')
-    return core.ok(undefined)
+    closing = Promise.all([
+      initializing,
+      drainCurrentAudit(),
+    ]).then(() => {
+      logger.info('Audit module closed')
+      return core.ok(undefined)
+    }).finally(() => {
+      closing = null
+    })
+    return closing
   },
 }

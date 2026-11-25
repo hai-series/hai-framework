@@ -12,12 +12,11 @@ When a user reads an order, Audit records the actor, target, outcome, and time. 
 
 Call `reldb.init()` first. `audit.init()` prepares the tables on that connection.
 
-The module uses 3 tables.
+The module uses two tables.
 
 | Table | Purpose |
 | --- | --- |
 | [`hai_audit_logs`](#table-hai-audit-logs) | Find who acted on a resource and when. |
-| [`hai_audit_policy`](#table-hai-audit-policy) | Enforce the minimum retention period. |
 | [`hai_audit_alert_claims`](#table-hai-audit-alert-claims) | Let one instance claim a rule, destination and time window. |
 
 <a id="table-hai-audit-logs"></a>
@@ -26,24 +25,24 @@ The module uses 3 tables.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
-| `id` | `TEXT` | No | — | Event primary key. IDs issued by Audit start with `audit_`. | `audit_example-42` |
-| `user_id` | `TEXT` | Yes | — | ID of the user who acted. | `user-42` |
-| `action` | `TEXT` | No | — | Action performed. | `read` |
-| `resource` | `TEXT` | No | — | Type of resource. | `orders` |
-| `resource_id` | `TEXT` | Yes | — | ID of the affected resource. | `order-42` |
-| `details` | `JSON` | Yes | — | Business details available for investigation. | `{"fields":["status"]}` |
-| `ip_address` | `TEXT` | Yes | — | Request source IP address. | `192.0.2.10` |
-| `user_agent` | `TEXT` | Yes | — | Client user agent. | `Example Browser` |
-| `category` | `TEXT` | No | — | Event category used for filtering. | `business` |
-| `outcome` | `TEXT` | No | — | Whether the action succeeded, failed or was denied. | `success` |
-| `severity` | `TEXT` | No | — | Event severity. | `info` |
-| `request_id` | `TEXT` | Yes | — | Related request ID. | `req-42` |
-| `trace_id` | `TEXT` | Yes | — | Related trace ID. | `trace-42` |
-| `scope_id` | `TEXT` | Yes | — | Business scope of the event. | `team-1` |
-| `actor_snapshot` | `JSON` | Yes | — | Snapshot of the actor at the time of the event. | `{"id":"user-42"}` |
-| `created_at` | `TIMESTAMP` | Yes | — | Event time from the database clock when Audit writes it. | `2026-11-17T00:00:00.000Z` |
+| `id` | `TEXT`, MySQL `VARCHAR(255)` | No | — | Event primary key. IDs issued by Audit start with `audit_`. | `audit_example-42` |
+| `user_id` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | ID of the user who acted. | `user-42` |
+| `action` | `TEXT`, MySQL `VARCHAR(256)` | No | — | Action performed. | `read` |
+| `resource` | `TEXT`, MySQL `VARCHAR(256)` | No | — | Type of resource. | `orders` |
+| `resource_id` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | ID of the affected resource. | `order-42` |
+| `details` | SQLite `TEXT`, PostgreSQL `JSONB`, MySQL `JSON` | Yes | — | Business details available for investigation. | `{"fields":["status"]}` |
+| `ip_address` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | Request source IP address. | `192.0.2.10` |
+| `user_agent` | `TEXT`, MySQL `VARCHAR(4096)` | Yes | — | Client user agent. | `Example Browser` |
+| `category` | `TEXT`, MySQL `VARCHAR(255)` | No | — | System or business event category used for filtering. | `business` |
+| `outcome` | `TEXT`, MySQL `VARCHAR(255)` | No | — | Whether the action succeeded, failed or was denied. | `success` |
+| `severity` | `TEXT`, MySQL `VARCHAR(255)` | No | — | Event severity. | `info` |
+| `request_id` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | Related request ID. | `req-42` |
+| `trace_id` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | Related trace ID. | `trace-42` |
+| `scope_id` | `TEXT`, MySQL `VARCHAR(256)` | Yes | — | Business scope of the event. | `team-1` |
+| `actor_snapshot` | SQLite `TEXT`, PostgreSQL `JSONB`, MySQL `JSON` | Yes | — | Snapshot of the actor at the time of the event. | `{"id":"user-42"}` |
+| `created_at` | SQLite `INTEGER`, PostgreSQL/MySQL `BIGINT` | No | — | Event time from the database clock in Unix milliseconds. | `1794873600000` |
 
-The `created_at` index supports time ranges and retention cleanup. Entries written in an application transaction commit or roll back with it.
+The `created_at` index supports time ranges and retention cleanup. The MySQL log table uses the `utf8mb4_0900_bin` collation. Exact string filters distinguish case, accents and trailing spaces.
 
 <a id="example-data"></a>
 
@@ -65,39 +64,13 @@ Record actor, resource and outcome for investigation and audit retention.
       "status"
     ]
   },
-  "created_at": "2026-11-17T00:00:00.000Z"
+  "created_at": 1794873600000
 }
 ```
 
-user-42 read order-42; details says only status was viewed. created_at shows the database event timestamp in UTC.
+`user-42` read the `status` of `order-42`. The selected fields show the stored representation. The API converts `created_at` to `createdAt: Date`, which formats as `2026-11-17T00:00:00.000Z` with `toISOString()`.
 
 After filtering by scope and event, `audit.countByOutcome` counts successful, failed, and denied events. For example, `{ total: 4, success: 2, failure: 1, denied: 1 }`. The query counts existing logs independently of pagination and ordering.
-
-<a id="table-hai-audit-policy"></a>
-
-### `hai_audit_policy`
-
-| Column | Type | Nullable | Default | Meaning | Example |
-| --- | --- | --- | --- | --- | --- |
-| `id` | `INTEGER` | No | — | Fixed primary key of the row inserted at initialization. | `1` |
-| `enabled` | `INTEGER` | No | — | `1` enforces minimum retention, `0` disables it. Audit initially writes `0`. | `1` |
-| `min_days` | `INTEGER` | No | — | Minimum days to retain records. Audit initially writes `90`. | `90` |
-
-<a id="which-audit-records-must-be-retained"></a>
-
-#### Example · Which audit records must be retained
-
-Store the database-enforced minimum retention so cleanup cannot delete protected events early.
-
-```json
-{
-  "id": 1,
-  "enabled": 1,
-  "min_days": 90
-}
-```
-
-The single id:1 policy is enabled and requires 90 days. It is not a daily policy-history row.
 
 <a id="table-hai-audit-alert-claims"></a>
 
@@ -109,7 +82,7 @@ The single id:1 policy is enabled and requires 90 days. It is not a daily policy
 | `rule_id` | `VARCHAR(64)` | No | — | Alert rule ID. | `failed-login` |
 | `target_id` | `VARCHAR(64)` | No | — | Alert destination ID. | `business` |
 | `window_start` | `BIGINT` | No | — | Start of the alert window in Unix milliseconds. | `1794873600000` |
-| `status` | `VARCHAR(16)` | No | — | Processing state after the claim. | `claimed` |
+| `status` | `VARCHAR(16)` | No | — | `claimed` is reserved, `sending` is authorized, `submitted` was accepted by the provider, `queued` entered the queue, and `unknown` needs review. | `claimed` |
 | `queue_id` | `VARCHAR(64)` | Yes | — | Reach queue ID once the alert is queued. | `notification-42` |
 | `error_code` | `VARCHAR(128)` | Yes | — | Diagnostic error code if the alert fails. | `NULL` |
 
@@ -124,7 +97,8 @@ Claim an alert for one rule, target and time window to reduce duplicate notifica
   "id": "<claim-digest>",
   "rule_id": "failed-login",
   "target_id": "security",
-  "window_start": 1794873600000
+  "window_start": 1794873600000,
+  "status": "claimed"
 }
 ```
 
@@ -134,7 +108,9 @@ This targets security under failed-login; window_start is Unix ms. A claim does 
 
 ### Retention and alert claims
 
-The database prevents updates to protected audit records and prevents deletion before the minimum retention period. The claim table coordinates delivery; delivery records belong to Reach.
+When [retention protection](../configuration/audit.en.md#audit-retention) is enabled, Audit installs database triggers from the active configuration to protect recent events from updates, deletions and overwrites. Instances sharing the database use the same settings. Events written in an application transaction commit or roll back with it. Cleanup and relative-time statistics compute their cutoffs using the database execution clock, in 24-hour days.
+
+Application instances share the alert claim table. Checks prune `submitted` and `queued` rows whose window started more than 72 hours ago. This is three times the maximum supported 24-hour window and applies across instances, even when some use shorter windows. Keep `claimed`, `sending` and `unknown` rows for review. Reach owns delivery records. See [Reach data structures](reach.en.md).
 
 <a id="backups"></a>
 
@@ -159,4 +135,4 @@ A backup header defines format and export range, followed by event lines and a c
 }
 ```
 
-This is only a header, not a restorable archive. cutoff is the endpoint; null from means no start filter. Entries and footer still need verification.
+This excerpt shows the header. `cutoff` is the upper bound and `from: null` means the range has no lower bound. `audit.backup.verify(key)` validates the entries, footer count and checksum.

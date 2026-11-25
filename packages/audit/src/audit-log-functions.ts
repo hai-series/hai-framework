@@ -64,7 +64,9 @@ const querySchema = z.object({
  * ```
  */
 export function validAuditQuery(options: unknown): boolean {
-  return querySchema.safeParse(options ?? {}).success
+  return querySchema.safeParse(options === undefined
+    ? {}
+    : options).success
 }
 
 /**
@@ -84,6 +86,41 @@ export function readAuditActor(value: unknown): AuditActorSnapshot | null {
   if (!parsed.success)
     throw new Error('Invalid audit actor snapshot')
   return parsed.data
+}
+
+/**
+ * 数据库映射只能补入符合公开身份契约的用户名。
+ * @example 模块内部上下文
+ * ```ts
+ * const username = readAuditActorUsername('operator')
+ * ```
+ */
+export function readAuditActorUsername(value: unknown): string | undefined {
+  const parsed = actorSchema.shape.username.safeParse(value)
+  return parsed.success
+    ? parsed.data || undefined
+    : undefined
+}
+
+/**
+ * 保留旧记录的主体标识，隔离无效快照，不将原始身份资料写入诊断。
+ * @example 模块内部上下文
+ * ```ts
+ * const actor = readStoredAuditActor({ id: 'stale-id' }, 'user-1', 'audit-1')
+ * ```
+ */
+export function readStoredAuditActor(value: unknown, userId: string | null, auditId: string): AuditActorSnapshot | null {
+  try {
+    const actor = readAuditActor(value)
+    if (!actor || actor.id === userId)
+      return actor
+  }
+  catch { /* 快照损坏时仍允许读取事件的其余字段。 */ }
+  logger.warn('Invalid stored audit actor snapshot', { auditId })
+  const id = actorSchema.shape.id.safeParse(userId)
+  return id.success
+    ? { id: id.data }
+    : null
 }
 
 /**
@@ -134,10 +171,15 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         }))
       }
       const snapshot = actor?.id === userId
-        ? readAuditActor(actor)
+        ? core.ok(readAuditActor(actor))
         : userId
           ? await repository.captureActor(userId, tx)
-          : null
+          : core.ok(null)
+      if (!snapshot.success) {
+        return core.err(HaiAuditError.LOG_FAILED, auditM('audit_logFailed', {
+          params: { error: snapshot.error.message },
+        }), snapshot.error)
+      }
       const outcome = value.outcome ?? 'success'
       // 先获得最终 JSON 形态，类实例和 toJSON 生成的凭据字段也必须经过脱敏。
       const jsonDetails: unknown = value.details == null
@@ -169,7 +211,7 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
             ? 'error'
             : 'info'),
         userId,
-        actorSnapshot: snapshot,
+        actorSnapshot: snapshot.data,
         requestId: value.requestId ?? context.requestId ?? correlation.requestId ?? null,
         traceId: value.traceId ?? context.traceId ?? correlation.traceId ?? correlation.requestId ?? null,
         scopeId: value.scopeId ?? context.scopeId ?? correlation.scopeId ?? null,

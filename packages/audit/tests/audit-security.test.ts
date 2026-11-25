@@ -3,13 +3,12 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { audit } from '../src/index.js'
+import { audit, AuditInitConfigSchema } from '../src/index.js'
 
 function tests() {
   beforeEach(async () => {
     for (const table of [
       'hai_audit_logs',
-      'hai_audit_policy',
       'hai_audit_alert_claims',
       'audit_security_users',
     ])
@@ -249,18 +248,16 @@ function tests() {
       expect(JSON.parse(result.data.details!)).toEqual({ 客户备注: '[REDACTED]', 订单状态: 'paid' })
   })
 
-  it('启用最低保留时 cleanup(0) 与数据库直接改删均不能绕过，显式关闭后可清理', async () => {
+  it('留存只取决于本次配置，清理和数据库触发器执行同一个期限', async () => {
     const ids: string[] = []
     for (const days of [91, 1]) {
       const result = await audit.log({ action: 'retained', resource: 'audit' })
       if (!result.success)
         throw new Error(result.error.message)
       ids.push(result.data.id)
-      const date = new Date(Date.now() - days * 86400_000)
+      const time = result.data.createdAt.getTime() - days * 86400_000
       expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at = ? WHERE id = ?', [
-        reldb.config?.type === 'sqlite'
-          ? date.getTime()
-          : date,
+        time,
         result.data.id,
       ])).success).toBe(true)
     }
@@ -279,30 +276,67 @@ function tests() {
     const conflict = reldb.config?.type === 'postgresql'
       ? ' ON CONFLICT(id) DO UPDATE SET action=EXCLUDED.action'
       : ''
-    const now = new Date()
     expect((await reldb.sql.execute(`${overwrite} INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity) VALUES (?, ?, ?, ?, 'system', 'success', 'info')${conflict}`, [
       ids[1],
       'overwritten',
       'audit',
-      reldb.config?.type === 'sqlite'
-        ? now.getTime()
-        : now,
+      Date.now(),
     ])).success).toBe(false)
-    // 未传保留设置的重初始化不静默清除数据库中已经启用的保护。
-    expect((await audit.init({ userTable: 'audit_security_users' })).success).toBe(true)
+    // 同一条 100 天前的记录分别用 120 天和 90 天配置检查。
+    const olderId = 'between_retention_limits'
+    expect((await reldb.sql.execute(
+      `INSERT INTO hai_audit_logs (id, action, resource, created_at, category, outcome, severity)
+       VALUES (?, ?, ?, ?, 'system', 'success', 'info')`,
+      [
+        olderId,
+        'retained',
+        'audit',
+        Date.now() - 100 * 86400_000,
+      ],
+    )).success).toBe(true)
+    const resolved = core.config.resolve({
+      name: 'audit',
+      value: {
+        userTable: 'audit_security_users',
+        retention: { enabled: true },
+      },
+      schema: AuditInitConfigSchema,
+      environment: { HAI_AUDIT_RETENTION_MINDAYS: '120' },
+    })
+    if (!resolved.success)
+      throw new Error(resolved.error.message)
+    expect((await audit.init(AuditInitConfigSchema.parse(resolved.data))).success).toBe(true)
     expect(await audit.cleanup(0)).toEqual({ success: true, data: 0 })
+    expect((await reldb.sql.execute('DELETE FROM hai_audit_logs WHERE id = ?', [olderId])).success).toBe(false)
     expect((await audit.init({
       userTable: 'audit_security_users',
-      retention: { enabled: false },
+      retention: { enabled: true },
     })).success).toBe(true)
     expect(await audit.cleanup(0)).toEqual({ success: true, data: 1 })
+    expect((await reldb.sql.execute('DELETE FROM hai_audit_logs WHERE id = ?', [ids[1]])).success).toBe(false)
+    expect((await audit.init({ userTable: 'audit_security_users' })).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_audit_logs SET action = ? WHERE id = ?', ['updated', ids[1]])).success).toBe(true)
+    expect(await audit.cleanup(0)).toEqual({ success: true, data: 1 })
+
+    const type = reldb.config?.type
+    const catalog = type === 'sqlite'
+      ? 'SELECT name FROM sqlite_master WHERE type=\'table\' AND name LIKE ? ESCAPE \'!\' ORDER BY name'
+      : `SELECT table_name AS name FROM information_schema.tables WHERE table_schema=${type === 'mysql'
+        ? 'DATABASE()'
+        : 'current_schema()'} AND table_name LIKE ? ESCAPE '!' ORDER BY table_name`
+    expect(await reldb.sql.query(catalog, ['hai!_audit!_%'])).toEqual({
+      success: true,
+      data: [
+        { name: 'hai_audit_alert_claims' },
+        { name: 'hai_audit_logs' },
+      ],
+    })
   })
 
   it('数据表结构不符时拒绝初始化并保留现有事件', async () => {
     await audit.close()
     for (const table of [
       'hai_audit_logs',
-      'hai_audit_policy',
       'hai_audit_alert_claims',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
@@ -319,9 +353,9 @@ function tests() {
     })).success).toBe(true)
     const date = new Date()
     expect((await reldb.sql.execute('INSERT INTO hai_audit_logs (id, user_id, action, resource, created_at) VALUES (?, ?, ?, ?, ?)', [
-      'legacy',
+      'invalid-schema-fixture',
       'actor-1',
-      'legacy-event',
+      'preserved-event',
       'orders',
       reldb.config?.type === 'sqlite'
         ? date.getTime()
@@ -331,9 +365,9 @@ function tests() {
     expect(audit.isInitialized).toBe(false)
     const columns = await reldb.schemaColumns('hai_audit_logs')
     expect(columns.success && columns.data).not.toContain('category')
-    expect(await reldb.sql.get('SELECT action FROM hai_audit_logs WHERE id=?', ['legacy'])).toMatchObject({
+    expect(await reldb.sql.get('SELECT action FROM hai_audit_logs WHERE id=?', ['invalid-schema-fixture'])).toMatchObject({
       success: true,
-      data: { action: 'legacy-event' },
+      data: { action: 'preserved-event' },
     })
   })
 

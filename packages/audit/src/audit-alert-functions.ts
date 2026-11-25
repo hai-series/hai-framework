@@ -2,12 +2,14 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ReachFunctions } from '@h-ai/reach'
+import type { DmlOperations } from '@h-ai/reldb'
 import type { SchedulerInitInput } from '@h-ai/scheduler'
 import type { AuditInitConfig } from './audit-config.js'
 import type { AuditAlertReport, AuditFunctions } from './audit-types.js'
 import { createHash } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
+import { AUDIT_ALERT_MAX_WINDOW_SECONDS } from './audit-config.js'
 import { withAuditContext } from './audit-context.js'
 import { auditClockSql, readAuditTime } from './audit-database-time.js'
 import { auditM } from './audit-i18n.js'
@@ -17,6 +19,31 @@ const logger = core.logger.child({ module: 'audit', scope: 'alerts' })
 const levels = ['info', 'warning', 'error', 'critical'] as const
 const table = 'hai_audit_alert_claims'
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+
+/** 锁定领取后核对存储端期限；先提交 sending 再交给外部通道。 */
+function authorizeAlertSend(id: string, expiresAt: number, signal: AbortSignal): Promise<HaiResult<boolean>> {
+  const update = async (sql: DmlOperations): Promise<HaiResult<boolean>> => {
+    if (signal.aborted)
+      return core.ok(false)
+    const result = await sql.execute(`UPDATE ${table} SET status='sending' WHERE id=? AND status='claimed' AND ? > ${auditClockSql()}`, [id, expiresAt])
+    return result.success
+      ? core.ok(result.data.changes === 1)
+      : result
+  }
+  if (reldb.config?.type === 'sqlite')
+    return update(reldb.sql)
+
+  // PostgreSQL 可能在等待行锁前求值 WHERE，MySQL 的 UTC_TIMESTAMP 固定在语句开始。
+  // 持锁后再执行 UPDATE，确保等待时间计入期限判定。
+  return reldb.tx.wrapResult(async (tx) => {
+    const locked = await tx.get(`SELECT id FROM ${table} WHERE id=? FOR UPDATE`, [id])
+    if (!locked.success)
+      return locked
+    return locked.data
+      ? update(tx)
+      : core.ok(false)
+  })
+}
 
 /**
  * 模块内部告警实现；Reach 和共享数据库由宿主拥有，close 只排空自己的检查。
@@ -65,9 +92,6 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
           ...new Set(rule.outcomes),
         ].sort()
         const severities = levels.slice(levels.indexOf(rule.minimumSeverity))
-        const date = (value: number) => type === 'sqlite'
-          ? value
-          : new Date(value)
         const conditions = [
           'created_at >= ?',
           'created_at < ?',
@@ -75,8 +99,8 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
           `action IN (${actions.map(() => '?').join(',')})`,
         ]
         const params: unknown[] = [
-          date(start),
-          date(end),
+          start,
+          end,
           'audit.alert',
           ...actions,
         ]
@@ -120,7 +144,8 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
               report.more = true
             continue
           }
-          // 最终领取使用存储端执行时钟；检查暂停或锁等待后不能重新领取已过期、已清理的旧窗口。
+          const expiresAt = start + duration * 2
+          // 领取语句先排除过期窗口，等待锁可能耗尽剩余期限，发送前仍需复核。
           const selection = `SELECT ?, ?, ?, ?, 'claimed' WHERE ? <= ${clock} AND ? > ${clock}`
           const statement = type === 'mysql'
             ? `INSERT IGNORE INTO ${table} (id, rule_id, target_id, window_start, status) ${selection}`
@@ -131,7 +156,7 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
             target.id,
             start,
             start,
-            start + duration * 2,
+            expiresAt,
           ])
           if (!claimed.success)
             return claimed
@@ -157,13 +182,13 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
           })
           if (!recorded.success)
             return recorded
-          // 领取后取消仍保留 claimed，不能把未知外部效果重新当作从未执行。
           signal.throwIfAborted()
-          // 首次 INSERT 或审计写入也可能等待；发送前再以数据库时钟确认，sending/unknown 不自动清除。
-          const sending = await reldb.sql.execute(`UPDATE ${table} SET status='sending' WHERE id=? AND status='claimed' AND ? > ${clock}`, [id, start + duration * 2])
+          const sending = await authorizeAlertSend(id, expiresAt, signal)
           if (!sending.success)
             return sending
-          if (sending.data.changes !== 1)
+          // 等待事务期间可能已取消；已提交的领取保留给运维核对。
+          signal.throwIfAborted()
+          if (!sending.data)
             continue
           const sent = await input.reach!.send({
             provider: target.provider,
@@ -225,8 +250,8 @@ export function createAuditAlerts(input: { config: AuditInitConfig['alerts'], re
         }
       }
     }
-    // 只删除查询范围外的领取。当前/前一窗口永远不会因清理重新发送。
-    const oldest = now - Math.max(...input.config.rules.map(rule => rule.windowSeconds * 1000)) * 3
+    // 多个实例可能配置不同，按允许的最大窗口保留所有仍可能补检的领取。
+    const oldest = now - AUDIT_ALERT_MAX_WINDOW_SECONDS * 1000 * 3
     const cleaned = await reldb.sql.execute(`DELETE FROM ${table} WHERE window_start < ? AND status IN ('submitted', 'queued')`, [oldest])
     return cleaned.success
       ? core.ok(report)

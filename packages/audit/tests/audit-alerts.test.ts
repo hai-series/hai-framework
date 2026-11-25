@@ -6,9 +6,10 @@ import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { audit } from '../src/index.js'
+import * as auditTime from '../src/audit-database-time.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
-function tests() {
+function tests(backend: 'sqlite' | 'postgresql' | 'mysql') {
   let server: Server
   let fail = false
   let messages: string[] = []
@@ -31,7 +32,6 @@ function tests() {
   beforeEach(async () => {
     for (const table of [
       'hai_audit_logs',
-      'hai_audit_policy',
       'hai_audit_alert_claims',
       'hai_iam_users',
     ])
@@ -175,6 +175,66 @@ function tests() {
     expect(messages).toHaveLength(2)
   })
 
+  it('其他实例的较短规则不能删除仍可补检的领取，过期的已提交领取仍会清理', async () => {
+    const day = 86400000
+    const long = {
+      reach,
+      alerts: {
+        ...alerts,
+        rules: [
+          { ...alerts.rules[0], threshold: 1, windowSeconds: 86400 },
+        ],
+      },
+    }
+    const short = {
+      reach,
+      alerts: {
+        ...alerts,
+        rules: [
+          { ...alerts.rules[0], id: 'short-window', windowSeconds: 60 },
+        ],
+      },
+    }
+    expect((await audit.init(long)).success).toBe(true)
+    const written = await audit.log({ action: 'auth.login', resource: 'auth', outcome: 'failure' })
+    if (!written.success)
+      throw new Error(written.error.message)
+    const start = Math.floor(written.data.createdAt.getTime() / day) * day
+    expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at=? WHERE id=?', [start - day / 2, written.data.id])).success).toBe(true)
+    expect(await audit.checkAlerts()).toMatchObject({
+      success: true,
+      data: { submitted: 1 },
+    })
+    expect((await reldb.sql.execute(
+      'INSERT INTO hai_audit_alert_claims (id, rule_id, target_id, window_start, status) VALUES (?, ?, ?, ?, ?)',
+      [
+        'old-receipt',
+        'historical',
+        'security-team',
+        start - 4 * day,
+        'queued',
+      ],
+    )).success).toBe(true)
+
+    expect((await audit.init(short)).success).toBe(true)
+    expect(await audit.checkAlerts()).toMatchObject({
+      success: true,
+      data: { submitted: 0 },
+    })
+    expect(await reldb.sql.query('SELECT status FROM hai_audit_alert_claims')).toMatchObject({
+      success: true,
+      data: [
+        { status: 'submitted' },
+      ],
+    })
+    expect((await audit.init(long)).success).toBe(true)
+    expect(await audit.checkAlerts()).toMatchObject({
+      success: true,
+      data: { submitted: 0 },
+    })
+    expect(messages).toHaveLength(1)
+  })
+
   it('外部通知失败保留不确定回执，不自动重发；失败可查询且关闭不关闭 Reach', async () => {
     expect((await audit.init({ reach, alerts })).success).toBe(true)
     await event()
@@ -291,11 +351,8 @@ function tests() {
       throw new Error(written.error.message)
     const day = 86400000
     const start = Math.floor(written.data.createdAt.getTime() / day) * day
-    const date = (value: number) => reldb.config?.type === 'sqlite'
-      ? value
-      : new Date(value)
     expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at=? WHERE id=?', [
-      date(start - day / 2),
+      start - day / 2,
       written.data.id,
     ])).success).toBe(true)
     vi.spyOn(Date, 'now').mockReturnValue(start + day * 100)
@@ -305,7 +362,7 @@ function tests() {
     })
     vi.restoreAllMocks()
     expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at=? WHERE id=?', [
-      date(start - day * 3),
+      start - day * 3,
       written.data.id,
     ])).success).toBe(true)
     expect(await audit.checkAlerts()).toMatchObject({
@@ -394,9 +451,7 @@ function tests() {
       throw new Error(written.error.message)
     const at = written.data.createdAt.getTime() - 180000
     expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at=? WHERE id=?', [
-      reldb.config?.type === 'sqlite'
-        ? at
-        : new Date(at),
+      at,
       written.data.id,
     ])).success).toBe(true)
     const get = reldb.sql.get.bind(reldb.sql)
@@ -410,8 +465,137 @@ function tests() {
     })
     expect(messages).toHaveLength(0)
   })
+
+  if (backend === 'sqlite') {
+    it('等待发送状态提交时收到取消，不能开始外部通知', async () => {
+      expect((await audit.init({
+        reach,
+        alerts: {
+          ...alerts,
+          rules: [
+            { ...alerts.rules[0], threshold: 1 },
+          ],
+        },
+      })).success).toBe(true)
+      await event()
+      const cancellation = new AbortController()
+      const entered = Promise.withResolvers<void>()
+      const proceed = Promise.withResolvers<void>()
+      const execute = reldb.sql.execute.bind(reldb.sql)
+      vi.spyOn(reldb.sql, 'execute').mockImplementation(async (statement, params) => {
+        if (statement.includes('SET status=\'sending\'')) {
+          entered.resolve()
+          await proceed.promise
+        }
+        return execute(statement, params)
+      })
+      const pending = audit.checkAlerts({ signal: cancellation.signal })
+      try {
+        await Promise.race([
+          entered.promise,
+          pending.then(() => { throw new Error('Alert check completed before authorizing delivery') }),
+        ])
+        cancellation.abort()
+        proceed.resolve()
+        expect(await pending).toMatchObject({
+          success: false,
+          error: { code: HaiAuditError.ALERTS_FAILED.code },
+        })
+        expect(messages).toHaveLength(0)
+        expect(await audit.checkAlerts()).toMatchObject({
+          success: true,
+          data: { submitted: 0 },
+        })
+        expect(messages).toHaveLength(0)
+      }
+      finally {
+        proceed.resolve()
+        await pending
+      }
+    })
+  }
+  else {
+    it('数据库行锁阻塞跨过告警期限后，不再调用 Reach', async () => {
+      const day = 86400000
+      expect((await audit.init({
+        reach,
+        alerts: {
+          ...alerts,
+          rules: [
+            { ...alerts.rules[0], threshold: 1, windowSeconds: 86400 },
+          ],
+        },
+      })).success).toBe(true)
+      const written = await audit.log({ action: 'auth.login', resource: 'auth', outcome: 'failure' })
+      if (!written.success)
+        throw new Error(written.error.message)
+      const eventTime = written.data.createdAt.getTime()
+      const start = Math.floor(eventTime / day) * day
+      const expiresAt = start + day
+      expect((await reldb.sql.execute('UPDATE hai_audit_logs SET created_at=? WHERE id=?', [start - day / 2, written.data.id])).success).toBe(true)
+
+      const opened = await reldb.tx.begin()
+      if (!opened.success)
+        throw new Error(opened.error.message)
+      const held = opened.data
+      let pending: ReturnType<typeof audit.checkAlerts> | undefined
+      try {
+        const blocker = backend === 'postgresql'
+          ? await held.get<{ pid: number }>('SELECT pg_backend_pid() AS pid')
+          : undefined
+        if (blocker && (!blocker.success || !blocker.data))
+          throw new Error('Missing PostgreSQL lock holder connection')
+        // 平移真实 SQL 时钟，让上个窗口在测试内到期；初次读时钟仍选择真实窗口。
+        const clock = auditTime.auditClockSql()
+        const time = await reldb.sql.get<{ now_ms: number | string }>(`SELECT ${clock} AS now_ms`)
+        if (!time.success || !time.data)
+          throw new Error('Missing database time')
+        const offset = expiresAt - Number(time.data.now_ms) - 1500
+        const testClock = `(${clock} + (${offset}))`
+        vi.spyOn(auditTime, 'auditClockSql').mockReturnValue(testClock)
+        const execute = reldb.sql.execute.bind(reldb.sql)
+        vi.spyOn(reldb.sql, 'execute').mockImplementation(async (statement, params) => {
+          const result = await execute(statement, params)
+          if (/^INSERT (?:IGNORE )?INTO hai_audit_alert_claims /.test(statement) && result.success && result.data.changes === 1) {
+            expect(await held.get('SELECT id FROM hai_audit_alert_claims WHERE id=? FOR UPDATE', [params?.[0]])).toMatchObject({
+              success: true,
+              data: { id: params?.[0] },
+            })
+          }
+          return result
+        })
+        pending = audit.checkAlerts()
+        await vi.waitFor(async () => {
+          const blocked = blocker
+            ? await reldb.sql.get('SELECT pid FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))', [blocker.data?.pid])
+            : await reldb.sql.get('SELECT 1 AS blocked FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID=w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_NAME=? LIMIT 1', ['hai_audit_alert_claims'])
+          expect(blocked.success && blocked.data).toBeTruthy()
+        }, { timeout: 1000, interval: 15 })
+        const blockedAt = await reldb.sql.get<{ now_ms: number | string }>(`SELECT ${testClock} AS now_ms`)
+        expect(blockedAt.success && Number(blockedAt.data?.now_ms)).toBeLessThan(expiresAt)
+        await vi.waitFor(async () => {
+          const expiredAt = await reldb.sql.get<{ now_ms: number | string }>(`SELECT ${testClock} AS now_ms`)
+          expect(expiredAt.success && Number(expiredAt.data?.now_ms)).toBeGreaterThanOrEqual(expiresAt)
+        }, { timeout: 2500, interval: 30 })
+        expect((await held.commit()).success).toBe(true)
+        expect(await pending).toMatchObject({
+          success: true,
+          data: { submitted: 0 },
+        })
+        expect(messages).toHaveLength(0)
+        expect(await reldb.sql.get('SELECT status FROM hai_audit_alert_claims')).toMatchObject({
+          success: true,
+          data: { status: 'claimed' },
+        })
+      }
+      finally {
+        await held.rollback()
+        await pending
+      }
+    })
+  }
 }
 
-defineDbSuite('audit alerts SQLite', sqliteMemoryEnv, tests)
-defineDbSuite('audit alerts PostgreSQL', postgresEnv, tests)
-defineDbSuite('audit alerts MySQL', mysqlEnv, tests)
+defineDbSuite('audit alerts SQLite', sqliteMemoryEnv, () => tests('sqlite'))
+defineDbSuite('audit alerts PostgreSQL', postgresEnv, () => tests('postgresql'))
+defineDbSuite('audit alerts MySQL', mysqlEnv, () => tests('mysql'))

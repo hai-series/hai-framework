@@ -20,16 +20,10 @@ capture:
   # 取值：true | false
   includeReads: ${HAI_AUDIT_CAPTURE_INCLUDEREADS:false}
 
-# 只由可信启动配置更改共享保留策略；未传时沿用数据库设置
-# 说明：未传时沿用数据库保留设置；显式关闭才解除保护。
-# 取值：配置块（填写下方缩进字段）
-retention:
-  # 说明：是否启用共享数据库的审计修改/删除/覆盖保护；配置会持久化，移除配置不会解除已有保护。
-  # 取值：true | false
-  enabled: ${HAI_AUDIT_RETENTION_ENABLED:false}
-  # 说明：保护期天数；例如 90 天内 cleanup(0) 也不能删除，到期不会自动清理日志。
-  # 取值：整数；>= 1；<= 36500
-  minDays: ${HAI_AUDIT_RETENTION_MINDAYS:90}
+# 默认关闭保留保护。取消下面三行注释并重启，可保护最近 90 天的事件。
+# retention:
+#   enabled: ${HAI_AUDIT_RETENTION_ENABLED:true}
+#   minDays: ${HAI_AUDIT_RETENTION_MINDAYS:90}
 
 # 凭据始终隐藏；业务隐私字段可配置
 # 说明：凭据始终脱敏；此开关仅控制业务隐私字段。

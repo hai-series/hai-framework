@@ -18,7 +18,9 @@ async function main() {
       process.once('message', resolve)
       process.send({ phase: 'ready' })
     })
-    const initialized = await audit.init()
+    const initialized = await audit.init({
+      retention: { enabled: true, minDays: 90 },
+    })
     if (!initialized.success)
       throw new Error('Audit init failed', { cause: initialized.error })
     for (const result of [

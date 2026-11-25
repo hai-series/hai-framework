@@ -112,9 +112,8 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
         return Promise.resolve(core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid')))
       const values = parsed.data
       const id = values.id ?? core.id.uuid()
-      const from = values.from
-        ? new Date(values.from.getTime())
-        : undefined
+      const from = values.from && new Date(values.from.getTime())
+      const to = values.to && new Date(values.to.getTime())
       const key = `${AUDIT_BACKUP_PREFIX}${id}.jsonl`
       const database = reldb.config
       const source = database?.type === 'sqlite'
@@ -125,13 +124,13 @@ export function createAuditBackup(input: { repository: AuditLogRepository, confi
             port: database?.port,
             database: database?.database,
           }
-      const requestHash = createHash('sha256').update(JSON.stringify({ source, from: from?.toISOString() ?? null, to: values.to?.toISOString() ?? null })).digest('hex')
+      const requestHash = createHash('sha256').update(JSON.stringify({ source, from: from?.toISOString() ?? null, to: to?.toISOString() ?? null })).digest('hex')
       return track(async (signal) => {
         const time = await readAuditTime()
         if (!time.success)
           return time
         const createdAt = time.data
-        const cutoff = new Date(values.to?.getTime() ?? createdAt.getTime())
+        const cutoff = to ?? createdAt
         if (cutoff > createdAt || (from && from > cutoff))
           return core.err(HaiAuditError.BACKUP_INVALID, auditM('audit_backupInvalid'))
         const exists = await input.storage!.file.exists(key)
