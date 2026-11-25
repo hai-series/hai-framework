@@ -1,4 +1,5 @@
 import type { KeyExchangeResponse } from '@h-ai/crypto'
+import type { AppInfoOutputData } from '{{fullstack.contractPackageName}}'
 import { HaiApiClientError } from '@h-ai/api-client'
 import { cache } from '@h-ai/cache'
 import { crypto } from '@h-ai/crypto'
@@ -6,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../src/lib/api/api-client.js'
 
 const runtimeInfo = {
+  notice: '',
   name: 'Configured workspace',
   version: '9.8.7',
   env: 'test',
@@ -13,7 +15,7 @@ const runtimeInfo = {
   supportedLocales: ['zh-CN', 'en-US'],
   startedAt: '2026-01-01T00:00:00.000Z',
   frontends: ['web'],
-}
+} satisfies AppInfoOutputData
 
 /** 使用真实 crypto 公共入口模拟对端，覆盖握手及双向加解密。 */
 function createServerFetch() {
