@@ -1,4 +1,6 @@
-# ai 数据结构
+# @h-ai/ai 数据结构
+
+<a id="ai-数据结构"></a>
 
 [English](ai.en.md) · [日本語](ai.ja.md)
 

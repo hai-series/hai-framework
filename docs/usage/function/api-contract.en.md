@@ -1,4 +1,4 @@
-# @h-ai/api-contract API reference
+# @h-ai/api-contract API Reference
 
 [Chinese source](api-contract.md) · [Configuration](../configuration/api-contract.en.md) · [Data structures](../data/api-contract.en.md)
 

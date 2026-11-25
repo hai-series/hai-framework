@@ -1,4 +1,6 @@
-# Feedback 配置
+# @h-ai/feedback 配置
+
+<a id="feedback-配置"></a>
 
 [English](feedback.en.md) · [日本語](feedback.ja.md)
 

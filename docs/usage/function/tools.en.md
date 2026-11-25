@@ -1,4 +1,6 @@
-# @h-ai/tools features
+# @h-ai/tools API Reference
+
+<a id="h-aitools-features"></a>
 
 Use `tools` to define, register and execute business tools. Ordinary business code, UI actions and AI can call the same implementation.
 

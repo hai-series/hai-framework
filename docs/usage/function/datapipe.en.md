@@ -1,4 +1,6 @@
-# Datapipe APIs
+# @h-ai/datapipe API Reference
+
+<a id="datapipe-apis"></a>
 
 [Package README](../../../packages/datapipe/README.en.md) · [Options](../configuration/datapipe.en.md) · [Data](../data/datapipe.en.md)
 

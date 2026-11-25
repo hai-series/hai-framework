@@ -1,4 +1,4 @@
-# @h-ai/vecdb Data structures
+# @h-ai/vecdb Data Structures
 
 [简体中文](vecdb.md) · [日本語](vecdb.ja.md)
 

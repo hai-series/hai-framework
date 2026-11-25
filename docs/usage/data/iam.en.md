@@ -1,4 +1,4 @@
-# @h-ai/iam Data structures
+# @h-ai/iam Data Structures
 
 [简体中文](iam.md) · [日本語](iam.ja.md)
 

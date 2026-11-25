@@ -1,4 +1,4 @@
-# @h-ai/api-contract Data structures
+# @h-ai/api-contract Data Structures
 
 [简体中文](api-contract.md) · [日本語](api-contract.ja.md)
 

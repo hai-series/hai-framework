@@ -1,4 +1,6 @@
-# @h-ai/tools ファイル設定
+# @h-ai/tools 設定
+
+<a id="h-aitools-ファイル設定"></a>
 
 [中国語](tools.md) · [English](tools.en.md)
 

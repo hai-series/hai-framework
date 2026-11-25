@@ -1,4 +1,4 @@
-# @h-ai/api-client Data structures
+# @h-ai/api-client Data Structures
 
 [简体中文](api-client.md) · [日本語](api-client.ja.md)
 

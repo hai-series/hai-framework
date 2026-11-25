@@ -1,4 +1,4 @@
-# @h-ai/kit API reference
+# @h-ai/kit API Reference
 
 <!-- translation: partial -->
 

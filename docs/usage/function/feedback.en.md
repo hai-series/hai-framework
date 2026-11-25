@@ -1,4 +1,4 @@
-# @h-ai/feedback API reference
+# @h-ai/feedback API Reference
 
 <!-- translation: partial -->
 

@@ -21,7 +21,7 @@ describe('vecdbConfigSchema', () => {
     expect(VecdbConfigSchema.safeParse({ type: 'chroma', url, apiKey: '' }).success).toBe(true)
   })
 
-  it('应支持操作日志配置并填充默认等级和长度', () => {
+  it('应支持操作日志配置并填充默认开关和长度', () => {
     const result = VecdbConfigSchema.parse({
       type: 'lancedb',
       path: './data/vecdb',
@@ -30,15 +30,15 @@ describe('vecdbConfigSchema', () => {
 
     expect(result.operationLog?.read).toBe(false)
     expect(result.operationLog?.write).toBe(true)
-    expect(result.operationLog?.level).toBe('debug')
     expect(result.operationLog?.maxLength).toBe(1000)
   })
 
-  it('操作日志等级仅支持 info/debug/trace', () => {
-    expect(() => VecdbConfigSchema.parse({
+  it.each(['info', 'trace', 'warn'])('兼容旧操作日志等级 %s 并从解析结果移除', (level) => {
+    const result = VecdbConfigSchema.parse({
       type: 'lancedb',
       path: './data/vecdb',
-      operationLog: { read: true, level: 'warn' },
-    })).toThrow()
+      operationLog: { read: true, level },
+    })
+    expect(result.operationLog).toEqual({ read: true, write: false, maxLength: 1000 })
   })
 })

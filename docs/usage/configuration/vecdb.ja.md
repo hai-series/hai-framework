@@ -17,9 +17,23 @@
 | `pgvector.indexType`, `tablePrefix` | `hnsw`, `vec_` | ベクトル索引の方式とテーブルの接頭辞。 |
 | `qdrant.url`, `apiKey` | `http://localhost:6333`, optional key | 外部サービスの URL と認証情報。 |
 | `chroma.host`, `port`, `serverCommand`, `startupTimeout` | `localhost`, `8000`, `chroma`, `30000` | Chroma の接続先とローカル起動設定。`path`、`url`、`apiKey` は任意。 |
-| `operationLog.read`, `write`, `maxLength`, `level` | `false`, `false`, `1000`, `debug` | 操作ログの有効化、長さとレベル。 |
 
 表のプロバイダー名は対象を示します。項目は選んだ設定オブジェクトに直接書きます。
+
+<a id="operation-logging"></a>
+
+### 操作ログ
+
+すべてのバックエンドに共通の設定です。有効にした操作の要約は `debug` レベルで出力し、[Core のログレベル](core.ja.md#アプリのログ出力)でフィルターします。
+
+| 設定項目 | 型 | 必須または既定値 | 用途 |
+| --- | --- | --- | --- |
+| `operationLog` | オブジェクト | 省略可 | 省略すると通常操作の要約を出力しません。 |
+| `operationLog.read` | 真偽値 | `false` | コレクションの照会やベクトル検索などの読み取りを記録します。 |
+| `operationLog.write` | 真偽値 | `false` | コレクションの変更やベクトルの書き込み・削除を記録します。 |
+| `operationLog.maxLength` | 非負整数 | `1000` | 安全な要約の最大文字数です。`0` で要約を省略します。 |
+
+旧設定から `operationLog` 配下の `level` を削除してください。環境変数を参照する場合は YAML 側の参照を先に削除し、その後で古い環境変数を削除します。
 
 ## 設定例
 

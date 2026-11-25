@@ -1,6 +1,8 @@
+import type { LogRecord } from '@h-ai/core'
 import type { ReldbOpsContext } from '../src/providers/reldb-provider-base.js'
 import { core } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { createBaseDdlOps, createBaseDmlOps, createBaseTxManager, logReldbOperation } from '../src/providers/reldb-provider-base.js'
 
 function createContext(): ReldbOpsContext {
@@ -10,7 +12,6 @@ function createContext(): ReldbOpsContext {
       read: true,
       write: false,
       maxLength: 24,
-      level: 'trace',
     }),
     logger: {
       error: vi.fn<(message: string, context?: Record<string, unknown>) => void>(),
@@ -22,6 +23,71 @@ function createContext(): ReldbOpsContext {
 }
 
 describe('reldb operation log', () => {
+  it('uses the Core threshold for safe summaries while retaining lifecycle and SQL errors', async () => {
+    const initialLevel = core.logger.getLevel()
+    const records: LogRecord[] = []
+    const stop = core.logger.observe((record) => {
+      if (record.context.module === 'reldb')
+        records.push(record)
+    })
+    try {
+      core.logger.setLevel('warn')
+      const rejected = await reldb.init({
+        type: 'sqlite',
+        database: ':memory:',
+        operationLog: { maxLength: -1 },
+      })
+      expect(rejected).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.CONFIG_ERROR.code },
+      })
+      expect(records).toContainEqual(expect.objectContaining({ level: 'error', message: 'RelDB config validation failed' }))
+
+      const config = {
+        type: 'sqlite' as const,
+        database: ':memory:',
+        operationLog: { read: true, level: 'info' },
+      }
+      expect((await reldb.init(config)).success).toBe(true)
+      const secret = 'private-sql-log-test-value'
+      const summaries = () => records.filter(record => record.message === 'RelDB operation executed')
+      for (const level of ['warn', 'info'] as const) {
+        core.logger.setLevel(level)
+        expect((await reldb.sql.query('SELECT ? AS label', [secret])).success).toBe(true)
+      }
+      expect(summaries()).toEqual([])
+
+      core.logger.setLevel('debug')
+      expect((await reldb.sql.query('SELECT ? AS label', [secret])).success).toBe(true)
+      expect(summaries()).toMatchObject([
+        {
+          level: 'debug',
+          context: { category: 'read', operation: 'query' },
+        },
+      ])
+
+      core.logger.setLevel('warn')
+      const failed = await core.context.run({ requestId: 'reldb-log-threshold' }, () =>
+        reldb.sql.query('SELECT ? FROM reldb_missing_log_probe', [secret]))
+      expect(failed).toMatchObject({
+        success: false,
+        error: { code: HaiReldbError.QUERY_FAILED.code, traceId: 'reldb-log-threshold' },
+      })
+      expect(records).toContainEqual(expect.objectContaining({
+        level: 'error',
+        message: 'DML: query failed',
+        context: expect.objectContaining({ traceId: 'reldb-log-threshold' }),
+      }))
+      expect(summaries()).toHaveLength(1)
+      expect(JSON.stringify(records)).not.toContain(secret)
+    }
+    finally {
+      stop()
+      core.logger.setLevel(initialLevel)
+      await reldb.close()
+    }
+  })
+
   it('logs enabled read operations through context config', () => {
     const ctx = createContext()
 
@@ -35,10 +101,10 @@ describe('reldb operation log', () => {
       },
     )
 
-    expect(ctx.logger.trace).toHaveBeenCalledOnce()
-    expect(ctx.logger.debug).not.toHaveBeenCalled()
+    expect(ctx.logger.debug).toHaveBeenCalledOnce()
+    expect(ctx.logger.trace).not.toHaveBeenCalled()
     expect(ctx.logger.info).not.toHaveBeenCalled()
-    expect(ctx.logger.trace).toHaveBeenCalledWith('RelDB operation executed', {
+    expect(ctx.logger.debug).toHaveBeenCalledWith('RelDB operation executed', {
       category: 'read',
       operation: 'query',
       payload: expect.stringMatching(/^.{24}$/),
@@ -51,7 +117,6 @@ describe('reldb operation log', () => {
       read: true,
       write: true,
       maxLength: 1000,
-      level: 'trace',
     })
     const secret = 'NOT_A_REAL_SECRET'
     logReldbOperation(ctx, 'write', 'execute', {
@@ -107,7 +172,7 @@ describe('reldb operation log', () => {
         stack: expect.stringContaining('database.ts:25:50'),
       })
     }
-    const logged = JSON.stringify([vi.mocked(ctx.logger.trace).mock.calls, vi.mocked(ctx.logger.error).mock.calls])
+    const logged = JSON.stringify([vi.mocked(ctx.logger.debug).mock.calls, vi.mocked(ctx.logger.error).mock.calls])
     expect(logged).not.toContain(secret)
     expect(logged).not.toContain('INSERT INTO')
     expect(logged).toContain('parameterCount')
@@ -139,7 +204,7 @@ describe('reldb operation log', () => {
 
     expect(result.success).toBe(true)
     expect(rawQuery).toHaveBeenCalledWith('SELECT * FROM users WHERE name = ?', ['Alice'])
-    expect(ctx.logger.trace).toHaveBeenCalledWith('RelDB operation executed', expect.objectContaining({
+    expect(ctx.logger.debug).toHaveBeenCalledWith('RelDB operation executed', expect.objectContaining({
       category: 'read',
       operation: 'query',
     }))
@@ -151,7 +216,6 @@ describe('reldb operation log', () => {
       read: false,
       write: true,
       maxLength: 1000,
-      level: 'debug',
     })
     const rawCreateTable = vi.fn(async () => core.ok(undefined))
     const ddl = createBaseDdlOps(ctx, {
@@ -185,7 +249,6 @@ describe('reldb operation log', () => {
       read: false,
       write: true,
       maxLength: 1000,
-      level: 'debug',
     })
     const commit = vi.fn(async () => core.ok(undefined))
     const rollback = vi.fn(async () => core.ok(undefined))
@@ -235,7 +298,6 @@ describe('reldb operation log', () => {
       read: false,
       write: true,
       maxLength: 1000,
-      level: 'info',
     })
 
     logReldbOperation(ctx, 'read', 'get', { sql: 'SELECT 1' })

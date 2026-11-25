@@ -1,4 +1,4 @@
-# @h-ai/serv Data structures
+# @h-ai/serv Data Structures
 
 [简体中文](serv.md) · [日本語](serv.ja.md)
 

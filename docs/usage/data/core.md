@@ -1,4 +1,6 @@
-# core 数据结构
+# @h-ai/core 数据结构
+
+<a id="core-数据结构"></a>
 
 [English](core.en.md) · [日本語](core.ja.md)
 

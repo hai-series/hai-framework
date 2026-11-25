@@ -77,14 +77,14 @@ finally {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返し、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
+モジュールの import は入門例と同じです。SQL と構造の操作は初期化成功後、終了前に実行します。ページングと識別子のツールは単独で利用できます。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返し、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 
 <a id="connection"></a>
 
 ### 接続・構造準備・終了：`reldb`
 
-最初に接続します。PostgreSQL では `prepareSchema` で複数インスタンスのスキーマ準備を調整できます。接続を閉じる前に各トランザクションを終了します。
+SQLite、PostgreSQL、MySQL のいずれかに接続した後、`prepareSchema` でモジュールのテーブル、インデックス、初期データを準備できます。PostgreSQL では複数のインスタンスで準備キーを共有できます。接続を閉じる前に、保持しているトランザクションを終了します。
 
 #### インターフェース一覧
 
@@ -92,17 +92,48 @@ finally {
 | --- | --- | --- | --- | --- |
 | `reldb.init(config)` | データベース接続を作成して検証 | 必須の `config: ReldbConfigInput`。[バックエンド設定](../configuration/reldb.ja.md)を参照。 | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
 | `reldb.close()` | 実行中のトランザクションを終了して接続を解放 | なし | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema(key, prepare)` | スキーマ準備を実行。PostgreSQL では名前付きのトランザクションロックを使い、同じ接続で実行 | 必須の `key: string` は各デプロイで共通の識別子。非同期コールバックに `ddl` と `sql` を渡す | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.prepareSchema(key, prepare)` | スキーマを準備。PostgreSQL ではキーに対応するトランザクションロックも取得 | 必須の `key: string` と非同期の `prepare`。全インスタンスで同じ固定のモジュールキーを使い、コールバックに `{ ddl, sql }` を渡す | `Promise<HaiResult<T>>`。成功時はコールバックの結果、未接続時は `NOT_INITIALIZED` | `await reldb.prepareSchema('docs:demo:schema', ({ ddl }) => ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true, notNull: true } }))` |
 
-#### 利用例：接続・構造準備・終了
-
-PostgreSQL は同じ接続でトランザクションロックを保持し、コールバックが失敗するとロールバックします。SQLite と MySQL では通常の `ddl` と `sql` を渡し、各データベースの規則で実行します。MySQL はプールから接続を取得し、同じ `key` を渡してもプロセス間ロックは取得しません。
+#### 利用例：接続と終了
 
 既存の接続がある場合、新しい設定がスキーマ検証または共有データベースの要件を満たさなければ、`init()` は設定エラーを返し、既存の接続は使用できます。設定が検証に通ると接続を置き換えます。新しい接続に失敗した場合は初期化をやり直します。
 
 未翻訳：SQL、JSON、トランザクション、リポジトリの各メソッドの例。[中国語の該当節](reldb.md#api-reference)を参照してください。
 
 [引数と手順の詳細](reldb.md#connection)
+
+<a id="prepare-schema"></a>
+
+#### 利用例：モジュールのテーブルを準備して読み取りを確認する
+
+このメソッドは SQLite、PostgreSQL、MySQL で利用できます。PostgreSQL は 1 つの接続でキーに対応するトランザクションロックを保持します。同じデータベースで同じキーを使った呼び出しは順にコールバックを実行し、失敗時はロールバックします。モデル呼び出しなどの外部操作はトランザクション終了後に実行します。SQLite と MySQL は通常の `ddl` と `sql` を渡し、コミットは各バックエンドの規則に従います。この 2 つのバックエンドでは `key` による調整は行われません。
+
+アプリの起動時に次のコードを実行します。[選択したデータベース](../configuration/reldb.ja.md)に接続し、`demo_prepared` が存在しないテスト用データベースを使用します。各インスタンスの固定キーは `docs:demo:schema` です。コールバックでは受け取った `ddl` と `sql` でテーブルを操作し、準備が成功してからサービスを開始します。
+
+```ts
+// 固定キーを使って準備します。成功時はコールバックで読み取った ID の一覧を返します。
+const prepared = await reldb.prepareSchema('docs:demo:schema', async ({ ddl, sql }) => {
+  // 例のテーブルを用意します。成功時に業務データはなく、失敗時は作成のエラーを返します。
+  const table = await ddl.createTable('demo_prepared', {
+    id: { type: 'TEXT', primaryKey: true, notNull: true },
+  }, true)
+  if (!table.success)
+    return table
+
+  // 受け取った sql で読み取ります。新しい表では [] が返り、読み取り失敗時は準備を終了します。
+  return sql.query<{ id: string }>('SELECT id FROM demo_prepared ORDER BY id')
+})
+if (!prepared.success)
+  return prepared
+prepared.data // []
+
+// テスト用データベースから例の表を削除します。成功時に業務データはありません。
+const removed = await reldb.ddl.dropTable('demo_prepared', true)
+if (!removed.success)
+  return removed
+```
+
+テーブルの作成後に読み取りが失敗すると、PostgreSQL は作成をロールバックします。SQLite と MySQL ではテーブルが既にコミットされている場合があるため、失敗結果を確認して各バックエンドの規則に従って処理します。
 
 <a id="schema"></a>
 
@@ -225,8 +256,6 @@ if (!rawResult.success)
 | `overrides.defaultPage / defaultPageSize` | `number` | 既定 1 と 20 | 対応する値が省略または 1 未満の場合に使用。正整数を使い、既定件数を上限以内にします。 |
 | `overrides.maxPageSize` | `number` | `200` | 呼び出し側が明示したページサイズの上限。 |
 
-3 ページ目に 50 件を指定し、アプリが `{ maxPageSize: 10 }` を適用すると、`{ page: 3, pageSize: 10, offset: 20, limit: 10 }` になります。
-
 `params` はプレースホルダーの順に値を束縛します。束縛する値がなければ省略できます。`page` は 1 始まり、`pageSize` はページごとの件数です。省略または 1 未満の値は `defaultPage` または `defaultPageSize` に戻り、有効な値は小数部分を切り捨てます。明示した `pageSize` は `maxPageSize` 以下に収まります。`overrides` はアプリで正の整数を指定し、既定の件数を上限以内に設定してください。
 
 #### 利用例：パラメーター付き SQL とページング
@@ -252,19 +281,15 @@ const getResult2 = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', [
 if (!getResult2.success)
   return getResult2
 getResult2.data // { id: 'o1' }
-// ページ 1、件数 20 から最初のページの上限とオフセットを得ます。
-const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
-// 利用者は 3 ページ目に 50 件を指定します。画面の上限は 10 件なので、20 行を飛ばして最大 10 行を取得します。
-const limited = reldb.pagination.normalize({ page: 3, pageSize: 50 }, { maxPageSize: 10 })
-limited // { page: 3, pageSize: 10, offset: 20, limit: 10 }
-// 固定 SQL と正規化済みページ設定を渡し、o1 のページと総数 1 を取得します。失敗時は元の結果を返します。
-const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
+// 固定 SQL とページ設定を渡し、o1 のページと総数 1 を取得します。失敗時は元の結果を返します。
+const pageResult = await reldb.sql.queryPage({
+  sql: 'SELECT id FROM demo_sql ORDER BY id',
+  pagination: { page: 1, pageSize: 20 },
+})
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data
 // page.items: [{ id: 'o1' }], total: 1
-// 例の行、総数、ページ設定から同等のページオブジェクトを作ります。
-reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
 // バッチで o1 を削除します。成功時は行を削除して data はなく、失敗時は元の結果を返します。
 const batchResult = await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])
 if (!batchResult.success)
@@ -280,6 +305,72 @@ getResult.data // null
 o1 はバインド値です。get の null は正常な該当なし、query は配列、batch は業務データなしです。識別子を値パラメーターにしません。
 
 [引数と手順の詳細](reldb.md#sql)
+
+<a id="pagination-utils"></a>
+
+#### 利用例：読み込み済みの注文一覧をページ分割する
+
+注文一覧への指定は 2 ページ目、1 ページ当たり 50 件で、画面の上限は 2 件です。例では ID 順の注文 5 件を使います。2 つの関数にデータベース接続は不要で、キャッシュやメモリにあるデータをページ分割できます。
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
+// 指定を正規化し、3 件目から最大 2 件を取り出す設定を得ます。
+const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
+pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+
+// 対象行を切り出し、現在の行と全件数、正規化済み設定から戻り値を作ります。
+const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
+const result = reldb.pagination.build(items, orders.length, pagination)
+result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
+```
+
+`build` は渡された行と全件数を使います。絞り込み、ソート、対象行の切り出しは呼び出し前に行います。
+
+<a id="sql-identifiers"></a>
+
+### SQL 識別子の検証と引用
+
+アクセスを許可したテーブル名と列名から識別子を選んで形式を検証します。アクセス権とバックエンド側の長さ制限はアプリが確認します。業務上の値は SQL のパラメーターとして渡します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `reldb.validateIdentifier(name)` | SQL 識別子を 1 つ検証 | `name: string`。先頭は ASCII 英字またはアンダースコア、以降は ASCII 英数字またはアンダースコア。最大 128 文字 | `HaiResult<string>`。成功時は元の文字列、失敗時は `CONFIG_ERROR` | `reldb.validateIdentifier('order_total')` |
+| `reldb.validateIdentifiers(names)` | 複数の SQL 識別子を順に検証 | `names: string[]`。同じ規則を各名前に適用 | `HaiResult<void>`。すべて成功時に data はなく、失敗時は最初のエラー | `reldb.validateIdentifiers(['order_id', 'order_total'])` |
+| `reldb.quoteIdentifier(name)` | 検証済みの識別子を二重引用符で囲む | `name: string`。PostgreSQL、SQLite など二重引用符で識別子を囲める方言で利用 | `string`。内部の二重引用符は 2 個にする | `reldb.quoteIdentifier('order_total')` |
+| `reldb.escapeSqlString(value)` | SQL リテラルの単一引用符を 2 個にする | `value: string`。信頼できる DDL 内の文字列リテラルを対象にする | `string`。単一引用符のみを処理し、外側の引用符は呼び出し元が付ける | `reldb.escapeSqlString("O'Reilly")` |
+
+#### 利用例：注文レポートの列名を確認する
+
+注文レポートは注文金額でのソートと注文番号の参照に対応します。用意済みのフィールドから `order_total` と `order_id` を選びます。初期化前でもツールを利用できます。
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+// 定義済みのソート列を検証します。成功時の data は order_total です。
+const column = reldb.validateIdentifier('order_total')
+if (!column.success)
+  throw new Error(column.error.message, { cause: column.error })
+
+// 定義済みの 2 列は形式を満たしています。成功時に業務データはありません。
+const columns = reldb.validateIdentifiers(['order_id', 'order_total'])
+if (!columns.success)
+  throw new Error(columns.error.message, { cause: columns.error })
+
+// このレポートが使う PostgreSQL または SQLite の規則で引用します。
+const quoted = reldb.quoteIdentifier(column.data) // '"order_total"'
+
+// ピリオドは識別子の規則に合いません。失敗結果の error.code は hai:reldb:013 です。
+const invalid = reldb.validateIdentifier('orders.total')
+if (!invalid.success)
+  invalid.error.code // 'hai:reldb:013'
+
+// 信頼できる DDL リテラルの単一引用符を 2 個にします。外側の引用符は付きません。
+const escaped = reldb.escapeSqlString("O'Reilly") // "O''Reilly"
+```
 
 <a id="transactions"></a>
 
@@ -405,9 +496,28 @@ ID `r1` と `r2` がある場合、`findAll({ orderBy: "id ASC", offset: 1 })` �
 | `reldb.json.insert(column, path, value)` | 未存在 JSON パスを追加する SQL 式を作成 | `column: string` 信頼できる JSON 列名または SQL の列表現。`path: string` 対象の JSON パス。例は $.status。`value` 対象パスに書き込む JSON 値 | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
 | `reldb.json.remove(column, path)` | JSON パスを削除する SQL 式を作成 | `column: string` 信頼できる JSON 列名または SQL の列表現。`path: string` 対象の JSON パス。例は $.status | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
 | `reldb.json.merge(column, patch)` | JSON を統合する SQL 式を作成 | `column: string` 信頼できる JSON 列名または SQL の列表現。`patch: Record<string, unknown>` JSON オブジェクトへマージする項目と値 | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
+| `reldb.parseJsonPath(path)` | JSON パスを分割 | `path: string`。例は `$.profile.name` | `string[]`。解析できた先頭部分だけを返す場合がある | `reldb.parseJsonPath('$.profile.name')` |
+| `reldb.createJsonOps(dbType)` | 指定した方言の式ビルダーを作成 | 必須の `dbType: DbType`。指定できる値は `sqlite`、`postgresql`、`mysql` | `ReldbJsonOps`。接続前でも利用可能 | `reldb.createJsonOps('postgresql')` |
 
 #### 利用例：JSON フィールドの読み書き
 
 以下では payload に対する各パスと実行後の JSON を示します。方言を DB に合わせ、式オブジェクトを保存済みデータと混同しません。
+
+#### 利用例：接続前に JSON 照会式を組み立てる
+
+設定された `$.profile.name` はプロフィールから名前を読み取るパスです。このレポートは PostgreSQL を使います。解釈できない箇所より前だけが返る場合があるため、必要に応じてパス全体と許可するキーをアプリで検証します。
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+const path = '$.profile.name'
+// profile と name を個別のパス要素として返します。
+const segments = reldb.parseJsonPath(path) // ['profile', 'name']
+// PostgreSQL の式ビルダーを返します。
+const pgJson = reldb.createJsonOps('postgresql')
+// パスをパラメーターとして渡します。作成した式は接続後にクエリで使えます。
+const expression = pgJson.extract('payload', path)
+expression // { sql: 'payload #> ?::text[]', params: [['profile', 'name']] }
+```
 
 [引数と手順の詳細](reldb.md#json-fields)

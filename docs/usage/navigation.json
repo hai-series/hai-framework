@@ -63,7 +63,7 @@
             { "id": "configuration-request-access", "title": "请求来源、时段与接口加密", "titles": { "en-US": "Request sources, access hours and API encryption", "ja-JP": "リクエスト元・アクセス時間帯・API 暗号化" }, "path": "configuration/request-access.md" }
           ]
         },
-        { "id": "configuration-ai", "title": "AI 配置清单与使用场景", "titles": { "en-US": "AI settings and use cases", "ja-JP": "AI の設定と利用例" }, "path": "configuration/ai.md" },
+        { "id": "configuration-ai", "title": "@h-ai/ai", "path": "configuration/ai.md" },
         { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "titles": { "en-US": "Feedback, notifications, audit and jobs", "ja-JP": "フィードバック・通知・監査・ジョブ" }, "path": "configuration/operations.md" },
         { "id": "configuration-experience", "title": "页面、支付与设备", "titles": { "en-US": "Pages, payments and devices", "ja-JP": "画面・決済・デバイス" }, "path": "configuration/experience.md" },
         { "id": "configuration-delivery", "title": "构建、部署与恢复", "titles": { "en-US": "Build, deployment and recovery", "ja-JP": "ビルド・デプロイ・復旧" }, "path": "configuration/delivery.md" },

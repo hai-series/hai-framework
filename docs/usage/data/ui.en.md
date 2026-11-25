@@ -1,4 +1,4 @@
-# @h-ai/ui Data structures
+# @h-ai/ui Data Structures
 
 [简体中文](ui.md) · [日本語](ui.ja.md)
 

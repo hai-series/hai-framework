@@ -1,4 +1,4 @@
-# @h-ai/storage API reference
+# @h-ai/storage API Reference
 
 <!-- translation: partial -->
 

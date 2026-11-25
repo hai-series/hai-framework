@@ -1,4 +1,6 @@
-# Reach 配置
+# @h-ai/reach 配置
+
+<a id="reach-配置"></a>
 
 [English](reach.en.md) · [日本語](reach.ja.md)
 

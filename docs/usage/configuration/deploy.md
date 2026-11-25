@@ -1,4 +1,6 @@
-# Deploy 配置
+# @h-ai/deploy 配置
+
+<a id="deploy-配置"></a>
 
 [English](deploy.en.md) · [日本語](deploy.ja.md)
 

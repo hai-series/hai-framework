@@ -1,4 +1,6 @@
-# IAM 配置
+# @h-ai/iam 配置
+
+<a id="iam-配置"></a>
 
 [English](iam.en.md) · [日本語](iam.ja.md)
 

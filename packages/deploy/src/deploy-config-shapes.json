@@ -123,15 +123,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -237,15 +228,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -377,15 +359,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -3764,15 +3737,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -3849,15 +3813,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -3907,15 +3862,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -3987,15 +3933,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }

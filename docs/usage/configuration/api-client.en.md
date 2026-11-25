@@ -1,4 +1,6 @@
-# @h-ai/api-client File configuration
+# @h-ai/api-client Configuration
+
+<a id="h-aiapi-client-file-configuration"></a>
 
 [Chinese](api-client.md) · [日本語](api-client.ja.md)
 

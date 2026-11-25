@@ -53,13 +53,11 @@ operationLog:
   read: false # collection.exists/info/list, vector.search/count
   write: false # collection.create/drop, vector.insert/upsert/delete
   maxLength: 1000
-  level: debug # info | debug | trace
 ```
 
-约定环境变量优先于 YAML，例如 `HAI_VECDB_URL`、
-`HAI_VECDB_APIKEY`、`HAI_VECDB_OPERATIONLOG_LEVEL`。
+约定环境变量优先于 YAML，例如 `HAI_VECDB_URL`、`HAI_VECDB_APIKEY`、`HAI_VECDB_OPERATIONLOG_READ`。
 
-`operationLog` 在集合/向量操作进入真实 Provider 前输出日志。日志包含操作类型以及条数、维度、topK、是否有过滤条件等摘要。`maxLength` 限制摘要字符数，0 省略摘要。`level` 默认 `debug`。
+`operationLog` 的读写开关默认关闭。开启后，在集合或向量操作前以 `debug` 写出安全摘要，由 `HAI_CORE_LOGGING_LEVEL` 过滤。摘要包含操作类型、条数、维度、topK 或是否有过滤条件。`maxLength` 限制摘要字符数，`0` 省略摘要。
 
 pgvector 在当前 PostgreSQL schema 创建集合表。读写按 `search_path` 解析表名，列表返回按该路径可见且当前角色有权限的表。为共享集合的实例设置相同的 `search_path`，以应用角色核对 `SHOW search_path` 和 `vecdb.collection.list()`。表名是字面 `tablePrefix` 加集合名，下划线和百分号按普通字符匹配。拼接后的表名按数据库编码计算字节数，超过服务器的 `max_identifier_length`（通常为 63）时返回 `CONFIG_ERROR`。
 

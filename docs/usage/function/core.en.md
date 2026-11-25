@@ -1,4 +1,6 @@
-# Core API reference
+# @h-ai/core API Reference
+
+<a id="core-api-reference"></a>
 
 [中文完整参考](core.md) · [日本語](core.ja.md) · [Core settings](../configuration/core.en.md) · [Core data](../data/core.en.md)
 

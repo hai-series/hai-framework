@@ -53,7 +53,7 @@ function fieldDescription(module, segments) {
   const key = segments.at(-1)
   const field = segments.join('.')
   if (key === 'operationLog')
-    return `${module} 操作日志的读写开关、级别与字段截断规则`
+    return `${module} 操作日志的读写开关与安全摘要长度`
   if (module === 'deploy' && field === 'provider')
     return '应用部署目标平台及其连接参数，按 type 选择对应平台字段'
   if (module === 'deploy' && field.startsWith('services')) {
@@ -65,8 +65,7 @@ function fieldDescription(module, segments) {
     return `${({ alipay: '支付宝', stripe: 'Stripe', wechat: '微信支付' })[key]}渠道的商户配置与验签参数`
   if (field.includes('operationLog.')) {
     return ({
-      level: '操作日志的输出级别',
-      maxLength: '操作日志字段的最大字符数，0 表示不截断',
+      maxLength: '操作摘要的最大字符数，0 省略摘要',
       read: '是否记录读取操作',
       write: '是否记录写入操作',
     })[key]

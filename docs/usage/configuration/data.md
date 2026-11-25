@@ -19,7 +19,7 @@ user: orders_app
 password: ${DB_PASSWORD}
 ssl: { rejectUnauthorized: true }
 pool: { min: 1, max: 10, idleTimeout: 30000, acquireTimeout: 10000 }
-operationLog: { read: false, write: false, maxLength: 1000, level: debug }
+operationLog: { read: false, write: false, maxLength: 1000 }
 ```
 
 示例主机和用户需替换，`${DB_PASSWORD}` 通过私有 Secret 提供。PostgreSQL 的 `ssl` 可为布尔值、`require`、`prefer`、`allow`、`disable` 或驱动对象；MySQL 的语义不同：只接受 `false` 或受限对象，不能照抄 PostgreSQL 模式字符串。

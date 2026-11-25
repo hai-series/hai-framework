@@ -3203,17 +3203,9 @@
     "name": "HAI_DB_OPERATIONLOG",
     "module": "db",
     "path": "db.operationLog",
-    "description": "db 操作日志的读写开关、级别与字段截断规则",
+    "description": "db 操作日志的读写开关与安全摘要长度",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_DB_OPERATIONLOG_LEVEL",
-    "module": "db",
-    "path": "db.operationLog.level",
-    "description": "操作日志的输出级别",
-    "value": "debug",
-    "constraint": "字符串；取值：info | debug | trace"
   },
   {
     "name": "HAI_DB_OPERATIONLOG_MAXLENGTH",
@@ -7667,17 +7659,9 @@
     "name": "HAI_VECDB_OPERATIONLOG",
     "module": "vecdb",
     "path": "vecdb.operationLog",
-    "description": "vecdb 操作日志的读写开关、级别与字段截断规则",
+    "description": "vecdb 操作日志的读写开关与安全摘要长度",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_VECDB_OPERATIONLOG_LEVEL",
-    "module": "vecdb",
-    "path": "vecdb.operationLog.level",
-    "description": "操作日志的输出级别",
-    "value": "debug",
-    "constraint": "字符串；取值：info | debug | trace"
   },
   {
     "name": "HAI_VECDB_OPERATIONLOG_MAXLENGTH",

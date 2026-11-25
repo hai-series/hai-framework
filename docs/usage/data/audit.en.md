@@ -1,4 +1,4 @@
-# @h-ai/audit Data structures
+# @h-ai/audit Data Structures
 
 [简体中文](audit.md) · [日本語](audit.ja.md)
 

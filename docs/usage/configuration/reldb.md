@@ -1,4 +1,6 @@
-# RelDB 配置
+# @h-ai/reldb 配置
+
+<a id="reldb-配置"></a>
 
 [English](reldb.en.md) · [日本語](reldb.ja.md)
 
@@ -67,7 +69,23 @@
 | `mysql` | 对象 | 可省略 | MySQL 驱动选项。 |
 | `mysql.charset` | 字符串 | `"utf8mb4"` | 连接字符集。 |
 
+<a id="connection-tls"></a>
+
+### 连接加密（TLS）
+
+PostgreSQL 和 MySQL 都可使用 TLS。SQLite 直接访问本地文件或内存。
+
+PostgreSQL 的 `ssl` 选项由 `pg` 传给 Node.js TLS。服务器使用私有 CA 时，将 PEM 内容放入 `ssl.ca`。如果在 `url` 中设置 `sslmode`、`sslcert`、`sslkey` 或 `sslrootcert`，驱动会用 URL 的 TLS 设置替换独立的 `ssl` 对象。见 [node-postgres TLS 说明](https://node-postgres.com/features/ssl#usage-with-connectionstring)。
+
+MySQL 使用自己的 `ssl` 对象，填 `{}` 即可开启 TLS 并校验证书链及 DNS 主机名。自定义 CA 同样填 `ssl.ca`。TLS 配置始终独立于 MySQL URL。
+
+<a id="operation-logging"></a>
+
 ### 操作日志
+
+各后端共用以下配置。启用的操作摘要以 `debug` 输出，由 [Core 日志阈值](core.md#应用日志) 过滤。
+
+旧配置请删除 `operationLog` 下的 `level` 字段。如果该字段引用了环境变量，应先删掉 YAML 中的引用，再删除对应的旧环境变量。
 
 | 配置项 | 类型 | 必填或默认值 | 用途 |
 | --- | --- | --- | --- |
@@ -75,7 +93,6 @@
 | `operationLog.read` | 布尔值 | `false` | 记录查询、单行查询和分页查询的摘要。 |
 | `operationLog.write` | 布尔值 | `false` | 记录结构变更、写入、批量执行和事务操作的摘要。 |
 | `operationLog.maxLength` | 非负整数 | `1000` | 安全数量摘要的字符上限，`0` 省略摘要。摘要不含 SQL 原文或绑定值。 |
-| `operationLog.level` | `"info"`、`"debug"` 或 `"trace"` | `"debug"` | 写出正常操作摘要的日志级别。 |
 
 ## 配置示例
 
@@ -88,7 +105,7 @@ database: ./data/orders.db
 
 ### 多个服务连接同一个 PostgreSQL 数据库
 
-让每个服务都连接 `postgres.internal` 上的 `orders` 库，并通过私有环境提供 `HAI_DB_PASSWORD`。本例每个进程最多使用 10 条连接，获取连接最多等待 5 秒。由一个服务写入测试订单，再从另一个服务读回，以确认它们使用了同一个库。
+让每个服务都连接 `postgres.internal` 上的 `orders` 库，并通过私有环境提供 `HAI_DB_PASSWORD`。本例每个进程最多使用 10 条连接，获取连接最多等待 5 秒。服务器已启用 TLS 并使用私有 CA 时，通过私有环境变量 `HAI_DB_SSL_CA` 提供 CA 的 PEM 内容，使用与证书匹配的主机名。由一个服务写入测试订单，再从另一个服务读回，以确认它们使用了同一个库。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: postgresql
@@ -97,14 +114,19 @@ port: 5432
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
+  rejectUnauthorized: true
 pool:
   max: 10
   acquireTimeout: 5000
 ```
 
+建立连接后，在应用使用的会话执行 `SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()`。结果为 `true` 表示该连接使用了 TLS。
+
 ### 连接已有 MySQL 数据库
 
-请数据库管理员先建好 `orders` 数据库和账号。这份配置通过单独字段选择连接目标，从私有环境读取密码。
+请数据库管理员先建好 `orders` 数据库和账号。这份配置通过单独字段选择启用了 TLS 的服务，从私有环境读取密码和 CA 的 PEM 内容。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql
@@ -113,9 +135,13 @@ port: 3306
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
 ```
 
-如果部署环境提供统一的连接字符串，可以改用下面的形式。示例 URL 只展示主机、端口、库名和用户名。如果连接需要密码，通过私有环境变量 `HAI_DB_URL` 注入带凭据的完整 URL。启动后在目标库读写测试记录，确认账号具有应用所需的权限。
+初始化成功后，在应用使用的会话执行 `SHOW SESSION STATUS LIKE 'Ssl_cipher'`。返回的 `Value` 非空表示该连接已协商加密套件。
+
+如果部署环境提供统一的连接字符串，可以用 URL 指定主机、端口、库名和用户名。如果连接需要密码，通过私有环境变量 `HAI_DB_URL` 注入带凭据的完整 URL。使用 TLS 的服务仍需单独配置上面的 `ssl` 对象。启动后在目标库读写测试记录，确认账号具有应用所需的权限。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql

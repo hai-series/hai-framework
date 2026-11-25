@@ -1,4 +1,4 @@
-# @h-ai/vecdb API reference
+# @h-ai/vecdb API Reference
 
 [Chinese source](vecdb.md) · [Configuration](../configuration/vecdb.en.md) · [Data structures](../data/vecdb.en.md)
 

@@ -38,15 +38,15 @@ operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
   maxLength: 1000
-  level: debug # info | debug | trace
 ```
 
-约定环境变量优先于 YAML，例如 `HAI_DB_TYPE`、`HAI_DB_DATABASE`、
-`HAI_DB_OPERATIONLOG_LEVEL`。
+约定环境变量优先于 YAML，例如 `HAI_DB_TYPE`、`HAI_DB_DATABASE`、`HAI_DB_OPERATIONLOG_READ`。
 
-`operationLog` 在 reldb provider-base 的 DML 操作层统一输出日志，不要在 `reldb-main.ts`、各 raw provider 或调用方重复包装。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，`maxLength` 限制安全数量摘要的字符数（0省略摘要）；SQL原文、参数值、DDL默认值和驱动错误内容不写入日志，`level` 默认 `debug`。
+`operationLog` 在 Provider 共用的操作层输出摘要。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，两者默认关闭。摘要使用 `debug`，由 `HAI_CORE_LOGGING_LEVEL` 过滤。`maxLength` 限制安全摘要的字符数，`0` 省略摘要。摘要只包含数量、长度等安全字段。
 
 ### 2. 初始化与关闭
+
+PostgreSQL 与 MySQL 都支持 TLS。PostgreSQL 把独立的 `ssl` 对象交给 `pg`，例如用 `{ ca: trustedCaPem, rejectUnauthorized: true }` 验证服务器。URL 中的 `sslmode`、`sslrootcert`、`sslcert` 或 `sslkey` 会替换这个对象。MySQL 独立配置自己的 `ssl` 对象。
 
 MySQL `pool` 仅支持 `{ max: 10, acquireTimeout: 10000, queueLimit: 1000 }`（也是省略时默认值）。`acquireTimeout` 为 1–2147483647 毫秒的整数，覆盖排队和建连；queueLimit 为正整数。SQL/DDL/CRUD/batch/tx 共用有界 FIFO，超时移除并返回 `TIMEOUT`，满额返回 `POOL_EXHAUSTED`；迟到建连结算前仍占槽位，只归还连接，不执行 SQL。close 立即取消排队，再等待借用/事务和驱动有界建连完成，不中止已启动 SQL。min/idleTimeout/mysql.timezone 明确拒绝，不承诺 MySQL 最小保留或可配置空闲回收；PostgreSQL 的 `min` 不预建连接。提供 `pool` 对象时，RelDB 补齐 `min: 1`、`max: 10`、`idleTimeout: 30000`、`acquireTimeout: 10000`。省略整个对象时，最大连接数仍为 10，pg 池默认最少保留 0 条、10 秒回收空闲连接，且无池获取超时。设置 `idleTimeout: 0` 或 `acquireTimeout: 0` 可分别关闭对应时限。
 
@@ -125,9 +125,11 @@ if (!closed.success) {
 
 > 所有方法均返回 `Promise<HaiResult<void>>`，上表省略异步与错误类型。
 
+`reldb.validateIdentifier(name)` 校验一个标识符，成功时 `data` 为原名称。`reldb.validateIdentifiers(names)` 校验名称数组。标识符先从应用白名单中选出，例如表名 `orders_archive`。校验只检查名称格式，动态值仍用绑定参数传入。
+
 SQLite 文本主键需显式设 `notNull: true`。旧表用 `PRAGMA table_info(table_name)` 检查 `pk` 和 `notnull`，并检查已有空 ID，由应用安排修数和迁移。MySQL 的 `addColumn()` 在同一次结构变更中添加列和 `references` 外键约束。MySQL 若有多个表使用同一个索引名，`dropIndex()` 返回 `DDL_FAILED` 并保留现有索引。
 
-PostgreSQL 的 `prepareSchema(key, prepare)` 按共同键加事务锁，回调内的 `ddl` 和 `sql` 在同一连接执行。重复准备部分索引时会核对已有定义，定义不符或无法校验时报错，需要显式迁移。校验已有部分索引的谓词需要创建临时表的权限。SQLite 和 MySQL 回调使用各自的普通操作，按各自数据库的 DDL 规则执行。
+`reldb.prepareSchema(key, prepare)` 在 SQLite、PostgreSQL 和 MySQL 上均可调用。PostgreSQL 按共同键加事务锁，回调内的 `ddl` 和 `sql` 在同一连接执行，失败时回滚。重复准备部分索引时会核对已有定义，定义不符或无法校验时报错，需要显式迁移。校验已有部分索引的谓词需要创建临时表的权限。SQLite 和 MySQL 直接运行回调并遵循各自的 DDL 规则，`key` 不参与加锁。
 
 **ReldbTableDef**（列名到列定义的映射）：
 
@@ -424,17 +426,21 @@ return tx.commit()
 | `normalize` | `(options?, overrides?) => NormalizedPagination`      | 规范化分页参数（含 offset/limit 计算） |
 | `build`     | `<T>(items, total, pagination) => PaginatedResult<T>` | 构建分页结果对象                       |
 
-```typescript
-// PaginatedResult 结构
-interface PaginatedResult<T> {
-  items: T[]
-  total: number
-  page: number
-  pageSize: number
-}
+这两个工具适合需要自行取得条目和总数的接口，无需初始化连接。`normalize()` 计算当前页所需的 `limit` 和 `offset`，默认页码为 1、每页 20 条，显式提供的每页条数最多 200。取到当前页后用 `build()` 组装响应，`total` 应是所有符合条件的记录数。
 
-// 默认值：page=1, pageSize=20, maxPageSize=200
+```ts
+import { reldb } from '@h-ai/reldb'
+
+// 已筛选、已排序的结果共有三条，本次请求第 2 页，每页 2 条。
+const matched = [{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]
+const pagination = reldb.pagination.normalize({ page: 2, pageSize: 2 })
+// limit=2、offset=2。用这两个值从结果中取出当前页。
+const pageItems = matched.slice(pagination.offset, pagination.offset + pagination.limit)
+const response = reldb.pagination.build(pageItems, matched.length, pagination)
+// { items: [{ id: 'o3' }], total: 3, page: 2, pageSize: 2 }
 ```
+
+固定 SQL 需要数据库分页时，可直接使用 `reldb.sql.queryPage()`，它会查询总数并取出当前页。
 
 ### JSON — `reldb.json`
 

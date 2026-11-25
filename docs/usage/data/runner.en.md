@@ -1,4 +1,4 @@
-# @h-ai/runner Data structures
+# @h-ai/runner Data Structures
 
 [简体中文](runner.md) · [日本語](runner.ja.md)
 

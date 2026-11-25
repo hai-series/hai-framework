@@ -1,4 +1,6 @@
-# cache 数据结构
+# @h-ai/cache 数据结构
+
+<a id="cache-数据结构"></a>
 
 [English](cache.en.md) · [日本語](cache.ja.md)
 

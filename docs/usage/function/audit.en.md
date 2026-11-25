@@ -1,4 +1,4 @@
-# @h-ai/audit API reference
+# @h-ai/audit API Reference
 
 <!-- translation: partial -->
 

@@ -92,7 +92,7 @@ function summarizeOperationPayload(payload: unknown): Record<string, number> {
 }
 
 /**
- * 记录不含 SQL 原文及绑定值的操作摘要。
+ * 以 debug 记录不含 SQL 原文及绑定值的操作摘要。
  *
  * @param ctx - Provider 日志和配置上下文
  * @param category - 读取或写入类别
@@ -116,7 +116,7 @@ export function logReldbOperation(
     return
   }
 
-  ctx.logger[config.level]('RelDB operation executed', {
+  ctx.logger.debug('RelDB operation executed', {
     category,
     operation,
     payload: config.maxLength <= 0

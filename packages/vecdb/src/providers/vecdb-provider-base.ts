@@ -203,7 +203,7 @@ function logVecdbOperation(
   const payload = config.maxLength > 0
     ? JSON.stringify(Object.fromEntries(fields)).slice(0, config.maxLength)
     : ''
-  ctx.logger[config.level]('VecDB operation started', { category, operation, payload })
+  ctx.logger.debug('VecDB operation started', { category, operation, payload })
 }
 
 /** 根据错误定义获取对应的 i18n 错误消息 */

@@ -1,4 +1,6 @@
-# Crypto の設定ファイル
+# @h-ai/crypto 設定
+
+<a id="crypto-の設定ファイル"></a>
 
 [中国語](crypto.md) · [English](crypto.en.md)
 

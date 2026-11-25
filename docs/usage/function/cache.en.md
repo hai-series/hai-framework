@@ -1,4 +1,4 @@
-# @h-ai/cache API reference
+# @h-ai/cache API Reference
 
 [中文](cache.md) · [日本語](cache.ja.md)
 

@@ -1,4 +1,4 @@
-# @h-ai/cache Data structures
+# @h-ai/cache Data Structures
 
 [简体中文](cache.md) · [日本語](cache.ja.md)
 

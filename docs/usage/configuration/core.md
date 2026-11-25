@@ -1,4 +1,6 @@
-# Core 配置
+# @h-ai/core 配置
+
+<a id="core-配置"></a>
 
 [English](core.en.md) · [日本語](core.ja.md)
 

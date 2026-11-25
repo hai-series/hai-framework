@@ -1,4 +1,4 @@
-# @h-ai/deploy API reference
+# @h-ai/deploy API Reference
 
 <!-- translation: partial -->
 

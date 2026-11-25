@@ -1,4 +1,6 @@
-# Core settings
+# @h-ai/core Configuration
+
+<a id="core-settings"></a>
 
 [简体中文](core.md) · [日本語](core.ja.md) · [Configuration API](../function/core.en.md#config-api)
 

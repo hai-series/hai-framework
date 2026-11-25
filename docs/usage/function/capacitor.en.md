@@ -1,4 +1,4 @@
-# @h-ai/capacitor API reference
+# @h-ai/capacitor API Reference
 
 [Chinese source](capacitor.md) · [Configuration](../configuration/capacitor.en.md) · [Data structures](../data/capacitor.en.md)
 

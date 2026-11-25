@@ -67,7 +67,23 @@ The required string field `type` accepts `sqlite`, `postgresql`, or `mysql`. Use
 | `mysql` | Object | Optional | MySQL driver options. |
 | `mysql.charset` | String | `"utf8mb4"` | Connection character set. |
 
+<a id="connection-tls"></a>
+
+### Encrypt connections with TLS
+
+PostgreSQL and MySQL both support TLS. SQLite accesses a local file or memory directly.
+
+For PostgreSQL, `pg` passes the `ssl` options to Node.js TLS. Set `ssl.ca` to PEM content when the server uses a private CA. If the `url` contains `sslmode`, `sslcert`, `sslkey`, or `sslrootcert`, the driver replaces the separate `ssl` object with the URL settings. See [node-postgres TLS configuration](https://node-postgres.com/features/ssl#usage-with-connectionstring).
+
+MySQL accepts its own `ssl` object. An empty object enables TLS with certificate-chain and DNS hostname checks. Set `ssl.ca` for a private CA. Configure TLS separately from the MySQL URL.
+
+<a id="operation-logging"></a>
+
 ### Operation logging
+
+These settings apply to every backend. Enabled operation summaries use `debug` and are filtered by the [Core logging threshold](core.en.md#application-logging).
+
+Remove the legacy `level` field under `operationLog`. If the field refers to an environment variable, remove the YAML reference before deleting the old variable.
 
 | Field | Type | Requirement or default | Meaning |
 | --- | --- | --- | --- |
@@ -75,7 +91,6 @@ The required string field `type` accepts `sqlite`, `postgresql`, or `mysql`. Use
 | `operationLog.read` | Boolean | `false` | Summarize multi-row queries, single-row queries, and paginated queries. |
 | `operationLog.write` | Boolean | `false` | Summarize schema changes, writes, batches, and transaction operations. |
 | `operationLog.maxLength` | Nonnegative integer | `1000` | Character limit for the summary of counts. `0` omits that summary. It contains no SQL text or bound values. |
-| `operationLog.level` | `"info"`, `"debug"`, or `"trace"` | `"debug"` | Log level for normal-operation summaries. |
 
 ## Configuration examples
 
@@ -88,7 +103,7 @@ database: ./data/orders.db
 
 ### Share a PostgreSQL database
 
-Point each service at the `orders` database on `postgres.internal` and provide `HAI_DB_PASSWORD` through the private server environment. Each process can use up to 10 connections and wait up to five seconds to acquire one. Write a test order from one service and read it from another to verify that they share the database.
+Point each service at the `orders` database on `postgres.internal` and provide `HAI_DB_PASSWORD` through the private server environment. Each process can use up to 10 connections and wait up to five seconds to acquire one. Write a test order from one service and read it from another to verify that they share the database. This example assumes the server has TLS enabled. Set `HAI_DB_SSL_CA` to the private CA’s PEM content and use the hostname on the server certificate.
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: postgresql
@@ -97,14 +112,19 @@ port: 5432
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
+  rejectUnauthorized: true
 pool:
   max: 10
   acquireTimeout: 5000
 ```
 
+On an application connection, run `SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()`. A value of `true` confirms TLS on that connection.
+
 ### Connect to an existing MySQL database
 
-Have the database administrator create the `orders` database and its account first. This example sets the connection fields individually and reads the password from the private server environment.
+Have the database administrator create the `orders` database and its account first. This example sets the connection fields individually and reads the password from the private server environment. Set `HAI_DB_SSL_CA` to the PEM content of the CA trusted by the application.
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql
@@ -113,9 +133,13 @@ port: 3306
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
 ```
 
-If your deployment supplies a connection string, use the form below. The example URL shows only the host, port, database, and username. When a password is required, inject the full URL with credentials through the private `HAI_DB_URL` environment variable. After startup, read and write a test record in the intended database to verify the account's application permissions.
+On an application connection, run `SHOW SESSION STATUS LIKE 'Ssl_cipher'`. A nonempty `Value` confirms a cipher was negotiated.
+
+If your deployment supplies a connection string, use the form below. The example URL shows only the host, port, database, and username. When a password is required, inject the full URL with credentials through the private `HAI_DB_URL` environment variable. For a server using TLS, keep the separate `ssl` object shown above. After startup, read and write a test record in the intended database to verify the account's application permissions.
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql

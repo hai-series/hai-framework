@@ -27,11 +27,21 @@ At startup, the generated app reads `config/_storage.yml` with `core.config.get(
 | `root` | Local | Required | Directory for files. The server process needs read and write access. |
 | `directoryMode` | Local | `0o755` (`493`) | POSIX mode for new directories. |
 | `fileMode` | Local | `0o644` (`420`) | POSIX mode for new files. |
-| `operationLog.read` | Both | `false` | Log read operations at debug level. |
-| `operationLog.write` | Both | `true` | Log write operations at debug level. |
-| `operationLog.maxLength` | Both | `1000` | Maximum characters in a diagnostic summary. Use `0` to omit the summary. |
 
 After restarting the backend with new settings, try writing and reading an object. Verify a presigned link from the browser's actual entry point as well, especially when using a proxy.
+
+<a id="operation-logging"></a>
+
+### Operation logging
+
+Local and S3 storage use the same logging settings. Storage logs write operations at `debug` even when `operationLog` is omitted. Set [Core's logging threshold](core.en.md#application-logging) to `debug` or `trace` to see these logs. Set `operationLog.write: false` to disable write logs for storage.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `operationLog` | Object | `{}` | Logging settings for file, directory, and signing operations. The defaults below apply when omitted. |
+| `operationLog.read` | Boolean | `false` | Log read operations. |
+| `operationLog.write` | Boolean | `true` | Log write operations. |
+| `operationLog.maxLength` | Nonnegative integer | `1000` | Character limit for the diagnostic summary. `0` omits the summary. |
 
 ## Configuration examples
 

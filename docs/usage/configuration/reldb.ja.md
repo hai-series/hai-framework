@@ -67,7 +67,23 @@
 | `mysql` | オブジェクト | 任意 | MySQL ドライバーの設定。 |
 | `mysql.charset` | 文字列 | `"utf8mb4"` | 接続の文字セット。 |
 
+<a id="connection-tls"></a>
+
+### TLS で接続を暗号化する
+
+PostgreSQL と MySQL はどちらも TLS を利用できます。SQLite はローカルファイルやメモリに直接アクセスします。
+
+PostgreSQL では、`pg` が `ssl` オプションを Node.js の TLS に渡します。サーバーでプライベート CA を利用する場合は `ssl.ca` に PEM の内容を指定します。`url` に `sslmode`、`sslcert`、`sslkey`、`sslrootcert` のいずれかを設定すると、ドライバーは個別の `ssl` オブジェクトを URL の設定で置き換えます。[node-postgres の TLS 設定](https://node-postgres.com/features/ssl#usage-with-connectionstring)を参照してください。
+
+MySQL では専用の `ssl` オブジェクトを指定します。`{}` で TLS が有効になり、証明書チェーンと DNS ホスト名を検証します。プライベート CA は `ssl.ca` で指定します。TLS 設定は MySQL の URL と別に指定します。
+
+<a id="operation-logging"></a>
+
 ### 操作ログ
+
+すべてのバックエンドに共通の設定です。有効にした操作の要約は `debug` レベルで出力し、[Core のログレベル](core.ja.md#アプリのログ出力)でフィルターします。
+
+旧設定から `operationLog` 配下の `level` を削除してください。環境変数を参照する場合は YAML 側の参照を先に削除し、その後で古い環境変数を削除します。
 
 | 項目 | 型 | 必須条件または既定値 | 用途 |
 | --- | --- | --- | --- |
@@ -75,7 +91,6 @@
 | `operationLog.read` | 真偽値 | `false` | 複数行、単一行、ページ単位のクエリーを要約して記録します。 |
 | `operationLog.write` | 真偽値 | `false` | スキーマ変更、書き込み、一括処理、トランザクション操作を要約して記録します。 |
 | `operationLog.maxLength` | 0 以上の整数 | `1000` | 件数要約の最大文字数。`0` は要約を省略します。SQL 原文とバインド値は含みません。 |
-| `operationLog.level` | `"info"`、`"debug"`、または `"trace"` | `"debug"` | 通常操作の要約を出力するログレベル。 |
 
 ## 設定例
 
@@ -88,7 +103,7 @@ database: ./data/orders.db
 
 ### 複数のサービスから同じ PostgreSQL に接続する
 
-各サービスを `postgres.internal` の `orders` データベースに接続し、サーバーの非公開環境変数 `HAI_DB_PASSWORD` にパスワードを設定します。1 プロセス当たりの接続数は最大 10、取得待ち時間は最大 5 秒です。同じデータベースを共有していることを確認するには、一方のサービスでテスト注文を書き込み、もう一方から読み取ります。
+各サービスを `postgres.internal` の `orders` データベースに接続し、サーバーの非公開環境変数 `HAI_DB_PASSWORD` にパスワードを設定します。1 プロセス当たりの接続数は最大 10、取得待ち時間は最大 5 秒です。同じデータベースを共有していることを確認するには、一方のサービスでテスト注文を書き込み、もう一方から読み取ります。 サーバー側では TLS を有効にし、プライベート CA の PEM 内容を `HAI_DB_SSL_CA` に設定します。証明書と一致するホスト名を使います。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: postgresql
@@ -97,14 +112,19 @@ port: 5432
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
+  rejectUnauthorized: true
 pool:
   max: 10
   acquireTimeout: 5000
 ```
 
+アプリケーションが使用する接続で `SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()` を実行します。`true` ならその接続で TLS が有効です。
+
 ### 既存の MySQL に接続する
 
-管理者が事前に `orders` データベースとアカウントを作成します。この例は個別項目で接続先を指定し、サーバーの非公開環境変数からパスワードを読み込みます。
+管理者が事前に `orders` データベースとアカウントを作成します。この例は個別項目で接続先を指定し、サーバーの非公開環境変数からパスワードを読み込みます。 信頼する CA の PEM 内容を `HAI_DB_SSL_CA` に設定します。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql
@@ -113,9 +133,13 @@ port: 3306
 database: orders
 user: orders_app
 password: ${HAI_DB_PASSWORD}
+ssl:
+  ca: ${HAI_DB_SSL_CA}
 ```
 
-デプロイ環境から接続文字列を渡す場合は、次の形式を使用できます。例の URL はホスト、ポート、データベース、ユーザー名だけを示します。パスワードが必要な場合は、認証情報を含む完全な URL を非公開環境変数 `HAI_DB_URL` で渡します。起動後、目的のデータベースでテストレコードを読み書きし、アプリに必要な権限を確認します。
+アプリケーションが使用する接続で `SHOW SESSION STATUS LIKE 'Ssl_cipher'` を実行します。`Value` が空でなければ暗号スイートが確立されています。
+
+デプロイ環境から接続文字列を渡す場合は、次の形式を使用できます。例の URL はホスト、ポート、データベース、ユーザー名だけを示します。パスワードが必要な場合は、認証情報を含む完全な URL を非公開環境変数 `HAI_DB_URL` で渡します。TLS を利用するサーバーには、上の `ssl` オブジェクトも別途指定します。起動後、目的のデータベースでテストレコードを読み書きし、アプリに必要な権限を確認します。
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
 type: mysql

@@ -17,9 +17,23 @@ Load `config/_vecdb.yml` and initialize the chosen backend. Choose a metric befo
 | `pgvector.indexType`, `tablePrefix` | `hnsw`, `vec_` | Vector index type and table prefix. |
 | `qdrant.url`, `apiKey` | `http://localhost:6333`, optional key | Remote service address and credential. |
 | `chroma.host`, `port`, `serverCommand`, `startupTimeout` | `localhost`, `8000`, `chroma`, `30000` | Chroma address and local startup settings; `path`, `url` and `apiKey` are optional. |
-| `operationLog.read`, `write`, `maxLength`, `level` | `false`, `false`, `1000`, `debug` | Operation log switches, length and level. |
 
 Provider names qualify the rows above. Fields are set directly inside the chosen configuration object.
+
+<a id="operation-logging"></a>
+
+### Operation logging
+
+These settings apply to every backend. Enabled operation summaries use `debug` and are filtered by the [Core logging threshold](core.en.md#application-logging).
+
+| Field | Type | Requirement or default | Meaning |
+| --- | --- | --- | --- |
+| `operationLog` | Object | Optional | Omit it to disable normal-operation summaries. |
+| `operationLog.read` | Boolean | `false` | Summarize reads such as collection queries and vector search. |
+| `operationLog.write` | Boolean | `false` | Summarize collection changes, vector writes, and deletions. |
+| `operationLog.maxLength` | Nonnegative integer | `1000` | Maximum characters in a safe summary. Use `0` to omit the summary. |
+
+Remove the legacy `level` field under `operationLog`. If the field refers to an environment variable, remove the YAML reference before deleting the old variable.
 
 ## Configuration examples
 

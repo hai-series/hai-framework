@@ -1,4 +1,4 @@
-# @h-ai/payment API reference
+# @h-ai/payment API Reference
 
 <!-- translation: partial -->
 

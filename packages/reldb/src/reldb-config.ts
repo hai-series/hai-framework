@@ -38,12 +38,12 @@ export const ReldbTypeSchema = z.enum(['sqlite', 'postgresql', 'mysql'])
 export type DbType = z.infer<typeof ReldbTypeSchema>
 
 /**
- * ReldbOperationLogConfigSchema 的数据约束与操作契约。
+ * 校验数据库操作的 debug 日志设置。默认关闭读写摘要，最长 1000 个字符。
  * @example
  * ```ts
  * import { ReldbOperationLogConfigSchema } from '@h-ai/reldb/schemas'
  *
- * const value = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100, level: 'debug' })
+ * const value = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100 })
  * void value
  * ```
  */
@@ -52,16 +52,15 @@ export const ReldbOperationLogConfigSchema = z.object({
   write: z.boolean().default(false),
   /** 安全数量摘要的最大字符数；0 表示省略摘要，永不记录 SQL 原文或参数值。 */
   maxLength: z.number().int().min(0).default(1000),
-  level: z.enum(['info', 'debug', 'trace']).default('debug'),
 })
 
 /**
- * ReldbOperationLogConfig 的数据约束与操作契约。
+ * 已解析的 debug 操作日志设置；`maxLength: 0` 省略摘要。
  * @example
  * ```ts
  * import { ReldbOperationLogConfigSchema, type ReldbOperationLogConfig } from '@h-ai/reldb/schemas'
  *
- * const value: ReldbOperationLogConfig = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100, level: 'debug' })
+ * const value: ReldbOperationLogConfig = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100 })
  * void value
  * ```
  */

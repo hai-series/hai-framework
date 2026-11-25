@@ -1,4 +1,4 @@
-# @h-ai/reach API reference
+# @h-ai/reach API Reference
 
 <!-- translation: partial -->
 

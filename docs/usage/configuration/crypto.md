@@ -1,4 +1,6 @@
-# Crypto 配置文件
+# @h-ai/crypto 配置
+
+<a id="crypto-配置文件"></a>
 
 [English](crypto.en.md) · [日本語](crypto.ja.md)
 

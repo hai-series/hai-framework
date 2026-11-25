@@ -1,4 +1,6 @@
-# Core のデータ
+# @h-ai/core データ構造
+
+<a id="core-のデータ"></a>
 
 [简体中文](core.md) · [English](core.en.md)
 

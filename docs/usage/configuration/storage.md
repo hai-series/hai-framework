@@ -1,4 +1,6 @@
-# Storage 配置
+# @h-ai/storage 配置
+
+<a id="storage-配置"></a>
 
 [English](storage.en.md) · [日本語](storage.ja.md)
 
@@ -12,7 +14,7 @@
 
 ## 配置清单
 
-本地存储必须填 `root`，S3 存储必须填桶名、区域和凭据。省略 `operationLog` 时，Storage 仍会尝试以 debug 级别记录写入，读取不记录。要关闭写入日志，填写 `operationLog.write: false`。
+本地存储必须填 `root`，S3 存储必须填桶名、区域和凭据。
 
 | 配置项                    | 适用条件     | 默认值/必填             | 说明                                                                                                                   |
 | ------------------------- | ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -30,18 +32,23 @@
 | `multipart`               | `type=s3`    | `{}`                    | S3 服务端流式上传的分片设置                                                                                            |
 | `multipart.partSizeBytes` | `type=s3`    | `5242880`               | 每片字节数，默认 5 MiB，范围 5 MiB 至 5 GiB。可填整数，5242880–5368709120                                              |
 | `multipart.queueSize`     | `type=s3`    | `2`                     | 单次上传的最大并发片数，默认 2。至少 1 的整数                                                                          |
-| `operationLog`            | `type=s3`    | `{}`                    | 文件、目录和签名操作的 debug 日志开关与安全摘要长度                                                                    |
-| `operationLog.read`       | `type=s3`    | `false`                 | 以 debug 记录读取操作，默认关闭                                                                                        |
-| `operationLog.write`      | `type=s3`    | `true`                  | 以 debug 记录写入操作，默认开启                                                                                        |
-| `operationLog.maxLength`  | `type=s3`    | `1000`                  | 诊断摘要的字符上限，0 省略摘要。非负整数                                                                               |
 | `type`                    | `type=local` | 必填                    | 存储类型。可填 `"local"`                                                                                               |
 | `root`                    | `type=local` | 必填                    | 根目录路径。可填字符串，至少 1 个字符                                                                                  |
 | `directoryMode`           | `type=local` | `0o755`（十进制 `493`） | 目录创建权限，POSIX 模式                                                                                               |
 | `fileMode`                | `type=local` | `0o644`（十进制 `420`） | 文件创建权限，POSIX 模式                                                                                               |
-| `operationLog`            | `type=local` | `{}`                    | 文件、目录和签名操作的 debug 日志开关与安全摘要长度                                                                    |
-| `operationLog.read`       | `type=local` | `false`                 | 以 debug 记录读取操作，默认关闭                                                                                        |
-| `operationLog.write`      | `type=local` | `true`                  | 以 debug 记录写入操作，默认开启                                                                                        |
-| `operationLog.maxLength`  | `type=local` | `1000`                  | 诊断摘要的字符上限，0 省略摘要。非负整数                                                                               |
+
+<a id="operation-logging"></a>
+
+### 操作日志
+
+本地和 S3 存储使用同一组日志选项。即使省略 `operationLog`，Storage 也会以 `debug` 级别记录写入操作。要查看这些日志，把 [Core 的日志阈值](core.md#应用日志)设为 `debug` 或 `trace`。要关闭存储写入日志，设置 `operationLog.write: false`。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `operationLog` | 对象 | `{}` | 文件、目录和签名操作的日志选项。省略时仍使用下列默认值。 |
+| `operationLog.read` | 布尔值 | `false` | 记录读取操作。 |
+| `operationLog.write` | 布尔值 | `true` | 记录写入操作。 |
+| `operationLog.maxLength` | 非负整数 | `1000` | 诊断摘要的字符上限，`0` 省略摘要。 |
 
 ## 配置示例
 

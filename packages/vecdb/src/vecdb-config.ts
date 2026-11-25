@@ -53,12 +53,12 @@ export const DistanceMetricSchema = z.enum(['cosine', 'euclidean', 'dot']).defau
 export type DistanceMetric = z.infer<typeof DistanceMetricSchema>
 
 /**
- * 操作日志配置；read/write 默认关闭，长度和级别由 Schema 校验。
+ * 校验向量库操作的 debug 日志设置。默认关闭读写摘要，最长 1000 个字符。
  * @example
  * ```ts
  * import { VecdbOperationLogConfigSchema } from '@h-ai/vecdb'
  *
- * const value = VecdbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500, level: 'debug' })
+ * const value = VecdbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500 })
  * void value
  * ```
  */
@@ -67,11 +67,10 @@ export const VecdbOperationLogConfigSchema = z.object({
   write: z.boolean().default(false),
   /** 安全摘要的最大字符数，0 省略摘要。 */
   maxLength: z.number().int().min(0).default(1000),
-  level: z.enum(['info', 'debug', 'trace']).default('debug'),
 })
 
 /**
- * 已解析的操作日志配置，单位和默认值与 Schema 保持一致。
+ * 已解析的 debug 操作日志设置；`maxLength: 0` 省略摘要。
  * @example
  * ```ts
  * import { VecdbOperationLogConfigSchema, type VecdbOperationLogConfig } from '@h-ai/vecdb'

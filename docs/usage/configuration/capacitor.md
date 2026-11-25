@@ -1,4 +1,6 @@
-# Capacitor 配置
+# @h-ai/capacitor 配置
+
+<a id="capacitor-配置"></a>
 
 [English](capacitor.en.md) · [日本語](capacitor.ja.md)
 

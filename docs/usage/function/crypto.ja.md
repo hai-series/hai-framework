@@ -1,4 +1,6 @@
-# @h-ai/crypto 機能
+# @h-ai/crypto API リファレンス
+
+<a id="h-aicrypto-機能"></a>
 
 [中文](crypto.md) · [English](crypto.en.md)
 

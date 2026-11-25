@@ -207,12 +207,11 @@ url: \${HAI_DB_URL:}
 ssl: \${HAI_DB_SSL:false}
 ${networkOptions}
 
-# 操作日志按需开启，只记录耗时、数量等安全摘要；maxLength 限制摘要长度，不记录 SQL 原文和参数。
+# 操作日志使用 debug，由 HAI_CORE_LOGGING_LEVEL 过滤；摘要只包含安全的长度和数量。
 # operationLog:
 #   read: false
 #   write: false
 #   maxLength: 1000
-#   level: debug # trace | debug | info
 `
 }
 
@@ -891,11 +890,11 @@ apiKey: \${HAI_VECDB_APIKEY:}
 # serverCommand: chroma
 # startupTimeout: 30000
 
+# 操作日志使用 debug，由 HAI_CORE_LOGGING_LEVEL 过滤。
 # operationLog:
 #   read: false
 #   write: false
 #   maxLength: 1000
-#   level: debug # trace | debug | info
 `
 }
 

@@ -1,4 +1,4 @@
-# @h-ai/feedback Data structures
+# @h-ai/feedback Data Structures
 
 [简体中文](feedback.md) · [日本語](feedback.ja.md)
 

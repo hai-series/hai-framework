@@ -1,4 +1,6 @@
-# Crypto のデータ構造
+# @h-ai/crypto データ構造
+
+<a id="crypto-のデータ構造"></a>
 
 [中文](crypto.md) · [English](crypto.en.md)
 

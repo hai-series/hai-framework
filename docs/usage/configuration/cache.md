@@ -1,4 +1,6 @@
-# Cache 配置
+# @h-ai/cache 配置
+
+<a id="cache-配置"></a>
 
 [English](cache.en.md) · [日本語](cache.ja.md)
 

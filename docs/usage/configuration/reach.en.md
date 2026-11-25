@@ -1,4 +1,6 @@
-# Reach configuration
+# @h-ai/reach Configuration
+
+<a id="reach-configuration"></a>
 
 [简体中文](reach.md) · [日本語](reach.ja.md)
 

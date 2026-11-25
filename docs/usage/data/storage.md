@@ -1,4 +1,6 @@
-# storage 数据结构
+# @h-ai/storage 数据结构
+
+<a id="storage-数据结构"></a>
 
 [English](storage.en.md) · [日本語](storage.ja.md)
 

@@ -1,4 +1,6 @@
-# @h-ai/ui File configuration
+# @h-ai/ui Configuration
+
+<a id="h-aiui-file-configuration"></a>
 
 [Chinese](ui.md) · [日本語](ui.ja.md)
 

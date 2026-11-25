@@ -1,4 +1,4 @@
-# @h-ai/payment Data structures
+# @h-ai/payment Data Structures
 
 [简体中文](payment.md) · [日本語](payment.ja.md)
 

@@ -1,4 +1,4 @@
-# @h-ai/kit Data structures
+# @h-ai/kit Data Structures
 
 [简体中文](kit.md) · [日本語](kit.ja.md)
 

@@ -1,4 +1,4 @@
-# @h-ai/reldb Data structures
+# @h-ai/reldb Data Structures
 
 [简体中文](reldb.md) · [日本語](reldb.ja.md)
 

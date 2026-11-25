@@ -1,4 +1,4 @@
-# @h-ai/scheduler API reference
+# @h-ai/scheduler API Reference
 
 [简体中文](scheduler.md) · [日本語](scheduler.ja.md)
 

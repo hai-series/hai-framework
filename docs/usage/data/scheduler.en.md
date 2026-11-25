@@ -1,4 +1,4 @@
-# @h-ai/scheduler Data structures
+# @h-ai/scheduler Data Structures
 
 [简体中文](scheduler.md) · [日本語](scheduler.ja.md)
 

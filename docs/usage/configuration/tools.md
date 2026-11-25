@@ -1,4 +1,6 @@
-# @h-ai/tools 文件配置
+# @h-ai/tools 配置
+
+<a id="h-aitools-文件配置"></a>
 
 [English](tools.en.md) · [日本語](tools.ja.md)
 

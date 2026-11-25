@@ -1,4 +1,4 @@
-# @h-ai/reldb API reference
+# @h-ai/reldb API Reference
 
 <!-- translation: partial -->
 
@@ -75,14 +75,14 @@ finally {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. Each call checks HaiResult.success, returns the original failed result, and reads data only on success. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
+Import the module as in the quick start. Run SQL and schema operations after initialization and before closure. The pagination and identifier helpers also work independently. Each call checks HaiResult.success, returns the original failed result, and reads data only on success. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 
 <a id="connection"></a>
 
 ### Connect, prepare and close: `reldb`
 
-Connect first. With PostgreSQL, use `prepareSchema` to coordinate schema preparation across instances. End transactions before closing the connection.
+After connecting to SQLite, PostgreSQL, or MySQL, use `prepareSchema` to prepare a module’s tables, indexes, or seed data. PostgreSQL deployments can share a schema preparation key across instances. End active transactions before closing the connection.
 
 #### Interface list
 
@@ -90,15 +90,46 @@ Connect first. With PostgreSQL, use `prepareSchema` to coordinate schema prepara
 | --- | --- | --- | --- | --- |
 | `reldb.init(config)` | Create and verify the database connection | Required `config: ReldbConfigInput`. See [backend configuration](../configuration/reldb.en.md). | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
 | `reldb.close()` | Release the connection after ending active transactions | None | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema(key, prepare)` | Run schema preparation. PostgreSQL uses a named transaction lock and one connection | Required `key: string` shared by deployments. The async callback receives `ddl` and `sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.prepareSchema(key, prepare)` | Run schema preparation. PostgreSQL also takes a transaction lock keyed by module | Required `key: string` and async `prepare`. Use the same stable module key on every instance. The callback receives `{ ddl, sql }` | `Promise<HaiResult<T>>`. Returns the callback result on success, or `NOT_INITIALIZED` before connecting | `await reldb.prepareSchema('docs:demo:schema', ({ ddl }) => ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true, notNull: true } }))` |
 
-#### Scenario: Connect, prepare and close
-
-PostgreSQL holds a transaction lock on one connection and rolls back if the callback fails. SQLite and MySQL provide ordinary `ddl` and `sql` operations governed by their database rules. MySQL borrows pooled connections, and a shared `key` supplies no cross-process lock.
+#### Scenario: Connect and close
 
 If an active connection exists and new settings fail schema validation or the deployment check for a shared backend, `init()` returns a configuration error and keeps the existing connection usable. Valid settings enter the replacement flow. If the new connection fails, initialize again.
 
 [Detailed parameters and workflows](reldb.md#connection)
+
+<a id="prepare-schema"></a>
+
+#### Scenario: Prepare a module table and verify it can be read
+
+SQLite, PostgreSQL, and MySQL all support this method. PostgreSQL holds a keyed transaction lock on one connection. Calls using the same key in the same database run their callbacks in sequence, and callback failure rolls back the transaction. Make external calls, such as calling a model, after the transaction ends. SQLite and MySQL run the callback with their ordinary `ddl` and `sql` operations, following each backend’s commit rules. On those backends `key` has no coordination effect.
+
+Run this fragment during application startup. Connect to the [selected database](../configuration/reldb.en.md) and use an isolated test database without a `demo_prepared` table. Each instance uses the fixed key `docs:demo:schema`. The callback accesses the table using the supplied `ddl` and `sql`, and the application starts serving after preparation succeeds.
+
+```ts
+// Prepare with a fixed key. On success, return the IDs read by the callback.
+const prepared = await reldb.prepareSchema('docs:demo:schema', async ({ ddl, sql }) => {
+  // Ensure the demo table exists. Success carries no business data. Return the DDL failure as-is.
+  const table = await ddl.createTable('demo_prepared', {
+    id: { type: 'TEXT', primaryKey: true, notNull: true },
+  }, true)
+  if (!table.success)
+    return table
+
+  // Use the callback’s sql to read the table. A new table returns []. A failed read ends preparation.
+  return sql.query<{ id: string }>('SELECT id FROM demo_prepared ORDER BY id')
+})
+if (!prepared.success)
+  return prepared
+prepared.data // []
+
+// Remove the example table from the isolated database. Success carries no business data.
+const removed = await reldb.ddl.dropTable('demo_prepared', true)
+if (!removed.success)
+  return removed
+```
+
+If table creation succeeds and the subsequent read fails, PostgreSQL rolls back the table creation. On SQLite and MySQL the table may already be committed. Check the failure and handle it under that backend’s rules.
 
 <a id="schema"></a>
 
@@ -221,8 +252,6 @@ Pass dynamic values as parameters, distinguish query rows from execution counts 
 | `overrides.defaultPage / defaultPageSize` | `number` | Defaults 1 and 20 | Used when the corresponding value is missing or below 1. Use positive integers and keep the default size within the cap. |
 | `overrides.maxPageSize` | `number` | `200` | Caps the explicitly requested page size. |
 
-Requesting page 3 with 50 rows and applying `{ maxPageSize: 10 }` yields `{ page: 3, pageSize: 10, offset: 20, limit: 10 }`.
-
 `params` binds business values in placeholder order and is optional when there are no values to bind. Pagination uses a one-based `page` and the `pageSize` in rows. An omitted value or one below 1 uses `defaultPage` or `defaultPageSize`. Valid inputs round down, and `maxPageSize` caps an explicit `pageSize`. Set `overrides` in application code using positive integers and keep the default size within the maximum.
 
 #### Scenario: Parameterized queries and pages
@@ -248,19 +277,15 @@ const getResult2 = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', [
 if (!getResult2.success)
   return getResult2
 getResult2.data // { id: 'o1' }
-// Normalize page 1 and size 20 into the limit and offset for the first page.
-const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
-// The user asks for page 3 with 50 rows. This screen caps the size at 10, so skip 20 rows and read up to 10.
-const limited = reldb.pagination.normalize({ page: 3, pageSize: 50 }, { maxPageSize: 10 })
-limited // { page: 3, pageSize: 10, offset: 20, limit: 10 }
-// Run the trusted SQL with normalized pagination. The page contains o1 and total 1. Return the failed result on failure.
-const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
+// Run the trusted SQL with the page settings. The page contains o1 and total 1. Return the failed result on failure.
+const pageResult = await reldb.sql.queryPage({
+  sql: 'SELECT id FROM demo_sql ORDER BY id',
+  pagination: { page: 1, pageSize: 20 },
+})
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data
 // page.items: [{ id: 'o1' }], total: 1
-// Build the equivalent page envelope from the sample row, total, and page settings.
-reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
 // Execute the deletion of o1 in this batch. Success removes the row and returns no data. Return the failed result on failure.
 const batchResult = await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])
 if (!batchResult.success)
@@ -276,6 +301,72 @@ getResult.data // null
 o1 is a bound value. get returns successful null when missing, query returns an array and batch has no business data. Value parameters cannot substitute identifiers.
 
 [Detailed parameters and workflows](reldb.md#sql)
+
+<a id="pagination-utils"></a>
+
+#### Scenario: Paginate an already loaded order list
+
+An order list requests page 2 with 50 rows, and the screen caps the page size at 2. The example uses five orders sorted by ID. Both helpers work without a database connection and can paginate cached or in-memory data.
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
+// Normalize the request to take two rows starting at the third order.
+const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
+pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+
+// Slice the page, then assemble the response from those rows, the total and the normalized page.
+const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
+const result = reldb.pagination.build(items, orders.length, pagination)
+result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
+```
+
+`build` uses the items and total supplied by the caller. Filter, sort and slice the source data before calling it.
+
+<a id="sql-identifiers"></a>
+
+### Validate and quote SQL identifiers
+
+Choose table and column names from a list the caller may access before checking their format. Identifier validation checks syntax only. The application still checks access and backend length limits. Bind business values as SQL parameters.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `reldb.validateIdentifier(name)` | Validate one SQL identifier | `name: string`. Start with an ASCII letter or underscore, followed by ASCII letters, digits, or underscores. Maximum 128 characters | `HaiResult<string>`. Returns the original name on success or `CONFIG_ERROR` on failure | `reldb.validateIdentifier('order_total')` |
+| `reldb.validateIdentifiers(names)` | Validate SQL identifiers in order | `names: string[]`. The same rules apply to each name | `HaiResult<void>`. Success has no data. Returns the first failure | `reldb.validateIdentifiers(['order_id', 'order_total'])` |
+| `reldb.quoteIdentifier(name)` | Quote a validated identifier with double quotes | `name: string`. For dialects that support double-quoted identifiers, including PostgreSQL and SQLite | `string`. Embedded double quotes are doubled | `reldb.quoteIdentifier('order_total')` |
+| `reldb.escapeSqlString(value)` | Double single quotes in a SQL literal | `value: string`. For string literals that must be written into trusted DDL | `string`. Escapes single quotes only. The caller supplies the outer quotes | `reldb.escapeSqlString("O'Reilly")` |
+
+#### Scenario: Check field names for an order report
+
+The report can sort by order total and reference the order ID. The code obtains `order_total` and `order_id` from its predefined fields. These helpers can run before database initialization.
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+// Validate the predefined sort column. On success, data contains order_total.
+const column = reldb.validateIdentifier('order_total')
+if (!column.success)
+  throw new Error(column.error.message, { cause: column.error })
+
+// Both predefined columns pass validation. Success carries no business data.
+const columns = reldb.validateIdentifiers(['order_id', 'order_total'])
+if (!columns.success)
+  throw new Error(columns.error.message, { cause: columns.error })
+
+// Double quotes apply to this report’s PostgreSQL or SQLite dialect.
+const quoted = reldb.quoteIdentifier(column.data) // '"order_total"'
+
+// A dot fails validation. The failure has error.code hai:reldb:013.
+const invalid = reldb.validateIdentifier('orders.total')
+if (!invalid.success)
+  invalid.error.code // 'hai:reldb:013'
+
+// Double the single quote for a trusted DDL literal. The helper returns no outer quotes.
+const escaped = reldb.escapeSqlString("O'Reilly") // "O''Reilly"
+```
 
 <a id="transactions"></a>
 
@@ -401,9 +492,28 @@ These helpers build parameterized SQL expressions; they do not modify the databa
 | `reldb.json.insert(column, path, value)` | Build a JSON path insertion | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status. `value` JSON value to write at the path | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
 | `reldb.json.remove(column, path)` | Build a JSON path removal | `column: string` Trusted JSON column name or SQL column expression. `path: string` Target JSON path such as $.status | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
 | `reldb.json.merge(column, patch)` | Build a JSON merge SQL expression | `column: string` Trusted JSON column name or SQL column expression. `patch: Record<string, unknown>` Fields and values to merge into the JSON object | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
+| `reldb.parseJsonPath(path)` | Split a JSON path | `path: string`, for example `$.profile.name` | `string[]`. May contain only the recognized prefix | `reldb.parseJsonPath('$.profile.name')` |
+| `reldb.createJsonOps(dbType)` | Create an expression builder for the supplied dialect | Required `dbType: DbType`, one of `sqlite`, `postgresql` or `mysql` | `ReldbJsonOps`. Works before connecting | `reldb.createJsonOps('postgresql')` |
 
 #### Scenario: Read and write JSON fields
 
 The payload examples below cover extract, set, insert, remove and merge paths and resulting JSON. Match dialects to the backend; an expression is not persisted data.
+
+#### Scenario: Build a JSON query expression before connecting
+
+The configured path `$.profile.name` reads a name from the profile. This report targets PostgreSQL. Unrecognized syntax may leave only the parsed prefix, so validate the full path and allowed keys in application code when needed.
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+const path = '$.profile.name'
+// Return profile and name as separate path segments.
+const segments = reldb.parseJsonPath(path) // ['profile', 'name']
+// Select PostgreSQL and return its expression builder.
+const pgJson = reldb.createJsonOps('postgresql')
+// Bind the path as a parameter. Use the resulting expression after connecting.
+const expression = pgJson.extract('payload', path)
+expression // { sql: 'payload #> ?::text[]', params: [['profile', 'name']] }
+```
 
 [Detailed parameters and workflows](reldb.md#json-fields)

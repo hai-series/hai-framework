@@ -1,4 +1,6 @@
-# CLI 配置
+# @h-ai/cli 配置
+
+<a id="cli-配置"></a>
 
 [English](cli.en.md) · [日本語](cli.ja.md)
 

@@ -71,20 +71,18 @@ finally {
 
 `reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password`、URL 内嵌凭证和 TLS 客户端私钥 `ssl.key` 会自动隐藏，便于排查状态但不应用于回放原始连接信息。
 
-多个 PostgreSQL 部署节点同时准备模块结构时，使用 `reldb.prepareSchema(key, ({ ddl, sql }) => ...)`。PostgreSQL 通过固定模块标识的事务锁协调建表、检查索引和更新种子行，回调失败回滚。请通过回调提供的操作访问数据库，并将模型服务、容器等外部调用放在事务结束之后。其他提供方沿用自身 DDL 提交规则。
-
 <a id="api-reference"></a>
 
 ## 功能说明
 
-下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。每次调用后先检查 `HaiResult.success`，失败时返回原结果，成功后再读取 `data`。未给出函数声明的片段位于应用的异步业务函数内。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+下面的场景代码沿用最小接入的模块导入。SQL 和结构操作在初始化成功后、关闭前运行。分页和标识符工具可独立调用。每次调用后先检查 `HaiResult.success`，失败时返回原结果，成功后再读取 `data`。未给出函数声明的片段位于应用的异步业务函数内。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 
 <a id="connection"></a>
 
 ### 连接、准备结构与关闭：`reldb`
 
-应用先连接数据库。PostgreSQL 可用 `prepareSchema` 协调多个实例的结构准备。关闭前先结束应用持有的事务。
+连接 SQLite、PostgreSQL 或 MySQL 后，可以用 `prepareSchema` 准备模块的表、索引或种子数据。使用 PostgreSQL 的多个实例可共享同一个结构准备键。关闭前先结束应用持有的事务。
 
 #### 接口清单
 
@@ -92,11 +90,9 @@ finally {
 | --- | --- | --- | --- | --- |
 | `reldb.init(config)` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
 | `reldb.close()` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema(key, prepare)` | 运行结构准备回调。PostgreSQL 按固定名称加事务锁，使用同一条连接 | `key: string` 是各节点共用的标识。异步回调接收 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.prepareSchema(key, prepare)` | 运行结构准备回调；PostgreSQL 还按键加事务锁 | 必填 `key: string` 和异步 `prepare`。各实例使用同一个稳定的模块键，回调接收 `{ ddl, sql }` | `Promise<HaiResult<T>>`，成功返回回调的结果，未连接返回 `NOT_INITIALIZED` | `await reldb.prepareSchema('docs:demo:schema', ({ ddl }) => ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true, notNull: true } }))` |
 
-#### 场景：连接、准备结构与关闭
-
-PostgreSQL 在同一条连接上持有事务锁。回调失败时回滚。SQLite 和 MySQL 回调接收普通 `ddl`、`sql` 操作，按各自数据库规则执行。MySQL 操作由连接池借用连接，同一个 `key` 不提供跨进程锁。
+#### 场景：连接与关闭
 
 已连接时，如果新的配置未通过 Schema 校验，或环境要求使用 PostgreSQL/MySQL 而新配置选择了 SQLite，`init()` 返回配置错误，现有连接仍可用。通过检查的配置会进入替换流程。如果新连接失败，需要重新初始化。
 
@@ -122,28 +118,38 @@ if (!closed.success) {
 
 table/column/index 名必须来自可信代码；sql 是可信语句，params 绑定业务值；steps 是模块迁移步骤，options 控制预检和分页。
 
-#### 场景：多个实例共同准备模块结构
+<a id="prepare-schema"></a>
 
-输入是稳定的模块标识；回调仅使用它收到的 ddl/sql。成功返回回调的 data，本例没有业务数据。PostgreSQL 在事务锁下执行，失败回滚；其他后端遵守自身 DDL 提交规则。
+#### 场景：准备模块结构并验证表可读
+
+SQLite、PostgreSQL 和 MySQL 均可调用此方法。PostgreSQL 在同一连接的事务内持有按键取得的事务锁。同一个数据库中使用同一键的调用依次运行回调，回调失败时回滚。模型调用等外部操作请放在事务结束后。SQLite 和 MySQL 直接用各自的普通 `ddl` 和 `sql` 执行回调，由各数据库决定每次操作的提交方式；`key` 在这两个后端不参与协调。
+
+在应用启动阶段运行下方片段。先连接[所选数据库](../configuration/reldb.md)，使用独立测试库并确保其中没有 `demo_prepared` 表。每个部署实例使用固定键 `docs:demo:schema`。回调通过传入的 `ddl` 和 `sql` 操作表，应用在回调成功后再开始服务。
 
 ```ts
-// 以下为应用异步业务函数体片段；失败时返回原结果。
-// 用共享的结构准备键运行下方建表回调，成功返回回调结果，协调或 DDL 失败时返回原失败结果。
-const prepareSchemaResult = await reldb.prepareSchema('docs:demo:schema', ({ ddl }) =>
-  // 创建仅有文本主键 id 的表，true 允许已存在，成功无 data，失败交回 prepareSchema。
-  ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true } }, true))
-if (!prepareSchemaResult.success)
-  return prepareSchemaResult
-// 读取刚建表的实际列名，返回 ['id']，查询失败时返回原失败结果。
-const schemaColumnsResult = await reldb.schemaColumns('demo_prepared')
-if (!schemaColumnsResult.success)
-  return schemaColumnsResult
-schemaColumnsResult.data // ['id']
-// 删除本例表，true 允许不存在，成功无 data，失败时返回原失败结果。
-const dropTableResult = await reldb.ddl.dropTable('demo_prepared', true)
-if (!dropTableResult.success)
-  return dropTableResult
+// 用固定键开始结构准备，成功时返回回调查询到的 ID 列表。
+const prepared = await reldb.prepareSchema('docs:demo:schema', async ({ ddl, sql }) => {
+  // 确保示例表存在。成功时不含业务数据，失败时返回建表错误。
+  const table = await ddl.createTable('demo_prepared', {
+    id: { type: 'TEXT', primaryKey: true, notNull: true },
+  }, true)
+  if (!table.success)
+    return table
+
+  // 用回调提供的 sql 读取表。新建空表返回 []，查询失败会结束此次准备。
+  return sql.query<{ id: string }>('SELECT id FROM demo_prepared ORDER BY id')
+})
+if (!prepared.success)
+  return prepared
+prepared.data // []
+
+// 清理独立测试库中的示例表。成功时不含业务数据。
+const removed = await reldb.ddl.dropTable('demo_prepared', true)
+if (!removed.success)
+  return removed
 ```
+
+如果建表成功、后续读取失败，PostgreSQL 会回滚这次建表。SQLite 和 MySQL 中建好的表可能已保留；调用方应检查失败并按后端规则处理。
 
 #### 生产数据库要求
 
@@ -272,8 +278,6 @@ if (!rawResult.success)
 | `overrides.defaultPage / defaultPageSize` | `number` | 默认 1 和 20 | 无效或缺少对应分页值时使用。应用选择正整数，并确保默认条数不超过上限。 |
 | `overrides.maxPageSize` | `number` | `200` | 限制调用方明确传入的页大小。 |
 
-例如请求第 3 页、每页 50 条，应用限制 `{ maxPageSize: 10 }`。实际得到 `{ page: 3, pageSize: 10, offset: 20, limit: 10 }`。
-
 `params` 按占位符顺序绑定业务值，省略时不绑定。分页对象使用从 1 开始的 `page` 和每页条数 `pageSize`。未传或小于 1 时，分别用 `defaultPage` 和 `defaultPageSize`。有效值向下取整，传入的 `pageSize` 受 `maxPageSize` 限制。`overrides` 适合由应用按业务场景选择默认值和上限，请使用正整数并将默认条数设在上限内。
 
 #### 场景：参数化查询与分页
@@ -299,19 +303,15 @@ const getResult2 = await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', [
 if (!getResult2.success)
   return getResult2
 getResult2.data // { id: 'o1' }
-// 将页码 1 和每页 20 条规范化为分页参数，得到首段记录的限制和偏移量。
-const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
-// 用户请求第 3 页、每页 50 条。此页面上限为 10，因此实际跳过 20 条并最多读 10 条。
-const limited = reldb.pagination.normalize({ page: 3, pageSize: 50 }, { maxPageSize: 10 })
-limited // { page: 3, pageSize: 10, offset: 20, limit: 10 }
-// 传可信 SQL 及规范化分页选项，返回 o1 所在一页与总条数 1，失败时返回原失败结果。
-const pageResult = await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination })
+// 传可信 SQL 和分页选项，返回 o1 所在一页与总条数 1，失败时返回原结果。
+const pageResult = await reldb.sql.queryPage({
+  sql: 'SELECT id FROM demo_sql ORDER BY id',
+  pagination: { page: 1, pageSize: 20 },
+})
 if (!pageResult.success)
   return pageResult
 const page = pageResult.data
 // page.items: [{ id: 'o1' }], total: 1
-// 用示例记录、总数和页参数构造等价分页对象，直接返回该对象。
-reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
 // 执行批次中绑定 o1 的删除，成功后不再有该行且无 data，批次失败时返回原失败结果。
 const batchResult = await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])
 if (!batchResult.success)
@@ -326,28 +326,71 @@ getResult.data // null
 
 输入的 o1 是参数，不拼进 SQL。get 返回 null 是成功但没找到，query 返回数组；batch 成功没有业务数据。标识符不能用值参数占位。
 
-#### 场景：验证可信标识符与选择 JSON 方言
+<a id="pagination-utils"></a>
 
-动态值优先通过 SQL 参数绑定。表名和列名由调用方从已授权集合中选择，使用标识符工具校验。
+#### 场景：对已加载的订单独立分页
+
+列表页收到第 2 页、每页 50 条的请求，页面策略上限为每页 2 条。示例数据是按 ID 排序的 5 条订单。两个函数无需连接数据库，可用于对缓存或内存中的数据分页。
 
 ```ts
 import { reldb } from '@h-ai/reldb'
 
-// 校验可信列名 order_total，成功 data 为原串，非法标识符返回失败。
-const column = reldb.validateIdentifier('order_total') // 成功的 data 为 'order_total'。
-// 一次校验两个可信列名，全部合法时无 data，任一非法则失败。
-const columns = reldb.validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
-// 按当前示例所用双引号规则包裹 order_total，返回引用后的标识符。
-const quoted = reldb.quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
-// 将示例 O'Reilly 的单引号加倍，返回用于可信 SQL 拼装的字符串。
-const escaped = reldb.escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
-// 将 $.profile.name 分解为 ['profile', 'name']，不支持的路径语法抛错。
-const segments = reldb.parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
-// 按 PostgreSQL 方言创建 JSON 表达式构造器，返回相应的操作对象。
-const ops = reldb.createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
+const orders = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({ id }))
+// 规范化页码及每页条数，得到从第 3 条开始取 2 条。
+const pagination = reldb.pagination.normalize({ page: 2, pageSize: 50 }, { maxPageSize: 2 })
+pagination // { page: 2, pageSize: 2, offset: 2, limit: 2 }
+
+// 显式截取当前页，再用该页记录、总数和页参数组装返回值。
+const items = orders.slice(pagination.offset, pagination.offset + pagination.limit)
+const result = reldb.pagination.build(items, orders.length, pagination)
+result // { items: [{ id: 'o3' }, { id: 'o4' }], total: 5, page: 2, pageSize: 2 }
 ```
 
-`reldb.parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `reldb.createJsonOps()`。
+`build` 直接使用传入的记录和总数。筛选、排序和截取应在调用前完成。
+
+<a id="sql-identifiers"></a>
+
+### 校验与引用 SQL 标识符
+
+应用从允许访问的表和列中选择标识符，再检查名称格式。标识符校验只检查格式，应用还需检查访问权限及后端的长度限制。业务值使用 SQL 参数绑定。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.validateIdentifier(name)` | 校验单个 SQL 标识符 | `name: string`，必须以 ASCII 字母或下划线开头，其余字符为 ASCII 字母、数字或下划线，最长 128 字符 | `HaiResult<string>`，成功返回原字符串，失败返回 `CONFIG_ERROR` | `reldb.validateIdentifier('order_total')` |
+| `reldb.validateIdentifiers(names)` | 依次校验多个 SQL 标识符 | `names: string[]`，每项采用相同规则 | `HaiResult<void>`，全部通过时无 data，否则返回第一个失败 | `reldb.validateIdentifiers(['order_id', 'order_total'])` |
+| `reldb.quoteIdentifier(name)` | 用双引号引用已校验的标识符 | `name: string`，适用于 PostgreSQL、SQLite 等支持双引号标识符的方言 | `string`，内部双引号加倍 | `reldb.quoteIdentifier('order_total')` |
+| `reldb.escapeSqlString(value)` | 加倍 SQL 字符串字面量中的单引号 | `value: string`，用于可信 DDL 中必须拼写的字符串字面量 | `string`，只转义单引号，调用方负责外层引号 | `reldb.escapeSqlString("O'Reilly")` |
+
+#### 场景：为订单查询检查字段名
+
+报表允许按订单金额排序，也会引用订单号。代码从报表预定义字段中取得 `order_total` 和 `order_id`。这些工具可在未初始化数据库时调用。
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+// 校验预定义排序列，成功时 data 为 order_total。
+const column = reldb.validateIdentifier('order_total')
+if (!column.success)
+  throw new Error(column.error.message, { cause: column.error })
+
+// 两个预定义列都合法，成功时不含业务数据。
+const columns = reldb.validateIdentifiers(['order_id', 'order_total'])
+if (!columns.success)
+  throw new Error(columns.error.message, { cause: columns.error })
+
+// 双引号引用适用于此报表使用的 PostgreSQL 或 SQLite。
+const quoted = reldb.quoteIdentifier(column.data) // '"order_total"'
+
+// 点号不符合标识符规则，失败结果的 error.code 为 hai:reldb:013。
+const invalid = reldb.validateIdentifier('orders.total')
+if (!invalid.success)
+  invalid.error.code // 'hai:reldb:013'
+
+// 在可信 DDL 字面量中加倍单引号。此工具不附加外层引号。
+const escaped = reldb.escapeSqlString("O'Reilly") // "O''Reilly"
+```
 
 <a id="transactions"></a>
 
@@ -821,6 +864,8 @@ if (!wrapResult.success)
 | `reldb.json.insert(column, path, value)` | 生成仅新增 JSON 路径的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status。`value` 要写入指定路径的 JSON 值 | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
 | `reldb.json.remove(column, path)` | 生成删除 JSON 路径的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`path: string` 目标的 JSON 路径，如 $.status | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
 | `reldb.json.merge(column, patch)` | 生成合并 JSON 对象的 SQL 表达式 | `column: string` 可信 JSON 列名或列 SQL 表达式。`patch: Record<string, unknown>` 合并到 JSON 对象的字段和值 | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
+| `reldb.parseJsonPath(path)` | 分解 JSON 路径 | `path: string`，例如 `$.profile.name` | `string[]`，可能只返回已识别的路径段 | `reldb.parseJsonPath('$.profile.name')` |
+| `reldb.createJsonOps(dbType)` | 按指定方言创建表达式构造器 | `dbType: DbType`，可选值为 `sqlite`、`postgresql`、`mysql`，必填 | `ReldbJsonOps`，可在未连接数据库时使用 | `reldb.createJsonOps('postgresql')` |
 
 #### 场景：读写 JSON 字段
 
@@ -895,6 +940,23 @@ if (!dropTableResult.success)
 ```
 
 set 创建或替换路径，insert 仅新增，remove 删除路径；merge 递归保留未改键，补丁 null 删除键，数组整体替换。补丁根必须是可序列化的对象。PostgreSQL 使用单条参数化递归 CTE，不要求预装函数，不在应用先读后写。路径格式支持 `$.key`、`$.key.subkey` 和 `$[0]`；列名来自可信代码，路径和值作为参数。
+
+#### 场景：在建立连接前构造 JSON 查询表达式
+
+配置中的路径 `$.profile.name` 读取资料中的姓名。下面为预定使用 PostgreSQL 的报表准备表达式。解析遇到未识别的部分时可能只返回此前识别的路径段；需要完整校验时由应用检查路径和允许的键。
+
+```ts
+import { reldb } from '@h-ai/reldb'
+
+const path = '$.profile.name'
+// 返回 profile 和 name 两个路径段。
+const segments = reldb.parseJsonPath(path) // ['profile', 'name']
+// 选择 PostgreSQL 方言，返回表达式构造器。
+const pgJson = reldb.createJsonOps('postgresql')
+// 把路径作为参数绑定，表达式可以在建立连接后用于查询。
+const expression = pgJson.extract('payload', path)
+expression // { sql: 'payload #> ?::text[]', params: [['profile', 'name']] }
+```
 
 ## 错误处理
 

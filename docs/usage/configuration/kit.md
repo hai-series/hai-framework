@@ -1,4 +1,6 @@
-# Kit 配置
+# @h-ai/kit 配置
+
+<a id="kit-配置"></a>
 
 [English](kit.en.md) · [日本語](kit.ja.md)
 

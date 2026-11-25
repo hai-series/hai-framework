@@ -1,4 +1,6 @@
-# @h-ai/datapipe 文件配置
+# @h-ai/datapipe 配置
+
+<a id="h-aidatapipe-文件配置"></a>
 
 [English](datapipe.en.md) · [日本語](datapipe.ja.md)
 

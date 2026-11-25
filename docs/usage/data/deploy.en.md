@@ -1,4 +1,4 @@
-# @h-ai/deploy Data structures
+# @h-ai/deploy Data Structures
 
 [简体中文](deploy.md) · [日本語](deploy.ja.md)
 

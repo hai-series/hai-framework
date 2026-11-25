@@ -1,4 +1,4 @@
-# @h-ai/storage Data structures
+# @h-ai/storage Data Structures
 
 [简体中文](storage.md) · [日本語](storage.ja.md)
 

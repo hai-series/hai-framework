@@ -161,7 +161,7 @@ describe('dbConfigSchema', () => {
     expect(result).toHaveProperty('ssl', { rejectUnauthorized: false })
   })
 
-  it('应支持操作日志配置并填充默认等级和长度', () => {
+  it('应支持操作日志配置并填充默认开关和长度', () => {
     const result = ReldbConfigSchema.parse({
       type: 'sqlite',
       database: ':memory:',
@@ -169,16 +169,16 @@ describe('dbConfigSchema', () => {
     })
     expect(result.operationLog?.read).toBe(true)
     expect(result.operationLog?.write).toBe(false)
-    expect(result.operationLog?.level).toBe('debug')
     expect(result.operationLog?.maxLength).toBe(1000)
   })
 
-  it('操作日志等级仅支持 info/debug/trace', () => {
-    expect(() => ReldbConfigSchema.parse({
+  it.each(['info', 'trace', 'warn'])('兼容旧操作日志等级 %s 并从解析结果移除', (level) => {
+    const result = ReldbConfigSchema.parse({
       type: 'sqlite',
       database: ':memory:',
-      operationLog: { read: true, level: 'warn' },
-    })).toThrow()
+      operationLog: { read: true, level },
+    })
+    expect(result.operationLog).toEqual({ read: true, write: false, maxLength: 1000 })
   })
 })
 

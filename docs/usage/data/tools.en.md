@@ -1,4 +1,4 @@
-# @h-ai/tools data structures
+# @h-ai/tools Data Structures
 
 [简体中文](tools.md) · [日本語](tools.ja.md)
 

@@ -1,4 +1,4 @@
-# @h-ai/serv API reference
+# @h-ai/serv API Reference
 
 <!-- translation: partial -->
 

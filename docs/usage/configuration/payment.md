@@ -1,4 +1,6 @@
-# Payment 配置
+# @h-ai/payment 配置
+
+<a id="payment-配置"></a>
 
 [English](payment.en.md) · [日本語](payment.ja.md)
 

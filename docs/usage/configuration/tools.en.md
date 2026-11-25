@@ -1,4 +1,6 @@
-# @h-ai/tools File configuration
+# @h-ai/tools Configuration
+
+<a id="h-aitools-file-configuration"></a>
 
 [Chinese](tools.md) · [日本語](tools.ja.md)
 

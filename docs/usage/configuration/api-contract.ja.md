@@ -1,4 +1,6 @@
-# @h-ai/api-contract ファイル設定
+# @h-ai/api-contract 設定
+
+<a id="h-aiapi-contract-ファイル設定"></a>
 
 [中国語](api-contract.md) · [English](api-contract.en.md)
 

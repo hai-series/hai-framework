@@ -1,4 +1,6 @@
-# Crypto data structures
+# @h-ai/crypto Data Structures
+
+<a id="crypto-data-structures"></a>
 
 [中文](crypto.md) · [日本語](crypto.ja.md)
 

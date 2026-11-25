@@ -1,4 +1,4 @@
-# @h-ai/capacitor Data structures
+# @h-ai/capacitor Data Structures
 
 [简体中文](capacitor.md) · [日本語](capacitor.ja.md)
 

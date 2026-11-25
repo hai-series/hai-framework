@@ -1,4 +1,4 @@
-# @h-ai/cli Data structures
+# @h-ai/cli Data Structures
 
 [简体中文](cli.md) · [日本語](cli.ja.md)
 

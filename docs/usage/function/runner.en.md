@@ -1,4 +1,4 @@
-# @h-ai/runner API reference
+# @h-ai/runner API Reference
 
 [Chinese source](runner.md) · [Configuration](../configuration/runner.en.md) · [Data structures](../data/runner.en.md)
 
