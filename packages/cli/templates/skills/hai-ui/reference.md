@@ -275,78 +275,66 @@ const p = ui.usePlatform()
 
 #### 移动端组合组件（7 个）
 
-| 组件             | Props 要点                                                                    | 说明             |
-| ---------------- | ----------------------------------------------------------------------------- | ---------------- |
-| `SafeArea`       | `top`, `bottom`, `left`, `right`                                              | 安全区域容器     |
-| `AppBar`         | `title`, `backHref`, `onback`, `fixed`, `transparent`, snippet `left`/`right` | 顶部导航栏       |
-| `BottomNav`      | `items: BottomNavItem[]`, `active`                                            | 底部导航栏，客户端挂载后启用按钮 |
-| `ActionSheet`    | `open`, `title`, `items: ActionSheetItem[]`, `cancelText`, `onselect`         | 底部弹出操作面板 |
-| `PullRefresh`    | `onrefresh`, `threshold`, `pullText`, `releaseText` | 下拉刷新，失败后复位并可重试 |
-| `InfiniteScroll` | `hasMore`, `threshold`, `onloadmore`, `loadingText`, `noMoreText` | 页面或列表接近末尾时请求下一页 |
-| `SwipeCell`      | `leftActions`, `rightActions: SwipeCellAction[]`, `threshold`                 | 滑动操作单元格   |
+| 组件 | Props 要点 | 说明 |
+| --- | --- | --- |
+| `SafeArea` | `position: 'top' / 'bottom' / 'all'` | 需要引入移动样式，默认预留四边 |
+| `AppBar` | `title`、`fixed`、`safeArea`、`leading` 和 `trailing` snippets | 顶部导航栏，返回等操作由宿主提供 |
+| `BottomNav` | `items: BottomNavItem[]`、`active`、`onchange(id)` | 导航项使用 `id` 标识，宿主负责切换内容或页面 |
+| `ActionSheet` | `open`、`items: ActionSheetItem[]`、`onselect(id)`、`onclose` | 底部操作面板，宿主在关闭回调更新 `open` |
+| `PullRefresh` | `onrefresh`、`threshold`、`pullText`、`releaseText` | 下拉刷新，失败后复位并可重试 |
+| `InfiniteScroll` | `hasMore`、`threshold`、`onloadmore`、`loadingText`、`noMoreText` | 页面或列表接近末尾时请求下一页 |
+| `SwipeCell` | `actions: SwipeCellAction[]`、`onaction(id)` | 向左滑动，显示右侧操作 |
 
-**移动端组件用法示例**：
+在应用根布局的样式入口引入 `@h-ai/ui/styles/mobile.css`。以下示例在点击导航时切换当前页签，下拉刷新完成后显示更新状态。实际业务可将这两个回调连接到导航和查询。
 
 ```svelte
-<script lang="ts">
+<script lang='ts'>
+  import { AppBar, BottomNav, PullRefresh, SafeArea } from '@h-ai/ui'
   import type { BottomNavItem } from '@h-ai/ui'
 
-  const navItems: BottomNavItem[] = [
-    { key: 'home', label: '首页', icon: 'tabler:home', href: '/' },
-    { key: 'discover', label: '发现', icon: 'tabler:compass', href: '/discover' },
-    { key: 'profile', label: '我的', icon: 'tabler:user', href: '/profile' },
+  const items: BottomNavItem[] = [
+    { id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' },
+    { id: 'orders', label: '订单', iconClass: 'icon-[tabler--list]' },
   ]
+  let active = $state('home')
+  let refreshed = $state(false)
+
+  async function refresh() {
+    refreshed = true
+  }
 </script>
 
-<!-- 为本页内容预留顶部和底部安全区。 -->
-<SafeArea top bottom>
-  <!-- 显示首页标题栏。 -->
-  <AppBar title="首页" />
-  <!-- 用户下拉时调用应用的异步 loadData，组件负责显示刷新状态。 -->
-  <PullRefresh onrefresh={loadData}>
-    <main class="p-4">
-      <!-- 页面内容 -->
-    </main>
+<SafeArea position='all'>
+  <AppBar title={active === 'home' ? '首页' : '订单'} fixed={false} safeArea={false} />
+  <PullRefresh onrefresh={refresh}>
+    <p class='p-4'>{refreshed ? '已刷新' : '下拉刷新列表'}</p>
   </PullRefresh>
-  <!-- 渲染三个指定的底部导航项，并高亮 home。 -->
-  <BottomNav items={navItems} active="home" />
+  <BottomNav {items} {active} safeArea={false} onchange={id => { active = id }} />
 </SafeArea>
 ```
 
-**ActionSheet 用法**：
+##### 底部菜单和滑动操作
+
+`ActionSheet` 的 `onselect` 与 `SwipeCell` 的 `onaction` 接收操作 ID。依 ID 调用宿主逻辑，例如将当前订单标记为待归档。确认和授权由宿主处理。
 
 ```svelte
-<script lang="ts">
-  import type { ActionSheetItem } from '@h-ai/ui'
+<script lang='ts'>
+  import type { ActionSheetItem, SwipeCellAction } from '@h-ai/ui'
+  import { ActionSheet, Button, SwipeCell } from '@h-ai/ui'
 
-  let showActions = $state(false)
-  const actions: ActionSheetItem[] = [
-    { key: 'camera', label: '拍照' },
-    { key: 'album', label: '从相册选择' },
-    { key: 'delete', label: '删除', destructive: true },
-  ]
+  let open = $state(false)
+  let selected = $state('')
+  const items: ActionSheetItem[] = [{ id: 'receipt', label: '下载回执' }]
+  const actions: SwipeCellAction[] = [{ id: 'archive', label: '归档', variant: 'warning' }]
 </script>
 
-<!-- 根据 showActions 显示操作菜单，选择动作时把对应项目交给 handleAction。 -->
-<ActionSheet bind:open={showActions} title="选择操作" items={actions} onselect={handleAction} />
-```
-
-**SwipeCell 用法**：
-
-```svelte
-<script lang="ts">
-  import type { SwipeCellAction } from '@h-ai/ui'
-
-  const rightActions: SwipeCellAction[] = [
-    { key: 'edit', label: '编辑', color: '#3b82f6' },
-    { key: 'delete', label: '删除', color: '#ef4444' },
-  ]
-</script>
-
-<!-- 向左滑动列表项展示两个指定动作。点击时将动作交给 handleSwipeAction。 -->
-<SwipeCell {rightActions} onaction={handleSwipeAction}>
-  <div class="p-4">列表项内容</div>
+<Button onclick={() => { open = true }}>订单操作</Button>
+<ActionSheet {open} title='选择操作' {items}
+  onselect={id => { selected = id }} onclose={() => { open = false }} />
+<SwipeCell {actions} onaction={id => { selected = id }}>
+  <div class='p-4'>订单 #42</div>
 </SwipeCell>
+{#if selected}<p>已选择 {selected}</p>{/if}
 ```
 
 ### 场景组件（Scenes）
@@ -447,8 +435,7 @@ const p = ui.usePlatform()
 
 ```svelte
 <!-- 以指定字号渲染传入的 Markdown，允许经过消毒的 HTML。 -->
-<MarkdownRenderer content={
-;(markdown} fontSize='1.125rem' allowHtmlTags />
+<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
 
 <!-- 以 18px 编辑传入的方案文档，显示工具栏，隐藏大纲。 -->
 <AiDocumentEditor
@@ -469,8 +456,7 @@ const p = ui.usePlatform()
 <!-- 按 label 绘制传入的限流和熔断数据，指针选取最近分段点并显示十字线。 -->
 <Chart
   type='line'
-  data={
-;(trendData}
+  data={trendData}
   x='label'
   y={['rateLimit', 'circuitBreak']}
   series={trendSeries}
@@ -522,8 +508,7 @@ const p = ui.usePlatform()
 ```svelte
 <!-- 展示传入的角色记录，启用增删改和弹窗表单，按指定设置分页与排序。 -->
 <CrudPage
-  crud={
-;(roleCrud}
+  crud={roleCrud}
   {data}
   permissions={{ create: true, update: true, delete: true }}
   form={{ variant: 'modal', modalSize: 'lg' }}
@@ -538,8 +523,7 @@ const p = ui.usePlatform()
 如果想维持侧边编辑体验，可改成：
 
 ```svelte
-form={
-;({ variant: 'drawer', drawerWidth: '40rem' }}
+<CrudPage crud={roleCrud} {data} {nav} form={{ variant: 'drawer', drawerWidth: '40rem' }} />
 ```
 
 抽屉默认可拖动左侧边缘调整宽度，并按 `crud.resource.name` 记忆；传 `drawerResizable: false` 可关闭。
@@ -677,8 +661,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 ```svelte
 <!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
 <!-- 用应用提供的 IAM 配置和认证动作展示表单，登录和注册插槽在对应界面可见。 -->
-<AuthPanel config={
-;(config} {actions}>
+<AuthPanel config={config} {actions}>
   {#snippet loginHeader()}
     <p>{m.loginHelp()}</p>
   {/snippet}
@@ -740,8 +723,7 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
 ```svelte
 <!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
 <!-- 布局为两列，左侧标签宽 6rem。有效提交将字段交给 save，必填失败阻止提交。 -->
-<Form columns={
-;(2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
   <!-- 以应用翻译展示必填姓名字段。 -->
   <FormField label={() => m.name()} required>
     <!-- 将姓名输入与 name 状态同步，提交字段名为 name。 -->
