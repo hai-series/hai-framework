@@ -2445,6 +2445,9 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.6(hono@4.13.17)
+      '@orpc/contract':
+        specifier: 'catalog:'
+        version: 1.16.2(@opentelemetry/api@1.9.1)
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 1.16.2(@opentelemetry/api@1.9.1)(ws@8.22.1)

@@ -19,6 +19,7 @@ export default defineConfig({
     '@h-ai/feedback',
     '@h-ai/iam',
     '@h-ai/storage',
+    '@orpc/contract',
     '@orpc/openapi',
     '@orpc/server',
     'hono',

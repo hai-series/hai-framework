@@ -27,6 +27,7 @@ import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
 import type { CreateServContext, ServContext, ServIam, ServRequestMetadata, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
+import type { ServTransportRoute } from './serv-route-transport.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
 import { posix } from 'node:path'
@@ -48,6 +49,7 @@ import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
 import { isCorsMiddleware } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
+import { createTransportRoutePreparer, isPrivateResponse } from './serv-route-transport.js'
 import { createTransportMiddleware } from './serv-transport.js'
 import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
@@ -178,6 +180,8 @@ export interface CreateServAppOptions<
    *
    */
   readonly transport?: ServTransportConfig
+  /** 由宿主在 HTTPS 入口启用的 multipart、文件和 SSE 契约端点。 */
+  readonly transportRoutes?: readonly ServTransportRoute[]
   /**
    * 启用统一语音 WebSocket 入口（opt-in）。提供后 serv 自动：
    * 1. 在 `${apiPrefix}/ai/audio`（可自定义 `path`）注册语音 WebSocket 路由
@@ -516,6 +520,16 @@ export function createApp<
       : next())
   }
 
+  const prepareTransport = createTransportRoutePreparer(
+    options.procedures,
+    options.transportRoutes,
+    http.apiPrefix,
+    checkAccess.encryption,
+    options.transport !== undefined,
+  )
+  if (prepareTransport)
+    app.use('*', async (c, next) => prepareTransport.preflight(c.req.raw) ?? next())
+
   // Step 7：若启用传输加密，必须在业务路由之前挂载。
   // 这样请求能先被解密，响应也能在离开应用前被重新加密。
   // 传输加密必须在所有业务路由之前装载：
@@ -576,7 +590,7 @@ export function createApp<
   }
 
   // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
-  mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)
+  mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext, prepareTransport)
 
   // Step 11：按需挂 OpenAPI JSON 文档端点。
   if (http.openapi !== false) {
@@ -641,12 +655,13 @@ function mountOpenAPIRoutes(
   procedures: Router<AnyContractRouter, ServContext>,
   apiPrefix: `/${string}`,
   createContext: CreateServContext,
+  prepareTransport: ReturnType<typeof createTransportRoutePreparer>,
 ): void {
   const handler = new OpenAPIHandler(procedures)
   // 这里只为 `${apiPrefix}/*` 这个挂载前缀注册一次 multi-method catch-all。
   // 它不是“为 contract 中的每个 endpoint 各注册一遍 GET/POST/...”，
   // 真实的路由命中与输入校验都在下游 oRPC handler 中完成。
-  app.on([...API_METHODS], `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext))
+  app.on([...API_METHODS], `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext, prepareTransport))
 }
 
 async function handleORPC(
@@ -655,21 +670,39 @@ async function handleORPC(
   prefix: `/${string}`,
   handler: OpenAPIHandler<ServContext>,
   createContext: CreateServContext,
+  prepareTransport: ReturnType<typeof createTransportRoutePreparer>,
 ): Promise<Response | void> {
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
-  const context = await createContext({
+  const resolvedContext = await createContext({
     request: c.req.raw,
     remoteAddress: readRemoteAddress(c.env),
   })
+  const context = prepareTransport && resolvedContext.request !== c.req.raw
+    ? { ...resolvedContext, request: c.req.raw }
+    : resolvedContext
+  // 文件和 SSE 在解码正文前校验宿主策略、身份及字节范围。
+  const request = await prepareTransport?.prepare(c.req.raw, context) ?? c.req.raw
+  if (request instanceof Response)
+    return request
+
   // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
-  const { matched, response } = await core.context.run({ requestId: context.requestId, userId: context.session?.userId, scopeId: context.scopeId }, () => handler.handle(c.req.raw, { prefix, context }))
+  const { matched, response } = await core.context.run({ requestId: context.requestId, userId: context.session?.userId, scopeId: context.scopeId }, () => handler.handle(request, { prefix, context }))
+  const isPrivate = isPrivateResponse(context)
   if (!matched) {
     // Step C：当前前缀下没有匹配路由，继续交给 Hono 后续路由处理。
     await next()
     return
   }
   // Step D：若命中的是输入校验错误，这里统一改写成本地化的 HaiResult 失败体。
-  return localizeValidationResponse(response, c.req.raw.headers)
+  const result = await localizeValidationResponse(response, c.req.raw.headers)
+  if (isPrivate) {
+    result.headers.set('Cache-Control', 'no-store')
+    result.headers.set('X-Content-Type-Options', 'nosniff')
+    const disposition = result.headers.get('Content-Disposition')
+    if (disposition?.startsWith('inline;'))
+      result.headers.set('Content-Disposition', `attachment${disposition.slice('inline'.length)}`)
+  }
+  return result
 }
 
 /**

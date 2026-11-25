@@ -87,44 +87,12 @@ export function applyServGuards<
 ): ProcedureHandler<TContext, TInput, HaiResult<TData>, TErrorMap, TMeta> {
   return async (options) => {
     try {
-      if (!hasAuthenticatedSession(options.context)) {
-        return core.err(
-          HaiCommonError.UNAUTHORIZED,
-          servM('serv_errorUnauthorized', { locale: options.context.locale }),
-        )
-      }
-
-      const { session } = options.context
-      if (requirements.permissions?.length) {
-        const allowed = session.permissions.includes(WILDCARD_PERMISSION)
-          || requirements.permissions.every(
-            permission => session.permissions.some(granted => granted === permission
-              || (granted.endsWith(':*') && permission.startsWith(granted.slice(0, -1)))),
-          )
-        if (!allowed) {
-          return core.err(
-            HaiCommonError.FORBIDDEN,
-            servM('serv_errorForbidden', { locale: options.context.locale }),
-          )
-        }
-      }
-
-      if (requirements.roles?.length) {
-        const allowed = session.roles.includes(WILDCARD_ROLE)
-          || requirements.roles.every(
-            role => session.roles.includes(role),
-          )
-        if (!allowed) {
-          return core.err(
-            HaiCommonError.FORBIDDEN,
-            servM('serv_errorForbidden', { locale: options.context.locale }),
-          )
-        }
-      }
-
+      const checked = checkServGuards(options.context, requirements)
+      if (!checked.success)
+        return checked
       return await handler({
         ...options,
-        context: options.context,
+        context: checked.data,
       })
     }
     catch (error) {
@@ -135,6 +103,36 @@ export function applyServGuards<
       )
     }
   }
+}
+
+/**
+ * 在解码传输正文前执行同一套身份和权限检查。
+ * @example 模块内部上下文
+ * ```ts
+ * function canRead(context: ServContext) {
+ *   return checkServGuards(context, { permissions: ['events:read'] })
+ * }
+ * ```
+ */
+export function checkServGuards<TContext extends ServContext>(
+  context: TContext,
+  requirements: ServGuardRequirements,
+): HaiResult<AuthenticatedServContext<TContext>> {
+  if (!hasAuthenticatedSession(context))
+    return core.err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+
+  const { session } = context
+  const requiredPermissions = requirements.permissions ?? []
+  const requiredRoles = requirements.roles ?? []
+  const hasPermissions = session.permissions.includes(WILDCARD_PERMISSION)
+    || requiredPermissions.every(permission => session.permissions.some(granted => granted === permission
+      || (granted.endsWith(':*') && permission.startsWith(granted.slice(0, -1)))))
+  const hasRoles = session.roles.includes(WILDCARD_ROLE)
+    || requiredRoles.every(role => session.roles.includes(role))
+  if (!hasPermissions || !hasRoles)
+    return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
+
+  return core.ok(context)
 }
 
 function hasAuthenticatedSession<TContext extends ServContext>(

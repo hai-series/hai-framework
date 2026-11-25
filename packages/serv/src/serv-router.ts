@@ -8,6 +8,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { AnyContractProcedure } from '@orpc/contract'
 import type {
   Context,
   ContractProcedure,
@@ -23,9 +24,12 @@ import type {
 } from '@orpc/server'
 import type { ServGuardRequirements } from './pipelines/serv-pipeline-guard.js'
 import type { ServContext } from './serv-context.js'
+import { core, HaiCommonError } from '@h-ai/core'
+import { isContractProcedure } from '@orpc/contract'
 import { implement as orpcImplement } from '@orpc/server'
-import { applyServGuards } from './pipelines/serv-pipeline-guard.js'
+import { applyServGuards, checkServGuards } from './pipelines/serv-pipeline-guard.js'
 import { mapHaiError } from './pipelines/serv-pipeline-helper.js'
+import { isAdmittedTransportRoute, registerTransportHandler, toTransportError } from './serv-route-transport.js'
 
 /**
  * 内部初始 context 空约束，用于保持 oRPC 推导而不伪造运行时字段。
@@ -248,6 +252,23 @@ type ServGuardedRouteHandler<
 > = RouteHandler<RouteContract<TContract, TPath>, AuthenticatedServContext<TContext>>
 
 /**
+ * 推导传输 handler 的输入与文件、异步迭代器或 JSON 输出类型。
+ * @example 模块内部上下文
+ * ```ts
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const procedure = apiContract.route({ method: 'GET', path: '/file' }).output(z.file())
+ * const handle: TransportRouteHandler<typeof procedure, ServContext> = () => new File(['data'], 'data.txt')
+ * ```
+ */
+type TransportRouteHandler<TProcedure, TContext extends ServContext>
+  = TProcedure extends ContractProcedure<infer TInput, infer TOutput, infer TErrors, infer TMeta>
+    ? InferSchemaInput<TOutput> extends File | AsyncIterable<unknown> | HaiResult<unknown>
+      ? ProcedureHandler<AuthenticatedServContext<TContext>, InferSchemaOutput<TInput>, InferSchemaInput<TOutput> | HaiResult<never>, TErrors, TMeta>
+      : never
+    : never
+
+/**
  * 一次注册后移除该路径的 builder；全部路径完成才提供 build。
  *
  * @example
@@ -362,6 +383,30 @@ export interface ServGuardedRouteRegistration<
   >
   readonly handle: (
     handler: ServGuardedRouteHandler<TContract, TPath, TCurrentContext>,
+  ) => NextBuilder<TContract, TInitialContext, TCurrentContext, TRemaining, TPath>
+  /**
+   * 实现需要 multipart、文件或事件流的认证端点，宿主须显式挂载传输策略。
+   * 业务失败可返回 `HaiResult<never>`，发送响应头后由事件流自身处理失败。
+   * @example
+   * ```ts
+   * import { apiContract } from '@h-ai/api-contract'
+   * import { type ServContext, serv } from '@h-ai/serv'
+   * import { z } from 'zod'
+   *
+   * const download = apiContract.route({ method: 'GET', path: '/file' }).output(z.file())
+   * const contract = { download }
+   * const procedures = serv.implement(contract).context<ServContext>()
+   *   .route('download').auth().handleTransport(() => new File(['data'], 'data.txt'))
+   *   .build()
+   * const app = serv.createApp({
+   *   contract,
+   *   procedures,
+   *   transportRoutes: [{ procedure: download, maxRequestBytes: 0 }],
+   * })
+   * ```
+   */
+  readonly handleTransport: (
+    handler: TransportRouteHandler<RouteContract<TContract, TPath>, TCurrentContext>,
   ) => NextBuilder<TContract, TInitialContext, TCurrentContext, TRemaining, TPath>
 }
 
@@ -568,13 +613,45 @@ type AuthenticatedRuntimeProcedureHandler = ProcedureHandler<
   Meta
 >
 
+/**
+ * 动态路由注册后的传输 handler，仍要求可信会话。
+ * @example 模块内部上下文
+ * ```ts
+ * const handler: TransportRuntimeHandler = () => new File(['data'], 'data.txt')
+ * ```
+ */
+type TransportRuntimeHandler = ProcedureHandler<AuthenticatedServContext, unknown, unknown, ErrorMap, Meta>
+
+function guardTransportHandler(procedure: AnyContractProcedure, guards: ServGuardRequirements, handler: TransportRuntimeHandler) {
+  const transport = { guards, procedure }
+  const audited = mapHaiError(async (options) => {
+    if (!isAdmittedTransportRoute(options.context, transport))
+      return core.err(HaiCommonError.REQUEST_ACCESS_DENIED, core.i18n.coreM('core_requestAccessDenied'))
+    const checked = checkServGuards(options.context, guards)
+    if (!checked.success)
+      return checked
+    const output = await handler({ ...options, context: checked.data })
+    if (output && typeof output === 'object' && 'success' in output && output.success === false)
+      return output as Extract<HaiResult<never>, { success: false }>
+    return core.ok(output)
+  })
+  const guarded: ProcedureHandler<ServContext, unknown, unknown, ErrorMap, Meta> = async (options) => {
+    const result = await audited(options)
+    if (!result.success)
+      throw toTransportError(result.error)
+    return result.data
+  }
+  registerTransportHandler(guarded, transport)
+  return guarded
+}
+
 class ServRouterBuilderRuntime {
   private readonly expectedPaths: ReadonlySet<string>
   private readonly implementedRoutes: Record<string, unknown>
   private readonly registeredPaths = new Set<string>()
 
   constructor(
-    contract: ServContract,
+    private readonly contract: ServContract,
     private readonly implementer: object,
   ) {
     this.expectedPaths = new Set(collectProcedurePaths(contract))
@@ -588,7 +665,7 @@ class ServRouterBuilderRuntime {
     return new ServRouteRegistrationRuntime(this, path)
   }
 
-  register(path: string, guards: ServGuardRequirements, handler: unknown): this {
+  register(path: string, guards: ServGuardRequirements, handler: unknown, transport = false): this {
     if (!this.expectedPaths.has(path))
       throw new TypeError(`Contract path is not implementable: ${path}`)
     if (this.registeredPaths.has(path))
@@ -603,10 +680,11 @@ class ServRouterBuilderRuntime {
 
     // 点路径反射会丢失单条 contract 的泛型；路径已由 expectedPaths 校验，
     // handler 的精确 input/output 则由公开的 ServRouteHandler 在调用侧保证。
-    const guardedHandler = hasGuards(guards)
-      ? applyServGuards(guards, handler as AuthenticatedRuntimeProcedureHandler)
-      : handler as RuntimeProcedureHandler
-    const safeHandler = mapHaiError(guardedHandler)
+    const safeHandler = transport
+      ? guardTransportHandler(getContractProcedure(this.contract, path), guards, handler as TransportRuntimeHandler)
+      : mapHaiError(hasGuards(guards)
+          ? applyServGuards(guards, handler as AuthenticatedRuntimeProcedureHandler)
+          : handler as RuntimeProcedureHandler)
     const implemented = Reflect.apply(
       implementHandler,
       procedureImplementer,
@@ -664,11 +742,21 @@ class ServRouteRegistrationRuntime {
   }
 
   handle(handler: unknown): ServRouterBuilderRuntime {
-    return this.parent.register(this.path, {
+    return this.parent.register(this.path, this.requirements(), handler)
+  }
+
+  handleTransport(handler: unknown): ServRouterBuilderRuntime {
+    if (!this.authRequired)
+      throw new TypeError(`Transport procedure requires an authentication guard: ${this.path}`)
+    return this.parent.register(this.path, this.requirements(), handler, true)
+  }
+
+  private requirements(): ServGuardRequirements {
+    return {
       auth: this.authRequired,
       permissions: [...this.permissions],
       roles: [...this.roles],
-    }, handler)
+    }
   }
 }
 
@@ -694,8 +782,11 @@ function collectProcedurePaths(
     collectProcedurePaths(child, [...prefix, key]))
 }
 
-function isContractProcedure(contract: ServContract): boolean {
-  return '~orpc' in contract
+function getContractProcedure(contract: ServContract, path: string): AnyContractProcedure {
+  const target = getAtPath(contract, path)
+  if (!isContractProcedure(target))
+    throw new TypeError(`Contract path is not implementable: ${path}`)
+  return target
 }
 
 function createRouterShape(contract: ServContract): Record<string, unknown> {
