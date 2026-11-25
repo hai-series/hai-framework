@@ -291,7 +291,7 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `session.avatarUrl` | `string` | — | Optional avatar URL. | `https://images.example.invalid/user-42.png` |
 | `session.version` | `string` | — | Updated when a session is explicitly changed. Sliding refresh preserves it. | `session-version-42` |
 | `session.credentialVersion` | `string` | — | Credential version bound at issuance, used to refuse old sessions after a password change. | `credential-version-42` |
-| `session.terminalType` | `string` | `web` | Client category. Older records without a value are treated as `web`. | `web` |
+| `session.terminalType` | `string` | — | Client category saved at issuance. Sign-ins that omit it store `web`. | `web` |
 | `session.apiKeyId` | `string` | — | Bound key ID on sessions issued from an API key. | `apikey-42` |
 | `session.apiKeyScopes` | `string[]` | — | Allowed scopes of a session issued from an API key. | `["orders.read"]` |
 | `session.roles` | `string[]` | — | Role codes for the session. | `["reader"]` |
@@ -299,7 +299,7 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `session.source` | `string` | — | Optional sign-in source. | `pc` |
 | `session.accessToken` | `string` | — | Access credential for the session. | `<access-token:redacted>` |
 | `session.createdAt` | ISO date string | — | Current issuance time. | `2026-11-17T00:00:00.000Z` |
-| `session.startedAt` | ISO date string | `createdAt` | First issuance time, preserved on refresh. Older records fall back to `createdAt`. | `2026-11-17T00:00:00.000Z` |
+| `session.startedAt` | ISO date string | — | First issuance time, preserved on refresh. | `2026-11-17T00:00:00.000Z` |
 | `session.lastActiveAt` | ISO date string | — | Most recent activity time, used to apply idle deadlines. | `2026-11-17T00:00:00.000Z` |
 | `session.expiresAt` | ISO date string | — | Access session expiry. | `2026-11-18T00:00:00.000Z` |
 | `session.maxAge` | `number` | `86400` | Access lifetime in seconds. Creation can override it. The session keeps that lifetime. | `86400` |
@@ -409,7 +409,7 @@ operation:login restricts it to login. Secrets are redacted and challenge detail
 
 #### Example · A short-lived one-use ticket
 
-The key is `hai:iam:ticket:sha256:<ticket digest>`. The client holds the original ticket, and the key contains only its hexadecimal SHA-256 digest. Updated instances still accept old tickets until they expire. When deploying to several instances, switch consumers together because older instances cannot redeem newly issued tickets.
+The key is `hai:iam:ticket:sha256:<ticket digest>`. The client holds the original ticket. IAM looks up its cache record by the ticket's hexadecimal SHA-256 digest.
 
 After checking the purpose and expiration, redemption atomically removes the matching record and returns its subject and authorization parameters.
 

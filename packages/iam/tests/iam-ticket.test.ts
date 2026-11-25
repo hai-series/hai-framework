@@ -101,27 +101,21 @@ describe('iam ticket', () => {
     expect((await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-audio' })).success).toBe(true)
   })
 
-  it('升级前尚未到期的票据可按原用途原子消费一次', async () => {
+  it('消费时只接受摘要键对应的记录', async () => {
     const ticket = 'L'.repeat(43)
-    const legacy = {
-      subjectId: 'legacy-user',
-      purpose: 'legacy-purpose',
+    const plainKey = `hai:iam:ticket:${ticket}`
+    const record = {
+      subjectId: 'user-1',
+      purpose: 'audio',
       grant: { operation: 'test' },
       expiresAt: Date.now() + 30_000,
     }
-    expect(await cache.kv.set(`hai:iam:ticket:${ticket}`, legacy, { px: 30_000 })).toEqual(core.ok(true))
-    expect((await iam.ticket.consume(ticket, { purpose: 'other-purpose' })).success).toBe(false)
-    const requests = await Promise.all([
-      iam.ticket.consume(ticket, { purpose: legacy.purpose }),
-      iam.ticket.consume(ticket, { purpose: legacy.purpose }),
-    ])
-    expect(requests.filter(result => result.success)).toEqual([
-      core.ok({
-        subjectId: legacy.subjectId,
-        purpose: legacy.purpose,
-        grant: legacy.grant,
-      }),
-    ])
+    expect(await cache.kv.set(plainKey, record, { px: 30_000 })).toEqual(core.ok(true))
+    expect(await iam.ticket.consume(ticket, { purpose: record.purpose })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.TICKET_INVALID.code },
+    })
+    expect(await cache.kv.get(plainKey)).toEqual(core.ok(record))
   })
 
   it('两次签发生成不同的票据值（密码学随机）', async () => {

@@ -295,7 +295,7 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `session.avatarUrl` | `string` | — | 任意のアバター URL。 | `https://images.example.invalid/user-42.png` |
 | `session.version` | `string` | — | 明示的な変更で更新し、スライド延長時は維持します。 | `session-version-42` |
 | `session.credentialVersion` | `string` | — | 発行時の認証情報の版。パスワード変更後の旧セッションを拒否します。 | `credential-version-42` |
-| `session.terminalType` | `string` | `web` | 端末区分。値のない旧レコードは `web` として扱います。 | `web` |
+| `session.terminalType` | `string` | — | 発行時に保存する端末区分。ログイン時に省略すると `web` を保存します。 | `web` |
 | `session.apiKeyId` | `string` | — | API Key から発行したセッションのキー ID。 | `apikey-42` |
 | `session.apiKeyScopes` | `string[]` | — | API Key から発行したセッションの許可範囲。 | `["orders.read"]` |
 | `session.roles` | `string[]` | — | セッションのロールコード。 | `["reader"]` |
@@ -303,7 +303,7 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `session.source` | `string` | — | 任意のログイン元。 | `pc` |
 | `session.accessToken` | `string` | — | セッションのアクセス認証情報。 | `<access-token:redacted>` |
 | `session.createdAt` | ISO date string | — | 今回の発行時刻。 | `2026-11-17T00:00:00.000Z` |
-| `session.startedAt` | ISO date string | `createdAt` | 初回発行時刻。更新しても維持し、旧レコードで省略されていれば `createdAt` を使います。 | `2026-11-17T00:00:00.000Z` |
+| `session.startedAt` | ISO date string | — | 初回の発行時刻。リフレッシュしても維持されます。 | `2026-11-17T00:00:00.000Z` |
 | `session.lastActiveAt` | ISO date string | — | 最終活動時刻。無操作期限の判定に使います。 | `2026-11-17T00:00:00.000Z` |
 | `session.expiresAt` | ISO date string | — | アクセスセッションの期限。 | `2026-11-18T00:00:00.000Z` |
 | `session.maxAge` | `number` | `86400` | アクセスの有効期間。単位は秒。作成時に上書きでき、その後は発行時の値を使います。 | `86400` |
@@ -413,7 +413,7 @@ login 専用の例で、秘密と挑戦詳細は省略しています。記録�
 
 #### 例 · 短時間だけ使える一回券
 
-キーの構造は `hai:iam:ticket:sha256:<チケットのダイジェスト>` です。クライアントが元のチケットを保持し、キーには SHA-256 の十六進ダイジェストだけを保存します。更新後も期限内の旧チケットを使えます。複数インスタンスでは利用側を同時に切り替えてください。旧版では新版が発行したチケットを利用できません。
+キーの構造は `hai:iam:ticket:sha256:<チケットのダイジェスト>` です。クライアントは元のチケットを保持します。IAM はチケットの SHA-256 十六進ダイジェストでキャッシュレコードを検索します。
 
 用途と有効期限を確認し、一致した記録を原子的に削除してから、主体と権限の関連情報を返します。
 

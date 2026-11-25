@@ -361,7 +361,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           apiKeyId: effectiveSession.apiKeyId,
           apiKeyScopes: effectiveSession.apiKeyScopes,
           source: oldSession.source,
-          terminalType: oldSession.terminalType ?? 'web',
+          terminalType: oldSession.terminalType,
           maxAge: oldSession.maxAge,
           data: oldSession.data
             ? { ...oldSession.data, _tokenPair: undefined }

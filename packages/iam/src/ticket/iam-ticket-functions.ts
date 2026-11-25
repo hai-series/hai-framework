@@ -98,17 +98,11 @@ export function createTicketOperations(): TicketOperations {
     },
 
     async consume(ticket: string, options?: ConsumeTicketOptions): Promise<HaiResult<ConsumedTicket>> {
-      // 老键兼容只接受曾签发的格式，不能以新键的 sha256:... 后缀绕过摘要。
       if (!TICKET_FORMAT.test(ticket)) {
         return core.err(HaiIamError.TICKET_INVALID, iamM('iam_ticketInvalid'))
       }
-      let key = buildTicketKey(ticket)
-      let found = await cache.kv.get<StoredTicket>(key)
-      if (found.success && !found.data) {
-        // 兼容升级前尚未到期的票据，旧键仍由原 TTL 回收。
-        key = `${TICKET_KEY_PREFIX}${ticket}`
-        found = await cache.kv.get<StoredTicket>(key)
-      }
+      const key = buildTicketKey(ticket)
+      const found = await cache.kv.get<StoredTicket>(key)
       if (!found.success) {
         return core.err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
       }

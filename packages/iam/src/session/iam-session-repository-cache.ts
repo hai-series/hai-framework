@@ -54,11 +54,13 @@ function restoreSession(session: Session): Session {
   const result = {
     ...session,
     createdAt: new Date(session.createdAt),
-    startedAt: new Date(session.startedAt ?? session.createdAt),
+    startedAt: new Date(session.startedAt),
     lastActiveAt: new Date(session.lastActiveAt),
     expiresAt: new Date(session.expiresAt),
   }
-  if ((result.terminalType !== undefined && !['web', 'app', 'desktop', 'api'].includes(result.terminalType)) || typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
+  if (!['web', 'app', 'desktop', 'api'].includes(result.terminalType)
+    || (typeof session.startedAt !== 'string' && !(session.startedAt instanceof Date))
+    || typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
     || ![
       result.createdAt,
@@ -142,7 +144,7 @@ export function createCacheSessionRepository(
   function policyExpired(session: Session): boolean {
     const now = Date.now()
     const activeAt = new Date(session.lastActiveAt).getTime()
-    const startedAt = new Date(session.startedAt ?? session.createdAt).getTime()
+    const startedAt = new Date(session.startedAt).getTime()
     return (idleTimeout > 0 && activeAt + idleTimeout * 1000 <= now)
       || (absoluteTimeout > 0 && startedAt + absoluteTimeout * 1000 <= now)
   }
@@ -232,7 +234,7 @@ export function createCacheSessionRepository(
     save: (session, tokens, singleDevice = false) => mutate(getUserSessionScope(session.userId), (state) => {
       // 已被数据库凭据代际撤销的旧记录不占用有效会话配额。
       const active = Object.entries(state.sessions).filter(([, entry]) => entry.session.credentialVersion === session.credentialVersion)
-      const terminal = session.terminalType ?? 'web'
+      const terminal = session.terminalType
       const limits = policy.terminalLimits ?? {}
       const cap = limits[terminal]
       if (Object.keys(limits).length && cap === undefined)
@@ -245,8 +247,8 @@ export function createCacheSessionRepository(
           Object.keys(state.sessions).forEach(token => removed.add(token))
       }
       else if (cap) {
-        const same = active.filter(([, entry]) => (entry.session.terminalType ?? 'web') === terminal)
-          .sort(([firstToken, first], [secondToken, second]) => new Date(first.session.startedAt ?? first.session.createdAt).getTime() - new Date(second.session.startedAt ?? second.session.createdAt).getTime() || firstToken.localeCompare(secondToken))
+        const same = active.filter(([, entry]) => entry.session.terminalType === terminal)
+          .sort(([firstToken, first], [secondToken, second]) => new Date(first.session.startedAt).getTime() - new Date(second.session.startedAt).getTime() || firstToken.localeCompare(secondToken))
         if (same.length >= cap) {
           if (policy.terminalLimitMode !== 'replace')
             return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
@@ -266,7 +268,7 @@ export function createCacheSessionRepository(
       if (old.session.version !== previous.version || session.userId !== previous.userId)
         return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
       // 绝对期限从首次签发计算，不随 refresh 创建新 access 重新计时。
-      session.startedAt = new Date(old.session.startedAt ?? old.session.createdAt)
+      session.startedAt = new Date(old.session.startedAt)
       // 自动换票不算业务活动，避免后台定时 refresh 无限延长闲置期限。
       if (idleTimeout > 0)
         session.lastActiveAt = new Date(old.session.lastActiveAt)
@@ -313,7 +315,7 @@ export function createCacheSessionRepository(
           return core.err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (!expectedVersion || entry.session.version !== expectedVersion)
           return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
-        if (patch.terminalType !== undefined && patch.terminalType !== (entry.session.terminalType ?? 'web'))
+        if (patch.terminalType !== undefined && patch.terminalType !== entry.session.terminalType)
           return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
         const updated = applySessionPatch(restoreSession(entry.session), patch)
         if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))

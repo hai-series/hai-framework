@@ -82,8 +82,8 @@ export interface AuthResult {
  * ```
  */
 export interface Session {
-  /** 登录时固定的终端分组；旧记录未设置时归为 web，刷新不能切换分组。 */
-  terminalType?: 'web' | 'app' | 'desktop' | 'api'
+  /** 登录时固定的终端分组，刷新不能切换分组。 */
+  terminalType: 'web' | 'app' | 'desktop' | 'api'
   /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
   version: string
   /** 认证快照绑定的持久凭据代；改密后的旧会话即使缓存清理失败也拒绝。 */
@@ -110,8 +110,8 @@ export interface Session {
   accessToken: string
   /** 创建时间 */
   createdAt: Date
-  /** 首次签发时间；刷新保留，用于绝对期限。旧记录未设置时以 createdAt 为准。 */
-  startedAt?: Date
+  /** 首次签发时间；刷新保留，用于绝对期限。 */
+  startedAt: Date
   /** 最后活动时间；启用闲置策略时，自动 refresh 不延长此值。 */
   lastActiveAt: Date
   /** 过期时间 */

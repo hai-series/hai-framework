@@ -1,6 +1,8 @@
 /** 可选会话策略必须同时约束 access、refresh 与并发签发。 */
 import type { IamConfigInput } from '../src/index.js'
+import { cache } from '@h-ai/cache'
 import { afterEach, expect, it, vi } from 'vitest'
+import { HaiIamError } from '../src/index.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
@@ -19,16 +21,23 @@ function tests() {
       maxSessions: 3,
       terminalLimits: { web: 2, app: 1 },
     })
-    const login = (terminalType: 'web' | 'app' | 'desktop') => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType })
-    const first = await login('web')
+    const login = (terminalType?: 'web' | 'app' | 'desktop') =>
+      iam.auth.login({ identifier: username, password: TEST_PASSWORD }, terminalType
+        ? { terminalType }
+        : undefined)
+    const first = await login()
     const second = await login('web')
     const app = await login('app')
     expect(first.success && second.success && app.success).toBe(true)
     expect((await login('web')).success).toBe(false)
     expect((await login('app')).success).toBe(false)
     expect((await login('desktop')).success).toBe(false)
-    if (!app.success)
-      throw new Error(app.error.message)
+    if (!first.success || !app.success)
+      throw new Error('Terminal setup failed')
+    expect(await iam.auth.verifyToken(first.data.tokens.accessToken)).toMatchObject({
+      success: true,
+      data: { terminalType: 'web' },
+    })
     const refreshed = await iam.session.refresh(app.data.tokens.refreshToken)
     if (!refreshed.success)
       throw new Error(refreshed.error.message)
@@ -37,6 +46,28 @@ function tests() {
     if (!current.success)
       throw new Error(current.error.message)
     expect((await iam.session.update(refreshed.data.accessToken, { terminalType: 'web' }, current.data.version)).success).toBe(false)
+  })
+
+  it.each(['startedAt', 'terminalType'] as const)('缓存会话缺少 %s 时拒绝读取和刷新', async (field) => {
+    const { iam, username } = await account({})
+    const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
+    if (!login.success)
+      throw new Error(login.error.message)
+    const { accessToken, refreshToken } = login.data.tokens
+    const [, partition] = accessToken.split('.')
+    const key = `hai:iam:sessions:{${partition}}`
+    const state = await cache.kv.get<{ sessions: Record<string, { session: Partial<Record<typeof field, string>> }> }>(key)
+    if (!state.success || !state.data?.sessions[accessToken])
+      throw new Error('Session fixture was not persisted')
+    delete state.data.sessions[accessToken].session[field]
+    expect((await cache.kv.set(key, state.data)).success).toBe(true)
+
+    const rejected = {
+      success: false,
+      error: { code: HaiIamError.REPOSITORY_ERROR.code },
+    }
+    expect(await iam.session.get(accessToken)).toMatchObject(rejected)
+    expect(await iam.session.refresh(refreshToken)).toMatchObject(rejected)
   })
 
   it('同类终端替换不踢掉其他终端，全局单会话仍优先', async () => {

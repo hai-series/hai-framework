@@ -297,7 +297,7 @@ IAM 写入 6 类缓存记录。以下是逻辑键。如果 Cache 设置了 `keyP
 | `session.avatarUrl` | `string` | — | 头像地址，可省略。 | `https://images.example.invalid/user-42.png` |
 | `session.version` | `string` | — | 显式修改会话时更新，例行滑动续期保留。 | `session-version-42` |
 | `session.credentialVersion` | `string` | — | 签发时绑定的凭据版本，改密码后用来拒绝旧会话。 | `credential-version-42` |
-| `session.terminalType` | `string` | `web` | 终端分组，老记录没有时按 `web` 归类。 | `web` |
+| `session.terminalType` | `string` | — | 签发时保存的终端分组。登录省略终端时写入 `web`。 | `web` |
 | `session.apiKeyId` | `string` | — | 仅 API Key 派生会话保存关联密钥 ID。 | `apikey-42` |
 | `session.apiKeyScopes` | `string[]` | — | API Key 派生会话的授权范围。 | `["orders.read"]` |
 | `session.roles` | `string[]` | — | 当前会话的角色码。 | `["reader"]` |
@@ -305,7 +305,7 @@ IAM 写入 6 类缓存记录。以下是逻辑键。如果 Cache 设置了 `keyP
 | `session.source` | `string` | — | 可选的登录来源。 | `pc` |
 | `session.accessToken` | `string` | — | 此会话使用的访问凭据。 | `<access-token:redacted>` |
 | `session.createdAt` | ISO date string | — | 本次签发时间。 | `2026-11-17T00:00:00.000Z` |
-| `session.startedAt` | ISO date string | `createdAt` | 初次签发时间，刷新时保留。旧记录缺失时取 `createdAt`。 | `2026-11-17T00:00:00.000Z` |
+| `session.startedAt` | ISO date string | — | 初次签发时间，刷新时保留。 | `2026-11-17T00:00:00.000Z` |
 | `session.lastActiveAt` | ISO date string | — | 最近一次活动的时间，用来判断是否闲置过久。 | `2026-11-17T00:00:00.000Z` |
 | `session.expiresAt` | ISO date string | — | 访问会话的到期时间。 | `2026-11-18T00:00:00.000Z` |
 | `session.maxAge` | `number` | `86400` | access 有效期，单位秒。创建时可覆盖，后续使用签发时的时长。 | `86400` |
@@ -415,7 +415,7 @@ operation:login 表示只能用于登录；秘密已隐藏，公开挑战内容�
 
 #### 示例 · 短时间内只准用一次的通行票
 
-对应结构为 `hai:iam:ticket:sha256:<票据摘要>`。签发后客户端持有原票据，缓存键只保存它的 SHA-256 十六进制摘要。新版可兑换旧版尚未过期的票据，旧键按原有效期回收。多实例部署时同时切换消费者，旧版实例无法兑换新版发出的票据。
+对应结构为 `hai:iam:ticket:sha256:<票据摘要>`。签发后客户端持有原票据。IAM 使用原票据的 SHA-256 十六进制摘要定位缓存记录。
 
 需要临时授权连接或操作时签发票据。用途和有效期核验通过后，兑换请求原子删除读到的记录，再取得绑定的主体和授权参数。
 
