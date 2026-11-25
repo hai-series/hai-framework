@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ArtifactDocument, ToolRun } from '../src/lib/components/scenes/tools/workspace-types.js'
+import type { ArtifactDocument, ArtifactSaveRequest, ArtifactSaveResponse, ToolRun } from '../src/lib/components/scenes/tools/workspace-types.js'
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, expect, it, vi } from 'vitest'
 import ArtifactWorkspace from '../src/lib/components/scenes/tools/ArtifactWorkspace.svelte'
@@ -53,6 +53,69 @@ it('可视修改保存遇到版本冲突时，保留草稿和基础版本', asyn
     button(target, uiM('artifact_source')).click()
     flushSync()
     expect(target.querySelector('textarea')?.value).toBe('# Title\n\nUpdated paragraph.\n')
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
+it('保存期间应用的改写保留为草稿，下次保存采用新的基础版本', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const firstSave = Promise.withResolvers<ArtifactSaveResponse>()
+  const artifact: ArtifactDocument = {
+    id: 'report',
+    title: 'Report',
+    kind: 'markdown',
+    version: 1,
+    content: 'Original draft',
+    editable: true,
+  }
+  const onsave = vi.fn<(request: ArtifactSaveRequest, signal: AbortSignal) => Promise<ArtifactSaveResponse>>()
+    .mockReturnValueOnce(firstSave.promise)
+    .mockImplementation(async request => ({
+      status: 'saved',
+      document: { ...artifact, version: request.baseVersion + 1, content: request.content },
+    }))
+  const component = mount(ArtifactWorkspace, {
+    target,
+    props: {
+      artifacts: [artifact],
+      onread: async () => artifact,
+      onsave,
+      onrewrite: async () => ({ content: 'Rewritten draft' }),
+    },
+  })
+  try {
+    await vi.waitFor(() => expect(button(target, uiM('artifact_source'))).toBeDefined())
+    button(target, uiM('artifact_source')).click()
+    flushSync()
+    const source = target.querySelector('textarea')!
+    source.value = 'Edited draft'
+    source.dispatchEvent(new Event('input', { bubbles: true }))
+    flushSync()
+    source.setSelectionRange(0, 6)
+    source.dispatchEvent(new Event('select', { bubbles: true }))
+    flushSync()
+    button(target, uiM('artifact_rewrite_selection')).click()
+    await vi.waitFor(() => expect(button(target, uiM('artifact_apply'))).toBeDefined())
+    button(target, uiM('artifact_save')).click()
+    expect(onsave).toHaveBeenNthCalledWith(1, { id: 'report', baseVersion: 1, content: 'Edited draft' }, expect.any(AbortSignal))
+    button(target, uiM('artifact_apply')).click()
+    flushSync()
+    expect(source.value).toBe('Rewritten draft')
+
+    firstSave.resolve({
+      status: 'saved',
+      document: { ...artifact, version: 2, content: 'Edited draft' },
+    })
+    await vi.waitFor(() => expect(target.textContent).toContain(uiM('artifact_version', { version: 2 })))
+    expect(source.value).toBe('Rewritten draft')
+    expect(target.textContent).toContain(uiM('artifact_unsaved'))
+    button(target, uiM('artifact_save')).click()
+    expect(onsave).toHaveBeenNthCalledWith(2, { id: 'report', baseVersion: 2, content: 'Rewritten draft' }, expect.any(AbortSignal))
+    await vi.waitFor(() => expect(target.textContent).toContain(uiM('artifact_version', { version: 3 })))
+    expect(button(target, uiM('artifact_save')).disabled).toBe(true)
   }
   finally {
     await unmount(component)

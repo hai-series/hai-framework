@@ -247,8 +247,9 @@
     const current = new AbortController()
     action = current
     saving = true
+    const submittedDraft = draft
     try {
-      const result = await onsave({ id: loaded.id, baseVersion: loaded.version, content: draft }, current.signal)
+      const result = await onsave({ id: loaded.id, baseVersion: loaded.version, content: submittedDraft }, current.signal)
       if (current.signal.aborted)
         return
       if (result.status === 'conflict') {
@@ -256,7 +257,14 @@
         notifyWarning(uiM('artifact_conflict'))
       }
       else {
-        accept(result.document)
+        if (draft === submittedDraft && !structureChanged) {
+          accept(result.document)
+        }
+        else {
+          // 保留请求发出后产生的修改，只推进下次保存的基础版本。
+          loaded = result.document
+          conflict = undefined
+        }
         notifyInfo(uiM('artifact_saved'))
       }
     }
