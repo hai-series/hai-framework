@@ -121,7 +121,7 @@
 
   function loadMore() {
     if (current && source.search && mode && cursor && !loading) {
-      void load(source.search, {
+      void load(source.search.bind(source), {
         mode,
         query: query.trim(),
         cursor,
