@@ -256,35 +256,6 @@ input::-webkit-credentials-auto-fill-button {
   animation: hai-slide-out-right 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-/* 兼容旧动画类名 */
-.animate-slide-in-from-right {
-  animation: hai-slide-in-right 0.3s ease-out;
-}
-.animate-slide-out-to-right {
-  animation: hai-slide-out-right 0.3s ease-in forwards;
-}
-.animate-fade-in {
-  animation: hai-fade-in 0.2s ease-out;
-}
-.animate-fade-out {
-  animation: hai-fade-out 0.2s ease-in forwards;
-}
-.animate-in {
-  animation-duration: 0.3s;
-  animation-timing-function: ease-out;
-  animation-fill-mode: both;
-}
-.slide-in-from-right {
-  animation-name: hai-slide-in-right;
-}
-.slide-in-from-left {
-  animation-name: hai-slide-in-right;
-  animation-direction: reverse;
-}
-.fade-in {
-  animation-name: hai-fade-in;
-}
-
 /* 保留最终状态及动画结束事件，减少动态效果时不再播放装饰运动。 */
 @media (prefers-reduced-motion: reduce) {
   html {
