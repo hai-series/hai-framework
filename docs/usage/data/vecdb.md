@@ -47,7 +47,7 @@ Chroma 写入批次中同一索引 `i` 的数组元素属于同一份文档。�
 | `content` | `TEXT` | 是 | — | 文档正文。调用向量写入接口省略正文时写空字符串。 | `Example shipping policy` |
 | `metadata` | `JSONB` | 是 | `{}` | 应用自定的属性，省略时为空对象。 | `{"source":"policy.txt"}` |
 
-只有 `id` 不可空，`metadata` 的 SQL 默认值是 `{}`。默认向量索引为 HNSW，可选 IVFFlat（`lists` 默认 100）。`vector` 列注释保存 `hai.vecdb.metric=<metric>`。
+只有 `id` 不可空，`metadata` 的 SQL 默认值是 `{}`。默认向量索引为 HNSW，可选 IVFFlat（`lists` 默认 100）。`vector` 列注释保存 `hai.vecdb.metric=<metric>`。`collection.info()` 和 `vector.search()` 从该注释读取度量。缺少有效注释时返回 `CONFIG_ERROR`。
 
 pgvector 在同一事务内建表、建索引并保存度量。三项在提交时一同生效，建索引失败会回滚本次建表。新表位于当前 PostgreSQL schema。已有表按 `search_path` 的顺序解析。参见[连接配置和验证方法](../configuration/vecdb.md#pgvector-schema)。
 
@@ -82,7 +82,7 @@ pgvector 在同一事务内建表、建索引并保存度量。三项在提交�
 
 #### 将现有文档导入 LanceDB 集合
 
-集合需要固定长度的向量列和已保存的距离度量。缺少任一项时，查看集合信息、搜索和写入均返回 `CONFIG_ERROR`。通过 VecDB 写入还要求将非空 `id` 声明为主键并使用 Arrow JSON 元数据列。需要按元数据过滤时，也应使用 Arrow JSON 列。
+集合需要固定长度的向量列和已保存的距离度量。缺少任一项时，查看集合信息、搜索和写入均返回 `CONFIG_ERROR`。通过 VecDB 写入还要求将非空 `id` 声明为主键并使用 Arrow JSON 元数据列。向量搜索也要求 Arrow JSON 元数据列。即使省略 `filter`，缺少该列也会返回 `CONFIG_ERROR`。
 
 如果来源集合的结构不满足这些要求，可以把现有文档导入由 VecDB 创建的集合。
 
@@ -98,11 +98,11 @@ pgvector 在同一事务内建表、建索引并保存度量。三项在提交�
 | `ids` | `string[]` | — | 写入批次中的文档 ID。 | `["doc-42"]` |
 | `embeddings` | `number[][]` | — | 与 ID 顺序一致的向量，每条符合指定维度。 | `[[0.1,0.2,0.3]]` |
 | `documents` | `string[]` | `[""]` | 与 ID 对应的文档正文。默认每项为空字符串。 | `["Example shipping policy"]` |
-| `metadatas` | `object[]` | — | 业务属性及框架保留的 `_content` 和有效键清单。取值须能通过 Chroma SDK 校验。 | `[{"source":"policy.txt","_content":"Example shipping policy"}]` |
+| `metadatas` | `object[]` | — | 业务属性及框架保留的 `_content` 和有效键清单。取值须能通过 Chroma SDK 校验。 | `[{"source":"policy.txt","_content":"Example shipping policy","_hai_vecdb_metadata_keys":["v1","k:source","k:_content"]}]` |
 
-VecDB 创建的集合保留框架的维度和度量定义。通过 Chroma 原生接口创建的集合使用服务端的索引度量。其维度在收到第一批向量后由 Chroma 记录，删空文档不会清除这一维度。
+VecDB 创建的集合保留框架的维度和度量定义。`collection.info()` 和 `vector.search()` 读取 Chroma 原生索引定义中的度量。仅在集合元数据中给出度量时返回 `CONFIG_ERROR`。原生集合的维度在收到第一批向量后由 Chroma 记录，删空文档不会清除这一维度。
 
-VecDB 在 `upsert` 时通过同一次请求把有效业务键清单保存到保留字段 `_hai_vecdb_metadata_keys`。搜索结果和过滤条件以该清单为准。记录没有有效键清单时，VecDB 直接读取已有的业务元数据。Chroma 原生接口可能仍能读到已从框架视图移除的键值。参见[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)。
+VecDB 在 `insert` 和 `upsert` 时把有效业务键清单写入保留字段 `_hai_vecdb_metadata_keys`，与向量和正文在同一次请求提交。搜索结果和筛选使用该清单。记录缺少有效清单时，无筛选搜索仍可返回 ID、分数及可用的正文，结果不含其业务元数据。任何非空业务元数据筛选都不会命中这类记录。Chroma 原生接口可能仍能读到已从 VecDB 视图移除的键值。参见[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)。
 
 VecDB 不创建 Redis 键。查询直接读取对应向量库。分页时，应用需在同一个数据库和集合的下一次查询中传回上次的游标。
 

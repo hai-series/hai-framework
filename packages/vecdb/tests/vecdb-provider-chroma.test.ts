@@ -5,10 +5,12 @@
  * 以及嵌入式模式的本地服务拉起/关闭，不连接真实 Chroma 服务。
  */
 
+import type { CreateCollectionConfiguration } from 'chromadb'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
+import { HaiVecdbError } from '../src/vecdb-types.js'
 
 const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
@@ -20,7 +22,11 @@ interface FakeRecord {
 }
 
 const chroma = vi.hoisted(() => {
-  const store = new Map<string, { metadata: Record<string, unknown>, records: Map<string, FakeRecord> }>()
+  const store = new Map<string, {
+    configuration?: CreateCollectionConfiguration
+    metadata: Record<string, unknown>
+    records: Map<string, FakeRecord>
+  }>()
   const ctorMock = vi.fn()
   const heartbeatMock = vi.fn(async () => 1)
   return { store, ctorMock, heartbeatMock }
@@ -39,6 +45,7 @@ vi.mock('chromadb', () => {
       })
     }
     return {
+      configuration: col.configuration,
       metadata: col.metadata,
       add: write,
       upsert: write,
@@ -80,10 +87,15 @@ vi.mock('chromadb', () => {
       return chroma.store.size
     }
 
-    async createCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
+    async createCollection({ name, metadata, configuration }: {
+      name: string
+      configuration?: CreateCollectionConfiguration
+      metadata?: Record<string, unknown>
+    }) {
       if (chroma.store.has(name))
         throw Object.assign(new Error('The resource already exists'), { name: 'ChromaUniqueError' })
       chroma.store.set(name, {
+        configuration,
         metadata: metadata ?? {},
         records: new Map(),
       })
@@ -252,6 +264,27 @@ describe('createChromaProvider', () => {
 
     const dup = await provider.collection.create('docs', { dimension: 3 })
     expect(dup.success).toBe(false)
+  })
+
+  it('集合只在应用元数据中声明度量时返回配置错误', async () => {
+    const provider = await connectDirect()
+    chroma.store.set('metadata-only-metric', {
+      metadata: { 'hai_dimension': 3, 'hnsw:space': 'cosine' },
+      records: new Map(),
+    })
+    try {
+      expect(await provider.collection.info('metadata-only-metric')).toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
+      expect(await provider.vector.search('metadata-only-metric', [1, 0, 0])).toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
+    }
+    finally {
+      await provider.close()
+    }
   })
 
   it('upsert 后可搜索并返回内容与元数据', async () => {

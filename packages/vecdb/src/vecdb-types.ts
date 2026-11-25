@@ -68,7 +68,7 @@ export interface VectorDocument {
   vector: number[]
   /** 文本内容（可选，用于存储原始文本） */
   content?: string
-  /** 元数据（可选）。Chroma 保留 `_hai_vecdb_metadata_keys` 字段供整条替换使用。 */
+  /** 元数据（可选）。Chroma 保留 `_hai_vecdb_metadata_keys` 字段，记录每次写入时有效的业务键。 */
   metadata?: Record<string, unknown>
 }
 

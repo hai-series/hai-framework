@@ -415,6 +415,8 @@ export function createLancedbProvider(): VecdbProvider {
         if (dimensionValidation) {
           return dimensionValidation
         }
+        if (!meta.inputSchema)
+          return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
 
         const topK = options?.topK ?? 10
         const minScore = options?.minScore ?? 0
@@ -424,8 +426,6 @@ export function createLancedbProvider(): VecdbProvider {
           : meta.metric).limit(topK)
 
         if (options?.filter !== undefined) {
-          if (!meta.inputSchema)
-            return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
           const predicate = buildMetadataPredicate(options.filter)
           if (!predicate.success)
             return predicate

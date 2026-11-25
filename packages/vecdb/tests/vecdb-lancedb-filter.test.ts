@@ -267,8 +267,8 @@ describe('lancedb metadata filter', () => {
     }
   })
 
-  it('旧 Utf8 metadata 表明确拒绝过滤，不猜测 JSON 内容或返回未过滤数据', async () => {
-    const database = path.join(directory, 'legacy')
+  it('有筛选和无筛选的向量搜索均拒绝 Utf8 元数据列', async () => {
+    const database = path.join(directory, 'utf8-metadata')
     const connection = await driver.connect(database)
     const table = await connection.createTable('docs', driver.makeArrowTable([
       {
@@ -282,6 +282,10 @@ describe('lancedb metadata filter', () => {
     ])))
     try {
       expect((await vecdb.init({ type: 'lancedb', path: database })).success).toBe(true)
+      expect(await vecdb.vector.search('docs', [1, 0])).toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
       expect(await vecdb.vector.search('docs', [1, 0], {
         filter: { owner: 'alice' },
       })).toMatchObject({

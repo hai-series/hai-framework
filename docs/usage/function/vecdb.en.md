@@ -156,7 +156,9 @@ A collection fixes the vector dimension and metric. Dropping it removes all its 
 
 When instances race to create the same collection in Chroma, pgvector, or Qdrant, a call that finds it already created returns `COLLECTION_ALREADY_EXISTS`. Before using a shared collection created by another instance, check that its dimension and metric match your application. Dropping a missing Qdrant collection returns `COLLECTION_NOT_FOUND`.
 
-For a collection created through native Chroma that has never received a vector, `vecdb.collection.info()` returns a `dimension` of `0`. The first write determines the dimension. Chroma retains it even if all records are later deleted. The metric comes from the server's index configuration. Supply `options.dimension` when creating a collection through VecDB.
+For a collection created through native Chroma that has never received a vector, `vecdb.collection.info()` returns a `dimension` of `0`. The first write determines the dimension. Chroma retains it even if all records are later deleted. The metric comes from Chroma’s native index definition. Collection information and vector search return `CONFIG_ERROR` if it is declared only in collection metadata. Supply `options.dimension` when creating a collection through VecDB.
+
+pgvector reads `hai.vecdb.metric=<metric>` from the `vector` column comment. Without a valid comment, `collection.info()` and `vector.search()` return `CONFIG_ERROR`. [pgvector storage layout](../data/vecdb.en.md#pgvector)
 
 #### Scenario: Prepare and remove collections
 
@@ -233,7 +235,7 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 
 `topK` caps the number of results ranked by similarity. `minScore` is an inclusive score threshold from 0 to 1. Write `metadata: { source: 'handbook' }`, then search with `filter: { source: 'handbook' }`. VecDB matches the [corresponding stored fields](../data/vecdb.en.md#document-field-mapping) on each backend.
 
-For portable equality filters, use top-level string fields. When you supply several fields, all must match. Comparisons involving numbers, `null`, nested fields, and operators depend on the backend. LanceDB uses typed equality for strings, finite numbers, booleans, and `null`. A missing field cannot match `null`, and unsupported values yield `CONFIG_ERROR`.
+For portable equality filters, use top-level string fields. When you supply several fields, all must match. Comparisons involving numbers, `null`, nested fields, and operators depend on the backend. LanceDB uses typed equality for strings, finite numbers, booleans, and `null`. A missing field cannot match `null`, and unsupported values yield `CONFIG_ERROR`. LanceDB search requires an Arrow JSON metadata column even without a filter. If the column is missing, search returns `CONFIG_ERROR`.
 
 ##### Duplicate document IDs
 
@@ -254,7 +256,9 @@ To build a LanceDB collection from existing documents, see [how to import them](
 
 ##### Chroma metadata replacement
 
-The example below writes `doc-1` with `{ legacyTag: 'draft' }`, then upserts the same ID with `{ source: 'handbook' }`. On Chroma, VecDB search returns only the new application metadata. The filter `{ legacyTag: 'draft' }` no longer matches that document. The same `upsert` submits the active metadata keys, vector, and text. For records without a valid metadata key list, VecDB reads the application metadata as stored. Direct reads from Chroma may still show removed fields. VecDB reserves `_hai_vecdb_metadata_keys` and rejects `insert` or `upsert` calls that supply this key. See the [Chroma connection example](../configuration/vecdb.en.md#chroma-server) for server requirements.
+The example below inserts `doc-1` with `{ status: 'draft' }`. Filtering by `status` finds the document. After an `upsert` with the same ID and `{ source: 'handbook' }`, search returns only `source`, and filtering by `{ status: 'draft' }` no longer matches. Direct Chroma reads may still show the omitted field. VecDB submits the active-key list, vector, and text together in both `insert` and `upsert`. Applications that supply the reserved `_hai_vecdb_metadata_keys` field receive an error.
+
+A Chroma record without a valid list can still match an unfiltered vector search. The result includes the ID, score, and available text, with application metadata omitted. Any nonempty application metadata filter excludes such records. [Chroma connection settings](../configuration/vecdb.en.md#chroma-server)
 
 <a id="qdrant-document-visibility"></a>
 
@@ -277,9 +281,14 @@ const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, 
 if (!createResult.success)
   return createResult
 // Insert doc-1, its three-dimensional vector, the text Install, and a draft tag into demo-docs. Success has no data. Return the failed result on failure.
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { status: 'draft' } }])
 if (!insertResult.success)
   return insertResult
+// Search by draft status to verify the insert. Success includes doc-1. Return the failed result on failure.
+const draftMatches = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
+if (!draftMatches.success)
+  return draftMatches
+draftMatches.data.map(item => item.id) // ['doc-1']
 // Count documents in demo-docs after insertion. Success returns 1. Return the failed result on failure.
 const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
@@ -295,8 +304,8 @@ if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // The first result is doc-1 with text Install v2, metadata { source: 'handbook' }, and a score of about 1.
-// Filter by the removed legacyTag=draft. Success returns []. Return the failed result on failure.
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
+// Filter by the removed status=draft. Success returns []. Return the failed result on failure.
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []

@@ -45,7 +45,7 @@ Chroma の書き込みバッチでは、同じインデックス `i` の配列�
 | `content` | `TEXT` | 可 | — | 文書本文。書き込み API で省略した場合は空文字列を保存します。 | `Example shipping policy` |
 | `metadata` | `JSONB` | 可 | `{}` | アプリ独自の属性。省略時は空オブジェクト。 | `{"source":"policy.txt"}` |
 
-`id` だけが NULL 不可で、`metadata` の SQL 既定値は `{}` です。既定のベクトル索引は HNSW です。IVFFlat を選ぶ場合、`lists` の既定値は 100 です。`vector` 列のコメントに `hai.vecdb.metric=<metric>` を記録します。
+`id` だけが NULL 不可で、`metadata` の SQL 既定値は `{}` です。既定のベクトル索引は HNSW です。IVFFlat を選ぶ場合、`lists` の既定値は 100 です。`vector` 列のコメントに `hai.vecdb.metric=<metric>` を記録します。 `collection.info()` と `vector.search()` はこのコメントから距離尺度を読み取ります。有効なコメントがない場合は `CONFIG_ERROR` を返します。
 
 pgvector はテーブル作成、索引作成、距離尺度の記録を 1 つのトランザクションで行います。コミット時にまとめて反映し、索引作成に失敗した場合はテーブル作成もロールバックします。新しいテーブルは PostgreSQL の現在のスキーマに置かれます。既存のテーブル名は `search_path` の順に解決します。[接続の設定と確認方法](../configuration/vecdb.ja.md#pgvector-schema)を参照してください。
 
@@ -80,7 +80,7 @@ pgvector はテーブル作成、索引作成、距離尺度の記録を 1 つ�
 
 #### 既存の文書を LanceDB コレクションに取り込む
 
-コレクションには固定長ベクトル列と、保存された距離尺度が必要です。どちらかが欠けていると、コレクション情報の取得、検索、書き込みは `CONFIG_ERROR` を返します。VecDB での書き込みには、主キーとして宣言された NULL 不可の `id` と、Arrow JSON メタデータ列も必要です。メタデータで絞り込む場合も Arrow JSON 列を使います。
+コレクションには固定長ベクトル列と、保存された距離尺度が必要です。どちらかが欠けていると、コレクション情報の取得、検索、書き込みは `CONFIG_ERROR` を返します。VecDB での書き込みには、主キーとして宣言された NULL 不可の `id` と、Arrow JSON メタデータ列も必要です。ベクトル検索にも Arrow JSON のメタデータ列が必要です。列がなければ、`filter` を省略しても検索は `CONFIG_ERROR` を返します。
 
 取り込み元がこれらの要件を満たさない場合は、VecDB でコレクションを作成し、そこへ文書を取り込みます。
 
@@ -96,11 +96,11 @@ pgvector はテーブル作成、索引作成、距離尺度の記録を 1 つ�
 | `ids` | `string[]` | — | 書き込みバッチの文書 ID。 | `["doc-42"]` |
 | `embeddings` | `number[][]` | — | ID と同じ順序のベクトル。それぞれ次元を揃えます。 | `[[0.1,0.2,0.3]]` |
 | `documents` | `string[]` | `[""]` | ID に対応する文書本文。既定で各項目は空文字列。 | `["Example shipping policy"]` |
-| `metadatas` | `object[]` | — | アプリの属性、予約項目 `_content`、有効なキーの一覧。値は Chroma SDK の検証に従います。 | `[{"source":"policy.txt","_content":"Example shipping policy"}]` |
+| `metadatas` | `object[]` | — | アプリの属性、予約項目 `_content`、有効なキーの一覧。値は Chroma SDK の検証に従います。 | `[{"source":"policy.txt","_content":"Example shipping policy","_hai_vecdb_metadata_keys":["v1","k:source","k:_content"]}]` |
 
-VecDB で作成したコレクションにはフレームワークの次元と距離尺度の定義が保存されます。Chroma のネイティブ API で作成されたコレクションはサーバーの索引に設定されている距離尺度を使います。最初にベクトルが書き込まれたときに Chroma が次元を記録し、レコードがすべて削除されても保持します。
+VecDB で作成したコレクションにはフレームワークの次元と距離尺度の定義が保存されます。`collection.info()` と `vector.search()` は Chroma のネイティブインデックス定義に記録された距離尺度を使います。コレクションのメタデータだけに距離尺度がある場合は `CONFIG_ERROR` を返します。最初にベクトルが書き込まれたときに Chroma が次元を記録し、レコードがすべて削除されても保持します。
 
-VecDB は同じ `upsert` リクエストで、有効なキーの一覧を予約項目 `_hai_vecdb_metadata_keys` に保存します。検索結果と絞り込みはこの一覧を参照します。有効なキーの一覧がないレコードでは、保存されている業務メタデータをそのまま読み取ります。Chroma から直接読み取ると、VecDB で削除したキーの値が残って見えることがあります。[メタデータの置き換え例](../function/vecdb.ja.md#chroma-metadata-replacement)を参照してください。
+VecDB は `insert` と `upsert` のどちらでも、有効な業務メタデータキーの一覧を予約項目 `_hai_vecdb_metadata_keys` に保存します。ベクトルと本文も同じリクエストで送信します。検索結果と絞り込みはこの一覧を使います。有効な一覧がないレコードも、絞り込みを付けなければベクトル検索の対象になります。ID、スコア、取得可能な本文は返りますが、業務メタデータは結果に含まれません。空でない業務メタデータの絞り込みは、そのレコードに一致しません。Chroma から直接読み取ると、VecDB で省略した属性が残っている場合があります。[メタデータの置き換え例](../function/vecdb.ja.md#chroma-metadata-replacement)
 
 VecDB は Redis キーを作りません。検索は接続先から読みます。次のページを読むときは同じ保存先とコレクションに前回のカーソルを渡します。
 

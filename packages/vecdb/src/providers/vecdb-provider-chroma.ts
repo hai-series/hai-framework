@@ -12,7 +12,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ChromaClient, ChromaClientArgs, Collection, EmbeddingFunction, Metadata, Where } from 'chromadb'
+import type { ChromaClient, ChromaClientArgs, Collection, EmbeddingFunction, EmbeddingFunctionSpace, Metadata, Where } from 'chromadb'
 import type { ChildProcess } from 'node:child_process'
 import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
@@ -32,7 +32,6 @@ import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance }
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'chroma' })
 const DIMENSION_METADATA_KEY = 'hai_dimension'
-const SPACE_METADATA_KEY = 'hnsw:space'
 // Chroma 的原生 schema 使用此保留键表示集合的密集向量索引。
 const EMBEDDING_SCHEMA_KEY = '#embedding'
 const HEARTBEAT_POLL_INTERVAL = 300
@@ -75,8 +74,8 @@ const NOOP_EMBEDDING_FUNCTION = {
   },
 } satisfies EmbeddingFunction
 
-/** DistanceMetric → Chroma hnsw:space */
-function toChromaSpace(metric: DistanceMetric): string {
+/** DistanceMetric → Chroma 原生距离空间 */
+function toChromaSpace(metric: DistanceMetric): EmbeddingFunctionSpace {
   if (metric === 'euclidean')
     return 'l2'
   if (metric === 'dot')
@@ -84,7 +83,7 @@ function toChromaSpace(metric: DistanceMetric): string {
   return 'cosine'
 }
 
-/** Chroma hnsw:space → DistanceMetric */
+/** Chroma 原生距离空间 → DistanceMetric */
 function fromChromaSpace(space: unknown): DistanceMetric | undefined {
   if (space === 'l2')
     return 'euclidean'
@@ -95,14 +94,13 @@ function fromChromaSpace(space: unknown): DistanceMetric | undefined {
     : undefined
 }
 
-/** 优先读取实际密集索引，保留旧服务只在 metadata 声明距离空间的兼容路径。 */
+/** 从原生 schema 或集合配置读取密集索引的距离空间。 */
 function readMetric(collection: Collection): HaiResult<DistanceMetric> {
   const schema = collection.schema
   const space = schema?.keys[EMBEDDING_SCHEMA_KEY]?.floatList?.vectorIndex?.config.space
     ?? collection.configuration?.hnsw?.space
     ?? collection.configuration?.spann?.space
     ?? schema?.defaults.floatList?.vectorIndex?.config.space
-    ?? collection.metadata?.[SPACE_METADATA_KEY]
   const metric = fromChromaSpace(space)
   return metric === undefined
     ? invalidNativeCollectionDefinition(collection.name)
@@ -129,7 +127,7 @@ function distanceToScore(distance: number, metric: DistanceMetric): number {
     : distance, metric)
 }
 
-/** Chroma 原地合并元数据。只有同次写入声明为有效的字段才参与过滤，旧记录仍用原生过滤。 */
+/** Chroma 原地合并元数据；以清单为准判断字段是否存在。 */
 function guardMetadataWhere(where: Where): Where {
   const entries: Array<[string, unknown]> = Object.entries(where)
   if (entries.length !== 1)
@@ -152,14 +150,7 @@ function guardMetadataWhere(where: Where): Where {
       $or: [
         where,
         {
-          $and: [
-            {
-              [ACTIVE_METADATA_KEYS]: { $contains: ACTIVE_METADATA_FORMAT },
-            },
-            {
-              [ACTIVE_METADATA_KEYS]: { $not_contains: marker },
-            },
-          ],
+          [ACTIVE_METADATA_KEYS]: { $not_contains: marker },
         },
       ],
     }
@@ -168,14 +159,7 @@ function guardMetadataWhere(where: Where): Where {
     $and: [
       where,
       {
-        $or: [
-          {
-            [ACTIVE_METADATA_KEYS]: { $not_contains: ACTIVE_METADATA_FORMAT },
-          },
-          {
-            [ACTIVE_METADATA_KEYS]: { $contains: marker },
-          },
-        ],
+        [ACTIVE_METADATA_KEYS]: { $contains: marker },
       },
     ],
   }
@@ -193,8 +177,15 @@ function buildWhere(filter?: Record<string, unknown>): Where | undefined {
     : {
         $and: entries.map(([key, value]) => ({ [key]: value })),
       }
-  // query 仍交给 SDK 校验原始谓词及新增的有效键约束。
-  return guardMetadataWhere(where as Where)
+  // 清单格式约束覆盖所有分支，且与业务谓词一同在服务端筛选。SDK 校验谓词。
+  return {
+    $and: [
+      {
+        [ACTIVE_METADATA_KEYS]: { $contains: ACTIVE_METADATA_FORMAT },
+      },
+      guardMetadataWhere(where as Where),
+    ],
+  }
 }
 
 /**
@@ -460,10 +451,12 @@ export function createChromaProvider(): VecdbProvider {
       try {
         await client!.createCollection({
           name,
-          metadata: {
-            [SPACE_METADATA_KEY]: toChromaSpace(metric),
-            [DIMENSION_METADATA_KEY]: options.dimension,
+          configuration: {
+            hnsw: {
+              space: toChromaSpace(metric),
+            },
           },
+          metadata: { [DIMENSION_METADATA_KEY]: options.dimension },
           embeddingFunction: NOOP_EMBEDDING_FUNCTION,
         })
       }
@@ -534,7 +527,7 @@ export function createChromaProvider(): VecdbProvider {
 
   // ─── 向量操作适配器 ───
 
-  function toWriteParams(documents: VectorDocument[], operation: 'insert' | 'upsert'): Parameters<Collection['add']>[0] {
+  function toWriteParams(documents: VectorDocument[]): Parameters<Collection['add']>[0] {
     return {
       ids: documents.map(doc => doc.id),
       embeddings: documents.map(doc => doc.vector),
@@ -548,13 +541,11 @@ export function createChromaProvider(): VecdbProvider {
             params: { key: ACTIVE_METADATA_KEYS },
           }))
         }
-        if (operation === 'upsert') {
-          // SDK 省略 null/undefined。与字段在同一次原生 upsert 提交，读者只看到完整的最新版本。
-          const keys = Object.entries(metadata)
-            .filter(([, value]) => value !== null && value !== undefined)
-            .map(([key]) => `k:${key}`)
-          metadata[ACTIVE_METADATA_KEYS] = [ACTIVE_METADATA_FORMAT, ...keys]
-        }
+        // SDK 省略 null/undefined。清单与字段一并提交，读者只看到完整的一次写入。
+        const keys = Object.entries(metadata)
+          .filter(([, value]) => value !== null && value !== undefined)
+          .map(([key]) => `k:${key}`)
+        metadata[ACTIVE_METADATA_KEYS] = [ACTIVE_METADATA_FORMAT, ...keys]
         return metadata as Metadata
       }),
     }
@@ -572,7 +563,7 @@ export function createChromaProvider(): VecdbProvider {
         if (validation)
           return validation
       }
-      await target.add(toWriteParams(documents, 'insert'))
+      await target.add(toWriteParams(documents))
       logger.info('Vectors inserted', { collection, count: documents.length })
       return core.ok(undefined)
     },
@@ -588,7 +579,7 @@ export function createChromaProvider(): VecdbProvider {
         if (validation)
           return validation
       }
-      await target.upsert(toWriteParams(documents, 'upsert'))
+      await target.upsert(toWriteParams(documents))
       logger.info('Vectors upserted', { collection, count: documents.length })
       return core.ok(undefined)
     },
@@ -639,14 +630,14 @@ export function createChromaProvider(): VecdbProvider {
           : undefined
         const visible = active?.has(ACTIVE_METADATA_FORMAT)
           ? Object.fromEntries(Object.entries(rest).filter(([key]) => active.has(`k:${key}`)))
-          : rest
+          : undefined
         results.push({
           id: ids[i],
           score,
           content: typeof _content === 'string' && _content.length > 0
             ? _content
             : undefined,
-          metadata: Object.keys(visible).length > 0
+          metadata: visible && Object.keys(visible).length > 0
             ? visible
             : undefined,
         })

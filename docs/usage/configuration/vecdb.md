@@ -97,11 +97,13 @@ pgvector 在 PostgreSQL 的当前 schema 中创建集合表。查询、写入和
 
 `tablePrefix` 是字面表名前缀。下划线和百分号按普通字符处理。拼接后的表名按数据库编码计算字节数，超过服务器的 `max_identifier_length`（通常为 63 字节）时返回 `CONFIG_ERROR`。参见 [PostgreSQL 标识符](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)。
 
+用 `vecdb.collection.info()` 确认已有集合的度量。pgvector 从 `vector` 列的 `hai.vecdb.metric=<metric>` 注释读取度量。缺少有效注释时，集合信息与向量搜索返回 `CONFIG_ERROR`。
+
 <a id="chroma-server"></a>
 
 ### 连接独立的 Chroma 服务
 
-此例连接独立运行的 Chroma 服务。框架通过 `upsert` 保存有效元数据键清单。服务需支持数组元数据，以及 `$contains` 和 `$not_contains` 过滤。已用 Chroma 1.5.5 验证。连接后，按[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)写入、更新并检索一条测试文档，确认移除的键无法用旧值命中。
+此例连接独立运行的 Chroma 服务。`insert` 和 `upsert` 都在写入文档时保存有效元数据键清单。集合信息和搜索使用 Chroma 原生索引定义中的度量。仅在集合元数据中声明度量时，两者返回 `CONFIG_ERROR`。服务需支持数组元数据，以及 `$contains` 和 `$not_contains` 过滤。已用 Chroma 1.5.5 验证。连接后，按[元数据替换示例](../function/vecdb.md#chroma-metadata-replacement)写入、更新并检索一条测试文档，确认移除的键无法用旧值命中。
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma

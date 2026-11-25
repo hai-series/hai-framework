@@ -46,7 +46,7 @@ describe('reldb operation log', () => {
       const config = {
         type: 'sqlite' as const,
         database: ':memory:',
-        operationLog: { read: true, level: 'info' },
+        operationLog: { read: true },
       }
       expect((await reldb.init(config)).success).toBe(true)
       const secret = 'private-sql-log-test-value'

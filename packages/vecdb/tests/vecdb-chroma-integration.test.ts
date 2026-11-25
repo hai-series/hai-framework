@@ -268,7 +268,7 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
     }
   }, 30_000)
 
-  it('upsert 替换元数据，旧字段在 topK 前失效且早期记录仍可筛选', async () => {
+  it('upsert 替换元数据，已移除字段在 topK 前失效且未更新的记录仍可筛选', async () => {
     const name = 'metadata-replacement'
     const query = [1, 0]
     try {
@@ -286,7 +286,7 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
           },
         },
         {
-          id: 'legacy',
+          id: 'unchanged',
           vector: [0, 1],
           metadata: {
             status: 'retired',
@@ -313,10 +313,10 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
       }
       expect(await search()).toMatchObject({ id: 'updated', content: 'current' })
       expect((await search())?.metadata).toEqual({ revision: 2 })
-      expect((await search({ status: 'retired' }))?.id).toBe('legacy')
+      expect((await search({ status: 'retired' }))?.id).toBe('unchanged')
       expect((await search({
         topics: { $contains: 'guide' },
-      }))?.id).toBe('legacy')
+      }))?.id).toBe('unchanged')
       expect((await search({
         $or: [
           {

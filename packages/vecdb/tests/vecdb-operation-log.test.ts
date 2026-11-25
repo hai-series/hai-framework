@@ -49,7 +49,7 @@ describe('vecdb operation log', () => {
     const config = {
       type: 'qdrant' as const,
       url: 'https://qdrant.example.test:6333',
-      operationLog: { read: true, level: 'info' },
+      operationLog: { read: true },
     }
     try {
       core.logger.setLevel('warn')

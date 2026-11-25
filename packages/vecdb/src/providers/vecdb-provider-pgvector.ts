@@ -163,27 +163,19 @@ export function createPgvectorProvider(): VecdbProvider {
       : collectionNotFound(name)
   }
 
-  /** 集合算法保存在向量列注释；旧集合从实际索引恢复，不受连接默认值变化影响。 */
+  /** 仅使用向量列的持久化距离度量，缺少有效框架注释时拒绝查询。 */
   async function getCollectionMetric(identifier: string): Promise<HaiResult<DistanceMetric>> {
-    const result = await pool!.query<{ definition: string | null, operator: string | null }>(`
-      SELECT pg_catalog.col_description(a.attrelid, a.attnum) AS definition,
-        (SELECT opc.opcname FROM pg_catalog.pg_index i JOIN pg_catalog.pg_opclass opc ON opc.oid = ANY(i.indclass)
-         WHERE i.indrelid = a.attrelid AND opc.opcname IN ('vector_cosine_ops', 'vector_l2_ops', 'vector_ip_ops') LIMIT 1) AS operator
+    const result = await pool!.query<{ definition: string | null }>(`
+      SELECT pg_catalog.col_description(a.attrelid, a.attnum) AS definition
       FROM pg_catalog.pg_attribute a WHERE a.attrelid = pg_catalog.to_regclass($1) AND a.attname = 'vector' AND NOT a.attisdropped
     `, [identifier])
-    const row = result.rows[0]
-    const stored = typeof row?.definition === 'string' && row.definition.startsWith('hai.vecdb.metric=')
-      ? row.definition.slice('hai.vecdb.metric='.length)
+    const definition = result.rows[0]?.definition
+    const prefix = 'hai.vecdb.metric='
+    const metric = definition?.startsWith(prefix)
+      ? definition.slice(prefix.length)
       : undefined
-    const inherited = row?.operator === 'vector_cosine_ops'
-      ? 'cosine'
-      : row?.operator === 'vector_l2_ops'
-        ? 'euclidean'
-        : row?.operator === 'vector_ip_ops'
-          ? 'dot'
-          : undefined
-    const metric = stored ?? inherited
     const parsed = DistanceMetricSchema.safeParse(metric)
+    // Schema 的默认值只适用于配置，不能替代缺失的持久定义。
     if (metric === undefined || !parsed.success)
       return core.err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_collectionMetricMissing'))
     return core.ok(parsed.data)

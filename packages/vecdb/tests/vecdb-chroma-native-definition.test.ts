@@ -111,6 +111,119 @@ it('reads a native default L2 collection before write, after write and after del
   })
 })
 
+it.each([
+  ['cosine', 'cosine'],
+  ['euclidean', 'l2'],
+  ['dot', 'ip'],
+] as const)('persists the %s metric in the native HNSW configuration', async (metric, space) => {
+  const name = `native-configuration-${metric}`
+  expect(await vecdb.collection.create(name, { dimension: 2, metric })).toEqual({ success: true })
+  const collection = await chroma.getCollection({ name, embeddingFunction: null })
+  expect(collection.configuration?.hnsw?.space).toBe(space)
+  expect(collection.metadata ?? {}).not.toHaveProperty('hnsw:space')
+  expect(await vecdb.collection.info(name)).toMatchObject({
+    success: true,
+    data: { dimension: 2, metric, count: 0 },
+  })
+})
+
+it('keeps unmarked vectors visible and excludes them from metadata filters before selecting topK', async () => {
+  const name = 'native-metadata-visibility'
+  const collection = await chroma.createCollection({ name, embeddingFunction: null })
+  await collection.add({
+    ids: ['native'],
+    embeddings: [
+      [1, 0],
+    ],
+    metadatas: [
+      { _content: 'existing body', status: 'native' },
+    ],
+  })
+  expect(await vecdb.vector.insert(name, [
+    {
+      id: 'managed',
+      vector: [0, 1],
+      metadata: { status: 'managed' },
+    },
+  ])).toEqual({ success: true })
+
+  expect(await vecdb.vector.search(name, [1, 0], { topK: 1, filter: {} })).toEqual({
+    success: true,
+    data: [
+      {
+        id: 'native',
+        score: 1,
+        content: 'existing body',
+        metadata: undefined,
+      },
+    ],
+  })
+  expect(await vecdb.vector.search(name, [1, 0], {
+    topK: 1,
+    filter: { status: 'native' },
+  })).toEqual({ success: true, data: [] })
+  expect(await vecdb.vector.search(name, [1, 0], {
+    topK: 1,
+    filter: {
+      status: { $ne: 'unmatched' },
+    },
+  })).toMatchObject({
+    success: true,
+    data: [
+      {
+        id: 'managed',
+        metadata: { status: 'managed' },
+      },
+    ],
+  })
+  expect(await vecdb.vector.search(name, [1, 0], {
+    filter: {
+      $or: [
+        {
+          status: { $ne: 'native' },
+        },
+        {
+          status: { $invalid: 'managed' },
+        },
+      ],
+    },
+  })).toMatchObject({
+    success: false,
+    error: { code: HaiVecdbError.QUERY_FAILED.code },
+  })
+
+  expect(await vecdb.vector.upsert(name, [
+    {
+      id: 'native',
+      vector: [1, 0],
+      content: 'existing body',
+      metadata: { source: 'imported' },
+    },
+  ])).toEqual({ success: true })
+  expect(await vecdb.vector.search(name, [1, 0], {
+    topK: 1,
+    filter: { source: 'imported' },
+  })).toMatchObject({
+    success: true,
+    data: [
+      {
+        id: 'native',
+        content: 'existing body',
+        metadata: { source: 'imported' },
+      },
+    ],
+  })
+  const persisted = await collection.get({
+    ids: ['native'],
+    include: ['metadatas'],
+  })
+  expect(persisted.metadatas[0]).toMatchObject({ status: 'native' })
+  expect(await vecdb.vector.search(name, [1, 0], {
+    topK: 1,
+    filter: { status: 'native' },
+  })).toEqual({ success: true, data: [] })
+})
+
 it('uses a native schema inner product space when normalizing scores', async () => {
   const name = 'native-inner-product'
   const schema = new Schema().createIndex(new VectorIndexConfig({ space: 'ip' }))

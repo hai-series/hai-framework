@@ -14,7 +14,7 @@
   "vecdb_invalidPgvectorIdentifier": "pgvector 表名（含前缀）必须是有效标识符，长度不得超过 {limit} 字节",
   "vecdb_atomicUpsertUnavailable": "LanceDB 集合或驱动缺少安全的原子 merge 主键能力，未执行写入，请重建集合或使用受支持的驱动",
   "vecdb_duplicateDocumentIds": "同一批向量文档的 ID 不得重复，未执行写入",
-  "vecdb_jsonMetadataRequired": "LanceDB 集合须使用原生 JSON 元数据，旧字符串元数据集合需重建后才能写入或过滤",
+  "vecdb_jsonMetadataRequired": "LanceDB 集合的写入和搜索要求 metadata 列使用 Arrow JSON",
   "vecdb_invalidMetadataFilter": "LanceDB 元数据过滤须为普通对象，值仅支持顶层字符串、有限数值、布尔或 null；不支持嵌套对象、数组和 undefined",
   "vecdb_dimensionMismatch": "向量维度不匹配: 期望 {expected}，实际 {actual}",
   "vecdb_insertFailed": "插入向量失败: {error}",
@@ -32,5 +32,5 @@
   "vecdb_chromaEndpointInvalid": "Chroma 仅支持 HTTP(S) 根端点，不得包含凭据、路径前缀、query 或 fragment",
   "vecdb_chromaTokenInvalid": "Chroma Bearer token 仅支持无空白的可打印 ASCII 字符",
   "vecdb_chromaReservedMetadataKey": "Chroma 文档元数据不能使用保留字段 {key}",
-  "vecdb_collectionMetricMissing": "集合缺少有效距离算法元数据，请核对并恢复向量索引或列注释"
+  "vecdb_collectionMetricMissing": "pgvector 集合的 vector 列缺少有效的 hai.vecdb.metric 注释"
 }

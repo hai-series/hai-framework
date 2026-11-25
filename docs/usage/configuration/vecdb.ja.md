@@ -72,11 +72,13 @@ pgvector は PostgreSQL の現在のスキーマにコレクションのテー�
 
 `tablePrefix` はテーブル名の接頭辞です。アンダースコアとパーセント記号は通常の文字として扱います。連結したテーブル名は データベースの文字エンコーディングでバイト数を検証します。サーバー設定の `max_identifier_length`（通常は 63 バイト）を超えると `CONFIG_ERROR` が返ります。[PostgreSQL の識別子](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)を参照してください。
 
+既存のコレクションの距離尺度は `vecdb.collection.info()` で確認します。pgvector は `vector` 列のコメント `hai.vecdb.metric=<metric>` から距離尺度を読み取ります。有効なコメントがない場合、コレクション情報の取得とベクトル検索は `CONFIG_ERROR` を返します。
+
 <a id="chroma-server"></a>
 
 ### Chroma サーバーへ接続する
 
-別途稼働する Chroma サービスに接続します。VecDB は `upsert` で有効なメタデータのキーを保存します。サーバーには配列型のメタデータと、`$contains` および `$not_contains` による絞り込みが必要です。Chroma 1.5.5 で検証済みです。接続後、[メタデータの置き換え例](../function/vecdb.ja.md#chroma-metadata-replacement)に沿ってテスト用文書を書き込み、更新して検索します。削除したキーを古い値で絞り込んでも一致しないことを確認します。
+別途稼働する Chroma サービスに接続します。`insert` と `upsert` はどちらも文書と一緒に有効なメタデータキーを保存します。コレクション情報の取得と検索は、Chroma のネイティブインデックス定義に記録された距離尺度を使います。コレクションのメタデータだけに距離尺度がある場合、どちらも `CONFIG_ERROR` を返します。サーバーには配列型のメタデータと、`$contains` および `$not_contains` による絞り込みが必要です。Chroma 1.5.5 で検証済みです。接続後、[メタデータの置き換え例](../function/vecdb.ja.md#chroma-metadata-replacement)に沿ってテスト用文書を書き込み、更新して検索します。削除したキーを古い値で絞り込んでも一致しないことを確認します。
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma

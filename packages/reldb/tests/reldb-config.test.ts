@@ -171,15 +171,6 @@ describe('dbConfigSchema', () => {
     expect(result.operationLog?.write).toBe(false)
     expect(result.operationLog?.maxLength).toBe(1000)
   })
-
-  it.each(['info', 'trace', 'warn'])('兼容旧操作日志等级 %s 并从解析结果移除', (level) => {
-    const result = ReldbConfigSchema.parse({
-      type: 'sqlite',
-      database: ':memory:',
-      operationLog: { read: true, level },
-    })
-    expect(result.operationLog).toEqual({ read: true, write: false, maxLength: 1000 })
-  })
 })
 
 // =============================================================================

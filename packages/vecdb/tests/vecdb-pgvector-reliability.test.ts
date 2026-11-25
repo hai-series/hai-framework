@@ -58,6 +58,51 @@ it('rolls back failed index creation and publishes each collection exactly once'
   })
 })
 
+it('requires a valid persisted pgvector metric even when a distance index exists', async () => {
+  expect(await vecdb.init({
+    ...lease,
+    type: 'pgvector',
+    tablePrefix: 'metric_probe_',
+    metric: 'dot',
+  })).toEqual({ success: true })
+  expect(await vecdb.collection.create('docs', { dimension: 2, metric: 'euclidean' })).toEqual({ success: true })
+  expect(await vecdb.vector.insert('docs', [
+    {
+      id: 'first',
+      vector: [1, 0],
+    },
+  ])).toEqual({ success: true })
+  expect(await vecdb.collection.info('docs')).toMatchObject({
+    success: true,
+    data: { metric: 'euclidean' },
+  })
+  expect(await vecdb.vector.search('docs', [1, 0])).toMatchObject({
+    success: true,
+    data: [
+      { id: 'first' },
+    ],
+  })
+
+  const indexes = await observer.query<{ count: number }>(`
+    SELECT count(*)::int AS count FROM pg_indexes
+    WHERE schemaname = 'public' AND tablename = 'metric_probe_docs' AND indexdef LIKE '%vector_l2_ops%'
+  `)
+  expect(indexes.rows[0].count).toBe(1)
+  const invalid = {
+    success: false,
+    error: { code: HaiVecdbError.CONFIG_ERROR.code },
+  }
+  for (const statement of [
+    'COMMENT ON COLUMN metric_probe_docs.vector IS NULL',
+    'COMMENT ON COLUMN metric_probe_docs.vector IS \'an unrelated column comment\'',
+    'COMMENT ON COLUMN metric_probe_docs.vector IS \'hai.vecdb.metric=invalid\'',
+  ]) {
+    await observer.query(statement)
+    expect(await vecdb.collection.info('docs')).toMatchObject(invalid)
+    expect(await vecdb.vector.search('docs', [1, 0])).toMatchObject(invalid)
+  }
+})
+
 it('resolves physical tables along search_path and interprets the prefix literally', async () => {
   expect(await vecdb.init({ ...lease, type: 'pgvector' })).toEqual({ success: true })
   expect(await vecdb.collection.create('legacy', { dimension: 2 })).toEqual({ success: true })

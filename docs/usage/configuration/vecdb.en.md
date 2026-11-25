@@ -72,11 +72,13 @@ pgvector creates collection tables in the current PostgreSQL schema. Reads, writ
 
 `tablePrefix` is a literal table-name prefix. Underscores and percent signs are ordinary characters. The combined table name is measured in bytes using the database encoding. A name longer than the server setting `max_identifier_length` (usually 63 bytes) returns `CONFIG_ERROR`. See [PostgreSQL identifiers](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS).
 
+Use `vecdb.collection.info()` to verify the metric on an existing collection. pgvector reads the `hai.vecdb.metric=<metric>` comment on the `vector` column. Without a valid comment, collection information and vector search return `CONFIG_ERROR`.
+
 <a id="chroma-server"></a>
 
 ### Connect to a Chroma server
 
-This connects to a separately deployed Chroma service. VecDB stores the active metadata keys on `upsert`. The server needs array-valued metadata and both `$contains` and `$not_contains` filters. This behavior was verified with Chroma 1.5.5. After connecting, follow the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement) to write, update, and search for a test document. Confirm that filtering on a removed key with its old value yields no match.
+This connects to a separately deployed Chroma service. Both `insert` and `upsert` store the active metadata keys with the document. Collection information and search use the metric in Chroma’s native index definition. If the metric is declared only in collection metadata, both operations return `CONFIG_ERROR`. The server needs array-valued metadata and both `$contains` and `$not_contains` filters. This behavior was verified with Chroma 1.5.5. After connecting, follow the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement) to write, update, and search for a test document. Confirm that filtering on a removed key with its old value yields no match.
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: chroma

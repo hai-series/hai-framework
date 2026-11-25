@@ -43,7 +43,7 @@ Set the name and dimension when you create a collection. New collections use cos
 | `content` | `TEXT` | Yes | — | Document text. The vector writer supplies an empty string if omitted. | `Example shipping policy` |
 | `metadata` | `JSONB` | Yes | `{}` | Application attributes, empty object if omitted. | `{"source":"policy.txt"}` |
 
-Only `id` is non-nullable. The SQL default for `metadata` is `{}`. HNSW is the default vector index. IVFFlat is available with `lists` defaulting to 100. The `vector` column comment records `hai.vecdb.metric=<metric>`.
+Only `id` is non-nullable. The SQL default for `metadata` is `{}`. HNSW is the default vector index. IVFFlat is available with `lists` defaulting to 100. The `vector` column comment records `hai.vecdb.metric=<metric>`. `collection.info()` and `vector.search()` read the metric from this comment. A missing or invalid comment returns `CONFIG_ERROR`.
 
 pgvector creates the table, builds the index, and records the metric in one transaction. They take effect together when the transaction commits. An index creation failure rolls back the table creation. New tables live in the current PostgreSQL schema. Existing names resolve in `search_path` order. See [connection configuration and verification](../configuration/vecdb.en.md#pgvector-schema).
 
@@ -78,7 +78,7 @@ The vector column fixes the dimension. Arrow schema metadata records `hai.vecdb.
 
 #### Import existing documents into a LanceDB collection
 
-A collection needs a fixed-length vector column and a stored distance metric. If either is missing, collection information, search, and write operations return `CONFIG_ERROR`. Writes through VecDB also require a non-null `id` declared as the primary key and an Arrow JSON metadata column. Metadata filters also require the Arrow JSON column.
+A collection needs a fixed-length vector column and a stored distance metric. If either is missing, collection information, search, and write operations return `CONFIG_ERROR`. Writes through VecDB also require a non-null `id` declared as the primary key and an Arrow JSON metadata column. Vector search requires the Arrow JSON metadata column. If the column is missing, search returns `CONFIG_ERROR` even when `filter` is omitted.
 
 If the source collection does not meet these requirements, import its documents into a collection created by VecDB.
 
@@ -94,11 +94,11 @@ If the source collection does not meet these requirements, import its documents 
 | `ids` | `string[]` | — | Document IDs in the write batch. | `["doc-42"]` |
 | `embeddings` | `number[][]` | — | Vectors in the same order as the IDs, each matching the dimension. | `[[0.1,0.2,0.3]]` |
 | `documents` | `string[]` | `[""]` | Document text matching each ID. The default for an individual item is the empty string. | `["Example shipping policy"]` |
-| `metadatas` | `object[]` | — | Application attributes, reserved `_content`, and the active-key list. Values must pass Chroma SDK validation. | `[{"source":"policy.txt","_content":"Example shipping policy"}]` |
+| `metadatas` | `object[]` | — | Application attributes, reserved `_content`, and the active-key list. Values must pass Chroma SDK validation. | `[{"source":"policy.txt","_content":"Example shipping policy","_hai_vecdb_metadata_keys":["v1","k:source","k:_content"]}]` |
 
-Collections created through VecDB retain the framework's dimension and metric definitions. Collections created through native Chroma use the server index metric. Chroma records the dimension when the first vectors arrive and retains it after all records are deleted.
+Collections created through VecDB retain the framework's dimension and metric definitions. `collection.info()` and `vector.search()` use Chroma’s native index definition. A metric declared only in collection metadata returns `CONFIG_ERROR`. Chroma records the dimension when the first vectors arrive and retains it after all records are deleted.
 
-VecDB stores the active application metadata keys in the reserved `_hai_vecdb_metadata_keys` field in the same `upsert` request. Search results and filters use this list. For records without an active-key list, VecDB reads the available application metadata directly. Direct Chroma reads may still show key values removed from the VecDB view. See the [metadata replacement example](../function/vecdb.en.md#chroma-metadata-replacement).
+Both `insert` and `upsert` store the active application metadata keys in the reserved `_hai_vecdb_metadata_keys` field, in the same request as the vector and text. Search results and filters use this list. A record with no valid list can still appear in an unfiltered vector search with its ID, score, and available text. Its application metadata is omitted, and it cannot match a nonempty application metadata filter. Direct Chroma reads may still show key values removed from the VecDB view. See [metadata replacement](../function/vecdb.en.md#chroma-metadata-replacement).
 
 VecDB creates no Redis keys. Search reads from the vector store. Pass the previous cursor when requesting another page from the same backend and collection.
 

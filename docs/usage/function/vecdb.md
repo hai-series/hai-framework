@@ -164,7 +164,9 @@ if (!closed.success) {
 
 多个实例同时在 Chroma、pgvector 或 Qdrant 创建同名集合时，后续创建调用会返回 `COLLECTION_ALREADY_EXISTS`。准备共享集合的应用可读取已有集合的维度和度量，确认匹配后再继续。Qdrant 删除不存在的集合时返回 `COLLECTION_NOT_FOUND`。
 
-对于通过 Chroma 原生接口创建、尚未写入过向量的集合，`vecdb.collection.info()` 的 `dimension` 为 `0`。第一次写入确定维度，之后即使删光文档也会保留。度量以服务端索引配置为准。创建框架集合时仍用 `options.dimension` 明确指定维度。
+对于通过 Chroma 原生接口创建、尚未写入过向量的集合，`vecdb.collection.info()` 的 `dimension` 为 `0`。第一次写入确定维度，之后即使删光文档也会保留。度量以 Chroma 原生索引定义为准。仅在集合元数据中声明度量时，集合信息和向量搜索返回 `CONFIG_ERROR`。创建框架集合时仍用 `options.dimension` 明确指定维度。
+
+pgvector 读取 `vector` 列注释中的 `hai.vecdb.metric=<metric>`。缺少有效注释时，`collection.info()` 和 `vector.search()` 返回 `CONFIG_ERROR`。[pgvector 存储结构](../data/vecdb.md#pgvector)
 
 #### 场景：准备与删除集合
 
@@ -239,7 +241,7 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 
 `topK` 是按相似度返回的条数上限。`minScore` 是 0–1 的分数下限，结果必须大于等于该值。写入时指定 `metadata: { source: 'handbook' }`，搜索时直接传 `filter: { source: 'handbook' }`。VecDB 会在各后端的[对应存储字段](../data/vecdb.md#document-field-mapping)中匹配。
 
-四个后端通用的写法是用顶层字符串字段做等值匹配，多个字段须同时命中。数值、`null`、嵌套字段和操作符的比较规则取决于后端。LanceDB 区分字段类型，支持字符串、有限数字、布尔值和 `null`。字段缺失时无法匹配 `null`，不支持的值返回 `CONFIG_ERROR`。
+四个后端通用的写法是用顶层字符串字段做等值匹配，多个字段须同时命中。数值、`null`、嵌套字段和操作符的比较规则取决于后端。LanceDB 区分字段类型，支持字符串、有限数字、布尔值和 `null`。字段缺失时无法匹配 `null`，不支持的值返回 `CONFIG_ERROR`。LanceDB 的搜索始终要求集合具有 Arrow JSON 元数据列。缺少该列会返回 `CONFIG_ERROR`。
 
 ##### 重复文档 ID
 
@@ -260,7 +262,9 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 
 ##### Chroma 元数据替换
 
-下例先用 `{ legacyTag: 'draft' }` 写入 `doc-1`，再对同一个 ID 调用 `upsert` 并传入 `{ source: 'handbook' }`。在 Chroma 上，VecDB 搜索结果只返回新的业务属性，使用 `{ legacyTag: 'draft' }` 过滤时不会命中。有效字段清单与向量、正文通过同一次 `upsert` 提交。缺少有效字段清单的记录按存储中的业务元数据读取。直接通过 Chroma 查看存储数据时，可能仍看到被移除的字段。框架保留 `_hai_vecdb_metadata_keys`，`insert` 和 `upsert` 会拒绝显式提供该键。部署版本的要求见 [Chroma 连接示例](../configuration/vecdb.md#chroma-server)。
+下例先用 `{ status: 'draft' }` 写入 `doc-1`，按 `status` 筛选可以找到该文档。用同一个 ID 调用 `upsert` 并传入 `{ source: 'handbook' }` 后，搜索只返回 `source` 字段，按 `{ status: 'draft' }` 筛选不再命中。Chroma 仍可能在原生接口返回已省略的字段。通过 VecDB 写入时，`insert` 和 `upsert` 都将有效键清单、向量和正文一同提交。`_hai_vecdb_metadata_keys` 是保留字段，应用传入该字段会被拒绝。
+
+如果 Chroma 集合包含没有有效清单的记录，省略筛选时，这些记录仍可按向量匹配，返回 ID、分数和可用的正文。结果不含其业务元数据。设置任何非空的业务元数据筛选都会排除这类记录。[Chroma 连接配置](../configuration/vecdb.md#chroma-server)
 
 <a id="qdrant-document-visibility"></a>
 
@@ -283,9 +287,14 @@ const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, 
 if (!createResult.success)
   return createResult
 // 将 doc-1、三维向量、原文 Install 和草稿标记写入 demo-docs。成功无 data，失败时返回原结果。
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { status: 'draft' } }])
 if (!insertResult.success)
   return insertResult
+// 按草稿状态验证刚写入的文档。成功时包含 doc-1，失败时返回原失败结果。
+const draftMatches = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
+if (!draftMatches.success)
+  return draftMatches
+draftMatches.data.map(item => item.id) // ['doc-1']
 // 按集合名统计插入后的文档数，data 为 1，失败时返回原失败结果。
 const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
@@ -301,8 +310,8 @@ if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // 首个结果是 doc-1，正文为 Install v2，元数据为 { source: 'handbook' }，分数约 1。
-// 查询已移除的 legacyTag=draft。成功 data 为 []，失败时返回原结果。
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
+// 查询已移除的 status=draft。成功 data 为 []，失败时返回原结果。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []

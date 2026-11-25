@@ -158,7 +158,9 @@ if (!closed.success) {
 
 複数のインスタンスが Chroma、pgvector、または Qdrant で同名のコレクションを同時に作成し、別の呼び出しが先に作成した場合は `COLLECTION_ALREADY_EXISTS` が返ります。共有コレクションを使い始める前に、次元と距離尺度がアプリの設定に一致することを確認します。存在しない Qdrant コレクションを削除すると `COLLECTION_NOT_FOUND` が返ります。
 
-Chroma のネイティブ API で作成し、ベクトルが一度も書き込まれていない集合では、`vecdb.collection.info()` の `dimension` が `0` になります。最初の書き込みで次元が決まり、その後すべてのレコードを削除しても保持されます。距離尺度は Chroma サーバーの索引設定に従います。VecDB で集合を作成する場合は `options.dimension` を指定します。
+Chroma のネイティブ API で作成し、ベクトルが一度も書き込まれていない集合では、`vecdb.collection.info()` の `dimension` が `0` になります。最初の書き込みで次元が決まり、その後すべてのレコードを削除しても保持されます。距離尺度は Chroma のネイティブインデックス定義に従います。コレクションのメタデータだけに距離尺度を指定している場合、コレクション情報の取得とベクトル検索は `CONFIG_ERROR` を返します。VecDB で集合を作成する場合は `options.dimension` を指定します。
+
+pgvector は `vector` 列のコメント `hai.vecdb.metric=<metric>` を読み取ります。有効なコメントがない場合、`collection.info()` と `vector.search()` は `CONFIG_ERROR` を返します。[pgvector の保存構造](../data/vecdb.ja.md#pgvector)
 
 #### 利用例：集合の作成と削除
 
@@ -235,7 +237,7 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 
 `topK` は類似度順で返す最大件数です。`minScore` は 0–1 のスコアの下限です。下限と等しいスコアも含まれます。書き込み時に `metadata: { source: 'handbook' }` を指定した文書は、検索時に `filter: { source: 'handbook' }` で絞り込めます。VecDB はバックエンドごとの[対応する保存フィールド](../data/vecdb.ja.md#document-field-mapping)を参照します。
 
-共通の等値条件にはトップレベルの文字列フィールドを使います。複数のフィールドを指定した場合はすべての条件が一致する必要があります。数値、`null`、ネストしたフィールド、演算子の比較規則はバックエンドによります。LanceDB は文字列、有限の数値、真偽値、`null` の型と値を厳密に比較します。欠損フィールドは `null` と一致せず、未対応の値は `CONFIG_ERROR` になります。
+共通の等値条件にはトップレベルの文字列フィールドを使います。複数のフィールドを指定した場合はすべての条件が一致する必要があります。数値、`null`、ネストしたフィールド、演算子の比較規則はバックエンドによります。LanceDB は文字列、有限の数値、真偽値、`null` の型と値を厳密に比較します。欠損フィールドは `null` と一致せず、未対応の値は `CONFIG_ERROR` になります。 LanceDB の検索には絞り込みの有無にかかわらず Arrow JSON のメタデータ列が必要です。列がない場合は `CONFIG_ERROR` を返します。
 
 ##### 文書 ID の重複
 
@@ -256,7 +258,9 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 
 ##### Chroma メタデータの置き換え
 
-次の例では、`doc-1` を `{ legacyTag: 'draft' }` で書き込んでから、同じ ID を `{ source: 'handbook' }` で upsert します。Chroma でも、VecDB の検索結果には新しいアプリの属性だけが含まれます。`{ legacyTag: 'draft' }` で絞り込んでもこの文書は一致しません。有効なメタデータのキー、ベクトル、本文は同じ `upsert` で送信します。有効なメタデータキーの一覧がないレコードは、保存されているアプリケーションのメタデータを読み取ります。Chroma から直接読み取ると、削除した属性が残って見えることがあります。`_hai_vecdb_metadata_keys` は VecDB の予約キーです。このキーを指定した `insert` や `upsert` は拒否されます。必要なサーバー機能は [Chroma の接続例](../configuration/vecdb.ja.md#chroma-server)を参照してください。
+この例では `doc-1` を `{ status: 'draft' }` で挿入します。`status` で絞り込むと対象の文書が見つかります。同じ ID を `{ source: 'handbook' }` で `upsert` すると、検索結果には `source` だけが含まれ、`{ status: 'draft' }` では一致しません。Chroma から直接読むと、省略した属性が残っている場合があります。VecDB は `insert` と `upsert` のどちらでも、有効なメタデータキー、ベクトル、本文を同じリクエストで送信します。アプリが予約キー `_hai_vecdb_metadata_keys` を渡すと、書き込みは失敗します。
+
+Chroma のレコードに有効な一覧がない場合も、絞り込みを付けなければベクトル検索の対象になります。ID、スコア、取得可能な本文が返り、そのレコードの業務メタデータは結果に含まれません。空でない業務メタデータの絞り込みは、そのレコードを除外します。[Chroma の接続設定](../configuration/vecdb.ja.md#chroma-server)
 
 <a id="qdrant-document-visibility"></a>
 
@@ -279,9 +283,14 @@ const createResult = await vecdb.collection.create('demo-docs', { dimension: 3, 
 if (!createResult.success)
   return createResult
 // doc-1、3 次元ベクトル、本文 Install、下書きタグを demo-docs に挿入します。成功時の data は undefined、失敗は元の失敗結果を返します。
-const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { legacyTag: 'draft' } }])
+const insertResult = await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install', metadata: { status: 'draft' } }])
 if (!insertResult.success)
   return insertResult
+// 下書き状態で検索し、挿入を確認します。成功時は doc-1 を含み、失敗時はその結果を返します。
+const draftMatches = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
+if (!draftMatches.success)
+  return draftMatches
+draftMatches.data.map(item => item.id) // ['doc-1']
 // 挿入後の demo-docs の文書数は 1 です。失敗は 元の失敗結果を返します。
 const countResult = await vecdb.vector.count('demo-docs')
 if (!countResult.success)
@@ -297,8 +306,8 @@ if (!matchesResult.success)
   return matchesResult
 const matches = matchesResult.data
 // 最初の結果は doc-1 です。本文は Install v2、メタデータは { source: 'handbook' }、得点は約 1 です。
-// 削除した legacyTag=draft で検索します。成功時の data は [] です。失敗時はその結果を返します。
-const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { legacyTag: 'draft' } })
+// 削除した status=draft で検索します。成功時の data は [] です。失敗時はその結果を返します。
+const excluded = await vecdb.vector.search('demo-docs', [1, 0, 0], { filter: { status: 'draft' } })
 if (!excluded.success)
   return excluded
 excluded.data // []

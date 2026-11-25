@@ -14,7 +14,7 @@
   "vecdb_invalidPgvectorIdentifier": "The pgvector table name, including the prefix, must be a valid identifier of at most {limit} bytes",
   "vecdb_atomicUpsertUnavailable": "LanceDB collection or driver lacks safe atomic merge primary-key support; no writes were performed. Rebuild the collection or use a supported driver",
   "vecdb_duplicateDocumentIds": "Vector document IDs must be unique within a batch; no writes were performed",
-  "vecdb_jsonMetadataRequired": "LanceDB collection requires native JSON metadata; rebuild legacy string metadata collections before writing or filtering",
+  "vecdb_jsonMetadataRequired": "LanceDB writes and searches require an Arrow JSON metadata column",
   "vecdb_invalidMetadataFilter": "LanceDB metadata filter must be a plain object of top-level string, finite number, boolean or null values; nested objects, arrays and undefined are unsupported",
   "vecdb_dimensionMismatch": "Vector dimension mismatch: expected {expected}, actual {actual}",
   "vecdb_insertFailed": "Failed to insert vectors: {error}",
@@ -32,5 +32,5 @@
   "vecdb_chromaEndpointInvalid": "Chroma requires an HTTP(S) root endpoint without credentials, path prefix, query or fragment",
   "vecdb_chromaTokenInvalid": "Chroma Bearer token must contain only printable ASCII characters without whitespace",
   "vecdb_chromaReservedMetadataKey": "Chroma document metadata cannot use the reserved field {key}",
-  "vecdb_collectionMetricMissing": "Collection distance metric is missing; restore its vector index or column metadata"
+  "vecdb_collectionMetricMissing": "The pgvector collection's vector column requires a valid hai.vecdb.metric comment"
 }

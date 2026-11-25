@@ -6,7 +6,7 @@
 
 ## 运行环境
 
-pgvector 将集合 metric 持久保存在 vector 列注释，索引、info、search 使用同一值；重连后修改默认 metric 不改变已有集合。旧集合从实际索引恢复；缺少索引与有效注释时先恢复定义，不按当前默认值猜测。
+pgvector 在 `vector` 列注释写入 `hai.vecdb.metric=<metric>`。`collection.info()` 和 `vector.search()` 从该注释读取距离度量。缺少有效注释时返回 `CONFIG_ERROR`。连接的默认度量只用于创建集合。
 
 > ⚠️ **服务端模块（Node.js only）。** 浏览器端不直接操作向量数据库，通过 `@h-ai/ai` 的 API 端点间接使用（如 RAG 检索、知识库查询）。
 
@@ -134,7 +134,7 @@ interface CollectionCreateOptions {
 
 pgvector 在同一个事务内建表、建向量索引并保存列的 metric 注释。建索引失败会回滚本次建表。Chroma、pgvector 和 Qdrant 并发创建同名集合时，后续创建调用返回 `COLLECTION_ALREADY_EXISTS`。使用共享集合前核对其维度和度量。Qdrant 删除不存在的集合会返回 `COLLECTION_NOT_FOUND`。
 
-通过 Chroma 原生接口创建的集合按服务端索引配置读取度量。`collection.info()` 在集合收到第一条向量前返回维度 0，首次写入后使用服务端保存的维度。删空文档后该维度仍保留。通过 VecDB 创建集合时显式传入 `options.dimension`。
+Chroma 集合的 `collection.info()` 和 `vector.search()` 以原生索引定义中的度量为准，仅在集合元数据中设置度量会返回 `CONFIG_ERROR`。通过 Chroma 原生接口创建的集合，`collection.info()` 在写入第一条向量前返回维度 0。首次写入后使用服务端保存的维度，删空文档后维度仍保留。通过 VecDB 创建集合时显式传入 `options.dimension`。
 
 LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。导入已有文档时，先创建带完整维度和距离度量的集合。
 
@@ -146,11 +146,11 @@ LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。�
 
 LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。导入记录时，选择带持久主键的目标集合。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
 
-LanceDB metadata 使用原生 JSON 字段，仍可保存嵌套 JSON 对象，搜索结果还原为对象；insert/upsert 明确使用 Arrow JSON schema 完成 JSONB 编码。旧 Utf8 metadata 表写入或过滤返回 CONFIG_ERROR，需要重建，不自动迁移。依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
+LanceDB 使用 Arrow JSON 元数据列保存嵌套 JSON 对象。`insert` 和 `upsert` 使用 Arrow JSON schema 写入，搜索把元数据还原为对象。缺少 Arrow JSON 元数据列时，写入和搜索均返回 `CONFIG_ERROR`，即使搜索未指定 `filter`。依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
 
 LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/有限 number/boolean/null；例如 `{ tenant: 'acme', page: 1, active: true, removedAt: null }`。数字/布尔不匹配同形字符串；null 只匹配显式 JSON null，不匹配缺失键。引号、反斜线、百分号、下划线均为字面量，点/括号不解释为嵌套路径。空对象不筛选；对象、数组、undefined、非有限数值返回 CONFIG_ERROR，不能忽略条件重试。过滤在向量 topK 前执行，随后应用 minScore；其它 Provider 沿用原生约束，不保证同样的 null、复杂值和路径语义。
 
-升级 LanceDB 旧集合时，暂停旧集合写入并备份完整目录。用应用原始数据或能读取旧格式的工具导出 ID、向量、正文和元数据。通过 `vecdb.collection.create()` 新建集合，复用旧向量时使用其原维度和度量。先处理重复 ID，再用小批次 `upsert` 回填，每批检查 `success`。通过 `collection.info`、`vector.count` 和已知文档的带过滤检索验证结果后，再切换应用读写目标。按应用的回退周期保留备份与旧集合。
+导入现有文档时，暂停来源集合写入并备份目录。导出 ID、向量、正文和元数据，通过 `vecdb.collection.create()` 创建目标集合。若继续使用原向量，请使用来源集合的维度和度量。处理重复 ID 后通过 `upsert` 分小批写入，每批检查 `success`。使用 `collection.info()`、`vector.count()` 和已知文档的带筛选搜索验证，再切换读写目标。按应用的回退周期保留备份和来源集合。
 
 ### 向量操作 — `vecdb.vector`
 
@@ -218,7 +218,7 @@ Chroma 直连 `url` 仅支持 HTTP(S) 根端点，优先于 `host/port`；URL �
 
 直连初始化总截止为 5 秒，本地服务拉起使用 `startupTimeout`；超时中止候选 HTTP 请求。成功清除初始化 timer，不限制后续业务请求。
 
-框架对 Chroma 执行 `upsert` 时，在同一次请求中提交向量、正文和有效元数据键清单。缺少有效键清单的记录按存储中的业务元数据读取。用 `upsert` 省略上次写入的键后，VecDB 搜索结果不会返回旧键，按旧值过滤也不会命中；通过 Chroma 原生接口仍可能看到旧值。保留字段 `_hai_vecdb_metadata_keys` 由框架维护，`insert` 和 `upsert` 会拒绝显式提供该键。服务需支持数组元数据及 `$contains`、`$not_contains`，已用 Chroma 1.5.5 验证。
+Chroma 的 `insert` 和 `upsert` 都在同一个请求内提交向量、正文和有效元数据键清单。应用通过 VecDB 写入后，可以按这些业务键筛选。`upsert` 省略上次写入的键后，VecDB 搜索结果和筛选不再使用该键，Chroma 原生读取可能仍看到对应值。缺少有效清单的记录可出现在无筛选搜索中，返回 ID、分数和可用正文，业务元数据不返回。非空业务筛选不会命中这些记录。`_hai_vecdb_metadata_keys` 由框架维护，`insert` 和 `upsert` 都拒绝应用传入该键。服务需支持数组元数据及 `$contains`、`$not_contains`，已用 Chroma 1.5.5 验证。
 
 Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖；超时 30 秒覆盖完整响应体，响应超过 16 MiB 明确失败。仅支持未命名向量字段的 cosine/euclidean/dot；外部 named-vector/Manhattan 集合的 info/写入/搜索返回 CONFIG_ERROR，不猜测维度或 metric。Chroma 使用 `chromadb 3.5.0` 的真实类型及 metadata/filter 校验，非法输入返回操作错误，不丢弃过滤；content 可省略。各后端的 null 和复杂元数据语义不承诺统一。
 

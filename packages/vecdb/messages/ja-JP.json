@@ -14,7 +14,7 @@
   "vecdb_invalidPgvectorIdentifier": "pgvector のテーブル名は接頭辞を含めて {limit} バイト以内の有効な識別子を指定してください",
   "vecdb_atomicUpsertUnavailable": "LanceDB コレクションまたはドライバーに安全な主キーによるアトミックな merge 機能がありません。書き込みは行っていません。コレクションを再作成するか、対応ドライバーを使用してください",
   "vecdb_duplicateDocumentIds": "同一バッチのベクトル文書 ID は一意である必要があります。書き込みは行っていません",
-  "vecdb_jsonMetadataRequired": "LanceDB コレクションにはネイティブ JSON メタデータが必要です。旧形式の文字列メタデータを使用するコレクションは、書き込みやフィルター処理の前に再作成してください",
+  "vecdb_jsonMetadataRequired": "LanceDB コレクションへの書き込みと検索には、Arrow JSON 型の metadata 列が必要です",
   "vecdb_invalidMetadataFilter": "LanceDB メタデータフィルターは通常のオブジェクトとし、最上位の値には文字列、有限数、真偽値、null のみ指定できます。入れ子のオブジェクト、配列、undefined は使用できません",
   "vecdb_dimensionMismatch": "ベクトルの次元が一致しません: 期待値{expected}、実際の値{actual}",
   "vecdb_insertFailed": "ベクトルの挿入に失敗しました: {error}",
@@ -32,5 +32,5 @@
   "vecdb_chromaEndpointInvalid": "Chroma には HTTP(S) のルートエンドポイントを指定してください。認証情報、パスプレフィックス、クエリ、フラグメントは使用できません",
   "vecdb_chromaTokenInvalid": "Chroma Bearer トークンには空白を含まない表示可能な ASCII 文字のみ使用できます",
   "vecdb_chromaReservedMetadataKey": "Chroma の文書メタデータには予約フィールド {key} を使用できません",
-  "vecdb_collectionMetricMissing": "コレクションの距離尺度がありません。ベクトルインデックスまたは列メタデータを復元してください"
+  "vecdb_collectionMetricMissing": "pgvector コレクションの vector 列には有効な hai.vecdb.metric コメントが必要です"
 }
