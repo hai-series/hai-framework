@@ -22,6 +22,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FileItem, FileListProps } from '../types.js'
   import { getUILocale, uiM } from '../../../messages.js'
+  import { toast } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -107,6 +108,9 @@
   function handlePreview(file: FileItem) {
     if (onpreview) {
       onpreview(file)
+    }
+    else if (!file.url) {
+      toast.error(uiM('file_list_preview_failed'))
     }
     else {
       previewFile = file
@@ -251,15 +255,13 @@
 <!-- 预览模态框 -->
 {#if previewFile}
   <Modal open title={previewFile.name} size='4xl' onclose={closePreview}>
-    {#if !previewFile.url}
-      <p role='alert'>{uiM('file_list_preview_failed')}</p>
-    {:else if previewFile.type.startsWith('image/')}
+    {#if previewFile.type.startsWith('image/')}
       <img src={previewFile.url} alt={previewFile.name} class='max-w-full max-h-[70vh] mx-auto' />
     {:else if previewFile.type.startsWith('video/')}
       <video src={previewFile.url} controls class='max-w-full max-h-[70vh] mx-auto'>
         <track kind='captions' />
       </video>
-    {:else if previewFile.type === 'application/pdf'}
+    {:else if previewFile.type === 'application/pdf' && previewFile.url}
       <FilePdfPreview url={previewFile.url} />
     {/if}
   </Modal>

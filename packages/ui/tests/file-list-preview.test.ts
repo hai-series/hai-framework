@@ -4,6 +4,7 @@ import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import FileList from '../src/lib/components/scenes/storage/FileList.svelte'
 import { uiM } from '../src/lib/messages.js'
+import { ui } from '../src/lib/ui-toast.js'
 
 const renderer = vi.hoisted(() => {
   const getDocument = vi.fn()
@@ -35,6 +36,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  ui.toast.clear()
   vi.unstubAllGlobals()
 })
 
@@ -44,11 +46,11 @@ function openPreview(target: HTMLElement) {
   flushSync()
 }
 
-it('pDF 以无注释的画布逐页渲染，关闭时释放解析器资源', async () => {
+it('重试后以无注释的画布逐页渲染 PDF，关闭时释放解析器资源', async () => {
   const bytes = new Uint8Array(new TextEncoder().encode('%PDF-1.7'))
   const fetch = vi.fn(async () => new Response(bytes, {
     headers: { 'Content-Type': 'application/pdf' },
-  }))
+  })).mockResolvedValueOnce(new Response(null, { status: 503 }))
   const page = {
     getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 850 * scale }),
     render: vi.fn(() => ({
@@ -73,7 +75,12 @@ it('pDF 以无注释的画布逐页渲染，关闭时释放解析器资源', asy
   })
   try {
     openPreview(target)
+    await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe(uiM('file_list_preview_failed')))
+    const retry = Array.from(target.querySelectorAll('button')).find(button => button.textContent?.trim() === uiM('file_list_retry'))
+    expect(retry).toBeDefined()
+    retry!.click()
     await vi.waitFor(() => expect(page.render).toHaveBeenCalledOnce())
+    expect(fetch).toHaveBeenCalledTimes(2)
     expect(fetch).toHaveBeenCalledWith(new URL(pdfFile.url!, document.baseURI), expect.objectContaining({
       credentials: 'same-origin',
       redirect: 'error',
@@ -143,7 +150,7 @@ it.each([
   })
   try {
     openPreview(target)
-    await vi.waitFor(() => expect(target.querySelector('[role="alert"]')?.textContent).toContain(uiM('file_list_preview_failed')))
+    await vi.waitFor(() => expect(ui.toast.items.at(-1)?.message).toBe(uiM('file_list_preview_failed')))
     expect(fetch).toHaveBeenCalledTimes(response ? 1 : 0)
     expect(renderer.getDocument).not.toHaveBeenCalled()
     expect(target.querySelector('iframe, object, embed')).toBeNull()

@@ -2,6 +2,7 @@
 <script lang='ts'>
   import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
   import { loadPdfPreview } from './file-preview-pdf.js'
 
@@ -16,9 +17,11 @@
   let rendering = $state(false)
   let failed = $state(false)
   let renderFailed = $state(false)
+  let attempt = $state(0)
   let disableAnnotations: number
 
   $effect(() => {
+    void attempt
     const source = url
     const controller = new AbortController()
     let releaseWorker: (() => void) | undefined
@@ -27,6 +30,7 @@
     pageNumber = 1
     loading = true
     failed = false
+    renderFailed = false
 
     function release() {
       const terminate = releaseWorker
@@ -143,12 +147,15 @@
       task?.cancel()
     }
   })
+  useToastFeedback(() => failed || renderFailed
+    ? uiM('file_list_preview_failed')
+    : '')
 </script>
 
 {#if loading}
   <p role='status'>{uiM('common_loading')}</p>
-{:else if failed}
-  <p role='alert'>{uiM('file_list_preview_failed')}</p>
+{:else if failed || renderFailed}
+  <Button size='sm' onclick={() => attempt += 1}>{uiM('file_list_retry')}</Button>
 {:else if pdf}
   {#if pdf.numPages > 1}
     <div class='flex items-center justify-center gap-3 pb-3'>
@@ -159,13 +166,11 @@
   {/if}
   {#if rendering}
     <p role='status'>{uiM('common_loading')}</p>
-  {:else if renderFailed}
-    <p role='alert'>{uiM('file_list_preview_failed')}</p>
   {/if}
   <div
     role='img'
     aria-label={uiM('pagination_page_info', { page: pageNumber, total: pdf.numPages })}
-    hidden={rendering || renderFailed}
+    hidden={rendering}
   >
     <canvas bind:this={canvas} class='mx-auto max-h-[70vh] max-w-full object-contain'></canvas>
   </div>
