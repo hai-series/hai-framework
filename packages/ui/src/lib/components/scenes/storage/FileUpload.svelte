@@ -56,6 +56,7 @@
   let isDragging = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   const activeRequests = new SvelteMap<string, AbortController>()
+  let destroyed = false
 
   const containerClass = $derived(
     cn(
@@ -130,8 +131,8 @@
       return
     }
 
-    current.abort()
     activeRequests.delete(fileId)
+    current.abort()
   }
 
   function abortAllActiveRequests(): void {
@@ -162,6 +163,7 @@
 
   $effect(() => {
     return () => {
+      destroyed = true
       abortAllActiveRequests()
     }
   })
@@ -217,7 +219,8 @@
 
   // 上传单个文件
   async function uploadFile(uploadFile: UploadFile) {
-    if (!uploadHandler) {
+    // worker 持有队列快照，开始请求前需确认记录仍在组件中且未被另一批任务领取。
+    if (!uploadHandler || destroyed || uploadFile.state !== 'pending' || !files.some(file => file.id === uploadFile.id)) {
       return
     }
 
@@ -232,6 +235,8 @@
       const result = await uploadHandler(uploadFile.file, {
         signal: controller.signal,
         onProgress(progress) {
+          if (controller.signal.aborted)
+            return
           uploadFile.progress = Math.max(0, Math.min(100, Math.round(progress)))
           files = [...files]
         },
@@ -267,8 +272,8 @@
   function removeFile(id: string) {
     const file = files.find(f => f.id === id)
     if (file) {
-      abortActiveRequest(id)
       files = files.filter(f => f.id !== id)
+      abortActiveRequest(id)
       onremove?.(file)
       onchange?.(files)
     }
@@ -277,7 +282,7 @@
   // 重试上传
   async function retryUpload(id: string) {
     const file = files.find(f => f.id === id)
-    if (file && file.state === 'error') {
+    if (file && file.state === 'error' && !validateFile(file.file)) {
       file.state = 'pending'
       file.error = undefined
       file.progress = 0
@@ -346,8 +351,8 @@
    * ```
    */
   export function clear() {
-    abortAllActiveRequests()
     files = []
+    abortAllActiveRequests()
     onchange?.(files)
   }
   useToastFeedback(() => operationError)
@@ -430,7 +435,7 @@
 
           <!-- 操作按钮 -->
           <div class='flex gap-1'>
-            {#if file.state === 'error'}
+            {#if uploadHandler && file.state === 'error' && !validateFile(file.file)}
               <IconButton
                 size='xs'
                 variant='ghost'

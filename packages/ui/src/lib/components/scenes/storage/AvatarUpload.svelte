@@ -141,6 +141,8 @@
         signal: controller.signal,
         onProgress: () => {},
       })
+      if (controller.signal.aborted || activeUpload !== controller)
+        return
       if (!result.url || !isSafePreviewUrl(result.url)) {
         throw new Error(uiM('avatar_upload_failed'))
       }
@@ -149,7 +151,7 @@
     }
     catch (error) {
       // 被后续选择替换的请求不得覆盖新请求的 loading 状态或触发旧错误提示。
-      if (activeUpload !== controller) {
+      if (controller.signal.aborted || activeUpload !== controller) {
         return
       }
       operationError = errorMessage(error, uiM('avatar_upload_failed'))
