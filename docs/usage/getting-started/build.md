@@ -61,7 +61,7 @@ hai build --target image --json
 
 直接调用已安装的 `hai`，命令在成功时向 stdout 写一行 JSON，构建进度和失败信息写到 stderr。机器调用读取 `schemaVersion: 1`、绝对路径 `artifactDir` 和 `manifestPath`，并用 `manifest.images[].file` 定位该目录内的归档。并发任务各自保存返回的结果。交付时将 `artifactDir` 传给 `hai deploy --artifact-dir`，或调用 `deploy.readDeploymentArtifact(artifactDir)` 校验归档和 SHA-256。
 
-`manifest.source` 记录启动时观察到的 Git 提交，以及工程目录、所选镜像构建上下文和 Dockerfile 是否有未提交改动。例如应用使用仓库根作为 context 时，兄弟包的修改也会令 `dirty` 为 true。无法识别提交时为 `unknown`；输入跨越所属仓库或无法完整检查时，`dirty` 为 `null`。检查沿用 Git 对未忽略文件的状态，不是构建输入的内容证明。`manifest.images[].platform` 来自实际镜像，例如 `linux/arm64`。需要可追溯的发布时，构建 Worker 应从固定提交的干净检出启动。旧镜像清单可以省略来源和平台。
+`manifest.source` 记录启动时观察到的 Git 提交，以及工程目录、所选镜像构建上下文和 Dockerfile 是否有未提交改动。例如应用使用仓库根作为 context 时，兄弟包的修改也会令 `dirty` 为 true。无法识别提交时为 `unknown`；输入跨越所属仓库或无法完整检查时，`dirty` 为 `null`。检查沿用 Git 对未忽略文件的状态，不是构建输入的内容证明。`manifest.images[].platform` 来自实际镜像，例如 `linux/arm64`。需要可追溯的发布时，构建 Worker 应从固定提交的干净检出启动。
 
 ### 统一命名
 
@@ -76,7 +76,7 @@ hai build --target image --json
 | Windows 安装包 | `todo-windows-x64-release-0.1.0-setup.exe` |
 | 部署交付包 | `bundle-todo-prod-20261105-171924-62e4f1-0.1.0`，保持现有格式 |
 
-原生文件名包含平台、架构（Desktop）、debug/release 和版本，Android ABI/flavor 等输出差异继续保留；其他原生格式沿用 `.ipa`、`.dmg`、`.app`、`.deb`、`.AppImage`。只调整 `.hai/build` 中的归档名称，Gradle/Tauri 自身的工作目录和文件名仍由原生工具管理。`latest` 存批次相对目录名，manifest 中的 `buildId` 保持短标识；旧构建目录、旧 `latest` 和旧镜像清单仍可读取，无须改写历史产物。
+原生文件名包含平台、架构（Desktop）、debug/release 和版本，Android ABI/flavor 等输出差异继续保留；其他原生格式沿用 `.ipa`、`.dmg`、`.app`、`.deb`、`.AppImage`。只调整 `.hai/build` 中的归档名称，Gradle/Tauri 自身的工作目录和文件名仍由原生工具管理。`latest` 存批次相对目录名，manifest 中的 `buildId` 使用不包含工程和目标前缀的短标识。
 
 源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。
 

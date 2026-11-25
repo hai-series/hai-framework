@@ -16,7 +16,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 错误响应与 Serv 共用 `HaiCommonError`：未认证用 `UNAUTHORIZED.code`、无权限用 `FORBIDDEN.code`、限流用 `RATE_LIMIT_EXCEEDED.code`（429）；不要匹配旧的无命名空间字符串。`fromError/fromResult` 保留安全字段校验、`httpStatus` 和追踪编号，内部异常只记录日志。前端使用已本地化的安全消息，排查按 `traceId` 关联服务端原因。
 
-`kit.response.validationError(errors)` 同样经 `fromError` 过滤，响应 `error.cause` 只含本地化 `field/message`；不回显 rejectedValue、SQL 或其他字段，不再读取 `details.errors`。
+`kit.response.validationError(errors)` 同样经 `fromError` 过滤，响应 `error.cause` 只含本地化的 `field` 和 `message`，会过滤 `rejectedValue`、SQL 和其他字段。
 
 ### 1. 请求管道
 

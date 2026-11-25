@@ -184,7 +184,7 @@ WHERE provider = 'sms' AND template = 'otp_sms' AND message_id = 'aliyun-42';
 
 如果处在免打扰时段，且配置 `strategy: discard` 或本次传 `deferPolicy: 'reject'`，普通 API 通知返回 `DND_BLOCKED`。这次调用写入 **0 行**，也不会联系仓库。
 
-Reach 保存发送时的正文和变量。发送历史的保留时间由应用决定。旧版本写入的 `[REDACTED]` 记录保留当时保存的数据。待发送的行保留在数据库中，节点重启后可以继续处理。
+Reach 保存发送时的正文和变量。发送历史的保留时间由应用决定。待发送的行保留在数据库中，节点重启后可以继续处理。
 
 <a id="template-table"></a>
 

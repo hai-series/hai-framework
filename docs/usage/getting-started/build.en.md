@@ -66,7 +66,7 @@ Use `--runtime auto`, `docker`, or `podman` to build Android in a container. A f
 
 The default is a release. `--debug` selects a debug build. Each platform and build type writes its own batch and `latest` under `.hai/build/app/` or `.hai/build/desktop/`. Prepare base images and dependency caches before building offline.
 
-Core's `name` sets the Capacitor display name and the Tauri product name and main window title. The build resolves `HAI_CORE_NAME` with the same precedence as other Core settings. Fullstack projects read the server workspace's `_core.yml` and project-root environment files. Existing native projects also need their platform display-name setting updated and a new installer built. Native package naming, environment selection, per-window overrides, and the handling of existing artifacts are covered in the [Chinese original](build.md#原生应用名称).
+Core's `name` sets the Capacitor display name and the Tauri product name and main window title. The build resolves `HAI_CORE_NAME` with the same precedence as other Core settings. Fullstack projects read the server workspace's `_core.yml` and project-root environment files. Existing native projects also need their platform display-name setting updated and a new installer built. Native package naming, environment selection, and per-window overrides are covered in the [Chinese original](build.md#原生应用名称).
 
 <a id="desktop-updates"></a>
 

@@ -184,7 +184,7 @@ From `08:00` the next morning, a worker uses the row's `queue_id` as the `Idempo
 
 During quiet hours, `strategy: discard` or a call with `deferPolicy: 'reject'` returns `DND_BLOCKED` for an ordinary API notification. This writes **zero rows** and sends no request to the warehouse.
 
-Reach stores the body and variables used for the send. The application decides how long to keep the history. Older `[REDACTED]` records contain the data that was saved at the time. Pending messages remain available to resume after a restart.
+Reach stores the body and variables used for the send. The application decides how long to keep the history. Pending messages remain available to resume after a restart.
 
 <a id="template-table"></a>
 

@@ -184,7 +184,7 @@ WHERE provider = 'sms' AND template = 'otp_sms' AND message_id = 'aliyun-42';
 
 通知を控える時間帯に `strategy: discard` が設定されている場合や、今回の呼び出しで `deferPolicy: 'reject'` を渡した場合、通常の API 通知には `DND_BLOCKED` が返ります。書き込む行は **0 行**で、倉庫へのリクエストも発生しません。
 
-送信時の本文と変数が履歴に入ります。履歴の保存期間はアプリ側で決めます。旧バージョンの `[REDACTED]` の行には当時保存したデータが残ります。送信待ちの行は再起動後も処理できます。
+送信時の本文と変数が履歴に入ります。履歴の保存期間はアプリ側で決めます。送信待ちの行は再起動後も処理できます。
 
 <a id="template-table"></a>
 

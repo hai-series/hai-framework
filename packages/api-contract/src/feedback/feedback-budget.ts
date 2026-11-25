@@ -32,7 +32,7 @@ export const FeedbackBudgetSchema = z.object({
 export type FeedbackBudget = z.infer<typeof FeedbackBudgetSchema>
 
 /**
- * 配置一次总容量，派生附件、双份证据和 JSON/Base64 传输上限；更小的旧单项限制仍生效。
+ * 由总容量推导附件、双份证据和 JSON/Base64 传输上限。调用方可传入更低的单项上限。
  * @example
  * ```ts
  * import { apiContract } from '@h-ai/api-contract/feedback'

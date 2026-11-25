@@ -266,7 +266,7 @@ await reach.send({
 
 验证码、重置链接等需要即时送出的消息可传 `ignoreDnd: true`。数据库已连接时，渠道受理后尝试保存普通发送历史。
 
-队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。初始化自动执行版本化迁移，包含次数、退避策略和失败分类；升级前先 dry-run、备份并停止旧写入。旧通知载荷退役会清空正文/变量并将旧待发项标记 discarded，回退镜像不能恢复这些数据；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
+队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。配置数据库后，初始化会准备发送日志表和队列索引。现有表缺少必要字段或未对 `queue_id` 建立唯一约束时，初始化失败。验收 PostgreSQL 或 MySQL 时，用目标数据库验证 Unix 毫秒字段和队列投递。
 
 ### 租约、接收端幂等与未知结果
 

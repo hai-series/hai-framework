@@ -87,7 +87,7 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 原生包批次位于 `.hai/build/app/<平台>/<构建类型>/` 或 `.hai/build/desktop/<平台>/<构建类型>/`，完整归档后更新该目录的 `latest`。Android 容器分支复用镜像源、npm 源、网络与代理设置。签名配置与构建命令见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。
 
-批次目录统一使用 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包使用工程标识、平台、Desktop 架构、类型和版本。`latest` 保存批次目录名，清单 `buildId` 是不含工程与目标前缀的短标识；旧目录仍可读取。完整示例见[统一命名](../getting-started/build.md#统一命名)。
+批次目录统一使用 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包使用工程标识、平台、Desktop 架构、类型和版本。`latest` 保存批次目录名，清单 `buildId` 是不含工程与目标前缀的短标识。完整示例见[统一命名](../getting-started/build.md#统一命名)。
 
 ### 构建并发和缓存
 
