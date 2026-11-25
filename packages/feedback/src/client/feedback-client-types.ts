@@ -147,7 +147,8 @@ export interface FeedbackBrowserClient {
   saveDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackSaveResult>>
   /** 并发初始化返回 INIT_IN_PROGRESS；重初始化先等待旧会话关闭。 */
   init: (config: FeedbackClientConfig) => Promise<HaiResult<void>>
-  prepare: () => Promise<HaiResult<FeedbackDraft>>
+  /** 补传失败时返回带受理回执的原草稿供本地保存。用户确认后，可用 startNew 替换这份草稿。 */
+  prepare: (options?: { startNew?: boolean }) => Promise<HaiResult<FeedbackDraft>>
   /** 补充当前可见页面截图；传附件 ID 则原位替换。冻结或异步冲突时保留原材料。 */
   captureScreenshot: (attachmentId?: string) => Promise<HaiResult<void>>
   submit: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackReport>>

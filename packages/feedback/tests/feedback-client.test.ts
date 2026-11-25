@@ -206,6 +206,35 @@ describe('feedback browser collection', () => {
     expect(client.getDraft()!.attachments).toHaveLength(0)
   })
 
+  it.each([false, true])('无参导出保留冻结的表单字段，已受理=%s', async (accepted) => {
+    const transport = actions()
+    const details = { description: 'Failed to save order', category: 'feature', contact: 'reporter@example.test' }
+    if (!accepted) {
+      vi.mocked(transport.submit).mockResolvedValueOnce(core.err(HaiCommonError.INTERNAL_ERROR, 'Response unavailable'))
+    }
+    else {
+      vi.mocked(transport.submit).mockResolvedValueOnce(core.ok({
+        ...report,
+        ...details,
+      }))
+    }
+    const { client } = await setup({
+      actions: transport,
+      appVersion: '1.2.3',
+      buildId: 'test-build',
+      commit: 'test-commit',
+    })
+    expect((await client.submit(details)).success).toBe(accepted)
+    const exported = await client.exportDraft()
+    if (!exported.success)
+      throw new Error(exported.error.message)
+    const parsed = await feedback.readBundle(exported.data)
+    expect(parsed.success && parsed.data.report).toMatchObject(details)
+    if (!accepted)
+      expect(parsed.success && parsed.data.report).toMatchObject({ appVersion: '1.2.3', buildId: 'test-build', commit: 'test-commit' })
+    expect(parsed.success && parsed.data.manifest.missing).toContain('server-evidence-not-obtained')
+  })
+
   it('本地失败返回安全提示与关联标识，详细脱敏日志和本地 UI trace 可检索', async () => {
     const { client } = await setup({
       captureScreenshot: async () => {
@@ -647,6 +676,47 @@ describe('feedback browser collection', () => {
     expect(transport.upload).not.toHaveBeenCalled()
   })
 
+  it('提交内替换失败时保留原附件，日志只记录失败码和追踪编号', async () => {
+    const { client, transport } = await setup()
+    await client.prepare()
+    await client.addFiles([
+      plainTextFile('Original notes'),
+    ])
+    const original = structuredClone(client.getDraft()!)
+    const malformed = new File(['private-attachment-body'], 'notes.json', { type: 'application/json' })
+    Object.defineProperty(malformed, 'text', {
+      value: async () => 'private-attachment-body',
+    })
+    const records: LogRecord[] = []
+    const stop = core.logger.observe(record => records.push(record))
+    try {
+      const submitted = await client.submit({
+        files: [malformed],
+        removedAttachmentIds: [original.attachments[0]!.id],
+      })
+      expect(submitted.success).toBe(false)
+      if (!submitted.success) {
+        expect(submitted.error.code).toBe('hai:feedback:025')
+        expect(records.find(record => record.context.traceId === submitted.error.traceId)?.level).toBe('warn')
+      }
+      expect(JSON.stringify([submitted, records])).not.toContain('private-attachment-body')
+      expect(client.getDraft()).toEqual(original)
+      expect(transport.submit).not.toHaveBeenCalled()
+
+      await client.submit()
+      const exported = await client.exportDraft({
+        files: [malformed],
+      })
+      expect(exported.success).toBe(false)
+      if (!exported.success)
+        expect(exported.error.code).toBe('hai:feedback:025')
+      expect(JSON.stringify([exported, records])).not.toContain('private-attachment-body')
+    }
+    finally {
+      stop()
+    }
+  })
+
   it('并发添加附件不会用慢批次的旧快照覆盖已完成批次', async () => {
     const { client } = await setup()
     expect((await client.prepare()).success).toBe(true)
@@ -739,6 +809,57 @@ describe('feedback browser collection', () => {
     expect(new Set(evidence.map(item => item.id)).size).toBe(evidence.length)
   })
 
+  it('失败请求作为错误锚点留在草稿中且只出现一次', async () => {
+    const { client } = await setup()
+    client.record({
+      kind: 'request',
+      data: { success: false },
+      requestId: 'failed-request',
+    })
+    const prepared = await client.prepare()
+    expect(prepared.success).toBe(true)
+    if (!prepared.success)
+      return
+    const { evidence, errorId } = prepared.data
+    expect(errorId).toBeDefined()
+    expect(evidence.filter(item => item.requestId === 'failed-request')).toEqual([
+      expect.objectContaining({ kind: 'request', errorId }),
+    ])
+  })
+
+  it('服务端须独占唯一证据名额时仍允许提交并标记裁剪', async () => {
+    const { client, transport } = await setup({
+      budget: apiContract.resolveFeedbackBudget({ maxEvidenceCount: 1 }),
+      afterCount: 0,
+    })
+    await client.prepare()
+    expect(client.getDraft()?.missing).toContain('browser-draft-truncated')
+    expect((await client.submit()).success).toBe(true)
+    expect(vi.mocked(transport.submit).mock.calls[0]?.[0].evidence).toEqual([])
+  })
+
+  it('首批证据上限之外的材料随已受理报告正常追加', async () => {
+    const { client, transport } = await setup({ maxEvents: 1200, beforeCount: 1200, afterCount: 0 })
+    for (let index = 0; index < 1001; index++) {
+      client.record({
+        kind: 'log',
+        data: { index },
+      })
+    }
+    const prepared = await client.prepare()
+    expect(prepared.success).toBe(true)
+    expect((await client.submit()).success).toBe(true)
+    expect((await client.flush()).success).toBe(true)
+    const submitted = vi.mocked(transport.submit).mock.calls[0]?.[0].evidence ?? []
+    const appended = vi.mocked(transport.appendEvidence).mock.calls.flatMap(([input]) => input.evidence)
+    expect(submitted).toHaveLength(1000)
+    expect(appended).toHaveLength(2)
+    expect(new Set([
+      ...submitted,
+      ...appended,
+    ].map(item => item.id)).size).toBe(1002)
+  })
+
   it('容量淘汰明确记录缺失，beforeCount为0不会反而返回全部历史', async () => {
     const { client } = await setup({ maxEvents: 5, beforeCount: 0 })
     for (let index = 0; index < 20; index++) {
@@ -780,6 +901,32 @@ describe('feedback browser collection', () => {
     expect(transport.completeCollection).toHaveBeenCalledOnce()
     await client.submit()
     expect(transport.submit).toHaveBeenCalledTimes(2)
+  })
+
+  it('旧附件被拒后仍可保存，用户选择新建时不再次上传旧草稿', async () => {
+    const transport = actions()
+    vi.mocked(transport.upload).mockResolvedValue(core.err({ code: 'review:invalid-file', httpStatus: 400, message: 'Invalid file' }))
+    const { client } = await setup({ actions: transport, afterCount: 0 })
+    await client.prepare()
+    await client.addFiles([
+      plainTextFile('Local notes'),
+    ])
+    expect((await client.submit({ description: 'Already accepted' })).success).toBe(true)
+    expect((await client.flush()).success).toBe(false)
+    const previous = await client.prepare()
+    expect(previous.success && previous.data.report?.number).toBe(report.number)
+    const saved = await client.exportDraft()
+    expect(saved.success).toBe(true)
+    if (!saved.success)
+      return
+    const parsed = await feedback.readBundle(saved.data)
+    expect(parsed.success && parsed.data.report.description).toBe('Already accepted')
+    expect(parsed.success && parsed.data.manifest.files.some(file => file.name === 'diagnostic.log')).toBe(true)
+    const uploads = vi.mocked(transport.upload).mock.calls.length
+    const started = await client.prepare({ startNew: true })
+    expect(started.success && started.data.submissionId).not.toBe(previous.success && previous.data.submissionId)
+    expect(started.success && started.data.report).toBeUndefined()
+    expect(transport.upload).toHaveBeenCalledTimes(uploads)
   })
 
   it('持久化需要产品提供身份范围，不能把其他用户材料恢复进当前反馈', async () => {

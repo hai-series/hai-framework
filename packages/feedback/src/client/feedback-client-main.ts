@@ -3,6 +3,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { FeedbackBrowserClient, FeedbackClientAttachment, FeedbackClientConfig, FeedbackClientSubmitInput, FeedbackDraft } from './feedback-client-types.js'
 import { apiContract, FeedbackBudgetSchema, FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
+import { feedbackClientEvidenceLimits } from '../feedback-evidence-budget.js'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
 import { saveFeedbackFile } from './feedback-client-files.js'
@@ -46,6 +47,18 @@ function feedbackFileContentType(file: File): string | undefined {
   ].includes(normalized)
     ? normalized
     : undefined
+}
+
+function sanitizeFeedbackJsonAttachment(raw: string): Uint8Array | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  }
+  catch {
+    // 原生 JSON 解析异常可能含有原始附件正文。
+    return undefined
+  }
+  return new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(parsed)))
 }
 
 /**
@@ -168,9 +181,10 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   function limits() {
+    const server = feedbackClientEvidenceLimits(budget)
     return {
-      events: Math.min(config?.maxEvents ?? 1000, budget.maxEvidenceCount),
-      bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, budget.maxEvidenceBytes),
+      events: Math.min(config?.maxEvents ?? 1000, server.events),
+      bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, server.bytes),
       age: config?.maxAgeMs ?? 300_000,
       before: config?.beforeCount ?? 100,
       after: config?.afterCount ?? 100,
@@ -209,13 +223,16 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     const item = entry.data
     const size = new TextEncoder().encode(JSON.stringify(item)).byteLength
     const bounds = limits()
-    if (size > Math.min(bounds.bytes, 64 * 1024)) {
+    if (bounds.events === 0 || size > Math.min(bounds.bytes, 64 * 1024)) {
       dropped++
+      missing.add('browser-draft-truncated')
+      if (draft && !collectionFinished && !collectionSealed && !draft.missing.includes('browser-draft-truncated'))
+        draft.missing.push('browser-draft-truncated')
       return
     }
     buffer.push(item)
     bufferBytes += size
-    while (buffer.length > bounds.events || bufferBytes > bounds.bytes || (buffer[0]?.timestamp ?? 0) < Date.now() - bounds.age) {
+    while (buffer.length && (buffer.length > bounds.events || bufferBytes > bounds.bytes || buffer[0]!.timestamp < Date.now() - bounds.age)) {
       const removed = buffer.shift()
       if (removed)
         bufferBytes -= new TextEncoder().encode(JSON.stringify(removed)).byteLength
@@ -258,13 +275,38 @@ export function createFeedbackClient(): FeedbackBrowserClient {
 
   function appendToDraft(item: FeedbackEvidenceInput, size: number, snapshot = false) {
     const bounds = limits()
-    if (draft && !collectionFinished && !collectionSealed && (snapshot || (Date.now() <= deadline && afterCount < bounds.after) || item.kind === 'environment') && draft.evidence.length < bounds.events && draftBytes + size <= bounds.bytes) {
-      draft.evidence.push(item)
-      draftBytes += size
-      if (item.kind === 'log' || item.kind === 'error')
-        afterCount++
-      schedulePersist()
+    if (!draft || collectionFinished || collectionSealed || (!snapshot && !(Date.now() <= deadline && afterCount < bounds.after) && item.kind !== 'environment'))
+      return
+    const addedBytes = size + (draft.evidence.length ? 1 : 0)
+    if (draft.evidence.length >= bounds.events || draftBytes + addedBytes > bounds.bytes) {
+      if (!draft.missing.includes('browser-draft-truncated'))
+        draft.missing.push('browser-draft-truncated')
+      return
     }
+    draft.evidence.push(item)
+    draftBytes += addedBytes
+    if (item.kind === 'log' || item.kind === 'error')
+      afterCount++
+    schedulePersist()
+  }
+
+  function trimDraftEvidence(current: FeedbackDraft) {
+    const bounds = limits()
+    const encoder = new TextEncoder()
+    let bytes = encoder.encode(JSON.stringify(current.evidence)).byteLength
+    let removed = 0
+    while (removed < current.evidence.length && (current.evidence.length - removed > bounds.events || bytes > bounds.bytes)) {
+      bytes -= encoder.encode(JSON.stringify(current.evidence[removed])).byteLength + (removed + 1 < current.evidence.length
+        ? 1
+        : 0)
+      removed++
+    }
+    if (removed) {
+      current.evidence.splice(0, removed)
+      if (!current.missing.includes('browser-draft-truncated'))
+        current.missing.push('browser-draft-truncated')
+    }
+    draftBytes = bytes
   }
 
   function listen<K extends keyof WindowEventMap>(name: K, callback: (event: WindowEventMap[K]) => void) {
@@ -339,8 +381,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             return failure('NOT_INITIALIZED')
           if (restored && Array.isArray(restored.evidence) && restored.evidence.every(item => FeedbackEvidenceInputSchema.safeParse(item).success)
             && Array.isArray(restored.attachments) && restored.attachments.every(item => item.bytes instanceof Uint8Array)
-            && (!restored.report || FeedbackReportSchema.safeParse(restored.report).success)) {
+            && Array.isArray(restored.missing) && restored.missing.every(reason => typeof reason === 'string')
+            && (!restored.report || FeedbackReportSchema.safeParse(restored.report).success)
+            && (!restored.submission || FeedbackSubmitInputSchema.safeParse(restored.submission).success)) {
             draft = restored
+            // 已确认的初始包络可直接恢复，不占用追加窗口或反复发送已 ACK 的证据。
+            if (restored.report)
+              initialIds = new Set(restored.submission?.evidence?.map(item => item.id))
+            if (!restored.report && !restored.submission)
+              trimDraftEvidence(restored)
+            else
+              draftBytes = new TextEncoder().encode(JSON.stringify(restored.evidence)).byteLength
             missing.add('browser-session-interrupted')
             deadline = Date.now()
           }
@@ -506,14 +557,19 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           })
           if (!safe.success)
             return
+          const bytes = new TextEncoder().encode(JSON.stringify(safe.data)).byteLength
+          if (bytes > Math.min(limits().bytes, 1024 * 1024)) {
+            missing.add('replay-snapshot-truncated')
+            return
+          }
           replayChunks.at(-1)?.push(safe.data)
           // 按需启动的当前页面快照属于本次准备材料，即使错误的后采窗口已结束也保留。
-          appendToDraft(safe.data, new TextEncoder().encode(JSON.stringify(safe.data)).byteLength, event.type === 2 || event.type === 4)
+          appendToDraft(safe.data, bytes, event.type === 2 || event.type === 4)
           while (replayChunks.length > 2)
             replayChunks.shift()
           const count = replayChunks.reduce((total, chunk) => total + chunk.length, 0)
-          const bytes = new TextEncoder().encode(JSON.stringify(replayChunks)).byteLength
-          if (count > limits().events || bytes > limits().bytes) {
+          const totalBytes = new TextEncoder().encode(JSON.stringify(replayChunks)).byteLength
+          if (count > limits().events || totalBytes > limits().bytes) {
             replayChunks = []
             missing.add('replay-capacity-exceeded')
           }
@@ -587,28 +643,36 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     return bounded(captured, activeConfig.screenshotTimeoutMs ?? 3000, controller)
   }
 
-  async function doPrepare(): Promise<HaiResult<FeedbackDraft>> {
+  async function doPrepare(options: { startNew?: boolean }): Promise<HaiResult<FeedbackDraft>> {
     if (!config || closing)
       return failure('NOT_INITIALIZED')
     const activeConfig = config
     // 先等上一轮补传退出，再收口本次窗口，避免复用收口前已完成的 Promise。
-    if (flushPromise) {
-      const pending = await flushPromise
-      if (!pending.success)
-        return pending
-      if (closing || config !== activeConfig)
-        return failure('NOT_INITIALIZED')
-    }
+    const pending = await flushPromise
+    if (closing || config !== activeConfig)
+      return failure('NOT_INITIALIZED')
     if (draft?.report && !collectionFinished) {
-      // 新反馈开始前先确认上一份待传材料，不能以关闭弹窗丢弃附件。
-      if (Date.now() < deadline && afterCount < limits().after)
-        draft.missing.push('collection-ended-by-new-feedback')
-      deadline = Date.now()
-      const settled = await flush()
-      if (!settled.success)
-        return settled
-      if (closing || config !== activeConfig)
-        return failure('NOT_INITIALIZED')
+      // 已受理但材料未传完时仍允许打开旧草稿并保存；只有用户明确选择才停止补传并替换。
+      if (!options.startNew) {
+        if (Date.now() < deadline && afterCount < limits().after)
+          draft.missing.push('collection-ended-by-new-feedback')
+        deadline = Date.now()
+        if (pending?.success !== false)
+          await flush()
+        if (closing || config !== activeConfig)
+          return failure('NOT_INITIALIZED')
+        if (!collectionFinished) {
+          pause()
+          return core.ok(draft)
+        }
+      }
+      else {
+        collectionFinished = true
+        if (config.persistDraft)
+          await deleteFeedbackDraft(storageKey).catch(() => missing.add('browser-persistence-unavailable'))
+        if (closing || config !== activeConfig)
+          return failure('NOT_INITIALIZED')
+      }
     }
     if (draft && !collectionFinished) {
       if (!draft.submission && config.screenshot !== false && preparedPage !== pageIdentity()) {
@@ -653,7 +717,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           return true
         }).sort((a, b) => a.sequence - b.sequence)
       : logs.slice(Math.max(0, logs.length - limits().before))
-    const other = buffer.filter(item => item.kind !== 'log' && item.kind !== 'error').slice(-100)
+    const other = buffer.filter(item => item.kind !== 'log' && item.kind !== 'error' && !selectedIds.has(item.id)).slice(-100)
     if (keyScreenshotPromise)
       await keyScreenshotPromise
     if (closing || config !== activeConfig)
@@ -673,11 +737,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       missing: [...missing],
       expiresAt: now + 86_400_000,
     }
-    while (draft.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength > limits().bytes) {
-      draft.evidence.shift()
-      missing.add('browser-draft-truncated')
-    }
-    draftBytes = new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength
+    trimDraftEvidence(draft)
     if (dropped)
       draft.missing.push(`browser-buffer-truncated:${dropped}`)
     afterCount = frozenWindow?.after ?? (anchor
@@ -711,8 +771,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     return core.ok(draft)
   }
 
-  function prepare(): Promise<HaiResult<FeedbackDraft>> {
-    preparePromise ??= doPrepare().finally(() => {
+  function prepare(options: { startNew?: boolean } = {}): Promise<HaiResult<FeedbackDraft>> {
+    preparePromise ??= doPrepare(options).finally(() => {
       preparePromise = undefined
     })
     return preparePromise
@@ -821,12 +881,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         policyVerified = true
         missing.delete('server-policy-unavailable')
         current.missing = current.missing.filter(reason => reason !== 'server-policy-unavailable')
-        while (current.evidence.length && (current.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(current.evidence)).byteLength > limits().bytes)) {
-          current.evidence.shift()
-          if (!current.missing.includes('browser-draft-truncated'))
-            current.missing.push('browser-draft-truncated')
-        }
-        draftBytes = new TextEncoder().encode(JSON.stringify(current.evidence)).byteLength
+        if (!current.submission)
+          trimDraftEvidence(current)
       }
       const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({
         description: sanitizeFeedbackData({ text: input.description ?? '' }).text,
@@ -841,15 +897,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         return failure('NOT_INITIALIZED')
       if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
         return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
-      if (!current.submission && input.removedAttachmentIds?.length)
-        current.attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
       if (!current.submission) {
-        const added = await addFiles(input.files ?? [])
+        const added = await addFiles(input.files ?? [], input.removedAttachmentIds)
         if (!added.success)
           return added
       }
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
+      if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
+        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
       current.submission ??= FeedbackSubmitInputSchema.parse({
         submissionId: current.submissionId,
         appId: config.appId,
@@ -863,7 +919,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         contact: input.contact,
         url: feedbackPageUrl(location.href),
         anchor: { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId },
-        evidence: current.evidence,
+        evidence: current.evidence.slice(0, 1000),
         attachments: current.attachments.map(({ bytes: _bytes, ...metadata }) => metadata),
       })
       current.userInputFingerprint = fingerprint
@@ -1029,18 +1085,20 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         const contentType = feedbackFileContentType(file)
         if (!contentType)
           return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
-        let bytes: Uint8Array
+        let bytes: Uint8Array | undefined
         if (contentType.startsWith('text/') || contentType === 'application/json') {
           const raw = await file.text()
           if (contentType === 'application/json' && raw.length > 8192)
             newMissing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
           bytes = contentType === 'application/json'
-            ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(raw))))
+            ? sanitizeFeedbackJsonAttachment(raw)
             : new TextEncoder().encode(sanitizeFeedbackText(raw))
         }
         else {
           bytes = new Uint8Array(await file.arrayBuffer())
         }
+        if (!bytes)
+          return failure('INVALID_INPUT')
         if (bytes.byteLength > budget.maxAttachmentBytes)
           return failure('LIMIT_EXCEEDED')
         const item = await attachment(file.name, contentType, bytes)
@@ -1071,16 +1129,20 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   async function exportDraft(input: FeedbackClientSubmitInput = {}): Promise<HaiResult<Uint8Array>> {
-    if (!draft)
+    const current = draft
+    const activeConfig = config
+    if (!current || !activeConfig || closing)
       return failure('NOT_INITIALIZED')
     try {
       const { feedback: bundleFeedback } = await import('../bundle/index.js')
-      const attachments = [...draft.attachments]
-      if (!draft.submission) {
+      if (closing || draft !== current || config !== activeConfig)
+        return failure('NOT_INITIALIZED')
+      let attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
+      if (!current.submission) {
         const added = await addFiles(input.files ?? [])
         if (!added.success)
           return added
-        attachments.splice(0, attachments.length, ...draft.attachments)
+        attachments = current.attachments.filter(item => !input.removedAttachmentIds?.includes(item.id))
       }
       else {
         // 离线兜底保留失败后新增的本地文件，但不改变已发送包络或后续上传队列。
@@ -1091,10 +1153,12 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           if (!contentType)
             return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
           const bytes = contentType === 'application/json'
-            ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(await file.text()))))
+            ? sanitizeFeedbackJsonAttachment(await file.text())
             : contentType.startsWith('text/')
               ? new TextEncoder().encode(sanitizeFeedbackText(await file.text()))
               : new Uint8Array(await file.arrayBuffer())
+          if (!bytes)
+            return failure('INVALID_INPUT')
           if (bytes.byteLength > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
           const item = await attachment(file.name, contentType, bytes)
@@ -1102,29 +1166,46 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             attachments.push(item)
         }
       }
+      if (closing || draft !== current || config !== activeConfig)
+        return failure('NOT_INITIALIZED')
+      if (attachments.reduce((total, item) => total + item.size, 0) > budget.maxAttachmentsBytes)
+        return failure('LIMIT_EXCEEDED')
+      const { submission, report } = current
+      const description = input.description ?? report?.description ?? submission?.description ?? ''
+      const category = input.category ?? report?.category ?? submission?.category
+      const contact = input.contact ?? report?.contact ?? submission?.contact
       return bundleFeedback.createBundle({
         maxBytes: budget.maxTotalBytes,
         report: {
-          ...(draft.report ?? {
-            id: draft.submissionId,
-            appId: config?.appId,
-            appVersion: config?.appVersion,
-            buildId: config?.buildId,
-            commit: config?.commit,
-            url: draft.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url,
-            anchor: { kind: draft.anchorKind, timestamp: draft.anchorTime },
+          ...(report ?? {
+            id: current.submissionId,
+            appId: submission ? submission.appId : activeConfig.appId,
+            appVersion: submission ? submission.appVersion : activeConfig.appVersion,
+            buildId: submission ? submission.buildId : activeConfig.buildId,
+            commit: submission ? submission.commit : activeConfig.commit,
+            url: submission?.url ?? current.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url,
+            anchor: submission?.anchor ?? { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId },
             evidenceRevision: 1,
           }),
-          ...sanitizeFeedbackData({ description: input.description ?? draft.report?.description ?? '', category: input.category, contact: input.contact }),
+          ...sanitizeFeedbackData({
+            description,
+            ...(category === undefined
+              ? {}
+              : { category }),
+            ...(contact === undefined
+              ? {}
+              : { contact }),
+          }),
         },
-        evidence: draft.evidence,
-        attachments: attachments.filter(item => !input.removedAttachmentIds?.includes(item.id)),
+        evidence: current.evidence,
+        attachments,
         missing: [
           ...new Set([
-            ...draft.missing,
+            ...current.missing,
             ...missing,
-            ...(!draft.report
-              ? ['server-evidence-not-obtained', 'feedback-not-yet-accepted']
+            'server-evidence-not-obtained',
+            ...(!report
+              ? ['feedback-not-yet-accepted']
               : []),
           ]),
         ],
@@ -1218,12 +1299,13 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     exportDraft,
     async saveDraft(input) {
       const session = config
+      const current = draft
       const exported = await exportDraft(input)
       if (!exported.success)
         return exported
-      if (closing || !session || session !== config)
+      if (closing || !session || session !== config || current !== draft)
         return failure('NOT_INITIALIZED')
-      return saveFeedbackFile(exported.data, `feedback-${draft?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
+      return saveFeedbackFile(exported.data, `feedback-${current?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
     },
     close,
     get budget() {
