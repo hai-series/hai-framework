@@ -168,6 +168,8 @@ Read and copy options
 
 `metadata` holds application-defined string values that `head` can read after upload. Local infers an omitted `contentType` from the file extension. S3 accepts `cacheControl: "max-age=3600"` for caching and `contentDisposition: 'attachment; filename="report.txt"'` for the downloaded filename.
 
+Local reserves the `.hai-storage-meta` directory and any path segment ending in `.upload.tmp`. An application key such as `report.meta.json` can be used as an ordinary object. Metadata reads require the record for the current file identity. [Local metadata storage](../data/storage.en.md)
+
 #### Scenario: Read, write and copy files
 
 ```ts

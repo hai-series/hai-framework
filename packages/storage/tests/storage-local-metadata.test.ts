@@ -44,41 +44,24 @@ it('unknown filesystem failures retain the full IO error definition and a safe p
 })
 
 it('metadata preparation failure does not publish or overwrite content', async () => {
-  await writeFile(join(root, 'report.txt'), 'legacy content')
-  await writeFile(join(root, 'report.txt.meta.json'), JSON.stringify({
-    contentType: 'text/plain',
-    metadata: { owner: 'legacy' },
-  }))
+  await writeFile(join(root, 'report.txt'), 'existing content')
   await writeFile(join(root, '.hai-storage-meta'), 'blocked metadata directory')
   const result = await storage.file.put('report.txt', 'new content', {
     metadata: { owner: 'new' },
   })
   expect(result.success).toBe(false)
-  expect(await readFile(join(root, 'report.txt'), 'utf8')).toBe('legacy content')
-  expect(await readFile(join(root, 'report.txt.meta.json'), 'utf8')).toBe(JSON.stringify({
-    contentType: 'text/plain',
-    metadata: { owner: 'legacy' },
-  }))
+  expect(await readFile(join(root, 'report.txt'), 'utf8')).toBe('existing content')
   expect((await storage.file.put('new.txt', 'new', { ifNoneMatch: '*' })).success).toBe(false)
   expect(await storage.file.exists('new.txt')).toEqual({ success: true, data: false })
 })
 
-it('requires the current generation record and never inherits a legacy sidecar', async () => {
-  await writeFile(join(root, 'report.txt'), 'legacy')
-  await writeFile(join(root, 'report.txt.meta.json'), JSON.stringify({
-    contentType: 'text/html',
-    metadata: { owner: 'legacy' },
-  }))
+it('requires the current generation record and writes an explicit empty record on put', async () => {
+  await writeFile(join(root, 'report.txt'), 'existing content')
   expect(await storage.file.head('report.txt')).toMatchObject({
     success: false,
     error: { code: HaiStorageError.OPERATION_FAILED.code },
   })
   expect((await storage.file.put('report.txt', 'new')).success).toBe(true)
-  // 模拟保留的旧旁车文件；新版本必须读取当前代际的显式空记录。
-  await writeFile(join(root, 'report.txt.meta.json'), JSON.stringify({
-    contentType: 'text/html',
-    metadata: { owner: 'legacy' },
-  }))
   expect(await storage.file.head('report.txt')).toMatchObject({
     success: true,
     data: { contentType: 'text/plain', metadata: undefined },
@@ -97,7 +80,7 @@ it.each(['{"secret":"metadata-secret-sentinel",', '{"metadata":{"secret":123}}',
   expect(JSON.stringify(result)).not.toContain('metadata-secret-sentinel')
 })
 
-it.each(['file.meta.json/child.txt', 'file.upload.tmp/child.txt', '.hai-storage-meta/child.txt'])('rejects internal metadata namespaces in every path segment: %s', async (key) => {
+it.each(['file.upload.tmp/child.txt', '.hai-storage-meta/child.txt'])('rejects internal metadata namespaces in every path segment: %s', async (key) => {
   for (const result of [await storage.file.put(key, 'blocked'), await storage.file.get(key), await storage.dir.delete(key)]) {
     expect(result.success).toBe(false)
     if (!result.success)

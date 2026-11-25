@@ -292,7 +292,7 @@ describe('storage.file', () => {
       if (headResult.success) {
         expect(headResult.data.key).toBe('with-meta.txt')
         expect(headResult.data.contentType).toBe('text/plain')
-        // metadata 应存在（local 通过 .meta.json，s3 通过 Metadata header）
+        // 从文件头读取上传时保存的业务元数据
         expect(headResult.data.metadata).toBeDefined()
         if (headResult.data.metadata) {
           expect(headResult.data.metadata.author).toBe('test')

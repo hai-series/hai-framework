@@ -172,6 +172,8 @@ if (!closeResult.success)
 
 `metadata` はアプリ独自の文字列のキーと値です。アップロード後に `head` で確認できます。Local では `contentType` を省略すると拡張子から推定します。S3 では `cacheControl: "max-age=3600"` でキャッシュ指示、`contentDisposition: 'attachment; filename="report.txt"'` でダウンロード時のファイル名を設定できます。
 
+Local は `.hai-storage-meta` ディレクトリーと、末尾が `.upload.tmp` のパス要素を予約します。`report.meta.json` は通常のオブジェクトキーとして使えます。メタデータの取得には、現在のファイルの識別情報に対応するレコードが必要です。[ローカルのメタデータ保存](../data/storage.ja.md)
+
 #### 利用例：ファイルの読み書きとコピー
 
 ```ts

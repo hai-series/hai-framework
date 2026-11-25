@@ -210,13 +210,9 @@ function isMetadataRecord(value: unknown): value is { contentType?: string, meta
   return true
 }
 
-/**
- * 检查 key 的任何路径片段是否占用内部元数据或临时文件命名空间
- *
- * 旧旁车文件同样保留为内部路径，避免升级后将遗留元数据当作业务文件暴露。
- */
+/** 检查 key 的任何路径片段是否占用内部元数据或临时文件命名空间。 */
 function isMetaFile(key: string): boolean {
-  return key.toLowerCase().split(PATH_SEGMENT_SPLIT_REGEX).some(segment => segment === METADATA_DIRECTORY || segment.endsWith('.meta.json') || segment.endsWith('.upload.tmp'))
+  return key.toLowerCase().split(PATH_SEGMENT_SPLIT_REGEX).some(segment => segment === METADATA_DIRECTORY || segment.endsWith('.upload.tmp'))
 }
 
 /**

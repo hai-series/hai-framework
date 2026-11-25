@@ -42,10 +42,9 @@ it('blocks reserved suffix case variants and Windows trailing characters or alte
     metadata: { owner: 'old' },
   })).success).toBe(true)
   const keys = [
-    'file.txt.META.JSON',
     'file.UPLOAD.TMP',
     ...(process.platform === 'win32'
-      ? ['file.txt.meta.json.', 'file.txt.meta.json ', 'file.txt.meta.json:stream']
+      ? ['file.txt.upload.tmp.', 'file.txt.upload.tmp ', 'file.txt.upload.tmp:stream']
       : []),
   ]
   for (const key of keys) {

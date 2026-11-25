@@ -209,14 +209,6 @@ describe('storageConfigSchema', () => {
       expect(result.fileMode).toBe(0o600)
       expect(result.operationLog).toEqual({ read: false, write: false, maxLength: 1000 })
     })
-
-    it('旧配置中的操作日志等级不再进入解析结果', () => {
-      const result = LocalConfigSchema.parse({
-        ...validLocal,
-        operationLog: { read: true, level: 'warn' },
-      })
-      expect(result.operationLog).toEqual({ read: true, write: true, maxLength: 1000 })
-    })
   })
 
   // ─── 联合 Schema ───

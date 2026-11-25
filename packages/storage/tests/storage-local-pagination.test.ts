@@ -113,20 +113,21 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
       'mixed/b/2.txt',
       'mixed/c.txt',
       'mixed/d/1.txt',
+      'mixed/report.meta.json',
     ])
       expect((await storage.file.put(key, key)).success).toBe(true)
     await mkdir(join(root.root, 'mixed', 'empty'), { recursive: true })
-    await writeFile(join(root.root, 'mixed', 'hidden.meta.json'), '{}')
     await writeFile(join(root.root, 'mixed', 'hidden.upload.tmp'), 'pending')
     const expected = [
       'mixed/a.txt',
       'mixed/b/',
       'mixed/c.txt',
       'mixed/d/',
+      'mixed/report.meta.json',
     ]
     const received: string[] = []
     let token: string | undefined
-    for (let page = 0; page < 4; page++) {
+    for (let page = 0; page < expected.length; page++) {
       const result = await storage.dir.list({
         prefix: 'mixed/',
         delimiter: '/',
@@ -140,7 +141,7 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
       expect(visible).toHaveLength(1)
       received.push(...visible)
       token = result.data.nextContinuationToken
-      expect(result.data.isTruncated).toBe(page < 3)
+      expect(result.data.isTruncated).toBe(page < expected.length - 1)
     }
     expect(received).toEqual(expected)
     expect(token).toBeUndefined()
