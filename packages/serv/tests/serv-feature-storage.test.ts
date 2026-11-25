@@ -131,6 +131,7 @@ describe('serv feature storage', () => {
     expect(body.error.cause).toEqual([
       { field: 'keys.1', message: '输入格式无效' },
     ])
+    expect(body).not.toHaveProperty('errors')
   })
 
   it('deleteMany 的 HTTP 契约保留部分成功与逐项失败进度', async () => {

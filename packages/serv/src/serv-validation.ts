@@ -20,17 +20,15 @@ const DEFAULT_LOCALE = 'zh-CN'
 /**
  * 校验失败响应体（含 i18n 错误列表）。
  *
- * 复用 `HaiResult` 失败分支结构。字段错误同时在两处出现：
- * - `error.cause`：与 `validateInputOrFail` 输出对齐，HaiResult 标准位置
- * - 顶层 `errors`：保留以兼容已有客户端
+ * 复用 `HaiResult` 失败分支结构。字段错误位于 `error.cause`。
  *
  * @example
  * ```ts
  *
- * import { type ServValidationFailureBody, serv } from '@h-ai/serv'
+ * import type { ServValidationFailureBody } from '@h-ai/serv'
  *
  * function fields(body: ServValidationFailureBody) {
- *   return body.error.cause ?? body.errors
+ *   return body.error.cause
  * }
  * // 业务调用先判断 success，字段错误仅包含安全的本地化文案。
  * ```
@@ -44,9 +42,8 @@ export interface ServValidationFailureBody {
     readonly httpStatus: number
     readonly system: string
     readonly module: string
-    readonly cause?: readonly ValidationFormError[]
+    readonly cause: readonly ValidationFormError[]
   }
-  readonly errors: readonly ValidationFormError[]
 }
 
 /**

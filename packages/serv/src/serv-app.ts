@@ -704,9 +704,7 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
   const issues = payload.data.issues
   const locale = resolveRequestLocale(requestHeaders)
   const errors = localizeZodError({ issues }, locale)
-  // 与 `validateInputOrFail` 输出对齐：errors 同时挂在 `error.cause` 上，
-  // 使两条校验路径的客户端解析逻辑一致（都从 `error.cause` 读取字段错误）。
-  // 顶层 `errors` 字段保留，兼容已有客户端读法。
+  // 与 `validateInputOrFail` 一致，客户端从 `error.cause` 读取字段错误。
   const body: ServValidationFailureBody = {
     success: false,
     error: {
@@ -721,7 +719,6 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
       module: HaiCommonError.VALIDATION_ERROR.module,
       cause: errors,
     },
-    errors,
   }
 
   // 保留原响应头（其中可能包含安全头），仅替换 body 与 status。
