@@ -165,6 +165,7 @@
     "mermaid": "catalog:",
     "mind-elixir": "catalog:",
     "monaco-editor": "catalog:",
+    "pdfjs-dist": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:"
   },

@@ -23,8 +23,10 @@
   import type { FileItem, FileListProps } from '../types.js'
   import { getUILocale, uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
+  import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
+  import FilePdfPreview from './FilePdfPreview.svelte'
 
   const {
     files = [],
@@ -248,29 +250,17 @@
 
 <!-- 预览模态框 -->
 {#if previewFile}
-  <dialog class='modal modal-open' onclick={closePreview}>
-    <div
-      class='modal-box max-w-4xl'
-      role='dialog'
-      tabindex='-1'
-      onclick={e => e.stopPropagation()}
-      onkeydown={e => e.stopPropagation()}
-    >
-      <IconButton variant='ghost' size='sm' class='absolute right-2 top-2' onclick={closePreview} ariaLabel={uiM('file_list_close')}>✕</IconButton>
-      <h3 class='font-bold text-lg mb-4'>{previewFile.name}</h3>
-
-      {#if previewFile.type.startsWith('image/')}
-        <img src={previewFile.url} alt={previewFile.name} class='max-w-full max-h-[70vh] mx-auto' />
-      {:else if previewFile.type.startsWith('video/')}
-        <video src={previewFile.url} controls class='max-w-full max-h-[70vh] mx-auto'>
-          <track kind='captions' />
-        </video>
-      {:else if previewFile.type === 'application/pdf'}
-        <iframe src={previewFile.url} class='w-full h-[70vh]' title={previewFile.name}></iframe>
-      {/if}
-    </div>
-    <form method='dialog' class='modal-backdrop'>
-      <Button>{uiM('file_list_close')}</Button>
-    </form>
-  </dialog>
+  <Modal open title={previewFile.name} size='4xl' onclose={closePreview}>
+    {#if !previewFile.url}
+      <p role='alert'>{uiM('file_list_preview_failed')}</p>
+    {:else if previewFile.type.startsWith('image/')}
+      <img src={previewFile.url} alt={previewFile.name} class='max-w-full max-h-[70vh] mx-auto' />
+    {:else if previewFile.type.startsWith('video/')}
+      <video src={previewFile.url} controls class='max-w-full max-h-[70vh] mx-auto'>
+        <track kind='captions' />
+      </video>
+    {:else if previewFile.type === 'application/pdf'}
+      <FilePdfPreview url={previewFile.url} />
+    {/if}
+  </Modal>
 {/if}

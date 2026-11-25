@@ -98,6 +98,7 @@
   "file_upload_remove": "削除",
   "file_list_no_files": "ファイルがありません",
   "file_list_preview": "プレビュー",
+  "file_list_preview_failed": "このファイルをプレビューできません",
   "file_list_download": "ダウンロード",
   "file_list_delete": "削除",
   "file_list_close": "閉じる",

@@ -2628,6 +2628,9 @@ importers:
       monaco-editor:
         specifier: 'catalog:'
         version: 0.57.0
+      pdfjs-dist:
+        specifier: 'catalog:'
+        version: 6.5.438
       shiki:
         specifier: 'catalog:'
         version: 4.6.0

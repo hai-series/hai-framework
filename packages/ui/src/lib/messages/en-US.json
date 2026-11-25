@@ -99,6 +99,7 @@
   "file_upload_remove": "Remove",
   "file_list_no_files": "No files",
   "file_list_preview": "Preview",
+  "file_list_preview_failed": "Unable to preview this file",
   "file_list_download": "Download",
   "file_list_delete": "Delete",
   "file_list_close": "Close",
