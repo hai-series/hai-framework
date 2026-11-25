@@ -267,8 +267,8 @@
     if (value === null || value === undefined) {
       return '-'
     }
-    // 自动格式化时间戳
-    if (typeof value === 'number' && col.key.toString().toLowerCase().includes('at')) {
+    // 保留 At 和 _at 命名的毫秒时间戳列，其他数字由调用方按需格式化。
+    if (typeof value === 'number' && /(?:[a-z\d]At|_at)$/.test(String(col.key))) {
       return new Date(value).toLocaleString()
     }
     return String(value)

@@ -43,6 +43,31 @@ describe('data table 列宽', () => {
     expect(body).toContain('title="安全公告"')
   })
 
+  it('保留普通数字并格式化带 At 或 _at 后缀的时间戳', () => {
+    const timestamp = Date.UTC(2030, 0, 1)
+    const { body } = render(DataTable, {
+      props: {
+        data: [
+          {
+            id: 'row',
+            rate: 95,
+            createdAt: timestamp,
+            updated_at: timestamp,
+          },
+        ],
+        columns: [
+          { key: 'rate', label: 'Rate' },
+          { key: 'createdAt', label: 'Created' },
+          { key: 'updated_at', label: 'Updated' },
+        ],
+        keyField: 'id',
+      },
+    })
+
+    expect(body).toContain('title="95"')
+    expect(body.split(`title="${new Date(timestamp).toLocaleString()}"`)).toHaveLength(3)
+  })
+
   it('可调整宽度的横向抽屉应渲染拖动手柄', () => {
     const { body } = render(Drawer, {
       props: {
