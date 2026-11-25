@@ -156,7 +156,7 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
     }))
     expect(remove).toHaveBeenCalledTimes(1)
     expect(document.body.textContent).not.toContain('Private SQL')
-    expect(confirm.isConnected).toBe(true)
+    expect(confirm.closest('dialog')?.open).toBe(true)
     expect(confirm.disabled).toBe(false)
     ui.toast.clear()
     confirm.click()
@@ -164,6 +164,77 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
     expect(remove).toHaveBeenCalledTimes(2)
   }
   finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
+it('取消等待检查的删除后，旧检查结果无法删除新记录', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const firstCheck = Promise.withResolvers<boolean>()
+  const onbeforedelete = vi.fn()
+    .mockImplementationOnce(() => firstCheck.promise)
+    .mockResolvedValue(true)
+  const remove = vi.fn(async () => {})
+  const items = [
+    { id: 'a', name: 'A' },
+    { id: 'b', name: 'B' },
+  ]
+  const data = {
+    items,
+    total: 2,
+    page: 1,
+    pageSize: 10,
+  }
+  const crud = ui.defineCrud({
+    name: 'records',
+    label: 'Records',
+    fields: [
+      { id: 'name', label: 'Name' },
+    ],
+    api: {
+      list: async () => data,
+      remove,
+    },
+  })
+  const component = mount(CrudPage, {
+    target,
+    props: {
+      crud,
+      data,
+      permissions: { create: false, update: false, delete: true },
+      nav: {
+        pathname: '/records',
+        navigate: vi.fn(),
+        refresh: vi.fn(),
+      },
+      onbeforedelete,
+    },
+  })
+  try {
+    flushSync()
+    const triggers = target.querySelectorAll<HTMLButtonElement>(`[aria-label="${uiM('crud_delete')}"]`)
+    const dialogButton = (label: string) => [
+      ...document.querySelectorAll<HTMLButtonElement>('dialog[open] button'),
+    ].find(button => button.textContent?.trim() === label)!
+
+    flushSync(() => triggers[0].click())
+    flushSync(() => dialogButton(uiM('crud_delete')).click())
+    expect(onbeforedelete).toHaveBeenCalledOnce()
+    flushSync(() => dialogButton(uiM('crud_cancel')).click())
+    flushSync(() => triggers[1].click())
+    firstCheck.resolve(true)
+    await firstCheck.promise
+    await Promise.resolve()
+    flushSync()
+
+    expect(remove).not.toHaveBeenCalled()
+    flushSync(() => dialogButton(uiM('crud_delete')).click())
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledExactlyOnceWith('b'))
+    expect(onbeforedelete).toHaveBeenNthCalledWith(2, items[1])
+  }
+  finally {
+    firstCheck.resolve(false)
     await unmount(component)
     target.remove()
   }

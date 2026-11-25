@@ -60,8 +60,10 @@
   })
 
   async function handleConfirm() {
-    await onconfirm?.()
-    open = false
+    if (loading)
+      return
+    if (await onconfirm?.() !== false)
+      open = false
   }
 
   function handleCancel() {

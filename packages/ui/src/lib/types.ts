@@ -1415,8 +1415,8 @@ export interface ConfirmProps extends DataAttributes {
   loading?: boolean
   /** 自定义类名 */
   class?: string
-  /** 确认事件 */
-  onconfirm?: () => void | Promise<void>
+  /** 确认事件；返回或解析为 false 时保持对话框打开。 */
+  onconfirm?: () => boolean | void | Promise<boolean | void>
   /** 取消事件 */
   oncancel?: () => void
 }

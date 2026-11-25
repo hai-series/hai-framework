@@ -25,7 +25,7 @@
   import type { CrudFieldDef } from './crud-controller.svelte.js'
   import type { CrudDensity, CrudFormConfig, CrudPaginationConfig } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
-  import { getContext } from 'svelte'
+  import { getContext, onDestroy } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
   import { errorMessage as operationErrorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
@@ -340,6 +340,13 @@
   /** 删除请求是否进行中。 */
   let deleting = $state(false)
   let deleteError = $state('')
+  /** 确认序号及进行中的检查，防止旧确认作用于当前记录。 */
+  let deleteConfirmation = 0
+  let confirmationPending = false
+
+  onDestroy(() => {
+    deleteConfirmation++
+  })
 
   // 过滤状态
   /** 搜索框当前值；提交时才同步到路由。 */
@@ -557,33 +564,41 @@
 
   /** 打开删除确认框并记录待删除项。 */
   function requestDelete(item: Record<string, unknown>) {
+    if (deleting)
+      return
+    deleteConfirmation++
+    confirmationPending = false
+    deleteError = ''
     deletingItem = item
     deleteConfirmOpen = true
   }
 
   /** 执行删除前钩子、删除请求和刷新流程。 */
-  async function confirmDelete() {
-    if (!deletingItem || !crud.api.remove)
-      return
+  async function confirmDelete(): Promise<boolean> {
+    const item = deletingItem
+    const api = crud.api
+    if (!deleteConfirmOpen || !item || !api.remove || confirmationPending)
+      return false
 
-    if (onbeforedelete) {
-      /** 业务删除前钩子的最终决策。 */
-      const proceed = await onbeforedelete(deletingItem)
-      if (!proceed) {
-        deleteConfirmOpen = false
-        deletingItem = null
-        return
-      }
-    }
-
-    deleting = true
+    const confirmation = deleteConfirmation
+    const id = String(item[keyField])
+    confirmationPending = true
     deleteError = ''
     try {
-      /** 待删除记录的稳定主键。 */
-      const id = String(deletingItem[keyField])
-      await crud.api.remove(id)
-      /** 保留删除成功的记录，供回调在状态清空后使用。 */
-      const deleted = deletingItem
+      if (onbeforedelete) {
+        const proceed = await onbeforedelete(item)
+        if (confirmation !== deleteConfirmation)
+          return false
+        if (!proceed) {
+          cancelDelete()
+          return false
+        }
+      }
+
+      deleting = true
+      await api.remove(id)
+      if (confirmation !== deleteConfirmation)
+        return false
       deleteConfirmOpen = false
       deletingItem = null
       // 如果删除的是当前详情/编辑中的项，关闭抽屉
@@ -591,21 +606,30 @@
         closePanel()
       }
       toast.success(uiM('crud_delete_success'))
-      onafterdelete?.(deleted)
+      onafterdelete?.(item)
       await nav.refresh?.()
+      return confirmation === deleteConfirmation
     }
     catch (e) {
-      /** 删除失败提示。 */
-      deleteError = operationErrorMessage(e, uiM('crud_delete_failed'))
-      onerror?.(deleteError)
+      if (confirmation === deleteConfirmation) {
+        deleteError = operationErrorMessage(e, uiM('crud_delete_failed'))
+        onerror?.(deleteError)
+      }
+      return false
     }
     finally {
-      deleting = false
+      if (confirmation === deleteConfirmation) {
+        confirmationPending = false
+        deleting = false
+      }
     }
   }
 
   /** 取消删除并清理确认状态。 */
   function cancelDelete() {
+    deleteConfirmation++
+    confirmationPending = false
+    deleteError = ''
     deleteConfirmOpen = false
     deletingItem = null
   }

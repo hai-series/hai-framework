@@ -16,7 +16,7 @@
   ```
 -->
 <script lang='ts'>
-  import type { DataAttributes } from '../../../types.js'
+  import type { ConfirmProps, DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
   import Confirm from '../../compounds/Confirm.svelte'
@@ -35,7 +35,7 @@
     loading?: boolean
     title?: string
     message?: string
-    onconfirm?: () => Promise<void> | void
+    onconfirm?: ConfirmProps['onconfirm']
     oncancel?: () => void
     class?: string
   } & DataAttributes = $props()
