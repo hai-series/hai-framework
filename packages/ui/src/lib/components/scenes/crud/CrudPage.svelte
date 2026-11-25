@@ -435,7 +435,8 @@
     for (const [key, val] of Object.entries(merged)) {
       /** 统一转换后的查询值。 */
       const strVal = String(val)
-      if (strVal && strVal !== '' && !(key === 'page' && strVal === '1') && !(key === 'pageSize' && strVal === String(crud.resource.defaultPageSize ?? 20))) {
+      const isDefaultPageSize = key === 'pageSize' && val === crud.resource.defaultPageSize
+      if (strVal && !(key === 'page' && strVal === '1') && !isDefaultPageSize) {
         params.set(key, strVal)
       }
     }

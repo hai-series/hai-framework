@@ -188,3 +188,43 @@ it('cRUD 默认复用卡片内查询栏，服务端排序与翻页只使用已�
     target.remove()
   }
 })
+
+it('cRUD 分页选择 20 条时，客户端控制器提交并显示 20 条', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const list = vi.fn(async (params: Record<string, unknown>) => ({
+    items: [],
+    total: 60,
+    page: Number(params.page),
+    pageSize: Number(params.pageSize),
+  }))
+  const crud = ui.defineCrud({
+    name: 'records',
+    label: 'Records',
+    fields: [
+      { id: 'name', label: 'Name', inList: true },
+    ],
+    api: { list },
+  })
+  const controller = ui.createCrudController(crud, { syncUrl: false, autoLoad: false })
+  await controller.load()
+  expect(controller.data.pageSize).toBe(10)
+  const component = mount(CrudPage, {
+    target,
+    props: { crud, data: controller.data, nav: controller.nav },
+  })
+  try {
+    flushSync()
+    const sizeControl = target.querySelector<HTMLInputElement>('[role="combobox"][id$="-size"]')!
+    flushSync(() => sizeControl.focus())
+    const option = [
+      ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ].find(item => item.textContent?.trim() === '20')!
+    flushSync(() => option.click())
+    await vi.waitFor(() => expect(controller.data.pageSize).toBe(20))
+    expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, pageSize: 20 }), expect.anything())
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})

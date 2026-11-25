@@ -413,7 +413,13 @@ export function createCrudController<T extends Record<string, unknown>>(
   const defaultPageSize = crud.resource.defaultPageSize ?? 10
   const keepPreviousData = options.keepPreviousData !== false
   const syncUrl = options.syncUrl !== false
-  const filterIds = crud.getFilterFields().map(f => f.id)
+  const queryKeys = [
+    'sortBy',
+    'sortDirection',
+    ...crud.getFilterFields().flatMap(field => field.type.trim().toLowerCase() === 'date-range'
+      ? [field.id, field.startKey ?? `${field.id}Start`, field.endKey ?? `${field.id}End`]
+      : [field.id]),
+  ]
 
   const data = $state<CrudData<T>>({
     items: [],
@@ -449,9 +455,9 @@ export function createCrudController<T extends Record<string, unknown>>(
     data.page = result.page
     data.pageSize = result.pageSize
     const filters: Record<string, unknown> = { search: params.search ?? '' }
-    for (const id of filterIds) {
-      if (params[id] !== undefined)
-        filters[id] = params[id]
+    for (const key of queryKeys) {
+      if (params[key] !== undefined)
+        filters[key] = params[key]
     }
     data.filters = filters
   }
@@ -536,15 +542,10 @@ export function createCrudController<T extends Record<string, unknown>>(
         ? Number(sp.get('pageSize'))
         : defaultPageSize,
     }
-    for (const key of ['sortBy', 'sortDirection']) {
+    for (const key of queryKeys) {
       const v = sp.get(key)
       if (v !== null && v !== '')
         params[key] = v
-    }
-    for (const id of filterIds) {
-      const v = sp.get(id)
-      if (v !== null && v !== '')
-        params[id] = v
     }
     return params
   }

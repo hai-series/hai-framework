@@ -243,6 +243,57 @@ describe('createCrudController', () => {
       { id: '1', name: 'A' },
     ])
   })
+
+  it('日期范围与排序参数进入查询并回填列表状态', async () => {
+    const controller = ui.createCrudController(ui.defineCrud<Row>({
+      name: 'row',
+      label: 'Row',
+      fields: [
+        {
+          id: 'created',
+          label: 'Created',
+          type: 'date-range',
+          filterable: true,
+        },
+        {
+          id: 'updated',
+          label: 'Updated',
+          type: 'date-range',
+          filterable: true,
+          startKey: 'from',
+          endKey: 'until',
+        },
+      ],
+      api: {
+        list: (params) => {
+          const request = deferred<PaginatedResult<Row>>()
+          calls.push({ params, deferred: request })
+          return request.promise
+        },
+      },
+    }), { autoLoad: false, syncUrl: false })
+    const filters = {
+      search: 'Ada',
+      createdStart: '2026-10-01',
+      createdEnd: '2026-10-31',
+      from: '2026-11-01',
+      until: '2026-11-20',
+      sortBy: 'name',
+      sortDirection: 'asc',
+    }
+    const query = new URLSearchParams({
+      ...filters,
+      page: '2',
+      pageSize: '20',
+      unrelated: 'ignored',
+    })
+    controller.nav.navigate(`/records?${query}`)
+    const loaded = controller.nav.refresh!()
+    expect(calls[0].params).toEqual({ ...filters, page: 2, pageSize: 20 })
+    calls[0].deferred.resolve(page([], 0, 2, 20))
+    await loaded
+    expect(controller.data.filters).toEqual(filters)
+  })
 })
 
 describe('mapPaginated', () => {
