@@ -6,6 +6,20 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js and `@h-ai/cli` | Run the deployment SDK or `hai deploy` | The SDK and CLI run on Node.js. The scaffolded deployment command uses the CLI | SDK callers prepare deployment settings and call `deploy.init()`. The CLI reads the project settings and initializes Deploy |
+| `@h-ai/core`, `@h-ai/api-contract` and `@h-ai/crypto` | Settings and diagnostics, feedback operations contracts, and encrypted gateway checks | Installed with Deploy | Use Deploy directly. It calls the utilities it needs |
+| Docker or Podman | Prepare, import and verify container images | For the corresponding `docker-ssh` image operations | Install and start the engine on the machine performing the operation |
+| OpenSSH, Linux and Compose | Deploy over SSH or apply an offline bundle on Linux | Remote delivery requires local OpenSSH. Applying a container release requires a Linux target, a Compose implementation supporting `--pull never` and deployment account permissions | Set up SSH authentication, the target engine and Compose. See the [host tools list](../configuration/delivery.md#离线交付与服务器条件) |
+| Vercel account, access token and prebuilt artifact | Publish a build to Vercel | When selecting `vercel` | Prepare a token and a Vercel Build Output API directory before initialization and deployment |
+
+### Example
+
 Scan the app and generate a deployment plan before making remote changes. Validate artifact identity and target. Use the documented recovery flow if a remote command has an uncertain result.
 
 ```sh

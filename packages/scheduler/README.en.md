@@ -12,6 +12,8 @@ Install with `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler`.
 
 [Open the quick-start guide](../../docs/usage/function/scheduler.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/scheduler.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define how often to check for work and how long a worker owns a task in `config/_scheduler.yml`. At startup, the application reads the file and passes the settings object to `scheduler.init(config)`.

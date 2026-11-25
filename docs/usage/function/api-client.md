@@ -10,6 +10,20 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| 浏览器或 Node.js、HTTP 服务 | 通过 Fetch 向服务端发送请求。 | 所有 HTTP 调用。 | 启用服务端路由，再用对应的 `baseUrl` 初始化客户端。可通过 `fetch` 选项替换运行环境提供的实现。 |
+| `@h-ai/api-contract` | 提供共享路由、输入和输出契约。 | 随 API Client 安装。应用直接导入契约时将它列为直接依赖。 | 使用内置契约，或把与服务端一致的契约传给 `apiClient.create(contract)` 后初始化实例。 |
+| `@h-ai/core` | 提供结果类型、错误和诊断能力。 | 随 API Client 安装。 | 应用自定义公共日志或配置时先配置 Core。 |
+| `@h-ai/crypto` | 提供加密传输能力。 | 随 API Client 安装。仅加密传输需要应用初始化 Crypto。 | 先配置服务端密钥交换并初始化 Crypto，再设置客户端的 `transport.crypto`。 |
+| `@orpc/client`、`@orpc/contract`、`@orpc/openapi-client`、`@orpc/zod`、`zod` | 支撑 HTTP 客户端、契约和校验。 | 随 API Client 安装。 | API Client 在内部使用。 |
+
+### 接入示例
+
 `apiClient.close()` 使当前客户端运行期失效，并等待已经开始的凭据存储操作结束。宿主可在之后把注入的 `TokenStorage` 交给新的客户端。退出登录时，先调用应用的退出接口撤销服务端会话并让浏览器接收 Cookie 清除响应，再调用 `client.auth.clear()` 清理本地凭据。
 
 `timeout` 包含等待响应头、读完整的 JSON 正文及读取所有失败响应正文的时间，例如代理返回的 HTML 错误页。请求超时或被取消后，客户端不会再为它刷新令牌。需要取消自定义流时，传入 `AbortSignal` 并用它停止读取。

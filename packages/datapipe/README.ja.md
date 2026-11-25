@@ -12,6 +12,8 @@
 
 [最小構成の導入手順](../../docs/usage/function/datapipe.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/datapipe.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/datapipe.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/datapipe.ja.md#call-options)。

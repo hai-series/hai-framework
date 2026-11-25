@@ -12,6 +12,8 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 [最小構成の導入手順](../../docs/usage/function/api-client.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/api-client.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/api-client.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/api-client.ja.md#call-options)。

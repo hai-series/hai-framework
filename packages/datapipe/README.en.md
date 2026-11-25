@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/datapipe`.
 
 [Open the quick-start guide](../../docs/usage/function/datapipe.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/datapipe.en.md#module-dependencies).
+
 ## Configuration Reference
 
 This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/datapipe.en.md); arguments or response structures are in the [reference](../../docs/usage/function/datapipe.en.md#call-options).

@@ -19,6 +19,8 @@ hai --version
 
 [跟着最小示例完成接入](../../docs/usage/function/cli.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/cli.md#module-dependencies)。
+
 ## 配置清单
 
 命令行选项控制本次执行，工程中的 `hai.json` 保存构建与发布配置。

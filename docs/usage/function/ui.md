@@ -10,6 +10,19 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `svelte` | 编译和渲染 Svelte 5 组件 | 使用 UI 组件时必需 | 在 Svelte 5 项目中导入组件，由 Svelte 挂载 |
+| `tailwindcss` 4、`daisyui` 5 | 生成组件样式和主题 | 使用预置样式时 | 构建前按[样式接入示例](#styles)配置 CSS 入口及组件扫描 |
+| `@tailwindcss/vite` | 在 Vite 构建中处理 Tailwind CSS | 使用 Tailwind 的 Vite 集成时 | 构建前在 Vite 配置中注册插件 |
+| `@h-ai/core` | 提供内置文案和结果类型 | 随 UI 安装 | 组件可直接导入 |
+
+### 接入示例
+
 把以下代码放进 Svelte 5 页面的 `+page.svelte`。
 
 ```svelte

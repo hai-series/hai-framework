@@ -12,7 +12,7 @@ On the SvelteKit server, import `kit` from `@h-ai/kit` and use `kit.createHandle
 
 Install with pnpm: `pnpm add @h-ai/kit`.
 
-[Open the quick-start guide](../../docs/usage/function/kit.en.md#quick-start).
+[Open the quick-start guide](../../docs/usage/function/kit.en.md#quick-start). [Dependencies and setup order](../../docs/usage/function/kit.en.md#module-dependencies).
 
 ## Configuration Reference
 

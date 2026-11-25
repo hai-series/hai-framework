@@ -8,42 +8,57 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `svelte`、`@sveltejs/kit` | コンポーネントとリクエストフックの実行環境を提供 | Kit の利用時に必須 | Svelte 5 プロジェクトを用意してからフックとルートを登録 |
+| `@sveltejs/adapter-node` または `@sveltejs/adapter-static` | Node サービスまたは静的サイトを生成 | デプロイ先に応じて選択 | アダプターを導入してからビルド。Node SSR では `sm-crypto@0.5.8` をアプリの本番依存関係に追加 |
+| `vite`、`@sveltejs/vite-plugin-svelte` | SvelteKit アプリのビルドとコンポーネントの前処理を実行 | 以下の Vite 導入例で使用。アプリで Tailwind を使う場合は `@tailwindcss/vite` も導入 | ビルド用の依存関係を入れ、Vite と SvelteKit を設定してからビルド |
+| `@h-ai/core`、`@h-ai/api-contract` | リクエスト用の機能、結果型、API 契約を提供 | Kit とともにインストール | 契約はそのまま使用。Core の設定はアプリで読み込む |
+| `zod` | ルート入力の検証ルールを定義 | Kit とともにインストール。独自のスキーマを定義する場合は直接インポート | スキーマを定義して対応する `kit.validate` のメソッドに渡す |
+| `@h-ai/iam` | セッションと A2A API キーを検証 | Kit とともにインストール。IAM で検証する場合に初期化 | `iam.init()` 後にセッション検証関数または `kit.a2a.createApiKeyAuthenticator()` を接続 |
+| `@h-ai/crypto` | 指定した Cookie と HTTP 本文を暗号化 | Kit とともにインストール。暗号化する場合に初期化 | Crypto を初期化して鍵を用意してから `kit.createHandle()` を呼び出す。通信暗号化ではキーリングと共有の鍵登録ストアも用意 |
+| `@h-ai/audit` | フックが捕捉した監査イベントを記録 | Kit とともにインストール。監査を有効にする場合に初期化 | リクエストの受付前に `capture` を指定して Audit を初期化 |
+| `@h-ai/cache` と Redis | レート制限の共有カウンターを提供 | 組み込みの Redis レート制限ストアを使う場合 | Redis に接続し、`kit.middleware.createCacheRateLimitStore()` でストアを作成してフックへ渡す |
+| `@h-ai/feedback` | フィードバックの REST ルートを処理 | `kit.createFeedbackHandler()` を使う場合 | Feedback を初期化し、信頼できるコンテキスト解決関数とともにハンドラーに渡す |
+
+### 利用例
+
 Kit は SvelteKit のフック、ルートハンドラー、ブラウザークライアントで使います。サーバーコードはルートを保護し、入力を検証し、業務結果を HTTP レスポンスに変換します。
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/adapter-node @sveltejs/vite-plugin-svelte vite tailwindcss @tailwindcss/vite
 ```
 
+`vite.config.ts` にプラグインを登録します。
+
 ```ts
-import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    sveltekit({
-      adapter: adapter(),
-      preprocess: [
-        vitePreprocess()
-      ],
-      compilerOptions: { runes: true },
-      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
-      paths: { base: '', relative: false },
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: ['bits-ui']
-  },
-  ssr: {
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto']
-  },
+  plugins: [sveltekit(), tailwindcss()],
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
+```
+
+`svelte.config.js` で Node アダプター、プリプロセッサー、パスを設定します。
+
+```js
+import adapter from '@sveltejs/adapter-node'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+export default {
+  preprocess: vitePreprocess(),
+  compilerOptions: { runes: true },
+  kit: { adapter: adapter(), paths: { base: '', relative: false } },
+}
 ```
 
 <a id="api-reference"></a>

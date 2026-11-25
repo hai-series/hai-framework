@@ -10,6 +10,8 @@
 
 [最小接入与自定义工具](../../docs/usage/function/tools.md#quick-start)
 
+[依赖与接入顺序](../../docs/usage/function/tools.md#module-dependencies)。
+
 ## 配置清单
 
 本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/tools.md)，调用参数或响应结构见[参考页](../../docs/usage/function/tools.md#call-options)。

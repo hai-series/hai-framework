@@ -2,7 +2,7 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
+[Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md)
 
 A cryptography module for asymmetric encryption, hashing, symmetric encryption, and password hashing.
 
@@ -11,6 +11,8 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 Install with pnpm: `pnpm add @h-ai/crypto`.
 
 [Open the quick-start guide](../../docs/usage/function/crypto.en.md#quick-start).
+
+[Dependencies and setup order](../../docs/usage/function/crypto.en.md#module-dependencies).
 
 ## Configuration Reference
 

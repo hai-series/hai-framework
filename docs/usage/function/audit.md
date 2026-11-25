@@ -10,9 +10,23 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（审计日志持久化），**需在 audit.init() 前初始化**
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js | 运行 Audit 服务。 | 所有 Audit 功能。 | 在服务端启动 Audit。 |
+| `@h-ai/reldb` | 保存和查询事件，保存告警处理状态。 | 所有 Audit 功能。 | 先启动 RelDB，再启动 Audit。关闭时按相反顺序。 |
+| `@h-ai/core` | 提供应用配置、日志和请求上下文。 | 随 Audit 安装。 | 应用集中读取配置或设置日志时先调用 `core.init()`。 |
+| `zod` | 校验配置和事件输入。 | 随 Audit 安装。 | 由 Audit 调用。 |
+| `@h-ai/storage` | 保存私有备份。 | 启用备份时安装。 | 先初始化私有 Storage，再传给 `audit.init({ ...config, storage })`。 |
+| `@h-ai/reach` | 向告警目标发送通知。 | 启用告警时安装。 | 先初始化 Reach 并配置通知渠道，再传给 `audit.init({ ...config, reach })`。 |
+| `@h-ai/scheduler` | 定期执行备份和告警检查。 | 配置自动备份或自动告警检查时安装。 | Audit 就绪后，把 `audit.schedulerPlan` 的任务和钩子交给 Scheduler。关闭时先停 Scheduler。 |
+
+启用框架自动采集时，在 IAM 启动、Kit 或 Serv 接收请求前启动 Audit。使用 Payment 的审计集成时，在处理支付前启动 Audit。应用停止处理这些操作后再关闭 Audit。见[采集触发条件](../configuration/audit.md#audit-capture)。
+
+### 接入示例
 
 在项目目录执行 `pnpm add @h-ai/audit @h-ai/reldb`。在 Node.js 开发环境执行下面的脚本。内存 SQLite 用于演示，生产应用应先接入共享 RelDB。脚本写入一条订单创建事件，再查出同一条记录。
 

@@ -10,7 +10,19 @@ Scheduler は Node.js サービスでタスクを定期実行または手動実�
 
 ## クイックスタート
 
-`pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler` でインストールします。この例ではメモリ内 SQLite を使い、`init({ tasks, hooks })` で日次売上のタスクと 4 つのフックを用意します。手動実行すると純売上は 1000 セントです。本番環境では共有の PostgreSQL または MySQL に接続します。[設定の読み込み](../configuration/scheduler.ja.md)
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `@h-ai/reldb` | タスクと実行記録を保存し、ノード間の実行権取得を調整 | 必須。ローカルでは SQLite、本番では共有 PostgreSQL または MySQL を使用 | RelDB を初期化してから `scheduler.init()` |
+| `@h-ai/core`、`croner` | ログ、共通の結果型、Cron 式の解析を提供 | Scheduler とともにインストール | Core の設定機能を使う場合は先に Core を初期化。Cron 解析の個別初期化は不要 |
+| アプリケーションのコールバックまたは外部サービス | タスク定義に沿ってコールバック、HTTP リクエスト、信頼済み JavaScript を実行 | 選択したタスク種別に応じて準備 | 初期化時に必要なコールバックと設定を渡す。定期実行する場合は初期化後に `scheduler.start()` |
+
+### 利用例
+
+`pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler` でインストールします。この例ではメモリ内 SQLite を使い、`init({ tasks, hooks })` で日次売上のタスクと 4 つのフックを用意します。手動実行すると純売上は 1000 セントです。[設定の読み込み](../configuration/scheduler.ja.md)
 
 ```ts
 import { core } from '@h-ai/core'

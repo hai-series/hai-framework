@@ -10,6 +10,8 @@
 
 [最小構成の導入手順](../../docs/usage/function/deploy.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/deploy.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 プロジェクトの `hai.json.deploy` で配布先を指定します。`hai deploy --env prod` を実行すると、CLI は prod 環境用の変数を読み込みます。アプリの接続先や認証情報は対象環境の設定に用意します。

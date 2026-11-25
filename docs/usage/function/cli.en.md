@@ -6,6 +6,21 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js and pnpm | Run the CLI, install packages and run generated app scripts | Node.js runs the CLI. pnpm is used by the example and required by the API and Fullstack templates | Install a supported Node.js release line starting at 22.23.4, 24.22.1 or 26.12.1, and pnpm 12.11.2, before installing the CLI |
+| `@h-ai/core` | Provides configuration, logging and other shared utilities | Installed with the CLI | Run `hai` directly. The CLI manages its own runtime |
+| Git | Initializes repositories and records build provenance | `hai create` initializes Git by default. Use `--no-git` to skip it | Install before scaffolding or recording build provenance |
+| `@h-ai/deploy` | Provides delivery support in the project | When running `hai deploy` | Keep deployment support during scaffolding or run `hai add deploy` from the project |
+| Docker or Podman | Builds images and runs containerized Android builds | When running `hai build --target image` or selecting a containerized Android build | Install and start a local engine before the build |
+| Platform SDKs and Rust | Build native installers | For local Android, iOS or desktop builds | Follow the [native build guide](../getting-started/build.en.md) for target SDKs. Tauri desktop builds also require Rust |
+
+### Example
+
 Install the CLI with `pnpm add -g @h-ai/cli`, then scaffold an application. Commands exit nonzero on failure.
 
 ```sh

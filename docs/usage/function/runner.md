@@ -10,11 +10,24 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/reldb` | 保存任务、事件和租约 | 提交节点和执行节点均必需。本地开发可用 SQLite，多节点连接同一 PostgreSQL 或 MySQL | 先初始化 RelDB，再调用 `runner.init()` |
+| `@h-ai/core` | 提供日志和统一结果 | 随 Runner 安装 | 应用使用 Core 配置中心时先初始化 Core |
+| Node.js | 运行服务端 API 和可信应用处理器 | 运行 Runner 的节点 | 初始化 Runner 后，在执行节点注册处理器，再提交相应任务 |
+| Podman 或 Docker | 运行隔离任务和预热容器 | 使用容器的执行节点 | 启动 Runner 执行节点前准备引擎和镜像，详见隔离执行示例 |
+
+### 接入示例
+
 ```sh
 pnpm add @h-ai/runner @h-ai/reldb
 ```
 
-先启动 RelDB，再启动 Runner。下面用 SQLite 运行一个可信的服务端处理器，无需容器引擎。把示例放在 Node.js 应用的启动脚本中运行。业务接口应从已认证身份取得 `tenantId` 和 `userId`，并在调用 Runner 前检查业务权限。
+下面用 SQLite 运行一个可信的服务端处理器。把示例放在 Node.js 应用的启动脚本中运行。业务接口应从已认证身份取得 `tenantId` 和 `userId`，并在调用 Runner 前检查业务权限。
 
 ```ts
 import { setTimeout as delay } from 'node:timers/promises' // 用于演示有界轮询。

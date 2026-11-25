@@ -12,6 +12,8 @@
 
 [最小構成の導入手順](../../docs/usage/function/reach.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/reach.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 生成したプロジェクトでは、配信チャネル、テンプレート、通知を止める時間帯、再試行ルールを `config/_reach.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `reach.init(config)` に渡します。

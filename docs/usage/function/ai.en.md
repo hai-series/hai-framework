@@ -4,9 +4,26 @@
 
 [Chinese source](ai.md) · [Configuration](../configuration/ai.en.md) · [Data structures](../data/ai.en.md)
 
+<a id="quick-start"></a>
+
 ## Quick start
 
-Initialize the configured provider before invoking AI. Start with chat or embeddings, then add tools, retrieval and durable sessions as needed. Assign the authenticated scope on the server and apply tool authorization there.
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Model service | Generate chat responses, embeddings, images, or audio | When calling the corresponding model | Prepare the model, any endpoint, and required credentials before `ai.init()` |
+| `@h-ai/reldb`, `@h-ai/vecdb` | Provide default persistent storage | When using the default persistent store. Production requires shared storage | Initialize both modules before `ai.init()`. In production, use PostgreSQL or MySQL with a networked VecDB, or inject a shared `storeProvider` |
+| `@h-ai/runner` | Run recoverable MCP and ACP jobs | When enabling background jobs backed by Runner | Initialize Runner and pass it to `ai.init(config, { runner })` |
+| `@h-ai/core`, `@h-ai/api-contract`, `@h-ai/datapipe`, `@h-ai/tools` | Provide framework utilities, audio protocols, document processing, and tool registration | Installed with AI. Create a tool registry to integrate custom tools as needed | Initialize Core first if the app uses its configuration service. Create a tool registry when needed |
+| Application HTTP or WebSocket endpoint | Provide chat or speech access for browsers | When calling AI from a browser | Configure AI and authentication on the server first. Call the app’s HTTP API for chat. Connect the audio client to WebSocket and provide `getTicket` |
+| `pdfjs-dist`, `mammoth` | Parse PDF and DOCX natively | When using the native parser for the corresponding format | Install the package for that format before use |
+
+### Example
+
+This example starts with chat. Add embeddings, tools, retrieval, and durable sessions as needed. Assign the authenticated scope on the server and apply tool authorization there.
 
 ```ts
 import { ai } from '@h-ai/ai'

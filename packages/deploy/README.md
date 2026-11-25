@@ -10,6 +10,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/deploy.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/deploy.md#module-dependencies)。
+
 ## 配置清单
 
 在项目的 `hai.json.deploy` 中指定发布目标。执行 `hai deploy --env prod` 时，CLI 读取 prod 环境的部署变量；应用的连接地址和凭据应放在该环境对应的配置中。

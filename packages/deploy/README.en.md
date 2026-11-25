@@ -10,6 +10,8 @@ Install with pnpm: `pnpm add @h-ai/deploy`.
 
 [Open the quick-start guide](../../docs/usage/function/deploy.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/deploy.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Set deployment targets in the project’s `hai.json.deploy`. When you run `hai deploy --env prod`, the CLI reads deployment variables for prod. Keep the application’s connection settings and credentials in the configuration for that environment.

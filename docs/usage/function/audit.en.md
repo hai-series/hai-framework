@@ -10,6 +10,24 @@ Record who did what, the outcome, and the request ID on the server. Query, count
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js | Runs the Audit service. | All Audit features. | Start Audit on the server. |
+| `@h-ai/reldb` | Stores and queries events and persists alert state. | All Audit features. | Start RelDB before Audit. Close them in reverse order. |
+| `@h-ai/core` | Provides application configuration, logging, and request context. | Installed with Audit. | Call `core.init()` first when the application loads shared settings or configures logging. |
+| `zod` | Validates configuration and event input. | Installed with Audit. | Audit calls it internally. |
+| `@h-ai/storage` | Stores private backups. | Install when enabling backups. | Initialize private Storage and pass it to `audit.init({ ...config, storage })`. |
+| `@h-ai/reach` | Sends alerts to configured targets. | Install when enabling alerts. | Initialize Reach and configure a notification provider, then pass Reach to `audit.init({ ...config, reach })`. |
+| `@h-ai/scheduler` | Runs periodic backups and alert checks. | Install for scheduled backups or alert checks. | Start Audit, then give Scheduler the tasks and hooks in `audit.schedulerPlan`. Close Scheduler first. |
+
+For automatic capture, start Audit before IAM starts or before Kit or Serv receives requests. If you use Payment’s audit integration, start Audit before handling payments. Stop those operations before closing Audit. See [what triggers capture](../configuration/audit.en.md#audit-capture).
+
+### Example
+
 Run `pnpm add @h-ai/audit @h-ai/reldb` in the project directory. Run this script in a Node.js development environment. It uses in-memory SQLite to write an order-creation event and find it again. Use shared RelDB in production.
 
 ```ts

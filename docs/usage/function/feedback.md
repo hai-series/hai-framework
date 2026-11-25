@@ -10,9 +10,25 @@
 
 ## 最小接入示例
 
-应用启动时先初始化 Core、RelDB 和私有 Storage，再初始化 Feedback。通知方式是 Reach 时，还须先初始化 Reach。生产部署为所有实例配置同一数据库和非公开对象存储，凭据从服务端私有配置读取。
+<a id="module-dependencies"></a>
 
-示例在应用启动时初始化模块。提交函数接收可信服务端生成的 `context` 和客户端为本次提交生成的 `submissionId`。
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/core`、`@h-ai/api-contract` | 提供日志、结果类型和反馈接口契约 | 随 Feedback 安装 | 应用通过 Core 加载服务配置时应先加载。契约可直接使用 |
+| `@h-ai/reldb` 与数据库 | 保存报告、处理状态和后台任务 | 服务端必需。RelDB 随 Feedback 安装 | 连接数据库并初始化 RelDB，再调用 `feedback.init()` |
+| `@h-ai/storage` 与非公开存储 | 保存附件和证据 | 服务端必需。Storage 随 Feedback 安装 | 初始化 Storage，再调用 `feedback.init()`。多实例部署应共享数据库和非公开对象存储 |
+| `@h-ai/reach` 与通知提供者 | 投递反馈通知 | `notificationMode: 'reach'` 时 | 初始化 Reach 并配置与 `notificationProvider` 同名的提供者，再初始化 Feedback |
+| `@h-ai/kit` 或 `@h-ai/serv` | 在 SvelteKit 或独立 HTTP 服务中挂载反馈接口 | 选择框架适配器时 | 初始化 Feedback，再将服务和可信上下文解析函数交给适配器 |
+| `@capacitor/filesystem`、`@capacitor/share` | 在 Capacitor 中保存和分享离线诊断包 | 使用 Capacitor 导出入口时 | 安装并同步两个插件，再调用导出适配器 |
+| `@tauri-apps/plugin-dialog`、`@tauri-apps/plugin-fs` | 在 Tauri 中选位置并保存离线诊断包 | 使用 Tauri 导出入口时 | 安装并注册插件，配置文件权限，再调用导出适配器 |
+
+浏览器调用 `@h-ai/feedback/client` 或离线工具调用 `@h-ai/feedback/bundle` 时，可直接使用对应入口。只有服务端需要初始化数据库和存储。
+
+### 接入示例
+
+应用启动时初始化模块，存储凭据从服务端私有配置读取。下例的提交函数接收服务端生成的可信 `context` 和客户端为本次提交生成的 `submissionId`。关闭其他依赖前调用 `feedback.close()`。
 
 ```ts
 

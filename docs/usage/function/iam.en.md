@@ -6,10 +6,28 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js | Runs authentication and authorization services. | Server-side IAM features. | Start IAM before accepting authentication requests. |
+| `@h-ai/reldb` | Stores accounts, roles, and permissions. | Required. | Initialize before `iam.init()`. |
+| `@h-ai/cache` | Manages sessions, one-time codes, and tickets. | Required. | Initialize before `iam.init()`. |
+| `@h-ai/core` | Provides logging, errors, and request context. | Installed with IAM. | Configure Core first when the application uses custom logging or shared settings. |
+| `@h-ai/crypto` | Provides password hashing and other cryptographic operations. | Installed with IAM. | `iam.init()` reuses the existing Crypto instance or initializes it as needed. |
+| `@h-ai/audit` | Captures IAM security events. | Installed with IAM. Used when the application enables audit capture. | Start Audit with `capture` enabled before IAM. Close IAM first. |
+| `@h-ai/reach` | Sends verification codes, password resets, and initial password setup invitations using standard templates. | Install when Reach handles delivery. The application can also supply its own delivery callbacks. | Initialize Reach first, then pass it to `iam.init({ ...config, reach })`. |
+| LDAP directory and `ldapts` | Connects to a directory for LDAP sign-in. | LDAP sign-in requires a reachable directory. Install `ldapts` to use the default client. | Pass directory settings to IAM. To use a custom client, pass `ldapClientFactory`. |
+| `altcha`, `zod` | Create and verify CAPTCHA challenges and validate configuration and input. | Installed with IAM. ALTCHA is used when CAPTCHA is enabled. | IAM invokes these libraries according to the configuration. |
+
+### Example
+
 Initialize the server IAM instance before accepting authentication requests. The application verifies identity before invoking authorization and uses trusted IDs for administration.
 
 ```bash
-pnpm add @h-ai/iam
+pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core
 ```
 
 ```ts

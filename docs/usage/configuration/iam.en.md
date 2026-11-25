@@ -6,7 +6,7 @@
 
 ## Configuration entry
 
-Load `_iam.yml` after database and required authentication dependencies initialized. Treat login, registration, challenges, permissions and session policies as separate controls. Publish only the form settings intended for browsers.
+Initialize RelDB and Cache before passing the settings from `_iam.yml` to `iam.init()`. IAM reuses the existing Crypto instance or initializes it as needed. See [dependencies](../function/iam.en.md#module-dependencies) for the full setup order. Treat login, registration, challenges, permissions and session policies as separate controls. Publish only the form settings intended for browsers.
 
 On configuration validation failure, `iam.init()` returns `CONFIG_ERROR`. Its message and `error.ext.fields` list invalid field paths, while `error.cause` retains the original validation error. Server logs include an `issues` array with paths, error categories and descriptions, without recording the complete configuration.
 

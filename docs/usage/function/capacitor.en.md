@@ -4,6 +4,21 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@capacitor/core`, `@capacitor/preferences` | Detect the runtime platform and store preferences | Required for the Capacitor module | Install both and call `capacitor.init()` before device or preferences operations |
+| `@capacitor/cli`, `@capacitor/android` or `@capacitor/ios` | Create and sync the native project | When packaging Android or iOS | Prepare the target project, install the selected plugins, configure the platform, and run `pnpm exec cap sync` |
+| `@capacitor/device`, `@capacitor/app` | Read device information and app version, respectively | For `capacitor.device.getInfo()` or `capacitor.device.getAppVersion()` | Prepare the matching plugin on the target platform, then initialize and call the method |
+| `@capacitor/camera`, `@capacitor/push-notifications`, `@capacitor/status-bar` | Supply camera, push, and status bar operations | Install the plugins for the features you use | Sync plugins and configure the required platform permissions and push services before initializing and calling them |
+| `@aparajita/capacitor-secure-storage` | Read and write credentials in native secure storage | When using the adapter returned by `capacitor.createTokenStorage()` | Sync the plugin into the Android or iOS project. Create the adapter directly |
+| `@h-ai/core`, `@h-ai/api-client` | Supply result types and the token storage contract | Installed with the module. Import API Client directly when calling framework HTTP endpoints | To use native credential storage, pass the adapter as `auth.storage` to `apiClient.init()` |
+
+### Example
+
 Call device, camera, push, status bar, and preferences operations through `capacitor` after `capacitor.init()` succeeds. Create secure token storage with `capacitor.createTokenStorage()`; creating the adapter requires no initialization, while reads and writes require a native runtime and the secure storage plugin. Remove push listeners when changing accounts or leaving a screen.
 
 ```ts

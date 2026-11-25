@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/payment.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/payment.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_payment.yml` 中设置各支付渠道的账号和服务端密钥。应用启动代码读取该文件，把配置对象传给 `payment.init(config)`。

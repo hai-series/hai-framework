@@ -14,6 +14,8 @@ Install with pnpm: `pnpm add @h-ai/ai`.
 
 [Open the quick-start guide](../../docs/usage/function/ai.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/ai.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define model names, endpoints, and other model settings in `config/_ai.yml`. At startup, the application reads the file and passes the settings object to `ai.init(config, options)`.

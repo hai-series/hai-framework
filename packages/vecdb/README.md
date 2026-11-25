@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/vecdb.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/vecdb.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_vecdb.yml` 中设置向量数据库的类型和连接参数。应用启动代码读取该文件，把配置对象传给 `vecdb.init(config)`。

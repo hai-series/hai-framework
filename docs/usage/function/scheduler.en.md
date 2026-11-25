@@ -10,7 +10,19 @@ Scheduler runs timed and manual jobs in Node.js. A task can call an HTTP endpoin
 
 ## Quick start with hooks
 
-Install `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler`. This example runs a daily net sales calculation against in-memory SQLite. It configures a startup task and four hooks with `init({ tasks, hooks })`, then triggers the task and reports 1000 cents in net sales. Use a shared PostgreSQL or MySQL database in production. [Configuration](../configuration/scheduler.en.md)
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/reldb` | Store tasks and execution records and coordinate claims across nodes | Required. Use SQLite locally and shared PostgreSQL or MySQL in production | Initialize RelDB before `scheduler.init()` |
+| `@h-ai/core`, `croner` | Provide logging, common result handling, and cron parsing | Installed with Scheduler | Initialize Core first if the app uses its configuration service. Cron parsing needs no separate initialization |
+| Application callback or external service | Run an app callback, make an HTTP request, or execute trusted JavaScript as defined by the task | Prepare what the selected task type requires | Pass any callbacks and settings at initialization. For scheduled execution, call `scheduler.start()` afterward |
+
+### Example
+
+Install `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler`. This example runs a daily net sales calculation against in-memory SQLite. It configures a startup task and four hooks with `init({ tasks, hooks })`, then triggers the task and reports 1000 cents in net sales. [Configuration](../configuration/scheduler.en.md)
 
 ```ts
 import { core } from '@h-ai/core'

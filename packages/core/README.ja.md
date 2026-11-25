@@ -12,6 +12,8 @@
 
 [最小構成の導入手順](../../docs/usage/function/core.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/core.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`config/_core.yml` からアプリ情報とログ設定を読み込みます。[Serv](../../docs/usage/configuration/serv.ja.md) または [Kit](../../docs/usage/configuration/kit.ja.md) は HTTP サービスを作成するときにアクセスルールを読み込みます。

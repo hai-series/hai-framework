@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/cache`.
 
 [Open the quick-start guide](../../docs/usage/function/cache.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/cache.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define the backend type and Redis connection settings in `config/_cache.yml`. At startup, the application reads the file and passes the settings object to `cache.init(config)`.

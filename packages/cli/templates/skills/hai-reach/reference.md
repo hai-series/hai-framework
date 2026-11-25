@@ -12,10 +12,12 @@ Provider 名称必须唯一，重名在连接前返回 CONFIG_ERROR。`reach.clo
 
 ## 依赖
 
-| 模块 | 用途 | 是否必需 | 初始化要求 |
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
-| `@h-ai/reldb` | 数据库（发送历史、排队和模板） | 模板、DND delay 必需；即时直发可选 | 先初始化；配置模板或 delay 所需表不可用时，`reach.init()` 返回 `CONFIG_ERROR` |
-| `@h-ai/cache` | 缓存（DND delay 策略分布式锁） | 可选 | 已初始化时自动启用分布式锁 |
+| `@h-ai/core` | 提供日志、配置支持和统一结果 | 随 Reach 安装 | 应用使用 Core 配置中心时先初始化 Core |
+| `@h-ai/reldb` | 持久化模板、发送历史和延迟队列 | 使用持久化模板、发送历史或免打扰策略 `delay` 时 | 先初始化 RelDB，再调用 `reach.init()`。配置模板或 `delay` 所需表不可用时，初始化返回 `CONFIG_ERROR` |
+| `@h-ai/cache` | 为延迟队列的扫描提供分布式锁 | 多节点需要减少重复扫描时可选 | 使用共享缓存时，在 `reach.init()` 前初始化 Cache |
+| 通知服务（SMTP、短信或 HTTP） | 将消息送到外部渠道 | 使用对应渠道时。SMTP 需要可选驱动 `nodemailer` | 准备服务端点、所需凭据及所选渠道的驱动，再调用 `reach.init()` |
 
 ## 适用场景
 

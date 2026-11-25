@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/runner @h-ai/reldb`.
 
 [Open the quick-start guide](../../docs/usage/function/runner.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/runner.en.md#module-dependencies).
+
 ## Configuration Reference
 
 At startup, use `runner.init(options)` to decide whether this node executes tasks, which container environments it may use, and how long to keep completed tasks. Disable execution on nodes that only submit and query tasks.

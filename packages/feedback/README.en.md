@@ -10,7 +10,7 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 Install with pnpm: `pnpm add @h-ai/feedback @h-ai/reldb @h-ai/storage`.
 
-[Open the quick-start guide](../../docs/usage/function/feedback.en.md#quick-start).
+[Open the quick-start guide](../../docs/usage/function/feedback.en.md#quick-start). [Dependencies and setup order](../../docs/usage/function/feedback.en.md#module-dependencies).
 
 ## Configuration Reference
 

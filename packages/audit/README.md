@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/audit.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/audit.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_audit.yml` 中设置审计采集、保留期限、备份和告警。应用启动时把配置传给 `audit.init(config)`。共享数据库的实例使用相同的留存配置，修改后协调重启。

@@ -12,7 +12,7 @@ Import `serv` from `@h-ai/serv`. Use `serv.createApp()` to create the HTTP app a
 
 Install with pnpm: `pnpm add @h-ai/serv`.
 
-[Open the quick-start guide](../../docs/usage/function/serv.en.md#quick-start).
+[Open the quick-start guide](../../docs/usage/function/serv.en.md#quick-start). [Dependencies and setup order](../../docs/usage/function/serv.en.md#module-dependencies).
 
 ## Configuration Reference
 

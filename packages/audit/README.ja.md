@@ -12,6 +12,8 @@ Node.js サービスで監査イベントを記録、検索、削除、集計し
 
 [最小構成の導入手順](../../docs/usage/function/audit.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/audit.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 生成したプロジェクトでは、監査の記録、保持、バックアップ、アラートを `config/_audit.yml` に設定します。アプリは起動時に設定を `audit.init(config)` に渡します。同じデータベースを使うインスタンスには同じ保持設定を適用し、変更後は再起動を調整してください。

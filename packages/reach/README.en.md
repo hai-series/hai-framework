@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/reach`.
 
 [Open the quick-start guide](../../docs/usage/function/reach.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/reach.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define delivery channels, templates, quiet hours, and retry rules in `config/_reach.yml`. At startup, the application reads the file and passes the settings object to `reach.init(config)`.

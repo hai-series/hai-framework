@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/reach.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/reach.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_reach.yml` 中设置发送渠道、模板、免打扰时段和重试规则。应用启动代码读取该文件，把配置对象传给 `reach.init(config)`。

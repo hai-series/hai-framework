@@ -12,6 +12,8 @@ Runner 在 Node.js 服务端运行受管的 Agent Worker 和工具作业。API �
 
 [跟着最小示例完成接入](../../docs/usage/function/runner.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/runner.md#module-dependencies)。
+
 ## 配置清单
 
 <a id="配置"></a>

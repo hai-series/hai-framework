@@ -6,6 +6,19 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js and `@h-ai/core` | Run database operations and use Core logging and result types | Database access runs on Node.js. Core is installed with RelDB | Pass the configuration to `reldb.init()` and check the result before starting database consumers |
+| SQLite and `better-sqlite3` | Open a local database file or an in-memory database. The native driver is installed with RelDB | When using `type: 'sqlite'` | Make sure the driver loads on the target Node.js version and operating system. Prepare a writable path for a database file |
+| PostgreSQL and `pg` | Connect to PostgreSQL. The driver is an optional package dependency | When using `type: 'postgresql'` | Prepare a reachable database and connection settings. Enable optional dependencies during installation and make sure `pg` is available before initialization |
+| MySQL and `mysql2` | Connect to MySQL. The driver is an optional package dependency | When using `type: 'mysql'` | Prepare a reachable database and connection settings. Enable optional dependencies during installation and make sure `mysql2` is available before initialization |
+
+### Example
+
 Initialize the configured database, then select SQL, a typed CRUD table or a transaction. Pass data as bound parameters and choose identifiers from trusted definitions. Check `HaiResult.success` before using data.
 
 ```ts

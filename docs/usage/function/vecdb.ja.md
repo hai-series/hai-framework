@@ -6,6 +6,20 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `@h-ai/core` | ログと共通の結果型を提供 | VecDB とともにインストール | Core の設定機能を使う場合は先に Core を初期化 |
+| LanceDB（`@lancedb/lancedb`、`apache-arrow`） | ローカルにベクトルを保存し、検索 | ローカル開発で `type: "lancedb"` を使う場合 | オプションのドライバー、Arrow 依存、書き込み可能なディレクトリを用意してから `vecdb.init()` |
+| PostgreSQL（pgvector 拡張、`pg`） | 共有 PostgreSQL に接続してベクトルを検索 | `type: "pgvector"` を使う場合 | ドライバー、データベース、拡張を用意して直接 `vecdb.init()` |
+| Qdrant | HTTP 経由でベクトルデータベースにアクセス | `type: "qdrant"` を使う場合 | サービス URL と必要な認証情報を用意してから `vecdb.init()` |
+| Chroma（`chromadb`） | 既存の Chroma に接続、またはローカルで起動 | `type: "chroma"` を使う場合 | ドライバーを用意。リモート接続にはサービス URL、ローカルの `path` モードには `serverCommand` で指定したコマンド（既定は `chroma`）が必要。準備後に `vecdb.init()` |
+
+### 利用例
+
 開発環境で、空の `./data/vecdb` ディレクトリを使って実行します。接続を閉じた後も `docs` コレクションは残ります。再実行には別の空のディレクトリを使います。
 
 ```ts

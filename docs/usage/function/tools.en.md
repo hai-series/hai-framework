@@ -11,7 +11,7 @@ Use `tools` to define, register and execute business tools. Ordinary business co
 | Entry point | Use cases | Execution and lifecycle |
 | --- | --- | --- |
 | `@h-ai/tools` | Short business functions, browser-local tools and neutral definitions for model adapters | `tools.define/createRegistry` are pure definitions and factories. No `init/close`; no Runner or model SDK import |
-| `@h-ai/tools/server` | Recoverable tasks, progress, cancellation, documents and container jobs | Includes the lightweight methods plus `tools.createService/createArtifactTools/createJobTools`; borrows an initialized Runner |
+| `@h-ai/tools/server` | Recoverable tasks, progress, cancellation, documents and container jobs | Includes the lightweight methods plus `tools.createService/createArtifactTools/createJobTools` |
 
 The lightweight entry works in browsers, but a trusted server must still verify server-side access. Keep `/server` out of frontend imports.
 
@@ -19,8 +19,21 @@ The lightweight entry works in browsers, but a trusted server must still verify 
 
 ## Minimal integration
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/core`, `zod` | Provide result handling, tool argument validation, and JSON Schema conversion | Installed with Tools. Declare `zod` as an app dependency when importing it to define arguments | Define tools and create registries as needed. No module initialization |
+| `@h-ai/runner` | Execute and resume recoverable tool runs and background jobs | When using server-side `createService()` or `createJobTools()` | The host initializes Runner and passes it to the factory. Register handlers before submitting jobs |
+| Runner container environments | Provide the engine and images for document, OCR, browser, and other standalone jobs | When using the corresponding `createJobTools()` jobs | Prepare execution nodes, then pass configured environment IDs to the factory |
+| Host file access interface | Read tool artifacts or provide file access to background jobs | When using `createArtifactTools()` or `createJobTools()` | Pass `files` restricted to the authenticated identity and scope when creating the tools |
+
+### Example
+
 ```sh
-pnpm add @h-ai/tools zod
+pnpm add @h-ai/tools @h-ai/core zod
 ```
 
 This is an ordinary business call. The registry includes only explicitly registered tools, and a trusted server supplies the identity.
@@ -76,7 +89,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-Tools has no module-level init/close. Lightweight examples use the root export; server examples import /server and borrow an initialized Runner. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
+Tools has no module-level init/close. Lightweight examples use the root export; server examples use the `/server` export. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
 
 <a id="definitions"></a>
 
@@ -106,7 +119,7 @@ Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents
 
 ##### Call arguments
 
-`tools.define/createRegistry` are pure definitions and factories, with no module YAML, environment variables or `init/close`. Import server factories from `@h-ai/tools/server`; they borrow an initialized Runner.
+`tools.define/createRegistry` are pure definitions and factories, with no module YAML, environment variables or `init/close`. Import server factories from `@h-ai/tools/server`. See the [dependencies](#module-dependencies) for each factory.
 
 ##### Definition and execution options
 

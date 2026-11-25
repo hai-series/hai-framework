@@ -10,13 +10,22 @@
 
 ## 最小接入示例
 
-先安装 Reach。接入 SMTP 邮件时还需要安装 `nodemailer`。
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/core` | 提供日志、配置支持和统一结果 | 随 Reach 安装 | 应用使用 Core 配置中心时先初始化 Core |
+| [`@h-ai/reldb`](../configuration/reldb.md) | 持久化模板、发送历史和延迟队列 | 使用持久化模板、发送历史或免打扰策略 `delay` 时 | 先初始化 RelDB，再调用 `reach.init()` |
+| `@h-ai/cache` | 为延迟队列的扫描提供分布式锁 | 多节点需要减少重复扫描时可选 | 使用共享缓存时，在 `reach.init()` 前初始化 Cache |
+| 通知服务（SMTP、短信或 HTTP） | 将消息送到外部渠道 | 使用对应渠道时。SMTP 需要可选驱动 `nodemailer` | 准备服务端点、所需凭据及所选渠道的驱动，再调用 `reach.init()` |
+
+### 先在本机试一次发送
 
 ```bash
 pnpm add @h-ai/reach
 ```
-
-### 先在本机试一次发送
 
 ```ts
 import { reach } from '@h-ai/reach'
@@ -50,7 +59,7 @@ finally {
 
 ## 功能说明
 
-后续示例在服务端运行。启动时将 [Reach 配置](../configuration/reach.md#configuration-fields) 传给 `reach.init()` 并检查结果。使用发送历史、模板或夜间排队时，先启动 [RelDB](../configuration/reldb.md)。
+后续示例在服务端运行。启动时将 [Reach 配置](../configuration/reach.md#configuration-fields) 传给 `reach.init()` 并检查结果。各功能的前置条件见[依赖](#module-dependencies)。
 
 <a id="sending"></a>
 

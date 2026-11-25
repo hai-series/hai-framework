@@ -10,6 +10,27 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js | 提供端口监听和 WebSocket 升级 | 使用 `serv.listen()` 时 | 创建应用后启动监听。也可将 `serv.toFetch()` 交给支持 Fetch 的宿主 |
+| `@h-ai/api-contract` | 定义客户端与服务端共享的 HTTP 契约 | 随 Serv 安装。`serv.createApp()` 需要契约 | 定义契约和处理函数后交给 `serv.createApp()` |
+| `zod` | 编写自定义契约的请求和响应 Schema | 随 Serv 安装。应用定义自有契约时可直接导入 | 定义 Schema 后用于契约，复用框架已有契约时可直接组装 |
+| `@h-ai/core` | 提供请求上下文、日志和结果类型 | 随 Serv 安装 | 应用通过 Core 读取监听配置时，先加载配置 |
+| `@h-ai/audit` | 记录 Serv 捕获的审计事件 | 随 Serv 安装。应用启用审计时需要初始化 | 开始处理请求前初始化 Audit 并设置 `capture` |
+| `@h-ai/crypto` | 加密 HTTP 请求和响应 | 随 Serv 安装。设置 `transport` 时需要 | 初始化 Crypto，准备密钥环和共享登记存储，再传入 `serv.createApp()` |
+| `@h-ai/iam` | 提供 IAM 路由、令牌验证和会话刷新 | 使用标准 IAM 路由或 IAM 验证和刷新时 | 初始化 IAM 后传给 `serv.createIamProcedures()` 或 `serv.createApp()` |
+| `@h-ai/storage`、`@h-ai/ai`、`@h-ai/feedback` | 提供各自的预置业务路由。AI 还提供音频服务 | 按挂载的功能选择 | 初始化所选服务后传给对应的路由工厂。音频通过 `serv.createApp()` 的 `audio` 选项接入 |
+
+### 接入示例
+
+```sh
+pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/ai
+```
+
 在应用启动时初始化 `core`、`iam`、`storage` 和 `ai`，加载并校验 `serv` 配置，再调用 `startApi(closeApp)`。`closeApp` 是应用提供的异步回调，负责按初始化的逆序释放业务资源。函数返回 Node 监听句柄。传入回调后，`serv.listen` 会在收到退出信号时先关闭监听，再调用该回调。只提供健康检查时，可以用空契约和空 procedures 创建 App。
 
 ```ts

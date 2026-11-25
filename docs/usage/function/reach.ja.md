@@ -10,13 +10,22 @@ Reach はサーバーからログイン確認コードを送ったり、新し�
 
 ## クイックスタート
 
-まず Reach をインストールします。SMTP でメールを送る場合は `nodemailer` もインストールします。
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `@h-ai/core` | ログ、設定支援、共通の結果型を提供 | Reach とともにインストール | Core の設定機能を使う場合は先に Core を初期化 |
+| [`@h-ai/reldb`](../configuration/reldb.ja.md) | テンプレート、配信履歴、遅延メッセージを永続化 | テンプレートや配信履歴の永続化、または通知抑制の `delay` を使う場合 | RelDB を初期化してから `reach.init()` |
+| `@h-ai/cache` | 遅延キューの走査に分散ロックを提供 | 複数ノードで重複走査を抑えたい場合に任意 | 共有キャッシュを使う場合は Cache を初期化してから `reach.init()` |
+| 通知サービス（SMTP、SMS、HTTP） | 外部チャネルを通じてメッセージを配信 | 対応するチャネルの利用時。SMTP ではオプションドライバー `nodemailer` が必要 | 接続先とチャネルに必要な認証情報・ドライバーを用意してから `reach.init()` |
+
+### ローカルで送信を試す
 
 ```bash
 pnpm add @h-ai/reach
 ```
-
-### ローカルで送信を試す
 
 ```ts
 import { reach } from '@h-ai/reach'
@@ -52,7 +61,7 @@ finally {
 
 ## 機能
 
-以降の例はサーバー側で実行します。起動時に [Reach の設定](../configuration/reach.ja.md#configuration-fields)を `reach.init()` に渡し、結果を確認します。送信履歴、テンプレート、遅延キューを使う場合は先に [RelDB](../configuration/reldb.ja.md) を起動します。
+以降の例はサーバー側で実行します。起動時に [Reach の設定](../configuration/reach.ja.md#configuration-fields)を `reach.init()` に渡し、結果を確認します。機能別の前提条件は [依存関係](#module-dependencies) を参照してください。
 
 <a id="sending"></a>
 

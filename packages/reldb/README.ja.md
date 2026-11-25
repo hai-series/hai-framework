@@ -12,6 +12,8 @@
 
 [最小構成の導入手順](../../docs/usage/function/reldb.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/reldb.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 生成したプロジェクトでは、データベースの種類、アドレス、接続オプションを `config/_db.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `reldb.init(config)` に渡します。

@@ -6,6 +6,27 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js | Open a listener and upgrade WebSocket connections | For `serv.listen()` | Create the app before listening. A Fetch host can use `serv.toFetch()` |
+| `@h-ai/api-contract` | Define HTTP contracts shared by client and server | Installed with Serv. `serv.createApp()` requires a contract | Define the contract and procedures before passing them to `serv.createApp()` |
+| `zod` | Define request and response schemas for custom contracts | Installed with Serv. Import it directly for your own contracts | Define schemas before assembling the contract. Built-in contracts are ready to compose |
+| `@h-ai/core` | Provide request context, logging, and result types | Installed with Serv | Load Core configuration first if the application reads listener settings through it |
+| `@h-ai/audit` | Record audit events captured by Serv | Installed with Serv. Initialize it when enabling auditing | Initialize Audit with the desired `capture` settings before serving requests |
+| `@h-ai/crypto` | Encrypt HTTP requests and responses | Installed with Serv. Needed when `transport` is enabled | Initialize Crypto and prepare a key ring and shared registration store before calling `serv.createApp()` |
+| `@h-ai/iam` | Supply IAM routes, token verification, and session refresh | For built-in IAM routes or IAM-backed verification and refresh | Initialize IAM before passing it to `serv.createIamProcedures()` or `serv.createApp()` |
+| `@h-ai/storage`, `@h-ai/ai`, `@h-ai/feedback` | Supply built-in routes for each feature. AI also provides audio | Choose the features you mount | Initialize each selected service before calling its procedure factory. Enable audio through the `audio` option of `serv.createApp()` |
+
+### Example
+
+```sh
+pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/ai
+```
+
 Use Serv to mount a typed HTTP contract in a standalone Node server. Configure authentication, transport encryption and trusted request parsing before listening.
 The root `serv` object includes the built-in procedure factories for IAM, Storage, AI and Feedback.
 

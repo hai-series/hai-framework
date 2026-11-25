@@ -19,6 +19,8 @@ hai --version
 
 [最小構成の導入手順](../../docs/usage/function/cli.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/cli.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 実行時のオプションは CLI で指定します。ビルドと配布の設定はプロジェクトの `hai.json` に保存します。

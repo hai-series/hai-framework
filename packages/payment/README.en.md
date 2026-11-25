@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/payment`.
 
 [Open the quick-start guide](../../docs/usage/function/payment.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/payment.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define the accounts and server-side credentials for each payment channel in `config/_payment.yml`. At startup, the application reads the file and passes the settings object to `payment.init(config)`.

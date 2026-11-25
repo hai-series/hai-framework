@@ -8,9 +8,11 @@
 
 ## クイックスタート
 
-`pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache` でインストールします。
+`pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core` でインストールします。
 
 [最小構成の導入手順](../../docs/usage/function/iam.ja.md#quick-start)を参照してください。
+
+[依存関係と初期化順序](../../docs/usage/function/iam.ja.md#module-dependencies)を参照してください。
 
 ## 設定一覧
 

@@ -10,6 +10,20 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js、`@h-ai/cli` | 运行部署 SDK 或 `hai deploy` | SDK 和 CLI 均在 Node.js 运行。使用脚手架部署命令时需要 CLI | SDK 调用方先准备用于部署的配置并执行 `deploy.init()`。CLI 从项目读取配置并初始化 |
+| `@h-ai/core`、`@h-ai/api-contract`、`@h-ai/crypto` | 配置和诊断、反馈运营接口契约、加密传输网关校验 | 随 Deploy 安装 | 直接使用 Deploy，部署工具会调用所需的工具函数 |
+| Docker 或 Podman | 准备、导入和核对容器镜像 | 执行相应的 `docker-ssh` 镜像操作时 | 先在执行相应操作的机器安装并启动引擎 |
+| OpenSSH、Linux 和 Compose | 通过 SSH 发布，或在 Linux 上执行离线包 | 直接远程发布需要本机 OpenSSH。执行容器部署需要目标 Linux、支持 `--pull never` 的 Compose 实现和部署账户权限 | 发布前配置 SSH 认证、目标引擎与 Compose，并按[交付说明](../configuration/delivery.md#离线交付与服务器条件)准备主机工具 |
+| Vercel 账户、访问令牌和预构建产物 | 将构建产物发布到 Vercel | 选择 `vercel` 时 | 先准备令牌与符合 Vercel Build Output API 的目录，再初始化和部署 |
+
+### 接入示例
+
 在 CLI 创建并已配置 `deploy` 脚本的工程根目录执行。先查看只读计划，核对环境、目标和服务范围，再构建并发布：
 
 ```sh

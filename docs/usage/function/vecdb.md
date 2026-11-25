@@ -10,6 +10,20 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/core` | 提供日志和统一结果 | 随 VecDB 安装 | 应用使用 Core 配置中心时先初始化 Core |
+| LanceDB（`@lancedb/lancedb`、`apache-arrow`） | 本地存储和搜索向量 | 本地开发使用 `type: "lancedb"` 时 | 确保可选驱动和 Arrow 依赖可用，并准备可写目录，再调用 `vecdb.init()` |
+| PostgreSQL（pgvector 扩展、`pg`） | 连接共享 PostgreSQL 并执行向量搜索 | 使用 `type: "pgvector"` 时 | 准备驱动、数据库和扩展，直接调用 `vecdb.init()` |
+| Qdrant | 通过 HTTP 访问向量数据库 | 使用 `type: "qdrant"` 时 | 准备服务地址和所需凭据，再调用 `vecdb.init()` |
+| Chroma（`chromadb`） | 连接远程 Chroma 或启动本地服务 | 使用 `type: "chroma"` 时 | 准备驱动。远程连接需服务地址，本地 `path` 模式需 `serverCommand` 指定的命令可用（默认 `chroma`）。然后调用 `vecdb.init()` |
+
+### 接入示例
+
 在开发环境用空的 `./data/vecdb` 目录运行示例。示例关闭连接后保留 `docs` 集合。需要重跑时，使用另一个空目录。
 
 搜索结果的 `score` 在 0 到 1 之间，值越大越相似。例如 `minScore: 0.7` 会滤掉转换后小于 0.7 的条目。得分不是百分比，换用距离算法或数据库后，应重新用实际数据确认阈值。

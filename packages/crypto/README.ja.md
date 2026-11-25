@@ -2,7 +2,7 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
+[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md)
 
 非対称暗号、ハッシュ、対称暗号、パスワードハッシュを提供する暗号モジュールです。
 
@@ -11,6 +11,8 @@
 `pnpm add @h-ai/crypto` でインストールします。
 
 [最小構成の導入手順](../../docs/usage/function/crypto.ja.md#quick-start)を参照してください。
+
+[依存関係と初期化順序](../../docs/usage/function/crypto.ja.md#module-dependencies)を参照してください。
 
 ## 設定一覧
 

@@ -11,7 +11,7 @@
 | インポート先 | 用途 | 実行とライフサイクル |
 | --- | --- | --- |
 | `@h-ai/tools` | 短時間の業務関数、ブラウザー内ツール、モデル連携用の中立な定義 | `tools.define/createRegistry` は純粋な定義・ファクトリー。`init/close` は不要で、Runner やモデル SDK を読み込まない |
-| `@h-ai/tools/server` | 再開可能なタスク、進捗・キャンセル、文書とコンテナジョブ | 軽量メソッドに `tools.createService/createArtifactTools/createJobTools` を追加。初期化済み Runner を利用する |
+| `@h-ai/tools/server` | 再開可能なタスク、進捗・キャンセル、文書とコンテナジョブ | 軽量メソッドに `tools.createService/createArtifactTools/createJobTools` を追加 |
 
 軽量エントリーはブラウザーでも利用できますが、サーバーの権限は信頼できるサーバー側で検証します。`/server` をフロントエンドにインポートしないでください。
 
@@ -19,8 +19,21 @@
 
 ## 最小構成
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `@h-ai/core`、`zod` | 共通の結果型、ツール引数の検証、JSON Schema 変換を提供 | Tools とともにインストール。引数定義で `zod` を直接インポートする場合はアプリの依存に追加 | 必要に応じてツールやレジストリを作成。モジュールの初期化は不要 |
+| `@h-ai/runner` | 再開可能なツール実行やバックグラウンドジョブの実行・再開を担当 | サーバーの `createService()` または `createJobTools()` を使う場合 | ホストが Runner を初期化してファクトリーに渡す。ジョブを登録する前にハンドラーを登録 |
+| Runner コンテナー環境 | 文書、OCR、ブラウザーなどの独立ジョブにエンジンとイメージを提供 | 対応する `createJobTools()` のジョブを使う場合 | 実行ノードを準備してから設定済みの環境 ID をファクトリーに渡す |
+| ホストのファイルアクセスインターフェース | 成果物の読み取りやバックグラウンドジョブのファイルアクセスを提供 | `createArtifactTools()` または `createJobTools()` を使う場合 | ツール作成時に認証済みの利用者とスコープに限定した `files` を渡す |
+
+### 利用例
+
 ```sh
-pnpm add @h-ai/tools zod
+pnpm add @h-ai/tools @h-ai/core zod
 ```
 
 通常の業務呼び出しの例です。登録したツールだけを使用し、信頼できるサーバーから本人情報を渡します。
@@ -76,7 +89,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
 
-Tools にモジュール単位の init/close はありません。軽量機能はルート、サーバー機能は /server から読み込み、初期化済み Runner を借用します。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
+Tools にモジュール単位の init/close はありません。軽量機能はルート、サーバー機能は `/server` から読み込みます。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
 
 <a id="definitions"></a>
 
@@ -98,7 +111,7 @@ Tools にモジュール単位の init/close はありません。軽量機能�
 
 [機能説明](tools.ja.md) · [データの帰属](../data/tools.ja.md)
 
-`tools.define/createRegistry` は純粋な定義・ファクトリーで、モジュール YAML・環境変数・`init/close` はありません。サーバー用は `@h-ai/tools/server` からインポートし、初期化済み Runner を利用します。
+`tools.define/createRegistry` は純粋な定義・ファクトリーで、モジュール YAML・環境変数・`init/close` はありません。サーバー用のファクトリーは `@h-ai/tools/server` からインポートします。各ファクトリーの前提条件は [依存関係](#module-dependencies) を参照してください。
 
 ##### 定義と実行のオプション
 

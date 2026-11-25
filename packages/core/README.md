@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/core.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/core.md#module-dependencies)。
+
 ## 配置清单
 
 应用启动时调用 `core.init({ configDir: './config' })` 读取 `config/_core.yml` 里的应用信息和日志设置。[Serv](../../docs/usage/configuration/serv.md) 或 [Kit](../../docs/usage/configuration/kit.md) 在创建 HTTP 服务时读取各自的访问策略。

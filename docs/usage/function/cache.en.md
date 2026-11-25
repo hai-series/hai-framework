@@ -6,6 +6,22 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js and `@h-ai/core` | Access the server-side cache and use Core logging and result types | Cache runs on Node.js. Core is installed with Cache | Pass the configuration to `cache.init()` and check the result before starting cache consumers |
+| Redis and `ioredis` | Share values, counters and locks across processes. The Redis driver is installed with Cache | A Redis server is required with `type: 'redis'`. Use Redis in production when shared state is required | Start Redis or obtain the connection settings for a managed instance, then call `cache.init()` |
+| Process memory | Store and expire cache entries within one process | When using `type: 'memory'` for local development or tests | Call `cache.init({ type: 'memory' })` |
+
+### Example
+
+```sh
+pnpm add @h-ai/cache @h-ai/core
+```
+
 Start a local Redis server. This example stores user 1's display name under `user:1`.
 
 ```ts

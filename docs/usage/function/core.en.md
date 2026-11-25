@@ -6,6 +6,19 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js / browser | Provides environment-specific configuration, logging, and shared utilities. | Use the Node.js entry for YAML configuration, `core.access`, and worker thread pools. Browsers use the browser entry. | Import shared utilities directly. Call `core.init()` at startup to load application settings or configure logging. |
+| `yaml`, `pino`, `loglevel` | Parse YAML and write logs in Node.js, and write logs in browsers. | Installed with Core by default. Keep the packages required by your runtime entry. | Core loads them through the selected entry. |
+| `pino-pretty` | Formats Node.js logs as readable text. | Install separately for `pretty` text output. Core falls back to JSON if the package is absent. | Install before startup and select the format through `logging.format`. |
+| `zod` | Validates configuration and form inputs. | Installed with Core. Declare it as a direct dependency if application code imports Zod to define schemas. | Define application schemas and use Core to validate them as needed. |
+
+### Example
+
 Install the package with `pnpm add @h-ai/core`. Add `config/_core.yml` to a Node.js application.
 
 ```yaml schema=@h-ai/core:CoreConfigSchema

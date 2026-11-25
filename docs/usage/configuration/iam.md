@@ -10,7 +10,7 @@
 
 生成的项目将登录、密码和会话的配置写在 `config/_iam.yml`。应用启动时从 `core.config.get('iam')` 读取这些设置并传给 `iam.init()`。用环境变量覆盖时使用 `HAI_IAM_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-应用先连接数据库和缓存、初始化加密模块，再运行 `iam.init()`。服务端路由仍需设置哪些请求必须登录、哪些操作需要权限。登录页用 `apiClient.iam.auth.publicConfig()` 请求服务端。服务端调用 `iam.getPublicConfig()`，只返回登录开关、密码长度等可给访客看的信息。数据库地址、LDAP 凭据和签名密钥都留在服务端。
+应用先连接数据库和缓存，再运行 `iam.init()`。IAM 复用已就绪的 Crypto，并在需要时自行初始化。完整顺序见[依赖](../function/iam.md#module-dependencies)。服务端路由仍需设置哪些请求必须登录、哪些操作需要权限。登录页用 `apiClient.iam.auth.publicConfig()` 请求服务端。服务端调用 `iam.getPublicConfig()`，只返回登录开关、密码长度等可给访客看的信息。数据库地址、LDAP 凭据和签名密钥都留在服务端。
 
 配置校验失败时，`iam.init()` 返回 `CONFIG_ERROR`，消息和 `error.ext.fields` 列出错误字段路径，`error.cause` 保留原始校验原因。服务端日志用 `issues` 数组记录路径、错误类别和说明，排错时无需查看整段配置。
 

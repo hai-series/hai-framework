@@ -10,7 +10,7 @@
 
 `pnpm add @h-ai/feedback @h-ai/reldb @h-ai/storage` でインストールします。
 
-[最小構成の導入手順](../../docs/usage/function/feedback.ja.md#quick-start)を参照してください。
+[最小構成の導入手順](../../docs/usage/function/feedback.ja.md#quick-start)を参照してください。 [依存関係と初期化順序](../../docs/usage/function/feedback.ja.md#module-dependencies)を参照してください。
 
 ## 設定一覧
 

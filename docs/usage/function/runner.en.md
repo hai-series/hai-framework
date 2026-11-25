@@ -2,9 +2,24 @@
 
 [Chinese source](runner.md) · [Configuration](../configuration/runner.en.md) · [Data structures](../data/runner.en.md)
 
+<a id="quick-start"></a>
+
 ## Quick start
 
-Initialize the runner after the database. The API may submit work, but only a node configured as executor runs handlers. Use the same scope and idempotency key to recover an uncertain submission.
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/reldb` | Store jobs, events, and leases | Required on submission and execution nodes. Use SQLite for local development or the same PostgreSQL or MySQL database across nodes | Initialize RelDB before `runner.init()` |
+| `@h-ai/core` | Provide logging and common result handling | Installed with Runner | Initialize Core first if the app uses its configuration service |
+| Node.js | Run server APIs and trusted application handlers | On every node running Runner | Initialize Runner and register handlers on execution nodes before submitting jobs of those kinds |
+| Podman or Docker | Run isolated jobs and prewarmed containers | On execution nodes that use containers | Prepare the engine and images before starting the Runner worker. See the isolated execution examples |
+
+### Example
+
+The API can submit work. Execution nodes run the handlers. Use the same scope and idempotency key to recover an uncertain submission.
 
 ```sh
 pnpm add @h-ai/runner @h-ai/reldb

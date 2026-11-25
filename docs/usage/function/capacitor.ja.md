@@ -6,6 +6,21 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| `@capacitor/core`、`@capacitor/preferences` | 実行環境を判定し、設定値を保存 | Capacitor モジュールの利用時に必須 | インストール後、デバイスや設定値の操作前に `capacitor.init()` を実行 |
+| `@capacitor/cli`、`@capacitor/android` または `@capacitor/ios` | ネイティブプロジェクトを作成して同期 | Android または iOS アプリをパッケージ化する場合 | 対象プロジェクトを用意し、プラグインの導入とプラットフォームの設定後に `pnpm exec cap sync` を実行 |
+| `@capacitor/device`、`@capacitor/app` | デバイス情報とアプリのバージョンをそれぞれ取得 | `capacitor.device.getInfo()` または `capacitor.device.getAppVersion()` を使う場合 | 対象環境に対応するプラグインを用意し、初期化後に呼び出す |
+| `@capacitor/camera`、`@capacitor/push-notifications`、`@capacitor/status-bar` | カメラ、プッシュ通知、ステータスバーを操作 | 使う機能に応じて導入 | プラグインを同期し、権限とプッシュサービスを設定してから初期化して呼び出す |
+| `@aparajita/capacitor-secure-storage` | 安全なネイティブストレージでトークンを読み書き | `capacitor.createTokenStorage()` のアダプターを使う場合 | Android または iOS プロジェクトにプラグインを同期。アダプターはそのまま作成可能 |
+| `@h-ai/core`、`@h-ai/api-client` | 結果型とトークン保存のインターフェースを提供 | モジュールとともにインストール。フレームワークの HTTP API を呼び出す場合は API Client を直接利用 | ネイティブのトークン保存を使う場合はアダプターを `auth.storage` として `apiClient.init()` に渡す |
+
+### 利用例
+
 デバイス、カメラ、プッシュ、ステータスバー、設定値の操作は `capacitor.init()` の成功後に `capacitor` から呼び出します。安全なトークン保存には `capacitor.createTokenStorage()` を使います。アダプターの作成に初期化は不要ですが、読み書きにはネイティブ環境と安全なストレージのプラグインが必要です。アカウント変更や画面離脱時にはプッシュのリスナーを解除します。
 
 ```ts

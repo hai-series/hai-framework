@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/scheduler.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/scheduler.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_scheduler.yml` 中设置任务检查间隔和执行租约时长。应用启动代码读取该文件，把配置对象传给 `scheduler.init(config)`。

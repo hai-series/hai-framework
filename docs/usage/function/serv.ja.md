@@ -8,6 +8,27 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| Node.js | ポートの待ち受けと WebSocket のアップグレードを実行 | `serv.listen()` を使う場合 | アプリ作成後に待ち受けを開始。Fetch 対応の実行環境では `serv.toFetch()` を使用可能 |
+| `@h-ai/api-contract` | クライアントとサーバーが共有する HTTP 契約を定義 | Serv とともにインストール。`serv.createApp()` に契約が必要 | 契約とハンドラーを定義してから `serv.createApp()` に渡す |
+| `zod` | 独自契約のリクエストとレスポンスのスキーマを定義 | Serv とともにインストール。独自契約を定義する場合は直接インポート | スキーマを定義してから契約を組み立てる。既存の契約はそのまま組み合わせ可能 |
+| `@h-ai/core` | リクエストコンテキスト、ログ、結果型を提供 | Serv とともにインストール | Core から待ち受け設定を取得する場合は先に設定を読み込む |
+| `@h-ai/audit` | Serv が捕捉した監査イベントを記録 | Serv とともにインストール。監査を有効にする場合に初期化 | リクエストの受付前に `capture` を指定して Audit を初期化 |
+| `@h-ai/crypto` | HTTP リクエストとレスポンスを暗号化 | Serv とともにインストール。`transport` を有効にする場合に必要 | Crypto を初期化し、キーリングと共有の鍵登録ストアを用意してから `serv.createApp()` に渡す |
+| `@h-ai/iam` | IAM ルート、トークン検証、セッション更新を提供 | 標準 IAM ルートまたは IAM による検証や更新を使う場合 | IAM を初期化してから `serv.createIamProcedures()` または `serv.createApp()` に渡す |
+| `@h-ai/storage`、`@h-ai/ai`、`@h-ai/feedback` | 各機能の組み込みルートを提供。AI は音声処理も提供 | 公開する機能に応じて選択 | 選択したサービスを初期化してから各ルートのファクトリーに渡す。音声は `serv.createApp()` の `audio` オプションで有効にする |
+
+### 利用例
+
+```sh
+pnpm add @h-ai/serv @h-ai/core @h-ai/api-contract @h-ai/iam @h-ai/storage @h-ai/ai
+```
+
 Serv は型付き HTTP 契約を独立した Node サーバーに配置します。待ち受けを始める前に、認証、通信暗号化、信頼できるリクエスト情報の取得を設定します。
 ルートから読み込んだ `serv` で IAM、Storage、AI、Feedback の標準ハンドラーを作成できます。
 

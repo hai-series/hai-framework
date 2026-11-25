@@ -10,6 +10,18 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js 或浏览器 | 运行密码算法和传输加密方法 | 两端共用 `@h-ai/crypto` 入口。异步密码哈希使用 Node.js | 在运行算法或创建传输客户端、服务端之前调用 `crypto.init()` |
+| `@h-ai/core` | 日志、结果类型与错误处理 | 随 Crypto 安装 | 应用通过 Crypto 调用算法 |
+| `@h-ai/cache`、Redis | 保存传输客户端公钥、登记防重放请求编号并统计配额 | Cache 为可选安装依赖，使用 `crypto.transport.createKeyStore({ cache })` 时需要。生产环境要求共享状态时使用 Redis | 安装 Cache，按所选的缓存后端执行 `cache.init()`，再创建密钥存储并传给 `crypto.transport.createServer()` |
+
+### 接入示例
+
 先检查初始化结果，再调用算法。算法返回 HaiResult，先判断 success，成功才读取 data；失败时由调用方返回原错误或交给应用的错误边界。后续算法场景在初始化后、关闭前运行。
 
 ```ts

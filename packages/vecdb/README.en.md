@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/vecdb`.
 
 [Open the quick-start guide](../../docs/usage/function/vecdb.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/vecdb.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define the vector database type and its connection settings in `config/_vecdb.yml`. At startup, the application reads the file and passes the settings object to `vecdb.init(config)`.

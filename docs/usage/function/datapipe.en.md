@@ -8,6 +8,18 @@ Clean plain text, split it into chunks, or combine those steps in a reusable pip
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js | Processes text and provides worker threads for pipelines. | All Datapipe features. | Import and call `datapipe` directly. The module manages its worker threads on demand. |
+| `@h-ai/core` | Provides results, localized messages, and the pipeline worker pool. | Installed with Datapipe. | Datapipe uses Core internally. The application can configure Core logging and locale as needed. |
+| `zod` | Validates cleaning, chunking, and other processing options. | Installed with Datapipe. | Datapipe validates the options it receives. |
+
+### Example
+
 ```ts
 import { datapipe } from '@h-ai/datapipe'
 

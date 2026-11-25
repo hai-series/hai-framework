@@ -10,7 +10,19 @@ Scheduler 在 Node.js 服务中定时或手动运行任务。执行方式有三�
 
 ## 快速开始
 
-用 `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler` 安装依赖。下例用内存 SQLite 运行日结摘要，通过 `init({ tasks, hooks })` 装配任务和四个回调，再手动触发并得到净销售额 1000 分。生产环境连接共享 PostgreSQL 或 MySQL。[配置入口](../configuration/scheduler.md#配置入口)
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/reldb` | 保存任务和执行记录，协调多节点领取 | 必需。本地开发可用 SQLite，生产使用共享 PostgreSQL 或 MySQL | 先初始化 RelDB，再调用 `scheduler.init()` |
+| `@h-ai/core`、`croner` | 提供日志、统一结果和 Cron 表达式解析 | 随 Scheduler 安装 | 应用使用 Core 配置中心时先初始化 Core。Cron 解析器无需单独初始化 |
+| 应用执行回调或外部服务 | 按任务定义执行应用回调、调用 HTTP 接口或运行受信任的 JavaScript | 按所选任务类型准备 | 初始化时传入所需的回调和配置。使用定时调度时，初始化后调用 `scheduler.start()` |
+
+### 接入示例
+
+用 `pnpm add @h-ai/core @h-ai/reldb @h-ai/scheduler` 安装依赖。下例用内存 SQLite 运行日结摘要，通过 `init({ tasks, hooks })` 装配任务和四个回调，再手动触发并得到净销售额 1000 分。[配置入口](../configuration/scheduler.md#配置入口)
 
 ```ts
 import { core } from '@h-ai/core'

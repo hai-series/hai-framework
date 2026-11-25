@@ -10,21 +10,27 @@
 
 ## 最小接入示例
 
-### 安装
-
-```bash
-pnpm add @h-ai/iam
-```
+<a id="module-dependencies"></a>
 
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
-- `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
-- `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
-- `@h-ai/audit` — 应用初始化 Audit 后会自动记录 IAM 安全事件。如果写入审计失败，本次操作会报告错误，应用应回滚交给 IAM 的事务。
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js | 运行认证和授权服务。 | 服务端 IAM 功能。 | 在接收认证请求前启动 IAM。 |
+| `@h-ai/reldb` | 保存账号、角色和权限。 | 必需。 | 在 `iam.init()` 前初始化。 |
+| `@h-ai/cache` | 管理会话、一次性验证码和票据。 | 必需。 | 在 `iam.init()` 前初始化。 |
+| `@h-ai/core` | 提供日志、错误和请求上下文。 | 随 IAM 安装。 | 应用使用自定义日志或共享配置时先配置 Core。 |
+| `@h-ai/crypto` | 提供密码哈希等加密能力。 | 随 IAM 安装。 | `iam.init()` 复用已就绪的 Crypto，并在需要时自行初始化。 |
+| `@h-ai/audit` | 采集 IAM 安全事件。 | 随 IAM 安装。应用启用审计采集时使用。 | 先启动 Audit 并启用 `capture`，再启动 IAM。关闭时先停 IAM。 |
+| `@h-ai/reach` | 通过标准模板发送验证码、密码重置及初始设密邀请。 | 使用 Reach 发送时安装。应用也可以提供自己的发送回调。 | 先初始化 Reach，再传给 `iam.init({ ...config, reach })`。 |
+| LDAP 目录与 `ldapts` | 连接目录执行 LDAP 登录。 | 启用 LDAP 需要可访问的目录。使用默认客户端时安装 `ldapts`。 | 初始化 IAM 时传目录配置。使用自定义客户端时传 `ldapClientFactory`。 |
+| `altcha`、`zod` | 生成与验证验证码挑战，校验配置与输入。 | 随 IAM 安装。ALTCHA 用于开启人机验证的场景。 | IAM 按配置调用。 |
 
-- `@h-ai/reach` — **可选**，应用安装、初始化并注入后可使用标准邮件/短信模板；自定义发送回调无需 Reach。
-- `ldapts` — **可选**，仅在显式启用 LDAP 且没有注入 `ldapClientFactory` 时加载。
+### 安装
+
+```bash
+pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core
+```
 
 ```ts
 import { cache } from '@h-ai/cache'

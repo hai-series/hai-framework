@@ -6,6 +6,19 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `svelte` | Compile and render Svelte 5 components | Required for UI components | Import the components in a Svelte 5 project. Svelte mounts them |
+| `tailwindcss` 4, `daisyui` 5 | Generate component styles and themes | When using the supplied styles | Configure the CSS entry and component scanning before building. See the [styles example](#styles) |
+| `@tailwindcss/vite` | Process Tailwind CSS in a Vite build | When using Tailwind's Vite integration | Register the plugin in the Vite configuration before building |
+| `@h-ai/core` | Supply built-in messages and result types | Installed with UI | Import the components directly |
+
+### Example
+
 Import components through the public UI entry points. Keep authorization and persistence in the application. Supply controlled values and callbacks for interactive scenes.
 
 Put this in a Svelte 5 page, such as `+page.svelte`.

@@ -10,7 +10,7 @@
 
 使用 pnpm 安装：`pnpm add @h-ai/storage`。
 
-[跟着最小示例完成接入](../../docs/usage/function/storage.md#quick-start)。
+[跟着最小示例完成接入](../../docs/usage/function/storage.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/storage.md#module-dependencies)。
 
 ## 配置清单
 

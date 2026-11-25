@@ -13,12 +13,14 @@ SQLite 的 `INTEGER` 与 PostgreSQL/MySQL 的 `BIGINT` 时间列均使用 Unix �
 
 ## 依赖
 
-| 模块 | 用途 | 是否必需 | 初始化要求 |
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
 | --- | --- | --- | --- |
-| `@h-ai/reldb` | 数据库（审计日志持久化） | **必需** | 需在 `audit.init()` 前初始化 |
-| `@h-ai/storage` | 私有备份 | 可选 | 启用备份时先初始化并注入 |
-| `@h-ai/reach` | 异常告警 | 可选 | 启用告警时先初始化并注入 |
-| `@h-ai/scheduler` | 自动备份/告警 | 可选 | 宿主显式装配 schedulerPlan，先于 Audit 关闭 |
+| Node.js | 运行审计服务。 | 所有 Audit 功能。 | 在服务端启动 Audit。 |
+| `@h-ai/reldb` | 保存和查询事件，保存告警状态。 | 必需。 | 先启动 RelDB，再启动 Audit。关闭按相反顺序。 |
+| `@h-ai/core`、`zod` | 提供配置、日志和上下文，校验配置和输入。 | 随 Audit 安装。 | 应用集中读取配置或设置日志时先配置 Core。 |
+| `@h-ai/storage` | 保存私有备份。 | 启用备份时安装。 | 先初始化私有 Storage，再传给 `audit.init({ ...config, storage })`。 |
+| `@h-ai/reach` | 发送异常告警。 | 启用告警时安装。 | 先初始化 Reach 并配置渠道，再传给 `audit.init({ ...config, reach })`。 |
+| `@h-ai/scheduler` | 定期执行备份和告警检查。 | 配置自动备份或自动告警检查时安装。 | Audit 就绪后装配 `audit.schedulerPlan` 的任务和钩子。关闭时先停 Scheduler。 |
 
 ## 使用步骤
 

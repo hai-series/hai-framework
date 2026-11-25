@@ -6,42 +6,57 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `svelte`, `@sveltejs/kit` | Host components and request hooks | Required for Kit | Set up a Svelte 5 project, then register hooks and routes |
+| `@sveltejs/adapter-node` or `@sveltejs/adapter-static` | Build a Node service or static site | Choose the deployment target | Install the selected adapter before building. For Node SSR, include `sm-crypto@0.5.8` in the application's production dependencies |
+| `vite`, `@sveltejs/vite-plugin-svelte` | Build the SvelteKit app and preprocess components | For the Vite setup below. Use `@tailwindcss/vite` when the app uses Tailwind | Install the build tooling and configure Vite and SvelteKit before building |
+| `@h-ai/core`, `@h-ai/api-contract` | Provide request utilities, result types, and route contracts | Installed with Kit | Use contracts directly. The application loads its Core configuration |
+| `zod` | Define validation rules for route input | Installed with Kit. Import it directly to write your own schemas | Define the schema and pass it to the appropriate `kit.validate` method |
+| `@h-ai/iam` | Verify sessions and A2A API keys | Installed with Kit. Initialize it for IAM-backed verification | Call `iam.init()` before wiring its session verifier or `kit.a2a.createApiKeyAuthenticator()` |
+| `@h-ai/crypto` | Encrypt selected cookies and HTTP bodies | Installed with Kit. Initialize it when enabling encryption | Initialize Crypto and prepare the relevant keys before `kit.createHandle()`. Transport encryption also needs a key ring and shared registration store |
+| `@h-ai/audit` | Record audit events captured by request hooks | Installed with Kit. Initialize it when enabling auditing | Initialize Audit with the desired `capture` settings before serving requests |
+| `@h-ai/cache` with Redis | Supply shared atomic rate-limit counters | When using the built-in Redis rate-limit store adapter | Connect to Redis, create the store with `kit.middleware.createCacheRateLimitStore()`, then pass it into the hook |
+| `@h-ai/feedback` | Handle feedback REST routes | When using `kit.createFeedbackHandler()` | Initialize Feedback before passing it and a trusted context resolver to the handler |
+
+### Example
+
 Use Kit in SvelteKit hooks, route handlers and the browser client. Server code protects routes and validates input as well as translating domain results into HTTP responses.
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/adapter-node @sveltejs/vite-plugin-svelte vite tailwindcss @tailwindcss/vite
 ```
 
+Register the plugins in `vite.config.ts`.
+
 ```ts
-import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    sveltekit({
-      adapter: adapter(),
-      preprocess: [
-        vitePreprocess()
-      ],
-      compilerOptions: { runes: true },
-      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
-      paths: { base: '', relative: false },
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: ['bits-ui']
-  },
-  ssr: {
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto']
-  },
+  plugins: [sveltekit(), tailwindcss()],
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
+```
+
+Set the Node adapter, preprocessor, and paths in `svelte.config.js`.
+
+```js
+import adapter from '@sveltejs/adapter-node'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+export default {
+  preprocess: vitePreprocess(),
+  compilerOptions: { runes: true },
+  kit: { adapter: adapter(), paths: { base: '', relative: false } },
+}
 ```
 
 <a id="api-reference"></a>

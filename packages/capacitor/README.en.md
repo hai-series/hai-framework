@@ -10,7 +10,7 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 
 Install with pnpm: `pnpm add @h-ai/capacitor @capacitor/core @capacitor/preferences`.
 
-[Open the quick-start guide](../../docs/usage/function/capacitor.en.md#quick-start).
+[Open the quick-start guide](../../docs/usage/function/capacitor.en.md#quick-start). [Dependencies and setup order](../../docs/usage/function/capacitor.en.md#module-dependencies).
 
 ## Configuration Reference
 

@@ -12,6 +12,8 @@
 
 [跟着最小示例完成接入](../../docs/usage/function/reldb.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/reldb.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_db.yml` 中设置数据库类型、地址和连接选项。应用启动代码读取该文件，把配置对象传给 `reldb.init(config)`。

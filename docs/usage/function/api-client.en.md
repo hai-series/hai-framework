@@ -6,6 +6,20 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Browser or Node.js, HTTP service | Sends requests to the server using Fetch. | All HTTP calls. | Expose the server routes, then initialize the client with their `baseUrl`. Supply the `fetch` option to replace the runtime implementation. |
+| `@h-ai/api-contract` | Provides shared route, input, and output contracts. | Installed with API Client. Declare it as a direct dependency if application code imports it. | Use the bundled contract, or pass the same contract as the server to `apiClient.create(contract)` and initialize the instance. |
+| `@h-ai/core` | Provides result types, errors, and diagnostics. | Installed with API Client. | Configure Core first when the application customizes shared logging or settings. |
+| `@h-ai/crypto` | Provides encrypted transport. | Installed with API Client. The application initializes Crypto for encrypted transport. | Configure server key exchange and initialize Crypto before setting the client's `transport.crypto`. |
+| `@orpc/client`, `@orpc/contract`, `@orpc/openapi-client`, `@orpc/zod`, `zod` | Support the HTTP client, contracts, and validation. | Installed with API Client. | API Client uses these libraries internally. |
+
+### Example
+
 Create one typed client from the same contract used by Serv or Kit. Initialize it before requests, handle each `HaiResult`, and close it when the owner releases it.
 
 ```ts

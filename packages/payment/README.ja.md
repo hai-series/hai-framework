@@ -12,6 +12,8 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 [最小構成の導入手順](../../docs/usage/function/payment.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/payment.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 生成したプロジェクトでは、決済チャネルごとのアカウントとサーバー側の認証情報を `config/_payment.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `payment.init(config)` に渡します。

@@ -8,6 +8,20 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| Node.js と `@h-ai/cli` | 配備 SDK または `hai deploy` の実行 | SDK と CLI は Node.js 上で動作します。テンプレートの配備コマンドには CLI が必要です | SDK では配備設定を準備して `deploy.init()` を呼びます。CLI はプロジェクトの設定を読み込み、Deploy を初期化します |
+| `@h-ai/core`、`@h-ai/api-contract`、`@h-ai/crypto` | 設定と診断、フィードバック運用 API の契約、暗号化ゲートウェイの検証 | Deploy と同時にインストールされます | Deploy を実行すると必要な関数が呼ばれます |
+| Docker または Podman | コンテナイメージの準備、取り込み、検証 | 対応する `docker-ssh` イメージ操作を行うとき | 操作を実行するマシンにエンジンを導入して起動します |
+| OpenSSH、Linux、Compose | SSH での配備、Linux 上でのオフラインバンドルの適用 | リモート配備にはローカルの OpenSSH が必要です。コンテナの配備先には Linux、`--pull never` 対応の Compose 実装、配備アカウントの権限が必要です | SSH 認証、配備先のエンジンと Compose を設定し、[ホストツール一覧](../configuration/delivery.md#离线交付与服务器条件)を確認します |
+| Vercel アカウント、アクセストークン、事前ビルド済み成果物 | ビルドを Vercel に公開 | `vercel` を選択するとき | 初期化と配備の前にトークンと Vercel Build Output API に沿ったディレクトリを用意します |
+
+### 利用例
+
 リモート変更の前にアプリを調べ、デプロイ計画を作成します。成果物の識別情報と対象を検証します。リモートコマンドの結果が不明な場合は復旧手順に従います。
 
 ```sh

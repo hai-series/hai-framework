@@ -10,7 +10,7 @@ An object storage module with a unified `storage` entry point for S3-compatible 
 
 Install with pnpm: `pnpm add @h-ai/storage`.
 
-[Open the quick-start guide](../../docs/usage/function/storage.en.md#quick-start).
+[Open the quick-start guide](../../docs/usage/function/storage.en.md#quick-start). [Dependencies and setup order](../../docs/usage/function/storage.en.md#module-dependencies).
 
 ## Configuration Reference
 

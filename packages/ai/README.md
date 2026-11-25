@@ -14,6 +14,8 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 [跟着最小示例完成接入](../../docs/usage/function/ai.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/ai.md#module-dependencies)。
+
 ## 配置清单
 
 生成的项目在 `config/_ai.yml` 中设置模型列表、模型名称和服务地址。应用启动代码读取该文件，把配置对象传给 `ai.init(config, options)`。

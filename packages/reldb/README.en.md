@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/reldb`.
 
 [Open the quick-start guide](../../docs/usage/function/reldb.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/reldb.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define the database type, address, and connection options in `config/_db.yml`. At startup, the application reads the file and passes the settings object to `reldb.init(config)`.

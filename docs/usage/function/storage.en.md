@@ -6,6 +6,20 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js | Run server file, directory, and signing APIs | When calling server APIs from `@h-ai/storage` | Call `storage.init()` at startup and begin file operations after it succeeds |
+| `@h-ai/core` | Provide logging, errors, and result types | Installed with Storage | If the app uses Core to load configuration, load it before passing it to `storage.init()` |
+| Writable local directory | Store local files and metadata | When `type: 'local'` | Give the app read and write access to the directory or its parent before initializing with `root` |
+| S3-compatible storage | Store objects and issue presigned URLs | When `type: 's3'`. The AWS SDK is installed with Storage | Prepare the bucket and credentials before initializing. To create a missing bucket, grant permission and enable `createBucket` |
+| Signing endpoint and storage CORS | Allow browsers to upload directly to object storage | When calling `@h-ai/storage/client` from a browser | Configure storage CORS and authorize the key on the server before issuing a URL. The browser can request the URL through `@h-ai/api-client` and pass it to the upload helper |
+
+### Example
+
 Initialize Storage and use the file API for object operations. Authorize the object key before issuing a signed URL. Use streaming for large downloads.
 
 ```ts
@@ -50,6 +64,12 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     throw new Error(closed.error.message)
   return result
 }
+```
+
+The browser example imports API Client directly. Install both packages in the frontend project.
+
+```sh
+pnpm add @h-ai/storage @h-ai/api-client
 ```
 
 ```ts

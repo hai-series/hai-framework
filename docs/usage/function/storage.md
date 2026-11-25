@@ -12,6 +12,18 @@ Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.s
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js | 运行服务端文件、目录与签名 API | 从 `@h-ai/storage` 调用服务端 API 时 | 启动时调用 `storage.init()`，成功后执行文件操作 |
+| `@h-ai/core` | 提供日志、错误与结果类型 | 随 Storage 安装 | 应用使用 Core 加载配置时，先读取配置再传入 `storage.init()` |
+| 可写本地目录 | 存放本地文件和元数据 | `type: 'local'` 时 | 为应用进程准备目录或父目录的读写权限，再传入 `root` 初始化 |
+| S3 兼容存储 | 存放对象并签发预签名 URL | `type: 's3'` 时。AWS SDK 随 Storage 安装 | 准备桶和凭据后初始化。也可授权并开启 `createBucket`，由 Storage 创建缺失的桶 |
+| 签名服务和存储端 CORS | 支持浏览器直传对象存储 | 从浏览器调用 `@h-ai/storage/client` 时 | 配置存储端 CORS，由服务端校验访问权限后签发 URL。前端可用 `@h-ai/api-client` 取得 URL，再交给上传方法 |
+
 ### Node.js 服务端
 
 将已校验的 S3 或 local 配置和 PNG 字节传给 `storeImage`。本例管理一次完整的连接生命周期。常驻服务应在应用启动时初始化，并在停机时关闭。
@@ -68,6 +80,12 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
 ### 浏览器客户端
 
 浏览器通过已初始化的 `apiClient` 获取 S3 上传地址。将应用授权的对象 key 和用户选择的 `File` 传给 `uploadImage`。
+
+下面的浏览器示例直接导入 API Client，请在前端项目安装。
+
+```sh
+pnpm add @h-ai/storage @h-ai/api-client
+```
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

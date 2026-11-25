@@ -8,6 +8,20 @@
 
 ## クイックスタート
 
+<a id="module-dependencies"></a>
+
+### 依存関係
+
+| 依存先 | 用途 | 利用条件 | 初期化順序 |
+| --- | --- | --- | --- |
+| Node.js | ファイル、ディレクトリ、署名のサーバー API を実行 | `@h-ai/storage` のサーバー API を使う場合 | 起動時に `storage.init()` を呼び出し、成功後にファイルを操作 |
+| `@h-ai/core` | ログ、エラー、結果型を提供 | Storage とともにインストール | Core を使う場合は設定を読み込んでから `storage.init()` に渡す |
+| 書き込み可能なローカルディレクトリ | ファイルとメタデータを保存 | `type: 'local'` の場合 | アプリにディレクトリまたは親ディレクトリの読み書き権限を付けてから `root` を指定して初期化 |
+| S3 互換ストレージ | オブジェクトを保存し、署名付き URL を発行 | `type: 's3'` の場合。AWS SDK は Storage とともにインストール | バケットと認証情報を用意して初期化。バケット作成権限を付けて `createBucket` を有効にすると、存在しないバケットを作成可能 |
+| 署名 API とストレージの CORS | ブラウザーからオブジェクトストレージへ直接アップロード | ブラウザーで `@h-ai/storage/client` を使う場合 | ストレージの CORS を設定し、サーバーでキーへのアクセスを確認して URL を発行。ブラウザーでは `@h-ai/api-client` で取得した URL をアップロード関数に渡すことも可能 |
+
+### 利用例
+
 Storage を初期化してファイル API でオブジェクトを操作します。署名付き URL の発行前にキーへのアクセスを確認します。大きなダウンロードにはストリームを使います。
 
 ```ts
@@ -52,6 +66,12 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
     throw new Error(closed.error.message)
   return result
 }
+```
+
+ブラウザーの例では API Client を直接インポートします。フロントエンドのプロジェクトに両方のパッケージをインストールします。
+
+```sh
+pnpm add @h-ai/storage @h-ai/api-client
 ```
 
 ```ts

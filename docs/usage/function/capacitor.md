@@ -12,6 +12,21 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@capacitor/core`、`@capacitor/preferences` | 识别运行平台并保存偏好 | 使用 Capacitor 模块时必需 | 安装后，在调用设备、偏好等操作前执行 `capacitor.init()` |
+| `@capacitor/cli`、`@capacitor/android` 或 `@capacitor/ios` | 创建并同步原生项目 | 打包 Android 或 iOS 应用时 | 准备平台项目，安装所需插件并完成平台配置，再执行 `pnpm exec cap sync` |
+| `@capacitor/device`、`@capacitor/app` | 分别读取设备信息和应用版本 | 使用 `capacitor.device.getInfo()` 或 `capacitor.device.getAppVersion()` 时 | 在目标平台准备对应插件，再初始化并调用 |
+| `@capacitor/camera`、`@capacitor/push-notifications`、`@capacitor/status-bar` | 提供相机、推送和状态栏功能 | 按所用功能安装 | 同步插件并配置所需平台权限及推送服务，再初始化并调用 |
+| `@aparajita/capacitor-secure-storage` | 在原生端安全读写令牌 | 使用 `capacitor.createTokenStorage()` 返回的适配器读写令牌时 | 在 Android 或 iOS 项目同步插件。适配器可直接创建 |
+| `@h-ai/core`、`@h-ai/api-client` | 提供结果类型和令牌存储契约 | 随模块安装。应用调用框架 HTTP 接口时可直接使用 API Client | 使用原生令牌存储时，将适配器作为 `auth.storage` 传给 `apiClient.init()` |
+
+### 接入示例
+
 ```ts
 import { capacitor } from '@h-ai/capacitor'
 

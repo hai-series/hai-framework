@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/api-contract`.
 
 [Open the quick-start guide](../../docs/usage/function/api-contract.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/api-contract.en.md#module-dependencies).
+
 ## Configuration Reference
 
 This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/api-contract.en.md); arguments or response structures are in the [reference](../../docs/usage/data/api-contract.en.md#public-settings).

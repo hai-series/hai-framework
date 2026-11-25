@@ -9,7 +9,7 @@
 | 入口 | 适用场景 | 执行与生命周期 |
 | --- | --- | --- |
 | `@h-ai/tools` | 短时业务函数、浏览器本地工具、模型协议适配前的中立定义 | `tools.define/createRegistry` 为纯定义与工厂，无 `init/close`，不加载 Runner 或模型 SDK |
-| `@h-ai/tools/server` | 可恢复任务、进度与取消、文档及独立容器作业 | 保留轻量方法，增加 `tools.createService/createArtifactTools/createJobTools`；借用已初始化的 Runner |
+| `@h-ai/tools/server` | 可恢复任务、进度与取消、文档及独立容器作业 | 保留轻量方法，增加 `tools.createService/createArtifactTools/createJobTools` |
 
 浏览器可导入轻量入口，但服务端权限仍由可信服务端验证。不要把 `/server` 导入前端。
 
@@ -17,8 +17,21 @@
 
 ## 最小接入
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/core`、`zod` | 提供统一结果、工具参数校验和 JSON Schema 转换 | 随 Tools 安装。应用直接导入 `zod` 定义参数时，把它声明为应用依赖 | 按需定义工具和创建注册表，无模块初始化 |
+| `@h-ai/runner` | 为可恢复的工具服务和后台作业提供执行及恢复能力 | 使用服务端的 `createService()` 或 `createJobTools()` 时 | 宿主先初始化 Runner，再传给工厂，在提交任务前完成处理器注册 |
+| Runner 容器环境 | 为文档、OCR、浏览器等独立作业提供引擎和镜像 | 使用相应的 `createJobTools()` 作业时 | 先准备执行节点，再将已配置的环境 ID 传给工厂 |
+| 宿主的文件访问接口 | 读取工具产物，或为后台作业提供文件访问 | 使用 `createArtifactTools()` 或 `createJobTools()` 时 | 创建工具时传入受身份和作用域约束的 `files` |
+
+### 接入示例
+
 ```sh
-pnpm add @h-ai/tools zod
+pnpm add @h-ai/tools @h-ai/core zod
 ```
 
 下面是独立业务调用。注册器只包含宿主显式注册的工具，身份由可信服务端传入。
@@ -72,7 +85,7 @@ export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
 
 ## 功能说明
 
-Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景从 /server 导入并借用已经初始化的 Runner。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景从 `/server` 导入。每次调用后先检查 `HaiResult.success`；失败分支返回原结果，成功分支再读取 `data`。未给出函数声明的场景是应用异步业务函数内的片段。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
 <a id="definitions"></a>
 
@@ -102,7 +115,7 @@ Tools 无模块级 init/close。轻量场景从根入口导入；服务端场景
 
 ##### 调用参数
 
-`tools.define/createRegistry` 是纯定义与工厂，无模块级 YAML、环境变量或 `init/close`。服务端工厂从 `@h-ai/tools/server` 导入，借用宿主已初始化的 Runner。
+`tools.define/createRegistry` 是纯定义与工厂，无模块级 YAML、环境变量或 `init/close`。服务端工厂从 `@h-ai/tools/server` 导入，各工厂的前置条件见[依赖](#module-dependencies)。
 
 ##### 定义与执行选项
 

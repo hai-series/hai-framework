@@ -12,6 +12,8 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 [跟着最小示例完成接入](../../docs/usage/function/api-client.md#quick-start)。
 
+[依赖与接入顺序](../../docs/usage/function/api-client.md#module-dependencies)。
+
 ## 配置清单
 
 本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/api-client.md)，调用参数或响应结构见[参考页](../../docs/usage/function/api-client.md#call-options)。

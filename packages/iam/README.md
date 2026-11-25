@@ -8,9 +8,11 @@
 
 ## 快速开始
 
-使用 pnpm 安装：`pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache`。
+使用 pnpm 安装：`pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core`。
 
 [跟着最小示例完成接入](../../docs/usage/function/iam.md#quick-start)。
+
+[依赖与接入顺序](../../docs/usage/function/iam.md#module-dependencies)。
 
 ## 配置清单
 

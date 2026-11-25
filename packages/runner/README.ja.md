@@ -12,6 +12,8 @@ Runner は Node.js のサーバー側で管理対象の Agent Worker とツー�
 
 [最小構成の導入手順](../../docs/usage/function/runner.ja.md#quick-start)を参照してください。
 
+[依存関係と初期化順序](../../docs/usage/function/runner.ja.md#module-dependencies)を参照してください。
+
 ## 設定一覧
 
 起動時に `runner.init(options)` で、そのノードがタスクを実行するか、どのコンテナ環境を使えるか、完了したタスクをいつまで保持するかを指定します。タスクの送信と照会だけを行うノードでは実行を無効にできます。

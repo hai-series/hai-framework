@@ -12,9 +12,22 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| Node.js 和 pnpm | 运行 CLI、安装依赖并执行生成项目的脚本 | Node.js 为运行前提。pnpm 用于下方示例和 API、Fullstack 模板 | 安装符合 CLI `engines` 的 Node.js（22.23.4、24.22.1 或 26.12.1 起的对应主版本）和 pnpm 12.11.2，再安装 CLI |
+| `@h-ai/core` | 配置与日志等基础能力 | 随 CLI 安装 | 直接运行 `hai`，CLI 管理自身运行过程 |
+| Git | 初始化仓库和记录构建来源 | `hai create` 默认初始化 Git，可用 `--no-git` 跳过 | 在创建项目或记录构建来源前安装 |
+| `@h-ai/deploy` | 由项目提供部署能力 | 运行 `hai deploy` 时 | 创建项目时保留部署选项，或在项目中运行 `hai add deploy` |
+| Docker 或 Podman | 构建镜像及在容器中构建 Android 包 | 运行 `hai build --target image` 或选择 Android 容器构建时 | 构建前安装并启动本机引擎 |
+| 平台 SDK 与 Rust | 编译原生安装包 | 构建本机 Android、iOS 或桌面安装包时 | 按[原生构建说明](../getting-started/build.md)准备对应平台的 SDK，Tauri 桌面构建还需 Rust |
+
 ### 安装 CLI
 
-安装前核对 Node.js 版本，支持 22.23.4、24.22.1 或 26.12.1 起的对应主版本。使用 pnpm 12.11.2。在 PowerShell 中，可运行 `pnpm.cmd`。
+在 PowerShell 中使用 `pnpm.cmd`。
 
 ```sh
 pnpm view @h-ai/cli@latest version # 查询注册表，输出最新已发布版本。

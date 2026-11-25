@@ -10,13 +10,22 @@ Use Reach on the server to send a sign-in code or tell the warehouse about a new
 
 ## Quick start
 
-Install Reach first. Install `nodemailer` as well if you send mail through SMTP.
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/core` | Provide logging, configuration support, and common result handling | Installed with Reach | Initialize Core first if the app uses its configuration service |
+| [`@h-ai/reldb`](../configuration/reldb.en.md) | Persist templates, delivery history, and delayed messages | When using persistent templates, delivery history, or the `delay` do-not-disturb strategy | Initialize RelDB before `reach.init()` |
+| `@h-ai/cache` | Provide a distributed lock for delayed-queue scans | Optional when multiple nodes need to reduce duplicate scans | When using a shared cache, initialize Cache before `reach.init()` |
+| Notification service (SMTP, SMS, or HTTP) | Deliver messages through an external channel | When using that channel. SMTP requires the optional `nodemailer` driver | Prepare the endpoint, any credentials, and any driver the channel needs before `reach.init()` |
+
+### Try one send locally
 
 ```bash
 pnpm add @h-ai/reach
 ```
-
-### Try one send locally
 
 ```ts
 import { reach } from '@h-ai/reach'
@@ -52,7 +61,7 @@ finally {
 
 ## Features
 
-Run the remaining examples on the server. Pass the [Reach configuration](../configuration/reach.en.md#configuration-fields) to `reach.init()` and check the result. Start [RelDB](../configuration/reldb.en.md) first when you need send history, templates or the delayed queue.
+Run the remaining examples on the server. Pass the [Reach configuration](../configuration/reach.en.md#configuration-fields) to `reach.init()` and check the result. See the [dependencies](#module-dependencies) for each feature’s prerequisites.
 
 <a id="sending"></a>
 

@@ -12,7 +12,7 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 
 使用 pnpm 安装：`pnpm add @h-ai/serv`。
 
-[跟着最小示例完成接入](../../docs/usage/function/serv.md#quick-start)。
+[跟着最小示例完成接入](../../docs/usage/function/serv.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/serv.md#module-dependencies)。
 
 ## 配置清单
 

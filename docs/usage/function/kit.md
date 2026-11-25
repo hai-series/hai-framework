@@ -12,14 +12,29 @@ SvelteKit 的服务端和浏览器代码都可以导入 `kit`。请求校验和�
 
 ## 最小接入示例
 
-`sequence` 保留并组合 SvelteKit 的 `resolve` 选项：页面转换由内向外执行，`preload` 与序列化响应头过滤使用首个配置，确保 i18n 的 HTML 语言标记正确替换。
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `svelte`、`@sveltejs/kit` | 提供组件和请求 Hook 宿主 | 接入 Kit 时必需 | 先准备 Svelte 5 项目，再注册 Hook 和路由 |
+| `@sveltejs/adapter-node` 或 `@sveltejs/adapter-static` | 生成 Node 服务或静态站点 | 按部署方式选择 | 安装所选适配器后再构建。使用 Node SSR 时，在应用生产依赖中保留 `sm-crypto@0.5.8` |
+| `vite`、`@sveltejs/vite-plugin-svelte` | 构建 SvelteKit 应用并预处理组件 | 使用下面的 Vite 接入示例时。应用使用 Tailwind 时引入 `@tailwindcss/vite` | 安装构建依赖后配置 Vite 和 SvelteKit，再构建应用 |
+| `@h-ai/core`、`@h-ai/api-contract` | 提供请求工具、结果类型和接口契约 | 随 Kit 安装 | 契约可直接使用。由应用负责加载 Core 配置 |
+| `zod` | 编写路由输入校验规则 | 随 Kit 安装。应用手动编写 Schema 时可直接导入 | 定义 Schema 后传给 `kit.validate` 的对应方法 |
+| `@h-ai/iam` | 验证会话和 A2A API Key | 随 Kit 安装。使用 IAM 验证时需要初始化 | 先调用 `iam.init()`，再接入 IAM 会话验证器或 `kit.a2a.createApiKeyAuthenticator()` |
+| `@h-ai/crypto` | 加密指定 Cookie 和 HTTP 正文 | 随 Kit 安装。启用加密时需要初始化 | 初始化 Crypto 并准备相应密钥，再调用 `kit.createHandle()`。传输加密还需密钥环和共享登记存储 |
+| `@h-ai/audit` | 记录由 Hook 捕获的审计事件 | 随 Kit 安装。应用启用审计时需要初始化 | 开始处理请求前初始化 Audit 并设置 `capture` |
+| `@h-ai/cache` 与 Redis | 提供共享的原子限流计数 | 使用内置 Redis 限流存储适配器时需要 | 先连接 Redis，再用 `kit.middleware.createCacheRateLimitStore()` 创建存储并传给 Hook |
+| `@h-ai/feedback` | 处理反馈 REST 路由 | 使用 `kit.createFeedbackHandler()` 时需要 | 初始化 Feedback，再将服务和可信上下文解析函数传给处理器 |
 
 ### 安装
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/adapter-node @sveltejs/vite-plugin-svelte vite tailwindcss @tailwindcss/vite
 ```
 
 ### 项目配置
@@ -62,6 +77,8 @@ export default {
 
 把认证、访问检查、限流和语言处理装进 Hook；业务失败在 handler 边界映射为安全 HTTP 响应。
 
+`sequence` 保留并组合 SvelteKit 的 `resolve` 选项：页面转换由内向外执行，`preload` 与序列化响应头过滤使用首个配置，确保 i18n 的 HTML 语言标记正确替换。
+
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
@@ -74,11 +91,6 @@ export default {
 | `kit.middleware.createMemoryRateLimitStore()` | 开发计数器 | `none; development or explicit test only` | `MemoryRateLimitStore` | `kit.middleware.createMemoryRateLimitStore()` |
 | `kit.i18n.setLocale(locale)` | 启动默认语言 | 必填 `locale` 设置启动阶段的默认语言，例如 `zh-CN`。 | `void; do not change process default per request` | `kit.i18n.setLocale("zh-CN")` |
 | `kit.i18n.runWithLocale(locale, operation)` | 请求语言隔离 | 必填请求 `locale` 和保留返回值的 `operation` 回调，只用于 Node 服务端。 | `same callback return value` | `kit.i18n.runWithLocale("en-US", () => resolve(event))` |
-
-##### Hook 的可选依赖
-
-- `@h-ai/iam` — 身份认证与授权（A2A 认证），可选；使用 A2A 功能时需在 kit 使用前初始化
-- `@h-ai/crypto` — 加密（传输加密 / Cookie 加密），可选；启用加密时需在 kit 使用前初始化
 
 ##### 选择服务端与浏览器入口
 

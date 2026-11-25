@@ -12,6 +12,24 @@
 
 ## 最小接入示例
 
+<a id="module-dependencies"></a>
+
+### 依赖
+
+| 依赖 | 用途 | 何时需要 | 接入顺序 |
+| --- | --- | --- | --- |
+| `@h-ai/core` | 提供共用的结果和错误结构。 | 随 API Contract 安装。 | 可直接导入契约和 Schema。 |
+| `@h-ai/storage/schemas` | 为文件接口校验对象键、前缀和签名有效期。 | 由随 API Contract 安装的 `@h-ai/storage` 提供。 | 直接导入 Storage 契约即可使用 Schema。启用实际文件路由时由应用初始化 Storage。 |
+| `@orpc/contract`、`zod` | 定义路由契约和校验输入输出。 | 随 API Contract 安装。应用直接导入 Zod 等包时将其列为直接依赖。 | 导入后定义 Schema 和契约。可将组合后的契约交给客户端和服务端。 |
+
+### 接入示例
+
+安装 `@h-ai/api-contract`。下面自定义契约的例子还直接导入了 Zod。
+
+```sh
+pnpm add @h-ai/api-contract zod
+```
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 

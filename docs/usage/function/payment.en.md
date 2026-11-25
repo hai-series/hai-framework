@@ -8,6 +8,20 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| Node.js and a browser | Create orders and verify signatures on the server, and open the payment flow in the browser | Node.js runs server-side `payment`. Browser checkout uses `@h-ai/payment/client` | Call `payment.init()` on the server. Call `payment.client.invoke()` after the browser receives order parameters from the server |
+| `@h-ai/core` | Logging, results and error types | Installed with Payment | Use Payment's public operations |
+| `@h-ai/reldb` | Stores Stripe provider references and idempotency results | Installed with Payment. A database connection is required when Stripe is enabled | Call `reldb.init()` and check the result before `payment.init()`. Use a shared database in production |
+| `@h-ai/audit` | Records successful order creation, notification handling, refunds and order closures | Installed with Payment. Initialize it to persist payment audit events | Call `reldb.init()` and `audit.init()` before handling payments |
+| WeChat Pay, Alipay or Stripe | Create provider orders, collect payments and verify notifications | When configuring the corresponding provider | Obtain merchant credentials. Set up an application endpoint before receiving provider notifications. See the provider examples below for browser requirements |
+
+### Example
+
 Initialize Payment before creating orders. Validate amounts and authorize operations in application code. Treat provider callbacks and query results as inputs to the app’s own order state machine.
 
 ```typescript

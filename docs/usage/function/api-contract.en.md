@@ -6,6 +6,24 @@
 
 ## Quick start
 
+<a id="module-dependencies"></a>
+
+### Dependencies
+
+| Dependency | Purpose | When required | Setup order |
+| --- | --- | --- | --- |
+| `@h-ai/core` | Provides shared result and error shapes. | Installed with API Contract. | Import the contracts and schemas directly. |
+| `@h-ai/storage/schemas` | Validates object keys, prefixes, and signature lifetimes for file APIs. | Provided by `@h-ai/storage`, which is installed with API Contract. | Import the storage contract to use its schemas. The application initializes Storage when it enables file routes that handle requests. |
+| `@orpc/contract`, `zod` | Define route contracts and validate inputs and outputs. | Installed with API Contract. Declare packages such as Zod as direct dependencies if application code imports them. | Import the libraries, then define schemas and contracts. Pass the composed contract to the client and server as needed. |
+
+### Example
+
+Install `@h-ai/api-contract`. The custom contract example below also imports Zod directly.
+
+```sh
+pnpm add @h-ai/api-contract zod
+```
+
 Import `apiContract` from `@h-ai/api-contract`. Assemble an application contract, then share it with the server procedures and the typed client.
 
 ```ts

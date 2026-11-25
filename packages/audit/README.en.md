@@ -12,6 +12,8 @@ Install with pnpm: `pnpm add @h-ai/audit @h-ai/reldb`.
 
 [Open the quick-start guide](../../docs/usage/function/audit.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/audit.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Generated projects define capture, retention, backup and alert settings in `config/_audit.yml`. The application passes those settings to `audit.init(config)` at startup. Use the same retention settings on all instances that share a database and coordinate restarts after changes.

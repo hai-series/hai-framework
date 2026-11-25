@@ -19,6 +19,8 @@ hai --version
 
 [Open the quick-start guide](../../docs/usage/function/cli.en.md#quick-start).
 
+[Dependencies and setup order](../../docs/usage/function/cli.en.md#module-dependencies).
+
 ## Configuration Reference
 
 Command-line flags configure the current run. The project’s `hai.json` stores build and deployment settings.
