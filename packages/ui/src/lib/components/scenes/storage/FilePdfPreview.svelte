@@ -1,6 +1,7 @@
 <!-- 只绘制 PDF 页面，不挂载文档链接、脚本、表单或注释。 -->
 <script lang='ts'>
   import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
+  import { tick } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { useToastFeedback } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
@@ -12,6 +13,7 @@
   const PREVIEW_TIMEOUT = 20_000
   let pdf = $state.raw<PDFDocumentProxy>()
   let canvas = $state<HTMLCanvasElement>()
+  let pager = $state<HTMLDivElement>()
   let pageNumber = $state(1)
   let loading = $state(true)
   let rendering = $state(false)
@@ -19,6 +21,26 @@
   let renderFailed = $state(false)
   let attempt = $state(0)
   let disableAnnotations: number
+
+  async function changePage(next: number) {
+    if (!pdf || next < 1 || next > pdf.numPages)
+      return
+    const boundary = next === 1 || next === pdf.numPages
+    pageNumber = next
+    if (boundary) {
+      // 触发按钮在首尾页变为禁用，把焦点移到可用按钮，以便继续键盘操作。
+      await tick()
+      if (pageNumber === next)
+        pager?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+    }
+  }
+
+  function retry(event: MouseEvent) {
+    // 重试会移除触发按钮，加载期间让焦点留在弹窗中。
+    if (event.currentTarget instanceof HTMLElement)
+      event.currentTarget.closest<HTMLElement>('[role="dialog"]')?.focus({ preventScroll: true })
+    attempt += 1
+  }
 
   $effect(() => {
     void attempt
@@ -155,13 +177,13 @@
 {#if loading}
   <p role='status'>{uiM('common_loading')}</p>
 {:else if failed || renderFailed}
-  <Button size='sm' onclick={() => attempt += 1}>{uiM('file_list_retry')}</Button>
+  <Button size='sm' onclick={retry}>{uiM('file_list_retry')}</Button>
 {:else if pdf}
   {#if pdf.numPages > 1}
-    <div class='flex items-center justify-center gap-3 pb-3'>
-      <Button size='sm' disabled={pageNumber <= 1} onclick={() => pageNumber -= 1}>{uiM('pagination_previous')}</Button>
+    <div bind:this={pager} class='flex items-center justify-center gap-3 pb-3'>
+      <Button size='sm' disabled={pageNumber <= 1} onclick={() => changePage(pageNumber - 1)}>{uiM('pagination_previous')}</Button>
       <span aria-live='polite'>{uiM('pagination_page_info', { page: pageNumber, total: pdf.numPages })}</span>
-      <Button size='sm' disabled={pageNumber >= pdf.numPages} onclick={() => pageNumber += 1}>{uiM('pagination_next')}</Button>
+      <Button size='sm' disabled={pageNumber >= pdf.numPages} onclick={() => changePage(pageNumber + 1)}>{uiM('pagination_next')}</Button>
     </div>
   {/if}
   {#if rendering}

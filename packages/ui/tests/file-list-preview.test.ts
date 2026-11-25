@@ -101,6 +101,7 @@ it('重试后以无注释的画布逐页渲染 PDF，关闭时释放解析器资
     expect(next).toBeDefined()
     next!.click()
     await vi.waitFor(() => expect(getPage).toHaveBeenLastCalledWith(2))
+    expect(document.activeElement?.textContent?.trim()).toBe(uiM('pagination_previous'))
     target.querySelector<HTMLButtonElement>(`[role="dialog"] button[aria-label="${uiM('common_close')}"]`)!.click()
     flushSync()
     await vi.waitFor(() => expect(renderer.terminate).toHaveBeenCalledOnce())
