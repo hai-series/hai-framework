@@ -20,6 +20,8 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../types.js'
+  import { uiM } from '../../messages.js'
+  import { notifyError } from '../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
   /**
@@ -36,7 +38,7 @@
    * ```
    */
   interface Props {
-    /** 刷新回调（需返回 Promise） */
+    /** 刷新回调（需返回 Promise）；拒绝时提示失败并恢复下拉操作。 */
     onrefresh?: () => Promise<void>
     /** 下拉触发距离（px） */
     threshold?: number
@@ -64,37 +66,48 @@
   let startY = 0
 
   function handleTouchStart(e: TouchEvent) {
-    if (disabled || refreshing)
+    const touch = e.touches[0]
+    if (disabled || refreshing || !touch)
       return
-    startY = e.touches[0].clientY
+    startY = touch.clientY
     pulling = true
   }
 
   function handleTouchMove(e: TouchEvent) {
-    if (!pulling || disabled || refreshing)
+    const touch = e.touches[0]
+    if (!pulling || disabled || refreshing || !touch)
       return
-    const diff = e.touches[0].clientY - startY
-    if (diff > 0) {
-      pullDistance = Math.min(diff * 0.5, threshold * 1.5) // 阻尼
-    }
+    const diff = Math.max(0, touch.clientY - startY)
+    pullDistance = Math.min(diff * 0.5, threshold * 1.5) // 阻尼
   }
 
   async function handleTouchEnd() {
-    if (!pulling || disabled)
+    if (!pulling)
       return
     pulling = false
 
-    if (pullDistance >= threshold && onrefresh) {
-      refreshing = true
-      try {
+    try {
+      if (!disabled && pullDistance >= threshold && onrefresh) {
+        refreshing = true
         await onrefresh()
       }
-      finally {
-        refreshing = false
-      }
     }
+    catch (error) {
+      notifyError(typeof error === 'string'
+        ? new Error(error)
+        : error, uiM('pull_refresh_failed'))
+    }
+    finally {
+      refreshing = false
+      pullDistance = 0
+    }
+  }
 
-    pullDistance = 0
+  function handleTouchCancel() {
+    if (pulling) {
+      pulling = false
+      pullDistance = 0
+    }
   }
 </script>
 
@@ -103,6 +116,7 @@
      ontouchstart={handleTouchStart}
      ontouchmove={handleTouchMove}
      ontouchend={handleTouchEnd}
+     ontouchcancel={handleTouchCancel}
      role='region'
 >
   <!-- 刷新指示器 -->
@@ -112,11 +126,11 @@
   >
     {#if refreshing}
       <span class='loading loading-spinner loading-sm mr-2'></span>
-      Refreshing...
+      {uiM('pull_refresh_active')}
     {:else if pullDistance >= threshold}
-      Release to refresh
+      {uiM('pull_refresh_release')}
     {:else if pullDistance > 0}
-      Pull to refresh
+      {uiM('pull_refresh_prompt')}
     {/if}
   </div>
 
