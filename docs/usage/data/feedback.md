@@ -87,7 +87,7 @@
 
 这是反馈主单的字段节选。`feedback-42` 属于 `team-1` 的 `user-42`，尚待处理且仍在收集材料；`evidence_count:0` 表示此时还没有关联证据，不代表后面步骤也没有。`created_at` 和 `updated_at` 是 Unix 毫秒。
 
-类别早已保存在报告的 `payload.category`，例如 `"bug"`。本人列表以 `scope_id`、`user_id` 等现有字段限定范围，已过期或正在删除的报告不会进入分页。
+类别早已保存在报告的 `payload.category`，例如 `"bug"`。本人列表以 `scope_id`、`user_id` 等现有字段限定范围。本人和管理列表均排除已过期或正在删除的报告，详情、附件及导出也在数据库时钟到达 `expires_at` 时失效。
 
 <a id="table-hai-feedback-evidence"></a>
 
@@ -229,12 +229,12 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 | `status` | `TEXT` | 否 | — | 任务是否在等待、执行或已经结束。 | `pending` |
 | `token` | `TEXT` | 是 | — | 当前领取者的令牌。 | `null` |
 | `lease_until` | `BIGINT` | 否 | — | 当前领取的截止时间，`0` 表示尚未领取。 | `0` |
-| `attempts` | `INTEGER` | 否 | — | 执行了多少次。 | `0` |
+| `attempts` | `INTEGER` | 否 | — | 已领取的执行次数，包含领取后退出的尝试。仅等待材料或免打扰解除的轮次不计入。 | `0` |
 | `next_run_at` | `BIGINT` | 否 | — | 最早可以再次领取的时间。 | `1794873600000` |
 | `created_at` | `BIGINT` | 否 | — | 登记时间。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
 | `last_error` | `TEXT` | 是 | — | 最近一次处理失败的错误信息。 | `NULL` |
-| `payload` | `JSON` | 否 | — | 任务执行所需的输入。 | `{}` |
+| `payload` | `JSON` | 否 | — | 任务执行所需的输入。采集任务还记录客户端完成确认、材料缺失和服务端日志是否已经保存，供重试续用。 | `{}` |
 | `result` | `JSON` | 是 | — | 任务完成后记录的结果。 | `NULL` |
 
 <a id="提交之后还要做的后台工作"></a>

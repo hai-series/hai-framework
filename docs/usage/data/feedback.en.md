@@ -83,7 +83,7 @@ Store the report, submitter and handling state as the entry point for evidence a
 
 This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
 
-The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`, and excludes expired reports and reports being deleted.
+The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`. Both author and administration lists exclude expired reports and reports being deleted. Details, attachments and exports also expire as soon as database time reaches `expires_at`.
 
 <a id="table-hai-feedback-evidence"></a>
 
@@ -225,12 +225,12 @@ Claim jobs by `(app_id, status, next_run_at)` and locate snapshots by `(report_i
 | `status` | `TEXT` | No | — | Whether the job is pending, active or finished. | `pending` |
 | `token` | `TEXT` | Yes | — | Token of the worker holding the lease. | `null` |
 | `lease_until` | `BIGINT` | No | — | Current lease deadline. `0` means unclaimed. | `0` |
-| `attempts` | `INTEGER` | No | — | Number of attempts so far. | `0` |
+| `attempts` | `INTEGER` | No | — | Number of claimed attempts, including claims interrupted by worker exit. Rounds spent waiting on material or quiet hours do not count. | `0` |
 | `next_run_at` | `BIGINT` | No | — | Earliest time the job can be claimed again. | `1794873600000` |
 | `created_at` | `BIGINT` | No | — | Registration time. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time. | `1794873600000` |
 | `last_error` | `TEXT` | Yes | — | Error from the most recent failure. | `NULL` |
-| `payload` | `JSON` | No | — | Input to the job. | `{}` |
+| `payload` | `JSON` | No | — | Input to the job. The collection job also records whether the client completed collection, whether evidence is missing, and whether server logs were saved for retries. | `{}` |
 | `result` | `JSON` | Yes | — | Recorded outcome when the job finishes. | `NULL` |
 
 <a id="background-work-after-submission"></a>

@@ -179,6 +179,8 @@ For example, `{ status: "pending", page: 1, pageSize: 5 }` returns up to five pe
 
 The server builds the context from an authenticated user and a verified scope. The list filters by application, scope, author, and expiry. Category matches are case-sensitive and read the existing report payload. The administration list still requires `feedback:read`.
 
+Authenticated authors can use the Kit and Serv route `GET /api/feedback/my-reports?category=bug&page=1` to find active reports in the current application and scope. This example assumes the application mounts the API at `/api`.
+
 ```ts
 
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
@@ -234,6 +236,10 @@ async function retryNotification(id: string, context: FeedbackContext) {
 }
 ```
 
+Lists, report details, evidence, attachments and exports use database time to check expiry. Expired reports are omitted from lists and individual operations return `NOT_FOUND`. A background job handles physical deletion from the database and object storage.
+
+Both online and offline queries can use an `errorId` from a failed request or an error. The anchor determines the source, request and sequence, with up to 100 surrounding log records on each side.
+
 <a id="evidence"></a>
 
 ### Append evidence and read attachments: `feedback`
@@ -266,6 +272,8 @@ Bind late evidence to the original report and principal; check attachment type, 
 | `completeCollection.input.missing` | `string[]` | Optional | Descriptions of diagnostic items still missing, up to 100 items and 2000 characters each. |
 
 #### Scenario: Append evidence and read attachments
+
+Repeated confirmations of the same missing evidence write it once. Attachment removals and additions are validated together. If a selected file fails validation, the previous attachments and missing evidence marks remain available.
 
 Use the accepted report ID and matching trusted context. Evidence carries stable id/source/sequence. Upload input encodes a declared attachment; changing IDs cannot bypass declarations or quotas.
 
@@ -309,6 +317,8 @@ Core Workers compress and unpack ZIP bundles. Browser offline export uses a Web 
 
 Export creates a job at a fixed evidence revision. Retrieve ZIP only when ready; the viewer does not replay business effects.
 
+The viewer reads the single-disk ZIP format produced by Feedback, using stored or DEFLATE entries. It checks paths, entry ranges, file count and expanded size before reading the contents.
+
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
@@ -344,21 +354,21 @@ Create a client per product session, freeze evidence before opening UI and clean
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `feedback.client.init(config)` | Start browser evidence capture | Required `config: FeedbackClientConfig`. See [application and capture fields](#feedback-client-config). | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedback.client.prepare()` | Prepare evidence for a report | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedback.client.captureScreenshot(attachmentId?)` | Capture a page screenshot | `attachmentId?: string` Add a screenshot when omitted or replace the given draft attachment | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedback.client.getDraft()` | Read the current draft | `—` | `FeedbackDraft \| undefined` | `feedback.client.getDraft()` |
-| `feedback.client.getView()` | Read UI view state | `—` | `FeedbackDraftView` | `feedback.client.getView()` |
-| `feedback.client.releasePreviews()` | Release temporary preview resources | `—` | `void` | `feedback.client.releasePreviews()` |
-| `feedback.client.addFiles(files, removedAttachmentIds?)` | Add user-selected files | `files: readonly File[], removedAttachmentIds?: readonly string[]` Newly selected files and optional draft attachment IDs to remove in the same batch | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedback.client.annotate(id, annotation)` | Apply annotations and redaction to an image | Required `id: string` (draft attachment ID) and `annotation: FeedbackImageAnnotation` (annotation and redaction data) | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedback.client.record(event)` | Record an application fact | Required `event` object with an evidence category `kind` and field object `data`. Optional `requestId` and `errorId` correlate an existing request or error | `void` | `feedback.client.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedback.client.submit(input?)` | Submit the current draft | Optional `input: FeedbackClientSubmitInput`. See [browser submission fields](#feedback-client-submit-input). | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedback.client.flush()` | Flush unacknowledged evidence | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedback.client.exportDraft(input?)` | Export a local diagnostic archive | `input?: FeedbackClientSubmitInput` supplies text and attachment changes for the archive. Omit to export the current draft | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedback.client.saveDraft(input?)` | Save a local draft | `input?: FeedbackClientSubmitInput` follows `exportDraft` before the host save action | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedback.client.pause()` | Pause capture | `—` | `void` | `feedback.client.pause()` |
-| `feedback.client.close(options?)` | Stop capture and release resources | `options?: { discard?: boolean }` Defaults to false for bounded finalization and cleanup. Set discard to true to discard the local draft | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | Start browser evidence capture | Required `config: FeedbackClientConfig`. See [application and capture fields](#feedback-client-config). | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare(options?)` | Prepare evidence for a report | Returns the previous accepted draft if uploading its files fails. Pass `{ startNew: true }` once the user confirms replacing it | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | Capture a page screenshot | `attachmentId?: string` Add a screenshot when omitted or replace the given draft attachment | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | Read the current draft | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | Read UI view state | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | Release temporary preview resources | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | Add user-selected files | `files: readonly File[], removedAttachmentIds?: readonly string[]` Newly selected files and optional draft attachment IDs to remove in the same batch | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | Apply annotations and redaction to an image | Required `id: string` (draft attachment ID) and `annotation: FeedbackImageAnnotation` (annotation and redaction data) | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | Record an application fact | Required `event` object with an evidence category `kind` and field object `data`. Optional `requestId` and `errorId` correlate an existing request or error | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | Submit the current draft | Optional `input: FeedbackClientSubmitInput`. See [browser submission fields](#feedback-client-submit-input). | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | Flush unacknowledged evidence | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | Export a local diagnostic archive | `input?: FeedbackClientSubmitInput` supplies text and attachment changes for the archive. Omit to export the current draft | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | Save a local draft | `input?: FeedbackClientSubmitInput` follows `exportDraft` before the host save action | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | Pause capture | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | Stop capture and release resources | `options?: { discard?: boolean }` Defaults to false for bounded finalization and cleanup. Set discard to true to discard the local draft | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
 
 <a id="feedback-client-config"></a>
 
@@ -469,6 +479,26 @@ export async function capture(config: FeedbackClientConfig) {
 ```
 
 The application supplies config.actions through typed HTTP adapters. Screenshot, file, annotation, submission and saving inputs follow below. A successful save result can still mean user cancellation.
+
+#### Scenario: Save pending evidence and start a new report
+
+If a successful `prepare()` result includes `report`, display its original receipt and offer to save feedback locally or start a new report. Saving without arguments keeps the description, category and contact details already accepted or frozen in the draft. Use the following call after the user confirms replacement. The server retains the accepted report and evidence already uploaded.
+
+```ts
+import type { FeedbackBrowserClient } from '@h-ai/feedback/client'
+
+async function startNewFeedback(client: FeedbackBrowserClient) {
+  // The user confirmed replacing the local draft. Check success, then display the returned draft.
+  const prepared = await client.prepare({ startNew: true })
+  if (!prepared.success)
+    return prepared
+  return prepared.data
+}
+```
+
+The initial submission includes at most 1,000 client evidence records. Other evidence within budget uploads after acceptance. The server reserves evidence capacity for its environment and follow-up collection. A minimal budget still permits report intake. When the environment exceeds its reserved space, the environment record contains `data.truncated: true`. The report retains the app ID.
+
+Online replay reconstructs snapshots and incremental events in an isolated document. Replay never loads application or external network resources. Switching reports clears the previous evidence and previews, and late responses can only update their own report.
 
 [Detailed parameters and workflows](feedback.md#browser-capture)
 

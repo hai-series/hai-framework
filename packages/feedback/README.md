@@ -22,7 +22,7 @@
 
 [查 API 清单](../../docs/usage/function/feedback.md#api-reference)，包含调用入口、输入、返回值和用法。
 
-`feedback.listMine` 提供当前作者的报告分页。本人和管理列表都可按类别筛选。
+`feedback.listMine` 提供当前作者的报告分页。本人和管理列表都可按类别筛选。通知、补采与回放的恢复边界见[功能说明](../../docs/usage/function/feedback.md#service)，未补传材料可先[保存到本地](../../docs/usage/function/feedback.md#browser-capture)。
 
 ## 数据结构
 

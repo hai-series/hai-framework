@@ -181,7 +181,9 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 #### 容量、保留与依赖故障
 
-服务端从 `@h-ai/feedback` 导入 `feedback`。`maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量；
+服务端从 `@h-ai/feedback` 导入 `feedback`。`maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量。
+
+首次提交最多 1000 条客户端证据，剩余预算内证据等待受理后补传。服务端从总预算保留环境与补采所需的条数和字节。极小的预算仍可受理报告。环境证据超出预留容量时保留 `data.truncated: true`，应用标识仍记录在报告中。
 
 普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明容量。启动时用 `@h-ai/api-contract/feedback` 的 `apiContract.resolveFeedbackBudget(已校验的反馈配置).maxTransportBytes` 预计算，避免可选反馈故障/重试期间缓存模块默认预算。路径中的 `*` 仅匹配一个完整路径段；优先使用应用为该路由明确设置的值。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
@@ -256,6 +258,8 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 服务端从已认证会话与已核验空间构造 context。本人列表按应用、空间、作者和有效期过滤。类别区分大小写，旧报告的类别直接从原报告读取。管理端继续使用需要 `feedback:read` 的列表。
 
+普通作者可通过 Kit 和 Serv 端点 `GET /api/feedback/my-reports?category=bug&page=1` 查询同一应用和作用域中的有效报告。这里以宿主挂载在 `/api` 为例。
+
 ```ts
 
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
@@ -317,7 +321,9 @@ async function retryNotification(id: string, context: FeedbackContext) {
 
 用 `feedback.getExport()` 查询导出时，服务端先验证反馈归属和 `feedback:export` 权限。导出任务仍为 `pending` 或 `running`，且导出所用的报告副本还有效时，返回 `CONFLICT`（409），可在有限时间内继续查询。任务失败时返回 `OPERATION_FAILED`（500），管理员核对后可调用 `feedback.retry()`。任务不存在、不属于这份反馈或报告副本已过期时返回 `NOT_FOUND`（404）。缺少导出权限时返回 `FORBIDDEN`（403）。导出副本过期后可对当前版本重新调用 `feedback.export()`。已完成的 ZIP 在读取时仍会核对文件校验和。
 
-按 `errorId` 查看错误时，用错误产生的来源、请求和日志位置来选取前后各最多 100 条。两处错误的日志范围重叠时，两处都能看到共有的日志。
+按 `errorId` 查看错误或失败请求时，在线查询和离线包都用同一来源、请求和序号定位锚点，并读取前后各最多 100 条日志。两处错误的日志范围重叠时，两处都能看到共有的日志。
+
+列表、详情、证据、附件和导出以数据库时间判断有效期。到期条目从列表隐藏，单条操作返回 `NOT_FOUND`。对象上传、删除与数据库使用独立存储，物理清理由后台任务继续。
 
 报告到期后，后台任务删除报告、证据、附件、历史和待导出记录。未附着到报告的上传也按对象路径前缀删除。为了清掉较晚才传完的文件，后台额外保留该前缀和 24 小时的截止时间，其间多次扫描，不保留报告或附件内容。清理失败时会重试。
 
@@ -353,6 +359,8 @@ async function retryNotification(id: string, context: FeedbackContext) {
 | `completeCollection.input.missing` | `string[]` | 可省略 | 本轮仍缺少的诊断条目描述，最多 100 项，每项最多 2000 字符。 |
 
 #### 场景：追加材料与读取附件
+
+同样的缺失材料多次确认只提交一次。浏览器提供的附件删除和新增在同一批校验；任一文件无效时原附件和缺失标记仍可使用。
 
 id 是原受理报告，context 与报告归属一致。每条证据携带稳定 id/source/sequence；上传输入来自已声明附件的字节编码，不能换 ID 绕过声明和配额。
 
@@ -423,6 +431,8 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 #### 场景：在终端读取离线包
 
+查看器接受框架生成的单盘 ZIP，支持存储和 DEFLATE。条目路径、压缩范围、文件数和解压大小在读取时校验，压缩条目只能解压到声明且已校验的容量。
+
 ```sh
 # 读取本地 feedback-FB-1.zip 并打印报告摘要，包无效时以错误退出。
 hai feedback summary feedback-FB-1.zip
@@ -466,21 +476,21 @@ const viewer = feedback.getBundleViewerFiles()['viewer/index.html'] // 无需输
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `feedback.client.init(config)` | 启动浏览器现场采集 | 必填 `config: FeedbackClientConfig`。见[应用身份和采集设置](#feedback-client-config)。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedback.client.prepare()` | 为本次反馈准备现场材料 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedback.client.captureScreenshot(attachmentId?)` | 采集当前页面截图 | `attachmentId?: string` 省略时新增截图，传草稿附件 ID 时替换该项 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedback.client.getDraft()` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedback.client.getDraft()` |
-| `feedback.client.getView()` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedback.client.getView()` |
-| `feedback.client.releasePreviews()` | 释放临时预览资源 | `—` | `void` | `feedback.client.releasePreviews()` |
-| `feedback.client.addFiles(files, removedAttachmentIds?)` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新选文件和可选的待移除草稿附件 ID。同一批执行 | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedback.client.annotate(id, annotation)` | 把标注与遮挡写入图片 | 必填 `id: string`（草稿附件 ID）与 `annotation: FeedbackImageAnnotation`（标注与遮挡数据） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedback.client.record(event)` | 记录一条应用现场事实 | 必填事件对象 `event`，包含证据类别 `kind` 和字段对象 `data`。可选 `requestId`、`errorId` 用于关联已有请求或错误 | `void` | `feedback.client.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedback.client.submit(input?)` | 提交当前反馈草稿 | 可省略 `input: FeedbackClientSubmitInput`。见[浏览器提交字段](#feedback-client-submit-input)。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedback.client.flush()` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedback.client.exportDraft(input?)` | 生成本地诊断包 | `input?: FeedbackClientSubmitInput`，指定离线包的补充文字和附件，省略时导出当前草稿 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedback.client.saveDraft(input?)` | 保存本地草稿 | `input?: FeedbackClientSubmitInput`，同 `exportDraft`，随后调用宿主保存入口 | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedback.client.pause()` | 暂停现场采集 | `—` | `void` | `feedback.client.pause()` |
-| `feedback.client.close(options?)` | 停止采集并释放资源 | `options?: { discard?: boolean }` 默认 false，等待有界收尾并清理。true 请求丢弃本机草稿 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | 启动浏览器现场采集 | 必填 `config: FeedbackClientConfig`。见[应用身份和采集设置](#feedback-client-config)。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare(options?)` | 为本次反馈准备现场材料 | 默认在上份已受理报告补传失败时返回原草稿。用户确认替换时传 `{ startNew: true }` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | 采集当前页面截图 | `attachmentId?: string` 省略时新增截图，传草稿附件 ID 时替换该项 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | 读取当前草稿 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | 读取供界面展示的状态 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | 释放临时预览资源 | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 添加用户选择的附件 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新选文件和可选的待移除草稿附件 ID。同一批执行 | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | 把标注与遮挡写入图片 | 必填 `id: string`（草稿附件 ID）与 `annotation: FeedbackImageAnnotation`（标注与遮挡数据） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | 记录一条应用现场事实 | 必填事件对象 `event`，包含证据类别 `kind` 和字段对象 `data`。可选 `requestId`、`errorId` 用于关联已有请求或错误 | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | 提交当前反馈草稿 | 可省略 `input: FeedbackClientSubmitInput`。见[浏览器提交字段](#feedback-client-submit-input)。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | 补交待确认的证据 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | 生成本地诊断包 | `input?: FeedbackClientSubmitInput`，指定离线包的补充文字和附件，省略时导出当前草稿 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | 保存本地草稿 | `input?: FeedbackClientSubmitInput`，同 `exportDraft`，随后调用宿主保存入口 | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | 暂停现场采集 | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | 停止采集并释放资源 | `options?: { discard?: boolean }` 默认 false，等待有界收尾并清理。true 请求丢弃本机草稿 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
 
 <a id="feedback-client-config"></a>
 
@@ -624,13 +634,29 @@ Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@
 
 草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。在 Svelte 组件中保存这份草稿时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。
 
+#### 场景：保存未补完的材料并开始新反馈
+
+若 `prepare()` 成功返回的草稿已有 `report`，界面展示原受理回执，并提供「保存反馈到本地」与「开始新反馈」。无参保存使用当前草稿已受理或已冻结的说明、类别和联系方式。用户确认替换后，调用下方函数。已受理的报告和已上传的材料仍可在服务端查看。
+
+```ts
+import type { FeedbackBrowserClient } from '@h-ai/feedback/client'
+
+async function startNewFeedback(client: FeedbackBrowserClient) {
+  // 用户已确认用新草稿替换旧草稿。检查 success 后，用返回的草稿更新界面。
+  const prepared = await client.prepare({ startNew: true })
+  if (!prepared.success)
+    return prepared
+  return prepared.data
+}
+```
+
 #### 场景：在反馈界面截图、遮挡与查看回放
 
 当前页面截图优先展示；`captureScreenshot(attachmentId?)` 补充当前页面，传附件 ID 则替换原截图。`FeedbackModal` 的 `oncapture` 接入此方法，选取时隐藏弹窗，允许切换页面后点击“截取当前页面”，并保留说明。`FeedbackForm.evidence` 展开显示已脱敏的日志、请求、环境和回放事件；`evidenceSummary` 补充缺失说明。浏览器环境取实际 URL（去查询参数/hash）、视口、语言和构建标识；服务端环境仅采集 `envAllowlist` 中的非凭据键，缺失值为 null。
 
 支持录屏的浏览器可在反馈中选择“录屏 → 开始录屏”，授权页面/窗口后录制无声视频，最多 60 秒 / 5 MiB，低帧率和码率；停止共享、取消、超时和组件销毁均释放流。录屏是用户主动选择的原始画面，不会自动遮挡敏感信息，停止后可预览和删除。WebM/MP4 与其他附件使用相同的私有存储、校验和及 5 MiB 限制；不支持录屏的浏览器可直接添加视频文件。
 
-参考管理台和启用 feedback 的 fullstack 模板显式启用 `replay: true`；SDK 默认仍关闭。管理员在反馈详情的“页面回放”播放或定位页面操作，应用提供的 `onreplay` 回调需要分页读取完整 `kind: replay` 事件，不能只传普通材料的一页。无记录时明确提示；录屏在“操作现场”预览。保存反馈到本地后可用 `hai feedback view <zip>` 查看附件、录屏和回放；本地包明确缺少尚未取得的服务端材料。
+参考管理台和启用 feedback 的 fullstack 模板显式启用 `replay: true`；SDK 默认仍关闭。管理员在反馈详情的“页面回放”播放或定位页面操作，应用提供的 `onreplay` 回调需要分页读取完整 `kind: replay` 事件，不能只传普通材料的一页。无记录时明确提示；录屏在“操作现场”预览。在线回放在隔离文档中重建快照和增量事件，外部或应用网络资源均不会重新加载。切换报告时清除旧材料及预览，迟到的响应只可更新它所属的报告。保存反馈到本地后可用 `hai feedback view <zip>` 查看附件、录屏和回放；本地包明确缺少尚未取得的服务端材料。
 
 构建身份统一限制 128 字符；显式非法 HAI_BUILD_ID/HAI_BUILD_COMMIT 在构建时拒绝，错误不回显私密值。默认脱敏包含 verificationCode、otpCode、短信/邮件/一次性/二次验证码；业务 code 字段不会一概隐藏。
 

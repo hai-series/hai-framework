@@ -48,13 +48,13 @@
 
 先RelDB/私有Storage，再Feedback。按[采集和通知配置](../configuration/operations.md#feedback通知采集和保留)先用console走通，随后接真实Reach或Webhook；这样能区分业务受理与通道故障。
 
-提交专用反馈后查看get().jobs：`collection`/notification/webhook各自判断。业务`collectEvidence`异步回调必须被等待；采集终态后投递固定载荷。失败只retry对应任务，接收端按`eventId`持久去重。离线导出和录屏回放不重新执行业务。
+提交专用反馈后查看 `get().jobs`，分别检查 `collect`、`notify` 和 `webhook`。查看采集失败时，报告材料状态与采集任务终态在同一事务提交，Webhook 随后投递固定载荷。任务被领取后节点退出也计入尝试次数。恢复依赖后针对失败任务调用 `retry`，接收端按 `eventId` 持久去重。离线导出和录屏回放只供诊断检查。
 
-附件超限时按[预算章节](../configuration/operations.md#预算与附件限制)核对总量/单附件/路由/代理/加密，不只扩大上传控件。到期清理完成和存储预留释放都要确认。
+附件超限时按[预算章节](../configuration/operations.md#预算与附件限制)核对总量、单附件、路由、代理与加密。报告到期即停止访问，同步清除列表中的入口。另行核对后台清理完成和存储预留释放。
 
 ### 页面闲置后出现错误，先查什么
 
-没有未完成受理任务时，Feedback不会因闲置自行补传。已有草稿的失败采用[客户端退避与退出边界](../configuration/operations.md#页面闲置退出和重试)，认证或网络恢复后显式重试；不要业务每秒flush绕过后台预算。
+已受理而仍有待传材料的草稿按[客户端退避与退出边界](../configuration/operations.md#页面闲置退出和重试)补传。认证或网络恢复后可主动重试。再次打开遇到补传失败会看到原受理回执，可以先保存旧材料，再确认开始新反馈。
 
 退出先`await client.close({ discard: true })`再切换身份。已经发出的请求不能据此承诺撤销。pause仅暂停截图/DOM，不能代替退出清理。
 

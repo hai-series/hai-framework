@@ -22,7 +22,7 @@ See the [configuration reference](../../docs/usage/configuration/feedback.en.md)
 
 [Browse the API list](../../docs/usage/function/feedback.en.md#api-reference) for entry points, inputs, results and examples.
 
-`feedback.listMine` paginates reports submitted by the current author. Both the personal and administration lists support category filtering.
+`feedback.listMine` paginates reports submitted by the current author. Both the personal and administration lists support category filtering. See the [service workflow](../../docs/usage/function/feedback.en.md#service) for collection and notification recovery, or [save pending evidence locally](../../docs/usage/function/feedback.en.md#browser-capture).
 
 ## Data Structures
 

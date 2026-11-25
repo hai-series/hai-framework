@@ -22,7 +22,7 @@
 
 [API 一覧](../../docs/usage/function/feedback.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
-`feedback.listMine` で自分が投稿した報告をページ取得できます。本人一覧と管理一覧の両方でカテゴリを絞り込めます。
+`feedback.listMine` で自分が投稿した報告をページ取得できます。本人一覧と管理一覧の両方でカテゴリを絞り込めます。収集や通知の復旧は[機能ガイド](../../docs/usage/function/feedback.ja.md#service)を参照してください。未送信の資料は[端末にも保存](../../docs/usage/function/feedback.ja.md#browser-capture)できます。
 
 ## データ構造
 

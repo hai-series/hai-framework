@@ -17,9 +17,9 @@
 | `notificationMode`, `consoleContent`, `notificationProvider`, `recipients` | `reach`, `metadata`, `email`, `[]` | 通知経路と共有する情報を選択。 |
 | `collectionTimeoutMs`, `businessCollectionTimeoutMs` | `60000`, `30000` | 収集期限（ミリ秒）。 |
 | `webhookUrl`, `webhookSecret`, `webhookTimeoutMs` | `""`, `""`, `10000` | Webhook の宛先、署名用の秘密値と期限。 |
-| `workerIntervalMs`, `leaseMs`, `maxAttempts` | `1000`, `30000`, `5` | ワーカー間隔、リース期間、最大試行回数。 |
-| `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | 報告の保存期間、出力の保存期間、出力件数の上限。 |
-| `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | 環境変数名の許可リスト、送信サイズと件数の上限。 |
+| `workerIntervalMs`, `leaseMs`, `maxAttempts` | `1000`, `30000`, `5` | ワーカー間隔、リース期間、引き受けた処理の最大試行回数。引き受け後にワーカーが終了した場合も含みます。削除ジョブは再試行を続けます。 |
+| `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | 報告の保存期間、出力の保存期間、出力件数の上限。報告へのアクセスと出力はデータベースの保持期限で終了し、削除はバックグラウンドで行います。 |
+| `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | 環境変数名の許可リスト、送信サイズと件数の上限。`maxEvidenceCount` に 1–10000 を指定でき、有効な上限は 2000 件です。サーバー環境と追加収集の容量を確保します。 |
 
 未翻訳：クォータ、証拠、Webhook の再試行、保持期間の項目別設定。[中国語の該当節](feedback.md#configuration-fields)を参照してください。
 

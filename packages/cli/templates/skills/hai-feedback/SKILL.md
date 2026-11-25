@@ -26,11 +26,11 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 3. 用 `feedback.createClient()` 创建收集器。actions 接 typed API，policy 读取 reports.policy({})。prepare 后打开 FeedbackModal。getView() 提供附件 URL、证据和预算。annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图。首次提交时冻结包络，重试遇到编辑冲突时保留输入。
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
 
-作者用 `feedback.listMine({ category: 'bug', page: 1 }, context)` 或已认证的 `feedback.reports.listMine` 路由查看自己在当前应用和作用域下、尚未过期的报告。作用域和作者来自可信服务端身份。管理列表 `feedback.list` 继续要求 `feedback:read`，两种列表都可按原始类别精确筛选。检查结果的 `success` 后再读取分页数据。
+作者用 `feedback.listMine({ category: 'bug', page: 1 }, context)` 或已认证的 `feedback.reports.listMine` 路由查看自己在当前应用和作用域下、尚未过期的报告。Kit 和 Serv 均挂载本人列表，使用 `/api` 前缀时为 `GET /api/feedback/my-reports`。作用域和作者来自可信服务端身份。管理列表 `feedback.list` 要求 `feedback:read`，两种列表都可按原始类别精确筛选。检查结果的 `success` 后再读取分页数据。
 5. 同一 submissionId 和证据来源/序号重试，持久化 ACK 前不释放待传材料。附件取实际 checksum，不保存公开 URL；数据库、对象存储与外部通知通道无共同事务，依靠持久任务和补偿核对。Reach API 接收方按 `extra.notificationId` 去重，同一通知任务重试沿用其任务 ID。
 6. 普通界面导出只传 id，由服务端当前事务固定证据快照；只有用户显式选择历史修订时才传 evidenceRevision，不沿用列表中的陈旧修订。导出固定证据修订；getExport 仅在有效快照 pending/running 时返回 CONFLICT/409，调用方只对此状态有界轮询；failed 为 OPERATION_FAILED/500，缺失/归属不符/未完成快照过期为 NOT_FOUND/404，缺少导出权限为 FORBIDDEN/403。当前修订快照过期可重新 export。离线包包含附件/查看器/索引/checksum，开发侧不持有生产凭据。用 hai feedback summary/inspect/evidence/view 或 /bundle 入口读取，不能执行导入包自带的任意脚本。
 7. 验证正常、越权、容量、崩溃、断线、重复提交、租约接管和离线查看；明确真实 S3/SMTP 与 mock 的不同证据。
-8. errorId 按锚点 source/request/sequence 查询前后各100条日志，不以首次归属丢弃重叠窗口上下文。到期删除报告、证据、附件、历史及含快照的任务，按前缀删除孤立 attempt；只保留前缀/24小时截止的最小墓碑清扫迟到对象，完成后删除，清理失败持续重试。
+8. errorId 按锚点 source/request/sequence 查询前后各100条日志，重叠窗口共享日志上下文。报告到达数据库时间计算的期限时，从本人和管理列表移除，详情、材料及导出立即失效。后台删除报告、证据、附件、历史及含快照的任务，按前缀清扫孤立对象；只保留前缀和 24 小时截止的最小墓碑清扫迟到对象，完成后删除，清理失败持续重试。
 
 范围/用户/应用和证据关联 ID 精确匹配，不能依赖 MySQL 默认排序规则放宽相等。附件 ID 为区分大小写的有效 Unicode（1–128 字符）；ZIP 路径由摘要生成，读取 manifest 中的路径，不从 ID 或名称推导。文本脱敏覆盖常见凭据键、JSON/转义 JSON、Bearer/Basic，业务专有敏感内容仍需宿主白名单与 DOM 标记。
 
@@ -55,7 +55,7 @@ captureConsole/persistDraft/keyScreenshots 默认 false；持久化启用时由�
 ## 业务补采与 Webhook
 
 - 用 init 的第二参数 collectEvidence({ report, signal })，直接返回或 await `{ text?, data?, attachments?: [{ id, name, contentType, bytes: Uint8Array }] }`。持久 collect 任务在受理后执行，无须进程内事件总线或另建通知队列；所有同 appId 实例必须注册相同函数。按 report.id 幂等并将 signal 传给异步 I/O；businessCollectionTimeoutMs 默认 30000ms（1–300000），关闭/超时停止等待。
-- text/data 作为 server:business 来源的 business 证据，FeedbackDetail 的“业务信息”页签分页展示；成功标记入库后不重复采集；附件全部保存后在持有租约的同一事务关联，详情和离线包均可读取。失败按 maxAttempts 重试并显示 collecting/failed，管理员 retry target: collect。附件 ID 稳定且 1–100 字符，server:business: 前缀由框架保留；所有附件共用 20 项和容量预算。TXT 全文脱敏；ZIP/GZIP 不解压、执行或内部脱敏，业务须压缩前脱敏。
+- text/data 作为 server:business 来源的 business 证据，FeedbackDetail 的“业务信息”页签分页展示。先持久化日志收集阶段，重试回调时复用已保存的日志；附件全部保存后在持有租约的同一事务关联，详情和离线包均可读取。达到 maxAttempts 时采集任务和报告一起进入 failed，允许 Webhook 继续发送。租约接管按数据库已领取次数计数，管理员可 retry target: collect。附件 ID 稳定且 1–100 字符，server:business: 前缀由框架保留；所有附件共用 20 项和容量预算。TXT 全文脱敏；ZIP/GZIP 不解压、执行或内部脱敏，业务须压缩前脱敏。
 - webhookUrl 默认空（禁用）；配置可信 HTTP(S) 目的地后独立持久 webhook 任务等待采集终态（包括失败），发送 feedback.created。notificationMode/Reach/DND 不控制 Webhook。webhookSecret 用服务端私有环境；webhookTimeoutMs 默认 10000ms（1–60000）。只接受 2xx，不跟随重定向，失败指数退避到 60s、最多 maxAttempts。
 - FeedbackWebhookEvent 包含 event/eventId/createdAt/report/evidence/detailUrl?；evidence 只有修订、业务采集成功和附件元数据，无正文、存储 key 或配置凭据。首次发送冻结载荷，重试/重启复用正文及 Idempotency-Key: eventId，接收方按此持久去重；至少一次投递。旧任务的 URL 与新配置不一致会失败，不自动转投。
 - 署名头 X-Hai-Feedback-Signature = sha256=HMAC-SHA256(secret, X-Hai-Feedback-Timestamp + '.' + 原始正文)，时间戳为 Unix 秒；接收方验证原始字节、恒定时间比较、时间偏差并防重放。get().jobs 提供 webhook 状态/attempts/安全 lastError；FeedbackDetail.webhook 传对应任务，管理员 retry target: webhook，需要 feedback:process 权限。
@@ -65,7 +65,7 @@ Web 使用 `@h-ai/feedback/client`。桌面端从 `@h-ai/feedback/tauri` 导入 
 
 ## 资源与可用性约束
 
-- 未提交或采集完成后不进行后台补传；临时故障（网络、5xx、408、429）按 1/2/4/8/16 秒退避，连续六次失败暂停，其他 4xx 立即暂停。材料保持不变，显式 flush/prepare 恢复；禁止在页面每秒调用 flush 绕过退避。退出身份必须 await close({ discard:true })，只等待在途请求、不再补传旧材料。验收空闲、持续故障、恢复和退出期间的请求次数与身份隔离。
+- 已受理且采集未完成时允许后台补传。临时故障（网络、5xx、408、429）按 1/2/4/8/16 秒退避，连续六次失败暂停，其他 4xx 立即暂停。再次 prepare 遇到补传失败时，返回带原受理回执的草稿，界面可以先调用无参 saveDraft 保留材料。仅在用户确认替换本机草稿后调用 prepare({ startNew: true })。认证或网络恢复后可显式 flush。退出身份必须 await close({ discard:true })，只等待在途请求。验收空闲、持续故障、恢复和退出期间的请求次数与身份隔离。
 
 - `keyScreenshots` 默认 false，需显式开启自动关键截图；手动 `prepare()` 仍可截图。截图超时会传递 AbortSignal，底层尚未结束时不允许重叠截图。默认渲染最多 10000 DOM 节点，继续受画布像素预算限制。`replay:true` 的默认 `replayStart` 为 `prepare`，打开反馈时才录制；明确需要预录时配置 `replayStart: init`。关闭反馈界面调用 `pause()` 停止 DOM 回放和截图，保留轻量日志、草稿及上传；退出身份仍调用 `close({ discard:true })`。自定义 `captureScreenshot({ signal })` 应尊重取消信号。
 - 反馈是可选辅助能力，启动失败须独立标记不可用/重试；不能回滚或拖垮业务模块。服务端默认按用户日累计及 scope 存储预留限制，超额为 QUOTA_EXCEEDED/429；默认值和保守预留公式见已安装 README。固定业务文件清单、ZIP 快照和创建时间，重试不能制造新对象；导出24小时过期、报告默认30天保留，专用 worker 必须持续执行清理。不要增加正常空闲或逐请求 info 日志。
@@ -78,7 +78,7 @@ Web 使用 `@h-ai/feedback/client`。桌面端从 `@h-ai/feedback/tauri` 导入 
 
 反馈交互：当前截图优先；FeedbackModal.oncapture 连接 captureScreenshot(id?)，选择时隐藏弹窗，允许换页后补图/替换并保留输入。FeedbackForm.evidence 展开实际脱敏内容，不能把全部事件数量称作日志。onfileschange 接入后支持用户主动无声短录屏（60秒/5 MiB），视频不自动遮挡，必须支持预览/删除；停止共享、取消、超时和销毁释放流。WebM/MP4 的私有读授权、容器字节/checksum 校验、上传和离线查看须一并验证。
 
-参考管理台和 feedback fullstack 模板显式 replay:true；SDK 缺省仍为 false。FeedbackDetail.onreplay 必须按需取得 kind:replay 的全部分页，详情“页面回放”提供播放/定位与无记录提示；原始录屏在操作现场播放。保存反馈到本地后用 hai feedback view <zip> 查看；本地包标记尚未取得的服务端证据。环境只展示实际构建/页面与服务端 envAllowlist 非凭据键，不能臆造全量环境已采集。
+参考管理台和 feedback fullstack 模板显式 replay:true，SDK 默认 false。FeedbackDetail.onreplay 按需取得 kind:replay 的全部分页。详情“页面回放”在隔离文档中展示快照与增量事件，不联网加载记录中的资源。切换报告时清除旧预览、证据分页及其在途结果。原始录屏在“操作现场”播放。保存反馈到本地后用 hai feedback view <zip> 查看；本地包标记尚未取得的服务端证据。离线归档只按已校验条目解压，并在解压前检查容量。环境只展示实际构建、页面与服务端 envAllowlist 中非凭据变量。
 
 保存与退出：saveDraft 及 saveFeedbackFile 选择 Web 下载、Tauri 原生保存、Capacitor 缓存分享，取消返回 cancelled；生成原生工程配置 optional peer 插件及最小权限。feedback.createReview(typedClient.feedback.reports) 负责全部回放分页、导出轮询及 retryReport(id) 失败任务重试；退出身份调用 review.close()、client.close({ discard: true }) 清理采集、草稿、预览和旧轮询。服务端环境只采实际 envAllowlist 非敏感值；verificationCode/otpCode 等默认脱敏，不把数目当材料正文。
 

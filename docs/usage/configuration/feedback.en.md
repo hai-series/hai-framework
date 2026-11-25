@@ -17,9 +17,9 @@ Configure the feedback service in `_feedback.yml`. Use server-side collection co
 | `notificationMode`, `consoleContent`, `notificationProvider`, `recipients` | `reach`, `metadata`, `email`, `[]` | Select notification channel and shared information. |
 | `collectionTimeoutMs`, `businessCollectionTimeoutMs` | `60000`, `30000` | Collection time limits in milliseconds. |
 | `webhookUrl`, `webhookSecret`, `webhookTimeoutMs` | `""`, `""`, `10000` | Webhook destination, signing secret and timeout. |
-| `workerIntervalMs`, `leaseMs`, `maxAttempts` | `1000`, `30000`, `5` | Worker polling, lease period and retry budget. |
-| `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | Report retention, export retention and export quota. |
-| `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | Allowlisted environment names and submission size/count quotas. |
+| `workerIntervalMs`, `leaseMs`, `maxAttempts` | `1000`, `30000`, `5` | Worker polling, lease period and maximum claimed attempts, including claims interrupted by worker exit. Cleanup keeps retrying. |
+| `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | Report retention, export retention and export quota. The database retention deadline ends report access and export. Physical cleanup runs in the background. |
+| `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | Allowlisted environment names and submission size/count quotas. `maxEvidenceCount` accepts 1–10000, with an effective ceiling of 2000. The server reserves evidence for its environment and follow-up collection. |
 
 Still untranslated: per-field limits for quotas, evidence, webhook retries and expiry. Read the [Chinese source section](feedback.md#configuration-fields).
 

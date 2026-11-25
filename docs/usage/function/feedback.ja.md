@@ -183,6 +183,8 @@ HTTP ルートを登録するには、`@h-ai/serv` から `serv` を読み込み
 
 サーバーは認証済みユーザーと検証済みスコープから context を作ります。アプリ、スコープ、投稿者、有効期限で絞り込みます。カテゴリは大文字と小文字を区別し、既存の報告から読み出します。管理一覧には引き続き `feedback:read` が必要です。
 
+認証済みの投稿者は、Kit と Serv の `GET /api/feedback/my-reports?category=bug&page=1` で、同じアプリとスコープの有効な報告を取得できます。この例ではアプリが API を `/api` にマウントしています。
+
 ```ts
 
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
@@ -238,6 +240,10 @@ async function retryNotification(id: string, context: FeedbackContext) {
 }
 ```
 
+一覧、詳細、証拠、添付、出力の有効期限はデータベースの時刻で判定します。期限切れの報告は一覧から除外され、個別の操作では `NOT_FOUND` が返ります。データベースとオブジェクトストレージからの削除はバックグラウンドジョブが行います。
+
+オンラインでもオフラインでも、失敗したリクエストやエラーの `errorId` で照会できます。同じ取得元とリクエストのログを、対象の前後それぞれ最大 100 件まで取得します。
+
 <a id="evidence"></a>
 
 ### 資料の追加と添付の読取：`feedback`
@@ -249,7 +255,7 @@ async function retryNotification(id: string, context: FeedbackContext) {
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `feedback.appendEvidence(input, context)` | 診断証拠を追加 | `input: FeedbackAppendEvidenceInput` 必須の報告 id と evidence 配列（最大 1000 件）。[証拠項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `{ acknowledged, evidenceRevision }` | `await feedback.appendEvidence(evidence, context)` |
-| `feedback.completeCollection(input, context)` | 証拠収集の完了を記録 | `input: FeedbackCompleteInput` 報告 id は必須、missing の一覧は任意。[欠損項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackReport` | `await feedback.completeCollection({ id: reportId, revision: 1 }, context)` |
+| `feedback.completeCollection(input, context)` | 証拠収集の完了を記録 | `input: FeedbackCompleteInput` 報告 id は必須、missing の一覧は任意。[欠損項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackReport` | `await feedback.completeCollection({ id: reportId }, context)` |
 | `feedback.uploadAttachment(input, context)` | 許可した添付をアップロード | `input: FeedbackUploadInput` 報告 id、宣言済みの attachmentId、対応する dataBase64 が必須。[アップロード項目](#feedback-evidence-fields)を参照。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackAttachment` | `await feedback.uploadAttachment(upload, context)` |
 | `feedback.getAttachment(input, context)` | 許可した添付を取得 | `input: { id: string, attachmentId: string }` 報告と添付の ID が必須。`context: FeedbackContext` 信頼できるセッション情報が必須。[呼び出し側](#feedback-submission-fields)を参照 | `FeedbackAttachmentData` | `await feedback.getAttachment({ id: reportId, attachmentId }, context)` |
 
@@ -270,6 +276,8 @@ async function retryNotification(id: string, context: FeedbackContext) {
 | `completeCollection.input.missing` | `string[]` | 任意 | まだ不足している診断項目。最大 100 件、各 2000 文字。 |
 
 #### 利用例：資料の追加と添付の読取
+
+同じ不足資料の確認を再送しても記録は一度です。添付の削除と追加はまとめて検証します。一つでも無効なファイルがあれば、元の添付と不足を示す記録を保持します。
 
 受理済み報告 ID と同じ帰属のコンテキストを使います。証拠は安定した id/source/sequence を持ちます。アップロードは宣言済み添付のバイト列で、ID の変更で制限を回避できません。
 
@@ -322,6 +330,8 @@ ZIP の圧縮と展開は Core Worker で行います。ブラウザーのオフ
 
 #### 利用例：診断包の出力と参照
 
+ビューアーは Feedback が生成する単一ディスクの ZIP を読み取ります。無圧縮と DEFLATE に対応し、読み取り前にパス、データ範囲、件数、展開サイズを確認します。
+
 認可済み管理者が報告 ID を指定すると export はジョブ ID を返します。この例は一度照会します。未完了の CONFLICT は空 ZIP ではなく、有界待機後に再照会します。
 
 ```ts
@@ -348,21 +358,21 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `feedback.client.init(config)` | ブラウザー証拠収集を開始 | 必須の `config: FeedbackClientConfig`。[アプリと収集の項目](#feedback-client-config)を参照。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
-| `feedback.client.prepare()` | 今回のフィードバック証拠を準備 | `—` | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
-| `feedback.client.captureScreenshot(attachmentId?)` | ページの画面を取得 | `attachmentId?: string` 省略するとスクリーンショットを追加。下書きの添付 ID を指定すると置換 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
-| `feedback.client.getDraft()` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedback.client.getDraft()` |
-| `feedback.client.getView()` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedback.client.getView()` |
-| `feedback.client.releasePreviews()` | 一時プレビューを解放 | `—` | `void` | `feedback.client.releasePreviews()` |
-| `feedback.client.addFiles(files, removedAttachmentIds?)` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新しく選んだファイルと同じ処理で外す任意の添付 ID | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
-| `feedback.client.annotate(id, annotation)` | 画像に注釈・マスクを反映 | 必須の `id: string`（下書き内の添付 ID）と `annotation: FeedbackImageAnnotation`（注釈とマスクのデータ） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
-| `feedback.client.record(event)` | アプリの診断情報を記録 | 証拠の種類 `kind` とフィールドオブジェクト `data` を含む `event` が必須。任意の `requestId`、`errorId` で既存リクエストやエラーと関連付ける | `void` | `feedback.client.record({ kind: 'business', data: { state: 'ready' } })` |
-| `feedback.client.submit(input?)` | 現在の下書きを送信 | 任意の `input: FeedbackClientSubmitInput`。[ブラウザー送信項目](#feedback-client-submit-input)を参照。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
-| `feedback.client.flush()` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
-| `feedback.client.exportDraft(input?)` | ローカル診断パッケージを生成 | `input?: FeedbackClientSubmitInput` はオフラインパッケージ用の補足情報と添付変更。省略すると現在の下書きを出力 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
-| `feedback.client.saveDraft(input?)` | ローカル下書きを保存 | `input?: FeedbackClientSubmitInput` は `exportDraft` と同じ。その後でホストの保存機能を使う | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
-| `feedback.client.pause()` | 収集を一時停止 | `—` | `void` | `feedback.client.pause()` |
-| `feedback.client.close(options?)` | 収集を終了して解放 | `options?: { discard?: boolean }` 既定 false で上限付きの終了処理と後片付け。discard を true にしてローカル下書きを破棄 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
+| `feedbackClient.init(config)` | ブラウザー証拠収集を開始 | 必須の `config: FeedbackClientConfig`。[アプリと収集の項目](#feedback-client-config)を参照。 | `Promise<HaiResult<void>>` | `await feedbackClient.init(config)` |
+| `feedbackClient.prepare(options?)` | 今回のフィードバック証拠を準備 | 前回の受付済み下書きの追加送信に失敗した場合は元の下書きを返す。利用者が置き換えを確認したら `{ startNew: true }` を渡す | `Promise<HaiResult<FeedbackDraft>>` | `await feedbackClient.prepare()` |
+| `feedbackClient.captureScreenshot(attachmentId?)` | ページの画面を取得 | `attachmentId?: string` 省略するとスクリーンショットを追加。下書きの添付 ID を指定すると置換 | `Promise<HaiResult<void>>` | `await feedbackClient.captureScreenshot()` |
+| `feedbackClient.getDraft()` | 現在の下書きを取得 | `—` | `FeedbackDraft \| undefined` | `feedbackClient.getDraft()` |
+| `feedbackClient.getView()` | 表示用状態を取得 | `—` | `FeedbackDraftView` | `feedbackClient.getView()` |
+| `feedbackClient.releasePreviews()` | 一時プレビューを解放 | `—` | `void` | `feedbackClient.releasePreviews()` |
+| `feedbackClient.addFiles(files, removedAttachmentIds?)` | 選択したファイルを追加 | `files: readonly File[], removedAttachmentIds?: readonly string[]` 新しく選んだファイルと同じ処理で外す任意の添付 ID | `Promise<HaiResult<void>>` | `await feedbackClient.addFiles(files, removedAttachmentIds)` |
+| `feedbackClient.annotate(id, annotation)` | 画像に注釈・マスクを反映 | 必須の `id: string`（下書き内の添付 ID）と `annotation: FeedbackImageAnnotation`（注釈とマスクのデータ） | `Promise<HaiResult<void>>` | `await feedbackClient.annotate(attachmentId, annotation)` |
+| `feedbackClient.record(event)` | アプリの診断情報を記録 | 証拠の種類 `kind` とフィールドオブジェクト `data` を含む `event` が必須。任意の `requestId`、`errorId` で既存リクエストやエラーと関連付ける | `void` | `feedbackClient.record({ kind: 'business', data: { state: 'ready' } })` |
+| `feedbackClient.submit(input?)` | 現在の下書きを送信 | 任意の `input: FeedbackClientSubmitInput`。[ブラウザー送信項目](#feedback-client-submit-input)を参照。 | `Promise<HaiResult<FeedbackReport>>` | `await feedbackClient.submit({ description: 'Checkout failed' })` |
+| `feedbackClient.flush()` | 未確認の証拠を送信 | `—` | `Promise<HaiResult<void>>` | `await feedbackClient.flush()` |
+| `feedbackClient.exportDraft(input?)` | ローカル診断パッケージを生成 | `input?: FeedbackClientSubmitInput` はオフラインパッケージ用の補足情報と添付変更。省略すると現在の下書きを出力 | `Promise<HaiResult<Uint8Array>>` | `await feedbackClient.exportDraft()` |
+| `feedbackClient.saveDraft(input?)` | ローカル下書きを保存 | `input?: FeedbackClientSubmitInput` は `exportDraft` と同じ。その後でホストの保存機能を使う | `Promise<HaiResult<FeedbackSaveResult>>` | `await feedbackClient.saveDraft()` |
+| `feedbackClient.pause()` | 収集を一時停止 | `—` | `void` | `feedbackClient.pause()` |
+| `feedbackClient.close(options?)` | 収集を終了して解放 | `options?: { discard?: boolean }` 既定 false で上限付きの終了処理と後片付け。discard を true にしてローカル下書きを破棄 | `Promise<void>` | `await feedbackClient.close({ discard: true })` |
 
 <a id="feedback-client-config"></a>
 
@@ -473,6 +483,26 @@ export async function capture(config: FeedbackClientConfig) {
 ```
 
 config.actions はアプリの型付き HTTP 適合処理です。撮影・ファイル・注釈・送信・保存の入出力は以下を参照してください。保存の成功結果でも利用者取消の場合があります。
+
+#### 利用例：未送信の資料を保存して新しい報告を開始する
+
+`prepare()` の成功結果に `report` が含まれる場合、元の受付番号を表示し、端末に保存するか新しい報告を開始するかを選べるようにします。引数なしの保存では、受付済みまたは送信内容が確定した下書きの説明、カテゴリ、連絡先も残ります。利用者が置き換えを確認してから次の関数を呼びます。受付済みの報告とアップロード済みの資料はサーバーに残ります。
+
+```ts
+import type { FeedbackBrowserClient } from '@h-ai/feedback/client'
+
+async function startNewFeedback(client: FeedbackBrowserClient) {
+  // 利用者が端末の下書きの置き換えを確認した。success を確認し、返された下書きを表示する。
+  const prepared = await client.prepare({ startNew: true })
+  if (!prepared.success)
+    return prepared
+  return prepared.data
+}
+```
+
+初回送信には最大 1,000 件のブラウザー証拠を含めます。予算内の残りの証拠は受付後に送信します。サーバー環境と追加収集のために件数と容量を確保するので、最小の予算でも報告を受け付けられます。環境証拠が確保した容量を超える場合は `data.truncated: true` を記録します。アプリ ID は報告に残ります。
+
+オンライン再生では、隔離された文書内でスナップショットと差分イベントを復元します。アプリや外部のネットワークリソースは取得しません。報告を切り替えると証拠とプレビューを消去し、遅れて届いた応答は該当する報告にだけ反映します。
 
 [引数と手順の詳細](feedback.md#browser-capture)
 
