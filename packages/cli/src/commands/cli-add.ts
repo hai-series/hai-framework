@@ -7,7 +7,7 @@
 
 import type { FeatureId, GlobalOptions } from '../cli-types.js'
 import path from 'node:path'
-import { parseEnv } from 'node:util'
+import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
@@ -439,7 +439,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const configured = new Set([
       ...previousProduction.matchAll(/^([A-Z][A-Z0-9_]*)=/gm),
     ].map(match => match[1]))
-    const previousValues = parseEnv(previousProduction)
+    const previousValues = core.config.parseEnv(previousProduction)
     const production = generateProductionEnvironment([selected, ...moduleDef.deps], previousValues.HAI_DB_TYPE === 'mysql'
       ? {
           db: { type: 'mysql', database: previousValues.HAI_DB_DATABASE },

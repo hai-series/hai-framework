@@ -119,7 +119,7 @@ export function mergeEnv(layers: readonly Environment[]): Record<string, string>
 }
 
 /**
- * dotenv 使用 Node 字面规则，也读取生成器的 JSON 字符串。带回车的值用行尾标记区分手写的反斜线文本。
+ * dotenv 使用 Node 字面规则，带行尾标记的值按 JSON 字符串解码。
  * @example 模块内部上下文
  * ```ts
  * const values = parseEnvironment('HAI_APP_NAME=Example\n')
@@ -137,16 +137,14 @@ export function parseEnvironment(text: string): Record<string, string> {
     names.add(name)
     const literal = match[2]
     const marked = match[3] !== undefined
-    if (literal !== undefined && (marked || literal.includes('\\"') || literal.includes('\\u0027'))) {
+    if (literal !== undefined && marked) {
       try {
         const value: unknown = JSON.parse(literal)
         if (typeof value === 'string')
           result[name] = value
       }
       catch {
-        if (marked)
-          throw new Error(`Invalid JSON-encoded environment variable: ${name}`)
-        // 兼容旧格式中恰好含有 JSON 转义的普通 dotenv 双引号值。
+        throw new Error(`Invalid JSON-encoded environment variable: ${name}`)
       }
     }
   }
@@ -172,8 +170,6 @@ export function stringifyEnv(values: Record<string, string>, options: { target?:
       literal = `'${value}'`
     else if (options.target === 'compose')
       literal = JSON.stringify(value).replaceAll('$', () => '$$')
-    else if (apostrophe)
-      literal = JSON.stringify(value).replaceAll('\'', '\\u0027')
     else
       literal = `${JSON.stringify(value)} # hai:json`
     return `${name}=${literal}`

@@ -65,16 +65,8 @@ function readEnvironment(name) {
       names.add(match[1])
       const literal = match[2]
       const marked = match[3] !== undefined
-      if (literal !== undefined && (marked || literal.includes('\\"') || literal.includes('\\u0027'))) {
-        try {
-          values[match[1]] = JSON.parse(literal)
-        }
-        catch {
-          if (marked)
-            throw new Error('Invalid JSON-encoded environment variable')
-          // 兼容旧格式中恰好含有 JSON 转义的普通 dotenv 双引号值。
-        }
-      }
+      if (literal !== undefined && marked)
+        values[match[1]] = JSON.parse(literal)
     }
     return values
   }
@@ -154,9 +146,7 @@ function applyManagedPasswords(values, bindings, state) {
 function serialize(values) {
   return `${Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).filter(([name]) => !startupEnvironment.has(name)).map(([name, value]) => {
     let literal = `'${value}'`
-    if (value.includes('\''))
-      literal = JSON.stringify(value).replaceAll('\'', '\\u0027')
-    else if (value.includes('\r'))
+    if (value.includes('\'') || value.includes('\r'))
       literal = `${JSON.stringify(value)} # hai:json`
     return `${name}=${literal}`
   }).join('\n')}\n`

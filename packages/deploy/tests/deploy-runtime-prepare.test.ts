@@ -59,11 +59,12 @@ it('局部后端发布保留实际运行连接和 publicEndpoint，更新业务�
   }
   const next = {
     HAI_STORAGE: JSON.stringify({ type: 's3', publicEndpoint: 'https://local.example.test/files', secretAccessKey: 'laptop-password' }),
-    APP_BUSINESS: 'new\r\n"quoted" $value',
+    APP_BUSINESS: 'new\r\n"quoted" and \'single\' $value',
   }
   const result = prepare('partial', next, previous, `STORAGE_PASSWORD=${secret}\n`)
   expect(result.status, result.stderr).toBe(0)
   const output = JSON.parse(result.stdout)
+  expect(output.environment).toMatch(/^APP_BUSINESS=".*" # hai:json$/m)
   const environment = parseEnv(output.environment)
   expect(environment.APP_BUSINESS).toBe(next.APP_BUSINESS)
   expect(environment.APP_REMOVED).toBeUndefined()

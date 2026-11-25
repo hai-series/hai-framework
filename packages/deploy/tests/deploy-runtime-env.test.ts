@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { parseEnv } from 'node:util'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { generateComposeFile, serializeEnvFile } from '../src/container/deploy-container-compose.js'
@@ -98,11 +99,13 @@ it.each([
   expect(JSON.parse(String(result.stdout)).value).toBe(value)
 }))
 
-it('旧版 dotenv 的反斜线和引号在部署启动时仍按原规则读取', () => fixture(({ directory, start }) => {
-  writeFileSync(join(directory, '.env.runtime'), 'HAI_RUNTIME_VALUE="C:\\repo\\tools"\r\nHAI_RUNTIME_DB="first\\u0027line\\r\\nsecond"\r\n')
+it('未标记的 dotenv 值在部署启动时使用 Node 的字面规则', () => fixture(({ directory, start }) => {
+  const dotenv = 'HAI_RUNTIME_VALUE="C:\\repo\\tools"\r\nHAI_RUNTIME_DB="first\\u0027line\\r\\nsecond"\r\n'
+  writeFileSync(join(directory, '.env.runtime'), dotenv)
   const result = start()
   expect(result.status).toBe(0)
-  expect(JSON.parse(String(result.stdout))).toMatchObject({ value: 'C:\\repo\\tools', db: 'first\'line\r\nsecond' })
+  const parsed = parseEnv(dotenv)
+  expect(JSON.parse(String(result.stdout))).toMatchObject({ value: parsed.HAI_RUNTIME_VALUE, db: parsed.HAI_RUNTIME_DB })
 }))
 
 it('空 Serv 父对象与运行进程覆盖均保留独立 Cookie 开关', () => fixture(({ directory, start }) => {

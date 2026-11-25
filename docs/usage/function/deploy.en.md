@@ -175,6 +175,8 @@ Read deployment and runtime files separately, merge by explicit precedence and s
 
 For example, `deploy.saveDeploymentEnvironment(environment, { HAI_DB_HOST: "db" })` for `prod` returns `["HAI_DB_HOST"]` on success and writes the public value to the target `.env.prod`.
 
+The deployment launcher reads the Node runtime dotenv file. Values that require escaping, such as those with single quotes, carriage returns, or CRLF, use JSON encoding. Keep the trailing `# hai:json` marker when editing these lines.
+
 #### Scenario: Read, merge and save deployment variables: environment helpers
 
 The operator selects the prod directory. Only run this after confirming it: load/merge read values and save returns written key names, without displaying secrets.

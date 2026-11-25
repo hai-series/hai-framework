@@ -405,7 +405,7 @@ it('dotenv 序列化无损保留混合引号、多行、反斜线和 Unicode，J
   expect(core.config.parseEnv(manual)).toEqual(nativeParseEnv(manual))
 })
 
-it('生成的 Node dotenv 往返保留回车和 CRLF，旧文件沿用原有引号规则', () => {
+it('生成的 Node dotenv 保留回车和 CRLF，未标记的值使用 Node 的字面规则', () => {
   const values = {
     BARE_CR: 'first\rsecond',
     CRLF: 'first\r\nsecond',
@@ -414,12 +414,14 @@ it('生成的 Node dotenv 往返保留回车和 CRLF，旧文件沿用原有引�
   }
   const text = core.config.stringifyEnv(values)
   expect(text).not.toContain('\r')
+  expect(text.match(/# hai:json/g)).toHaveLength(3)
   expect(core.config.parseEnv(text)).toEqual(values)
   expect(core.config.parseEnv(text.replaceAll('\n', '\r\n'))).toEqual(values)
 
   const manual = 'DIRECTORY="C:\\repo\\tools"\r\nLITERAL_ESCAPE="\\u000d"\r\nMULTILINE=\'first\r\nsecond\'\r\n'
   expect(core.config.parseEnv(manual)).toEqual(nativeParseEnv(manual))
-  expect(core.config.parseEnv('QUOTED="first\\u0027line\\r\\nsecond"\n')).toEqual({ QUOTED: 'first\'line\r\nsecond' })
+  const unmarked = 'QUOTED="first\\u0027line\\r\\nsecond"\n'
+  expect(core.config.parseEnv(unmarked)).toEqual(nativeParseEnv(unmarked))
 })
 
 it('为 Compose 输出双引号转义的回车并保留字面美元符号', () => {
