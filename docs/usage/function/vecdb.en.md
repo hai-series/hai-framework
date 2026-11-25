@@ -227,11 +227,13 @@ Insert and search vectors of the same dimension. Update or delete by ID; scan ID
 | `VectorDocument.metadata` | `Record<string, unknown>` | Optional | Store auxiliary data such as source for later filtering. See [metadata replacement](#chroma-metadata-replacement) for the reserved Chroma key. |
 | `VectorSearchOptions.topK` | `number` | `10` | Maximum matches ranked by similarity. |
 | `VectorSearchOptions.minScore` | `number` | `0` | Inclusive 0–1 score threshold. |
-| `VectorSearchOptions.filter` | `Record<string, unknown>` | No metadata filter | Filter based on metadata. See backend comparison semantics below. |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | No metadata filter | Match each document's `VectorDocument.metadata` in the selected collection, for example `{ tenantId: 'tenant-a' }`. |
 | `VectorScanOptions.cursor` | `string` | Omit for the first page | Pass the previous nextCursor for the same backend and collection. |
 | `VectorScanOptions.limit` | `number` | `64` | Document IDs per page, integer 1–128. |
 
-`topK` caps the number of results ranked by similarity. `minScore` is an inclusive score threshold from 0 to 1. `filter` matches metadata, for example `{ source: "handbook" }`. LanceDB requires a typed exact match on all supplied top-level fields and supports strings, finite numbers, booleans, and `null`. A missing field does not match `null`, and unsupported values yield `CONFIG_ERROR`. Other backends may compare values differently. The portable example below uses a top-level string.
+`topK` caps the number of results ranked by similarity. `minScore` is an inclusive score threshold from 0 to 1. Write `metadata: { source: 'handbook' }`, then search with `filter: { source: 'handbook' }`. VecDB matches the [corresponding stored fields](../data/vecdb.en.md#document-field-mapping) on each backend.
+
+For portable equality filters, use top-level string fields. When you supply several fields, all must match. Comparisons involving numbers, `null`, nested fields, and operators depend on the backend. LanceDB uses typed equality for strings, finite numbers, booleans, and `null`. A missing field cannot match `null`, and unsupported values yield `CONFIG_ERROR`.
 
 ##### Duplicate document IDs
 
@@ -316,6 +318,25 @@ countResult2.data // 0
 ```
 
 The query equals the stored vector, so its normalized cosine score is about 1. Content comes from the latest full upsert. Concurrent changes affect scans; a score is not a percentage.
+
+<a id="tenant-filter"></a>
+
+#### Scenario: Search documents for an authorized tenant
+
+When writing documents to a shared collection, the server stores each document's tenant in `metadata.tenantId`. For a search request, use IAM to authenticate the caller and authorize collection access first. Obtain `authorizedTenantId` from the verified session or the authorization result. The application generates `queryVector` with the same embedding model used for the documents.
+
+```ts
+// Fragment inside an async server function. The caller is authorized to search the shared documents collection.
+const result = await vecdb.vector.search('documents', queryVector, {
+  topK: 5,
+  filter: { tenantId: authorizedTenantId },
+})
+if (!result.success)
+  return result
+const matches = result.data
+```
+
+If the collection contains documents for `tenant-a` and `tenant-b`, a request authorized for `tenant-a` retrieves up to five documents belonging to `tenant-a`. Use `metadata.ownerId` in the same way for owner-scoped searches. Preserve the original error if the search fails. Authorize writes, deletes, and scans separately on the server.
 
 <a id="scan-pages"></a>
 

@@ -6,6 +6,23 @@
 
 検索対象の文書を登録する際、アプリは文書 ID、埋め込み、本文、属性を VecDB に渡します。バックエンドは指定コレクションをベクトル距離で検索し、該当項目を返します。
 
+<a id="document-field-mapping"></a>
+
+## 文書フィールドの対応
+
+アプリが VecDB に文書を書き込むときは、どのバックエンドでも共通の `VectorDocument` フィールドを使います。[文書の例](#example-data)の各項目がバックエンドのどのフィールドに保存されるかを示します。
+
+| アプリのフィールド | [pgvector](#pgvector) | [Qdrant](#qdrant) | [LanceDB](#lancedb) | [Chroma](#chroma) |
+| --- | --- | --- | --- | --- |
+| `id` | `id` | `payload._id` | `id` | `ids[i]` |
+| `vector` | `vector` | `vector` | `vector` | `embeddings[i]` |
+| `content` | `content` | `payload._content` | `content` | `documents[i]` |
+| `metadata` | `metadata` | `payload` 内のアプリの属性 | `metadata` | `metadatas[i]` 内のアプリの属性 |
+
+pgvector、LanceDB、Chroma は元の文字列 `id` をそのまま保存します。Qdrant のポイント ID には符号なし 64 ビット整数か UUID を指定します。VecDB は元の `id` から決定的にポイントの UUID を生成するため、同じ文書 ID で書き込み、更新、削除すると同じポイントが対象になります。予約フィールド `payload._id` に元の文書 ID を保存し、VecDB の検索や走査で返します。[Qdrant のポイント ID](https://qdrant.tech/documentation/manage-data/points/#point-ids)を参照してください。
+
+Chroma の書き込みバッチでは、同じインデックス `i` の配列要素が同じ文書に属します。検索結果で本文を返すため、VecDB は `metadatas[i]._content` にも本文を書き込みます。絞り込みでは `filter: { source: 'policy.txt' }` のようにアプリの属性を指定します。Qdrant は `payload` の `source` を、他のバックエンドは対応するメタデータの項目を比較します。
+
 <a id="vector-collections"></a>
 
 ## ベクトルコレクション

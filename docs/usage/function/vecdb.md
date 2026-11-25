@@ -233,11 +233,13 @@ LanceDB 和 pgvector 的大批次使用 Worker 构造 Arrow 批次或 SQL 参数
 | `VectorDocument.metadata` | `Record<string, unknown>` | 可省略 | 存储额外业务信息，例如 source，后续可据此筛选。Chroma 保留键见[元数据替换](#chroma-metadata-replacement)。 |
 | `VectorSearchOptions.topK` | `number` | `10` | 返回的条数上限，按相似度排序。 |
 | `VectorSearchOptions.minScore` | `number` | `0` | 0–1 的分数下限，等于阈值的结果也保留。 |
-| `VectorSearchOptions.filter` | `Record<string, unknown>` | 不筛选元数据 | 按元数据筛选。后端比较语义见下文。 |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | 不筛选元数据 | 按指定集合中每份文档的 `VectorDocument.metadata` 筛选，例如 `{ tenantId: 'tenant-a' }`。 |
 | `VectorScanOptions.cursor` | `string` | 首页省略 | 传上次 nextCursor，保持相同后端和集合。 |
 | `VectorScanOptions.limit` | `number` | `64` | 每页 ID 数量，取整数 1–128。 |
 
-`topK` 是按相似度返回的条数上限。`minScore` 是 0–1 的分数下限，结果必须大于等于该值。`filter` 按元数据匹配，例如 `{ source: "handbook" }`。LanceDB 对顶层字段按类型精确比较，多字段须全部匹配，支持字符串、有限数字、布尔值和 `null`。缺失字段不匹配 `null`；不支持的值会返回 `CONFIG_ERROR`。其他后端的类型比较规则可能不同。可移植示例使用顶层字符串字段。
+`topK` 是按相似度返回的条数上限。`minScore` 是 0–1 的分数下限，结果必须大于等于该值。写入时指定 `metadata: { source: 'handbook' }`，搜索时直接传 `filter: { source: 'handbook' }`。VecDB 会在各后端的[对应存储字段](../data/vecdb.md#document-field-mapping)中匹配。
+
+四个后端通用的写法是用顶层字符串字段做等值匹配，多个字段须同时命中。数值、`null`、嵌套字段和操作符的比较规则取决于后端。LanceDB 区分字段类型，支持字符串、有限数字、布尔值和 `null`。字段缺失时无法匹配 `null`，不支持的值返回 `CONFIG_ERROR`。
 
 ##### 重复文档 ID
 
@@ -322,6 +324,25 @@ countResult2.data // 0
 ```
 
 输入向量 [1,0,0] 与被存储向量一致，余弦转换分数约为 1。内容来自最新的整条 upsert。并发变化时扫描可能不完整，游标规则见下文；不要把 score 当百分比。
+
+<a id="tenant-filter"></a>
+
+#### 场景：按已授权租户检索文档
+
+共享集合中的文档写入时，由服务端把归属租户保存到 `metadata.tenantId`。处理搜索请求时，服务端先通过 IAM 验证身份和集合访问权限，从已验证的会话或授权结果取得 `authorizedTenantId`。查询向量 `queryVector` 由应用用同一嵌入模型生成。
+
+```ts
+// 服务端异步函数片段。documents 是已授权访问的共享集合。
+const result = await vecdb.vector.search('documents', queryVector, {
+  topK: 5,
+  filter: { tenantId: authorizedTenantId },
+})
+if (!result.success)
+  return result
+const matches = result.data
+```
+
+如果集合里有属于 `tenant-a` 和 `tenant-b` 的文档，已授权为 `tenant-a` 的请求只会从 `tenant-a` 的文档中取至多五条。按所有者限制搜索时，可以同样保存并筛选 `metadata.ownerId`。搜索出错时保留原失败结果。写入、删除和扫描各自需要服务端授权。
 
 <a id="scan-pages"></a>
 

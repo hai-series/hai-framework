@@ -237,6 +237,8 @@ interface VectorDocument {
 
 **VectorSearchOptions**：
 
+搜索的 `filter` 匹配所选集合中每份文档的 `VectorDocument.metadata`。写入时存 `metadata: { tenantId: 'tenant-a' }`，检索时用 `filter: { tenantId: authorizedTenantId }`。跨后端使用顶层字符串等值条件。用于租户或所有者隔离时，先在服务端鉴权，从已验证的权限上下文取筛选值。此条件只约束搜索，写入、删除和扫描分别授权。
+
 ```typescript
 interface VectorSearchOptions {
   topK?: number // 返回数量（默认 10）

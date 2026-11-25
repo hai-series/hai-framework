@@ -86,7 +86,9 @@ export interface VectorSearchOptions {
   /** 返回的最大结果数（默认 10） */
   topK?: number
   /**
-   * 元数据过滤，具体能力以 Provider 为准。
+   * 按指定集合中每份文档的 VectorDocument.metadata 筛选；键直接对应写入的业务字段。
+   * 跨后端的租户或所有者筛选可用顶层字符串等值条件，值由服务端已验证的授权上下文提供。
+   * 筛选只约束本次搜索；集合访问与其它操作须分别授权。
    * LanceDB：顶层字面量键的 AND 精确匹配，仅支持 string、有限 number、boolean、null；
    * 类型严格区分，null 不匹配缺失字段；空对象不筛选，不支持对象/数组/undefined。
    * 条件在 topK 前执行，不支持的值返回 CONFIG_ERROR。其它后端不保证相同 null/复杂值语义。

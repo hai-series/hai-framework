@@ -6,6 +6,23 @@
 
 应用写入检索文档时，把文档 ID、向量、正文及属性一起交给 VecDB。搜索时后端按向量距离查询指定集合，返回匹配项。
 
+<a id="document-field-mapping"></a>
+
+## 文档字段映射
+
+应用通过 VecDB 写入文档时使用统一的 `VectorDocument` 字段。下表将[示例文档](#example-data)中的字段对应到各后端的存储字段。
+
+| 应用字段 | [pgvector](#pgvector) | [Qdrant](#qdrant) | [LanceDB](#lancedb) | [Chroma](#chroma) |
+| --- | --- | --- | --- | --- |
+| `id` | `id` | `payload._id` | `id` | `ids[i]` |
+| `vector` | `vector` | `vector` | `vector` | `embeddings[i]` |
+| `content` | `content` | `payload._content` | `content` | `documents[i]` |
+| `metadata` | `metadata` | `payload` 中的业务属性 | `metadata` | `metadatas[i]` 中的业务属性 |
+
+pgvector、LanceDB 和 Chroma 直接保存原始字符串 `id`。Qdrant 的点 ID 只接受无符号 64 位整数或 UUID。VecDB 根据原始 `id` 确定性地生成点的 UUID，同一个文档 ID 在写入、更新和删除时对应同一个点。保留字段 `payload._id` 保存原始业务 ID，供搜索和扫描返回给应用。参见 [Qdrant 点 ID](https://qdrant.tech/documentation/manage-data/points/#point-ids)。
+
+Chroma 写入批次中同一索引 `i` 的数组元素属于同一份文档。正文也写入 `metadatas[i]._content`，供 VecDB 检索返回。调用方按业务属性筛选，例如 `filter: { source: 'policy.txt' }`。Qdrant 在 `payload` 中匹配 `source`，其他后端从对应的元数据字段匹配。
+
 <a id="vector-collections"></a>
 
 ## 向量集合

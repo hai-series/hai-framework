@@ -229,11 +229,13 @@ LanceDB と pgvector の大きな書き込みバッチでは、Worker が Arrow 
 | `VectorDocument.metadata` | `Record<string, unknown>` | 任意 | source など後で絞り込むための追加データ。Chroma の予約キーは[メタデータの置き換え](#chroma-metadata-replacement)を参照してください。 |
 | `VectorSearchOptions.topK` | `number` | `10` | 類似度順に取得する最大件数。 |
 | `VectorSearchOptions.minScore` | `number` | `0` | 0–1 の下限。下限と等しいスコアも含みます。 |
-| `VectorSearchOptions.filter` | `Record<string, unknown>` | メタデータの絞り込みなし | メタデータで絞り込み。比較規則は下記を参照。 |
+| `VectorSearchOptions.filter` | `Record<string, unknown>` | メタデータの絞り込みなし | 指定したコレクションの各文書を `VectorDocument.metadata` で絞り込みます。例は `{ tenantId: 'tenant-a' }` です。 |
 | `VectorScanOptions.cursor` | `string` | 初回は省略 | 同じバックエンドとコレクションで前回の nextCursor を指定。 |
 | `VectorScanOptions.limit` | `number` | `64` | 1 ページの文書 ID 数。1–128 の整数。 |
 
-`topK` は類似度順で返す最大件数です。`minScore` は 0–1 のスコアの下限です。下限と等しいスコアも含まれます。`filter` は、たとえば `{ source: "handbook" }` のようにメタデータを絞り込みます。LanceDB は上位フィールドの型と値を厳密に比較し、指定した全項目の一致を求めます。文字列、有限の数値、真偽値、`null` に対応し、欠損は `null` と一致しません。未対応の値は `CONFIG_ERROR` になります。他のバックエンドでは比較規則が異なることがあります。下の例は上位フィールドの文字列を使います。
+`topK` は類似度順で返す最大件数です。`minScore` は 0–1 のスコアの下限です。下限と等しいスコアも含まれます。書き込み時に `metadata: { source: 'handbook' }` を指定した文書は、検索時に `filter: { source: 'handbook' }` で絞り込めます。VecDB はバックエンドごとの[対応する保存フィールド](../data/vecdb.ja.md#document-field-mapping)を参照します。
+
+共通の等値条件にはトップレベルの文字列フィールドを使います。複数のフィールドを指定した場合はすべての条件が一致する必要があります。数値、`null`、ネストしたフィールド、演算子の比較規則はバックエンドによります。LanceDB は文字列、有限の数値、真偽値、`null` の型と値を厳密に比較します。欠損フィールドは `null` と一致せず、未対応の値は `CONFIG_ERROR` になります。
 
 ##### 文書 ID の重複
 
@@ -318,6 +320,25 @@ countResult2.data // 0
 ```
 
 保存済みと同じベクトルを検索するため、変換後のコサイン得点は約 1 です。本文は最後の upsert の値です。並行更新は scan に影響し、得点は百分率ではありません。
+
+<a id="tenant-filter"></a>
+
+#### 利用例：アクセスを許可されたテナントの文書を検索する
+
+共有コレクションに書き込む際は、サーバーで各文書の所属テナントを `metadata.tenantId` に保存します。検索リクエストを処理する際は、まず IAM で本人確認とコレクションのアクセス権確認を行い、検証済みのセッションまたは認可結果から `authorizedTenantId` を取得します。アプリは文書と同じ埋め込みモデルで `queryVector` を生成します。
+
+```ts
+// サーバーの非同期関数内の断片です。呼び出し元は共有の documents コレクションを検索できます。
+const result = await vecdb.vector.search('documents', queryVector, {
+  topK: 5,
+  filter: { tenantId: authorizedTenantId },
+})
+if (!result.success)
+  return result
+const matches = result.data
+```
+
+コレクションに `tenant-a` と `tenant-b` の文書がある場合、`tenant-a` の検索権限で実行したリクエストは `tenant-a` の文書から最大 5 件を取得します。所有者で絞り込む場合も同様に `metadata.ownerId` を使えます。検索が失敗した場合は元のエラーを返します。書き込み、削除、走査はサーバーで個別に認可してください。
 
 <a id="scan-pages"></a>
 

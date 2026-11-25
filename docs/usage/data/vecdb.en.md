@@ -6,6 +6,23 @@
 
 When an application indexes a document, it supplies an ID, embedding, content, and metadata to VecDB. The backend searches the selected collection by vector distance and returns matches.
 
+<a id="document-field-mapping"></a>
+
+## Document field mapping
+
+Applications write documents to VecDB using the same `VectorDocument` fields on every backend. The table maps the fields in the [example document](#example-data) to each backend's storage fields.
+
+| Application field | [pgvector](#pgvector) | [Qdrant](#qdrant) | [LanceDB](#lancedb) | [Chroma](#chroma) |
+| --- | --- | --- | --- | --- |
+| `id` | `id` | `payload._id` | `id` | `ids[i]` |
+| `vector` | `vector` | `vector` | `vector` | `embeddings[i]` |
+| `content` | `content` | `payload._content` | `content` | `documents[i]` |
+| `metadata` | `metadata` | Application fields in `payload` | `metadata` | Application fields in `metadatas[i]` |
+
+pgvector, LanceDB, and Chroma store the original string `id` directly. Qdrant point IDs accept unsigned 64-bit integers and UUIDs. VecDB derives a deterministic point UUID from the original `id`, so writing, updating, and deleting with that document ID address the same point. The reserved `payload._id` field preserves the original ID for VecDB search and scan results. See [Qdrant point IDs](https://qdrant.tech/documentation/manage-data/points/#point-ids).
+
+In a Chroma write batch, entries at the same index `i` belong to one document. VecDB also writes the text to `metadatas[i]._content` for its search results. Callers filter on application attributes, for example `filter: { source: 'policy.txt' }`. Qdrant matches `source` in `payload`, and the other backends match it in their metadata fields.
+
 ## Vector collections
 
 Set the name and dimension when you create a collection. New collections use cosine similarity by default. Existing collections keep their creation metric. Each backend stores a collection as shown below.
