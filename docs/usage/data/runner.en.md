@@ -12,6 +12,8 @@ After a container job is submitted, Runner stores its state, resource budget, an
 
 Runner keeps tasks, resource limits and execution events in shared [RelDB](reldb.en.md). Nodes use the database clock to check deadlines.
 
+Initialization creates missing tables and checks existing tables for the required columns. It fails if any required column is missing.
+
 The module uses 3 tables.
 
 | Table | Purpose |

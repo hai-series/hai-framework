@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { reldb } from '@h-ai/reldb'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { runner } from '../src/index.js'
+import { HaiRunnerError, runner } from '../src/index.js'
 
 let database: Awaited<ReturnType<typeof postgresEnv>>
 const scope = { tenantId: 'runner-schema-test', userId: 'owner' }
@@ -76,25 +76,7 @@ function startNode(nodeId: string) {
   }
 }
 
-it.each(['empty', 'upgrade'] as const)('coordinates independent nodes on %s PostgreSQL', async (stage) => {
-  const seed = runner.create()
-  let oldId: string | undefined
-  if (stage === 'upgrade') {
-    expect((await seed.init({ nodeId: 'seed', executor: false })).success).toBe(true)
-    const old = await seed.submit({
-      scope,
-      kind: 'test',
-      input: { original: true },
-      idempotencyKey: 'before-upgrade',
-    })
-    expect(old.success).toBe(true)
-    if (old.success)
-      oldId = old.data.id
-    expect((await seed.close()).success).toBe(true)
-    for (const column of ['event_bytes', 'owner_process_json'])
-      expect((await reldb.ddl.dropColumn('hai_runner_executions', column)).success).toBe(true)
-    expect((await reldb.ddl.dropIndex('hai_runner_event_cursor_idx')).success).toBe(true)
-  }
+it('coordinates independent nodes on an empty PostgreSQL database', async () => {
   const transaction = await reldb.tx.begin()
   if (!transaction.success)
     throw new Error(transaction.error.message)
@@ -122,23 +104,36 @@ it.each(['empty', 'upgrade'] as const)('coordinates independent nodes on %s Post
     const columns = await reldb.schemaColumns('hai_runner_executions')
     expect(columns.success && columns.data).toEqual(expect.arrayContaining(['event_bytes', 'owner_process_json']))
     expect((await reldb.sql.get('SELECT id FROM hai_runner_gate')).success).toBe(true)
-    if (oldId) {
-      expect((await seed.init({ nodeId: 'seed', executor: false })).success).toBe(true)
-      expect(await seed.get(scope, oldId)).toMatchObject({
-        success: true,
-        data: { id: oldId, status: 'queued' },
-      })
-    }
   }
   finally {
     await held.rollback()
     await pending?.catch(() => {})
-    await Promise.all([
-      ...nodes.map(node => node.close()),
-      seed.close(),
-    ])
+    await Promise.all(nodes.map(node => node.close()))
   }
 }, 20_000)
+
+it('rejects an execution table missing required columns without changing it', async () => {
+  const node = runner.create()
+  const required = ['event_bytes', 'owner_process_json']
+  try {
+    expect((await node.init({ nodeId: 'schema-mismatch', executor: false })).success).toBe(true)
+    expect((await node.close()).success).toBe(true)
+    for (const column of required)
+      expect((await reldb.ddl.dropColumn('hai_runner_executions', column)).success).toBe(true)
+
+    expect(await node.init({ nodeId: 'schema-mismatch', executor: false })).toMatchObject({
+      success: false,
+      error: { code: HaiRunnerError.UNAVAILABLE.code },
+    })
+    const columns = await reldb.schemaColumns('hai_runner_executions')
+    expect(columns.success).toBe(true)
+    if (columns.success)
+      expect(columns.data.filter(column => required.includes(column))).toEqual([])
+  }
+  finally {
+    await node.close()
+  }
+})
 
 it('rolls back incomplete initialization and retries on the same instance', async () => {
   const node = runner.create()

@@ -272,7 +272,6 @@ export async function readyStore(): Promise<HaiResult<void>> {
 
 async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): Promise<HaiResult<void>> {
   const type = reldb.config?.type
-  const addedColumns = ['event_bytes', 'owner_process_json']
   for (const [name, def] of [
     [
       GATE,
@@ -294,26 +293,11 @@ async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): P
     ],
   ] satisfies [string, ReldbTableDef][]) {
     const result = await ddl.createTable(name, def)
-    if (!result.success) {
-      if (type === 'postgresql')
-        return result
-      const existing = await reldb.schemaColumns(name, sql)
-      if (!existing.success || Object.keys(def).some(column => !existing.data.includes(column) && !(name === EXECUTIONS && addedColumns.includes(column))))
-        return unavailable()
-    }
-  }
-  const existing = await reldb.schemaColumns(EXECUTIONS, sql)
-  if (!existing.success)
-    return unavailable()
-  for (const column of addedColumns.filter(column => !existing.data.includes(column))) {
-    const added = await ddl.addColumn(EXECUTIONS, column, executions[column])
-    if (!added.success) {
-      if (type === 'postgresql')
-        return added
-      const refreshed = await reldb.schemaColumns(EXECUTIONS, sql)
-      if (!refreshed.success || !refreshed.data.includes(column))
-        return unavailable()
-    }
+    if (!result.success && type === 'postgresql')
+      return result
+    const existing = await reldb.schemaColumns(name, sql)
+    if (!existing.success || Object.keys(def).some(column => !existing.data.includes(column)))
+      return unavailable()
   }
 
   for (const [table, name, fields] of [
