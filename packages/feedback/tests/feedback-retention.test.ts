@@ -8,7 +8,7 @@ import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { feedback } from '../src/index.js'
+import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const actor = {
   scopeId: 'retention-scope',
@@ -58,6 +58,45 @@ async function expire(id: string) {
 }
 
 describe('反馈数据保留与顺序', { concurrent: false }, () => {
+  it('专用清理 worker 暂停时，到期报告立即从公开读写和导出接口消失', async () => {
+    const submission = { appId: config.appId, submissionId: 'expired-before-cleanup' }
+    const report = await feedback.submit(submission, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    const id = report.data.id
+    const job = await feedback.export({ id }, actor)
+    expect(job.success).toBe(true)
+    if (!job.success)
+      return
+    expect((await reldb.sql.execute('UPDATE hai_feedback_reports SET expires_at = 0 WHERE id = ?', [id])).success).toBe(true)
+    const unavailable = {
+      success: false,
+      error: { code: HaiFeedbackError.NOT_FOUND.code },
+    }
+    expect(await feedback.list({}, actor)).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+    expect(await feedback.listMine({}, actor)).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+    expect(await feedback.submit(submission, actor)).toMatchObject(unavailable)
+    expect(await feedback.get(id, actor)).toMatchObject(unavailable)
+    expect(await feedback.getEvidence({ id }, actor)).toMatchObject(unavailable)
+    expect(await feedback.getAttachment({ id, attachmentId: 'fixture' }, actor)).toMatchObject(unavailable)
+    expect(await feedback.setStatus({ id, status: 'handled', expectedVersion: 1 }, actor)).toMatchObject(unavailable)
+    expect(await feedback.completeCollection({ id }, actor)).toMatchObject(unavailable)
+    expect(await feedback.retry({ id, target: 'export' }, actor)).toMatchObject(unavailable)
+    expect(await feedback.export({ id }, actor)).toMatchObject(unavailable)
+    expect(await feedback.getExport({ id, jobId: job.data.id }, actor)).toMatchObject(unavailable)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 0 WHERE report_id = ? AND kind = \'cleanup\'', [id])).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(await reldb.sql.get('SELECT id FROM hai_feedback_reports WHERE id = ?', [id])).toMatchObject({ success: true, data: null })
+    expect(await reldb.sql.get('SELECT id FROM hai_feedback_jobs WHERE id = ?', [job.data.id])).toMatchObject({ success: true, data: null })
+  })
+
   it('已到期反馈删除正文、历史、证据及导出job内固定快照，不能残留诊断原文', async () => {
     const marker = 'private-retention-evidence-marker'
     const report = await feedback.submit({

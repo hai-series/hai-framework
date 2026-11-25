@@ -53,9 +53,11 @@ afterEach(async () => {
 })
 
 describe('通知与材料任务边界', { concurrent: false }, () => {
-  it('通知先执行时，证据配额耗尽仅让collect失败，受理邮件仍发送一次', async () => {
+  it('通知先执行时，业务证据配额耗尽仅让collect失败，受理邮件仍发送一次', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 })).success).toBe(true)
+    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 }, {
+      collectEvidence: () => ({ text: '未能写入的业务证据' }),
+    })).success).toBe(true)
     const send = vi.spyOn(reach, 'send')
     const report = await feedback.submit({ appId: config.appId, submissionId: 'notify-before-collect' }, actor)
     expect(report.success).toBe(true)
@@ -115,7 +117,7 @@ describe('通知与材料任务边界', { concurrent: false }, () => {
       if (mode === 'deleting')
         expect((await reldb.sql.execute('UPDATE hai_feedback_reports SET deleting = 1 WHERE id = ?', [report.data.id])).success).toBe(true)
       if (mode === 'database')
-        vi.spyOn(reldb.tx, 'begin').mockResolvedValue(core.err(HaiReldbError.QUERY_FAILED, 'Database unavailable at pre-send checkpoint'))
+        vi.spyOn(reldb.tx, 'begin').mockResolvedValueOnce(core.err(HaiReldbError.QUERY_FAILED, 'Database unavailable at pre-send checkpoint'))
     }
     finally { release.resolve() }
     expect((await worker).success).toBe(true)

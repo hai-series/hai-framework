@@ -1,3 +1,4 @@
+import type { HaiResult } from '@h-ai/core'
 import type { FeedbackConfigInput } from './feedback-config.js'
 import type { FeedbackRuntime } from './feedback-functions.js'
 import type { FeedbackFunctions, FeedbackInitOptions } from './feedback-types.js'
@@ -17,7 +18,8 @@ const notInitialized = core.module.createNotInitializedKit(HaiFeedbackError.NOT_
 const unavailable = notInitialized.proxy<FeedbackRuntime>()
 let current: { operations: FeedbackRuntime, capture: ReturnType<typeof createFeedbackCapture>, config: ReturnType<typeof FeedbackConfigSchema.parse> } | null = null
 let generation = 0
-let initializing = false
+let initializing: Promise<void> | null = null
+let closingPromise: Promise<HaiResult<void>> | null = null
 const inFlight = new Set<Promise<unknown>>()
 
 /**
@@ -46,9 +48,12 @@ export const feedback: FeedbackFunctions = {
   readBundle: readFeedbackBundle,
   summarizeBundle: summarizeFeedbackBundle,
   async init(config: FeedbackConfigInput, options: FeedbackInitOptions = {}) {
-    if (initializing)
+    if (initializing || closingPromise)
       return core.err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
-    initializing = true
+    let completeInitialization: (() => void) | undefined
+    initializing = new Promise<void>((resolve) => {
+      completeInitialization = resolve
+    })
     const epoch = ++generation
     let candidateCapture: ReturnType<typeof createFeedbackCapture> | undefined
     try {
@@ -74,6 +79,8 @@ export const feedback: FeedbackFunctions = {
         if (!reach.config?.providers.some(provider => provider.name === parsed.data.notificationProvider))
           return configFailure(['notificationProvider'])
       }
+      if (epoch !== generation)
+        return notInitialized.result()
       if (current) {
         const previous = current
         current = null
@@ -82,6 +89,8 @@ export const feedback: FeedbackFunctions = {
         await closing
         await previous.capture.close()
       }
+      if (epoch !== generation)
+        return notInitialized.result()
       const repository = new FeedbackReportRepository()
       const ready = await repository.ready()
       if (!ready.success)
@@ -106,23 +115,30 @@ export const feedback: FeedbackFunctions = {
       return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
     }
     finally {
-      initializing = false
+      initializing = null
+      completeInitialization?.()
     }
   },
-  async close() {
+  close() {
+    if (closingPromise)
+      return closingPromise
     generation++
     const previous = current
     current = null
-    try {
-      const closing = previous?.operations.close()
-      await Promise.allSettled([...inFlight])
-      await closing
-      await previous?.capture.close()
-      return core.ok(undefined)
-    }
-    catch {
-      return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
-    }
+    closingPromise = (async () => {
+      try {
+        const closing = previous?.operations.close()
+        await Promise.allSettled([...inFlight])
+        await closing
+        await previous?.capture.close()
+        await initializing
+        return core.ok(undefined)
+      }
+      catch {
+        return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+      }
+    })().finally(() => { closingPromise = null })
+    return closingPromise
   },
   get isInitialized() {
     return current !== null

@@ -169,10 +169,13 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
         adminUrl: 'http://localhost/admin/feedback',
         workerIntervalMs: 0,
         maxAttempts: 1,
-        maxEvidenceCount: status === 'failed'
-          ? 1
-          : 2000,
-      })).success).toBe(true)
+      }, status === 'failed'
+        ? {
+            collectEvidence: () => {
+              throw new Error('Fixture business evidence collection failed')
+            },
+          }
+        : undefined)).success).toBe(true)
       const actor = {
         scopeId: 'mail-content-scope',
         userId: 'mail-content-user',
@@ -185,7 +188,7 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
       if (!report.success)
         return
       expect((await feedback.completeCollection({ id: report.data.id }, actor)).success).toBe(true)
-      // 先真实执行采集；失败场景由证据配额耗尽触发，不直接伪造 collection_status。
+      // 先真实执行采集。失败分支由业务补采函数产生。
       expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = ? WHERE report_id = ? AND kind = \'notify\'', [Date.now() + 60000, report.data.id])).success).toBe(true)
       const previousMailCount = smtp.messages.length
       expect((await feedback.runJobs()).success).toBe(true)
@@ -199,7 +202,7 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
           ? 'failed'
           : 'succeeded')
         if (status === 'failed')
-          expect(collectionJob?.lastError).toBe(HaiFeedbackError.LIMIT_EXCEEDED.code)
+          expect(collectionJob?.lastError).toBe(HaiFeedbackError.OPERATION_FAILED.code)
       }
       expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 0 WHERE report_id = ? AND kind = \'notify\'', [report.data.id])).success).toBe(true)
       expect((await feedback.runJobs()).success).toBe(true)

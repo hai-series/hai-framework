@@ -3,6 +3,7 @@ import type { DmlOperations, DmlWithTxOperations, ReldbTableDef } from '@h-ai/re
 import { FeedbackReportSchema } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
+import { feedbackClockSql } from './feedback-clock.js'
 import { feedbackM } from './feedback-i18n.js'
 import { HaiFeedbackError } from './feedback-types.js'
 
@@ -410,16 +411,29 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
     })
   }
 
-  async find(id: string, scope: string, sql: DmlOperations = reldb.sql) {
+  async find(id: string, scope: string, sql: DmlOperations = reldb.sql, includeExpired = false) {
     const lock = sql !== reldb.sql && reldb.config?.type !== 'sqlite'
       ? ' FOR UPDATE'
       : ''
     const params: unknown[] = []
     const condition = `${feedbackTextEquals('id', id, params)} AND ${feedbackTextEquals('scope_id', scope, params)}`
-    const result = await sql.get<FeedbackReportRow>(`SELECT * FROM ${REPORTS} WHERE ${condition}${lock}`, params)
-    return result.success && result.data && (result.data.id !== id || result.data.scope_id !== scope)
-      ? core.ok(null)
-      : result
+    const live = !includeExpired && !lock
+      ? ` AND deleting = 0 AND expires_at > ${feedbackClockSql()}`
+      : ''
+    const result = await sql.get<FeedbackReportRow>(`SELECT * FROM ${REPORTS} WHERE ${condition}${live}${lock}`, params)
+    if (!result.success || !result.data)
+      return result
+    if (result.data.id !== id || result.data.scope_id !== scope)
+      return core.ok(null)
+    if (!includeExpired && lock) {
+      // 行锁等待可能跨过截止时间；拿到锁后检查数据库时钟。
+      const current = await sql.get<{ id: string }>(`SELECT id FROM ${REPORTS} WHERE ${condition} AND deleting = 0 AND expires_at > ${feedbackClockSql()}`, params)
+      if (!current.success)
+        return current
+      if (!current.data)
+        return core.ok(null)
+    }
+    return result
   }
 
   report(row: FeedbackReportRow) {

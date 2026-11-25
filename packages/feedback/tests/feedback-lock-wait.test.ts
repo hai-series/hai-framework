@@ -115,11 +115,18 @@ for (const [label, setup] of [
           ? '(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)'
           : '(CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED))'
         expect((await held.execute(`UPDATE hai_feedback_jobs SET lease_until = ${now} + 300 WHERE id = ?`, [job.data.id])).success).toBe(true)
-        const execute = reldb.sql.execute
-        vi.spyOn(reldb.sql, 'execute').mockImplementation((sql, params) => {
-          if (sql.startsWith('UPDATE hai_feedback_jobs SET status = ?') && sql.includes('token = NULL'))
-            committing.resolve()
-          return execute(sql, params)
+        const begin = reldb.tx.begin
+        vi.spyOn(reldb.tx, 'begin').mockImplementation(async () => {
+          const result = await begin()
+          if (result.success) {
+            const execute = result.data.execute
+            vi.spyOn(result.data, 'execute').mockImplementation((sql, params) => {
+              if (sql.startsWith('UPDATE hai_feedback_jobs SET status = ?') && sql.includes('token = NULL'))
+                committing.resolve()
+              return execute(sql, params)
+            })
+          }
+          return result
         })
         releaseSmtp.resolve()
         await checkpoint(committing.promise)

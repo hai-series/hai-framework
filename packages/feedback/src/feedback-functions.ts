@@ -13,6 +13,7 @@ import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { feedback } from './bundle/index.js'
 import { feedbackClockSql } from './feedback-clock.js'
+import { feedbackClientEvidenceLimits } from './feedback-evidence-budget.js'
 import { feedbackM } from './feedback-i18n.js'
 import { feedbackTextEquals, readFeedbackJson } from './feedback-repository.js'
 import { canonicalFeedbackJson, redactFeedbackText, sanitizeFeedbackValue } from './feedback-sanitize.js'
@@ -79,6 +80,7 @@ function escapeHtml(value: string) {
  */
 export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture, options: FeedbackInitOptions = {}): FeedbackRuntime {
   const budget = apiContract.resolveFeedbackBudget(config)
+  const clientEvidence = feedbackClientEvidenceLimits(budget)
   const table = repo.tables
   const clock = feedbackClockSql()
   let stopped = false
@@ -223,15 +225,14 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       : forbidden()
   }
 
-  async function insertJob(tx: DmlOperations, report: FeedbackReport, kind: FeedbackJobRow['kind'], suffix: string, payload: unknown, nextRun: number) {
+  async function insertJob(tx: DmlOperations, report: FeedbackReport, kind: FeedbackJobRow['kind'], suffix: string, payload: unknown, nextRun?: number) {
     const id = hash(`${report.id}:${kind}:${suffix}`)
     const previous = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [id])
     if (!previous.success)
       return previous
     if (previous.data)
       return core.ok(id)
-    const now = Date.now()
-    const inserted = await tx.execute(`INSERT INTO ${table.jobs} (id, app_id, snapshot_revision, snapshot_version, report_id, scope_id, kind, status, token, lease_until, attempts, next_run_at, created_at, updated_at, last_error, payload, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${clock} + ?, ?, ?, ?, ?, ?)`, [
+    const inserted = await tx.execute(`INSERT INTO ${table.jobs} (id, app_id, snapshot_revision, snapshot_version, report_id, scope_id, kind, status, token, lease_until, attempts, next_run_at, created_at, updated_at, last_error, payload, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, ${clock}), ${clock}, ${clock}, ?, ?, ?)`, [
       id,
       config.appId,
       kind === 'export'
@@ -247,9 +248,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       null,
       0,
       0,
-      Math.max(0, nextRun - now),
-      now,
-      now,
+      nextRun ?? null,
       null,
       JSON.stringify(payload),
       null,
@@ -284,11 +283,17 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     })
   }
 
-  async function appendInside(tx: DmlWithTxOperations, row: FeedbackReportRow, events: FeedbackEvidenceInput[], internal = false): Promise<HaiResult<{ acknowledged: string[], evidenceRevision: number }>> {
+  async function appendInside(tx: DmlWithTxOperations, row: FeedbackReportRow, events: FeedbackEvidenceInput[], mode: 'client' | 'server' | 'capture' = 'client', reserveBusiness = false) {
     const acknowledged: string[] = []
     const additions: Array<{ key: string, event: FeedbackEvidenceInput, bytes: number }> = []
+    let evidenceBytes = Number(row.evidence_bytes)
+    let truncated = false
+    const eventLimit = budget.maxEvidenceCount - (reserveBusiness ? 1 : 0)
+    const byteLimit = budget.maxEvidenceBytes - (reserveBusiness
+      ? Math.min(16 * 1024, Math.floor((budget.maxEvidenceBytes - clientEvidence.bytes) / 2))
+      : 0)
     for (const input of events) {
-      if (!internal && input.source.startsWith('server:'))
+      if (mode === 'client' && input.source.startsWith('server:'))
         return invalid()
       const event = FeedbackEvidenceInputSchema.parse(sanitizeFeedbackValue(input))
       const key = hash(`${row.id}:${event.source}:${event.sequence}`)
@@ -296,7 +301,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!previous.success)
         return previous
       if (previous.data) {
-        if (canonicalFeedbackJson(readFeedbackJson(previous.data.payload)) !== canonicalFeedbackJson(event))
+        // 旧任务可能已经保存日志，再次关联到错误时保留第一次确认的记录。
+        if (mode !== 'capture' && canonicalFeedbackJson(readFeedbackJson(previous.data.payload)) !== canonicalFeedbackJson(event))
           return conflict()
       }
       else {
@@ -306,8 +312,14 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const staged = additions.find(item => item.key === key)
         if (staged && canonicalFeedbackJson(staged.event) !== canonicalFeedbackJson(event))
           return conflict()
-        if (!staged)
+        if (!staged) {
+          if (mode === 'capture' && (Number(row.evidence_count) + additions.length + 1 > eventLimit || evidenceBytes + bytes > byteLimit)) {
+            truncated = true
+            continue
+          }
           additions.push({ key, event, bytes })
+          evidenceBytes += bytes
+        }
       }
       acknowledged.push(event.id)
     }
@@ -315,7 +327,19 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       return core.ok({
         acknowledged,
         evidenceRevision: Number(row.revision),
+        truncated,
       })
+    }
+    const incomingClient = additions.filter(item => !item.event.source.startsWith('server:'))
+    if (incomingClient.length) {
+      const prefix = reldb.config?.type === 'mysql'
+        ? 'CAST(LEFT(source, 7) AS BINARY) <> CAST(\'server:\' AS BINARY)'
+        : 'SUBSTR(source, 1, 7) <> \'server:\''
+      const stored = await tx.get<{ count: number, bytes: number }>(`SELECT COUNT(*) AS count, COALESCE(SUM(bytes), 0) AS bytes FROM ${table.evidence} WHERE report_id = ? AND ${prefix}`, [row.id])
+      if (!stored.success)
+        return stored
+      if (Number(stored.data?.count ?? 0) + incomingClient.length > clientEvidence.events || Number(stored.data?.bytes ?? 0) + incomingClient.reduce((total, item) => total + item.bytes, 0) > clientEvidence.bytes)
+        return limited()
     }
     const bytes = additions.reduce((total, item) => total + item.bytes, 0)
     const revision = Number(row.revision) + 1
@@ -356,23 +380,20 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!inserted.success)
         return inserted
     }
-    return core.ok({ acknowledged, evidenceRevision: revision })
-  }
-
-  async function appendInternal(id: string, actor: FeedbackContext, events: FeedbackEvidenceInput[]) {
-    return repo.transaction(async (tx) => {
-      const row = await access(id, actor, undefined, tx)
-      return row.success
-        ? appendInside(tx, row.data, events, true)
-        : row
-    })
+    return core.ok({ acknowledged, evidenceRevision: revision, truncated })
   }
 
   async function attachments(id: string, sql: DmlOperations = reldb.sql) {
     return sql.query<FeedbackAttachmentRow>(`SELECT * FROM ${table.attachments} WHERE report_id = ? ORDER BY id`, [id])
   }
-  async function withLease<T>(job: FeedbackJobRow, work: (tx: DmlWithTxOperations) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+  async function withLease<T>(job: FeedbackJobRow, work: (tx: DmlWithTxOperations, row: FeedbackReportRow) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
     return repo.transaction(async (tx) => {
+      // 与用户完成采集的事务采用同一加锁顺序。
+      const report = await repo.find(job.report_id, job.scope_id, tx, job.kind === 'cleanup')
+      if (!report.success)
+        return report
+      if (!report.data)
+        return missing()
       const lock = reldb.config?.type === 'sqlite'
         ? ''
         : ' FOR UPDATE'
@@ -381,7 +402,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return owned
       if (!owned.data)
         return conflict()
-      const result = await work(tx)
+      const result = await work(tx, report.data)
       if (!result.success)
         return result
       const stillOwned = await tx.get(`SELECT id FROM ${table.jobs} WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [job.id, job.token])
@@ -391,10 +412,10 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     })
   }
 
-  async function notificationSummary(id: string) {
+  async function notificationSummary(sql: DmlOperations, id: string) {
     if (config.notificationMode === 'disabled')
-      return reldb.sql.execute(`UPDATE ${table.reports} SET notification_status = 'disabled' WHERE id = ?`, [id])
-    return reldb.sql.execute(`UPDATE ${table.reports} SET notification_status = CASE
+      return sql.execute(`UPDATE ${table.reports} SET notification_status = 'disabled' WHERE id = ?`, [id])
+    return sql.execute(`UPDATE ${table.reports} SET notification_status = CASE
       WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND (status = 'failed' OR last_error IS NOT NULL)) THEN 'failed'
       WHEN NOT EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND status <> 'succeeded') THEN 'sent'
       WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND status = 'running') THEN 'sending'
@@ -443,10 +464,10 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       feedbackTextEquals('scope_id', actor.scopeId, params),
       feedbackTextEquals('app_id', config.appId, params),
       'deleting = 0',
+      `expires_at > ${clock}`,
     ]
-    if (mine) {
-      conditions.push(feedbackTextEquals('user_id', actor.userId, params), `expires_at > ${clock}`)
-    }
+    if (mine)
+      conditions.push(feedbackTextEquals('user_id', actor.userId, params))
     if (query.category !== undefined) {
       // 类别在正式报告 JSON 已存在，旧记录也能匹配。同一类别值跨数据库按原文匹配。
       const type = reldb.config?.type
@@ -540,19 +561,25 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         sanitized.submissionId,
       ]))
       const digest = hash(canonicalFeedbackJson(sanitized))
-      const existing = await reldb.sql.get<FeedbackReportRow>(`SELECT * FROM ${table.reports} WHERE submission_key = ?`, [submissionKey])
+      const bySubmission = `SELECT *, CASE WHEN deleting = 0 AND expires_at > ${clock} THEN 1 ELSE 0 END AS live FROM ${table.reports} WHERE submission_key = ?`
+      const existing = await reldb.sql.get<FeedbackReportRow & { live: number }>(bySubmission, [submissionKey])
       if (!existing.success)
         return existing
       if (existing.data && (existing.data.scope_id !== actor.scopeId || existing.data.user_id !== actor.userId || existing.data.app_id !== config.appId))
         return conflict()
-      if (existing.data && Number(existing.data.deleting))
+      if (existing.data && !Number(existing.data.live))
         return missing()
       if (existing.data) {
         return existing.data.submission_hash === digest
           ? core.ok(repo.report(existing.data))
           : conflict()
       }
-      const now = Date.now()
+      const time = await reldb.sql.get<{ now: number }>(`SELECT ${clock} AS now`)
+      if (!time.success)
+        return time
+      const now = Number(time.data?.now)
+      if (!Number.isFinite(now))
+        return failed()
       const id = `fb_${randomUUID()}`
       const report: FeedbackReport = {
         id,
@@ -610,10 +637,22 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!reservation.success)
           return reservation
         // 受理与环境证据共同提交；环境写入失败时同一 submissionId 可安全重试。
+        let environment = capture.environment()
+        const environmentBudget = budget.maxEvidenceBytes - clientEvidence.bytes
+        const fitsEnvironmentBudget = (item: FeedbackEvidenceInput) => Buffer.byteLength(JSON.stringify(sanitizeFeedbackValue(item))) <= environmentBudget
+        if (!fitsEnvironmentBudget(environment)) {
+          environment = {
+            ...environment,
+            data: { appId: config.appId, truncated: true },
+          }
+          // 应用标识也可能耗尽最小预算，完整标识已保存在报告上。
+          if (!fitsEnvironmentBudget(environment))
+            environment.data = { truncated: true }
+        }
         const initial = await appendInside(tx, row, [
           ...sanitized.evidence ?? [],
-          capture.environment(),
-        ], true)
+          environment,
+        ], 'server')
         if (!initial.success)
           return initial
         if ((sanitized.attachments ?? []).reduce((total, file) => total + file.size, 0) > budget.maxAttachmentsBytes)
@@ -661,12 +700,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return core.ok({ ...report, evidenceRevision: initial.data.evidenceRevision })
       })
       if (!result.success) {
-        const duplicate = await reldb.sql.get<FeedbackReportRow>(`SELECT * FROM ${table.reports} WHERE submission_key = ?`, [submissionKey])
+        const duplicate = await reldb.sql.get<FeedbackReportRow & { live: number }>(bySubmission, [submissionKey])
         if (!duplicate.success || !duplicate.data)
           return result
         if (duplicate.data.scope_id !== actor.scopeId || duplicate.data.user_id !== actor.userId || duplicate.data.app_id !== config.appId)
           return conflict()
-        if (Number(duplicate.data.deleting))
+        if (!Number(duplicate.data.live))
           return missing()
         return duplicate.data.submission_hash === digest
           ? core.ok(repo.report(duplicate.data))
@@ -734,7 +773,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (query.errorId) {
         const anchorParams: unknown[] = []
         const anchorIdentity = `${feedbackTextEquals('report_id', query.id, anchorParams)} AND ${feedbackTextEquals('error_id', query.errorId, anchorParams)}`
-        const anchor = await reldb.sql.get<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE ${anchorIdentity} AND kind = 'error'`, anchorParams)
+        const anchor = await reldb.sql.get<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE ${anchorIdentity} AND kind IN ('error', 'request') ORDER BY CASE WHEN kind = 'error' THEN 0 ELSE 1 END, timestamp, id`, anchorParams)
         if (!anchor.success)
           return anchor
         if (!anchor.data) {
@@ -750,13 +789,14 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const request = anchor.data.request_id
           ? feedbackTextEquals('request_id', anchor.data.request_id, contextParams)
           : 'request_id IS NULL'
-        const before = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${contextIdentity} AND ${request} AND kind IN ('log', 'error') AND sequence <= ? ORDER BY sequence DESC LIMIT 101`, [...contextParams, anchor.data.sequence])
+        const before = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${contextIdentity} AND ${request} AND kind IN ('log', 'error') AND sequence < ? ORDER BY sequence DESC LIMIT 100`, [...contextParams, anchor.data.sequence])
         if (!before.success)
           return before
         const after = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${contextIdentity} AND ${request} AND kind IN ('log', 'error') AND sequence > ? ORDER BY sequence ASC LIMIT 100`, [...contextParams, anchor.data.sequence])
         if (!after.success)
           return after
         const ids = [
+          anchor.data,
           ...before.data,
           ...after.data,
         ].map(row => row.id)
@@ -851,9 +891,15 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const row = await accessWrite(input.id, actor, tx)
         if (!row.success)
           return row
-        if (Number(row.data.collect_deadline) + 5 * 60000 < Date.now())
+        const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
+        if (!time.success)
+          return time
+        if (Number(row.data.collect_deadline) + 5 * 60000 < Number(time.data?.now))
           return conflict()
-        return appendInside(tx, row.data, parsed.data.evidence)
+        const result = await appendInside(tx, row.data, parsed.data.evidence)
+        return result.success
+          ? core.ok({ acknowledged: result.data.acknowledged, evidenceRevision: result.data.evidenceRevision })
+          : result
       })
     },
 
@@ -861,28 +907,78 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const parsed = FeedbackCompleteInputSchema.safeParse(input)
       if (!parsed.success)
         return invalid()
-      const row = await accessWrite(input.id, actor)
-      if (!row.success)
-        return row
-      if (parsed.data.missing?.length) {
-        const saved = await appendInternal(input.id, actor, [
-          {
-            id: randomUUID(),
-            source: 'collection',
-            sequence: Date.now(),
-            kind: 'missing',
-            timestamp: Date.now(),
-            data: { missing: parsed.data.missing },
-            missingReason: 'collection_incomplete',
-          },
-        ])
-        if (!saved.success)
-          return saved
-      }
-      const next = await reldb.sql.execute(`UPDATE ${table.jobs} SET next_run_at = ${clock}, updated_at = ${clock} WHERE report_id = ? AND kind IN ('collect', 'notify', 'webhook') AND status = 'pending'`, [input.id])
-      return next.success
-        ? core.ok(repo.report(row.data))
-        : next
+      const result = await repo.transaction(async (tx) => {
+        const row = await accessWrite(input.id, actor, tx)
+        if (!row.success)
+          return row
+        const report = repo.report(row.data)
+        const collect = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE report_id = ? AND kind = 'collect'`, [input.id])
+        if (!collect.success)
+          return collect
+        const stored = readFeedbackJson(collect.data?.payload)
+        const payload = stored && typeof stored === 'object'
+          ? stored
+          : {}
+        const alreadyCompleted = 'clientComplete' in payload && payload.clientComplete === true
+        const items = [
+          ...new Set(parsed.data.missing),
+        ].sort()
+        if (items.length) {
+          const digest = hash(JSON.stringify(items))
+          const reserveBusiness = (collect.data?.status === 'pending' || collect.data?.status === 'running')
+            && 'businessEvidence' in payload && payload.businessEvidence === true
+          const saved = await appendInside(tx, row.data, [
+            {
+              id: digest,
+              source: `server:collection:client:${digest}`,
+              sequence: 0,
+              kind: 'missing',
+              timestamp: report.createdAt,
+              data: { missing: items },
+              missingReason: 'collection_incomplete',
+            },
+          ], 'capture', reserveBusiness)
+          if (!saved.success)
+            return saved
+          report.evidenceRevision = saved.data.evidenceRevision
+          if (report.collectionStatus === 'complete') {
+            const partial = await tx.execute(`UPDATE ${table.reports} SET collection_status = 'partial', updated_at = ${clock} WHERE id = ?`, [input.id])
+            if (!partial.success)
+              return partial
+            report.collectionStatus = 'partial'
+          }
+        }
+        if (collect.data && (!alreadyCompleted || (items.length && !('clientMissing' in payload && payload.clientMissing === true)))) {
+          const marked = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ?`, [
+            JSON.stringify({
+              ...payload,
+              clientComplete: true,
+              ...(items.length
+                ? { clientMissing: true }
+                : {}),
+            }),
+            collect.data.id,
+          ])
+          if (!marked.success)
+            return marked
+        }
+        if (!alreadyCompleted) {
+          const next = await tx.execute(`UPDATE ${table.jobs} SET next_run_at = ${clock}, updated_at = ${clock} WHERE report_id = ? AND kind IN ('collect', 'notify', 'webhook') AND status = 'pending'`, [input.id])
+          if (!next.success)
+            return next
+        }
+        if (report.evidenceRevision === Number(row.data.revision) && report.collectionStatus === row.data.collection_status)
+          return core.ok(report)
+        const updated = await repo.find(input.id, actor.scopeId, tx)
+        if (!updated.success)
+          return updated
+        return updated.data
+          ? core.ok(repo.report(updated.data))
+          : missing()
+      })
+      if (result.success)
+        wakeWorker()
+      return result
     },
 
     async uploadAttachment(input, actor) {
@@ -919,30 +1015,36 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const permission = input.target === 'export'
         ? 'feedback:export'
         : 'feedback:process'
-      const row = await access(input.id, actor, permission)
-      if (!row.success)
-        return row
-      if (input.target === 'attachment') {
-        const params: unknown[] = [
-          Date.now(),
-        ]
-        const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.targetId ?? '', params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
-        const updated = await reldb.sql.execute(`UPDATE ${table.attachments} SET status = 'pending', updated_at = ? WHERE ${identity} AND status = 'failed'`, params)
-        return updated.success
-          ? core.ok(undefined)
-          : updated
-      }
-      const updated = await reldb.sql.execute(`UPDATE ${table.jobs} SET status = 'pending', attempts = 0, next_run_at = ${clock}, last_error = NULL WHERE report_id = ? AND kind = ? AND status IN ('failed', 'pending')`, [input.id, input.target])
-      if (updated.success && input.target === 'collect') {
-        const resumed = await reldb.sql.execute(`UPDATE ${table.reports} SET collection_status = 'collecting' WHERE id = ? AND deleting = 0 AND EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'collect' AND status = 'pending')`, [input.id, input.id])
-        if (!resumed.success)
-          return resumed
-      }
-      if (updated.success)
+      const result = await repo.transaction(async (tx) => {
+        const row = await access(input.id, actor, permission, tx)
+        if (!row.success)
+          return row
+        if (input.target === 'attachment') {
+          const params: unknown[] = []
+          const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.targetId ?? '', params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
+          const updated = await tx.execute(`UPDATE ${table.attachments} SET status = 'pending', updated_at = ${clock} WHERE ${identity} AND status = 'failed'`, params)
+          return updated.success
+            ? core.ok(undefined)
+            : updated
+        }
+        const updated = await tx.execute(`UPDATE ${table.jobs} SET status = 'pending', attempts = 0, next_run_at = ${clock}, last_error = NULL WHERE report_id = ? AND kind = ? AND status IN ('failed', 'pending')`, [input.id, input.target])
+        if (!updated.success)
+          return updated
+        if (input.target === 'collect') {
+          const resumed = await tx.execute(`UPDATE ${table.reports} SET collection_status = 'collecting' WHERE id = ? AND deleting = 0 AND EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'collect' AND status = 'pending')`, [input.id, input.id])
+          if (!resumed.success)
+            return resumed
+        }
+        if (input.target === 'notify') {
+          const resumed = await notificationSummary(tx, input.id)
+          if (!resumed.success)
+            return resumed
+        }
+        return core.ok(undefined)
+      })
+      if (result.success)
         wakeWorker()
-      return updated.success
-        ? core.ok(undefined)
-        : updated
+      return result
     },
 
     async export(input, actor) {
@@ -953,6 +1055,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const row = await access(input.id, actor, 'feedback:export', tx)
         if (!row.success)
           return row
+        const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
+        if (!time.success)
+          return time
+        const now = Number(time.data?.now)
+        if (!Number.isFinite(now))
+          return failed()
         const revision = parsed.data.evidenceRevision ?? Number(row.data.revision)
         if (revision > Number(row.data.revision))
           return conflict()
@@ -970,8 +1078,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return previous
         if (previous.data) {
           const snapshot = readFeedbackJson(previous.data.payload)
-          const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > Date.now()
-          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.exportRetentionHours * 3600000 > Date.now()) || (previous.data.status !== 'succeeded' && live))
+          const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > now
+          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.exportRetentionHours * 3600000 > now) || (previous.data.status !== 'succeeded' && live))
             return core.ok(jobData(previous.data))
         }
         if (revision < Number(row.data.revision)) {
@@ -1003,8 +1111,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           attachments: files.data,
           history: changes.data,
           maxBytes: Number(reservation.data.report_bytes),
-          snapshotExpiresAt: Date.now() + 3600000,
-        }, Date.now())
+          snapshotExpiresAt: now + 3600000,
+        })
         if (!added.success)
           return added
         const job = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [added.data])
@@ -1023,20 +1131,21 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return row
       const params: unknown[] = []
       const identity = `${feedbackTextEquals('id', input.jobId, params)} AND ${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)} AND ${feedbackTextEquals('app_id', config.appId, params)}`
-      const job = await reldb.sql.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE ${identity} AND kind = 'export'`, params)
+      const job = await reldb.sql.get<FeedbackJobRow & { now: number }>(`SELECT *, ${clock} AS now FROM ${table.jobs} WHERE ${identity} AND kind = 'export'`, params)
       if (!job.success)
         return job
       if (!job.data)
         return missing()
+      const now = Number(job.data.now)
       if (job.data.status === 'pending' || job.data.status === 'running') {
         const snapshot = readFeedbackJson(job.data.payload)
         if (!snapshot || typeof snapshot !== 'object' || !('snapshotExpiresAt' in snapshot) || typeof snapshot.snapshotExpiresAt !== 'number')
           return failed()
-        if (snapshot.snapshotExpiresAt < Date.now())
+        if (snapshot.snapshotExpiresAt <= now)
           return missing()
         return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
       }
-      if (Number(job.data.created_at) + config.exportRetentionHours * 3600000 <= Date.now())
+      if (Number(job.data.created_at) + config.exportRetentionHours * 3600000 <= now)
         return missing()
       if (job.data.status === 'failed')
         return failed()
@@ -1127,7 +1236,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   }
 
   /** 上传与最终关联分开；只有持有租约的事务能发布材料，孤立对象由反馈到期清理回收。 */
-  async function collectBusiness(job: FeedbackJobRow, report: FeedbackReport, actor: FeedbackContext): Promise<HaiResult<void>> {
+  async function collectBusiness(job: FeedbackJobRow, report: FeedbackReport): Promise<HaiResult<void>> {
     const marker = hash(`${report.id}:server:business:0`)
     const previous = await reldb.sql.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
     if (!previous.success)
@@ -1271,10 +1380,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return stored
       }
     }
-    return withLease(job, async (tx) => {
-      const fresh = await access(report.id, actor, undefined, tx)
-      if (!fresh.success)
-        return fresh
+    return withLease(job, async (tx, fresh) => {
       const completed = await tx.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
       if (!completed.success)
         return completed
@@ -1283,7 +1389,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const capacity = await checkCapacity(tx)
       if (!capacity.success)
         return capacity
-      const appended = await appendInside(tx, fresh.data, [event.data], true)
+      const appended = await appendInside(tx, fresh, [event.data], 'server')
       if (!appended.success)
         return appended
       for (const file of files) {
@@ -1291,7 +1397,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           file.rowId,
           file.metadata.id,
           report.id,
-          actor.scopeId,
+          report.scopeId,
           file.key,
           'available',
           file.bytes.length,
@@ -1306,85 +1412,146 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     })
   }
 
-  async function processJobs(): Promise<HaiResult<{ processed: number }>> {
-    let processed = 0
-    const candidateParams: unknown[] = []
-    const appIdentity = feedbackTextEquals('app_id', config.appId, candidateParams)
-    const candidates = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE ${appIdentity} AND ((status = 'pending' AND next_run_at <= ${clock}) OR (status = 'running' AND lease_until < ${clock})) ORDER BY next_run_at, id LIMIT 20`, candidateParams)
-    if (!candidates.success)
-      return candidates
-    for (const job of candidates.data) {
-      if (stopped)
-        break
-      if (job.app_id !== config.appId)
-        continue
+  /**
+   * 扫描阶段仅提取定位和加锁字段，领取后读取当前尝试次数及任务内容。
+   * @example 模块内部上下文
+   * ```ts
+   * function jobReport(candidate: JobCandidate) { return candidate.report_id }
+   * ```
+   */
+  type JobCandidate = Pick<FeedbackJobRow, 'id' | 'scope_id' | 'report_id' | 'kind'>
+  const due = `((status = 'pending' AND next_run_at <= ${clock}) OR (status = 'running' AND lease_until <= ${clock}))`
+
+  async function claimJob(candidate: JobCandidate) {
+    return repo.transaction(async (tx) => {
+      if (candidate.kind === 'collect' || candidate.kind === 'notify') {
+        const locked = await repo.find(candidate.report_id, candidate.scope_id, tx, true)
+        if (!locked.success)
+          return locked
+      }
       const token = randomUUID()
-      const claimParams: unknown[] = [token, config.leaseMs, job.id]
-      const claimIdentity = feedbackTextEquals('app_id', config.appId, claimParams)
-      const claimed = await reldb.sql.execute(`UPDATE ${table.jobs} SET status = 'running', token = ?, lease_until = ${clock} + ?, attempts = attempts + 1, updated_at = ${clock} WHERE id = ? AND ${claimIdentity} AND ((status = 'pending' AND next_run_at <= ${clock}) OR (status = 'running' AND lease_until < ${clock}))`, claimParams)
+      const params: unknown[] = [token, config.leaseMs, candidate.id]
+      const app = feedbackTextEquals('app_id', config.appId, params)
+      const claimed = await tx.execute(`UPDATE ${table.jobs} SET status = 'running', token = ?, lease_until = ${clock} + ?, attempts = attempts + 1, updated_at = ${clock} WHERE id = ? AND ${app} AND ${due} AND (kind = 'cleanup' OR attempts < ?)`, [...params, config.maxAttempts])
       if (!claimed.success)
         return claimed
-      if (!claimed.data.changes)
+      if (claimed.data.changes) {
+        if (candidate.kind === 'notify') {
+          const summary = await notificationSummary(tx, candidate.report_id)
+          if (!summary.success)
+            return summary
+        }
+        return tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ? AND token = ?`, [candidate.id, token])
+      }
+
+      // 已领取的尝试可能产生过外部效果。耗尽次数后保留终态供人工确认。
+      const expiredParams: unknown[] = [HaiFeedbackError.OPERATION_FAILED.code, candidate.id]
+      const expiredApp = feedbackTextEquals('app_id', config.appId, expiredParams)
+      const exhausted = await tx.execute(`UPDATE ${table.jobs} SET status = 'failed', token = NULL, lease_until = 0, last_error = ?, updated_at = ${clock} WHERE id = ? AND ${expiredApp} AND ${due} AND kind <> 'cleanup' AND attempts >= ?`, [...expiredParams, config.maxAttempts])
+      if (!exhausted.success)
+        return exhausted
+      if (exhausted.data.changes) {
+        const summary = await syncJobReport(tx, candidate, 'failed')
+        if (!summary.success)
+          return summary
+      }
+      return core.ok(null)
+    })
+  }
+
+  async function syncJobReport(tx: DmlWithTxOperations, job: JobCandidate, status: FeedbackJobRow['status']) {
+    if (job.kind === 'notify')
+      return notificationSummary(tx, job.report_id)
+    if (job.kind !== 'collect' || (status !== 'failed' && status !== 'succeeded'))
+      return core.ok(undefined)
+    if (status === 'failed')
+      return tx.execute(`UPDATE ${table.reports} SET collection_status = 'failed', updated_at = ${clock} WHERE id = ? AND deleting = 0`, [job.report_id])
+
+    const current = await tx.get<{ payload: unknown }>(`SELECT payload FROM ${table.jobs} WHERE id = ?`, [job.id])
+    if (!current.success)
+      return current
+    const payload = readFeedbackJson(current.data?.payload)
+    const files = await attachments(job.report_id, tx)
+    if (!files.success)
+      return files
+    const reasons = await tx.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table.evidence} WHERE report_id = ? AND kind = 'missing'`, [job.report_id])
+    if (!reasons.success)
+      return reasons
+    const partial = Number(reasons.data?.count ?? 0) > 0 || files.data.some(item => item.status !== 'available')
+      || (payload && typeof payload === 'object' && (('serverMissing' in payload && payload.serverMissing === true) || ('clientMissing' in payload && payload.clientMissing === true)))
+    return tx.execute(`UPDATE ${table.reports} SET collection_status = ?, updated_at = ${clock} WHERE id = ? AND deleting = 0`, [
+      partial ? 'partial' : 'complete',
+      job.report_id,
+    ])
+  }
+
+  async function finishJob(job: FeedbackJobRow, result: HaiResult<unknown>) {
+    const receipt = result.success && !!result.data && typeof result.data === 'object' && 'pending' in result.data && result.data.pending === true
+    const purged = result.success && !!result.data && typeof result.data === 'object' && 'purged' in result.data && result.data.purged === true
+    const status = result.success
+      ? receipt ? 'pending' : 'succeeded'
+      : job.kind !== 'cleanup' && Number(job.attempts) >= config.maxAttempts
+        ? 'failed'
+        : 'pending'
+    return repo.transaction(async (tx) => {
+      if (job.kind === 'collect' || job.kind === 'notify') {
+        const locked = await repo.find(job.report_id, job.scope_id, tx, true)
+        if (!locked.success)
+          return locked
+      }
+      const saved = purged
+        ? await tx.execute(`DELETE FROM ${table.jobs} WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [job.id, job.token])
+        : await tx.execute(`UPDATE ${table.jobs} SET status = ?, attempts = attempts - ?, token = NULL, lease_until = 0, next_run_at = ${clock} + ?, updated_at = ${clock}, last_error = ?, result = CASE WHEN ? = 1 THEN ? ELSE result END WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [
+            status,
+            receipt ? 1 : 0,
+            Math.min(60000, 1000 * 2 ** Math.min(Number(job.attempts) - 1, 6)),
+            result.success ? null : result.error.code,
+            result.success ? 1 : 0,
+            result.success
+              ? JSON.stringify(result.data)
+              : null,
+            job.id,
+            job.token,
+          ])
+      if (!saved.success || !saved.data.changes)
+        return saved
+      return syncJobReport(tx, job, status)
+    })
+  }
+
+  async function processJobs(): Promise<HaiResult<{ processed: number }>> {
+    let processed = 0
+    const params: unknown[] = []
+    const app = feedbackTextEquals('app_id', config.appId, params)
+    const candidates = await reldb.sql.query<JobCandidate>(`SELECT id, report_id, scope_id, kind FROM ${table.jobs} WHERE ${app} AND ${due} ORDER BY next_run_at, id LIMIT 20`, params)
+    if (!candidates.success)
+      return candidates
+    for (const candidate of candidates.data) {
+      if (stopped)
+        break
+      const claimed = await claimJob(candidate)
+      if (!claimed.success)
+        return claimed
+      const job = claimed.data
+      if (!job)
         continue
-      if (job.kind === 'notify')
-        await notificationSummary(job.report_id)
       const renewal = setInterval(() => {
-        void reldb.sql.execute(`UPDATE ${table.jobs} SET lease_until = ${clock} + ? WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [config.leaseMs, job.id, token])
+        void reldb.sql.execute(`UPDATE ${table.jobs} SET lease_until = ${clock} + ? WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [config.leaseMs, job.id, job.token])
       }, Math.max(250, Math.floor(config.leaseMs / 3)))
       renewal.unref()
       try {
-        const result = await executeJob({ ...job, token, attempts: Number(job.attempts) + 1 })
-        const pendingReceipt = result.success && !!result.data && typeof result.data === 'object' && 'pending' in result.data && result.data.pending === true
-        const purged = result.success && !!result.data && typeof result.data === 'object' && 'purged' in result.data && result.data.purged === true
-        const status = result.success
-          ? pendingReceipt ? 'pending' : 'succeeded'
-          : job.kind !== 'cleanup' && Number(job.attempts) + 1 >= config.maxAttempts
-            ? 'failed'
-            : 'pending'
-        const saved = purged
-          ? await reldb.sql.execute(`DELETE FROM ${table.jobs} WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [job.id, token])
-          : await reldb.sql.execute(`UPDATE ${table.jobs} SET status = ?, attempts = attempts - ?, token = NULL, lease_until = 0, next_run_at = ${clock} + ?, updated_at = ${clock}, last_error = ?, result = CASE WHEN ? = 1 THEN ? ELSE result END WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [
-              status,
-              pendingReceipt ? 1 : 0,
-              Math.min(60000, 1000 * 2 ** Math.min(Number(job.attempts), 6)),
-              result.success ? null : result.error.code,
-              result.success ? 1 : 0,
-              result.success
-                ? JSON.stringify(result.data)
-                : null,
-              job.id,
-              token,
-            ])
+        const result = await executeJob(job).catch(failed)
+        const saved = await finishJob(job, result)
         if (!saved.success)
           return saved
-        if (saved.data.changes && status === 'failed' && job.kind === 'collect') {
-          const terminal = await reldb.sql.execute(`UPDATE ${table.reports} SET collection_status = 'failed', updated_at = ${clock} WHERE id = ? AND deleting = 0 AND EXISTS (SELECT 1 FROM ${table.jobs} WHERE id = ? AND status = 'failed')`, [job.report_id, job.id])
-          if (!terminal.success)
-            return terminal
-        }
-        // ZIP 按不可变任务快照复用同一个对象；只有最终租约提交能发布下载引用。
-        if (job.kind === 'notify')
-          await notificationSummary(job.report_id)
         processed++
-      }
-      catch {
-        await reldb.sql.execute(`UPDATE ${table.jobs} SET status = ?, next_run_at = ${clock} + 60000, last_error = ?, token = NULL, lease_until = 0 WHERE id = ? AND token = ? AND lease_until > ${clock}`, [
-          job.kind === 'cleanup'
-            ? 'pending'
-            : 'failed',
-          HaiFeedbackError.OPERATION_FAILED.code,
-          job.id,
-          token,
-        ])
-        if (job.kind === 'collect')
-          await reldb.sql.execute(`UPDATE ${table.reports} SET collection_status = 'failed', updated_at = ${clock} WHERE id = ? AND deleting = 0 AND EXISTS (SELECT 1 FROM ${table.jobs} WHERE id = ? AND status = 'failed')`, [job.report_id, job.id])
       }
       finally {
         clearInterval(renewal)
       }
     }
     if (Date.now() >= cleanupAfter) {
-      const expiredExports = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE app_id = ? AND kind = 'export' AND status = 'succeeded' AND created_at <= ${clock} - ? ORDER BY created_at, id LIMIT 20`, [config.appId, config.exportRetentionHours * 3600000])
+      const expiredExports = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE ${app} AND kind = 'export' AND status = 'succeeded' AND created_at <= ${clock} - ? ORDER BY created_at, id LIMIT 20`, [...params, config.exportRetentionHours * 3600000])
       if (!expiredExports.success)
         return expiredExports
       for (const job of expiredExports.data) {
@@ -1404,7 +1571,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!marked.success)
           return marked
       }
-      const quotaRows = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.quotas} WHERE app_id = ? AND period > 0 AND period < ${clock} - 172800000 ORDER BY period, id LIMIT 100`, [config.appId])
+      const quotaRows = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.quotas} WHERE ${app} AND period > 0 AND period < ${clock} - 172800000 ORDER BY period, id LIMIT 100`, params)
       if (!quotaRows.success)
         return quotaRows
       if (quotaRows.data.length) {
@@ -1460,7 +1627,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         ? core.ok({ purged: true })
         : core.ok({ pending: true })
     }
-    const row = await repo.find(job.report_id, job.scope_id)
+    const row = await repo.find(job.report_id, job.scope_id, reldb.sql, job.kind === 'cleanup')
     if (!row.success)
       return row
     if (!row.data || row.data.id !== job.report_id || row.data.scope_id !== job.scope_id || row.data.app_id !== config.appId)
@@ -1468,55 +1635,55 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (Number(row.data.deleting) && job.kind !== 'cleanup')
       return missing()
     const report = repo.report(row.data)
-    const actor: FeedbackContext = {
-      scopeId: report.scopeId,
-      userId: report.userId,
-      permissions: ['feedback:*'],
-    }
     if (job.kind === 'collect') {
-      const anchor = 'anchor' in payload && typeof payload.anchor === 'number'
-        ? payload.anchor
-        : report.createdAt
-      const captured = await capture.collect(report.scopeId, report.userId, anchor)
-      const saved = await withLease(job, async (tx) => {
-        const fresh = await access(report.id, actor, undefined, tx)
-        return fresh.success
-          ? appendInside(tx, fresh.data, captured.length
-              ? captured
-              : [
-                  {
-                    id: `missing-server-${report.id}`,
-                    source: 'collection',
-                    sequence: 0,
-                    kind: 'missing',
-                    timestamp: report.createdAt,
-                    data: { source: 'server_logs' },
-                    missingReason: 'no_correlated_server_logs',
-                  },
-                ], true)
-          : fresh
-      })
-      if (!saved.success)
-        return saved
-      if ('businessEvidence' in payload && payload.businessEvidence === true) {
-        const business = await collectBusiness(job, report, actor)
+      const needsBusiness = 'businessEvidence' in payload && payload.businessEvidence === true
+      let count = 0
+      if (!('serverCaptured' in payload && payload.serverCaptured === true)) {
+        const anchor = 'anchor' in payload && typeof payload.anchor === 'number'
+          ? payload.anchor
+          : report.createdAt
+        const captured = await capture.collect(report.scopeId, report.userId, anchor)
+        const saved = await withLease(job, async (tx, fresh) => {
+          const current = await tx.get<{ payload: unknown }>(`SELECT payload FROM ${table.jobs} WHERE id = ?`, [job.id])
+          if (!current.success)
+            return current
+          const stored = readFeedbackJson(current.data?.payload)
+          if (!stored || typeof stored !== 'object')
+            return invalid()
+          const appended = await appendInside(tx, fresh, captured.length
+            ? captured
+            : [
+                {
+                  id: `missing-server-${report.id}`,
+                  source: 'server:collection',
+                  sequence: 0,
+                  kind: 'missing',
+                  timestamp: report.createdAt,
+                  data: { source: 'server_logs' },
+                  missingReason: 'no_correlated_server_logs',
+                },
+              ], 'capture', needsBusiness)
+          if (!appended.success)
+            return appended
+          const marked = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [
+            JSON.stringify({ ...stored, serverCaptured: true, serverMissing: captured.length === 0 || appended.data.truncated }),
+            job.id,
+            job.token,
+          ])
+          return marked.success
+            ? core.ok(captured.length ? appended.data.acknowledged.length : 0)
+            : marked
+        })
+        if (!saved.success)
+          return saved
+        count = saved.data
+      }
+      if (needsBusiness) {
+        const business = await collectBusiness(job, report)
         if (!business.success)
           return business
       }
-      const files = await attachments(report.id)
-      if (!files.success)
-        return files
-      const reasons = await reldb.sql.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table.evidence} WHERE report_id = ? AND kind = 'missing'`, [report.id])
-      if (!reasons.success)
-        return reasons
-      const partial = Number(reasons.data?.count ?? 0) > 0 || files.data.some(item => item.status !== 'available')
-      const updated = await withLease(job, tx => tx.execute(`UPDATE ${table.reports} SET collection_status = ?, updated_at = ${clock} WHERE id = ?`, [
-        partial ? 'partial' : 'complete',
-        report.id,
-      ]))
-      return updated.success
-        ? core.ok({ collected: captured.length })
-        : updated
+      return core.ok({ collected: count })
     }
     if (job.kind === 'webhook') {
       if (!('url' in payload) || payload.url !== config.webhookUrl || !config.webhookUrl)
@@ -1524,11 +1691,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       // 材料仍在采集中时等待，不消耗发送尝试次数；终态失败也应通知接收方。
       if (report.collectionStatus === 'collecting')
         return core.ok({ pending: true })
-      const frozen = await withLease(job, async (tx) => {
-        const live = await access(report.id, actor, undefined, tx)
-        if (!live.success)
-          return live
-        if (live.data.collection_status === 'collecting')
+      const frozen = await withLease(job, async (tx, live) => {
+        if (live.collection_status === 'collecting')
           return conflict()
         const stored = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [job.id])
         if (!stored.success || !stored.data)
@@ -1552,9 +1716,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           event: 'feedback.created',
           eventId: job.id,
           createdAt: report.createdAt,
-          report: repo.report(live.data),
+          report: repo.report(live),
           evidence: {
-            revision: Number(live.data.revision),
+            revision: Number(live.revision),
             business: !!business.data,
             attachments: files.data.map(attachmentData),
           },
@@ -1612,7 +1776,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (config.notificationMode === 'reach' && !config.recipients.includes(recipient))
         return invalid()
       // 受理通知与补采独立；发送前以数据库租约和存活报告再次确认副作用资格。
-      const live = await withLease(job, tx => access(report.id, actor, undefined, tx))
+      const live = await withLease(job, async (_tx, live) => core.ok(live))
       if (!live.success)
         return live
       const current = repo.report(live.data)
@@ -1730,21 +1894,11 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         size: bundle.data.length,
       })
     }
-    const marked = await withLease(job, async (tx) => {
-      const locked = await repo.find(report.id, report.scopeId, tx)
-      if (!locked.success)
-        return locked
-      if (!locked.data)
-        return missing()
-      const active = await tx.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table.jobs} WHERE report_id = ? AND kind = 'export' AND status IN ('pending', 'running')`, [report.id])
-      if (!active.success)
-        return active
-      if (Number(active.data?.count ?? 0) > 0)
-        return conflict()
+    const marked = await withLease(job, async (tx, locked) => {
       const updated = await tx.execute(`UPDATE ${table.reports} SET deleting = 1 WHERE id = ? AND expires_at <= ${clock}`, [report.id])
       if (!updated.success)
         return updated
-      return updated.data.changes || Number(locked.data.deleting)
+      return updated.data.changes || Number(locked.deleting)
         ? core.ok(undefined)
         : conflict()
     })
@@ -1789,7 +1943,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!tombstone.success)
         return tombstone
       const params: unknown[] = []
-      const identity = `${feedbackTextEquals('id', report.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
+      const identity = `${feedbackTextEquals('id', report.id, params)} AND ${feedbackTextEquals('scope_id', report.scopeId, params)}`
       const removed = await tx.execute(`DELETE FROM ${table.reports} WHERE ${identity} AND expires_at <= ${clock}`, params)
       return removed.success
         ? core.ok({ pending: true })

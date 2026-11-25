@@ -74,6 +74,63 @@ async function drain() {
 }
 
 describe('业务补采与反馈 Webhook', () => {
+  it('极小预算为业务补采留位，浏览器缺失原因仍反映在材料状态', async () => {
+    const collectEvidence = vi.fn(() => ({ text: 'Business evidence' }))
+    expect((await feedback.init({ ...config, maxEvidenceCount: 2 }, { collectEvidence })).success).toBe(true)
+    const accepted = await feedback.submit({ appId: config.appId, submissionId: 'small-budget' }, actor)
+    expect(accepted.success).toBe(true)
+    if (!accepted.success)
+      return
+    const { id } = accepted.data
+    expect((await feedback.completeCollection({
+      id,
+      missing: ['browser-draft-truncated'],
+    }, actor)).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(collectEvidence).toHaveBeenCalledOnce()
+    expect(await feedback.get(id, actor)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'partial' },
+      },
+    })
+    expect(await feedback.getEvidence({ id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+  })
+
+  it('业务补采重试从已提交的日志快照继续，不受同请求晚到错误影响', async () => {
+    const collectEvidence = vi.fn(() => ({ text: 'Recovered business evidence' })).mockImplementationOnce(() => {
+      throw new Error('Fixture transient collector failure')
+    })
+    expect((await feedback.init(config, { collectEvidence })).success).toBe(true)
+    const output = core.logger.create({ name: 'late-error-fixture', level: 'info', format: 'json' })
+    const context = { ...actor, requestId: 'late-error-request' }
+    core.context.run(context, () => output.info('Request started'))
+    const submitted = await feedback.submit({ appId: config.appId, submissionId: 'late-error-recovery' }, actor)
+    expect(submitted.success).toBe(true)
+    if (!submitted.success)
+      return
+    const id = submitted.data.id
+    expect((await feedback.completeCollection({ id }, actor)).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    const initial = await feedback.getEvidence({ id, kind: 'log' }, actor)
+    expect(initial).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+    core.context.run(context, () => output.error('Request failed later'))
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 0 WHERE report_id = ? AND kind = \'collect\'', [id])).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(collectEvidence).toHaveBeenCalledTimes(2)
+    expect(await feedback.getEvidence({ id, kind: 'log' }, actor)).toEqual(initial)
+    expect(await feedback.getEvidence({ id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+  })
+
   it('等待异步业务日志和 ZIP，脱敏文本，详情/离线包可读取且重复提交不重复采集', async () => {
     const archive = zipSync({
       'safe.log': strToU8('Order diagnostic log'),

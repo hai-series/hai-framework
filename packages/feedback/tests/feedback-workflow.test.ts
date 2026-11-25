@@ -62,6 +62,46 @@ afterAll(async () => {
 })
 
 describe('反馈公开流程', { concurrent: false }, () => {
+  it('按失败请求锚点返回请求本身及同请求前后日志', async () => {
+    const events = [
+      { id: 'before-request', kind: 'log' as const, requestId: 'server-correlation' },
+      {
+        id: 'failed-request',
+        kind: 'request' as const,
+        requestId: 'server-correlation',
+        errorId: 'request-anchor',
+      },
+      { id: 'unrelated-request-log', kind: 'log' as const, requestId: 'other-correlation' },
+      { id: 'after-request', kind: 'log' as const, requestId: 'server-correlation' },
+    ]
+    const report = await feedback.submit({
+      appId: config.appId,
+      submissionId: 'request-error-anchor',
+      evidence: events.map((event, sequence) => ({
+        ...event,
+        source: 'browser:request-anchor',
+        sequence,
+        timestamp: sequence + 1,
+        data: {},
+      })),
+    }, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    const evidence = await feedback.getEvidence({ id: report.data.id, errorId: 'request-anchor' }, admin)
+    expect(evidence).toMatchObject({
+      success: true,
+      data: {
+        total: 3,
+        items: [
+          { id: 'before-request' },
+          { id: 'failed-request' },
+          { id: 'after-request' },
+        ],
+      },
+    })
+  })
+
   it('允许空描述、同一提交幂等，并拒绝借同一标识替换现场', async () => {
     const first = await feedback.submit({ submissionId: 'empty-1', appId: config.appId }, actor)
     expect(first.success).toBe(true)

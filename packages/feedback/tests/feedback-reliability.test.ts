@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { core } from '@h-ai/core'
 import { HaiReachError, reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { feedback, HaiFeedbackError } from '../src/index.js'
@@ -306,7 +306,9 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
 
   it('补采耗尽尝试后进入failed终态，人工重试时才重新进入collecting', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 })).success).toBe(true)
+    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 }, {
+      collectEvidence: () => ({ text: '业务证据超过当前报告预算' }),
+    })).success).toBe(true)
     const report = await feedback.submit({ submissionId: 'collection-terminal-failure', appId: config.appId }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
@@ -322,5 +324,226 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     expect((await feedback.retry({ id: report.data.id, target: 'collect' }, admin)).success).toBe(true)
     const retried = await feedback.get(report.data.id, admin)
     expect(retried.success && retried.data.report.collectionStatus).toBe('collecting')
+  })
+
+  it('报告终态写入失败会回滚任务终态，恢复后停止等待并且不重跑已耗尽回调', async () => {
+    await feedback.close()
+    const collectEvidence = vi.fn(() => {
+      throw new Error('Fixture collection failure')
+    })
+    expect((await feedback.init({ ...config, notificationMode: 'disabled' }, { collectEvidence })).success).toBe(true)
+    const report = await feedback.submit({ submissionId: 'terminal-report-rollback', appId: config.appId }, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    expect((await feedback.completeCollection({ id: report.data.id }, actor)).success).toBe(true)
+    const original = reldb.tx.begin
+    const failing = vi.spyOn(reldb.tx, 'begin').mockImplementation(async () => {
+      const started = await original()
+      if (started.success) {
+        const execute = started.data.execute
+        vi.spyOn(started.data, 'execute').mockImplementation((sql, args) => sql.startsWith('UPDATE hai_feedback_reports SET collection_status = \'failed\'')
+          ? Promise.resolve(core.err(HaiReldbError.QUERY_FAILED, 'Fixture terminal report write failure'))
+          : execute(sql, args))
+      }
+      return started
+    })
+    expect(await feedback.runJobs()).toMatchObject({
+      success: false,
+      error: { code: HaiReldbError.QUERY_FAILED.code },
+    })
+    failing.mockRestore()
+    const attempt = await feedback.get(report.data.id, admin)
+    expect(attempt).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'collecting' },
+      },
+    })
+    expect(attempt.success && attempt.data.jobs.find(job => job.type === 'collect')).toMatchObject({ status: 'running', attempts: 1 })
+
+    expect((await feedback.close()).success).toBe(true)
+    expect((await feedback.init({ ...config, notificationMode: 'disabled' }, { collectEvidence })).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET lease_until = 0 WHERE report_id = ? AND kind = \'collect\'', [report.data.id])).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    const recovered = await feedback.get(report.data.id, admin)
+    expect(recovered).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'failed' },
+      },
+    })
+    expect(recovered.success && recovered.data.jobs.find(job => job.type === 'collect')).toMatchObject({ status: 'failed', attempts: 1 })
+    expect(collectEvidence).toHaveBeenCalledTimes(1)
+  })
+
+  it('重复完成采集复用缺失证据和调度回执，且小预算仍能标记材料不完整', async () => {
+    await feedback.close()
+    expect((await feedback.init({ ...config, notificationMode: 'disabled', maxEvidenceCount: 2 })).success).toBe(true)
+    const report = await feedback.submit({ submissionId: 'collection-finish-idempotent', appId: config.appId }, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    const id = report.data.id
+    const completed = await feedback.completeCollection({
+      id,
+      missing: ['recording', 'screen'],
+    }, actor)
+    expect(completed.success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 1 WHERE report_id = ? AND kind = \'collect\'', [id])).success).toBe(true)
+    expect(await feedback.completeCollection({
+      id,
+      missing: ['screen', 'recording', 'screen'],
+    }, actor)).toEqual(completed)
+    const scheduled = await feedback.get(id, admin)
+    expect(scheduled.success && scheduled.data.jobs.find(job => job.type === 'collect')).toMatchObject({ nextRunAt: 1 })
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(await feedback.getEvidence({ id, kind: 'missing' }, admin)).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+    expect(await feedback.get(id, admin)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'partial' },
+      },
+    })
+  })
+
+  it('客户端条数和字节分段核算，服务端环境和报告状态留有容量', async () => {
+    await feedback.close()
+    expect((await feedback.init({
+      ...config,
+      notificationMode: 'disabled',
+      maxEvidenceCount: 4,
+      maxEvidenceBytes: 1024,
+    })).success).toBe(true)
+    const clientEvent = {
+      id: 'client-1',
+      source: 'browser:budget',
+      sequence: 1,
+      kind: 'log' as const,
+      timestamp: 1,
+      data: { message: 'fixture' },
+    }
+    const report = await feedback.submit({
+      submissionId: 'evidence-reserve',
+      appId: config.appId,
+      evidence: [clientEvent],
+    }, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    const id = report.data.id
+    expect(await feedback.appendEvidence({
+      id,
+      evidence: [clientEvent],
+    }, actor)).toMatchObject({
+      success: true,
+      data: {
+        acknowledged: [clientEvent.id],
+      },
+    })
+    expect(await feedback.appendEvidence({
+      id,
+      evidence: [
+        { ...clientEvent, id: 'client-2', sequence: 2 },
+      ],
+    }, actor)).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.LIMIT_EXCEEDED.code },
+    })
+    expect(await feedback.submit({
+      submissionId: 'evidence-byte-reserve',
+      appId: config.appId,
+      evidence: [
+        {
+          ...clientEvent,
+          data: {
+            message: 'x'.repeat(600),
+          },
+        },
+      ],
+    }, actor)).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.LIMIT_EXCEEDED.code },
+    })
+    expect(await feedback.getEvidence({ id, kind: 'environment' }, admin)).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
+
+    expect((await feedback.close()).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      notificationMode: 'disabled',
+      maxEvidenceCount: 1,
+      maxEvidenceBytes: 1024,
+    })).success).toBe(true)
+    const minimal = await feedback.submit({ submissionId: 'minimum-evidence', appId: config.appId }, actor)
+    expect(minimal.success).toBe(true)
+    if (!minimal.success)
+      return
+    expect((await feedback.completeCollection({
+      id: minimal.data.id,
+      missing: ['recording unavailable'],
+    }, actor)).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(await feedback.get(minimal.data.id, admin)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'partial' },
+      },
+    })
+    expect(await feedback.getEvidence({ id: minimal.data.id }, admin)).toMatchObject({
+      success: true,
+      data: {
+        total: 1,
+        items: [
+          { kind: 'environment' },
+        ],
+      },
+    })
+  })
+
+  it('最小字节预算下长应用标识仍能与浏览器证据一同受理', async () => {
+    const appId = '日'.repeat(128)
+    expect((await feedback.init({
+      ...config,
+      appId,
+      notificationMode: 'disabled',
+      maxEvidenceCount: 4,
+      maxEvidenceBytes: 1024,
+    })).success).toBe(true)
+    const accepted = await feedback.submit({
+      submissionId: 'minimal-byte-budget',
+      appId,
+      evidence: [
+        {
+          id: 'browser-log',
+          source: 'browser',
+          sequence: 0,
+          kind: 'log',
+          timestamp: Date.now(),
+          data: {
+            text: 'x'.repeat(380),
+          },
+        },
+      ],
+    }, actor)
+    expect(accepted.success).toBe(true)
+    if (!accepted.success)
+      return
+    expect(accepted.data.appId).toBe(appId)
+    expect(await feedback.getEvidence({ id: accepted.data.id, kind: 'environment' }, actor)).toMatchObject({
+      success: true,
+      data: {
+        items: [
+          {
+            data: { truncated: true },
+          },
+        ],
+      },
+    })
   })
 })
