@@ -4,45 +4,38 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md)
 
-hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序等运行时提供统一 API 调用与 Token 管理。
+面向浏览器、Node.js 和移动应用的类型化 HTTP 客户端。它按共享的 oRPC/OpenAPI 契约调用接口，支持凭据存储、自动刷新、应用层加密和请求观察。运行环境须提供 Fetch，也可注入兼容实现。
 
 ## 快速开始
 
-使用 pnpm 安装：`pnpm add @h-ai/api-client`。
+用 `pnpm add @h-ai/api-client` 安装。应用直接导入共享契约时，也将 `@h-ai/api-contract` 加入直接依赖。
 
-[跟着最小示例完成接入](../../docs/usage/function/api-client.md#quick-start)。
-
-[依赖与接入顺序](../../docs/usage/function/api-client.md#module-dependencies)。
+[最小接入示例](../../docs/usage/function/api-client.md#quick-start) · [依赖与接入顺序](../../docs/usage/function/api-client.md#module-dependencies)
 
 ## 配置清单
 
-本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/api-client.md)，调用参数或响应结构见[参考页](../../docs/usage/function/api-client.md#call-options)。
+应用负责读取运行配置，并向 `apiClient.init(config)` 或独立实例的 `client.init(config)` 提供 API 地址和所需选项。见[配置来源](../../docs/usage/configuration/api-client.md)和[调用参数](../../docs/usage/function/api-client.md#call-options)。
 
 ## 功能说明
 
-普通请求与令牌刷新默认用当前 `core.i18n` 语言设置 `Accept-Language`。应用可通过 `headers` 覆盖请求头。
+- 使用默认客户端，或从应用自己的契约创建隔离实例。见[客户端生命周期](../../docs/usage/function/api-client.md#client-lifecycle)。
+- 处理登录、凭据和会话刷新。见[认证操作](../../docs/usage/function/api-client.md#auth-actions)和[凭据刷新](../../docs/usage/function/api-client.md#credentials)。
+- 设置单次调用的请求选项，按契约读取 `HaiResult`、裸 JSON 或 SSE。见[请求选项](../../docs/usage/function/api-client.md#request-options)和[自定义响应](../../docs/usage/function/api-client.md#custom-response-results)。
+- 对接支持加密的服务端，或订阅请求摘要。见[加密传输](../../docs/usage/function/api-client.md#encrypted-requests)、[明文容量](../../docs/usage/function/crypto.md#transport-capacity)和[请求观察](../../docs/usage/function/api-client.md#transport-observation)。
 
-浏览器可将同源根路径（如 `/api/v1`）作为 `baseUrl`。Node.js 和没有浏览器来源的设备使用 HTTP(S) 绝对地址。地址无效时，`init()` 返回 `CONFIG_ERROR`。
-
-[查 API 清单](../../docs/usage/function/api-client.md#api-reference)，包含调用入口、输入、返回值和用法。
-
-请求绑定发起时的身份和客户端运行期。参阅[凭据刷新和会话恢复](../../docs/usage/function/api-client.md#credentials)及[自定义 JSON 和 SSE 的结果](../../docs/usage/function/api-client.md#custom-response-results)。
-
-客户端默认从服务端握手获取 `transport.maxPlaintextBytes`；可显式设置本地同名字段取较小值。容量失败返回 `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`），保留方向、阶段和字节诊断。见 [容量配置与升级](../../docs/usage/function/crypto.md#transport-capacity)。
-
-Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请求返回加密的 HTTP 400 错误。客户端抛出 `TransportTimeError`（`hai:crypto:071`），显示校验时的服务器 UTC 时间，提示开启设备的自动校时或手工修改时间后刷新。`serverTime` 为 Unix 毫秒。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 和 `cause.serverTime` 保留诊断信息。
+[完整 API 清单](../../docs/usage/function/api-client.md#api-reference)
 
 ## 数据结构
 
-模块没有自建数据库表。
-
-查看[数据结构](../../docs/usage/data/api-client.md)，查阅访问令牌和刷新令牌分别保存在哪里，重新加载页面或关闭客户端后是否还可以使用。
+应用选择令牌存储，服务端保存会话与业务数据，调用方决定是否保存响应和观察记录。见[数据结构](../../docs/usage/data/api-client.md)。
 
 ## 开发测试
 
+在已安装工作区依赖的仓库根目录运行以下命令。
+
 ```bash
-pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
+pnpm --filter @h-ai/api-client test
 ```
 
 ## 许可证

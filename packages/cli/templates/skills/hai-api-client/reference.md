@@ -1,209 +1,102 @@
 # hai-api-client 参考
 
-> `@h-ai/api-client` 是跨端 typed API client。公共 HTTP API 由 `@h-ai/api-contract` 定义，服务端由 `@h-ai/serv` 挂载，客户端直接调用 `apiClient.<domain>.<group>.<operation>()`。
-
-
-认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
-
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/205/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，资源访问仍由服务端检查 IAM 权限。
-
-对服务端通过 `encryption: disabled` 或 `transport.excludePaths` 允许普通 HTTPS 的路径，用普通 `fetch`（如 GET `/health`），或为已声明契约的路由创建独立 typed client，并在 `init` 中省略 `transport`。开启 `transport` 的实例以加密方式发送它的全部请求。若使用 `kit.client`，可用其 `excludePaths` 与服务端匹配。
+`@h-ai/api-client` 用共享 HTTP 契约提供带类型的调用。默认客户端包含 IAM、Storage 和 AI；应用可从与 Serv 或 Kit 共用的契约创建独立客户端。
 
 ## 使用步骤
 
-`client.close()` 结束当前客户端运行期并等待已开始的凭据写入。宿主保留注入的 `TokenStorage`，之后可重新 init。请求 timeout 覆盖响应头、完整 JSON 和所有失败响应正文（包括 HTML）。自定义流按需读取，以调用方 signal 取消正文。内置 Cookie 适配器的登录和刷新包含跨域凭据，服务端须配置明确 Origin。内存或原生存储沿用原请求凭据策略。
+### 1. 确定 API 地址和客户端所有者
 
-### 1. 初始化
+`baseUrl` 包含部署时启用的 API 前缀。浏览器同源部署可用 `/api/v1`，Node.js 和没有浏览器来源的设备使用完整的 HTTP(S) 地址。业务、刷新和密钥交换路径都以这个地址为前缀。地址中省略凭据、查询和片段。应用通过 `init(config)` 传入公开设置。
 
-浏览器默认使用 httpOnly cookie 存储（推荐）：
+浏览器布局可复用默认客户端。多用户 SSR 按请求使用 `apiClient.create(contract)`。在初始化成功后调用业务接口，所属请求、应用或布局结束时调用 `close()` 释放实例。并发初始化同一未就绪实例共享当前工作；已就绪或正在关闭时初始化返回 `CONFIG_ERROR`。 `client.config` 返回生效的绝对 `baseUrl` 和脱敏快照。
 
-```ts
-import { apiClient } from '@h-ai/api-client'
+### 2. 从共享契约创建客户端
 
-// 使用 HTTPS API 地址和默认浏览器认证配置初始化单例。成功后可发送请求，失败结果包含配置错误。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {},
-})
-```
-
-启用传输加密时，只传顶层 `crypto` 句柄；api-client 内部自动调用 `crypto.transport.createClient()`：
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { crypto } from '@h-ai/crypto'
-
-// 按默认配置初始化传输密码学依赖。成功后才可交给客户端，失败结果包含错误。
-await crypto.init()
-
-// 将已初始化的 crypto 交给指定 HTTPS 客户端。初始化失败时应先处理返回的错误。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {},
-  transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
-})
-```
-
-App/Capacitor 场景传入自定义 TokenStorage：
-
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-// 用 HTTPS 地址和原生认证存储初始化客户端。失败返回错误。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  // 创建原生安全令牌适配器供认证模块读写。原生存储不可用时，后续读写会失败。
-  auth: { storage: capacitor.createTokenStorage() },
-})
-```
-
-> `capacitor.createTokenStorage()` 仅在 Android/iOS 原生环境 + `@aparajita/capacitor-secure-storage` 已安装时持久化 token；纯 Web 不会回退到 `localStorage`。
-
-SSR / Node.js 测试场景请显式传入内存存储：
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-// 用 HTTPS 地址和内存认证存储初始化客户端。失败返回错误。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  // 为本客户端创建空的进程内凭据存储。
-  auth: { storage: apiClient.tokenStorage.memory() },
-})
-```
-
-### 2. 调用 typed API
-
-```ts
-// 用示例账号口令登录。成功返回用户和令牌，认证失败时不进入下面的保存分支。
-const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
-if (login.success) {
-  // 默认 httpOnly cookie 模式下，refresh token 由服务端 Set-Cookie 管理。
-  // 将登录返回的令牌交给当前认证存储。写入失败时 Promise 拒绝。
-  await apiClient.auth.setTokens(login.data.tokens)
-}
-
-// 读取当前凭据对应的用户。成功返回用户、角色和权限，未登录等失败返回错误。
-const me = await apiClient.iam.auth.currentUser()
-if (me.success) {
-  // currentUser 返回服务端最新角色/权限；不要把权限快照持久化到 localStorage。
-  const { roles, permissions, ...user } = me.data
-}
-// 为 avatar.png 请求上传预签名 URL。成功返回上传信息，无权限或签名失败返回错误。
-const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-// 向聊天接口发送 hello。成功返回回答，接口或授权失败返回错误。
-const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
-```
-
-默认 `ai.chats.createCompletion({ messages, tools, tool_choice })` 只返回非流式 HaiResult JSON；不接受 stream 字段。完整 function 参数 JSON Schema、strict 与工具选择直接到模型。先检查 success，再读取助手 tool_calls；业务方授权执行工具后，以对应 tool_call_id 回传工具消息。流式接口须绑定应用自定义流契约。
-
-### 3. 自定义 contract
+使用应用和服务端共用的契约，把已声明的路由传给工厂。完整的路由声明和挂载过程见 [共享契约](../hai-api-contract/reference.md#use-with-client)。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 
-// 只组合内置 IAM 路由，得到独立客户端使用的契约。
-const contract = apiContract.create({ iam: apiContract.iam })
-// 为该契约创建独立客户端，公开 IAM 调用。
-const client = apiClient.create(contract)
-// 配置此实例的 HTTPS API 地址。失败结果含初始化错误。
-await client.init({ baseUrl: 'https://api.example.com/api/v1' })
+export async function loadAuthPolicy(baseUrl: string) {
+  // Serv 或 Kit 已在该地址下挂载标准 IAM 路由。得到单独的客户端后再初始化。
+  const client = apiClient.create({ iam: apiContract.iam })
+  const ready = await client.init({ baseUrl })
+  if (!ready.success)
+    return ready
+
+  try {
+    // 公开路由无输入。成功数据为认证策略或 null，失败返回公开错误。
+    const policy = await client.iam.auth.publicConfig()
+    if (!policy.success)
+      return policy
+    return policy
+  }
+  finally {
+    await client.close()
+  }
+}
 ```
 
-`client.config` / `apiClient.config` 返回有效的绝对 `baseUrl` 和脱敏后的配置快照，`headers.authorization` 等敏感值会隐藏。
+### 3. 控制单次请求并判断结果
 
-### 4. 关闭
+操作的第一个参数按契约传业务输入。没有业务输入时，可用 `undefined` 占位后传 `options`。使用 `options.signal` 取消本次调用，`options.context.autoRefresh: false` 跳过本次调用的自动刷新。 `context.keepalive` 设置 Fetch 离页选项；浏览器仍可限制大小及发送时机。敏感操作传 `context.reauthentication`，允许重试时可用 `context.reauthorize` 提供新票据，返回 `null` 取消重试。
 
-```ts
-// 关闭默认客户端，释放本地状态和观察者。完成后无业务数据。
-await apiClient.close()
-```
+标准业务结果先判断 `success`。自定义裸 JSON 或 SSE 成功时返回值或异步迭代器，调用或建立流失败时返回 `HaiResult<never>` 的失败分支。数字用 `typeof result === 'number'` 区分，流用 `Symbol.asyncIterator in result` 判断。流建立后的错误通过迭代抛出。可转换为 JSON Schema 的 Zod 输出按线上 JSON 校验，失败返回 `VALIDATION_FAILED`。
 
-> 已初始化后再次 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；切换 `baseUrl` / `fetch` / `transport` 前必须先 `close()`，避免旧 transport 会话泄漏。
+`timeout` 默认 30000 毫秒，覆盖等待响应头、完整 JSON 和失败响应正文。用调用方的 `signal` 停止读取已经建立的流。超时发生在写入操作时，先查询服务端结果再决定是否重试。
 
 ## Token Storage 适配器
 
 | 工厂调用 | 存储位置 | 适用场景 |
 | --- | --- | --- |
-| `apiClient.tokenStorage.httpOnlyCookie()` | httpOnly cookie（服务端管理） | **默认**；浏览器端推荐，refresh token 不暴露给 JS |
-| `apiClient.tokenStorage.memory()` | 内存 | SSR / Node.js 单元测试（需显式传入） |
+| `apiClient.tokenStorage.httpOnlyCookie()` | 实例内存保存访问令牌，浏览器保存服务端写入的刷新 Cookie | 启用 `auth` 且省略 `auth.storage` 时的默认值。服务端同步启用 Cookie 刷新。 |
+| `apiClient.tokenStorage.memory()` | 新建的进程内存保存访问和刷新令牌 | SSR 或 Node.js 测试，按请求或用例隔离。 |
+| `capacitor.createTokenStorage()` | Capacitor 的原生安全存储 | Android 或 iOS 应用显式注入。安装对应的原生插件。 |
 
-浏览器只使用内存 access token + 服务端 httpOnly refresh Cookie；原生端注入平台安全 TokenStorage。禁止将认证凭据持久化到 Web Storage。
+浏览器 Cookie 模式自动发送 `credentials: 'include'`。跨域服务端允许指定的页面 Origin 和凭据，Cookie 属性应与部署域名匹配。 `serv.createApp({ iam, refreshCookie: {} })` 可开启 Serv 的 Cookie 模式，见 [Serv 参考](../hai-serv/reference.md)。原生实例在 `init({ baseUrl, auth: { storage, terminalType: 'app' } })` 中传入安全存储。Capacitor 公共工厂依赖 Android/iOS 原生安全存储插件。Node.js SSR 的全局 Fetch 不带浏览器的 Cookie jar，入站身份由应用按请求注入。持久凭据保存在对应的安全适配器中。
 
-### httpOnly Cookie 模式
+`client.auth.setTokens(tokens)` 和 `client.auth.clear()` 等待适配器完成，适配器失败时 Promise 拒绝。成功登录和注册可用认证动作自动提交。若直接调用 `client.iam.auth.login(input)`，应用先检查结果，再把 `data.tokens` 交给 `client.auth.setTokens(tokens)`。退出时先请求 IAM 撤销会话并清除 Cookie，再清理客户端的本地凭据。 `close()` 结束运行期、清理订阅和等待在途的凭据操作，宿主保存并按自身策略清理注入的适配器。
 
-Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cookie 管理，浏览器 JS 无法读取，可有效防止 XSS 窃取 token。
+`TokenPair` 包含用于 Bearer 请求头的 `accessToken`、内存或原生存储使用的可选 `refreshToken`、以秒为单位的 `expiresIn`，以及固定的 `tokenType: 'Bearer'`。适配器实现 `getAccessToken()`、`setAccessToken(token)`、`getRefreshToken()`、`setRefreshToken(token)`、`clear()`。存储缺值时读取返回 `null`，读写故障拒绝 Promise。管理器可传空字符串废弃旧刷新值。内置 Cookie 适配器由服务端管理 Cookie。
 
-**前提**：服务端需配置 `serv.createApp({ iam, refreshCookie: {} })`，参见 `hai-serv` skill。
+`auth.refreshPath` 默认 `/auth/refresh`，刷新超时默认 10000 毫秒。只有明确的会话认证拒绝才触发刷新或恢复。刷新端点返回 401 时按失效处理，限流、暂时性失败和网络超时保留原凭据。设置 `auth.recoverSession` 时，在恢复期间记录当前用户 ID，用 `expectedUserId` 约束登录，并在新凭据提交后返回 `true`。客户端重新核对身份、取消状态与运行期，再决定是否重试原调用。配合 `ui.createSessionRecovery` 时，退出或卸载可用 `recovery.cancel()` 停止界面恢复流程。
 
-启用 `transport` 时，登录、业务请求以及 401 后的自动刷新都会复用同一个加密 fetch 链路；不要在业务代码中手写明文 `/auth/refresh` 请求。
-
-一次逻辑请求绑定发起时的客户端运行期和身份。只有明确的认证拒绝可触发自动重试，例如真实 HTTP 401，或 HTTP 200 中具备 401 语义的有效失败 `HaiResult`。客户端进一步核对 IAM 会话错误码。内置认证入口及配置的 `auth.refreshPath` 排除在自动刷新之外。只有仍在运行且恢复到原身份的请求可重试一次，敏感操作按需重新取得用途票据。超时、取消和结果未知的写入交给调用方处理。
-
-`auth.recoverSession` 用于明确的会话失效。配合 UI 的 `ui.createSessionRecovery` 时，把 `recovery.recover` 配到客户端，关闭恢复弹窗、退出或销毁布局时调用 `recovery.cancel()`。单个调用可通过 `AbortSignal` 停止等待和重试。
-
-刷新端点报告 401 时清理凭据并通知。429、408、409 等其他失败、网络异常和超时保留原凭据。HTTP 200 的有效失败 HaiResult 使用 error.httpStatus 分类，后续业务请求可继续触发刷新。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-// apiClient.tokenStorage.httpOnlyCookie() 是默认存储，无需显式指定
-// 配置默认浏览器客户端的 HTTPS 地址和 Cookie 认证。初始化失败返回错误。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {},
-})
-
-// 登录后设置 access token（refresh token 由服务端写入 cookie，前端无需操作）
-// 使用示例账号和口令登录。成功返回凭据，认证失败不写入。
-const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
-if (login.success) {
-  // 保存登录响应中的访问令牌。写入完成无业务数据，存储失败时拒绝。
-  await apiClient.auth.setTokens(login.data.tokens)
-}
-```
+会话明确失效时，可在未启用 `recoverSession` 的客户端配置 `onRefreshFailed` 显示重新登录入口。刷新成功后，用 `auth.onTokenRefreshed` 更新应用会话状态，或在已初始化的客户端上用 `client.auth.onTokenRefreshed(({ expiresIn }) => showLifetime(expiresIn))` 为页面订阅。销毁页面时调用返回的取消函数。应用状态只接收期限等展示字段。
 
 ## 核心 API
 
 | API | 用途 |
 | --- | --- |
-| `apiClient.init(config)` | 初始化默认 API Service client；重复初始化返回 `CONFIG_ERROR` |
-| `apiClient.close()` | 清理 client 状态 |
-| `apiClient.auth.setTokens(tokens)` | 使旧刷新失效并替换凭据；非 httpOnly 存储保存提供的 refresh token，缺省时清除旧值 |
-| `apiClient.auth.clear()` | 使旧刷新失效并清理本客户端 Token；服务端会话/Cookie 另由退出接口撤销 |
-| `apiClient.auth.onTokenRefreshed(cb)` | 监听刷新结果 |
-| `apiClient.create(contract)` | 创建自定义 typed client |
-| `apiClient.tokenStorage.{memory,httpOnlyCookie}()` | TokenStorage 工厂 |
-
-退出或换账号通过 `auth.clear()` / `auth.setTokens()` 更新本地凭据。方法使旧刷新失效，并按顺序提交本地存储操作。旧登录动作和刷新结果不能覆盖新的本地身份。Cookie 模式下先调用应用的退出接口撤销服务端会话并清除浏览器 Cookie，再清理本地凭据。SSR 按请求隔离含用户凭据的实例。
+| `apiClient.create(contract)` | 从应用契约创建独立实例。 |
+| `client.init(config)`、`client.close()` | 管理该实例的运行期；初始化返回 `HaiResult`。 |
+| `client.isInitialized`、`client.config` | 查看就绪状态和脱敏配置。 |
+| `client.auth.setTokens(tokens)`、`client.auth.clear()` | 替换或清理当前实例的凭据。 |
+| `client.auth.onTokenRefreshed(callback)` | 订阅已提交的刷新，返回取消订阅函数。 |
+| `client.observeRequests(observer)` | 每次逻辑调用产生一条诊断摘要，返回取消订阅函数。 |
+| `apiClient.createAuthActions(client)` | 为具有标准 IAM 认证契约的客户端生成表单动作。 |
 
 ### Transport 配置
 
 | 字段 | 说明 |
 | --- | --- |
-| `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例 |
-| `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange` |
+| `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例。 |
+| `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange`。 |
+| `transport.maxPlaintextBytes` | 可选的明文字节上限；省略时采用握手公布的值，传入后只能收紧。 |
 
-服务端必须对应启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。serverKeyRing 与 keyStore 仅服务端注入，生产各节点共用受管版本化 ring 和共享 registry；客户端只接收 serverKeyId/公钥并在请求密文带回版本，不得接收私钥。旧版本撤销后需销毁客户端会话并重协商，不自动重放非幂等请求。
-自动刷新会沿用 `transport.encryptedFetch`，并在 httpOnly cookie 模式下发送空请求体 + `credentials: 'include'`，由服务端从 cookie 读取 refresh token。
+服务端通过 Serv 或 Kit 启用密钥交换和加密路由。服务端密钥环及共享 registry 由服务端管理；客户端通过 HTTPS 获取握手公钥及版本。启用 `transport` 的实例对业务和刷新使用同一个加密链路。服务端允许普通 HTTPS 的路由可通过普通 `fetch` 或独立未配置 `transport` 的客户端调用。 `kit.client` 的路径例外见 [Kit 参考](../hai-kit/reference.md)。客户端关闭后，再由依赖所有者决定是否关闭 Crypto。
 
-CLI 独立 mobile 模板在选择 IAM/crypto 时安装前端 crypto 并默认启用该 transport，未选择 crypto 时保留明文 API 模式。`PUBLIC_API_TRANSPORT=off` 仅用于明确匹配的明文服务；`PUBLIC_API_KEY_EXCHANGE_PATH` 可调整公开协商子路径。配置先于 client 初始化，握手失败不会回退明文。关闭顺序为 client → 本客户端初始化的 crypto，不能关闭其他调用方已有的 crypto。
+启用了 IAM 和 Crypto 的 CLI 独立移动模板默认使用加密。模板用 `PUBLIC_API_TRANSPORT=off` 对应允许普通 HTTPS 的部署，用 `PUBLIC_API_KEY_EXCHANGE_PATH` 覆盖公开的协商子路径。握手失败返回错误，由应用处理。加密时间错误映射为 `VALIDATION_FAILED`，`cause.transportCode` 和 `cause.serverTime` 记录底层编号与 Unix 毫秒。容量超限映射为 `PAYLOAD_TOO_LARGE`，原因可包含 `direction`、`stage`、`limitBytes` 和 `actualBytes`。
 
 ## 常见模式
 
-- 浏览器可将同源根路径（如 `/api/v1`）作为 `baseUrl`。Node.js 和没有浏览器来源的设备使用 HTTP(S) 绝对地址。地址无效时，`init()` 返回 `CONFIG_ERROR`。初始化时将同源路径锚定到浏览器的来源（协议、主机和端口）。业务请求、刷新与加密握手都使用同一生效地址。地址中省略用户信息、查询参数和片段，协议相对地址（如 `//example.com`）会在初始化时报错。
-- 标准业务错误通过 `HaiResult.success` 判断。自定义裸 JSON 值或 SSE 在调用失败时返回 `HaiResult<never>` 的失败分支。若成功值为数字，先用 `typeof result === 'number'` 确认识别成功值；对象可根据契约字段区分成功结果和 `success: false`。SSE 先检查 `Symbol.asyncIterator in result` 再迭代，流建立后沿用正常的迭代异常和取消行为。
-- HTTP JSON 输出可转换为 Zod JSON Schema 时校验契约。响应不符返回 `VALIDATION_FAILED`，校验保留 ISO 字符串等线上数据。
-- 动态领域可用 `client.payment?.orders` 访问。`then` 是保留属性，客户端及其领域对象可作为普通值通过 `await` 传递。
-- 客户端不导入服务端 `procedures` 或 `@h-ai/serv`。
-- 客户端不导入 `@h-ai/crypto` 的内部 transport 工厂，只通过 `transport: { crypto }` 装配。
-- 前端只依赖 `@h-ai/api-client` 和 contract 类型，不依赖业务模块实现。
-- httpOnly cookie 模式需服务端与客户端同步配置，跨 Origin 请求需正确设置 CORS 与 credentials；`SameSite=Strict` 限制跨站 Cookie，跨域不等于跨站。
-
+- `client.observeRequests(observer)` 按逻辑操作计数，`attempts` 记录实际业务请求次数。请求摘要的路径可能含业务编号。同步观察器做有界收集，页面卸载时取消订阅。
+- `ai.chats.createCompletion({ messages, tools, tool_choice })` 返回非流式 JSON。读取 `choices` 中的工具调用；应用自行授权并执行工具，再通过对应的 `tool_call_id` 提交结果。需要流时使用应用自己的流契约。
+- 对服务端的有效失败 `HaiResult` 保留业务码和 `traceId`，按实际 HTTP 状态执行公开化处理。界面使用安全消息和可用的追踪编号。验证超时、取消、刷新与退出，并按业务结果确认写入是否完成。
+- 动态领域可用 `client.payment?.orders` 访问。 `then` 是保留属性；客户端和领域对象可作为普通值传入 `Promise.resolve`。
 
 ## 配置驱动认证页面
 
-`apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。
+初始化时提供 `auth: {}` 启用默认 Cookie 适配器，或显式选择安全适配器。 `apiClient.createAuthActions(client)` 绑定该实例的标准 IAM 路由，然后可把动作交给 `AuthPanel` 或自定义表单。页面先通过 `publicConfig()` 取得允许的登录方式，再发起登录或注册；成功时动作已提交本地凭据。登录输入使用 `identifier` 和 `password`，`method` 默认为 `password`，也可为 `ldap`、`email` 或 `sms`。验证码模式传 `code`，类型所需的 `password` 可填空字符串。需要交互挑战时先按用途调用 `createCaptcha({ operation })`，再提交求解所得的 `captcha`。敏感操作通过 `reauthenticate(password, operation)` 取得 `data.ticket`。
 
-传输容量默认从服务端握手获取 `maxPlaintextBytes`；可选客户端 `transport.maxPlaintextBytes` 只收紧上限。容量失败映射为 `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`），cause 保留 direction/stage/limitBytes/actualBytes，应用可据此显示本地化提示。
+用 `client.iam.auth.currentUser()` 的 `roles` 和 `permissions` 控制页面显示。Serv 或 Kit 在每次请求按已验证的身份核对路由权限及目标资源。业务调用的 401 需要结合错误码判断会话或再次验证状态，403 提示权限不足并保留登录状态。对敏感操作把用途票据传给该次调用的 `context.reauthentication`。自定义业务继续使用与宿主共享的路由树，例如 `client.reports.exports.create({ reportId, format: 'pdf' })`。此名称和参数取决于应用的契约。

@@ -1,8 +1,8 @@
 # @h-ai/api-client API リファレンス
 
-<!-- translation: partial -->
+共有 API 契約から型付き HTTP クライアントを作成し、IAM やアプリの手続きを呼び出します。ブラウザーのログイン状態を維持する場合は認証を有効にし、リクエスト時に資格情報を補います。
 
-[原文（中国語）](api-client.md) · [設定](../configuration/api-client.ja.md) · [データ構造](../data/api-client.ja.md)
+[简体中文](api-client.md) · [English](api-client.en.md)
 
 <a id="quick-start"></a>
 
@@ -14,446 +14,773 @@
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
-| ブラウザーまたは Node.js、HTTP サービス | Fetch でサーバーへリクエストを送信します。 | すべての HTTP 呼び出しで使います。 | サーバーでルートを公開し、対応する `baseUrl` でクライアントを初期化します。`fetch` オプションで実行環境の実装を差し替えられます。 |
-| `@h-ai/api-contract` | ルート、入力、出力の共通契約を提供します。 | API Client と一緒にインストールされます。アプリから直接インポートする場合は直接依存に追加します。 | 組み込み契約を使うか、サーバーと同じ契約を `apiClient.create(contract)` に渡してインスタンスを初期化します。 |
-| `@h-ai/core` | 結果型、エラー、診断機能を提供します。 | API Client と一緒にインストールされます。 | アプリ共通のログや設定を変更する場合は先に Core を設定します。 |
-| `@h-ai/crypto` | 暗号化通信を提供します。 | API Client と一緒にインストールされます。暗号化通信を使う場合にアプリが Crypto を初期化します。 | サーバーの鍵交換を設定して Crypto を初期化し、クライアントの `transport.crypto` に指定します。 |
-| `@orpc/client`、`@orpc/contract`、`@orpc/openapi-client`、`@orpc/zod`、`zod` | HTTP クライアント、契約、入力の検証を支えます。 | API Client と一緒にインストールされます。 | API Client が内部で使います。 |
+| Fetch API を備えたブラウザーまたは Node.js | HTTP 通信とリクエストの中断 | 常に必要。独自環境では互換 Fetch を注入 | クライアント初期化時に必要 |
+| `@h-ai/api-contract` | ホストと共有する手続きを定義 | この例ではアプリから直接インポート | クライアントの作成前に契約を組み立てる |
+| IAM の公開ルートを公開する HTTP ホスト | 認証設定を取得 | 以下の公開設定の例に必要 | 呼び出し前に [Serv](serv.ja.md) または [Kit](kit.ja.md) などのホストで公開 |
+| `@h-ai/crypto` | アプリケーション層の通信暗号化 | `transport` を使用する場合のみ | crypto を先に初期化し、クライアントを先に終了 |
 
-### 利用例
+### インストール
 
-Serv や Kit と同じ契約から型付きクライアントを作成します。リクエストの前に初期化し、各 `HaiResult` を確認し、所有元の終了時に閉じます。
+```bash
+pnpm add @h-ai/api-client @h-ai/api-contract
+```
+
+<a id="利用例"></a>
+
+### 公開ログイン設定を読み取る
+
+IAM の `GET /auth/config` が `/api/v1` の下に登録され、ホストがポート 3000 で稼働している場合は `loadAuthPolicy('http://localhost:3000/api/v1')` を呼び出します。配備先では公開 HTTPS アドレスと実際の API 接頭辞を渡します。
 
 ```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
 
-import { type IamAuthLoginInput, apiClient } from '@h-ai/api-client'
+export async function loadAuthPolicy(baseUrl: string) {
+  // ホストと共有する IAM 契約から独立したクライアントを作ります。
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const client = apiClient.create(contract)
+  // 公開ルートなので資格情報の設定は省略します。
+  const ready = await client.init({ baseUrl })
+  if (!ready.success)
+    return ready
 
-async function loginAndLoadProfile(input: IamAuthLoginInput) {
-  // Start the default client at /api/v1 with default authentication storage. Return initialization errors before using the client.
-  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-  if (!initialized.success)
-    return initialized
   try {
-    // Build auth actions bound to the initialized default client. Subsequent actions use its URL and credential storage.
-    const actions = apiClient.createAuthActions(apiClient)
-    // Send the caller's login input. Success supplies the session and stores the issued tokens. Return a failed login result unchanged.
-    const loggedIn = await actions.login(input)
-    if (!loggedIn.success)
-      return loggedIn
-    // Fetch the signed-in user with the current credentials. Success includes the profile and permissions; return a failure unchanged.
-    const profile = await apiClient.iam.auth.currentUser()
-    if (!profile.success)
-      return profile
-    return profile
-  }
-  catch (writeError) {
-    try {
-      // Clear any credentials left by a failed write. Storage cleanup can reject and is combined with the original error.
-      await apiClient.auth.clear()
-    }
-    catch (cleanupError) {
-      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
-    }
-    throw writeError
+    // 入力なしで許可されたログイン方式などを読み取ります。サービスの失敗も呼び出し元へ返します。
+    const policy = await client.iam.auth.publicConfig()
+    if (!policy.success)
+      return policy
+    // data が null の場合は、公開設定を利用できません。
+    return policy
   }
   finally {
-    // Close the default client and release local state and observers. The promise resolves without data.
-    await apiClient.close()
+    await client.close()
   }
 }
 ```
+
+呼び出し元で `success` を確認し、`data` が利用できればログイン画面に現在の方式を表示します。設定に該当する認証フォームが必要なら [認証フォームの接続](#auth-actions)を参照してください。[公開設定の応答](../data/api-contract.ja.md#public-settings)で主要フィールドを確認できます。
 
 <a id="api-reference"></a>
 
 ## 機能
 
-各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
-
-モジュールの import は入門例と同じです。既存のクライアントを使う例は初期化成功後、終了前に実行します。標準の業務 API では `HaiResult.success` を確認してから `data` を読みます。JSON 値やストリームを直接受け取る場合は[独自のレスポンス](#custom-response-results)を参照してください。関数宣言のない例はアプリの非同期業務関数内の断片です。
-
 <a id="client-lifecycle"></a>
 
 ### クライアントの準備と分離：`apiClient`
 
-ブラウザでは既定インスタンス、SSR では要求ごとに別のインスタンスを作り、主体の混在を防ぎます。
+`apiClient` 自体も既定のクライアントです。接続先、認証状態、試験用 Fetch のいずれかを分ける場合は、同じ契約から独立したクライアントを作ります。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.init(config)` | 既定クライアントを準備 | `config` と API の `baseUrl` は必須。任意の項目は[接続オプション](#call-options)を参照。 | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
-| `apiClient.close()` | 既定クライアントを終了 | 引数なし | `Promise<void>` | `await apiClient.close()` |
-| `apiClient.create(contract)` | 独立クライアントを作成 | サーバーと共有するルート契約 `contract` が必須。 | `ApiClient<TContract>` | `apiClient.create(contract)` |
-| `apiClient.config` | 現在のマスク済みクライアント設定を取得 | 読み取り専用プロパティ、引数なし | `ApiClientConfig \| null` | `apiClient.config` |
-| `apiClient.isInitialized` | 既定クライアントの準備状態を確認 | 読み取り専用プロパティ、引数なし | `boolean` | `apiClient.isInitialized` |
+| `apiClient.create(contract)` | 独立したクライアントを作成 | `contract` はホストと共有するルーター。たとえば [`apiContract.create` の戻り値](api-contract.ja.md#use-with-client) | `ApiClient<TContract>`。ここでは接続を開始しない | `const client = apiClient.create(contract)` |
+
+#### 利用例：SSR のリクエスト専用にクライアントを作る
+
+SSR では認証情報とストレージをリクエストごとに用意します。`create` が返す新しいインスタンスをその処理だけで使用し、完了時に解放します。[発行済みの資格情報で利用者を取得する例](#detailed-workflow)で、作成から解放まで確認できます。
+
+<a id="client-integration"></a>
+
+### クライアントを初期化、確認、終了する：`client.init(config)`
+
+接続先とオプションを設定し、使い終えたインスタンスを解放します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.init(config)` | 接続、認証、通信の設定を適用 | `config` は `ApiClientConfig`。下の表を参照 | `Promise<HaiResult<void>>`。成功後または終了中の再初期化は `CONFIG_ERROR` | `await client.init({ baseUrl, auth: {} })` |
+| `client.close()` | 現在のインスタンスの通信セッションと購読を解放 | 引数なし | `Promise<void>`。完了後は再初期化可 | `await client.close()` |
+| `client.isInitialized` | 初期化の成否を確認 | 読み取り専用 | `boolean` | `const active = client.isInitialized` |
+| `client.config` | 適用された設定を確認 | 読み取り専用 | 機密項目を除いた設定。未初期化時は `null` | `const endpoint = client.config?.baseUrl` |
 
 <a id="call-options"></a>
 
 ##### 呼び出し引数と接続オプション
 
-既定のクライアントには `apiClient.init(config)` で設定を渡します。アプリ独自の契約を使う場合は `apiClient.create(contract)` でクライアントを作成し、戻り値の `init(config)` を呼びます。ブラウザーはサーバーの応答に従って Cookie を保存し、Fetch で送信します。SSR ではクライアントとトークンの保存先をリクエストごとに作ります。
-
-初期化時にルート相対パスをブラウザーのオリジン（スキーム、ホスト、ポート）で解決します。API 呼び出し、トークン更新、暗号化ハンドシェイクは解決済みの URL を共用します。ユーザー情報、クエリ、フラグメントは省略してください。`//example.com` のようなスキーム相対 URL は初期化時に拒否されます。
-
-| 項目 | 既定値・必須条件 | 用途 |
+| `config` の項目 | 型と既定値 | 効果 |
 | --- | --- | --- |
-| `baseUrl` | 必須 | HTTP(S) の絶対 API URL、またはブラウザーでは `/api/v1` のような同一オリジンのルート相対パス。 |
-| `timeout` | `30000` ms | ヘッダーと JSON 読み取りの期限。ストリームの読み取りは呼び出し元の中断シグナルを使う。 |
-| `clientName` | `hai-api-client` | 診断用の `x-request-client` の値。 |
-| `headers` | 追加なし | 固定のヘッダーまたはヘッダーを返す同期・非同期関数。 |
-| `fetch` | グローバルの `fetch` | Fetch 互換の関数。差し替える場合はキャンセルと Cookie の扱いを維持する。 |
-| `auth` | `undefined` | 既定の認証と更新を有効にするには `{}` を指定。 |
-| `auth.storage` | `apiClient.tokenStorage.httpOnlyCookie()` | アクセストークンはブラウザーのメモリー。更新 Cookie はサーバーで管理。 |
-| `auth.refreshPath` | `/auth/refresh` | ベース URL からの相対パス。 |
-| `auth.refreshTimeoutMs` | `10000` | 更新の期限（ミリ秒）。タイムアウトでは認証情報を保持。 |
-| `auth.terminalType` | `web` | IAM が許可する端末種別。 `web`、`app`、`desktop`、`api`。 |
-| `auth.recoverSession` | 省略可 | 更新が明示的に拒否された後、同じ利用者を復旧します。リクエストが有効で元の利用者とクライアントの実行期間に属する場合に、一度だけ再試行できます。 |
-| `auth.onTokenRefreshed` | 省略可 | 更新の成功後に呼ぶ。表示中のログイン状態を更新できる。 |
-| `auth.onRefreshFailed` | 省略可 | 更新できないことが確定したときに呼ぶ。再ログインを案内できる。 |
-| `transport` | `undefined` | オブジェクトを指定するとアプリ層の通信暗号化が有効。 |
-| `transport.crypto` | 必須 | 暗号化を使う場合に初期化済みの `@h-ai/crypto` を指定。 |
-| `transport.keyExchangePath` | `/_hai/key-exchange` | ベース URL からの鍵交換の相対パス。 |
-| `transport.maxPlaintextBytes` | 省略可 | サーバーの上限を使用。小さい上限を指定した場合はその値を採用。 |
+| `baseUrl` | 必須の `string` | API の接頭辞を含む HTTP(S) アドレス。ブラウザーでは `/api/v1` のような同一オリジンのルート相対パスも使用可 |
+| `timeout` | `number`、既定 30,000 ミリ秒 | 送信後の応答ヘッダー、JSON 本文、非成功応答本文を待つ期限。カスタムストリーム本文は呼び出し側の `signal` で中断 |
+| `clientName` | `string`、既定 `hai-api-client` | `x-request-client` ヘッダーに設定するアプリ識別名 |
+| `headers` | `Record<string, string>` または同期・非同期関数、省略可 | リクエストごとの追加ヘッダー。アプリの言語は通常 `core.i18n` から `Accept-Language` に設定 |
+| `fetch` | `typeof globalThis.fetch`、既定は実行環境の Fetch | テストやプラットフォームの通信アダプター。中断や Cookie を扱う場合も Fetch の動作を維持 |
+| `auth` | `AuthConfig`、省略可 | トークンの付与と自動更新。公開 API のみの場合は省略できる |
+| `transport` | `ApiClientTransportConfig`、省略可 | インスタンス単位で通信を暗号化。設定例は[暗号化通信](#encrypted-requests)を参照 |
 
-更新結果に応じて保存済み認証情報を扱います。`401` の場合は認証情報を削除し、セッション失効を通知します。`429`、`408`、`409` などの失敗やタイムアウト時は既存の認証情報を保持します。HTTP 200 内の有効な失敗 `HaiResult` は `error.httpStatus` で判定します。後続の業務リクエストで再度更新できます。
+##### 認証オプション
 
-<a id="client-integration"></a>
+| `config.auth` の項目 | 型と既定値 | 効果 | 設定例と使いどころ |
+| --- | --- | --- | --- |
+| `storage` | `TokenStorage`、既定 `apiClient.tokenStorage.httpOnlyCookie()` | トークンの保存先。Node.js や SSR ではリクエストごとに選ぶ | `storage: apiClient.tokenStorage.memory()` で SSR リクエストの資格情報を分離する |
+| `terminalType` | `'web' / 'app' / 'desktop' / 'api'`、既定 `web` | `x-hai-terminal` に送る IAM のセッション区分。許可する区分はホストの設定で決まる | `terminalType: 'app'` で Capacitor のセッションをアプリ用に分類する |
+| `refreshPath` | `string`、既定 `/auth/refresh` | `baseUrl` の API 接頭辞の下にある更新エンドポイント | `refreshPath: '/auth/refresh'` と `baseUrl: '/api/v1'` で `/api/v1/auth/refresh` を呼ぶ |
+| `refreshTimeoutMs` | `number`、既定 10,000 ミリ秒 | 更新の待機期限。期限超過時も資格情報を保持する | `refreshTimeoutMs: 8000` で更新待ちを 8 秒に制限する |
+| `onTokenRefreshed` | `(tokens: TokenPair) => void`、省略可 | 新しいトークンを書き込んだ後に呼ぶ同期コールバック | `onTokenRefreshed: tokens => updateExpiry(tokens.expiresIn)` で有効期間の表示を更新する |
+| `onRefreshFailed` | `() => void`、省略可 | `recoverSession` が未設定で、更新の明示的な失敗や資格情報の欠落を処理するときの通知 | `onRefreshFailed: showSignIn` でサインイン画面への切り替えをアプリに通知する |
+| `recoverSession` | `() => Promise<boolean>`、省略可 | 同じ利用者で再ログインし、新しい資格情報を書き込んだ後に `true`。キャンセルや失敗では `false` | [同じ利用者での再ログイン](#recover-session)で中断した画面の操作を引き継ぐ |
+
+##### 暗号化オプション
+
+| `config.transport` の項目 | 型と既定値 | 効果 |
+| --- | --- | --- |
+| `crypto` | 初期化済みの `CryptoFunctions`、`transport` 使用時に必須 | クライアントの暗号化セッションを作成 |
+| `keyExchangePath` | `string`、既定 `/_hai/key-exchange` | API 接頭辞の下でホストと一致させる鍵交換パス |
+| `maxPlaintextBytes` | `number`、省略時はホストの上限を使用 | 平文 UTF-8 バイト数の上限。指定時はホストとローカルの小さい方を使用 |
 
 ##### クライアントのアドレス・期限・復旧
 
-コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](api-client.md#client-integration)にあり、この節は部分翻訳です。
+Node.js や SSR では絶対 URL を渡します。URL のユーザー情報、クエリ、フラグメントおよびスキームを省略した `//host` 形式は使用できません。ブラウザーの別オリジン通信では、ホストの CORS 設定を接続元に合わせます。
 
-[引数と手順の詳細](api-client.md#client-lifecycle)
+同じインスタンスで並行する初期化は同じ処理を待ちます。初期化の完了は設定が有効になったことを示します。接続の成否は実際の手続きの結果で確認します。設定を切り替えるときは `close()` の完了を待ちます。組み立てた契約にある手続きだけが使用でき、条件付きドメインは `client.payment?.orders` のように参照できます。`then` は予約されています。
 
 #### 利用例：クライアントの準備と分離
 
+同じ IAM 契約で一時的に別のホストを確認します。`baseUrl` は IAM が稼働している環境から取得します。公開設定を実際に読み取るコードは[クイックスタート](#quick-start)を参照してください。
+
 ```ts
-// import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
+import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
-apiClient.isInitialized // default client readiness
-const settings = apiClient.config // redacted config or null
-// Compose the supplied IAM router and create an independent client exposing its procedures. No connection is established here.
-const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
-// Initialize that client for the HTTPS API and default auth options. Return the failed result on initialization failure.
-const initResult = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
-if (!initResult.success)
-  return initResult
-try {
-  // Fetch public authentication settings from this client's server. Read data only on success and return the original result on failure.
-  const policyResult = await client.iam.auth.publicConfig()
-  if (!policyResult.success)
-    return policyResult
-  const policy = policyResult.data // IamPublicConfig from this server
-}
-finally {
-  // Close only the independent client used in this try block. Its local resources are released.
-  await client.close() // undefined; local resources released
+
+export async function checkApiAddress(baseUrl: string) {
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const client = apiClient.create(contract)
+  // このインスタンスだけに URL と 15 秒の期限を適用します。
+  const ready = await client.init({ baseUrl, timeout: 15_000 })
+  if (!ready.success)
+    return ready
+
+  try {
+    return { active: client.isInitialized, baseUrl: client.config?.baseUrl }
+  }
+  finally {
+    await client.close()
+  }
 }
 ```
 
-実際のテストサービスの URL に置き換えます。`create` は独立したクライアントを返します。リクエストを送る前に初期化します。`then` は予約済みなので、クライアントとドメインは `await` や `Promise.resolve` に通常の値として渡せます。条件付きドメインは `client.payment?.orders` で参照できます。組合せ方は[条件付きドメイン](api-contract.ja.md#conditional-domains)を参照してください。
-
-未翻訳：既定の各 API、認証フォーム用操作、更新処理の詳細。[中国語の該当節](api-client.md#detailed-workflow)を参照してください。
-
 <a id="credentials"></a>
+<a id="資格情報の保存と更新apiclientauthtokenstorage"></a>
 
-### 資格情報の保存と更新：`apiClient.auth`・`tokenStorage`
+### 資格情報の保存と更新：`client.auth`・`apiClient.tokenStorage`
 
-保存と更新はクライアントに任せます。SSR/テストは分離メモリ、ブラウザの更新用トークンは httpOnly Cookie です。
+認証を使うクライアントを `auth` 付きで初期化します。`TokenPair` は必須の `accessToken`、任意の `refreshToken`、有効期間を秒で表す `expiresIn`、固定値 `tokenType: 'Bearer'` を含みます。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.auth.setTokens(tokens)` | 現在の資格情報を保存 | `tokens` は信頼できる認証応答の `TokenPair`。アクセストークン、秒単位の有効期間、任意の更新トークンを含む。 | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
-| `apiClient.auth.clear()` | 現在の資格情報を削除 | 引数なし | `Promise<void>` | `await apiClient.auth.clear()` |
-| `apiClient.auth.onTokenRefreshed(callback)` | トークン更新を購読 | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
-| `apiClient.tokenStorage.memory()` | メモリー資格情報ストアを作成 | 引数なし | `TokenStorage` | `apiClient.tokenStorage.memory()` |
-| `apiClient.tokenStorage.httpOnlyCookie()` | サーバー管理の更新 Cookie を利用 | 引数なし | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
-| `storage.getAccessToken()` | アクセストークンを取得 | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
-| `storage.setAccessToken(token)` | アクセストークンを保存 | 信頼済みの認証応答に含まれるアクセストークン文字列 `token` が必須。 | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
-| `storage.getRefreshToken()` | 更新トークンを取得 | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
-| `storage.setRefreshToken(token)` | 更新トークンを保存 | 信頼済みの応答に含まれる更新トークン文字列 `token` が必須。Cookie アダプターではサーバーが更新トークンを管理。 | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
-| `storage.clear()` | 全資格情報を削除 | — | `Promise<void>` | `await storage.clear()` |
+| `client.auth.setTokens(tokens)` | 信頼できる認証結果を保存 | 認証応答の `TokenPair` | `Promise<void>`。認証未設定なら何もしない。書き込み失敗は拒否 | `await client.auth.setTokens(login.data.tokens)` |
+| `client.auth.clear()` | ローカルの資格情報を消去し、旧世代の更新を無効化 | 引数なし | `Promise<void>`。認証未設定なら何もしない。保存先の消去失敗は拒否 | `await client.auth.clear()` |
+| `client.auth.onTokenRefreshed(callback)` | 書き込み完了後の更新を購読 | `TokenPair` を受け取る同期関数 | 購読解除関数。認証を有効にしていなければ空の処理 | `const stop = client.auth.onTokenRefreshed(updateExpiry)` |
+| `apiClient.tokenStorage.httpOnlyCookie()` | ブラウザー向けアダプター | 引数なし。認証を有効にした場合の既定 | `TokenStorage`。アクセストークンはインスタンスのメモリーに保存 | `const storage = apiClient.tokenStorage.httpOnlyCookie()` |
+| `apiClient.tokenStorage.memory()` | 独立したメモリーアダプター | 引数なし | `TokenStorage`。アダプターの存続中、両トークンを保存 | `const storage = apiClient.tokenStorage.memory()` |
+
+##### `TokenPair` のフィールド
+
+| フィールド | 型と条件 | 使いどころ |
+| --- | --- | --- |
+| `accessToken` | 必須の `string` | 認証結果の `login.data.tokens.accessToken` を保存すると、以降の操作で `Authorization: Bearer …` に付与される |
+| `refreshToken` | 任意の `string` | 本文で発行する構成では `login.data.tokens.refreshToken` を安全なアダプターに保存する。Cookie 構成ではサーバーが Cookie を発行するため、応答本文から省略されることがある |
+| `expiresIn` | 必須の `number`。単位は秒 | `login.data.tokens.expiresIn` が `900` ならアクセストークンの有効期間は 15 分。残り時間の表示に使える |
+| `tokenType` | 固定の `'Bearer'` | 応答の `login.data.tokens.tokenType` が、リクエストに付ける認証スキームを示す |
+
+<a id="token-storage-methods"></a>
+
+##### `TokenStorage` の実装契約
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.getAccessToken()` | アクセストークンを読み取り | 引数なし | `Promise<string \| null>` | `const token = await storage.getAccessToken()` |
+| `storage.setAccessToken(token)` | アクセストークンを書き込み | 認証応答の `string` | `Promise<void>` | `await storage.setAccessToken(tokens.accessToken)` |
+| `storage.getRefreshToken()` | 更新資格情報を読み取り | 引数なし | `Promise<string \| null>`。Cookie 方式では内部識別値 | `const token = await storage.getRefreshToken()` |
+| `storage.setRefreshToken(token)` | 更新トークンを書き込み | 更新資格情報の `string` | `Promise<void>`。Cookie 方式の実装は何もしない | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear()` | アダプターで管理する資格情報を消去 | 引数なし | `Promise<void>`。Cookie 方式で消去するのはメモリー内のアクセストークン | `await storage.clear()` |
+
+`null` は資格情報の欠落を表します。読み書きの障害では Promise を拒否します。クライアントに渡した後は、その `client.auth` を通して書き込むとログイン、更新、消去の世代が管理されます。
+
+- ブラウザーではサーバーが `Set-Cookie` で `HttpOnly` の更新 Cookie を管理します。ページ再読み込み時にメモリーのアクセストークンは消えます。Cookie 方式のリクエストは `credentials: 'include'` を使います。JavaScript で扱うトークンを Web Storage に保存しないでください。
+- Node.js の Fetch はブラウザーの Cookie を引き継ぎません。テストと SSR でメモリー方式を使用するときは、リクエストや利用者ごとにクライアントとストアを用意し、サーバーが発行する更新トークンを受け取れる構成にします。
+- ネイティブアプリでは OS の安全な資格情報ストアを `TokenStorage` に接続し、書き込み途中の失敗も呼び出し元に伝えます。[Capacitor のアダプター](capacitor.ja.md)も使用できます。
+
+#### 利用例：クライアントへの接続前に保存先を確認する
+
+Node.js のテストで、応答本文から取得するアクセストークンと更新トークンの書き込み、読み取り、消去を確認します。`tokens` にはテスト用の認証応答を渡します。実際のトークンは画面やログに表示しません。接続後の更新と消去は `client.auth.setTokens()` と `client.auth.clear()` から行います。
+
+```ts
+import type { TokenPair } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+
+export async function verifyStorage(tokens: TokenPair & { refreshToken: string }) {
+  // クライアントに接続していない、試験専用のアダプターを使います。
+  const storage = apiClient.tokenStorage.memory()
+  let written = false
+  try {
+    await storage.setAccessToken(tokens.accessToken)
+    await storage.setRefreshToken(tokens.refreshToken)
+    const access = await storage.getAccessToken()
+    const refresh = await storage.getRefreshToken()
+    written = access === tokens.accessToken && refresh === tokens.refreshToken
+  }
+  finally {
+    // 書き込みに失敗しても、残っている資格情報を消去します。
+    await storage.clear()
+  }
+  const empty = await storage.getAccessToken() === null && await storage.getRefreshToken() === null
+  return { written, empty }
+}
+```
+
+両方の項目が `true` なら書き込みと消去を確認できました。保存の障害は Promise の拒否として扱います。
+
+<a id="detailed-workflow"></a>
 
 #### 利用例：資格情報の保存と更新
 
-業務要求で会話が無効になった場合を示します。ログイン、登録、更新用のエンドポイント自身はこの回復処理の対象外です。
+同じ利用者の保護された画面が、期限切れの資格情報でリクエストした場合の流れです。対象となる HTTP 401 または IAM の認証失敗を受けると、同じインスタンスで並行する呼び出しが一回の更新を共有します。更新に成功すると有効な同じ利用者の呼び出しだけが一度再試行されます。呼び出し側の中断は、その呼び出しの待機を終わらせます。
 
-![認証付き要求を回復して再試行する条件](../images/function-api-client-recovery.ja.svg)
+![認証エラーから資格情報の更新と同一利用者の復旧を経て、許可された元のリクエストを再試行する流れ](../images/function-api-client-recovery.ja.svg)
 
-各リクエストは開始時のクライアントの実行期間と利用者にひも付きます。ヘッダーの準備、送信、更新、復旧のときに、この対応を確認します。並行する更新は 1 回の refresh を共有します。サーバーが認証を明示的に拒否した場合、同じ利用者の新しい資格情報で一度だけ再試行できます。機密操作では新しい証明が必要になる場合があります。ログアウト、アカウント切り替え、クライアントの終了後も、送信済みのリクエストには元の応答が届くことがあります。そのリクエストから復旧や再試行は行わず、遅れて届いた更新やログインの結果はローカルの資格情報に反映されません。取り消し、タイムアウト、通信障害、結果不明の書き込みは呼び出し元で扱います。
+たとえば `iam.auth.currentUser()` が更新可能な認証エラーを返し、更新 Cookie がまだ有効なら、ブラウザーから更新後に同じプロフィールを取り直します。サーバーが更新資格情報の無効を明示した場合、対応する保存データを消去して設定済みの `recoverSession` を呼びます。復旧のフォームでは対象の利用者 ID を `expectedUserId` に渡し、同じ利用者の新しい資格情報が保存できた場合に限って `true` を返します。ネットワーク障害、期限超過、レート制限などの一時失敗では資格情報を維持し、結果不明の操作は自動で再送しません。
 
-その場でセッションを復旧するには、`auth.recoverSession` に `ui.createSessionRecovery` の `recovery.recover` を設定し、`SessionRecoveryDialog` で標準の認証アクションを使います。ダイアログには元の利用者と公開 IAM 設定を渡します。ダイアログを閉じるとき、ログアウト時、レイアウト破棄時に `recovery.cancel()` を呼び出します。個々のリクエストは `AbortSignal` で取り消せます。同じクライアントが新しい資格情報を一度保存できたら、復旧結果として `true` を返します。IAM のログイン引数 `expectedUserId` で復旧を元の利用者に限定します。
+ログイン、登録、パスワード更新・再設定、自動更新そのものの失敗は、通常の保護 API の更新と同じ扱いになりません。通常の[ログアウト](#logout)でセッションを閉じます。
 
-ログアウト時はアプリのログアウト API でサーバー側のセッションを取り消し、更新 Cookie を削除する応答をブラウザーに受け取らせます。その後 `client.auth.clear()` でローカルの資格情報を削除します。`client.close()` はクライアントの実行期間を終了し、進行中の資格情報の書き込みを待ちます。ホストが渡したストレージは後で再利用できます。
-
-信頼できるログインのトークンを入力。保存失敗は拒否し、finally で購読と端末の認証情報を消します。サーバーのログアウトは別操作です。
+SSR で以前にサーバーから発行された信頼できる `tokens` がある場合は、リクエスト専用のストレージに保存してからプロフィールを取得します。
 
 ```ts
-async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setTokens>[0]) {
-  // Create a fresh in-process credential store. It starts without an access or refresh token.
+import type { TokenPair } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+export async function readCurrentUser(baseUrl: string, tokens: TokenPair) {
   const storage = apiClient.tokenStorage.memory()
-  // Write the issued access token into this memory store. Completion has no result data.
-  await storage.setAccessToken(tokens.accessToken)
-  if (tokens.refreshToken)
-    // Write the supplied refresh token when present. The write only changes this memory instance.
-    await storage.setRefreshToken(tokens.refreshToken)
-  // Read back both tokens. access is the issued access token, and refresh is the provided refresh token or null.
-  const stored = { access: await storage.getAccessToken(), refresh: await storage.getRefreshToken() }
-  // Remove both tokens from this store. Subsequent reads return null.
-  await storage.clear()
-  // Read the access token after the clear. It is null.
-  const afterClear = await storage.getAccessToken() // null
-  // Create the browser cookie-backed adapter. It holds access credentials in memory and relies on the browser for the HttpOnly refresh cookie.
-  const browserStorage = apiClient.tokenStorage.httpOnlyCookie() // refresh cookie is not readable
-  let refreshCount = 0
-  // Subscribe to client refresh events and increment the counter on each event. The returned function removes this subscription.
-  const stop = apiClient.auth.onTokenRefreshed(() => { refreshCount += 1 })
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const client = apiClient.create(contract)
+  // サーバーから発行された、現在の SSR リクエスト専用の資格情報を使います。
+  const ready = await client.init({ baseUrl, auth: { storage } })
+  if (!ready.success)
+    return ready
+
   try {
-    // Give the client's active auth store the issued pair. Persistence failure rejects; successful assignment alone is not a refresh event.
-    await apiClient.auth.setTokens(tokens)
-    return { stored, afterClear, refreshCount }
+    await client.auth.setTokens(tokens)
+    // 失効したアクセストークンは更新可能であれば自動で更新されます。
+    const me = await client.iam.auth.currentUser()
+    if (!me.success)
+      return me
+    return me.data
   }
   finally {
-    // Remove the callback registered above. Later refreshes no longer update refreshCount.
-    stop()
-    // Clear credentials from the client's active auth store. This can reject if storage cleanup fails.
-    await apiClient.auth.clear()
+    try {
+      await client.auth.clear()
+    }
+    finally {
+      await client.close()
+    }
   }
 }
 ```
+
+<a id="browser-refresh"></a>
+
+#### 利用例：ブラウザーでログインし、期限切れの資格情報を更新する
+
+IAM のログイン、更新、ログアウトを同じ API ベース URL で公開し、サーバーで HttpOnly の更新 Cookie を有効にします。同一オリジンなら例の `/api/v1` を使えます。別オリジンの場合はホストでアプリのオリジンと Cookie 付き CORS リクエストを許可します。
+
+```ts
+import type { IamAuthLoginInput } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+export async function startBrowserSession(updateExpiry: (seconds: number) => void, showSignIn: () => void) {
+  const client = apiClient.create({ iam: apiContract.iam })
+  const initialized = await client.init({
+    baseUrl: '/api/v1',
+    auth: {
+      terminalType: 'web',
+      refreshPath: '/auth/refresh',
+      refreshTimeoutMs: 8000,
+      onRefreshFailed: showSignIn,
+    },
+  })
+  if (!initialized.success)
+    return initialized
+
+  const actions = apiClient.createAuthActions(client)
+  // 自動更新で保存が終わると、新しいアクセストークンの有効期間だけを画面に渡します。
+  const stop = client.auth.onTokenRefreshed(tokens => updateExpiry(tokens.expiresIn))
+
+  return {
+    success: true as const,
+    data: {
+      async signIn(input: IamAuthLoginInput) {
+        // input はログインフォームで入力した認証情報です。
+        const result = await actions.login(input)
+        if (!result.success)
+          return result
+        updateExpiry(result.data.tokens.expiresIn)
+        return { success: true as const, data: result.data.user }
+      },
+      async readProfile() {
+        // 保護された API の更新可能な 401 では、同じクライアントが Cookie で更新して再試行します。
+        const profile = await client.iam.auth.currentUser()
+        if (!profile.success)
+          return profile
+        return { success: true as const, data: profile.data }
+      },
+      async signOut() {
+        // ホストにセッションの失効と Cookie の消去を依頼し、ローカルの資格情報も消去します。
+        const result = await client.iam.auth.logout({}, { context: { autoRefresh: false } })
+        await client.auth.clear()
+        return result
+      },
+      async close() {
+        stop()
+        await client.close()
+      },
+    },
+  }
+}
+```
+
+初期化後に `data.signIn(input)` をフォームから呼び、成功時にプロフィールを表示します。アクセストークンが失効していて更新 Cookie が有効なら、`data.readProfile()` に伴って更新エンドポイントが呼ばれ、元の取得が一度再試行されます。認証の失敗や資格情報の欠落を確認した場合は、例の `showSignIn` が画面を切り替えます。ネットワーク障害や更新のタイムアウトでは資格情報を保持します。ログアウトの結果が失敗した場合、サーバー側の失効を確認できていない旨を画面に示します。インスタンスを使い終えたら `data.close()` を呼びます。
+
+<a id="recover-session"></a>
+
+#### 利用例：同じ利用者で再ログインして画面の操作を続ける
+
+利用者が編集中の内容を保持したまま復旧フォームを表示する場合は、`onRefreshFailed` の代わりに `recoverSession` を指定します。`getCurrentUserId` は現在の画面が対象とする利用者 ID、`requestLogin` は組み込みの認証入力を返すアプリのフォーム処理です。フォームを取り消した場合は `undefined` を返します。
+
+```ts
+import type { IamAuthLoginInput } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+export async function createRecoveringClient(
+  baseUrl: string,
+  getCurrentUserId: () => string | undefined,
+  requestLogin: () => Promise<IamAuthLoginInput | undefined>,
+) {
+  const client = apiClient.create({ iam: apiContract.iam })
+  const actions = apiClient.createAuthActions(client)
+  const initialized = await client.init({
+    baseUrl,
+    auth: {
+      async recoverSession() {
+        const expectedUserId = getCurrentUserId()
+        if (!expectedUserId)
+          return false
+        const input = await requestLogin()
+        if (!input || getCurrentUserId() !== expectedUserId)
+          return false
+        // 同じ利用者でのログイン結果が保存された場合にだけ、元のリクエストを再試行できます。
+        const restored = await actions.login({ ...input, expectedUserId })
+        return restored.success
+      },
+    },
+  })
+  if (!initialized.success)
+    return initialized
+  return { success: true as const, data: client }
+}
+```
+
+初期化したインスタンスで通常の `actions.login()` を行い、その利用者 ID をアプリで保持します。サーバーが更新資格情報を無効と判定すると、保護リクエストの途中で復旧処理が始まります。`expectedUserId` を付けたログインに成功し、同じ利用者のために新しい資格情報が一度保存されたとクライアントが確認した場合に再試行できます。利用者が切り替わった場合や元のリクエストが中断された場合は、元の操作を再開しません。画面やアプリでインスタンスを破棄するときは `close()` を呼びます。
 
 <a id="auth-actions"></a>
 
 ### 認証フォームの接続：`apiClient.createAuthActions`
 
-公開方針を UI に渡し、ログイン・登録・OTP・パスワード回復・再認証を手順に沿って実行します。
+標準 IAM 契約がある初期化済みクライアントを画面の操作に接続します。ログインや登録で資格情報を保存するには、クライアントの初期化時に `auth` を指定します。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.createAuthActions(client)` | 認証フォームの操作を作成 | 標準 IAM ルートと認証情報の管理 API を備えた `client` が必須。返された操作を実行する前に初期化する。 | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
-| `actions.publicConfig()` | 公開認証方針を取得 | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
-| `actions.createCaptcha(input)` | 操作用チャレンジを取得 | `input` オブジェクト。`operation` は必須で `login`、`register`、`sendOtp`、`passwordReset`、`renewPassword` のいずれか。 | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
-| `actions.login(input)` | ログインフォームを送信 | `input` オブジェクト。アカウント `identifier` と `password` が必須。操作証明 `captcha` と同一利用者の復旧に使う `expectedUserId` は省略可。 | `Promise<HaiResult<T>>` | `await actions.login({ identifier, password })` |
-| `actions.register(input)` | 登録フォームを送信 | `input` オブジェクト。`username`、`password` が必須。`email`、`phone`、`displayName`、`metadata`、`captcha` は省略可。 | `Promise<HaiResult<T>>` | `await actions.register({ username, password })` |
-| `actions.sendOtp(identifier, options?)` | ワンタイムコードを要求 | アカウントの識別子 `identifier` が必須。サーバーが CAPTCHA を要求する場合は `options.captcha` にその操作の証明を渡す。 | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
-| `actions.requestPasswordReset(identifier, options?)` | 再設定通知を要求 | アカウントの識別子 `identifier` が必須。サーバーが CAPTCHA を要求する場合は `options.captcha` にその操作の証明を渡す。 | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
-| `actions.confirmPasswordReset(token, newPassword)` | 再設定資格情報と新パスワードを送信 | 再設定用の `token` と新しい `newPassword` が必須。いずれも文字列で、サーバーがパスワード方針を適用。 | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
-| `actions.renewPassword(input)` | 期限切れ・初期パスワードを変更 | `input` オブジェクト。アカウント `identifier`、元の `password`、`newPassword` が必須。操作用 `captcha` は省略可。 | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
-| `actions.reauthenticate(password, operation)` | 機密操作のため再認証 | 現在の `password` とサーバーに登録した `operation`（例 `users:delete`）が必須。 | `Promise<HaiResult<T>>` | `await actions.reauthenticate(password, 'users:delete')` |
-| `actions.bindPageExit(options?)` | ページ離脱時のセッション処理を設定 | `options.enabled` は既定で無効。`true` にするとブラウザーの離脱リスナーを登録。 | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
+| `apiClient.createAuthActions(client)` | フォーム用の操作を作成 | 標準 `iam.auth` と `client.auth` を持つクライアント | 以下の `actions` | `const actions = apiClient.createAuthActions(client)` |
+| `actions.publicConfig()` | 公開認証設定を取得 | 引数なし | 設定または `null` を含む `HaiResult` | `await actions.publicConfig()` |
+| `actions.createCaptcha(input)` | 操作用の CAPTCHA を開始 | 必須の `operation` に `login`、`register`、`sendOtp`、`passwordReset`、`renewPassword` のいずれか | チャレンジを含む `HaiResult` | `await actions.createCaptcha({ operation: 'login' })` |
+| `actions.login(input)` | パスワード、LDAP、OTP でログイン | 必須の `identifier` と `password`。任意の `method` は既定 `password`、ほかに `ldap`、`email`、`sms`。OTP は `code` を渡し、`password` は空文字にできる。任意の `captcha`、`expectedUserId` | 認証済み利用者とトークンを含む `HaiResult`。保存障害は Promise を拒否 | `await actions.login({ identifier, password })` |
+| `actions.register(input)` | 利用者を登録してログイン | 必須の `username`、`password`。任意の `email`、`phone`、`displayName`、`metadata`、`captcha` | 利用者とトークンを含む `HaiResult`。保存障害は Promise を拒否 | `await actions.register({ username, password })` |
+| `actions.sendOtp(identifier, options?)` | OTP を送信 | 対象の `identifier: string`、必要時に `options.captcha` | 期限 `expiresAt` を含む `HaiResult` | `await actions.sendOtp(identifier, { captcha })` |
+| `actions.requestPasswordReset(identifier, options?)` | 再設定通知を要求 | 対象の `identifier: string`、必要時に `options.captcha` | `HaiResult<void>` | `await actions.requestPasswordReset(identifier)` |
+| `actions.confirmPasswordReset(token, newPassword)` | 通知にある資格情報で再設定 | 一回限りの `token`、新しい `newPassword`、どちらも文字列 | `HaiResult<void>` | `await actions.confirmPasswordReset(token, newPassword)` |
+| `actions.renewPassword(input)` | 初回または期限切れのパスワードを更新 | 必須の `identifier`、`password`、`newPassword`。任意の `captcha` | `HaiResult<void>` | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate(password, operation)` | 機密操作用の再認証 | 現在の `password` とホストが指定する操作 ID `operation`。操作 ID は前後の空白を除いて 1～128 文字 | `ticket` と有効期限を含む `HaiResult` | `await actions.reauthenticate(password, 'iam.users.delete')` |
+| `actions.bindPageExit(options?)` | ページを離れるときのセッション終了を登録 | `options.enabled` に公開設定の `session.endOnPageHide` を渡す。既定は無効 | リスナーの解除関数 | `const stop = actions.bindPageExit({ enabled: policy.session.endOnPageHide })` |
+
+LDAP の `identifier` は LDAP 利用者名として送ります。メールと SMS の入力は OTP ルートを使用します。CAPTCHA が必要かどうかは公開設定と画面の操作で判断し、対象操作用に取得して利用者が解いた証明を送ります。OTP の受け付け期限は `expiresAt` の ISO 日時で確認できます。再認証で受け取った `ticket` は対象の呼び出しの `context.reauthentication` に渡します。
+
+認証を有効にしたクライアントでは、ログイン・登録は書き込み完了を待ちます。その間にログアウト、アカウント変更、インスタンス終了が起きて開始時の認証状態が無効になると `UNAUTHORIZED` が返ります。ページ離脱時のリスナーは `pagehide` で `keepalive` を使用して自動更新を停止し、BFCache に保存される場合は何も送りません。ブラウザーが離脱後も送信を完了するとは限りません。この処理中は新しいページの資格情報を保つため、Cookie とローカルのストアを消去しません。画面破棄時に解除関数を呼べます。インスタンスの終了時にも解除されます。
 
 #### 利用例：認証フォームの接続
 
-フォーム入力を受け、actions が保存完了を待ちます。ログインや登録の完了前にログアウト、アカウント切り替え、クライアントの終了が起きた場合は、`HaiApiClientError.UNAUTHORIZED`（`hai:api-client:004`）が返ります。以下の関数は別々の操作用です。必要な captcha は AuthPanel が渡します。
+以下の関数を標準 IAM 契約で初期化済みのブラウザークライアントとともに利用します。入力はログインフォームから渡します。
 
 ```ts
-// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
-// Bind auth actions to the initialized API client and its current credential store.
-const actions = apiClient.createAuthActions(apiClient)
-// Load the server's public IAM settings, or null when unavailable. Return the failed result a failed result.
-const configResult = await actions.publicConfig()
-if (!configResult.success)
-  return configResult
-const config = configResult.data // IamPublicConfig | null
-if (!config)
-  throw new Error('Public authentication settings are unavailable')
-// Bind page-exit session ending only when the returned setting enables it. Keep the function that unbinds the listener.
-const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
-async function login(input: Parameters<typeof actions.login>[0]) {
-  // Submit the caller's login input. Success returns authenticated identity and tokens. Return the failed result the preserved failure.
-  const loginResult = await actions.login(input)
-  if (!loginResult.success)
-    return loginResult
-  return loginResult.data // authenticated user and tokens; the failure branch above returns the original result
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
+
+type IamClient = ApiClient<{ iam: typeof apiContract.iam }>
+
+export async function prepareSignIn(client: IamClient) {
+  const actions = apiClient.createAuthActions(client)
+  // 公開設定が失敗、または利用不可ならフォームを表示する前に呼び出し元へ返します。
+  const policy = await actions.publicConfig()
+  if (!policy.success || !policy.data)
+    return { policy }
+
+  const stop = actions.bindPageExit({ enabled: policy.data.session.endOnPageHide })
+  return {
+    policy,
+    stop,
+    async submit(input: Parameters<typeof actions.login>[0]) {
+      // フォームで選んだ方式を使用し、成功時は保存を待って利用者を返します。
+      const login = await actions.login(input)
+      if (!login.success)
+        return login
+      return login.data
+    },
+  }
 }
-async function register(input: Parameters<typeof actions.register>[0]) {
-  // Submit the caller's registration input. Success returns the registration result. Return the failed result on failed registration.
-  const registerResult = await actions.register(input)
-  if (!registerResult.success)
-    return registerResult
-  return registerResult.data // registration/authentication result
-}
-async function sendCode(identifier: string) {
-  // Request an OTP for the supplied identifier. Success returns its expiry. Return the failed result a failed request.
-  const sendOtpResult = await actions.sendOtp(identifier)
-  if (!sendOtpResult.success)
-    return sendOtpResult
-  return sendOtpResult.data // expiresAt
-}
-async function requestReset(identifier: string) {
-  // Request a password reset for the identifier. Success has no data. Return the failed result if the request fails.
-  const requestPasswordResetResult = await actions.requestPasswordReset(identifier)
-  if (!requestPasswordResetResult.success)
-    return requestPasswordResetResult
-}
-async function resetPassword(token: string, newPassword: string) {
-  // Send the supplied reset token and new password. Success completes the reset without data. Return the failed result on failure.
-  const confirmPasswordResetResult = await actions.confirmPasswordReset(token, newPassword)
-  if (!confirmPasswordResetResult.success)
-    return confirmPasswordResetResult
-}
-async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
-  // Submit the caller's renewal input. Success confirms renewal without data. Return the failed result on failure.
-  const renewPasswordResult = await actions.renewPassword(input)
-  if (!renewPasswordResult.success)
-    return renewPasswordResult
-}
-async function confirmSensitive(password: string) {
-  // Exchange the current password for a credential scoped to users:delete. Return the failed result on a failed reauthentication.
-  const reauthenticateResult = await actions.reauthenticate(password, 'users:delete')
-  if (!reauthenticateResult.success)
-    return reauthenticateResult
-  return reauthenticateResult.data // one-operation credential
-}
-// Request a CAPTCHA for login. Check success before handing the returned challenge to AuthPanel.
-const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
-// Remove the page-exit handler registered above when the page leaves.
-unbind() // call when this page is destroyed
 ```
 
-<a id="iam-requests"></a>
+画面を離れるときは `stop()` を呼びます。通常のログアウトには[ログアウトの例](#logout)を使用します。
 
-### 認証と管理 API の呼び出し：`apiClient.iam`
+<a id="request-options"></a>
+<a id="呼び出しごとのオプション"></a>
 
-標準 HTTP 契約でアカウント・利用者・ロール・権限を扱い、各操作と資源の権限はサーバーで確認します。
+### 呼び出しごとのオプション：`client.<domain>.<group>.<operation>(input, options?)`
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.iam.auth.publicConfig(input?, options?)` | 读取公开认证配置 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
-| `apiClient.iam.auth.createCaptcha(input, options?)` | 生成挑战 | `input` オブジェクト。`operation` は必須で `login`、`register`、`sendOtp`、`passwordReset`、`renewPassword` のいずれか。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
-| `apiClient.iam.auth.login(input, options?)` | 密码登录 | `input` オブジェクト。アカウント `identifier` と `password` が必須。操作証明 `captcha` と同一利用者の復旧に使う `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
-| `apiClient.iam.auth.loginWithLdap(input, options?)` | LDAP 登录 | `input` オブジェクト。LDAP の `username` と `password` が必須。操作証明 `captcha` と同一利用者の復旧用 `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
-| `apiClient.iam.auth.sendOtp(input, options?)` | 发送一次性验证码 | `input` オブジェクト。アカウント `identifier` が必須。任意の操作証明 `captcha`。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
-| `apiClient.iam.auth.loginWithOtp(input, options?)` | 验证码登录 | `input` オブジェクト。アカウント `identifier` と OTP 文字列 `code` が必須。`captcha` と復旧する同じ利用者の `expectedUserId` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
-| `apiClient.iam.auth.register(input, options?)` | 注册 | `input` オブジェクト。`username`、`password` が必須。`email`、`phone`、`displayName`、`metadata`、`captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
-| `apiClient.iam.auth.currentUser(input?, options?)` | 读取当前账号 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
-| `apiClient.iam.auth.updateCurrentUser(input, options?)` | 更新本人资料 | `input` オブジェクト。`username`、`email`、`displayName`、`avatarUrl`、`phone`、`metadata` は省略可。更新する項目だけ送信。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
-| `apiClient.iam.auth.changePassword(input, options?)` | 已登录用户修改密码 | `input` オブジェクト。現在の `oldPassword` と新しい `newPassword` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
-| `apiClient.iam.auth.renewPassword(input, options?)` | 密码到期后续密 | `input` オブジェクト。アカウント `identifier`、元の `password`、`newPassword` が必須。操作用 `captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
-| `apiClient.iam.auth.requestPasswordReset(input, options?)` | 申请密码重置 | `input` オブジェクト。アカウント `identifier` が必須。操作用 `captcha` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
-| `apiClient.iam.auth.confirmPasswordReset(input, options?)` | 使用重置凭证 | `input` オブジェクト。通知に含まれる一回限りの `token` と `newPassword` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
-| `apiClient.iam.auth.reauthenticate(input, options?)` | 申请敏感操作票据 | `input` オブジェクト。現在の `password` と操作 ID `operation` が必須。後者は空白除去後に 1～128 文字。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
-| `apiClient.iam.auth.refresh(input, options?)` | 刷新凭据 | `input` オブジェクト。クライアント管理の更新処理で、文字列 `refreshToken` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
-| `apiClient.iam.auth.logout(input, options?)` | 主动退出 | `input` オブジェクトが必須。`{}` で現在の Bearer アクセストークンを使用するか、無効化するトークンを `{ accessToken }` で指定。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.logout({})` |
-| `apiClient.iam.auth.closeSession(input, options?)` | 请求结束当前会话 | `input` オブジェクトが必須。`{}` で現在の Bearer アクセストークンを使用するか、無効化するトークンを `{ accessToken }` で指定。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.auth.closeSession({})` |
-| `apiClient.iam.users.list(input, options?)` | 分页查询用户 | `input` オブジェクトが必須で `{}` も可。ページング、ソート、絞り込みは[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
-| `apiClient.iam.users.get(input, options?)` | ユーザーを取得 | 前の処理で取得した利用者の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | ユーザー情報。該当なしの場合は `null` | `await apiClient.iam.users.get({ id: userId })` |
-| `apiClient.iam.users.create(input, options?)` | 创建用户 | `input.username` と `input.password` が必須。種類、有効期限、プロフィールは[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
-| `apiClient.iam.users.invite(input, options?)` | 发出邀请 | `input.username` が必須。通知経路に応じ `email` または `phone` を指定。`accountStatus` は `active` のみ。[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
-| `apiClient.iam.users.update(input, options?)` | 修改用户 | `input.id` が必須。更新する項目を渡し、`accountExpiresAt: null` で期限を解除。[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
-| `apiClient.iam.users.delete(input, options?)` | 删除用户 | 前の処理で取得した利用者の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
-| `apiClient.iam.users.resetPassword(input, options?)` | 管理员重置密码 | 利用者 ID `input.id` と `input.newPassword` が必須。いずれも空でない文字列。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
-| `apiClient.iam.roles.list(input?, options?)` | 查询角色 | 業務入力がないため `input` は省略可。第 2 引数を渡す場合は `undefined` を使う。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 角色分页 | `await apiClient.iam.roles.list()` |
-| `apiClient.iam.roles.get(input, options?)` | ロールを取得 | 前の処理で取得したロールの ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | ロール情報。該当なしの場合は `null` | `await apiClient.iam.roles.get({ id: roleId })` |
-| `apiClient.iam.roles.create(input, options?)` | 创建角色 | ロールコード `input.code` と表示名 `input.name` が必須。`description` と `isSystem` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
-| `apiClient.iam.roles.update(input, options?)` | 更新角色 | `input.id` が必須。新しい `name` と `description` は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
-| `apiClient.iam.roles.delete(input, options?)` | 删除角色 | 前の処理で取得したロールの ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
-| `apiClient.iam.permissions.list(input, options?)` | 分页查询权限 | `input` は必須で `{}` も可。ページングと `type`、`search` は[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
-| `apiClient.iam.permissions.get(input, options?)` | 读取权限 | 前の処理で取得した権限の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
-| `apiClient.iam.permissions.create(input, options?)` | 创建权限 | `input.code` と `input.name` が必須。任意の `description`、`resource`、`action`、`type`、`sensitiveOperations` は[IAM 管理用項目](#iam-admin-inputs)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
-| `apiClient.iam.permissions.setSensitiveOperations(input, options?)` | 配置敏感操作 | 権限 ID `input.id` が必須。`sensitiveOperations` は 1～128 文字の操作 ID を最大 1000 件。`[]` でクリア。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
-| `apiClient.iam.permissions.delete(input, options?)` | 删除权限 | 前の処理で取得した権限の ID 文字列 `input.id` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+| `client.iam.auth.currentUser(input?, options?)` | 入力なしの手続きに中断シグナルを渡す | `input` は `undefined`。任意の `options` を第 2 引数に指定 | 現在の利用者の `HaiResult` | `await client.iam.auth.currentUser(undefined, { signal })` |
 
-<a id="iam-admin-inputs"></a>
+##### 単一の呼び出しに適用する項目
 
-#### IAM 管理用項目
-
-| 項目 | 用途と既定値 |
-| --- | --- |
-| `page`、`pageSize` | 利用者と権限一覧で使用可。`page` は 1 からで既定 1。`pageSize` は 1～100、既定 20。 |
-| `sortBy`、`sortDirection` | 利用者一覧を `username`、`email`、`displayName`、`accountStatus`、`createdAt` で `asc` または `desc` に整列。省略時はサーバー順。 |
-| `search`、`roleCode`、`accountStatus` | `search` は利用者・権限を検索。利用者一覧では 1～100 文字の `roleCode`、`active` / `dormant` / `closed` の `accountStatus` で絞り込み可。省略した項目は絞り込まない。 |
-| `accountType`、`accountStatus`、`accountExpiresAt` | 作成・招待・更新の任意項目。種類は `permanent` / `temporary`、招待の状態は `active` のみ。期限は日付、更新時の `null` で解除。 |
-| `email`、`phone`、`displayName`、`avatarUrl`、`metadata`、`roleIds` | メール、電話、表示名は任意。更新時は `avatarUrl` も指定可。`metadata` はアプリの項目、`roleIds` は割り当てるロール ID の配列。 |
-| `type`、`resource`、`action`、`description`、`sensitiveOperations` | 権限 `type` は `menu`、`api`、`button`。一覧の絞り込みにも使用。作成時の資源、操作、説明は省略可。`sensitiveOperations` は 1～128 文字の操作 ID 最大 1000 件、既定 `[]`。 |
-
-管理権限を持つセッションで `{ page: 1, pageSize: 20, accountStatus: 'active' }` を指定すると、成功時の `data.items` は有効アカウント最大 20 件。失敗時は `error` を確認。
-
-<a id="request-options"></a>
-
-##### 呼び出しごとのオプション
-
-第 1 引数には契約が定める業務入力を渡します。入力のない手続きに第 2 引数を渡すときは、第 1 引数を `undefined` にします。
+第 1 引数は契約が定める業務入力です。入力のない手続きで第 2 引数を使う場合は `client.iam.auth.currentUser(undefined, { signal })` のように `undefined` を渡します。
 
 | 第 2 引数の項目 | 省略時 | 指定した場合 |
 | --- | --- | --- |
-| `signal` | 呼び出し元からの中断なし | `AbortController.signal` で応答待ちと送受信を中断できます。サーバーで開始済みの書き込みは完了することがあります。 |
-| `context.autoRefresh` | クライアントの更新方針を継承 | `false` でこの呼び出しからの認証情報の更新を停止します。現在のアクセストークンはクライアント設定に従って送信します。 |
-| `context.keepalive` | Fetch の既定値 | `true` で Fetch の `keepalive` を有効にします。ブラウザーの制限があり、ページ離脱後の送信は保証されません。 |
-| `context.reauthentication` | 操作用の証明を送信しない | 認証操作から得た証明を、このリクエストの `X-Hai-Reauthentication` ヘッダーに設定します。 |
-| `context.reauthorize` | 再試行用の証明を取得しない | セッションまたは用途証明が明示的に拒否され、再試行可能な場合に呼ぶ任意の非同期コールバックです。新しい証明文字列、再試行を取り消す `null`、証明なしで再試行を許可する `undefined` を返します。 |
+| `signal` | 呼び出し元からの中断なし | `AbortController.signal` で応答待ちを終える。サーバーで開始済みの書き込みは完了することがある |
+| `lastEventId` | イベント ID を送らない | SSE の再接続に使う文字列。続きのイベントを返すかはサーバーの実装で決まる |
+| `context.autoRefresh` | クライアントの認証設定を使用 | `false` でこのリクエストの自動更新を停止。現在のアクセストークンは設定に従って送信 |
+| `context.keepalive` | Fetch の既定値 | `true` でページ離脱後も通信を続けるよう Fetch に通知。実際の送信はブラウザーの制約を受ける |
+| `context.reauthentication` | 再認証チケットを送らない | 操作用のチケット文字列を `X-Hai-Reauthentication` として送信 |
+| `context.reauthorize` | 新しいチケットを取得しない | 許可された再試行で呼ぶコールバック。文字列で新しいチケット、`null` で再試行を中止、`undefined` でチケットなしの再試行を許可 |
+
+#### 利用例：ページを閉じるときにプロフィールの読み込みを中断する
+
+認証済みの画面で、初期化済みのクライアントと `AbortController` の `signal` を渡します。ページ破棄時はコントローラーの `abort()` を呼びます。
 
 ```ts
-import { apiClient } from '@h-ai/api-client'
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
 
-// アプリの非同期関数内で実行します。初期化済みのクライアントには利用者一覧の権限があります。
-// ページ破棄時は controller.abort() を呼びます。
-const controller = new AbortController()
-// 1 ページ目を最大 20 件取得します。signal で応答待ちを中断でき、成功時は閲覧可能な一覧、失敗時は元のエラーを返します。
-const users = await apiClient.iam.users.list({ page: 1, pageSize: 20 }, { signal: controller.signal })
-if (!users.success)
-  return users
-const visibleUsers = users.data.items
+export async function loadProfile(client: ApiClient<{ iam: typeof apiContract.iam }>, signal: AbortSignal) {
+  // 現在のログイン利用者のプロフィールを読み取り、待機中は signal を監視します。
+  const profile = await client.iam.auth.currentUser(undefined, { signal })
+  if (!profile.success)
+    return profile
+  return profile.data
+}
 ```
 
-[引数と手順の詳細](api-client.md#iam-requests)
+<a id="request-authorization"></a>
 
-#### 利用例：認証と管理 API の呼び出し
+### 保護された API の認証と認可を扱う：`client.<domain>.<group>.<operation>()`
 
-```ts
-// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
-// Fetch the authenticated current user with no explicit input. Success supplies the profile. Missing authorization or other failures are thrown below.
-const current = await apiClient.iam.auth.currentUser()
-if (!current.success)
-  throw new Error(current.error.message)
-// Fetch authorized page 1 with at most 20 users. Return the failed result the failure instead of returning a page.
-const usersResult = await apiClient.iam.users.list({ page: 1, pageSize: 20 })
-if (!usersResult.success)
-  return usersResult
-const users = usersResult.data
-// users.items is the authorized user page, not every user in the database
-// Use default role filters. Success yields the roles visible to the caller. Return the failed result on failure.
-const rolesResult = await apiClient.iam.roles.list()
-if (!rolesResult.success)
-  return rolesResult
-const roles = rolesResult.data // configured roles visible to this caller
-// Use default permission filters. Success contains visible permission records. Return the failed result on failure.
-const permissionsResult = await apiClient.iam.permissions.list({})
-if (!permissionsResult.success)
-  return permissionsResult
-const permissions = permissionsResult.data // permitted permission records
-```
-
-一覧に個々の入力と成功データを示しています。ID は前の成功応答から取得し、内容は実サービスと権限によります。ログインだけで管理権限は得られません。
-
-<a id="business-requests"></a>
-
-### ファイルと AI API：`apiClient.storage`・`apiClient.ai`
-
-署名 URL は直接転送に使い、チャット・記憶・セッションは定義済みの AI 経路から取得します。サーバー内部 API とは別です。
+クライアントはアクセストークンを送信します。Serv または Kit はトークンからセッションを検証し、その利用者が操作や対象レコードにアクセスできるかを各リクエストで判定します。アプリは `currentUser()` が成功したときの `data.roles` と `data.permissions` をナビゲーションやボタンの表示に使えます。権限の変更や画面が保持している情報の古さに備え、サーバーでは業務処理の前に権限を確認します。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.storage.files.list(input, options?)` | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter` | `input` は必須で `{}` も可。`prefix` は接頭辞、`maxKeys` は 1～1000、`delimiter` はグループ化の区切り、`continuationToken` は前ページから取得。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `apiClient.storage.files.getMetadata(input, options?)` | 读对象元数据 | 現在の呼び出し元が読み取れるオブジェクトキー `input.key` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
-| `apiClient.storage.files.delete(input, options?)` | 删除单个对象 | 現在の呼び出し元が削除できるオブジェクトキー `input.key` が必須。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
-| `apiClient.storage.files.deleteMany(input, options?)` | 批量删除对象 | 空でないオブジェクトキー配列 `input.keys` が必須。サーバーは各キーの削除権限を確認。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
-| `apiClient.storage.presignedUrls.createUpload(input, options?)` | 签发上传地址 | `input.key` が必須。任意の `contentType` は既定 `application/octet-stream`、`expiresIn` は既定 900 秒。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
-| `apiClient.storage.presignedUrls.createDownload(input, options?)` | 签发下载地址 | `input.key` が必須。任意の `expiresIn` は署名付き URL の有効時間（秒）、既定 900。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
-| `apiClient.ai.chats.createCompletion(input, options?)` | `messages` 必填 | 空でない `input.messages` が必須。生成、ツール、セッションは[AI リクエスト項目](#ai-input-fields)を参照。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
-| `apiClient.ai.chats.sendMessage(input, options?)` | 发送会话消息 | `input.message` が必須。`sessionId` の既定値は `default`。`objectId`、`systemPrompt`、`model`、`temperature`（0～2）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
-| `apiClient.ai.chats.listHistory(input, options?)` | 查询历史 | `input.sessionId` が必須。主体 `objectId`、`limit`（1～200）、`order`（`asc` または `desc`）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
-| `apiClient.ai.memories.list(input, options?)` | 查询记忆 | `input` が必須で `{}` も可。`objectId`、`types` 配列、0 以上の `offset`、`limit`（1～100）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
-| `apiClient.ai.memories.recall(input, options?)` | 按内容检索记忆 | `input.query` が必須。主体 `objectId`、`topK`（1 以上）、`types` 配列、`minImportance`（0～1）は省略可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
-| `apiClient.ai.sessions.list(input, options?)` | 查询对象的会话 | `input` は必須で `{}` の場合は現在の認証主体。許可された主体を `objectId` で指定可。 任意の `options` で[今回のリクエスト](#request-options)を指定。 | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+| `client.iam.auth.currentUser(input?, options?)` | 現在の利用者と表示用のロール・権限を取得 | 業務入力なし | `HaiResult`。成功した `data` に `roles` と `permissions` がある | `await client.iam.auth.currentUser()` |
+| `actions.reauthenticate(password, operation)` | サーバーが指定した機密操作に使うチケットを取得 | 現在のパスワードと登録済み操作 ID | `HaiResult`。成功した `data.ticket` を該当する操作の `context.reauthentication` に渡す | `await actions.reauthenticate(password, 'iam.users.delete')` |
+
+| 最終結果 | サーバーの判定 | クライアントの対応 |
+| --- | --- | --- |
+| `success: false`、`error.httpStatus: 401` | 認証情報が不足または失効。操作によっては再認証チケットが必要 | 更新や再認証の対象であればクライアントが再試行を調整する。復旧後も 401 が返ればサインインや再認証へ案内する |
+| `success: false`、`error.httpStatus: 403` | 利用者は認証できたが、この操作や対象へのアクセスは許可されない | 拒否の案内を表示する。この結果でトークン更新は始まらない |
+| `success: true` | そのリクエストが許可され、サーバーが業務処理を完了または受理した | `data` で画面を更新する。受理後に処理が続く操作は、返された ID で進捗を確認する |
+
+#### 利用例：権限を画面に反映し、保護 API の結果で操作を判断する
+
+ログイン直後に `currentUser()` で画面に表示するロールと権限を取得します。エクスポートボタンを押した後は、表示状態にかかわらず[レポートの作成リクエスト](#custom-business-client)の結果を確認します。機密操作のチケットはサーバーが指定した用途にだけ付けます。たとえば[利用者削除の例](#利用例再認証チケットを使って利用者を削除する)では `iam.users.delete` のチケットをその削除リクエストに渡します。
+
+保護ルートの設定手順は [Serv の認証](serv.ja.md#authentication)または [Kit のガード](kit.ja.md#auth)を参照してください。
+
+<a id="iam-requests"></a>
+<a id="認証と管理-api-の呼び出しapiclientiam"></a>
+
+### アカウントとセッションの呼び出し：`client.iam.auth`
+
+本人のプロフィールの取得やログアウトでは、契約の手続きを直接使用できます。各操作は `HaiResult` を返し、任意の第 2 引数は[呼び出しごとのオプション](#request-options)に従います。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.iam.auth.publicConfig(input?, options?)` | 公開認証設定を取得 | 業務入力なし | 設定または `null` | `await client.iam.auth.publicConfig()` |
+| `client.iam.auth.createCaptcha(input, options?)` | チャレンジを開始 | 必須の `operation`。[認証フォームの接続](#auth-actions)を参照 | CAPTCHA チャレンジ | `await client.iam.auth.createCaptcha({ operation: 'login' })` |
+| `client.iam.auth.login(input, options?)` | パスワードでログイン | 必須の `identifier` と `password`。任意の `captcha`、`expectedUserId` | 利用者とトークン | `await client.iam.auth.login({ identifier, password })` |
+| `client.iam.auth.loginWithLdap(input, options?)` | LDAP でログイン | 必須の `username` と `password`。任意の `captcha`、`expectedUserId` | 利用者とトークン | `await client.iam.auth.loginWithLdap({ username, password })` |
+| `client.iam.auth.loginWithOtp(input, options?)` | OTP でログイン | 必須の `identifier` と `code`。任意の `captcha`、`expectedUserId` | 利用者とトークン | `await client.iam.auth.loginWithOtp({ identifier, code })` |
+| `client.iam.auth.sendOtp(input, options?)` | OTP を要求 | 必須の `identifier`。任意の `captcha` | 有効期限 | `await client.iam.auth.sendOtp({ identifier })` |
+| `client.iam.auth.register(input, options?)` | 新規登録 | 必須の `username` と `password`。任意の `email`、`phone`、`displayName`、`metadata`、`captcha` | 利用者とトークン | `await client.iam.auth.register({ username, password })` |
+| `client.iam.auth.currentUser(input?, options?)` | 現在の利用者を取得 | 業務入力なし | プロフィール、ロール、権限 | `await client.iam.auth.currentUser()` |
+| `client.iam.auth.updateCurrentUser(input, options?)` | 自分のプロフィールを変更 | 変更する `username`、`email`、`displayName`、`avatarUrl`、`phone`、`metadata` | 変更後のプロフィール | `await client.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
+| `client.iam.auth.changePassword(input, options?)` | ログイン中にパスワードを変更 | 必須の `oldPassword` と `newPassword` | 業務データなし | `await client.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `client.iam.auth.renewPassword(input, options?)` | 初回・期限切れのパスワードを更新 | 必須の `identifier`、`password`、`newPassword`。任意の `captcha` | 業務データなし | `await client.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `client.iam.auth.requestPasswordReset(input, options?)` | 再設定通知を要求 | 必須の `identifier`。任意の `captcha` | 業務データなし | `await client.iam.auth.requestPasswordReset({ identifier })` |
+| `client.iam.auth.confirmPasswordReset(input, options?)` | 再設定を完了 | 必須の `token` と `newPassword` | 業務データなし | `await client.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `client.iam.auth.reauthenticate(input, options?)` | 操作用チケットを取得 | 必須の `password` と `operation` | チケットと有効期限 | `await client.iam.auth.reauthenticate({ password, operation: 'iam.users.delete' })` |
+| `client.iam.auth.refresh(input, options?)` | 資格情報を更新 | 契約の入力は `refreshToken: string`。通常はクライアントが更新処理を実行 | 新しいトークン | `await client.iam.auth.refresh({ refreshToken })` |
+| `client.iam.auth.logout(input, options?)` | 通常のログアウト | 必須のオブジェクト。`{}` で現在の Bearer を使用、任意の `accessToken` で対象指定 | 業務データなし | `await client.iam.auth.logout({})` |
+| `client.iam.auth.closeSession(input, options?)` | ページ離脱時などにセッションを失効 | 必須のオブジェクト。`{}` で現在の Bearer を使用、任意の `accessToken` で対象指定 | 業務データなし | `await client.iam.auth.closeSession({})` |
+
+ログインや登録の手続きを直接使った場合、呼び出し側が成功を確認し `client.auth.setTokens(result.data.tokens)` で保存します。[認証フォームの接続](#auth-actions)の操作を経由すれば保存も行います。
+
+<a id="logout"></a>
+
+#### 利用例：現在のセッションからログアウトする
+
+ログアウトボタンからホスト側のセッションを終了し、ローカルの資格情報を消去します。ホストから失敗が返る場合もローカル消去を行い、呼び出し元に失敗を伝えます。ストレージの消去が失敗した場合は Promise が拒否されます。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function signOut(client: ApiClient<{ iam: typeof apiContract.iam }>) {
+  // 現在のセッションをサーバーで取り消し、ローカルの資格情報も消去します。
+  const logout = await client.iam.auth.logout({}, { context: { autoRefresh: false } })
+  await client.auth.clear()
+  if (!logout.success)
+    return logout
+  return logout
+}
+```
+
+<a id="iam-admin-inputs"></a>
+
+### 利用者、ロール、権限を管理する：`client.iam.users`、`client.iam.roles`、`client.iam.permissions`
+
+ホストが管理権限を確認します。既存のレコードに対する操作では、一覧や以前の成功結果から利用者、ロール、権限の ID を取得します。[呼び出しごとのオプション](#request-options)を第 2 引数に指定できます。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.iam.users.list(input, options?)` | 利用者を一覧表示 | 必須のオブジェクト。`{}` で既定。絞り込みは[管理用項目](#iam-admin-inputs)を参照 | 利用者一覧のページ | `await client.iam.users.list({ page: 1, pageSize: 20 })` |
+| `client.iam.users.get(input, options?)` | 利用者を取得 | 必須の `id` は既存の利用者 ID | 利用者または `null` | `await client.iam.users.get({ id: userId })` |
+| `client.iam.users.create(input, options?)` | 利用者を作成 | 必須の `username` と `password`。[管理用項目](#iam-admin-inputs)を参照 | 作成された利用者 | `await client.iam.users.create({ username, password })` |
+| `client.iam.users.invite(input, options?)` | 招待通知を送信 | 必須の `username` と通知先 `email` または `phone`。[管理用項目](#iam-admin-inputs)を参照 | 作成された利用者 | `await client.iam.users.invite({ username, email })` |
+| `client.iam.users.update(input, options?)` | 利用者を更新 | 必須の `id` と変更項目。[管理用項目](#iam-admin-inputs)を参照 | 更新された利用者 | `await client.iam.users.update({ id: userId, displayName: 'Mina' })` |
+| `client.iam.users.delete(input, options?)` | 利用者を削除 | 必須の `id` は対象の利用者 ID | 業務データなし | `await client.iam.users.delete({ id: userId })` |
+| `client.iam.users.resetPassword(input, options?)` | 管理者としてパスワードを変更 | 必須の利用者 `id` と `newPassword` | 業務データなし | `await client.iam.users.resetPassword({ id: userId, newPassword })` |
+| `client.iam.roles.list(input?, options?)` | ロールを一覧表示 | 業務入力なし | ロール一覧。結果はページ形式 | `await client.iam.roles.list()` |
+| `client.iam.roles.get(input, options?)` | ロールを取得 | 必須の `id` は既存のロール ID | ロールまたは `null` | `await client.iam.roles.get({ id: roleId })` |
+| `client.iam.roles.create(input, options?)` | ロールを作成 | 必須の `code` と `name`。任意の `description`、`isSystem` | 作成されたロール | `await client.iam.roles.create({ code: 'reader', name: 'Reader' })` |
+| `client.iam.roles.update(input, options?)` | ロールを更新 | 必須の `id`。任意の `name`、`description` | 更新されたロール | `await client.iam.roles.update({ id: roleId, name: 'Report reader' })` |
+| `client.iam.roles.delete(input, options?)` | ロールを削除 | 必須の `id` は対象のロール ID | 業務データなし | `await client.iam.roles.delete({ id: roleId })` |
+| `client.iam.permissions.list(input, options?)` | 権限を一覧表示 | 必須のオブジェクト。`{}` で既定。絞り込みは[管理用項目](#iam-admin-inputs)を参照 | 権限一覧のページ | `await client.iam.permissions.list({ type: 'api' })` |
+| `client.iam.permissions.get(input, options?)` | 権限を取得 | 必須の `id` は既存の権限 ID | 権限または `null` | `await client.iam.permissions.get({ id: permissionId })` |
+| `client.iam.permissions.create(input, options?)` | 権限を作成 | 必須の `code` と `name`。[管理用項目](#iam-admin-inputs)を参照 | 作成された権限 | `await client.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
+| `client.iam.permissions.setSensitiveOperations(input, options?)` | 再認証対象の操作を更新 | 必須の権限 `id` と `sensitiveOperations`。`[]` で解除 | 業務データなし | `await client.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['iam.users.delete'] })` |
+| `client.iam.permissions.delete(input, options?)` | 権限を削除 | 必須の `id` は対象の権限 ID | 業務データなし | `await client.iam.permissions.delete({ id: permissionId })` |
+
+##### IAM 管理用項目
+
+| 項目 | 用途と既定値 |
+| --- | --- |
+| `page`、`pageSize` | 利用者・権限一覧。ページ番号は 1 から、既定 1。件数は 1～100、既定 20 |
+| `sortBy`、`sortDirection` | 利用者一覧の並び順。列は `username`、`email`、`displayName`、`accountStatus`、`createdAt`。方向は `asc` または `desc` |
+| `search`、`roleCode`、`accountStatus` | `search` は利用者と権限の検索語。利用者一覧では 1～100 文字の `roleCode` および `active`、`dormant`、`closed` の状態を指定可 |
+| `accountType`、`accountStatus`、`accountExpiresAt` | 作成、招待、更新に任意で指定。種類は `permanent` または `temporary`。招待時の状態は `active` のみ。期限は日付で、更新時の `null` は期限を解除 |
+| `email`、`phone`、`displayName`、`avatarUrl`、`metadata`、`roleIds` | 利用者のプロフィールと割り当て。招待はホストが通知に使える連絡先を指定。`avatarUrl` は更新時に指定可。`roleIds` は既存ロールの ID 配列 |
+| `type`、`resource`、`action`、`description`、`sensitiveOperations` | 権限作成の任意項目。`type` は `menu`、`api`、`button` で一覧の絞り込みにも使用。`sensitiveOperations` は 1～128 文字の操作 ID を最大 1,000 件 |
+
+#### 利用例：認証と管理 API の呼び出し
+
+利用者一覧の閲覧権限がある画面で、初期化済みのクライアントと画面破棄時に中断するシグナルを渡します。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function loadUsers(client: ApiClient<{ iam: typeof apiContract.iam }>, signal: AbortSignal) {
+  // 可視ユーザーの 1 ページ目を 20 件まで取得します。
+  const users = await client.iam.users.list({ page: 1, pageSize: 20 }, { signal })
+  if (!users.success)
+    return users
+  return { items: users.data.items, total: users.data.total }
+}
+```
+
+成功時は `items` に表示可能な利用者、`total` に該当件数を取得します。失敗時は元の `error` を返します。詳細や更新で必要な ID には、この一覧などで取得した対象の値を使用します。
+
+#### 利用例：再認証チケットを使って利用者を削除する
+
+Serv で `iam.users.delete` が再認証を要求する場合の手順です。対象の `id` は管理画面の一覧から取得し、`password` は削除を実行する管理者に確認します。チケットの取得に失敗した時点では削除を送信しません。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function deleteUser(client: ApiClient<{ iam: typeof apiContract.iam }>, id: string, password: string) {
+  // 現在の管理者のパスワードで、削除専用のチケットを取得します。
+  const proof = await client.iam.auth.reauthenticate({ password, operation: 'iam.users.delete' })
+  if (!proof.success)
+    return proof
+
+  // 発行されたチケットを一度だけ使います。失敗時は元の結果を返します。
+  const deleted = await client.iam.users.delete({ id }, {
+    context: { reauthentication: proof.data.ticket },
+  })
+  if (!deleted.success)
+    return deleted
+  return { success: true as const }
+}
+```
+
+<a id="custom-business-client"></a>
+
+### アプリ独自の保護 API を呼び出す：`apiClient.create(contract)`
+
+レポート画面で利用者が PDF または CSV の生成を依頼する例です。契約をクライアントとサーバーの共有モジュールに置きます。クライアントの呼び出し名は `reports.exports.create` で、HTTP では `POST /reports/{reportId}/exports` に対応します。アプリが直接使う `zod` を追加してください。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.create(contract)` | IAM と業務操作を同じインスタンスに登録 | ホストと共有する契約ツリー | `ApiClient<typeof contract>`。利用前に `init()` を実行する | `const client = apiClient.create(reportContract)` |
+| `client.reports.exports.create(input, options?)` | 対象レポートのエクスポートを依頼する | 一覧で選択した `reportId` と `format: 'pdf' \| 'csv'` が必須 | 成功した `data.exportId` は受理 ID。権限がなければ失敗結果 | `await client.reports.exports.create({ reportId: 'r-42', format: 'pdf' })` |
+
+#### 利用例：選択したレポートのエクスポートを依頼する
+
+Serv に登録する場合は [契約の登録](api-contract.ja.md#use-with-serv)に従い `reports.exports.create` のハンドラーを結び付けます。Kit の場合は [ファイルルートへの接続](api-contract.ja.md#use-with-kit)に従い、`reports/[reportId]/exports/+server.ts` の `POST` でパス引数と本文を共有 Schema で検証します。どちらの場合も、サーバーがセッション、アプリの権限 `reports:export`、対象レポートへのアクセスを確認します。Cookie を使う場合は同じホストに [IAM の認証ルート](#browser-refresh)も用意します。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+export const ReportExportInputSchema = z.object({
+  reportId: z.string().min(1),
+  format: z.enum(['pdf', 'csv']),
+})
+export const ReportExportDataSchema = z.object({ exportId: z.string().min(1) })
+
+// この契約はホストとクライアントが共有します。
+export const reportContract = {
+  iam: apiContract.iam,
+  reports: {
+    exports: {
+      create: apiContract.route({
+        method: 'POST',
+        path: '/reports/{reportId}/exports',
+        operationId: 'reports.exports.create',
+      }).input(ReportExportInputSchema).output(apiContract.haiResultSchema(ReportExportDataSchema)),
+    },
+  },
+}
+
+export async function startReportClient(baseUrl: string) {
+  const client = apiClient.create(reportContract)
+  // 同一オリジンで /api/v1 に登録した場合はその値を渡し、Cookie 認証を有効にします。
+  const ready = await client.init({ baseUrl, auth: {} })
+  if (!ready.success)
+    return ready
+  return { success: true as const, data: client }
+}
+
+export async function requestReportExport(
+  client: ApiClient<typeof reportContract>,
+  input: z.input<typeof ReportExportInputSchema>,
+) {
+  // セッション確立後に、選択したレポート ID と出力形式を送信します。
+  const result = await client.reports.exports.create(input)
+  if (!result.success) {
+    return {
+      kind: result.error.httpStatus === 403 ? 'forbidden' as const : 'failed' as const,
+      error: result.error,
+    }
+  }
+  return { kind: 'accepted' as const, exportId: result.data.exportId }
+}
+```
+
+`startReportClient('/api/v1')` に成功したら、そのインスタンスを `apiClient.createAuthActions(client)` に渡してログインします。たとえば `requestReportExport(client, { reportId: 'r-42', format: 'pdf' })` で選択したレポートを送信します。サーバーが受理すると `exportId` が得られるので、画面に受理済みと表示できます。認証済みの利用者にエクスポート権限がない場合は HTTP 403 が返り、画面には拒否理由を表示します。使い終えたら `client.close()` でインスタンスを解放します。
+
+<a id="business-requests"></a>
+<a id="storage-requests"></a>
+<a id="ファイルと-ai-apiapiclientstorageapiclientai"></a>
+
+### オブジェクトストレージへのアクセス：`client.storage`
+
+アプリに Storage と AI のルートが登録されている場合は、対応するドメインをクライアントから使用できます。既定の `apiClient` には IAM、Storage、AI が含まれます。Feedback、Payment、独自のドメインを呼び出す場合は、[ホストと共有する契約](api-contract.ja.md#use-with-client)からクライアントを作ります。以下の手続きは任意の[呼び出しオプション](#request-options)を受け取り、`HaiResult` を返します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.storage.files.list(input, options?)` | 閲覧許可があるオブジェクトの一覧 | `input` 必須、`{}` 可。任意の `prefix`、`maxKeys`（1～1,000）、グループ化用の `delimiter`、前ページの `continuationToken` | オブジェクトと次ページの情報 | `await client.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `client.storage.files.getMetadata(input, options?)` | オブジェクトのメタデータを取得 | 閲覧可能な `key` が必須 | キー、サイズ、コンテンツ型など | `await client.storage.files.getMetadata({ key })` |
+| `client.storage.files.delete(input, options?)` | オブジェクトを削除 | 削除可能な `key` が必須 | 業務データなし | `await client.storage.files.delete({ key })` |
+| `client.storage.files.deleteMany(input, options?)` | オブジェクトをまとめて削除 | `keys` は空でないキーの配列。ホストが各キーを確認 | 削除結果。部分失敗は `error.ext.deleteMany` に進捗が入る場合がある | `await client.storage.files.deleteMany({ keys: [key] })` |
+| `client.storage.presignedUrls.createUpload(input, options?)` | 署名付きアップロード URL を発行 | `key` が必須。任意の `contentType` は既定 `application/octet-stream`、`expiresIn` は既定 900 秒 | 一時 URL とオブジェクトキー | `await client.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
+| `client.storage.presignedUrls.createDownload(input, options?)` | 署名付きダウンロード URL を発行 | `key` が必須。任意の `expiresIn` は有効秒数、既定 900 | 一時 URL とオブジェクトキー | `await client.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+
+<a id="利用例ファイルと-ai-api"></a>
+
+#### 利用例：PDF のアップロード URL を発行する
+
+初期化済みでアップロードが許可されたクライアントを使用します。`key` はホストが利用者に割り当てた書き込み先、`file` はフォームで受け取った PDF です。署名取得後は、同じコンテンツ型でオブジェクトストレージの HTTPS URL に直接送信します。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function uploadReport(client: ApiClient<{ storage: typeof apiContract.storage }>, key: string, file: File) {
+  const contentType = 'application/pdf'
+  // 署名を取得します。権限やキーのエラーはそのまま返します。
+  const signed = await client.storage.presignedUrls.createUpload({ key, contentType })
+  if (!signed.success)
+    return signed
+
+  // 署名付きアドレスへ書き込み、ストレージからの成否を確認します。
+  const uploaded = await fetch(signed.data.url, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: file,
+  })
+  if (!uploaded.ok)
+    throw new Error(`アップロードに失敗しました（HTTP ${uploaded.status}）`)
+  return signed
+}
+```
+
+<a id="ai-requests"></a>
+
+### チャット、記憶、セッションの呼び出し：`client.ai`
+
+現在の認証主体を使用し、別の `objectId` で呼び出すときはホスト側で対象へのアクセス権を確認します。既定の呼び出しは JSON を返します。ストリーミングの例は[独自の戻り値と SSE](#custom-response-results)を参照してください。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.ai.chats.createCompletion(input, options?)` | メッセージから非ストリーミング補完を生成 | `messages` は必須の空でない配列。[チャット補完の要求項目](#ai-input-fields)を参照 | 応答候補、モデル、使用量、ツール呼び出し | `await client.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
+| `client.ai.chats.sendMessage(input, options?)` | セッションにメッセージを送信 | 必須の `message`。`sessionId` は既定 `default`。任意の `objectId`、`systemPrompt`、`model`、`temperature`（0～2） | 応答テキスト、モデル、任意の使用量 | `await client.ai.chats.sendMessage({ message, sessionId })` |
+| `client.ai.chats.listHistory(input, options?)` | 履歴を取得 | 必須の `sessionId`。任意の `objectId`、`limit`（1～200）、`order`（`asc` または `desc`） | チャット履歴 | `await client.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `client.ai.memories.list(input, options?)` | 記憶を一覧表示 | `input` は必須、`{}` 可。任意の `objectId`、`types` 配列、0 からの `offset`、`limit`（1～100） | 記憶の一覧 | `await client.ai.memories.list({ objectId, limit: 20 })` |
+| `client.ai.memories.recall(input, options?)` | 内容で記憶を検索 | 必須の `query`。任意の `objectId`、`topK`（1 以上）、`types` 配列、`minImportance`（0～1） | 該当する記憶 | `await client.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `client.ai.sessions.list(input, options?)` | セッションを一覧表示 | `input` 必須。`{}` は現在の認証主体、`objectId` は許可された主体 | セッションの一覧 | `await client.ai.sessions.list({})` |
 
 <a id="ai-input-fields"></a>
 
@@ -461,151 +788,256 @@ const permissions = permissionsResult.data // permitted permission records
 
 | 項目 | 用途と既定値 |
 | --- | --- |
-| `messages` | 空でない配列が必須。ロールは `system`、`user`、`assistant`、`tool`。本文は文字列または `{ type: 'text', text }` パーツ。利用者メッセージの `image_url` のみ `{ url, detail? }` を追加可。詳細度は `auto`、`low`、`high`。 |
-| `messages[].tool_calls`、`messages[].tool_call_id` | アシスタントは `id`、`type: 'function'`、`function.name`、JSON 文字列の `function.arguments` を持つ呼び出しを付加可。`content` を省略する場合は一件以上必要。ツールの結果には元の `tool_call_id` が必須。 |
-| `objectId`、`sessionId`、`model` | 主体、セッション、モデルは省略可。既定は認証済み主体、`default` セッション、サーバーのモデル設定。別主体には権限が必要。 |
-| `temperature`、`top_p`、`max_tokens` | 任意の温度 0～2、サンプリング確率 0～1、最大生成トークンの正整数。省略時はモデル設定を使用。 |
-| `tools`、`tool_choice` | 任意の関数ツールは `type: 'function'` と `function.name` が必須。説明、JSON Schema の引数、strict 設定は省略可。`auto`、`none`、`required`、`{ type: 'function', function: { name } }` を選択。必須または名前指定の選択には対応ツールが必要。 |
+| `messages` | 空でない配列。ロールは `system`、`user`、`assistant`、`tool`。本文は文字列または `{ type: 'text', text }` のパーツ。利用者メッセージでは `image_url` パーツに `url` と任意の `detail`（`auto`、`low`、`high`）を指定可 |
+| `messages[].tool_calls`、`messages[].tool_call_id` | アシスタントのツール呼び出しは `id`、`type: 'function'`、`function.name` と JSON 文字列の `function.arguments` を指定。本文を省略する場合はツール呼び出しが必要。ツール結果には対応する `tool_call_id` を指定 |
+| `objectId`、`sessionId`、`model` | 主体、セッション、モデルを指定可。省略時は認証主体、`default` セッション、ホストのモデル設定 |
+| `temperature`、`top_p`、`max_tokens` | 任意の温度（0～2）、サンプリング確率（0～1）、最大生成トークン数（正整数） |
+| `tools`、`tool_choice` | 任意の関数ツールの配列。`type: 'function'` と `function.name` が必須。説明、JSON Schema の引数、`strict` は任意。`tool_choice` には `auto`、`none`、`required`、または定義済みの関数を指定 |
 
-例は `{ messages: [{ role: 'user', content: 'Hello' }], max_tokens: 15, tool_choice: 'none' }`。成功時は設定済みのモデルの補完結果を返す。本文はモデルによる。
+#### 利用例：現在のセッションへ新しいメッセージを送る
 
-#### 利用例：ファイルと AI API
+初期化済みの AI クライアントに、チャット画面の `sessionId` と利用者が入力した `message` を渡します。成功時は応答の `content` を画面に追加します。
 
 ```ts
-// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
-// List up to 20 authorized entries under reports/. Success includes file metadata and pagination. Return the failed result on failure.
-const filesResult = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
-if (!filesResult.success)
-  return filesResult
-const files = filesResult.data
-// files contains metadata and pagination for this authorized prefix
-// List the AI sessions visible to the caller using default filters. Return the failed result on request failure.
-const sessionsResult = await apiClient.ai.sessions.list({})
-if (!sessionsResult.success)
-  return sessionsResult
-const sessions = sessionsResult.data // visible AI sessions
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function sendChatMessage(client: ApiClient<{ ai: typeof apiContract.ai }>, sessionId: string, message: string) {
+  // 現在の認証主体のセッションへ送信し、サービスからの失敗はそのまま返します。
+  const result = await client.ai.chats.sendMessage({ sessionId, message })
+  if (!result.success)
+    return result
+  return { content: result.data.content, model: result.data.model }
+}
 ```
 
-reports/ と成功応答のセッション ID を使います。削除は実データを変え、署名結果は URL・キー・期限を含みます。AI の文言は固定ではありません。
+<a id="encrypted-requests"></a>
 
-[引数と手順の詳細](api-client.md#business-requests)
+### HTTPS 上にアプリケーション層の暗号化を追加する：`client.init({ transport })`
 
-<a id="transport-observation"></a>
-
-### 通信の暗号化と結果の監視：`apiClient`
-
-初期化時に通信設定を渡します。論理要求の監視は一つの業務呼び出しのマスク済み結果を受け取ります。
+暗号化はインスタンス単位です。ホストの暗号化を有効にし、鍵交換パスを一致させます。Serv の設定は API 接頭辞からの相対パス、Kit の設定ではマウント先を含むパスを使用します。クライアントは HTTPS でホストを確認して鍵交換を行い、サービスの秘密鍵はホストで管理します。GET や HEAD など本文がないリクエストも対象です。別オリジンの場合は CORS で `X-Hai-Transport` リクエストヘッダーを許可し、同名のレスポンスヘッダーを公開します。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `apiClient.observeRequests(observer)` | 論理リクエストの最終結果を監視 | 論理リクエストの完了時に `ApiRequestRecord` を受け取る同期 `observer(record)` が必須。 | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
-
-#### 利用例：通信の暗号化と結果の監視
-
-```ts
-const outcomes: string[] = []
-// Register an observer that collects sanitized logical request outcomes. The returned function removes it.
-const stop = apiClient.observeRequests(record => { outcomes.push(JSON.stringify(record)) })
-try {
-  // Read this server's public IAM settings. The logical request is observed even if the call fails, and failure throws below.
-  const result = await apiClient.iam.auth.publicConfig()
-  if (!result.success)
-    throw new Error(result.error.message)
-  // outcomes now contains the sanitized logical request record for this call
-}
-finally {
-  // Unsubscribe the request observer created above.
-  stop()
-}
-```
-
-監視関数を入力して解除関数を得ます。記録に生のトークンは含めません。更新・再試行の内部段階を複数の業務成功と数えません。
-
-<a id="encrypted-requests"></a>
+| `client.init(config)` | インスタンスの暗号化を有効にする | `config.baseUrl` と `config.transport.crypto` は必須。鍵交換パスとサイズ上限は[暗号化オプション](#暗号化オプション)を参照 | 初期化の `HaiResult<void>`。暗号化セッションの確立は初回送信時 | `await client.init({ baseUrl, transport: { crypto } })` |
 
 #### 利用例：トランスポート暗号化を有効にする
 
-サーバー側で IAM ルートを登録し、`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` を設定します。この例はローカルの crypto インスタンスを初期化して終了するため、独立したプロセスで実行します。API のベース URL をテストサーバーの HTTPS アドレスに置き換えます。
+`pnpm add @h-ai/crypto` を実行します。[Serv のホスト設定](serv.ja.md#host-options)または [Kit の暗号化設定](kit.ja.md#transport)で IAM と暗号化した通信を公開してから、`baseUrl` に稼働中の HTTPS アドレスを渡します。この例は共有の crypto を初期化して終了するので、独立したプロセスで実行します。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { crypto } from '@h-ai/crypto'
 
-const initialized = await crypto.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
+export async function loadEncryptedAuthPolicy(baseUrl: string) {
+  // 暗号化に使う crypto を準備します。
+  const started = await crypto.init()
+  if (!started.success)
+    return started
 
-const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
-try {
-  // 初期化済みの crypto を使います。既定の鍵交換パスは /api/v1/_hai/key-exchange です。
-  const ready = await client.init({ baseUrl: 'https://api.example.com/api/v1', transport: { crypto } })
-  if (!ready.success)
-    throw new Error(ready.error.message)
+  const contract = apiContract.create({ iam: apiContract.iam })
+  const client = apiClient.create(contract)
+  try {
+    // IAM までの接頭辞を含むアドレスと、初期化済みの暗号サービスを渡します。
+    const ready = await client.init({ baseUrl, transport: { crypto } })
+    if (!ready.success)
+      return ready
 
-  // 最初のリクエストで鍵を交換し、公開 IAM 設定を取得します。
-  const config = await client.iam.auth.publicConfig()
-  if (!config.success)
-    throw new Error(config.error.message)
-}
-finally {
-  await client.close()
-  await crypto.close()
+    // 初回の呼び出しで鍵を交換し、公開設定を読み取ります。
+    const policy = await client.iam.auth.publicConfig()
+    if (!policy.success)
+      return policy
+    return policy.data
+  }
+  finally {
+    try {
+      await client.close()
+    }
+    finally {
+      await crypto.close()
+    }
+  }
 }
 ```
 
-クロスオリジンの暗号化通信では、サーバーの CORS 設定で `X-Hai-Transport` リクエストヘッダーを許可し、同名のレスポンスヘッダーを公開します。HTTPS で鍵交換の公開鍵を提供するサーバーの身元を確認し、リソースへのアクセス権はサーバー側で IAM により検証します。
+平文サイズや圧縮上限の設計は[暗号化通信の容量](crypto.ja.md#transport-capacity)を参照してください。暗号化後もサーバーが利用者と操作の権限を確認します。
 
 <a id="plain-https-requests"></a>
 
+### 通常の HTTPS を受け付けるルートを呼び出す：`client.init(config)` または `fetch`
+
+サーバーの手続きで `encryption: 'disabled'` を指定するか、サーバーの `transport.excludePaths` に対象を設定します。クライアント側では `transport` を省略した別のインスタンスを作成するか、通常の `fetch` を使用します。`excludePaths` はサーバー側の設定です。
+
 #### 利用例：通常の HTTPS を受け付けるルートを呼び出す
 
-サーバーのルートに `encryption: disabled` を設定するか、暗号化が必須でないルートをサーバーの `transport.excludePaths` に追加します。たとえば、有効なヘルスチェック `/health` を除外し、通常の `fetch` で呼び出します。アプリの契約内にあるルートには、専用の型付きクライアントを作り、`init` の設定で `transport` を省略することもできます。`transport` を有効にしたクライアントでは、そのインスタンスのすべてのリクエストに暗号化が適用されます。
+Serv のヘルスチェック `/health` が有効で、通常の HTTPS で呼び出せることを確認します。API ルーターとは別のこのパスへホストの原点を渡します。
 
 ```ts
-// GET /health は通常の HTTPS を受け付けます。api.example.com を稼働中のホストに置き換えます。
-const response = await fetch('https://api.example.com/health')
-if (!response.ok)
-  throw new Error(`Health check failed (HTTP ${response.status})`)
-const health = await response.json() // { status: 'ok' }
+export async function checkHealth(origin: string) {
+  const response = await fetch(new URL('/health', origin))
+  if (!response.ok)
+    throw new Error(`稼働確認に失敗しました（HTTP ${response.status}）`)
+  return response.json()
+}
 ```
 
-[引数と手順の詳細](api-client.md#transport-observation)
+成功時、Serv の応答は `{ status: 'ok' }` です。
+
+<a id="transport-observation"></a>
+<a id="通信の暗号化と結果の監視apiclient"></a>
+
+### リクエストの結果を記録する：`client.observeRequests(observer)`
+
+購読先のインスタンスごとに、ひとまとまりの業務呼び出しにつき 1 件の記録が届きます。HTTP 200 の `HaiResult` でも `success: false` なら失敗になります。更新や鍵交換の内部通信は独立した記録にならず、業務リクエストの再試行は `attempts` に含まれます。ストリームでは確立時点の結果を記録します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.observeRequests(observer)` | 業務呼び出しの結果を購読 | `ApiRequestRecord` を受け取る同期関数 | 解除関数。コールバックの例外はリクエスト結果に影響しない | `const stop = client.observeRequests(record => collect(record))` |
+
+| 記録の項目 | 観測できる内容 |
+| --- | --- |
+| `requestId`、`procedure` | 呼び出しの関連 ID と契約内の手続き名 |
+| `timestamp`、`duration` | 開始時刻（Unix ミリ秒）と所要時間（ミリ秒） |
+| `success`、`attempts`、`errorCode` | 最終成否、業務リクエストの試行数、失敗時のコード（取得可能な場合） |
+| `method`、`url`、`status` | 取得できた場合の HTTP メソッド、URL、レスポンスステータス |
+
+URL からクエリ、フラグメント、ユーザー情報が除去されますが、パスには利用者や業務レコードの ID が含まれることがあります。記録に送受信ヘッダーや本文は入りません。集計には `procedure` などを使い、コールバック内で扱うデータ量を制限します。購読の解除関数を呼ぶと観測が止まり、`client.close()` でも全解除されます。
+
+<a id="利用例通信の暗号化と結果の監視"></a>
+
+#### 利用例：公開設定のリクエストを計測する
+
+初期化済みのクライアントを使い、結果の成否と手続き名を集計処理に渡します。
+
+```ts
+import type { ApiClient, ApiRequestRecord } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+
+export async function observePolicy(
+  client: ApiClient<{ iam: typeof apiContract.iam }>,
+  recordResult: (record: Pick<ApiRequestRecord, 'procedure' | 'success' | 'duration'>) => void,
+) {
+  const stop = client.observeRequests(({ procedure, success, duration }) => recordResult({ procedure, success, duration }))
+  try {
+    // 実際に公開設定を読み取ると、一度だけ購読のコールバックが呼ばれます。
+    const policy = await client.iam.auth.publicConfig()
+    if (!policy.success)
+      return policy
+    return policy.data
+  }
+  finally {
+    stop()
+  }
+}
+```
 
 <a id="custom-response-results"></a>
 
+### 独自の戻り値とストリームを扱う：`client.<procedure>()`
+
+独自ルートでは、成功時に契約で宣言した JSON 値、バイナリ、SSE の非同期イテレーターを受け取れます。リクエストやストリームの確立に失敗した場合は `HaiResult<never>` の失敗分岐が返ります。JSON Schema に変換できる Zod の HTTP JSON 出力は検証され、契約に合わなければ `VALIDATION_FAILED` が返ります。ISO 日付文字列など、受信した JSON 値はその型のまま利用します。ストリーム確立後に起きた障害は、反復処理の例外として扱います。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `client.count(input?, options?)` | 下の独自契約にある件数を取得 | 業務入力なし。任意の `signal` | 数値、または開始時の失敗分岐 | `await client.count(undefined, { signal })` |
+| `client.events(input?, options?)` | 下の独自契約にある進捗を購読 | 業務入力なし。任意の `signal` | 非同期イテレーター、または開始時の失敗分岐 | `await client.events(undefined, { signal })` |
+
 #### 利用例：独自の戻り値と SSE 応答を読み取る
 
-独自のエンドポイントは JSON 値や SSE を返せます。成功時は契約で宣言した値または非同期イテレーターが返ります。呼び出しやストリームの確立に失敗した場合は `HaiResult<never>` の失敗分岐が返ります。JSON Schema に変換できる Zod の HTTP JSON 出力は検証され、一致しなければ `HaiApiClientError.VALIDATION_FAILED`（`hai:api-client:007`）が返ります。ISO 日付文字列など、受信した JSON の値は保持されます。SSE が確立した後は、イテレーターの通常のエラー処理と取り消しが適用されます。
-
-サーバーと共有する次の契約でクライアントを作ります。テストサーバーの `/status/count` は数値を、`/status/events` は進捗ストリームを返します。初期化済みのクライアントとページの取り消しシグナルを `readProgress` に渡します。
+`pnpm add @h-ai/api-client @h-ai/api-contract @orpc/contract zod` を実行します。ホストに同じ契約を登録し、`GET /status/count` は件数、`GET /status/events` は進捗イベントを返すようにします。画面破棄時の中断シグナルを渡します。
 
 ```ts
-import type { ApiClient } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { eventIterator } from '@orpc/contract'
 import { z } from 'zod'
 
-const contract = {
+export const progressContract = {
   count: apiContract.route({ method: 'GET', path: '/status/count' }).output(z.number()),
   events: apiContract.route({ method: 'GET', path: '/status/events' })
     .output(eventIterator(z.object({ completed: z.number() }))),
 }
 
-async function readProgress(client: ApiClient<typeof contract>, signal: AbortSignal, update: (completed: number) => void) {
-  // 成功時は数値です。失敗時はエラーを含む結果をそのまま返します。
-  const count = await client.count(undefined, { signal })
-  if (typeof count !== 'number')
-    return count
-  update(count)
+export async function readProgress(baseUrl: string, signal: AbortSignal, update: (completed: number) => void) {
+  const client = apiClient.create(progressContract)
+  const ready = await client.init({ baseUrl })
+  if (!ready.success)
+    return ready
 
-  // ストリームの確立を確認してから読み取ります。取り消しには signal を使います。
-  const events = await client.events(undefined, { signal })
-  if (!(Symbol.asyncIterator in events))
-    return events
-  for await (const event of events)
-    update(event.completed)
+  try {
+    // 数値を返すルートで、先に失敗分岐を外します。
+    const count = await client.count(undefined, { signal })
+    if (typeof count !== 'number')
+      return count
+    update(count)
+
+    // 接続の失敗分岐を外してから、以降のイベントを画面に反映します。
+    const events = await client.events(undefined, { signal })
+    if (!(Symbol.asyncIterator in events))
+      return events
+    for await (const event of events)
+      update(event.completed)
+  }
+  finally {
+    await client.close()
+  }
 }
 ```
+
+開始時の失敗は関数の戻り値で確認します。途中で通信が切れたときや `signal` で中断したときは、呼び出し元で反復処理の例外を扱います。
+
+<a id="errors"></a>
+<a id="error-handling"></a>
+<a id="エラー処理"></a>
+
+### 呼び出しの失敗を処理する：`HaiApiClientError`
+
+標準の手続きでは `success` を先に確認し、失敗時は `error.code` と、存在すれば `error.traceId` を参照します。サーバーの `HaiResult` の業務エラーや、認識できる非成功 HTTP 応答の業務エラーは、コードを保ったまま呼び出し側へ返ります。サーバーの 5xx に含まれる詳細はクライアント向けに伏せられることがあります。
+
+#### インターフェース一覧
+
+| `HaiApiClientError` | コード | 既定の HTTP ステータス | 用途 |
+| --- | --- | --- | --- |
+| `NETWORK_ERROR` | `hai:api-client:001` | 502 | サーバーへの到達や通信に失敗 |
+| `TIMEOUT` | `hai:api-client:002` | 504 | リクエストの待機期限、または `AbortError` としての中断 |
+| `SERVER_ERROR` | `hai:api-client:003` | 502 | 業務エラーとして解釈できない上流障害 |
+| `UNAUTHORIZED` | `hai:api-client:004` | 401 | 認証に失敗、または開始時の認証状態が変更済み |
+| `FORBIDDEN` | `hai:api-client:005` | 403 | 操作が許可されていない |
+| `NOT_FOUND` | `hai:api-client:006` | 404 | 対象の HTTP リソースが見つからない |
+| `VALIDATION_FAILED` | `hai:api-client:007` | 400 | 契約の検証や通信形式で失敗 |
+| `TOKEN_REFRESH_FAILED` | `hai:api-client:008` | 401 | トークン更新失敗を表す定義。自動更新後も元のエラーが返ることがある |
+| `NOT_INITIALIZED` | `hai:api-client:010` | 500 | `init` 完了前、または終了後に呼び出した |
+| `CONFIG_ERROR` | `hai:api-client:011` | 500 | 初期化設定、またはインスタンスの状態に問題がある |
+| `PAYLOAD_TOO_LARGE` | `hai:api-client:020` | 413 | 送信または受信データが上限を超えた |
+| `UNKNOWN` | `hai:api-client:099` | 500 | 上の分類に当てはまらない失敗 |
+
+暗号化通信の時刻エラーは `VALIDATION_FAILED` として返り、`error.cause.transportCode` と `serverTime`（Unix ミリ秒）が診断に使えます。サイズ超過時は `direction`、`stage`、`limitBytes`、`actualBytes` などを確認できます。ローカル資格情報の読み書きやストリームの反復処理は Promise を拒否する場合があります。アプリのログには関連 ID、手続き、コードを使い、資格情報、本文、署名付き URL は記録しないでください。
+
+#### 利用例：待機期限とサービスからのエラーを扱う
+
+初期化済みの IAM クライアントで、プロフィールの読み込みに失敗した理由を画面の処理に渡します。
+
+```ts
+import type { ApiClient } from '@h-ai/api-client'
+import type { apiContract } from '@h-ai/api-contract'
+import { HaiApiClientError } from '@h-ai/api-client'
+
+export async function readProfile(client: ApiClient<{ iam: typeof apiContract.iam }>) {
+  // プロフィールが取得できない場合は、コードと関連 ID を確認します。
+  const profile = await client.iam.auth.currentUser()
+  if (profile.success)
+    return { user: profile.data }
+
+  const { code, traceId } = profile.error
+  return { timedOut: code === HaiApiClientError.TIMEOUT.code, code, traceId }
+}
+```
+
+設定の所有者は[クライアント設定](../configuration/api-client.ja.md)、応答や保存データは[クライアントのデータ構造](../data/api-client.ja.md)を参照してください。

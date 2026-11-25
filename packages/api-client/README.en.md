@@ -4,45 +4,38 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md)
 
-A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent API calls and token management across Web, apps, and mini programs.
+A typed HTTP client for browsers, Node.js, and mobile apps. It calls endpoints using a shared oRPC/OpenAPI contract and supports credential storage, automatic refresh, application-layer encryption, and request observation. Supply Fetch through the runtime or inject a compatible implementation.
 
 ## Quick Start
 
-Install with pnpm: `pnpm add @h-ai/api-client`.
+Install with `pnpm add @h-ai/api-client`. Add `@h-ai/api-contract` as a direct dependency if the application imports the shared contract.
 
-[Open the quick-start guide](../../docs/usage/function/api-client.en.md#quick-start).
-
-[Dependencies and setup order](../../docs/usage/function/api-client.en.md#module-dependencies).
+[Minimal setup example](../../docs/usage/function/api-client.en.md#quick-start) · [Dependencies and setup order](../../docs/usage/function/api-client.en.md#module-dependencies)
 
 ## Configuration Reference
 
-This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/api-client.en.md); arguments or response structures are in the [reference](../../docs/usage/function/api-client.en.md#call-options).
+The application reads runtime settings and passes the API address and options to `apiClient.init(config)` or an independent instance's `client.init(config)`. See [configuration sources](../../docs/usage/configuration/api-client.en.md) and [call options](../../docs/usage/function/api-client.en.md#call-options).
 
 ## Features
 
-Requests and token refresh use the current `core.i18n` locale for `Accept-Language`. The application can override it in `headers`.
+- Use the default client or create an isolated instance from the application's contract. See [client lifecycle](../../docs/usage/function/api-client.en.md#client-lifecycle).
+- Handle sign-in, credentials, and session refresh. See [authentication actions](../../docs/usage/function/api-client.en.md#auth-actions) and [credential refresh](../../docs/usage/function/api-client.en.md#credentials).
+- Set per-call request options and read a `HaiResult`, bare JSON value, or SSE stream according to the contract. See [request options](../../docs/usage/function/api-client.en.md#request-options) and [custom responses](../../docs/usage/function/api-client.en.md#custom-response-results).
+- Connect to a server that supports encrypted transport or subscribe to request summaries. See [encrypted transport](../../docs/usage/function/api-client.en.md#encrypted-requests), [plaintext capacity](../../docs/usage/function/crypto.en.md#transport-capacity), and [request observation](../../docs/usage/function/api-client.en.md#transport-observation).
 
-In browsers, `baseUrl` can be a same-origin root path such as `/api/v1`. Use an absolute HTTP(S) URL in Node.js and in clients without a browser origin. `init()` returns `CONFIG_ERROR` for invalid addresses.
-
-[Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples.
-
-Requests stay bound to their starting identity and client lifetime. See [credential refresh and recovery](../../docs/usage/function/api-client.en.md#credentials) and [custom JSON and SSE results](../../docs/usage/function/api-client.en.md#custom-response-results).
-
-Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../../docs/usage/function/crypto.en.md#transport-capacity).
-
-Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`.
+[Full API list](../../docs/usage/function/api-client.en.md#api-reference)
 
 ## Data Structures
 
-The module creates no database tables of its own.
-
-See the [data reference](../../docs/usage/data/api-client.en.md) for where access and refresh tokens are stored and when they are removed.
+The application chooses token storage. The server stores sessions and business data. Callers decide whether to retain responses and observation records. See [data structures](../../docs/usage/data/api-client.en.md).
 
 ## Development and Testing
 
+Run these commands from the repository root after installing workspace dependencies.
+
 ```bash
-pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
+pnpm --filter @h-ai/api-client test
 ```
 
 ## License
