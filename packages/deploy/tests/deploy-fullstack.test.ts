@@ -228,14 +228,19 @@ it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ m
     ? 'HAI_SERV'
     : 'HAI_KIT'
   const file = { file: './config/access.yaml' }
+  const http = {
+    trustedProxies: ['192.0.2.10'],
+    rateLimit: { windowMs: 5000, maxRequests: 2 },
+    ...(source === 'object'
+      ? { access: file }
+      : {}),
+  }
   const settings = module === 'serv'
     ? {
-        http: { apiPrefix: '/custom-api/v2', access: file },
+        http: { ...http, apiPrefix: '/custom-api/v2' },
       }
-    : { access: file, transport: false }
-  const field = module === 'serv'
-    ? 'HAI_SERV_HTTP_ACCESS_FILE'
-    : 'HAI_KIT_ACCESS_FILE'
+    : { http, transport: false }
+  const field = `${configName}_HTTP_ACCESS_FILE`
   writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n${source === 'field'
     ? `${field}=./config/access.yaml\n`
     : ''}${module === 'serv'
@@ -290,9 +295,17 @@ it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ m
     })
     const directory = deliveryDirectory(result)
     const environment = parseEnv(readBundleFile(directory, 'config/.env.runtime'))
-    expect(environment[module === 'serv'
-      ? 'HAI_SERV_HTTP_ACCESS_FILE'
-      : 'HAI_KIT_ACCESS_FILE']).toBe('/run/hai/request-access.yml')
+    const generated = deploy.loadDeploymentConfig(module, join(root, `config/_${module}.yml`), environment)
+    expect(generated).toMatchObject({
+      success: true,
+      data: {
+        http: {
+          access: { file: '/run/hai/request-access.yml' },
+          trustedProxies: http.trustedProxies,
+          rateLimit: http.rateLimit,
+        },
+      },
+    })
     const snapshot = readBundleFile(directory, '.hai/request-access.yml')
     expect(parse(snapshot)).toMatchObject({
       rules: [
@@ -316,7 +329,41 @@ it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ m
     expect(readBundleFile(directory, '.hai/request-access.yml')).toBe(snapshot)
     writeFileSync(policyFile, 'rules:\n  - id: external\n    paths: [/custom-api/v2/external/**]\n    encryption: disabled\n    allowIps: [192.0.2.0/24]\n')
   }
+  if (module === 'kit') {
+    if (source === 'object') {
+      writeFileSync(join(root, 'config/_kit.yml'), 'access: false\ntransport: false\n')
+      writeFileSync(join(root, '.env.test'), 'HAI_CORE_ENV=test\n')
+    }
+    else {
+      writeFileSync(join(root, '.env.test'), 'HAI_KIT_TRUSTEDPROXIES="[]"\n')
+    }
+    const rejected = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+    expect(rejected).toMatchObject({
+      success: false,
+      error: { code: HaiDeployError.CONFIG_ERROR.code },
+    })
+    if (!rejected.success)
+      expect(rejected.error.message).toContain('kit.http')
+  }
 }, 30_000)
+
+it.each([
+  'http:\n  rateLimit: true\n',
+  'http:\n  rateLimit: { windowMs: 0 }\n',
+  'rateLimit: { maxRequests: 1 }\n',
+])('发布前拒绝无效的 HTTP 限流设置 %j', async (settings) => {
+  writeFileSync(join(root, 'config/_serv.yml'), settings)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({
+    success: false,
+    error: {
+      code: HaiDeployError.CONFIG_ERROR.code,
+      message: expect.stringContaining('serv.http.rateLimit'),
+    },
+  })
+  expect(ssh.upload).not.toHaveBeenCalled()
+})
 
 it.each([
   'missing',
@@ -868,9 +915,51 @@ function readBundleMetadata(directory: string, name: string): string {
   return manifest.metadata[name]
 }
 
+it.each([
+  {
+    a2a: '{}',
+    audio: '{}',
+    cardPath: '/.well-known/agent-card.json',
+    rpcPath: '/a2a',
+    audioPath: '/custom-api/v2/ai/audio',
+  },
+  {
+    a2a: '{cardPath: /agents/orders.json, rpcPath: /partners/orders}',
+    audio: '{path: /voice}',
+    cardPath: '/agents/orders.json',
+    rpcPath: '/partners/orders',
+    audioPath: '/voice',
+  },
+])('部署包从应用配置转发 $cardPath、$rpcPath 和 $audioPath', async ({ a2a, audio, cardPath, rpcPath, audioPath }) => {
+  writeFileSync(join(root, 'config/_serv.yml'), `http:\n  apiPrefix: /custom-api/v2\na2a: ${a2a}\naudio: ${audio}\n`)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  if (!result.success || !result.data.bundlePath)
+    throw new Error('Expected a protocol gateway deployment bundle')
+  const proxy = readBundleFile(dirname(result.data.bundlePath), '.hai/web.conf')
+  expect(proxy).toContain(`location = ${cardPath} {`)
+  expect(proxy).toContain(`location = ${rpcPath} {\n    # A2A`)
+  expect(proxy).toContain(`location = ${audioPath} {`)
+  expect(proxy).toContain('proxy_set_header Upgrade $http_upgrade')
+})
+
+it('部署包拒绝 JSON-RPC 和密钥交换占用同一入口', async () => {
+  writeFileSync(join(root, 'config/_serv.yml'), 'a2a: {rpcPath: /session/exchange}\ntransport: {keyExchangePath: /session/exchange}\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({
+    success: false,
+    error: { code: HaiDeployError.CONFIG_ERROR.code },
+  })
+})
+
 it.each([false, true])('完整与增量模式 %s 从正式配置生成一致密文预算并携带代理更新产物', async (partial) => {
   writeFileSync(join(root, 'config/_serv.yml'), `http:\n  apiPrefix: /custom-api/v2\ntransport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
-  writeFileSync(join(root, '.env.test'), 'HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=8388608\n')
+  const keyExchangePath = partial ? '/session/key-exchange' : '/api/v1/_hai/key-exchange'
+  const exchangeEnv = partial
+    ? `HAI_SERV_TRANSPORT_KEYEXCHANGEPATH=${keyExchangePath}\n`
+    : ''
+  writeFileSync(join(root, '.env.test'), `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=8388608\n${exchangeEnv}`)
   await initialize(false)
   const result = await deploy.deployApp(root, {
     environment: 'test',
@@ -894,6 +983,8 @@ it.each([false, true])('完整与增量模式 %s 从正式配置生成一致密�
   ])
   const proxy = readFileSync(join(proof, '.hai/web.conf'), 'utf8')
   expect(proxy).toContain('client_max_body_size 16809984;')
+  expect(proxy).toContain(`location = ${keyExchangePath} {`)
+  expect(proxy).toContain(`apiBase:globalThis.location.origin+"/custom-api/v2",apiKeyExchangePath:"${keyExchangePath}"`)
   expect(JSON.parse(readFileSync(join(proof, 'manifest.json'), 'utf8')).metadata['proxy-service']).toBe('web')
   if (!partial)
     expect(JSON.parse(readFileSync(join(proof, '.hai/compose.json'), 'utf8')).services.web.volumes).toContainEqual(expect.stringContaining('/web.conf:/etc/nginx/conf.d/default.conf:ro'))
@@ -935,6 +1026,47 @@ it('svelteKit 部署从同一 _kit 配置推导 adapter-node 正文预算', asyn
   if (!result.success || !result.data.bundlePath)
     throw new Error('Expected a SvelteKit deployment bundle')
   expect(parseEnv(readBundleFile(dirname(result.data.bundlePath), 'config/.env.runtime')).BODY_SIZE_LIMIT).toBe('16809984')
+})
+
+it('kit 子目录部署原样转发 A2A，并给 adapter-node 设置正文预算', async () => {
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    name: 'orders-console',
+    dependencies: { '@sveltejs/kit': '^2' },
+  }))
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({
+    lockfileVersion: '9.0',
+    importers: {
+      '.': {
+        dependencies: {
+          '@sveltejs/kit': { version: '2.0.0' },
+        },
+      },
+    },
+    packages: { '@sveltejs/kit@2.0.0': {} },
+  }))
+  writeFileSync(join(root, 'svelte.config.js'), 'export default {}')
+  writeFileSync(join(root, 'config/_kit.yml'), `
+a2a:
+  cardPath: /console/.well-known/agent-card.json
+  rpcPath: /console/orders/a2a
+`)
+  const manifestPath = join(artifacts, 'manifest.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  writeFileSync(manifestPath, JSON.stringify({
+    ...manifest,
+    primaryService: 'web',
+    webBasePath: '/console',
+    images: manifest.images.filter((image: { name: string }) => image.name === 'web'),
+  }))
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const directory = deliveryDirectory(result)
+  expect(readBundleMetadata(directory, 'proxy-service')).toBe('gateway')
+  const proxy = readBundleFile(directory, '.hai/web.conf')
+  expect(proxy).toContain('location = /console/.well-known/agent-card.json {')
+  expect(proxy).toContain('location = /console/orders/a2a {')
+  expect(proxy).not.toContain('location = /a2a {')
+  expect(parseEnv(readBundleFile(directory, 'config/.env.runtime')).BODY_SIZE_LIMIT).toBe('2097152')
 })
 
 it('存储初始化是内部任务，不能作为独立部署服务', async () => {

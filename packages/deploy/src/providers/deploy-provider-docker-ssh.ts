@@ -7,6 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ProtocolProxyPaths } from '../container/deploy-container-compose.js'
 import type {
   ContainerDeployContext,
   ContainerDeployProvider,
@@ -20,8 +21,9 @@ import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { parseEnv } from 'node:util'
-import { apiContract, FeedbackSubmissionLimitsSchema } from '@h-ai/api-contract/feedback'
-import { core, CoreConfigSchema, RequestAccessConfigSchema } from '@h-ai/core'
+import { apiContract } from '@h-ai/api-contract'
+import { FeedbackSubmissionLimitsSchema } from '@h-ai/api-contract/feedback'
+import { core, CoreConfigSchema, HttpEndpointPathSchema, HttpRateLimitConfigSchema, RequestAccessConfigSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { z } from 'zod'
@@ -29,11 +31,13 @@ import { uploadAndApplyBundle } from '../container/deploy-bundle-transport.js'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
 import {
+  A2A_HTTP_PROXY_MAX_BYTES,
   buildRuntimeEnv,
   generateApplicationProxyConfig,
   generateComposeFile,
   generateStaticWebConfig,
   generateWebProxyConfig,
+  ProtocolProxyPathError,
   serializeEnvFile,
 } from '../container/deploy-container-compose.js'
 import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.js'
@@ -52,21 +56,36 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh
 /** 健康检查轮询间隔（毫秒） */
 const HEALTH_POLL_INTERVAL = 3000
 
+/** 在归档前校验目标环境生效的限流设置；原子存储由应用进程装配。 */
+function validateRequestRateLimit(
+  settings: Record<string, unknown>,
+  module: 'serv' | 'kit',
+  env: Record<string, string>,
+): HaiResult<void> {
+  const http = settings.http
+  const configured = http && typeof http === 'object' && 'rateLimit' in http
+    ? http.rateLimit
+    : undefined
+  const oldPrefix = `HAI_${module.toUpperCase()}_RATELIMIT`
+  if (Object.hasOwn(settings, 'rateLimit')
+    || Object.keys(env).some(key => key === oldPrefix || key.startsWith(`${oldPrefix}_`))
+    || !HttpRateLimitConfigSchema.safeParse(configured).success) {
+    return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_rateLimitInvalid', {
+      params: { field: `${module}.http.rateLimit` },
+    }))
+  }
+  return core.ok(undefined)
+}
+
 /** 只处理本次选中的应用配置；文件按应用目录读取，运行期路径不回写调用方环境。 */
 function prepareRequestAccess(options: { settings: Record<string, unknown>, module: 'serv' | 'kit', directory: string }): HaiResult<{ settings: Record<string, unknown>, snapshot?: string }> {
-  const scope = options.module === 'serv'
-    ? options.settings.http
-    : options.settings
+  const scope = options.settings.http
   if (!scope || typeof scope !== 'object' || !('access' in scope))
     return core.ok({ settings: options.settings })
   const configured = RequestAccessConfigSchema.safeParse(scope.access)
   if (!configured.success) {
     return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
-      params: {
-        field: options.module === 'serv'
-          ? 'serv.http.access'
-          : 'kit.access',
-      },
+      params: { field: `${options.module}.http.access` },
     }))
   }
   try {
@@ -77,24 +96,17 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
     if (configured.data === false || !('file' in configured.data))
       return core.ok({ settings: options.settings })
     const access = { file: '/run/hai/request-access.yml' }
-    const settings = options.module === 'serv'
-      ? {
-          ...options.settings,
-          http: { ...scope, access },
-        }
-      : { ...options.settings, access }
     return core.ok({
-      settings,
+      settings: {
+        ...options.settings,
+        http: { ...scope, access },
+      },
       snapshot: stringify(policy, { aliasDuplicateObjects: false }),
     })
   }
   catch {
     return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
-      params: {
-        field: options.module === 'serv'
-          ? 'serv.http.access'
-          : 'kit.access',
-      },
+      params: { field: `${options.module}.http.access` },
     }))
   }
 }
@@ -117,6 +129,38 @@ function endpointSettings(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Invalid service endpoint configuration')
   return value as Record<string, unknown>
+}
+
+/** 仅将已启用传输的规范请求路径交给部署代理。 */
+function transportKeyExchangePath(transport: unknown): string | undefined {
+  if (transport === undefined || transport === false)
+    return undefined
+  const configured = endpointSettings(transport).keyExchangePath
+  const path = configured === undefined
+    ? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+    : configured
+  if (!crypto.transport.isKeyExchangePath(path))
+    throw new Error('Invalid transport key exchange path')
+  return path
+}
+
+function a2aEndpointPaths(value: unknown): ProtocolProxyPaths['a2a'] {
+  if (value === undefined || value === false)
+    return undefined
+  const settings = endpointSettings(value)
+  return {
+    cardPath: servicePath(settings.cardPath, '/.well-known/agent-card.json'),
+    rpcPath: servicePath(settings.rpcPath, '/a2a'),
+  }
+}
+
+function audioEndpointPath(value: unknown, http: Record<string, unknown>): string | undefined {
+  if (value === undefined || value === false)
+    return undefined
+  const settings = endpointSettings(value)
+  const path = HttpEndpointPathSchema.optional().parse(settings.path)
+  const apiPrefix = HttpEndpointPathSchema.parse(http.apiPrefix ?? '/api/v1')
+  return apiContract.resolveAudioWebSocketPath(apiPrefix, path)
 }
 
 /** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
@@ -356,8 +400,21 @@ export function createDockerSshProvider(
     if (!server.success)
       return server
     const backendPaths: string[] = []
+    let keyExchangePath: string | undefined
+    const protocolPaths: ProtocolProxyPaths = {}
+    if (primaryService === 'serv') {
+      try {
+        protocolPaths.a2a = a2aEndpointPaths(server.data.a2a)
+        protocolPaths.audioPath = audioEndpointPath(server.data.audio, endpointSettings(server.data.http))
+      }
+      catch {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_protocolRoutesInvalid'))
+      }
+    }
     try {
       const http = endpointSettings(server.data.http)
+      if (primaryService === 'serv')
+        keyExchangePath = transportKeyExchangePath(server.data.transport)
       if (primaryService === 'serv' && http.health !== false) {
         const health = endpointSettings(http.health)
         const path = servicePath(health.path, '/health')
@@ -392,6 +449,9 @@ export function createDockerSshProvider(
     }
     let requestAccessSnapshot: string | undefined
     if (updatesApp && primaryService === 'serv') {
+      const rateLimit = validateRequestRateLimit(server.data, 'serv', env)
+      if (!rateLimit.success)
+        return rateLimit
       const prepared = prepareRequestAccess({ settings: server.data, module: 'serv', directory: appDir })
       if (!prepared.success)
         return prepared
@@ -427,10 +487,32 @@ export function createDockerSshProvider(
       const kitPath = join(appDir, 'config', '_kit.yml')
       const kit = existsSync(kitPath)
         ? loadDeploymentConfig('kit', kitPath, env)
-        : core.ok({})
+        : core.ok<Record<string, unknown>>({})
       if (!kit.success)
         return kit
+      if (Object.hasOwn(kit.data, 'access') || Object.hasOwn(kit.data, 'trustedProxies')
+        || Object.keys(env).some(name => /^(?:HAI_KIT_ACCESS|HAI_KIT_TRUSTEDPROXIES)(?:_|$)/.test(name))) {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
+          params: { field: 'kit.http' },
+        }))
+      }
+      try {
+        keyExchangePath = transportKeyExchangePath(kit.data.transport)
+      }
+      catch {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+      }
+      try {
+        if (primaryService === 'web')
+          protocolPaths.a2a = a2aEndpointPaths(kit.data.a2a)
+      }
+      catch {
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_protocolRoutesInvalid'))
+      }
       if (updatesApp) {
+        const rateLimit = validateRequestRateLimit(kit.data, 'kit', env)
+        if (!rateLimit.success)
+          return rateLimit
         const prepared = prepareRequestAccess({ settings: kit.data, module: 'kit', directory: appDir })
         if (!prepared.success)
           return prepared
@@ -455,7 +537,7 @@ export function createDockerSshProvider(
             ? undefined
             : configured, routes).maximum.plaintextBytes, feedbackTransportBytes))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
-          env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
+          env.BODY_SIZE_LIMIT = String(Math.max(limits.encryptedPayloadBytes, protocolPaths.a2a ? A2A_HTTP_PROXY_MAX_BYTES : 0))
           applicationPlaintextBytes = limits.plaintextBytes
         }
         catch (error) {
@@ -463,6 +545,9 @@ export function createDockerSshProvider(
             ? error.message
             : deployM('deploy_transportBodyLimitInvalid'))
         }
+      }
+      else if (protocolPaths.a2a && env.BODY_SIZE_LIMIT === undefined) {
+        env.BODY_SIZE_LIMIT = String(A2A_HTTP_PROXY_MAX_BYTES)
       }
     }
     if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !crypto.transport.parseServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success) {
@@ -480,7 +565,7 @@ export function createDockerSshProvider(
       if (typeof apiPrefix !== 'string' || !/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..')) {
         return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       }
-      if (webBasePath && ([...backendPaths, '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
+      if (webBasePath && ([...backendPaths, keyExchangePath, '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
         return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
@@ -489,22 +574,28 @@ export function createDockerSshProvider(
           ? undefined
           : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes))
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, {
+          ...protocolPaths,
           webPort: webContainerPort,
           maxPlaintextBytes: limits.plaintextBytes,
           webBasePath,
           backendPaths,
+          keyExchangePath,
           storageBucket: managedStorage?.bucket,
           storageBasePath,
           trustedEdgeProxies: config.trustedEdgeProxies,
         })
       }
       catch (error) {
+        if (error instanceof ProtocolProxyPathError)
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_protocolRoutesInvalid'))
         return core.err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
           ? error.message
           : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
     }
     else if (gateway) {
+      if (keyExchangePath === '/_hai/gateway-health')
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       try {
         const http = server.data.http as { apiPrefix?: string } | undefined
         if (primaryService === 'serv') {
@@ -514,12 +605,17 @@ export function createDockerSshProvider(
             : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes)
         }
         webProxy = generateApplicationProxyConfig({
+          ...protocolPaths,
           primaryService,
           port: containerPort,
           bucket: managedStorage?.bucket,
+          backendPaths,
           storageBasePath,
           reservedPaths: [
             http?.apiPrefix ?? '/api/v1',
+            ...(keyExchangePath
+              ? [keyExchangePath]
+              : []),
             ...(storageBasePath
               ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`]
               : [webBasePath]),
@@ -528,7 +624,9 @@ export function createDockerSshProvider(
           trustedEdgeProxies: config.trustedEdgeProxies,
         })
       }
-      catch {
+      catch (error) {
+        if (error instanceof ProtocolProxyPathError)
+          return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_protocolRoutesInvalid'))
         return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
       }
     }

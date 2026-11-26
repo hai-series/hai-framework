@@ -844,6 +844,101 @@ export function generateComposeFile(options: {
 }
 
 /**
+ * 主应用配置中实际启用的精确代理路径。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const orders: ProtocolProxyPaths = {
+ *   a2a: { cardPath: '/.well-known/agent-card.json', rpcPath: '/partners/orders' },
+ *   audioPath: '/api/v1/ai/audio',
+ * }
+ * const proxy = generateWebProxyConfig(3000, '/api/v1', orders)
+ * ```
+ */
+export interface ProtocolProxyPaths {
+  a2a?: { cardPath: string, rpcPath: string }
+  audioPath?: string
+}
+
+/**
+ * A2A HTTP 请求的网关正文预算，单位为字节。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * function adapterNodeBodySizeLimit(encryptedPayloadBytes: number): string {
+ *   return String(Math.max(encryptedPayloadBytes, A2A_HTTP_PROXY_MAX_BYTES))
+ * }
+ * ```
+ */
+export const A2A_HTTP_PROXY_MAX_BYTES = 2 * 1024 * 1024
+
+/**
+ * 表示 A2A 或实时语音路径无效，或与网关已有入口重叠。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * function renderOrdersProxy(paths: ProtocolProxyPaths) {
+ *   try { return generateWebProxyConfig(3000, '/api/v1', paths) }
+ *   catch (error) {
+ *     if (error instanceof ProtocolProxyPathError) return null
+ *     throw error
+ *   }
+ * }
+ * ```
+ */
+export class ProtocolProxyPathError extends Error {}
+
+function protocolEndpointPaths(
+  { a2a, audioPath }: ProtocolProxyPaths,
+  reserved: readonly string[],
+  namespaces: readonly string[] = [],
+): string[] {
+  const paths = [
+    ...(a2a
+      ? [a2a.cardPath, a2a.rpcPath]
+      : []),
+    ...(audioPath
+      ? [audioPath]
+      : []),
+  ]
+  if (new Set(paths).size !== paths.length || paths.some(path =>
+    !/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(path)
+    || path.split('/').some(part => part === '.' || part === '..')
+    || reserved.includes(path)
+    || namespaces.some(directory => path === directory || path.startsWith(`${directory}/`)),
+  )) {
+    throw new ProtocolProxyPathError('A2A or audio endpoint conflicts with proxy paths')
+  }
+  return paths
+}
+
+function renderProtocolProxyLocations(
+  { a2a, audioPath }: ProtocolProxyPaths,
+  proxy: (maxRequestBytes?: number, upgrade?: boolean) => string,
+): string {
+  // A2A 的 HTTP 请求上限为 2 MiB，与业务传输层的密文预算分别计算。
+  const a2aLocations = a2a
+    ? `  location = ${a2a.cardPath} {
+${proxy()}  }
+  location = ${a2a.rpcPath} {
+    # A2A 程序凭据可以位于查询中，代理日志不保留请求参数。
+    access_log off;
+    error_log /dev/null;
+    proxy_read_timeout 300s;
+${proxy(A2A_HTTP_PROXY_MAX_BYTES)}  }
+`
+    : ''
+  return a2aLocations + (audioPath
+    ? `  location = ${audioPath} {
+    # WebSocket 握手查询包含一次性票据。
+    access_log off;
+    error_log /dev/null;
+${proxy(undefined, true)}  }
+`
+    : '')
+}
+
+/**
  * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
  * API 上限由 @h-ai/crypto 的同一明文容量推导密文预算；
  * 关闭请求缓冲，让应用在读取过程中执行握手、公钥和正文的更细预算。
@@ -857,17 +952,30 @@ export function generateComposeFile(options: {
  * @param options.storageBasePath - 对象入口目录，转发前移除；空字符串保持根桶路径。
  * @param options.trustedEdgeProxies - Nginx 前方显式可信的负载均衡 IP/CIDR，默认不信任上游头。
  * @param options.backendPaths - 后端实际启用的健康、就绪及文档精确路径，认证仍由后端执行。
+ * @param options.keyExchangePath - 已启用传输的完整密钥交换路径，同时发布到浏览器运行配置。
+ * @param options.a2a - 已启用的 Agent Card 与 JSON-RPC 绝对路径。
+ * @param options.audioPath - 已启用的音频 WebSocket 完整路径。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  *```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, backendPaths?: string[], storageBucket?: string, storageBasePath?: string, trustedEdgeProxies?: string[] } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: ProtocolProxyPaths & {
+  webPort?: number
+  maxPlaintextBytes?: number
+  webBasePath?: string
+  backendPaths?: string[]
+  keyExchangePath?: string
+  storageBucket?: string
+  storageBasePath?: string
+  trustedEdgeProxies?: string[]
+} = {}): string {
   const bodyLimits = crypto.transport.resolveBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
   const apiPath = apiPrefix.replace(/\/+$/, '')
+  const keyExchangePath = options.keyExchangePath
   const backendPaths = [
     ...new Set(options.backendPaths ?? ['/health']),
   ]
@@ -877,6 +985,31 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     || (webBasePath && (backendPaths.includes(webBasePath) || webBasePath === apiPath || webBasePath.startsWith(`${apiPath}/`)))) {
     throw new Error('Invalid web proxy target')
   }
+  if (keyExchangePath !== undefined && (!crypto.transport.isKeyExchangePath(keyExchangePath)
+    || backendPaths.includes(keyExchangePath)
+    || [
+      apiPath,
+      webBasePath,
+      `${webBasePath}/index.html`,
+      `${webBasePath}/runtime-config.js`,
+      '/_hai/web-health',
+      '/_hai/gateway-health',
+    ].includes(keyExchangePath)
+    || [`${webBasePath}/assets`, `${webBasePath}/_app`].some(path => keyExchangePath === path || keyExchangePath.startsWith(`${path}/`)))) {
+    throw new Error('Invalid web proxy key exchange path')
+  }
+  const protocolPaths = protocolEndpointPaths(options, [
+    ...backendPaths,
+    ...(keyExchangePath
+      ? [keyExchangePath]
+      : []),
+    apiPath,
+    webBasePath,
+    `${webBasePath}/index.html`,
+    `${webBasePath}/runtime-config.js`,
+    '/_hai/web-health',
+    '/_hai/gateway-health',
+  ], [`${webBasePath}/assets`, `${webBasePath}/_app`])
   const webLocation = renderWebLocation(webBasePath)
   const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
   const forwardedHeaders = `    proxy_set_header Host $http_host;
@@ -890,6 +1023,10 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     ? renderStorageLocation(options.storageBucket, [
         apiPath,
         ...backendPaths,
+        ...protocolPaths,
+        ...(keyExchangePath
+          ? [keyExchangePath]
+          : []),
         ...(options.storageBasePath
           ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`]
           : [webBasePath]),
@@ -901,6 +1038,29 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
 ${forwardedHeaders}
   }
 `).join('')
+  const exchangeConfig = keyExchangePath
+    ? `,apiKeyExchangePath:${JSON.stringify(keyExchangePath)}`
+    : ''
+  const proxyApi = (maxRequestBytes = bodyLimits.encryptedPayloadBytes, upgrade = false) => `    client_max_body_size ${maxRequestBytes};
+    proxy_pass http://hai_serv_backend;
+    proxy_http_version 1.1;
+${forwardedHeaders}
+${upgrade
+  ? `    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;
+`
+  : ''}    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_buffer_size 32k;
+    proxy_buffers 8 32k;
+`
+  const exchangeLocation = keyExchangePath
+    ? `  location = ${keyExchangePath} {
+${proxyApi()}  }
+`
+    : ''
+  const protocolLocations = renderProtocolProxyLocations(options, proxyApi)
   return `include /tmp/hai-dns.conf;
 ${renderDownloadErrorMaps()}
 ${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${options.storageBucket
@@ -913,22 +1073,14 @@ ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  root /usr/share/nginx/h
 ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
     add_header Cache-Control "no-store";
     default_type application/javascript;
-    return 200 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:globalThis.location.origin+"${apiPrefix}"};';
+    return 200 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:globalThis.location.origin+"${apiPrefix}"${exchangeConfig}};';
   }
   location = /_hai/web-health {
     access_log off;
     return 200 'ok';
   }
-${backendLocations}  location ${apiPrefix.replace(/\/$/, '')}/ {
-    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
-    proxy_pass http://hai_serv_backend;
-    proxy_http_version 1.1;
-${forwardedHeaders}
-    proxy_request_buffering off;
-    proxy_buffering off;
-    proxy_buffer_size 32k;
-    proxy_buffers 8 32k;
-  }
+${backendLocations}${exchangeLocation}${protocolLocations}  location ${apiPath}/ {
+${proxyApi()}  }
 }
 `
 }
@@ -1018,6 +1170,9 @@ map $request_uri $hai_storage_uri {
  * @param options.bucket - 私有 S3 桶名。
  * @param options.storageBasePath - publicEndpoint 中的代理目录，不包含桶名。
  * @param options.reservedPaths - 不能与桶路由重叠的应用路径。
+ * @param options.backendPaths - 已在单应用中注册的精确端点，不能与 A2A 或音频重叠。
+ * @param options.a2a - 已启用的 Agent Card 与 JSON-RPC 绝对路径。
+ * @param options.audioPath - Serv 已启用的音频 WebSocket 完整路径。
  * @param options.maxPlaintextBytes - 应用 transport 明文预算。
  * @param options.trustedEdgeProxies - Nginx 上游可信负载均衡 IP/CIDR。
  * @returns 监听 8080 的公开 Nginx 配置，不含应用或对象存储凭据。
@@ -1027,20 +1182,30 @@ map $request_uri $hai_storage_uri {
  * void config
  *```
  */
-export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket?: string, reservedPaths: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
+export function generateApplicationProxyConfig(options: ProtocolProxyPaths & { primaryService: 'serv' | 'web', port: number, bucket?: string, reservedPaths: string[], backendPaths?: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
   const { primaryService, port, bucket, reservedPaths, maxPlaintextBytes } = options
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = crypto.transport.resolveBodyLimits(maxPlaintextBytes)
+  const protocolPaths = protocolEndpointPaths(options, [
+    ...reservedPaths,
+    ...(options.backendPaths ?? []),
+    '/_hai/gateway-health',
+    '/_hai/web-health',
+  ])
   const trustedEdges = renderTrustedEdgeProxies(options.trustedEdgeProxies)
   const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
-  const proxySettings = `    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
+  const proxySettings = (maxRequestBytes = bodyLimits.encryptedPayloadBytes, upgrade = false) => `    client_max_body_size ${maxRequestBytes};
     proxy_pass http://hai_application_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto ${forwardedProtocol};
-    proxy_set_header Connection "";
-    proxy_set_header X-Forwarded-Host $http_host;
+${upgrade
+  ? `    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;
+`
+  : '    proxy_set_header Connection "";\n'}    proxy_set_header X-Forwarded-Host $http_host;
     proxy_set_header X-Forwarded-Port "";
     proxy_set_header Forwarded "";
     proxy_set_header X-Forwarded-For $remote_addr;
@@ -1048,7 +1213,8 @@ export function generateApplicationProxyConfig(options: { primaryService: 'serv'
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;
-    proxy_buffers 8 32k;`
+    proxy_buffers 8 32k;
+`
   return `include /tmp/hai-dns.conf;
 ${renderDownloadErrorMaps()}
 ${renderResolvedUpstream('hai_application_backend', primaryService, port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${bucket
@@ -1058,24 +1224,25 @@ ${renderResolvedUpstream('hai_application_backend', primaryService, port)}${rend
   server_name _;
 ${trustedEdges}  large_client_header_buffers 4 32k;
 ${bucket
-  ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
+  ? renderStorageLocation(bucket, [
+      ...reservedPaths,
+      ...protocolPaths,
+    ], options.storageBasePath)
   : ''}  location = /_hai/gateway-health {
     access_log off;
     return 200 'ok';
   }
-${renderDownloadErrorLocation()}  location / {
+${renderDownloadErrorLocation()}${renderProtocolProxyLocations(options, proxySettings)}  location / {
     recursive_error_pages on;
     error_page 418 = @hai_download_proxy;
     if ($hai_signed_download) { return 418; }
-${proxySettings}
-  }
+${proxySettings()}  }
   location @hai_download_proxy {
     access_log off;
     error_log /dev/null;
     proxy_intercept_errors on;
     error_page 404 = @hai_download_unavailable;
-${proxySettings}
-  }
+${proxySettings()}  }
 }
 `
 }

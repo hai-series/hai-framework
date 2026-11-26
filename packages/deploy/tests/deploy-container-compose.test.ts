@@ -602,6 +602,88 @@ describe('对象存储网关边界', () => {
 })
 
 describe('generateComposeFile', () => {
+  it('只在启用的音频精确路由升级连接，并为 A2A 单独关闭缓冲和查询日志', () => {
+    const paths = {
+      a2a: { cardPath: '/portal/.well-known/agent-card.json', rpcPath: '/portal/partner/a2a' },
+      audioPath: '/backend/api/voice',
+    }
+    const proxies = [
+      generateWebProxyConfig(3000, '/backend/api', { webBasePath: '/portal', ...paths }),
+      generateApplicationProxyConfig({
+        primaryService: 'serv',
+        port: 3000,
+        reservedPaths: ['/backend/api'],
+        ...paths,
+      }),
+    ]
+    for (const config of proxies) {
+      const segment = (path: string) => config.split(`location = ${path} {\n`)[1]?.split('\n  }')[0]
+      expect(segment(paths.a2a.cardPath)).toContain('proxy_pass http://hai_')
+      expect(segment(paths.a2a.rpcPath)).toContain('proxy_buffering off;')
+      expect(segment(paths.a2a.rpcPath)).toContain('client_max_body_size 2097152;')
+      expect(segment(paths.a2a.rpcPath)).toContain('access_log off;')
+      expect(segment(paths.audioPath)).toContain('proxy_set_header Upgrade $http_upgrade;')
+      expect(segment(paths.audioPath)).toContain('proxy_set_header Connection "upgrade";')
+      expect(segment(paths.audioPath)).toContain('access_log off;')
+      expect(segment(paths.audioPath)).toContain('error_log /dev/null;')
+      expect(config.match(/proxy_set_header Upgrade/g)).toHaveLength(1)
+    }
+    const defaultConfig = generateWebProxyConfig(3000, '/backend/api')
+    expect(defaultConfig).not.toContain('location = /.well-known/agent-card.json')
+    expect(defaultConfig).not.toContain('location = /a2a')
+    expect(defaultConfig).not.toContain('proxy_set_header Upgrade')
+  })
+
+  it.each([
+    '/portal',
+    '/portal/runtime-config.js',
+    '/portal/_app/immutable/a2a',
+    '/backend/api',
+    '/session/key-exchange',
+    '/ready',
+    '/_hai/gateway-health',
+    '/backend/voice',
+    '/x/../a2a',
+    '/x/a2a;return 200',
+  ])('拒绝 A2A 与前端、协商、探活和音频路径冲突：%s', (rpcPath) => {
+    expect(() => generateWebProxyConfig(3000, '/backend/api', {
+      webBasePath: '/portal',
+      backendPaths: ['/ready'],
+      keyExchangePath: '/session/key-exchange',
+      audioPath: '/backend/voice',
+      a2a: { cardPath: '/.well-known/agent-card.json', rpcPath },
+    })).toThrow('A2A or audio endpoint conflicts with proxy paths')
+  })
+
+  it('把完整密钥交换路径发布给客户端，并原样转发到后端', () => {
+    const config = generateWebProxyConfig(3000, '/backend/api', {
+      keyExchangePath: '/session/key-exchange',
+      maxPlaintextBytes: 8388608,
+    })
+    expect(config).toContain('apiBase:globalThis.location.origin+"/backend/api",apiKeyExchangePath:"/session/key-exchange"')
+    expect(config).toContain('location = /session/key-exchange {\n    client_max_body_size 16809984;\n    proxy_pass http://hai_serv_backend;')
+    expect(config).toContain('location /backend/api/ {\n    client_max_body_size 16809984;\n    proxy_pass http://hai_serv_backend;')
+  })
+
+  it.each([
+    '/portal',
+    '/portal/index.html',
+    '/portal/runtime-config.js',
+    '/portal/assets/exchange',
+    '/_hai/web-health',
+    '/_hai/gateway-health',
+    '/health',
+    '/reference',
+    '/backend/api',
+    '/session/../exchange',
+  ])('拒绝密钥交换路径冲突或格式错误：%s', (keyExchangePath) => {
+    expect(() => generateWebProxyConfig(3000, '/backend/api', {
+      webBasePath: '/portal',
+      backendPaths: ['/health', '/reference'],
+      keyExchangePath,
+    })).toThrow('Invalid web proxy key exchange path')
+  })
+
   it('拒绝会产生双斜杠路由的 API 前缀', () => {
     expect(() => generateWebProxyConfig(3000, '/somepath/api/v1/')).toThrow()
   })

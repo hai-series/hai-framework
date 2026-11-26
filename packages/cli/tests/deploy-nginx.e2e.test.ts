@@ -785,7 +785,18 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=${production ? 'production' : 'test'}\nHAI_SERV_HTTP_HEALTH_PATH=/somepath/status\n`)
     writeFileSync(path.join(project, 'config/_core.yml'), 'env: test\n')
-    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /somepath/api/v1\n  health: {path: /health, readyPath: /somepath/ready}\n  docs: {path: /somepath/reference, requireAuth: true}\n  openapi: {path: /somepath/schema.json}\n')
+    writeFileSync(path.join(project, 'config/_serv.yml'), `
+http:
+  apiPrefix: /somepath/api/v1
+  health: {path: /health, readyPath: /somepath/ready}
+  docs: {path: /somepath/reference, requireAuth: true}
+  openapi: {path: /somepath/schema.json}
+a2a:
+  cardPath: /somepath/.well-known/agent-card.json
+  rpcPath: /somepath/partners/orders
+audio:
+  path: /voice
+`)
     const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.0.0.tar`
       writeFileSync(path.join(artifacts, file), name)
@@ -821,50 +832,50 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       throw new Error('Expected a route deployment bundle')
     const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
     const configuration = path.join(project, 'nginx.conf')
-    // 后端仅充当协议夹具；此处验证 Nginx 不吞掉文档请求、不将后端 401 改成前端成功页。
-    const upstream = `server { listen 3000; location = /somepath/status { return 200 'backend healthy'; } location = /somepath/reference { return 401 'authenticated docs required'; } location = /somepath/schema.json { default_type application/json; return 200 '{"openapi":"3.1.0"}'; } location = /somepath/_hai/scalar.js { default_type application/javascript; return 200 'globalThis.scalarBackend = true'; } location = /somepath/ready { return 200 'ready'; } location /somepath/api/v1/ { return 401 'api authentication required'; } location / { return 404; } }`
-    writeFileSync(configuration, `pid /tmp/routes-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('server serv:', 'server 127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/routes-static')}\n${upstream}\nserver { listen 8081; location /somepath/ { proxy_pass http://127.0.0.1:8080; } location / { return 404; } }\n}\n`)
+    // 前置路径夹具保留 URI 并透传数据流；正式发布包中的内层 Nginx 指令原样执行。
+    writeFileSync(configuration, `pid /tmp/routes-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('server serv:', 'server 127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/routes-static')}\nserver { listen 8081; location /somepath/ { proxy_buffering off; proxy_pass http://127.0.0.1:8080; } location / { return 404; } }\n}\n`)
     execFileSync(runtime, ['cp', configuration, `${fixture.containerId}:/tmp/routes-nginx.conf`], { windowsHide: true, timeout: 15_000 })
-    await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'mkdir -p /tmp/routes-static; printf "frontend fallback" > /tmp/routes-static/index.html; nginx -t -c /tmp/routes-nginx.conf; nginx -c /tmp/routes-nginx.conf'], { timeoutMs: 15_000 })
+    await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'mkdir -p /tmp/routes-static; printf "frontend fallback" > /tmp/routes-static/index.html'], { timeoutMs: 15_000 })
+    const checked = await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'nginx -t -c /tmp/routes-nginx.conf 2>&1; printf "\\nNGINX_EXIT:%s\\n" "$?"'], { timeoutMs: 15_000 })
+    expect(checked).toContain('NGINX_EXIT:0')
+    await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/routes-nginx.conf'], { timeoutMs: 15_000 })
+    let nodeContainer: string | undefined
     try {
-      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, [
-        'sh',
-        '-c',
-        'wget -S -O - "$1" 2>&1 || true',
-        'probe',
-        `http://127.0.0.1:8081${pathname}`,
-      ], { timeoutMs: 10_000 })
-      expect(await read('/somepath/status')).toContain('backend healthy')
-      expect(await read('/somepath/ready')).toContain('ready')
-      expect(await read('/somepath/api/v1/private')).toContain('401')
-      expect(await read('/api/v1/private')).toContain('404')
-      expect(await read('/health')).toContain('404')
-      expect(await read('/somepath/runtime-config.js')).toContain('location.origin+"/somepath/api/v1"')
-      const docs = await read('/somepath/reference')
-      const spec = await read('/somepath/schema.json')
-      const scalar = await read('/somepath/_hai/scalar.js')
-      if (production) {
-        expect(docs).toContain('frontend fallback')
-        expect(spec).not.toContain('"openapi"')
-        expect(scalar).not.toContain('scalarBackend')
-      }
-      else {
-        expect(docs).toContain('401')
-        expect(docs).not.toContain('frontend fallback')
-        expect(spec).toContain('"openapi":"3.1.0"')
-        expect(scalar).toContain('scalarBackend')
-      }
-      expect(await read('/_hai/scalar.js')).toContain('404')
+      const image = 'docker.io/library/node:24.22.1-bookworm-slim'
+      ensureDeployTestBaseImage(runtime, image, 30_000)
+      nodeContainer = execFileSync(runtime, [
+        'create',
+        '--network',
+        `container:${fixture.containerId}`,
+        '--entrypoint',
+        'node',
+        image,
+        '/tmp/a2a-audio-gateway-node.mjs',
+        production ? 'production' : 'test',
+      ], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      const flow = path.resolve('tests/fixtures/a2a-audio-gateway-node.mjs')
+      execFileSync(runtime, ['cp', flow, `${nodeContainer}:/tmp/a2a-audio-gateway-node.mjs`], { windowsHide: true, timeout: 15_000 })
+      const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+      expect(output).toContain('A2A first frame and audio WebSocket upgrade verified')
+      const logs = execFileSync(runtime, ['logs', fixture.containerId], { encoding: 'utf8', windowsHide: true, timeout: 15_000 })
+      expect(logs).not.toContain('gateway-log-regression')
     }
     finally {
-      await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'nginx -s quit -c /tmp/routes-nginx.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/routes-nginx.pid ] && exit 0; sleep 0.1; done; exit 1'], { timeoutMs: 10_000 })
+      try {
+        if (nodeContainer)
+          execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000 })
+      }
+      finally {
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'nginx -s quit -c /tmp/routes-nginx.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/routes-nginx.pid ] && exit 0; sleep 0.1; done; exit 1'], { timeoutMs: 10_000 })
+      }
     }
   }, 60_000)
 
-  it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 保留 %i 明文容量，反馈不缩容，普通 JSON 边界与超限均符合协议', async (maxPlaintextBytes) => {
+  it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 通过独立密钥交换路径保留 %i 明文容量并执行协议边界', async (maxPlaintextBytes) => {
     if (!fixture)
       throw new Error('Expected an owned proxy fixture')
     const limits = crypto.transport.resolveBodyLimits(maxPlaintextBytes)
+    const keyExchangePath = '/session/key-exchange'
     const image = 'docker.io/library/node:24.22.1-bookworm-slim'
     ensureDeployTestBaseImage(runtime, image, 30_000)
     let nodeContainer: string | undefined
@@ -878,7 +889,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'proxy-capacity', version: '1.2.3' }))
       writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
       writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=test\nHAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}\n`)
-      writeFileSync(path.join(project, 'config/_serv.yml'), `transport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
+      writeFileSync(path.join(project, 'config/_serv.yml'), `transport:\n  keyExchangePath: ${keyExchangePath}\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
       if (maxPlaintextBytes === 24 * 1048576) {
         writeFileSync(path.join(project, 'pnpm-lock.yaml'), JSON.stringify({
           lockfileVersion: '9.0',
@@ -982,6 +993,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         'NODE_ENV=test',
         '-e',
         `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}`,
+        '-e',
+        `HAI_SERV_TRANSPORT_KEYEXCHANGEPATH=${keyExchangePath}`,
         '--entrypoint',
         'node',
         image,
@@ -999,6 +1012,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
       // 24 MiB 场景包含三次真实加解密与代理往返，不能沿用单个 XLSX 的一分钟预算。
       const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 240_000 })
+      expect(output).toContain('KEY_EXCHANGE_ROUTE_PASS')
       expect(output).toContain('TRANSPORT_CAPACITY_PASS')
     }
     finally {
