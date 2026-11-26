@@ -893,7 +893,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
           packages: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} },
           snapshots: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} },
         }))
-        writeFileSync(path.join(project, 'config/_feedback.yml'), 'appId: capacity\nnotification:\n  mode: disabled\nlimits:\n  maxTotalBytes: 8388608\n  maxEvidenceBytes: 2097152\n')
+        writeFileSync(path.join(project, 'config/_feedback.yml'), 'appId: capacity\n')
         const key = createECDH('SM2')
         key.generateKeys()
         const ring = JSON.stringify({

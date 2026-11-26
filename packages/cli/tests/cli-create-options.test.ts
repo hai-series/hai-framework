@@ -9,7 +9,6 @@ const commands = vi.hoisted(() => ({
   buildCommand: vi.fn(),
   createProject: vi.fn(),
   deployCommand: vi.fn(),
-  feedbackCommand: vi.fn(),
   generate: vi.fn(),
   initProject: vi.fn(),
   upgradeCommand: vi.fn(),

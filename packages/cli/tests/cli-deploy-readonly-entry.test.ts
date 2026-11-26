@@ -22,7 +22,6 @@ vi.mock('../src/commands/cli-commands.js', () => ({
   buildCommand: vi.fn(),
   createProject: vi.fn(),
   deployCommand: observed.deploy,
-  feedbackCommand: vi.fn(),
   generate: vi.fn(),
   initProject: vi.fn(),
   upgradeCommand: vi.fn(),

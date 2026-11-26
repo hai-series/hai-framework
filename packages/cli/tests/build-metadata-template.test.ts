@@ -7,7 +7,7 @@ import ts from 'typescript'
 import { expect, it } from 'vitest'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
-it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物身份接入实际编译与反馈初始化', async (appType) => {
+it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程使用同一构建标识配置编译与产物清单', async (appType) => {
   const directory = await mkdtemp(path.join(process.cwd(), '.tmp-build-metadata-template-'))
   try {
     await generateFromTemplates(directory, buildTemplateContext({
@@ -34,12 +34,6 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
       expect(config).toContain('import.meta.url')
       await verifyMetadataOutput(config, path.join(directory, target))
     }
-    const runtime = appType === 'admin'
-      ? 'src/lib/server/init.ts'
-      : appType === 'api'
-        ? 'apps/metadata-sample-serv/src/lib/server/init.ts'
-        : 'packages/metadata-sample-serv/src/server/runtime.ts'
-    expect(await read(runtime)).toContain('...buildMetadata')
     const dockerfiles = appType === 'fullstack'
       ? ['images/serv.Dockerfile', 'images/web.Dockerfile']
       : [
@@ -54,16 +48,8 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
       expect(dockerfile).toContain('HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT"')
     }
     if (appType === 'fullstack') {
-      const workspace = await read('packages/metadata-sample-shared/src/lib/components/AdminWorkspace.svelte')
-      expect(workspace).toContain('initializeBrowserFeedback(buildMetadata)')
-      expect(workspace).not.toContain('initializeBrowserFeedback(store.info?.version)')
-      const client = await read('packages/metadata-sample-shared/src/lib/api/feedback-client.ts')
-      expect(client).toContain('...metadata')
-      for (const target of ['web', 'app', 'desktop']) {
-        const app = await read(`apps/metadata-sample-${target}/src/App.svelte`)
-        expect(app).toContain('{buildMetadata}')
+      for (const target of ['web', 'app', 'desktop'])
         expect(await read(`apps/metadata-sample-${target}/src/build-metadata.ts`)).toContain('__HAI_BUILD_METADATA__')
-      }
     }
     // 生成源码lint归并到template-quality的已预热夹具；本例只验证实际输出行为。
   }
