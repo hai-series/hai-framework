@@ -1153,7 +1153,7 @@ import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 | [`<FeedbackDetail>`](#component-feedbackdetail) | 問題票の ID と認証済みの操作を渡して、会話、返信、添付を扱います。`canProcess` で状態変更と資料の依頼を有効にします。 | `<FeedbackDetail {id} {actions} />` |
 | [`<FeedbackForm>`](#component-feedbackform) | ページ内に本文と添付の入力欄を表示します。`onsubmit` で入力を送信します。 | `<FeedbackForm onsubmit={submitFeedback} />` |
 | [`<FeedbackList>`](#component-feedbacklist) | `actions.list` と詳細に必要な操作を渡します。`initialId` で特定の問題票を開けます。 | `<FeedbackList {actions} />` |
-| [`<FeedbackModal>`](#component-feedbackmodal) | `open` で提出ダイアログを開き、`onsubmit` をホストの送信関数につなぎます。 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | `open` で最初の投稿を開き、`onsubmit` で送信します。ログイン中のアカウントの `captureKey` を渡すと資料を収集します。 | `<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />` |
 
 [@h-ai/feedback](feedback.ja.md#feedback-steps)
 
@@ -3218,10 +3218,10 @@ Markdown 文書を目次付きで読み、ツールバーからコピーやダ�
 
 #### FeedbackModal
 
-`open` で提出ダイアログを開き、`onsubmit` をホストの送信関数につなぎます。
+`open` で最初の投稿を開き、`onsubmit` で送信します。ログイン中のアカウントの `captureKey` を渡すと資料を収集します。
 
 ```svelte
-<FeedbackModal bind:open={open} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>

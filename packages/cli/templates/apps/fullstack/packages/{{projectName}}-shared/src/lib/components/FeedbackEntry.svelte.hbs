@@ -5,7 +5,7 @@
   import { myFeedbackActions, submitFeedback } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
 
-  const { canSubmit }: { canSubmit: boolean } = $props()
+  const { canSubmit, captureKey }: { canSubmit: boolean, captureKey?: string } = $props()
   let open = $state(false)
   let mine = $state(false)
   let selected = $state<string>()
@@ -18,7 +18,7 @@
 
 {#if canSubmit}
   <Button variant='ghost' size='sm' onclick={() => { open = true }} data-testid='feedback-open'>{m.nav_feedback()}</Button>
-  <FeedbackModal bind:open onsubmit={submitFeedback} oncomplete={openMine} />
+  <FeedbackModal bind:open {captureKey} onsubmit={submitFeedback} oncomplete={openMine} />
 {/if}
 <Button variant='ghost' size='sm' onclick={() => openMine()} data-testid='feedback-mine'>{m.feedback_mine()}</Button>
 <Modal bind:open={mine} title={m.feedback_mine()} size='xl'>

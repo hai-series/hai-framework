@@ -11548,6 +11548,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackAttachmentKindSchema",
+              "kind": "value",
+              "declaration": "FeedbackAttachmentKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
@@ -11563,6 +11575,18 @@
               "name": "FeedbackAttachmentSchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInputSchema",
+              "kind": "value",
+              "declaration": "FeedbackCaptureInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -12782,6 +12806,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackAttachmentKindSchema",
+              "kind": "value",
+              "declaration": "FeedbackAttachmentKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
@@ -12797,6 +12833,18 @@
               "name": "FeedbackAttachmentSchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInputSchema",
+              "kind": "value",
+              "declaration": "FeedbackCaptureInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14016,6 +14064,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackAttachmentKindSchema",
+              "kind": "value",
+              "declaration": "FeedbackAttachmentKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
@@ -14031,6 +14091,18 @@
               "name": "FeedbackAttachmentSchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInputSchema",
+              "kind": "value",
+              "declaration": "FeedbackCaptureInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15468,6 +15540,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackAttachmentKindSchema",
+              "kind": "value",
+              "declaration": "FeedbackAttachmentKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
@@ -15483,6 +15567,18 @@
               "name": "FeedbackAttachmentSchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInputSchema",
+              "kind": "value",
+              "declaration": "FeedbackCaptureInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15676,6 +15772,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackAttachmentKindSchema",
+              "kind": "value",
+              "declaration": "FeedbackAttachmentKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
@@ -15691,6 +15799,18 @@
               "name": "FeedbackAttachmentSchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInputSchema",
+              "kind": "value",
+              "declaration": "FeedbackCaptureInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -23159,9 +23279,21 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23289,9 +23421,21 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "FeedbackAttachmentKind",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuery",
               "kind": "type",
               "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackCaptureInput",
+              "kind": "type",
+              "declaration": "FeedbackCaptureInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {

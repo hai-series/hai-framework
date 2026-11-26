@@ -31,6 +31,9 @@ interface CreateApiServiceAppOptions {
 export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
   const coreConfig = core.config.getOrThrow<CoreConfig>('core')
+{{#if features.feedback}}
+  const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+{{/if}}
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,
     corsOrigin: servConfig.cors.origin,
@@ -93,6 +96,12 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
 
   const appOptions: Parameters<typeof serv.createApp>[0] = {
     contract: {{api.contractExportName}},
+{{#if features.feedback}}
+    createContext: async input => ({
+      ...await authenticate(input),
+      scopeId: '{{projectName}}',
+    }),
+{{/if}}
     procedures: {{api.serviceProceduresFactoryName}}({
       app: {
         info: {

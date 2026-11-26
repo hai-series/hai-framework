@@ -19,6 +19,9 @@ const STARTED_AT = new Date().toISOString()
 export function createServerApp(): ServHttpApp {
   const coreConfig = core.config.getOrThrow<CoreConfig>('core')
   const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
+{{#if features.feedback}}
+  const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+{{/if}}
   if (servConfig.transport === false)
     throw new Error('Fullstack management requires transport encryption; configure scoped access.rules[].encryption: disabled for plaintext external endpoints')
   const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
@@ -44,6 +47,12 @@ export function createServerApp(): ServHttpApp {
 
   return serv.createApp({
     contract: contracts.{{fullstack.contractExportName}},
+{{#if features.feedback}}
+    createContext: async input => ({
+      ...await authenticate(input),
+      scopeId: '{{projectName}}',
+    }),
+{{/if}}
     procedures: createServerProcedures({
       app: {
         name: coreConfig.name,

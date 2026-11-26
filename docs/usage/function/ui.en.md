@@ -1149,7 +1149,7 @@ The host supplies authenticated feedback actions. Users explicitly choose the fi
 | [`<FeedbackDetail>`](#component-feedbackdetail) | Supply a report ID and authorized actions for the conversation, replies, and files. Use `canProcess` to allow status changes and requests. | `<FeedbackDetail {id} {actions} />` |
 | [`<FeedbackForm>`](#component-feedbackform) | Render fields and file selection in a page. The host sends the input through `onsubmit`. | `<FeedbackForm onsubmit={submitFeedback} />` |
 | [`<FeedbackList>`](#component-feedbacklist) | Supply the author or staff list through `actions.list` and the detail actions. Set `initialId` to open a specific report. | `<FeedbackList {actions} />` |
-| [`<FeedbackModal>`](#component-feedbackmodal) | Open the submission dialog with `open` and connect `onsubmit` to the host’s submission function. | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | Open the first-post dialog with `open` and submit via `onsubmit`. Pass the signed-in account’s `captureKey` to enable diagnostic capture. | `<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />` |
 
 [@h-ai/feedback](feedback.en.md#feedback-steps)
 
@@ -3214,10 +3214,10 @@ Supply the author or staff list through `actions.list` and the detail actions. S
 
 #### FeedbackModal
 
-Open the submission dialog with `open` and connect `onsubmit` to the host’s submission function.
+Open the first-post dialog with `open` and submit via `onsubmit`. Pass the signed-in account’s `captureKey` to enable diagnostic capture.
 
 ```svelte
-<FeedbackModal bind:open={open} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>
